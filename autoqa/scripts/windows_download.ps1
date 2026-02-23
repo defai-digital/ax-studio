@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# Windows download script for Jan app
+# Windows download script for Ax-Fabric app
 
 param(
     [string]$WorkflowInputUrl = "",
@@ -10,54 +10,54 @@ param(
     [string]$DefaultIsNightly = ""
 )
 
-# Determine Jan app URL and nightly flag from multiple sources (priority order):
+# Determine Ax-Fabric app URL and nightly flag from multiple sources (priority order):
 # 1. Workflow dispatch input (manual trigger)
-# 2. Repository variable JAN_APP_URL
+# 2. Repository variable AX_FABRIC_APP_URL
 # 3. Default URL from env
 
-$janAppUrl = ""
+$axFabricAppUrl = ""
 $isNightly = $false
 
 if ($WorkflowInputUrl -ne "") {
-    $janAppUrl = $WorkflowInputUrl
+    $axFabricAppUrl = $WorkflowInputUrl
     $isNightly = [System.Convert]::ToBoolean($WorkflowInputIsNightly)
-    Write-Host "Using Jan app URL from workflow input: $janAppUrl"
+    Write-Host "Using Ax-Fabric app URL from workflow input: $axFabricAppUrl"
     Write-Host "Is nightly build: $isNightly"
 }
 elseif ($RepoVariableUrl -ne "") {
-    $janAppUrl = $RepoVariableUrl
+    $axFabricAppUrl = $RepoVariableUrl
     $isNightly = [System.Convert]::ToBoolean($RepoVariableIsNightly)
-    Write-Host "Using Jan app URL from repository variable: $janAppUrl"
+    Write-Host "Using Ax-Fabric app URL from repository variable: $axFabricAppUrl"
     Write-Host "Is nightly build: $isNightly"
 }
 else {
-    $janAppUrl = $DefaultUrl
+    $axFabricAppUrl = $DefaultUrl
     $isNightly = [System.Convert]::ToBoolean($DefaultIsNightly)
-    Write-Host "Using default Jan app URL: $janAppUrl"
+    Write-Host "Using default Ax-Fabric app URL: $axFabricAppUrl"
     Write-Host "Is nightly build: $isNightly"
 }
 
 # Set environment variables for later steps
-Write-Output "JAN_APP_URL=$janAppUrl" >> $env:GITHUB_ENV
+Write-Output "AX_FABRIC_APP_URL=$axFabricAppUrl" >> $env:GITHUB_ENV
 Write-Output "IS_NIGHTLY=$isNightly" >> $env:GITHUB_ENV
 
-Write-Host "Downloading Jan app from: $janAppUrl"
+Write-Host "Downloading Ax-Fabric app from: $axFabricAppUrl"
 
-$downloadPath = "$env:TEMP\jan-installer.exe"
+$downloadPath = "$env:TEMP\ax-fabric-installer.exe"
 
 try {
     # Use wget for better performance
-    wget.exe "$janAppUrl" -O "$downloadPath"
+    wget.exe "$axFabricAppUrl" -O "$downloadPath"
 
     if (Test-Path $downloadPath) {
         $fileSize = (Get-Item $downloadPath).Length
-        Write-Host "Downloaded Jan app successfully. Size: $fileSize bytes"
+        Write-Host "Downloaded Ax-Fabric app successfully. Size: $fileSize bytes"
         Write-Host "File saved to: $downloadPath"
     } else {
         throw "Downloaded file not found"
     }
 }
 catch {
-    Write-Error "Failed to download Jan app: $_"
+    Write-Error "Failed to download Ax-Fabric app: $_"
     exit 1
 }

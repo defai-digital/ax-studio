@@ -8,15 +8,15 @@ from pathlib import Path
 # from computer import Computer
 from agent import ComputerAgent, LLM
 
-from utils import is_jan_running, force_close_jan, start_jan_app, get_latest_trajectory_folder
+from utils import is_app_running, force_close_app, start_app, get_latest_trajectory_folder
 from screen_recorder import ScreenRecorder
 from reportportal_handler import upload_test_results_to_rp
 from reportportal_client.helpers import timestamp
 
 logger = logging.getLogger(__name__)
 
-async def run_single_test_with_timeout(computer, test_data, rp_client, launch_id, max_turns=30, 
-                                     jan_app_path=None, jan_process_name="Jan.exe", agent_config=None, 
+async def run_single_test_with_timeout(computer, test_data, rp_client, launch_id, max_turns=30,
+                                     app_path=None, app_process_name="Ax-Fabric.exe", agent_config=None,
                                      enable_reportportal=False):
     """
     Run a single test case with turn count monitoring, forced stop, and screen recording
@@ -26,7 +26,7 @@ async def run_single_test_with_timeout(computer, test_data, rp_client, launch_id
     prompt = test_data['prompt']
     
     # Detect if using nightly version based on process name
-    is_nightly = "nightly" in jan_process_name.lower() if jan_process_name else False
+    is_nightly = "nightly" in app_process_name.lower() if app_process_name else False
     
     # Default agent config if not provided
     if agent_config is None:
@@ -79,16 +79,16 @@ async def run_single_test_with_timeout(computer, test_data, rp_client, launch_id
     recorder = ScreenRecorder(video_path, fps=10)
     
     try:
-        # Step 1: Check and force close Jan app if running
-        if is_jan_running(jan_process_name):
-            logger.info("Jan application is running, force closing...")
-            force_close_jan(jan_process_name)
-        
-        # Step 2: Start Jan app in maximized mode
-        if jan_app_path:
-            start_jan_app(jan_app_path)
+        # Step 1: Check and force close Ax-Fabric app if running
+        if is_app_running(app_process_name):
+            logger.info("Ax-Fabric application is running, force closing...")
+            force_close_app(app_process_name)
+
+        # Step 2: Start Ax-Fabric app in maximized mode
+        if app_path:
+            start_app(app_path)
         else:
-            start_jan_app()  # Use default path
+            start_app()  # Use default path
         
         # Step 3: Start screen recording
         recorder.start_recording()
@@ -314,9 +314,9 @@ async def run_single_test_with_timeout(computer, test_data, rp_client, launch_id
             if not enable_reportportal:
                 logger.warning(f"[INFO] LOCAL RESULT: {path} - {final_status} ({status_message})")
         
-        # Step 9: Always force close Jan app after test completion
+        # Step 9: Always force close Ax-Fabric app after test completion
         logger.info(f"Cleaning up after test: {path}")
-        force_close_jan(jan_process_name)
+        force_close_app(app_process_name)
         
         # Return test result
         return test_result_data

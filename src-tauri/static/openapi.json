@@ -1,14 +1,14 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "title": "Jan API Server Endpoints",
-    "description": "Jan API server provides a REST API interface for seamless interaction with large language models (LLMs) for third party apps. Compatible with the OpenAI API spec, it enables straightforward API access of models available in Jan.",
+    "title": "Ax-Fabric API Server Endpoints",
+    "description": "Ax-Fabric API server provides a REST API interface for seamless interaction with large language models (LLMs) for third party apps. Compatible with the OpenAI API spec, it enables straightforward API access of models available in Ax-Fabric.",
     "version": "1.0"
   },
   "servers": [
     {
       "url": "http://localhost:1337/v1",
-      "description": "Jan API server"
+      "description": "Ax-Fabric API server"
     }
   ],
   "tags": [
@@ -56,7 +56,7 @@
                 "$ref": "#/components/schemas/CreateChatCompletionDto"
               },
               "example": {
-                "model": "janhq/Jan-v3-4b-base-instruct-Q4_K_XL",
+                "model": "ax-fabric/default-model",
                 "messages": [
                   {"role": "user", "content": "Hello!"}
                 ]
@@ -92,7 +92,7 @@
                 "$ref": "#/components/schemas/CreateMessageDto"
               },
               "example": {
-                "model": "janhq/Jan-v3-4b-base-instruct-Q4_K_XL",
+                "model": "ax-fabric/default-model",
                 "messages": [
                   {"role": "user", "content": "Hello!"}
                 ]

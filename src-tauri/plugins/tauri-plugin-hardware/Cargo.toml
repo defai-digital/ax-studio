@@ -1,10 +1,10 @@
 [package]
 name = "tauri-plugin-hardware"
 version = "0.6.599"
-authors = ["Jan <service@jan.ai>"]
+authors = ["Ax-Fabric"]
 description = "Tauri plugin for hardware information and GPU monitoring"
 license = "MIT"
-repository = "https://github.com/janhq/jan"
+repository = "https://github.com/ax-fabric/ax-fabric"
 edition = "2021"
 rust-version = "1.77.2"
 exclude = ["/examples", "/dist-js", "/guest-js", "/node_modules"]

@@ -1,5 +1,5 @@
-use crate::core::app::commands::get_jan_data_folder_path;
-use jan_utils::normalize_file_path;
+use crate::core::app::commands::get_app_data_folder_path;
+use ax_fabric_utils::normalize_file_path;
 use std::path::PathBuf;
 use tauri::Runtime;
 
@@ -10,7 +10,7 @@ pub fn resolve_path<R: Runtime>(app_handle: tauri::AppHandle<R>, path: &str) -> 
             .trim_start_matches(std::path::MAIN_SEPARATOR)
             .trim_start_matches('/')
             .trim_start_matches('\\');
-        get_jan_data_folder_path(app_handle).join(relative_normalized)
+        get_app_data_folder_path(app_handle).join(relative_normalized)
     } else {
         PathBuf::from(path)
     };

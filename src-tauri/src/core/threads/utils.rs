@@ -3,10 +3,10 @@ use std::path::PathBuf;
 use tauri::Runtime;
 
 use super::constants::{MESSAGES_FILE, THREADS_DIR, THREADS_FILE};
-use crate::core::app::commands::get_jan_data_folder_path;
+use crate::core::app::commands::get_app_data_folder_path;
 
 pub fn get_data_dir<R: Runtime>(app_handle: tauri::AppHandle<R>) -> PathBuf {
-    get_jan_data_folder_path(app_handle).join(THREADS_DIR)
+    get_app_data_folder_path(app_handle).join(THREADS_DIR)
 }
 
 pub fn get_thread_dir<R: Runtime>(app_handle: tauri::AppHandle<R>, thread_id: &str) -> PathBuf {

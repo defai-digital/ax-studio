@@ -5,27 +5,27 @@ IS_NIGHTLY="$1"
 
 echo "Cleaning up after tests..."
 
-# Kill any running Jan processes (both regular and nightly)
-pkill -f "Jan" || true
-pkill -f "jan" || true
-pkill -f "Jan-nightly" || true
-pkill -f "jan-nightly" || true
+# Kill any running Ax-Fabric processes (both regular and nightly)
+pkill -f "Ax-Fabric" || true
+pkill -f "ax-fabric" || true
+pkill -f "Ax-Fabric-nightly" || true
+pkill -f "ax-fabric-nightly" || true
 
-# Remove Jan data folders (both regular and nightly)
-rm -rf ~/.config/Jan
-rm -rf ~/.config/Jan-nightly
-rm -rf ~/.local/share/Jan
-rm -rf ~/.local/share/Jan-nightly
-rm -rf ~/.cache/jan
-rm -rf ~/.cache/jan-nightly
-rm -rf ~/.local/share/jan-nightly.ai.app
-rm -rf ~/.local/share/jan.ai.app
+# Remove Ax-Fabric data folders (both regular and nightly)
+rm -rf ~/.config/Ax-Fabric
+rm -rf ~/.config/Ax-Fabric-nightly
+rm -rf ~/.local/share/Ax-Fabric
+rm -rf ~/.local/share/Ax-Fabric-nightly
+rm -rf ~/.cache/ax-fabric
+rm -rf ~/.cache/ax-fabric-nightly
+rm -rf ~/.local/share/ax-fabric-nightly.ai.app
+rm -rf ~/.local/share/ai.axfabric.app
 
-# Try to uninstall Jan app
+# Try to uninstall Ax-Fabric app
 if [ "$IS_NIGHTLY" = "true" ]; then
-    PACKAGE_NAME="jan-nightly"
+    PACKAGE_NAME="ax-fabric-nightly"
 else
-    PACKAGE_NAME="jan"
+    PACKAGE_NAME="ax-fabric"
 fi
 
 echo "Attempting to uninstall package: $PACKAGE_NAME"
@@ -39,6 +39,6 @@ else
 fi
 
 # Clean up downloaded installer
-rm -f "/tmp/jan-installer.deb"
+rm -f "/tmp/ax-fabric-installer.deb"
 
 echo "Cleanup completed"

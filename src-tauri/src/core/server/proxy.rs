@@ -2,7 +2,7 @@ use futures_util::StreamExt;
 use hyper::body::Bytes;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Request, Response, Server, StatusCode};
-use jan_utils::{is_cors_header, is_valid_host, remove_prefix};
+use ax_fabric_utils::{is_cors_header, is_valid_host, remove_prefix};
 use reqwest::Client;
 use serde_json;
 use std::collections::HashMap;

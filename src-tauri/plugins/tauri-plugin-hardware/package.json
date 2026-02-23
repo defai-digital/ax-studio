@@ -1,5 +1,5 @@
 {
-  "name": "@janhq/tauri-plugin-hardware-api",
+  "name": "@ax-fabric/tauri-plugin-hardware-api",
   "version": "0.6.6",
   "private": true,
   "description": "Hardware monitoring plugin API for Tauri",

@@ -1,6 +1,6 @@
 use super::commands::*;
 use super::helpers::should_use_sqlite;
-use crate::core::app::commands::get_jan_data_folder_path;
+use crate::core::app::commands::get_app_data_folder_path;
 use futures_util::future;
 use serde_json::json;
 use std::fs;
@@ -11,7 +11,7 @@ use tauri::test::{mock_app, MockRuntime};
 fn mock_app_with_temp_data_dir() -> (tauri::App<MockRuntime>, PathBuf) {
     let app = mock_app();
     // Get the actual data dir that will be used by storage code
-    let data_dir = get_jan_data_folder_path(app.handle().clone());
+    let data_dir = get_app_data_folder_path(app.handle().clone());
     println!("Mock app data dir: {}", data_dir.display());
     (app, data_dir)
 }

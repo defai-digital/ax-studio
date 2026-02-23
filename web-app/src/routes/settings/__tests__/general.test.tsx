@@ -170,8 +170,8 @@ vi.mock('@/components/ui/dialog', () => ({
 vi.mock('@/services/app/web', () => ({
   WebAppService: vi.fn().mockImplementation(() => ({
     factoryReset: vi.fn(),
-    getJanDataFolder: vi.fn().mockResolvedValue('/test/data/folder'),
-    relocateJanDataFolder: vi.fn(),
+    getAppDataFolder: vi.fn().mockResolvedValue('/test/data/folder'),
+    relocateAppDataFolder: vi.fn(),
   })),
 }))
 
@@ -185,8 +185,8 @@ vi.mock('@/hooks/useServiceHub', () => ({
   useServiceHub: () => ({
     app: () => ({
       factoryReset: vi.fn(),
-      getJanDataFolder: vi.fn().mockResolvedValue('/test/data/folder'),
-      relocateJanDataFolder: vi.fn(),
+      getAppDataFolder: vi.fn().mockResolvedValue('/test/data/folder'),
+      relocateAppDataFolder: vi.fn(),
     }),
     models: () => ({
       stopAllModels: vi.fn(),

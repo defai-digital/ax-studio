@@ -146,13 +146,13 @@ pub fn write_yaml(
     save_path: &str,
 ) -> Result<(), String> {
     // TODO: have an internal function to check scope
-    let jan_data_folder = crate::core::app::commands::get_jan_data_folder_path(app.clone());
-    let save_path = jan_utils::normalize_path(&jan_data_folder.join(save_path));
-    if !save_path.starts_with(&jan_data_folder) {
+    let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app.clone());
+    let save_path = ax_fabric_utils::normalize_path(&app_data_folder.join(save_path));
+    if !save_path.starts_with(&app_data_folder) {
         return Err(format!(
-            "Error: save path {} is not under jan_data_folder {}",
+            "Error: save path {} is not under app_data_folder {}",
             save_path.to_string_lossy(),
-            jan_data_folder.to_string_lossy(),
+            app_data_folder.to_string_lossy(),
         ));
     }
     let file = fs::File::create(&save_path).map_err(|e| e.to_string())?;
@@ -166,13 +166,13 @@ pub fn read_yaml<R: Runtime>(
     app: tauri::AppHandle<R>,
     path: &str,
 ) -> Result<serde_json::Value, String> {
-    let jan_data_folder = crate::core::app::commands::get_jan_data_folder_path(app.clone());
-    let path = jan_utils::normalize_path(&jan_data_folder.join(path));
-    if !path.starts_with(&jan_data_folder) {
+    let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app.clone());
+    let path = ax_fabric_utils::normalize_path(&app_data_folder.join(path));
+    if !path.starts_with(&app_data_folder) {
         return Err(format!(
-            "Error: path {} is not under jan_data_folder {}",
+            "Error: path {} is not under app_data_folder {}",
             path.to_string_lossy(),
-            jan_data_folder.to_string_lossy(),
+            app_data_folder.to_string_lossy(),
         ));
     }
     let file = fs::File::open(&path).map_err(|e| e.to_string())?;
@@ -187,15 +187,15 @@ pub fn decompress<R: Runtime>(
     path: &str,
     output_dir: &str,
 ) -> Result<(), String> {
-    let jan_data_folder = crate::core::app::commands::get_jan_data_folder_path(app.clone());
-    let path_buf = jan_utils::normalize_path(&jan_data_folder.join(path));
+    let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app.clone());
+    let path_buf = ax_fabric_utils::normalize_path(&app_data_folder.join(path));
 
-    let output_dir_buf = jan_utils::normalize_path(&jan_data_folder.join(output_dir));
-    if !output_dir_buf.starts_with(&jan_data_folder) {
+    let output_dir_buf = ax_fabric_utils::normalize_path(&app_data_folder.join(output_dir));
+    if !output_dir_buf.starts_with(&app_data_folder) {
         return Err(format!(
-            "Error: output directory {} is not under jan_data_folder {}",
+            "Error: output directory {} is not under app_data_folder {}",
             output_dir_buf.to_string_lossy(),
-            jan_data_folder.to_string_lossy(),
+            app_data_folder.to_string_lossy(),
         ));
     }
 
@@ -211,7 +211,7 @@ pub fn decompress<R: Runtime>(
     // Use short path on Windows to handle paths with spaces
     #[cfg(windows)]
     let file = {
-        if let Some(short_path) = jan_utils::path::get_short_path(&path_buf) {
+        if let Some(short_path) = ax_fabric_utils::path::get_short_path(&path_buf) {
             fs::File::open(&short_path).map_err(|e| e.to_string())?
         } else {
             fs::File::open(&path_buf).map_err(|e| e.to_string())?
@@ -329,4 +329,49 @@ pub async fn save_dialog(options: Option<DialogOpenOptions>) -> Result<Option<St
 
     let result = dialog.save_file().await;
     Ok(result.map(|file| file.path().to_string_lossy().to_string()))
+}
+
+// AkiDB config file management — reads/writes ~/.akidb/config.yaml
+// Uses dirs crate to resolve home directory; bypasses app_data_folder scope restriction
+// because AkiDB is a separate autonomous daemon that owns its own config path.
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct AkidbConfig {
+    #[serde(rename = "data-folder")]
+    pub data_folder: String,
+    pub frequency: u32, // minutes between reconciliation scans; 0 = real-time only
+}
+
+/// Read ~/.akidb/config.yaml and return the parsed config, or None if the file does not exist yet.
+#[tauri::command]
+pub fn read_akidb_config() -> Result<Option<AkidbConfig>, String> {
+    let home = dirs::home_dir()
+        .ok_or_else(|| "Cannot determine home directory".to_string())?;
+    let config_path = home.join(".akidb").join("config.yaml");
+
+    if !config_path.exists() {
+        return Ok(None);
+    }
+
+    let file = fs::File::open(&config_path).map_err(|e| e.to_string())?;
+    let reader = std::io::BufReader::new(file);
+    let config: AkidbConfig = serde_yaml::from_reader(reader)
+        .map_err(|e| format!("Failed to parse ~/.akidb/config.yaml: {e}"))?;
+    Ok(Some(config))
+}
+
+/// Write ~/.akidb/config.yaml, creating ~/.akidb/ if it does not exist.
+#[tauri::command]
+pub fn write_akidb_config(config: AkidbConfig) -> Result<(), String> {
+    let home = dirs::home_dir()
+        .ok_or_else(|| "Cannot determine home directory".to_string())?;
+    let config_dir = home.join(".akidb");
+
+    fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
+
+    let config_path = config_dir.join("config.yaml");
+    let yaml = serde_yaml::to_string(&config)
+        .map_err(|e| format!("Failed to serialize AkiDB config: {e}"))?;
+    fs::write(&config_path, yaml).map_err(|e| e.to_string())?;
+    Ok(())
 }

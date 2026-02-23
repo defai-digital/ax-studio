@@ -1,6 +1,6 @@
 use super::commands::is_extension_not_connected_error;
 use super::helpers::{add_server_config, add_server_config_with_path, run_mcp_commands};
-use crate::core::app::commands::get_jan_data_folder_path;
+use crate::core::app::commands::get_app_data_folder_path;
 use crate::core::state::{AppState, SharedMcpServers};
 use std::collections::HashMap;
 use std::fs::File;
@@ -22,7 +22,7 @@ async fn test_run_mcp_commands() {
     });
 
     // Get the app path where the config should be created
-    let app_path = get_jan_data_folder_path(app.handle().clone());
+    let app_path = get_app_data_folder_path(app.handle().clone());
     let config_path = app_path.join("mcp_config.json");
 
     // Ensure the directory exists
@@ -48,7 +48,7 @@ async fn test_run_mcp_commands() {
 #[test]
 fn test_add_server_config_new_file() {
     let app = mock_app();
-    let app_path = get_jan_data_folder_path(app.handle().clone());
+    let app_path = get_app_data_folder_path(app.handle().clone());
     let config_path = app_path.join("mcp_config_test_new.json");
 
     // Ensure the directory exists
@@ -99,7 +99,7 @@ fn test_add_server_config_new_file() {
 #[test]
 fn test_add_server_config_existing_servers() {
     let app = mock_app();
-    let app_path = get_jan_data_folder_path(app.handle().clone());
+    let app_path = get_app_data_folder_path(app.handle().clone());
     let config_path = app_path.join("mcp_config_test_existing.json");
 
     // Ensure the directory exists
@@ -166,7 +166,7 @@ fn test_add_server_config_existing_servers() {
 #[test]
 fn test_add_server_config_missing_config_file() {
     let app = mock_app();
-    let app_path = get_jan_data_folder_path(app.handle().clone());
+    let app_path = get_app_data_folder_path(app.handle().clone());
 
     // Ensure the directory exists
     if let Some(parent) = app_path.parent() {
@@ -362,7 +362,7 @@ async fn test_stop_mcp_servers_prevents_concurrent_shutdown() {
 
 #[test]
 fn test_extension_disconnected_error_detection() {
-    // Real error messages from Jan Browser MCP server when extension is not connected
+    // Real error messages from Ax-Fabric Browser MCP server when extension is not connected
     let disconnected_errors = [
         // Direct error messages from MCP server
         "Browser extension not connected to bridge",

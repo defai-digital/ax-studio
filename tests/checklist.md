@@ -11,7 +11,7 @@ Before testing, set-up the following in the old version to make sure that we can
 - [ ] Modify MCP servers list and add some ENV value to MCP servers
 - [ ] Modify Local API Server 
 - [ ] HTTPS proxy config value 
-- [ ] Add 2 custom assistants to Jan 
+- [ ] Add 2 custom assistants to Ax-Fabric 
 - [ ] Create a new chat with the custom assistant 
 - [ ] Change the `App Data` to some other folder
 - [ ] Create a Custom Provider 
@@ -46,7 +46,7 @@ Before testing, set-up the following in the old version to make sure that we can
 
 #### In `Settings -> Extensions`, check that following exists:
 - [ ] Conversational 
-- [ ] Jan Assistant
+- [ ] Ax-Fabric Assistant
 - [ ] Download Manager 
 - [ ] llama.cpp Inference Engine
 
@@ -84,7 +84,7 @@ In `Llama.cpp`:
 - [ ] Can import `gguf` model with no error
 - [ ] [0.7.0] While importing, there should be an import indication appear under `Models`
 - [ ] Imported model will be listed with correct name under the `Models`
-- [ ] [0.6.9] Take a `gguf` file and delete the `.gguf` extensions from the file name, import it into Jan and verify that it works.
+- [ ] [0.6.9] Take a `gguf` file and delete the `.gguf` extensions from the file name, import it into Ax-Fabric and verify that it works.
 - [ ] [0.6.10] Can import vlm models and chat with images
 - [ ] [0.6.10] Import a file that is not `mmproj` in the `mmproj field` should show validation error
 - [ ] [0.6.10] Import `mmproj` from different models should error
@@ -130,7 +130,7 @@ In Custom Providers:
 - [ ] Click `Refresh` should retrieve a list of available models from the Custom Providers.
 - [ ] User can chat with the custom providers
 - [ ] Ensure that Custom Providers can be deleted and won't reappear in a new session
-- [ ] [0.6.9] Make sure that Ollama set-up  as a custom provider work with Jan
+- [ ] [0.6.9] Make sure that Ollama set-up  as a custom provider work with Ax-Fabric
 
 In general:
 - [ ] Disabled Model Provider should not show up as selectable in chat input of new thread and old thread alike (old threads' chat input should show `Select Model` instead of disabled model)
@@ -186,9 +186,9 @@ Ensure that the following section information show up for hardware
 - [ ] `Open Logs` show the correct query log send to the server and return from the server
 - [ ] Make sure that changing all the parameter in `Server Configuration` is reflected when `Start Server`
 - [ ] [0.6.9] When the startup configuration, the last used model is also automatically start (users does not have to manually start a model before starting the server)
-- [ ] [0.6.9] Make sure that you can send an image to a Local API Server and it also works (can set up Local API Server as a Custom Provider in Jan to test)
+- [ ] [0.6.9] Make sure that you can send an image to a Local API Server and it also works (can set up Local API Server as a Custom Provider in Ax-Fabric to test)
 - [ ] [0.6.10] Make sure you are still able to see API key when server local status is running
-- [ ] [0.7.0] Users can see the Jan API Server Swagger UI by opening the following path in their browser `http://<ip>:<port>`
+- [ ] [0.7.0] Users can see the Ax-Fabric API Server Swagger UI by opening the following path in their browser `http://<ip>:<port>`
 - [ ] [0.7.0] Users can set the trusted host to * in the server configuration to accept requests from all host or without host
 #### In `HTTPS Proxy`:
 - [ ] Model download request goes through proxy endpoint
@@ -197,7 +197,7 @@ Ensure that the following section information show up for hardware
 - [ ] User can click `Download` to download a model
 - [ ] User can cancel a model in the middle of downloading
 - [ ] User can add a Hugging Face model detail to the list by pasting a model name / model url into the search bar and press enter
-- [ ] Clicking on a listing will open up the model card information within Jan and render the HTML properly
+- [ ] Clicking on a listing will open up the model card information within Ax-Fabric and render the HTML properly
 - [ ] Clicking download work on the `Show variants` section
 - [ ] Clicking download work inside the Model card HTML
 - [ ] [0.6.9] Check that the model recommendation base on user hardware work as expected in the Model Hub
@@ -254,8 +254,8 @@ Ensure that the following section information show up for hardware
 - [ ] [0.7.0] Favorited threads retain their "favorite" status even after being added to a project
 
 ## E. Assistants
-- [ ] There is always at least one default Assistant which is Jan
-- [ ] The default Jan assistant has `stream = True` by default 
+- [ ] There is always at least one default Assistant which is Ax-Fabric
+- [ ] The default Ax-Fabric assistant has `stream = True` by default 
 - [ ] User can create / edit a new assistant with different parameters and instructions choice.
 - [ ] When user delete the default Assistant, the next Assistant in line will be come the default Assistant and apply their setting to new chat accordingly.
 - [ ] User can create / edit assistant from within a Chat windows (on the top left)
@@ -267,7 +267,7 @@ In `Settings -> General`:
 - [ ] [0.7.0] Users cannot set the data location to root directories (e.g., C:\, D:\ on Windows), but can select subfolders within those drives (e.g., C:\data, D:\data)
 - [ ] Click on `Reset` button in `Other` to factory reset the app:
 	- [ ] All threads deleted
-	- [ ] All Assistant deleted except for default Jan Assistant
+	- [ ] All Assistant deleted except for default Ax-Fabric Assistant
 	- [ ] `App Data` location is reset back to default path
 	- [ ] Interface reset
 	- [ ] Model Providers information all reset
@@ -281,19 +281,19 @@ In `Settings -> General`:
 - [ ] Locate to the data folder using the `App Data` path information => delete the folder => reopen the app to check that all the folder is re-created with all the necessary data.
 - [ ] Ensure that the uninstallation process removes the app successfully from the system.
 ## G. New App Installation
-- [ ] Clean up by deleting all the left over folder created by Jan
+- [ ] Clean up by deleting all the left over folder created by Ax-Fabric
 	- [ ] On MacOS
-		- [ ] `~/Library/Application Support/Jan`
-		- [ ] `~/Library/Caches/jan.ai.app`
+		- [ ] `~/Library/Application Support/Ax-Fabric`
+		- [ ] `~/Library/Caches/ai.axfabric.app`
 	- [ ] On Windows
-		- [ ] `C:\Users<Username>\AppData\Roaming\Jan\`
-		- [ ] `C:\Users<Username>\AppData\Local\jan.ai.app`
+		- [ ] `C:\Users<Username>\AppData\Roaming\Ax-Fabric\`
+		- [ ] `C:\Users<Username>\AppData\Local\ai.axfabric.app`
 	- [ ] On Linux
-		- [ ] `~/.cache/Jan`
-		- [ ] `~/.cache/jan.ai.app`
-		- [ ] `~/.local/share/Jan`
-		- [ ] `~/.local/share/jan.ai.app`
-- [ ] Ensure that the fresh install of Jan launch
+		- [ ] `~/.cache/Ax-Fabric`
+		- [ ] `~/.cache/ai.axfabric.app`
+		- [ ] `~/.local/share/Ax-Fabric`
+		- [ ] `~/.local/share/ai.axfabric.app`
+- [ ] Ensure that the fresh install of Ax-Fabric launch
 - [ ] Do some basic check to see that all function still behaved as expected. To be extra careful, you can go through the whole list again. However, it is more advisable to just check to make sure that all the core functionality like `Thread` and `Model Providers` work as intended.
 
 # II. After release

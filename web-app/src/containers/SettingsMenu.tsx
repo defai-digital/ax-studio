@@ -189,11 +189,7 @@ const SettingsMenu = () => {
                           <div
                             className={cn(
                               'flex px-2 items-center gap-1.5 cursor-pointer hover:bg-secondary/60 py-1 w-full rounded-sm [&.active]:bg-secondary/80 text-foreground',
-                              isActive && 'bg-secondary',
-                              // hidden for llama.cpp provider for setup remote provider
-                              provider.provider === 'llama.cpp' &&
-                                stepSetupRemoteProvider &&
-                                'hidden'
+                              isActive && 'bg-secondary'
                             )}
                             onClick={() =>
                               navigate({

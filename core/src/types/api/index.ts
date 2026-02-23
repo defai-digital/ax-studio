@@ -98,7 +98,7 @@ export enum FileSystemRoute {
 }
 export enum FileManagerRoute {
   copyFile = 'copyFile',
-  getJanDataFolderPath = 'getJanDataFolderPath',
+  getAppDataFolderPath = 'getAppDataFolderPath',
   getResourcePath = 'getResourcePath',
   getUserHomePath = 'getUserHomePath',
   fileStat = 'fileStat',

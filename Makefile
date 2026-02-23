@@ -130,7 +130,7 @@ ifeq ($(OS),Windows_NT)
 	-powershell -Command "Remove-Item -Recurse -Force ./electron/pre-install/*.tgz"
 	-powershell -Command "Remove-Item -Recurse -Force ./src-tauri/resources"
 	-powershell -Command "Remove-Item -Recurse -Force ./src-tauri/target"
-	-powershell -Command "if (Test-Path \"$($env:USERPROFILE)\jan\extensions\") { Remove-Item -Path \"$($env:USERPROFILE)\jan\extensions\" -Recurse -Force }"
+	-powershell -Command "if (Test-Path \"$($env:USERPROFILE)\ax-fabric\extensions\") { Remove-Item -Path \"$($env:USERPROFILE)\ax-fabric\extensions\" -Recurse -Force }"
 else ifeq ($(shell uname -s),Linux)
 	find . -name "node_modules" -type d -prune -exec rm -rf '{}' +
 	find . -name ".next" -type d -exec rm -rf '{}' +

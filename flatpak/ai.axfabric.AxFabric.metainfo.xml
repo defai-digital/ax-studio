@@ -3,7 +3,7 @@
   <id>ai.axfabric.AxFabric</id>
   <metadata_license>FSFAP</metadata_license>
   <project_license>Apache-2.0</project_license>
-  <developer_name>Menlo Research Pte. Ltd.</developer_name>
+  <developer_name>Ax-Fabric</developer_name>
 
   <name>Ax-Fabric</name>
   <icon type="stock">ai.axfabric.AxFabric</icon>
@@ -20,16 +20,16 @@
 
   <description>
     <p>
-      Jan is an open source alternative to ChatGPT that runs 100% offline on your computer.
+      Ax-Fabric is an open-source AI desktop application that connects to any cloud AI provider and integrates with your own backend services.
     </p>
     <p xml:lang="pl">
-      Jan to otwartoźródłowa alternatywa dla ChatGPT, która działa w 100% bez dostępu do sieci na Twoim komputerze.
+      Ax-Fabric to otwarta aplikacja desktopowa AI, która łączy się z dowolnym dostawcą chmury AI i integruje z własnymi usługami backendowymi.
     </p>
 
     <p>Features</p>
     <ul>
-      <li>Local AI models: Run LLMs such as Llama, Gemma, Qwen and others on your device</li>
-      <li xml:lang="pl">Lokalne modele SI: Uruchamiaj duże modele językowe, takie jak Llama, Gemma i Qwen, na swoim urządzeniu.</li>
+      <li>Multi-provider chat: Connect to OpenAI, Anthropic, Mistral, Groq, Gemini and more</li>
+      <li xml:lang="pl">Czat z wieloma dostawcami: Połącz się z OpenAI, Anthropic, Mistral, Groq, Gemini i innymi.</li>
 
       <li>Optional cloud access: Connect to services like OpenAI, Anthropic, Gemini and Groq when internet-based models are required</li>
       <li xml:lang="pl">Opcjonalny dostęp do chmury: Łącz się z usługami, takimi jak OpenAI, Anthropic, Gemini i Groq, gdy wymagane są modele dostępne przez Internet.</li>
@@ -38,21 +38,21 @@
       <li xml:lang="pl">Własne asystenty: Twórz asystenty wyspecjalizowane do pisania, kodowania, podsumowywania itd.</li>
 
       <li>OpenAI-compatible API: Includes a local API server at localhost:1337 for tools expecting the OpenAI format</li>
-      <li xml:lang="pl">Interfejs API kompatybilny z OpenAI: Jan posiada lokalny serwer API, dostępny pod adresem localhost:1337, dla narzędzi zgodnych z formatem OpenAI.</li>
+      <li xml:lang="pl">Interfejs API kompatybilny z OpenAI: Ax-Fabric posiada lokalny serwer API, dostępny pod adresem localhost:1337, dla narzędzi zgodnych z formatem OpenAI.</li>
 
       <li>MCP support: Integrates the Model Context Protocol for enhanced workflows and tooling</li>
-      <li xml:lang="pl">Obsługa MCP: Jan obsługuje Model Context Protocol dla lepszego przepływu pracy i obsługi narzędzi.</li>
+      <li xml:lang="pl">Obsługa MCP: Ax-Fabric obsługuje Model Context Protocol dla lepszego przepływu pracy i obsługi narzędzi.</li>
 
-      <li>Privacy-aware design: Jan works offline by default. Cloud access is optional and user-controlled</li>
-      <li xml:lang="pl">Projekt uwzględniający prywatność: Jan domyślnie działa w trybie bez dostępu do sieci. Dostęp do chmury jest opcjonalny i pozostaje pod kontrolą użytkownika.</li>
+      <li>Privacy-aware design: Ax-Fabric keeps all conversation data on your machine. Cloud calls are direct from your device.</li>
+      <li xml:lang="pl">Projekt uwzględniający prywatność: Ax-Fabric przechowuje wszystkie dane rozmów na Twoim urządzeniu. Połączenia z chmurą są realizowane bezpośrednio z urządzenia.</li>
     </ul>
 
     <p>
-      Jan is actively maintained by Menlo Research.  
+      Ax-Fabric is actively maintained.  
       Feedback, bug reports and feature requests are welcomed through GitHub.
     </p>
     <p xml:lang="pl">
-      Aplikacja Jan jest aktywnie utrzymywana przez Menlo Research.
+      Aplikacja Ax-Fabric jest aktywnie utrzymywana.
       Informacje zwrotne, zgłoszenia błędów i prośby o nowe funkcje są mile widziane za pośrednictwem platformy GitHub.
     </p>
   </description>
@@ -60,32 +60,32 @@
   <launchable type="desktop-id">ai.axfabric.AxFabric.desktop</launchable>
   <screenshots>
   <screenshot>
-    <image>https://catalog.axfabric.ai/flatpak/jan_screenshot_1.png</image>
-    <caption>Blank Jan page with 0 threads</caption>
-    <caption xml:lang="pl">Pusta strona Jan bez żadnych wątków</caption>
+    <image>https://catalog.axfabric.ai/flatpak/ax_fabric_screenshot_1.png</image>
+    <caption>Blank Ax-Fabric page with 0 threads</caption>
+    <caption xml:lang="pl">Pusta strona Ax-Fabric bez żadnych wątków</caption>
   </screenshot>
   <screenshot type="default">
-    <image>https://catalog.axfabric.ai/flatpak/jan_screenshot_2.png</image>
-    <caption>Jan using a search MCP to gather information</caption>
-    <caption xml:lang="pl">Aplikacja Jan używająca wyszukiwania MCP celem zgromadzenia informacji</caption>
+    <image>https://catalog.axfabric.ai/flatpak/ax_fabric_screenshot_2.png</image>
+    <caption>Ax-Fabric using a search MCP to gather information</caption>
+    <caption xml:lang="pl">Aplikacja Ax-Fabric używająca wyszukiwania MCP celem zgromadzenia informacji</caption>
   </screenshot>
   <screenshot>
-    <image>https://catalog.axfabric.ai/flatpak/jan_screenshot_3.png</image>
+    <image>https://catalog.axfabric.ai/flatpak/ax_fabric_screenshot_3.png</image>
     <caption>Assistant creation screen</caption>
     <caption xml:lang="pl">Ekran tworzenia asystenta</caption>
   </screenshot>
   <screenshot>
-    <image>https://catalog.axfabric.ai/flatpak/jan_screenshot_4.png</image>
-    <caption>Jan Hub</caption>
-    <caption xml:lang="pl">Centrum modeli Jan</caption>
+    <image>https://catalog.axfabric.ai/flatpak/ax_fabric_screenshot_4.png</image>
+    <caption>Ax-Fabric Hub</caption>
+    <caption xml:lang="pl">Centrum modeli Ax-Fabric</caption>
   </screenshot>
   <screenshot>
-    <image>https://catalog.axfabric.ai/flatpak/jan_screenshot_5.png</image>
+    <image>https://catalog.axfabric.ai/flatpak/ax_fabric_screenshot_5.png</image>
     <caption>Llama.cpp screen showcasing the models</caption>
     <caption xml:lang="pl">Ekran Llama.cpp z listą modeli</caption>
   </screenshot>
   <screenshot>
-    <image>https://catalog.axfabric.ai/flatpak/jan_screenshot_6.png</image>
+    <image>https://catalog.axfabric.ai/flatpak/ax_fabric_screenshot_6.png</image>
     <caption>MCP Settings</caption>
     <caption xml:lang="pl">Ustawienia MCP</caption>
   </screenshot>
@@ -111,7 +111,7 @@
     </release>
     <release version="0.7.6" date="2026-01-27">
     <description>
-      <p>Unified interface seamlessly integrated with the groundbreaking Jan V3 model, delivering an unparalleled AI experience</p>
+      <p>Unified interface seamlessly integrated with the latest Ax-Fabric capabilities, delivering an unparalleled AI experience</p>
     </description>
   </release>
     <release version="0.7.5" date="2025-12-08">

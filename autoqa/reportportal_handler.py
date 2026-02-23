@@ -162,26 +162,26 @@ def extract_test_result_from_trajectory(trajectory_dir):
         logger.error(f"Error extracting test result: {e}")
         return False
 
-def get_jan_log_paths(is_nightly=False):
+def get_ax_fabric_log_paths(is_nightly=False):
     """
-    Get Jan application log file paths based on OS and version (nightly vs regular)
+    Get Ax-Fabric application log file paths based on OS and version (nightly vs regular)
     Returns list of glob patterns for log files
     """
     system = platform.system().lower()
-    app_name = "Jan-nightly" if is_nightly else "Jan"
+    app_name = "Ax-Fabric-nightly" if is_nightly else "Ax-Fabric"
     
     if system == "windows":
-        # Windows: %APPDATA%\Jan(-nightly)\data\logs\*.log
+        # Windows: %APPDATA%\Ax-Fabric(-nightly)\data\logs\*.log
         appdata = os.path.expandvars("%APPDATA%")
         return [f"{appdata}\\{app_name}\\data\\logs\\*.log"]
     
     elif system == "darwin":  # macOS
-        # macOS: ~/Library/Application Support/Jan(-nightly)/data/logs/*.log
+        # macOS: ~/Library/Application Support/Ax-Fabric(-nightly)/data/logs/*.log
         home_dir = os.path.expanduser("~")
         return [f"{home_dir}/Library/Application Support/{app_name}/data/logs/*.log"]
     
     elif system == "linux":
-        # Linux: ~/.local/share/Jan(-nightly)/data/logs/*.log
+        # Linux: ~/.local/share/Ax-Fabric(-nightly)/data/logs/*.log
         home_dir = os.path.expanduser("~")
         return [f"{home_dir}/.local/share/{app_name}/data/logs/*.log"]
     
@@ -189,14 +189,14 @@ def get_jan_log_paths(is_nightly=False):
         logger.warning(f"Unsupported OS: {system}")
         return []
 
-def upload_jan_logs(client, test_item_id, is_nightly=False, max_log_files=5):
+def upload_ax_fabric_logs(client, test_item_id, is_nightly=False, max_log_files=5):
     """
-    Upload Jan application log files to ReportPortal
+    Upload Ax-Fabric application log files to ReportPortal
     """
-    log_patterns = get_jan_log_paths(is_nightly)
+    log_patterns = get_ax_fabric_log_paths(is_nightly)
     app_type = "nightly" if is_nightly else "regular"
     
-    logger.info(f"Looking for Jan {app_type} logs...")
+    logger.info(f"Looking for Ax-Fabric {app_type} logs...")
     
     all_log_files = []
     for pattern in log_patterns:
@@ -208,11 +208,11 @@ def upload_jan_logs(client, test_item_id, is_nightly=False, max_log_files=5):
             logger.error(f"Error searching for logs with pattern {pattern}: {e}")
     
     if not all_log_files:
-        logger.warning(f"No Jan {app_type} log files found")
+        logger.warning(f"No Ax-Fabric {app_type} log files found")
         client.log(
             time=timestamp(),
             level="WARNING",
-            message=f"[INFO] No Jan {app_type} application logs found",
+            message=f"[INFO] No Ax-Fabric {app_type} application logs found",
             item_id=test_item_id
         )
         return
@@ -222,7 +222,7 @@ def upload_jan_logs(client, test_item_id, is_nightly=False, max_log_files=5):
         all_log_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
         log_files_to_upload = all_log_files[:max_log_files]
         
-        logger.info(f"Uploading {len(log_files_to_upload)} most recent Jan {app_type} log files")
+        logger.info(f"Uploading {len(log_files_to_upload)} most recent Ax-Fabric {app_type} log files")
         
         for i, log_file in enumerate(log_files_to_upload, 1):
             try:
@@ -251,10 +251,10 @@ def upload_jan_logs(client, test_item_id, is_nightly=False, max_log_files=5):
                 client.log(
                     time=timestamp(),
                     level="INFO",
-                    message=f"[INFO] Jan {app_type} application log: {file_name}",
+                    message=f"[INFO] Ax-Fabric {app_type} application log: {file_name}",
                     item_id=test_item_id,
                     attachment={
-                        "name": f"jan_{app_type}_log_{i}_{file_name}",
+                        "name": f"ax_fabric_{app_type}_log_{i}_{file_name}",
                         "data": log_content.encode('utf-8'),
                         "mime": "text/plain"
                     }
@@ -275,16 +275,16 @@ def upload_jan_logs(client, test_item_id, is_nightly=False, max_log_files=5):
         client.log(
             time=timestamp(),
             level="INFO",
-            message=f"[INFO] Uploaded {len(log_files_to_upload)} Jan {app_type} log files (total available: {len(all_log_files)})",
+            message=f"[INFO] Uploaded {len(log_files_to_upload)} Ax-Fabric {app_type} log files (total available: {len(all_log_files)})",
             item_id=test_item_id
         )
         
     except Exception as e:
-        logger.error(f"Error processing Jan logs: {e}")
+        logger.error(f"Error processing Ax-Fabric logs: {e}")
         client.log(
             time=timestamp(),
             level="ERROR",
-            message=f"Error processing Jan {app_type} logs: {str(e)}",
+            message=f"Error processing Ax-Fabric {app_type} logs: {str(e)}",
             item_id=test_item_id
         )
 
@@ -409,9 +409,9 @@ def upload_test_results_to_rp(client, launch_id, test_path, trajectory_dir, forc
                 item_id=test_item_id
             )
         
-        # Upload Jan application logs
-        logger.info("Uploading Jan application logs...")
-        upload_jan_logs(client, test_item_id, is_nightly=is_nightly, max_log_files=5)
+        # Upload Ax-Fabric application logs
+        logger.info("Uploading Ax-Fabric application logs...")
+        upload_ax_fabric_logs(client, test_item_id, is_nightly=is_nightly, max_log_files=5)
         
         # Upload all turn data with appropriate status
         # If test failed, mark all turns as failed

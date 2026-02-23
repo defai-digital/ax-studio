@@ -18,7 +18,7 @@ use std::sync::OnceLock;
 use tauri::{AppHandle, Manager, Runtime};
 use tokio::sync::Mutex;
 
-const DB_NAME: &str = "jan.db";
+const DB_NAME: &str = "ax-fabric.db";
 
 /// Global database pool for mobile platforms
 static DB_POOL: OnceLock<Mutex<Option<SqlitePool>>> = OnceLock::new();

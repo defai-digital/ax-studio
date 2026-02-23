@@ -6,8 +6,8 @@
       "checking": "Sprawdzanie statusu rozszerzenia..."
     },
     "notInstalled": {
-      "title": "Jan wykonuje zadania w Twojej przeglądarce",
-      "description": "Zainstaluj rozszerzenie, aby dać Janowi dostęp do przeglądarki",
+      "title": "Ax-Fabric wykonuje zadania w Twojej przeglądarce",
+      "description": "Zainstaluj rozszerzenie, aby dać Ax-Fabric dostęp do przeglądarki",
       "getExtension": "Pobierz rozszerzenie"
     }
   },
@@ -56,7 +56,7 @@
   "serverStatusInactive": "Pomyślnie dezaktywowano serwer {{serverKey}}",
   "runtimeSettings": {
     "title": "Ustawienia środowiska uruchomieniowego",
-    "description": "Skonfiguruj, jak Jan zarządza i ponawia próby połączenia z serwerami MCP.",
+    "description": "Skonfiguruj, jak Ax-Fabric zarządza i ponawia próby połączenia z serwerami MCP.",
     "toolCallTimeout": "Limit czasu wywołania narzędzia (sekundy)",
     "toolCallTimeoutDesc": "Maksymalny czas oczekiwania na odpowiedź narzędzia MCP przed przekroczeniem limitu czasu."
   }

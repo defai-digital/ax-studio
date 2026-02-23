@@ -73,7 +73,7 @@ export class DefaultUploadsService implements UploadsService {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        path: params.attachment.url,
+        path: params.attachment.path,
         name: params.attachment.name,
         size: params.attachment.size,
         thread_id: params.threadId,

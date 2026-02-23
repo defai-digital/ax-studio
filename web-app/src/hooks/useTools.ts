@@ -9,6 +9,7 @@ import { ExtensionTypeEnum, MCPExtension } from '@ax-fabric/core'
 export const useTools = () => {
   const updateTools = useAppState((state) => state.updateTools)
   const updateMcpToolNames = useAppState((state) => state.updateMcpToolNames)
+  const updateRagToolNames = useAppState((state) => state.updateRagToolNames)
   const { isDefaultsInitialized, setDefaultDisabledTools, markDefaultsAsInitialized } = useToolAvailable()
 
   useEffect(() => {
@@ -38,6 +39,14 @@ export const useTools = () => {
         }
       } catch (error) {
         console.error('Failed to fetch MCP tools:', error)
+      }
+
+      // Fetch RAG tools from the Retrieval Service (fails silently when service is offline)
+      try {
+        const ragTools = await getServiceHub().rag().getTools()
+        updateRagToolNames(ragTools.map((t) => t.name))
+      } catch {
+        updateRagToolNames([])
       }
     }
     setTools()

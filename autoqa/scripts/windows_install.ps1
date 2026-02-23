@@ -1,20 +1,20 @@
 #!/usr/bin/env pwsh
-# Windows install script for Jan app
+# Windows install script for Ax-Fabric app
 
 param(
     [string]$IsNightly = "false"
 )
 
-$installerPath = "$env:TEMP\jan-installer.exe"
+$installerPath = "$env:TEMP\ax-fabric-installer.exe"
 $isNightly = [System.Convert]::ToBoolean($IsNightly)
 
-Write-Host "Installing Jan app..."
+Write-Host "Installing Ax-Fabric app..."
 Write-Host "Is nightly build: $isNightly"
 
 # Try silent installation first
 try {
     Start-Process -FilePath $installerPath -ArgumentList "/S" -Wait -NoNewWindow
-    Write-Host "Jan app installed silently"
+    Write-Host "Ax-Fabric app installed silently"
 }
 catch {
     Write-Host "Silent installation failed, trying normal installation..."
@@ -24,25 +24,25 @@ catch {
 # Wait a bit for installation to complete
 Start-Sleep -Seconds 10
 
-Write-Host "[INFO] Waiting for Jan app first initialization (120 seconds)..."
-Write-Host "This allows Jan to complete its initial setup and configuration"
+Write-Host "[INFO] Waiting for Ax-Fabric app first initialization (120 seconds)..."
+Write-Host "This allows Ax-Fabric to complete its initial setup and configuration"
 Start-Sleep -Seconds 120
 Write-Host "[SUCCESS] Initialization wait completed"
 
 # Verify installation based on nightly flag
 if ($isNightly) {
-    $defaultJanPath = "$env:LOCALAPPDATA\Programs\jan-nightly\Jan-nightly.exe"
-    $processName = "Jan-nightly.exe"
+    $defaultAxFabricPath = "$env:LOCALAPPDATA\Programs\ax-fabric-nightly\Ax-Fabric-nightly.exe"
+    $processName = "Ax-Fabric-nightly.exe"
 } else {
-    $defaultJanPath = "$env:LOCALAPPDATA\Programs\jan\Jan.exe"
-    $processName = "Jan.exe"
+    $defaultAxFabricPath = "$env:LOCALAPPDATA\Programs\ax-fabric\Ax-Fabric.exe"
+    $processName = "Ax-Fabric.exe"
 }
 
-if (Test-Path $defaultJanPath) {
-    Write-Host "Jan app installed successfully at: $defaultJanPath"
-    Write-Output "JAN_APP_PATH=$defaultJanPath" >> $env:GITHUB_ENV
-    Write-Output "JAN_PROCESS_NAME=$processName" >> $env:GITHUB_ENV
+if (Test-Path $defaultAxFabricPath) {
+    Write-Host "Ax-Fabric app installed successfully at: $defaultAxFabricPath"
+    Write-Output "AX_FABRIC_APP_PATH=$defaultAxFabricPath" >> $env:GITHUB_ENV
+    Write-Output "AX_FABRIC_PROCESS_NAME=$processName" >> $env:GITHUB_ENV
 } else {
-    Write-Warning "Jan app not found at expected location: $defaultJanPath"
+    Write-Warning "Ax-Fabric app not found at expected location: $defaultAxFabricPath"
     Write-Host "Will auto-detect during test run"
 }

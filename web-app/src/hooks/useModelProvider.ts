@@ -38,9 +38,6 @@ export const useModelProvider = create<ModelProviderState>()(
       setProviders: (providers) =>
         set((state) => {
           const existingProviders = state.providers
-            // Filter out legacy llama.cpp provider for migration
-            // Can remove after a couple of releases
-            .filter((e) => e.provider !== 'llama.cpp')
             .map((provider) => {
               return {
                 ...provider,
@@ -51,17 +48,6 @@ export const useModelProvider = create<ModelProviderState>()(
                 ),
               }
             })
-
-          let legacyModels: Model[] | undefined = []
-          /// Cortex Migration
-          if (
-            localStorage.getItem('cortex_model_settings_migrated') !== 'true'
-          ) {
-            legacyModels = state.providers.find(
-              (e) => e.provider === 'llama.cpp'
-            )?.models
-            localStorage.setItem('cortex_model_settings_migrated', 'true')
-          }
           // Ensure deletedModels is always an array
           const currentDeletedModels = Array.isArray(state.deletedModels)
             ? state.deletedModels
@@ -88,10 +74,7 @@ export const useModelProvider = create<ModelProviderState>()(
             ]
             const updatedModels = provider.models?.map((model) => {
               const settings =
-                (legacyModels && legacyModels?.length > 0
-                  ? legacyModels
-                  : models
-                ).find(
+                models.find(
                   (m) =>
                     m.id
                       .split(':')

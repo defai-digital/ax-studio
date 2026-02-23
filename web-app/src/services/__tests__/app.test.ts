@@ -120,24 +120,24 @@ describe('TauriAppService', () => {
     })
   })
 
-  describe('getJanDataFolder', () => {
-    it('should get jan data folder path', async () => {
-      const mockConfig = { data_folder: '/path/to/jan/data' }
+  describe('getAppDataFolder', () => {
+    it('should get app data folder path', async () => {
+      const mockConfig = { data_folder: '/path/to/ax-fabric/data' }
       mockWindow.core.api.getAppConfigurations.mockResolvedValue(mockConfig)
 
-      const result = await appService.getJanDataFolder()
+      const result = await appService.getAppDataFolder()
 
       expect(mockWindow.core.api.getAppConfigurations).toHaveBeenCalled()
-      expect(result).toBe('/path/to/jan/data')
+      expect(result).toBe('/path/to/ax-fabric/data')
     })
   })
 
-  describe('relocateJanDataFolder', () => {
-    it('should relocate jan data folder', async () => {
-      const newPath = '/new/path/to/jan/data'
+  describe('relocateAppDataFolder', () => {
+    it('should relocate app data folder', async () => {
+      const newPath = '/new/path/to/ax-fabric/data'
       mockWindow.core.api.changeAppDataFolder.mockResolvedValue(undefined)
 
-      await appService.relocateJanDataFolder(newPath)
+      await appService.relocateAppDataFolder(newPath)
 
       expect(mockWindow.core.api.changeAppDataFolder).toHaveBeenCalledWith({
         newDataFolder: newPath,

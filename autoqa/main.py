@@ -49,16 +49,16 @@ def get_computer_config():
             "os_type": "linux"
         }
 
-def get_default_jan_path():
-    """Get default Jan app path based on OS"""
+def get_default_ax_fabric_path():
+    """Get default Ax-Fabric app path based on OS"""
     if IS_WINDOWS:
         # Try multiple common locations on Windows
         possible_paths = [
-            os.path.expanduser(r"~\AppData\Local\Programs\jan\Jan.exe"),
-            os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'jan', 'Jan.exe'),
-            os.path.join(os.environ.get('APPDATA', ''), 'jan', 'Jan.exe'),
-            r"C:\Program Files\jan\Jan.exe",
-            r"C:\Program Files (x86)\jan\Jan.exe"
+            os.path.expanduser(r"~\AppData\Local\Programs\ax-fabric\Ax-Fabric.exe"),
+            os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'ax-fabric', 'Ax-Fabric.exe'),
+            os.path.join(os.environ.get('APPDATA', ''), 'ax-fabric', 'Ax-Fabric.exe'),
+            r"C:\Program Files\ax-fabric\Ax-Fabric.exe",
+            r"C:\Program Files (x86)\ax-fabric\Ax-Fabric.exe"
         ]
         
         # Return first existing path, or first option as default
@@ -72,10 +72,10 @@ def get_default_jan_path():
     elif IS_LINUX:
         # Linux possible locations
         possible_paths = [
-            "/usr/bin/Jan",
-            "/usr/local/bin/Jan",
-            os.path.expanduser("~/Applications/Jan/Jan"),
-            "/opt/Jan/Jan"
+            "/usr/bin/Ax-Fabric",
+            "/usr/local/bin/Ax-Fabric",
+            os.path.expanduser("~/Applications/Ax-Fabric/Ax-Fabric"),
+            "/opt/Ax-Fabric/Ax-Fabric"
         ]
         
         # Return first existing path, or first option as default
@@ -84,13 +84,13 @@ def get_default_jan_path():
                 return path
         
         # Default to nightly build path
-        return "/usr/bin/Jan"
+        return "/usr/bin/Ax-Fabric"
     
     elif IS_MACOS:
         # macOS defaults
         possible_paths = [
-            "/Applications/Jan.app/Contents/MacOS/Jan",
-            os.path.expanduser("~/Applications/Jan.app/Contents/MacOS/Jan")
+            "/Applications/Ax-Fabric.app/Contents/MacOS/Ax-Fabric",
+            os.path.expanduser("~/Applications/Ax-Fabric.app/Contents/MacOS/Ax-Fabric")
         ]
         
         for path in possible_paths:
@@ -101,7 +101,7 @@ def get_default_jan_path():
     
     else:
         # Unknown platform
-        return "jan"
+        return "ax-fabric"
 
 def start_computer_server():
     """Start computer server in background thread"""
@@ -177,8 +177,8 @@ Examples:
   # Run with ReportPortal integration
   python main.py --enable-reportportal --rp-token YOUR_TOKEN
   
-  # Run with custom Jan app path
-  python main.py --jan-app-path "C:/Custom/Path/Jan.exe"
+  # Run with custom Ax-Fabric app path
+  python main.py --app-path "C:/Custom/Path/Ax-Fabric.exe"
   
   # Run with different model
   python main.py --model-name "gpt-4" --model-base-url "https://api.openai.com/v1"
@@ -188,8 +188,8 @@ Examples:
         """
     )
     
-    # Get default Jan path
-    default_jan_path = get_default_jan_path()
+    # Get default Ax-Fabric path
+    default_ax_fabric_path = get_default_ax_fabric_path()
     
     # Computer server arguments
     server_group = parser.add_argument_group('Computer Server Configuration')
@@ -210,7 +210,7 @@ Examples:
     )
     rp_group.add_argument(
         '--rp-endpoint',
-        default=os.getenv('RP_ENDPOINT', 'https://reportportal.menlo.ai'),
+        default=os.getenv('RP_ENDPOINT', 'https://reportportal.axfabric.ai'),
         help='ReportPortal endpoint URL (env: RP_ENDPOINT, default: %(default)s)'
     )
     rp_group.add_argument(
@@ -229,17 +229,17 @@ Examples:
         help='Custom launch name for ReportPortal (env: LAUNCH_NAME, default: auto-generated with timestamp)'
     )
     
-    # Jan app arguments
-    jan_group = parser.add_argument_group('Jan Application Configuration')
-    jan_group.add_argument(
-        '--jan-app-path',
-        default=os.getenv('JAN_APP_PATH', default_jan_path),
-        help=f'Path to Jan application executable (env: JAN_APP_PATH, default: auto-detected or {default_jan_path})'
+    # Ax-Fabric app arguments
+    app_group = parser.add_argument_group('Ax-Fabric Application Configuration')
+    app_group.add_argument(
+        '--app-path',
+        default=os.getenv('AX_FABRIC_APP_PATH', default_ax_fabric_path),
+        help=f'Path to Ax-Fabric application executable (env: AX_FABRIC_APP_PATH, default: auto-detected or {default_ax_fabric_path})'
     )
-    jan_group.add_argument(
-        '--jan-process-name',
-        default=os.getenv('JAN_PROCESS_NAME', 'Jan.exe' if IS_WINDOWS else ('Jan' if IS_MACOS else 'Jan-nightly')),
-        help='Jan process name for monitoring (env: JAN_PROCESS_NAME, default: platform-specific)'
+    app_group.add_argument(
+        '--process-name',
+        default=os.getenv('AX_FABRIC_PROCESS_NAME', 'Ax-Fabric.exe' if IS_WINDOWS else ('Ax-Fabric' if IS_MACOS else 'Ax-Fabric-nightly')),
+        help='Ax-Fabric process name for monitoring (env: AX_FABRIC_PROCESS_NAME, default: platform-specific)'
     )
     
     # Model/Agent arguments
@@ -328,9 +328,9 @@ async def main():
         logger.info(f"Tests directory: {args.tests_dir}")
         logger.info(f"Max turns per test: {args.max_turns}")
         logger.info(f"Delay between tests: {args.delay_between_tests}s")
-        logger.info(f"Jan app path: {args.jan_app_path}")
-        logger.info(f"Jan app exists: {os.path.exists(args.jan_app_path)}")
-        logger.info(f"Jan process name: {args.jan_process_name}")
+        logger.info(f"Ax-Fabric app path: {args.app_path}")
+        logger.info(f"Ax-Fabric app exists: {os.path.exists(args.app_path)}")
+        logger.info(f"Ax-Fabric process name: {args.process_name}")
         logger.info(f"Model: {args.model_name}")
         logger.info(f"Model URL: {args.model_base_url}")
         logger.info(f"Model provider: {args.model_provider}")
@@ -415,13 +415,13 @@ async def main():
             try:
                 # Pass all configs to test runner
                 test_result = await run_single_test_with_timeout(
-                    computer=computer, 
-                    test_data=test_data, 
+                    computer=computer,
+                    test_data=test_data,
                     rp_client=rp_client,  # Can be None
                     launch_id=launch_id,  # Can be None
                     max_turns=args.max_turns,
-                    jan_app_path=args.jan_app_path,
-                    jan_process_name=args.jan_process_name,
+                    app_path=args.app_path,
+                    app_process_name=args.process_name,
                     agent_config=agent_config,
                     enable_reportportal=args.enable_reportportal
                 )

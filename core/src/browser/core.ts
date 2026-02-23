@@ -1,11 +1,11 @@
 import { SystemInformation } from '../types'
 
 /**
- * Gets Jan's data folder path.
+ * Gets the application data folder path.
  *
- * @returns {Promise<string>} A Promise that resolves with Jan's data folder path.
+ * @returns {Promise<string>} A Promise that resolves with the application data folder path.
  */
-const getJanDataFolderPath = (): Promise<string> => globalThis.core.api?.getJanDataFolderPath()
+const getAppDataFolderPath = (): Promise<string> => globalThis.core.api?.getAppDataFolderPath()
 
 /**
  * Opens the file explorer at a specific path.
@@ -101,7 +101,7 @@ export type RegisterExtensionPoint = (
  * Functions exports
  */
 export {
-  getJanDataFolderPath,
+  getAppDataFolderPath,
   openFileExplorer,
   getResourcePath,
   joinPath,

@@ -32,8 +32,7 @@ export const useModelSources = create<ModelSourcesState>()(
                   ...quant,
                   model_id: sanitizeModelId(quant.model_id),
                 })),
-                is_mlx: catalog.library_name === 'mlx',
-              })).filter(e => IS_MACOS ? true : !e.is_mlx)
+              }))
             )
 
           set({

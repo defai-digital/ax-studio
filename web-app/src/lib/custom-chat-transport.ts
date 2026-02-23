@@ -37,6 +37,11 @@ export type ServiceHub = {
       Array<{ name: string; description: string; inputSchema: unknown }>
     >
   }
+  rag(): {
+    getTools(): Promise<
+      Array<{ name: string; description: string; inputSchema: unknown }>
+    >
+  }
 }
 
 export class CustomChatTransport implements ChatTransport<UIMessage> {
@@ -44,6 +49,7 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
   private tools: Record<string, Tool> = {}
   private onTokenUsage?: TokenUsageCallback
   private modelSupportsTools = false
+  private hasDocuments = false
   private systemMessage?: string
   private serviceHub: ServiceHub | null
   private threadId?: string
@@ -63,17 +69,18 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
   }
 
   /**
-   * Update tool availability based on model capabilities.
-   * RAG parameters are accepted for API compatibility but are no longer used.
+   * Update tool availability based on model capabilities and document state.
+   * Called whenever the thread's document state or selected model changes.
    */
   async updateRagToolsAvailability(
-    _hasDocuments: boolean,
+    hasDocuments: boolean,
     modelSupportsTools: boolean,
-    _ragFeatureAvailable: boolean
+    ragFeatureAvailable: boolean
   ) {
     this.modelSupportsTools = modelSupportsTools
+    // Only expose RAG tools when the feature is enabled AND documents have been indexed
+    this.hasDocuments = ragFeatureAvailable && hasDocuments
 
-    // Update tools based on current state
     await this.refreshTools()
   }
 
@@ -127,6 +134,30 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
         }
       } catch (error) {
         console.warn('Failed to load MCP tools:', error)
+      }
+
+      // Load RAG tools when documents have been indexed into the thread/project.
+      // RAG tools come from the Retrieval Service (/tools endpoint) and are
+      // routed to rag().callTool() in the thread component — not through MCP.
+      if (this.hasDocuments) {
+        try {
+          const ragTools = await this.serviceHub.rag().getTools()
+          if (Array.isArray(ragTools) && ragTools.length > 0) {
+            ragTools.forEach((tool) => {
+              // Use 'retrieval' as the server namespace for the disable-check key
+              if (!isToolDisabled('retrieval', tool.name)) {
+                toolsRecord[tool.name] = {
+                  description: tool.description,
+                  inputSchema: jsonSchema(
+                    tool.inputSchema as Record<string, unknown>
+                  ),
+                } as Tool
+              }
+            })
+          }
+        } catch (error) {
+          console.warn('Failed to load RAG tools (retrieval service may be offline):', error)
+        }
       }
     }
 

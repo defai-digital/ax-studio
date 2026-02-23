@@ -1,7 +1,7 @@
 /**
  * Ax-Fabric Setup / Onboarding Screen
  *
- * Shown on first launch.  Replaces the Jan local-model download flow with
+ * Shown on first launch.  Replaces the original local-model download flow with
  * an Ax-Fabric backend service configuration step so the user can point the
  * app at their self-hosted services before entering the main UI.
  */

@@ -59,7 +59,7 @@ futures-util = "0.3.31"
 hex = "0.4"
 hmac = "0.12"
 hyper = { version = "0.14", features = ["server"] }
-jan-utils = { path = "./utils", package = "ax-fabric-utils" }
+ax-fabric-utils = { path = "./utils", package = "ax-fabric-utils" }
 libloading = "0.8.7"
 log = "0.4"
 rand = "0.8"

@@ -29,22 +29,22 @@ ${StrLoc}
 !define WEBVIEW2APPGUID "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
 
 !define MANUFACTURER "Ax-Fabric"
-!define PRODUCTNAME "jan_productname"
-!define VERSION "jan_version"
-!define VERSIONWITHBUILD "jan_build"
+!define PRODUCTNAME "ax_fabric_productname"
+!define VERSION "ax_fabric_version"
+!define VERSIONWITHBUILD "ax_fabric_build"
 !define HOMEPAGE ""
 !define INSTALLMODE "currentUser"
 !define LICENSE ""
-!define INSTALLERICON "D:\a\jan\jan\src-tauri\icons\icon.ico"
+!define INSTALLERICON "D:\a\ax-fabric\ax-fabric\src-tauri\icons\icon.ico"
 !define SIDEBARIMAGE ""
 !define HEADERIMAGE ""
-!define MAINBINARYNAME "jan_mainbinaryname"
-!define MAINBINARYSRCPATH "D:\a\jan\jan\src-tauri\target\release\jan_mainbinaryname.exe"
-!define BUNDLEID "jan_mainbinaryname.ai.app"
+!define MAINBINARYNAME "ax_fabric_mainbinaryname"
+!define MAINBINARYSRCPATH "D:\a\ax-fabric\ax-fabric\src-tauri\target\release\ax_fabric_mainbinaryname.exe"
+!define BUNDLEID "ax_fabric_mainbinaryname.ai.app"
 !define COPYRIGHT ""
 !define OUTFILE "nsis-output.exe"
 !define ARCH "x64"
-!define ADDITIONALPLUGINSPATH "D:\a\jan\jan\src-tauri\target\release\nsis\x64\Plugins\x86-unicode\additional"
+!define ADDITIONALPLUGINSPATH "D:\a\ax-fabric\ax-fabric\src-tauri\target\release\nsis\x64\Plugins\x86-unicode\additional"
 !define ALLOWDOWNGRADES "true"
 !define DISPLAYLANGUAGESELECTOR "false"
 !define INSTALLWEBVIEW2MODE "downloadBootstrapper"
@@ -452,7 +452,7 @@ FunctionEnd
 ;Languages
 !insertmacro MUI_LANGUAGE "English"
 !insertmacro MUI_RESERVEFILE_LANGDLL
-  !include "D:\a\jan\jan\src-tauri\target\release\nsis\x64\English.nsh"
+  !include "D:\a\ax-fabric\ax-fabric\src-tauri\target\release\nsis\x64\English.nsh"
 
 Function .onInit
   ${GetOptions} $CMDLINE "/P" $PassiveMode
@@ -697,14 +697,14 @@ Section Install
     CreateDirectory "$INSTDIR\resources"
     CreateDirectory "$INSTDIR\resources\pre-install"
     SetOutPath $INSTDIR
-    File /a "/oname=LICENSE" "D:\a\jan\jan\src-tauri\resources\LICENSE"
+    File /a "/oname=LICENSE" "D:\a\ax-fabric\ax-fabric\src-tauri\resources\LICENSE"
     SetOutPath "$INSTDIR\resources\pre-install"
-    File /nonfatal /a /r "D:\a\jan\jan\src-tauri\resources\pre-install\"
+    File /nonfatal /a /r "D:\a\ax-fabric\ax-fabric\src-tauri\resources\pre-install\"
     SetOutPath $INSTDIR
 
   ; Copy external binaries
-    File /a "/oname=bun.exe" "D:\a\jan\jan\src-tauri\resources\bin\bun-x86_64-pc-windows-msvc.exe"
-    File /a "/oname=uv.exe" "D:\a\jan\jan\src-tauri\resources\bin\uv-x86_64-pc-windows-msvc.exe"
+    File /a "/oname=bun.exe" "D:\a\ax-fabric\ax-fabric\src-tauri\resources\bin\bun-x86_64-pc-windows-msvc.exe"
+    File /a "/oname=uv.exe" "D:\a\ax-fabric\ax-fabric\src-tauri\resources\bin\uv-x86_64-pc-windows-msvc.exe"
 
   ; Create file associations
 
@@ -825,12 +825,9 @@ Section Uninstall
     Delete "$INSTDIR\LICENSE"
 
   ; Delete resources
-    Delete "$INSTDIR\resources\pre-install\janhq-assistant-extension-1.0.2.tgz"
-    Delete "$INSTDIR\resources\pre-install\janhq-conversational-extension-1.0.0.tgz"
-    Delete "$INSTDIR\resources\pre-install\janhq-engine-management-extension-1.0.3.tgz"
-    Delete "$INSTDIR\resources\pre-install\janhq-hardware-management-extension-1.0.0.tgz"
-    Delete "$INSTDIR\resources\pre-install\janhq-inference-cortex-extension-1.0.25.tgz"
-    Delete "$INSTDIR\resources\pre-install\janhq-model-extension-1.0.36.tgz"
+    Delete "$INSTDIR\resources\pre-install\ax-fabric-assistant-extension.tgz"
+    Delete "$INSTDIR\resources\pre-install\ax-fabric-conversational-extension.tgz"
+    Delete "$INSTDIR\resources\pre-install\ax-fabric-download-extension.tgz"
 
   ; Delete external binaries
     Delete "$INSTDIR\bun.exe"

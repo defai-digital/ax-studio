@@ -1,5 +1,5 @@
 /**
- * EventEmitter class - matches jan-dev implementation
+ * EventEmitter class - matches Ax-Fabric event emitter interface
  * Used by ExtensionProvider to set window.core.events
  */
 

@@ -28,19 +28,19 @@ export class TauriAppService extends DefaultAppService {
     return logData.split('\n').map(this.parseLogLine)
   }
 
-  async getJanDataFolder(): Promise<string | undefined> {
+  async getAppDataFolder(): Promise<string | undefined> {
     try {
       const appConfiguration: AppConfiguration | undefined =
         await window.core?.api?.getAppConfigurations()
 
       return appConfiguration?.data_folder
     } catch (error) {
-      console.error('Failed to get Jan data folder:', error)
+      console.error('Failed to get Ax-Fabric data folder:', error)
       return undefined
     }
   }
 
-  async relocateJanDataFolder(path: string): Promise<void> {
+  async relocateAppDataFolder(path: string): Promise<void> {
     await window.core?.api?.changeAppDataFolder({ newDataFolder: path })
   }
 

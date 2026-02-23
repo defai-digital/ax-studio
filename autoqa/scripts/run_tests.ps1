@@ -2,14 +2,14 @@
 # Windows test runner script
 
 param(
-    [string]$JanAppPath,
+    [string]$AxFabricAppPath,
     [string]$ProcessName,
     [string]$RpToken
 )
 
 Write-Host "Starting Auto QA Tests..."
 
-Write-Host "Jan app path: $JanAppPath"
+Write-Host "Ax-Fabric app path: $AxFabricAppPath"
 Write-Host "Process name: $ProcessName"
 Write-Host "Current working directory: $(Get-Location)"
 Write-Host "Contents of current directory:"
@@ -22,10 +22,10 @@ if (Test-Path "trajectories") {
 }
 
 # Run the main test with proper arguments
-if ($JanAppPath -and $ProcessName) {
-    python main.py --enable-reportportal --rp-token "$RpToken" --jan-app-path "$JanAppPath" --jan-process-name "$ProcessName"
-} elseif ($JanAppPath) {
-    python main.py --enable-reportportal --rp-token "$RpToken" --jan-app-path "$JanAppPath"
+if ($AxFabricAppPath -and $ProcessName) {
+    python main.py --enable-reportportal --rp-token "$RpToken" --app-path "$AxFabricAppPath" --process-name "$ProcessName"
+} elseif ($AxFabricAppPath) {
+    python main.py --enable-reportportal --rp-token "$RpToken" --app-path "$AxFabricAppPath"
 } else {
     python main.py --enable-reportportal --rp-token "$RpToken"
 }

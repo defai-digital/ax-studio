@@ -6,8 +6,8 @@
       "checking": "Memeriksa status ekstensi..."
     },
     "notInstalled": {
-      "title": "Jan menyelesaikan tugas di browser Anda",
-      "description": "Instal ekstensi untuk memberikan Jan akses browser",
+      "title": "Ax-Fabric menyelesaikan tugas di browser Anda",
+      "description": "Instal ekstensi untuk memberikan Ax-Fabric akses browser",
       "getExtension": "Dapatkan Ekstensi"
     }
   },
@@ -56,7 +56,7 @@
   "serverStatusInactive": "Server {{serverKey}} berhasil dinonaktifkan",
   "runtimeSettings": {
     "title": "Pengaturan Runtime",
-    "description": "Atur bagaimana Jan mengelola dan mencoba ulang server MCP.",
+    "description": "Atur bagaimana Ax-Fabric mengelola dan mencoba ulang server MCP.",
     "toolCallTimeout": "Batas waktu pemanggilan alat (detik)",
     "toolCallTimeoutDesc": "Waktu maksimum menunggu respons alat MCP sebelum waktu habis."
   }

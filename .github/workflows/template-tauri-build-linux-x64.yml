@@ -44,7 +44,7 @@ on:
         required: false
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD:
         required: false
-      JAN_SIGNING_KEY:
+      AX_FABRIC_SIGNING_KEY:
         required: false
     outputs:
       DEB_SIG:
@@ -151,9 +151,9 @@ jobs:
           # Change app name for beta and nightly builds
           if [ "${{ inputs.channel }}" != "stable" ]; then
             if [[ "${{ inputs.channel }}" == "nightly" ]]; then
-              jq '.plugins.updater.endpoints = ["https://apps-nightly.jan.ai/update-check", "https://delta.jan.ai/${{ inputs.channel }}/latest.json"]' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
+              jq '.plugins.updater.endpoints = ["https://apps-nightly.axfabric.ai/update-check", "https://delta.axfabric.ai/${{ inputs.channel }}/latest.json"]' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
             else
-              jq '.plugins.updater.endpoints = ["https://delta.jan.ai/${{ inputs.channel }}/latest.json"]' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
+              jq '.plugins.updater.endpoints = ["https://delta.axfabric.ai/${{ inputs.channel }}/latest.json"]' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
             fi
             mv /tmp/tauri.conf.json ./src-tauri/tauri.conf.json
 
@@ -163,7 +163,7 @@ jobs:
             cat ./src-tauri/tauri.conf.json
 
             # Update Cargo.toml
-            ctoml ./src-tauri/Cargo.toml package.name "Jan-${{ inputs.channel }}"
+            ctoml ./src-tauri/Cargo.toml package.name "Ax-Fabric-${{ inputs.channel }}"
             ctoml ./src-tauri/Cargo.toml dependencies.tauri.features[] "devtools"
             echo "------------------"
             cat ./src-tauri/Cargo.toml
@@ -198,7 +198,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           AUTO_UPDATER_DISABLED: ${{ inputs.disable_updater && 'true' || 'false' }}
-          JAN_SIGNING_KEY: ${{ secrets.JAN_SIGNING_KEY }}
+          AX_FABRIC_SIGNING_KEY: ${{ secrets.AX_FABRIC_SIGNING_KEY }}
       # Publish app
 
       ## Artifacts, for dev and test
@@ -206,14 +206,14 @@ jobs:
         if: inputs.public_provider != 'github'
         uses: actions/upload-artifact@v4
         with:
-          name: jan-linux-amd64-${{ inputs.new_version }}-deb
+          name: ax-fabric-linux-amd64-${{ inputs.new_version }}-deb
           path: ./src-tauri/target/release/bundle/deb/*.deb
 
       - name: Upload Artifact
         if: inputs.public_provider != 'github'
         uses: actions/upload-artifact@v4
         with:
-          name: jan-linux-amd64-${{ inputs.new_version }}-AppImage
+          name: ax-fabric-linux-amd64-${{ inputs.new_version }}-AppImage
           path: ./src-tauri/target/release/bundle/appimage/*.AppImage
 
       ## Set output filename for linux
@@ -223,15 +223,15 @@ jobs:
           cd ./src-tauri/target/release/bundle
 
           if [ "${{ inputs.channel }}" != "stable" ]; then
-            DEB_FILE_NAME=Jan-${{ inputs.channel }}_${{ inputs.new_version }}_amd64.deb
-            APPIMAGE_FILE_NAME=Jan-${{ inputs.channel }}_${{ inputs.new_version }}_amd64.AppImage
-            DEB_SIG=$(cat deb/Jan-${{ inputs.channel }}_${{ inputs.new_version }}_amd64.deb.sig)
-            APPIMAGE_SIG=$(cat appimage/Jan-${{ inputs.channel }}_${{ inputs.new_version }}_amd64.AppImage.sig)
+            DEB_FILE_NAME=Ax-Fabric-${{ inputs.channel }}_${{ inputs.new_version }}_amd64.deb
+            APPIMAGE_FILE_NAME=Ax-Fabric-${{ inputs.channel }}_${{ inputs.new_version }}_amd64.AppImage
+            DEB_SIG=$(cat deb/Ax-Fabric-${{ inputs.channel }}_${{ inputs.new_version }}_amd64.deb.sig)
+            APPIMAGE_SIG=$(cat appimage/Ax-Fabric-${{ inputs.channel }}_${{ inputs.new_version }}_amd64.AppImage.sig)
           else
-            DEB_FILE_NAME=Jan_${{ inputs.new_version }}_amd64.deb
-            APPIMAGE_FILE_NAME=Jan_${{ inputs.new_version }}_amd64.AppImage
-            DEB_SIG=$(cat deb/Jan_${{ inputs.new_version }}_amd64.deb.sig)
-            APPIMAGE_SIG=$(cat appimage/Jan_${{ inputs.new_version }}_amd64.AppImage.sig)
+            DEB_FILE_NAME=Ax-Fabric_${{ inputs.new_version }}_amd64.deb
+            APPIMAGE_FILE_NAME=Ax-Fabric_${{ inputs.new_version }}_amd64.AppImage
+            DEB_SIG=$(cat deb/Ax-Fabric_${{ inputs.new_version }}_amd64.deb.sig)
+            APPIMAGE_SIG=$(cat appimage/Ax-Fabric_${{ inputs.new_version }}_amd64.AppImage.sig)
           fi
 
           echo "DEB_SIG=$DEB_SIG" >> $GITHUB_OUTPUT
@@ -246,10 +246,10 @@ jobs:
           cd ./src-tauri/target/release/bundle
 
           # Upload for tauri updater
-          aws s3 cp ./appimage/Jan-${{ inputs.channel }}_${{ inputs.new_version }}_amd64.AppImage s3://${{ secrets.DELTA_AWS_S3_BUCKET_NAME }}/temp-${{ inputs.channel }}/Jan-${{ inputs.channel }}_${{ inputs.new_version }}_amd64.AppImage
-          aws s3 cp ./deb/Jan-${{ inputs.channel }}_${{ inputs.new_version }}_amd64.deb s3://${{ secrets.DELTA_AWS_S3_BUCKET_NAME }}/temp-${{ inputs.channel }}/Jan-${{ inputs.channel }}_${{ inputs.new_version }}_amd64.deb
-          aws s3 cp ./appimage/Jan-${{ inputs.channel }}_${{ inputs.new_version }}_amd64.AppImage.sig s3://${{ secrets.DELTA_AWS_S3_BUCKET_NAME }}/temp-${{ inputs.channel }}/Jan-${{ inputs.channel }}_${{ inputs.new_version }}_amd64.AppImage.sig
-          aws s3 cp ./deb/Jan-${{ inputs.channel }}_${{ inputs.new_version }}_amd64.deb.sig s3://${{ secrets.DELTA_AWS_S3_BUCKET_NAME }}/temp-${{ inputs.channel }}/Jan-${{ inputs.channel }}_${{ inputs.new_version }}_amd64.deb.sig
+          aws s3 cp ./appimage/Ax-Fabric-${{ inputs.channel }}_${{ inputs.new_version }}_amd64.AppImage s3://${{ secrets.DELTA_AWS_S3_BUCKET_NAME }}/temp-${{ inputs.channel }}/Ax-Fabric-${{ inputs.channel }}_${{ inputs.new_version }}_amd64.AppImage
+          aws s3 cp ./deb/Ax-Fabric-${{ inputs.channel }}_${{ inputs.new_version }}_amd64.deb s3://${{ secrets.DELTA_AWS_S3_BUCKET_NAME }}/temp-${{ inputs.channel }}/Ax-Fabric-${{ inputs.channel }}_${{ inputs.new_version }}_amd64.deb
+          aws s3 cp ./appimage/Ax-Fabric-${{ inputs.channel }}_${{ inputs.new_version }}_amd64.AppImage.sig s3://${{ secrets.DELTA_AWS_S3_BUCKET_NAME }}/temp-${{ inputs.channel }}/Ax-Fabric-${{ inputs.channel }}_${{ inputs.new_version }}_amd64.AppImage.sig
+          aws s3 cp ./deb/Ax-Fabric-${{ inputs.channel }}_${{ inputs.new_version }}_amd64.deb.sig s3://${{ secrets.DELTA_AWS_S3_BUCKET_NAME }}/temp-${{ inputs.channel }}/Ax-Fabric-${{ inputs.channel }}_${{ inputs.new_version }}_amd64.deb.sig
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.DELTA_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.DELTA_AWS_SECRET_ACCESS_KEY }}

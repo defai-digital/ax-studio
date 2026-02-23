@@ -1,8 +1,8 @@
-# Contributing to Jan Core
+# Contributing to Ax-Fabric Core
 
 [← Back to Main Contributing Guide](../CONTRIBUTING.md)
 
-TypeScript SDK providing extension system, APIs, and type definitions for all Jan components.
+TypeScript SDK providing extension system, APIs, and type definitions for all Ax-Fabric components.
 
 ## Key Directories
 

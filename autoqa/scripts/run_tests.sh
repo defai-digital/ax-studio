@@ -1,14 +1,14 @@
 #!/bin/bash
 # Common test runner script
 
-JAN_APP_PATH="$1"
+AX_FABRIC_APP_PATH="$1"
 PROCESS_NAME="$2"
 RP_TOKEN="$3"
 PLATFORM="$4"
 
 echo "Starting Auto QA Tests..."
 echo "Platform: $PLATFORM"
-echo "Jan app path: $JAN_APP_PATH"
+echo "Ax-Fabric app path: $AX_FABRIC_APP_PATH"
 echo "Process name: $PROCESS_NAME"
 
 # Platform-specific setup
@@ -31,22 +31,22 @@ if [ "$PLATFORM" = "ubuntu" ]; then
         exit 1
     }
 
-    # Make Jan executable if needed
-    if [ -f "/usr/bin/Jan-nightly" ]; then
-        sudo chmod +x /usr/bin/Jan-nightly
+    # Make Ax-Fabric executable if needed
+    if [ -f "/usr/bin/Ax-Fabric-nightly" ]; then
+        sudo chmod +x /usr/bin/Ax-Fabric-nightly
     fi
-    if [ -f "/usr/bin/Jan" ]; then
-        sudo chmod +x /usr/bin/Jan
+    if [ -f "/usr/bin/Ax-Fabric" ]; then
+        sudo chmod +x /usr/bin/Ax-Fabric
     fi
 fi
 
 # macOS specific setup
 if [ "$PLATFORM" = "macos" ]; then
-    # Verify Jan app path
-    if [ ! -f "$JAN_APP_PATH" ]; then
-        echo "❌ Jan app not found at: $JAN_APP_PATH"
+    # Verify Ax-Fabric app path
+    if [ ! -f "$AX_FABRIC_APP_PATH" ]; then
+        echo "❌ Ax-Fabric app not found at: $AX_FABRIC_APP_PATH"
         echo "Available files in /Applications:"
-        ls -la /Applications/ | grep -i jan || echo "No Jan apps found"
+        ls -la /Applications/ | grep -i "Ax-Fabric" || echo "No Ax-Fabric apps found"
         exit 1
     fi
 fi
@@ -60,10 +60,10 @@ echo "Contents of trajectories directory (if exists):"
 ls -la trajectories/ 2>/dev/null || echo "trajectories directory not found"
 
 # Run the main test with proper arguments
-if [ -n "$JAN_APP_PATH" ] && [ -n "$PROCESS_NAME" ]; then
-    python main.py --enable-reportportal --rp-token "$RP_TOKEN" --jan-app-path "$JAN_APP_PATH" --jan-process-name "$PROCESS_NAME"
-elif [ -n "$JAN_APP_PATH" ]; then
-    python main.py --enable-reportportal --rp-token "$RP_TOKEN" --jan-app-path "$JAN_APP_PATH"
+if [ -n "$AX_FABRIC_APP_PATH" ] && [ -n "$PROCESS_NAME" ]; then
+    python main.py --enable-reportportal --rp-token "$RP_TOKEN" --app-path "$AX_FABRIC_APP_PATH" --process-name "$PROCESS_NAME"
+elif [ -n "$AX_FABRIC_APP_PATH" ]; then
+    python main.py --enable-reportportal --rp-token "$RP_TOKEN" --app-path "$AX_FABRIC_APP_PATH"
 else
     python main.py --enable-reportportal --rp-token "$RP_TOKEN"
 fi

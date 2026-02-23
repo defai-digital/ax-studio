@@ -1,9 +1,9 @@
 use super::models::{DownloadEvent, DownloadItem, ProgressTracker, ProxyConfig};
-use crate::core::app::commands::get_jan_data_folder_path;
+use crate::core::app::commands::get_app_data_folder_path;
 use crate::core::updater::session::get_session_id;
 use crate::core::updater::hmac_client::SignedRequestHeaders;
 use futures_util::StreamExt;
-use jan_utils::normalize_path;
+use ax_fabric_utils::normalize_path;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use std::collections::HashMap;
 use std::path::Path;
@@ -19,8 +19,8 @@ use url::Url;
 /// Ax-Fabric mirror prefix for HuggingFace downloads
 /// - Stable builds: https://cdn.axfabric.ai/
 /// - Nightly builds: https://cdn-nightly.axfabric.ai/
-const JAN_MIRROR_PREFIX_STABLE: &str = "https://cdn.axfabric.ai/";
-const JAN_MIRROR_PREFIX_NIGHTLY: &str = "https://cdn-nightly.axfabric.ai/";
+const AX_FABRIC_MIRROR_PREFIX_STABLE: &str = "https://cdn.axfabric.ai/";
+const AX_FABRIC_MIRROR_PREFIX_NIGHTLY: &str = "https://cdn-nightly.axfabric.ai/";
 
 /// Domains that should use mirror download with fallback
 const MIRROR_DOMAINS: &[&str] = &["huggingface.co"];
@@ -34,16 +34,16 @@ fn is_nightly_build() -> bool {
 /// Get the appropriate mirror prefix based on build type
 fn get_mirror_prefix() -> &'static str {
     if is_nightly_build() {
-        JAN_MIRROR_PREFIX_NIGHTLY
+        AX_FABRIC_MIRROR_PREFIX_NIGHTLY
     } else {
-        JAN_MIRROR_PREFIX_STABLE
+        AX_FABRIC_MIRROR_PREFIX_STABLE
     }
 }
 
 /// Secret key for HMAC request authentication
-/// - In CI: Set JAN_SIGNING_KEY environment variable at build time
+/// - In CI: Set AX_FABRIC_SIGNING_KEY environment variable at build time
 /// - In local dev: Falls back to a test key
-const SECRET_KEY: &str = match option_env!("JAN_SIGNING_KEY") {
+const SECRET_KEY: &str = match option_env!("AX_FABRIC_SIGNING_KEY") {
     Some(key) => key,
     None => "local-dev-test-key-not-for-production",
 };
@@ -103,7 +103,7 @@ async fn validate_downloaded_file(
     }
 
     // Use model_id from item if available, otherwise extract from save path
-    // Path structure: llamacpp/models/{modelId}/model.gguf or llamacpp/models/{modelId}/mmproj.gguf
+    
     let model_id = item
         .model_id
         .as_ref()
@@ -175,7 +175,7 @@ async fn validate_downloaded_file(
     if let Some(expected_sha256) = &item.sha256 {
         log::info!("Starting Hash verification for {}", item.url);
 
-        match jan_utils::crypto::compute_file_sha256_with_cancellation(save_path, cancel_token)
+        match ax_fabric_utils::crypto::compute_file_sha256_with_cancellation(save_path, cancel_token)
             .await
         {
             Ok(computed_sha256) => {
@@ -405,21 +405,21 @@ pub async fn _download_files_internal(
     // Create progress tracker
     let progress_tracker = ProgressTracker::new(items, file_sizes.clone());
 
-    // save file under Jan data folder
-    let jan_data_folder = get_jan_data_folder_path(app.clone());
+    // save file under app data folder
+    let app_data_folder = get_app_data_folder_path(app.clone());
 
     // Collect download tasks for parallel execution
     let mut download_tasks = Vec::new();
 
     for (index, item) in items.iter().enumerate() {
-        let save_path = jan_data_folder.join(&item.save_path);
+        let save_path = app_data_folder.join(&item.save_path);
         let save_path = normalize_path(&save_path);
 
-        if !save_path.starts_with(&jan_data_folder) {
+        if !save_path.starts_with(&app_data_folder) {
             return Err(format!(
                 "Path {} is outside of Ax-Fabric data folder {}",
                 save_path.display(),
-                jan_data_folder.display()
+                app_data_folder.display()
             ));
         }
 

@@ -56,7 +56,7 @@ function General() {
   }
   const { checkForUpdate } = useAppUpdater()
   const { pausePolling } = useHardware()
-  const [janDataFolder, setJanDataFolder] = useState<string | undefined>()
+  const [appDataFolder, setAppDataFolder] = useState<string | undefined>()
   const [isCopied, setIsCopied] = useState(false)
   const [selectedNewPath, setSelectedNewPath] = useState<string | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -65,8 +65,8 @@ function General() {
 
   useEffect(() => {
     const fetchDataFolder = async () => {
-      const path = await serviceHub.app().getJanDataFolder()
-      setJanDataFolder(path)
+      const path = await serviceHub.app().getAppDataFolder()
+      setAppDataFolder(path)
     }
 
     fetchDataFolder()
@@ -74,7 +74,7 @@ function General() {
 
   const resetApp = async () => {
     // Prevent resetting if data folder is root directory
-    if (isRootDir(janDataFolder ?? '/')) {
+    if (isRootDir(appDataFolder ?? '/')) {
       toast.error(t('settings:general.couldNotResetRootDirectory'))
       return
     }
@@ -105,10 +105,10 @@ function General() {
     const selectedPath = await serviceHub.dialog().open({
       multiple: false,
       directory: true,
-      defaultPath: janDataFolder,
+      defaultPath: appDataFolder,
     })
 
-    if (selectedPath === janDataFolder) return
+    if (selectedPath === appDataFolder) return
     if (selectedPath !== null) {
       setSelectedNewPath(selectedPath as string)
       setIsDialogOpen(true)
@@ -125,8 +125,8 @@ function General() {
             // Prevent relocating to root directory (e.g., C:\ or D:\ on Windows, / on Unix)
             if (isRootDir(selectedNewPath))
               throw new Error(t('settings:general.couldNotRelocateToRoot'))
-            await serviceHub.app().relocateJanDataFolder(selectedNewPath)
-            setJanDataFolder(selectedNewPath)
+            await serviceHub.app().relocateAppDataFolder(selectedNewPath)
+            setAppDataFolder(selectedNewPath)
             // Only relaunch if relocation was successful
             window.core?.api?.relaunch()
             setSelectedNewPath(null)
@@ -143,8 +143,8 @@ function General() {
       } catch (error) {
         console.error('Failed to relocate data folder:', error)
         // Revert the data folder path on error
-        const originalPath = await serviceHub.app().getJanDataFolder()
-        setJanDataFolder(originalPath)
+        const originalPath = await serviceHub.app().getAppDataFolder()
+        setAppDataFolder(originalPath)
 
         toast.error(t('settings:general.failedToRelocateDataFolderDesc'))
       }
@@ -234,15 +234,15 @@ function General() {
                     <div className="flex items-center gap-2 mt-1 ">
                       <div className="truncate">
                         <span
-                          title={janDataFolder}
+                          title={appDataFolder}
                           className="bg-secondary text-xs p-1 rounded-sm"
                         >
-                          {janDataFolder}
+                          {appDataFolder}
                         </span>
                       </div>
                       <button
                         onClick={() =>
-                          janDataFolder && copyToClipboard(janDataFolder)
+                          appDataFolder && copyToClipboard(appDataFolder)
                         }
                         className="cursor-pointer flex items-center justify-center rounded-sm bg-secondary transition-all duration-200 ease-in-out p-1"
                         title={
@@ -284,7 +284,7 @@ function General() {
                     </Button>
                     {selectedNewPath && (
                       <ChangeDataFolderLocation
-                        currentPath={janDataFolder || ''}
+                        currentPath={appDataFolder || ''}
                         newPath={selectedNewPath}
                         onConfirm={confirmDataFolderChange}
                         open={isDialogOpen}
@@ -314,9 +314,9 @@ function General() {
                       size="sm"
                       className="p-0"
                       onClick={async () => {
-                        if (janDataFolder) {
+                        if (appDataFolder) {
                           try {
-                            const logsPath = `${janDataFolder}/logs`
+                            const logsPath = `${appDataFolder}/logs`
                             await serviceHub.opener().revealItemInDir(logsPath)
                           } catch (error) {
                             console.error(

@@ -285,4 +285,4 @@ Built on the shoulders of:
 - [Tauri](https://tauri.app/) — Cross-platform desktop framework
 - [Vercel AI SDK](https://sdk.vercel.ai/) — AI streaming and provider abstraction
 - [rmcp](https://github.com/modelcontextprotocol/rust-sdk) — Rust MCP client
-- [Jan](https://github.com/janhq/jan) — Original open-source AI desktop app that inspired this fork
+- [Jan](https://github.com/ax-fabric/ax-fabric) — Original open-source AI desktop app that inspired this fork

@@ -15,12 +15,12 @@ use tauri::{
 };
 use tauri_plugin_store::Store;
 
-use crate::core::app::commands::get_jan_data_folder_path;
+use crate::core::app::commands::get_app_data_folder_path;
 use crate::core::mcp::constants::DEFAULT_MCP_CONFIG;
 use crate::core::mcp::helpers::add_server_config;
 
 use super::{
-    extensions::commands::get_jan_extensions_path, mcp::helpers::run_mcp_commands, state::AppState,
+    extensions::commands::get_app_extensions_path, mcp::helpers::run_mcp_commands, state::AppState,
 };
 
 pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> Result<(), String> {
@@ -31,7 +31,7 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
         return Ok(());
     }
 
-    let extensions_path = get_jan_extensions_path(app.clone());
+    let extensions_path = get_app_extensions_path(app.clone());
     let pre_install_path = app
         .path()
         .resource_dir()
@@ -210,7 +210,7 @@ pub fn migrate_mcp_servers(
 }
 
 fn migrate_exa_to_http(app_handle: tauri::AppHandle) -> Result<(), String> {
-    let config_path = get_jan_data_folder_path(app_handle).join("mcp_config.json");
+    let config_path = get_app_data_folder_path(app_handle).join("mcp_config.json");
 
     let config_str =
         fs::read_to_string(&config_path).map_err(|e| format!("Failed to read MCP config: {e}"))?;
@@ -280,7 +280,7 @@ pub fn setup_mcp<R: Runtime>(app: &App<R>) {
         use crate::core::mcp::lockfile::cleanup_all_stale_locks;
 
         // Create default mcp_config.json if it doesn't exist
-        let config_path = get_jan_data_folder_path(app_handle.clone()).join("mcp_config.json");
+        let config_path = get_app_data_folder_path(app_handle.clone()).join("mcp_config.json");
         if !config_path.exists() {
             log::info!("mcp_config.json not found, creating default config");
             if let Err(e) = fs::write(&config_path, DEFAULT_MCP_CONFIG) {

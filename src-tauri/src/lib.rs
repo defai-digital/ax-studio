@@ -1,12 +1,12 @@
 mod core;
 use core::{
-    app::commands::get_jan_data_folder_path,
+    app::commands::get_app_data_folder_path,
     downloads::models::DownloadManagerState,
     mcp::models::McpSettings,
     setup::{self, setup_mcp},
     state::{AppState, AxFabricServiceConfig},
 };
-use jan_utils::generate_app_token;
+use ax_fabric_utils::generate_app_token;
 use std::{collections::HashMap, sync::Arc};
 use tauri::{Emitter, Manager, RunEvent};
 use tauri_plugin_store::StoreExt;
@@ -61,17 +61,19 @@ pub fn run() {
         core::filesystem::commands::decompress,
         core::filesystem::commands::open_dialog,
         core::filesystem::commands::save_dialog,
+        core::filesystem::commands::read_akidb_config,
+        core::filesystem::commands::write_akidb_config,
         // App configuration commands
         core::app::commands::get_app_configurations,
         core::app::commands::get_user_home_path,
         core::app::commands::update_app_configuration,
-        core::app::commands::get_jan_data_folder_path,
+        core::app::commands::get_app_data_folder_path,
         core::app::commands::get_configuration_file_path,
         core::app::commands::default_data_folder_path,
         core::app::commands::change_app_data_folder,
         core::app::commands::app_token,
         // Extension commands
-        core::extensions::commands::get_jan_extensions_path,
+        core::extensions::commands::get_app_extensions_path,
         core::extensions::commands::install_extensions,
         core::extensions::commands::get_active_extensions,
         // System commands
@@ -104,7 +106,7 @@ pub fn run() {
         core::mcp::commands::get_mcp_configs,
         core::mcp::commands::activate_mcp_server,
         core::mcp::commands::deactivate_mcp_server,
-        core::mcp::commands::check_jan_browser_extension_connected,
+        core::mcp::commands::check_ax_fabric_browser_extension_connected,
         // Threads
         core::threads::commands::list_threads,
         core::threads::commands::create_thread,
@@ -143,17 +145,19 @@ pub fn run() {
         core::filesystem::commands::decompress,
         core::filesystem::commands::open_dialog,
         core::filesystem::commands::save_dialog,
+        core::filesystem::commands::read_akidb_config,
+        core::filesystem::commands::write_akidb_config,
         // App configuration commands
         core::app::commands::get_app_configurations,
         core::app::commands::get_user_home_path,
         core::app::commands::update_app_configuration,
-        core::app::commands::get_jan_data_folder_path,
+        core::app::commands::get_app_data_folder_path,
         core::app::commands::get_configuration_file_path,
         core::app::commands::default_data_folder_path,
         core::app::commands::change_app_data_folder,
         core::app::commands::app_token,
         // Extension commands
-        core::extensions::commands::get_jan_extensions_path,
+        core::extensions::commands::get_app_extensions_path,
         core::extensions::commands::install_extensions,
         core::extensions::commands::get_active_extensions,
         // System commands
@@ -187,7 +191,7 @@ pub fn run() {
         core::mcp::commands::get_mcp_configs,
         core::mcp::commands::activate_mcp_server,
         core::mcp::commands::deactivate_mcp_server,
-        core::mcp::commands::check_jan_browser_extension_connected,
+        core::mcp::commands::check_ax_fabric_browser_extension_connected,
         // Threads
         core::threads::commands::list_threads,
         core::threads::commands::create_thread,
@@ -229,7 +233,7 @@ pub fn run() {
                         tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
                         tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview),
                         tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Folder {
-                            path: get_jan_data_folder_path(app.handle().clone()).join("logs"),
+                            path: get_app_data_folder_path(app.handle().clone()).join("logs"),
                             file_name: Some("app".to_string()),
                         }),
                     ])
@@ -240,7 +244,7 @@ pub fn run() {
                 .plugin(tauri_plugin_updater::Builder::new().build())?;
 
             // Start migration
-            let mut store_path = get_jan_data_folder_path(app.handle().clone());
+            let mut store_path = get_app_data_folder_path(app.handle().clone());
             store_path.push("store.json");
             let store = app
                 .handle()

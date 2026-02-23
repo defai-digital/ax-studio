@@ -7,68 +7,68 @@ param(
 
 Write-Host "Cleaning up after tests..."
 
-# Kill any running Jan processes (both regular and nightly)
-Get-Process -Name "Jan" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-Get-Process -Name "jan" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-Get-Process -Name "Jan-nightly" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-Get-Process -Name "jan-nightly" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+# Kill any running Ax-Fabric processes (both regular and nightly)
+Get-Process -Name "Ax-Fabric" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process -Name "ax-fabric" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process -Name "Ax-Fabric-nightly" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process -Name "ax-fabric-nightly" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
-# Remove Jan data folders (both regular and nightly)
-$janAppData = "$env:APPDATA\Jan"
-$janNightlyAppData = "$env:APPDATA\Jan-nightly"
-$janLocalAppData = "$env:LOCALAPPDATA\jan.ai.app"
-$janNightlyLocalAppData = "$env:LOCALAPPDATA\jan-nightly.ai.app"
-$janProgramsPath = "$env:LOCALAPPDATA\Programs\Jan"
-$janNightlyProgramsPath = "$env:LOCALAPPDATA\Programs\Jan-nightly"
+# Remove Ax-Fabric data folders (both regular and nightly)
+$axFabricAppData = "$env:APPDATA\Ax-Fabric"
+$axFabricNightlyAppData = "$env:APPDATA\Ax-Fabric-nightly"
+$axFabricLocalAppData = "$env:LOCALAPPDATA\ai.axfabric.app"
+$axFabricNightlyLocalAppData = "$env:LOCALAPPDATA\ax-fabric-nightly.ai.app"
+$axFabricProgramsPath = "$env:LOCALAPPDATA\Programs\Ax-Fabric"
+$axFabricNightlyProgramsPath = "$env:LOCALAPPDATA\Programs\Ax-Fabric-nightly"
 
-if (Test-Path $janAppData) {
-    Write-Host "Removing $janAppData"
-    Remove-Item -Path $janAppData -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path $axFabricAppData) {
+    Write-Host "Removing $axFabricAppData"
+    Remove-Item -Path $axFabricAppData -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-if (Test-Path $janNightlyAppData) {
-    Write-Host "Removing $janNightlyAppData"
-    Remove-Item -Path $janNightlyAppData -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path $axFabricNightlyAppData) {
+    Write-Host "Removing $axFabricNightlyAppData"
+    Remove-Item -Path $axFabricNightlyAppData -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-if (Test-Path $janLocalAppData) {
-    Write-Host "Removing $janLocalAppData"
-    Remove-Item -Path $janLocalAppData -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path $axFabricLocalAppData) {
+    Write-Host "Removing $axFabricLocalAppData"
+    Remove-Item -Path $axFabricLocalAppData -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-if (Test-Path $janNightlyLocalAppData) {
-    Write-Host "Removing $janNightlyLocalAppData"
-    Remove-Item -Path $janNightlyLocalAppData -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path $axFabricNightlyLocalAppData) {
+    Write-Host "Removing $axFabricNightlyLocalAppData"
+    Remove-Item -Path $axFabricNightlyLocalAppData -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-if (Test-Path $janProgramsPath) {
-    Write-Host "Removing $janProgramsPath"
-    Remove-Item -Path $janProgramsPath -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path $axFabricProgramsPath) {
+    Write-Host "Removing $axFabricProgramsPath"
+    Remove-Item -Path $axFabricProgramsPath -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-if (Test-Path $janNightlyProgramsPath) {
-    Write-Host "Removing $janNightlyProgramsPath"
-    Remove-Item -Path $janNightlyProgramsPath -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path $axFabricNightlyProgramsPath) {
+    Write-Host "Removing $axFabricNightlyProgramsPath"
+    Remove-Item -Path $axFabricNightlyProgramsPath -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-# Remove Jan extensions folder
-$janExtensionsPath = "$env:USERPROFILE\jan\extensions"
-if (Test-Path $janExtensionsPath) {
-    Write-Host "Removing $janExtensionsPath"
-    Remove-Item -Path $janExtensionsPath -Recurse -Force -ErrorAction SilentlyContinue
+# Remove Ax-Fabric extensions folder
+$axFabricExtensionsPath = "$env:USERPROFILE\ax-fabric\extensions"
+if (Test-Path $axFabricExtensionsPath) {
+    Write-Host "Removing $axFabricExtensionsPath"
+    Remove-Item -Path $axFabricExtensionsPath -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-# Try to uninstall Jan app silently
+# Try to uninstall Ax-Fabric app silently
 try {
     $isNightly = [System.Convert]::ToBoolean($IsNightly)
 
     # Determine uninstaller path based on nightly flag
     if ($isNightly) {
-        $uninstallerPath = "$env:LOCALAPPDATA\Programs\jan-nightly\uninstall.exe"
-        $installPath = "$env:LOCALAPPDATA\Programs\jan-nightly"
+        $uninstallerPath = "$env:LOCALAPPDATA\Programs\ax-fabric-nightly\uninstall.exe"
+        $installPath = "$env:LOCALAPPDATA\Programs\ax-fabric-nightly"
     } else {
-        $uninstallerPath = "$env:LOCALAPPDATA\Programs\jan\uninstall.exe"
-        $installPath = "$env:LOCALAPPDATA\Programs\jan"
+        $uninstallerPath = "$env:LOCALAPPDATA\Programs\ax-fabric\uninstall.exe"
+        $installPath = "$env:LOCALAPPDATA\Programs\ax-fabric"
     }
 
     Write-Host "Looking for uninstaller at: $uninstallerPath"
@@ -86,15 +86,15 @@ try {
         }
     }
 
-    Write-Host "Jan app cleanup completed"
+    Write-Host "Ax-Fabric app cleanup completed"
 }
 catch {
-    Write-Warning "Failed to uninstall Jan app cleanly: $_"
+    Write-Warning "Failed to uninstall Ax-Fabric app cleanly: $_"
     Write-Host "Manual cleanup may be required"
 }
 
 # Clean up downloaded installer
-$installerPath = "$env:TEMP\jan-installer.exe"
+$installerPath = "$env:TEMP\ax-fabric-installer.exe"
 if (Test-Path $installerPath) {
     Remove-Item -Path $installerPath -Force -ErrorAction SilentlyContinue
 }

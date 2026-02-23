@@ -14,7 +14,7 @@
     "dist",
     "types"
   ],
-  "author": "Jan <service@jan.ai>",
+  "author": "Ax-Fabric",
   "scripts": {
     "lint": "tslint --project tsconfig.json -t codeFrame 'src/**/*.ts' 'test/**/*.ts'",
     "test": "vitest run",

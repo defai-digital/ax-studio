@@ -1,8 +1,8 @@
 prompt = """
-You are going to test the Jan application by downloading and chatting with a model (bitcpm4).
+You are going to test the Ax-Fabric application by downloading and chatting with a model (bitcpm4).
 
 Step-by-step instructions:
-1. Given the Jan application is already opened.
+1. Given the Ax-Fabric application is already opened.
 2. In the **bottom-left corner**, click the **Hub** menu item.
 3. Scroll through the model list or use the search bar to find **qwen3-0.6B**.
 4. Click **Use** on the qwen3-0.6B model.

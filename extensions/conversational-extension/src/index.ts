@@ -6,7 +6,7 @@ import {
 } from '@ax-fabric/core'
 
 /**
- * JanConversationalExtension is a ConversationalExtension implementation that provides
+ * AxFabricConversationalExtension is a ConversationalExtension implementation that provides
  * functionality for managing threads.
  */
 export default class AxFabricConversationalExtension extends ConversationalExtension {

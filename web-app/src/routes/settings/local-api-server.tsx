@@ -25,6 +25,7 @@ import { toast } from 'sonner'
 import { getModelToStart } from '@/utils/getModelToStart'
 import { LogViewer } from '@/components/LogViewer'
 import { invoke } from '@tauri-apps/api/core'
+import AkidbConfigPanel from '@/containers/AkidbConfigPanel'
 import {
   Popover,
   PopoverTrigger,
@@ -567,6 +568,9 @@ function LocalAPIServerContent() {
                   </Button>
                 </div>
               </Card>
+
+              {/* AkiDB folder sync configuration */}
+              <AkidbConfigPanel />
             </div>
           </div>
           <div className="p-4 shrink-0">

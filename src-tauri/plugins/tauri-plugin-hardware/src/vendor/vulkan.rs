@@ -70,7 +70,7 @@ fn get_vulkan_gpus_internal() -> Result<Vec<GpuInfo>, Box<dyn std::error::Error>
     let instance = Instance::new(
         library,
         InstanceCreateInfo {
-            application_name: Some("Jan GPU Detection".into()),
+            application_name: Some("Ax-Fabric GPU Detection".into()),
             application_version: vulkano::Version::V1_1,
             ..Default::default()
         },
