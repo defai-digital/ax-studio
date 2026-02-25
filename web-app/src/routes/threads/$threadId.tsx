@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { createFileRoute, useParams } from '@tanstack/react-router'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createFileRoute, useNavigate, useParams } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
 
 import HeaderPage from '@/containers/HeaderPage'
@@ -52,11 +52,262 @@ import { useToolApproval } from '@/hooks/useToolApproval'
 import DropdownModelProvider from '@/containers/DropdownModelProvider'
 import { ExtensionTypeEnum, VectorDBExtension } from '@ax-fabric/core'
 import { ExtensionManager } from '@/lib/extension'
+import { Columns2, X } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 const CHAT_STATUS = {
   STREAMING: 'streaming',
   SUBMITTED: 'submitted',
 } as const
+
+function SplitThreadPane({
+  threadId,
+  onClose,
+}: {
+  threadId: string
+  onClose?: () => void
+}) {
+  const serviceHub = useServiceHub()
+  const thread = useThreads(useShallow((state) => state.threads[threadId]))
+  const renameThread = useThreads((state) => state.renameThread)
+  const setMessages = useMessages((state) => state.setMessages)
+  const addMessage = useMessages((state) => state.addMessage)
+  const updateMessage = useMessages((state) => state.updateMessage)
+  const deleteMessage = useMessages((state) => state.deleteMessage)
+  const getAttachments = useChatAttachments((state) => state.getAttachments)
+  const clearAttachmentsForThread = useChatAttachments(
+    (state) => state.clearAttachments
+  )
+  const selectedProvider = useModelProvider((state) => state.selectedProvider)
+  const reasoningContainerRef = useRef<HTMLDivElement>(null)
+  const paneLogo = useMemo(() => {
+    const chatLogo =
+      typeof thread?.metadata?.chatLogo === 'string'
+        ? thread.metadata.chatLogo.trim()
+        : ''
+    if (chatLogo) return chatLogo
+    const projectLogo =
+      typeof thread?.metadata?.project?.logo === 'string'
+        ? thread.metadata.project.logo.trim()
+        : ''
+    return projectLogo || ''
+  }, [thread?.metadata])
+
+  const systemMessage = thread?.assistants?.[0]?.instructions
+    ? renderInstructions(thread.assistants[0].instructions)
+    : undefined
+
+  const {
+    messages,
+    status,
+    sendMessage,
+    stop,
+    error,
+    setMessages: setChatMessages,
+    regenerate,
+  } = useChat({
+    sessionId: threadId,
+    sessionTitle: thread?.title,
+    systemMessage,
+    experimental_throttle: 50,
+    onFinish: ({ message, isAbort }) => {
+      if (!isAbort && message.role === 'assistant') {
+        const contentParts = extractContentPartsFromUIMessage(message)
+        if (contentParts.length > 0) {
+          const assistantMessage: ThreadMessage = {
+            type: 'text',
+            role: ChatCompletionRole.Assistant,
+            content: contentParts,
+            id: message.id,
+            object: 'thread.message',
+            thread_id: threadId,
+            status: MessageStatus.Ready,
+            created_at: Date.now(),
+            completed_at: Date.now(),
+            metadata: (message.metadata || {}) as Record<string, unknown>,
+          }
+          const existingMessages = useMessages.getState().getMessages(threadId)
+          const existingMessage = existingMessages.find((m) => m.id === message.id)
+          if (existingMessage) {
+            updateMessage(assistantMessage)
+          } else {
+            addMessage(assistantMessage)
+          }
+        }
+      }
+    },
+  })
+
+  const handleRegenerate = useCallback(
+    (messageId: string) => {
+      regenerate({ messageId })
+    },
+    [regenerate]
+  )
+
+  useEffect(() => {
+    serviceHub
+      .messages()
+      .fetchMessages(threadId)
+      .then((fetchedMessages) => {
+        if (fetchedMessages && fetchedMessages.length > 0) {
+          setMessages(threadId, fetchedMessages)
+          setChatMessages(convertThreadMessagesToUIMessages(fetchedMessages))
+        }
+      })
+  }, [serviceHub, setChatMessages, setMessages, threadId])
+
+  const handleSubmit = async (
+    text: string,
+    files?: Array<{ type: string; mediaType: string; url: string }>
+  ) => {
+    const normalizedText = text.trim()
+    if (
+      normalizedText &&
+      messages.length === 0 &&
+      (!thread?.title || thread.title === 'New Thread')
+    ) {
+      renameThread(threadId, normalizedText)
+    }
+
+    const allAttachments = getAttachments(threadId)
+    const imageAttachments = files?.map((file) => {
+      const base64 = file.url.split(',')[1] || ''
+      return createImageAttachment({
+        name: `image-${Date.now()}`,
+        mimeType: file.mediaType,
+        dataUrl: file.url,
+        base64,
+        size: Math.ceil((base64.length * 3) / 4),
+      })
+    })
+    const combinedAttachments = [
+      ...(imageAttachments || []),
+      ...allAttachments.filter((a) => a.type === 'document'),
+    ]
+    let processedAttachments = combinedAttachments
+
+    if (combinedAttachments.length > 0) {
+      try {
+        const parsePreference = useAttachments.getState().parseMode
+        const result = await processAttachmentsForSend({
+          attachments: combinedAttachments,
+          threadId,
+          projectId: thread?.metadata?.project?.id,
+          serviceHub,
+          selectedProvider,
+          parsePreference,
+        })
+        processedAttachments = result.processedAttachments
+        if (result.hasEmbeddedDocuments) {
+          useThreads.getState().updateThread(threadId, {
+            metadata: { ...thread?.metadata, hasDocuments: true },
+          })
+        }
+      } catch {
+        return
+      }
+    }
+
+    const messageId = generateId()
+    const userMessage = newUserThreadContent(
+      threadId,
+      normalizedText,
+      processedAttachments,
+      messageId
+    )
+    addMessage(userMessage)
+
+    const parts: Array<
+      | { type: 'text'; text: string }
+      | { type: 'file'; mediaType: string; url: string }
+    > = [{ type: 'text', text: userMessage.content[0].text?.value ?? normalizedText }]
+
+    files?.forEach((file) => {
+      parts.push({ type: 'file', mediaType: file.mediaType, url: file.url })
+    })
+
+    sendMessage({
+      parts,
+      id: messageId,
+      metadata: userMessage.metadata,
+    })
+    clearAttachmentsForThread(threadId)
+  }
+
+  return (
+    <div className="h-full rounded-md border bg-background flex flex-col overflow-hidden">
+      <div className="px-3 py-2 border-b text-sm font-medium truncate flex items-center justify-between gap-2">        
+        <div className="flex items-center gap-2 min-w-0">
+          {paneLogo && (
+            <img
+              src={paneLogo}
+              alt={thread?.title || 'Thread Logo'}
+              className="size-5 rounded-sm object-cover shrink-0"
+            />
+          )}
+          <span className="truncate">{thread?.title || 'New Thread'}</span>
+        </div>
+        {onClose && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="shrink-0"
+            onClick={onClose}
+          >
+            <X className="size-4" />
+          </Button>
+        )}
+      </div>
+      <div className="flex-1 relative">
+        <Conversation className="absolute inset-0 text-start">
+          <ConversationContent className={cn('mx-auto w-full px-2')}>
+            {messages.map((message, index) => {
+              const isLastMessage = index === messages.length - 1
+              const isFirstMessage = index === 0
+              return (
+                <MessageItem
+                  key={message.id}
+                  message={message}
+                  isFirstMessage={isFirstMessage}
+                  isLastMessage={isLastMessage}
+                  status={status}
+                  reasoningContainerRef={reasoningContainerRef}
+                  onRegenerate={handleRegenerate}
+                  onDelete={(messageId) => {
+                    deleteMessage(threadId, messageId)
+                    setChatMessages(messages.filter((m) => m.id !== messageId))
+                  }}
+                />
+              )
+            })}
+            {status === CHAT_STATUS.SUBMITTED && <PromptProgress />}
+            {error && (
+              <div className="px-4 py-3 mx-4 my-2 rounded-lg border border-destructive/10 bg-destructive/10">
+                <p className="text-sm text-muted-foreground">{error.message}</p>
+              </div>
+            )}
+          </ConversationContent>
+          <ConversationScrollButton />
+        </Conversation>
+      </div>
+      <div className="p-2">
+        <ChatInput
+          threadId={threadId}
+          model={thread?.model}
+          onSubmit={handleSubmit}
+          onStop={stop}
+          chatStatus={status}
+        />
+      </div>
+    </div>
+  )
+}
 
 // as route.threadsDetail
 export const Route = createFileRoute('/threads/$threadId')({
@@ -66,6 +317,8 @@ export const Route = createFileRoute('/threads/$threadId')({
 function ThreadDetail() {
   const serviceHub = useServiceHub()
   const { threadId } = useParams({ from: Route.id })
+  const navigate = useNavigate()
+  const createThread = useThreads((state) => state.createThread)
   const setCurrentThreadId = useThreads((state) => state.setCurrentThreadId)
   const setCurrentAssistant = useAssistant((state) => state.setCurrentAssistant)
   const assistants = useAssistant((state) => state.assistants)
@@ -114,6 +367,10 @@ function ThreadDetail() {
   const getProviderByName = useModelProvider((state) => state.getProviderByName)
   const threadRef = useRef(thread)
   const projectId = threadRef.current?.metadata?.project?.id
+  const [splitDirection, setSplitDirection] = useState<'left' | 'right' | null>(
+    null
+  )
+  const [splitThreadId, setSplitThreadId] = useState<string | null>(null)
 
   // Get system message from thread's assistant instructions (if thread has an assigned assistant)
   // Only use assistant instructions if the thread was created with one (e.g., via a project)
@@ -737,15 +994,194 @@ function ThreadDetail() {
   ])
 
   const threadModel = useMemo(() => thread?.model, [thread])
+  const threadLogo = useMemo(() => {
+    const chatLogo =
+      typeof thread?.metadata?.chatLogo === 'string'
+        ? thread.metadata.chatLogo.trim()
+        : ''
+    if (chatLogo) return chatLogo
+    const projectLogo =
+      typeof thread?.metadata?.project?.logo === 'string'
+        ? thread.metadata.project.logo.trim()
+        : ''
+    return projectLogo || ''
+  }, [thread?.metadata])
+  const splitPaneOrder = useMemo(() => {
+    if (!splitThreadId || !splitDirection) return null
+    return splitDirection === 'left' ? ['split', 'main'] : ['main', 'split']
+  }, [splitDirection, splitThreadId])
+
+  const handleSplit = useCallback(
+    async (direction: 'left' | 'right') => {
+      if (splitThreadId) {
+        setSplitDirection(direction)
+        return
+      }
+
+      const newThread = await createThread(
+        {
+          id: thread?.model?.id ?? selectedModel?.id ?? '*',
+          provider: thread?.model?.provider ?? selectedProvider,
+        },
+        'New Thread',
+        thread?.assistants?.[0],
+        thread?.metadata?.project
+      )
+      setSplitThreadId(newThread.id)
+      setSplitDirection(direction)
+    },
+    [
+      createThread,
+      selectedModel?.id,
+      selectedProvider,
+      splitThreadId,
+      thread?.assistants,
+      thread?.metadata?.project,
+      thread?.model?.id,
+      thread?.model?.provider,
+    ]
+  )
 
   return (
     <div className="flex flex-col h-[calc(100dvh-(env(safe-area-inset-bottom)+env(safe-area-inset-top)))]">
       <HeaderPage>
-        <div className="flex items-center justify-between w-full pr-2">
+        <div className="flex items-center w-full pr-2">
           <DropdownModelProvider model={threadModel} />
         </div>
       </HeaderPage>
       <div className="flex flex-1 flex-col h-full overflow-hidden">
+        <div className="px-4 md:px-8 pb-2 shrink-0">
+          <div className="mx-auto w-full md:w-4/5 xl:w-4/6 flex justify-end">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Columns2 className="size-4" />
+                  <span>Split View</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => handleSplit('left')}>
+                  Split Left
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => handleSplit('right')}>
+                  Split Right
+                </DropdownMenuItem>
+                {splitPaneOrder && (
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      setSplitThreadId(null)
+                      setSplitDirection(null)
+                    }}
+                  >
+                    Close Split View
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+        {splitPaneOrder && splitThreadId ? (
+          <div className="grid grid-cols-2 gap-2 px-2 pb-2 h-full">
+            {splitPaneOrder.map((pane) =>
+              pane === 'main' ? (
+                <div
+                  key="main-pane"
+                  className="h-full rounded-md border bg-background overflow-hidden"
+                >
+                  <div className="px-3 py-2 border-b text-sm font-medium truncate">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {threadLogo && (
+                          <img
+                            src={threadLogo}
+                            alt={thread?.title || 'Thread Logo'}
+                            className="size-5 rounded-sm object-cover shrink-0"
+                          />
+                        )}
+                        <span className="truncate">{thread?.title || 'Current Thread'}</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="shrink-0"
+                        onClick={() => {
+                          if (!splitThreadId) return
+                          setSplitThreadId(null)
+                          setSplitDirection(null)
+                          navigate({
+                            to: '/threads/$threadId',
+                            params: { threadId: splitThreadId },
+                          })
+                        }}
+                      >
+                        <X className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="h-[calc(100%-37px)] flex flex-col overflow-hidden">
+                    {/* Messages Area */}
+                    <div className="flex-1 relative">
+                      <Conversation className="absolute inset-0 text-start">
+                        <ConversationContent className={cn('mx-auto w-full px-2')}>
+                          {chatMessages.map((message, index) => {
+                            const isLastMessage = index === chatMessages.length - 1
+                            const isFirstMessage = index === 0
+                            return (
+                              <MessageItem
+                                key={message.id}
+                                message={message}
+                                isFirstMessage={isFirstMessage}
+                                isLastMessage={isLastMessage}
+                                status={status}
+                                reasoningContainerRef={reasoningContainerRef}
+                                onRegenerate={handleRegenerate}
+                                onEdit={handleEditMessage}
+                                onDelete={handleDeleteMessage}
+                              />
+                            )
+                          })}
+                          {status === CHAT_STATUS.SUBMITTED && <PromptProgress />}
+                        </ConversationContent>
+                        <ConversationScrollButton />
+                      </Conversation>
+                    </div>
+                    <div className="p-2">
+                      <ChatInput
+                        threadId={threadId}
+                        model={threadModel}
+                        onSubmit={handleSubmit}
+                        onStop={stop}
+                        chatStatus={status}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <SplitThreadPane
+                  key="split-pane"
+                  threadId={splitThreadId}
+                  onClose={() => {
+                    setSplitThreadId(null)
+                    setSplitDirection(null)
+                  }}
+                />
+              )
+            )}
+          </div>
+        ) : (
+          <>
+        <div className="px-4 md:px-8 pb-2 shrink-0">
+          <div className="mx-auto w-full md:w-4/5 xl:w-4/6 flex items-center gap-2 min-w-0">
+            {threadLogo && (
+              <img
+                src={threadLogo}
+                alt={thread?.title || 'Thread Logo'}
+                className="size-5 rounded-sm object-cover shrink-0"
+              />
+            )}
+            <h2 className="text-sm font-medium truncate">{thread?.title || 'New Thread'}</h2>
+          </div>
+        </div>
         {/* Messages Area */}
         <div className="flex-1 relative">
           <Conversation className="absolute inset-0 text-start">
@@ -808,12 +1244,15 @@ function ThreadDetail() {
         {/* Chat Input - Fixed at bottom */}
         <div className="py-4 mx-auto w-full md:w-4/5 xl:w-4/6">
           <ChatInput
+            threadId={threadId}
             model={threadModel}
             onSubmit={handleSubmit}
             onStop={stop}
             chatStatus={status}
           />
         </div>
+          </>
+        )}
       </div>
     </div>
   )
