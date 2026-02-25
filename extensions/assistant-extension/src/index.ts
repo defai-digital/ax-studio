@@ -80,15 +80,15 @@ export default class AxFabricAssistantExtension extends AssistantExtension {
   }
 
   private defaultAssistant: Assistant = {
-    avatar: ‘👋’,
+    avatar: '👋',
     thread_location: undefined,
-    id: ‘ax-fabric’,
-    object: ‘assistant’,
+    id: 'ax-fabric',
+    object: 'assistant',
     created_at: Date.now() / 1000,
-    name: ‘Ax-Fabric’,
+    name: 'Ax-Fabric',
     description:
-      ‘Ax-Fabric is a helpful desktop assistant that can reason through complex tasks and use tools to complete them on the user\’s behalf.’,
-    model: ‘*’,
+      'Ax-Fabric is a helpful desktop assistant that can reason through complex tasks and use tools to complete them on the user\'s behalf.',
+    model: '*',
     instructions: `You are Ax-Fabric, a helpful AI assistant who assists users with their requests.
 
 You must output your response in the exact language used in the latest user message. Do not provide translations or switch languages unless explicitly instructed to do so. If the input is mostly English, respond in English.

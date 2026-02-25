@@ -2,17 +2,29 @@ import { StrictMode } from 'react'
 import ReactDOM from 'react-dom/client'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
 
-// Import the generated route tree
-import { routeTree } from './routeTree.gen'
-
 import './index.css'
-import './i18n'
+
+const hideInitialLoader = () => {
+  document.body.classList.add('loaded')
+  const loader = document.getElementById('initial-loader')
+  if (loader) {
+    setTimeout(() => loader.remove(), 300)
+  }
+}
+
+const showStartupError = () => {
+  const root = document.getElementById('root')
+  if (!root || root.childElementCount > 0) return
+  root.innerHTML =
+    '<div style="height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;text-align:center;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#666;">Ax-Fabric failed to initialize. Please restart the app.</div>'
+}
 
 // Mobile-specific viewport and styling setup
 const setupMobileViewport = () => {
   // Check if running on mobile platform (iOS/Android via Tauri)
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
-                   window.matchMedia('(max-width: 768px)').matches
+                   (typeof window.matchMedia === 'function' &&
+                    window.matchMedia('(max-width: 768px)').matches)
 
   if (isMobile) {
     // Update viewport meta tag to disable zoom
@@ -62,23 +74,33 @@ setupMobileViewport()
 // Prevent files from opening when dropped
 preventDefaultFileDrop()
 
-// Create a new router instance
-const router = createRouter({ routeTree })
+// Render the app
+const rootElement = document.getElementById('root')
+if (!rootElement) {
+  throw new Error('Root element not found')
+}
 
-// Register the router instance for type safety
-declare module '@tanstack/react-router' {
-  interface Register {
-    router: typeof router
+const bootstrap = async () => {
+  try {
+    const [{ routeTree }] = await Promise.all([
+      import('./routeTree.gen'),
+      import('./i18n'),
+    ])
+    const router = createRouter({ routeTree })
+    if (!rootElement.innerHTML) {
+      const root = ReactDOM.createRoot(rootElement)
+      root.render(
+        <StrictMode>
+          <RouterProvider router={router} />
+        </StrictMode>
+      )
+    }
+  } catch (error) {
+    console.error('Failed to initialize app:', error)
+    showStartupError()
+  } finally {
+    hideInitialLoader()
   }
 }
 
-// Render the app
-const rootElement = document.getElementById('root')!
-if (!rootElement.innerHTML) {
-  const root = ReactDOM.createRoot(rootElement)
-  root.render(
-    <StrictMode>
-      <RouterProvider router={router} />
-    </StrictMode>
-  )
-}
+void bootstrap()

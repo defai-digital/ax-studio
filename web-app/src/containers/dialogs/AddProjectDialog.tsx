@@ -32,8 +32,9 @@ interface AddProjectDialogProps {
     name: string
     updated_at: number
     assistantId?: string
+    logo?: string
   }
-  onSave: (name: string, assistantId?: string) => void
+  onSave: (name: string, assistantId?: string, logo?: string) => void
 }
 
 export default function AddProjectDialog({
@@ -45,6 +46,7 @@ export default function AddProjectDialog({
 }: AddProjectDialogProps) {
   const { t } = useTranslation()
   const [name, setName] = useState(initialData?.name || '')
+  const [logo, setLogo] = useState(initialData?.logo || '')
   const [selectedAssistantId, setSelectedAssistantId] = useState<string | undefined>(initialData?.assistantId)
   const { folders } = useThreadManagement()
   const { assistants, addAssistant } = useAssistant()
@@ -52,9 +54,22 @@ export default function AddProjectDialog({
 
   const selectedAssistant = assistants.find((a) => a.id === selectedAssistantId)
 
+  const handleLogoFileChange = (file?: File) => {
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      setLogo(String(reader.result || ''))
+    }
+    reader.onerror = () => {
+      toast.error(t('error'))
+    }
+    reader.readAsDataURL(file)
+  }
+
   useEffect(() => {
     if (open) {
       setName(initialData?.name || '')
+      setLogo(initialData?.logo || '')
       setSelectedAssistantId(initialData?.assistantId)
     }
   }, [open, initialData])
@@ -63,6 +78,7 @@ export default function AddProjectDialog({
     if (!name.trim()) return
 
     const trimmedName = name.trim()
+    const trimmedLogo = logo.trim()
 
     // Check for duplicate names (excluding current project when editing)
     const isDuplicate = folders.some(
@@ -76,7 +92,7 @@ export default function AddProjectDialog({
       return
     }
 
-    onSave(trimmedName, selectedAssistantId)
+    onSave(trimmedName, selectedAssistantId, trimmedLogo || undefined)
 
     // Show success message
     if (editingKey) {
@@ -85,18 +101,22 @@ export default function AddProjectDialog({
       toast.success(t('projects.addProjectDialog.createSuccess', { projectName: trimmedName }))
     }
     setName('')
+    setLogo('')
     setSelectedAssistantId(undefined)
   }
 
   const handleCancel = () => {
     onOpenChange(false)
     setName('')
+    setLogo('')
     setSelectedAssistantId(undefined)
   }
 
   // Check if the button should be disabled
   const hasChanged = editingKey
-    ? name.trim() !== initialData?.name || selectedAssistantId !== initialData?.assistantId
+    ? name.trim() !== initialData?.name ||
+      selectedAssistantId !== initialData?.assistantId ||
+      logo.trim() !== (initialData?.logo || '')
     : true
   const isButtonDisabled = !name.trim() || (editingKey && !hasChanged)
 
@@ -123,6 +143,32 @@ export default function AddProjectDialog({
                 }
               }}
             />
+          </div>
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">
+              {t('projects.addProjectDialog.logoUrl', { defaultValue: 'Logo URL (optional)' })}
+            </label>
+            <Input
+              value={logo}
+              onChange={(e) => setLogo(e.target.value)}
+              placeholder={t('projects.addProjectDialog.logoUrlPlaceholder', {
+                defaultValue: 'https://example.com/logo.png',
+              })}
+              className="mt-1"
+            />
+            <Input
+              type="file"
+              accept="image/*"
+              className="mt-2"
+              onChange={(e) => handleLogoFileChange(e.target.files?.[0])}
+            />
+            {logo.trim() && (
+              <img
+                src={logo.trim()}
+                alt={name.trim() || t('projects.projectName')}
+                className="mt-2 size-10 rounded-md object-cover border"
+              />
+            )}
           </div>
           <div>
             <label className="text-sm font-medium mb-1.5 block">

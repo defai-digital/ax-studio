@@ -44,6 +44,7 @@ function ProjectItem({
 }) {
 
   const navigate = useNavigate()
+  const logo = item.logo?.trim()
 
   return (
     <SidebarMenuItem>
@@ -52,7 +53,15 @@ function ProjectItem({
           to="/project/$projectId"
           params={{ projectId: item.id }}
         >
-          <FolderIcon  className="text-foreground/70" size={16} />
+          {logo ? (
+            <img
+              src={logo}
+              alt={item.name}
+              className="size-4 rounded-sm object-cover"
+            />
+          ) : (
+            <FolderIcon className="text-foreground/70" size={16} />
+          )}
           <span>{item.name}</span>
         </Link>
       </SidebarMenuButton>
@@ -107,9 +116,13 @@ export function NavProjects() {
     setDeleteDialogOpen(true)
   }
 
-  const handleSaveEdit = async (name: string, assistantId?: string) => {
+  const handleSaveEdit = async (
+    name: string,
+    assistantId?: string,
+    logo?: string
+  ) => {
     if (selectedProject) {
-      await updateFolder(selectedProject.id, name, assistantId)
+      await updateFolder(selectedProject.id, name, assistantId, logo)
       setEditDialogOpen(false)
       setSelectedProject(null)
     }

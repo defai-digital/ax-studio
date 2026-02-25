@@ -7,8 +7,17 @@ import { useEffect } from 'react'
 type ThreadManagementState = {
   folders: ThreadFolder[]
   setFolders: (folders: ThreadFolder[]) => void
-  addFolder: (name: string, assistantId?: string) => Promise<ThreadFolder>
-  updateFolder: (id: string, name: string, assistantId?: string) => Promise<void>
+  addFolder: (
+    name: string,
+    assistantId?: string,
+    logo?: string
+  ) => Promise<ThreadFolder>
+  updateFolder: (
+    id: string,
+    name: string,
+    assistantId?: string,
+    logo?: string
+  ) => Promise<void>
   deleteFolder: (id: string) => Promise<void>
   deleteFolderWithThreads: (id: string) => Promise<void>
   getFolderById: (id: string) => ThreadFolder | undefined
@@ -22,19 +31,41 @@ const useThreadManagementStore = create<ThreadManagementState>()((set, get) => (
     set({ folders })
   },
 
-  addFolder: async (name, assistantId) => {
+  addFolder: async (name, assistantId, logo) => {
     const projectsService = getServiceHub().projects()
-    const newFolder = await projectsService.addProject(name, assistantId)
+    const newFolder = await projectsService.addProject(name, assistantId, logo)
     const updatedProjects = await projectsService.getProjects()
     set({ folders: updatedProjects })
     return newFolder
   },
 
-  updateFolder: async (id, name, assistantId) => {
+  updateFolder: async (id, name, assistantId, logo) => {
     const projectsService = getServiceHub().projects()
-    await projectsService.updateProject(id, name, assistantId)
+    await projectsService.updateProject(id, name, assistantId, logo)
     const updatedProjects = await projectsService.getProjects()
     set({ folders: updatedProjects })
+
+    const updatedProject = updatedProjects.find((project) => project.id === id)
+    if (!updatedProject) return
+
+    const threadsState = useThreads.getState()
+    const threadsToUpdate = Object.values(threadsState.threads).filter(
+      (thread) => thread.metadata?.project?.id === id
+    )
+
+    threadsToUpdate.forEach((thread) => {
+      threadsState.updateThread(thread.id, {
+        metadata: {
+          ...thread.metadata,
+          project: {
+            id: updatedProject.id,
+            name: updatedProject.name,
+            updated_at: updatedProject.updated_at,
+            logo: updatedProject.logo,
+          },
+        },
+      })
+    })
   },
 
   deleteFolder: async (id) => {

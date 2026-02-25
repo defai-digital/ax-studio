@@ -37,12 +37,17 @@ export class DefaultProjectsService implements ProjectsService {
     return this.loadFromStorage()
   }
 
-  async addProject(name: string, assistantId?: string): Promise<ThreadFolder> {
+  async addProject(
+    name: string,
+    assistantId?: string,
+    logo?: string
+  ): Promise<ThreadFolder> {
     const newProject: ThreadFolder = {
       id: ulid(),
       name,
       updated_at: Date.now(),
       assistantId,
+      logo,
     }
 
     const projects = this.loadFromStorage()
@@ -52,11 +57,16 @@ export class DefaultProjectsService implements ProjectsService {
     return newProject
   }
 
-  async updateProject(id: string, name: string, assistantId?: string): Promise<void> {
+  async updateProject(
+    id: string,
+    name: string,
+    assistantId?: string,
+    logo?: string
+  ): Promise<void> {
     const projects = this.loadFromStorage()
     const updatedProjects = projects.map((project) =>
       project.id === id
-        ? { ...project, name, updated_at: Date.now(), assistantId }
+        ? { ...project, name, updated_at: Date.now(), assistantId, logo }
         : project
     )
     this.saveToStorage(updatedProjects)

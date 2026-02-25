@@ -1,4 +1,4 @@
-import { Folder, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react'
+import { Folder, ImagePlus, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react'
 import { useThreads } from '@/hooks/useThreads'
 import { useMessages } from '@/hooks/useMessages'
 import { useThreadManagement } from '@/hooks/useThreadManagement'
@@ -28,6 +28,15 @@ import { RenameThreadDialog, DeleteThreadDialog } from '@/containers/dialogs'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { ThreadMessage } from '@ax-fabric/core'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 
 const ThreadItem = memo(
   ({
@@ -47,6 +56,8 @@ const ThreadItem = memo(
     const { t } = useTranslation()
     const [renameOpen, setRenameOpen] = useState(false)
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+    const [logoDialogOpen, setLogoDialogOpen] = useState(false)
+    const [chatLogo, setChatLogo] = useState('')
 
     const serviceHub = useServiceHub()
     const getMessages = useMessages((state) => state.getMessages)
@@ -104,6 +115,12 @@ const ThreadItem = memo(
       return (thread.title || '').replace(/<span[^>]*>|<\/span>/g, '')
     }, [thread.title])
 
+    const currentChatLogo = useMemo(() => {
+      return typeof thread.metadata?.chatLogo === 'string'
+        ? thread.metadata.chatLogo.trim()
+        : ''
+    }, [thread.metadata])
+
     const availableProjects = useMemo(() => {
       return folders
         .filter((f) => {
@@ -121,6 +138,7 @@ const ThreadItem = memo(
           id: project.id,
           name: project.name,
           updated_at: project.updated_at,
+          logo: project.logo,
         }
 
         updateThread(threadId, {
@@ -134,11 +152,48 @@ const ThreadItem = memo(
       }
     }
 
+    const handleSaveChatLogo = () => {
+      const normalizedLogo = chatLogo.trim()
+      updateThread(thread.id, {
+        metadata: {
+          ...thread.metadata,
+          chatLogo: normalizedLogo || undefined,
+        },
+      })
+      setLogoDialogOpen(false)
+      toast.success(
+        normalizedLogo
+          ? t('common:chatLogoSaved', { defaultValue: 'Chat logo saved.' })
+          : t('common:chatLogoRemoved', { defaultValue: 'Chat logo removed.' })
+      )
+    }
+
+    const handleChatLogoFileChange = (file?: File) => {
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = () => {
+        setChatLogo(String(reader.result || ''))
+      }
+      reader.onerror = () => {
+        toast.error(t('error'))
+      }
+      reader.readAsDataURL(file)
+    }
+
     return (
       <SidebarMenuItem>
         {currentProjectId ? 
           <Link to="/threads/$threadId" params={{ threadId: thread.id }} className="bg-card dark:bg-secondary/20 px-4 py-4 border hover:dark:bg-secondary/30 rounded-lg block">
-              <span>{thread.title || t('common:newThread')}</span>
+              <div className="flex items-center gap-2">
+                {currentChatLogo && (
+                  <img
+                    src={currentChatLogo}
+                    alt={thread.title || t('common:newThread')}
+                    className="size-4 rounded-sm object-cover"
+                  />
+                )}
+                <span>{thread.title || t('common:newThread')}</span>
+              </div>
               {currentProjectId && lastUserMessageText && (
                 <div className="text-muted-foreground text-xs mt-1 line-clamp-1 pr-10">
                   {lastUserMessageText}
@@ -148,6 +203,13 @@ const ThreadItem = memo(
           : 
           <SidebarMenuButton asChild>
             <Link to="/threads/$threadId" params={{ threadId: thread.id }}>
+              {currentChatLogo && (
+                <img
+                  src={currentChatLogo}
+                  alt={thread.title || t('common:newThread')}
+                  className="size-4 rounded-sm object-cover"
+                />
+              )}
               <span>{thread.title || t('common:newThread')}</span>
             </Link>
           </SidebarMenuButton>
@@ -170,6 +232,17 @@ const ThreadItem = memo(
             <DropdownMenuItem onSelect={() => setRenameOpen(true)}>
               <Pencil className="size-4" />
               <span>{t('common:rename')}</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => {
+                setChatLogo(currentChatLogo)
+                setLogoDialogOpen(true)
+              }}
+            >
+              <ImagePlus className="size-4" />
+              <span>
+                {t('common:setChatLogo', { defaultValue: 'Set Chat Logo' })}
+              </span>
             </DropdownMenuItem>
             <DropdownMenuSub>
               <DropdownMenuSubTrigger className="gap-2">
@@ -253,6 +326,55 @@ const ThreadItem = memo(
           onOpenChange={setDeleteConfirmOpen}
           withoutTrigger
         />
+
+        <Dialog open={logoDialogOpen} onOpenChange={setLogoDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {t('common:setChatLogo', { defaultValue: 'Set Chat Logo' })}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <Input
+                value={chatLogo}
+                onChange={(event) => setChatLogo(event.target.value)}
+                placeholder={t('common:chatLogoPlaceholder', {
+                  defaultValue: 'https://example.com/chat-logo.png',
+                })}
+              />
+              <Input
+                type="file"
+                accept="image/*"
+                onChange={(event) =>
+                  handleChatLogoFileChange(event.target.files?.[0])
+                }
+              />
+              {chatLogo.trim() && (
+                <img
+                  src={chatLogo.trim()}
+                  alt={thread.title || t('common:newThread')}
+                  className="size-10 rounded-md object-cover border"
+                />
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setLogoDialogOpen(false)}
+              >
+                {t('common:cancel')}
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSaveChatLogo}
+                disabled={chatLogo.trim() === currentChatLogo}
+              >
+                {t('common:save')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </SidebarMenuItem>
     )
   }

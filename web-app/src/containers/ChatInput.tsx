@@ -347,7 +347,7 @@ const ChatInput = memo(function ChatInput({
       } else {
         // Get project metadata and assistant if projectId is provided
         let projectMetadata:
-          | { id: string; name: string; updated_at: number }
+          | { id: string; name: string; updated_at: number; logo?: string }
           | undefined
         let projectAssistantId: string | undefined
 
@@ -361,6 +361,7 @@ const ChatInput = memo(function ChatInput({
                 id: project.id,
                 name: project.name,
                 updated_at: project.updated_at,
+                logo: project.logo,
               }
               projectAssistantId = project.assistantId
             }

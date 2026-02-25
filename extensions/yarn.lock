@@ -34,37 +34,37 @@ __metadata:
 
 "@ax-fabric/core@file:../../core/package.tgz::locator=%40ax-fabric%2Fassistant-extension%40workspace%3Aassistant-extension":
   version: 0.1.10
-  resolution: "@ax-fabric/core@file:../../core/package.tgz#../../core/package.tgz::hash=cdc118&locator=%40ax-fabric%2Fassistant-extension%40workspace%3Aassistant-extension"
+  resolution: "@ax-fabric/core@file:../../core/package.tgz#../../core/package.tgz::hash=eec03a&locator=%40ax-fabric%2Fassistant-extension%40workspace%3Aassistant-extension"
   dependencies:
     rxjs: "npm:^7.8.1"
     ulidx: "npm:^2.3.0"
   peerDependencies:
     react: 19.0.0
-  checksum: 10c0/c523ad1d03207be9341e6e51cccaa702ac3bc6a771198a9902984c09c829ed83bd9e1fca752fba101411338a81038f044f4a9b464bfc1130cc77609a0ec2d56a
+  checksum: 10c0/48c6b4a4d50f12e4c4546e25b074f6ac95efd4a5ec958ad4526976bad21fa26d2fa29fd373d53c96e3ef8913c9219dd206d533b1d47dc638cb63dd7f5797c475
   languageName: node
   linkType: hard
 
 "@ax-fabric/core@file:../../core/package.tgz::locator=%40ax-fabric%2Fconversational-extension%40workspace%3Aconversational-extension":
   version: 0.1.10
-  resolution: "@ax-fabric/core@file:../../core/package.tgz#../../core/package.tgz::hash=cdc118&locator=%40ax-fabric%2Fconversational-extension%40workspace%3Aconversational-extension"
+  resolution: "@ax-fabric/core@file:../../core/package.tgz#../../core/package.tgz::hash=eec03a&locator=%40ax-fabric%2Fconversational-extension%40workspace%3Aconversational-extension"
   dependencies:
     rxjs: "npm:^7.8.1"
     ulidx: "npm:^2.3.0"
   peerDependencies:
     react: 19.0.0
-  checksum: 10c0/c523ad1d03207be9341e6e51cccaa702ac3bc6a771198a9902984c09c829ed83bd9e1fca752fba101411338a81038f044f4a9b464bfc1130cc77609a0ec2d56a
+  checksum: 10c0/48c6b4a4d50f12e4c4546e25b074f6ac95efd4a5ec958ad4526976bad21fa26d2fa29fd373d53c96e3ef8913c9219dd206d533b1d47dc638cb63dd7f5797c475
   languageName: node
   linkType: hard
 
 "@ax-fabric/core@file:../../core/package.tgz::locator=%40ax-fabric%2Fdownload-extension%40workspace%3Adownload-extension":
   version: 0.1.10
-  resolution: "@ax-fabric/core@file:../../core/package.tgz#../../core/package.tgz::hash=cdc118&locator=%40ax-fabric%2Fdownload-extension%40workspace%3Adownload-extension"
+  resolution: "@ax-fabric/core@file:../../core/package.tgz#../../core/package.tgz::hash=eec03a&locator=%40ax-fabric%2Fdownload-extension%40workspace%3Adownload-extension"
   dependencies:
     rxjs: "npm:^7.8.1"
     ulidx: "npm:^2.3.0"
   peerDependencies:
     react: 19.0.0
-  checksum: 10c0/c523ad1d03207be9341e6e51cccaa702ac3bc6a771198a9902984c09c829ed83bd9e1fca752fba101411338a81038f044f4a9b464bfc1130cc77609a0ec2d56a
+  checksum: 10c0/48c6b4a4d50f12e4c4546e25b074f6ac95efd4a5ec958ad4526976bad21fa26d2fa29fd373d53c96e3ef8913c9219dd206d533b1d47dc638cb63dd7f5797c475
   languageName: node
   linkType: hard
 

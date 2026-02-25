@@ -21,7 +21,7 @@ type ThreadState = {
     model: ThreadModel,
     title?: string,
     assistant?: Assistant,
-    projectMetadata?: { id: string; name: string; updated_at: number },
+    projectMetadata?: { id: string; name: string; updated_at: number; logo?: string },
     isTemporary?: boolean
   ) => Promise<Thread>
   updateCurrentThreadModel: (model: ThreadModel) => void

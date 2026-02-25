@@ -53,6 +53,7 @@ describe('main.tsx', () => {
     mockRootElement.innerHTML = ''
     
     await import('../main')
+    await new Promise((resolve) => setTimeout(resolve, 50))
     
     expect(mockGetElementById).toHaveBeenCalledWith('root')
     expect(mockCreateRoot).toHaveBeenCalledWith(mockRootElement)
@@ -63,6 +64,7 @@ describe('main.tsx', () => {
     mockRootElement.innerHTML = '<div>existing content</div>'
     
     await import('../main')
+    await new Promise((resolve) => setTimeout(resolve, 50))
     
     expect(mockGetElementById).toHaveBeenCalledWith('root')
     expect(mockCreateRoot).not.toHaveBeenCalled()

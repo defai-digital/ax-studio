@@ -59,9 +59,13 @@ function ProjectPageContent() {
       .sort((a, b) => (b.updated || 0) - (a.updated || 0))
   }, [threads, projectId])
 
-  const handleSaveEdit = async (name: string, assistantId?: string) => {
+  const handleSaveEdit = async (
+    name: string,
+    assistantId?: string,
+    logo?: string
+  ) => {
     if (project) {
-      await updateFolder(project.id, name, assistantId)
+      await updateFolder(project.id, name, assistantId, logo)
       setEditDialogOpen(false)
     }
   }
@@ -97,9 +101,16 @@ function ProjectPageContent() {
         <div className="mx-auto w-full md:w-4/5 xl:w-4/6">
           {/* Project Name with Dropdown */}
           <div className="flex items-center justify-between gap-2 mb-4">
-            <h1 className="text-2xl font-semibold">
-              {project.name}
-            </h1>
+            <div className="flex items-center gap-2">
+              {project.logo && (
+                <img
+                  src={project.logo}
+                  alt={project.name}
+                  className="size-7 rounded-md object-cover"
+                />
+              )}
+              <h1 className="text-2xl font-semibold">{project.name}</h1>
+            </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon-xs">

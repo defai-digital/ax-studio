@@ -49,6 +49,7 @@ type Thread = {
       id: string
       name: string
       updated_at: number
+      logo?: string
     }
     [key: string]: unknown
   }
