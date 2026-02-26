@@ -21,6 +21,8 @@ type CustomChatOptions = Omit<ChatInit<UIMessage>, 'transport'> &
     sessionId?: string
     sessionTitle?: string
     systemMessage?: string
+    inferenceParameters?: Record<string, unknown>
+    modelOverrideId?: string
     onTokenUsage?: (usage: LanguageModelUsage, messageId: string) => void;
   }
 
@@ -35,6 +37,8 @@ export function useChat(
     sessionId,
     sessionTitle,
     systemMessage,
+    inferenceParameters = {},
+    modelOverrideId,
     onTokenUsage,
     ...chatInitOptions
   } = options ?? {}
@@ -53,7 +57,13 @@ export function useChat(
   // Create transport immediately with modelId and provider
   if (!transportRef.current) {
     transportRef.current =
-      existingSessionTransport ?? new CustomChatTransport(systemMessage, sessionId)
+      existingSessionTransport ??
+      new CustomChatTransport(
+        systemMessage,
+        sessionId,
+        inferenceParameters,
+        modelOverrideId
+      )
   } else if (
     existingSessionTransport &&
     transportRef.current !== existingSessionTransport
@@ -66,6 +76,18 @@ export function useChat(
       transportRef.current.updateSystemMessage(systemMessage)
     }
   }, [systemMessage])
+
+  useEffect(() => {
+    if (transportRef.current) {
+      transportRef.current.updateInferenceParameters(inferenceParameters)
+    }
+  }, [inferenceParameters])
+
+  useEffect(() => {
+    if (transportRef.current) {
+      transportRef.current.updateModelOverrideId(modelOverrideId)
+    }
+  }, [modelOverrideId])
 
   // Set up streaming token speed callback to update global state
   const resetTokenSpeed = useAppState((state) => state.resetTokenSpeed)

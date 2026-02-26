@@ -25,9 +25,11 @@ import { toast } from 'sonner'
 import { isDev } from '@/lib/utils'
 import { SystemEvent } from '@/types/events'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { useHardware } from '@/hooks/useHardware'
 import LanguageSwitcher from '@/containers/LanguageSwitcher'
 import { isRootDir } from '@/utils/path'
+import { fallbackDefaultPrompt } from '@/lib/system-prompt'
 const TOKEN_VALIDATION_TIMEOUT_MS = 10_000
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -42,6 +44,12 @@ function General() {
     setSpellCheckChatInput,
     huggingfaceToken,
     setHuggingfaceToken,
+    globalDefaultPrompt,
+    setGlobalDefaultPrompt,
+    autoTuningEnabled,
+    setAutoTuningEnabled,
+    applyMode,
+    setApplyMode,
   } = useGeneralSetting()
   const serviceHub = useServiceHub()
 
@@ -212,6 +220,64 @@ function General() {
               <CardItem
                 title={t('common:language')}
                 actions={<LanguageSwitcher />}
+              />
+            </Card>
+
+            <Card title="Custom System Prompts">
+              <CardItem
+                title="Global Default Prompt"
+                description="Used when thread/project overrides are empty."
+                align="start"
+                actions={
+                  <div className="w-full max-w-xl space-y-2">
+                    <Textarea
+                      value={globalDefaultPrompt}
+                      onChange={(event) =>
+                        setGlobalDefaultPrompt(event.target.value)
+                      }
+                      className="min-h-28"
+                      placeholder={fallbackDefaultPrompt}
+                    />
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{globalDefaultPrompt.length} characters</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setGlobalDefaultPrompt('')}
+                      >
+                        Reset to Default
+                      </Button>
+                    </div>
+                  </div>
+                }
+              />
+              <CardItem
+                title="Auto Tuning"
+                description="Automatically tune temperature, top_p and max tokens without changing prompt."
+                actions={
+                  <Switch
+                    checked={autoTuningEnabled}
+                    onCheckedChange={(value) => setAutoTuningEnabled(value)}
+                  />
+                }
+              />
+              <CardItem
+                title="Apply Mode"
+                description="Choose whether global prompt updates affect all chats or only new chats."
+                actions={
+                  <select
+                    className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-9 rounded-md border bg-transparent px-3 text-sm outline-none focus-visible:ring-[3px]"
+                    value={applyMode}
+                    onChange={(event) =>
+                      setApplyMode(
+                        event.target.value as 'new_chats_only' | 'all_chats'
+                      )
+                    }
+                  >
+                    <option value="all_chats">All chats</option>
+                    <option value="new_chats_only">New chats only</option>
+                  </select>
+                }
               />
             </Card>
 

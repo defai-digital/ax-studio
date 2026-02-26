@@ -139,6 +139,7 @@ const ThreadItem = memo(
           name: project.name,
           updated_at: project.updated_at,
           logo: project.logo,
+          projectPrompt: project.projectPrompt ?? null,
         }
 
         updateThread(threadId, {

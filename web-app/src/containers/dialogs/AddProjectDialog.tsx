@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { useThreadManagement } from '@/hooks/useThreadManagement'
 import { useAssistant } from '@/hooks/useAssistant'
 import { AvatarEmoji } from '@/containers/AvatarEmoji'
@@ -33,8 +34,14 @@ interface AddProjectDialogProps {
     updated_at: number
     assistantId?: string
     logo?: string
+    projectPrompt?: string | null
   }
-  onSave: (name: string, assistantId?: string, logo?: string) => void
+  onSave: (
+    name: string,
+    assistantId?: string,
+    logo?: string,
+    projectPrompt?: string | null
+  ) => void
 }
 
 export default function AddProjectDialog({
@@ -47,6 +54,7 @@ export default function AddProjectDialog({
   const { t } = useTranslation()
   const [name, setName] = useState(initialData?.name || '')
   const [logo, setLogo] = useState(initialData?.logo || '')
+  const [projectPrompt, setProjectPrompt] = useState(initialData?.projectPrompt || '')
   const [selectedAssistantId, setSelectedAssistantId] = useState<string | undefined>(initialData?.assistantId)
   const { folders } = useThreadManagement()
   const { assistants, addAssistant } = useAssistant()
@@ -70,6 +78,7 @@ export default function AddProjectDialog({
     if (open) {
       setName(initialData?.name || '')
       setLogo(initialData?.logo || '')
+      setProjectPrompt(initialData?.projectPrompt || '')
       setSelectedAssistantId(initialData?.assistantId)
     }
   }, [open, initialData])
@@ -79,6 +88,7 @@ export default function AddProjectDialog({
 
     const trimmedName = name.trim()
     const trimmedLogo = logo.trim()
+    const trimmedProjectPrompt = projectPrompt.trim()
 
     // Check for duplicate names (excluding current project when editing)
     const isDuplicate = folders.some(
@@ -92,7 +102,12 @@ export default function AddProjectDialog({
       return
     }
 
-    onSave(trimmedName, selectedAssistantId, trimmedLogo || undefined)
+    onSave(
+      trimmedName,
+      selectedAssistantId,
+      trimmedLogo || undefined,
+      trimmedProjectPrompt || null
+    )
 
     // Show success message
     if (editingKey) {
@@ -102,6 +117,7 @@ export default function AddProjectDialog({
     }
     setName('')
     setLogo('')
+    setProjectPrompt('')
     setSelectedAssistantId(undefined)
   }
 
@@ -109,6 +125,7 @@ export default function AddProjectDialog({
     onOpenChange(false)
     setName('')
     setLogo('')
+    setProjectPrompt('')
     setSelectedAssistantId(undefined)
   }
 
@@ -116,7 +133,8 @@ export default function AddProjectDialog({
   const hasChanged = editingKey
     ? name.trim() !== initialData?.name ||
       selectedAssistantId !== initialData?.assistantId ||
-      logo.trim() !== (initialData?.logo || '')
+      logo.trim() !== (initialData?.logo || '') ||
+      projectPrompt.trim() !== (initialData?.projectPrompt || '')
     : true
   const isButtonDisabled = !name.trim() || (editingKey && !hasChanged)
 
@@ -169,6 +187,28 @@ export default function AddProjectDialog({
                 className="mt-2 size-10 rounded-md object-cover border"
               />
             )}
+          </div>
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">
+              Project Prompt Override (optional)
+            </label>
+            <Textarea
+              value={projectPrompt}
+              onChange={(e) => setProjectPrompt(e.target.value)}
+              className="min-h-24"
+              placeholder="Leave empty to inherit global prompt."
+            />
+            <div className="mt-2 flex justify-end">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setProjectPrompt('')}
+                disabled={!projectPrompt.trim()}
+              >
+                Clear Override
+              </Button>
+            </div>
           </div>
           <div>
             <label className="text-sm font-medium mb-1.5 block">

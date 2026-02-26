@@ -10,13 +10,15 @@ type ThreadManagementState = {
   addFolder: (
     name: string,
     assistantId?: string,
-    logo?: string
+    logo?: string,
+    projectPrompt?: string | null
   ) => Promise<ThreadFolder>
   updateFolder: (
     id: string,
     name: string,
     assistantId?: string,
-    logo?: string
+    logo?: string,
+    projectPrompt?: string | null
   ) => Promise<void>
   deleteFolder: (id: string) => Promise<void>
   deleteFolderWithThreads: (id: string) => Promise<void>
@@ -31,17 +33,28 @@ const useThreadManagementStore = create<ThreadManagementState>()((set, get) => (
     set({ folders })
   },
 
-  addFolder: async (name, assistantId, logo) => {
+  addFolder: async (name, assistantId, logo, projectPrompt) => {
     const projectsService = getServiceHub().projects()
-    const newFolder = await projectsService.addProject(name, assistantId, logo)
+    const newFolder = await projectsService.addProject(
+      name,
+      assistantId,
+      logo,
+      projectPrompt
+    )
     const updatedProjects = await projectsService.getProjects()
     set({ folders: updatedProjects })
     return newFolder
   },
 
-  updateFolder: async (id, name, assistantId, logo) => {
+  updateFolder: async (id, name, assistantId, logo, projectPrompt) => {
     const projectsService = getServiceHub().projects()
-    await projectsService.updateProject(id, name, assistantId, logo)
+    await projectsService.updateProject(
+      id,
+      name,
+      assistantId,
+      logo,
+      projectPrompt
+    )
     const updatedProjects = await projectsService.getProjects()
     set({ folders: updatedProjects })
 
@@ -57,14 +70,15 @@ const useThreadManagementStore = create<ThreadManagementState>()((set, get) => (
       threadsState.updateThread(thread.id, {
         metadata: {
           ...thread.metadata,
-          project: {
-            id: updatedProject.id,
-            name: updatedProject.name,
-            updated_at: updatedProject.updated_at,
-            logo: updatedProject.logo,
+            project: {
+              id: updatedProject.id,
+              name: updatedProject.name,
+              updated_at: updatedProject.updated_at,
+              logo: updatedProject.logo,
+              projectPrompt: updatedProject.projectPrompt ?? null,
+            },
           },
-        },
-      })
+        })
     })
   },
 

@@ -364,7 +364,13 @@ const ChatInput = memo(function ChatInput({
       } else {
         // Get project metadata and assistant if projectId is provided
         let projectMetadata:
-          | { id: string; name: string; updated_at: number; logo?: string }
+          | {
+              id: string
+              name: string
+              updated_at: number
+              logo?: string
+              projectPrompt?: string | null
+            }
           | undefined
         let projectAssistantId: string | undefined
 
@@ -379,6 +385,7 @@ const ChatInput = memo(function ChatInput({
                 name: project.name,
                 updated_at: project.updated_at,
                 logo: project.logo,
+                projectPrompt: project.projectPrompt ?? null,
               }
               projectAssistantId = project.assistantId
             }
@@ -1275,7 +1282,7 @@ const ChatInput = memo(function ChatInput({
   const isStreaming = chatStatus === 'submitted' || chatStatus === 'streaming'
 
   return (
-    <div className="relative">
+    <div className="relative overflow-hidden">
       <div className="relative">
         <div
           className={cn(
@@ -1425,7 +1432,7 @@ const ChatInput = memo(function ChatInput({
               data-gramm_editor={spellCheckChatInput}
               data-gramm_grammarly={spellCheckChatInput}
               className={cn(
-                'bg-transparent pt-4 w-full shrink-0 border-none resize-none outline-0 px-4',
+                'bg-transparent pt-4 w-full shrink-0 border-none resize-none outline-0 px-4 break-words',
                 rows < maxRows && 'scrollbar-hide',
                 className
               )}

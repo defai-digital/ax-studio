@@ -62,10 +62,11 @@ function ProjectPageContent() {
   const handleSaveEdit = async (
     name: string,
     assistantId?: string,
-    logo?: string
+    logo?: string,
+    projectPrompt?: string | null
   ) => {
     if (project) {
-      await updateFolder(project.id, name, assistantId, logo)
+      await updateFolder(project.id, name, assistantId, logo, projectPrompt)
       setEditDialogOpen(false)
     }
   }
@@ -212,6 +213,25 @@ function ProjectPageContent() {
                     {t('projects.noAssistantAssigned')}
                   </p>
                 )}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditDialogOpen(true)}
+              >
+                <PencilIcon className="size-3" />
+                <span>{t('common:edit')}</span>
+              </Button>
+            </div>
+
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <div className="flex flex-col gap-1">
+                <h3 className="text-sm font-medium">System Prompt</h3>
+                <p className="text-sm text-muted-foreground">
+                  {project.projectPrompt?.trim()
+                    ? 'Using Project Prompt'
+                    : 'Inheriting from Global'}
+                </p>
               </div>
               <Button
                 variant="outline"

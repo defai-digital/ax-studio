@@ -1,5 +1,9 @@
 .markdown {
   @apply text-inherit;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  overflow-x: hidden;
+  max-width: 100%;
 
   &.is-user {
     p {

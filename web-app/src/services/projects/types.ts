@@ -9,6 +9,7 @@ export interface ThreadFolder {
   updated_at: number
   assistantId?: string
   logo?: string
+  projectPrompt?: string | null
 }
 
 export interface ProjectsService {
@@ -20,12 +21,23 @@ export interface ProjectsService {
   /**
    * Add a new project/folder
    */
-  addProject(name: string, assistantId?: string, logo?: string): Promise<ThreadFolder>
+  addProject(
+    name: string,
+    assistantId?: string,
+    logo?: string,
+    projectPrompt?: string | null
+  ): Promise<ThreadFolder>
 
   /**
    * Update a project/folder
    */
-  updateProject(id: string, name: string, assistantId?: string, logo?: string): Promise<void>
+  updateProject(
+    id: string,
+    name: string,
+    assistantId?: string,
+    logo?: string,
+    projectPrompt?: string | null
+  ): Promise<void>
 
   /**
    * Delete a project/folder

@@ -119,10 +119,17 @@ export function NavProjects() {
   const handleSaveEdit = async (
     name: string,
     assistantId?: string,
-    logo?: string
+    logo?: string,
+    projectPrompt?: string | null
   ) => {
     if (selectedProject) {
-      await updateFolder(selectedProject.id, name, assistantId, logo)
+      await updateFolder(
+        selectedProject.id,
+        name,
+        assistantId,
+        logo,
+        projectPrompt
+      )
       setEditDialogOpen(false)
       setSelectedProject(null)
     }

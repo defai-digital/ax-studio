@@ -94,7 +94,7 @@ function RenderMarkdownComponent({
   return (
     <div
       className={cn(
-        'markdown wrap-break-word select-text',
+        'markdown break-words select-text overflow-hidden min-w-0',
         isUser && 'is-user',
         className
       )}
@@ -106,7 +106,7 @@ function RenderMarkdownComponent({
           enabled: false,
         }}
         className={cn(
-          'size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
+          'w-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
           className
         )}
         remarkPlugins={[remarkGfm, remarkMath, disableIndentedCodeBlockPlugin]}

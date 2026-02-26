@@ -2,15 +2,22 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
 import { ExtensionManager } from '@/lib/extension'
+import type { ApplyMode } from '@/lib/system-prompt'
 type GeneralSettingState = {
   currentLanguage: Language
   spellCheckChatInput: boolean
   tokenCounterCompact: boolean
   huggingfaceToken?: string
+  globalDefaultPrompt: string
+  autoTuningEnabled: boolean
+  applyMode: ApplyMode
   setHuggingfaceToken: (token: string) => void
   setSpellCheckChatInput: (value: boolean) => void
   setTokenCounterCompact: (value: boolean) => void
   setCurrentLanguage: (value: Language) => void
+  setGlobalDefaultPrompt: (value: string) => void
+  setAutoTuningEnabled: (value: boolean) => void
+  setApplyMode: (value: ApplyMode) => void
 }
 
 export const useGeneralSetting = create<GeneralSettingState>()(
@@ -20,9 +27,15 @@ export const useGeneralSetting = create<GeneralSettingState>()(
       spellCheckChatInput: true,
       tokenCounterCompact: true,
       huggingfaceToken: undefined,
+      globalDefaultPrompt: '',
+      autoTuningEnabled: false,
+      applyMode: 'all_chats',
       setSpellCheckChatInput: (value) => set({ spellCheckChatInput: value }),
       setTokenCounterCompact: (value) => set({ tokenCounterCompact: value }),
       setCurrentLanguage: (value) => set({ currentLanguage: value }),
+      setGlobalDefaultPrompt: (value) => set({ globalDefaultPrompt: value }),
+      setAutoTuningEnabled: (value) => set({ autoTuningEnabled: value }),
+      setApplyMode: (value) => set({ applyMode: value }),
       setHuggingfaceToken: (token) => {
         set({ huggingfaceToken: token })
         ExtensionManager.getInstance()

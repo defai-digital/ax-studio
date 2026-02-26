@@ -146,9 +146,9 @@ export const MessageItem = memo(
       }
 
       return (
-        <div key={`${message.id}-${partIndex}`} className="w-full">
+        <div key={`${message.id}-${partIndex}`} className="w-full min-w-0 overflow-hidden">
           {message.role === 'user' ? (
-            <div className="flex justify-end w-full h-full text-start wrap-break-word whitespace-normal">
+            <div className="flex justify-end w-full h-full text-start break-words whitespace-normal">
               <div className="bg-secondary relative text-foreground p-2 rounded-md inline-block max-w-[80%]">
                 {/* Show attached files if any */}
                 {attachedFiles.length > 0 && (
@@ -173,7 +173,7 @@ export const MessageItem = memo(
                   </div>
                 )}
                 {displayText && (
-                  <div className="select-text whitespace-pre-wrap">
+                  <div className="select-text whitespace-pre-wrap break-words overflow-hidden">
                     {displayText}
                   </div>
                 )}
