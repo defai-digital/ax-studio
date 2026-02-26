@@ -34,14 +34,17 @@ export default class AxFabricDownloadManager extends BaseExtension {
     url: string,
     savePath: string,
     taskId: string,
-    proxyConfig: Record<string, string | string[] | boolean> = {},
+    proxyConfig: Record<string, string | string[] | boolean> | null = null,
     onProgress?: (transferred: number, total: number) => void
   ) {
-    return await this.downloadFiles(
-      [{ url, save_path: savePath, proxy: proxyConfig }],
-      taskId,
-      onProgress
-    )
+    // Only include the proxy field when there is actually a proxy configured.
+    // Sending an empty object {} causes Rust's serde to fail deserializing
+    // Option<ProxyConfig> because ProxyConfig.url is a required field.
+    const item: DownloadItem = { url, save_path: savePath }
+    if (proxyConfig && Object.keys(proxyConfig).length > 0) {
+      item.proxy = proxyConfig
+    }
+    return await this.downloadFiles([item], taskId, onProgress)
   }
 
   onSettingUpdate<T>(key: string, value: T): void {

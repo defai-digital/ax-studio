@@ -28,10 +28,17 @@ export const useModelSources = create<ModelSourcesState>()(
             .then((catalogs) =>
               catalogs.map((catalog) => ({
                 ...catalog,
-                quants: catalog.quants?.map((quant) => ({
-                  ...quant,
-                  model_id: sanitizeModelId(quant.model_id),
-                })),
+                quants: catalog.quants?.map((quant) => {
+                  const parts = quant.model_id.split('/')
+                  const author = parts.length > 1 ? parts.slice(0, -1).join('/') : ''
+                  const name = parts.length > 1 ? parts[parts.length - 1] : parts[0]
+                  const sanitizedName = sanitizeModelId(name)
+                  const newId = author ? `${author}/${sanitizedName}` : sanitizedName
+                  return {
+                    ...quant,
+                    model_id: newId,
+                  }
+                }),
               }))
             )
 

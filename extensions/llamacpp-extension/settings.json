@@ -1,0 +1,429 @@
+[
+  {
+    "key": "version_backend",
+    "title": "Version & Backend",
+    "description": "Select which llama.cpp version and hardware backend to use.",
+    "controllerType": "dropdown",
+    "controllerProps": {
+      "value": "",
+      "options": []
+    }
+  },
+  {
+    "key": "llamacpp_env",
+    "title": "Environment Variables",
+    "description": "Custom environment variables passed to the llama.cpp server (e.g. GGML_VK_VISIBLE_DEVICES=0,1).",
+    "controllerType": "input",
+    "controllerProps": {
+      "placeholder": "KEY=VALUE KEY2=VALUE2",
+      "value": "",
+      "type": "text"
+    }
+  },
+  {
+    "key": "auto_update_engine",
+    "title": "Auto-Update Engine",
+    "description": "Automatically download newer llama.cpp versions when available.",
+    "controllerType": "checkbox",
+    "controllerProps": {
+      "value": true
+    }
+  },
+  {
+    "key": "auto_unload",
+    "title": "Auto-Unload",
+    "description": "Automatically unload the current model when loading a new one to free memory.",
+    "controllerType": "checkbox",
+    "controllerProps": {
+      "value": true
+    }
+  },
+  {
+    "key": "timeout",
+    "title": "Load Timeout (seconds)",
+    "description": "Maximum time to wait for a model to load before giving up.",
+    "controllerType": "input",
+    "controllerProps": {
+      "placeholder": "600",
+      "value": "600",
+      "type": "number"
+    }
+  },
+  {
+    "key": "fit",
+    "title": "Auto Memory Fit",
+    "description": "Automatically adjust context size and batch size to fit within available memory.",
+    "controllerType": "checkbox",
+    "controllerProps": {
+      "value": true
+    }
+  },
+  {
+    "key": "fit_target",
+    "title": "Memory Margin (MiB)",
+    "description": "Target memory headroom per device when auto-fitting.",
+    "controllerType": "input",
+    "controllerProps": {
+      "placeholder": "1024",
+      "value": "1024",
+      "type": "number"
+    }
+  },
+  {
+    "key": "fit_ctx",
+    "title": "Minimum Context Size",
+    "description": "Minimum context window size when auto-fitting is enabled.",
+    "controllerType": "input",
+    "controllerProps": {
+      "placeholder": "4096",
+      "value": "4096",
+      "type": "number"
+    }
+  },
+  {
+    "key": "threads",
+    "title": "CPU Threads",
+    "description": "Number of CPU threads for token generation. -1 = use all logical cores.",
+    "controllerType": "input",
+    "controllerProps": {
+      "placeholder": "-1",
+      "value": "-1",
+      "type": "number"
+    }
+  },
+  {
+    "key": "threads_batch",
+    "title": "Batch Threads",
+    "description": "CPU threads for prompt processing. -1 = same as threads.",
+    "controllerType": "input",
+    "controllerProps": {
+      "placeholder": "-1",
+      "value": "-1",
+      "type": "number"
+    }
+  },
+  {
+    "key": "ctx_shift",
+    "title": "Context Shift",
+    "description": "Slide the context window when the input exceeds the context length.",
+    "controllerType": "checkbox",
+    "controllerProps": {
+      "value": false
+    }
+  },
+  {
+    "key": "n_predict",
+    "title": "Max Tokens",
+    "description": "Maximum tokens to generate per request. -1 = unlimited.",
+    "controllerType": "input",
+    "controllerProps": {
+      "placeholder": "-1",
+      "value": "-1",
+      "type": "number"
+    }
+  },
+  {
+    "key": "ubatch_size",
+    "title": "Micro-Batch Size",
+    "description": "Physical batch size for generation. Smaller values use less memory.",
+    "controllerType": "input",
+    "controllerProps": {
+      "placeholder": "512",
+      "value": "512",
+      "type": "number"
+    }
+  },
+  {
+    "key": "device",
+    "title": "GPU Devices",
+    "description": "Comma-separated GPU device IDs for offloading (e.g. CUDA0,CUDA1). Leave empty for auto.",
+    "controllerType": "input",
+    "controllerProps": {
+      "placeholder": "CUDA0",
+      "value": "",
+      "type": "text"
+    }
+  },
+  {
+    "key": "split_mode",
+    "title": "Multi-GPU Split Mode",
+    "description": "How to distribute layers across multiple GPUs.",
+    "controllerType": "dropdown",
+    "controllerProps": {
+      "value": "layer",
+      "options": [
+        { "name": "None", "value": "none" },
+        { "name": "Layer", "value": "layer" },
+        { "name": "Row", "value": "row" }
+      ]
+    }
+  },
+  {
+    "key": "main_gpu",
+    "title": "Primary GPU",
+    "description": "Index of the primary GPU (0-based).",
+    "controllerType": "input",
+    "controllerProps": {
+      "placeholder": "0",
+      "value": "0",
+      "type": "number"
+    }
+  },
+  {
+    "key": "n_gpu_layers",
+    "title": "GPU Layers",
+    "description": "Number of model layers to offload to GPU. -1 = all layers, 0 = CPU-only.",
+    "controllerType": "input",
+    "controllerProps": {
+      "placeholder": "-1",
+      "value": "-1",
+      "type": "number"
+    }
+  },
+  {
+    "key": "flash_attn",
+    "title": "Flash Attention",
+    "description": "Enable Flash Attention for faster inference and lower memory usage.",
+    "controllerType": "dropdown",
+    "controllerProps": {
+      "value": "auto",
+      "options": [
+        { "name": "Auto", "value": "auto" },
+        { "name": "On", "value": "on" },
+        { "name": "Off", "value": "off" }
+      ]
+    }
+  },
+  {
+    "key": "cont_batching",
+    "title": "Continuous Batching",
+    "description": "Allow multiple concurrent inference requests to share the same model session.",
+    "controllerType": "checkbox",
+    "controllerProps": {
+      "value": false
+    }
+  },
+  {
+    "key": "no_mmap",
+    "title": "Disable Memory Mapping",
+    "description": "Load the model fully into RAM instead of memory-mapping. Slower load, reduces page faults.",
+    "controllerType": "checkbox",
+    "controllerProps": {
+      "value": false
+    }
+  },
+  {
+    "key": "mlock",
+    "title": "Lock Memory",
+    "description": "Prevent the model from being swapped to disk.",
+    "controllerType": "checkbox",
+    "controllerProps": {
+      "value": false
+    }
+  },
+  {
+    "key": "cache_type_k",
+    "title": "KV Cache Key Type",
+    "description": "Precision for attention key vectors. Lower precision saves memory.",
+    "controllerType": "dropdown",
+    "controllerProps": {
+      "value": "f16",
+      "options": [
+        { "name": "f32", "value": "f32" },
+        { "name": "f16", "value": "f16" },
+        { "name": "bf16", "value": "bf16" },
+        { "name": "q8_0", "value": "q8_0" },
+        { "name": "q4_0", "value": "q4_0" },
+        { "name": "q4_1", "value": "q4_1" },
+        { "name": "iq4_nl", "value": "iq4_nl" },
+        { "name": "q5_0", "value": "q5_0" },
+        { "name": "q5_1", "value": "q5_1" }
+      ]
+    }
+  },
+  {
+    "key": "cache_type_v",
+    "title": "KV Cache Value Type",
+    "description": "Precision for attention value vectors. Requires Flash Attention = on.",
+    "controllerType": "dropdown",
+    "controllerProps": {
+      "value": "f16",
+      "options": [
+        { "name": "f32", "value": "f32" },
+        { "name": "f16", "value": "f16" },
+        { "name": "bf16", "value": "bf16" },
+        { "name": "q8_0", "value": "q8_0" },
+        { "name": "q4_0", "value": "q4_0" },
+        { "name": "q4_1", "value": "q4_1" },
+        { "name": "iq4_nl", "value": "iq4_nl" },
+        { "name": "q5_0", "value": "q5_0" },
+        { "name": "q5_1", "value": "q5_1" }
+      ]
+    }
+  },
+  {
+    "key": "defrag_thold",
+    "title": "KV Cache Defrag Threshold",
+    "description": "Trigger KV cache defragmentation when fragmentation exceeds this ratio.",
+    "controllerType": "input",
+    "controllerProps": {
+      "placeholder": "0.1",
+      "value": "0.1",
+      "type": "number"
+    }
+  },
+  {
+    "key": "rope_scaling",
+    "title": "RoPE Scaling Method",
+    "description": "Context extension method for models with limited training context.",
+    "controllerType": "dropdown",
+    "controllerProps": {
+      "value": "none",
+      "options": [
+        { "name": "None", "value": "none" },
+        { "name": "Linear", "value": "linear" },
+        { "name": "YaRN", "value": "yarn" }
+      ]
+    }
+  },
+  {
+    "key": "rope_scale",
+    "title": "RoPE Scale Factor",
+    "description": "Context length multiplier for linear RoPE scaling.",
+    "controllerType": "input",
+    "controllerProps": {
+      "placeholder": "1.0",
+      "value": "1.0",
+      "type": "number"
+    }
+  },
+  {
+    "key": "rope_freq_base",
+    "title": "RoPE Base Frequency",
+    "description": "Override the model's RoPE base frequency (0 = use model default).",
+    "controllerType": "input",
+    "controllerProps": {
+      "placeholder": "0",
+      "value": "0",
+      "type": "number"
+    }
+  },
+  {
+    "key": "rope_freq_scale",
+    "title": "RoPE Frequency Scale",
+    "description": "Multiplier for RoPE frequencies.",
+    "controllerType": "input",
+    "controllerProps": {
+      "placeholder": "1.0",
+      "value": "1.0",
+      "type": "number"
+    }
+  },
+  {
+    "key": "mirostat",
+    "title": "Mirostat Sampling",
+    "description": "Perplexity-controlled sampling. 0=off, 1=Mirostat v1, 2=Mirostat v2.",
+    "controllerType": "dropdown",
+    "controllerProps": {
+      "value": "0",
+      "options": [
+        { "name": "Off", "value": "0" },
+        { "name": "Mirostat v1", "value": "1" },
+        { "name": "Mirostat v2", "value": "2" }
+      ]
+    }
+  },
+  {
+    "key": "mirostat_lr",
+    "title": "Mirostat Learning Rate (η)",
+    "description": "How quickly Mirostat adapts to maintain target perplexity.",
+    "controllerType": "input",
+    "controllerProps": {
+      "placeholder": "0.1",
+      "value": "0.1",
+      "type": "number"
+    }
+  },
+  {
+    "key": "mirostat_ent",
+    "title": "Mirostat Target Entropy (τ)",
+    "description": "Target perplexity value. Higher = more creative, lower = more focused.",
+    "controllerType": "input",
+    "controllerProps": {
+      "placeholder": "5.0",
+      "value": "5.0",
+      "type": "number"
+    }
+  },
+  {
+    "key": "grammar_file",
+    "title": "Grammar File",
+    "description": "Path to a BNF grammar file for constrained text generation.",
+    "controllerType": "input",
+    "controllerProps": {
+      "placeholder": "",
+      "value": "",
+      "type": "text"
+    }
+  },
+  {
+    "key": "json_schema_file",
+    "title": "JSON Schema File",
+    "description": "Path to a JSON schema file for structured JSON output.",
+    "controllerType": "input",
+    "controllerProps": {
+      "placeholder": "",
+      "value": "",
+      "type": "text"
+    }
+  },
+  {
+    "key": "no_kv_offload",
+    "title": "Keep KV Cache on Same Device",
+    "description": "Keep KV cache on same device (do not offload to CPU).",
+    "controllerType": "checkbox",
+    "controllerProps": {
+      "value": false
+    }
+  },
+  {
+    "key": "cpu_moe",
+    "title": "Use CPU for MoE Layers",
+    "description": "Offload Mixture-of-Experts layers to CPU.",
+    "controllerType": "checkbox",
+    "controllerProps": {
+      "value": false
+    }
+  },
+  {
+    "key": "n_cpu_moe",
+    "title": "MoE CPU Threshold",
+    "description": "Number of MoE experts to run on CPU.",
+    "controllerType": "input",
+    "controllerProps": {
+      "placeholder": "0",
+      "value": "0",
+      "type": "number"
+    }
+  },
+  {
+    "key": "offload_mmproj",
+    "title": "Offload Vision Projector",
+    "description": "Offload vision projector (mmproj) to GPU.",
+    "controllerType": "checkbox",
+    "controllerProps": {
+      "value": true
+    }
+  },
+  {
+    "key": "ctx_size",
+    "title": "Context Size",
+    "description": "Context window size (0 = from model, used when auto-fit is disabled).",
+    "controllerType": "input",
+    "controllerProps": {
+      "placeholder": "0",
+      "value": "0",
+      "type": "number"
+    }
+  }
+]

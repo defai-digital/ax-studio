@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils'
 import { useModelProvider } from '@/hooks/useModelProvider'
 import { getProviderTitle } from '@/lib/utils'
 import ProvidersAvatar from '@/containers/ProvidersAvatar'
+import { PlatformFeatures, PlatformFeature } from '@/lib/platform'
 
 const SettingsMenu = () => {
   const { t } = useTranslation()
@@ -119,6 +120,12 @@ const SettingsMenu = () => {
       route: route.settings.https_proxy,
       hasSubMenu: false,
       isEnabled: true,
+    },
+    {
+      title: 'common:engineSettings',
+      route: route.settings.engine_settings,
+      hasSubMenu: false,
+      isEnabled: PlatformFeatures[PlatformFeature.LOCAL_INFERENCE],
     },
     // Hide Extension settings for now
     // {

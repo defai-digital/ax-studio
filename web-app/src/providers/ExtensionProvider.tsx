@@ -22,6 +22,10 @@ export function ExtensionProvider({ children }: PropsWithChildren) {
       .registerActive()
       .then(() => ExtensionManager.getInstance().load())
       .then(() => setFinishedSetup(true))
+      .catch((err) => {
+        console.error('Extension setup failed, rendering app anyway:', err)
+        setFinishedSetup(true)
+      })
   }, [])
 
   useEffect(() => {

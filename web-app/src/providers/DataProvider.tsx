@@ -29,6 +29,11 @@ type RegisterProviderRequest = {
 }
 
 async function registerRemoteProvider(provider: ModelProvider) {
+  // Local providers (llamacpp, mlx, ollama) are registered by the ExtensionManager/EngineManager.
+  // We only register remote providers that have an API key with the Rust backend.
+  const isLocalProvider = ['llamacpp', 'mlx', 'ollama'].includes(provider.provider)
+  if (isLocalProvider) return
+
   // Skip providers without API key (they can't make requests)
   if (!provider.api_key) {
     console.log(`Provider ${provider.provider} has no API key, skipping registration`)
@@ -178,12 +183,16 @@ export function DataProvider() {
   }, [checkForUpdate])
 
   useEffect(() => {
-    events.on(AppEvent.onModelImported, () => {
+    const handleModelImported = () => {
       serviceHub.providers().getProviders().then((providers) => {
         setProviders(providers)
         providers.forEach(registerRemoteProvider)
       })
-    })
+    }
+    events.on(AppEvent.onModelImported, handleModelImported)
+    return () => {
+      events.off(AppEvent.onModelImported, handleModelImported)
+    }
   }, [serviceHub, setProviders])
 
   // Auto-start Local API Server on app startup if enabled
