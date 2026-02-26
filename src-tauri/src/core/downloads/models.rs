@@ -34,29 +34,48 @@ pub struct DownloadEvent {
 }
 
 /// Structure to track progress for each file in parallel downloads
+/// Tracks (transferred, total) per file_id
 #[derive(Clone)]
 pub struct ProgressTracker {
-    file_progress: Arc<Mutex<HashMap<String, u64>>>,
-    total_size: u64,
+    file_stats: Arc<Mutex<HashMap<String, (u64, u64)>>>,
 }
 
 impl ProgressTracker {
-    pub fn new(_items: &[DownloadItem], sizes: HashMap<String, u64>) -> Self {
-        let total_size = sizes.values().sum();
+    pub fn new(initial_sizes: HashMap<String, u64>) -> Self {
+        let mut file_stats = HashMap::new();
+        for (id, size) in initial_sizes {
+            file_stats.insert(id, (0, size));
+        }
         ProgressTracker {
-            file_progress: Arc::new(Mutex::new(HashMap::new())),
-            total_size,
+            file_stats: Arc::new(Mutex::new(file_stats)),
         }
     }
 
+    /// Update transferred bytes for a file
     pub async fn update_progress(&self, file_id: &str, transferred: u64) {
-        let mut progress = self.file_progress.lock().await;
-        progress.insert(file_id.to_string(), transferred);
+        let mut stats = self.file_stats.lock().await;
+        if let Some(entry) = stats.get_mut(file_id) {
+            entry.0 = transferred;
+        }
     }
 
+    /// Refine total size for a file (useful if HEAD was 0 but GET has Content-Length)
+    pub async fn set_file_total(&self, file_id: &str, total: u64) {
+        let mut stats = self.file_stats.lock().await;
+        if let Some(entry) = stats.get_mut(file_id) {
+            entry.1 = total;
+        }
+    }
+
+    /// Get combined (transferred, total) across all files
     pub async fn get_total_progress(&self) -> (u64, u64) {
-        let progress = self.file_progress.lock().await;
-        let total_transferred: u64 = progress.values().sum();
-        (total_transferred, self.total_size)
+        let stats = self.file_stats.lock().await;
+        let mut total_transferred = 0;
+        let mut total_size = 0;
+        for (transferred, size) in stats.values() {
+            total_transferred += transferred;
+            total_size += size;
+        }
+        (total_transferred, total_size)
     }
 }

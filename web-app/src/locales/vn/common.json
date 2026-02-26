@@ -1,5 +1,6 @@
 {
   "assistants": "Trợ lý",
+  "engineSettings": "Engine Settings",
   "hardware": "Phần cứng",
   "mcp-servers": "Máy chủ MCP",
   "local_api_server": "Máy chủ API cục bộ",

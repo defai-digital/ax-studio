@@ -1,0 +1,44 @@
+{
+  "name": "@ax-fabric/llamacpp-extension",
+  "productName": "llama.cpp Inference Engine",
+  "version": "1.0.0",
+  "description": "This extension enables llama.cpp local inference for Ax-Fabric",
+  "main": "dist/index.js",
+  "module": "dist/module.js",
+  "engine": "llamacpp",
+  "author": "Ax-Fabric <service@axfabric.ai>",
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "rolldown -c rolldown.config.mjs",
+    "build:publish": "rimraf *.tgz --glob || true && yarn build && npm pack && cpx *.tgz ../../pre-install",
+    "test": "vitest",
+    "test:run": "vitest run"
+  },
+  "devDependencies": {
+    "cpx": "1.5.0",
+    "rimraf": "3.0.2",
+    "rolldown": "1.0.0-beta.1",
+    "typescript": "5.9.2",
+    "vitest": "3.2.4"
+  },
+  "dependencies": {
+    "@ax-fabric/core": "../../core/package.tgz",
+    "@ax-fabric/tauri-plugin-llamacpp-api": "link:../../src-tauri/plugins/tauri-plugin-llamacpp",
+    "@tauri-apps/api": "2.8.0",
+    "@tauri-apps/plugin-http": "2.5.0",
+    "@tauri-apps/plugin-log": "^2.6.0",
+    "fetch-retry": "^5.0.6",
+    "ulidx": "2.4.1"
+  },
+  "files": [
+    "dist/*",
+    "package.json"
+  ],
+  "bundleDependencies": [
+    "fetch-retry"
+  ],
+  "installConfig": {
+    "hoistingLimits": "workspaces"
+  },
+  "packageManager": "yarn@4.5.3"
+}

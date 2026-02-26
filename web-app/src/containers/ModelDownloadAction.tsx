@@ -3,12 +3,15 @@ import { Progress } from '@/components/ui/progress'
 import { route } from '@/constants/routes'
 import { useDownloadStore } from '@/hooks/useDownloadStore'
 import { useGeneralSetting } from '@/hooks/useGeneralSetting'
+import { useModelProvider } from '@/hooks/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useTranslation } from '@/i18n'
 import { CatalogModel } from '@/services/models/types'
+import { sanitizeModelId } from '@/lib/utils'
+import { AppEvent, DownloadEvent, DownloadState, events } from '@ax-fabric/core'
 import { IconDownload } from '@tabler/icons-react'
 import { useNavigate } from '@tanstack/react-router'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 export const ModelDownloadAction = ({
   variant,
@@ -21,8 +24,12 @@ export const ModelDownloadAction = ({
 
   const { t } = useTranslation()
   const huggingfaceToken = useGeneralSetting((state) => state.huggingfaceToken)
+  const getProviderByName = useModelProvider((state) => state.getProviderByName)
+  const llamaProvider = getProviderByName('llamacpp')
   const { downloads, localDownloadingModels, addLocalDownloadingModel } =
     useDownloadStore()
+  const [isDownloaded, setDownloaded] = useState<boolean>(false)
+
   const downloadProcesses = useMemo(
     () =>
       Object.values(downloads).map((download) => ({
@@ -37,6 +44,36 @@ export const ModelDownloadAction = ({
 
   const navigate = useNavigate()
 
+  useEffect(() => {
+    const isDownloaded = llamaProvider?.models.some(
+      (m: { id: string }) =>
+        m.id === variant.model_id ||
+        m.id === `${model.developer}/${sanitizeModelId(variant.model_id.split('/').pop() || '')}`
+    )
+    setDownloaded(!!isDownloaded)
+  }, [llamaProvider, variant.model_id, model.developer])
+
+  useEffect(() => {
+    const handleVerified = (state: DownloadState) => {
+      if (state.modelId === variant.model_id) setDownloaded(true)
+    }
+    // Also listen for onModelImported — onFileDownloadAndVerificationSuccess
+    // only fires when SHA256 verification is enabled (skipVerification=false).
+    // onModelImported fires unconditionally after model.yml is written.
+    const handleImported = (payload: { modelId?: string }) => {
+      if (payload?.modelId === variant.model_id) setDownloaded(true)
+    }
+    events.on(
+      DownloadEvent.onFileDownloadAndVerificationSuccess,
+      handleVerified
+    )
+    events.on(AppEvent.onModelImported, handleImported)
+    return () => {
+      events.off(DownloadEvent.onFileDownloadAndVerificationSuccess, handleVerified)
+      events.off(AppEvent.onModelImported, handleImported)
+    }
+  }, [variant.model_id])
+
   const handleUseModel = useCallback(
     (modelId: string) => {
       navigate({
@@ -45,7 +82,7 @@ export const ModelDownloadAction = ({
         search: {
           model: {
             id: modelId,
-            provider: 'ax-fabric',
+            provider: 'llamacpp',
           },
         },
       })
@@ -83,8 +120,6 @@ export const ModelDownloadAction = ({
     downloadProcesses.some((e) => e.id === variant.model_id)
   const downloadProgress =
     downloadProcesses.find((e) => e.id === variant.model_id)?.progress || 0
-  // No local provider in Ax-Fabric; downloads tracked via download store only
-  const isDownloaded = false
 
   if (isDownloading) {
     return (

@@ -2,11 +2,13 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { useDownloadStore } from '@/hooks/useDownloadStore'
 import { useGeneralSetting } from '@/hooks/useGeneralSetting'
+import { useModelProvider } from '@/hooks/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useTranslation } from '@/i18n'
-import { cn } from '@/lib/utils'
+import { cn, sanitizeModelId } from '@/lib/utils'
 import { CatalogModel } from '@/services/models/types'
-import { useCallback, useMemo } from 'react'
+import { AppEvent, DownloadEvent, DownloadState, events } from '@ax-fabric/core'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { DEFAULT_MODEL_QUANTIZATIONS } from '@/constants/models'
 
@@ -28,9 +30,12 @@ export function DownloadButtonPlaceholder({
       }))
     )
   const { t } = useTranslation()
+  const getProviderByName = useModelProvider((state) => state.getProviderByName)
+  const llamaProvider = getProviderByName('llamacpp')
+
   const serviceHub = useServiceHub()
   const huggingfaceToken = useGeneralSetting((state) => state.huggingfaceToken)
-  const isDownloaded = false
+  const [isDownloaded, setDownloaded] = useState<boolean>(false)
 
   const quant =
     model.quants?.find((e) =>
@@ -52,6 +57,44 @@ export function DownloadButtonPlaceholder({
       })),
     [downloads]
   )
+
+  useEffect(() => {
+    const isDownloaded = llamaProvider?.models.some((m: { id: string }) => {
+      const parts = modelId.split('/')
+      const name = parts[parts.length - 1]
+      const sanitizedName = sanitizeModelId(name)
+      const author = parts.length > 1 ? parts.slice(0, -1).join('/') : ''
+
+      return (
+        m.id === modelId ||
+        m.id === sanitizedName ||
+        (author && m.id === `${author}/${sanitizedName}`) ||
+        m.id === `${model.developer}/${sanitizedName}`
+      )
+    })
+    setDownloaded(!!isDownloaded)
+  }, [llamaProvider, modelId, model.developer])
+
+  useEffect(() => {
+    const handleVerified = (state: DownloadState) => {
+      if (state.modelId === modelId) setDownloaded(true)
+    }
+    // Also listen for onModelImported — onFileDownloadAndVerificationSuccess
+    // only fires when SHA256 verification is enabled (skipVerification=false).
+    // onModelImported fires unconditionally after model.yml is written.
+    const handleImported = (payload: { modelId?: string }) => {
+      if (payload?.modelId === modelId) setDownloaded(true)
+    }
+    events.on(
+      DownloadEvent.onFileDownloadAndVerificationSuccess,
+      handleVerified
+    )
+    events.on(AppEvent.onModelImported, handleImported)
+    return () => {
+      events.off(DownloadEvent.onFileDownloadAndVerificationSuccess, handleVerified)
+      events.off(AppEvent.onModelImported, handleImported)
+    }
+  }, [modelId])
 
   const isRecommendedModel = useCallback((_modelId: string) => {
     return false

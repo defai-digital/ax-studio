@@ -20,11 +20,11 @@ import { useServiceHub } from '@/hooks/useServiceHub'
 import { IconSettings2 } from '@tabler/icons-react'
 import { cn } from '@/lib/utils'
 import { ApiKeyInput } from '@/containers/ApiKeyInput'
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { getModelToStart } from '@/utils/getModelToStart'
 import { LogViewer } from '@/components/LogViewer'
-import { invoke } from '@tauri-apps/api/core'
+
 import AkidbConfigPanel from '@/containers/AkidbConfigPanel'
 import {
   Popover,
@@ -67,7 +67,7 @@ function LocalAPIServerContent() {
   } = useLocalApiServer()
 
   const { serverStatus, setServerStatus } = useAppState()
-  const { providers, selectedModel, selectedProvider, getProviderByName } =
+  const { selectedModel, selectedProvider, getProviderByName } =
     useModelProvider()
   const [showApiKeyError, setShowApiKeyError] = useState(false)
   const setActiveModels = useAppState((state) => state.setActiveModels)

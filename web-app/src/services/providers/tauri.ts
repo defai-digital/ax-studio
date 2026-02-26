@@ -49,7 +49,7 @@ export class TauriProvidersService extends DefaultProvidersService {
       for (const [providerName, value] of EngineManager.instance().engines) {
         const models = await value.list() ?? [] 
         const provider: ModelProvider = {
-          active: false,
+          active: true, // Runtime engines (llamacpp, mlx) are active by default
           persist: true,
           provider: providerName,
           base_url:

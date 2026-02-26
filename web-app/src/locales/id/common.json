@@ -1,5 +1,6 @@
 {
   "assistants": "Asisten",
+  "engineSettings": "Engine Settings",
   "hardware": "Perangkat Keras",
   "mcp-servers": "Server MCP",
   "local_api_server": "Server API Lokal",

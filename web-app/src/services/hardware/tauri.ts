@@ -16,7 +16,19 @@ export class TauriHardwareService extends DefaultHardwareService {
   }
 
   async getLlamacppDevices(): Promise<DeviceList[]> {
-    return []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ext = (window as any).core?.extensionManager?.getByName(
+      '@ax-fabric/llamacpp-extension'
+    )
+    if (!ext) return []
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return await (ext as any).getDevices()
+    } catch (e) {
+      console.error('[TauriHardwareService] getLlamacppDevices failed:', e)
+      return []
+    }
   }
 
   async setActiveGpus(data: { gpus: number[] }): Promise<void> {

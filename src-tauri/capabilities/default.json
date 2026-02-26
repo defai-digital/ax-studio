@@ -25,6 +25,7 @@
     "opener:allow-open-url",
     "store:default",
     "hardware:default",
+    "llamacpp:default",
     "deep-link:default",
     "updater:default",
     "updater:allow-check",

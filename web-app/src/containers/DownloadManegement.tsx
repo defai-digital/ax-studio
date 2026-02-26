@@ -24,10 +24,7 @@ export function DownloadManagement() {
   const serviceHub = useServiceHub()
   const {
     downloads,
-    updateProgress,
     localDownloadingModels,
-    removeDownload,
-    removeLocalDownloadingModel,
   } = useDownloadStore()
   const { updateState } = useAppUpdater()
 
@@ -143,24 +140,9 @@ export function DownloadManagement() {
     appUpdateState.downloadedBytes,
   ])
 
-  const onFileDownloadUpdate = useCallback(
-    async (state: DownloadState) => {
-      updateProgress(
-        state.modelId,
-        state.percent,
-        state.modelId,
-        state.size?.transferred,
-        state.size?.total
-      )
-    },
-    [updateProgress]
-  )
-
   const onFileDownloadError = useCallback(
     (state: DownloadState) => {
       console.debug('onFileDownloadError', state)
-      removeDownload(state.modelId)
-      removeLocalDownloadingModel(state.modelId)
 
       const anyState = state as unknown as { error?: string }
       const err = anyState?.error || ''
@@ -207,7 +189,7 @@ export function DownloadManagement() {
         }),
       })
     },
-    [removeDownload, removeLocalDownloadingModel, t, navigate]
+    [t, navigate]
   )
 
   const onModelValidationStarted = useCallback(
@@ -233,9 +215,6 @@ export function DownloadManagement() {
       // Dismiss the validation started toast
       toast.dismiss(`model-validation-started-${event.modelId}`)
 
-      removeDownload(event.modelId)
-      removeLocalDownloadingModel(event.modelId)
-
       // Show specific toast for validation failure
       toast.error(t('common:toast.modelValidationFailed.title'), {
         description: t('common:toast.modelValidationFailed.description', {
@@ -244,16 +223,7 @@ export function DownloadManagement() {
         duration: 30000,
       })
     },
-    [removeDownload, removeLocalDownloadingModel, t]
-  )
-
-  const onFileDownloadStopped = useCallback(
-    (state: DownloadState) => {
-      console.debug('onFileDownloadStopped', state)
-      removeDownload(state.modelId)
-      removeLocalDownloadingModel(state.modelId)
-    },
-    [removeDownload, removeLocalDownloadingModel]
+    [t]
   )
 
   const onFileDownloadSuccess = useCallback(
@@ -263,8 +233,6 @@ export function DownloadManagement() {
       // Dismiss any validation started toast when download completes successfully
       toast.dismiss(`model-validation-started-${state.modelId}`)
 
-      removeDownload(state.modelId)
-      removeLocalDownloadingModel(state.modelId)
       toast.success(t('common:toast.downloadComplete.title'), {
         id: 'download-complete',
         description: t('common:toast.downloadComplete.description', {
@@ -272,7 +240,7 @@ export function DownloadManagement() {
         }),
       })
     },
-    [removeDownload, removeLocalDownloadingModel, t]
+    [t]
   )
 
   const onFileDownloadAndVerificationSuccess = useCallback(
@@ -282,8 +250,6 @@ export function DownloadManagement() {
       // Dismiss any validation started toast when download and verification complete successfully
       toast.dismiss(`model-validation-started-${state.modelId}`)
 
-      removeDownload(state.modelId)
-      removeLocalDownloadingModel(state.modelId)
       toast.success(t('common:toast.downloadAndVerificationComplete.title'), {
         id: 'download-complete',
         description: t(
@@ -294,15 +260,13 @@ export function DownloadManagement() {
         ),
       })
     },
-    [removeDownload, removeLocalDownloadingModel, t]
+    [t]
   )
 
   useEffect(() => {
     console.debug('DownloadListener: registering event listeners...')
-    events.on(DownloadEvent.onFileDownloadUpdate, onFileDownloadUpdate)
     events.on(DownloadEvent.onFileDownloadError, onFileDownloadError)
     events.on(DownloadEvent.onFileDownloadSuccess, onFileDownloadSuccess)
-    events.on(DownloadEvent.onFileDownloadStopped, onFileDownloadStopped)
     events.on(DownloadEvent.onModelValidationStarted, onModelValidationStarted)
     events.on(DownloadEvent.onModelValidationFailed, onModelValidationFailed)
     events.on(
@@ -317,10 +281,8 @@ export function DownloadManagement() {
 
     return () => {
       console.debug('DownloadListener: unregistering event listeners...')
-      events.off(DownloadEvent.onFileDownloadUpdate, onFileDownloadUpdate)
       events.off(DownloadEvent.onFileDownloadError, onFileDownloadError)
       events.off(DownloadEvent.onFileDownloadSuccess, onFileDownloadSuccess)
-      events.off(DownloadEvent.onFileDownloadStopped, onFileDownloadStopped)
       events.off(
         DownloadEvent.onModelValidationStarted,
         onModelValidationStarted
@@ -340,10 +302,8 @@ export function DownloadManagement() {
       events.off(AppEvent.onAppUpdateDownloadError, onAppUpdateDownloadError)
     }
   }, [
-    onFileDownloadUpdate,
     onFileDownloadError,
     onFileDownloadSuccess,
-    onFileDownloadStopped,
     onModelValidationStarted,
     onModelValidationFailed,
     onFileDownloadAndVerificationSuccess,
