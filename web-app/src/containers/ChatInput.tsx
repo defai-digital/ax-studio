@@ -28,8 +28,8 @@ import {
   IconX,
   IconPaperclip,
   IconLoader2,
-  IconWorld,
   IconUser,
+  IconBrain,
 } from '@tabler/icons-react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useGeneralSetting } from '@/hooks/useGeneralSetting'
@@ -49,6 +49,7 @@ import {
 import { localStorageKey } from '@/constants/localStorage'
 import { defaultModel } from '@/lib/models'
 import { useAssistant } from '@/hooks/useAssistant'
+import { useMemory } from '@/hooks/useMemory'
 import DropdownToolsAvailable from '@/containers/DropdownToolsAvailable'
 import { AvatarEmoji } from '@/containers/AvatarEmoji'
 import { useServiceHub } from '@/hooks/useServiceHub'
@@ -71,6 +72,7 @@ import { useAttachments } from '@/hooks/useAttachments'
 import { toast } from 'sonner'
 import { isPlatformTauri } from '@/lib/platform/utils'
 import { processAttachmentsForSend } from '@/lib/attachmentProcessing'
+
 import { useAttachmentIngestionPrompt } from '@/hooks/useAttachmentIngestionPrompt'
 import {
   NEW_THREAD_ATTACHMENT_KEY,
@@ -120,6 +122,9 @@ const ChatInput = memo(function ChatInput({
   const setGlobalPrompt = usePrompt((state) => state.setPrompt)
   const currentThreadId = useThreads((state) => state.currentThreadId)
   const effectiveThreadId = threadId ?? currentThreadId
+  const isMemoryEnabled = useMemory((state) => state.memoryEnabled)
+  const toggleMemory = useMemory((state) => state.toggleMemory)
+  const memoryCount = useMemory((state) => (state.memories['default'] || []).length)
   const currentThread = useThreads((state) =>
     effectiveThreadId ? state.threads[effectiveThreadId] : state.getCurrentThread()
   )
@@ -1643,21 +1648,33 @@ const ChatInput = memo(function ChatInput({
                     </Tooltip>
                   ))}
 
-                {selectedModel?.capabilities?.includes('web_search') && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon-xs">
-                        <IconWorld
-                          size={18}
-                          className="text-muted-foreground"
-                        />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Web Search</p>
-                    </TooltipContent>
-                  </Tooltip>
-                )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="relative"
+                      onClick={() => toggleMemory()}
+                    >
+                      <IconBrain
+                        size={18}
+                        className={cn(
+                          isMemoryEnabled
+                            ? 'text-primary'
+                            : 'text-muted-foreground'
+                        )}
+                      />
+                      {memoryCount > 0 && (
+                        <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-0.5 text-[10px] font-medium text-primary-foreground">
+                          {memoryCount}
+                        </span>
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{isMemoryEnabled ? `Memory (${memoryCount})` : 'Memory'}</p>
+                  </TooltipContent>
+                </Tooltip>
 
                 {selectedModel?.capabilities?.includes('reasoning') && (
                   <Tooltip>

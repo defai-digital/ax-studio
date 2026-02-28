@@ -53,7 +53,15 @@ import DropdownModelProvider from '@/containers/DropdownModelProvider'
 import { ExtensionTypeEnum, VectorDBExtension } from '@ax-fabric/core'
 import { ExtensionManager } from '@/lib/extension'
 import { Columns2, X } from 'lucide-react'
+import { toast } from 'sonner'
 import { useGeneralSetting } from '@/hooks/useGeneralSetting'
+import { useMemory } from '@/hooks/useMemory'
+import {
+  parseMemoryFromResponse,
+  buildMemoryContext,
+  extractFactsFromPatterns,
+  mergePatternFacts,
+} from '@/lib/memory-extractor'
 import {
   getOptimizedModelConfig,
   resolveSystemPrompt,
@@ -92,6 +100,8 @@ function SplitThreadPane({
   const selectedProvider = useModelProvider((state) => state.selectedProvider)
   const selectedModel = useModelProvider((state) => state.selectedModel)
   const { globalDefaultPrompt, autoTuningEnabled } = useGeneralSetting()
+  const memoryEnabled = useMemory((state) => state.memoryEnabled)
+  const memoryVersion = useMemory((state) => state.memoryVersion)
   const messageCount = useMessages(
     (state) => state.messages[threadId]?.length ?? 0
   )
@@ -110,6 +120,13 @@ function SplitThreadPane({
         : ''
     return projectLogo || ''
   }, [thread?.metadata])
+
+  const memorySuffix = useMemo(() => {
+    if (!memoryEnabled) return ''
+    const memories = useMemory.getState().getMemories('default')
+    return buildMemoryContext(memories)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memoryEnabled, memoryVersion])
 
   const promptResolution = useMemo(
     () =>
@@ -167,7 +184,7 @@ function SplitThreadPane({
   } = useChat({
     sessionId: threadId,
     sessionTitle: thread?.title,
-    systemMessage: promptResolution.resolvedPrompt,
+    systemMessage: promptResolution.resolvedPrompt + memorySuffix,
     modelOverrideId: optimizedModelConfig.modelId,
     inferenceParameters: {
       temperature: optimizedModelConfig.temperature,
@@ -178,6 +195,53 @@ function SplitThreadPane({
     onFinish: ({ message, isAbort }) => {
       if (!isAbort && message.role === 'assistant') {
         const contentParts = extractContentPartsFromUIMessage(message)
+
+        // Memory: parse LLM tags + client-side pattern extraction
+        if (useMemory.getState().isMemoryEnabled() && contentParts.length > 0) {
+          const prevCount = useMemory.getState().getMemories('default').length
+          let llmReplaced = false
+          for (const part of contentParts) {
+            if (part.type === 'text' && part.text?.value) {
+              const { facts, isFullReplace, cleanedText } = parseMemoryFromResponse(part.text.value)
+              part.text.value = cleanedText
+              if (isFullReplace && facts.length > 0) {
+                useMemory.getState().replaceMemories('default', facts, threadId)
+                llmReplaced = true
+                const newCount = facts.length
+                const added = newCount - prevCount
+                if (added > 0) {
+                  toast.success(`Remembered ${added} new fact${added !== 1 ? 's' : ''}`)
+                } else if (newCount === prevCount && newCount > 0) {
+                  toast.info('Updated memories')
+                }
+              }
+            }
+          }
+          // Fallback: pattern-match the user message for personal facts
+          if (!llmReplaced) {
+            const storedMsgs = useMessages.getState().getMessages(threadId)
+            const lastUserMsg = [...storedMsgs].reverse().find((m) => m.role === 'user')
+            const userText = lastUserMsg?.content
+              ?.filter((c: { type?: string }) => c.type === 'text')
+              .map((c: { text?: { value?: string } }) => c.text?.value ?? '')
+              .join('\n') ?? ''
+            if (userText) {
+              const patternFacts = extractFactsFromPatterns(userText)
+              if (patternFacts.size > 0) {
+                const existing = useMemory.getState().getMemories('default')
+                const merged = mergePatternFacts(existing, patternFacts, threadId)
+                useMemory.getState().importMemories('default', merged)
+                const added = merged.length - existing.length
+                if (added > 0) {
+                  toast.success(`Remembered ${added} new fact${added !== 1 ? 's' : ''}`)
+                } else if (patternFacts.size > 0) {
+                  toast.info('Updated memories')
+                }
+              }
+            }
+          }
+        }
+
         if (contentParts.length > 0) {
           const assistantMessage: ThreadMessage = {
             type: 'text',
@@ -198,6 +262,27 @@ function SplitThreadPane({
           } else {
             addMessage(assistantMessage)
           }
+        }
+      }
+
+      // Strip memory_extract tags from UI chat messages
+      if (useMemory.getState().isMemoryEnabled()) {
+        const sessions = useChatSessions.getState().sessions[threadId]
+        if (sessions?.chat.messages) {
+          const cleaned = sessions.chat.messages.map((msg) => {
+            if (msg.id !== message.id || msg.role !== 'assistant') return msg
+            return {
+              ...msg,
+              parts: msg.parts.map((part) => {
+                if (part.type !== 'text') return part
+                const stripped = (part as { type: 'text'; text: string }).text
+                  .replace(/<memory_extract>[\s\S]*?<\/memory_extract>/, '')
+                  .trimEnd()
+                return { ...part, text: stripped }
+              }),
+            }
+          })
+          setChatMessages(cleaned)
         }
       }
     },
@@ -235,6 +320,41 @@ function SplitThreadPane({
     files?: Array<{ type: string; mediaType: string; url: string }>
   ) => {
     const normalizedText = text.trim()
+
+    // Handle /remember command
+    if (normalizedText.startsWith('/remember ')) {
+      const fact = normalizedText.slice('/remember '.length).trim()
+      if (fact) {
+        const now = Date.now()
+        useMemory.getState().addMemories('default', [{
+          id: `mem-${now}-manual`,
+          fact,
+          category: 'manual',
+          sourceThreadId: threadId,
+          createdAt: now,
+          updatedAt: now,
+        }])
+        toast.success(`Remembered: "${fact}"`)
+      }
+      return
+    }
+
+    // Handle /forget command
+    if (normalizedText.startsWith('/forget ')) {
+      const query = normalizedText.slice('/forget '.length).trim().toLowerCase()
+      if (query) {
+        const memories = useMemory.getState().getMemories('default')
+        const match = memories.find(m => m.fact.toLowerCase().includes(query))
+        if (match) {
+          useMemory.getState().deleteMemory('default', match.id)
+          toast.success(`Forgot: "${match.fact}"`)
+        } else {
+          toast.info(`No memory found matching "${query}"`)
+        }
+      }
+      return
+    }
+
     if (
       normalizedText &&
       messages.length === 0 &&
@@ -500,6 +620,8 @@ function ThreadDetail() {
     globalDefaultPrompt,
     autoTuningEnabled,
   } = useGeneralSetting()
+  const mainMemoryEnabled = useMemory((state) => state.memoryEnabled)
+  const mainMemoryVersion = useMemory((state) => state.memoryVersion)
   const threadMessageCount = useMessages(
     (state) => state.messages[threadId]?.length ?? 0
   )
@@ -531,6 +653,13 @@ function ThreadDetail() {
     }
     return null
   })
+
+  const mainMemorySuffix = useMemo(() => {
+    if (!mainMemoryEnabled) return ''
+    const memories = useMemory.getState().getMemories('default')
+    return buildMemoryContext(memories)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mainMemoryEnabled, mainMemoryVersion])
 
   const promptResolution = useMemo(
     () =>
@@ -603,7 +732,7 @@ function ThreadDetail() {
   } = useChat({
     sessionId: threadId,
     sessionTitle: thread?.title,
-    systemMessage: promptResolution.resolvedPrompt,
+    systemMessage: promptResolution.resolvedPrompt + mainMemorySuffix,
     modelOverrideId: optimizedModelConfig.modelId,
     inferenceParameters: {
       temperature: optimizedModelConfig.temperature,
@@ -617,6 +746,52 @@ function ThreadDetail() {
         // Extract content parts (including tool calls) as separate items in the content array
         // This preserves the natural ordering: text -> tool call -> text -> tool call, etc.
         const contentParts = extractContentPartsFromUIMessage(message)
+
+        // Memory: parse LLM tags + client-side pattern extraction
+        if (useMemory.getState().isMemoryEnabled() && contentParts.length > 0) {
+          const prevCount = useMemory.getState().getMemories('default').length
+          let llmReplaced = false
+          for (const part of contentParts) {
+            if (part.type === 'text' && part.text?.value) {
+              const { facts, isFullReplace, cleanedText } = parseMemoryFromResponse(part.text.value)
+              part.text.value = cleanedText
+              if (isFullReplace && facts.length > 0) {
+                useMemory.getState().replaceMemories('default', facts, threadId)
+                llmReplaced = true
+                const newCount = facts.length
+                const added = newCount - prevCount
+                if (added > 0) {
+                  toast.success(`Remembered ${added} new fact${added !== 1 ? 's' : ''}`)
+                } else if (newCount === prevCount && newCount > 0) {
+                  toast.info('Updated memories')
+                }
+              }
+            }
+          }
+          // Fallback: pattern-match the user message for personal facts
+          if (!llmReplaced) {
+            const storedMsgs = useMessages.getState().getMessages(threadId)
+            const lastUserMsg = [...storedMsgs].reverse().find((m) => m.role === 'user')
+            const userText = lastUserMsg?.content
+              ?.filter((c: { type?: string }) => c.type === 'text')
+              .map((c: { text?: { value?: string } }) => c.text?.value ?? '')
+              .join('\n') ?? ''
+            if (userText) {
+              const patternFacts = extractFactsFromPatterns(userText)
+              if (patternFacts.size > 0) {
+                const existing = useMemory.getState().getMemories('default')
+                const merged = mergePatternFacts(existing, patternFacts, threadId)
+                useMemory.getState().importMemories('default', merged)
+                const added = merged.length - existing.length
+                if (added > 0) {
+                  toast.success(`Remembered ${added} new fact${added !== 1 ? 's' : ''}`)
+                } else if (patternFacts.size > 0) {
+                  toast.info('Updated memories')
+                }
+              }
+            }
+          }
+        }
 
         if (contentParts.length > 0) {
           // Extract metadata from the message (including usage and tokenSpeed)
@@ -650,6 +825,27 @@ function ThreadDetail() {
           } else {
             addMessage(assistantMessage)
           }
+        }
+      }
+
+      // Strip memory_extract tags from UI chat messages
+      if (useMemory.getState().isMemoryEnabled()) {
+        const sessions = useChatSessions.getState().sessions[threadId]
+        if (sessions?.chat.messages) {
+          const cleaned = sessions.chat.messages.map((msg) => {
+            if (msg.id !== message.id || msg.role !== 'assistant') return msg
+            return {
+              ...msg,
+              parts: msg.parts.map((part) => {
+                if (part.type !== 'text') return part
+                const stripped = (part as { type: 'text'; text: string }).text
+                  .replace(/<memory_extract>[\s\S]*?<\/memory_extract>/, '')
+                  .trimEnd()
+                return { ...part, text: stripped }
+              }),
+            }
+          })
+          setChatMessages(cleaned)
         }
       }
 
@@ -889,8 +1085,43 @@ function ThreadDetail() {
       text: string,
       files?: Array<{ type: string; mediaType: string; url: string }>
     ) => {
-      // Rename thread on first message if still using default title
       const normalizedText = text.trim()
+
+      // Handle /remember command
+      if (normalizedText.startsWith('/remember ')) {
+        const fact = normalizedText.slice('/remember '.length).trim()
+        if (fact) {
+          const now = Date.now()
+          useMemory.getState().addMemories('default', [{
+            id: `mem-${now}-manual`,
+            fact,
+            category: 'manual',
+            sourceThreadId: threadId,
+            createdAt: now,
+            updatedAt: now,
+          }])
+          toast.success(`Remembered: "${fact}"`)
+        }
+        return
+      }
+
+      // Handle /forget command
+      if (normalizedText.startsWith('/forget ')) {
+        const query = normalizedText.slice('/forget '.length).trim().toLowerCase()
+        if (query) {
+          const memories = useMemory.getState().getMemories('default')
+          const match = memories.find(m => m.fact.toLowerCase().includes(query))
+          if (match) {
+            useMemory.getState().deleteMemory('default', match.id)
+            toast.success(`Forgot: "${match.fact}"`)
+          } else {
+            toast.info(`No memory found matching "${query}"`)
+          }
+        }
+        return
+      }
+
+      // Rename thread on first message if still using default title
       const currentThread = useThreads.getState().threads[threadId]
       const currentMessages = useMessages.getState().getMessages(threadId)
       if (

@@ -152,110 +152,119 @@ function Index() {
           <DropdownModelProvider model={selectedModel} />
         </div>
       </HeaderPage>
-      <div
-        className={cn(
-          'flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col gap-2 px-3'
-        )}
-      >
+      <div className="flex flex-1 flex-col min-h-0">
+        {/* Scrollable content area */}
         <div
           className={cn(
-            'mx-auto w-full md:w-4/5 xl:w-4/6 my-auto min-w-0',
+            'flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col justify-center px-3 py-2'
           )}
         >
-          <div className="flex items-center justify-end gap-2 mb-2">
-            <Button
-              variant={showThreadPromptEditor ? 'secondary' : 'outline'}
-              size="sm"
-              onClick={() => setShowThreadPromptEditor((v) => !v)}
-            >
-              Thread Prompt
-            </Button>
-            <Button
-              variant={showPromptDebug ? 'secondary' : 'outline'}
-              size="sm"
-              onClick={() => setShowPromptDebug((v) => !v)}
-            >
-              Debug
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Columns2 className="size-4" />
-                  <span>Split View</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => handleSplit('left')}>
-                  Split Left
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleSplit('right')}>
-                  Split Right
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-          {showThreadPromptEditor && (
-            <div className="mb-2 rounded-md border bg-card p-3 space-y-2">
-              <p className="text-xs text-muted-foreground">
-                {threadPromptDraft.trim()
-                  ? 'Thread Prompt (will apply to new thread)'
-                  : promptResolution.source === 'global'
-                    ? 'Inheriting from Global Prompt'
-                    : 'Using Fallback Prompt'}
-              </p>
-              <Textarea
-                value={threadPromptDraft}
-                onChange={(e) => setThreadPromptDraft(e.target.value)}
-                className="min-h-24"
-                placeholder="Set a prompt for the new thread. Leave empty to inherit from global."
-              />
-              <div className="flex justify-end gap-2">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setThreadPromptDraft('')}
-                >
-                  Clear
-                </Button>
+          <div
+            className={cn(
+              'mx-auto w-full md:w-4/5 xl:w-4/6 min-w-0',
+            )}
+          >
+            {/* Heading */}
+            <div className="text-center mb-3 sm:mb-4">
+              <h1 className="text-xl sm:text-2xl mt-1 sm:mt-2 font-studio font-medium">
+                {t('chat:description')}
+              </h1>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mb-3">
+              <Button
+                variant={showThreadPromptEditor ? 'secondary' : 'outline'}
+                size="sm"
+                onClick={() => setShowThreadPromptEditor((v) => !v)}
+              >
+                Thread Prompt
+              </Button>
+              <Button
+                variant={showPromptDebug ? 'secondary' : 'outline'}
+                size="sm"
+                onClick={() => setShowPromptDebug((v) => !v)}
+              >
+                Debug
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Columns2 className="size-4" />
+                    <span>Split View</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="center">
+                  <DropdownMenuItem onSelect={() => handleSplit('left')}>
+                    Split Left
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => handleSplit('right')}>
+                    Split Right
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
+            {/* Thread prompt editor */}
+            {showThreadPromptEditor && (
+              <div className="mb-2 rounded-md border bg-card p-2 sm:p-3 space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  {threadPromptDraft.trim()
+                    ? 'Thread Prompt (will apply to new thread)'
+                    : promptResolution.source === 'global'
+                      ? 'Inheriting from Global Prompt'
+                      : 'Using Fallback Prompt'}
+                </p>
+                <Textarea
+                  value={threadPromptDraft}
+                  onChange={(e) => setThreadPromptDraft(e.target.value)}
+                  className="min-h-20 sm:min-h-24"
+                  placeholder="Set a prompt for the new thread. Leave empty to inherit from global."
+                />
+                <div className="flex justify-end gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setThreadPromptDraft('')}
+                  >
+                    Clear
+                  </Button>
+                </div>
               </div>
-            </div>
-          )}
-          {showPromptDebug && (
-            <div className="mb-2 rounded-md border bg-card p-3 text-xs space-y-1">
-              <p>
-                <span className="font-medium">Source:</span> {promptResolution.source}
-              </p>
-              <p>
-                <span className="font-medium">Auto Tuning:</span>{' '}
-                {autoTuningEnabled ? 'Enabled' : 'Disabled'}
-              </p>
-              <p>
-                <span className="font-medium">temperature:</span>{' '}
-                {optimizedModelConfig.temperature ?? 'default'}
-              </p>
-              <p>
-                <span className="font-medium">top_p:</span>{' '}
-                {optimizedModelConfig.top_p ?? 'default'}
-              </p>
-              <p>
-                <span className="font-medium">max_output_tokens:</span>{' '}
-                {optimizedModelConfig.max_output_tokens ?? 'default'}
-              </p>
-              <pre className="bg-muted rounded p-2 whitespace-pre-wrap break-words">
-                {promptResolution.resolvedPrompt}
-              </pre>
-            </div>
-          )}
-          <div className={cn('text-center mb-4')}>
-            <h1
-              className={cn(
-                'text-2xl mt-2 font-studio font-medium',
-              )}
-            >
-              {t('chat:description')}
-            </h1>
+            )}
+
+            {/* Debug panel */}
+            {showPromptDebug && (
+              <div className="mb-2 rounded-md border bg-card p-2 sm:p-3 text-xs space-y-1">
+                <p>
+                  <span className="font-medium">Source:</span> {promptResolution.source}
+                </p>
+                <p>
+                  <span className="font-medium">Auto Tuning:</span>{' '}
+                  {autoTuningEnabled ? 'Enabled' : 'Disabled'}
+                </p>
+                <p>
+                  <span className="font-medium">temperature:</span>{' '}
+                  {optimizedModelConfig.temperature ?? 'default'}
+                </p>
+                <p>
+                  <span className="font-medium">top_p:</span>{' '}
+                  {optimizedModelConfig.top_p ?? 'default'}
+                </p>
+                <p>
+                  <span className="font-medium">max_output_tokens:</span>{' '}
+                  {optimizedModelConfig.max_output_tokens ?? 'default'}
+                </p>
+                <pre className="bg-muted rounded p-2 whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
+                  {promptResolution.resolvedPrompt}
+                </pre>
+              </div>
+            )}
           </div>
-          <div className="flex-1 shrink-0 min-w-0">
+        </div>
+        {/* ChatInput pinned at bottom */}
+        <div className="shrink-0 px-3 pb-2 sm:pb-4">
+          <div className="mx-auto w-full md:w-4/5 xl:w-4/6">
             <ChatInput
               showSpeedToken={false}
               model={selectedModel}

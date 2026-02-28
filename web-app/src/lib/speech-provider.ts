@@ -15,6 +15,17 @@ export const normalizeBaseUrl = (baseUrl?: string): string => {
     .replace(/\/completions$/i, '')
 }
 
+export const getSpeechEndpoints = (baseUrl?: string): string[] => {
+  const normalized = normalizeBaseUrl(baseUrl)
+  if (!normalized) return []
+
+  const endpoints = [`${normalized}/audio/speech`]
+  if (!/\/v\d+$/i.test(normalized)) {
+    endpoints.push(`${normalized}/v1/audio/speech`)
+  }
+  return Array.from(new Set(endpoints))
+}
+
 export const getTranscriptionEndpoints = (baseUrl?: string): string[] => {
   const normalized = normalizeBaseUrl(baseUrl)
   if (!normalized) return []
