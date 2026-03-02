@@ -1,5 +1,11 @@
 .markdown {
   @apply text-inherit;
+  overflow-wrap: anywhere;
+  word-wrap: break-word;
+  word-break: break-word;
+  overflow-x: hidden;
+  max-width: 100%;
+  box-sizing: border-box;
 
   &.is-user {
     p {
@@ -158,9 +164,14 @@
     padding-left: 16px;
     white-space: normal;
     list-style-position: inside;
+    max-width: 100%;
+    overflow-wrap: anywhere;
     li {
+      max-width: 100%;
+      overflow-wrap: anywhere;
       p {
         display: inline;
+        overflow-wrap: anywhere;
       }
     }
   }

@@ -235,3 +235,16 @@
     padding: 6px 16px !important;
   }
 }
+
+/* Prevent horizontal overflow in conversation scroll area.
+   StickToBottom sets inline overflow:auto on its scroll container;
+   this !important rule overrides that to block horizontal scrolling. */
+[role="log"] > div {
+  overflow-x: hidden !important;
+}
+
+/* Ensure all content within the conversation respects container width */
+[role="log"] > div > div {
+  max-width: 100%;
+  min-width: 0;
+}

@@ -53,15 +53,32 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
   private systemMessage?: string
   private serviceHub: ServiceHub | null
   private threadId?: string
+  private inferenceParameters: Record<string, unknown>
+  private modelOverrideId?: string
 
-  constructor(systemMessage?: string, threadId?: string) {
+  constructor(
+    systemMessage?: string,
+    threadId?: string,
+    inferenceParameters: Record<string, unknown> = {},
+    modelOverrideId?: string
+  ) {
     this.systemMessage = systemMessage
     this.threadId = threadId
+    this.inferenceParameters = { ...inferenceParameters }
+    this.modelOverrideId = modelOverrideId
     this.serviceHub = useServiceStore.getState().serviceHub
   }
 
   updateSystemMessage(systemMessage: string | undefined) {
     this.systemMessage = systemMessage
+  }
+
+  updateInferenceParameters(parameters: Record<string, unknown>) {
+    this.inferenceParameters = { ...parameters }
+  }
+
+  updateModelOverrideId(modelId: string | undefined) {
+    this.modelOverrideId = modelId
   }
 
   setOnTokenUsage(callback: TokenUsageCallback | undefined) {
@@ -185,7 +202,8 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
     await this.refreshTools()
 
     // Initialize model if not already initialized
-    const modelId = useModelProvider.getState().selectedModel?.id
+    const modelId =
+      this.modelOverrideId ?? useModelProvider.getState().selectedModel?.id
     const providerId = useModelProvider.getState().selectedProvider
     const provider = useModelProvider.getState().getProviderByName(providerId)
     if (this.serviceHub && modelId && provider) {
@@ -224,14 +242,17 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
 
         // Get assistant parameters from current assistant
         const currentAssistant = useAssistant.getState().currentAssistant
-        const inferenceParams = currentAssistant?.parameters
+        const inferenceParams = {
+          ...(currentAssistant?.parameters ?? {}),
+          ...(this.inferenceParameters ?? {}),
+        }
 
         // Create the model using the factory
         this.model = await ModelFactory.createModel(
           modelId,
           activeProvider,
-          inferenceParams ?? {}
-        )
+           inferenceParams
+         )
       } catch (error) {
         console.error('Failed to create model:', error)
         throw new Error(

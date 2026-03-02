@@ -1,4 +1,4 @@
-import { LucideIcon } from 'lucide-react'
+import { AudioLines, LayoutList, LucideIcon, Mic } from 'lucide-react'
 import { route } from '@/constants/routes'
 
 import {
@@ -31,9 +31,15 @@ import {
 import { BlocksIcon, type BlocksIconHandle } from '../animated-icon/blocks'
 import AddProjectDialog from '@/containers/dialogs/AddProjectDialog'
 import { SearchDialog } from '@/containers/dialogs/SearchDialog'
+import WorkspaceChatsDialog from '@/containers/dialogs/WorkspaceChatsDialog'
+import SpeechToTextDialog from '@/containers/dialogs/SpeechToTextDialog'
+import TextToSpeechDialog from '@/containers/dialogs/TextToSpeechDialog'
 import { useThreadManagement } from '@/hooks/useThreadManagement'
 import { useSearchDialog } from '@/hooks/useSearchDialog'
 import { useProjectDialog } from '@/hooks/useProjectDialog'
+import { useWorkspaceChatsDialog } from '@/hooks/useWorkspaceChatsDialog'
+import { useSpeechToTextDialog } from '@/hooks/useSpeechToTextDialog'
+import { useTextToSpeechDialog } from '@/hooks/useTextToSpeechDialog'
 
 type AnimatedIconHandle =
   | SearchIconHandle
@@ -59,7 +65,10 @@ type NavMainItem = {
 
 const getNavMainItems = (
   onNewProject: () => void,
-  onSearch: () => void
+  onSearch: () => void,
+  onWorkspaceChats: () => void,
+  onSpeechToText: () => void,
+  onTextToSpeech: () => void
 ): NavMainItem[] => [
   {
     title: 'common:newChat',
@@ -99,6 +108,21 @@ const getNavMainItems = (
         <Kbd className="bg-transparent size-3">K</Kbd>
       </KbdGroup>
     ),
+  },
+  {
+    title: 'common:projects.workspaceChats',
+    icon: LayoutList,
+    onClick: onWorkspaceChats,
+  },
+  {
+    title: 'speech.speechToText',
+    icon: Mic,
+    onClick: onSpeechToText,
+  },
+  {
+    title: 'speech.textToSpeech',
+    icon: AudioLines,
+    onClick: onTextToSpeech,
   },
   {
     title: 'common:hub',
@@ -152,14 +176,28 @@ export function NavMain() {
   const { open: searchOpen, setOpen: setSearchOpen } = useSearchDialog()
   const { open: projectDialogOpen, setOpen: setProjectDialogOpen } =
     useProjectDialog()
+  const { open: workspaceChatsOpen, setOpen: setWorkspaceChatsOpen } =
+    useWorkspaceChatsDialog()
+  const { open: speechToTextOpen, setOpen: setSpeechToTextOpen } =
+    useSpeechToTextDialog()
+  const { open: textToSpeechOpen, setOpen: setTextToSpeechOpen } =
+    useTextToSpeechDialog()
 
   const navMainItems = getNavMainItems(
     () => setProjectDialogOpen(true),
-    () => setSearchOpen(true)
+    () => setSearchOpen(true),
+    () => setWorkspaceChatsOpen(true),
+    () => setSpeechToTextOpen(true),
+    () => setTextToSpeechOpen(true)
   )
 
-  const handleCreateProject = async (name: string, assistantId?: string) => {
-    const newProject = await addFolder(name, assistantId)
+  const handleCreateProject = async (
+    name: string,
+    assistantId?: string,
+    logo?: string,
+    projectPrompt?: string | null
+  ) => {
+    const newProject = await addFolder(name, assistantId, logo, projectPrompt)
     setProjectDialogOpen(false)
     navigate({
       to: '/project/$projectId',
@@ -191,13 +229,13 @@ export function NavMain() {
               >
                 {item.url ? (
                   <Link to={item.url}>
-                    {Icon && <Icon className="text-foreground/70" />}
+                    {Icon && <Icon className="text-foreground/70 size-4" />}
                     <span>{t(item.title)}</span>
                     {item.shortcut}
                   </Link>
                 ) : (
                   <>
-                    {Icon && <Icon className="text-foreground/70" />}
+                    {Icon && <Icon className="text-foreground/70 size-4" />}
                     <span>{t(item.title)}</span>
                     {item.shortcut}
                   </>
@@ -216,6 +254,18 @@ export function NavMain() {
       />
 
       <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
+      <WorkspaceChatsDialog
+        open={workspaceChatsOpen}
+        onOpenChange={setWorkspaceChatsOpen}
+      />
+      <SpeechToTextDialog
+        open={speechToTextOpen}
+        onOpenChange={setSpeechToTextOpen}
+      />
+      <TextToSpeechDialog
+        open={textToSpeechOpen}
+        onOpenChange={setTextToSpeechOpen}
+      />
     </>
   )
 }

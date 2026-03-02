@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { createFileRoute, useParams } from '@tanstack/react-router'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createFileRoute, useNavigate, useParams } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
 
 import HeaderPage from '@/containers/HeaderPage'
@@ -13,10 +13,9 @@ import { useServiceHub } from '@/hooks/useServiceHub'
 import { useAssistant } from '@/hooks/useAssistant'
 import { useTools } from '@/hooks/useTools'
 import { useAppState } from '@/hooks/useAppState'
-import { SESSION_STORAGE_PREFIX } from '@/constants/chat'
+import { SESSION_STORAGE_PREFIX, SESSION_STORAGE_KEY } from '@/constants/chat'
 import { useChat } from '@/hooks/use-chat'
 import { useModelProvider } from '@/hooks/useModelProvider'
-import { renderInstructions } from '@/lib/instructionTemplate'
 import {
   Conversation,
   ConversationContent,
@@ -47,16 +46,517 @@ import { PromptProgress } from '@/components/PromptProgress'
 import { useToolAvailable } from '@/hooks/useToolAvailable'
 import { OUT_OF_CONTEXT_SIZE } from '@/utils/error'
 import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 import { IconAlertCircle } from '@tabler/icons-react'
 import { useToolApproval } from '@/hooks/useToolApproval'
 import DropdownModelProvider from '@/containers/DropdownModelProvider'
 import { ExtensionTypeEnum, VectorDBExtension } from '@ax-fabric/core'
 import { ExtensionManager } from '@/lib/extension'
+import { Columns2, X } from 'lucide-react'
+import { toast } from 'sonner'
+import { useGeneralSetting } from '@/hooks/useGeneralSetting'
+import { useMemory } from '@/hooks/useMemory'
+import {
+  parseMemoryFromResponse,
+  buildMemoryContext,
+  extractFactsFromPatterns,
+  mergePatternFacts,
+} from '@/lib/memory-extractor'
+import {
+  getOptimizedModelConfig,
+  resolveSystemPrompt,
+} from '@/lib/system-prompt'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 const CHAT_STATUS = {
   STREAMING: 'streaming',
   SUBMITTED: 'submitted',
 } as const
+
+function SplitThreadPane({
+  threadId,
+  onClose,
+}: {
+  threadId: string
+  onClose?: () => void
+}) {
+  const serviceHub = useServiceHub()
+  const thread = useThreads(useShallow((state) => state.threads[threadId]))
+  const renameThread = useThreads((state) => state.renameThread)
+  const updateThread = useThreads((state) => state.updateThread)
+  const setMessages = useMessages((state) => state.setMessages)
+  const addMessage = useMessages((state) => state.addMessage)
+  const updateMessage = useMessages((state) => state.updateMessage)
+  const deleteMessage = useMessages((state) => state.deleteMessage)
+  const getAttachments = useChatAttachments((state) => state.getAttachments)
+  const clearAttachmentsForThread = useChatAttachments(
+    (state) => state.clearAttachments
+  )
+  const selectedProvider = useModelProvider((state) => state.selectedProvider)
+  const selectedModel = useModelProvider((state) => state.selectedModel)
+  const { globalDefaultPrompt, autoTuningEnabled } = useGeneralSetting()
+  const memoryEnabled = useMemory((state) => state.memoryEnabled)
+  const memoryVersion = useMemory((state) => state.memoryVersion)
+  const messageCount = useMessages(
+    (state) => state.messages[threadId]?.length ?? 0
+  )
+  const [showThreadPromptEditor, setShowThreadPromptEditor] = useState(false)
+  const [threadPromptDraft, setThreadPromptDraft] = useState('')
+  const reasoningContainerRef = useRef<HTMLDivElement>(null)
+  const paneLogo = useMemo(() => {
+    const chatLogo =
+      typeof thread?.metadata?.chatLogo === 'string'
+        ? thread.metadata.chatLogo.trim()
+        : ''
+    if (chatLogo) return chatLogo
+    const projectLogo =
+      typeof thread?.metadata?.project?.logo === 'string'
+        ? thread.metadata.project.logo.trim()
+        : ''
+    return projectLogo || ''
+  }, [thread?.metadata])
+
+  const memorySuffix = useMemo(() => {
+    if (!memoryEnabled) return ''
+    const memories = useMemory.getState().getMemories('default')
+    return buildMemoryContext(memories)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memoryEnabled, memoryVersion])
+
+  const promptResolution = useMemo(
+    () =>
+      resolveSystemPrompt(
+        thread?.metadata?.threadPrompt,
+        thread?.metadata?.project?.projectPrompt,
+        { globalDefaultPrompt }
+      ),
+    [
+      globalDefaultPrompt,
+      thread?.metadata?.project?.projectPrompt,
+      thread?.metadata?.threadPrompt,
+    ]
+  )
+
+  const optimizedModelConfig = useMemo(() => {
+    const baseConfig = {
+      temperature:
+        thread?.assistants?.[0]?.parameters?.temperature as number | undefined,
+      top_p: thread?.assistants?.[0]?.parameters?.top_p as number | undefined,
+      max_output_tokens:
+        thread?.assistants?.[0]?.parameters?.max_output_tokens as
+          | number
+          | undefined,
+      modelId: selectedModel?.id,
+    }
+    if (!autoTuningEnabled) return baseConfig
+    return getOptimizedModelConfig(
+      {
+        promptLength: promptResolution.resolvedPrompt.length,
+        messageCount,
+        hasAttachments: Boolean(thread?.metadata?.hasDocuments),
+        modelCapabilities: selectedModel?.capabilities,
+      },
+      baseConfig
+    )
+  }, [
+    autoTuningEnabled,
+    messageCount,
+    promptResolution.resolvedPrompt.length,
+    selectedModel?.id,
+    selectedModel?.capabilities,
+    thread?.assistants,
+    thread?.metadata?.hasDocuments,
+  ])
+
+  const {
+    messages,
+    status,
+    sendMessage,
+    stop,
+    error,
+    setMessages: setChatMessages,
+    regenerate,
+  } = useChat({
+    sessionId: threadId,
+    sessionTitle: thread?.title,
+    systemMessage: promptResolution.resolvedPrompt + memorySuffix,
+    modelOverrideId: optimizedModelConfig.modelId,
+    inferenceParameters: {
+      temperature: optimizedModelConfig.temperature,
+      top_p: optimizedModelConfig.top_p,
+      max_output_tokens: optimizedModelConfig.max_output_tokens,
+    },
+    experimental_throttle: 50,
+    onFinish: ({ message, isAbort }) => {
+      if (!isAbort && message.role === 'assistant') {
+        const contentParts = extractContentPartsFromUIMessage(message)
+
+        // Memory: parse LLM tags + client-side pattern extraction
+        if (useMemory.getState().isMemoryEnabled() && contentParts.length > 0) {
+          const prevCount = useMemory.getState().getMemories('default').length
+          let llmReplaced = false
+          for (const part of contentParts) {
+            if (part.type === 'text' && part.text?.value) {
+              const { facts, isFullReplace, cleanedText } = parseMemoryFromResponse(part.text.value)
+              part.text.value = cleanedText
+              if (isFullReplace && facts.length > 0) {
+                useMemory.getState().replaceMemories('default', facts, threadId)
+                llmReplaced = true
+                const newCount = facts.length
+                const added = newCount - prevCount
+                if (added > 0) {
+                  toast.success(`Remembered ${added} new fact${added !== 1 ? 's' : ''}`)
+                } else if (newCount === prevCount && newCount > 0) {
+                  toast.info('Updated memories')
+                }
+              }
+            }
+          }
+          // Fallback: pattern-match the user message for personal facts
+          if (!llmReplaced) {
+            const storedMsgs = useMessages.getState().getMessages(threadId)
+            const lastUserMsg = [...storedMsgs].reverse().find((m) => m.role === 'user')
+            const userText = lastUserMsg?.content
+              ?.filter((c: { type?: string }) => c.type === 'text')
+              .map((c: { text?: { value?: string } }) => c.text?.value ?? '')
+              .join('\n') ?? ''
+            if (userText) {
+              const patternFacts = extractFactsFromPatterns(userText)
+              if (patternFacts.size > 0) {
+                const existing = useMemory.getState().getMemories('default')
+                const merged = mergePatternFacts(existing, patternFacts, threadId)
+                useMemory.getState().importMemories('default', merged)
+                const added = merged.length - existing.length
+                if (added > 0) {
+                  toast.success(`Remembered ${added} new fact${added !== 1 ? 's' : ''}`)
+                } else if (patternFacts.size > 0) {
+                  toast.info('Updated memories')
+                }
+              }
+            }
+          }
+        }
+
+        if (contentParts.length > 0) {
+          const assistantMessage: ThreadMessage = {
+            type: 'text',
+            role: ChatCompletionRole.Assistant,
+            content: contentParts,
+            id: message.id,
+            object: 'thread.message',
+            thread_id: threadId,
+            status: MessageStatus.Ready,
+            created_at: Date.now(),
+            completed_at: Date.now(),
+            metadata: (message.metadata || {}) as Record<string, unknown>,
+          }
+          const existingMessages = useMessages.getState().getMessages(threadId)
+          const existingMessage = existingMessages.find((m) => m.id === message.id)
+          if (existingMessage) {
+            updateMessage(assistantMessage)
+          } else {
+            addMessage(assistantMessage)
+          }
+        }
+      }
+
+      // Strip memory_extract tags from UI chat messages
+      if (useMemory.getState().isMemoryEnabled()) {
+        const sessions = useChatSessions.getState().sessions[threadId]
+        if (sessions?.chat.messages) {
+          const cleaned = sessions.chat.messages.map((msg) => {
+            if (msg.id !== message.id || msg.role !== 'assistant') return msg
+            return {
+              ...msg,
+              parts: msg.parts.map((part) => {
+                if (part.type !== 'text') return part
+                const stripped = (part as { type: 'text'; text: string }).text
+                  .replace(/<memory_extract>[\s\S]*?<\/memory_extract>/, '')
+                  .trimEnd()
+                return { ...part, text: stripped }
+              }),
+            }
+          })
+          setChatMessages(cleaned)
+        }
+      }
+    },
+  })
+
+  const handleRegenerate = useCallback(
+    (messageId: string) => {
+      regenerate({ messageId })
+    },
+    [regenerate]
+  )
+
+  useEffect(() => {
+    setThreadPromptDraft(
+      typeof thread?.metadata?.threadPrompt === 'string'
+        ? thread.metadata.threadPrompt
+        : ''
+    )
+  }, [thread?.metadata?.threadPrompt])
+
+  useEffect(() => {
+    serviceHub
+      .messages()
+      .fetchMessages(threadId)
+      .then((fetchedMessages) => {
+        if (fetchedMessages && fetchedMessages.length > 0) {
+          setMessages(threadId, fetchedMessages)
+          setChatMessages(convertThreadMessagesToUIMessages(fetchedMessages))
+        }
+      })
+  }, [serviceHub, setChatMessages, setMessages, threadId])
+
+  const handleSubmit = async (
+    text: string,
+    files?: Array<{ type: string; mediaType: string; url: string }>
+  ) => {
+    const normalizedText = text.trim()
+
+    // Handle /remember command
+    if (normalizedText.startsWith('/remember ')) {
+      const fact = normalizedText.slice('/remember '.length).trim()
+      if (fact) {
+        const now = Date.now()
+        useMemory.getState().addMemories('default', [{
+          id: `mem-${now}-manual`,
+          fact,
+          category: 'manual',
+          sourceThreadId: threadId,
+          createdAt: now,
+          updatedAt: now,
+        }])
+        toast.success(`Remembered: "${fact}"`)
+      }
+      return
+    }
+
+    // Handle /forget command
+    if (normalizedText.startsWith('/forget ')) {
+      const query = normalizedText.slice('/forget '.length).trim().toLowerCase()
+      if (query) {
+        const memories = useMemory.getState().getMemories('default')
+        const match = memories.find(m => m.fact.toLowerCase().includes(query))
+        if (match) {
+          useMemory.getState().deleteMemory('default', match.id)
+          toast.success(`Forgot: "${match.fact}"`)
+        } else {
+          toast.info(`No memory found matching "${query}"`)
+        }
+      }
+      return
+    }
+
+    if (
+      normalizedText &&
+      messages.length === 0 &&
+      (!thread?.title || thread.title === 'New Thread')
+    ) {
+      renameThread(threadId, normalizedText)
+    }
+
+    const allAttachments = getAttachments(threadId)
+    const imageAttachments = files?.map((file) => {
+      const base64 = file.url.split(',')[1] || ''
+      return createImageAttachment({
+        name: `image-${Date.now()}`,
+        mimeType: file.mediaType,
+        dataUrl: file.url,
+        base64,
+        size: Math.ceil((base64.length * 3) / 4),
+      })
+    })
+    const combinedAttachments = [
+      ...(imageAttachments || []),
+      ...allAttachments.filter((a) => a.type === 'document'),
+    ]
+    let processedAttachments = combinedAttachments
+
+    if (combinedAttachments.length > 0) {
+      try {
+        const parsePreference = useAttachments.getState().parseMode
+        const result = await processAttachmentsForSend({
+          attachments: combinedAttachments,
+          threadId,
+          projectId: thread?.metadata?.project?.id,
+          serviceHub,
+          selectedProvider,
+          parsePreference,
+        })
+        processedAttachments = result.processedAttachments
+        if (result.hasEmbeddedDocuments) {
+          useThreads.getState().updateThread(threadId, {
+            metadata: { ...thread?.metadata, hasDocuments: true },
+          })
+        }
+      } catch {
+        return
+      }
+    }
+
+    const messageId = generateId()
+    const userMessage = newUserThreadContent(
+      threadId,
+      normalizedText,
+      processedAttachments,
+      messageId
+    )
+    addMessage(userMessage)
+
+    const parts: Array<
+      | { type: 'text'; text: string }
+      | { type: 'file'; mediaType: string; url: string }
+    > = [{ type: 'text', text: userMessage.content[0].text?.value ?? normalizedText }]
+
+    files?.forEach((file) => {
+      parts.push({ type: 'file', mediaType: file.mediaType, url: file.url })
+    })
+
+    sendMessage({
+      parts,
+      id: messageId,
+      metadata: userMessage.metadata,
+    })
+    clearAttachmentsForThread(threadId)
+  }
+
+  return (
+    <div className="h-full rounded-md border bg-background flex flex-col overflow-hidden">
+      <div className="px-3 py-2 border-b text-sm font-medium truncate flex items-center justify-between gap-2">        
+        <div className="flex items-center gap-2 min-w-0">
+          {paneLogo && (
+            <img
+              src={paneLogo}
+              alt={thread?.title || 'Thread Logo'}
+              className="size-5 rounded-sm object-cover shrink-0"
+            />
+          )}
+          <span className="truncate">{thread?.title || 'New Thread'}</span>
+        </div>
+        {onClose && (
+          <div className="flex items-center gap-1 shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowThreadPromptEditor((value) => !value)}
+            >
+              Thread Prompt
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="shrink-0"
+              onClick={onClose}
+            >
+              <X className="size-4" />
+            </Button>
+          </div>
+        )}
+      </div>
+      {showThreadPromptEditor && (
+        <div className="border-b p-2 space-y-2">
+          <p className="text-xs text-muted-foreground">
+            {promptResolution.source === 'thread'
+              ? 'Using Thread Prompt'
+              : promptResolution.source === 'project'
+                ? 'Inheriting from Project Prompt'
+                : promptResolution.source === 'global'
+                  ? 'Inheriting from Global Prompt'
+                  : 'Using Fallback Prompt'}
+          </p>
+          <Textarea
+            value={threadPromptDraft}
+            onChange={(event) => setThreadPromptDraft(event.target.value)}
+            className="min-h-20"
+            placeholder="Leave empty to inherit from project/global."
+          />
+          <div className="flex justify-end gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setThreadPromptDraft('')
+                updateThread(threadId, {
+                  metadata: {
+                    ...thread?.metadata,
+                    threadPrompt: null,
+                  },
+                })
+              }}
+            >
+              Clear Override
+            </Button>
+            <Button
+              size="sm"
+              onClick={() =>
+                {
+                  updateThread(threadId, {
+                    metadata: {
+                      ...thread?.metadata,
+                      threadPrompt: threadPromptDraft.trim() || null,
+                    },
+                  })
+                  setShowThreadPromptEditor(false)
+                }
+              }
+            >
+              Save
+            </Button>
+          </div>
+        </div>
+      )}
+      <div className="flex-1 relative">
+        <Conversation className="absolute inset-0 text-start">
+          <ConversationContent className={cn('mx-auto w-full px-2')}>
+            {messages.map((message, index) => {
+              const isLastMessage = index === messages.length - 1
+              const isFirstMessage = index === 0
+              return (
+                <MessageItem
+                  key={message.id}
+                  message={message}
+                  isFirstMessage={isFirstMessage}
+                  isLastMessage={isLastMessage}
+                  status={status}
+                  reasoningContainerRef={reasoningContainerRef}
+                  onRegenerate={handleRegenerate}
+                  onDelete={(messageId) => {
+                    deleteMessage(threadId, messageId)
+                    setChatMessages(messages.filter((m) => m.id !== messageId))
+                  }}
+                />
+              )
+            })}
+            {status === CHAT_STATUS.SUBMITTED && <PromptProgress />}
+            {error && (
+              <div className="px-4 py-3 mx-4 my-2 rounded-lg border border-destructive/10 bg-destructive/10">
+                <p className="text-sm text-muted-foreground">{error.message}</p>
+              </div>
+            )}
+          </ConversationContent>
+          <ConversationScrollButton />
+        </Conversation>
+      </div>
+      <div className="p-2">
+        <ChatInput
+          threadId={threadId}
+          model={thread?.model}
+          onSubmit={handleSubmit}
+          onStop={stop}
+          chatStatus={status}
+        />
+      </div>
+    </div>
+  )
+}
 
 // as route.threadsDetail
 export const Route = createFileRoute('/threads/$threadId')({
@@ -66,6 +566,10 @@ export const Route = createFileRoute('/threads/$threadId')({
 function ThreadDetail() {
   const serviceHub = useServiceHub()
   const { threadId } = useParams({ from: Route.id })
+  const navigate = useNavigate()
+  const createThread = useThreads((state) => state.createThread)
+  const updateThread = useThreads((state) => state.updateThread)
+  const renameThread = useThreads((state) => state.renameThread)
   const setCurrentThreadId = useThreads((state) => state.setCurrentThreadId)
   const setCurrentAssistant = useAssistant((state) => state.setCurrentAssistant)
   const assistants = useAssistant((state) => state.assistants)
@@ -112,19 +616,107 @@ function ThreadDetail() {
   const selectedModel = useModelProvider((state) => state.selectedModel)
   const selectedProvider = useModelProvider((state) => state.selectedProvider)
   const getProviderByName = useModelProvider((state) => state.getProviderByName)
+  const {
+    globalDefaultPrompt,
+    autoTuningEnabled,
+  } = useGeneralSetting()
+  const mainMemoryEnabled = useMemory((state) => state.memoryEnabled)
+  const mainMemoryVersion = useMemory((state) => state.memoryVersion)
+  const threadMessageCount = useMessages(
+    (state) => state.messages[threadId]?.length ?? 0
+  )
   const threadRef = useRef(thread)
   const projectId = threadRef.current?.metadata?.project?.id
+  const [threadPromptDraft, setThreadPromptDraft] = useState('')
+  const [showThreadPromptEditor, setShowThreadPromptEditor] = useState(false)
+  const [showPromptDebug, setShowPromptDebug] = useState(false)
+  const [splitDirection, setSplitDirection] = useState<'left' | 'right' | null>(
+    () => {
+      const stored = sessionStorage.getItem(SESSION_STORAGE_KEY.SPLIT_VIEW_INFO)
+      if (stored) {
+        try {
+          const info = JSON.parse(stored) as { splitThreadId: string; direction: 'left' | 'right' }
+          return info.direction
+        } catch { /* ignore */ }
+      }
+      return null
+    }
+  )
+  const [splitThreadId, setSplitThreadId] = useState<string | null>(() => {
+    const stored = sessionStorage.getItem(SESSION_STORAGE_KEY.SPLIT_VIEW_INFO)
+    if (stored) {
+      try {
+        sessionStorage.removeItem(SESSION_STORAGE_KEY.SPLIT_VIEW_INFO)
+        const info = JSON.parse(stored) as { splitThreadId: string; direction: 'left' | 'right' }
+        return info.splitThreadId
+      } catch { /* ignore */ }
+    }
+    return null
+  })
 
-  // Get system message from thread's assistant instructions (if thread has an assigned assistant)
-  // Only use assistant instructions if the thread was created with one (e.g., via a project)
-  const threadAssistant = thread?.assistants?.[0]
-  const systemMessage = threadAssistant?.instructions
-    ? renderInstructions(threadAssistant.instructions)
-    : undefined
+  const mainMemorySuffix = useMemo(() => {
+    if (!mainMemoryEnabled) return ''
+    const memories = useMemory.getState().getMemories('default')
+    return buildMemoryContext(memories)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mainMemoryEnabled, mainMemoryVersion])
+
+  const promptResolution = useMemo(
+    () =>
+      resolveSystemPrompt(
+        thread?.metadata?.threadPrompt,
+        thread?.metadata?.project?.projectPrompt,
+        { globalDefaultPrompt }
+      ),
+    [
+      globalDefaultPrompt,
+      thread?.metadata?.project?.projectPrompt,
+      thread?.metadata?.threadPrompt,
+    ]
+  )
+
+  const optimizedModelConfig = useMemo(() => {
+    const baseConfig = {
+      temperature:
+        thread?.assistants?.[0]?.parameters?.temperature as number | undefined,
+      top_p: thread?.assistants?.[0]?.parameters?.top_p as number | undefined,
+      max_output_tokens:
+        thread?.assistants?.[0]?.parameters?.max_output_tokens as
+          | number
+          | undefined,
+      modelId: selectedModel?.id,
+    }
+    if (!autoTuningEnabled) return baseConfig
+    return getOptimizedModelConfig(
+      {
+        promptLength: promptResolution.resolvedPrompt.length,
+        messageCount: threadMessageCount,
+        hasAttachments: Boolean(thread?.metadata?.hasDocuments),
+        modelCapabilities: selectedModel?.capabilities,
+      },
+      baseConfig
+    )
+  }, [
+    autoTuningEnabled,
+    promptResolution.resolvedPrompt.length,
+    selectedModel?.id,
+    selectedModel?.capabilities,
+    thread?.assistants,
+    thread?.metadata?.hasDocuments,
+    threadMessageCount,
+  ])
 
   useEffect(() => {
     threadRef.current = thread
   }, [thread])
+
+  useEffect(() => {
+    setThreadPromptDraft(
+      typeof thread?.metadata?.threadPrompt === 'string'
+        ? thread.metadata.threadPrompt
+        : ''
+    )
+  }, [thread?.metadata?.threadPrompt])
 
   // Use the AI SDK chat hook
   const {
@@ -140,7 +732,13 @@ function ThreadDetail() {
   } = useChat({
     sessionId: threadId,
     sessionTitle: thread?.title,
-    systemMessage,
+    systemMessage: promptResolution.resolvedPrompt + mainMemorySuffix,
+    modelOverrideId: optimizedModelConfig.modelId,
+    inferenceParameters: {
+      temperature: optimizedModelConfig.temperature,
+      top_p: optimizedModelConfig.top_p,
+      max_output_tokens: optimizedModelConfig.max_output_tokens,
+    },
     experimental_throttle: 50,
     onFinish: ({ message, isAbort }) => {
       // Persist assistant message to backend (skip if aborted)
@@ -148,6 +746,52 @@ function ThreadDetail() {
         // Extract content parts (including tool calls) as separate items in the content array
         // This preserves the natural ordering: text -> tool call -> text -> tool call, etc.
         const contentParts = extractContentPartsFromUIMessage(message)
+
+        // Memory: parse LLM tags + client-side pattern extraction
+        if (useMemory.getState().isMemoryEnabled() && contentParts.length > 0) {
+          const prevCount = useMemory.getState().getMemories('default').length
+          let llmReplaced = false
+          for (const part of contentParts) {
+            if (part.type === 'text' && part.text?.value) {
+              const { facts, isFullReplace, cleanedText } = parseMemoryFromResponse(part.text.value)
+              part.text.value = cleanedText
+              if (isFullReplace && facts.length > 0) {
+                useMemory.getState().replaceMemories('default', facts, threadId)
+                llmReplaced = true
+                const newCount = facts.length
+                const added = newCount - prevCount
+                if (added > 0) {
+                  toast.success(`Remembered ${added} new fact${added !== 1 ? 's' : ''}`)
+                } else if (newCount === prevCount && newCount > 0) {
+                  toast.info('Updated memories')
+                }
+              }
+            }
+          }
+          // Fallback: pattern-match the user message for personal facts
+          if (!llmReplaced) {
+            const storedMsgs = useMessages.getState().getMessages(threadId)
+            const lastUserMsg = [...storedMsgs].reverse().find((m) => m.role === 'user')
+            const userText = lastUserMsg?.content
+              ?.filter((c: { type?: string }) => c.type === 'text')
+              .map((c: { text?: { value?: string } }) => c.text?.value ?? '')
+              .join('\n') ?? ''
+            if (userText) {
+              const patternFacts = extractFactsFromPatterns(userText)
+              if (patternFacts.size > 0) {
+                const existing = useMemory.getState().getMemories('default')
+                const merged = mergePatternFacts(existing, patternFacts, threadId)
+                useMemory.getState().importMemories('default', merged)
+                const added = merged.length - existing.length
+                if (added > 0) {
+                  toast.success(`Remembered ${added} new fact${added !== 1 ? 's' : ''}`)
+                } else if (patternFacts.size > 0) {
+                  toast.info('Updated memories')
+                }
+              }
+            }
+          }
+        }
 
         if (contentParts.length > 0) {
           // Extract metadata from the message (including usage and tokenSpeed)
@@ -181,6 +825,27 @@ function ThreadDetail() {
           } else {
             addMessage(assistantMessage)
           }
+        }
+      }
+
+      // Strip memory_extract tags from UI chat messages
+      if (useMemory.getState().isMemoryEnabled()) {
+        const sessions = useChatSessions.getState().sessions[threadId]
+        if (sessions?.chat.messages) {
+          const cleaned = sessions.chat.messages.map((msg) => {
+            if (msg.id !== message.id || msg.role !== 'assistant') return msg
+            return {
+              ...msg,
+              parts: msg.parts.map((part) => {
+                if (part.type !== 'text') return part
+                const stripped = (part as { type: 'text'; text: string }).text
+                  .replace(/<memory_extract>[\s\S]*?<\/memory_extract>/, '')
+                  .trimEnd()
+                return { ...part, text: stripped }
+              }),
+            }
+          })
+          setChatMessages(cleaned)
         }
       }
 
@@ -420,6 +1085,53 @@ function ThreadDetail() {
       text: string,
       files?: Array<{ type: string; mediaType: string; url: string }>
     ) => {
+      const normalizedText = text.trim()
+
+      // Handle /remember command
+      if (normalizedText.startsWith('/remember ')) {
+        const fact = normalizedText.slice('/remember '.length).trim()
+        if (fact) {
+          const now = Date.now()
+          useMemory.getState().addMemories('default', [{
+            id: `mem-${now}-manual`,
+            fact,
+            category: 'manual',
+            sourceThreadId: threadId,
+            createdAt: now,
+            updatedAt: now,
+          }])
+          toast.success(`Remembered: "${fact}"`)
+        }
+        return
+      }
+
+      // Handle /forget command
+      if (normalizedText.startsWith('/forget ')) {
+        const query = normalizedText.slice('/forget '.length).trim().toLowerCase()
+        if (query) {
+          const memories = useMemory.getState().getMemories('default')
+          const match = memories.find(m => m.fact.toLowerCase().includes(query))
+          if (match) {
+            useMemory.getState().deleteMemory('default', match.id)
+            toast.success(`Forgot: "${match.fact}"`)
+          } else {
+            toast.info(`No memory found matching "${query}"`)
+          }
+        }
+        return
+      }
+
+      // Rename thread on first message if still using default title
+      const currentThread = useThreads.getState().threads[threadId]
+      const currentMessages = useMessages.getState().getMessages(threadId)
+      if (
+        normalizedText &&
+        currentMessages.length === 0 &&
+        (!currentThread?.title || currentThread.title === 'New Thread')
+      ) {
+        renameThread(threadId, normalizedText)
+      }
+
       // Get all attachments from the store (includes both images and documents)
       const allAttachments = getAttachments(attachmentsKey)
 
@@ -515,6 +1227,7 @@ function ThreadDetail() {
       threadId,
       thread,
       addMessage,
+      renameThread,
       getAttachments,
       attachmentsKey,
       clearAttachmentsForThread,
@@ -553,6 +1266,26 @@ function ThreadDetail() {
       })()
     }
   }, [threadId, processAndSendMessage])
+
+  // Apply thread prompt drafted from the new-chat page
+  const threadPromptAppliedRef = useRef(false)
+  useEffect(() => {
+    if (threadPromptAppliedRef.current) return
+    const storedPrompt = sessionStorage.getItem(
+      SESSION_STORAGE_KEY.NEW_THREAD_PROMPT
+    )
+    if (storedPrompt) {
+      sessionStorage.removeItem(SESSION_STORAGE_KEY.NEW_THREAD_PROMPT)
+      threadPromptAppliedRef.current = true
+      updateThread(threadId, {
+        metadata: {
+          ...thread?.metadata,
+          threadPrompt: storedPrompt,
+        },
+      })
+      setThreadPromptDraft(storedPrompt)
+    }
+  }, [threadId, thread?.metadata, updateThread])
 
   // Handle submit from ChatInput
   const handleSubmit = useCallback(
@@ -737,15 +1470,351 @@ function ThreadDetail() {
   ])
 
   const threadModel = useMemo(() => thread?.model, [thread])
+  const threadLogo = useMemo(() => {
+    const chatLogo =
+      typeof thread?.metadata?.chatLogo === 'string'
+        ? thread.metadata.chatLogo.trim()
+        : ''
+    if (chatLogo) return chatLogo
+    const projectLogo =
+      typeof thread?.metadata?.project?.logo === 'string'
+        ? thread.metadata.project.logo.trim()
+        : ''
+    return projectLogo || ''
+  }, [thread?.metadata])
+  const splitPaneOrder = useMemo(() => {
+    if (!splitThreadId || !splitDirection) return null
+    return splitDirection === 'left' ? ['split', 'main'] : ['main', 'split']
+  }, [splitDirection, splitThreadId])
+
+  const handleSplit = useCallback(
+    async (direction: 'left' | 'right') => {
+      if (splitThreadId) {
+        setSplitDirection(direction)
+        return
+      }
+
+      const newThread = await createThread(
+        {
+          id: thread?.model?.id ?? selectedModel?.id ?? '*',
+          provider: thread?.model?.provider ?? selectedProvider,
+        },
+        'New Thread',
+        thread?.assistants?.[0],
+        thread?.metadata?.project
+      )
+      setSplitThreadId(newThread.id)
+      setSplitDirection(direction)
+    },
+    [
+      createThread,
+      selectedModel?.id,
+      selectedProvider,
+      splitThreadId,
+      thread?.assistants,
+      thread?.metadata?.project,
+      thread?.model?.id,
+      thread?.model?.provider,
+    ]
+  )
 
   return (
     <div className="flex flex-col h-[calc(100dvh-(env(safe-area-inset-bottom)+env(safe-area-inset-top)))]">
       <HeaderPage>
-        <div className="flex items-center justify-between w-full pr-2">
+        <div className="flex items-center w-full pr-2">
           <DropdownModelProvider model={threadModel} />
         </div>
       </HeaderPage>
       <div className="flex flex-1 flex-col h-full overflow-hidden">
+        <div className="px-4 md:px-8 pb-2 shrink-0">
+          <div className="mx-auto w-full md:w-4/5 xl:w-4/6 flex items-center justify-end gap-2">
+            {!splitPaneOrder && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowThreadPromptEditor((value) => !value)}
+                >
+                  Thread Prompt
+                </Button>
+                <Button
+                  variant={showPromptDebug ? 'secondary' : 'outline'}
+                  size="sm"
+                  onClick={() => setShowPromptDebug((value) => !value)}
+                >
+                  Debug
+                </Button>
+              </>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Columns2 className="size-4" />
+                  <span>Split View</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => handleSplit('left')}>
+                  Split Left
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => handleSplit('right')}>
+                  Split Right
+                </DropdownMenuItem>
+                {splitPaneOrder && (
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      setSplitThreadId(null)
+                      setSplitDirection(null)
+                    }}
+                  >
+                    Close Split View
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          {!splitPaneOrder && showThreadPromptEditor && (
+            <div className="mx-auto w-full md:w-4/5 xl:w-4/6 mt-2 rounded-md border bg-card p-3 space-y-2">
+              <p className="text-xs text-muted-foreground">
+                {promptResolution.source === 'thread'
+                  ? 'Using Thread Prompt'
+                  : promptResolution.source === 'project'
+                    ? 'Inheriting from Project Prompt'
+                    : promptResolution.source === 'global'
+                      ? 'Inheriting from Global Prompt'
+                      : 'Using Fallback Prompt'}
+              </p>
+              <Textarea
+                value={threadPromptDraft}
+                onChange={(event) => setThreadPromptDraft(event.target.value)}
+                className="min-h-24"
+                placeholder="Leave empty to inherit from project/global."
+              />
+              <div className="flex justify-end gap-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setThreadPromptDraft('')
+                    updateThread(threadId, {
+                      metadata: {
+                        ...thread?.metadata,
+                        threadPrompt: null,
+                      },
+                    })
+                  }}
+                >
+                  Clear Override
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    {
+                      updateThread(threadId, {
+                        metadata: {
+                          ...thread?.metadata,
+                          threadPrompt: threadPromptDraft.trim() || null,
+                        },
+                      })
+                      setShowThreadPromptEditor(false)
+                    }
+                  }
+                >
+                  Save
+                </Button>
+              </div>
+            </div>
+          )}
+          {!splitPaneOrder && showPromptDebug && (
+            <div className="mx-auto w-full md:w-4/5 xl:w-4/6 mt-2 rounded-md border bg-card p-3 text-xs space-y-1">
+              <p>
+                <span className="font-medium">Source:</span> {promptResolution.source}
+              </p>
+              <p>
+                <span className="font-medium">Auto Tuning:</span>{' '}
+                {autoTuningEnabled ? 'Enabled' : 'Disabled'}
+              </p>
+              <p>
+                <span className="font-medium">temperature:</span>{' '}
+                {optimizedModelConfig.temperature ?? 'default'}
+              </p>
+              <p>
+                <span className="font-medium">top_p:</span>{' '}
+                {optimizedModelConfig.top_p ?? 'default'}
+              </p>
+              <p>
+                <span className="font-medium">max_output_tokens:</span>{' '}
+                {optimizedModelConfig.max_output_tokens ?? 'default'}
+              </p>
+              <pre className="bg-muted rounded p-2 whitespace-pre-wrap break-words">
+                {promptResolution.resolvedPrompt}
+              </pre>
+            </div>
+          )}
+        </div>
+        {splitPaneOrder && splitThreadId ? (
+          <div className="grid grid-cols-2 gap-2 px-2 pb-2 h-full">
+            {splitPaneOrder.map((pane) =>
+              pane === 'main' ? (
+                <div
+                  key="main-pane"
+                  className="h-full rounded-md border bg-background overflow-hidden flex flex-col"
+                >
+                  <div className="px-3 py-2 border-b text-sm font-medium truncate">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {threadLogo && (
+                          <img
+                            src={threadLogo}
+                            alt={thread?.title || 'Thread Logo'}
+                            className="size-5 rounded-sm object-cover shrink-0"
+                          />
+                        )}
+                        <span className="truncate">{thread?.title || 'Current Thread'}</span>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            setShowThreadPromptEditor((value) => !value)
+                          }
+                        >
+                          Thread Prompt
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          className="shrink-0"
+                          onClick={() => {
+                            if (!splitThreadId) return
+                            setSplitThreadId(null)
+                            setSplitDirection(null)
+                            navigate({
+                              to: '/threads/$threadId',
+                              params: { threadId: splitThreadId },
+                            })
+                          }}
+                        >
+                          <X className="size-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  {showThreadPromptEditor && (
+                    <div className="border-b p-2 space-y-2">
+                      <p className="text-xs text-muted-foreground">
+                        {promptResolution.source === 'thread'
+                          ? 'Using Thread Prompt'
+                          : promptResolution.source === 'project'
+                            ? 'Inheriting from Project Prompt'
+                            : promptResolution.source === 'global'
+                              ? 'Inheriting from Global Prompt'
+                              : 'Using Fallback Prompt'}
+                      </p>
+                      <Textarea
+                        value={threadPromptDraft}
+                        onChange={(event) => setThreadPromptDraft(event.target.value)}
+                        className="min-h-20"
+                        placeholder="Leave empty to inherit from project/global."
+                      />
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setThreadPromptDraft('')
+                            updateThread(threadId, {
+                              metadata: {
+                                ...thread?.metadata,
+                                threadPrompt: null,
+                              },
+                            })
+                          }}
+                        >
+                          Clear Override
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            updateThread(threadId, {
+                              metadata: {
+                                ...thread?.metadata,
+                                threadPrompt: threadPromptDraft.trim() || null,
+                              },
+                            })
+                            setShowThreadPromptEditor(false)
+                          }}
+                        >
+                          Save
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex-1 flex flex-col overflow-hidden">
+                    {/* Messages Area */}
+                    <div className="flex-1 relative">
+                      <Conversation className="absolute inset-0 text-start">
+                        <ConversationContent className={cn('mx-auto w-full px-2')}>
+                          {chatMessages.map((message, index) => {
+                            const isLastMessage = index === chatMessages.length - 1
+                            const isFirstMessage = index === 0
+                            return (
+                              <MessageItem
+                                key={message.id}
+                                message={message}
+                                isFirstMessage={isFirstMessage}
+                                isLastMessage={isLastMessage}
+                                status={status}
+                                reasoningContainerRef={reasoningContainerRef}
+                                onRegenerate={handleRegenerate}
+                                onEdit={handleEditMessage}
+                                onDelete={handleDeleteMessage}
+                              />
+                            )
+                          })}
+                          {status === CHAT_STATUS.SUBMITTED && <PromptProgress />}
+                        </ConversationContent>
+                        <ConversationScrollButton />
+                      </Conversation>
+                    </div>
+                    <div className="p-2">
+                      <ChatInput
+                        threadId={threadId}
+                        model={threadModel}
+                        onSubmit={handleSubmit}
+                        onStop={stop}
+                        chatStatus={status}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <SplitThreadPane
+                  key="split-pane"
+                  threadId={splitThreadId}
+                  onClose={() => {
+                    setSplitThreadId(null)
+                    setSplitDirection(null)
+                  }}
+                />
+              )
+            )}
+          </div>
+        ) : (
+          <>
+        <div className="px-4 md:px-8 pb-2 shrink-0">
+          <div className="mx-auto w-full md:w-4/5 xl:w-4/6 flex items-center gap-2 min-w-0">
+            {threadLogo && (
+              <img
+                src={threadLogo}
+                alt={thread?.title || 'Thread Logo'}
+                className="size-5 rounded-sm object-cover shrink-0"
+              />
+            )}
+            <h2 className="text-sm font-medium truncate">{thread?.title || 'New Thread'}</h2>
+          </div>
+        </div>
         {/* Messages Area */}
         <div className="flex-1 relative">
           <Conversation className="absolute inset-0 text-start">
@@ -808,12 +1877,15 @@ function ThreadDetail() {
         {/* Chat Input - Fixed at bottom */}
         <div className="py-4 mx-auto w-full md:w-4/5 xl:w-4/6">
           <ChatInput
+            threadId={threadId}
             model={threadModel}
             onSubmit={handleSubmit}
             onStop={stop}
             chatStatus={status}
           />
         </div>
+          </>
+        )}
       </div>
     </div>
   )

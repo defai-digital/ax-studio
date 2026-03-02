@@ -80,6 +80,12 @@ const SettingsMenu = () => {
       isEnabled: true,
     },
     {
+      title: 'Memory',
+      route: route.settings.memory,
+      hasSubMenu: false,
+      isEnabled: true,
+    },
+    {
       title: 'common:modelProviders',
       route: route.settings.model_providers,
       hasSubMenu: activeProviders.length > 0,

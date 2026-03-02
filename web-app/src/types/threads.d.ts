@@ -49,7 +49,10 @@ type Thread = {
       id: string
       name: string
       updated_at: number
+      logo?: string
+      projectPrompt?: string | null
     }
+    threadPrompt?: string | null
     [key: string]: unknown
   }
 }

@@ -7,6 +7,7 @@ export const localStorageKey = {
   modelSources: 'model-sources',
   settingInterface: 'setting-appearance',
   settingGeneral: 'setting-general',
+  
   settingCodeBlock: 'setting-code-block',
   settingLocalApiServer: 'setting-local-api-server',
   settingProxyConfig: 'setting-proxy-config',
@@ -24,6 +25,7 @@ export const localStorageKey = {
   threadManagement: 'thread-management',
   modelSupportCache: 'ax-fabric-model-support-cache',
   recentSearches: 'recent-searches',
+  memoryStore: 'memory-store',
 }
 
 export const CACHE_EXPIRY_MS = 1000 * 60 * 60 * 24

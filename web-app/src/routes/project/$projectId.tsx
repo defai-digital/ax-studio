@@ -59,9 +59,14 @@ function ProjectPageContent() {
       .sort((a, b) => (b.updated || 0) - (a.updated || 0))
   }, [threads, projectId])
 
-  const handleSaveEdit = async (name: string, assistantId?: string) => {
+  const handleSaveEdit = async (
+    name: string,
+    assistantId?: string,
+    logo?: string,
+    projectPrompt?: string | null
+  ) => {
     if (project) {
-      await updateFolder(project.id, name, assistantId)
+      await updateFolder(project.id, name, assistantId, logo, projectPrompt)
       setEditDialogOpen(false)
     }
   }
@@ -97,9 +102,16 @@ function ProjectPageContent() {
         <div className="mx-auto w-full md:w-4/5 xl:w-4/6">
           {/* Project Name with Dropdown */}
           <div className="flex items-center justify-between gap-2 mb-4">
-            <h1 className="text-2xl font-semibold">
-              {project.name}
-            </h1>
+            <div className="flex items-center gap-2">
+              {project.logo && (
+                <img
+                  src={project.logo}
+                  alt={project.name}
+                  className="size-7 rounded-md object-cover"
+                />
+              )}
+              <h1 className="text-2xl font-semibold">{project.name}</h1>
+            </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon-xs">
@@ -201,6 +213,25 @@ function ProjectPageContent() {
                     {t('projects.noAssistantAssigned')}
                   </p>
                 )}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditDialogOpen(true)}
+              >
+                <PencilIcon className="size-3" />
+                <span>{t('common:edit')}</span>
+              </Button>
+            </div>
+
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <div className="flex flex-col gap-1">
+                <h3 className="text-sm font-medium">System Prompt</h3>
+                <p className="text-sm text-muted-foreground">
+                  {project.projectPrompt?.trim()
+                    ? 'Using Project Prompt'
+                    : 'Inheriting from Global'}
+                </p>
               </div>
               <Button
                 variant="outline"

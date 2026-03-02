@@ -3,6 +3,7 @@ import { ulid } from 'ulidx'
 import { getServiceHub } from '@/hooks/useServiceHub'
 import { Fzf } from 'fzf'
 import { TEMPORARY_CHAT_ID } from '@/constants/chat'
+import { useGeneralSetting } from '@/hooks/useGeneralSetting'
 type ThreadState = {
   threads: Record<string, Thread>
   currentThreadId?: string
@@ -21,7 +22,13 @@ type ThreadState = {
     model: ThreadModel,
     title?: string,
     assistant?: Assistant,
-    projectMetadata?: { id: string; name: string; updated_at: number },
+    projectMetadata?: {
+      id: string
+      name: string
+      updated_at: number
+      logo?: string
+      projectPrompt?: string | null
+    },
     isTemporary?: boolean
   ) => Promise<Thread>
   updateCurrentThreadModel: (model: ThreadModel) => void
@@ -272,6 +279,19 @@ export const useThreads = create<ThreadState>()((set, get) => ({
     projectMetadata,
     isTemporary
   ) => {
+    const generalSettings = useGeneralSetting.getState()
+    const shouldSnapshotGlobalPrompt =
+      generalSettings.applyMode === 'new_chats_only' &&
+      Boolean(generalSettings.globalDefaultPrompt.trim()) &&
+      !projectMetadata?.projectPrompt
+
+    const baseMetadata = {
+      ...(projectMetadata && { project: projectMetadata }),
+      ...(shouldSnapshotGlobalPrompt && {
+        threadPrompt: generalSettings.globalDefaultPrompt.trim(),
+      }),
+    }
+
     const newThread: Thread = {
       id: isTemporary ? TEMPORARY_CHAT_ID : ulid(),
       title: title ?? (isTemporary ? 'Temporary Chat' : 'New Thread'),
@@ -280,16 +300,17 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       assistants: assistant ? [assistant] : [],
       ...(projectMetadata &&
         !isTemporary && {
-          metadata: {
-            project: projectMetadata,
-          },
+          metadata: baseMetadata,
         }),
       ...(isTemporary && {
         metadata: {
           isTemporary: true,
-          ...(projectMetadata && { project: projectMetadata }),
+          ...baseMetadata,
         },
       }),
+      ...(!projectMetadata &&
+        !isTemporary &&
+        Object.keys(baseMetadata).length > 0 && { metadata: baseMetadata }),
     }
     return await getServiceHub()
       .threads()

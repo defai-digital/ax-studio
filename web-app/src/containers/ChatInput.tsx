@@ -28,8 +28,8 @@ import {
   IconX,
   IconPaperclip,
   IconLoader2,
-  IconWorld,
   IconUser,
+  IconBrain,
 } from '@tabler/icons-react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useGeneralSetting } from '@/hooks/useGeneralSetting'
@@ -49,6 +49,7 @@ import {
 
 import { defaultModel } from '@/lib/models'
 import { useAssistant } from '@/hooks/useAssistant'
+import { useMemory } from '@/hooks/useMemory'
 import DropdownToolsAvailable from '@/containers/DropdownToolsAvailable'
 import { AvatarEmoji } from '@/containers/AvatarEmoji'
 import { useServiceHub } from '@/hooks/useServiceHub'
@@ -71,6 +72,7 @@ import { useAttachments } from '@/hooks/useAttachments'
 import { toast } from 'sonner'
 import { isPlatformTauri } from '@/lib/platform/utils'
 import { processAttachmentsForSend } from '@/lib/attachmentProcessing'
+
 import { useAttachmentIngestionPrompt } from '@/hooks/useAttachmentIngestionPrompt'
 import {
   NEW_THREAD_ATTACHMENT_KEY,
@@ -89,6 +91,7 @@ type ChatInputProps = {
   model?: ThreadModel
   initialMessage?: boolean
   projectId?: string
+  threadId?: string
   onSubmit?: (
     text: string,
     files?: Array<{ type: string; mediaType: string; url: string }>
@@ -101,6 +104,7 @@ const ChatInput = memo(function ChatInput({
   className,
   initialMessage,
   projectId,
+  threadId,
   onSubmit,
   onStop,
   chatStatus,
@@ -114,10 +118,28 @@ const ChatInput = memo(function ChatInput({
   const tools = useAppState((state) => state.tools)
   const cancelToolCall = useAppState((state) => state.cancelToolCall)
   const setActiveModels = useAppState((state) => state.setActiveModels)
-  const prompt = usePrompt((state) => state.prompt)
-  const setPrompt = usePrompt((state) => state.setPrompt)
+  const globalPrompt = usePrompt((state) => state.prompt)
+  const setGlobalPrompt = usePrompt((state) => state.setPrompt)
   const currentThreadId = useThreads((state) => state.currentThreadId)
-  const currentThread = useThreads((state) => state.getCurrentThread())
+  const effectiveThreadId = threadId ?? currentThreadId
+  const isMemoryEnabled = useMemory((state) => state.memoryEnabled)
+  const toggleMemory = useMemory((state) => state.toggleMemory)
+  const memoryCount = useMemory((state) => (state.memories['default'] || []).length)
+  const currentThread = useThreads((state) =>
+    effectiveThreadId ? state.threads[effectiveThreadId] : state.getCurrentThread()
+  )
+  const [localPrompt, setLocalPrompt] = useState('')
+  const prompt = threadId ? localPrompt : globalPrompt
+  const setPrompt = useCallback(
+    (value: string) => {
+      if (threadId) {
+        setLocalPrompt(value)
+      } else {
+        setGlobalPrompt(value)
+      }
+    },
+    [setGlobalPrompt, threadId]
+  )
   const updateCurrentThreadAssistant = useThreads(
     (state) => state.updateCurrentThreadAssistant
   )
@@ -136,7 +158,7 @@ const ChatInput = memo(function ChatInput({
   // Get current thread messages for token counting
   const threadMessages = useMessages(
     useShallow((state) =>
-      currentThreadId ? state.messages[currentThreadId] : []
+      effectiveThreadId ? state.messages[effectiveThreadId] : []
     )
   )
 
@@ -162,7 +184,7 @@ const ChatInput = memo(function ChatInput({
   const autoInlineContextRatio = useAttachments((s) => s.autoInlineContextRatio)
 
   // Derived: any document currently processing (ingestion in progress)
-  const attachmentsKey = currentThreadId ?? NEW_THREAD_ATTACHMENT_KEY
+  const attachmentsKey = effectiveThreadId ?? NEW_THREAD_ATTACHMENT_KEY
   const attachments = useChatAttachments(
     useCallback(
       (state) => state.getAttachments(attachmentsKey),
@@ -194,13 +216,13 @@ const ChatInput = memo(function ChatInput({
 
   useEffect(() => {
     if (
-      currentThreadId &&
-      lastTransferredThreadId.current !== currentThreadId
+      effectiveThreadId &&
+      lastTransferredThreadId.current !== effectiveThreadId
     ) {
-      transferAttachments(NEW_THREAD_ATTACHMENT_KEY, currentThreadId)
-      lastTransferredThreadId.current = currentThreadId
+      transferAttachments(NEW_THREAD_ATTACHMENT_KEY, effectiveThreadId)
+      lastTransferredThreadId.current = effectiveThreadId
     }
-  }, [currentThreadId, transferAttachments])
+  }, [effectiveThreadId, transferAttachments])
 
   const updateAttachmentProcessing = useCallback(
     (
@@ -340,7 +362,13 @@ const ChatInput = memo(function ChatInput({
       } else {
         // Get project metadata and assistant if projectId is provided
         let projectMetadata:
-          | { id: string; name: string; updated_at: number }
+          | {
+              id: string
+              name: string
+              updated_at: number
+              logo?: string
+              projectPrompt?: string | null
+            }
           | undefined
         let projectAssistantId: string | undefined
 
@@ -354,6 +382,8 @@ const ChatInput = memo(function ChatInput({
                 id: project.id,
                 name: project.name,
                 updated_at: project.updated_at,
+                logo: project.logo,
+                projectPrompt: project.projectPrompt ?? null,
               }
               projectAssistantId = project.assistantId
             }
@@ -438,7 +468,7 @@ const ChatInput = memo(function ChatInput({
     if (textareaRef.current) {
       textareaRef.current.focus()
     }
-  }, [currentThreadId])
+  }, [effectiveThreadId])
 
   // Focus when streaming content finishes
   useEffect(() => {
@@ -467,7 +497,7 @@ const ChatInput = memo(function ChatInput({
 
   const processNewDocumentAttachments = useCallback(
     async (docs: Attachment[]) => {
-      if (!docs.length || !currentThreadId) return
+      if (!docs.length || !effectiveThreadId) return
 
       const modelReady = await (async () => {
         if (!selectedModel?.id) return false
@@ -579,7 +609,7 @@ const ChatInput = memo(function ChatInput({
               {
                 id: 'inline-attachment',
                 object: 'thread.message',
-                thread_id: currentThreadId,
+                thread_id: effectiveThreadId,
                 role: 'user',
                 content: [
                   {
@@ -610,7 +640,7 @@ const ChatInput = memo(function ChatInput({
         const { processedAttachments, hasEmbeddedDocuments } =
           await processAttachmentsForSend({
             attachments: docs,
-            threadId: currentThreadId,
+            threadId: effectiveThreadId,
             serviceHub,
             selectedProvider,
             contextThreshold,
@@ -632,7 +662,7 @@ const ChatInput = memo(function ChatInput({
         }
 
         if (hasEmbeddedDocuments) {
-          useThreads.getState().updateThread(currentThreadId, {
+          useThreads.getState().updateThread(effectiveThreadId, {
             metadata: { hasDocuments: true },
           })
         }
@@ -645,7 +675,7 @@ const ChatInput = memo(function ChatInput({
       attachmentsKey,
       autoInlineContextRatio,
       activeModels,
-      currentThreadId,
+      effectiveThreadId,
       getProviderByName,
       parsePreference,
       selectedModel?.id,
@@ -776,7 +806,7 @@ const ChatInput = memo(function ChatInput({
     const attachmentToRemove = attachments[indexToRemove]
 
     // If attachment was ingested (has an ID), delete it from the backend
-    if (attachmentToRemove?.id && currentThreadId) {
+    if (attachmentToRemove?.id && effectiveThreadId) {
       try {
         if (attachmentToRemove.type === 'document') {
           const vectorDBExtension = ExtensionManager.getInstance().get(
@@ -785,7 +815,7 @@ const ChatInput = memo(function ChatInput({
 
           if (vectorDBExtension?.deleteFile) {
             await vectorDBExtension.deleteFile(
-              currentThreadId,
+              effectiveThreadId,
               attachmentToRemove.id
             )
           }
@@ -910,7 +940,7 @@ const ChatInput = memo(function ChatInput({
       return currentAttachments
     })
 
-    if (currentThreadId && newFiles.length > 0) {
+    if (effectiveThreadId && newFiles.length > 0) {
       void (async () => {
         for (const img of newFiles) {
           try {
@@ -925,7 +955,7 @@ const ChatInput = memo(function ChatInput({
 
             const result = await serviceHub
               .uploads()
-              .ingestImage(currentThreadId, img)
+              .ingestImage(effectiveThreadId, img)
 
             if (result?.id) {
               // Mark as processed with ID
@@ -1250,7 +1280,7 @@ const ChatInput = memo(function ChatInput({
   const isStreaming = chatStatus === 'submitted' || chatStatus === 'streaming'
 
   return (
-    <div className="relative">
+    <div className="relative overflow-hidden">
       <div className="relative">
         <div
           className={cn(
@@ -1400,7 +1430,7 @@ const ChatInput = memo(function ChatInput({
               data-gramm_editor={spellCheckChatInput}
               data-gramm_grammarly={spellCheckChatInput}
               className={cn(
-                'bg-transparent pt-4 w-full shrink-0 border-none resize-none outline-0 px-4',
+                'bg-transparent pt-4 w-full shrink-0 border-none resize-none outline-0 px-4 break-words',
                 rows < maxRows && 'scrollbar-hide',
                 className
               )}
@@ -1471,7 +1501,7 @@ const ChatInput = memo(function ChatInput({
                             className={!selectedAssistant && !currentThread?.assistants?.length ? 'bg-accent' : ''}
                             onClick={() => {
                               setSelectedAssistant(undefined)
-                              if (currentThreadId) {
+                              if (effectiveThreadId) {
                                 updateCurrentThreadAssistant(undefined as unknown as Assistant)
                               }
                             }}
@@ -1494,7 +1524,7 @@ const ChatInput = memo(function ChatInput({
                                   className={isSelected ? 'bg-accent' : ''}
                                   onClick={() => {
                                     setSelectedAssistant(assistant)
-                                    if (currentThreadId) {
+                                    if (effectiveThreadId) {
                                       updateCurrentThreadAssistant(assistant)
                                     }
                                   }}
@@ -1611,21 +1641,33 @@ const ChatInput = memo(function ChatInput({
                     </Tooltip>
                   ))}
 
-                {selectedModel?.capabilities?.includes('web_search') && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon-xs">
-                        <IconWorld
-                          size={18}
-                          className="text-muted-foreground"
-                        />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Web Search</p>
-                    </TooltipContent>
-                  </Tooltip>
-                )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="relative"
+                      onClick={() => toggleMemory()}
+                    >
+                      <IconBrain
+                        size={18}
+                        className={cn(
+                          isMemoryEnabled
+                            ? 'text-primary'
+                            : 'text-muted-foreground'
+                        )}
+                      />
+                      {memoryCount > 0 && (
+                        <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-0.5 text-[10px] font-medium text-primary-foreground">
+                          {memoryCount}
+                        </span>
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{isMemoryEnabled ? `Memory (${memoryCount})` : 'Memory'}</p>
+                  </TooltipContent>
+                </Tooltip>
 
                 {selectedModel?.capabilities?.includes('reasoning') && (
                   <Tooltip>
@@ -1672,7 +1714,7 @@ const ChatInput = memo(function ChatInput({
                   size="icon-sm"
                   className="rounded-full mr-1 mb-1"
                   onClick={() => {
-                    if (currentThreadId) stopStreaming(currentThreadId)
+                    if (effectiveThreadId) stopStreaming(effectiveThreadId)
                   }}
                 >
                   <IconPlayerStopFilled />

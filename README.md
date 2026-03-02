@@ -12,6 +12,8 @@
 
 ---
 
+
+
 ## Features
 
 - **Multi-Provider Chat** — Connect to OpenAI, Anthropic, Mistral, Groq, Azure, Gemini, HuggingFace, OpenRouter, or any OpenAI-compatible endpoint

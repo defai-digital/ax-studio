@@ -10,6 +10,8 @@ export const TEMPORARY_CHAT_QUERY_ID = 'temporary-chat'
  */
 export const SESSION_STORAGE_KEY = {
   INITIAL_MESSAGE_TEMPORARY: 'initial-message-temporary',
+  NEW_THREAD_PROMPT: 'new-thread-prompt',
+  SPLIT_VIEW_INFO: 'split-view-info',
 } as const
 
 export const SESSION_STORAGE_PREFIX = {

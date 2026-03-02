@@ -28,6 +28,68 @@
       <img src="/images/ax-fabric-logo.png" alt="Ax-Fabric Logo" />
     </div>
     <div id="root"></div>
+    <script>
+      ;(() => {
+        const sanitizePersistedStorage = () => {
+          const jsonStorageKeys = [
+            'left-panel',
+            'threads',
+            'messages',
+            'theme',
+            'model-provider',
+            'model-sources',
+            'setting-appearance',
+            'setting-general',
+            'setting-local-api-server',
+            'setting-proxy-config',
+            'setting-hardware',
+            'productAnalyticPrompt',
+            'productAnalytic',
+            'tool-approval',
+            'tool-availability',
+            'favorite-models',
+            'thread-management',
+            'ax-fabric-service-config',
+          ]
+
+          for (const key of jsonStorageKeys) {
+            const value = localStorage.getItem(key)
+            if (!value) continue
+            try {
+              JSON.parse(value)
+            } catch {
+              localStorage.removeItem(key)
+            }
+          }
+        }
+
+        const hideInitialLoader = () => {
+          const loader = document.getElementById('initial-loader')
+          if (!loader) return
+          document.body.classList.add('loaded')
+          setTimeout(() => loader.remove(), 300)
+        }
+
+        const showStartupError = () => {
+          const root = document.getElementById('root')
+          if (!root || root.childElementCount > 0) return
+          root.innerHTML =
+            '<div style="height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;text-align:center;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#666;">Ax-Fabric failed to initialize. Please restart the app.</div>'
+        }
+
+        const startupFailSafe = () => {
+          if (!document.getElementById('initial-loader')) return
+          hideInitialLoader()
+          showStartupError()
+        }
+
+        sanitizePersistedStorage()
+        window.addEventListener('error', startupFailSafe, { once: true })
+        window.addEventListener('unhandledrejection', startupFailSafe, {
+          once: true,
+        })
+      })()
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
