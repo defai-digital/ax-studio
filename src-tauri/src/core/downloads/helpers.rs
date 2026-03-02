@@ -17,13 +17,14 @@ use url::Url;
 // ===== CONSTANTS =====
 
 /// Ax-Fabric mirror prefix for HuggingFace downloads
-/// - Stable builds: https://cdn.axfabric.ai/
-/// - Nightly builds: https://cdn-nightly.axfabric.ai/
-const AX_FABRIC_MIRROR_PREFIX_STABLE: &str = "https://cdn.axfabric.ai/";
-const AX_FABRIC_MIRROR_PREFIX_NIGHTLY: &str = "https://cdn-nightly.axfabric.ai/";
+/// CDN mirrors are disabled until the domains are provisioned.
+/// Set these to valid URLs when cdn.axfabric.ai is available.
+const AX_FABRIC_MIRROR_PREFIX_STABLE: &str = "";
+const AX_FABRIC_MIRROR_PREFIX_NIGHTLY: &str = "";
 
 /// Domains that should use mirror download with fallback
-const MIRROR_DOMAINS: &[&str] = &["huggingface.co"];
+/// Empty list effectively disables mirror attempts.
+const MIRROR_DOMAINS: &[&str] = &[];
 
 /// Check if this is a nightly build based on package name
 fn is_nightly_build() -> bool {
@@ -63,10 +64,12 @@ pub fn convert_to_mirror_url(url: &str) -> Option<String> {
     
     // Check if the domain should use mirror
     if MIRROR_DOMAINS.iter().any(|domain| host == *domain || host.ends_with(&format!(".{}", domain))) {
-        // Remove the scheme (https://) and prepend mirror prefix
+        // Remove the scheme (https://) and any leading slashes to avoid // in path
         let url_without_scheme = url
             .strip_prefix("https://")
-            .or_else(|| url.strip_prefix("http://"))?;
+            .or_else(|| url.strip_prefix("http://"))?
+            .trim_start_matches('/');
+            
         Some(format!("{}{}", get_mirror_prefix(), url_without_scheme))
     } else {
         None
@@ -301,6 +304,7 @@ pub fn _get_client_for_item(
     header_map: &HeaderMap,
 ) -> Result<reqwest::Client, String> {
     let mut client_builder = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(30))
         .http2_keep_alive_timeout(Duration::from_secs(15))
         .default_headers(header_map.clone());
 
@@ -346,7 +350,7 @@ pub async fn _get_file_size(
     client: &reqwest::Client,
     url: &str,
 ) -> Result<u64, Box<dyn std::error::Error>> {
-    let resp = client.head(url).send().await?;
+    let resp = tokio::time::timeout(Duration::from_secs(10), client.head(url).send()).await??;
     if !resp.status().is_success() {
         return Err(format!("Failed to get file size: HTTP status {}", resp.status()).into());
     }
@@ -398,12 +402,24 @@ pub async fn _download_files_internal(
     }
 
     let total_size: u64 = file_sizes.values().sum();
-    log::info!("Total download size: {total_size}");
+    log::info!("Total download size from HEAD: {total_size} bytes");
 
     let evt_name = format!("download-{task_id}");
 
-    // Create progress tracker
-    let progress_tracker = ProgressTracker::new(items, file_sizes.clone());
+    // Build a file_id → HEAD-based size map for the progress tracker.
+    // The tracker will refine these values from the actual GET response
+    // Content-Length inside download_single_file.
+    let file_id_sizes: HashMap<String, u64> = items
+        .iter()
+        .enumerate()
+        .map(|(index, item)| {
+            let file_id = format!("{task_id}-{index}");
+            let size = file_sizes.get(&item.url).copied().unwrap_or(0);
+            (file_id, size)
+        })
+        .collect();
+
+    let progress_tracker = ProgressTracker::new(file_id_sizes);
 
     // save file under app data folder
     let app_data_folder = get_app_data_folder_path(app.clone());
@@ -594,21 +610,6 @@ async fn download_single_file(
                     downloaded_size
                 );
                 initial_progress = downloaded_size;
-
-                // Initialize progress for resumed download
-                progress_tracker
-                    .update_progress(&file_id, downloaded_size)
-                    .await;
-
-                // Emit initial combined progress
-                let (combined_transferred, combined_total) =
-                    progress_tracker.get_total_progress().await;
-                let evt = DownloadEvent {
-                    transferred: combined_transferred,
-                    total: combined_total,
-                };
-                app.emit(&evt_name, evt).unwrap();
-
                 (resp, item.url.clone())
             }
             Err(e) => {
@@ -622,6 +623,27 @@ async fn download_single_file(
         // Use mirror fallback for new downloads
         _get_maybe_resume_with_fallback(&client, &item.url, 0).await?
     };
+
+    // Refine the expected file size from the actual GET/206 response Content-Length.
+    // The HEAD-based estimate from _get_file_size can be 0 when HuggingFace CDN
+    // omits the Content-Length header on HEAD requests.  The GET response is
+    // much more reliable.
+    //   • New download  : Content-Length = full file size
+    //   • Resumed download: Content-Length = remaining bytes → total = initial + remaining
+    if let Some(content_length) = resp.content_length() {
+        if content_length > 0 {
+            let full_size = initial_progress + content_length;
+            progress_tracker.set_file_total(&file_id, full_size).await;
+            log::info!("File size from GET Content-Length: {full_size} bytes");
+        }
+    }
+
+    // Emit an initial progress event now that we have an accurate total.
+    // This replaces "Initializing download..." in the UI with "0.00 / X.XX GB (0%)"
+    // as soon as the download connection is established.
+    progress_tracker.update_progress(&file_id, initial_progress).await;
+    let (init_transferred, init_total) = progress_tracker.get_total_progress().await;
+    let _ = app.emit(&evt_name, DownloadEvent { transferred: init_transferred, total: init_total });
     
     // Log which URL is being used for download
     if actual_url != item.url {
@@ -662,8 +684,8 @@ async fn download_single_file(
         download_delta += chunk.len() as u64;
         total_transferred += chunk.len() as u64;
 
-        // Update progress every 10 MB
-        if download_delta >= 10 * 1024 * 1024 {
+        // Update progress every 1 MB (was 10 MB) for more responsive UI
+        if download_delta >= 1024 * 1024 {
             // Update individual file progress
             progress_tracker
                 .update_progress(&file_id, total_transferred)
@@ -752,7 +774,7 @@ async fn _get_maybe_resume_with_hmac(
     let nonce_seed = get_download_nonce_seed();
     let app_version = get_app_version();
     let signed_headers = SignedRequestHeaders::new(SECRET_KEY, &nonce_seed, app_version);
-    
+
     let mut request = if start_bytes > 0 {
         client
             .get(url)
@@ -760,13 +782,22 @@ async fn _get_maybe_resume_with_hmac(
     } else {
         client.get(url)
     };
-    
+
     // Add HMAC headers
     for (key, value) in signed_headers.to_header_pairs() {
         request = request.header(key, value);
     }
-    
-    let resp = request.send().await.map_err(err_to_string)?;
+
+    // Use a short timeout for mirror requests so that an unreachable CDN
+    // (e.g. cdn.axfabric.ai not yet live) fails fast and falls back to the
+    // original URL instead of blocking the download for 30+ seconds.
+    let resp = tokio::time::timeout(
+        Duration::from_secs(15),
+        request.send(),
+    )
+    .await
+    .map_err(|_| "Mirror request timed out after 15s".to_string())?
+    .map_err(err_to_string)?;
     
     if start_bytes > 0 {
         if resp.status() != reqwest::StatusCode::PARTIAL_CONTENT {
@@ -793,13 +824,20 @@ async fn _get_maybe_resume_internal(
     url: &str,
     start_bytes: u64,
 ) -> Result<reqwest::Response, String> {
-    if start_bytes > 0 {
-        let resp = client
+    let mut request = if start_bytes > 0 {
+        client
             .get(url)
             .header("Range", format!("bytes={start_bytes}-"))
-            .send()
-            .await
-            .map_err(err_to_string)?;
+    } else {
+        client.get(url)
+    };
+
+    let resp = tokio::time::timeout(Duration::from_secs(30), request.send())
+        .await
+        .map_err(|_| "Request timed out after 30s".to_string())?
+        .map_err(err_to_string)?;
+
+    if start_bytes > 0 {
         if resp.status() != reqwest::StatusCode::PARTIAL_CONTENT {
             return Err(format!(
                 "Failed to resume download: HTTP status {}, {}",
@@ -809,7 +847,6 @@ async fn _get_maybe_resume_internal(
         }
         Ok(resp)
     } else {
-        let resp = client.get(url).send().await.map_err(err_to_string)?;
         if !resp.status().is_success() {
             return Err(format!(
                 "Failed to download: HTTP status {}, {}",
@@ -826,13 +863,20 @@ pub async fn _get_maybe_resume(
     url: &str,
     start_bytes: u64,
 ) -> Result<reqwest::Response, String> {
-    if start_bytes > 0 {
-        let resp = client
+    let mut request = if start_bytes > 0 {
+        client
             .get(url)
             .header("Range", format!("bytes={start_bytes}-"))
-            .send()
-            .await
-            .map_err(err_to_string)?;
+    } else {
+        client.get(url)
+    };
+
+    let resp = tokio::time::timeout(Duration::from_secs(30), request.send())
+        .await
+        .map_err(|_| "Request timed out after 30s".to_string())?
+        .map_err(err_to_string)?;
+
+    if start_bytes > 0 {
         if resp.status() != reqwest::StatusCode::PARTIAL_CONTENT {
             return Err(format!(
                 "Failed to resume download: HTTP status {}, {}",
@@ -842,7 +886,6 @@ pub async fn _get_maybe_resume(
         }
         Ok(resp)
     } else {
-        let resp = client.get(url).send().await.map_err(err_to_string)?;
         if !resp.status().is_success() {
             return Err(format!(
                 "Failed to download: HTTP status {}, {}",

@@ -589,7 +589,7 @@ function General() {
                 description={t('settings:general.discordDesc')}
                 actions={
                   <a
-                    href="https://discord.com/invite/FTk2MvZwJH"
+                    href="https://discord.gg/cd5AD5zY6U"
                     target="_blank"
                     rel="noopener noreferrer"
                   >

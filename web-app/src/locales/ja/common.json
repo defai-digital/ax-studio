@@ -1,5 +1,6 @@
 {
   "assistants": "アシスタント",
+  "engineSettings": "Engine Settings",
   "hardware": "ハードウェア",
   "mcp-servers": "MCPサーバー",
   "local_api_server": "ローカルAPIサーバー",

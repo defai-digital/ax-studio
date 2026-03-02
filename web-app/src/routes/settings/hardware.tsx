@@ -3,9 +3,12 @@ import { route } from '@/constants/routes'
 import SettingsMenu from '@/containers/SettingsMenu'
 import HeaderPage from '@/containers/HeaderPage'
 import { Card, CardItem } from '@/containers/Card'
+import { Switch } from '@/components/ui/switch'
 import { Progress } from '@/components/ui/progress'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useHardware } from '@/hooks/useHardware'
+import { useLlamacppDevices } from '@/hooks/useLlamacppDevices'
+import { useBackendUpdater } from '@/hooks/useBackendUpdater'
 import { useEffect, useState } from 'react'
 import { IconDeviceDesktopAnalytics } from '@tabler/icons-react'
 import { useServiceHub } from '@/hooks/useServiceHub'
@@ -13,6 +16,10 @@ import type { HardwareData, SystemUsage } from '@/services/hardware/types'
 import { cn, formatMegaBytes } from '@/lib/utils'
 import { toNumber } from '@/utils/number'
 import { Button } from '@/components/ui/button'
+import { useModelProvider } from '@/hooks/useModelProvider'
+import { useAppState } from '@/hooks/useAppState'
+import { PlatformFeatures, PlatformFeature } from '@/lib/platform'
+import { toast } from 'sonner'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const Route = createFileRoute(route.settings.hardware as any)({
@@ -30,6 +37,70 @@ function HardwareContent() {
     updateSystemUsage,
     pollingPaused,
   } = useHardware()
+  const { providers } = useModelProvider()
+  const llamacpp = providers.find((p) => p.provider === 'llamacpp')
+  const setActiveModels = useAppState((state) => state.setActiveModels)
+
+  // Llamacpp GPU devices — skip on macOS (Metal is managed internally)
+  const llamacppDevicesResult = useLlamacppDevices()
+  const {
+    devices: llamacppDevices,
+    loading: llamacppDevicesLoading,
+    error: llamacppDevicesError,
+    toggleDevice,
+    fetchDevices,
+  } = IS_MACOS
+    ? {
+        devices: [] as ReturnType<typeof useLlamacppDevices.getState>['devices'],
+        loading: false,
+        error: null as string | null,
+        toggleDevice: (_id: string) => {},
+        fetchDevices: async () => {},
+      }
+    : llamacppDevicesResult
+
+  // Backend updater
+  const {
+    updateState,
+    checkForUpdate,
+    updateBackend,
+    installBackend,
+  } = useBackendUpdater()
+
+  // Handle "Update Now" click
+  const handleUpdateBackend = async () => {
+    try {
+      await updateBackend()
+      toast.success(t('settings:backendUpdater.updateSuccess'))
+    } catch {
+      toast.error(t('settings:backendUpdater.updateError'))
+    }
+  }
+
+  // Handle "Select File" click — open native file picker
+  const handleManualInstall = async () => {
+    try {
+      const selected = await serviceHub.dialog().open({
+        multiple: false,
+        filters: [{ name: 'Backend Archive', extensions: ['gz', 'zip'] }],
+      })
+      if (selected && typeof selected === 'string') {
+        await installBackend(selected)
+        toast.success(t('settings:backendInstallSuccess'))
+      }
+    } catch {
+      toast.error(t('settings:backendInstallError'))
+    }
+  }
+
+  // Fetch llamacpp devices when page mounts
+  useEffect(() => {
+    if (!IS_MACOS && llamacpp) {
+      fetchDevices()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Fetch initial hardware info and system usage
   useEffect(() => {
     setIsLoading(true)
@@ -238,6 +309,107 @@ function HardwareContent() {
                   }
                 />
               </Card>
+
+              {/* GPU Devices for Local Inference (non-macOS only, hidden when no GPUs present) */}
+              {!IS_MACOS && llamacpp && (llamacppDevicesLoading || llamacppDevicesError || llamacppDevices.length > 0) && (
+                <Card title={t('settings:hardware.gpus')}>
+                  {llamacppDevicesLoading ? (
+                    <CardItem title={t('settings:hardware.loadingDevices')} actions={<></>} />
+                  ) : llamacppDevicesError ? (
+                    <CardItem
+                      title={t('settings:hardware.errorLoadingDevices')}
+                      actions={
+                        <span className="text-destructive text-sm">
+                          {llamacppDevicesError}
+                        </span>
+                      }
+                    />
+                  ) : (
+                    llamacppDevices.map((device, index) => (
+                      <Card key={index}>
+                        <CardItem
+                          title={device.name}
+                          actions={
+                            <div className="flex items-center gap-4">
+                              <Switch
+                                checked={device.activated}
+                                onCheckedChange={async () => {
+                                  toggleDevice(device.id)
+                                  try {
+                                    await serviceHub.models().stopAllModels()
+                                    const active = await serviceHub
+                                      .models()
+                                      .getActiveModels()
+                                    setActiveModels(active || [])
+                                  } catch (e) {
+                                    console.error('Failed to stop models:', e)
+                                  }
+                                }}
+                              />
+                            </div>
+                          }
+                        />
+                        <div className="mt-3">
+                          <CardItem
+                            title={t('settings:hardware.vram')}
+                            actions={
+                              <span className="text-foreground">
+                                {formatMegaBytes(device.free)}{' '}
+                                {t('settings:hardware.freeOf')}{' '}
+                                {formatMegaBytes(device.mem)}
+                              </span>
+                            }
+                          />
+                        </div>
+                      </Card>
+                    ))
+                  )}
+                </Card>
+              )}
+
+              {/* Engine (llama.cpp) update section — desktop only */}
+              {PlatformFeatures[PlatformFeature.LOCAL_INFERENCE] && (
+                <Card title={t('settings:hardware.engineUpdates')}>
+                  <CardItem
+                    title={t('settings:hardware.checkForBackendUpdates')}
+                    description={t('settings:hardware.checkForBackendUpdatesDesc')}
+                    actions={
+                      updateState.isUpdateAvailable ? (
+                        <Button
+                          size="sm"
+                          onClick={handleUpdateBackend}
+                          disabled={updateState.isUpdating}
+                        >
+                          {updateState.isUpdating
+                            ? t('settings:backendUpdater.updating')
+                            : `${t('settings:hardware.updateNow')} (${updateState.updateInfo?.newVersion ?? ''})`}
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => checkForUpdate(true)}
+                        >
+                          {t('settings:hardware.checkNow')}
+                        </Button>
+                      )
+                    }
+                  />
+                  <CardItem
+                    title={t('settings:hardware.installFromFile')}
+                    description={t('settings:hardware.installFromFileDesc')}
+                    actions={
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleManualInstall}
+                      >
+                        {t('settings:hardware.selectFile')}
+                      </Button>
+                    }
+                  />
+                </Card>
+              )}
 
             </div>
           )}

@@ -13,7 +13,6 @@ import {
   useRef,
   useTransition,
 } from 'react'
-import { useModelProvider } from '@/hooks/useModelProvider'
 import { Card, CardItem } from '@/containers/Card'
 import { extractModelName, extractDescription } from '@/lib/models'
 import {
@@ -43,12 +42,14 @@ import { ChevronsUpDown, Loader } from 'lucide-react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import Fuse from 'fuse.js'
 import { useGeneralSetting } from '@/hooks/useGeneralSetting'
+import { useModelProvider } from '@/hooks/useModelProvider'
 import { DownloadButtonPlaceholder } from '@/containers/DownloadButton'
 import { useShallow } from 'zustand/shallow'
 import { ModelDownloadAction } from '@/containers/ModelDownloadAction'
 import { DEFAULT_MODEL_QUANTIZATIONS } from '@/constants/models'
 import { Button } from '@/components/ui/button'
 import { RenderMarkdown } from '@/containers/RenderMarkdown'
+import { sanitizeModelId } from '@/lib/utils'
 
 type SearchParams = {
   repo: string
@@ -66,6 +67,7 @@ function HubContent() {
   const parentRef = useRef(null)
   const huggingfaceToken = useGeneralSetting((state) => state.huggingfaceToken)
   const serviceHub = useServiceHub()
+  const getProviderByName = useModelProvider((state) => state.getProviderByName)
 
   const { t } = useTranslation()
 
@@ -154,8 +156,23 @@ function HubContent() {
     }
     // Apply downloaded filter
     if (showOnlyDownloaded) {
-      // Local model filtering not applicable — local inference removed
-      filtered = []
+      const llamaProvider = getProviderByName('llamacpp')
+      filtered = filtered.filter((model) => {
+        return model.quants?.some((quant) =>
+          llamaProvider?.models.some(
+            (m) => {
+              const parts = quant.model_id.split('/')
+              const name = parts.length > 1 ? parts[1] : parts[0]
+              const sanitizedName = sanitizeModelId(name)
+              const author = parts.length > 1 ? parts[0] : ''
+              
+              return m.id === quant.model_id || 
+                     m.id === sanitizedName ||
+                     (author && m.id === `${author}/${sanitizedName}`)
+            }
+          )
+        )
+      })
     }
     if (huggingFaceRepo) {
       filtered = [huggingFaceRepo, ...filtered]
@@ -279,7 +296,7 @@ function HubContent() {
         search: {
           model: {
             id: modelId,
-            provider: 'ax-fabric',
+            provider: 'llamacpp',
           },
         },
       })

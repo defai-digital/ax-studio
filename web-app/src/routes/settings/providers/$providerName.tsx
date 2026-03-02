@@ -43,19 +43,8 @@ function ProviderDetail() {
   const [refreshingModels, setRefreshingModels] = useState(false)
   const [importingModel, setImportingModel] = useState<string | null>(null)
   const { providerName } = useParams({ from: Route.id })
-  const { getProviderByName, setProviders, updateProvider } = useModelProvider()
+  const { getProviderByName, updateProvider } = useModelProvider()
   const provider = getProviderByName(providerName)
-
-  const handleModelImportSuccess = async (importedModelName?: string) => {
-    if (importedModelName) {
-      setImportingModel(importedModelName)
-    }
-    try {
-      await serviceHub.providers().getProviders().then(setProviders)
-    } finally {
-      // The importing state will be cleared by the useEffect when model appears in list
-    }
-  }
 
   // Clear importing state when model appears in the provider's model list
   useEffect(() => {

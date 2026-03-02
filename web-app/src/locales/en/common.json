@@ -1,6 +1,7 @@
 {
   "assistants": "Assistants",
   "hardware": "Hardware",
+  "engineSettings": "Engine Settings",
   "mcp-servers": "MCP Servers",
   "local_api_server": "Local API Server",
   "https_proxy": "HTTPS Proxy",

@@ -12,6 +12,7 @@ import {
   SidebarRail,
 } from '@/components/ui/sidebar'
 import { cn } from '@/lib/utils'
+import { IconBrandDiscord } from '@tabler/icons-react'
 
 export function LeftSidebar() {
   return (
@@ -30,6 +31,15 @@ export function LeftSidebar() {
         </SidebarContent>
         <SidebarFooter>
           <DownloadManagement />
+          <a
+            href="https://discord.gg/cd5AD5zY6U"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-sidebar-foreground/8"
+          >
+            <IconBrandDiscord size={16} className="shrink-0" />
+            <span>Share Feedback</span>
+          </a>
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>

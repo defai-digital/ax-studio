@@ -43,6 +43,11 @@ pub fn run() {
         app_builder = app_builder.plugin(tauri_plugin_hardware::init());
     }
 
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        app_builder = app_builder.plugin(tauri_plugin_llamacpp::init());
+    }
+
     // Desktop: include updater commands
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let app_builder = app_builder.invoke_handler(tauri::generate_handler![
@@ -342,6 +347,13 @@ pub fn run() {
                     {
                         Ok(_) => log::info!("MCP cleanup completed successfully"),
                         Err(_) => log::warn!("MCP cleanup timed out after 10 seconds"),
+                    }
+
+                    // Kill any running llama.cpp server processes
+                    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+                    {
+                        let _ = tauri_plugin_llamacpp::cleanup_llama_processes(app_handle.clone()).await;
+                        log::info!("llama.cpp process cleanup completed");
                     }
 
                     log::info!("App cleanup completed");

@@ -10,7 +10,7 @@ export const isPlatformTauri = (): boolean => {
   // vite.config.ts always sets IS_WEB_APP=false so we cannot rely on it to distinguish
   // Tauri from browser; the runtime check is authoritative.
   if (typeof window !== 'undefined') {
-    return (window as Record<string, unknown>).__TAURI_INTERNALS__ != null
+    return (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ != null
   }
   // Non-browser environment (SSR / test) — fall back to the build-time constant
   if (typeof IS_WEB_APP === 'undefined') {

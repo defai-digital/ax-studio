@@ -10,7 +10,7 @@ import {
   type LanguageModelUsage,
   jsonSchema,
 } from 'ai'
-import { useServiceStore } from '@/hooks/useServiceHub'
+import { useServiceStore, getServiceHub } from '@/hooks/useServiceHub'
 import { useToolAvailable } from '@/hooks/useToolAvailable'
 import { ModelFactory } from './model-factory'
 import { useModelProvider } from '@/hooks/useModelProvider'
@@ -214,14 +214,30 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
 
         const activeProvider = updatedProvider ?? provider
 
-        // Guard: provider must have an API key registered before we attempt a request.
-        // Without a key the Rust proxy has no provider_configs entry and returns a 404,
-        // which causes the SSE parser to hang silently instead of showing an error.
-        if (!activeProvider.api_key) {
+        // Guard: remote providers must have an API key registered.
+        // Local providers (llamacpp, mlx, ollama) are exempted.
+        const isLocalProvider = ['llamacpp', 'mlx', 'ollama'].includes(activeProvider.provider)
+        if (!activeProvider.api_key && !isLocalProvider) {
           throw new Error(
             `No API key configured for provider "${activeProvider.provider}". ` +
             `Go to Settings → AI Providers and add your API key.`
           )
+        }
+
+        // For local providers, ensure the model is loaded (llama-server running)
+        // before sending a request. startModel is a no-op if already loaded.
+        // The OnModelReady event handler in GlobalEventHandler registers the
+        // local server with the Rust proxy so the proxy can route the request.
+        if (isLocalProvider) {
+          try {
+            const hub = getServiceHub()
+            await hub.models().startModel(activeProvider, modelId)
+          } catch (loadError) {
+            console.error('Failed to load local model:', loadError)
+            throw new Error(
+              `Failed to load model "${modelId}": ${loadError instanceof Error ? loadError.message : String(loadError)}`
+            )
+          }
         }
 
         // Get assistant parameters from current assistant

@@ -1,5 +1,6 @@
 {
   "assistants": "Assistentes",
+  "engineSettings": "Engine Settings",
   "hardware": "Hardware",
   "mcp-servers": "Servidores MCP",
   "local_api_server": "Servidor de API Local",

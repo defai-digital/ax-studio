@@ -21,8 +21,9 @@ import { useServiceHub } from '@/hooks/useServiceHub'
 import type { CatalogModel, ModelQuant } from '@/services/models/types'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn, sanitizeModelId } from '@/lib/utils'
 import { useGeneralSetting } from '@/hooks/useGeneralSetting'
+import { useModelProvider } from '@/hooks/useModelProvider'
 import { ModelInfoHoverCard } from '@/containers/ModelInfoHoverCard'
 import { DEFAULT_MODEL_QUANTIZATIONS } from '@/constants/models'
 import { useTranslation } from '@/i18n'
@@ -47,7 +48,8 @@ function HubModelDetailContent() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const search = useSearch({ from: Route.id as any })
 
-  // llamacpp removed — local provider no longer applicable
+  const getProviderByName = useModelProvider((state) => state.getProviderByName)
+  const llamaProvider = getProviderByName('llamacpp')
   const { downloads, localDownloadingModels, addLocalDownloadingModel } =
     useDownloadStore()
   const serviceHub = useServiceHub()
@@ -108,7 +110,7 @@ function HubModelDetailContent() {
         search: {
           model: {
             id: modelId,
-            provider: 'ax-fabric',
+            provider: 'llamacpp',
           },
         },
       })
@@ -374,8 +376,13 @@ function HubModelDetailContent() {
                           downloadProcesses.find(
                             (e) => e.id === variant.model_id
                           )?.progress || 0
-                        // Local provider removed — downloaded state tracks via download store
-                        const isDownloaded = false
+                        // Check if model is already downloaded by looking
+                        // at the llamacpp provider's installed models list
+                        const isDownloaded = !!llamaProvider?.models.some(
+                          (m: { id: string }) =>
+                            m.id === variant.model_id ||
+                            m.id === `${modelData.developer}/${sanitizeModelId(variant.model_id.split('/').pop() || '')}`
+                        )
 
                         // Extract format from model_id
                         const format = variant.model_id
