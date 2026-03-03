@@ -43,15 +43,17 @@ export const DIAGRAM_FORMAT_INSTRUCTION = `
 
 ## Diagram rules
 
-For these question types, output a diagram — not bullet points:
-- "what are the concepts / parts / ideas of X" → use diagramType mindmap
-- "how does X work / steps of X / flow of X" → use diagramType flowchart
-- "how do X and Y communicate / interact" → use diagramType sequenceDiagram
-- "class or object structure of X" → use diagramType classDiagram
-- "database schema / tables for X" → use diagramType erDiagram
-- "states / lifecycle of X" → use diagramType stateDiagram-v2
+When a diagram would help clarify your answer, include exactly one diagram alongside your explanation — never instead of it. Always write your full text explanation first, then add a single diagram after it.
 
-Output the diagram as a Mermaid code fence:
+Add a diagram when the question involves:
+- concepts / parts / ideas of X → mindmap
+- how X works / steps of X / flow of X → flowchart
+- how X and Y communicate / interact → sequenceDiagram
+- class or object structure of X → classDiagram
+- database schema / tables for X → erDiagram
+- states / lifecycle of X → stateDiagram-v2
+
+If a \`generate_diagram\` tool is available, call it after writing your explanation. Otherwise output a Mermaid code fence after your text:
 \`\`\`mermaid
 <valid mermaid syntax>
 \`\`\`
@@ -60,7 +62,7 @@ Mermaid syntax rules — follow these to avoid parse errors:
 - Always wrap node labels in double quotes when they contain parentheses, apostrophes, angle brackets, pipes, or any special character: A["Recipient's Device"] not A[Recipient's Device], A["Setup (X3DH)"] not A[Setup (X3DH)]
 - Use \`<br/>\` inside quoted labels for line breaks: A["Line one<br/>Line two"]
 
-Never use PlantUML, ASCII art, or plain bullet lists when a diagram is appropriate.`
+Never use PlantUML, ASCII art, or plain bullet lists as a substitute for a diagram.`
 
 const normalizePrompt = (value: unknown): string | null => {
   if (typeof value !== 'string') return null
@@ -181,8 +183,8 @@ You have a Python code execution engine. When asked to:
 
 Rules:
 - ALWAYS write a \`\`\`python code block — never say "I cannot create visualizations" or "I cannot run code"
-- Use \`plt.show()\` or \`plt.savefig()\` for charts — output is captured automatically
-- Use \`print(df)\` or just \`df\` on the last line for DataFrames — the table is captured automatically
+- Use \`plt.show()\` for charts — figures are captured automatically
+- For DataFrames always put \`df\` or \`display(df)\` as the LAST line — NEVER use \`print(df)\` (it outputs plain text, not a styled table)
 - Import libraries at the top of the code block (matplotlib, pandas, numpy, seaborn are available)
 - Keep code self-contained — define all data inside the block`
 

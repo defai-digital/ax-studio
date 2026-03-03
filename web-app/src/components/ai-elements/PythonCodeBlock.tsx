@@ -2,11 +2,12 @@ import { type ReactNode, memo, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { useCodeExecution, type ExecutionResult } from '@/hooks/useCodeExecution'
 import { Button } from '@/components/ui/button'
-import { PlayIcon, RotateCcwIcon, LoaderCircleIcon, DownloadIcon } from 'lucide-react'
+import { PlayIcon, RotateCcwIcon, LoaderCircleIcon, DownloadIcon, SquareTerminalIcon } from 'lucide-react'
 
 type PythonCodeBlockProps = {
   code: string
   children: ReactNode
+  threadId?: string
 }
 
 function OutputImage({ data, index }: { data: string; index: number }) {
@@ -14,7 +15,6 @@ function OutputImage({ data, index }: { data: string; index: number }) {
 
   const download = useCallback(async () => {
     try {
-      // Open native save dialog
       const savePath = await invoke<string | null>('save_dialog', {
         options: {
           default_path: `figure-${index + 1}.png`,
@@ -23,7 +23,6 @@ function OutputImage({ data, index }: { data: string; index: number }) {
       })
       if (!savePath) return
 
-      // Convert base64 → hex (write_binary_file expects hex-encoded bytes)
       const binary = atob(data)
       const hex = Array.from(binary, (c) =>
         c.charCodeAt(0).toString(16).padStart(2, '0')
@@ -78,7 +77,7 @@ function ExecutionOutput({ result }: { result: ExecutionResult }) {
           .map((o, i) => (
             <div
               key={i}
-              className="overflow-x-auto text-xs"
+              className="overflow-x-auto text-xs [&_.dataframe]:w-full [&_.dataframe]:border-collapse [&_.dataframe_th]:px-3 [&_.dataframe_th]:py-1.5 [&_.dataframe_th]:bg-muted [&_.dataframe_th]:text-left [&_.dataframe_th]:font-semibold [&_.dataframe_th]:border [&_.dataframe_th]:border-border [&_.dataframe_td]:px-3 [&_.dataframe_td]:py-1.5 [&_.dataframe_td]:border [&_.dataframe_td]:border-border [&_.dataframe_tr:hover]:bg-muted/40"
               // biome-ignore lint/security/noDangerouslySetInnerHtml: trusted local execution output
               dangerouslySetInnerHTML={{ __html: o.data }}
             />
@@ -124,12 +123,25 @@ function ExecutionOutput({ result }: { result: ExecutionResult }) {
 export const PythonCodeBlock = memo(function PythonCodeBlock({
   code,
   children,
+  threadId,
 }: PythonCodeBlockProps) {
-  const { state, execute, reset } = useCodeExecution()
+  const { state, execute, reset, resetSession } = useCodeExecution(threadId)
+
+  const isChecking = state.status === 'checking'
+  const isStarting = state.status === 'starting_sandbox'
   const isRunning = state.status === 'running'
+  const isBusy = isChecking || isStarting || isRunning
   const isDone = state.status === 'done'
   const isError = state.status === 'error'
+  const isUnavailable = state.status === 'sandbox_unavailable'
   const showResults = isDone || isError
+
+  const runLabel = () => {
+    if (isChecking) return 'Checking…'
+    if (isStarting) return 'Starting sandbox…'
+    if (isRunning) return 'Running…'
+    return 'Run'
+  }
 
   return (
     <div>
@@ -138,6 +150,16 @@ export const PythonCodeBlock = memo(function PythonCodeBlock({
         {children}
       </div>
 
+      {/* Docker / sandbox not available warning */}
+      {isUnavailable && (
+        <div className="flex items-center gap-2 px-3 py-2 mb-1 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 text-xs text-amber-700 dark:text-amber-400">
+          <SquareTerminalIcon size={13} className="shrink-0" />
+          {state.dockerAvailable
+            ? 'Sandbox container not found. Click Run to start it automatically.'
+            : 'Docker is not running. Please start Docker Desktop, then click Run again.'}
+        </div>
+      )}
+
       {/* Run / Reset button row */}
       <div className="flex items-center gap-2 mb-1">
         {!isDone && !isError ? (
@@ -145,13 +167,13 @@ export const PythonCodeBlock = memo(function PythonCodeBlock({
             size="sm"
             variant="ghost"
             className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground gap-1.5"
-            onClick={() => !isRunning && execute(code)}
-            disabled={isRunning}
+            onClick={() => !isBusy && execute(code)}
+            disabled={isBusy}
           >
-            {isRunning ? (
+            {isBusy ? (
               <>
                 <LoaderCircleIcon size={12} className="animate-spin" />
-                Running…
+                {runLabel()}
               </>
             ) : (
               <>
@@ -161,15 +183,27 @@ export const PythonCodeBlock = memo(function PythonCodeBlock({
             )}
           </Button>
         ) : (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground gap-1.5"
-            onClick={reset}
-          >
-            <RotateCcwIcon size={12} />
-            Run again
-          </Button>
+          <>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground gap-1.5"
+              onClick={reset}
+            >
+              <RotateCcwIcon size={12} />
+              Run again
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground gap-1.5"
+              onClick={resetSession}
+              title="Wipe all variables from the kernel — other code blocks in this chat that depend on these variables will stop working until re-run"
+            >
+              <SquareTerminalIcon size={12} />
+              Clear kernel
+            </Button>
+          </>
         )}
       </div>
 

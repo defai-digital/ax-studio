@@ -130,6 +130,11 @@ pub fn run() {
         core::downloads::commands::cancel_download_task,
         // Code execution
         core::code_execution::commands::execute_python_code,
+        core::code_execution::commands::check_sandbox_status,
+        core::code_execution::commands::start_sandbox,
+        core::code_execution::commands::stop_sandbox,
+        core::code_execution::commands::reset_sandbox_session,
+        core::code_execution::commands::update_sandbox_url,
         // Custom updater commands (desktop only)
         core::updater::commands::check_for_app_updates,
         core::updater::commands::is_update_available,
@@ -218,6 +223,11 @@ pub fn run() {
         core::downloads::commands::cancel_download_task,
         // Code execution
         core::code_execution::commands::execute_python_code,
+        core::code_execution::commands::check_sandbox_status,
+        core::code_execution::commands::start_sandbox,
+        core::code_execution::commands::stop_sandbox,
+        core::code_execution::commands::reset_sandbox_session,
+        core::code_execution::commands::update_sandbox_url,
     ]);
 
     let app = app_builder
@@ -235,6 +245,8 @@ pub fn run() {
             mcp_server_pids: Arc::new(Mutex::new(HashMap::new())),
             provider_configs: Arc::new(Mutex::new(HashMap::new())),
             ax_fabric_service_config: Arc::new(Mutex::new(AxFabricServiceConfig::default())),
+            sandbox_sessions: Arc::new(Mutex::new(HashMap::new())),
+            sandbox_url: Arc::new(Mutex::new("http://127.0.0.1:8080".to_string())),
         })
         .setup(|app| {
             app.handle().plugin(

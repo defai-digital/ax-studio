@@ -22,6 +22,7 @@ interface MarkdownProps {
   isUser?: boolean
   isStreaming?: boolean
   messageId?: string
+  threadId?: string
 }
 
 /**
@@ -49,7 +50,7 @@ function sanitizeMermaidFences(input: string): string {
   return input.replace(
     /(```mermaid\n)([\s\S]*?)(```)/g,
     (_full, open, body: string, close) => {
-      const fixed = body
+      let fixed = body
         .split('\n')
         .map((line) =>
           line.replace(
@@ -63,6 +64,18 @@ function sanitizeMermaidFences(input: string): string {
           )
         )
         .join('\n')
+
+      // Fix unclosed class/struct bodies in classDiagram (EOF_IN_STRUCT error).
+      // Count unmatched { braces and append the missing closing braces.
+      const firstLine = fixed.trimStart().split('\n')[0] ?? ''
+      if (/^\s*class(Diagram)?\b/i.test(firstLine)) {
+        const opens = (fixed.match(/\{/g) ?? []).length
+        const closes = (fixed.match(/\}/g) ?? []).length
+        if (opens > closes) {
+          fixed = fixed.trimEnd() + '\n' + '}'.repeat(opens - closes) + '\n'
+        }
+      }
+
       return open + fixed + close
     }
   )
@@ -186,6 +199,7 @@ function RenderMarkdownComponent({
   isStreaming,
   components,
   messageId,
+  threadId,
 }: MarkdownProps) {
   const { isDark } = useTheme()
   const mermaidTheme = isDark ? 'dark' : 'default'
@@ -213,13 +227,13 @@ function RenderMarkdownComponent({
           const pythonCode = getPythonCode(node)
           if (pythonCode !== null) {
             return (
-              <PythonCodeBlock code={pythonCode}>{children}</PythonCodeBlock>
+              <PythonCodeBlock code={pythonCode} threadId={threadId ?? messageId}>{children}</PythonCodeBlock>
             )
           }
         }
         return <>{children}</>
       },
-    [isUser, isStreaming]
+    [isUser, isStreaming, threadId]
   )
 
   // Merge our pre override with any caller-supplied components.
