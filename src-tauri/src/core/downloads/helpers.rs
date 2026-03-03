@@ -824,7 +824,7 @@ async fn _get_maybe_resume_internal(
     url: &str,
     start_bytes: u64,
 ) -> Result<reqwest::Response, String> {
-    let mut request = if start_bytes > 0 {
+    let request = if start_bytes > 0 {
         client
             .get(url)
             .header("Range", format!("bytes={start_bytes}-"))
@@ -863,7 +863,7 @@ pub async fn _get_maybe_resume(
     url: &str,
     start_bytes: u64,
 ) -> Result<reqwest::Response, String> {
-    let mut request = if start_bytes > 0 {
+    let request = if start_bytes > 0 {
         client
             .get(url)
             .header("Range", format!("bytes={start_bytes}-"))
