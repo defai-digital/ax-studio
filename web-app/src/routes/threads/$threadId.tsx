@@ -112,6 +112,8 @@ function SplitThreadPane({
   const [showThreadPromptEditor, setShowThreadPromptEditor] = useState(false)
   const [threadPromptDraft, setThreadPromptDraft] = useState('')
   const reasoningContainerRef = useRef<HTMLDivElement>(null)
+  const processedMemoryMsgIds = useRef(new Set<string>())
+  const lastUserInputRef = useRef('')
   const paneLogo = useMemo(() => {
     const chatLogo =
       typeof thread?.metadata?.chatLogo === 'string'
