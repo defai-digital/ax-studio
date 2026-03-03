@@ -279,11 +279,51 @@ export const MessageItem = memo(
     }
 
     const renderToolPart = (part: any, partIndex: number) => {
-      if (!part.type.startsWith('tool-') || !('state' in part)) {
+      // AI SDK v5 emits two shapes for tool parts:
+      //   ToolUIPart      → type: 'tool-{name}'   (static/chat-level tools)
+      //   DynamicToolUIPart → type: 'dynamic-tool', toolName: string  (streamText tools)
+      // Both carry a `state` field; anything else is not a tool part.
+      const isDynamic = part.type === 'dynamic-tool'
+      const isStatic = typeof part.type === 'string' && part.type.startsWith('tool-')
+      if ((!isDynamic && !isStatic) || !('state' in part)) {
         return null
       }
 
-      const toolName = part.type.split('-').slice(1).join('-')
+      const toolName: string = isDynamic
+        ? (part.toolName as string)
+        : part.type.split('-').slice(1).join('-')
+
+      // generate_diagram: render the diagram inline via the Mermaid pipeline
+      // instead of showing a JSON tool card
+      if (toolName === 'generate_diagram') {
+        const source: string = part.output?.source ?? ''
+        const title: string = part.output?.title ?? ''
+        if (source) {
+          return (
+            <div key={`${message.id}-${partIndex}`} className="mb-2">
+              {title && (
+                <p className="text-xs text-muted-foreground mb-1 font-medium">
+                  {title}
+                </p>
+              )}
+              <RenderMarkdown
+                content={`\`\`\`mermaid\n${source}\n\`\`\``}
+                messageId={message.id}
+              />
+            </div>
+          )
+        }
+        // While streaming (source not yet available) show a slim loading state
+        return (
+          <div
+            key={`${message.id}-${partIndex}`}
+            className="mb-2 text-xs text-muted-foreground animate-pulse"
+          >
+            Generating diagram…
+          </div>
+        )
+      }
+
       return (
         <Tool
           key={`${message.id}-${partIndex}`}

@@ -33,6 +33,35 @@ export interface ChatPromptInjection {
 
 export const fallbackDefaultPrompt = 'You are a helpful assistant.'
 
+/**
+ * Appended to every resolved system prompt regardless of source.
+ * Instructs the model to proactively call `generate_diagram` whenever a
+ * visual would aid understanding, and guides diagram-type selection.
+ * Also ensures the Mermaid fallback (text path) uses correct syntax.
+ */
+export const DIAGRAM_FORMAT_INSTRUCTION = `
+
+## Diagram rules
+
+For these question types, output a diagram — not bullet points:
+- "what are the concepts / parts / ideas of X" → use diagramType mindmap
+- "how does X work / steps of X / flow of X" → use diagramType flowchart
+- "how do X and Y communicate / interact" → use diagramType sequenceDiagram
+- "class or object structure of X" → use diagramType classDiagram
+- "database schema / tables for X" → use diagramType erDiagram
+- "states / lifecycle of X" → use diagramType stateDiagram-v2
+
+Output the diagram as a Mermaid code fence:
+\`\`\`mermaid
+<valid mermaid syntax>
+\`\`\`
+
+Mermaid syntax rules — follow these to avoid parse errors:
+- Always wrap node labels in double quotes when they contain parentheses, apostrophes, angle brackets, pipes, or any special character: A["Recipient's Device"] not A[Recipient's Device], A["Setup (X3DH)"] not A[Setup (X3DH)]
+- Use \`<br/>\` inside quoted labels for line breaks: A["Line one<br/>Line two"]
+
+Never use PlantUML, ASCII art, or plain bullet lists when a diagram is appropriate.`
+
 const normalizePrompt = (value: unknown): string | null => {
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
@@ -135,11 +164,33 @@ export const getOptimizedModelConfig = (
   return optimized
 }
 
+/**
+ * Appended to every resolved system prompt alongside DIAGRAM_FORMAT_INSTRUCTION.
+ * Tells every model that a Python code execution engine is available so it never
+ * refuses data/visualization tasks with "I cannot do that".
+ */
+export const CODE_EXECUTION_INSTRUCTION = `
+
+## Python code execution
+
+You have a Python code execution engine. When asked to:
+- Plot, chart, or visualize data → write Python using matplotlib or seaborn
+- Create or display a table / DataFrame → write Python using pandas
+- Run a calculation, simulation, or algorithm → write Python
+- Generate any output that requires computation → write Python
+
+Rules:
+- ALWAYS write a \`\`\`python code block — never say "I cannot create visualizations" or "I cannot run code"
+- Use \`plt.show()\` or \`plt.savefig()\` for charts — output is captured automatically
+- Use \`print(df)\` or just \`df\` on the last line for DataFrames — the table is captured automatically
+- Import libraries at the top of the code block (matplotlib, pandas, numpy, seaborn are available)
+- Keep code self-contained — define all data inside the block`
+
 export const buildChatPromptInjection = (
   resolved: ResolvedSystemPrompt
 ): ChatPromptInjection => {
   return {
-    systemMessage: resolved.resolvedPrompt,
+    systemMessage: resolved.resolvedPrompt + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION,
   }
 }
 

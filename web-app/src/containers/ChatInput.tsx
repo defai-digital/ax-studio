@@ -30,6 +30,7 @@ import {
   IconLoader2,
   IconUser,
   IconBrain,
+  IconHierarchy2,
 } from '@tabler/icons-react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useGeneralSetting } from '@/hooks/useGeneralSetting'
@@ -99,6 +100,16 @@ type ChatInputProps = {
   onStop?: () => void
   chatStatus?: ChatStatus
 }
+
+const DIAGRAM_PROMPTS = [
+  { label: 'Flowchart',        prompt: 'Draw a flowchart for '                        },
+  { label: 'Sequence Diagram', prompt: 'Draw a sequence diagram showing '             },
+  { label: 'Class Diagram',    prompt: 'Draw a class diagram for '                    },
+  { label: 'ER Diagram',       prompt: 'Draw an ER diagram for '                      },
+  { label: 'State Machine',    prompt: 'Draw a state diagram for '                    },
+  { label: 'Gantt Chart',      prompt: 'Create a Gantt chart for '                    },
+  { label: 'Mind Map',         prompt: 'Create a mind map for '                       },
+] as const
 
 const ChatInput = memo(function ChatInput({
   className,
@@ -1555,6 +1566,32 @@ const ChatInput = memo(function ChatInput({
                         </DropdownMenuSubContent>
                       </DropdownMenuSub>
                     )}
+                    {/* Generate Diagram quick-prompt */}
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger>
+                        <IconHierarchy2 size={18} className="text-muted-foreground" />
+                        <span>Generate Diagram</span>
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        {DIAGRAM_PROMPTS.map(({ label, prompt }) => (
+                          <DropdownMenuItem
+                            key={label}
+                            onClick={() => {
+                              setPrompt(prompt)
+                              setTimeout(() => {
+                                if (textareaRef.current) {
+                                  textareaRef.current.focus()
+                                  const len = textareaRef.current.value.length
+                                  textareaRef.current.setSelectionRange(len, len)
+                                }
+                              }, 0)
+                            }}
+                          >
+                            <span>{label}</span>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
                   </DropdownMenuContent>
                 </DropdownMenu>
                 {selectedModel?.capabilities?.includes('embeddings') && (

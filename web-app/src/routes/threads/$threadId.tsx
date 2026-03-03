@@ -57,14 +57,18 @@ import { toast } from 'sonner'
 import { useGeneralSetting } from '@/hooks/useGeneralSetting'
 import { useMemory } from '@/hooks/useMemory'
 import {
-  parseMemoryFromResponse,
+  parseMemoryDelta,
+  applyMemoryDelta,
   buildMemoryContext,
   extractFactsFromPatterns,
   mergePatternFacts,
+  type MemoryDeltaOp,
 } from '@/lib/memory-extractor'
 import {
   getOptimizedModelConfig,
   resolveSystemPrompt,
+  DIAGRAM_FORMAT_INSTRUCTION,
+  CODE_EXECUTION_INSTRUCTION,
 } from '@/lib/system-prompt'
 import {
   DropdownMenu,
@@ -184,7 +188,7 @@ function SplitThreadPane({
   } = useChat({
     sessionId: threadId,
     sessionTitle: thread?.title,
-    systemMessage: promptResolution.resolvedPrompt + memorySuffix,
+    systemMessage: promptResolution.resolvedPrompt + memorySuffix + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION,
     modelOverrideId: optimizedModelConfig.modelId,
     inferenceParameters: {
       temperature: optimizedModelConfig.temperature,
@@ -196,48 +200,51 @@ function SplitThreadPane({
       if (!isAbort && message.role === 'assistant') {
         const contentParts = extractContentPartsFromUIMessage(message)
 
-        // Memory: parse LLM tags + client-side pattern extraction
-        if (useMemory.getState().isMemoryEnabled() && contentParts.length > 0) {
-          const prevCount = useMemory.getState().getMemories('default').length
-          let llmReplaced = false
-          for (const part of contentParts) {
-            if (part.type === 'text' && part.text?.value) {
-              const { facts, isFullReplace, cleanedText } = parseMemoryFromResponse(part.text.value)
-              part.text.value = cleanedText
-              if (isFullReplace && facts.length > 0) {
-                useMemory.getState().replaceMemories('default', facts, threadId)
-                llmReplaced = true
-                const newCount = facts.length
-                const added = newCount - prevCount
-                if (added > 0) {
-                  toast.success(`Remembered ${added} new fact${added !== 1 ? 's' : ''}`)
-                } else if (newCount === prevCount && newCount > 0) {
-                  toast.info('Updated memories')
-                }
-              }
+        // Guard: use ref-based dedup — store-based check is unreliable (timing issues)
+        const isNewMessage = !processedMemoryMsgIds.current.has(message.id)
+        if (isNewMessage) processedMemoryMsgIds.current.add(message.id)
+
+        // Strip memory tags + collect LLM ops from all content parts
+        const allOps: MemoryDeltaOp[] = []
+        for (const part of contentParts) {
+          if (part.type === 'text' && part.text?.value) {
+            const { ops, cleanedText } = parseMemoryDelta(part.text.value)
+            part.text.value = cleanedText
+            if (isNewMessage) allOps.push(...ops)
+          }
+        }
+
+        if (isNewMessage && useMemory.getState().isMemoryEnabled() && contentParts.length > 0) {
+          let toasted = false
+
+          // Step 1: Apply LLM delta ops (surgical add/update/delete)
+          if (allOps.length > 0) {
+            const existing = useMemory.getState().getMemories('default')
+            const updated = applyMemoryDelta(existing, allOps, threadId)
+            useMemory.getState().importMemories('default', updated)
+            const added = allOps.filter((o) => o.op === 'add').length
+            const changed = allOps.filter((o) => o.op === 'update' || o.op === 'delete').length
+            if (added > 0) {
+              toast.success(`Remembered ${added} new fact${added !== 1 ? 's' : ''}`)
+              toasted = true
+            } else if (changed > 0) {
+              toast.info('Updated memories')
+              toasted = true
             }
           }
-          // Fallback: pattern-match the user message for personal facts
-          if (!llmReplaced) {
-            const storedMsgs = useMessages.getState().getMessages(threadId)
-            const lastUserMsg = [...storedMsgs].reverse().find((m) => m.role === 'user')
-            const userText = lastUserMsg?.content
-              ?.filter((c: { type?: string }) => c.type === 'text')
-              .map((c: { text?: { value?: string } }) => c.text?.value ?? '')
-              .join('\n') ?? ''
-            if (userText) {
-              const patternFacts = extractFactsFromPatterns(userText)
-              if (patternFacts.size > 0) {
-                const existing = useMemory.getState().getMemories('default')
-                const merged = mergePatternFacts(existing, patternFacts, threadId)
-                useMemory.getState().importMemories('default', merged)
-                const added = merged.length - existing.length
-                if (added > 0) {
-                  toast.success(`Remembered ${added} new fact${added !== 1 ? 's' : ''}`)
-                } else if (patternFacts.size > 0) {
-                  toast.info('Updated memories')
-                }
-              }
+
+          // Step 2: Pattern fallback — use ref captured at submit time (no stale-closure issues)
+          // mergePatternFacts deduplicates by category, so no duplicates from Step 1
+          // Always saves to also correct wrong LLM-written facts (e.g. name="vegetarian")
+          const userText = lastUserInputRef.current
+          if (userText) {
+            const patternFacts = extractFactsFromPatterns(userText)
+            if (patternFacts.size > 0) {
+              const currentMems = useMemory.getState().getMemories('default')
+              const merged = mergePatternFacts(currentMems, patternFacts, threadId)
+              const newlyAdded = merged.length - currentMems.length
+              useMemory.getState().importMemories('default', merged)
+              if (newlyAdded > 0 && !toasted) toast.success(`Remembered ${newlyAdded} new fact${newlyAdded !== 1 ? 's' : ''}`)
             }
           }
         }
@@ -320,6 +327,7 @@ function SplitThreadPane({
     files?: Array<{ type: string; mediaType: string; url: string }>
   ) => {
     const normalizedText = text.trim()
+    lastUserInputRef.current = normalizedText
 
     // Handle /remember command
     if (normalizedText.startsWith('/remember ')) {
@@ -626,6 +634,11 @@ function ThreadDetail() {
     (state) => state.messages[threadId]?.length ?? 0
   )
   const threadRef = useRef(thread)
+  // Track which assistant message IDs have already had memory processed
+  // (onFinish can fire multiple times; store-based check is unreliable)
+  const processedMemoryMsgIds = useRef(new Set<string>())
+  // Capture user text at submit time so onFinish can read it without stale-closure issues
+  const lastUserInputRef = useRef('')
   const projectId = threadRef.current?.metadata?.project?.id
   const [threadPromptDraft, setThreadPromptDraft] = useState('')
   const [showThreadPromptEditor, setShowThreadPromptEditor] = useState(false)
@@ -732,7 +745,7 @@ function ThreadDetail() {
   } = useChat({
     sessionId: threadId,
     sessionTitle: thread?.title,
-    systemMessage: promptResolution.resolvedPrompt + mainMemorySuffix,
+    systemMessage: promptResolution.resolvedPrompt + mainMemorySuffix + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION,
     modelOverrideId: optimizedModelConfig.modelId,
     inferenceParameters: {
       temperature: optimizedModelConfig.temperature,
@@ -747,48 +760,52 @@ function ThreadDetail() {
         // This preserves the natural ordering: text -> tool call -> text -> tool call, etc.
         const contentParts = extractContentPartsFromUIMessage(message)
 
-        // Memory: parse LLM tags + client-side pattern extraction
-        if (useMemory.getState().isMemoryEnabled() && contentParts.length > 0) {
-          const prevCount = useMemory.getState().getMemories('default').length
-          let llmReplaced = false
-          for (const part of contentParts) {
-            if (part.type === 'text' && part.text?.value) {
-              const { facts, isFullReplace, cleanedText } = parseMemoryFromResponse(part.text.value)
-              part.text.value = cleanedText
-              if (isFullReplace && facts.length > 0) {
-                useMemory.getState().replaceMemories('default', facts, threadId)
-                llmReplaced = true
-                const newCount = facts.length
-                const added = newCount - prevCount
-                if (added > 0) {
-                  toast.success(`Remembered ${added} new fact${added !== 1 ? 's' : ''}`)
-                } else if (newCount === prevCount && newCount > 0) {
-                  toast.info('Updated memories')
-                }
-              }
+        // Ref-based dedup — more reliable than store-based timing check
+        const isNewMessage = !processedMemoryMsgIds.current.has(message.id)
+        if (isNewMessage) processedMemoryMsgIds.current.add(message.id)
+
+        // Strip memory tags + collect LLM ops from all content parts
+        const allOps: MemoryDeltaOp[] = []
+        for (const part of contentParts) {
+          if (part.type === 'text' && part.text?.value) {
+            const { ops, cleanedText } = parseMemoryDelta(part.text.value)
+            part.text.value = cleanedText
+            if (isNewMessage) allOps.push(...ops)
+          }
+        }
+
+        if (isNewMessage && useMemory.getState().isMemoryEnabled() && contentParts.length > 0) {
+          let toasted = false
+
+          // Step 1: Apply LLM delta ops (surgical add/update/delete)
+          if (allOps.length > 0) {
+            const existing = useMemory.getState().getMemories('default')
+            const updated = applyMemoryDelta(existing, allOps, threadId)
+            useMemory.getState().importMemories('default', updated)
+            const added = allOps.filter((o) => o.op === 'add').length
+            const changed = allOps.filter((o) => o.op === 'update' || o.op === 'delete').length
+            if (added > 0) {
+              toast.success(`Remembered ${added} new fact${added !== 1 ? 's' : ''}`)
+              toasted = true
+            } else if (changed > 0) {
+              toast.info('Updated memories')
+              toasted = true
             }
           }
-          // Fallback: pattern-match the user message for personal facts
-          if (!llmReplaced) {
-            const storedMsgs = useMessages.getState().getMessages(threadId)
-            const lastUserMsg = [...storedMsgs].reverse().find((m) => m.role === 'user')
-            const userText = lastUserMsg?.content
-              ?.filter((c: { type?: string }) => c.type === 'text')
-              .map((c: { text?: { value?: string } }) => c.text?.value ?? '')
-              .join('\n') ?? ''
-            if (userText) {
-              const patternFacts = extractFactsFromPatterns(userText)
-              if (patternFacts.size > 0) {
-                const existing = useMemory.getState().getMemories('default')
-                const merged = mergePatternFacts(existing, patternFacts, threadId)
-                useMemory.getState().importMemories('default', merged)
-                const added = merged.length - existing.length
-                if (added > 0) {
-                  toast.success(`Remembered ${added} new fact${added !== 1 ? 's' : ''}`)
-                } else if (patternFacts.size > 0) {
-                  toast.info('Updated memories')
-                }
-              }
+
+          // Step 2: Pattern fallback — use ref captured at submit time (no stale-closure issues)
+          // mergePatternFacts deduplicates by category, so no duplicates from Step 1
+          const userText = lastUserInputRef.current
+          if (userText) {
+            const patternFacts = extractFactsFromPatterns(userText)
+            if (patternFacts.size > 0) {
+              const currentMems = useMemory.getState().getMemories('default')
+              const merged = mergePatternFacts(currentMems, patternFacts, threadId)
+              const newlyAdded = merged.length - currentMems.length
+              // Always save: pattern fallback also corrects wrong LLM-written facts
+              // (e.g. LLM sets name="vegetarian", pattern corrects it to "Alex")
+              useMemory.getState().importMemories('default', merged)
+              if (newlyAdded > 0 && !toasted) toast.success(`Remembered ${newlyAdded} new fact${newlyAdded !== 1 ? 's' : ''}`)
             }
           }
         }
@@ -1086,6 +1103,7 @@ function ThreadDetail() {
       files?: Array<{ type: string; mediaType: string; url: string }>
     ) => {
       const normalizedText = text.trim()
+      lastUserInputRef.current = normalizedText
 
       // Handle /remember command
       if (normalizedText.startsWith('/remember ')) {

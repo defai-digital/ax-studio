@@ -68,11 +68,130 @@ const preventDefaultFileDrop = () => {
   })
 }
 
+/**
+ * Tauri WebView2 (Windows) silently drops blob: anchor downloads.
+ * We intercept URL.createObjectURL to store the original Blob, then
+ * redirect anchor.click() downloads through showSaveFilePicker so the
+ * user gets a real OS save dialog for SVG / PNG / MMD exports.
+ */
+const patchBlobDownloads = () => {
+  const registry = new Map<string, Blob>()
+
+  const origCreate = URL.createObjectURL.bind(URL)
+  URL.createObjectURL = (obj: Blob | MediaSource): string => {
+    const url = origCreate(obj)
+    if (obj instanceof Blob) registry.set(url, obj)
+    return url
+  }
+
+  const origRevoke = URL.revokeObjectURL.bind(URL)
+  URL.revokeObjectURL = (url: string): void => {
+    registry.delete(url)
+    origRevoke(url)
+  }
+
+  const origClick = HTMLAnchorElement.prototype.click
+  HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) {
+    if (this.download && this.href.startsWith('blob:')) {
+      const blob = registry.get(this.href)
+      if (blob) {
+        void saveBlobNative(blob, this.download)
+        return
+      }
+    }
+    origClick.call(this)
+  }
+}
+
+function getDialogFilters(ext: string) {
+  const map: Record<string, { name: string; extensions: string[] }> = {
+    svg: { name: 'SVG Image',      extensions: ['svg'] },
+    png: { name: 'PNG Image',      extensions: ['png'] },
+    mmd: { name: 'Mermaid Source', extensions: ['mmd'] },
+  }
+  return map[ext] ? [map[ext]] : []
+}
+
+function getFilePickerTypes(ext: string): object[] {
+  const map: Record<string, object> = {
+    svg: { description: 'SVG Image',      accept: { 'image/svg+xml': ['.svg'] } },
+    png: { description: 'PNG Image',      accept: { 'image/png':     ['.png'] } },
+    mmd: { description: 'Mermaid Source', accept: { 'text/plain':    ['.mmd'] } },
+  }
+  return map[ext] ? [map[ext]] : []
+}
+
+async function saveBlobNative(blob: Blob, filename: string): Promise<void> {
+  try {
+    const ext = filename.split('.').pop()?.toLowerCase() ?? ''
+
+    if ('__TAURI__' in window) {
+      // Tauri context: use native Rust save dialog — works on both
+      // macOS (WKWebView, no showSaveFilePicker) and Windows (WebView2).
+      const { invoke } = await import('@tauri-apps/api/core')
+
+      const savePath = await invoke<string | null>('save_dialog', {
+        options: {
+          defaultPath: filename,      // rfd uses this as the suggested filename
+          filters: getDialogFilters(ext),
+        },
+      })
+      if (!savePath) return           // user cancelled
+
+      if (ext === 'png') {
+        // PNG is binary — hex-encode and let Rust decode before writing
+        const bytes = new Uint8Array(await blob.arrayBuffer())
+        const hexData = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+        await invoke('write_binary_file', { path: savePath, hexData })
+      } else {
+        // SVG / MMD are plain text
+        const text = await blob.text()
+        await invoke('write_file_sync', { args: [savePath, text] })
+      }
+
+    } else if ('showSaveFilePicker' in window) {
+      // Plain browser / Electron with File System Access API
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const handle = await (window as any).showSaveFilePicker({
+        suggestedName: filename,
+        types: getFilePickerTypes(ext),
+      })
+      const writable = await handle.createWritable()
+      await writable.write(blob)
+      await writable.close()
+
+    } else {
+      // Last-resort: data URI (limited browser environments)
+      await new Promise<void>((resolve) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+          const a = document.createElement('a')
+          a.href = reader.result as string
+          a.download = filename
+          document.body.appendChild(a)
+          a.dispatchEvent(new MouseEvent('click'))
+          document.body.removeChild(a)
+          resolve()
+        }
+        reader.readAsDataURL(blob)
+      })
+    }
+  } catch (e) {
+    // AbortError = user cancelled the dialog — silent
+    if ((e as Error)?.name !== 'AbortError') {
+      console.error('[ax-fabric] diagram save failed:', e)
+    }
+  }
+}
+
 // Initialize mobile setup
 setupMobileViewport()
 
 // Prevent files from opening when dropped
 preventDefaultFileDrop()
+
+// Fix blob: anchor downloads for Tauri WebView2
+patchBlobDownloads()
 
 // Render the app
 const rootElement = document.getElementById('root')

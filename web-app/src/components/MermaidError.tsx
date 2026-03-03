@@ -1,4 +1,7 @@
-import { memo } from 'react'
+import { memo, useState } from 'react'
+import { AlertCircle, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 interface MermaidErrorComponentProps {
   error: string
@@ -7,22 +10,51 @@ interface MermaidErrorComponentProps {
   messageId?: string
 }
 
-/**
- * Mermaid diagram error component
- * Displays an error message when mermaid diagram fails to render
- */
 function MermaidErrorComponent({
   error,
+  chart,
+  retry,
 }: MermaidErrorComponentProps) {
+  const [showSource, setShowSource] = useState(false)
+
   return (
-    <div className="flex flex-col items-center justify-center p-6 gap-3">
-      <img src="/images/ax-fabric-logo.png" alt="Ax-Fabric Logo" className="h-12 w-12" />
-      <p className="text-sm text-muted-foreground text-center">
-        Diagram error detected
-      </p>
-      <p className="text-xs text-muted-foreground/60 text-center mt-1">
-        {error}
-      </p>
+    <div className="my-4 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+      <div className="flex items-start gap-3">
+        <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-destructive">
+            Diagram failed to render
+          </p>
+          <p className="mt-1 font-mono text-xs text-muted-foreground break-all">
+            {error}
+          </p>
+          <div className="mt-3 flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={retry}
+              className="h-7 gap-1.5 text-xs"
+            >
+              <RefreshCw size={12} />
+              Retry
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowSource((s) => !s)}
+              className={cn('h-7 gap-1.5 text-xs text-muted-foreground')}
+            >
+              {showSource ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              {showSource ? 'Hide source' : 'Show source'}
+            </Button>
+          </div>
+          {showSource && (
+            <pre className="mt-3 overflow-x-auto rounded-lg bg-muted p-3 font-mono text-xs text-foreground">
+              {chart}
+            </pre>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

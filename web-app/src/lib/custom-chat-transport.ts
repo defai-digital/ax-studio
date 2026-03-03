@@ -2,6 +2,7 @@ import { type UIMessage } from '@ai-sdk/react'
 import {
   convertToModelMessages,
   streamText,
+  stepCountIs,
   type ChatRequestOptions,
   type ChatTransport,
   type LanguageModel,
@@ -107,11 +108,6 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
    * @private
    */
   async refreshTools() {
-    if (!this.serviceHub) {
-      this.tools = {}
-      return
-    }
-
     const toolsRecord: Record<string, Tool> = {}
 
     // Get disabled tools for this thread
@@ -126,43 +122,22 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
       return disabledToolKeys.includes(toolKey)
     }
 
-    const selectedModel = useModelProvider.getState().selectedModel
-    const modelSupportsTools = selectedModel?.capabilities?.includes('tools') ?? this.modelSupportsTools
+    // Load MCP and RAG tools only when a service hub is available and model supports tools
+    if (this.serviceHub) {
+      const selectedModel = useModelProvider.getState().selectedModel
+      const modelSupportsTools = selectedModel?.capabilities?.includes('tools') ?? this.modelSupportsTools
 
-    // Only load tools if model supports them
-    if (modelSupportsTools) {
-      // Load MCP tools
-      try {
-        const mcpTools = await this.serviceHub.mcp().getTools()
-        if (Array.isArray(mcpTools) && mcpTools.length > 0) {
-          // Convert MCP tools to AI SDK format, filtering out disabled tools
-          mcpTools.forEach((tool) => {
-            // MCP tools use MCPTool interface with server field
-            const serverName = (tool as { server?: string }).server || 'unknown'
-            if (!isToolDisabled(serverName, tool.name)) {
-              toolsRecord[tool.name] = {
-                description: tool.description,
-                inputSchema: jsonSchema(
-                  tool.inputSchema as Record<string, unknown>
-                ),
-              } as Tool
-            }
-          })
-        }
-      } catch (error) {
-        console.warn('Failed to load MCP tools:', error)
-      }
-
-      // Load RAG tools when documents have been indexed into the thread/project.
-      // RAG tools come from the Retrieval Service (/tools endpoint) and are
-      // routed to rag().callTool() in the thread component — not through MCP.
-      if (this.hasDocuments) {
+      // Only load external tools if model supports them
+      if (modelSupportsTools) {
+        // Load MCP tools
         try {
-          const ragTools = await this.serviceHub.rag().getTools()
-          if (Array.isArray(ragTools) && ragTools.length > 0) {
-            ragTools.forEach((tool) => {
-              // Use 'retrieval' as the server namespace for the disable-check key
-              if (!isToolDisabled('retrieval', tool.name)) {
+          const mcpTools = await this.serviceHub.mcp().getTools()
+          if (Array.isArray(mcpTools) && mcpTools.length > 0) {
+            // Convert MCP tools to AI SDK format, filtering out disabled tools
+            mcpTools.forEach((tool) => {
+              // MCP tools use MCPTool interface with server field
+              const serverName = (tool as { server?: string }).server || 'unknown'
+              if (!isToolDisabled(serverName, tool.name)) {
                 toolsRecord[tool.name] = {
                   description: tool.description,
                   inputSchema: jsonSchema(
@@ -173,9 +148,105 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
             })
           }
         } catch (error) {
-          console.warn('Failed to load RAG tools (retrieval service may be offline):', error)
+          console.warn('Failed to load MCP tools:', error)
+        }
+
+        // Load RAG tools when documents have been indexed into the thread/project.
+        // RAG tools come from the Retrieval Service (/tools endpoint) and are
+        // routed to rag().callTool() in the thread component — not through MCP.
+        if (this.hasDocuments) {
+          try {
+            const ragTools = await this.serviceHub.rag().getTools()
+            if (Array.isArray(ragTools) && ragTools.length > 0) {
+              ragTools.forEach((tool) => {
+                // Use 'retrieval' as the server namespace for the disable-check key
+                if (!isToolDisabled('retrieval', tool.name)) {
+                  toolsRecord[tool.name] = {
+                    description: tool.description,
+                    inputSchema: jsonSchema(
+                      tool.inputSchema as Record<string, unknown>
+                    ),
+                  } as Tool
+                }
+              })
+            }
+          } catch (error) {
+            console.warn('Failed to load RAG tools (retrieval service may be offline):', error)
+          }
         }
       }
+    }
+
+    // Built-in diagram tool — runs client-side, no MCP server or backend needed.
+    // Always registered regardless of serviceHub or model capability detection,
+    // because most modern models support tool calling even if not in the token.js list.
+    // The execute function runs in the browser and returns the Mermaid source;
+    // MessageItem renders it through the Streamdown → Mermaid pipeline.
+    if (!isToolDisabled('built-in', 'generate_diagram')) {
+      toolsRecord['generate_diagram'] = {
+        description:
+          'Generate a visual Mermaid diagram. ALWAYS call this proactively — never wait to be asked. ' +
+          'Use it whenever a visual aids understanding. Type selection guide:\n' +
+          '• mindmap — "what are the concepts/parts/ideas of X", conceptual overviews\n' +
+          '• flowchart — step-by-step processes, decision trees, algorithms, how X works\n' +
+          '• sequenceDiagram — message passing between distinct actors/systems (login, API calls)\n' +
+          '• classDiagram — object models, class hierarchies, OOP structure\n' +
+          '• erDiagram — database schemas, entity relationships\n' +
+          '• stateDiagram-v2 — states and transitions of a system or object\n' +
+          '• gantt — project timelines, schedules, task planning\n' +
+          '• mindmap — also use for listing main topics, categories, or branches of a subject',
+        inputSchema: jsonSchema({
+          type: 'object',
+          properties: {
+            title: {
+              type: 'string',
+              description: 'Short descriptive title for the diagram',
+            },
+            diagramType: {
+              type: 'string',
+              enum: [
+                'flowchart',
+                'sequenceDiagram',
+                'classDiagram',
+                'erDiagram',
+                'stateDiagram-v2',
+                'gantt',
+                'mindmap',
+                'timeline',
+                'gitGraph',
+                'pie',
+              ],
+              description:
+                'Mermaid diagram type. Choose based on content: ' +
+                'flowchart=processes/steps/decisions, ' +
+                'sequenceDiagram=actor-to-actor message flow, ' +
+                'classDiagram=OOP class structure, ' +
+                'erDiagram=database/entity schema, ' +
+                'stateDiagram-v2=state machine/transitions, ' +
+                'gantt=timeline/schedule, ' +
+                'mindmap=concepts/topics/overview/categories, ' +
+                'timeline=chronological events, ' +
+                'gitGraph=git branches, ' +
+                'pie=proportional breakdown',
+            },
+            source: {
+              type: 'string',
+              description:
+                'Complete valid Mermaid syntax for the diagram body, without the ```mermaid fence',
+            },
+          },
+          required: ['title', 'diagramType', 'source'],
+        }),
+        execute: async ({
+          title,
+          diagramType,
+          source,
+        }: {
+          title: string
+          diagramType: string
+          source: string
+        }) => ({ title, diagramType, source }),
+      } as Tool
     }
 
     this.tools = toolsRecord
@@ -268,7 +339,12 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
       this.mapUserInlineAttachments(options.messages)
     )
 
-    // Include tools only if we have tools loaded AND model supports them
+    // Gate all tools (MCP, RAG, and built-in generate_diagram) behind the model
+    // capability check. Local models (Ollama, LMStudio) that are not in the
+    // token.js supportsToolCalls list get modelSupportsTools=false and use the
+    // text path instead (the model outputs ```mermaid blocks per the system prompt,
+    // which streamdown renders). Cloud models (GPT-4, Claude, Gemini, etc.) that
+    // are in the list get tools passed and use the agentic tool path.
     const hasTools = Object.keys(this.tools).length > 0
     const selectedModel = useModelProvider.getState().selectedModel
     const modelSupportsTools = selectedModel?.capabilities?.includes('tools') ?? this.modelSupportsTools
@@ -284,6 +360,9 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
       tools: shouldEnableTools ? this.tools : undefined,
       toolChoice: shouldEnableTools ? 'auto' : undefined,
       system: this.systemMessage,
+      // When tools are enabled allow up to 3 steps so the model can:
+      // call generate_diagram → see result → write follow-up text.
+      stopWhen: shouldEnableTools ? stepCountIs(3) : stepCountIs(1),
     })
 
     let tokensPerSecond = 0
