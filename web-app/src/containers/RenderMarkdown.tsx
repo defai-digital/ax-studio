@@ -1,18 +1,19 @@
- 
-import { Components } from 'react-markdown'
-import { memo, useMemo } from 'react'
+import { type ReactNode, memo, useMemo } from 'react'
 import { cn, disableIndentedCodeBlockPlugin } from '@/lib/utils'
-// import 'katex/dist/katex.min.css'
 import { defaultRehypePlugins, Streamdown } from 'streamdown'
 import { cjk } from '@streamdown/cjk'
 import { code } from '@streamdown/code'
 import { mermaid } from '@streamdown/mermaid'
-
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import { MermaidError } from '@/components/MermaidError'
+import { useTheme } from '@/hooks/useTheme'
+import { PythonCodeBlock } from '@/components/ai-elements/PythonCodeBlock'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Components = any
 
 interface MarkdownProps {
   content: string
@@ -21,6 +22,50 @@ interface MarkdownProps {
   isUser?: boolean
   isStreaming?: boolean
   messageId?: string
+}
+
+/**
+ * Fixes Mermaid syntax errors caused by unquoted square-bracket node labels
+ * that contain characters the Mermaid parser cannot handle without quotes:
+ *
+ *   '  apostrophe   → A[Recipient's] breaks the parser
+ *   () parentheses  → A[Setup (X3DH)] is treated as shape syntax
+ *   <> angle bracks → A[<br/>text] confuses the tokeniser
+ *   |  pipe         → A[foo|bar] is misread as an edge-label delimiter
+ *
+ * Any label containing one of those characters is wrapped in double quotes:
+ *   A[Recipient's Device]          → A["Recipient's Device"]
+ *   A[Setup (X3DH Key Exchange)]   → A["Setup (X3DH Key Exchange)"]
+ *   A[<br/>Signal Protocol (E2E)]  → A["<br/>Signal Protocol (E2E)"]
+ *
+ * Skips labels that are already quoted (start with ") and labels that begin
+ * with a Mermaid shape specifier ([ ( / \ >).
+ * Only operates inside ```mermaid fences.
+ */
+function sanitizeMermaidFences(input: string): string {
+  // Characters that break Mermaid's parser inside unquoted [ ] labels
+  const UNSAFE = /['()|<>]/
+
+  return input.replace(
+    /(```mermaid\n)([\s\S]*?)(```)/g,
+    (_full, open, body: string, close) => {
+      const fixed = body
+        .split('\n')
+        .map((line) =>
+          line.replace(
+            // Unquoted [label] — not already starting with " or a shape specifier
+            /\[(?!["[/\\(>])([^\]\n"]+)\]/g,
+            (_m, inner) => {
+              if (!UNSAFE.test(inner)) return _m   // safe — leave unchanged
+              // Escape any stray double-quotes inside the label before wrapping
+              return `["${inner.replace(/"/g, '\\"')}"]`
+            }
+          )
+        )
+        .join('\n')
+      return open + fixed + close
+    }
+  )
 }
 
 // Cache for normalized LaTeX content
@@ -79,16 +124,110 @@ const normalizeLatex = (input: string): string => {
   return result
 }
 
+/** Extract all text content from a HAST node. */
+function extractHastText(node: unknown): string {
+  if (!node || typeof node !== 'object') return ''
+  const n = node as Record<string, unknown>
+  if (n.type === 'text' && typeof n.value === 'string') return n.value
+  if (Array.isArray(n.children)) {
+    return (n.children as unknown[]).map(extractHastText).join('')
+  }
+  return ''
+}
+
+const PYTHON_LANG_RE = /^(language-)?(python\d*|py\d*)$/i
+
+const PYTHON_HEURISTICS = [
+  /^import\s+\w/m,
+  /^from\s+\w+\s+import/m,
+  /^def\s+\w+\s*\(/m,
+  /^class\s+\w+/m,
+  /print\s*\(/,
+]
+
+/**
+ * If a HAST pre node wraps a Python code block, returns the code text.
+ * Returns null otherwise.
+ *
+ * Detection order:
+ * 1. Explicit language tag matching python / py / python3 / py3 (case-insensitive)
+ * 2. No language tag → fall back to content heuristics (import, def, class, print)
+ */
+function getPythonCode(preNode: unknown): string | null {
+  if (!preNode || typeof preNode !== 'object') return null
+  const node = preNode as Record<string, unknown>
+  const children = node.children as unknown[] | undefined
+  if (!Array.isArray(children) || children.length === 0) return null
+
+  const codeEl = children[0] as Record<string, unknown>
+  if (!codeEl || codeEl.tagName !== 'code') return null
+
+  const props = codeEl.properties as Record<string, unknown> | undefined
+  const classes = props?.className
+  const code = extractHastText(codeEl)
+
+  if (Array.isArray(classes) && classes.length > 0) {
+    // Explicit language tag present — only match Python variants
+    const isPython = classes.some(
+      (c) => typeof c === 'string' && PYTHON_LANG_RE.test(c)
+    )
+    return isPython ? code : null
+  }
+
+  // No language tag — use heuristics to avoid false positives on generic blocks
+  const looksLikePython = PYTHON_HEURISTICS.some((re) => re.test(code))
+  return looksLikePython ? code : null
+}
+
 function RenderMarkdownComponent({
   content,
   className,
   isUser,
+  isStreaming,
   components,
   messageId,
 }: MarkdownProps) {
+  const { isDark } = useTheme()
+  const mermaidTheme = isDark ? 'dark' : 'default'
 
   // Memoize the normalized content to avoid reprocessing on every render
-  const normalizedContent = useMemo(() => normalizeLatex(content), [content])
+  const normalizedContent = useMemo(
+    () => sanitizeMermaidFences(normalizeLatex(content)),
+    [content]
+  )
+
+  /**
+   * Custom `pre` component:
+   * - For Python code blocks in assistant messages (not streaming): wraps with
+   *   PythonCodeBlock which adds a Run button + execution results.
+   * - All other cases: return children unchanged (same as Streamdown default).
+   *
+   * Streamdown passes `passNode: true` so we receive the HAST pre node as `node`.
+   * The `children` prop already holds the fully syntax-highlighted code block JSX
+   * rendered by Streamdown's default `code` component (jt).
+   */
+  const preOverride = useMemo(
+    () =>
+      ({ node, children }: { node?: unknown; children?: ReactNode }) => {
+        if (!isUser && !isStreaming) {
+          const pythonCode = getPythonCode(node)
+          if (pythonCode !== null) {
+            return (
+              <PythonCodeBlock code={pythonCode}>{children}</PythonCodeBlock>
+            )
+          }
+        }
+        return <>{children}</>
+      },
+    [isUser, isStreaming]
+  )
+
+  // Merge our pre override with any caller-supplied components.
+  // Caller components take precedence (spread after).
+  const mergedComponents = useMemo(
+    () => ({ pre: preOverride, ...components }),
+    [preOverride, components]
+  )
 
   // Render the markdown content
   return (
@@ -114,7 +253,7 @@ function RenderMarkdownComponent({
           rehypeKatex,
           defaultRehypePlugins.harden,
         ]}
-        components={components}
+        components={mergedComponents}
         plugins={{
           code: code,
           mermaid: mermaid,
@@ -125,22 +264,22 @@ function RenderMarkdownComponent({
             fullscreen: false,
           },
         }}
-        mermaid={
-          messageId
-            ? {
-                errorComponent: (props) => (
-                  <MermaidError messageId={messageId} {...props} />
-                ),
-              }
-            : {}
-        }
+        mermaid={{
+          config: { theme: mermaidTheme },
+          errorComponent: messageId
+            ? (props) => <MermaidError messageId={messageId} {...props} />
+            : undefined,
+        }}
       >
         {normalizedContent}
       </Streamdown>
     </div>
   )
 }
+
 export const RenderMarkdown = memo(
   RenderMarkdownComponent,
-  (prevProps, nextProps) => prevProps.content === nextProps.content
+  (prevProps, nextProps) =>
+    prevProps.content === nextProps.content &&
+    prevProps.isStreaming === nextProps.isStreaming
 )

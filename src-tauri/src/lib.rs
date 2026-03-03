@@ -66,6 +66,7 @@ pub fn run() {
         core::filesystem::commands::decompress,
         core::filesystem::commands::open_dialog,
         core::filesystem::commands::save_dialog,
+        core::filesystem::commands::write_binary_file,
         core::filesystem::commands::read_akidb_config,
         core::filesystem::commands::write_akidb_config,
         // App configuration commands
@@ -127,6 +128,8 @@ pub fn run() {
         // Download
         core::downloads::commands::download_files,
         core::downloads::commands::cancel_download_task,
+        // Code execution
+        core::code_execution::commands::execute_python_code,
         // Custom updater commands (desktop only)
         core::updater::commands::check_for_app_updates,
         core::updater::commands::is_update_available,
@@ -150,6 +153,7 @@ pub fn run() {
         core::filesystem::commands::decompress,
         core::filesystem::commands::open_dialog,
         core::filesystem::commands::save_dialog,
+        core::filesystem::commands::write_binary_file,
         core::filesystem::commands::read_akidb_config,
         core::filesystem::commands::write_akidb_config,
         // App configuration commands
@@ -212,6 +216,8 @@ pub fn run() {
         // Download
         core::downloads::commands::download_files,
         core::downloads::commands::cancel_download_task,
+        // Code execution
+        core::code_execution::commands::execute_python_code,
     ]);
 
     let app = app_builder
