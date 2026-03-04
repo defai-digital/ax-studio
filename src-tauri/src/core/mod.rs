@@ -1,5 +1,6 @@
 pub mod app;
 pub mod code_execution;
+pub mod research;
 pub mod downloads;
 pub mod extensions;
 pub mod filesystem;

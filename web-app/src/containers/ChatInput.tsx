@@ -18,7 +18,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu'
-import { ArrowRight, PlusIcon, AppWindowIcon } from 'lucide-react'
+import { ArrowRight, PlusIcon, AppWindowIcon, SearchIcon } from 'lucide-react'
 import {
   IconPhoto,
   IconAtom,
@@ -117,6 +117,11 @@ const DIAGRAM_PROMPTS = [
   { label: 'State Machine',    prompt: 'Draw a state diagram for '                    },
   { label: 'Gantt Chart',      prompt: 'Create a Gantt chart for '                    },
   { label: 'Mind Map',         prompt: 'Create a mind map for '                       },
+] as const
+
+const RESEARCH_PROMPTS = [
+  { label: 'Standard', prompt: '/research:standard ', description: 'Balanced depth with page scraping' },
+  { label: 'Deep',     prompt: '/research:deep ',     description: 'Thorough multi-level research'     },
 ] as const
 
 const ChatInput = memo(function ChatInput({
@@ -1622,6 +1627,35 @@ const ChatInput = memo(function ChatInput({
                             }}
                           >
                             <span>{label}</span>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                    {/* Deep Research quick-prompt */}
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger>
+                        <SearchIcon size={18} className="text-muted-foreground" />
+                        <span>Deep Research</span>
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        {RESEARCH_PROMPTS.map(({ label, prompt, description }) => (
+                          <DropdownMenuItem
+                            key={label}
+                            onClick={() => {
+                              setPrompt(prompt)
+                              setTimeout(() => {
+                                if (textareaRef.current) {
+                                  textareaRef.current.focus()
+                                  const len = textareaRef.current.value.length
+                                  textareaRef.current.setSelectionRange(len, len)
+                                }
+                              }, 0)
+                            }}
+                          >
+                            <div className="flex flex-col gap-0.5">
+                              <span>{label}</span>
+                              <span className="text-[11px] text-muted-foreground">{description}</span>
+                            </div>
                           </DropdownMenuItem>
                         ))}
                       </DropdownMenuSubContent>

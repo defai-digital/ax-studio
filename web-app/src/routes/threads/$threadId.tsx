@@ -79,6 +79,14 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ArtifactPanel } from '@/components/ai-elements/ArtifactPanel'
 import { useArtifactPanel } from '@/hooks/useArtifactPanel'
+import { ResearchPanel } from '@/components/research/ResearchPanel'
+import { useResearchPanel } from '@/hooks/useResearchPanel'
+import { useResearch } from '@/hooks/useResearch'
+
+/** Parse /research[:mode] prefix into a depth number (2=Standard, 3=Deep). */
+function parseResearchDepth(afterCommand: string): 2 | 3 {
+  return /^:(deep|3)\b/i.test(afterCommand) ? 3 : 2
+}
 
 const CHAT_STATUS = {
   STREAMING: 'streaming',
@@ -676,6 +684,11 @@ function ThreadDetail() {
   // Artifact panel — reads from the per-thread pinned state
   const pinnedArtifact = useArtifactPanel((state) => state.pinnedByThread[threadId] ?? null)
   const clearArtifact = useArtifactPanel((state) => state.clearArtifact)
+
+  // Research panel
+  const pinnedResearch = useResearchPanel((s) => s.getPinned(threadId))
+  const clearResearch = useResearchPanel((s) => s.clearResearch)
+  const { startResearch } = useResearch(threadId)
 
   const mainMemorySuffix = useMemo(() => {
     if (!mainMemoryEnabled) return ''
@@ -1287,13 +1300,25 @@ function ThreadDetail() {
             files?: Array<{ type: string; mediaType: string; url: string }>
           }
 
+          // Check for /research command before falling through to normal chat
+          const trimmed = message.text.trimStart()
+          if (trimmed.toLowerCase().startsWith('/research')) {
+            const afterCommand = trimmed.slice('/research'.length)
+            const depth = parseResearchDepth(afterCommand)
+            const query = afterCommand.replace(/^:(standard|deep|[123])?\s*/i, '').trim()
+            if (query) {
+              startResearch(query, depth)
+              return
+            }
+          }
+
           await processAndSendMessage(message.text, message.files)
         } catch (error) {
           console.error('Failed to parse initial message:', error)
         }
       })()
     }
-  }, [threadId, processAndSendMessage])
+  }, [threadId, processAndSendMessage, startResearch])
 
   // Apply thread prompt drafted from the new-chat page
   const threadPromptAppliedRef = useRef(false)
@@ -1321,9 +1346,21 @@ function ThreadDetail() {
       text: string,
       files?: Array<{ type: string; mediaType: string; url: string }>
     ) => {
+      // /research[:mode] <query> — open the Research Panel instead of normal chat
+      // mode is optional: quick | standard (default) | deep
+      const trimmed = text.trimStart()
+      if (trimmed.toLowerCase().startsWith('/research')) {
+        const afterCommand = trimmed.slice('/research'.length)
+        const depth = parseResearchDepth(afterCommand)
+        const query = afterCommand.replace(/^:(standard|deep|[123])?\s*/i, '').trim()
+        if (query) {
+          startResearch(query, depth)
+          return
+        }
+      }
       await processAndSendMessage(text, files)
     },
-    [processAndSendMessage]
+    [processAndSendMessage, startResearch]
   )
 
   // Handle regenerate from any message (user or assistant)
@@ -1831,9 +1868,9 @@ function ThreadDetail() {
             )}
           </div>
         ) : (
-          <div className={pinnedArtifact ? 'grid grid-cols-2 gap-2 px-2 pb-2 h-full' : 'flex flex-1 flex-col h-full overflow-hidden'}>
+          <div className={(pinnedArtifact || pinnedResearch) ? 'grid grid-cols-2 gap-2 px-2 pb-2 h-full' : 'flex flex-1 flex-col h-full overflow-hidden'}>
           {/* Main chat column */}
-          <div className={pinnedArtifact ? 'h-full rounded-md border bg-background overflow-hidden flex flex-col' : 'flex flex-1 flex-col h-full overflow-hidden'}>
+          <div className={(pinnedArtifact || pinnedResearch) ? 'h-full rounded-md border bg-background overflow-hidden flex flex-col' : 'flex flex-1 flex-col h-full overflow-hidden'}>
         <div className="px-4 md:px-8 pb-2 shrink-0">
           <div className="mx-auto w-full md:w-4/5 xl:w-4/6 flex items-center gap-2 min-w-0">
             {threadLogo && (
@@ -1850,7 +1887,7 @@ function ThreadDetail() {
         <div className="flex-1 relative">
           <Conversation className="absolute inset-0 text-start">
             <ConversationContent
-              className={cn(pinnedArtifact ? 'mx-auto w-full px-2' : 'mx-auto w-full md:w-4/5 xl:w-4/6')}
+              className={cn((pinnedArtifact || pinnedResearch) ? 'mx-auto w-full px-2' : 'mx-auto w-full md:w-4/5 xl:w-4/6')}
             >
               {chatMessages.map((message, index) => {
                 const isLastMessage = index === chatMessages.length - 1
@@ -1907,7 +1944,7 @@ function ThreadDetail() {
         </div>
 
         {/* Chat Input - Fixed at bottom */}
-        <div className={pinnedArtifact ? 'p-2' : 'py-4 mx-auto w-full md:w-4/5 xl:w-4/6'}>
+        <div className={(pinnedArtifact || pinnedResearch) ? 'p-2' : 'py-4 mx-auto w-full md:w-4/5 xl:w-4/6'}>
           <ChatInput
             threadId={threadId}
             model={threadModel}
@@ -1917,8 +1954,14 @@ function ThreadDetail() {
           />
         </div>
           </div>
-          {/* Artifact panel — shown in right column when an artifact is pinned */}
-          {pinnedArtifact && (
+          {/* Right panel — Research takes priority over Artifact */}
+          {pinnedResearch && (
+            <ResearchPanel
+              threadId={threadId}
+              onClose={() => clearResearch(threadId)}
+            />
+          )}
+          {!pinnedResearch && pinnedArtifact && (
             <ArtifactPanel
               threadId={threadId}
               onClose={() => clearArtifact(threadId)}

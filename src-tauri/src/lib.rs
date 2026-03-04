@@ -135,6 +135,9 @@ pub fn run() {
         core::code_execution::commands::stop_sandbox,
         core::code_execution::commands::reset_sandbox_session,
         core::code_execution::commands::update_sandbox_url,
+        // Research commands
+        core::research::commands::scrape_url,
+        core::research::commands::web_search,
         // Custom updater commands (desktop only)
         core::updater::commands::check_for_app_updates,
         core::updater::commands::is_update_available,
@@ -228,6 +231,9 @@ pub fn run() {
         core::code_execution::commands::stop_sandbox,
         core::code_execution::commands::reset_sandbox_session,
         core::code_execution::commands::update_sandbox_url,
+        // Research commands
+        core::research::commands::scrape_url,
+        core::research::commands::web_search,
     ]);
 
     let app = app_builder
