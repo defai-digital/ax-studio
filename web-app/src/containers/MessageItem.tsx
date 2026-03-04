@@ -42,6 +42,7 @@ export type MessageItemProps = {
   isFirstMessage: boolean
   isLastMessage: boolean
   status: ChatStatus
+  threadId?: string
   reasoningContainerRef?: React.RefObject<HTMLDivElement | null>
   onRegenerate?: (messageId: string) => void
   onEdit?: (messageId: string, newText: string) => void
@@ -55,6 +56,7 @@ export const MessageItem = memo(
     message,
     isLastMessage,
     status,
+    threadId,
     reasoningContainerRef,
     onRegenerate,
     onEdit,
@@ -185,6 +187,7 @@ export const MessageItem = memo(
                 content={part.text}
                 isStreaming={isStreaming && isLastPart}
                 messageId={message.id}
+                threadId={threadId}
               />
             </>
           )}
@@ -296,7 +299,13 @@ export const MessageItem = memo(
       // generate_diagram: render the diagram inline via the Mermaid pipeline
       // instead of showing a JSON tool card
       if (toolName === 'generate_diagram') {
-        const source: string = part.output?.source ?? ''
+        // Strip fence markers if the model returned them inside the source field
+        // (double-fencing causes a parse error: ```mermaid\n```mermaid\n...\n```)
+        const rawSource: string = part.output?.source ?? ''
+        const source = rawSource
+          .replace(/^```mermaid\s*/i, '')
+          .replace(/```\s*$/, '')
+          .trim()
         const title: string = part.output?.title ?? ''
         if (source) {
           return (
@@ -313,15 +322,9 @@ export const MessageItem = memo(
             </div>
           )
         }
-        // While streaming (source not yet available) show a slim loading state
-        return (
-          <div
-            key={`${message.id}-${partIndex}`}
-            className="mb-2 text-xs text-muted-foreground animate-pulse"
-          >
-            Generating diagram…
-          </div>
-        )
+        // Tool call in progress — source not yet available, render nothing.
+        // The diagram will appear as soon as the tool output resolves.
+        return null
       }
 
       return (

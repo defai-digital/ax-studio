@@ -11,6 +11,8 @@ import 'katex/dist/katex.min.css'
 import { MermaidError } from '@/components/MermaidError'
 import { useTheme } from '@/hooks/useTheme'
 import { PythonCodeBlock } from '@/components/ai-elements/PythonCodeBlock'
+import { ArtifactBlock } from '@/components/ai-elements/ArtifactBlock'
+import type { ArtifactType } from '@/lib/artifact-harness'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Components = any
@@ -47,28 +49,49 @@ function sanitizeMermaidFences(input: string): string {
   // Characters that break Mermaid's parser inside unquoted [ ] labels
   const UNSAFE = /['()|<>]/
 
-  return input.replace(
+  // Step 1: Close any mermaid fence that was truncated (model ran out of tokens
+  // mid-response). Split on ```mermaid — if the last segment has no closing ```
+  // the model stopped mid-fence; append one so the regex below can match it.
+  let text = input
+  const mermaidParts = text.split('```mermaid')
+  if (mermaidParts.length > 1) {
+    const last = mermaidParts[mermaidParts.length - 1]
+    if (!last.includes('```')) {
+      mermaidParts[mermaidParts.length - 1] = last.trimEnd() + '\n```'
+      text = mermaidParts.join('```mermaid')
+    }
+  }
+
+  // Step 2: Process every (now properly closed) mermaid fence.
+  return text.replace(
     /(```mermaid\n)([\s\S]*?)(```)/g,
     (_full, open, body: string, close) => {
-      let fixed = body
+      let fixed = body.trimStart()
+
+      // Fix 1: strip any nested ```mermaid fence that the model put inside the source
+      fixed = fixed.replace(/^```mermaid\s*/i, '').replace(/```\s*$/, '').trimStart()
+
+      // Fix 2: bare "flowchart" with no direction → add TD
+      fixed = fixed.replace(/^(flowchart)\s*$/im, 'flowchart TD')
+
+      // Fix 3: quote unquoted [ ] labels that contain special characters
+      fixed = fixed
         .split('\n')
         .map((line) =>
           line.replace(
-            // Unquoted [label] — not already starting with " or a shape specifier
             /\[(?!["[/\\(>])([^\]\n"]+)\]/g,
             (_m, inner) => {
-              if (!UNSAFE.test(inner)) return _m   // safe — leave unchanged
-              // Escape any stray double-quotes inside the label before wrapping
+              if (!UNSAFE.test(inner)) return _m
               return `["${inner.replace(/"/g, '\\"')}"]`
             }
           )
         )
         .join('\n')
 
-      // Fix unclosed class/struct bodies in classDiagram (EOF_IN_STRUCT error).
-      // Count unmatched { braces and append the missing closing braces.
+      // Fix 4: close unclosed class bodies in classDiagram (EOF_IN_STRUCT error).
+      // Count unmatched { } braces and append the missing closing braces.
       const firstLine = fixed.trimStart().split('\n')[0] ?? ''
-      if (/^\s*class(Diagram)?\b/i.test(firstLine)) {
+      if (/^classDiagram\b/i.test(firstLine)) {
         const opens = (fixed.match(/\{/g) ?? []).length
         const closes = (fixed.match(/\}/g) ?? []).length
         if (opens > closes) {
@@ -192,6 +215,38 @@ function getPythonCode(preNode: unknown): string | null {
   return looksLikePython ? code : null
 }
 
+const ARTIFACT_LANG_RE = /^language-artifact-(html|react|svg|chartjs|vega)$/i
+
+/**
+ * If a HAST pre node wraps an artifact code block, returns the type and source.
+ * Returns null otherwise.
+ */
+function getArtifactInfo(preNode: unknown): { type: ArtifactType; source: string } | null {
+  if (!preNode || typeof preNode !== 'object') return null
+  const node = preNode as Record<string, unknown>
+  const children = node.children as unknown[] | undefined
+  if (!Array.isArray(children) || children.length === 0) return null
+
+  const codeEl = children[0] as Record<string, unknown>
+  if (!codeEl || codeEl.tagName !== 'code') return null
+
+  const props = codeEl.properties as Record<string, unknown> | undefined
+  const classes = props?.className
+  if (!Array.isArray(classes)) return null
+
+  const match = classes
+    .filter((c): c is string => typeof c === 'string')
+    .map((c) => ARTIFACT_LANG_RE.exec(c))
+    .find(Boolean)
+
+  if (!match) return null
+
+  return {
+    type: match[1].toLowerCase() as ArtifactType,
+    source: extractHastText(codeEl),
+  }
+}
+
 function RenderMarkdownComponent({
   content,
   className,
@@ -224,6 +279,20 @@ function RenderMarkdownComponent({
     () =>
       ({ node, children }: { node?: unknown; children?: ReactNode }) => {
         if (!isUser && !isStreaming) {
+          // Artifact blocks take precedence over Python detection
+          const artifactInfo = getArtifactInfo(node)
+          if (artifactInfo !== null) {
+            return (
+              <ArtifactBlock
+                type={artifactInfo.type}
+                source={artifactInfo.source}
+                threadId={threadId ?? messageId}
+              >
+                {children}
+              </ArtifactBlock>
+            )
+          }
+
           const pythonCode = getPythonCode(node)
           if (pythonCode !== null) {
             return (
@@ -233,7 +302,7 @@ function RenderMarkdownComponent({
         }
         return <>{children}</>
       },
-    [isUser, isStreaming, threadId]
+    [isUser, isStreaming, threadId, messageId]
   )
 
   // Merge our pre override with any caller-supplied components.

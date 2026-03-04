@@ -141,13 +141,15 @@ export const getOptimizedModelConfig = (
   }
 
   // --- max_output_tokens ---
-  let targetTokens = 1200
+  // Base is 4096 — enough for a complete artifact or code block.
+  // 1200 was too low and truncated model output mid-generation.
+  let targetTokens = 4096
   if (isReasoning) {
-    targetTokens = 4096
+    targetTokens = 8192
   } else if (context.promptLength >= 2000 || context.hasAttachments) {
-    targetTokens = 2048
+    targetTokens = 6144
   } else if (context.promptLength >= 800) {
-    targetTokens = 1800
+    targetTokens = 4096
   }
 
   if (optimized.max_output_tokens == null) {
@@ -188,11 +190,40 @@ Rules:
 - Import libraries at the top of the code block (matplotlib, pandas, numpy, seaborn are available)
 - Keep code self-contained — define all data inside the block`
 
+/**
+ * Appended to every resolved system prompt alongside DIAGRAM_FORMAT_INSTRUCTION
+ * and CODE_EXECUTION_INSTRUCTION. Instructs the model to wrap self-contained,
+ * interactive outputs in artifact fences so the UI can render them in a preview pane.
+ */
+export const ARTIFACT_FORMAT_INSTRUCTION = `
+
+## Artifacts
+
+When generating a **self-contained, renderable output** that the user can interact with visually, wrap it in a fenced code block using one of these language identifiers:
+
+| Output type         | Fence identifier      |
+|---------------------|-----------------------|
+| HTML page/component | \`\`\`artifact-html   |
+| React component     | \`\`\`artifact-react  |
+| SVG graphic         | \`\`\`artifact-svg      |
+| Chart.js chart      | \`\`\`artifact-chartjs  |
+| Vega-Lite chart     | \`\`\`artifact-vega     |
+
+Rules:
+- Use artifacts for complete, standalone outputs — landing pages, interactive demos, data visualizations, SVG illustrations.
+- Do NOT use artifact fences for code examples, snippets, or partial code — only complete, immediately renderable output.
+- React artifacts must define a function component named \`App\` (e.g. \`function App() { ... }\`).
+- SVG artifacts must be a single \`<svg>\` element with a \`viewBox\` attribute.
+- Chart.js artifacts (\`artifact-chartjs\`) must be a valid Chart.js v4 config object (JSON with a \`type\` and \`data\` property). Callback functions in \`options\` are allowed.
+- Vega-Lite artifacts (\`artifact-vega\`) must be a valid Vega-Lite v5 JSON spec (with \`$schema\`, \`data\`, and \`mark\` or \`layer\`/\`hconcat\`/\`vconcat\`).
+- When asked to fix or update an artifact, always output the full updated version in a new artifact block.
+- Keep artifacts self-contained — inline all styles, use no external imports beyond the available runtime (React 18, Chart.js 4, Vega-Lite 5, standard HTML/CSS/JS).`
+
 export const buildChatPromptInjection = (
   resolved: ResolvedSystemPrompt
 ): ChatPromptInjection => {
   return {
-    systemMessage: resolved.resolvedPrompt + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION,
+    systemMessage: resolved.resolvedPrompt + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION + ARTIFACT_FORMAT_INSTRUCTION,
   }
 }
 

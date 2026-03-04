@@ -69,6 +69,7 @@ import {
   resolveSystemPrompt,
   DIAGRAM_FORMAT_INSTRUCTION,
   CODE_EXECUTION_INSTRUCTION,
+  ARTIFACT_FORMAT_INSTRUCTION,
 } from '@/lib/system-prompt'
 import {
   DropdownMenu,
@@ -76,6 +77,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { ArtifactPanel } from '@/components/ai-elements/ArtifactPanel'
+import { useArtifactPanel } from '@/hooks/useArtifactPanel'
 
 const CHAT_STATUS = {
   STREAMING: 'streaming',
@@ -190,7 +193,7 @@ function SplitThreadPane({
   } = useChat({
     sessionId: threadId,
     sessionTitle: thread?.title,
-    systemMessage: promptResolution.resolvedPrompt + memorySuffix + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION,
+    systemMessage: promptResolution.resolvedPrompt + memorySuffix + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION + ARTIFACT_FORMAT_INSTRUCTION,
     modelOverrideId: optimizedModelConfig.modelId,
     inferenceParameters: {
       temperature: optimizedModelConfig.temperature,
@@ -536,6 +539,7 @@ function SplitThreadPane({
                   isFirstMessage={isFirstMessage}
                   isLastMessage={isLastMessage}
                   status={status}
+                  threadId={threadId}
                   reasoningContainerRef={reasoningContainerRef}
                   onRegenerate={handleRegenerate}
                   onDelete={(messageId) => {
@@ -669,6 +673,10 @@ function ThreadDetail() {
     return null
   })
 
+  // Artifact panel — reads from the per-thread pinned state
+  const pinnedArtifact = useArtifactPanel((state) => state.pinnedByThread[threadId] ?? null)
+  const clearArtifact = useArtifactPanel((state) => state.clearArtifact)
+
   const mainMemorySuffix = useMemo(() => {
     if (!mainMemoryEnabled) return ''
     const memories = useMemory.getState().getMemories('default')
@@ -747,7 +755,7 @@ function ThreadDetail() {
   } = useChat({
     sessionId: threadId,
     sessionTitle: thread?.title,
-    systemMessage: promptResolution.resolvedPrompt + mainMemorySuffix + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION,
+    systemMessage: promptResolution.resolvedPrompt + mainMemorySuffix + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION + ARTIFACT_FORMAT_INSTRUCTION,
     modelOverrideId: optimizedModelConfig.modelId,
     inferenceParameters: {
       temperature: optimizedModelConfig.temperature,
@@ -1786,6 +1794,7 @@ function ThreadDetail() {
                                 isFirstMessage={isFirstMessage}
                                 isLastMessage={isLastMessage}
                                 status={status}
+                                threadId={threadId}
                                 reasoningContainerRef={reasoningContainerRef}
                                 onRegenerate={handleRegenerate}
                                 onEdit={handleEditMessage}
@@ -1822,7 +1831,9 @@ function ThreadDetail() {
             )}
           </div>
         ) : (
-          <>
+          <div className={pinnedArtifact ? 'grid grid-cols-2 gap-2 px-2 pb-2 h-full' : 'flex flex-1 flex-col h-full overflow-hidden'}>
+          {/* Main chat column */}
+          <div className={pinnedArtifact ? 'h-full rounded-md border bg-background overflow-hidden flex flex-col' : 'flex flex-1 flex-col h-full overflow-hidden'}>
         <div className="px-4 md:px-8 pb-2 shrink-0">
           <div className="mx-auto w-full md:w-4/5 xl:w-4/6 flex items-center gap-2 min-w-0">
             {threadLogo && (
@@ -1839,7 +1850,7 @@ function ThreadDetail() {
         <div className="flex-1 relative">
           <Conversation className="absolute inset-0 text-start">
             <ConversationContent
-              className={cn('mx-auto w-full md:w-4/5 xl:w-4/6')}
+              className={cn(pinnedArtifact ? 'mx-auto w-full px-2' : 'mx-auto w-full md:w-4/5 xl:w-4/6')}
             >
               {chatMessages.map((message, index) => {
                 const isLastMessage = index === chatMessages.length - 1
@@ -1851,6 +1862,7 @@ function ThreadDetail() {
                     isFirstMessage={isFirstMessage}
                     isLastMessage={isLastMessage}
                     status={status}
+                    threadId={threadId}
                     reasoningContainerRef={reasoningContainerRef}
                     onRegenerate={handleRegenerate}
                     onEdit={handleEditMessage}
@@ -1895,7 +1907,7 @@ function ThreadDetail() {
         </div>
 
         {/* Chat Input - Fixed at bottom */}
-        <div className="py-4 mx-auto w-full md:w-4/5 xl:w-4/6">
+        <div className={pinnedArtifact ? 'p-2' : 'py-4 mx-auto w-full md:w-4/5 xl:w-4/6'}>
           <ChatInput
             threadId={threadId}
             model={threadModel}
@@ -1904,7 +1916,15 @@ function ThreadDetail() {
             chatStatus={status}
           />
         </div>
-          </>
+          </div>
+          {/* Artifact panel — shown in right column when an artifact is pinned */}
+          {pinnedArtifact && (
+            <ArtifactPanel
+              threadId={threadId}
+              onClose={() => clearArtifact(threadId)}
+            />
+          )}
+          </div>
         )}
       </div>
     </div>
