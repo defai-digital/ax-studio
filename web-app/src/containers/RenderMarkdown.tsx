@@ -12,6 +12,7 @@ import { MermaidError } from '@/components/MermaidError'
 import { useTheme } from '@/hooks/useTheme'
 import { PythonCodeBlock } from '@/components/ai-elements/PythonCodeBlock'
 import { ArtifactBlock } from '@/components/ai-elements/ArtifactBlock'
+import { RenderableCodeBlock } from '@/components/ai-elements/RenderableCodeBlock'
 import type { ArtifactType } from '@/lib/artifact-harness'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -217,8 +218,19 @@ function getPythonCode(preNode: unknown): string | null {
 
 const ARTIFACT_LANG_RE = /^language-artifact-(html|react|svg|chartjs|vega)$/i
 
+// Plain language classes that can be promoted to artifacts via the Render button
+// Maps Streamdown class name → ArtifactType
+const RENDERABLE_LANG_MAP: Record<string, ArtifactType> = {
+  'language-html': 'html',
+  'language-jsx': 'react',
+  'language-tsx': 'react',
+  'language-react': 'react',
+  'language-svg': 'svg',
+}
+
 /**
- * If a HAST pre node wraps an artifact code block, returns the type and source.
+ * If a HAST pre node wraps an artifact code block (explicit artifact-* fence,
+ * or a full HTML document in a plain ```html block), returns the type and source.
  * Returns null otherwise.
  */
 function getArtifactInfo(preNode: unknown): { type: ArtifactType; source: string } | null {
@@ -234,17 +246,53 @@ function getArtifactInfo(preNode: unknown): { type: ArtifactType; source: string
   const classes = props?.className
   if (!Array.isArray(classes)) return null
 
-  const match = classes
-    .filter((c): c is string => typeof c === 'string')
-    .map((c) => ARTIFACT_LANG_RE.exec(c))
-    .find(Boolean)
+  const strClasses = classes.filter((c): c is string => typeof c === 'string')
 
-  if (!match) return null
-
-  return {
-    type: match[1].toLowerCase() as ArtifactType,
-    source: extractHastText(codeEl),
+  // 1. Explicit artifact-* fence
+  const match = strClasses.map((c) => ARTIFACT_LANG_RE.exec(c)).find(Boolean)
+  if (match) {
+    return { type: match[1].toLowerCase() as ArtifactType, source: extractHastText(codeEl) }
   }
+
+  // 2. Auto-detect full HTML documents in plain ```html blocks
+  const isHtml = strClasses.some((c) => c === 'language-html')
+  if (isHtml) {
+    const source = extractHastText(codeEl)
+    if (/^<!DOCTYPE\s+html|^<html/i.test(source.trim())) {
+      return { type: 'html', source }
+    }
+  }
+
+  return null
+}
+
+/**
+ * If a HAST pre node wraps a plain html/jsx/tsx/svg block (not already an
+ * artifact), returns the type and source so a Render button can be shown.
+ * Returns null if it's already handled by getArtifactInfo or is not renderable.
+ */
+function getRenderableInfo(preNode: unknown): { type: ArtifactType; source: string } | null {
+  if (!preNode || typeof preNode !== 'object') return null
+  const node = preNode as Record<string, unknown>
+  const children = node.children as unknown[] | undefined
+  if (!Array.isArray(children) || children.length === 0) return null
+
+  const codeEl = children[0] as Record<string, unknown>
+  if (!codeEl || codeEl.tagName !== 'code') return null
+
+  const props = codeEl.properties as Record<string, unknown> | undefined
+  const classes = props?.className
+  if (!Array.isArray(classes)) return null
+
+  const strClasses = classes.filter((c): c is string => typeof c === 'string')
+
+  for (const cls of strClasses) {
+    const type = RENDERABLE_LANG_MAP[cls]
+    if (type) {
+      return { type, source: extractHastText(codeEl) }
+    }
+  }
+  return null
 }
 
 function RenderMarkdownComponent({
@@ -279,7 +327,7 @@ function RenderMarkdownComponent({
     () =>
       ({ node, children }: { node?: unknown; children?: ReactNode }) => {
         if (!isUser && !isStreaming) {
-          // Artifact blocks take precedence over Python detection
+          // 1. Explicit artifact-* fences + auto-detected full HTML docs
           const artifactInfo = getArtifactInfo(node)
           if (artifactInfo !== null) {
             return (
@@ -293,6 +341,21 @@ function RenderMarkdownComponent({
             )
           }
 
+          // 2. Plain html/jsx/tsx/svg blocks — show a Render button on hover
+          const renderableInfo = getRenderableInfo(node)
+          if (renderableInfo !== null) {
+            return (
+              <RenderableCodeBlock
+                type={renderableInfo.type}
+                source={renderableInfo.source}
+                threadId={threadId ?? messageId}
+              >
+                {children}
+              </RenderableCodeBlock>
+            )
+          }
+
+          // 3. Python blocks
           const pythonCode = getPythonCode(node)
           if (pythonCode !== null) {
             return (

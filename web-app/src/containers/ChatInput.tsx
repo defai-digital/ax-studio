@@ -18,7 +18,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu'
-import { ArrowRight, PlusIcon } from 'lucide-react'
+import { ArrowRight, PlusIcon, AppWindowIcon } from 'lucide-react'
 import {
   IconPhoto,
   IconAtom,
@@ -100,6 +100,14 @@ type ChatInputProps = {
   onStop?: () => void
   chatStatus?: ChatStatus
 }
+
+const ARTIFACT_PROMPTS = [
+  { label: 'HTML Page',        prompt: 'Build an artifact-html page for '            },
+  { label: 'React Component',  prompt: 'Build an artifact-react component for '      },
+  { label: 'SVG Graphic',      prompt: 'Create an artifact-svg illustration of '     },
+  { label: 'Chart.js Chart',   prompt: 'Create an artifact-chartjs chart showing '   },
+  { label: 'Vega-Lite Chart',  prompt: 'Create an artifact-vega chart showing '      },
+] as const
 
 const DIAGRAM_PROMPTS = [
   { label: 'Flowchart',        prompt: 'Draw a flowchart for '                        },
@@ -1566,6 +1574,32 @@ const ChatInput = memo(function ChatInput({
                         </DropdownMenuSubContent>
                       </DropdownMenuSub>
                     )}
+                    {/* Generate Artifact quick-prompt */}
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger>
+                        <AppWindowIcon size={18} className="text-muted-foreground" />
+                        <span>Generate Artifact</span>
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        {ARTIFACT_PROMPTS.map(({ label, prompt }) => (
+                          <DropdownMenuItem
+                            key={label}
+                            onClick={() => {
+                              setPrompt(prompt)
+                              setTimeout(() => {
+                                if (textareaRef.current) {
+                                  textareaRef.current.focus()
+                                  const len = textareaRef.current.value.length
+                                  textareaRef.current.setSelectionRange(len, len)
+                                }
+                              }, 0)
+                            }}
+                          >
+                            <span>{label}</span>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
                     {/* Generate Diagram quick-prompt */}
                     <DropdownMenuSub>
                       <DropdownMenuSubTrigger>
