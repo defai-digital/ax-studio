@@ -1,137 +1,88 @@
 # Contributing to Ax-Fabric Extensions
 
-[← Back to Main Contributing Guide](../CONTRIBUTING.md)
-
-Extensions add specific features to Ax-Fabric as self-contained modules.
+Ax-Fabric extensions are self-contained modules that add features to the application (e.g., chat persistence, model downloading, specific AI assistants). Extensions are written in TypeScript and leverage the `@ax-fabric/core` SDK.
 
 ## Current Extensions
 
-### `/assistant-extension`
-- Assistant CRUD operations
-- `src/index.ts` - Main implementation
+- **`assistant-extension/`**: CRUD operations for AI assistants.
+- **`conversational-extension/`**: Logic for managing threads and messages.
+- **`download-extension/`**: Downloads models from HuggingFace with progress tracking.
+- **`llamacpp-extension/`**: Local model inference via `llama.cpp`.
 
-### `/conversational-extension` 
-- Message handling, conversation state
-- `src/index.ts` - Chat logic
+## Quick Start: "Hello World" Extension
 
-### `/download-extension`
-- Model downloads with progress tracking
-- `src/index.ts` - Download logic
-- `settings.json` - Download settings
-
-### `/llamacpp-extension`
-- Local model inference via llama.cpp
-- `src/index.ts` - Entry point
-- `src/backend.ts` - llama.cpp integration
-- `settings.json` - Model settings
-
-## Creating Extensions
-
-### Setup
-
+### 1. Create the Directory
 ```bash
-mkdir my-extension
-cd my-extension  
+mkdir extensions/hello-world
+cd extensions/hello-world
 yarn init
 ```
 
-### Structure
-
+### 2. Configure `package.json`
+Ensure your `package.json` follows this format:
+```json
+{
+  "name": "@ax-fabric/hello-world",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "dependencies": {
+    "@ax-fabric/core": "../../core/package.tgz"
+  },
+  "scripts": {
+    "build": "rolldown -c rolldown.config.mjs"
+  }
+}
 ```
-my-extension/
-├── package.json
-├── rolldown.config.mjs
-├── src/index.ts
-└── settings.json (optional)
-```
 
-### Basic Extension
-
+### 3. Implement `src/index.ts`
 ```typescript
-import { Extension } from '@ax-fabric/core'
+import { BaseExtension } from '@ax-fabric/core';
 
-export default class MyExtension extends Extension {
+export default class HelloWorld extends BaseExtension {
   async onLoad() {
-    // Extension initialization
+    console.log('Hello world extension loaded!');
+    
+    // Register a simple command that can be called from the UI
+    this.registerService('greet', {
+      sayHi: async (name: string) => `Hello, ${name}!`
+    });
   }
-  
+
   async onUnload() {
-    // Cleanup
+    console.log('Hello world extension unloaded');
   }
 }
 ```
 
-## Building & Testing
-
+### 4. Build and Install
 ```bash
-# Build extension
 yarn build
-
-# Run tests
-yarn test
+# This creates a .tgz file. Install it in Ax-Fabric via Settings > Extensions.
 ```
 
-## Common Patterns
+## Build & Publish Flow
 
-### Service Registration
-```typescript
-async onLoad() {
-  this.registerService('myService', {
-    doSomething: async () => 'result'
-  })
-}
-```
+The extension build process involves:
+1.  **TypeScript Compilation**: Transpiles `.ts` to `.js`.
+2.  **Bundling**: Uses [Rolldown](https://rolldown.rs/) to bundle code into a single `dist/index.js` file.
+3.  **Packing**: `npm pack` creates a `.tgz` file (e.g., `ax-fabric-hello-world-v1.0.0.tgz`).
+4.  **Publishing**: The `.tgz` is moved to the root `pre-install/` directory, where the main app can load it on startup.
 
-### Event Handling  
-```typescript
-async onLoad() {
-  this.on('model:loaded', (model) => {
-    console.log('Model loaded:', model.id)
-  })
-}
-```
-
-## Extension Lifecycle
-
-1. **Ax-Fabric starts** → Discovers extensions
-2. **Loading** → Calls `onLoad()` method  
-3. **Active** → Extension responds to events
-4. **Unloading** → Calls `onUnload()` on shutdown
-
-## Debugging Extensions
-
+### Makefile Helpers
+Use the root `Makefile` to build all extensions at once:
 ```bash
-# Check if extension loaded
-console.log(window.core.extensions)
-
-# Debug extension events
-this.on('*', console.log)
-
-# Check extension services
-console.log(window.core.api)
+make build-extensions
 ```
-
-## Common Issues
-
-**Extension not loading?**
-- Check package.json format: `@ax-fabric/extension-name`
-- Ensure `onLoad()` doesn't throw errors
-- Verify exports in index.ts
-
-**Events not working?**
-- Check event name spelling
-- Ensure listeners are set up in `onLoad()`
 
 ## Best Practices
 
-- Keep extensions focused on one feature
-- Use async/await for all operations
-- Clean up resources in onUnload()
-- Handle errors gracefully
-- Don't depend on other extensions
+- **Resource Management**: Always clean up event listeners and timers in `onUnload()`.
+- **Async Operations**: All extension hooks (`onLoad`, `onUnload`) are `async`. Use `await` for I/O.
+- **Isolation**: Don't rely on other extensions unless strictly necessary. Communicate via events.
+- **Testing**: Add a `test/` directory and use Vitest to verify extension logic in isolation.
 
-## Dependencies
+## Common Issues
 
-- **@ax-fabric/core** - Core SDK and extension system
-- **TypeScript** - Type safety
-- **Rolldown** - Bundling
+- **Extension Not Loading**: Check the browser console (Ctrl+Shift+I) for errors during `onLoad()`.
+- **Typing Errors**: Ensure `@ax-fabric/core` is correctly linked in your `package.json`.
+- **Stale Builds**: Run `make clean` to remove old `.tgz` files before rebuilding.

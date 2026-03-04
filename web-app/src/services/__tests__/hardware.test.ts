@@ -190,7 +190,6 @@ describe('TauriHardwareService', () => {
       const gpuData = { gpus: [0, 1, 2] }
 
       await hardwareService.setActiveGpus(gpuData)
-
       expect(consoleSpy).toHaveBeenCalledWith(gpuData)
     })
 
