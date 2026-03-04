@@ -131,6 +131,14 @@ export function buildReactHarness(source: string, baseUrl: string): string {
 <body>
   <div id="root"></div>
   <script type="text/babel" data-presets="react">
+// Make all common React APIs available as globals so models can use
+// destructured hooks (useState, useEffect, etc.) without imports.
+const {
+  useState, useEffect, useCallback, useMemo, useRef,
+  useContext, useReducer, createContext, forwardRef, memo,
+  Fragment, Children, cloneElement, createElement, isValidElement,
+} = React;
+
 try {
 ${escapedSource}
 
