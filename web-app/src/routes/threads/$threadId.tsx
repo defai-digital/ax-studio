@@ -102,6 +102,9 @@ function SplitThreadPane({
 }) {
   const serviceHub = useServiceHub()
   const thread = useThreads(useShallow((state) => state.threads[threadId]))
+  const splitPinnedResearch = useResearchPanel((s) => s.getPinned(threadId))
+  const clearResearch = useResearchPanel((s) => s.clearResearch)
+  const { startResearch } = useResearch(threadId)
   const renameThread = useThreads((state) => state.renameThread)
   const updateThread = useThreads((state) => state.updateThread)
   const setMessages = useMessages((state) => state.setMessages)
@@ -342,6 +345,17 @@ function SplitThreadPane({
     const normalizedText = text.trim()
     lastUserInputRef.current = normalizedText
 
+    // Handle /research command
+    if (normalizedText.startsWith('/research')) {
+      const afterCommand = normalizedText.slice('/research'.length)
+      const depth = parseResearchDepth(afterCommand)
+      const query = afterCommand.replace(/^:(standard|deep|[123])?\s*/i, '').trim()
+      if (query) {
+        startResearch(query, depth)
+        return
+      }
+    }
+
     // Handle /remember command
     if (normalizedText.startsWith('/remember ')) {
       const fact = normalizedText.slice('/remember '.length).trim()
@@ -450,7 +464,12 @@ function SplitThreadPane({
   }
 
   return (
-    <div className="h-full rounded-md border bg-background flex flex-col overflow-hidden">
+    <div className="h-full rounded-md border bg-background flex flex-col overflow-hidden relative">
+      {splitPinnedResearch && (
+        <div className="absolute inset-0 z-10 flex flex-col bg-background">
+          <ResearchPanel threadId={threadId} onClose={() => clearResearch(threadId)} />
+        </div>
+      )}
       <div className="px-3 py-2 border-b text-sm font-medium truncate flex items-center justify-between gap-2">        
         <div className="flex items-center gap-2 min-w-0">
           {paneLogo && (
