@@ -6,6 +6,9 @@ import { useMessages } from './useMessages'
 import { useModelProvider } from './useModelProvider'
 import { ModelFactory } from '@/lib/model-factory'
 import { newUserThreadContent, newAssistantThreadContent } from '@/lib/completion'
+import { useChatSessions } from '@/stores/chat-session-store'
+import { convertThreadMessageToUIMessage } from '@/lib/messages'
+import type { ThreadMessage } from '@ax-fabric/core'
 import {
   PLANNER_PROMPT,
   SUMMARISE_PROMPT,
@@ -245,11 +248,6 @@ function parseDrillDown(json: string): string[] {
   return result.slice(0, 2)
 }
 
-export const __researchTestUtils = {
-  isExaRateLimitError,
-  isExaRateLimitMessage,
-}
-
 // ---------------------------------------------------------------------------
 // Free web search via SearXNG (Rust backend — no CORS, no API key)
 // ---------------------------------------------------------------------------
@@ -322,7 +320,25 @@ async function scrapeWithTimeout(url: string, signal: AbortSignal, ms = 8000): P
     new Promise<string>((_, reject) =>
       setTimeout(() => reject(new Error('scrape timeout')), ms)
     ),
+    // Resolves immediately when cancel is clicked — doesn't wait for the scrape
+    new Promise<string>((_, reject) => {
+      if (signal.aborted) return reject(new DOMException('Aborted', 'AbortError'))
+      signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true })
+    }),
   ]).catch(() => '')
+}
+
+// Save to both the persistent store AND the live chat UI so the message
+// appears immediately without needing to navigate away and back.
+function saveMessageToChat(threadId: string, msg: ThreadMessage) {
+  useMessages.getState().addMessage(msg)
+  const session = useChatSessions.getState().sessions[threadId]
+  if (session) {
+    const uiMsg = convertThreadMessageToUIMessage(msg)
+    if (uiMsg) {
+      session.chat.messages = [...session.chat.messages, uiMsg]
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -367,7 +383,7 @@ export function useResearch(threadId: string) {
 
       // Save user query to chat history so the thread records what was researched
       const depthLabel = depth === 3 ? 'Deep' : 'Standard'
-      useMessages.getState().addMessage({
+      saveMessageToChat(threadId, {
         ...newUserThreadContent(threadId, `🔍 **Research (${depthLabel}):** ${query}`),
         created_at: Date.now(),
         completed_at: Date.now(),
@@ -376,10 +392,12 @@ export function useResearch(threadId: string) {
       // Reset the sequential gate so stale chains from a previous run don't delay us
       exaGatePromise = Promise.resolve()
 
-      // breadth = number of top-level sub-questions
+      // breadth   = number of top-level sub-questions
       // numResults = results fetched per search call
-      const breadth = depth === 1 ? 4 : depth === 2 ? 5 : 6
-      const numResults = depth === 1 ? 6 : depth === 2 ? 8 : 10
+      // scrapeTop  = max pages to scrape+summarise per sub-question (rest use snippet)
+      const breadth    = depth === 2 ? 3 : 4
+      const numResults = depth === 2 ? 5 : 6
+      const scrapeTop  = depth === 2 ? 3 : 4
       const allSources: ResearchSource[] = []
       let exaUnavailableForRun = false
 
@@ -543,38 +561,46 @@ export function useResearch(threadId: string) {
             }
           }
 
+          // Scrape top N pages in parallel (instead of sequential) then summarise
+          addStep({ type: 'scraping', message: `Fetching ${Math.min(results.length, scrapeTop)} pages…` })
+          const pages = await Promise.all(
+            results.slice(0, scrapeTop).map(async (r) => {
+              let text = r.snippet || r.title || ''
+              if (depth > 1) {
+                const scraped = await scrapeWithTimeout(r.url, signal)
+                if (scraped.length > 100) text = scraped
+              }
+              return { r, text }
+            })
+          )
+          if (signal.aborted) return []
+
           const validSummaries: string[] = []
-          for (const r of results) {
+          for (const { r, text } of pages) {
             if (signal.aborted) break
-            addStep({ type: 'scraping', message: `Scraping: ${r.title || r.url}` })
-            let pageText = r.snippet || r.title || ''
-            if (depth > 1) {
-              const scraped = await scrapeWithTimeout(r.url, signal)
-              if (scraped.length > 100) pageText = scraped
-            }
             addStep({ type: 'summarising', message: `Summarising: ${r.title || r.url}` })
             try {
               const { text: summary } = await generateText({
                 model,
-                messages: [{ role: 'user', content: SUMMARISE_PROMPT(question, pageText) }],
+                messages: [{ role: 'user', content: SUMMARISE_PROMPT(question, text) }],
                 abortSignal: signal,
               })
               validSummaries.push(`Source: ${r.url}\n${summary}`)
             } catch (err) {
               if ((err as Error).name === 'AbortError') throw err
-              validSummaries.push(`Source: ${r.url}\n${pageText.slice(0, 500)}`)
+              validSummaries.push(`Source: ${r.url}\n${text.slice(0, 500)}`)
             }
           }
 
-          // 3. Drill down with 2 follow-up questions for deeper coverage
-          if (currentDepth > 1 && !signal.aborted) {
+          // 3. Drill down — Deep mode only, 1 follow-up to avoid ballooning time
+          if (depth === 3 && currentDepth > 1 && !signal.aborted) {
             try {
               const { text: drillJson } = await generateText({
                 model,
                 messages: [{ role: 'user', content: DRILL_DOWN_PROMPT(question, validSummaries) }],
                 abortSignal: signal,
               })
-              const followUps = parseDrillDown(drillJson) // up to 2 follow-ups
+              const followUps = parseDrillDown(drillJson).slice(0, 1)
               for (const followUp of followUps) {
                 if (signal.aborted) break
                 const childSummaries = await researchNode(followUp, currentDepth - 1)
@@ -600,13 +626,26 @@ export function useResearch(threadId: string) {
         const subQuestions = parsePlan(planJson)
 
         // ----------------------------------------------------------------
-        // Research phase — sequential to stay within Exa rate limits
+        // Research phase — sequential; early-stop once enough info gathered
         // ----------------------------------------------------------------
+        // Always run at least 2 sub-questions, then stop if we have enough.
+        const ENOUGH_CHARS   = depth === 2 ? 8000 : 12000
+        const ENOUGH_SOURCES = depth === 2 ? 5    : 8
+
         const context: string[] = []
+        let completed = 0
         for (const q of subQuestions) {
           if (signal.aborted) break
           const summaries = await researchNode(q, depth)
           context.push(...summaries)
+          completed++
+          if (completed >= 2) {
+            const totalChars = context.reduce((n, s) => n + s.length, 0)
+            if (allSources.length >= ENOUGH_SOURCES && totalChars >= ENOUGH_CHARS) {
+              addStep({ type: 'searching', query: `Enough info gathered (${allSources.length} sources) — writing report` })
+              break
+            }
+          }
         }
 
         // ----------------------------------------------------------------
@@ -636,7 +675,7 @@ export function useResearch(threadId: string) {
         const { textStream } = streamText({
           model,
           messages: [{ role: 'user', content: writerPrompt }],
-          maxTokens: 6000,
+          maxTokens: 12000,
           abortSignal: signal,
         })
         for await (const chunk of textStream) {
@@ -645,25 +684,57 @@ export function useResearch(threadId: string) {
           updateResearch(threadId, (prev) => ({ ...prev, reportMarkdown: report }))
         }
 
-        // If the report has no Conclusion, the model was cut off — continue writing
-        const hasConclusion = /^##\s*conclusion/im.test(report)
-        if (!hasConclusion && !signal.aborted) {
-          addStep({ type: 'writing', message: 'Completing report…' })
-          const { textStream: continueStream } = streamText({
+        // ----------------------------------------------------------------
+        // Continuation loop — if the report was cut off mid-sentence,
+        // continue it; then ensure a Conclusion section exists.
+        // ----------------------------------------------------------------
+
+        // Step A: continue mid-sentence cuts (up to 2 rounds)
+        for (let round = 0; round < 2 && !signal.aborted; round++) {
+          const trimmed = report.trimEnd()
+          const lastChar = trimmed[trimmed.length - 1] ?? ''
+          const isCutOff = !/[.!?»"')]/.test(lastChar)
+          if (!isCutOff) break
+
+          addStep({ type: 'writing', message: 'Continuing report…' })
+          const continuePrompt =
+            `You are continuing a research report that was cut off mid-sentence.\n\n` +
+            `Here is where the report stopped:\n---\n${report.slice(-1500)}\n---\n\n` +
+            `Continue SEAMLESSLY from exactly where it stopped. ` +
+            `Do NOT repeat, rewrite, or summarise anything already written. ` +
+            `Do NOT add a preamble — start with the next word that logically continues the cut-off sentence. ` +
+            `Write only the remaining body content (no Conclusion section — that will be added separately).`
+          const { textStream: contStream } = streamText({
             model,
-            messages: [
-              { role: 'user', content: writerPrompt },
-              { role: 'assistant', content: report },
-              {
-                role: 'user',
-                content:
-                  'The report was cut off. Continue exactly from where it stopped and complete all remaining sections, finishing with a full ## Conclusion.',
-              },
-            ],
+            messages: [{ role: 'user', content: continuePrompt }],
             maxTokens: 4000,
             abortSignal: signal,
           })
-          for await (const chunk of continueStream) {
+          for await (const chunk of contStream) {
+            if (signal.aborted) break
+            report += chunk
+            updateResearch(threadId, (prev) => ({ ...prev, reportMarkdown: report }))
+          }
+        }
+
+        // Step B: if Conclusion is still missing, write it
+        const hasConclusion = /^##\s*conclusion/im.test(report)
+        if (!hasConclusion && !signal.aborted) {
+          addStep({ type: 'writing', message: 'Writing conclusion…' })
+          const conclusionPrompt =
+            `You are finishing a research report about: "${query}"\n\n` +
+            `Here is the end of the report written so far:\n---\n${report.slice(-2500)}\n---\n\n` +
+            `Write ONLY the ## Conclusion section (150–200 words). ` +
+            `Summarise the key findings and their significance. ` +
+            `Do NOT repeat or rewrite anything already written above. ` +
+            `Start your response directly with "## Conclusion".`
+          const { textStream: conclusionStream } = streamText({
+            model,
+            messages: [{ role: 'user', content: conclusionPrompt }],
+            maxTokens: 800,
+            abortSignal: signal,
+          })
+          for await (const chunk of conclusionStream) {
             if (signal.aborted) break
             report += chunk
             updateResearch(threadId, (prev) => ({ ...prev, reportMarkdown: report }))
@@ -676,7 +747,7 @@ export function useResearch(threadId: string) {
         const sourceFooter = allSources.length > 0
           ? '\n\n---\n**Sources:** ' + allSources.map((s, i) => `[[${i + 1}]](${s.url})`).join(' ')
           : ''
-        useMessages.getState().addMessage({
+        saveMessageToChat(threadId, {
           ...newAssistantThreadContent(threadId, report + sourceFooter, { researchReport: true }),
           created_at: Date.now(),
           completed_at: Date.now(),

@@ -30,6 +30,7 @@ export function ResearchPanel({ threadId, onClose }: ResearchPanelProps) {
   const [activeTab, setActiveTab] = useState<Tab>('progress')
   const [copied, setCopied] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
 
   // Track whether the user manually selected a tab (to prevent auto-switching away)
   const userPickedTab = useRef(false)
@@ -37,11 +38,12 @@ export function ResearchPanel({ threadId, onClose }: ResearchPanelProps) {
   const isRunning = entry?.status === 'running'
   const isDone = entry?.status === 'done'
 
-  // Reset user choice whenever a new research run starts
+  // Reset user choice and cancelling state whenever a new research run starts
   useEffect(() => {
     if (entry?.status === 'running') {
       userPickedTab.current = false
       setActiveTab('progress')
+      setCancelling(false)
     }
   }, [entry?.status])
 
@@ -186,12 +188,13 @@ export function ResearchPanel({ threadId, onClose }: ResearchPanelProps) {
           {/* Cancel (while running) */}
           {isRunning && (
             <button
-              onClick={cancelResearch}
+              onClick={() => { setCancelling(true); cancelResearch() }}
+              disabled={cancelling}
               title="Cancel research"
-              className="flex items-center gap-1 px-2 py-1 rounded text-xs text-destructive hover:bg-destructive/10 transition-colors"
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <XCircleIcon size={12} />
-              Cancel
+              {cancelling ? 'Cancelling…' : 'Cancel'}
             </button>
           )}
 

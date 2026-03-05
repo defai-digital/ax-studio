@@ -1742,8 +1742,13 @@ function ThreadDetail() {
               pane === 'main' ? (
                 <div
                   key="main-pane"
-                  className="h-full rounded-md border bg-background overflow-hidden flex flex-col"
+                  className="h-full rounded-md border bg-background overflow-hidden flex flex-col relative"
                 >
+                  {pinnedResearch && (
+                    <div className="absolute inset-0 z-10 flex flex-col bg-background">
+                      <ResearchPanel threadId={threadId} onClose={() => clearResearch(threadId)} />
+                    </div>
+                  )}
                   <div className="px-3 py-2 border-b text-sm font-medium truncate">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
