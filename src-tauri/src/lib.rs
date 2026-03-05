@@ -141,6 +141,15 @@ pub fn run() {
         // Custom updater commands (desktop only)
         core::updater::commands::check_for_app_updates,
         core::updater::commands::is_update_available,
+        // Agent teams
+        core::agent_teams::list_agent_teams,
+        core::agent_teams::get_agent_team,
+        core::agent_teams::save_agent_team,
+        core::agent_teams::delete_agent_team,
+        // Agent run logs
+        core::agent_run_logs::save_agent_run_log,
+        core::agent_run_logs::list_agent_run_logs,
+        core::agent_run_logs::get_agent_run_log,
     ]);
 
     // Mobile: no updater commands
@@ -234,6 +243,15 @@ pub fn run() {
         // Research commands
         core::research::commands::scrape_url,
         core::research::commands::web_search,
+        // Agent teams
+        core::agent_teams::list_agent_teams,
+        core::agent_teams::get_agent_team,
+        core::agent_teams::save_agent_team,
+        core::agent_teams::delete_agent_team,
+        // Agent run logs
+        core::agent_run_logs::save_agent_run_log,
+        core::agent_run_logs::list_agent_run_logs,
+        core::agent_run_logs::get_agent_run_log,
     ]);
 
     let app = app_builder

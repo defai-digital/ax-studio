@@ -1,12 +1,15 @@
 import { type UIMessage } from '@ai-sdk/react'
 import {
+  Experimental_Agent as Agent,
   convertToModelMessages,
+  createUIMessageStream,
   streamText,
   stepCountIs,
   type ChatRequestOptions,
   type ChatTransport,
   type LanguageModel,
   type UIMessageChunk,
+  type UIMessageStreamWriter,
   type Tool,
   type LanguageModelUsage,
   jsonSchema,
@@ -16,6 +19,26 @@ import { useToolAvailable } from '@/hooks/useToolAvailable'
 import { ModelFactory } from './model-factory'
 import { useModelProvider } from '@/hooks/useModelProvider'
 import { useAssistant } from '@/hooks/useAssistant'
+import type { AgentStatusData } from '@/types/agent-data-parts'
+import type { RunLogData } from './multi-agent/run-log'
+import {
+  TokenUsageTracker,
+  AgentHealthMonitor,
+  MultiAgentRunLog,
+  persistRunLog,
+  validateTeamAgentNames,
+  estimateTeamRunCost,
+} from './multi-agent'
+import type { CostEstimate } from './multi-agent/cost-estimation'
+import { buildDelegationTools } from './multi-agent/delegation-tools'
+import { buildParallelOrchestration } from './multi-agent/parallel-orchestration'
+import {
+  buildOrchestratorPrompt,
+  resolveVariables,
+} from './multi-agent/orchestrator-prompt'
+import { sanitize } from './multi-agent/sanitize'
+import { useAgentTeamStore } from '@/stores/agent-team-store'
+import { useThreads } from '@/hooks/useThreads'
 
 export type TokenUsageCallback = (
   usage: LanguageModelUsage,
@@ -56,6 +79,11 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
   private threadId?: string
   private inferenceParameters: Record<string, unknown>
   private modelOverrideId?: string
+  private activeTeamId?: string
+  private streamWriter: UIMessageStreamWriter | null = null
+  private costApprovalCallback?: (
+    estimate: CostEstimate
+  ) => Promise<boolean>
 
   constructor(
     systemMessage?: string,
@@ -84,6 +112,26 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
 
   setOnTokenUsage(callback: TokenUsageCallback | undefined) {
     this.onTokenUsage = callback
+  }
+
+  updateActiveTeamId(teamId: string | undefined) {
+    this.activeTeamId = teamId
+  }
+
+  setCostApprovalCallback(
+    callback: ((estimate: CostEstimate) => Promise<boolean>) | undefined
+  ) {
+    this.costApprovalCallback = callback
+  }
+
+  private getThreadMetadata(): Record<string, unknown> | null {
+    if (!this.threadId) return null
+    try {
+      const thread = useThreads.getState().getThreadById(this.threadId)
+      return (thread?.metadata as Record<string, unknown>) ?? null
+    } catch {
+      return null
+    }
   }
 
   /**
@@ -269,6 +317,11 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
       messageId: string | undefined
     } & ChatRequestOptions
   ): Promise<ReadableStream<UIMessageChunk>> {
+    // Check if thread has an active agent team
+    if (this.activeTeamId) {
+      return this.sendMultiAgentMessages(options, this.activeTeamId)
+    }
+
     // Ensure tools updated before sending messages
     await this.refreshTools()
 
@@ -449,6 +502,410 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
     })
   }
 
+  private emitDataPart(
+    type: string,
+    data: AgentStatusData | RunLogData
+  ): void {
+    if (this.streamWriter) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      this.streamWriter.write({ type: `data-${type}`, data } as any)
+    }
+  }
+
+  private async sendMultiAgentMessages(
+    options: {
+      chatId: string
+      messages: UIMessage[]
+      abortSignal: AbortSignal | undefined
+    } & {
+      trigger: 'submit-message' | 'regenerate-message'
+      messageId: string | undefined
+    } & ChatRequestOptions,
+    teamId: string
+  ): Promise<ReadableStream<UIMessageChunk>> {
+    let runLog: MultiAgentRunLog | null = null
+    try {
+      // Load team
+      const team = useAgentTeamStore.getState().getTeam(teamId)
+      if (!team) {
+        throw new Error(`Agent team "${teamId}" not found`)
+      }
+
+      // Load agents from the assistant store
+      const assistantStore = useAssistant.getState()
+      const agents: Array<{
+        id: string
+        name: string
+        role?: string
+        goal?: string
+        description?: string
+        instructions?: string
+        model_override_id?: string
+        tool_scope?: { mode: 'all' | 'include' | 'exclude'; tool_keys: string[] }
+        max_steps?: number
+        timeout?: { total_ms?: number; step_ms?: number }
+        max_result_tokens?: number
+        parameters?: Record<string, unknown>
+        optional?: boolean
+      }> = []
+      for (const agentId of team.agent_ids) {
+        const agent = assistantStore.assistants?.find(
+          (a: { id: string }) => a.id === agentId
+        )
+        if (agent) {
+          agents.push(agent)
+        }
+      }
+
+      if (agents.length === 0) {
+        throw new Error('No agents found for this team')
+      }
+
+      // Validate agent name uniqueness
+      const nameError = validateTeamAgentNames(agents)
+      if (nameError) throw new Error(nameError)
+
+      // Ensure tools are loaded
+      await this.refreshTools()
+
+      // Initialize model
+      const modelId =
+        this.modelOverrideId ??
+        useModelProvider.getState().selectedModel?.id
+      const providerId = useModelProvider.getState().selectedProvider
+      const providerConfig =
+        useModelProvider.getState().getProviderByName(providerId)
+
+      if (!this.serviceHub || !modelId || !providerConfig) {
+        throw new Error(
+          'ServiceHub not initialized or model/provider missing.'
+        )
+      }
+
+      const activeProvider =
+        useModelProvider.getState().getProviderByName(providerId) ??
+        providerConfig
+
+      // Create the main model
+      const currentAssistant = useAssistant.getState().currentAssistant
+      const inferenceParams = {
+        ...(currentAssistant?.parameters ?? {}),
+        ...(this.inferenceParameters ?? {}),
+      }
+      this.model = await ModelFactory.createModel(
+        modelId,
+        activeProvider,
+        inferenceParams
+      )
+
+      // Save team config snapshot on first run (PRD Section 3.6)
+      const rawMetadata = this.getThreadMetadata() ?? {}
+      if (!rawMetadata.agent_team_snapshot && this.threadId) {
+        try {
+          useThreads.getState().updateThread(this.threadId, {
+            metadata: {
+              ...rawMetadata,
+              agent_team_snapshot: { ...team, snapshotted_at: Date.now() },
+            },
+          })
+        } catch (snapshotErr) {
+          console.warn('Failed to save team snapshot:', snapshotErr)
+        }
+      }
+
+      // Initialize per-run state
+      const tokenBudget = team.token_budget ?? 100000
+      runLog = new MultiAgentRunLog(team.id, this.threadId, tokenBudget)
+      const healthMonitor = new AgentHealthMonitor()
+      const tokenTracker = new TokenUsageTracker(tokenBudget)
+
+      // Pre-flight cost gating: block execution if threshold exceeded
+      if (team.cost_approval_threshold) {
+        const estimate = estimateTeamRunCost(team, agents)
+        if (estimate.range.max > team.cost_approval_threshold) {
+          if (this.costApprovalCallback) {
+            const approved = await this.costApprovalCallback(estimate)
+            if (!approved) {
+              throw new Error(
+                'Multi-agent run cancelled by user (cost threshold)'
+              )
+            }
+          } else {
+            console.warn(
+              `[MultiAgent] Cost estimate ${estimate.range.max} exceeds threshold ${team.cost_approval_threshold}, no approval callback set`
+            )
+          }
+        }
+      }
+
+      // Shared options for delegation tools and parallel orchestration
+      const delegationOptions = {
+        model: this.model,
+        allTools: this.tools,
+        tokenTracker,
+        healthMonitor,
+        runLog,
+        emitDataPart: (type: string, data: AgentStatusData) =>
+          this.emitDataPart(type, data),
+        createModel: async (
+          overrideModelId: string,
+          params: Record<string, unknown>
+        ) =>
+          ModelFactory.createModel(overrideModelId, activeProvider, params),
+      }
+
+      // Build tools and system prompt based on orchestration mode
+      let orchestratorTools: Record<string, Tool>
+      let orchestratorSystem: string
+
+      if (team.orchestration.mode === 'parallel') {
+        const { tools: parallelTools, system: parallelSystem } =
+          buildParallelOrchestration(team, agents, delegationOptions)
+        orchestratorTools = parallelTools
+        orchestratorSystem = parallelSystem
+      } else {
+        orchestratorTools = buildDelegationTools(agents, delegationOptions)
+        orchestratorSystem = buildOrchestratorPrompt(team, agents)
+      }
+
+      // Resolve variables from thread metadata
+      const rawMeta = this.getThreadMetadata() ?? {}
+      const variableValues = (rawMeta.agent_team_variables ?? {}) as Record<string, string>
+      const resolvedSystem = resolveVariables(
+        orchestratorSystem,
+        team.variables,
+        variableValues
+      )
+
+      // Resolve routing model for cost optimization
+      const routingModel = team.orchestrator_model_id
+        ? await ModelFactory.createModel(
+            team.orchestrator_model_id,
+            activeProvider,
+            {}
+          )
+        : null
+
+      // Create orchestrator Agent
+      const orchestrator = new Agent({
+        model: this.model,
+        system: resolvedSystem,
+        tools: { ...orchestratorTools },
+        stopWhen: [
+          stepCountIs(agents.length * 2 + 5),
+          tokenTracker.budgetExhausted(),
+        ],
+        prepareStep: async ({ stepNumber, steps }) => {
+          const mode = team.orchestration.mode
+
+          // Count delegation tool calls made so far
+          const delegationsMade = (steps ?? []).reduce((count, step) => {
+            const calls = step.toolCalls ?? []
+            return (
+              count +
+              calls.filter(
+                (tc: { toolName: string }) =>
+                  tc.toolName.startsWith('delegate_to_') ||
+                  tc.toolName === 'run_all_agents_parallel'
+              ).length
+            )
+          }, 0)
+
+          // Determine toolChoice for this step.
+          // Use SPECIFIC tool names (not generic 'required') because many
+          // providers (Cloudflare Workers AI, some Gemini endpoints) silently
+          // ignore tool_choice: "required" and generate text instead.
+          // Specific tool names map to { type: "function", function: { name } }
+          // in the OpenAI-compatible API, which is more widely enforced.
+          let stepToolChoice:
+            | undefined
+            | 'required'
+            | { type: 'tool'; toolName: string }
+
+          switch (mode) {
+            case 'parallel': {
+              if (delegationsMade === 0) {
+                stepToolChoice = {
+                  type: 'tool',
+                  toolName: 'run_all_agents_parallel',
+                }
+              }
+              break
+            }
+            case 'sequential': {
+              if (delegationsMade < agents.length) {
+                const nextAgent = agents[delegationsMade]
+                stepToolChoice = {
+                  type: 'tool',
+                  toolName: `delegate_to_${sanitize(nextAgent.name)}`,
+                }
+              }
+              break
+            }
+            case 'evaluator-optimizer': {
+              const maxIter =
+                'max_iterations' in team.orchestration
+                  ? (team.orchestration.max_iterations ?? 3)
+                  : 3
+              const requiredDelegations = maxIter * 2
+              if (delegationsMade < requiredDelegations && agents.length >= 2) {
+                // Alternate: even steps -> worker (agents[0]), odd -> evaluator (agents[1])
+                const agentIdx = delegationsMade % 2
+                stepToolChoice = {
+                  type: 'tool',
+                  toolName: `delegate_to_${sanitize(agents[agentIdx].name)}`,
+                }
+              }
+              break
+            }
+            case 'router':
+            default: {
+              // Router: let the model choose which agent, but force it to pick one
+              if (delegationsMade === 0) {
+                stepToolChoice = 'required'
+              }
+              break
+            }
+          }
+
+          const result: Record<string, unknown> = {}
+
+          if (stepToolChoice) {
+            result.toolChoice = stepToolChoice
+          }
+
+          // Use cheaper routing model for the first step in router mode
+          if (stepNumber === 0 && routingModel && mode === 'router') {
+            result.model = routingModel
+          }
+
+          // Context compression for long conversations
+          // Increased threshold to 12 steps (default agents.length * 2 + 5 can be up to 25)
+          // Keep original user messages (step 0) plus the last 8 steps
+          if (steps && steps.length > 12) {
+            result.messages = [
+              ...steps[0].messages,
+              ...steps.slice(-8).flatMap((s) => s.messages),
+            ]
+          }
+
+          return Object.keys(result).length > 0 ? result : undefined
+        },
+      })
+
+      // Stream with typed data parts
+      const modelMessages = convertToModelMessages(
+        this.mapUserInlineAttachments(options.messages)
+      )
+
+      const orchestratorResult = orchestrator.stream({
+        messages: modelMessages,
+        abortSignal: options.abortSignal,
+      })
+
+      // Wrap in createUIMessageStream for data part support
+      return createUIMessageStream({
+        execute: async ({ writer }) => {
+          this.streamWriter = writer
+
+          try {
+            await writer.merge(
+              orchestratorResult.toUIMessageStream({
+                onFinish: async ({ totalUsage }) => {
+                  runLog.setOrchestratorTokens(
+                    totalUsage?.totalTokens ?? 0
+                  )
+
+                  // Detect zero-delegation runs: the model didn't call any
+                  // delegation tools, so no agents ran and output is empty.
+                  const logData = runLog.getData()
+                  if (logData.steps.length === 0) {
+                    console.warn(
+                      '[MultiAgent] Orchestrator finished without delegating to any agent. ' +
+                      'The model may not support tool calling. ' +
+                      `Model: ${modelId}, Mode: ${team.orchestration.mode}`
+                    )
+                    // Write a visible error message so the user isn't left with blank output
+                    writer.write({
+                      type: 'text',
+                      text: `\n\n> **Agent Team Notice:** The orchestrator model did not delegate to any agents. ` +
+                        `This usually means the model doesn't support tool calling reliably. ` +
+                        `Try switching to a model that supports tool calling (e.g. GPT-4o, Claude, Gemini, Llama 4 Scout).`,
+                    })
+                  }
+
+                  runLog.complete()
+                  await persistRunLog(runLog)
+
+                  // Emit run log summary as data part for UI
+                  this.emitDataPart('runLog', runLog.getData())
+
+                  const usage = runLog.getUsage()
+                  if (this.onTokenUsage) {
+                    this.onTokenUsage(
+                      {
+                        inputTokens: 0,
+                        outputTokens: 0,
+                        totalTokens: usage.consumed,
+                      },
+                      options.messageId ?? ''
+                    )
+                  }
+                },
+              })
+            )
+          } catch (streamError) {
+            console.error('[MultiAgent] Orchestrator stream error:', streamError)
+            const errMsg = streamError instanceof Error
+              ? streamError.message
+              : String(streamError)
+            // Detect toolChoice-related failures (models that don't support tool_choice: required)
+            const isBadRequest = /bad request|400|unsupported.*tool.?choice/i.test(errMsg)
+            const hint = isBadRequest
+              ? ' This model may not support forced tool calling (`tool_choice: required`). Try a model with full tool-calling support (e.g. GPT-4o, Claude, Gemini).'
+              : ''
+            writer.write({
+              type: 'text',
+              text: `\n\n> **Agent Team Error:** ${errMsg}${hint}`,
+            })
+            runLog.fail(errMsg)
+            persistRunLog(runLog).catch(() => {})
+            this.emitDataPart('runLog', runLog.getData())
+          }
+        },
+      })
+    } catch (error) {
+      console.error(
+        'Multi-agent orchestration failed, falling back to single-agent:',
+        error
+      )
+
+      // Persist failed run log if it was created
+      if (runLog) {
+        runLog.fail(error instanceof Error ? error.message : String(error))
+        persistRunLog(runLog).catch(() => {})
+      }
+
+      // Emit error data part
+      this.emitDataPart('agentStatus', {
+        agent_id: 'orchestrator',
+        agent_name: 'Orchestrator',
+        status: 'error',
+        tokens_used: 0,
+        error: `Multi-agent failed: ${error instanceof Error ? error.message : String(error)}. Falling back to single-agent mode.`,
+      })
+
+      // Fall back to single-agent for this message only (don't permanently clear activeTeamId)
+      const savedTeamId = this.activeTeamId
+      this.activeTeamId = undefined
+      try {
+        return await this.sendMessages(options)
+      } finally {
+        this.activeTeamId = savedTeamId
+      }
+    }
+  }
+
   async reconnectToStream(
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _options: {
@@ -496,7 +953,7 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
               }
               return part
             })
-            message.parts = parts
+            return { ...message, parts }
           }
         }
       }

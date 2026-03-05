@@ -80,7 +80,7 @@ const SettingsMenu = () => {
       isEnabled: true,
     },
     {
-      title: 'Memory',
+      title: 'common:memory',
       route: route.settings.memory,
       hasSubMenu: false,
       isEnabled: true,
@@ -94,6 +94,12 @@ const SettingsMenu = () => {
     {
       title: 'common:assistants',
       route: route.settings.assistant,
+      hasSubMenu: false,
+      isEnabled: true,
+    },
+    {
+      title: 'common:agentTeams',
+      route: route.settings.agent_teams,
       hasSubMenu: false,
       isEnabled: true,
     },

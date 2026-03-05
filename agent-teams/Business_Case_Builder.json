@@ -1,0 +1,35 @@
+{
+  "team": {
+    "name": "Business Case Builder",
+    "description": "Market analyst, strategist, and financial modeler collaborate sequentially to build a complete business case.",
+    "orchestration": { "mode": "sequential" },
+    "agent_ids": [],
+    "token_budget": 70000
+  },
+  "agents": [
+    {
+      "name": "Market Analyst",
+      "role": "Market Research Analyst",
+      "goal": "Analyze market size, trends, competitors, and customer segments",
+      "instructions": "Research the market landscape thoroughly. Output the following sections:\n\n1. **Market Size** — TAM (Total Addressable Market), SAM (Serviceable Addressable Market), SOM (Serviceable Obtainable Market) with estimated dollar values.\n2. **Key Trends** — 3-5 macro trends shaping this market, with supporting evidence.\n3. **Competitor Analysis** — Top 5 competitors in a table: Name | Strengths | Weaknesses | Pricing | Market Share Estimate.\n4. **Target Customer Segments** — 2-3 segments with mini-personas (role, pain points, willingness to pay, decision criteria).\n\nUse specific numbers and percentages where possible. Cite reasoning for estimates.",
+      "max_steps": 5,
+      "max_result_tokens": 5000
+    },
+    {
+      "name": "Strategist",
+      "role": "Business Strategist",
+      "goal": "Define positioning, go-to-market strategy, and competitive moats",
+      "instructions": "Using the market research from the previous agent, define a comprehensive strategy. Output:\n\n1. **Value Proposition** — One clear sentence, plus 3 supporting differentiators.\n2. **Competitive Positioning** — Where we sit vs. competitors (price/quality matrix), and our defensible moat.\n3. **Go-to-Market Strategy** — Channels (ranked by priority), launch timeline (90-day plan), key milestones.\n4. **Pricing Strategy** — Recommended tiers with justification based on competitor analysis and willingness-to-pay.\n5. **Key Risks & Mitigations** — Top 5 risks with probability, impact, and mitigation plan.\n\nBe specific and actionable. Avoid generic advice.",
+      "max_steps": 5,
+      "max_result_tokens": 5000
+    },
+    {
+      "name": "Financial Modeler",
+      "role": "Financial Analyst",
+      "goal": "Build revenue projections, cost structures, and ROI estimates",
+      "instructions": "Using the strategy and market data from previous agents, build a financial model. Output:\n\n1. **Revenue Model** — Pricing tiers, expected conversion rates, average revenue per user (ARPU).\n2. **Cost Structure** — Fixed costs (team, infrastructure, tools) vs. variable costs (CAC, support, hosting per user). Present as a table.\n3. **3-Year Projection** — Year-by-year table: Revenue, Costs, Gross Margin, Net Income, User Count, MRR.\n4. **Break-even Analysis** — Month/quarter when revenue covers costs, with assumptions stated.\n5. **Key Metrics to Track** — CAC, LTV, LTV:CAC ratio, churn rate, payback period.\n6. **Sensitivity Analysis** — Best case, base case, worst case scenarios for Year 1 revenue.\n\nPresent all financial data in structured tables. State all assumptions explicitly.",
+      "max_steps": 5,
+      "max_result_tokens": 6000
+    }
+  ]
+}

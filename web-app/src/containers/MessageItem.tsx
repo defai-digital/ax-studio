@@ -25,6 +25,10 @@ import TokenSpeedIndicator from '@/containers/TokenSpeedIndicator'
 import { extractFilesFromPrompt, FileMetadata } from '@/lib/fileMetadata'
 import { useMemo } from 'react'
 import { Button } from '@/components/ui/button'
+import { AgentOutputCard } from '@/components/AgentOutputCard'
+import { RunLogSummary } from '@/components/RunLogViewer'
+import type { AgentStatusData } from '@/types/agent-data-parts'
+import type { RunLogData } from '@/lib/multi-agent/run-log'
 
 const CHAT_STATUS = {
   STREAMING: 'streaming',
@@ -367,6 +371,19 @@ export const MessageItem = memo(
       )
     }
 
+    // Deduplicate agent status parts: only render the latest status per agent_id.
+    // Each agent emits 'running' then 'complete'/'error' — showing both would be confusing.
+    const latestAgentStatusIndex = useMemo(() => {
+      const lastIndex = new Map<string, number>()
+      message.parts.forEach((part, i) => {
+        if (part.type === 'data-agentStatus') {
+          const data = (part as any).data as AgentStatusData
+          lastIndex.set(data.agent_id, i)
+        }
+      })
+      return lastIndex
+    }, [message.parts])
+
     return (
       <div className="w-full mb-4">
 
@@ -382,6 +399,27 @@ export const MessageItem = memo(
                 part as { type: 'reasoning'; text: string },
                 i
               )
+            case 'data-agentStatus': {
+              const data = (part as any).data as AgentStatusData
+              // Skip superseded status parts (e.g., 'running' followed by 'complete')
+              if (latestAgentStatusIndex.get(data.agent_id) !== i) return null
+              return (
+                <AgentOutputCard
+                  key={`agent-${data.agent_id}-${i}`}
+                  agentName={data.agent_name}
+                  agentRole={data.agent_role}
+                  status={data.status}
+                  tokensUsed={data.tokens_used}
+                  toolCalls={data.tool_calls}
+                  error={data.error}
+                  isCollapsed={data.status === 'complete' && !isLastMessage}
+                />
+              )
+            }
+            case 'data-runLog': {
+              const data = (part as any).data as RunLogData
+              return <RunLogSummary key={`runlog-${data.id}`} runLog={data} />
+            }
             default:
               return renderToolPart(part, i)
           }

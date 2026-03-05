@@ -10,6 +10,16 @@ export type AssistantTool = {
   settings: any
 }
 
+export type ToolScope = {
+  mode: 'all' | 'include' | 'exclude'
+  tool_keys: string[]
+}
+
+export type AgentTimeout = {
+  total_ms?: number
+  step_ms?: number
+}
+
 export type Assistant = {
   /** Represents the avatar of the user. */
   avatar: string
@@ -35,6 +45,26 @@ export type Assistant = {
   file_ids: string[]
   /** Represents the metadata of the object. */
   metadata?: Record<string, unknown>
+  /** Inference parameters (temperature, top_p, etc.) */
+  parameters?: Record<string, unknown>
+  /** Whether this assistant is a plain assistant or an agent */
+  type?: 'assistant' | 'agent'
+  /** Short role label, e.g. "Researcher" */
+  role?: string
+  /** What this agent optimizes for */
+  goal?: string
+  /** Use a different model than thread default */
+  model_override_id?: string
+  /** Which tools this agent can access */
+  tool_scope?: ToolScope
+  /** Max tool-calling iterations (default: 10) */
+  max_steps?: number
+  /** Time-based limits per agent */
+  timeout?: AgentTimeout
+  /** Truncate output before returning to orchestrator (default: 4000) */
+  max_result_tokens?: number
+  /** If true, orchestrator may skip this agent when not needed */
+  optional?: boolean
 }
 
 export interface CodeInterpreterTool {

@@ -283,6 +283,61 @@ function isSameCategory(category: string, existingFact: string): boolean {
   }
 }
 
+// ── Delta-based API (used by $threadId.tsx) ─────────────────────────────
+
+export type MemoryDeltaOp = {
+  op: 'add' | 'update' | 'delete'
+  fact: string
+}
+
+/**
+ * Parse <memory_extract> tags and return delta operations + cleaned text.
+ * Wraps parseMemoryFromResponse with a delta-op interface.
+ */
+export function parseMemoryDelta(text: string): {
+  ops: MemoryDeltaOp[]
+  cleanedText: string
+} {
+  const result = parseMemoryFromResponse(text)
+  if (!result.isFullReplace || result.facts.length === 0) {
+    return { ops: [], cleanedText: result.cleanedText }
+  }
+  const ops: MemoryDeltaOp[] = result.facts.map((fact) => ({
+    op: 'add' as const,
+    fact,
+  }))
+  return { ops, cleanedText: result.cleanedText }
+}
+
+/**
+ * Apply delta operations to existing memories.
+ * For a full-replace (all 'add' ops), replaces the entire memory set,
+ * preserving existing entries that match.
+ */
+export function applyMemoryDelta(
+  existing: MemoryEntry[],
+  ops: MemoryDeltaOp[],
+  threadId: string
+): MemoryEntry[] {
+  const now = Date.now()
+  const addOps = ops.filter((o) => o.op === 'add')
+  if (addOps.length === 0) return existing
+
+  return addOps.map((op, i) => {
+    const match = existing.find(
+      (e) => e.fact.toLowerCase() === op.fact.toLowerCase()
+    )
+    if (match) return match
+    return {
+      id: `mem-${now}-${i}`,
+      fact: op.fact,
+      sourceThreadId: threadId,
+      createdAt: now,
+      updatedAt: now,
+    }
+  })
+}
+
 /**
  * Build a system prompt suffix from stored memories.
  * Includes retrieval context + extraction instruction.

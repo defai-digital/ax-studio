@@ -34,49 +34,49 @@ __metadata:
 
 "@ax-fabric/core@file:../../core/package.tgz::locator=%40ax-fabric%2Fassistant-extension%40workspace%3Aassistant-extension":
   version: 0.1.10
-  resolution: "@ax-fabric/core@file:../../core/package.tgz#../../core/package.tgz::hash=50e77b&locator=%40ax-fabric%2Fassistant-extension%40workspace%3Aassistant-extension"
+  resolution: "@ax-fabric/core@file:../../core/package.tgz#../../core/package.tgz::hash=0ac0dc&locator=%40ax-fabric%2Fassistant-extension%40workspace%3Aassistant-extension"
   dependencies:
     rxjs: "npm:^7.8.1"
     ulidx: "npm:^2.3.0"
   peerDependencies:
     react: 19.0.0
-  checksum: 10c0/70b53b3a3a0065a1769fa0d9ec2dc218bc76537631c2742564195c1bdf4e45fb6225e965125b9eb92727c58cf3c54badbdc102021e1aaf320c84c880a3f936a7
+  checksum: 10c0/3187c5c7213360129206eab68ded114b2fcd0a03728eda65cd9b6f8db69047d12de1a950dc41de92ef558b6428116c27242b678e201b66fd81447df279b093f8
   languageName: node
   linkType: hard
 
 "@ax-fabric/core@file:../../core/package.tgz::locator=%40ax-fabric%2Fconversational-extension%40workspace%3Aconversational-extension":
   version: 0.1.10
-  resolution: "@ax-fabric/core@file:../../core/package.tgz#../../core/package.tgz::hash=50e77b&locator=%40ax-fabric%2Fconversational-extension%40workspace%3Aconversational-extension"
+  resolution: "@ax-fabric/core@file:../../core/package.tgz#../../core/package.tgz::hash=0ac0dc&locator=%40ax-fabric%2Fconversational-extension%40workspace%3Aconversational-extension"
   dependencies:
     rxjs: "npm:^7.8.1"
     ulidx: "npm:^2.3.0"
   peerDependencies:
     react: 19.0.0
-  checksum: 10c0/70b53b3a3a0065a1769fa0d9ec2dc218bc76537631c2742564195c1bdf4e45fb6225e965125b9eb92727c58cf3c54badbdc102021e1aaf320c84c880a3f936a7
+  checksum: 10c0/3187c5c7213360129206eab68ded114b2fcd0a03728eda65cd9b6f8db69047d12de1a950dc41de92ef558b6428116c27242b678e201b66fd81447df279b093f8
   languageName: node
   linkType: hard
 
 "@ax-fabric/core@file:../../core/package.tgz::locator=%40ax-fabric%2Fdownload-extension%40workspace%3Adownload-extension":
   version: 0.1.10
-  resolution: "@ax-fabric/core@file:../../core/package.tgz#../../core/package.tgz::hash=50e77b&locator=%40ax-fabric%2Fdownload-extension%40workspace%3Adownload-extension"
+  resolution: "@ax-fabric/core@file:../../core/package.tgz#../../core/package.tgz::hash=0ac0dc&locator=%40ax-fabric%2Fdownload-extension%40workspace%3Adownload-extension"
   dependencies:
     rxjs: "npm:^7.8.1"
     ulidx: "npm:^2.3.0"
   peerDependencies:
     react: 19.0.0
-  checksum: 10c0/70b53b3a3a0065a1769fa0d9ec2dc218bc76537631c2742564195c1bdf4e45fb6225e965125b9eb92727c58cf3c54badbdc102021e1aaf320c84c880a3f936a7
+  checksum: 10c0/3187c5c7213360129206eab68ded114b2fcd0a03728eda65cd9b6f8db69047d12de1a950dc41de92ef558b6428116c27242b678e201b66fd81447df279b093f8
   languageName: node
   linkType: hard
 
 "@ax-fabric/core@file:../../core/package.tgz::locator=%40ax-fabric%2Fllamacpp-extension%40workspace%3Allamacpp-extension":
   version: 0.1.10
-  resolution: "@ax-fabric/core@file:../../core/package.tgz#../../core/package.tgz::hash=50e77b&locator=%40ax-fabric%2Fllamacpp-extension%40workspace%3Allamacpp-extension"
+  resolution: "@ax-fabric/core@file:../../core/package.tgz#../../core/package.tgz::hash=0ac0dc&locator=%40ax-fabric%2Fllamacpp-extension%40workspace%3Allamacpp-extension"
   dependencies:
     rxjs: "npm:^7.8.1"
     ulidx: "npm:^2.3.0"
   peerDependencies:
     react: 19.0.0
-  checksum: 10c0/70b53b3a3a0065a1769fa0d9ec2dc218bc76537631c2742564195c1bdf4e45fb6225e965125b9eb92727c58cf3c54badbdc102021e1aaf320c84c880a3f936a7
+  checksum: 10c0/3187c5c7213360129206eab68ded114b2fcd0a03728eda65cd9b6f8db69047d12de1a950dc41de92ef558b6428116c27242b678e201b66fd81447df279b093f8
   languageName: node
   linkType: hard
 

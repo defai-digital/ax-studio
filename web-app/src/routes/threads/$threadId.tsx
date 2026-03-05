@@ -77,6 +77,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { useAgentTeamStore } from '@/stores/agent-team-store'
+import type { AgentTeam } from '@/types/agent-team'
 import { ArtifactPanel } from '@/components/ai-elements/ArtifactPanel'
 import { useArtifactPanel } from '@/hooks/useArtifactPanel'
 import { ResearchPanel } from '@/components/research/ResearchPanel'
@@ -87,6 +89,9 @@ import { useResearch } from '@/hooks/useResearch'
 function parseResearchDepth(afterCommand: string): 2 | 3 {
   return /^:(deep|3)\b/i.test(afterCommand) ? 3 : 2
 }
+import { TeamVariablePrompt } from '@/components/TeamVariablePrompt'
+import { CostApprovalModal } from '@/components/CostApprovalModal'
+import type { CostEstimate } from '@/lib/multi-agent/cost-estimation'
 
 const CHAT_STATUS = {
   STREAMING: 'streaming',
@@ -206,6 +211,7 @@ function SplitThreadPane({
     sessionTitle: thread?.title,
     systemMessage: promptResolution.resolvedPrompt + memorySuffix + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION + ARTIFACT_FORMAT_INSTRUCTION,
     modelOverrideId: optimizedModelConfig.modelId,
+    activeTeamId: (thread?.metadata?.agent_team_id as string) ?? undefined,
     inferenceParameters: {
       temperature: optimizedModelConfig.temperature,
       top_p: optimizedModelConfig.top_p,
@@ -645,6 +651,27 @@ function ThreadDetail() {
       ) {
         return false
       }
+
+      // Don't trigger follow-up for multi-agent delegation tool calls.
+      // These are already executed internally by the orchestrator Agent.
+      const lastMsg = messages.findLast((m) => m.role === 'assistant')
+      if (lastMsg) {
+        const toolParts = lastMsg.parts.filter(
+          (p) => p.type === 'tool-invocation'
+        )
+        if (toolParts.length > 0) {
+          const allDelegation = toolParts.every((p) => {
+            const name = (p as { toolInvocation?: { toolName?: string } })
+              .toolInvocation?.toolName
+            return (
+              name?.startsWith('delegate_to_') ||
+              name === 'run_all_agents_parallel'
+            )
+          })
+          if (allDelegation) return false
+        }
+      }
+
       return lastAssistantMessageIsCompleteWithToolCalls({ messages })
     },
     []
@@ -708,6 +735,79 @@ function ThreadDetail() {
   const pinnedResearch = useResearchPanel((s) => s.getPinned(threadId))
   const clearResearch = useResearchPanel((s) => s.clearResearch)
   const { startResearch } = useResearch(threadId)
+
+  // Agent team state
+  const agentTeams = useAgentTeamStore((state) => state.teams)
+  const agentTeamsLoaded = useAgentTeamStore((state) => state.isLoaded)
+  const loadTeams = useAgentTeamStore((state) => state.loadTeams)
+  const activeTeamId = (thread?.metadata?.agent_team_id as string) ?? undefined
+  const activeTeam = agentTeams.find((t) => t.id === activeTeamId)
+
+  // Variable prompt state
+  const [showVariablePrompt, setShowVariablePrompt] = useState(false)
+
+  // Cost approval state
+  const [costApprovalState, setCostApprovalState] = useState<{
+    estimate: CostEstimate
+    resolve: (approved: boolean) => void
+  } | null>(null)
+
+  const handleCostApproval = useCallback(
+    (estimate: CostEstimate): Promise<boolean> => {
+      return new Promise((resolve) => {
+        setCostApprovalState({ estimate, resolve })
+      })
+    },
+    []
+  )
+  const activeTeamSnapshot = thread?.metadata?.agent_team_snapshot as AgentTeam | undefined
+  const teamHasVariables = activeTeam?.variables && activeTeam.variables.length > 0
+  const variablesFilled = !!thread?.metadata?.agent_team_variables
+
+  // Track cumulative token usage from run logs
+  const [teamTokensUsed, setTeamTokensUsed] = useState(0)
+
+  useEffect(() => {
+    if (!agentTeamsLoaded) {
+      loadTeams()
+    }
+  }, [agentTeamsLoaded, loadTeams])
+
+  // Show variable prompt when team with variables is assigned but variables not yet filled
+  useEffect(() => {
+    if (activeTeamId && teamHasVariables && !variablesFilled) {
+      setShowVariablePrompt(true)
+    }
+  }, [activeTeamId, teamHasVariables, variablesFilled])
+
+  const handleVariableSubmit = useCallback(
+    async (values: Record<string, string>) => {
+      if (!serviceHub || !threadId) return
+      await updateThread(threadId, {
+        metadata: {
+          ...(thread?.metadata ?? {}),
+          agent_team_variables: values,
+        },
+      })
+      setShowVariablePrompt(false)
+    },
+    [serviceHub, threadId, thread?.metadata, updateThread]
+  )
+
+  const handleTeamChange = useCallback(
+    async (teamId: string | undefined) => {
+      if (!serviceHub || !threadId) return
+      await updateThread(threadId, {
+        metadata: {
+          ...(thread?.metadata ?? {}),
+          agent_team_id: teamId ?? null,
+          agent_team_snapshot: null,
+          agent_team_variables: null,
+        },
+      })
+    },
+    [serviceHub, threadId, thread?.metadata, updateThread]
+  )
 
   const mainMemorySuffix = useMemo(() => {
     if (!mainMemoryEnabled) return ''
@@ -789,6 +889,8 @@ function ThreadDetail() {
     sessionTitle: thread?.title,
     systemMessage: promptResolution.resolvedPrompt + mainMemorySuffix + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION + ARTIFACT_FORMAT_INSTRUCTION,
     modelOverrideId: optimizedModelConfig.modelId,
+    activeTeamId: (thread?.metadata?.agent_team_id as string) ?? undefined,
+    onCostApproval: handleCostApproval,
     inferenceParameters: {
       temperature: optimizedModelConfig.temperature,
       top_p: optimizedModelConfig.top_p,
@@ -1008,6 +1110,15 @@ function ThreadDetail() {
       })
     },
     onToolCall: ({ toolCall }) => {
+      // Skip delegation tools — they are already executed internally by the
+      // multi-agent orchestrator Agent. Their tool-invocation parts appear in
+      // the UI stream but must NOT be routed through MCP/RAG services.
+      if (
+        toolCall.toolName.startsWith('delegate_to_') ||
+        toolCall.toolName === 'run_all_agents_parallel'
+      ) {
+        return
+      }
       sessionData.tools.push(toolCall)
     },
     sendAutomaticallyWhen: followUpMessage,
@@ -1060,6 +1171,34 @@ function ThreadDetail() {
     updateRagToolsAvailability,
     disabledTools, // Re-run when tools are enabled/disabled
   ])
+
+  // Load cumulative token usage from run logs when team is active
+  useEffect(() => {
+    if (!activeTeamId || !threadId) {
+      setTeamTokensUsed(0)
+      return
+    }
+    let cancelled = false
+    const loadUsage = async () => {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core')
+        const logs = await invoke<Array<{ total_tokens: number }>>(
+          'list_agent_run_logs',
+          { threadId }
+        )
+        if (!cancelled) {
+          const total = logs.reduce((sum, l) => sum + l.total_tokens, 0)
+          setTeamTokensUsed(total)
+        }
+      } catch {
+        // Silently ignore — web mode or no logs yet
+      }
+    }
+    loadUsage()
+    return () => {
+      cancelled = true
+    }
+  }, [activeTeamId, threadId, status])
 
   // Ref for reasoning container auto-scroll
   const reasoningContainerRef = useRef<HTMLDivElement>(null)
@@ -1359,6 +1498,25 @@ function ThreadDetail() {
     }
   }, [threadId, thread?.metadata, updateThread])
 
+  // Apply agent team selected from the new-chat page
+  const teamAppliedRef = useRef(false)
+  useEffect(() => {
+    if (teamAppliedRef.current) return
+    const storedTeamId = sessionStorage.getItem(
+      SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID
+    )
+    if (storedTeamId) {
+      sessionStorage.removeItem(SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID)
+      teamAppliedRef.current = true
+      updateThread(threadId, {
+        metadata: {
+          ...(thread?.metadata ?? {}),
+          agent_team_id: storedTeamId,
+        },
+      })
+    }
+  }, [threadId, thread?.metadata, updateThread])
+
   // Handle submit from ChatInput
   const handleSubmit = useCallback(
     async (
@@ -1632,6 +1790,49 @@ function ThreadDetail() {
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
+                <Button
+                  variant={activeTeamId ? 'secondary' : 'outline'}
+                  size="sm"
+                >
+                  {activeTeam ? activeTeam.name : 'Agent Team'}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => handleTeamChange(undefined)}>
+                  No Team (single agent)
+                </DropdownMenuItem>
+                {agentTeams.map((team) => (
+                  <DropdownMenuItem
+                    key={team.id}
+                    onSelect={() => handleTeamChange(team.id)}
+                  >
+                    {team.name}
+                    {team.id === activeTeamId && ' ✓'}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {/* Step 33: Update to Latest Team Config */}
+            {activeTeamId && activeTeamSnapshot && activeTeam && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={async () => {
+                  await updateThread(threadId, {
+                    metadata: {
+                      ...(thread?.metadata ?? {}),
+                      agent_team_snapshot: null,
+                    },
+                  })
+                  toast.success('Team config will refresh on next run')
+                }}
+              >
+                Update Config
+              </Button>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm">
                   <Columns2 className="size-4" />
                   <span>Split View</span>
@@ -1657,6 +1858,32 @@ function ThreadDetail() {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+          {/* Token budget display when team is active */}
+          {!splitPaneOrder && activeTeam && (
+            <div className="mx-auto w-full md:w-4/5 xl:w-4/6 mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+              <span>{activeTeam.name}</span>
+              <span>&middot;</span>
+              <span>{activeTeam.agent_ids.length} agent{activeTeam.agent_ids.length !== 1 ? 's' : ''}</span>
+              {activeTeam.token_budget && (
+                <>
+                  <span>&middot;</span>
+                  <span>{teamTokensUsed.toLocaleString()} / {activeTeam.token_budget.toLocaleString()} tokens</span>
+                </>
+              )}
+              {!activeTeam.token_budget && teamTokensUsed > 0 && (
+                <>
+                  <span>&middot;</span>
+                  <span>{teamTokensUsed.toLocaleString()} tokens used</span>
+                </>
+              )}
+              {activeTeamSnapshot && (
+                <>
+                  <span>&middot;</span>
+                  <span className="text-amber-500">Snapshot active</span>
+                </>
+              )}
+            </div>
+          )}
           {!splitPaneOrder && showThreadPromptEditor && (
             <div className="mx-auto w-full md:w-4/5 xl:w-4/6 mt-2 rounded-md border bg-card p-3 space-y-2">
               <p className="text-xs text-muted-foreground">
@@ -1895,18 +2122,32 @@ function ThreadDetail() {
           <div className={(pinnedArtifact || pinnedResearch) ? 'grid grid-cols-2 gap-2 px-2 pb-2 h-full' : 'flex flex-1 flex-col h-full overflow-hidden'}>
           {/* Main chat column */}
           <div className={(pinnedArtifact || pinnedResearch) ? 'h-full rounded-md border bg-background overflow-hidden flex flex-col' : 'flex flex-1 flex-col h-full overflow-hidden'}>
-        <div className="px-4 md:px-8 pb-2 shrink-0">
-          <div className="mx-auto w-full md:w-4/5 xl:w-4/6 flex items-center gap-2 min-w-0">
-            {threadLogo && (
-              <img
-                src={threadLogo}
-                alt={thread?.title || 'Thread Logo'}
-                className="size-5 rounded-sm object-cover shrink-0"
-              />
-            )}
-            <h2 className="text-sm font-medium truncate">{thread?.title || 'New Thread'}</h2>
-          </div>
-        </div>
+        {/* Thread title — hide when it duplicates the first user message */}
+        {(() => {
+          const title = thread?.title || 'New Thread'
+          const firstUserMsg = chatMessages.find((m) => m.role === 'user')
+          const firstMsgText = firstUserMsg?.parts
+            .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+            .map((p) => p.text)
+            .join('')
+            .trim()
+          const titleMatchesFirst = firstMsgText && title === firstMsgText
+          if (titleMatchesFirst && !threadLogo) return null
+          return (
+            <div className="px-4 md:px-8 pb-2 shrink-0">
+              <div className="mx-auto w-full md:w-4/5 xl:w-4/6 flex items-center gap-2 min-w-0">
+                {threadLogo && (
+                  <img
+                    src={threadLogo}
+                    alt={title}
+                    className="size-5 rounded-sm object-cover shrink-0"
+                  />
+                )}
+                <h2 className="text-sm font-medium truncate">{title}</h2>
+              </div>
+            </div>
+          )
+        })()}
         {/* Messages Area */}
         <div className="flex-1 relative">
           <Conversation className="absolute inset-0 text-start">
@@ -1994,6 +2235,33 @@ function ThreadDetail() {
           </div>
         )}
       </div>
+
+      {/* Variable Prompt Modal */}
+      {activeTeam && activeTeam.variables && activeTeam.variables.length > 0 && (
+        <TeamVariablePrompt
+          open={showVariablePrompt}
+          onOpenChange={setShowVariablePrompt}
+          teamName={activeTeam.name}
+          variables={activeTeam.variables}
+          onSubmit={handleVariableSubmit}
+        />
+      )}
+
+      {/* Cost Approval Modal */}
+      {costApprovalState && (
+        <CostApprovalModal
+          open={true}
+          estimate={costApprovalState.estimate}
+          onApprove={() => {
+            costApprovalState.resolve(true)
+            setCostApprovalState(null)
+          }}
+          onCancel={() => {
+            costApprovalState.resolve(false)
+            setCostApprovalState(null)
+          }}
+        />
+      )}
     </div>
   )
 }

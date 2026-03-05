@@ -27,6 +27,7 @@ import { Route as SettingsExtensionsRouteImport } from './routes/settings/extens
 import { Route as SettingsEngineSettingsRouteImport } from './routes/settings/engine-settings'
 import { Route as SettingsAttachmentsRouteImport } from './routes/settings/attachments'
 import { Route as SettingsAssistantRouteImport } from './routes/settings/assistant'
+import { Route as SettingsAgentTeamsRouteImport } from './routes/settings/agent-teams'
 import { Route as ProjectProjectIdRouteImport } from './routes/project/$projectId'
 import { Route as LocalApiServerLogsRouteImport } from './routes/local-api-server/logs'
 import { Route as HubModelIdRouteImport } from './routes/hub/$modelId'
@@ -123,6 +124,11 @@ const SettingsAssistantRoute = SettingsAssistantRouteImport.update({
   path: '/settings/assistant',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsAgentTeamsRoute = SettingsAgentTeamsRouteImport.update({
+  id: '/settings/agent-teams',
+  path: '/settings/agent-teams',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProjectProjectIdRoute = ProjectProjectIdRouteImport.update({
   id: '/project/$projectId',
   path: '/project/$projectId',
@@ -157,6 +163,7 @@ export interface FileRoutesByFullPath {
   '/hub/$modelId': typeof HubModelIdRoute
   '/local-api-server/logs': typeof LocalApiServerLogsRoute
   '/project/$projectId': typeof ProjectProjectIdRoute
+  '/settings/agent-teams': typeof SettingsAgentTeamsRoute
   '/settings/assistant': typeof SettingsAssistantRoute
   '/settings/attachments': typeof SettingsAttachmentsRoute
   '/settings/engine-settings': typeof SettingsEngineSettingsRoute
@@ -182,6 +189,7 @@ export interface FileRoutesByTo {
   '/hub/$modelId': typeof HubModelIdRoute
   '/local-api-server/logs': typeof LocalApiServerLogsRoute
   '/project/$projectId': typeof ProjectProjectIdRoute
+  '/settings/agent-teams': typeof SettingsAgentTeamsRoute
   '/settings/assistant': typeof SettingsAssistantRoute
   '/settings/attachments': typeof SettingsAttachmentsRoute
   '/settings/engine-settings': typeof SettingsEngineSettingsRoute
@@ -208,6 +216,7 @@ export interface FileRoutesById {
   '/hub/$modelId': typeof HubModelIdRoute
   '/local-api-server/logs': typeof LocalApiServerLogsRoute
   '/project/$projectId': typeof ProjectProjectIdRoute
+  '/settings/agent-teams': typeof SettingsAgentTeamsRoute
   '/settings/assistant': typeof SettingsAssistantRoute
   '/settings/attachments': typeof SettingsAttachmentsRoute
   '/settings/engine-settings': typeof SettingsEngineSettingsRoute
@@ -235,6 +244,7 @@ export interface FileRouteTypes {
     | '/hub/$modelId'
     | '/local-api-server/logs'
     | '/project/$projectId'
+    | '/settings/agent-teams'
     | '/settings/assistant'
     | '/settings/attachments'
     | '/settings/engine-settings'
@@ -260,6 +270,7 @@ export interface FileRouteTypes {
     | '/hub/$modelId'
     | '/local-api-server/logs'
     | '/project/$projectId'
+    | '/settings/agent-teams'
     | '/settings/assistant'
     | '/settings/attachments'
     | '/settings/engine-settings'
@@ -285,6 +296,7 @@ export interface FileRouteTypes {
     | '/hub/$modelId'
     | '/local-api-server/logs'
     | '/project/$projectId'
+    | '/settings/agent-teams'
     | '/settings/assistant'
     | '/settings/attachments'
     | '/settings/engine-settings'
@@ -311,6 +323,7 @@ export interface RootRouteChildren {
   HubModelIdRoute: typeof HubModelIdRoute
   LocalApiServerLogsRoute: typeof LocalApiServerLogsRoute
   ProjectProjectIdRoute: typeof ProjectProjectIdRoute
+  SettingsAgentTeamsRoute: typeof SettingsAgentTeamsRoute
   SettingsAssistantRoute: typeof SettingsAssistantRoute
   SettingsAttachmentsRoute: typeof SettingsAttachmentsRoute
   SettingsEngineSettingsRoute: typeof SettingsEngineSettingsRoute
@@ -458,6 +471,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsAssistantRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings/agent-teams': {
+      id: '/settings/agent-teams'
+      path: '/settings/agent-teams'
+      fullPath: '/settings/agent-teams'
+      preLoaderRoute: typeof SettingsAgentTeamsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/project/$projectId': {
       id: '/project/$projectId'
       path: '/project/$projectId'
@@ -503,6 +523,7 @@ const rootRouteChildren: RootRouteChildren = {
   HubModelIdRoute: HubModelIdRoute,
   LocalApiServerLogsRoute: LocalApiServerLogsRoute,
   ProjectProjectIdRoute: ProjectProjectIdRoute,
+  SettingsAgentTeamsRoute: SettingsAgentTeamsRoute,
   SettingsAssistantRoute: SettingsAssistantRoute,
   SettingsAttachmentsRoute: SettingsAttachmentsRoute,
   SettingsEngineSettingsRoute: SettingsEngineSettingsRoute,

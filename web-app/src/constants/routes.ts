@@ -19,6 +19,7 @@ export const route = {
     https_proxy: '/settings/https-proxy',
     hardware: '/settings/hardware',
     assistant: '/settings/assistant',
+    agent_teams: '/settings/agent-teams',
     engine_settings: '/settings/engine-settings',
   },
   hub: {
