@@ -444,10 +444,9 @@ export default class AxFabricLlamacppExtension extends AIEngine {
 
       const engineType = this.config.engine_type || 'llamacpp'
       const embedding = isEmbedding || Boolean(cfg.embedding)
-      const hasVision = Boolean(cfg.mmproj_path)
 
-      // ax-serving mode for text models (embedding/vision falls back to llamacpp)
-      if (engineType === 'ax-serving' && !embedding && !hasVision) {
+      // ax-serving mode for text/vision models (embedding falls back to llamacpp)
+      if (engineType === 'ax-serving' && !embedding) {
         try {
           return await this._doLoadAxServing(modelId, cfg)
         } catch (axErr: any) {
@@ -457,10 +456,10 @@ export default class AxFabricLlamacppExtension extends AIEngine {
         }
       }
 
-      // llamacpp mode (also serves as fallback for ax-serving embedding/vision)
-      if (engineType === 'ax-serving' && (embedding || hasVision)) {
+      // llamacpp mode (also serves as fallback for ax-serving embedding)
+      if (engineType === 'ax-serving' && embedding) {
         console.log(
-          `[llamacpp] ax-serving: falling back to llamacpp for ${embedding ? 'embedding' : 'vision'} model "${modelId}"`
+          `[llamacpp] ax-serving: falling back to llamacpp for embedding model "${modelId}"`
         )
       }
       return await this._doLoadLlamacpp(modelId, cfg, overrideSettings, isEmbedding)
