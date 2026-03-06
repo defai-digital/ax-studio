@@ -65,7 +65,15 @@ type Assistant = {
   description?: string
   instructions: string
   parameters: Record<string, unknown>
-  // tool_steps?: number
+  type?: 'assistant' | 'agent'
+  role?: string
+  goal?: string
+  model_override_id?: string
+  tool_scope?: { mode: 'all' | 'include' | 'exclude'; tool_keys: string[] }
+  max_steps?: number
+  timeout?: { total_ms?: number; step_ms?: number }
+  max_result_tokens?: number
+  optional?: boolean
 }
 
 type TokenSpeed = {

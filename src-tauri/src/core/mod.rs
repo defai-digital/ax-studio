@@ -1,4 +1,8 @@
+pub mod agent_run_logs;
+pub mod agent_teams;
 pub mod app;
+pub mod code_execution;
+pub mod research;
 pub mod downloads;
 pub mod extensions;
 pub mod filesystem;

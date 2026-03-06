@@ -313,9 +313,23 @@ pub async fn save_dialog(options: Option<DialogOpenOptions>) -> Result<Option<St
     let mut dialog = AsyncFileDialog::new();
 
     if let Some(opts) = options {
-        // Set default path
+        // If default_path has a file extension treat it as "directory + suggested filename".
+        // e.g. "diagram.svg" → set_file_name("diagram.svg")
+        //      "/home/user/docs" → set_directory("/home/user/docs")
         if let Some(path) = opts.default_path {
-            dialog = dialog.set_directory(&path);
+            let p = std::path::Path::new(&path);
+            if p.extension().is_some() {
+                if let Some(parent) = p.parent() {
+                    if parent != std::path::Path::new("") {
+                        dialog = dialog.set_directory(parent);
+                    }
+                }
+                if let Some(name) = p.file_name() {
+                    dialog = dialog.set_file_name(&*name.to_string_lossy());
+                }
+            } else {
+                dialog = dialog.set_directory(&path);
+            }
         }
 
         // Set filters
@@ -329,6 +343,15 @@ pub async fn save_dialog(options: Option<DialogOpenOptions>) -> Result<Option<St
 
     let result = dialog.save_file().await;
     Ok(result.map(|file| file.path().to_string_lossy().to_string()))
+}
+
+/// Write binary data (hex-encoded) to a file path.
+/// Used by the diagram export flow on platforms where blob: anchor downloads
+/// do not work (macOS WKWebView, Tauri WebView2 on Windows).
+#[tauri::command]
+pub fn write_binary_file(path: String, hex_data: String) -> Result<(), String> {
+    let data = hex::decode(&hex_data).map_err(|e| e.to_string())?;
+    std::fs::write(&path, &data).map_err(|e| e.to_string())
 }
 
 // AkiDB config file management — reads/writes ~/.akidb/config.yaml

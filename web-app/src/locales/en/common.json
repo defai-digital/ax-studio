@@ -12,6 +12,8 @@
   "modelProviders": "Model Providers",
   "interface": "Interface",
   "privacy": "Privacy",
+  "memory": "Memory",
+  "agentTeams": "Agent Teams",
   "keyboardShortcuts": "Shortcuts",
   "newChat": "New Chat",
   "favorites": "Favorites",

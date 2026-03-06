@@ -33,6 +33,37 @@ export interface ChatPromptInjection {
 
 export const fallbackDefaultPrompt = 'You are a helpful assistant.'
 
+/**
+ * Appended to every resolved system prompt regardless of source.
+ * Instructs the model to proactively call `generate_diagram` whenever a
+ * visual would aid understanding, and guides diagram-type selection.
+ * Also ensures the Mermaid fallback (text path) uses correct syntax.
+ */
+export const DIAGRAM_FORMAT_INSTRUCTION = `
+
+## Diagram rules
+
+When a diagram would help clarify your answer, include exactly one diagram alongside your explanation — never instead of it. Always write your full text explanation first, then add a single diagram after it.
+
+Add a diagram when the question involves:
+- concepts / parts / ideas of X → mindmap
+- how X works / steps of X / flow of X → flowchart
+- how X and Y communicate / interact → sequenceDiagram
+- class or object structure of X → classDiagram
+- database schema / tables for X → erDiagram
+- states / lifecycle of X → stateDiagram-v2
+
+If a \`generate_diagram\` tool is available, call it after writing your explanation. Otherwise output a Mermaid code fence after your text:
+\`\`\`mermaid
+<valid mermaid syntax>
+\`\`\`
+
+Mermaid syntax rules — follow these to avoid parse errors:
+- Always wrap node labels in double quotes when they contain parentheses, apostrophes, angle brackets, pipes, or any special character: A["Recipient's Device"] not A[Recipient's Device], A["Setup (X3DH)"] not A[Setup (X3DH)]
+- Use \`<br/>\` inside quoted labels for line breaks: A["Line one<br/>Line two"]
+
+Never use PlantUML, ASCII art, or plain bullet lists as a substitute for a diagram.`
+
 const normalizePrompt = (value: unknown): string | null => {
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
@@ -110,13 +141,15 @@ export const getOptimizedModelConfig = (
   }
 
   // --- max_output_tokens ---
-  let targetTokens = 1200
+  // Base is 4096 — enough for a complete artifact or code block.
+  // 1200 was too low and truncated model output mid-generation.
+  let targetTokens = 4096
   if (isReasoning) {
-    targetTokens = 4096
+    targetTokens = 8192
   } else if (context.promptLength >= 2000 || context.hasAttachments) {
-    targetTokens = 2048
+    targetTokens = 6144
   } else if (context.promptLength >= 800) {
-    targetTokens = 1800
+    targetTokens = 4096
   }
 
   if (optimized.max_output_tokens == null) {
@@ -135,11 +168,62 @@ export const getOptimizedModelConfig = (
   return optimized
 }
 
+/**
+ * Appended to every resolved system prompt alongside DIAGRAM_FORMAT_INSTRUCTION.
+ * Tells every model that a Python code execution engine is available so it never
+ * refuses data/visualization tasks with "I cannot do that".
+ */
+export const CODE_EXECUTION_INSTRUCTION = `
+
+## Python code execution
+
+You have a Python code execution engine. When asked to:
+- Plot, chart, or visualize data → write Python using matplotlib or seaborn
+- Create or display a table / DataFrame → write Python using pandas
+- Run a calculation, simulation, or algorithm → write Python
+- Generate any output that requires computation → write Python
+
+Rules:
+- ALWAYS write a \`\`\`python code block — never say "I cannot create visualizations" or "I cannot run code"
+- Use \`plt.show()\` for charts — figures are captured automatically
+- For DataFrames always put \`df\` or \`display(df)\` as the LAST line — NEVER use \`print(df)\` (it outputs plain text, not a styled table)
+- Import libraries at the top of the code block (matplotlib, pandas, numpy, seaborn are available)
+- Keep code self-contained — define all data inside the block`
+
+/**
+ * Appended to every resolved system prompt alongside DIAGRAM_FORMAT_INSTRUCTION
+ * and CODE_EXECUTION_INSTRUCTION. Instructs the model to wrap self-contained,
+ * interactive outputs in artifact fences so the UI can render them in a preview pane.
+ */
+export const ARTIFACT_FORMAT_INSTRUCTION = `
+
+## Artifacts
+
+When generating a **self-contained, renderable output** that the user can interact with visually, wrap it in a fenced code block using one of these language identifiers:
+
+| Output type         | Fence identifier      |
+|---------------------|-----------------------|
+| HTML page/component | \`\`\`artifact-html   |
+| React component     | \`\`\`artifact-react  |
+| SVG graphic         | \`\`\`artifact-svg      |
+| Chart.js chart      | \`\`\`artifact-chartjs  |
+| Vega-Lite chart     | \`\`\`artifact-vega     |
+
+Rules:
+- Use artifacts for complete, standalone outputs — landing pages, interactive demos, data visualizations, SVG illustrations.
+- Do NOT use artifact fences for code examples, snippets, or partial code — only complete, immediately renderable output.
+- React artifacts must define a function component named \`App\` (e.g. \`function App() { ... }\`).
+- SVG artifacts must be a single \`<svg>\` element with a \`viewBox\` attribute.
+- Chart.js artifacts (\`artifact-chartjs\`) must be a valid Chart.js v4 config object (JSON with a \`type\` and \`data\` property). Callback functions in \`options\` are allowed.
+- Vega-Lite artifacts (\`artifact-vega\`) must be a valid Vega-Lite v5 JSON spec (with \`$schema\`, \`data\`, and \`mark\` or \`layer\`/\`hconcat\`/\`vconcat\`).
+- When asked to fix or update an artifact, always output the full updated version in a new artifact block.
+- Keep artifacts self-contained — inline all styles, use no external imports beyond the available runtime (React 18, Chart.js 4, Vega-Lite 5, standard HTML/CSS/JS).`
+
 export const buildChatPromptInjection = (
   resolved: ResolvedSystemPrompt
 ): ChatPromptInjection => {
   return {
-    systemMessage: resolved.resolvedPrompt,
+    systemMessage: resolved.resolvedPrompt + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION + ARTIFACT_FORMAT_INSTRUCTION,
   }
 }
 

@@ -57,14 +57,19 @@ import { toast } from 'sonner'
 import { useGeneralSetting } from '@/hooks/useGeneralSetting'
 import { useMemory } from '@/hooks/useMemory'
 import {
-  parseMemoryFromResponse,
+  parseMemoryDelta,
+  applyMemoryDelta,
   buildMemoryContext,
   extractFactsFromPatterns,
   mergePatternFacts,
+  type MemoryDeltaOp,
 } from '@/lib/memory-extractor'
 import {
   getOptimizedModelConfig,
   resolveSystemPrompt,
+  DIAGRAM_FORMAT_INSTRUCTION,
+  CODE_EXECUTION_INSTRUCTION,
+  ARTIFACT_FORMAT_INSTRUCTION,
 } from '@/lib/system-prompt'
 import {
   DropdownMenu,
@@ -72,6 +77,21 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { useAgentTeamStore } from '@/stores/agent-team-store'
+import type { AgentTeam } from '@/types/agent-team'
+import { ArtifactPanel } from '@/components/ai-elements/ArtifactPanel'
+import { useArtifactPanel } from '@/hooks/useArtifactPanel'
+import { ResearchPanel } from '@/components/research/ResearchPanel'
+import { useResearchPanel } from '@/hooks/useResearchPanel'
+import { useResearch } from '@/hooks/useResearch'
+
+/** Parse /research[:mode] prefix into a depth number (2=Standard, 3=Deep). */
+function parseResearchDepth(afterCommand: string): 2 | 3 {
+  return /^:(deep|3)\b/i.test(afterCommand) ? 3 : 2
+}
+import { TeamVariablePrompt } from '@/components/TeamVariablePrompt'
+import { CostApprovalModal } from '@/components/CostApprovalModal'
+import type { CostEstimate } from '@/lib/multi-agent/cost-estimation'
 
 const CHAT_STATUS = {
   STREAMING: 'streaming',
@@ -87,6 +107,9 @@ function SplitThreadPane({
 }) {
   const serviceHub = useServiceHub()
   const thread = useThreads(useShallow((state) => state.threads[threadId]))
+  const splitPinnedResearch = useResearchPanel((s) => s.getPinned(threadId))
+  const clearResearch = useResearchPanel((s) => s.clearResearch)
+  const { startResearch } = useResearch(threadId)
   const renameThread = useThreads((state) => state.renameThread)
   const updateThread = useThreads((state) => state.updateThread)
   const setMessages = useMessages((state) => state.setMessages)
@@ -108,6 +131,8 @@ function SplitThreadPane({
   const [showThreadPromptEditor, setShowThreadPromptEditor] = useState(false)
   const [threadPromptDraft, setThreadPromptDraft] = useState('')
   const reasoningContainerRef = useRef<HTMLDivElement>(null)
+  const processedMemoryMsgIds = useRef(new Set<string>())
+  const lastUserInputRef = useRef('')
   const paneLogo = useMemo(() => {
     const chatLogo =
       typeof thread?.metadata?.chatLogo === 'string'
@@ -184,8 +209,9 @@ function SplitThreadPane({
   } = useChat({
     sessionId: threadId,
     sessionTitle: thread?.title,
-    systemMessage: promptResolution.resolvedPrompt + memorySuffix,
+    systemMessage: promptResolution.resolvedPrompt + memorySuffix + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION + ARTIFACT_FORMAT_INSTRUCTION,
     modelOverrideId: optimizedModelConfig.modelId,
+    activeTeamId: (thread?.metadata?.agent_team_id as string) ?? undefined,
     inferenceParameters: {
       temperature: optimizedModelConfig.temperature,
       top_p: optimizedModelConfig.top_p,
@@ -196,48 +222,51 @@ function SplitThreadPane({
       if (!isAbort && message.role === 'assistant') {
         const contentParts = extractContentPartsFromUIMessage(message)
 
-        // Memory: parse LLM tags + client-side pattern extraction
-        if (useMemory.getState().isMemoryEnabled() && contentParts.length > 0) {
-          const prevCount = useMemory.getState().getMemories('default').length
-          let llmReplaced = false
-          for (const part of contentParts) {
-            if (part.type === 'text' && part.text?.value) {
-              const { facts, isFullReplace, cleanedText } = parseMemoryFromResponse(part.text.value)
-              part.text.value = cleanedText
-              if (isFullReplace && facts.length > 0) {
-                useMemory.getState().replaceMemories('default', facts, threadId)
-                llmReplaced = true
-                const newCount = facts.length
-                const added = newCount - prevCount
-                if (added > 0) {
-                  toast.success(`Remembered ${added} new fact${added !== 1 ? 's' : ''}`)
-                } else if (newCount === prevCount && newCount > 0) {
-                  toast.info('Updated memories')
-                }
-              }
+        // Guard: use ref-based dedup — store-based check is unreliable (timing issues)
+        const isNewMessage = !processedMemoryMsgIds.current.has(message.id)
+        if (isNewMessage) processedMemoryMsgIds.current.add(message.id)
+
+        // Strip memory tags + collect LLM ops from all content parts
+        const allOps: MemoryDeltaOp[] = []
+        for (const part of contentParts) {
+          if (part.type === 'text' && part.text?.value) {
+            const { ops, cleanedText } = parseMemoryDelta(part.text.value)
+            part.text.value = cleanedText
+            if (isNewMessage) allOps.push(...ops)
+          }
+        }
+
+        if (isNewMessage && useMemory.getState().isMemoryEnabled() && contentParts.length > 0) {
+          let toasted = false
+
+          // Step 1: Apply LLM delta ops (surgical add/update/delete)
+          if (allOps.length > 0) {
+            const existing = useMemory.getState().getMemories('default')
+            const updated = applyMemoryDelta(existing, allOps, threadId)
+            useMemory.getState().importMemories('default', updated)
+            const added = allOps.filter((o) => o.op === 'add').length
+            const changed = allOps.filter((o) => o.op === 'update' || o.op === 'delete').length
+            if (added > 0) {
+              toast.success(`Remembered ${added} new fact${added !== 1 ? 's' : ''}`)
+              toasted = true
+            } else if (changed > 0) {
+              toast.info('Updated memories')
+              toasted = true
             }
           }
-          // Fallback: pattern-match the user message for personal facts
-          if (!llmReplaced) {
-            const storedMsgs = useMessages.getState().getMessages(threadId)
-            const lastUserMsg = [...storedMsgs].reverse().find((m) => m.role === 'user')
-            const userText = lastUserMsg?.content
-              ?.filter((c: { type?: string }) => c.type === 'text')
-              .map((c: { text?: { value?: string } }) => c.text?.value ?? '')
-              .join('\n') ?? ''
-            if (userText) {
-              const patternFacts = extractFactsFromPatterns(userText)
-              if (patternFacts.size > 0) {
-                const existing = useMemory.getState().getMemories('default')
-                const merged = mergePatternFacts(existing, patternFacts, threadId)
-                useMemory.getState().importMemories('default', merged)
-                const added = merged.length - existing.length
-                if (added > 0) {
-                  toast.success(`Remembered ${added} new fact${added !== 1 ? 's' : ''}`)
-                } else if (patternFacts.size > 0) {
-                  toast.info('Updated memories')
-                }
-              }
+
+          // Step 2: Pattern fallback — use ref captured at submit time (no stale-closure issues)
+          // mergePatternFacts deduplicates by category, so no duplicates from Step 1
+          // Always saves to also correct wrong LLM-written facts (e.g. name="vegetarian")
+          const userText = lastUserInputRef.current
+          if (userText) {
+            const patternFacts = extractFactsFromPatterns(userText)
+            if (patternFacts.size > 0) {
+              const currentMems = useMemory.getState().getMemories('default')
+              const merged = mergePatternFacts(currentMems, patternFacts, threadId)
+              const newlyAdded = merged.length - currentMems.length
+              useMemory.getState().importMemories('default', merged)
+              if (newlyAdded > 0 && !toasted) toast.success(`Remembered ${newlyAdded} new fact${newlyAdded !== 1 ? 's' : ''}`)
             }
           }
         }
@@ -320,6 +349,18 @@ function SplitThreadPane({
     files?: Array<{ type: string; mediaType: string; url: string }>
   ) => {
     const normalizedText = text.trim()
+    lastUserInputRef.current = normalizedText
+
+    // Handle /research command
+    if (normalizedText.startsWith('/research')) {
+      const afterCommand = normalizedText.slice('/research'.length)
+      const depth = parseResearchDepth(afterCommand)
+      const query = afterCommand.replace(/^:(standard|deep|[123])?\s*/i, '').trim()
+      if (query) {
+        startResearch(query, depth)
+        return
+      }
+    }
 
     // Handle /remember command
     if (normalizedText.startsWith('/remember ')) {
@@ -429,7 +470,12 @@ function SplitThreadPane({
   }
 
   return (
-    <div className="h-full rounded-md border bg-background flex flex-col overflow-hidden">
+    <div className="h-full rounded-md border bg-background flex flex-col overflow-hidden relative">
+      {splitPinnedResearch && (
+        <div className="absolute inset-0 z-10 flex flex-col bg-background">
+          <ResearchPanel threadId={threadId} onClose={() => clearResearch(threadId)} />
+        </div>
+      )}
       <div className="px-3 py-2 border-b text-sm font-medium truncate flex items-center justify-between gap-2">        
         <div className="flex items-center gap-2 min-w-0">
           {paneLogo && (
@@ -526,6 +572,7 @@ function SplitThreadPane({
                   isFirstMessage={isFirstMessage}
                   isLastMessage={isLastMessage}
                   status={status}
+                  threadId={threadId}
                   reasoningContainerRef={reasoningContainerRef}
                   onRegenerate={handleRegenerate}
                   onDelete={(messageId) => {
@@ -604,6 +651,27 @@ function ThreadDetail() {
       ) {
         return false
       }
+
+      // Don't trigger follow-up for multi-agent delegation tool calls.
+      // These are already executed internally by the orchestrator Agent.
+      const lastMsg = messages.findLast((m) => m.role === 'assistant')
+      if (lastMsg) {
+        const toolParts = lastMsg.parts.filter(
+          (p) => p.type === 'tool-invocation'
+        )
+        if (toolParts.length > 0) {
+          const allDelegation = toolParts.every((p) => {
+            const name = (p as { toolInvocation?: { toolName?: string } })
+              .toolInvocation?.toolName
+            return (
+              name?.startsWith('delegate_to_') ||
+              name === 'run_all_agents_parallel'
+            )
+          })
+          if (allDelegation) return false
+        }
+      }
+
       return lastAssistantMessageIsCompleteWithToolCalls({ messages })
     },
     []
@@ -626,6 +694,11 @@ function ThreadDetail() {
     (state) => state.messages[threadId]?.length ?? 0
   )
   const threadRef = useRef(thread)
+  // Track which assistant message IDs have already had memory processed
+  // (onFinish can fire multiple times; store-based check is unreliable)
+  const processedMemoryMsgIds = useRef(new Set<string>())
+  // Capture user text at submit time so onFinish can read it without stale-closure issues
+  const lastUserInputRef = useRef('')
   const projectId = threadRef.current?.metadata?.project?.id
   const [threadPromptDraft, setThreadPromptDraft] = useState('')
   const [showThreadPromptEditor, setShowThreadPromptEditor] = useState(false)
@@ -653,6 +726,88 @@ function ThreadDetail() {
     }
     return null
   })
+
+  // Artifact panel — reads from the per-thread pinned state
+  const pinnedArtifact = useArtifactPanel((state) => state.pinnedByThread[threadId] ?? null)
+  const clearArtifact = useArtifactPanel((state) => state.clearArtifact)
+
+  // Research panel
+  const pinnedResearch = useResearchPanel((s) => s.getPinned(threadId))
+  const clearResearch = useResearchPanel((s) => s.clearResearch)
+  const { startResearch } = useResearch(threadId)
+
+  // Agent team state
+  const agentTeams = useAgentTeamStore((state) => state.teams)
+  const agentTeamsLoaded = useAgentTeamStore((state) => state.isLoaded)
+  const loadTeams = useAgentTeamStore((state) => state.loadTeams)
+  const activeTeamId = (thread?.metadata?.agent_team_id as string) ?? undefined
+  const activeTeam = agentTeams.find((t) => t.id === activeTeamId)
+
+  // Variable prompt state
+  const [showVariablePrompt, setShowVariablePrompt] = useState(false)
+
+  // Cost approval state
+  const [costApprovalState, setCostApprovalState] = useState<{
+    estimate: CostEstimate
+    resolve: (approved: boolean) => void
+  } | null>(null)
+
+  const handleCostApproval = useCallback(
+    (estimate: CostEstimate): Promise<boolean> => {
+      return new Promise((resolve) => {
+        setCostApprovalState({ estimate, resolve })
+      })
+    },
+    []
+  )
+  const activeTeamSnapshot = thread?.metadata?.agent_team_snapshot as AgentTeam | undefined
+  const teamHasVariables = activeTeam?.variables && activeTeam.variables.length > 0
+  const variablesFilled = !!thread?.metadata?.agent_team_variables
+
+  // Track cumulative token usage from run logs
+  const [teamTokensUsed, setTeamTokensUsed] = useState(0)
+
+  useEffect(() => {
+    if (!agentTeamsLoaded) {
+      loadTeams()
+    }
+  }, [agentTeamsLoaded, loadTeams])
+
+  // Show variable prompt when team with variables is assigned but variables not yet filled
+  useEffect(() => {
+    if (activeTeamId && teamHasVariables && !variablesFilled) {
+      setShowVariablePrompt(true)
+    }
+  }, [activeTeamId, teamHasVariables, variablesFilled])
+
+  const handleVariableSubmit = useCallback(
+    async (values: Record<string, string>) => {
+      if (!serviceHub || !threadId) return
+      await updateThread(threadId, {
+        metadata: {
+          ...(thread?.metadata ?? {}),
+          agent_team_variables: values,
+        },
+      })
+      setShowVariablePrompt(false)
+    },
+    [serviceHub, threadId, thread?.metadata, updateThread]
+  )
+
+  const handleTeamChange = useCallback(
+    async (teamId: string | undefined) => {
+      if (!serviceHub || !threadId) return
+      await updateThread(threadId, {
+        metadata: {
+          ...(thread?.metadata ?? {}),
+          agent_team_id: teamId ?? null,
+          agent_team_snapshot: null,
+          agent_team_variables: null,
+        },
+      })
+    },
+    [serviceHub, threadId, thread?.metadata, updateThread]
+  )
 
   const mainMemorySuffix = useMemo(() => {
     if (!mainMemoryEnabled) return ''
@@ -732,8 +887,10 @@ function ThreadDetail() {
   } = useChat({
     sessionId: threadId,
     sessionTitle: thread?.title,
-    systemMessage: promptResolution.resolvedPrompt + mainMemorySuffix,
+    systemMessage: promptResolution.resolvedPrompt + mainMemorySuffix + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION + ARTIFACT_FORMAT_INSTRUCTION,
     modelOverrideId: optimizedModelConfig.modelId,
+    activeTeamId: (thread?.metadata?.agent_team_id as string) ?? undefined,
+    onCostApproval: handleCostApproval,
     inferenceParameters: {
       temperature: optimizedModelConfig.temperature,
       top_p: optimizedModelConfig.top_p,
@@ -747,48 +904,52 @@ function ThreadDetail() {
         // This preserves the natural ordering: text -> tool call -> text -> tool call, etc.
         const contentParts = extractContentPartsFromUIMessage(message)
 
-        // Memory: parse LLM tags + client-side pattern extraction
-        if (useMemory.getState().isMemoryEnabled() && contentParts.length > 0) {
-          const prevCount = useMemory.getState().getMemories('default').length
-          let llmReplaced = false
-          for (const part of contentParts) {
-            if (part.type === 'text' && part.text?.value) {
-              const { facts, isFullReplace, cleanedText } = parseMemoryFromResponse(part.text.value)
-              part.text.value = cleanedText
-              if (isFullReplace && facts.length > 0) {
-                useMemory.getState().replaceMemories('default', facts, threadId)
-                llmReplaced = true
-                const newCount = facts.length
-                const added = newCount - prevCount
-                if (added > 0) {
-                  toast.success(`Remembered ${added} new fact${added !== 1 ? 's' : ''}`)
-                } else if (newCount === prevCount && newCount > 0) {
-                  toast.info('Updated memories')
-                }
-              }
+        // Ref-based dedup — more reliable than store-based timing check
+        const isNewMessage = !processedMemoryMsgIds.current.has(message.id)
+        if (isNewMessage) processedMemoryMsgIds.current.add(message.id)
+
+        // Strip memory tags + collect LLM ops from all content parts
+        const allOps: MemoryDeltaOp[] = []
+        for (const part of contentParts) {
+          if (part.type === 'text' && part.text?.value) {
+            const { ops, cleanedText } = parseMemoryDelta(part.text.value)
+            part.text.value = cleanedText
+            if (isNewMessage) allOps.push(...ops)
+          }
+        }
+
+        if (isNewMessage && useMemory.getState().isMemoryEnabled() && contentParts.length > 0) {
+          let toasted = false
+
+          // Step 1: Apply LLM delta ops (surgical add/update/delete)
+          if (allOps.length > 0) {
+            const existing = useMemory.getState().getMemories('default')
+            const updated = applyMemoryDelta(existing, allOps, threadId)
+            useMemory.getState().importMemories('default', updated)
+            const added = allOps.filter((o) => o.op === 'add').length
+            const changed = allOps.filter((o) => o.op === 'update' || o.op === 'delete').length
+            if (added > 0) {
+              toast.success(`Remembered ${added} new fact${added !== 1 ? 's' : ''}`)
+              toasted = true
+            } else if (changed > 0) {
+              toast.info('Updated memories')
+              toasted = true
             }
           }
-          // Fallback: pattern-match the user message for personal facts
-          if (!llmReplaced) {
-            const storedMsgs = useMessages.getState().getMessages(threadId)
-            const lastUserMsg = [...storedMsgs].reverse().find((m) => m.role === 'user')
-            const userText = lastUserMsg?.content
-              ?.filter((c: { type?: string }) => c.type === 'text')
-              .map((c: { text?: { value?: string } }) => c.text?.value ?? '')
-              .join('\n') ?? ''
-            if (userText) {
-              const patternFacts = extractFactsFromPatterns(userText)
-              if (patternFacts.size > 0) {
-                const existing = useMemory.getState().getMemories('default')
-                const merged = mergePatternFacts(existing, patternFacts, threadId)
-                useMemory.getState().importMemories('default', merged)
-                const added = merged.length - existing.length
-                if (added > 0) {
-                  toast.success(`Remembered ${added} new fact${added !== 1 ? 's' : ''}`)
-                } else if (patternFacts.size > 0) {
-                  toast.info('Updated memories')
-                }
-              }
+
+          // Step 2: Pattern fallback — use ref captured at submit time (no stale-closure issues)
+          // mergePatternFacts deduplicates by category, so no duplicates from Step 1
+          const userText = lastUserInputRef.current
+          if (userText) {
+            const patternFacts = extractFactsFromPatterns(userText)
+            if (patternFacts.size > 0) {
+              const currentMems = useMemory.getState().getMemories('default')
+              const merged = mergePatternFacts(currentMems, patternFacts, threadId)
+              const newlyAdded = merged.length - currentMems.length
+              // Always save: pattern fallback also corrects wrong LLM-written facts
+              // (e.g. LLM sets name="vegetarian", pattern corrects it to "Alex")
+              useMemory.getState().importMemories('default', merged)
+              if (newlyAdded > 0 && !toasted) toast.success(`Remembered ${newlyAdded} new fact${newlyAdded !== 1 ? 's' : ''}`)
             }
           }
         }
@@ -949,6 +1110,15 @@ function ThreadDetail() {
       })
     },
     onToolCall: ({ toolCall }) => {
+      // Skip delegation tools — they are already executed internally by the
+      // multi-agent orchestrator Agent. Their tool-invocation parts appear in
+      // the UI stream but must NOT be routed through MCP/RAG services.
+      if (
+        toolCall.toolName.startsWith('delegate_to_') ||
+        toolCall.toolName === 'run_all_agents_parallel'
+      ) {
+        return
+      }
       sessionData.tools.push(toolCall)
     },
     sendAutomaticallyWhen: followUpMessage,
@@ -1001,6 +1171,34 @@ function ThreadDetail() {
     updateRagToolsAvailability,
     disabledTools, // Re-run when tools are enabled/disabled
   ])
+
+  // Load cumulative token usage from run logs when team is active
+  useEffect(() => {
+    if (!activeTeamId || !threadId) {
+      setTeamTokensUsed(0)
+      return
+    }
+    let cancelled = false
+    const loadUsage = async () => {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core')
+        const logs = await invoke<Array<{ total_tokens: number }>>(
+          'list_agent_run_logs',
+          { threadId }
+        )
+        if (!cancelled) {
+          const total = logs.reduce((sum, l) => sum + l.total_tokens, 0)
+          setTeamTokensUsed(total)
+        }
+      } catch {
+        // Silently ignore — web mode or no logs yet
+      }
+    }
+    loadUsage()
+    return () => {
+      cancelled = true
+    }
+  }, [activeTeamId, threadId, status])
 
   // Ref for reasoning container auto-scroll
   const reasoningContainerRef = useRef<HTMLDivElement>(null)
@@ -1086,6 +1284,7 @@ function ThreadDetail() {
       files?: Array<{ type: string; mediaType: string; url: string }>
     ) => {
       const normalizedText = text.trim()
+      lastUserInputRef.current = normalizedText
 
       // Handle /remember command
       if (normalizedText.startsWith('/remember ')) {
@@ -1259,13 +1458,25 @@ function ThreadDetail() {
             files?: Array<{ type: string; mediaType: string; url: string }>
           }
 
+          // Check for /research command before falling through to normal chat
+          const trimmed = message.text.trimStart()
+          if (trimmed.toLowerCase().startsWith('/research')) {
+            const afterCommand = trimmed.slice('/research'.length)
+            const depth = parseResearchDepth(afterCommand)
+            const query = afterCommand.replace(/^:(standard|deep|[123])?\s*/i, '').trim()
+            if (query) {
+              startResearch(query, depth)
+              return
+            }
+          }
+
           await processAndSendMessage(message.text, message.files)
         } catch (error) {
           console.error('Failed to parse initial message:', error)
         }
       })()
     }
-  }, [threadId, processAndSendMessage])
+  }, [threadId, processAndSendMessage, startResearch])
 
   // Apply thread prompt drafted from the new-chat page
   const threadPromptAppliedRef = useRef(false)
@@ -1287,15 +1498,46 @@ function ThreadDetail() {
     }
   }, [threadId, thread?.metadata, updateThread])
 
+  // Apply agent team selected from the new-chat page
+  const teamAppliedRef = useRef(false)
+  useEffect(() => {
+    if (teamAppliedRef.current) return
+    const storedTeamId = sessionStorage.getItem(
+      SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID
+    )
+    if (storedTeamId) {
+      sessionStorage.removeItem(SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID)
+      teamAppliedRef.current = true
+      updateThread(threadId, {
+        metadata: {
+          ...(thread?.metadata ?? {}),
+          agent_team_id: storedTeamId,
+        },
+      })
+    }
+  }, [threadId, thread?.metadata, updateThread])
+
   // Handle submit from ChatInput
   const handleSubmit = useCallback(
     async (
       text: string,
       files?: Array<{ type: string; mediaType: string; url: string }>
     ) => {
+      // /research[:mode] <query> — open the Research Panel instead of normal chat
+      // mode is optional: quick | standard (default) | deep
+      const trimmed = text.trimStart()
+      if (trimmed.toLowerCase().startsWith('/research')) {
+        const afterCommand = trimmed.slice('/research'.length)
+        const depth = parseResearchDepth(afterCommand)
+        const query = afterCommand.replace(/^:(standard|deep|[123])?\s*/i, '').trim()
+        if (query) {
+          startResearch(query, depth)
+          return
+        }
+      }
       await processAndSendMessage(text, files)
     },
-    [processAndSendMessage]
+    [processAndSendMessage, startResearch]
   )
 
   // Handle regenerate from any message (user or assistant)
@@ -1548,6 +1790,49 @@ function ThreadDetail() {
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
+                <Button
+                  variant={activeTeamId ? 'secondary' : 'outline'}
+                  size="sm"
+                >
+                  {activeTeam ? activeTeam.name : 'Agent Team'}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => handleTeamChange(undefined)}>
+                  No Team (single agent)
+                </DropdownMenuItem>
+                {agentTeams.map((team) => (
+                  <DropdownMenuItem
+                    key={team.id}
+                    onSelect={() => handleTeamChange(team.id)}
+                  >
+                    {team.name}
+                    {team.id === activeTeamId && ' ✓'}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {/* Step 33: Update to Latest Team Config */}
+            {activeTeamId && activeTeamSnapshot && activeTeam && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={async () => {
+                  await updateThread(threadId, {
+                    metadata: {
+                      ...(thread?.metadata ?? {}),
+                      agent_team_snapshot: null,
+                    },
+                  })
+                  toast.success('Team config will refresh on next run')
+                }}
+              >
+                Update Config
+              </Button>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm">
                   <Columns2 className="size-4" />
                   <span>Split View</span>
@@ -1573,6 +1858,32 @@ function ThreadDetail() {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+          {/* Token budget display when team is active */}
+          {!splitPaneOrder && activeTeam && (
+            <div className="mx-auto w-full md:w-4/5 xl:w-4/6 mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+              <span>{activeTeam.name}</span>
+              <span>&middot;</span>
+              <span>{activeTeam.agent_ids.length} agent{activeTeam.agent_ids.length !== 1 ? 's' : ''}</span>
+              {activeTeam.token_budget && (
+                <>
+                  <span>&middot;</span>
+                  <span>{teamTokensUsed.toLocaleString()} / {activeTeam.token_budget.toLocaleString()} tokens</span>
+                </>
+              )}
+              {!activeTeam.token_budget && teamTokensUsed > 0 && (
+                <>
+                  <span>&middot;</span>
+                  <span>{teamTokensUsed.toLocaleString()} tokens used</span>
+                </>
+              )}
+              {activeTeamSnapshot && (
+                <>
+                  <span>&middot;</span>
+                  <span className="text-amber-500">Snapshot active</span>
+                </>
+              )}
+            </div>
+          )}
           {!splitPaneOrder && showThreadPromptEditor && (
             <div className="mx-auto w-full md:w-4/5 xl:w-4/6 mt-2 rounded-md border bg-card p-3 space-y-2">
               <p className="text-xs text-muted-foreground">
@@ -1658,8 +1969,13 @@ function ThreadDetail() {
               pane === 'main' ? (
                 <div
                   key="main-pane"
-                  className="h-full rounded-md border bg-background overflow-hidden flex flex-col"
+                  className="h-full rounded-md border bg-background overflow-hidden flex flex-col relative"
                 >
+                  {pinnedResearch && (
+                    <div className="absolute inset-0 z-10 flex flex-col bg-background">
+                      <ResearchPanel threadId={threadId} onClose={() => clearResearch(threadId)} />
+                    </div>
+                  )}
                   <div className="px-3 py-2 border-b text-sm font-medium truncate">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
@@ -1766,6 +2082,7 @@ function ThreadDetail() {
                                 isFirstMessage={isFirstMessage}
                                 isLastMessage={isLastMessage}
                                 status={status}
+                                threadId={threadId}
                                 reasoningContainerRef={reasoningContainerRef}
                                 onRegenerate={handleRegenerate}
                                 onEdit={handleEditMessage}
@@ -1802,24 +2119,40 @@ function ThreadDetail() {
             )}
           </div>
         ) : (
-          <>
-        <div className="px-4 md:px-8 pb-2 shrink-0">
-          <div className="mx-auto w-full md:w-4/5 xl:w-4/6 flex items-center gap-2 min-w-0">
-            {threadLogo && (
-              <img
-                src={threadLogo}
-                alt={thread?.title || 'Thread Logo'}
-                className="size-5 rounded-sm object-cover shrink-0"
-              />
-            )}
-            <h2 className="text-sm font-medium truncate">{thread?.title || 'New Thread'}</h2>
-          </div>
-        </div>
+          <div className={(pinnedArtifact || pinnedResearch) ? 'grid grid-cols-2 gap-2 px-2 pb-2 h-full' : 'flex flex-1 flex-col h-full overflow-hidden'}>
+          {/* Main chat column */}
+          <div className={(pinnedArtifact || pinnedResearch) ? 'h-full rounded-md border bg-background overflow-hidden flex flex-col' : 'flex flex-1 flex-col h-full overflow-hidden'}>
+        {/* Thread title — hide when it duplicates the first user message */}
+        {(() => {
+          const title = thread?.title || 'New Thread'
+          const firstUserMsg = chatMessages.find((m) => m.role === 'user')
+          const firstMsgText = firstUserMsg?.parts
+            .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+            .map((p) => p.text)
+            .join('')
+            .trim()
+          const titleMatchesFirst = firstMsgText && title === firstMsgText
+          if (titleMatchesFirst && !threadLogo) return null
+          return (
+            <div className="px-4 md:px-8 pb-2 shrink-0">
+              <div className="mx-auto w-full md:w-4/5 xl:w-4/6 flex items-center gap-2 min-w-0">
+                {threadLogo && (
+                  <img
+                    src={threadLogo}
+                    alt={title}
+                    className="size-5 rounded-sm object-cover shrink-0"
+                  />
+                )}
+                <h2 className="text-sm font-medium truncate">{title}</h2>
+              </div>
+            </div>
+          )
+        })()}
         {/* Messages Area */}
         <div className="flex-1 relative">
           <Conversation className="absolute inset-0 text-start">
             <ConversationContent
-              className={cn('mx-auto w-full md:w-4/5 xl:w-4/6')}
+              className={cn((pinnedArtifact || pinnedResearch) ? 'mx-auto w-full px-2' : 'mx-auto w-full md:w-4/5 xl:w-4/6')}
             >
               {chatMessages.map((message, index) => {
                 const isLastMessage = index === chatMessages.length - 1
@@ -1831,6 +2164,7 @@ function ThreadDetail() {
                     isFirstMessage={isFirstMessage}
                     isLastMessage={isLastMessage}
                     status={status}
+                    threadId={threadId}
                     reasoningContainerRef={reasoningContainerRef}
                     onRegenerate={handleRegenerate}
                     onEdit={handleEditMessage}
@@ -1875,7 +2209,7 @@ function ThreadDetail() {
         </div>
 
         {/* Chat Input - Fixed at bottom */}
-        <div className="py-4 mx-auto w-full md:w-4/5 xl:w-4/6">
+        <div className={(pinnedArtifact || pinnedResearch) ? 'p-2' : 'py-4 mx-auto w-full md:w-4/5 xl:w-4/6'}>
           <ChatInput
             threadId={threadId}
             model={threadModel}
@@ -1884,9 +2218,50 @@ function ThreadDetail() {
             chatStatus={status}
           />
         </div>
-          </>
+          </div>
+          {/* Right panel — Research takes priority over Artifact */}
+          {pinnedResearch && (
+            <ResearchPanel
+              threadId={threadId}
+              onClose={() => clearResearch(threadId)}
+            />
+          )}
+          {!pinnedResearch && pinnedArtifact && (
+            <ArtifactPanel
+              threadId={threadId}
+              onClose={() => clearArtifact(threadId)}
+            />
+          )}
+          </div>
         )}
       </div>
+
+      {/* Variable Prompt Modal */}
+      {activeTeam && activeTeam.variables && activeTeam.variables.length > 0 && (
+        <TeamVariablePrompt
+          open={showVariablePrompt}
+          onOpenChange={setShowVariablePrompt}
+          teamName={activeTeam.name}
+          variables={activeTeam.variables}
+          onSubmit={handleVariableSubmit}
+        />
+      )}
+
+      {/* Cost Approval Modal */}
+      {costApprovalState && (
+        <CostApprovalModal
+          open={true}
+          estimate={costApprovalState.estimate}
+          onApprove={() => {
+            costApprovalState.resolve(true)
+            setCostApprovalState(null)
+          }}
+          onCancel={() => {
+            costApprovalState.resolve(false)
+            setCostApprovalState(null)
+          }}
+        />
+      )}
     </div>
   )
 }

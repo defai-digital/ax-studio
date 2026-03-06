@@ -75,6 +75,10 @@ pub struct AppState {
     pub provider_configs: Arc<Mutex<HashMap<String, ProviderConfig>>>,
     /// Ax-Fabric backend service URLs (Retrieval, Agents, AkiDB, API Service)
     pub ax_fabric_service_config: Arc<Mutex<AxFabricServiceConfig>>,
+    /// Jupyter session ids per thread (thread_id → sandbox session_id)
+    pub sandbox_sessions: Arc<Mutex<HashMap<String, String>>>,
+    /// Base URL for the agent-infra/sandbox container
+    pub sandbox_url: Arc<Mutex<String>>,
 }
 
 impl RunningServiceEnum {

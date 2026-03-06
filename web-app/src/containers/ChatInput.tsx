@@ -18,7 +18,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu'
-import { ArrowRight, PlusIcon } from 'lucide-react'
+import { ArrowRight, PlusIcon, AppWindowIcon, SearchIcon } from 'lucide-react'
 import {
   IconPhoto,
   IconAtom,
@@ -30,6 +30,7 @@ import {
   IconLoader2,
   IconUser,
   IconBrain,
+  IconHierarchy2,
 } from '@tabler/icons-react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useGeneralSetting } from '@/hooks/useGeneralSetting'
@@ -99,6 +100,29 @@ type ChatInputProps = {
   onStop?: () => void
   chatStatus?: ChatStatus
 }
+
+const ARTIFACT_PROMPTS = [
+  { label: 'HTML Page',        prompt: 'Build an artifact-html page for '            },
+  { label: 'React Component',  prompt: 'Build an artifact-react component for '      },
+  { label: 'SVG Graphic',      prompt: 'Create an artifact-svg illustration of '     },
+  { label: 'Chart.js Chart',   prompt: 'Create an artifact-chartjs chart showing '   },
+  { label: 'Vega-Lite Chart',  prompt: 'Create an artifact-vega chart showing '      },
+] as const
+
+const DIAGRAM_PROMPTS = [
+  { label: 'Flowchart',        prompt: 'Draw a flowchart for '                        },
+  { label: 'Sequence Diagram', prompt: 'Draw a sequence diagram showing '             },
+  { label: 'Class Diagram',    prompt: 'Draw a class diagram for '                    },
+  { label: 'ER Diagram',       prompt: 'Draw an ER diagram for '                      },
+  { label: 'State Machine',    prompt: 'Draw a state diagram for '                    },
+  { label: 'Gantt Chart',      prompt: 'Create a Gantt chart for '                    },
+  { label: 'Mind Map',         prompt: 'Create a mind map for '                       },
+] as const
+
+const RESEARCH_PROMPTS = [
+  { label: 'Standard', prompt: '/research:standard ', description: 'Balanced depth with page scraping' },
+  { label: 'Deep',     prompt: '/research:deep ',     description: 'Thorough multi-level research'     },
+] as const
 
 const ChatInput = memo(function ChatInput({
   className,
@@ -1555,6 +1579,87 @@ const ChatInput = memo(function ChatInput({
                         </DropdownMenuSubContent>
                       </DropdownMenuSub>
                     )}
+                    {/* Generate Artifact quick-prompt */}
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger>
+                        <AppWindowIcon size={18} className="text-muted-foreground" />
+                        <span>Generate Artifact</span>
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        {ARTIFACT_PROMPTS.map(({ label, prompt }) => (
+                          <DropdownMenuItem
+                            key={label}
+                            onClick={() => {
+                              setPrompt(prompt)
+                              setTimeout(() => {
+                                if (textareaRef.current) {
+                                  textareaRef.current.focus()
+                                  const len = textareaRef.current.value.length
+                                  textareaRef.current.setSelectionRange(len, len)
+                                }
+                              }, 0)
+                            }}
+                          >
+                            <span>{label}</span>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                    {/* Generate Diagram quick-prompt */}
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger>
+                        <IconHierarchy2 size={18} className="text-muted-foreground" />
+                        <span>Generate Diagram</span>
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        {DIAGRAM_PROMPTS.map(({ label, prompt }) => (
+                          <DropdownMenuItem
+                            key={label}
+                            onClick={() => {
+                              setPrompt(prompt)
+                              setTimeout(() => {
+                                if (textareaRef.current) {
+                                  textareaRef.current.focus()
+                                  const len = textareaRef.current.value.length
+                                  textareaRef.current.setSelectionRange(len, len)
+                                }
+                              }, 0)
+                            }}
+                          >
+                            <span>{label}</span>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                    {/* Deep Research quick-prompt */}
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger>
+                        <SearchIcon size={18} className="text-muted-foreground" />
+                        <span>Deep Research</span>
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        {RESEARCH_PROMPTS.map(({ label, prompt, description }) => (
+                          <DropdownMenuItem
+                            key={label}
+                            onClick={() => {
+                              setPrompt(prompt)
+                              setTimeout(() => {
+                                if (textareaRef.current) {
+                                  textareaRef.current.focus()
+                                  const len = textareaRef.current.value.length
+                                  textareaRef.current.setSelectionRange(len, len)
+                                }
+                              }, 0)
+                            }}
+                          >
+                            <div className="flex flex-col gap-0.5">
+                              <span>{label}</span>
+                              <span className="text-[11px] text-muted-foreground">{description}</span>
+                            </div>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
                   </DropdownMenuContent>
                 </DropdownMenu>
                 {selectedModel?.capabilities?.includes('embeddings') && (

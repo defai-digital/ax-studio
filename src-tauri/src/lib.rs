@@ -66,6 +66,7 @@ pub fn run() {
         core::filesystem::commands::decompress,
         core::filesystem::commands::open_dialog,
         core::filesystem::commands::save_dialog,
+        core::filesystem::commands::write_binary_file,
         core::filesystem::commands::read_akidb_config,
         core::filesystem::commands::write_akidb_config,
         // App configuration commands
@@ -127,9 +128,28 @@ pub fn run() {
         // Download
         core::downloads::commands::download_files,
         core::downloads::commands::cancel_download_task,
+        // Code execution
+        core::code_execution::commands::execute_python_code,
+        core::code_execution::commands::check_sandbox_status,
+        core::code_execution::commands::start_sandbox,
+        core::code_execution::commands::stop_sandbox,
+        core::code_execution::commands::reset_sandbox_session,
+        core::code_execution::commands::update_sandbox_url,
+        // Research commands
+        core::research::commands::scrape_url,
+        core::research::commands::web_search,
         // Custom updater commands (desktop only)
         core::updater::commands::check_for_app_updates,
         core::updater::commands::is_update_available,
+        // Agent teams
+        core::agent_teams::list_agent_teams,
+        core::agent_teams::get_agent_team,
+        core::agent_teams::save_agent_team,
+        core::agent_teams::delete_agent_team,
+        // Agent run logs
+        core::agent_run_logs::save_agent_run_log,
+        core::agent_run_logs::list_agent_run_logs,
+        core::agent_run_logs::get_agent_run_log,
     ]);
 
     // Mobile: no updater commands
@@ -150,6 +170,7 @@ pub fn run() {
         core::filesystem::commands::decompress,
         core::filesystem::commands::open_dialog,
         core::filesystem::commands::save_dialog,
+        core::filesystem::commands::write_binary_file,
         core::filesystem::commands::read_akidb_config,
         core::filesystem::commands::write_akidb_config,
         // App configuration commands
@@ -212,6 +233,25 @@ pub fn run() {
         // Download
         core::downloads::commands::download_files,
         core::downloads::commands::cancel_download_task,
+        // Code execution
+        core::code_execution::commands::execute_python_code,
+        core::code_execution::commands::check_sandbox_status,
+        core::code_execution::commands::start_sandbox,
+        core::code_execution::commands::stop_sandbox,
+        core::code_execution::commands::reset_sandbox_session,
+        core::code_execution::commands::update_sandbox_url,
+        // Research commands
+        core::research::commands::scrape_url,
+        core::research::commands::web_search,
+        // Agent teams
+        core::agent_teams::list_agent_teams,
+        core::agent_teams::get_agent_team,
+        core::agent_teams::save_agent_team,
+        core::agent_teams::delete_agent_team,
+        // Agent run logs
+        core::agent_run_logs::save_agent_run_log,
+        core::agent_run_logs::list_agent_run_logs,
+        core::agent_run_logs::get_agent_run_log,
     ]);
 
     let app = app_builder
@@ -229,6 +269,8 @@ pub fn run() {
             mcp_server_pids: Arc::new(Mutex::new(HashMap::new())),
             provider_configs: Arc::new(Mutex::new(HashMap::new())),
             ax_fabric_service_config: Arc::new(Mutex::new(AxFabricServiceConfig::default())),
+            sandbox_sessions: Arc::new(Mutex::new(HashMap::new())),
+            sandbox_url: Arc::new(Mutex::new("http://127.0.0.1:8080".to_string())),
         })
         .setup(|app| {
             app.handle().plugin(

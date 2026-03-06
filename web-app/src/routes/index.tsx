@@ -35,6 +35,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { useAgentTeamStore } from '@/stores/agent-team-store'
 
 export const Route = createFileRoute(route.home as any)({
   component: Index,
@@ -62,6 +63,21 @@ function Index() {
   const [threadPromptDraft, setThreadPromptDraft] = useState(
     () => sessionStorage.getItem(SESSION_STORAGE_KEY.NEW_THREAD_PROMPT) || ''
   )
+
+  // Agent Team selection for new threads
+  const agentTeams = useAgentTeamStore((state) => state.teams)
+  const agentTeamsLoaded = useAgentTeamStore((state) => state.isLoaded)
+  const loadTeams = useAgentTeamStore((state) => state.loadTeams)
+  const [selectedTeamId, setSelectedTeamId] = useState<string | undefined>(
+    () => sessionStorage.getItem(SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID) || undefined
+  )
+  const selectedTeam = agentTeams.find((t) => t.id === selectedTeamId)
+
+  useEffect(() => {
+    if (!agentTeamsLoaded) {
+      loadTeams()
+    }
+  }, [agentTeamsLoaded, loadTeams])
 
   const promptResolution = useMemo(
     () =>
@@ -141,6 +157,15 @@ function Index() {
     }
   }, [threadPromptDraft])
 
+  // Persist selected team ID to sessionStorage so the new thread picks it up
+  useEffect(() => {
+    if (selectedTeamId) {
+      sessionStorage.setItem(SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID, selectedTeamId)
+    } else {
+      sessionStorage.removeItem(SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID)
+    }
+  }, [selectedTeamId])
+
   if (!hasValidProviders) {
     return <SetupScreen onComplete={() => setSetupCompleted(true)} />
   }
@@ -187,6 +212,30 @@ function Index() {
               >
                 Debug
               </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant={selectedTeamId ? 'secondary' : 'outline'}
+                    size="sm"
+                  >
+                    {selectedTeam ? selectedTeam.name : 'Agent Team'}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="center">
+                  <DropdownMenuItem onSelect={() => setSelectedTeamId(undefined)}>
+                    No Team (single agent)
+                  </DropdownMenuItem>
+                  {agentTeams.map((team) => (
+                    <DropdownMenuItem
+                      key={team.id}
+                      onSelect={() => setSelectedTeamId(team.id)}
+                    >
+                      {team.name}
+                      {team.id === selectedTeamId && ' ✓'}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm">

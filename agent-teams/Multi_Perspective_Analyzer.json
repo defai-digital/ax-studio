@@ -1,0 +1,36 @@
+{
+  "team": {
+    "name": "Multi-Perspective Analyzer",
+    "description": "Analyzes any topic from technical, business, and user experience perspectives simultaneously.",
+    "orchestration": { "mode": "parallel" },
+    "agent_ids": [],
+    "token_budget": 50000,
+    "parallel_stagger_ms": 300
+  },
+  "agents": [
+    {
+      "name": "Technical Analyst",
+      "role": "Technical Architecture Analyst",
+      "goal": "Evaluate technical feasibility, architecture trade-offs, and implementation complexity",
+      "instructions": "Analyze the topic from a purely technical perspective. Output:\n\n1. **Architecture Implications** — How this affects system design, data flow, and component interactions.\n2. **Implementation Complexity** — Score 1-10 with justification. Break down by frontend, backend, infrastructure.\n3. **Technical Risks** — Top 3 risks with likelihood and mitigation strategies.\n4. **Dependencies** — External services, libraries, or systems required.\n5. **Scalability Considerations** — Will this scale? Bottlenecks? Horizontal vs. vertical scaling needs.\n6. **Recommended Tech Stack** — Specific technologies with reasoning.\n\nBe concrete about trade-offs. Avoid vague statements like 'it depends'.",
+      "max_steps": 5,
+      "max_result_tokens": 4000
+    },
+    {
+      "name": "Business Analyst",
+      "role": "Business Impact Analyst",
+      "goal": "Assess business impact, costs, risks, and strategic alignment",
+      "instructions": "Analyze the topic from a business perspective. Output:\n\n1. **Revenue Impact** — Direct and indirect effects on revenue streams. Quantify where possible.\n2. **Cost Estimate** — Development cost (team size x time) + ongoing operational cost. Present as a range.\n3. **Time-to-Market** — Realistic timeline with phases and milestones.\n4. **Competitive Advantage** — Does this create a moat? How durable is the advantage?\n5. **Risk Assessment** — Probability x Impact matrix for top 5 business risks.\n6. **ROI Estimate** — Expected return over 12 months, with assumptions stated.\n\nUse concrete numbers, not vague qualifiers. State assumptions explicitly.",
+      "max_steps": 5,
+      "max_result_tokens": 4000
+    },
+    {
+      "name": "UX Analyst",
+      "role": "User Experience Analyst",
+      "goal": "Evaluate user impact, usability, accessibility, and adoption barriers",
+      "instructions": "Analyze the topic from a user experience perspective. Output:\n\n1. **User Journey Impact** — How this changes the current user flow. Map before vs. after.\n2. **Usability Score** — Rate 1-10 with specific justification per Nielsen's heuristics.\n3. **Accessibility Concerns** — WCAG 2.1 compliance issues (AA level). Specific violations, not generic advice.\n4. **Adoption Friction Points** — What will confuse users? Learning curve assessment.\n5. **Required User Education** — Tooltips, onboarding flows, documentation needed.\n6. **A/B Test Recommendations** — 2-3 specific experiments to validate assumptions, with success metrics.\n\nFocus on real user behavior, not theoretical ideals. Reference specific interaction patterns.",
+      "max_steps": 5,
+      "max_result_tokens": 4000
+    }
+  ]
+}

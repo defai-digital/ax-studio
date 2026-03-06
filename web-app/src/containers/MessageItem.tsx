@@ -25,6 +25,10 @@ import TokenSpeedIndicator from '@/containers/TokenSpeedIndicator'
 import { extractFilesFromPrompt, FileMetadata } from '@/lib/fileMetadata'
 import { useMemo } from 'react'
 import { Button } from '@/components/ui/button'
+import { AgentOutputCard } from '@/components/AgentOutputCard'
+import { RunLogSummary } from '@/components/RunLogViewer'
+import type { AgentStatusData } from '@/types/agent-data-parts'
+import type { RunLogData } from '@/lib/multi-agent/run-log'
 
 const CHAT_STATUS = {
   STREAMING: 'streaming',
@@ -42,6 +46,7 @@ export type MessageItemProps = {
   isFirstMessage: boolean
   isLastMessage: boolean
   status: ChatStatus
+  threadId?: string
   reasoningContainerRef?: React.RefObject<HTMLDivElement | null>
   onRegenerate?: (messageId: string) => void
   onEdit?: (messageId: string, newText: string) => void
@@ -55,6 +60,7 @@ export const MessageItem = memo(
     message,
     isLastMessage,
     status,
+    threadId,
     reasoningContainerRef,
     onRegenerate,
     onEdit,
@@ -185,6 +191,7 @@ export const MessageItem = memo(
                 content={part.text}
                 isStreaming={isStreaming && isLastPart}
                 messageId={message.id}
+                threadId={threadId}
               />
             </>
           )}
@@ -279,11 +286,51 @@ export const MessageItem = memo(
     }
 
     const renderToolPart = (part: any, partIndex: number) => {
-      if (!part.type.startsWith('tool-') || !('state' in part)) {
+      // AI SDK v5 emits two shapes for tool parts:
+      //   ToolUIPart      → type: 'tool-{name}'   (static/chat-level tools)
+      //   DynamicToolUIPart → type: 'dynamic-tool', toolName: string  (streamText tools)
+      // Both carry a `state` field; anything else is not a tool part.
+      const isDynamic = part.type === 'dynamic-tool'
+      const isStatic = typeof part.type === 'string' && part.type.startsWith('tool-')
+      if ((!isDynamic && !isStatic) || !('state' in part)) {
         return null
       }
 
-      const toolName = part.type.split('-').slice(1).join('-')
+      const toolName: string = isDynamic
+        ? (part.toolName as string)
+        : part.type.split('-').slice(1).join('-')
+
+      // generate_diagram: render the diagram inline via the Mermaid pipeline
+      // instead of showing a JSON tool card
+      if (toolName === 'generate_diagram') {
+        // Strip fence markers if the model returned them inside the source field
+        // (double-fencing causes a parse error: ```mermaid\n```mermaid\n...\n```)
+        const rawSource: string = part.output?.source ?? ''
+        const source = rawSource
+          .replace(/^```mermaid\s*/i, '')
+          .replace(/```\s*$/, '')
+          .trim()
+        const title: string = part.output?.title ?? ''
+        if (source) {
+          return (
+            <div key={`${message.id}-${partIndex}`} className="mb-2">
+              {title && (
+                <p className="text-xs text-muted-foreground mb-1 font-medium">
+                  {title}
+                </p>
+              )}
+              <RenderMarkdown
+                content={`\`\`\`mermaid\n${source}\n\`\`\``}
+                messageId={message.id}
+              />
+            </div>
+          )
+        }
+        // Tool call in progress — source not yet available, render nothing.
+        // The diagram will appear as soon as the tool output resolves.
+        return null
+      }
+
       return (
         <Tool
           key={`${message.id}-${partIndex}`}
@@ -324,6 +371,19 @@ export const MessageItem = memo(
       )
     }
 
+    // Deduplicate agent status parts: only render the latest status per agent_id.
+    // Each agent emits 'running' then 'complete'/'error' — showing both would be confusing.
+    const latestAgentStatusIndex = useMemo(() => {
+      const lastIndex = new Map<string, number>()
+      message.parts.forEach((part, i) => {
+        if (part.type === 'data-agentStatus') {
+          const data = (part as any).data as AgentStatusData
+          lastIndex.set(data.agent_id, i)
+        }
+      })
+      return lastIndex
+    }, [message.parts])
+
     return (
       <div className="w-full mb-4">
 
@@ -339,6 +399,27 @@ export const MessageItem = memo(
                 part as { type: 'reasoning'; text: string },
                 i
               )
+            case 'data-agentStatus': {
+              const data = (part as any).data as AgentStatusData
+              // Skip superseded status parts (e.g., 'running' followed by 'complete')
+              if (latestAgentStatusIndex.get(data.agent_id) !== i) return null
+              return (
+                <AgentOutputCard
+                  key={`agent-${data.agent_id}-${i}`}
+                  agentName={data.agent_name}
+                  agentRole={data.agent_role}
+                  status={data.status}
+                  tokensUsed={data.tokens_used}
+                  toolCalls={data.tool_calls}
+                  error={data.error}
+                  isCollapsed={data.status === 'complete' && !isLastMessage}
+                />
+              )
+            }
+            case 'data-runLog': {
+              const data = (part as any).data as RunLogData
+              return <RunLogSummary key={`runlog-${data.id}`} runLog={data} />
+            }
             default:
               return renderToolPart(part, i)
           }

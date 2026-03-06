@@ -872,7 +872,12 @@ async fn proxy_request<R: tauri::Runtime>(
 
                             if let Some(provider_cfg) = provider_config {
                                 target_base_url = provider_cfg.base_url.clone().map(|url| {
-                                    format!("{}{}", url.trim_end_matches('/'), "/messages")
+                                    let trimmed = url
+                                        .trim_end_matches('/')
+                                        .trim_end_matches("/messages")
+                                        .trim_end_matches("/chat/completions")
+                                        .trim_end_matches("/completions");
+                                    format!("{trimmed}/messages")
                                 });
                                 session_api_key = provider_cfg.api_key.clone();
                                 provider_custom_headers = provider_cfg.custom_headers.clone();
@@ -997,7 +1002,18 @@ async fn proxy_request<R: tauri::Runtime>(
 
                             if let Some(provider_cfg) = provider_config {
                                 if let Some(api_url) = provider_cfg.base_url.clone() {
-                                    target_base_url = Some(format!("{api_url}{destination_path}"));
+                                    // Strip known endpoint suffixes from base_url before
+                                    // appending destination_path.  Providers like Cloudflare
+                                    // gateway have base_urls that already include the endpoint
+                                    // (e.g. ".../compat/chat/completions").  Without stripping,
+                                    // the final URL would be doubled.
+                                    let trimmed_url = api_url
+                                        .trim_end_matches('/')
+                                        .trim_end_matches("/chat/completions")
+                                        .trim_end_matches("/completions")
+                                        .trim_end_matches("/embeddings")
+                                        .trim_end_matches("/messages");
+                                    target_base_url = Some(format!("{trimmed_url}{destination_path}"));
                                 } else {
                                     target_base_url = None;
                                 }
@@ -1456,6 +1472,11 @@ async fn proxy_request<R: tauri::Runtime>(
                     .text()
                     .await
                     .unwrap_or_else(|e| format!("Failed to read error body: {}", e));
+
+                log::error!(
+                    "Upstream provider returned {status} for {destination_path}: {}",
+                    &error_body[..error_body.len().min(500)]
+                );
 
                 let mut error_response = Response::builder().status(status);
                 error_response = add_cors_headers_with_host_and_origin(
