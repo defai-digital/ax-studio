@@ -252,7 +252,16 @@ export default class AxFabricLlamacppExtension extends AIEngine {
       case 'offload_mmproj':        cfg.offload_mmproj = bool(v); break
       case 'cpu_moe':               cfg.cpu_moe = bool(v); break
       case 'n_cpu_moe':             cfg.n_cpu_moe = num(v, 0); break
-      case 'engine_type':           cfg.engine_type = str(v, 'llamacpp'); break
+      case 'engine_type': {
+        const prev = cfg.engine_type
+        cfg.engine_type = str(v, 'llamacpp')
+        // When engine changes, unload active models and stop the old engine
+        // so the next load uses the newly selected engine.
+        if (prev && prev !== cfg.engine_type) {
+          this._handleEngineSwitch(prev, cfg.engine_type)
+        }
+        break
+      }
     }
   }
 
@@ -742,6 +751,37 @@ export default class AxFabricLlamacppExtension extends AIEngine {
     } catch (e) {
       console.warn('[llamacpp] _unloadActiveTextModels error:', e)
     }
+  }
+
+  /**
+   * Handle engine switch: unload all active text models and stop the
+   * ax-serving process if we are moving away from it.  Fire-and-forget
+   * because onSettingUpdate is synchronous.
+   */
+  private _handleEngineSwitch(from: string, to: string): void {
+    console.log(`[llamacpp] Engine switch: ${from} → ${to}, unloading active text models`)
+
+    const doSwitch = async () => {
+      // 1. Unload all active text models from both engines
+      await this._unloadActiveTextModels('')
+
+      // 2. If we are leaving ax-serving, stop its process and reset state
+      if (from === 'ax-serving' && this.axServingPid > 0) {
+        try {
+          await unloadLlamaModel(this.axServingPid)
+          console.log('[llamacpp] ax-serving process stopped after engine switch')
+        } catch (e) {
+          console.warn('[llamacpp] Failed to stop ax-serving process:', e)
+        }
+        this.axServingPid = 0
+        this.axServingPort = 0
+        this.axServingSessions.clear()
+      }
+    }
+
+    doSwitch().catch((e) =>
+      console.warn('[llamacpp] Engine switch cleanup error:', e)
+    )
   }
 
   // ─── unload() ─────────────────────────────────────────────────────────────
