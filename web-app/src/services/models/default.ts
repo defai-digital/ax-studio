@@ -23,6 +23,7 @@ import type {
   CatalogModel,
   ModelValidationResult,
 } from './types'
+import staticCatalog from '@/data/model-catalog.json'
 
 // Default provider for local inference
 const defaultProvider = 'llamacpp'
@@ -41,23 +42,7 @@ export class DefaultModelsService implements ModelsService {
   }
 
   async fetchModelCatalog(): Promise<ModelCatalog> {
-    try {
-      const response = await fetch(MODEL_CATALOG_URL)
-
-      if (!response.ok) {
-        throw new Error(
-          `Failed to fetch model catalog: ${response.status} ${response.statusText}`
-        )
-      }
-
-      const catalog: ModelCatalog = await response.json()
-      return catalog
-    } catch (error) {
-      console.error('Error fetching model catalog:', error)
-      throw new Error(
-        `Failed to fetch model catalog: ${error instanceof Error ? error.message : 'Unknown error'}`
-      )
-    }
+    return staticCatalog as ModelCatalog
   }
 
   async fetchHuggingFaceRepo(

@@ -448,7 +448,13 @@ export default class AxFabricLlamacppExtension extends AIEngine {
 
       // ax-serving mode for text models (embedding/vision falls back to llamacpp)
       if (engineType === 'ax-serving' && !embedding && !hasVision) {
-        return await this._doLoadAxServing(modelId, cfg)
+        try {
+          return await this._doLoadAxServing(modelId, cfg)
+        } catch (axErr: any) {
+          console.warn(
+            `[llamacpp] ax-serving failed, falling back to llamacpp: ${axErr?.message ?? axErr}`
+          )
+        }
       }
 
       // llamacpp mode (also serves as fallback for ax-serving embedding/vision)
@@ -622,7 +628,8 @@ export default class AxFabricLlamacppExtension extends AIEngine {
 
     // Merge global config with per-model override settings
     // Per-model settings (ctx_size, n_gpu_layers, etc.) take precedence
-    const mergedConfig: Partial<LlamacppConfig> = { ...this.config }
+    // Force engine_type to 'llamacpp' — this method always runs llama-server
+    const mergedConfig: Partial<LlamacppConfig> = { ...this.config, engine_type: 'llamacpp' }
     if (overrideSettings) {
       for (const [key, value] of Object.entries(overrideSettings)) {
         if (value !== undefined && value !== '' && value !== null) {
