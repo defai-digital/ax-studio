@@ -68,16 +68,15 @@ export function buildParallelOrchestration(
           if (staggerMs > 0 && index > 0) {
             if (abortSignal?.aborted) throw abortSignal.reason
             await new Promise<void>((resolve, reject) => {
-              const timer = setTimeout(resolve, staggerMs * index)
               const onAbort = () => {
                 clearTimeout(timer)
                 reject(abortSignal!.reason)
               }
-              abortSignal?.addEventListener('abort', onAbort, { once: true })
-              // Clean up listener when timer fires normally
-              setTimeout(() => {
+              const timer = setTimeout(() => {
                 abortSignal?.removeEventListener('abort', onAbort)
+                resolve()
               }, staggerMs * index)
+              abortSignal?.addEventListener('abort', onAbort, { once: true })
             })
           }
 

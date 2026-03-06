@@ -796,14 +796,17 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
           // Increased threshold to 12 steps (default agents.length * 2 + 5 can be up to 25)
           // Keep original user messages (step 0) plus the last 8 steps
           if (steps && steps.length > 12) {
-            // Keep tool results from trimmed steps so the model has tool call context
+            // Keep tool call/result pairs from trimmed steps to maintain API validity
             const trimmedSteps = steps.slice(1, -8)
-            const toolMessages = trimmedSteps.flatMap((s) =>
-              s.messages.filter((m) => m.role === 'tool')
+            const toolRelatedMessages = trimmedSteps.flatMap((s) =>
+              s.messages.filter((m) =>
+                m.role === 'tool' ||
+                (m.role === 'assistant' && (m as any).tool_calls?.length)
+              )
             )
             result.messages = [
               ...steps[0].messages,
-              ...toolMessages,
+              ...toolRelatedMessages,
               ...steps.slice(-8).flatMap((s) => s.messages),
             ]
           }

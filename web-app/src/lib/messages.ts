@@ -547,7 +547,7 @@ export function convertThreadMessageToUIMessage(
         try {
           toolInput = JSON.parse(toolInput)
         } catch {
-          toolInput = toolInput
+          // keep as raw string
         }
       }
       const toolCallId = tc.tool?.id || tc.id

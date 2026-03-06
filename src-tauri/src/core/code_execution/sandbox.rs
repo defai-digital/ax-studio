@@ -250,7 +250,6 @@ pub async fn execute_via_sandbox(
 ) -> Result<SandboxExecutionResult, String> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(timeout_secs + 10))
-        .connection_verbose(true)
         .build()
         .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
 

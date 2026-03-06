@@ -51,6 +51,13 @@ pub fn mv<R: Runtime>(app_handle: tauri::AppHandle<R>, args: Vec<String>) -> Res
         ));
     }
 
+    if !destination.starts_with(&app_data_folder) {
+        return Err(format!(
+            "mv error: destination path {} is not under app data folder",
+            destination.display()
+        ));
+    }
+
     if !source.exists() {
         return Err("mv error: Source path does not exist".to_string());
     }

@@ -199,7 +199,11 @@ export const useChatSessions = create<ChatSessionState>((set, get) => ({
   removeSession: (sessionId) => {
     const existing = get().sessions[sessionId];
     if (!existing) {
-      delete standaloneData[sessionId];
+      // Remove from standalone data immutably
+      set((state) => {
+        const { [sessionId]: _, ...rest } = state.standaloneData;
+        return { standaloneData: rest };
+      });
       return;
     }
 
@@ -208,9 +212,9 @@ export const useChatSessions = create<ChatSessionState>((set, get) => ({
       if (!state.sessions[sessionId]) {
         return state;
       }
-      const rest = { ...state.sessions };
-      delete rest[sessionId];
-      return { sessions: rest };
+      const { [sessionId]: _s, ...restSessions } = state.sessions;
+      const { [sessionId]: _d, ...restStandalone } = state.standaloneData;
+      return { sessions: restSessions, standaloneData: restStandalone };
     });
 
     // Then cleanup (existing is a copy, safe to use after removal)
@@ -226,8 +230,6 @@ export const useChatSessions = create<ChatSessionState>((set, get) => ({
     } catch (error) {
       console.error("Failed to stop chat session", error);
     }
-
-    delete standaloneData[sessionId];
   },
   clearSessions: () => {
     const sessions = get().sessions;
@@ -246,11 +248,6 @@ export const useChatSessions = create<ChatSessionState>((set, get) => ({
       }
     });
 
-    // Clear standalone data
-    Object.keys(standaloneData).forEach((key) => {
-      delete standaloneData[key];
-    });
-
-    set({ sessions: {}, activeConversationId: undefined });
+    set({ sessions: {}, standaloneData: {}, activeConversationId: undefined });
   },
 }));

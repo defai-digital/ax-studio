@@ -295,9 +295,7 @@ pub fn setup_mcp<R: Runtime>(app: &App<R>) {
         if let Err(e) = run_mcp_commands(&app_handle, servers).await {
             log::error!("Failed to run mcp commands: {e}");
         }
-        app_handle
-            .emit("mcp-update", "MCP servers updated")
-            .unwrap();
+        let _ = app_handle.emit("mcp-update", "MCP servers updated");
     });
 }
 

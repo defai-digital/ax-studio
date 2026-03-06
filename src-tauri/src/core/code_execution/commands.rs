@@ -158,7 +158,10 @@ pub async fn start_sandbox(
 pub async fn stop_sandbox(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    stop_sandbox_container()?;
+    tokio::task::spawn_blocking(stop_sandbox_container)
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())?;
     // Clear all sandbox sessions since the container is gone
     let mut sessions = state.sandbox_sessions.lock().await;
     sessions.clear();

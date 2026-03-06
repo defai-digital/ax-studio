@@ -232,6 +232,45 @@
 
 ---
 
+---
+
+## Verification Review — Additional Bugs Found & Fixed
+
+After the initial 54-bug pass, a comprehensive 4-agent code review identified and fixed additional issues:
+
+### Critical (runtime crashes / security)
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `chat-session-store.ts:202,230,250` | Bare `standaloneData` references after moving into Zustand store — `ReferenceError` at runtime | Replaced with immutable `set()` updates |
+| `mcp/commands.rs:476-506` | `check_ax_fabric_browser_extension_connected` held `mcp_servers` lock across up to 25s of awaits | Clone Arc ref, drop lock before awaits |
+| `mcp/helpers.rs:210-225` | Health-check failure cleanup held lock across `service.cancel().await` | Remove from map first, drop lock, then cancel |
+| `filesystem/helpers.rs:22` | `canonicalize()` fallback to raw path bypassed traversal check for non-existent paths | Use `normalize_path()` as fallback instead of raw path |
+
+### High / Medium
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `custom-chat-transport.ts:798` | Context compression kept tool messages but dropped assistant tool_call messages — API validation errors | Also preserve assistant messages with `tool_calls` |
+| `mcp/commands.rs:246-276` | `call_tool` Phase 1 still held lock across `list_all_tools().await` | Collect Arc refs, drop lock, then search |
+| `parallel-orchestration.ts:70-81` | Abort listener cleanup used separate `setTimeout` with identical delay — race condition | Clean up listener inside resolve callback |
+| `filesystem/commands.rs:47-58` | `mv` only validated source path, not destination against `app_data_folder` | Added `starts_with` check on destination |
+| `code_execution/commands.rs:161` | `stop_sandbox_container()` blocked async runtime (up to 10s Docker stop) | Wrapped in `spawn_blocking` |
+| `downloads/helpers.rs:720` | Last remaining `.unwrap()` on `app.emit()` | Changed to `.ok()` |
+| `useThreads.ts:343,366,389,422,448` | 6 `updateThread` calls missing `.catch()` — unhandled promise rejections | Added `.catch(console.error)` to all |
+| `threads/commands.rs:114-116` | `modify_thread` used `fs::write` directly instead of atomic write | Added tmp+rename pattern |
+
+### Low
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `sandbox.rs:253` | `connection_verbose(true)` debug logging left in production | Removed |
+| `setup.rs:300` | `.unwrap()` on `app.emit()` | Changed to `let _ =` |
+| `mcp/helpers.rs:452,467` | `.to_str().unwrap()` on cache_dir paths | Changed to `.to_string_lossy()` |
+| `messages.ts:550` | No-op self-assignment `toolInput = toolInput` in catch block | Replaced with empty catch comment |
+
+---
+
 ## Verification Results
 
 | Check | Result |
@@ -240,3 +279,4 @@
 | `tsc --noEmit` | Pass (zero errors) |
 | All type errors from Arc refactor | Resolved |
 | Command registration (`lib.rs`) | Compatible — Tauri auto-handles `Result<T, String>` return types |
+| Verification review (4-agent audit) | All critical/high/medium issues fixed |

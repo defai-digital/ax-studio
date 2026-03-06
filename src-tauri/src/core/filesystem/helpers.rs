@@ -1,10 +1,11 @@
 use crate::core::app::commands::get_app_data_folder_path;
-use ax_fabric_utils::normalize_file_path;
+use ax_fabric_utils::{normalize_file_path, normalize_path};
 use std::path::PathBuf;
 use tauri::Runtime;
 
 pub fn resolve_path<R: Runtime>(app_handle: tauri::AppHandle<R>, path: &str) -> PathBuf {
     let app_data_folder = get_app_data_folder_path(app_handle.clone());
+    let canonical_app_data = normalize_path(&app_data_folder);
     let path = if path.starts_with("file:/") || path.starts_with("file:\\") {
         let normalized = normalize_file_path(path);
         let relative_normalized = normalized
@@ -19,13 +20,16 @@ pub fn resolve_path<R: Runtime>(app_handle: tauri::AppHandle<R>, path: &str) -> 
     if path.starts_with("http://") || path.starts_with("https://") {
         path
     } else {
-        let resolved = path.canonicalize().unwrap_or(path);
+        // Use normalize_path (resolves .. without requiring path to exist)
+        // then try canonicalize for symlink resolution if the path exists
+        let resolved = path.canonicalize()
+            .unwrap_or_else(|_| normalize_path(&path));
         // Security: ensure resolved path is within the app data folder
-        if !resolved.starts_with(&app_data_folder) {
+        if !resolved.starts_with(&canonical_app_data) {
             log::warn!(
                 "Path traversal blocked: {} is outside app data folder {}",
                 resolved.display(),
-                app_data_folder.display()
+                canonical_app_data.display()
             );
             return app_data_folder;
         }

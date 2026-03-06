@@ -113,7 +113,9 @@ pub async fn modify_thread<R: Runtime>(
 
     let path = get_thread_metadata_path(app_handle.clone(), thread_id);
     let data = serde_json::to_string_pretty(&thread).map_err(|e| e.to_string())?;
-    fs::write(path, data).map_err(|e| e.to_string())?;
+    let tmp_path = path.with_extension("json.tmp");
+    fs::write(&tmp_path, &data).map_err(|e| e.to_string())?;
+    fs::rename(&tmp_path, &path).map_err(|e| e.to_string())?;
     Ok(())
 }
 

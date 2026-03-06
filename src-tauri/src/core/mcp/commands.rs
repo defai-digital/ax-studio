@@ -242,39 +242,47 @@ pub async fn call_tool(
         cancellations.insert(token.clone(), cancel_tx);
     }
 
-    // Phase 1: Find which server has the tool (hold lock briefly)
-    let target_service = {
+    // Phase 1: Collect Arc refs under lock, then search without lock
+    let (server_refs, server_not_found) = {
         let servers = state.mcp_servers.lock().await;
 
-        let servers_to_check: Vec<(&String, &Arc<crate::core::state::RunningServiceEnum>)> =
+        let refs: Vec<(String, Arc<crate::core::state::RunningServiceEnum>)> =
             if let Some(ref server) = server_name {
-                servers.iter().filter(|(name, _)| *name == server).collect()
+                servers.iter()
+                    .filter(|(name, _)| *name == server)
+                    .map(|(name, svc)| (name.clone(), svc.clone()))
+                    .collect()
             } else {
-                servers.iter().collect()
+                servers.iter()
+                    .map(|(name, svc)| (name.clone(), svc.clone()))
+                    .collect()
             };
 
-        if servers_to_check.is_empty() {
-            if let Some(server) = server_name {
-                return Err(format!("Server '{server}' not found"));
-            }
-        }
-
-        let mut found = None;
-        for (srv_name, service) in servers_to_check.iter() {
-            let tools = match timeout(timeout_duration, service.list_all_tools()).await {
-                Ok(Ok(tools)) => tools,
-                _ => continue,
-            };
-
-            if tools.iter().any(|t| t.name == tool_name) {
-                println!("Found tool {tool_name} in server {srv_name}");
-                found = Some((*service).clone());
-                break;
-            }
-        }
-        found
+        let not_found = refs.is_empty() && server_name.is_some();
+        (refs, not_found)
     };
     // Lock is dropped here
+
+    if server_not_found {
+        if let Some(ref server) = server_name {
+            return Err(format!("Server '{server}' not found"));
+        }
+    }
+
+    // Search for tool without holding lock
+    let mut target_service = None;
+    for (srv_name, service) in server_refs.iter() {
+        let tools = match timeout(timeout_duration, service.list_all_tools()).await {
+            Ok(Ok(tools)) => tools,
+            _ => continue,
+        };
+
+        if tools.iter().any(|t| t.name == tool_name) {
+            log::debug!("Found tool {tool_name} in server {srv_name}");
+            target_service = Some(service.clone());
+            break;
+        }
+    }
 
     let service = match target_service {
         Some(s) => s,
@@ -476,13 +484,16 @@ fn get_result_text(result: &rmcp::model::CallToolResult) -> Option<&str> {
 pub async fn check_ax_fabric_browser_extension_connected(
     state: State<'_, AppState>,
 ) -> Result<bool, String> {
-    let servers = state.mcp_servers.lock().await;
-    let service = match servers.get("Ax-Fabric Browser MCP") {
-        Some(s) => s,
-        None => return Ok(false),
+    // Clone Arc ref and drop lock before any await calls
+    let service = {
+        let servers = state.mcp_servers.lock().await;
+        match servers.get("Ax-Fabric Browser MCP") {
+            Some(s) => s.clone(),
+            None => return Ok(false),
+        }
     };
 
-    // Check available tools
+    // Check available tools (lock is dropped)
     let tools = match timeout(Duration::from_secs(2), service.list_all_tools()).await {
         Ok(Ok(tools)) if !tools.is_empty() => tools,
         _ => return Ok(false),
@@ -492,7 +503,7 @@ pub async fn check_ax_fabric_browser_extension_connected(
 
     // Try simple ping first if available
     if has_ping {
-        match try_ping_tool(service).await {
+        match try_ping_tool(&service).await {
             PingResult::Connected => return Ok(true),
             PingResult::NotConnected => return Ok(false),
             PingResult::ToolNotAvailable => {
@@ -502,7 +513,7 @@ pub async fn check_ax_fabric_browser_extension_connected(
     }
 
     // Fallback to browser_snapshot
-    try_browser_snapshot_tool(service).await
+    try_browser_snapshot_tool(&service).await
 }
 
 enum PingResult {

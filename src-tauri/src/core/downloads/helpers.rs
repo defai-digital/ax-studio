@@ -717,7 +717,7 @@ async fn download_single_file(
         transferred: combined_transferred,
         total: combined_total,
     };
-    app.emit(&evt_name, evt).unwrap();
+    app.emit(&evt_name, evt).ok();
 
     // rename tmp file to final file
     tokio::fs::rename(&tmp_save_path, &save_path)

@@ -261,6 +261,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
         getServiceHub()
           .threads()
           .updateThread({ ...thread, isFavorite: false })
+          .catch(console.error)
       })
       return { threads: updatedThreads }
     })
@@ -346,6 +347,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
             ...currentThread,
             assistants: assistant ? [{ ...assistant, model: currentThread.model }] : [],
           })
+          .catch(console.error)
       return {
         threads: {
           ...state.threads,
@@ -366,6 +368,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
         getServiceHub()
           .threads()
           .updateThread({ ...currentThread, model })
+          .catch(console.error)
       return {
         threads: {
           ...state.threads,
@@ -386,7 +389,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
         title: newTitle,
         updated: Date.now() / 1000,
       }
-      getServiceHub().threads().updateThread(updatedThread) // External call, order is fine
+      getServiceHub().threads().updateThread(updatedThread).catch(console.error)
       const newThreads = { ...state.threads, [threadId]: updatedThread }
       return {
         threads: newThreads,
@@ -419,7 +422,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       updatedThreads[threadId] = updatedThread
 
       // Update the backend for the main thread
-      getServiceHub().threads().updateThread(updatedThread)
+      getServiceHub().threads().updateThread(updatedThread).catch(console.error)
 
       return {
         threads: updatedThreads,
@@ -445,7 +448,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
         updated: Date.now() / 1000,
       }
 
-      getServiceHub().threads().updateThread(updatedThread)
+      getServiceHub().threads().updateThread(updatedThread).catch(console.error)
 
       const newThreads = { ...state.threads, [threadId]: updatedThread }
       return {

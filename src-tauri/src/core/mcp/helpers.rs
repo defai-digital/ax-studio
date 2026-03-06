@@ -205,22 +205,27 @@ pub async fn monitor_mcp_server_handle(
         };
 
         if !health_check_result {
-            // Server failed health check - remove it and return
+            // Server failed health check - remove from map, then cancel without lock
             log::error!("MCP server {name} failed health check, removing from active servers");
-            let mut servers = servers_state.lock().await;
-            if let Some(service) = servers.remove(&name) {
-                // Try to cancel the service gracefully
+            let service = {
+                let mut servers = servers_state.lock().await;
+                servers.remove(&name)
+            };
+            // Lock dropped — cancel without holding it
+            if let Some(service) = service {
                 if let Ok(inner) = Arc::try_unwrap(service) {
                     match inner {
-                        RunningServiceEnum::NoInit(service) => {
+                        RunningServiceEnum::NoInit(svc) => {
                             log::info!("Stopping server {name}...");
-                            let _ = service.cancel().await;
+                            let _ = svc.cancel().await;
                         }
-                        RunningServiceEnum::WithInit(service) => {
+                        RunningServiceEnum::WithInit(svc) => {
                             log::info!("Stopping server {name} with initialization...");
-                            let _ = service.cancel().await;
+                            let _ = svc.cancel().await;
                         }
                     }
+                } else {
+                    log::warn!("Service {name} still has active references, skipping cancel");
                 }
             }
             return Some(rmcp::service::QuitReason::Closed);
@@ -449,7 +454,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
             cache_dir.push(".npx");
             cmd = Command::new(bun_x_path.display().to_string());
             cmd.arg("x");
-            cmd.env("BUN_INSTALL", cache_dir.to_str().unwrap());
+            cmd.env("BUN_INSTALL", cache_dir.to_string_lossy().as_ref());
         }
 
         let uv_path = if cfg!(windows) {
@@ -464,7 +469,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
             cmd = Command::new(uv_path);
             cmd.arg("tool");
             cmd.arg("run");
-            cmd.env("UV_CACHE_DIR", cache_dir.to_str().unwrap());
+            cmd.env("UV_CACHE_DIR", cache_dir.to_string_lossy().as_ref());
         }
         #[cfg(windows)]
         {
