@@ -35,6 +35,7 @@ import {
 import {
   loadLlamaModel,
   unloadLlamaModel,
+  startAxServing,
   getDevices,
   generateApiKey,
   isProcessRunning,
@@ -58,6 +59,7 @@ import {
   updateBackend,
   installBackendFromFile,
   getBackendExePath,
+  getAxServingBinaryPath,
   BackendUpdateInfo,
   checkForBackendUpdate,
   fetchRemoteBackends,
@@ -73,12 +75,7 @@ import {
   EmbeddingResponse,
 } from './util'
 
-// Injected by rolldown at build time
-declare const SETTINGS: any[]
-declare const ENGINE: string
-declare const IS_WINDOWS: boolean
-declare const IS_MACOS: boolean
-declare const IS_LINUX: boolean
+// Build-time constants — see env.d.ts for declarations
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -130,12 +127,21 @@ export default class AxFabricLlamacppExtension extends AIEngine {
   /** Unload listeners to clean up */
   private cleanupListeners: Array<() => void> = []
 
+  // ─── ax-serving state ─────────────────────────────────────────────────────
+  /** Port the ax-serving service is listening on (0 = not running) */
+  private axServingPort: number = 0
+  /** PID of the ax-serving process (0 = not running) */
+  private axServingPid: number = 0
+  /** Sessions for models loaded via ax-serving HTTP API */
+  private axServingSessions: Map<string, SessionInfo> = new Map()
+  /** Coalesces concurrent ax-serving start attempts */
+  private axServingStarting: Promise<void> | null = null
+
   // ─── Lifecycle ─────────────────────────────────────────────────────────────
 
   override async onLoad(): Promise<void> {
-    // Safety check for injected constants
-    const rawSettings = typeof SETTINGS !== 'undefined' ? SETTINGS : []
-    const isMac = typeof IS_MACOS !== 'undefined' ? IS_MACOS : false
+    const rawSettings = SETTINGS
+    const isMac = IS_MACOS
 
     // On macOS, Auto-Fit defaults to false — Metal handles memory internally.
     const settingsToRegister = isMac
@@ -162,6 +168,16 @@ export default class AxFabricLlamacppExtension extends AIEngine {
   }
 
   override async onUnload(): Promise<void> {
+    // Stop ax-serving if it's running
+    if (this.axServingPid > 0) {
+      try {
+        await unloadLlamaModel(this.axServingPid)
+      } catch {}
+      this.axServingPid = 0
+      this.axServingPort = 0
+      this.axServingSessions.clear()
+    }
+
     for (const off of this.cleanupListeners) {
       try { off() } catch {}
     }
@@ -180,9 +196,9 @@ export default class AxFabricLlamacppExtension extends AIEngine {
 
   onSettingUpdate<T>(key: string, value: T): void {
     const v = value as any
-    const isWindows = typeof IS_WINDOWS !== 'undefined' ? IS_WINDOWS : false
-    const isMac = typeof IS_MACOS !== 'undefined' ? IS_MACOS : false
-    const isLinux = typeof IS_LINUX !== 'undefined' ? IS_LINUX : false
+    const isWindows = IS_WINDOWS
+    const isMac = IS_MACOS
+    const isLinux = IS_LINUX
 
     switch (key) {
       case 'auto_unload':       this.autoUnload = Boolean(v); break
@@ -236,6 +252,7 @@ export default class AxFabricLlamacppExtension extends AIEngine {
       case 'offload_mmproj':        cfg.offload_mmproj = bool(v); break
       case 'cpu_moe':               cfg.cpu_moe = bool(v); break
       case 'n_cpu_moe':             cfg.n_cpu_moe = num(v, 0); break
+      case 'engine_type':           cfg.engine_type = str(v, 'llamacpp'); break
     }
   }
 
@@ -303,7 +320,7 @@ export default class AxFabricLlamacppExtension extends AIEngine {
 
   async list(): Promise<modelInfo[]> {
     try {
-      const engineName = typeof ENGINE !== 'undefined' ? ENGINE : 'llamacpp'
+      const engineName = ENGINE
       const modelsDir = await this._modelsDir()
       if (!(await fs.existsSync(modelsDir))) return []
 
@@ -371,7 +388,7 @@ export default class AxFabricLlamacppExtension extends AIEngine {
   async get(modelId: string): Promise<modelInfo | undefined> {
     const cfg = await this._readModelConfig(modelId)
     if (!cfg) return undefined
-    const engineName = typeof ENGINE !== 'undefined' ? ENGINE : 'llamacpp'
+    const engineName = ENGINE
     return {
       id: modelId,
       name: cfg.name || modelId,
@@ -421,103 +438,249 @@ export default class AxFabricLlamacppExtension extends AIEngine {
         await this._unloadActiveTextModels(modelId)
       }
 
-      // Resolve backend path
-      const versionBackend = await this.getSetting<string>('version_backend', '')
-      if (!versionBackend) {
-        throw new Error('No backend selected. Please configure the engine backend in settings.')
-      }
-      const [version, ...rest] = versionBackend.split('/')
-      const backend = rest.join('/')
-      const backendPath = await this._ensureBackend(version, backend)
-
       // Read model config
       const cfg = await this._readModelConfig(modelId)
       if (!cfg) throw new Error(`Model not found: ${modelId}`)
 
-      // Resolve absolute paths
-      const appData = await getAppDataFolderPath()
-      const modelPath = await joinPath([appData, cfg.model_path])
-      const mmprojPath = cfg.mmproj_path
-        ? await joinPath([appData, cfg.mmproj_path])
-        : undefined
-
-      // Verify model file exists
-      if (!(await fs.existsSync(modelPath))) {
-        throw new Error(`Model file not found: ${modelPath}`)
-      }
-
+      const engineType = this.config.engine_type || 'llamacpp'
       const embedding = isEmbedding || Boolean(cfg.embedding)
-      const port = await getRandomPort()
-      const apiSecret = String(Date.now())
-      const apiKey = await generateApiKey(modelId, apiSecret)
+      const hasVision = Boolean(cfg.mmproj_path)
 
-      // Merge global config with per-model override settings
-      // Per-model settings (ctx_size, n_gpu_layers, etc.) take precedence
-      const mergedConfig: Partial<LlamacppConfig> = { ...this.config }
-      if (overrideSettings) {
-        for (const [key, value] of Object.entries(overrideSettings)) {
-          if (value !== undefined && value !== '' && value !== null) {
-            ;(mergedConfig as any)[key] = value
-          }
-        }
-      }
-      const llamaConfig = normalizeLlamacppConfig(mergedConfig)
-
-      // Build environment variables for the llama-server process
-      const envs: Record<string, string> = {
-        LLAMA_API_KEY: apiKey,
-        LLAMA_ARG_TIMEOUT: String(this.timeout),
-      }
-      if (this.config.llamacpp_env) {
-        for (const pair of String(this.config.llamacpp_env).split(/\s+/)) {
-          const idx = pair.indexOf('=')
-          if (idx > 0) {
-            envs[pair.slice(0, idx)] = pair.slice(idx + 1)
-          }
-        }
+      // ax-serving mode for text models (embedding/vision falls back to llamacpp)
+      if (engineType === 'ax-serving' && !embedding && !hasVision) {
+        return await this._doLoadAxServing(modelId, cfg)
       }
 
-      const session = await loadLlamaModel(
-        backendPath,
-        modelId,
-        modelPath,
-        port,
-        llamaConfig,
-        envs,
-        mmprojPath,
-        embedding,
-        this.timeout
-      )
-
-      // Register the local provider with the Rust proxy SYNCHRONOUSLY before
-      // returning, so the proxy is ready to route requests immediately.
-      // This prevents a race condition where sendMessages() sends a request
-      // to the proxy before the provider is registered.
-      try {
-        await invoke('register_provider_config', {
-          request: {
-            provider: this.providerId,
-            base_url: `http://localhost:${session.port}/v1`,
-            api_key: session.api_key ?? '',
-            custom_headers: [],
-            models: [modelId],
-          },
-        })
-      } catch (regErr) {
-        console.warn('[llamacpp] Failed to register provider with proxy:', regErr)
+      // llamacpp mode (also serves as fallback for ax-serving embedding/vision)
+      if (engineType === 'ax-serving' && (embedding || hasVision)) {
+        console.log(
+          `[llamacpp] ax-serving: falling back to llamacpp for ${embedding ? 'embedding' : 'vision'} model "${modelId}"`
+        )
       }
-
-      events.emit(ModelEvent.OnModelReady, {
-        modelId,
-        port: session.port,
-        api_key: session.api_key,
-        provider: this.providerId,
-      })
-      return session
+      return await this._doLoadLlamacpp(modelId, cfg, overrideSettings, isEmbedding)
     } catch (e: any) {
       events.emit(ModelEvent.OnModelFail, { modelId, error: e?.message ?? String(e) })
       throw e
     }
+  }
+
+  // ─── ax-serving load path ──────────────────────────────────────────────────
+
+  /** Load a model via ax-serving HTTP API (long-running service model) */
+  private async _doLoadAxServing(
+    modelId: string,
+    cfg: ModelConfig
+  ): Promise<SessionInfo> {
+    // Ensure ax-serving process is running
+    await this._ensureAxServingRunning()
+
+    // Resolve absolute model path
+    const appData = await getAppDataFolderPath()
+    const modelPath = await joinPath([appData, cfg.model_path])
+
+    if (!(await fs.existsSync(modelPath))) {
+      throw new Error(`Model file not found: ${modelPath}`)
+    }
+
+    // Load model via ax-serving REST API
+    const loadRes = await fetch(`http://127.0.0.1:${this.axServingPort}/v1/models`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model_id: modelId,
+        path: modelPath,
+      }),
+      signal: AbortSignal.timeout(this.timeout * 1000),
+    })
+
+    if (loadRes.status === 409) {
+      // Model already loaded — this is fine
+      console.log(`[llamacpp] ax-serving: model "${modelId}" already loaded`)
+    } else if (!loadRes.ok) {
+      const errText = await loadRes.text()
+      throw new Error(`ax-serving failed to load model (${loadRes.status}): ${errText}`)
+    } else {
+      const loadData = await loadRes.json()
+      console.log(
+        `[llamacpp] ax-serving: loaded "${modelId}" (arch=${loadData.architecture}, ctx=${loadData.context_length}, ${loadData.load_time_ms}ms)`
+      )
+    }
+
+    // Create synthetic session (ax-serving manages the process, not Tauri plugin)
+    const session: SessionInfo = {
+      pid: this.axServingPid,
+      port: this.axServingPort,
+      model_id: modelId,
+      model_path: modelPath,
+      is_embedding: false,
+      api_key: '',
+    }
+    this.axServingSessions.set(modelId, session)
+
+    // Register model with the proxy so it can route requests
+    try {
+      await invoke('register_provider_config', {
+        request: {
+          provider: this.providerId,
+          base_url: `http://127.0.0.1:${this.axServingPort}/v1`,
+          api_key: '',
+          custom_headers: [],
+          models: [modelId],
+        },
+      })
+    } catch (regErr) {
+      console.warn('[llamacpp] Failed to register ax-serving provider with proxy:', regErr)
+    }
+
+    events.emit(ModelEvent.OnModelReady, {
+      modelId,
+      port: session.port,
+      api_key: session.api_key,
+      provider: this.providerId,
+    })
+    return session
+  }
+
+  /** Ensure the ax-serving process is running, start it if needed */
+  private async _ensureAxServingRunning(): Promise<void> {
+    // Check if already running and healthy
+    if (this.axServingPid > 0) {
+      try {
+        const res = await fetch(`http://127.0.0.1:${this.axServingPort}/health`, {
+          signal: AbortSignal.timeout(3000),
+        })
+        if (res.ok) return
+      } catch {}
+      // Not responding — reset state and restart
+      console.warn('[llamacpp] ax-serving not responding, will restart')
+      this.axServingPid = 0
+      this.axServingPort = 0
+      this.axServingSessions.clear()
+    }
+
+    // Coalesce concurrent start attempts
+    if (this.axServingStarting) {
+      await this.axServingStarting
+      return
+    }
+
+    this.axServingStarting = this._startAxServingProcess()
+    try {
+      await this.axServingStarting
+    } finally {
+      this.axServingStarting = null
+    }
+  }
+
+  /** Start the ax-serving process via Tauri plugin */
+  private async _startAxServingProcess(): Promise<void> {
+    const binaryPath = await getAxServingBinaryPath()
+    const port = await getRandomPort()
+
+    console.log(`[llamacpp] Starting ax-serving at ${binaryPath} on port ${port}`)
+    const session = await startAxServing(binaryPath, port, this.timeout)
+
+    this.axServingPort = session.port
+    this.axServingPid = session.pid
+    console.log(`[llamacpp] ax-serving started (PID=${session.pid}, port=${session.port})`)
+  }
+
+  // ─── llamacpp load path ────────────────────────────────────────────────────
+
+  /** Load a model by spawning a dedicated llama-server process (original flow) */
+  private async _doLoadLlamacpp(
+    modelId: string,
+    cfg: ModelConfig,
+    overrideSettings?: Record<string, any>,
+    isEmbedding = false
+  ): Promise<SessionInfo> {
+    // Resolve backend binary
+    const versionBackend = await this.getSetting<string>('version_backend', '')
+    if (!versionBackend) {
+      throw new Error('No backend selected. Please configure the engine backend in settings.')
+    }
+    const [version, ...rest] = versionBackend.split('/')
+    const backend = rest.join('/')
+    const backendPath = await this._ensureBackend(version, backend)
+
+    // Resolve absolute paths
+    const appData = await getAppDataFolderPath()
+    const modelPath = await joinPath([appData, cfg.model_path])
+    const mmprojPath = cfg.mmproj_path
+      ? await joinPath([appData, cfg.mmproj_path])
+      : undefined
+
+    // Verify model file exists
+    if (!(await fs.existsSync(modelPath))) {
+      throw new Error(`Model file not found: ${modelPath}`)
+    }
+
+    const embedding = isEmbedding || Boolean(cfg.embedding)
+    const port = await getRandomPort()
+    const apiSecret = String(Date.now())
+    const apiKey = await generateApiKey(modelId, apiSecret)
+
+    // Merge global config with per-model override settings
+    // Per-model settings (ctx_size, n_gpu_layers, etc.) take precedence
+    const mergedConfig: Partial<LlamacppConfig> = { ...this.config }
+    if (overrideSettings) {
+      for (const [key, value] of Object.entries(overrideSettings)) {
+        if (value !== undefined && value !== '' && value !== null) {
+          ;(mergedConfig as any)[key] = value
+        }
+      }
+    }
+    const llamaConfig = normalizeLlamacppConfig(mergedConfig)
+
+    // Build environment variables for the llama-server process
+    const envs: Record<string, string> = {
+      LLAMA_API_KEY: apiKey,
+      LLAMA_ARG_TIMEOUT: String(this.timeout),
+    }
+    if (this.config.llamacpp_env) {
+      for (const pair of String(this.config.llamacpp_env).split(/\s+/)) {
+        const idx = pair.indexOf('=')
+        if (idx > 0) {
+          envs[pair.slice(0, idx)] = pair.slice(idx + 1)
+        }
+      }
+    }
+
+    const session = await loadLlamaModel(
+      backendPath,
+      modelId,
+      modelPath,
+      port,
+      llamaConfig,
+      envs,
+      mmprojPath,
+      embedding,
+      this.timeout
+    )
+
+    // Register the local provider with the Rust proxy SYNCHRONOUSLY before
+    // returning, so the proxy is ready to route requests immediately.
+    try {
+      await invoke('register_provider_config', {
+        request: {
+          provider: this.providerId,
+          base_url: `http://localhost:${session.port}/v1`,
+          api_key: session.api_key ?? '',
+          custom_headers: [],
+          models: [modelId],
+        },
+      })
+    } catch (regErr) {
+      console.warn('[llamacpp] Failed to register provider with proxy:', regErr)
+    }
+
+    events.emit(ModelEvent.OnModelReady, {
+      modelId,
+      port: session.port,
+      api_key: session.api_key,
+      provider: this.providerId,
+    })
+    return session
   }
 
   /** Ensure backend binary is present, downloading if necessary */
@@ -545,12 +708,23 @@ export default class AxFabricLlamacppExtension extends AIEngine {
   /** Unload all active text models except the one about to be loaded */
   private async _unloadActiveTextModels(excludeModelId: string): Promise<void> {
     try {
-      const activeIds = await getLoadedModels()
-      for (const id of activeIds) {
+      // Collect all loaded model IDs from both engines
+      const llamacppIds = await getLoadedModels().catch(() => [] as string[])
+      const axServingIds = Array.from(this.axServingSessions.keys())
+      const allIds = [...new Set([...llamacppIds, ...axServingIds])]
+
+      for (const id of allIds) {
         if (id === excludeModelId) continue
         // Wait for any in-progress load for this model to complete
         await this.loadingModels.get(id)?.catch(() => {})
         try {
+          // Check ax-serving sessions first
+          const axSession = this.axServingSessions.get(id)
+          if (axSession && !axSession.is_embedding) {
+            await this.unload(id)
+            continue
+          }
+          // Check llamacpp sessions
           const session = await findSessionByModel(id)
           if (session && !session.is_embedding) {
             await this.unload(id)
@@ -568,7 +742,30 @@ export default class AxFabricLlamacppExtension extends AIEngine {
 
   async unload(sessionId: string): Promise<UnloadResult> {
     try {
-      // sessionId is the modelId in this engine
+      // Check ax-serving sessions first
+      const axSession = this.axServingSessions.get(sessionId)
+      if (axSession) {
+        events.emit(ModelEvent.OnModelStop, { modelId: sessionId })
+        // Unload via ax-serving HTTP API
+        try {
+          const encodedId = encodeURIComponent(sessionId)
+          const res = await fetch(
+            `http://127.0.0.1:${this.axServingPort}/v1/models/${encodedId}`,
+            { method: 'DELETE', signal: AbortSignal.timeout(10000) }
+          )
+          if (!res.ok && res.status !== 404) {
+            const errText = await res.text()
+            console.warn(`[llamacpp] ax-serving unload warning (${res.status}): ${errText}`)
+          }
+        } catch (e) {
+          console.warn('[llamacpp] ax-serving unload HTTP error:', e)
+        }
+        this.axServingSessions.delete(sessionId)
+        events.emit(ModelEvent.OnModelStopped, { modelId: sessionId })
+        return { success: true }
+      }
+
+      // Fallback: llamacpp process-based session
       const session = await findSessionByModel(sessionId)
       if (!session) {
         return { success: true }
@@ -697,6 +894,11 @@ export default class AxFabricLlamacppExtension extends AIEngine {
 
   /** Find a loaded session or throw */
   private async _requireSession(modelId: string): Promise<SessionInfo> {
+    // Check ax-serving sessions first
+    const axSession = this.axServingSessions.get(modelId)
+    if (axSession) return axSession
+
+    // Fallback to Tauri IPC (llamacpp-spawned sessions)
     const session = await findSessionByModel(modelId)
     if (!session) {
       throw new Error(`Model "${modelId}" is not loaded. Load it first.`)
@@ -704,8 +906,38 @@ export default class AxFabricLlamacppExtension extends AIEngine {
     return session
   }
 
-  /** Health check — verify the llama-server process is alive */
+  /** Health check — verify the inference server is alive */
   private async _healthCheck(port: number, pid: number, modelId: string): Promise<void> {
+    const isAxServing = this.axServingSessions.has(modelId)
+
+    if (isAxServing) {
+      // ax-serving: check server health and model presence
+      try {
+        const res = await fetch(`http://localhost:${port}/health`, {
+          signal: AbortSignal.timeout(5000),
+        })
+        if (!res.ok) {
+          throw new Error(`ax-serving health check failed (${res.status})`)
+        }
+        const health = await res.json()
+        // Check if our model is still loaded (may have been evicted by LRU/idle)
+        if (Array.isArray(health.loaded_models) && !health.loaded_models.includes(modelId)) {
+          this.axServingSessions.delete(modelId)
+          throw new Error(`Model "${modelId}" was evicted by ax-serving. Please reload.`)
+        }
+      } catch (e: any) {
+        if (e?.message?.includes('evicted')) throw e
+        // ax-serving process may have crashed — reset state
+        console.error('[llamacpp] ax-serving health check failed:', e)
+        this.axServingPid = 0
+        this.axServingPort = 0
+        this.axServingSessions.clear()
+        throw new Error(`ax-serving is not responding. Please reload the model.`)
+      }
+      return
+    }
+
+    // llamacpp: check process is alive
     const alive = await isProcessRunning(pid)
     if (!alive) {
       await this.unload(modelId).catch(() => {})
@@ -866,10 +1098,14 @@ export default class AxFabricLlamacppExtension extends AIEngine {
   // ─── delete() / update() ──────────────────────────────────────────────────
 
   async delete(modelId: string): Promise<void> {
-    // Unload first if running
+    // Unload first if running (check both engines)
     try {
-      const session = await findSessionByModel(modelId)
-      if (session) await this.unload(modelId)
+      if (this.axServingSessions.has(modelId)) {
+        await this.unload(modelId)
+      } else {
+        const session = await findSessionByModel(modelId)
+        if (session) await this.unload(modelId)
+      }
     } catch {}
 
     const modelDir = await this._modelDir(modelId)
@@ -891,9 +1127,12 @@ export default class AxFabricLlamacppExtension extends AIEngine {
 
   async getLoadedModels(): Promise<string[]> {
     try {
-      return await getLoadedModels()
+      const llamacppModels = await getLoadedModels()
+      const axModels = Array.from(this.axServingSessions.keys())
+      // Deduplicate in case of overlap
+      return [...new Set([...llamacppModels, ...axModels])]
     } catch {
-      return []
+      return Array.from(this.axServingSessions.keys())
     }
   }
 

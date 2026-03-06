@@ -15,6 +15,7 @@ Default permissions for the llamacpp plugin
 - `allow-get-loaded-models`
 - `allow-get-all-sessions`
 - `allow-get-session-by-model`
+- `allow-start-ax-serving`
 - `allow-read-gguf-metadata`
 - `allow-estimate-kv-cache-size`
 - `allow-get-model-size`
@@ -768,6 +769,32 @@ Enables the should_migrate_backend command without any pre-configured scope.
 <td>
 
 Denies the should_migrate_backend command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`llamacpp:allow-start-ax-serving`
+
+</td>
+<td>
+
+Enables the start_ax_serving command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`llamacpp:deny-start-ax-serving`
+
+</td>
+<td>
+
+Denies the start_ax_serving command without any pre-configured scope.
 
 </td>
 </tr>

@@ -38,6 +38,13 @@ pub struct LlamacppConfig {
     pub rope_freq_base: f32,
     pub rope_freq_scale: f32,
     pub ctx_shift: bool,
+    /// Which inference engine to use: "llamacpp" (default) or "ax-serving"
+    #[serde(default = "default_engine_type")]
+    pub engine_type: String,
+}
+
+fn default_engine_type() -> String {
+    "llamacpp".to_string()
 }
 
 pub struct ArgumentBuilder {
@@ -338,6 +345,75 @@ impl ArgumentBuilder {
         }
     }
 }
+/// Builds CLI arguments for ax-serving binary instead of llama-server.
+/// ax-serving uses: `ax-serving serve -m <model> --port <port> --model-id <id> [--host 127.0.0.1]`
+pub struct AxServingArgumentBuilder {
+    config: LlamacppConfig,
+    is_embedding: bool,
+}
+
+impl AxServingArgumentBuilder {
+    pub fn new(config: LlamacppConfig, is_embedding: bool) -> Self {
+        Self {
+            config,
+            is_embedding,
+        }
+    }
+
+    /// Build ax-serving CLI arguments.
+    /// Returns (subcommand_args, env_vars) where subcommand_args starts with "serve".
+    pub fn build(
+        &self,
+        model_id: &str,
+        model_path: &str,
+        port: u16,
+        _mmproj_path: Option<String>,
+    ) -> Vec<String> {
+        let mut args = Vec::new();
+
+        // Subcommand
+        args.push("serve".to_string());
+
+        // Model path
+        args.push("-m".to_string());
+        args.push(model_path.to_string());
+
+        // Model ID
+        args.push("--model-id".to_string());
+        args.push(model_id.to_string());
+
+        // Port and host
+        args.push("--port".to_string());
+        args.push(port.to_string());
+        args.push("--host".to_string());
+        args.push("127.0.0.1".to_string());
+
+        args
+    }
+
+    /// Build environment variables for ax-serving.
+    pub fn build_envs(&self, api_key: &str) -> std::collections::HashMap<String, String> {
+        let mut envs = std::collections::HashMap::new();
+
+        // Auth: if API key is provided, set it so ax-serving requires Bearer auth
+        if !api_key.is_empty() {
+            envs.insert("AXS_API_KEY".to_string(), api_key.to_string());
+        } else {
+            // Allow running without auth for local use
+            envs.insert("AXS_ALLOW_NO_AUTH".to_string(), "true".to_string());
+        }
+
+        // GPU layers: ax-serving doesn't take this as CLI arg for serve mode,
+        // but its internal llama-server subprocess uses default behavior.
+        // For native backend, GPU is automatic on Metal.
+
+        // Logging
+        envs.insert("AXS_LOG".to_string(), "info".to_string());
+
+        envs
+    }
+}
+
 // -- Tests
 #[cfg(test)]
 mod tests {
@@ -381,6 +457,7 @@ mod tests {
             rope_freq_base: 0.0,
             rope_freq_scale: 1.0,
             ctx_shift: false,
+            engine_type: "llamacpp".to_string(),
         }
     }
 

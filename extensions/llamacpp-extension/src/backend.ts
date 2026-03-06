@@ -21,9 +21,7 @@ import {
 } from '@ax-fabric/tauri-plugin-llamacpp-api'
 import { getProxyConfig, buildProxyArg } from './util'
 
-declare const IS_WINDOWS: boolean
-declare const IS_MACOS: boolean
-declare const IS_LINUX: boolean
+// Build-time constants — see env.d.ts for declarations
 
 const GITHUB_RELEASES_URL =
   'https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=10'
@@ -55,7 +53,7 @@ export async function getBackendDir(version: string, backend: string): Promise<s
  */
 export async function getBackendExePath(version: string, backend: string): Promise<string> {
   const dir = await getBackendDir(version, backend)
-  const isWindows = typeof IS_WINDOWS !== 'undefined' ? IS_WINDOWS : false
+  const isWindows = IS_WINDOWS
   const binary = isWindows ? 'llama-server.exe' : 'llama-server'
 
   // Check ggml-org structure: llama-{version}/llama-server
@@ -84,6 +82,33 @@ export async function isBackendInstalled(version: string, backend: string): Prom
   } catch {
     return false
   }
+}
+
+// ─── ax-serving binary discovery ──────────────────────────────────────────────
+
+/**
+ * Get the absolute path to the ax-serving binary.
+ * Searches:
+ *  1. ~/.ax-fabric/ax-serving/ax-serving (app data directory)
+ *  2. /usr/local/bin/ax-serving (Homebrew / pkg install)
+ *  3. ax-serving on PATH (fallback — will be resolved by the OS)
+ */
+export async function getAxServingBinaryPath(): Promise<string> {
+  // Check app data directory
+  const appData = await getAppDataFolderPath()
+  const appDataPath = await joinPath([appData, 'ax-serving', 'ax-serving'])
+  if (await fs.existsSync(appDataPath)) return appDataPath
+
+  // Check /usr/local/bin (Homebrew default)
+  const usrLocalPath = '/usr/local/bin/ax-serving'
+  if (await fs.existsSync(usrLocalPath)) return usrLocalPath
+
+  // Check /opt/homebrew/bin (Apple Silicon Homebrew)
+  const optBrewPath = '/opt/homebrew/bin/ax-serving'
+  if (await fs.existsSync(optBrewPath)) return optBrewPath
+
+  // Fallback: assume it's on PATH
+  return 'ax-serving'
 }
 
 // ─── Local backend discovery ─────────────────────────────────────────────────
@@ -152,9 +177,9 @@ interface HardwareInfo {
  * Get hardware info from the hardware extension for backend selection.
  */
 async function getHardwareInfo(): Promise<HardwareInfo> {
-  const isWindows = typeof IS_WINDOWS !== 'undefined' ? IS_WINDOWS : false
-  const isMac = typeof IS_MACOS !== 'undefined' ? IS_MACOS : false
-  const isLinux = typeof IS_LINUX !== 'undefined' ? IS_LINUX : false
+  const isWindows = IS_WINDOWS
+  const isMac = IS_MACOS
+  const isLinux = IS_LINUX
 
   try {
     const hw = await (window as any).core?.extensionManager
@@ -189,7 +214,7 @@ export async function downloadBackend(
   backend: string,
   onProgress?: (pct: number) => void
 ): Promise<void> {
-  const isWindows = typeof IS_WINDOWS !== 'undefined' ? IS_WINDOWS : false
+  const isWindows = IS_WINDOWS
   const ext = isWindows ? '.zip' : '.tar.gz'
   const filename = `llama-${version}-bin-${backend}${ext}`
   const downloadUrl = `https://github.com/ggml-org/llama.cpp/releases/download/${version}/${filename}`

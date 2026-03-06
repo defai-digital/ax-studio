@@ -18,7 +18,7 @@ export const Route = createFileRoute(route.settings.engine_settings as any)({
 
 // Settings grouped into sections per PRD §8
 const SECTION_KEYS: Record<string, string[]> = {
-  backend: ['version_backend', 'auto_update_engine', 'llamacpp_env', 'timeout'],
+  backend: ['engine_type', 'version_backend', 'auto_update_engine', 'llamacpp_env', 'timeout'],
   memory: ['fit', 'fit_target', 'fit_ctx', 'auto_unload', 'no_mmap', 'mlock'],
   compute: ['threads', 'threads_batch', 'n_predict', 'ubatch_size'],
   gpu: ['device', 'split_mode', 'main_gpu', 'n_gpu_layers', 'offload_mmproj', 'cpu_moe', 'n_cpu_moe'],
