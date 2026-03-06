@@ -5,6 +5,7 @@ pub mod code_execution;
 pub mod research;
 pub mod downloads;
 pub mod extensions;
+pub mod integrations;
 pub mod filesystem;
 pub mod mcp;
 pub mod server;
