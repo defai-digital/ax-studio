@@ -4,13 +4,14 @@ use std::path::PathBuf;
 use tauri::Runtime;
 
 pub fn resolve_path<R: Runtime>(app_handle: tauri::AppHandle<R>, path: &str) -> PathBuf {
+    let app_data_folder = get_app_data_folder_path(app_handle.clone());
     let path = if path.starts_with("file:/") || path.starts_with("file:\\") {
         let normalized = normalize_file_path(path);
         let relative_normalized = normalized
             .trim_start_matches(std::path::MAIN_SEPARATOR)
             .trim_start_matches('/')
             .trim_start_matches('\\');
-        get_app_data_folder_path(app_handle).join(relative_normalized)
+        app_data_folder.join(relative_normalized)
     } else {
         PathBuf::from(path)
     };
@@ -18,6 +19,16 @@ pub fn resolve_path<R: Runtime>(app_handle: tauri::AppHandle<R>, path: &str) -> 
     if path.starts_with("http://") || path.starts_with("https://") {
         path
     } else {
-        path.canonicalize().unwrap_or(path)
+        let resolved = path.canonicalize().unwrap_or(path);
+        // Security: ensure resolved path is within the app data folder
+        if !resolved.starts_with(&app_data_folder) {
+            log::warn!(
+                "Path traversal blocked: {} is outside app data folder {}",
+                resolved.display(),
+                app_data_folder.display()
+            );
+            return app_data_folder;
+        }
+        resolved
     }
 }

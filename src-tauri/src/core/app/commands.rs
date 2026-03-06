@@ -141,16 +141,18 @@ pub fn get_configuration_file_path<R: Runtime>(app_handle: tauri::AppHandle<R>) 
 
 #[tauri::command]
 pub fn default_data_folder_path<R: Runtime>(app_handle: tauri::AppHandle<R>) -> String {
-    let mut path = app_handle.path().data_dir().unwrap();
+    let mut path = app_handle.path().data_dir().unwrap_or_else(|_| {
+        std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+    });
 
     let app_name = std::env::var("APP_NAME")
-        .unwrap_or_else(|_| app_handle.config().product_name.clone().unwrap());
+        .unwrap_or_else(|_| app_handle.config().product_name.clone().unwrap_or_default());
     path.push(app_name);
     path.push("data");
 
-    let mut path_str = path.to_str().unwrap().to_string();
+    let mut path_str = path.to_string_lossy().to_string();
 
-    if let Some(stripped) = path.to_str().unwrap().to_string().strip_suffix(".ai.app") {
+    if let Some(stripped) = path_str.strip_suffix(".ai.app") {
         path_str = stripped.to_string();
     }
 

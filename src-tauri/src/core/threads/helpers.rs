@@ -30,16 +30,20 @@ pub async fn get_lock_for_thread(thread_id: &str) -> Arc<Mutex<()>> {
     lock
 }
 
-/// Write messages to a thread's messages.jsonl file
+/// Write messages to a thread's messages.jsonl file (atomic: write to .tmp then rename)
 pub fn write_messages_to_file(
     messages: &[serde_json::Value],
     path: &std::path::Path,
 ) -> Result<(), String> {
-    let mut file = File::create(path).map_err(|e| e.to_string())?;
+    let tmp_path = path.with_extension("jsonl.tmp");
+    let mut file = File::create(&tmp_path).map_err(|e| e.to_string())?;
     for msg in messages {
         let data = serde_json::to_string(msg).map_err(|e| e.to_string())?;
         writeln!(file, "{data}").map_err(|e| e.to_string())?;
     }
+    file.flush().map_err(|e| e.to_string())?;
+    drop(file);
+    fs::rename(&tmp_path, path).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -79,14 +83,25 @@ pub fn read_messages_from_file<R: Runtime>(
     Ok(messages)
 }
 
-/// Update thread metadata by writing to thread.json
+/// Update thread metadata by writing to thread.json (atomic: write to .tmp then rename)
 pub fn update_thread_metadata<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     thread_id: &str,
     thread: &serde_json::Value,
 ) -> Result<(), String> {
     let path = get_thread_metadata_path(app_handle, thread_id);
+    let tmp_path = path.with_extension("json.tmp");
     let data = serde_json::to_string_pretty(thread).map_err(|e| e.to_string())?;
-    fs::write(path, data).map_err(|e| e.to_string())?;
+    fs::write(&tmp_path, data).map_err(|e| e.to_string())?;
+    fs::rename(&tmp_path, &path).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Remove the per-thread lock entry when a thread is deleted
+pub fn remove_lock_for_thread(thread_id: &str) {
+    if let Some(locks) = MESSAGE_LOCKS.get() {
+        if let Ok(mut map) = locks.try_lock() {
+            map.remove(thread_id);
+        }
+    }
 }

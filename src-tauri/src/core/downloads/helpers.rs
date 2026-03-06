@@ -127,7 +127,7 @@ async fn validate_downloaded_file(
                 "downloadType": "Model",
             }),
         )
-        .unwrap();
+        .ok();
         log::info!("Starting validation for model: {model_id}");
     }
 
@@ -514,7 +514,7 @@ pub async fn _download_files_internal(
                 "downloadType": "Model",
             }),
         )
-        .unwrap();
+        .ok();
         log::info!("Starting validation for model: {model_id}");
     }
 
@@ -540,7 +540,7 @@ pub async fn _download_files_internal(
     // Emit final progress
     let (transferred, total) = progress_tracker.get_total_progress().await;
     let final_evt = DownloadEvent { transferred, total };
-    app.emit(&evt_name, final_evt).unwrap();
+    app.emit(&evt_name, final_evt).ok();
     Ok(())
 }
 
@@ -671,7 +671,7 @@ async fn download_single_file(
     while let Some(chunk) = stream.next().await {
         if cancel_token.is_cancelled() {
             if !should_resume {
-                tokio::fs::remove_dir_all(&save_path.parent().unwrap())
+                tokio::fs::remove_file(&tmp_save_path)
                     .await
                     .ok();
             }
@@ -698,7 +698,7 @@ async fn download_single_file(
                 transferred: combined_transferred,
                 total: combined_total,
             };
-            app.emit(&evt_name, evt).unwrap();
+            app.emit(&evt_name, evt).ok();
 
             download_delta = 0u64;
         }

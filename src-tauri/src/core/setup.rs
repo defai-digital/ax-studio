@@ -331,9 +331,10 @@ pub fn setup_tray(app: &App) -> tauri::Result<TrayIcon> {
         })
         .on_menu_event(|app, event| match event.id.as_ref() {
             "open" => {
-                let window = app.get_webview_window("main").unwrap();
-                window.show().unwrap();
-                window.set_focus().unwrap();
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
             }
             "quit" => {
                 app.exit(0);

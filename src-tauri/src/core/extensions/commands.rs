@@ -42,7 +42,7 @@ pub fn get_active_extensions<R: Runtime>(app: AppHandle<R>) -> Vec<serde_json::V
                             "url": ext["url"],
                             "name": ext["name"],
                             "productName": ext["productName"],
-                            "active": ext["_active"],
+                            "active": ext["active"],
                             "description": ext["description"],
                             "version": ext["version"]
                         })

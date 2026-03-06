@@ -110,45 +110,47 @@ pub fn relaunch<R: Runtime>(app: AppHandle<R>) {
 }
 
 #[tauri::command]
-pub fn open_app_directory<R: Runtime>(app: AppHandle<R>) {
-    let app_path = app.path().app_data_dir().unwrap();
+pub fn open_app_directory<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
+    let app_path = app.path().app_data_dir().map_err(|e| e.to_string())?;
     if cfg!(target_os = "windows") {
         std::process::Command::new("explorer")
             .arg(app_path)
             .status()
-            .expect("Failed to open app directory");
+            .map_err(|e| format!("Failed to open app directory: {e}"))?;
     } else if cfg!(target_os = "macos") {
         std::process::Command::new("open")
             .arg(app_path)
             .status()
-            .expect("Failed to open app directory");
+            .map_err(|e| format!("Failed to open app directory: {e}"))?;
     } else {
         std::process::Command::new("xdg-open")
             .arg(app_path)
             .status()
-            .expect("Failed to open app directory");
+            .map_err(|e| format!("Failed to open app directory: {e}"))?;
     }
+    Ok(())
 }
 
 #[tauri::command]
-pub fn open_file_explorer(path: String) {
+pub fn open_file_explorer(path: String) -> Result<(), String> {
     let path = PathBuf::from(path);
     if cfg!(target_os = "windows") {
         std::process::Command::new("explorer")
             .arg(path)
             .status()
-            .expect("Failed to open file explorer");
+            .map_err(|e| format!("Failed to open file explorer: {e}"))?;
     } else if cfg!(target_os = "macos") {
         std::process::Command::new("open")
             .arg(path)
             .status()
-            .expect("Failed to open file explorer");
+            .map_err(|e| format!("Failed to open file explorer: {e}"))?;
     } else {
         std::process::Command::new("xdg-open")
             .arg(path)
             .status()
-            .expect("Failed to open file explorer");
+            .map_err(|e| format!("Failed to open file explorer: {e}"))?;
     }
+    Ok(())
 }
 
 #[tauri::command]

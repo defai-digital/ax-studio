@@ -101,7 +101,7 @@ pub fn is_process_alive(pid: u32) -> bool {
 
         if let Ok(output) = output {
             let output_str = String::from_utf8_lossy(&output.stdout);
-            output_str.contains(&pid.to_string())
+            output_str.contains(&format!(" {} ", pid))
         } else {
             false
         }

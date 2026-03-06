@@ -3,7 +3,7 @@ use hyper::{Body, Request, Response, Server, StatusCode};
 use rand::Rng;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use std::net::SocketAddr;
+
 use std::sync::Arc;
 use tokio::sync::oneshot;
 
@@ -91,8 +91,8 @@ pub async fn initiate_google_oauth(
     let code_verifier = generate_code_verifier();
     let code_challenge = compute_code_challenge(&code_verifier);
 
-    // Find an available port
-    let port = find_available_port().await?;
+    // Find an available port (returns bound listener to avoid TOCTOU race)
+    let (listener, port) = find_available_port().await?;
     let redirect_uri = format!("http://localhost:{port}/callback");
 
     // Build authorization URL with proper URL encoding
@@ -125,8 +125,9 @@ pub async fn initiate_google_oauth(
         }
     });
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    let server = Server::bind(&addr).serve(make_svc);
+    let server = Server::from_tcp(listener)
+        .map_err(|e| format!("Failed to create server from listener: {e}"))?
+        .serve(make_svc);
 
     // Set up graceful shutdown
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
@@ -260,6 +261,13 @@ async fn exchange_code_for_tokens(
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
+    if refresh_token.is_none() {
+        return Err(
+            "No refresh_token in token response. Ensure 'access_type=offline' and 'prompt=consent' are set."
+                .to_string(),
+        );
+    }
+
     let expires_in = body
         .get("expires_in")
         .and_then(|v| v.as_u64());
@@ -343,15 +351,25 @@ pub fn write_google_workspace_config(
     )
     .map_err(|e| format!("Failed to write token file: {e}"))?;
 
+    // Restrict file permissions on Unix (credentials contain secrets)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::Permissions::from_mode(0o600);
+        let _ = std::fs::set_permissions(config_dir.join("credentials.json"), mode.clone());
+        let _ = std::fs::set_permissions(config_dir.join("accounts.json"), mode.clone());
+        let _ = std::fs::set_permissions(&token_path, mode);
+    }
+
     Ok(())
 }
 
-/// Find an available TCP port in the range 12300-12400.
-async fn find_available_port() -> Result<u16, String> {
+/// Find an available TCP port in the range 12300-12400 and return the listener.
+/// Returns the listener (still bound) and the port to avoid TOCTOU race.
+async fn find_available_port() -> Result<(std::net::TcpListener, u16), String> {
     for port in 12300..12400 {
-        if let Ok(listener) = tokio::net::TcpListener::bind(("127.0.0.1", port)).await {
-            drop(listener);
-            return Ok(port);
+        if let Ok(listener) = std::net::TcpListener::bind(("127.0.0.1", port)) {
+            return Ok((listener, port));
         }
     }
     Err("No available port found in range 12300-12400".to_string())

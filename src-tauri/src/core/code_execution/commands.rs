@@ -131,8 +131,18 @@ pub async fn start_sandbox(
         return Ok(());
     }
 
+    // Extract port from sandbox URL
+    let port: u16 = base_url
+        .trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .rsplit(':')
+        .next()
+        .and_then(|p| p.split('/').next())
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(8080);
+
     // Start the container (blocking — offload to thread pool)
-    tokio::task::spawn_blocking(start_sandbox_container)
+    tokio::task::spawn_blocking(move || start_sandbox_container(port))
         .await
         .map_err(|e| format!("Failed to spawn container start task: {e}"))??;
 
@@ -145,8 +155,14 @@ pub async fn start_sandbox(
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-pub async fn stop_sandbox() -> Result<(), String> {
-    stop_sandbox_container()
+pub async fn stop_sandbox(
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    stop_sandbox_container()?;
+    // Clear all sandbox sessions since the container is gone
+    let mut sessions = state.sandbox_sessions.lock().await;
+    sessions.clear();
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------

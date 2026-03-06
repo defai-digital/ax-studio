@@ -79,7 +79,7 @@ export const useMessages = create<MessageState>()((set, get) => ({
     })
   },
   deleteMessage: (threadId, messageId) => {
-    getServiceHub().messages().deleteMessage(threadId, messageId)
+    getServiceHub().messages().deleteMessage(threadId, messageId).catch(console.error)
     set((state) => ({
       messages: {
         ...state.messages,

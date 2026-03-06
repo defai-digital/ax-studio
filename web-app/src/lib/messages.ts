@@ -274,6 +274,7 @@ export class CompletionMessagesBuilder {
     }
     // Ensure no consecutive user messages
     if (this.messages[this.messages.length - 1]?.role === 'user') {
+      console.warn('[Messages] Dropping previous user message to prevent consecutive user messages')
       this.messages.pop()
     }
     this.messages.push(this.toCompletionParamFromThread(message))
@@ -541,10 +542,14 @@ export function convertThreadMessageToUIMessage(
       }
 
       const toolName = tc.tool?.function?.name || tc.name
-      const toolInput =
-        typeof tc.tool?.function?.arguments === 'string'
-          ? JSON.parse(tc.tool.function.arguments)
-          : tc.tool?.function?.arguments || tc.args
+      let toolInput = tc.tool?.function?.arguments || tc.args
+      if (typeof toolInput === 'string') {
+        try {
+          toolInput = JSON.parse(toolInput)
+        } catch {
+          toolInput = toolInput
+        }
+      }
       const toolCallId = tc.tool?.id || tc.id
 
       // Use AI SDK v5 UIToolInvocation format

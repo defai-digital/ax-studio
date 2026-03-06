@@ -749,6 +749,19 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
                   : 3
               const requiredDelegations = maxIter * 2
               if (delegationsMade < requiredDelegations && agents.length >= 2) {
+                // Check if the last evaluator approved the output
+                if (steps && steps.length > 0) {
+                  const lastStep = steps[steps.length - 1]
+                  const lastToolResult = lastStep?.messages
+                    ?.filter((m: any) => m.role === 'tool')
+                    ?.pop()
+                  const resultText = typeof lastToolResult?.content === 'string'
+                    ? lastToolResult.content
+                    : ''
+                  if (/\bapproved?\b/i.test(resultText) || /\bpass(ed)?\b/i.test(resultText)) {
+                    break // Evaluator approved, stop forcing more steps
+                  }
+                }
                 // Alternate: even steps -> worker (agents[0]), odd -> evaluator (agents[1])
                 const agentIdx = delegationsMade % 2
                 stepToolChoice = {
@@ -783,8 +796,14 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
           // Increased threshold to 12 steps (default agents.length * 2 + 5 can be up to 25)
           // Keep original user messages (step 0) plus the last 8 steps
           if (steps && steps.length > 12) {
+            // Keep tool results from trimmed steps so the model has tool call context
+            const trimmedSteps = steps.slice(1, -8)
+            const toolMessages = trimmedSteps.flatMap((s) =>
+              s.messages.filter((m) => m.role === 'tool')
+            )
             result.messages = [
               ...steps[0].messages,
+              ...toolMessages,
               ...steps.slice(-8).flatMap((s) => s.messages),
             ]
           }
@@ -844,9 +863,9 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
                   if (this.onTokenUsage) {
                     this.onTokenUsage(
                       {
-                        inputTokens: 0,
-                        outputTokens: 0,
-                        totalTokens: usage.consumed,
+                        inputTokens: totalUsage?.inputTokens ?? 0,
+                        outputTokens: totalUsage?.outputTokens ?? 0,
+                        totalTokens: usage.consumed || (totalUsage?.totalTokens ?? 0),
                       },
                       options.messageId ?? ''
                     )
@@ -871,10 +890,15 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
             runLog.fail(errMsg)
             persistRunLog(runLog).catch(() => {})
             this.emitDataPart('runLog', runLog.getData())
+          } finally {
+            this.streamWriter = null
           }
         },
       })
     } catch (error) {
+      // Re-throw abort errors — they should not trigger fallback
+      if (error instanceof Error && error.name === 'AbortError') throw error
+
       console.error(
         'Multi-agent orchestration failed, falling back to single-agent:',
         error

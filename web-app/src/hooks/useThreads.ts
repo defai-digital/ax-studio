@@ -108,12 +108,14 @@ export const useThreads = create<ThreadState>()((set, get) => ({
   },
   toggleFavorite: (threadId) => {
     set((state) => {
+      if (!state.threads[threadId]) return state
       getServiceHub()
         .threads()
         .updateThread({
           ...state.threads[threadId],
           isFavorite: !state.threads[threadId].isFavorite,
         })
+        .catch(console.error)
       return {
         threads: {
           ...state.threads,
@@ -131,7 +133,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { [threadId]: _, ...remainingThreads } = state.threads
 
-      getServiceHub().threads().deleteThread(threadId)
+      getServiceHub().threads().deleteThread(threadId).catch(console.error)
 
       return {
         threads: remainingThreads,
@@ -166,7 +168,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
 
       // Delete threads
       threadsToDeleteIds.forEach((threadId) => {
-        getServiceHub().threads().deleteThread(threadId)
+        getServiceHub().threads().deleteThread(threadId).catch(console.error)
       })
 
       // Keep favorite threads and threads with project metadata
@@ -197,7 +199,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
 
       // Delete all threads
       allThreadIds.forEach((threadId) => {
-        getServiceHub().threads().deleteThread(threadId)
+        getServiceHub().threads().deleteThread(threadId).catch(console.error)
       })
 
       return {
@@ -221,7 +223,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
 
       // Delete threads belonging to this project
       threadsToDeleteIds.forEach((threadId) => {
-        getServiceHub().threads().deleteThread(threadId)
+        getServiceHub().threads().deleteThread(threadId).catch(console.error)
       })
 
       // Keep threads that don't belong to this project

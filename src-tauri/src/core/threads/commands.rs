@@ -6,8 +6,8 @@ use uuid::Uuid;
 #[cfg(any(target_os = "android", target_os = "ios"))]
 use super::db;
 use super::helpers::{
-    get_lock_for_thread, read_messages_from_file, should_use_sqlite, update_thread_metadata,
-    write_messages_to_file,
+    get_lock_for_thread, read_messages_from_file, remove_lock_for_thread, should_use_sqlite,
+    update_thread_metadata, write_messages_to_file,
 };
 use super::{
     constants::THREADS_FILE,
@@ -106,6 +106,11 @@ pub async fn modify_thread<R: Runtime>(
     if !thread_dir.exists() {
         return Err("Thread directory does not exist".to_string());
     }
+
+    // Acquire per-thread lock before writing
+    let lock = get_lock_for_thread(thread_id).await;
+    let _guard = lock.lock().await;
+
     let path = get_thread_metadata_path(app_handle.clone(), thread_id);
     let data = serde_json::to_string_pretty(&thread).map_err(|e| e.to_string())?;
     fs::write(path, data).map_err(|e| e.to_string())?;
@@ -128,6 +133,8 @@ pub async fn delete_thread<R: Runtime>(
     if thread_dir.exists() {
         let _ = fs::remove_dir_all(thread_dir);
     }
+    // Clean up the per-thread lock entry
+    remove_lock_for_thread(&thread_id);
     Ok(())
 }
 
@@ -144,6 +151,9 @@ pub async fn list_messages<R: Runtime>(
     }
 
     // Use file-based storage on desktop
+    // Acquire per-thread lock to prevent reading during writes
+    let lock = get_lock_for_thread(&thread_id).await;
+    let _guard = lock.lock().await;
     read_messages_from_file(app_handle, &thread_id)
 }
 

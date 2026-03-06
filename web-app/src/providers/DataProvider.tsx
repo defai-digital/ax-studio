@@ -244,7 +244,13 @@ export function DataProvider() {
     console.log('Received deeplink:', urls)
     const deeplink = urls[0]
     if (deeplink) {
-      const url = new URL(deeplink)
+      let url: URL
+      try {
+        url = new URL(deeplink)
+      } catch {
+        console.error('Invalid deeplink URL:', deeplink)
+        return
+      }
       const params = url.pathname.split('/').filter((str) => str.length > 0)
 
       if (params.length < 3) return undefined

@@ -39,13 +39,17 @@ export function useChat(
     sessionId,
     sessionTitle,
     systemMessage,
-    inferenceParameters = {},
+    inferenceParameters: rawInferenceParameters = {},
     modelOverrideId,
     activeTeamId,
     onTokenUsage,
     onCostApproval,
     ...chatInitOptions
   } = options ?? {}
+  // Stabilize inferenceParameters reference to avoid infinite useEffect loops
+  const inferenceParametersJson = JSON.stringify(rawInferenceParameters)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const inferenceParameters = useMemo(() => rawInferenceParameters, [inferenceParametersJson])
   const ensureSession = useChatSessions((state) => state.ensureSession)
   const setSessionTitle = useChatSessions((state) => state.setSessionTitle)
   const updateStatus = useChatSessions((state) => state.updateStatus)

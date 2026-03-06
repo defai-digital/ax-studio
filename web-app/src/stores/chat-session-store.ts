@@ -23,6 +23,7 @@ export type ChatSession = {
 
 interface ChatSessionState {
   sessions: Record<string, ChatSession>;
+  standaloneData: Record<string, SessionData>;
   activeConversationId?: string;
   setActiveConversationId: (conversationId?: string) => void;
   ensureSession: (
@@ -54,11 +55,9 @@ const createSessionData = (): SessionData => ({
   idMap: new Map<string, string>(),
 });
 
-// Standalone data store for sessions that don't have a Chat yet
-const standaloneData: Record<string, SessionData> = {};
-
 export const useChatSessions = create<ChatSessionState>((set, get) => ({
   sessions: {},
+  standaloneData: {},
   activeConversationId: undefined,
   setActiveConversationId: (conversationId) =>
     set({ activeConversationId: conversationId }),
@@ -96,8 +95,9 @@ export const useChatSessions = create<ChatSessionState>((set, get) => ({
       : undefined;
 
     // Use existing standalone data if available, otherwise create new
-    const data = standaloneData[sessionId] ?? createSessionData();
-    delete standaloneData[sessionId]; // Move to session
+    const data = get().standaloneData[sessionId] ?? createSessionData();
+    // Move from standalone to session
+    const { [sessionId]: _, ...remainingStandalone } = get().standaloneData;
 
     const newSession: ChatSession = {
       chat,
@@ -114,6 +114,7 @@ export const useChatSessions = create<ChatSessionState>((set, get) => ({
         ...state.sessions,
         [sessionId]: newSession,
       },
+      standaloneData: remainingStandalone,
     }));
 
     return chat;
@@ -124,10 +125,15 @@ export const useChatSessions = create<ChatSessionState>((set, get) => ({
       return existing.data;
     }
     // Return or create standalone data for sessions without a Chat yet
-    if (!standaloneData[sessionId]) {
-      standaloneData[sessionId] = createSessionData();
+    const standalone = get().standaloneData;
+    if (!standalone[sessionId]) {
+      const newData = createSessionData();
+      set((state) => ({
+        standaloneData: { ...state.standaloneData, [sessionId]: newData },
+      }));
+      return newData;
     }
-    return standaloneData[sessionId];
+    return standalone[sessionId];
   },
   updateStatus: (sessionId, status) => {
     set((state) => {

@@ -48,7 +48,7 @@ pub async fn download_files<R: Runtime>(
         let app_data_folder = get_app_data_folder_path(app.clone());
         for item in items {
             let save_path = app_data_folder.join(&item.save_path);
-            let _ = std::fs::remove_file(&save_path); // don't check error
+            let _ = tokio::fs::remove_file(&save_path).await; // don't check error
         }
     }
 

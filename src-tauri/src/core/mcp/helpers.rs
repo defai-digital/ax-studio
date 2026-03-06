@@ -63,7 +63,7 @@ pub async fn run_mcp_commands<R: Runtime>(
     servers_state: SharedMcpServers,
 ) -> Result<(), String> {
     let app_path = get_app_data_folder_path(app.clone());
-    let app_path_str = app_path.to_str().unwrap().to_string();
+    let app_path_str = app_path.to_string_lossy().to_string();
     log::trace!(
         "Load MCP configs from {}",
         app_path_str.clone() + "/mcp_config.json"
@@ -180,27 +180,27 @@ pub async fn monitor_mcp_server_handle(
         }
 
         let health_check_result = {
-            let servers = servers_state.lock().await;
-            if let Some(service) = servers.get(&name) {
-                // Try to list tools as a health check with a short timeout
-                match timeout(Duration::from_secs(2), service.list_all_tools()).await {
-                    Ok(Ok(_)) => {
-                        // Server responded successfully
-                        true
-                    }
-                    Ok(Err(e)) => {
-                        log::warn!("MCP server {name} health check failed: {e}");
-                        false
-                    }
-                    Err(_) => {
-                        log::warn!("MCP server {name} health check timed out");
-                        false
+            let service = {
+                let servers = servers_state.lock().await;
+                match servers.get(&name) {
+                    Some(s) => s.clone(),
+                    None => {
+                        log::info!("MCP server {name} no longer in running services");
+                        return Some(rmcp::service::QuitReason::Closed);
                     }
                 }
-            } else {
-                // Server was removed from HashMap (e.g., by deactivate_mcp_server)
-                log::info!("MCP server {name} no longer in running services");
-                return Some(rmcp::service::QuitReason::Closed);
+            };
+            // Lock is dropped here — health check runs without holding the lock
+            match timeout(Duration::from_secs(2), service.list_all_tools()).await {
+                Ok(Ok(_)) => true,
+                Ok(Err(e)) => {
+                    log::warn!("MCP server {name} health check failed: {e}");
+                    false
+                }
+                Err(_) => {
+                    log::warn!("MCP server {name} health check timed out");
+                    false
+                }
             }
         };
 
@@ -210,14 +210,16 @@ pub async fn monitor_mcp_server_handle(
             let mut servers = servers_state.lock().await;
             if let Some(service) = servers.remove(&name) {
                 // Try to cancel the service gracefully
-                match service {
-                    RunningServiceEnum::NoInit(service) => {
-                        log::info!("Stopping server {name}...");
-                        let _ = service.cancel().await;
-                    }
-                    RunningServiceEnum::WithInit(service) => {
-                        log::info!("Stopping server {name} with initialization...");
-                        let _ = service.cancel().await;
+                if let Ok(inner) = Arc::try_unwrap(service) {
+                    match inner {
+                        RunningServiceEnum::NoInit(service) => {
+                            log::info!("Stopping server {name}...");
+                            let _ = service.cancel().await;
+                        }
+                        RunningServiceEnum::WithInit(service) => {
+                            log::info!("Stopping server {name} with initialization...");
+                            let _ = service.cancel().await;
+                        }
                     }
                 }
             }
@@ -331,7 +333,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
                 servers
                     .lock()
                     .await
-                    .insert(name.clone(), RunningServiceEnum::WithInit(client));
+                    .insert(name.clone(), Arc::new(RunningServiceEnum::WithInit(client)));
 
                 emit_mcp_update_event(&app, &name);
             }
@@ -400,7 +402,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
                 servers
                     .lock()
                     .await
-                    .insert(name.clone(), RunningServiceEnum::WithInit(client));
+                    .insert(name.clone(), Arc::new(RunningServiceEnum::WithInit(client)));
 
                 emit_mcp_update_event(&app, &name);
             }
@@ -542,7 +544,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
                 servers
                     .lock()
                     .await
-                    .insert(name.clone(), RunningServiceEnum::NoInit(server));
+                    .insert(name.clone(), Arc::new(RunningServiceEnum::NoInit(server)));
                 log::info!("Server {name} started successfully.");
             }
             Err(_) => {
@@ -881,7 +883,7 @@ pub async fn stop_mcp_servers_with_context<R: Runtime>(
         let pids = state.mcp_server_pids.lock().await;
         pids.clone()
     };
-    let servers_to_stop: Vec<(String, RunningServiceEnum, Option<u16>)> = {
+    let servers_to_stop: Vec<(String, Arc<RunningServiceEnum>, Option<u16>)> = {
         let mut servers_map = state.mcp_servers.lock().await;
         let keys: Vec<String> = servers_map.keys().cloned().collect();
 
@@ -923,9 +925,13 @@ pub async fn stop_mcp_servers_with_context<R: Runtime>(
 
             tauri::async_runtime::spawn(async move {
                 let cancel_future = async {
-                    match service {
-                        RunningServiceEnum::NoInit(service) => service.cancel().await,
-                        RunningServiceEnum::WithInit(service) => service.cancel().await,
+                    match Arc::try_unwrap(service) {
+                        Ok(RunningServiceEnum::NoInit(service)) => service.cancel().await,
+                        Ok(RunningServiceEnum::WithInit(service)) => service.cancel().await,
+                        Err(_) => {
+                            log::warn!("Service still has active references during shutdown");
+                            Ok(rmcp::service::QuitReason::Closed)
+                        }
                     }
                 };
 

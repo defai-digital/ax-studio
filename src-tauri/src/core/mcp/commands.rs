@@ -15,7 +15,7 @@ use crate::core::{
     mcp::models::ToolWithServer,
     state::{RunningServiceEnum, SharedMcpServers},
 };
-use std::{fs, time::Duration};
+use std::{fs, sync::Arc, time::Duration};
 
 async fn tool_call_timeout(state: &State<'_, AppState>) -> Duration {
     state.mcp_settings.lock().await.tool_call_timeout_duration()
@@ -47,7 +47,7 @@ pub async fn deactivate_mcp_server<R: Runtime>(
         let active_servers = state.mcp_active_servers.lock().await;
         active_servers.get(&name).and_then(|config| {
             config
-                .get("envs")
+                .get("env")
                 .and_then(|envs| envs.get("BRIDGE_PORT"))
                 .and_then(|port| port.as_str())
                 .and_then(|port_str| port_str.parse::<u16>().ok())
@@ -75,14 +75,17 @@ pub async fn deactivate_mcp_server<R: Runtime>(
     // Release the lock before calling cancel
     drop(servers_map);
 
-    match service {
-        RunningServiceEnum::NoInit(service) => {
+    match Arc::try_unwrap(service) {
+        Ok(RunningServiceEnum::NoInit(service)) => {
             log::info!("Stopping server {name}...");
             service.cancel().await.map_err(|e| e.to_string())?;
         }
-        RunningServiceEnum::WithInit(service) => {
+        Ok(RunningServiceEnum::WithInit(service)) => {
             log::info!("Stopping server {name} with initialization...");
             service.cancel().await.map_err(|e| e.to_string())?;
+        }
+        Err(_arc) => {
+            log::warn!("Server {name} still has active references, will be dropped when last reference is released");
         }
     }
 
@@ -164,11 +167,16 @@ pub async fn get_connected_servers(
 #[tauri::command]
 pub async fn get_tools(state: State<'_, AppState>) -> Result<Vec<ToolWithServer>, String> {
     let timeout_duration = tool_call_timeout(&state).await;
-    let servers = state.mcp_servers.lock().await;
     let mut all_tools: Vec<ToolWithServer> = Vec::new();
 
-    for (server_name, service) in servers.iter() {
-        // List tools with timeout
+    // Collect server refs under lock, then drop lock before querying
+    let server_refs: Vec<(String, Arc<crate::core::state::RunningServiceEnum>)> = {
+        let servers = state.mcp_servers.lock().await;
+        servers.iter().map(|(name, svc)| (name.clone(), svc.clone())).collect()
+    };
+
+    for (server_name, service) in &server_refs {
+        // List tools with timeout — lock is NOT held
         let tools_future = service.list_all_tools();
         let tools = match timeout(timeout_duration, tools_future).await {
             Ok(Ok(tools)) => tools,
@@ -181,7 +189,7 @@ pub async fn get_tools(state: State<'_, AppState>) -> Result<Vec<ToolWithServer>
                     "Listing tools timed out after {} seconds",
                     timeout_duration.as_secs()
                 );
-                continue; // Skip this server and continue with others
+                continue;
             }
         };
 
@@ -234,77 +242,83 @@ pub async fn call_tool(
         cancellations.insert(token.clone(), cancel_tx);
     }
 
-    let servers = state.mcp_servers.lock().await;
+    // Phase 1: Find which server has the tool (hold lock briefly)
+    let target_service = {
+        let servers = state.mcp_servers.lock().await;
 
-    // If server_name is provided, only check that specific server
-    let servers_to_check: Vec<(&String, &crate::core::state::RunningServiceEnum)> =
-        if let Some(ref server) = server_name {
-            servers.iter().filter(|(name, _)| *name == server).collect()
-        } else {
-            servers.iter().collect()
-        };
+        let servers_to_check: Vec<(&String, &Arc<crate::core::state::RunningServiceEnum>)> =
+            if let Some(ref server) = server_name {
+                servers.iter().filter(|(name, _)| *name == server).collect()
+            } else {
+                servers.iter().collect()
+            };
 
-    if servers_to_check.is_empty() {
-        if let Some(server) = server_name {
-            return Err(format!("Server '{server}' not found"));
-        }
-    }
-
-    // Iterate through servers and find the one that contains the tool
-    for (srv_name, service) in servers_to_check.iter() {
-        let tools = match service.list_all_tools().await {
-            Ok(tools) => tools,
-            Err(_) => continue, // Skip this server if we can't list tools
-        };
-
-        if !tools.iter().any(|t| t.name == tool_name) {
-            continue; // Tool not found in this server, try next
+        if servers_to_check.is_empty() {
+            if let Some(server) = server_name {
+                return Err(format!("Server '{server}' not found"));
+            }
         }
 
-        println!("Found tool {tool_name} in server {srv_name}");
+        let mut found = None;
+        for (srv_name, service) in servers_to_check.iter() {
+            let tools = match timeout(timeout_duration, service.list_all_tools()).await {
+                Ok(Ok(tools)) => tools,
+                _ => continue,
+            };
 
-        // Call the tool with timeout and cancellation support
-        let tool_call = service.call_tool(CallToolRequestParam {
-            name: tool_name.clone().into(),
-            arguments,
-        });
+            if tools.iter().any(|t| t.name == tool_name) {
+                println!("Found tool {tool_name} in server {srv_name}");
+                found = Some((*service).clone());
+                break;
+            }
+        }
+        found
+    };
+    // Lock is dropped here
 
-        // Race between timeout, tool call, and cancellation
-        let result = if cancellation_token.is_some() {
-            tokio::select! {
-                result = timeout(timeout_duration, tool_call) => {
-                    match result {
-                        Ok(call_result) => call_result.map_err(|e| e.to_string()),
-                        Err(_) => Err(format!(
-                            "Tool call '{tool_name}' timed out after {} seconds",
-                            timeout_duration.as_secs()
-                        )),
-                    }
-                }
-                _ = cancel_rx => {
-                    Err(format!("Tool call '{tool_name}' was cancelled"))
+    let service = match target_service {
+        Some(s) => s,
+        None => return Err(format!("Tool {tool_name} not found")),
+    };
+
+    // Phase 2: Call the tool without holding the servers lock
+    let tool_call = service.call_tool(CallToolRequestParam {
+        name: tool_name.clone().into(),
+        arguments,
+    });
+
+    let result = if cancellation_token.is_some() {
+        tokio::select! {
+            result = timeout(timeout_duration, tool_call) => {
+                match result {
+                    Ok(call_result) => call_result.map_err(|e| e.to_string()),
+                    Err(_) => Err(format!(
+                        "Tool call '{tool_name}' timed out after {} seconds",
+                        timeout_duration.as_secs()
+                    )),
                 }
             }
-        } else {
-            match timeout(timeout_duration, tool_call).await {
-                Ok(call_result) => call_result.map_err(|e| e.to_string()),
-                Err(_) => Err(format!(
-                    "Tool call '{tool_name}' timed out after {} seconds",
-                    timeout_duration.as_secs()
-                )),
+            _ = cancel_rx => {
+                Err(format!("Tool call '{tool_name}' was cancelled"))
             }
-        };
-
-        // Clean up cancellation token
-        if let Some(token) = &cancellation_token {
-            let mut cancellations = state.tool_call_cancellations.lock().await;
-            cancellations.remove(token);
         }
+    } else {
+        match timeout(timeout_duration, tool_call).await {
+            Ok(call_result) => call_result.map_err(|e| e.to_string()),
+            Err(_) => Err(format!(
+                "Tool call '{tool_name}' timed out after {} seconds",
+                timeout_duration.as_secs()
+            )),
+        }
+    };
 
-        return result;
+    // Clean up cancellation token
+    if let Some(token) = &cancellation_token {
+        let mut cancellations = state.tool_call_cancellations.lock().await;
+        cancellations.remove(token);
     }
 
-    Err(format!("Tool {tool_name} not found"))
+    result
 }
 
 /// Cancels a running tool call by its cancellation token
@@ -582,7 +596,8 @@ pub async fn save_mcp_configs<R: Runtime>(
     if !config_object.contains_key("mcpSettings") {
         config_object.insert(
             "mcpSettings".to_string(),
-            serde_json::to_value(&settings).expect("Failed to serialize MCP settings"),
+            serde_json::to_value(&settings)
+                .map_err(|e| format!("Failed to serialize MCP settings: {e}"))?,
         );
     }
 
