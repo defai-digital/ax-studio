@@ -454,10 +454,10 @@ export default class AxFabricLlamacppExtension extends AIEngine {
       const engineType = this.config.engine_type || 'llamacpp'
       const embedding = isEmbedding || Boolean(cfg.embedding)
 
-      // ax-serving mode for text/vision models (embedding falls back to llamacpp)
-      if (engineType === 'ax-serving' && !embedding) {
+      // ax-serving mode — handles text, vision, and embedding models
+      if (engineType === 'ax-serving') {
         try {
-          return await this._doLoadAxServing(modelId, cfg)
+          return await this._doLoadAxServing(modelId, cfg, embedding)
         } catch (axErr: any) {
           console.warn(
             `[llamacpp] ax-serving failed, falling back to llamacpp: ${axErr?.message ?? axErr}`
@@ -465,12 +465,6 @@ export default class AxFabricLlamacppExtension extends AIEngine {
         }
       }
 
-      // llamacpp mode (also serves as fallback for ax-serving embedding)
-      if (engineType === 'ax-serving' && embedding) {
-        console.log(
-          `[llamacpp] ax-serving: falling back to llamacpp for embedding model "${modelId}"`
-        )
-      }
       return await this._doLoadLlamacpp(modelId, cfg, overrideSettings, isEmbedding)
     } catch (e: any) {
       events.emit(ModelEvent.OnModelFail, { modelId, error: e?.message ?? String(e) })
@@ -483,7 +477,8 @@ export default class AxFabricLlamacppExtension extends AIEngine {
   /** Load a model via ax-serving HTTP API (long-running service model) */
   private async _doLoadAxServing(
     modelId: string,
-    cfg: ModelConfig
+    cfg: ModelConfig,
+    isEmbedding = false
   ): Promise<SessionInfo> {
     // Ensure ax-serving process is running
     await this._ensureAxServingRunning()
@@ -496,14 +491,38 @@ export default class AxFabricLlamacppExtension extends AIEngine {
       throw new Error(`Model file not found: ${modelPath}`)
     }
 
+    // Resolve mmproj path for vision/multimodal models
+    let mmprojPath: string | undefined
+    if (cfg.mmproj_path) {
+      mmprojPath = await joinPath([appData, cfg.mmproj_path])
+      if (!(await fs.existsSync(mmprojPath))) {
+        console.warn(`[llamacpp] mmproj file not found: ${mmprojPath}, loading without vision`)
+        mmprojPath = undefined
+      }
+    }
+
+    // Build load request with all supported fields
+    const loadBody: Record<string, any> = {
+      model_id: modelId,
+      path: modelPath,
+    }
+    if (mmprojPath) {
+      loadBody.mmproj_path = mmprojPath
+    }
+    const nGpuLayers = Number(this.config.n_gpu_layers)
+    if (nGpuLayers >= 0 && nGpuLayers !== 100) {
+      loadBody.n_gpu_layers = nGpuLayers
+    }
+    const ctxSize = Number(this.config.ctx_size)
+    if (ctxSize > 0) {
+      loadBody.context_length = ctxSize
+    }
+
     // Load model via ax-serving REST API
     const loadRes = await fetch(`http://127.0.0.1:${this.axServingPort}/v1/models`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model_id: modelId,
-        path: modelPath,
-      }),
+      body: JSON.stringify(loadBody),
       signal: AbortSignal.timeout(this.timeout * 1000),
     })
 
@@ -526,7 +545,7 @@ export default class AxFabricLlamacppExtension extends AIEngine {
       port: this.axServingPort,
       model_id: modelId,
       model_path: modelPath,
-      is_embedding: false,
+      is_embedding: isEmbedding,
       api_key: '',
     }
     this.axServingSessions.set(modelId, session)
