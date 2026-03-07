@@ -35,7 +35,7 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
     let pre_install_path = app
         .path()
         .resource_dir()
-        .unwrap()
+        .map_err(|e| format!("Failed to get resource dir: {e}"))?
         .join("resources")
         .join("pre-install");
 
@@ -205,7 +205,9 @@ pub fn migrate_mcp_servers(
         }
     }
     store.set("mcp_version", 3);
-    store.save().expect("Failed to save store");
+    if let Err(e) = store.save() {
+        log::error!("Failed to save store after MCP migration: {e}");
+    }
     Ok(())
 }
 
@@ -306,7 +308,10 @@ pub fn setup_tray(app: &App) -> tauri::Result<TrayIcon> {
     let separator_i = PredefinedMenuItem::separator(app.handle())?;
     let menu = Menu::with_items(app.handle(), &[&show_i, &separator_i, &quit_i])?;
     TrayIconBuilder::with_id("tray")
-        .icon(app.default_window_icon().unwrap().clone())
+        .icon(app.default_window_icon().cloned().unwrap_or_else(|| {
+            log::warn!("No default window icon configured, using empty icon");
+            tauri::image::Image::new(&[], 0, 0)
+        }))
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_tray_icon_event(|tray, event| match event {

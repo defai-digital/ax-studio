@@ -101,6 +101,8 @@ export function DataProvider() {
       setProviders(providers)
       // Register remote providers with the backend
       providers.forEach(registerRemoteProvider)
+    }).catch((error) => {
+      console.error('Failed to load providers:', error)
     })
     serviceHub
       .mcp()
@@ -108,6 +110,9 @@ export function DataProvider() {
       .then((data) => {
         setServers(data.mcpServers ?? {})
         setSettings(data.mcpSettings ?? DEFAULT_MCP_SETTINGS)
+      })
+      .catch((error) => {
+        console.error('Failed to load MCP config:', error)
       })
     serviceHub
       .assistants()
@@ -122,7 +127,9 @@ export function DataProvider() {
       .catch((error) => {
         console.warn('Failed to load assistants, keeping default:', error)
       })
-    serviceHub.deeplink().getCurrent().then(handleDeepLink)
+    serviceHub.deeplink().getCurrent().then(handleDeepLink).catch((error) => {
+      console.error('Failed to get current deep link:', error)
+    })
     serviceHub.deeplink().onOpenUrl(handleDeepLink)
 
     // Listen for deep link events

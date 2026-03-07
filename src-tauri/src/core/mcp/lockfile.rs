@@ -101,7 +101,8 @@ pub fn is_process_alive(pid: u32) -> bool {
 
         if let Ok(output) = output {
             let output_str = String::from_utf8_lossy(&output.stdout);
-            output_str.contains(&format!(" {} ", pid))
+            // tasklist /FI "PID eq N" returns "INFO: No tasks..." if not found
+            !output_str.contains("No tasks") && !output_str.trim().is_empty()
         } else {
             false
         }

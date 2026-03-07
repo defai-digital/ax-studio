@@ -136,7 +136,7 @@ pub async fn delete_thread<R: Runtime>(
         let _ = fs::remove_dir_all(thread_dir);
     }
     // Clean up the per-thread lock entry
-    remove_lock_for_thread(&thread_id);
+    remove_lock_for_thread(&thread_id).await;
     Ok(())
 }
 
@@ -332,6 +332,11 @@ pub async fn create_thread_assistant<R: Runtime>(
     if !path.exists() {
         return Err("Thread not found".to_string());
     }
+
+    // Acquire per-thread lock before modifying
+    let lock = get_lock_for_thread(&thread_id).await;
+    let _guard = lock.lock().await;
+
     let mut thread: serde_json::Value = {
         let data = fs::read_to_string(&path).map_err(|e| e.to_string())?;
         serde_json::from_str(&data).map_err(|e| e.to_string())?
@@ -363,6 +368,11 @@ pub async fn modify_thread_assistant<R: Runtime>(
     if !path.exists() {
         return Err("Thread not found".to_string());
     }
+
+    // Acquire per-thread lock before modifying
+    let lock = get_lock_for_thread(&thread_id).await;
+    let _guard = lock.lock().await;
+
     let mut thread: serde_json::Value = {
         let data = fs::read_to_string(&path).map_err(|e| e.to_string())?;
         serde_json::from_str(&data).map_err(|e| e.to_string())?

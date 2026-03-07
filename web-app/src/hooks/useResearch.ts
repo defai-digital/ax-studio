@@ -336,11 +336,9 @@ function saveMessageToChat(threadId: string, msg: ThreadMessage) {
   if (session) {
     const uiMsg = convertThreadMessageToUIMessage(msg)
     if (uiMsg) {
-      // Use setMessages if available for proper reactivity, fallback to direct mutation
+      // Use setMessages for proper React reactivity
       if (typeof session.chat.setMessages === 'function') {
         session.chat.setMessages([...session.chat.messages, uiMsg])
-      } else {
-        session.chat.messages = [...session.chat.messages, uiMsg]
       }
     }
   }

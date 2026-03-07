@@ -301,17 +301,17 @@ async fn validate_slack(credentials: &HashMap<String, String>) -> Result<String,
 
 async fn validate_jira(credentials: &HashMap<String, String>) -> Result<String, String> {
     let token = credentials
-        .get("JIRA_API_TOKEN")
-        .ok_or("Missing JIRA_API_TOKEN")?;
+        .get("ATLASSIAN_API_TOKEN")
+        .ok_or("Missing ATLASSIAN_API_TOKEN")?;
     let email = credentials
-        .get("JIRA_EMAIL")
-        .ok_or("Missing JIRA_EMAIL")?;
-    let url = credentials
-        .get("JIRA_URL")
-        .ok_or("Missing JIRA_URL")?;
+        .get("ATLASSIAN_USER_EMAIL")
+        .ok_or("Missing ATLASSIAN_USER_EMAIL")?;
+    let site_name = credentials
+        .get("ATLASSIAN_SITE_NAME")
+        .ok_or("Missing ATLASSIAN_SITE_NAME")?;
 
-    let base_url = url.trim_end_matches('/');
-    let api_url = format!("{base_url}/rest/api/3/myself");
+    let site = site_name.trim().trim_end_matches('/');
+    let api_url = format!("https://{site}.atlassian.net/rest/api/3/myself");
 
     let client = reqwest::Client::new();
     let resp = client

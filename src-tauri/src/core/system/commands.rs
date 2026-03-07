@@ -36,7 +36,11 @@ fn write_env_to_shell(
     let marker = "# Ax-Fabric Local API Server - Claude Code Config";
     let new_entries: String = env_vars
         .iter()
-        .map(|(k, v)| format!("export {}='{}'\n", k, v))
+        .map(|(k, v)| {
+            // Escape single quotes to prevent shell injection
+            let escaped_v = v.replace('\'', "'\\''");
+            format!("export {}='{}'\n", k, escaped_v)
+        })
         .collect();
 
     let existing_content = std::fs::read_to_string(env_file_path).unwrap_or_default();
@@ -264,7 +268,11 @@ pub fn launch_claude_code_with_config(
 
                 let env_content: String = env_vars
                     .iter()
-                    .map(|(k, v)| format!("export {}='{}'\n", k, v))
+                    .map(|(k, v)| {
+            // Escape single quotes to prevent shell injection
+            let escaped_v = v.replace('\'', "'\\''");
+            format!("export {}='{}'\n", k, escaped_v)
+        })
                     .collect();
 
                 let new_block = format!("{}\n{}", marker, env_content);

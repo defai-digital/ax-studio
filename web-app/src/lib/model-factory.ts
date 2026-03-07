@@ -151,14 +151,16 @@ function createCustomFetch(
 ): typeof httpFetch {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     if ((init?.method === 'POST' || !init?.method) && Object.keys(parameters).length > 0) {
+      if (typeof init?.body !== 'string') {
+        // Body is Blob, ReadableStream, FormData, etc. — skip parameter injection
+        return baseFetch(input, init)
+      }
       let body: Record<string, unknown> = {}
-      if (typeof init?.body === 'string') {
-        try {
-          body = JSON.parse(init.body)
-        } catch {
-          // body is not JSON, skip parameter injection
-          return baseFetch(input, init)
-        }
+      try {
+        body = JSON.parse(init.body)
+      } catch {
+        // body is not JSON, skip parameter injection
+        return baseFetch(input, init)
       }
       init = { ...init, body: JSON.stringify({ ...body, ...parameters }) }
     }

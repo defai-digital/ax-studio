@@ -67,9 +67,15 @@ export const useIntegrations = create<IntegrationStoreState>()((set, get) => ({
 
       // Build the MCP server config for this integration
       const serverName = `integration-${id}`
+
+      // PostgreSQL passes connection string as CLI arg, not env var
+      const args = id === 'postgres' && credentials['POSTGRES_CONNECTION_STRING']
+        ? [...integration.mcpArgs, credentials['POSTGRES_CONNECTION_STRING']]
+        : [...integration.mcpArgs]
+
       const config: MCPServerConfig = {
         command: integration.mcpCommand,
-        args: integration.mcpArgs,
+        args,
         env: {},
         active: true,
         managed: true,

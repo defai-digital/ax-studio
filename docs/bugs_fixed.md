@@ -271,6 +271,39 @@ After the initial 54-bug pass, a comprehensive 4-agent code review identified an
 
 ---
 
+## Final Pass — Remaining Issues Fixed
+
+After the verification review, the following remaining issues were addressed:
+
+### Rust Backend
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `threads/utils.rs` | Thread ID used unsanitized in filesystem paths — path traversal | Added sanitization: strip `/`, `\`, `..` |
+| `filesystem/commands.rs:47` | `join_path` result not validated against `app_data_folder` | Added `normalize_path` + `starts_with` check |
+| `system/commands.rs` | Shell injection via env var values in `export` command | Escape single quotes: `v.replace('\'', "'\\''")` |
+| `app/commands.rs` | `.expect()` on HOME env var — panics if unset | Changed to `unwrap_or_else` with `/tmp` fallback |
+| `mcp/helpers.rs` | Nested lock: `mcp_active_servers` acquired while holding `mcp_servers` | Read `mcp_active_servers` BEFORE acquiring `mcp_servers` |
+| `setup.rs` | Multiple `.unwrap()`/`.expect()` on resource_dir, store.save, default_window_icon | Replaced with `.map_err()?`, `if let Err`, graceful fallback |
+| `proxy.rs` | SSE `line_buffer` remainder not processed after stream ends | Added post-loop processing of remaining buffer |
+| `lockfile.rs` | Windows PID matching with space-padded format could false-match | Reverted to simple `!output_str.contains("No tasks")` check |
+| `threads/helpers.rs` | No `fsync` before `rename` in atomic writes — data loss risk on crash | Added `sync_all()` before `rename` in both write functions |
+| `threads/helpers.rs` | `remove_lock_for_thread` silently failed if lock contended | Changed to `async fn` that awaits the lock properly |
+| `threads/commands.rs` | `create_thread_assistant`/`modify_thread_assistant` not using per-thread lock | Added `get_lock_for_thread` acquisition in both |
+
+### TypeScript Frontend
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `model-factory.ts` | Non-string `init.body` (Blob, ReadableStream) silently overwritten | Added early return for non-string bodies |
+| `tauri.ts:67,71,79` | `getTools()`, `getConnectedServers()`, `callTool()` can return undefined | Added `?? []` / `?? { error, content }` fallbacks |
+| `DataProvider.tsx:100-126` | `getProviders`, `getMCPConfig`, `getCurrent` missing `.catch()` | Added `.catch(console.error)` to all 3 |
+| `useResearch.ts:343` | Direct `session.chat.messages` mutation won't trigger React re-renders | Removed mutation fallback, only use `setMessages` |
+| `useMessages.ts:81-91` | No rollback on optimistic delete if backend fails | Added rollback in `.catch()` callback |
+| `PythonCodeBlock.tsx` | Regex-based HTML sanitization bypassable | Replaced with DOM-based parser sanitization |
+
+---
+
 ## Verification Results
 
 | Check | Result |
@@ -280,3 +313,4 @@ After the initial 54-bug pass, a comprehensive 4-agent code review identified an
 | All type errors from Arc refactor | Resolved |
 | Command registration (`lib.rs`) | Compatible — Tauri auto-handles `Result<T, String>` return types |
 | Verification review (4-agent audit) | All critical/high/medium issues fixed |
+| Final pass fixes | All remaining issues fixed |

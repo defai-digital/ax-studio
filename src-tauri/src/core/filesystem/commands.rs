@@ -74,9 +74,18 @@ pub fn join_path<R: Runtime>(
         return Err("join_path error: Invalid argument".to_string());
     }
 
+    let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app_handle.clone());
     let path = resolve_path(app_handle, &args[0]);
     let joined_path = args[1..].iter().fold(path, |acc, part| acc.join(part));
-    Ok(joined_path.to_string_lossy().to_string())
+    // Normalize to resolve any ".." segments from subsequent args
+    let normalized = ax_fabric_utils::normalize_path(&joined_path);
+    if !normalized.starts_with(&app_data_folder) {
+        return Err(format!(
+            "join_path error: result path {} is outside app data folder",
+            normalized.display()
+        ));
+    }
+    Ok(normalized.to_string_lossy().to_string())
 }
 
 #[tauri::command]

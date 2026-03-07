@@ -107,19 +107,19 @@ export const INTEGRATIONS: Integration[] = [
     mcpArgs: ['-y', '@aashari/mcp-server-atlassian-jira'],
     fields: [
       {
-        key: 'JIRA_URL',
-        label: 'Jira Instance URL',
-        type: 'url',
-        placeholder: 'https://your-org.atlassian.net',
+        key: 'ATLASSIAN_SITE_NAME',
+        label: 'Atlassian Site Name',
+        type: 'text',
+        placeholder: 'your-org (from your-org.atlassian.net)',
       },
       {
-        key: 'JIRA_EMAIL',
+        key: 'ATLASSIAN_USER_EMAIL',
         label: 'Email Address',
         type: 'text',
         placeholder: 'you@company.com',
       },
       {
-        key: 'JIRA_API_TOKEN',
+        key: 'ATLASSIAN_API_TOKEN',
         label: 'API Token',
         type: 'password',
         placeholder: 'xxxxxxxxxxxxxxxx',

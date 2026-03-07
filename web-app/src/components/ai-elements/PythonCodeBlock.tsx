@@ -1,8 +1,38 @@
-import { type ReactNode, memo, useCallback } from 'react'
+import { type ReactNode, memo, useCallback, useMemo } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { useCodeExecution, type ExecutionResult } from '@/hooks/useCodeExecution'
 import { Button } from '@/components/ui/button'
 import { PlayIcon, RotateCcwIcon, LoaderCircleIcon, DownloadIcon, SquareTerminalIcon } from 'lucide-react'
+
+const DANGEROUS_TAGS = new Set([
+  'script', 'iframe', 'object', 'embed', 'form', 'meta', 'link', 'base',
+  'applet', 'frame', 'frameset', 'layer', 'ilayer',
+])
+
+function sanitizeHtml(html: string): string {
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  const walk = (node: Element) => {
+    // Remove dangerous tags
+    for (const el of Array.from(node.querySelectorAll('*'))) {
+      if (DANGEROUS_TAGS.has(el.tagName.toLowerCase())) {
+        el.remove()
+        continue
+      }
+      // Remove all event handler attributes and javascript: URLs
+      for (const attr of Array.from(el.attributes)) {
+        const name = attr.name.toLowerCase()
+        if (name.startsWith('on') || (
+          (name === 'href' || name === 'src' || name === 'action' || name === 'formaction' || name === 'xlink:href') &&
+          attr.value.replace(/\s/g, '').toLowerCase().startsWith('javascript:')
+        )) {
+          el.removeAttribute(attr.name)
+        }
+      }
+    }
+  }
+  walk(doc.body)
+  return doc.body.innerHTML
+}
 
 type PythonCodeBlockProps = {
   code: string
@@ -78,8 +108,8 @@ function ExecutionOutput({ result }: { result: ExecutionResult }) {
             <div
               key={i}
               className="overflow-x-auto text-xs [&_.dataframe]:w-full [&_.dataframe]:border-collapse [&_.dataframe_th]:px-3 [&_.dataframe_th]:py-1.5 [&_.dataframe_th]:bg-muted [&_.dataframe_th]:text-left [&_.dataframe_th]:font-semibold [&_.dataframe_th]:border [&_.dataframe_th]:border-border [&_.dataframe_td]:px-3 [&_.dataframe_td]:py-1.5 [&_.dataframe_td]:border [&_.dataframe_td]:border-border [&_.dataframe_tr:hover]:bg-muted/40"
-              // biome-ignore lint/security/noDangerouslySetInnerHtml: sandbox execution output, sanitized
-              dangerouslySetInnerHTML={{ __html: o.data.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '').replace(/\bon\w+\s*=/gi, 'data-removed=') }}
+              // biome-ignore lint/security/noDangerouslySetInnerHtml: sandbox execution output, sanitized via DOM-based sanitizer
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(o.data) }}
             />
           ))}
 

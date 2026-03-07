@@ -888,6 +888,18 @@ pub async fn stop_mcp_servers_with_context<R: Runtime>(
         let pids = state.mcp_server_pids.lock().await;
         pids.clone()
     };
+    // Read port from mcp_active_servers FIRST to avoid nested lock acquisition
+    let browser_mcp_port: Option<u16> = {
+        let active_servers = state.mcp_active_servers.lock().await;
+        active_servers.get("Ax-Fabric Browser MCP").and_then(|config| {
+            config
+                .get("env")
+                .and_then(|e| e.get("BRIDGE_PORT"))
+                .and_then(|p| p.as_str())
+                .and_then(|s| s.parse::<u16>().ok())
+        })
+    };
+
     let servers_to_stop: Vec<(String, Arc<RunningServiceEnum>, Option<u16>)> = {
         let mut servers_map = state.mcp_servers.lock().await;
         let keys: Vec<String> = servers_map.keys().cloned().collect();
@@ -896,14 +908,7 @@ pub async fn stop_mcp_servers_with_context<R: Runtime>(
         for key in keys {
             if let Some(service) = servers_map.remove(&key) {
                 let port = if key == "Ax-Fabric Browser MCP" {
-                    let active_servers = state.mcp_active_servers.lock().await;
-                    active_servers.get(&key).and_then(|config| {
-                        config
-                            .get("env")
-                            .and_then(|e| e.get("BRIDGE_PORT"))
-                            .and_then(|p| p.as_str())
-                            .and_then(|s| s.parse::<u16>().ok())
-                    })
+                    browser_mcp_port
                 } else {
                     None
                 };

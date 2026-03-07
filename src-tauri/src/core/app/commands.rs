@@ -107,7 +107,14 @@ pub fn get_configuration_file_path<R: Runtime>(app_handle: tauri::AppHandle<R>) 
         } else {
             "HOME"
         })
-        .expect("Failed to determine the home directory");
+        .unwrap_or_else(|_| {
+            log::error!("HOME/USERPROFILE env var not set, falling back to /tmp");
+            if cfg!(target_os = "windows") {
+                "C:\\Temp".to_string()
+            } else {
+                "/tmp".to_string()
+            }
+        });
 
         PathBuf::from(home_dir)
     });

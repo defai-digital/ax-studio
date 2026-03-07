@@ -42,6 +42,7 @@ pub fn write_messages_to_file(
         writeln!(file, "{data}").map_err(|e| e.to_string())?;
     }
     file.flush().map_err(|e| e.to_string())?;
+    file.sync_all().map_err(|e| e.to_string())?;
     drop(file);
     fs::rename(&tmp_path, path).map_err(|e| e.to_string())?;
     Ok(())
@@ -92,16 +93,19 @@ pub fn update_thread_metadata<R: Runtime>(
     let path = get_thread_metadata_path(app_handle, thread_id);
     let tmp_path = path.with_extension("json.tmp");
     let data = serde_json::to_string_pretty(thread).map_err(|e| e.to_string())?;
-    fs::write(&tmp_path, data).map_err(|e| e.to_string())?;
+    fs::write(&tmp_path, &data).map_err(|e| e.to_string())?;
+    // fsync to ensure data is on disk before rename
+    if let Ok(f) = File::open(&tmp_path) {
+        let _ = f.sync_all();
+    }
     fs::rename(&tmp_path, &path).map_err(|e| e.to_string())?;
     Ok(())
 }
 
-/// Remove the per-thread lock entry when a thread is deleted
-pub fn remove_lock_for_thread(thread_id: &str) {
+/// Remove the per-thread lock entry when a thread is deleted.
+pub async fn remove_lock_for_thread(thread_id: &str) {
     if let Some(locks) = MESSAGE_LOCKS.get() {
-        if let Ok(mut map) = locks.try_lock() {
-            map.remove(thread_id);
-        }
+        let mut map = locks.lock().await;
+        map.remove(thread_id);
     }
 }

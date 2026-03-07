@@ -2000,6 +2000,25 @@ async fn transform_and_forward_stream<S>(
             }
         }
     }
+    // Process any remaining data in line_buffer after stream ends
+    if !line_buffer.trim().is_empty() {
+        for line in line_buffer.split('\n') {
+            if line.starts_with("data:") {
+                let json_str = line.trim_start_matches("data:").trim();
+                if json_str == "[DONE]" {
+                    break;
+                }
+                if let Ok(data) = serde_json::from_str::<serde_json::Value>(json_str) {
+                    log::debug!("Processing remaining buffered SSE line after stream end");
+                    // Forward as raw SSE to avoid duplicating the full processing logic
+                    let forward = format!("data: {}\n\n", data);
+                    if sender.send_data(Bytes::from(forward)).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+    }
     log::debug!("Streaming complete (Anthropic format)");
 }
 
