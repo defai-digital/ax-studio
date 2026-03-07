@@ -467,6 +467,7 @@ pub async fn start_ax_serving<R: Runtime>(
     let mut envs: HashMap<String, String> = HashMap::new();
     envs.insert("AXS_ALLOW_NO_AUTH".to_string(), "true".to_string());
     envs.insert("AXS_LOG".to_string(), "info".to_string());
+    envs.insert("AXS_REQUEST_TIMEOUT_SECS".to_string(), timeout.to_string());
 
     log::info!("ax-serving args: {:?}", args);
 
@@ -476,6 +477,16 @@ pub async fn start_ax_serving<R: Runtime>(
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
     setup_windows_process_flags(&mut command);
+
+    // Make ax-serving a process group leader so that killing the group
+    // also terminates any child llama-server processes it spawns.
+    #[cfg(unix)]
+    unsafe {
+        command.pre_exec(|| {
+            libc::setpgid(0, 0);
+            Ok(())
+        });
+    }
 
     let mut child = command.spawn().map_err(ServerError::Io)?;
 

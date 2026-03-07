@@ -49,7 +49,11 @@ pub async fn get_random_available_port<R: Runtime>(
     generate_random_port(&used_ports)
 }
 
-/// Gracefully terminate a process on Unix systems
+/// Gracefully terminate a process on Unix systems.
+///
+/// If the process is a process group leader (e.g. ax-serving started with
+/// `setpgid(0,0)`), signals are sent to the entire process group so that
+/// child processes (like llama-server instances) are also terminated.
 #[cfg(unix)]
 pub async fn graceful_terminate_process(child: &mut tokio::process::Child) {
     use nix::sys::signal::{kill, Signal};
@@ -59,17 +63,31 @@ pub async fn graceful_terminate_process(child: &mut tokio::process::Child) {
 
     if let Some(raw_pid) = child.id() {
         let raw_pid = raw_pid as i32;
-        log::info!("Sending SIGTERM to PID {}", raw_pid);
-        let _ = kill(Pid::from_raw(raw_pid), Signal::SIGTERM);
+
+        // Check if this process is a process group leader (pgid == pid).
+        // If so, send signals to the whole group (negative PID) to also
+        // kill child processes like llama-server instances spawned by ax-serving.
+        let pgid = unsafe { libc::getpgid(raw_pid) };
+        let is_group_leader = pgid == raw_pid;
+
+        let signal_target = if is_group_leader {
+            log::debug!("Sending SIGTERM to process group -{}", raw_pid);
+            Pid::from_raw(-raw_pid)
+        } else {
+            log::debug!("Sending SIGTERM to PID {}", raw_pid);
+            Pid::from_raw(raw_pid)
+        };
+
+        let _ = kill(signal_target, Signal::SIGTERM);
 
         match timeout(Duration::from_secs(5), child.wait()).await {
-            Ok(Ok(status)) => log::info!("Process exited gracefully: {}", status),
+            Ok(Ok(status)) => log::debug!("Process {} exited gracefully: {}", raw_pid, status),
             Ok(Err(e)) => log::error!("Error waiting after SIGTERM: {}", e),
             Err(_) => {
                 log::warn!("SIGTERM timed out; sending SIGKILL to PID {}", raw_pid);
-                let _ = kill(Pid::from_raw(raw_pid), Signal::SIGKILL);
+                let _ = kill(signal_target, Signal::SIGKILL);
                 match child.wait().await {
-                    Ok(s) => log::info!("Force-killed process exited: {}", s),
+                    Ok(s) => log::debug!("Force-killed process exited: {}", s),
                     Err(e) => log::error!("Error waiting after SIGKILL: {}", e),
                 }
             }

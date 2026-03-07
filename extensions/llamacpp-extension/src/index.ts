@@ -584,11 +584,17 @@ export default class AxFabricLlamacppExtension extends AIEngine {
         })
         if (res.ok) return
       } catch {}
-      // Not responding — reset state and restart
-      console.warn('[llamacpp] ax-serving not responding, will restart')
+      // Not responding — kill the old process tree before restarting
+      console.warn('[llamacpp] ax-serving not responding, killing old process and restarting')
+      const oldPid = this.axServingPid
       this.axServingPid = 0
       this.axServingPort = 0
       this.axServingSessions.clear()
+      try {
+        await unloadLlamaModel(oldPid)
+      } catch (e) {
+        console.warn('[llamacpp] Failed to kill unresponsive ax-serving:', e)
+      }
     }
 
     // Coalesce concurrent start attempts

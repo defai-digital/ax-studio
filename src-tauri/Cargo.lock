@@ -6119,6 +6119,7 @@ dependencies = [
  "base64 0.22.1",
  "byteorder",
  "hmac",
+ "libc",
  "log",
  "nix",
  "rand 0.8.5",

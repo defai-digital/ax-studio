@@ -5,7 +5,9 @@ use crate::error::{ErrorCode, LlamacppError, ServerResult};
 #[cfg(windows)]
 use ax_fabric_utils::path::get_short_path;
 
-/// Validate that a binary path exists and is accessible
+/// Validate that a binary path exists and is accessible.
+/// On macOS, also strips quarantine/provenance extended attributes that can
+/// prevent copied or downloaded binaries from executing properly.
 pub fn validate_binary_path(backend_path: &str) -> ServerResult<PathBuf> {
     let server_path_buf = PathBuf::from(backend_path);
     if !server_path_buf.exists() {
@@ -21,6 +23,25 @@ pub fn validate_binary_path(backend_path: &str) -> ServerResult<PathBuf> {
         )
         .into());
     }
+
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::{Command, Stdio};
+        let path_str = server_path_buf.display().to_string();
+        match Command::new("xattr")
+            .args(["-cr", &path_str])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+        {
+            Ok(s) if s.success() => {
+                log::debug!("Cleared quarantine attributes on {}", path_str);
+            }
+            Ok(s) => log::warn!("xattr -cr on {} exited with {}", path_str, s),
+            Err(e) => log::warn!("Failed to run xattr on {}: {}", path_str, e),
+        }
+    }
+
     Ok(server_path_buf)
 }
 
