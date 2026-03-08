@@ -3,7 +3,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core'
-import { AppConfiguration } from '@ax-fabric/core'
+import { AppConfiguration } from '@ax-studio/core'
 import type { LogEntry } from './types'
 import { DefaultAppService } from './default'
 
@@ -12,7 +12,7 @@ export class TauriAppService extends DefaultAppService {
     // Kill background processes and remove data folder
     // Note: We can't import stopAllModels directly to avoid circular dependency
     // Instead we'll use the engine manager directly
-    const { EngineManager } = await import('@ax-fabric/core')
+    const { EngineManager } = await import('@ax-studio/core')
     for (const [, engine] of EngineManager.instance().engines) {
       const activeModels = await engine.getLoadedModels()
       if (activeModels) {
@@ -35,7 +35,7 @@ export class TauriAppService extends DefaultAppService {
 
       return appConfiguration?.data_folder
     } catch (error) {
-      console.error('Failed to get Ax-Fabric data folder:', error)
+      console.error('Failed to get Ax-Studio data folder:', error)
       return undefined
     }
   }

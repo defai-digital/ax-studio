@@ -12,7 +12,7 @@ import { toast } from 'sonner'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { createDocumentAttachment, type Attachment } from '@/types/attachment'
 import { useAttachments } from '@/hooks/useAttachments'
-import { ExtensionTypeEnum, FileStat, VectorDBExtension } from '@ax-fabric/core'
+import { ExtensionTypeEnum, FileStat, VectorDBExtension } from '@ax-studio/core'
 import { ExtensionManager } from '@/lib/extension'
 import { IconLoader2, IconPaperclip } from '@tabler/icons-react'
 
@@ -58,7 +58,7 @@ const SUPPORTED_EXTENSIONS = [
 
 async function getFilesFromPaths(paths: string[]): Promise<string[]> {
   const files: string[] = []
-  const { fs } = await import('@ax-fabric/core')
+  const { fs } = await import('@ax-studio/core')
 
   for (const path of paths) {
     try {
@@ -80,7 +80,7 @@ async function getFilesFromPaths(paths: string[]): Promise<string[]> {
 
 async function getFilesFromDirectory(
   dirPath: string,
-  fs: typeof import('@ax-fabric/core').fs
+  fs: typeof import('@ax-studio/core').fs
 ): Promise<string[]> {
   const files: string[] = []
   try {
@@ -169,7 +169,7 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
 
         let size: number | undefined = undefined
         try {
-          const stat = await import('@ax-fabric/core').then((m) => m.fs.fileStat(p))
+          const stat = await import('@ax-studio/core').then((m) => m.fs.fileStat(p))
           size = stat?.size ? Number(stat.size) : undefined
         } catch (e) {
           console.warn('Failed to read file size for', p, e)

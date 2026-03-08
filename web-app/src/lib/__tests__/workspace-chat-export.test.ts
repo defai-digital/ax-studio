@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ContentType, MessageStatus, type ThreadMessage } from '@ax-fabric/core'
+import { ContentType, MessageStatus, type ThreadMessage } from '@ax-studio/core'
 import type { ThreadFolder } from '@/services/projects/types'
 import {
   buildWorkspaceChatsExportData,

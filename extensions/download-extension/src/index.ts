@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
-import { BaseExtension, events } from '@ax-fabric/core'
+import { BaseExtension, events } from '@ax-studio/core'
 
 export enum Settings {
   hfToken = 'hf-token',
@@ -20,7 +20,7 @@ type DownloadEvent = {
   total: number
 }
 
-export default class AxFabricDownloadManager extends BaseExtension {
+export default class AxStudioDownloadManager extends BaseExtension {
   hfToken?: string
 
   async onLoad() {

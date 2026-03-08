@@ -23,7 +23,7 @@ export const localStorageKey = {
   favoriteModels: 'favorite-models',
   setupCompleted: 'setup-completed',
   threadManagement: 'thread-management',
-  modelSupportCache: 'ax-fabric-model-support-cache',
+  modelSupportCache: 'ax-studio-model-support-cache',
   recentSearches: 'recent-searches',
   memoryStore: 'memory-store',
 }

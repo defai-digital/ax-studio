@@ -1,10 +1,10 @@
 {
-  "name": "@ax-fabric/conversational-extension",
+  "name": "@ax-studio/conversational-extension",
   "productName": "Conversational",
   "version": "1.0.0",
   "description": "Enables conversations and state persistence via your file system.",
   "main": "dist/index.js",
-  "author": "Ax-Fabric",
+  "author": "Ax-Studio",
   "license": "MIT",
   "scripts": {
     "build": "rolldown -c rolldown.config.mjs",
@@ -22,7 +22,7 @@
     "typescript": "5.9.2"
   },
   "dependencies": {
-    "@ax-fabric/core": "../../core/package.tgz"
+    "@ax-studio/core": "../../core/package.tgz"
   },
   "engines": {
     "node": ">=18.0.0"

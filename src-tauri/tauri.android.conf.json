@@ -1,5 +1,5 @@
 {
-  "identifier": "ai.axfabric.app",
+  "identifier": "ai.axstudio.app",
   "build": {
     "devUrl": null,
     "frontendDist": "../web-app/dist",

@@ -3,7 +3,7 @@ import {
   chatCompletionChunk,
   ChatCompletionMessage,
   chatCompletionRequestMessage,
-} from '@ax-fabric/core'
+} from '@ax-studio/core'
 
 // Helper function to get reasoning content from an object
 function getReasoning(

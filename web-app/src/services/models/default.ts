@@ -14,8 +14,8 @@ import {
   events,
   DownloadEvent,
   UnloadResult,
-} from '@ax-fabric/core'
-import { Model as CoreModel } from '@ax-fabric/core'
+} from '@ax-studio/core'
+import { Model as CoreModel } from '@ax-studio/core'
 import type {
   ModelsService,
   ModelCatalog,

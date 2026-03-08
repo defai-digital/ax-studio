@@ -27,7 +27,7 @@ import { Link } from '@tanstack/react-router'
 import { RenameThreadDialog, DeleteThreadDialog } from '@/containers/dialogs'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { ThreadMessage } from '@ax-fabric/core'
+import { ThreadMessage } from '@ax-studio/core'
 import {
   Dialog,
   DialogContent,

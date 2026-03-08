@@ -1,8 +1,8 @@
-# Contributing to Ax-Fabric
+# Contributing to Ax-Studio
 
-First off, thank you for considering contributing to Ax-Fabric. It's people like you that make Ax-Fabric such an amazing project.
+First off, thank you for considering contributing to Ax-Studio. It's people like you that make Ax-Studio such an amazing project.
 
-Ax-Fabric is an AI assistant that can run 100% offline on your device. Think ChatGPT, but private, local, and under your complete control. If you're thinking about contributing, you're already awesome - let's make AI accessible to everyone, one commit at a time.
+Ax-Studio is an AI assistant that can run 100% offline on your device. Think ChatGPT, but private, local, and under your complete control. If you're thinking about contributing, you're already awesome - let's make AI accessible to everyone, one commit at a time.
 
 ## Quick Links to Component Guides
 
@@ -12,9 +12,9 @@ Ax-Fabric is an AI assistant that can run 100% offline on your device. Think Cha
 - **[Tauri Backend](./src-tauri/CONTRIBUTING.md)** - Rust native integration
 - **[Tauri Plugins](./src-tauri/plugins/CONTRIBUTING.md)** - Hardware and system plugins
 
-## How Ax-Fabric Actually Works
+## How Ax-Studio Actually Works
 
-Ax-Fabric is a desktop app that runs local AI models. Here's how the components actually connect:
+Ax-Studio is a desktop app that runs local AI models. Here's how the components actually connect:
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -109,7 +109,7 @@ Here's what actually happens when you click "Download Llama 3":
 ## Project Structure
 
 ```
-ax-fabric/
+ax-studio/
 ├── web-app/              # React frontend (what users see)
 ├── src-tauri/            # Rust backend (system integration)
 │   ├── src/core/         # Core Tauri commands
@@ -143,8 +143,8 @@ ax-fabric/
 
 **Option 1: The Easy Way (Make)**
 ```bash
-git clone https://github.com/ax-fabric/ax-fabric
-cd ax-fabric
+git clone https://github.com/ax-studio/ax-studio
+cd ax-studio
 make dev
 ```
 
@@ -152,8 +152,8 @@ make dev
 
 ### Reporting Bugs
 
-- **Ensure the bug was not already reported** by searching on GitHub under [Issues](https://github.com/ax-fabric/ax-fabric/issues)
-- If you're unable to find an open issue addressing the problem, [open a new one](https://github.com/ax-fabric/ax-fabric/issues/new)
+- **Ensure the bug was not already reported** by searching on GitHub under [Issues](https://github.com/ax-studio/ax-studio/issues)
+- If you're unable to find an open issue addressing the problem, [open a new one](https://github.com/ax-studio/ax-studio/issues/new)
 - Include your system specs and error logs - it helps a ton
 
 ### Suggesting Enhancements
@@ -224,10 +224,10 @@ docs: update installation instructions
 
 If things go sideways:
 
-1. **Check our [troubleshooting docs](https://axfabric.ai/docs/desktop/troubleshooting)**
+1. **Check our [troubleshooting docs](https://axstudio.ai/docs/desktop/troubleshooting)**
 2. **Clear everything and start fresh:** `make clean` then `make dev`
 3. **Copy your error logs and system specs**
-4. **Ask for help in our [Discord](https://discord.gg/FTk2MvZwJH)** `#🆘|ax-fabric-help` channel
+4. **Ask for help in our [Discord](https://discord.gg/FTk2MvZwJH)** `#🆘|ax-studio-help` channel
 
 Common issues:
 - **Build failures**: Check Node.js and Rust versions
@@ -236,10 +236,10 @@ Common issues:
 
 ## Getting Help
 
-- [Documentation](https://axfabric.ai/docs) - The manual you should read
+- [Documentation](https://axstudio.ai/docs) - The manual you should read
 - [Discord Community](https://discord.gg/FTk2MvZwJH) - Where the community lives
-- [GitHub Issues](https://github.com/ax-fabric/ax-fabric/issues) - Report bugs here
-- [GitHub Discussions](https://github.com/ax-fabric/ax-fabric/discussions) - Ask questions
+- [GitHub Issues](https://github.com/ax-studio/ax-studio/issues) - Report bugs here
+- [GitHub Discussions](https://github.com/ax-studio/ax-studio/discussions) - Ask questions
 
 ## License
 

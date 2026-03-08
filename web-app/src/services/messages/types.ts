@@ -2,7 +2,7 @@
  * Messages Service Types
  */
 
-import { ThreadMessage } from '@ax-fabric/core'
+import { ThreadMessage } from '@ax-studio/core'
 
 export interface MessagesService {
   fetchMessages(threadId: string): Promise<ThreadMessage[]>

@@ -1,4 +1,4 @@
-import { CoreRoutes, APIRoutes } from '@ax-fabric/core'
+import { CoreRoutes, APIRoutes } from '@ax-studio/core'
 import { getServiceHub } from '@/hooks/useServiceHub'
 import { isPlatformTauri } from '@/lib/platform'
 import type { InvokeArgs } from '@/services/core/types'

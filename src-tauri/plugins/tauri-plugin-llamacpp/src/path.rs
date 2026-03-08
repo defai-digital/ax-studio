@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use crate::error::{ErrorCode, LlamacppError, ServerResult};
 
 #[cfg(windows)]
-use ax_fabric_utils::path::get_short_path;
+use ax_studio_utils::path::get_short_path;
 
 /// Validate that a binary path exists and is accessible.
 /// On macOS, also strips quarantine/provenance extended attributes that can

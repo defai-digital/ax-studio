@@ -537,7 +537,7 @@ function General() {
                 description={t('settings:general.documentationDesc')}
                 actions={
                   <a
-                    href="https://axfabric.ai/docs"
+                    href="https://axstudio.ai/docs"
                     target="_blank"
                     rel="noopener noreferrer"
                   >
@@ -553,7 +553,7 @@ function General() {
                 description={t('settings:general.releaseNotesDesc')}
                 actions={
                   <a
-                    href="https://github.com/ax-fabric/ax-fabric/releases"
+                    href="https://github.com/ax-studio/ax-studio/releases"
                     target="_blank"
                     rel="noopener noreferrer"
                   >
@@ -573,7 +573,7 @@ function General() {
                 description={t('settings:general.githubDesc')}
                 actions={
                   <a
-                    href="https://github.com/ax-fabric/ax-fabric"
+                    href="https://github.com/ax-studio/ax-studio"
                     target="_blank"
                     rel="noopener noreferrer"
                   >
@@ -609,7 +609,7 @@ function General() {
                 description={t('settings:general.reportAnIssueDesc')}
                 actions={
                   <a
-                    href="https://github.com/ax-fabric/ax-fabric/issues/new"
+                    href="https://github.com/ax-studio/ax-studio/issues/new"
                     target="_blank"
                   >
                     <div className="flex items-center gap-1">

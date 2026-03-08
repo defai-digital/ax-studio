@@ -16,7 +16,7 @@ const showStartupError = () => {
   const root = document.getElementById('root')
   if (!root || root.childElementCount > 0) return
   root.innerHTML =
-    '<div style="height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;text-align:center;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#666;">Ax-Fabric failed to initialize. Please restart the app.</div>'
+    '<div style="height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;text-align:center;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#666;">Ax-Studio failed to initialize. Please restart the app.</div>'
 }
 
 // Mobile-specific viewport and styling setup
@@ -179,7 +179,7 @@ async function saveBlobNative(blob: Blob, filename: string): Promise<void> {
   } catch (e) {
     // AbortError = user cancelled the dialog — silent
     if ((e as Error)?.name !== 'AbortError') {
-      console.error('[ax-fabric] diagram save failed:', e)
+      console.error('[ax-studio] diagram save failed:', e)
     }
   }
 }

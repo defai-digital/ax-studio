@@ -1,4 +1,4 @@
-import { ContentType, type ThreadMessage } from '@ax-fabric/core'
+import { ContentType, type ThreadMessage } from '@ax-studio/core'
 import type { ThreadFolder } from '@/services/projects/types'
 
 export type WorkspaceChatExportFormat = 'csv' | 'json' | 'alpaca' | 'openai-jsonl'

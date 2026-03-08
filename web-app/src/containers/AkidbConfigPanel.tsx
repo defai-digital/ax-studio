@@ -6,7 +6,7 @@ import { Card, CardItem } from '@/containers/Card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { useAkidbConfig } from '@/hooks/useAkidbConfig'
-import { useAxFabricConfig } from '@/stores/useAxFabricConfig'
+import { useAxStudioConfig } from '@/stores/useAxStudioConfig'
 
 type AkidbStatus = {
   status: 'idle' | 'syncing' | 'error'
@@ -29,7 +29,7 @@ const FREQUENCY_OPTIONS = [
 
 export default function AkidbConfigPanel() {
   const { config, loading, saving, load, save } = useAkidbConfig()
-  const akidbUrl = useAxFabricConfig((s) => s.config.akidbUrl)
+  const akidbUrl = useAxStudioConfig((s) => s.config.akidbUrl)
 
   const [dataFolder, setDataFolder] = useState('')
   const [frequency, setFrequency] = useState(60)

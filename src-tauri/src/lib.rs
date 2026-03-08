@@ -4,9 +4,9 @@ use core::{
     downloads::models::DownloadManagerState,
     mcp::models::McpSettings,
     setup::{self, setup_mcp},
-    state::{AppState, AxFabricServiceConfig},
+    state::{AppState, AxStudioServiceConfig},
 };
-use ax_fabric_utils::generate_app_token;
+use ax_studio_utils::generate_app_token;
 use std::{collections::HashMap, sync::Arc};
 use tauri::{Emitter, Manager, RunEvent};
 use tauri_plugin_store::StoreExt;
@@ -51,7 +51,7 @@ pub fn run() {
     // Desktop: include updater commands
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let app_builder = app_builder.invoke_handler(tauri::generate_handler![
-        // FS commands - Deperecate soon
+        // FS commands - Deprecate soon
         core::filesystem::commands::join_path,
         core::filesystem::commands::mkdir,
         core::filesystem::commands::exists_sync,
@@ -99,9 +99,9 @@ pub fn run() {
         core::server::remote_provider_commands::unregister_provider_config,
         core::server::remote_provider_commands::get_provider_config,
         core::server::remote_provider_commands::list_provider_configs,
-        // Ax-Fabric backend service config commands
-        core::server::remote_provider_commands::get_ax_fabric_service_config,
-        core::server::remote_provider_commands::update_ax_fabric_service_config,
+        // Ax-Studio backend service config commands
+        core::server::remote_provider_commands::get_ax_studio_service_config,
+        core::server::remote_provider_commands::update_ax_studio_service_config,
         // MCP commands
         core::mcp::commands::get_tools,
         core::mcp::commands::call_tool,
@@ -112,7 +112,7 @@ pub fn run() {
         core::mcp::commands::get_mcp_configs,
         core::mcp::commands::activate_mcp_server,
         core::mcp::commands::deactivate_mcp_server,
-        core::mcp::commands::check_ax_fabric_browser_extension_connected,
+        core::mcp::commands::check_ax_studio_browser_extension_connected,
         // Threads
         core::threads::commands::list_threads,
         core::threads::commands::create_thread,
@@ -203,10 +203,9 @@ pub fn run() {
         core::server::remote_provider_commands::unregister_provider_config,
         core::server::remote_provider_commands::get_provider_config,
         core::server::remote_provider_commands::list_provider_configs,
-        core::server::remote_provider_commands::abort_remote_stream,
-        // Ax-Fabric backend service config commands
-        core::server::remote_provider_commands::get_ax_fabric_service_config,
-        core::server::remote_provider_commands::update_ax_fabric_service_config,
+        // Ax-Studio backend service config commands
+        core::server::remote_provider_commands::get_ax_studio_service_config,
+        core::server::remote_provider_commands::update_ax_studio_service_config,
         // MCP commands
         core::mcp::commands::get_tools,
         core::mcp::commands::call_tool,
@@ -217,7 +216,7 @@ pub fn run() {
         core::mcp::commands::get_mcp_configs,
         core::mcp::commands::activate_mcp_server,
         core::mcp::commands::deactivate_mcp_server,
-        core::mcp::commands::check_ax_fabric_browser_extension_connected,
+        core::mcp::commands::check_ax_studio_browser_extension_connected,
         // Threads
         core::threads::commands::list_threads,
         core::threads::commands::create_thread,
@@ -268,7 +267,7 @@ pub fn run() {
             background_cleanup_handle: Arc::new(Mutex::new(None)),
             mcp_server_pids: Arc::new(Mutex::new(HashMap::new())),
             provider_configs: Arc::new(Mutex::new(HashMap::new())),
-            ax_fabric_service_config: Arc::new(Mutex::new(AxFabricServiceConfig::default())),
+            ax_studio_service_config: Arc::new(Mutex::new(AxStudioServiceConfig::default())),
             sandbox_sessions: Arc::new(Mutex::new(HashMap::new())),
             sandbox_url: Arc::new(Mutex::new("http://127.0.0.1:8080".to_string())),
         })

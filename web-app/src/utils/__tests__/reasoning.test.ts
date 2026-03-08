@@ -4,7 +4,7 @@ import {
   extractReasoningFromMessage,
 } from '../reasoning'
 import { CompletionResponseChunk } from 'token.js'
-import { chatCompletionChunk, chatCompletionRequestMessage } from '@ax-fabric/core'
+import { chatCompletionChunk, chatCompletionRequestMessage } from '@ax-studio/core'
 
 describe('extractReasoningFromMessage', () => {
   it('should extract reasoning from message with reasoning_content property', () => {

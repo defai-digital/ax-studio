@@ -1,5 +1,5 @@
 /**
- * EventEmitter class - matches Ax-Fabric event emitter interface
+ * EventEmitter class - matches Ax-Studio event emitter interface
  * Used by ExtensionProvider to set window.core.events
  */
 

@@ -25,7 +25,7 @@ export const useReleaseNotes = create<ReleaseState>((set) => ({
     set({ loading: true, error: null })
     try {
       const res = await fetch(
-        'https://api.github.com/repos/ax-fabric/ax-fabric/releases'
+        'https://api.github.com/repos/ax-studio/ax-studio/releases'
       )
       if (!res.ok) throw new Error('Failed to fetch releases')
       const releases = await res.json()

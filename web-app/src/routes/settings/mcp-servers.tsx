@@ -477,8 +477,8 @@ function MCPServersDesktop() {
                           {config.official && (
                             <div className="flex items-center gap-1.5 px-2 py-0.5 text-xs bg-secondary border rounded-sm">
                               <img
-                                src="/images/ax-fabric-logo.png"
-                                alt="Ax-Fabric"
+                                src="/images/ax-studio-logo.png"
+                                alt="Ax-Studio"
                                 className="w-3 h-3 object-contain"
                               />
                               <span>Official</span>
@@ -516,7 +516,7 @@ function MCPServersDesktop() {
                               {config.official && (
                                 <div className="mt-2 text-xs text-muted-foreground pt-2">
                                   <p className="mb-1">
-                                    Requires Ax-Fabric Browser Extension to be installed
+                                    Requires Ax-Studio Browser Extension to be installed
                                     in your Chrome-based browser.
                                   </p>
                                   <a

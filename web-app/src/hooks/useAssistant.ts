@@ -1,5 +1,5 @@
 import { getServiceHub } from '@/hooks/useServiceHub'
-import { Assistant as CoreAssistant } from '@ax-fabric/core'
+import { Assistant as CoreAssistant } from '@ax-studio/core'
 import { create } from 'zustand'
 import { localStorageKey } from '@/constants/localStorage'
 
@@ -35,8 +35,8 @@ const setLastUsedAssistantId = (assistantId: string) => {
 }
 
 export const defaultAssistant: Assistant = {
-  id: 'ax-fabric',
-  name: 'Ax-Fabric',
+  id: 'ax-studio',
+  name: 'Ax-Studio',
   created_at: 1747029866.542,
   parameters: {
     temperature: 0.7,
@@ -46,8 +46,8 @@ export const defaultAssistant: Assistant = {
   },
   avatar: '🧵',
   description:
-    "Ax-Fabric is a helpful desktop assistant that can reason through complex tasks and use tools to complete them on the user's behalf.",
-  instructions: `You are Ax-Fabric, a helpful AI assistant who assists users with their requests.
+    "Ax-Studio is a helpful desktop assistant that can reason through complex tasks and use tools to complete them on the user's behalf.",
+  instructions: `You are Ax-Studio, a helpful AI assistant who assists users with their requests.
 
 You must output your response in the exact language used in the latest user message. Do not provide translations or switch languages unless explicitly instructed to do so. If the input is mostly English, respond in English.
 

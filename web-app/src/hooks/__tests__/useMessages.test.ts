@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useMessages } from '../useMessages'
-import { ThreadMessage } from '@ax-fabric/core'
+import { ThreadMessage } from '@ax-studio/core'
 
 // Mock the ServiceHub
 const mockCreateMessage = vi.fn()

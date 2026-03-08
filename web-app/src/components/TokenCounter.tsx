@@ -7,7 +7,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { useTokensCount } from '@/hooks/useTokensCount'
-import { ThreadMessage } from '@ax-fabric/core'
+import { ThreadMessage } from '@ax-studio/core'
 
 interface TokenCounterProps {
   messages?: ThreadMessage[]

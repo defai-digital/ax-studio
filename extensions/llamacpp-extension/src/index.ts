@@ -1,8 +1,8 @@
 /**
- * Ax-Fabric llama.cpp Extension — Main Engine Class
+ * Ax-Studio llama.cpp Extension — Main Engine Class
  *
- * Implements AIEngine from @ax-fabric/core to provide local LLM inference
- * via llama.cpp. Written from scratch for Ax-Fabric (UNLICENSED).
+ * Implements AIEngine from @ax-studio/core to provide local LLM inference
+ * via llama.cpp. Written from scratch for Ax-Studio (UNLICENSED).
  *
  * Capabilities:
  *  - Load / unload GGUF models via tauri-plugin-llamacpp
@@ -30,7 +30,7 @@ import {
   AppEvent,
   DownloadEvent,
   ModelEvent,
-} from '@ax-fabric/core'
+} from '@ax-studio/core'
 
 import {
   loadLlamaModel,
@@ -49,7 +49,7 @@ import {
   LlamacppConfig,
   DeviceList,
   GgufMetadata,
-} from '@ax-fabric/tauri-plugin-llamacpp-api'
+} from '@ax-studio/tauri-plugin-llamacpp-api'
 
 import { invoke } from '@tauri-apps/api/core'
 
@@ -101,7 +101,7 @@ interface TokenCountOptions {
 
 // ─── Main Extension Class ─────────────────────────────────────────────────────
 
-export default class AxFabricLlamacppExtension extends AIEngine {
+export default class AxStudioLlamacppExtension extends AIEngine {
   readonly provider: string = 'llamacpp'
   readonly providerId: string = 'llamacpp'
 
@@ -1045,7 +1045,7 @@ export default class AxFabricLlamacppExtension extends AIEngine {
     if (!(await fs.existsSync(modelDir))) await fs.mkdir(modelDir)
 
     const downloadExt = (window as any).core?.extensionManager?.getByName(
-      '@ax-fabric/download-extension'
+      '@ax-studio/download-extension'
     )
 
     // ── Download model file if URL provided ──
@@ -1152,7 +1152,7 @@ export default class AxFabricLlamacppExtension extends AIEngine {
 
   async abortImport(modelId: string): Promise<void> {
     const downloadExt = (window as any).core?.extensionManager?.getByName(
-      '@ax-fabric/download-extension'
+      '@ax-studio/download-extension'
     )
     if (downloadExt) {
       try {

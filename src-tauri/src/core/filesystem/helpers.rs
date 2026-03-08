@@ -1,5 +1,5 @@
 use crate::core::app::commands::get_app_data_folder_path;
-use ax_fabric_utils::normalize_file_path;
+use ax_studio_utils::normalize_file_path;
 use std::path::PathBuf;
 use tauri::Runtime;
 

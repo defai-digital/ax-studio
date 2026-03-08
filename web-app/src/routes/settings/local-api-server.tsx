@@ -13,7 +13,7 @@ import { ApiPrefixInput } from '@/containers/ApiPrefixInput'
 import { TrustedHostsInput } from '@/containers/TrustedHostsInput'
 import { useLocalApiServer } from '@/hooks/useLocalApiServer'
 import { useAppState } from '@/hooks/useAppState'
-import { useAxFabricConfig } from '@/stores/useAxFabricConfig'
+import { useAxStudioConfig } from '@/stores/useAxStudioConfig'
 import { Input } from '@/components/ui/input'
 import { useModelProvider } from '@/hooks/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
@@ -72,7 +72,7 @@ function LocalAPIServerContent() {
   const [showApiKeyError, setShowApiKeyError] = useState(false)
   const setActiveModels = useAppState((state) => state.setActiveModels)
 
-  const { config: serviceConfig, setConfig: setServiceConfig } = useAxFabricConfig()
+  const { config: serviceConfig, setConfig: setServiceConfig } = useAxStudioConfig()
   const [localServiceUrls, setLocalServiceUrls] = useState(serviceConfig)
   const [serviceConfigSaved, setServiceConfigSaved] = useState(false)
 
@@ -483,13 +483,13 @@ function LocalAPIServerContent() {
                 />
               </Card>
 
-              {/* Ax-Fabric Backend Services Configuration */}
+              {/* Ax-Studio Backend Services Configuration */}
               <Card
                 header={
                   <div className="mb-3 flex w-full items-center gap-3">
                     <IconSettings2 size={20} className="shrink-0 text-muted-foreground" />
                     <h1 className="text-foreground font-medium text-base">
-                      Ax-Fabric Backend Services
+                      Ax-Studio Backend Services
                     </h1>
                   </div>
                 }

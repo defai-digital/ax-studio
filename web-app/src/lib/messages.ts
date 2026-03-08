@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { ChatCompletionMessageParam } from 'token.js'
 import { ChatCompletionMessageToolCall } from 'openai/resources'
-import { ThreadMessage, ContentType, MessageStatus } from '@ax-fabric/core'
+import { ThreadMessage, ContentType, MessageStatus } from '@ax-studio/core'
 import { removeReasoningContent } from '@/utils/reasoning'
 import type { UIMessage } from '@ai-sdk/react'
 // Attachments are now handled upstream in newUserThreadContent
@@ -9,7 +9,7 @@ import type { UIMessage } from '@ai-sdk/react'
 type ThreadContent = NonNullable<ThreadMessage['content']>[number]
 
 /**
- * Convert AI SDK UIMessage to Ax-Fabric's ThreadMessage format.
+ * Convert AI SDK UIMessage to Ax-Studio's ThreadMessage format.
  * This allows using chatMessages from useChat with ThreadContent component.
  */
 export function convertUIMessageToThreadMessage(
@@ -116,7 +116,7 @@ export function convertUIMessageToThreadMessage(
 }
 
 /**
- * Convert an array of AI SDK UIMessages to Ax-Fabric's ThreadMessage format.
+ * Convert an array of AI SDK UIMessages to Ax-Studio's ThreadMessage format.
  */
 export function convertUIMessagesToThreadMessages(
   uiMessages: UIMessage[],
@@ -432,7 +432,7 @@ export const parseReasoning = (text: string) => {
 }
 
 /**
- * Convert Ax-Fabric's ThreadMessage format to AI SDK UIMessage format.
+ * Convert Ax-Studio's ThreadMessage format to AI SDK UIMessage format.
  * This is used to load existing messages into the AI SDK chat.
  * Tool calls are now part of the content array and will be converted to tool parts.
  */
@@ -585,7 +585,7 @@ export function convertThreadMessageToUIMessage(
 }
 
 /**
- * Convert an array of Ax-Fabric's ThreadMessages to AI SDK UIMessage format.
+ * Convert an array of Ax-Studio's ThreadMessages to AI SDK UIMessage format.
  * Tool calls are now part of the content array, so no special merging is needed.
  */
 export function convertThreadMessagesToUIMessages(

@@ -1,50 +1,50 @@
 #!/usr/bin/env pwsh
-# Windows cleanup script for Ax-Fabric app
+# Windows cleanup script for Ax-Studio app
 
 param(
     [string]$IsNightly = "false"
 )
 
-Write-Host "Cleaning existing Ax-Fabric installations..."
+Write-Host "Cleaning existing Ax-Studio installations..."
 
-# Remove Ax-Fabric data folders (both regular and nightly)
-$axFabricAppData = "$env:APPDATA\Ax-Fabric"
-$axFabricNightlyAppData = "$env:APPDATA\Ax-Fabric-nightly"
-$axFabricLocalAppData = "$env:LOCALAPPDATA\ai.axfabric.app"
-$axFabricNightlyLocalAppData = "$env:LOCALAPPDATA\ax-fabric-nightly.ai.app"
+# Remove Ax-Studio data folders (both regular and nightly)
+$axStudioAppData = "$env:APPDATA\Ax-Studio"
+$axStudioNightlyAppData = "$env:APPDATA\Ax-Studio-nightly"
+$axStudioLocalAppData = "$env:LOCALAPPDATA\ai.axstudio.app"
+$axStudioNightlyLocalAppData = "$env:LOCALAPPDATA\ax-studio-nightly.ai.app"
 
-if (Test-Path $axFabricAppData) {
-    Write-Host "Removing $axFabricAppData"
-    Remove-Item -Path $axFabricAppData -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path $axStudioAppData) {
+    Write-Host "Removing $axStudioAppData"
+    Remove-Item -Path $axStudioAppData -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-if (Test-Path $axFabricNightlyAppData) {
-    Write-Host "Removing $axFabricNightlyAppData"
-    Remove-Item -Path $axFabricNightlyAppData -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path $axStudioNightlyAppData) {
+    Write-Host "Removing $axStudioNightlyAppData"
+    Remove-Item -Path $axStudioNightlyAppData -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-if (Test-Path $axFabricLocalAppData) {
-    Write-Host "Removing $axFabricLocalAppData"
-    Remove-Item -Path $axFabricLocalAppData -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path $axStudioLocalAppData) {
+    Write-Host "Removing $axStudioLocalAppData"
+    Remove-Item -Path $axStudioLocalAppData -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-if (Test-Path $axFabricNightlyLocalAppData) {
-    Write-Host "Removing $axFabricNightlyLocalAppData"
-    Remove-Item -Path $axFabricNightlyLocalAppData -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path $axStudioNightlyLocalAppData) {
+    Write-Host "Removing $axStudioNightlyLocalAppData"
+    Remove-Item -Path $axStudioNightlyLocalAppData -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 
-# Kill any running Ax-Fabric processes (both regular and nightly)
-Get-Process -Name "Ax-Fabric" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-Get-Process -Name "ax-fabric" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-Get-Process -Name "Ax-Fabric-nightly" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-Get-Process -Name "ax-fabric-nightly" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+# Kill any running Ax-Studio processes (both regular and nightly)
+Get-Process -Name "Ax-Studio" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process -Name "ax-studio" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process -Name "Ax-Studio-nightly" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process -Name "ax-studio-nightly" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
-# Remove Ax-Fabric extensions folder
-$axFabricExtensionsPath = "$env:USERPROFILE\ax-fabric\extensions"
-if (Test-Path $axFabricExtensionsPath) {
-    Write-Host "Removing $axFabricExtensionsPath"
-    Remove-Item -Path $axFabricExtensionsPath -Recurse -Force -ErrorAction SilentlyContinue
+# Remove Ax-Studio extensions folder
+$axStudioExtensionsPath = "$env:USERPROFILE\ax-studio\extensions"
+if (Test-Path $axStudioExtensionsPath) {
+    Write-Host "Removing $axStudioExtensionsPath"
+    Remove-Item -Path $axStudioExtensionsPath -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-Write-Host "Ax-Fabric cleanup completed"
+Write-Host "Ax-Studio cleanup completed"

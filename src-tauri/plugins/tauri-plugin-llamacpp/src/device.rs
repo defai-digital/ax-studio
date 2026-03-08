@@ -7,7 +7,7 @@ use tokio::time::timeout;
 
 use crate::error::{ErrorCode, LlamacppError, ServerError, ServerResult};
 use crate::path::validate_binary_path;
-use ax_fabric_utils::{add_cuda_paths, binary_requires_cuda, setup_library_path, setup_windows_process_flags};
+use ax_studio_utils::{add_cuda_paths, binary_requires_cuda, setup_library_path, setup_windows_process_flags};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceInfo {

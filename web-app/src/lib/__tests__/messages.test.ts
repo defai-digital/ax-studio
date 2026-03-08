@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   CompletionMessagesBuilder,
 } from '../messages'
-import { ThreadMessage } from '@ax-fabric/core'
+import { ThreadMessage } from '@ax-studio/core'
 import { ChatCompletionMessageToolCall } from 'openai/resources'
 
 // Mock thread messages for testing

@@ -4,7 +4,7 @@ import {
   ChatCompletionRole,
   ThreadMessage,
   MessageStatus,
-} from '@ax-fabric/core'
+} from '@ax-studio/core'
 import { ulid } from 'ulidx'
 import { Attachment } from '@/types/attachment'
 import { injectFilesIntoPrompt } from './fileMetadata'

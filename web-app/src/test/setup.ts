@@ -161,7 +161,7 @@ Object.defineProperty(window, 'matchMedia', {
   })),
 })
 
-// Mock globalThis.core.api for @ax-fabric/core functions // cspell: disable-line
+// Mock globalThis.core.api for @ax-studio/core functions // cspell: disable-line
 ;(globalThis as Record<string, unknown>).core = {
   api: {
     getAppDataFolderPath: vi.fn().mockResolvedValue('/mock/app/data'),
@@ -170,7 +170,7 @@ Object.defineProperty(window, 'matchMedia', {
   }
 }
 
-// Mock globalThis.fs for @ax-fabric/core fs functions // cspell: disable-line
+// Mock globalThis.fs for @ax-studio/core fs functions // cspell: disable-line
 ;(globalThis as Record<string, unknown>).fs = {
   existsSync: vi.fn().mockResolvedValue(false),
   readFile: vi.fn().mockResolvedValue(''),

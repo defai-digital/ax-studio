@@ -28,23 +28,23 @@ ${StrLoc}
 
 !define WEBVIEW2APPGUID "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
 
-!define MANUFACTURER "Ax-Fabric"
-!define PRODUCTNAME "ax_fabric_productname"
-!define VERSION "ax_fabric_version"
-!define VERSIONWITHBUILD "ax_fabric_build"
+!define MANUFACTURER "Ax-Studio"
+!define PRODUCTNAME "ax_studio_productname"
+!define VERSION "ax_studio_version"
+!define VERSIONWITHBUILD "ax_studio_build"
 !define HOMEPAGE ""
 !define INSTALLMODE "currentUser"
 !define LICENSE ""
-!define INSTALLERICON "D:\a\ax-fabric\ax-fabric\src-tauri\icons\icon.ico"
+!define INSTALLERICON "D:\a\ax-studio\ax-studio\src-tauri\icons\icon.ico"
 !define SIDEBARIMAGE ""
 !define HEADERIMAGE ""
-!define MAINBINARYNAME "ax_fabric_mainbinaryname"
-!define MAINBINARYSRCPATH "D:\a\ax-fabric\ax-fabric\src-tauri\target\release\ax_fabric_mainbinaryname.exe"
-!define BUNDLEID "ax_fabric_mainbinaryname.ai.app"
+!define MAINBINARYNAME "ax_studio_mainbinaryname"
+!define MAINBINARYSRCPATH "D:\a\ax-studio\ax-studio\src-tauri\target\release\ax_studio_mainbinaryname.exe"
+!define BUNDLEID "ax_studio_mainbinaryname.ai.app"
 !define COPYRIGHT ""
 !define OUTFILE "nsis-output.exe"
 !define ARCH "x64"
-!define ADDITIONALPLUGINSPATH "D:\a\ax-fabric\ax-fabric\src-tauri\target\release\nsis\x64\Plugins\x86-unicode\additional"
+!define ADDITIONALPLUGINSPATH "D:\a\ax-studio\ax-studio\src-tauri\target\release\nsis\x64\Plugins\x86-unicode\additional"
 !define ALLOWDOWNGRADES "true"
 !define DISPLAYLANGUAGESELECTOR "false"
 !define INSTALLWEBVIEW2MODE "downloadBootstrapper"
@@ -452,7 +452,7 @@ FunctionEnd
 ;Languages
 !insertmacro MUI_LANGUAGE "English"
 !insertmacro MUI_RESERVEFILE_LANGDLL
-  !include "D:\a\ax-fabric\ax-fabric\src-tauri\target\release\nsis\x64\English.nsh"
+  !include "D:\a\ax-studio\ax-studio\src-tauri\target\release\nsis\x64\English.nsh"
 
 Function .onInit
   ${GetOptions} $CMDLINE "/P" $PassiveMode
@@ -499,7 +499,7 @@ Function .onInit
     Call RestorePreviousInstallLocation
   ${EndIf}
 
-  ; Remove old Ax-Fabric if it exists
+  ; Remove old Ax-Studio if it exists
   ${If} ${FileExists} "$INSTDIR\LICENSE.electron.txt"
       DeleteRegKey HKLM "Software\${PRODUCTNAME}"
       RMDir /r "$INSTDIR"
@@ -697,14 +697,14 @@ Section Install
     CreateDirectory "$INSTDIR\resources"
     CreateDirectory "$INSTDIR\resources\pre-install"
     SetOutPath $INSTDIR
-    File /a "/oname=LICENSE" "D:\a\ax-fabric\ax-fabric\src-tauri\resources\LICENSE"
+    File /a "/oname=LICENSE" "D:\a\ax-studio\ax-studio\src-tauri\resources\LICENSE"
     SetOutPath "$INSTDIR\resources\pre-install"
-    File /nonfatal /a /r "D:\a\ax-fabric\ax-fabric\src-tauri\resources\pre-install\"
+    File /nonfatal /a /r "D:\a\ax-studio\ax-studio\src-tauri\resources\pre-install\"
     SetOutPath $INSTDIR
 
   ; Copy external binaries
-    File /a "/oname=bun.exe" "D:\a\ax-fabric\ax-fabric\src-tauri\resources\bin\bun-x86_64-pc-windows-msvc.exe"
-    File /a "/oname=uv.exe" "D:\a\ax-fabric\ax-fabric\src-tauri\resources\bin\uv-x86_64-pc-windows-msvc.exe"
+    File /a "/oname=bun.exe" "D:\a\ax-studio\ax-studio\src-tauri\resources\bin\bun-x86_64-pc-windows-msvc.exe"
+    File /a "/oname=uv.exe" "D:\a\ax-studio\ax-studio\src-tauri\resources\bin\uv-x86_64-pc-windows-msvc.exe"
 
   ; Create file associations
 
@@ -825,9 +825,9 @@ Section Uninstall
     Delete "$INSTDIR\LICENSE"
 
   ; Delete resources
-    Delete "$INSTDIR\resources\pre-install\ax-fabric-assistant-extension.tgz"
-    Delete "$INSTDIR\resources\pre-install\ax-fabric-conversational-extension.tgz"
-    Delete "$INSTDIR\resources\pre-install\ax-fabric-download-extension.tgz"
+    Delete "$INSTDIR\resources\pre-install\ax-studio-assistant-extension.tgz"
+    Delete "$INSTDIR\resources\pre-install\ax-studio-conversational-extension.tgz"
+    Delete "$INSTDIR\resources\pre-install\ax-studio-download-extension.tgz"
 
   ; Delete external binaries
     Delete "$INSTDIR\bun.exe"

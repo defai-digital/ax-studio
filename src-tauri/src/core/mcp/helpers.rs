@@ -22,7 +22,7 @@ use crate::core::{
     mcp::models::{McpServerConfig, McpSettings},
     state::{AppState, RunningServiceEnum, SharedMcpServers},
 };
-use ax_fabric_utils::{can_override_npx, can_override_uvx};
+use ax_studio_utils::{can_override_npx, can_override_uvx};
 
 #[derive(Debug, Clone, Copy)]
 pub enum ShutdownContext {
@@ -314,7 +314,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
             protocol_version: Default::default(),
             capabilities: ClientCapabilities::default(),
             client_info: Implementation {
-                name: "Ax-Fabric Streamable Client".to_string(),
+                name: "Ax-Studio Streamable Client".to_string(),
                 version: "0.0.1".to_string(),
                 title: None,
                 website_url: None,
@@ -382,7 +382,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
             protocol_version: Default::default(),
             capabilities: ClientCapabilities::default(),
             client_info: Implementation {
-                name: "Ax-Fabric SSE Client".to_string(),
+                name: "Ax-Studio SSE Client".to_string(),
                 version: "0.0.1".to_string(),
                 title: None,
                 website_url: None,
@@ -410,11 +410,11 @@ async fn schedule_mcp_start_task<R: Runtime>(
             }
         }
     } else {
-        if name == "Ax-Fabric Browser MCP" {
+        if name == "Ax-Studio Browser MCP" {
             if let Some(port_str) = config_params.envs.get("BRIDGE_PORT") {
                 if let Some(port_str) = port_str.as_str() {
                     if let Ok(port) = port_str.parse::<u16>() {
-                        if !ax_fabric_utils::network::is_port_available(port) {
+                        if !ax_studio_utils::network::is_port_available(port) {
                             log::warn!("Port {} occupied, attempting cleanup", port);
                             match kill_orphaned_mcp_process_with_app(&app, port).await {
                                 Ok(true) => {
@@ -422,7 +422,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
                                 }
                                 Ok(false) => {
                                     return Err(format!(
-                                        "Port {} is already in use. Please close the application using this port or restart Ax-Fabric.",
+                                        "Port {} is already in use. Please close the application using this port or restart Ax-Studio.",
                                         port
                                     ));
                                 }
@@ -544,8 +544,8 @@ async fn schedule_mcp_start_task<R: Runtime>(
             return Err(format!("MCP server {name} quit immediately after starting"));
         }
 
-        // Create lock file for Ax-Fabric Browser MCP
-        if name == "Ax-Fabric Browser MCP" {
+        // Create lock file for Ax-Studio Browser MCP
+        if name == "Ax-Studio Browser MCP" {
             if let Some(port_str) = config_params.envs.get("BRIDGE_PORT") {
                 if let Some(port_str) = port_str.as_str() {
                     if let Ok(port) = port_str.parse::<u16>() {
@@ -660,8 +660,8 @@ pub async fn kill_orphaned_mcp_process_with_app<R: Runtime>(
         }
 
         // Process from lock file is alive - verify it's still the MCP process
-        if let Some(process_info) = ax_fabric_utils::network::get_process_info_by_pid(lock.pid) {
-            if ax_fabric_utils::network::is_orphaned_mcp_process(&process_info) {
+        if let Some(process_info) = ax_studio_utils::network::get_process_info_by_pid(lock.pid) {
+            if ax_studio_utils::network::is_orphaned_mcp_process(&process_info) {
                 log::info!(
                     "Lock file PID {} verified as MCP process, attempting kill",
                     lock.pid
@@ -673,7 +673,7 @@ pub async fn kill_orphaned_mcp_process_with_app<R: Runtime>(
 
                 tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
-                if ax_fabric_utils::network::is_port_available(port) {
+                if ax_studio_utils::network::is_port_available(port) {
                     log::info!("Cleaned up orphaned process via lock file");
                     return Ok(true);
                 }
@@ -697,7 +697,7 @@ pub async fn kill_orphaned_mcp_process_with_app<R: Runtime>(
     }
 
     // Fallback: Use lsof/netstat to find process on port
-    let process_info = match ax_fabric_utils::network::find_process_using_port(port) {
+    let process_info = match ax_studio_utils::network::find_process_using_port(port) {
         Some(info) => info,
         None => return Ok(false),
     };
@@ -710,9 +710,9 @@ pub async fn kill_orphaned_mcp_process_with_app<R: Runtime>(
         process_info.cmd
     );
 
-    if !ax_fabric_utils::network::is_orphaned_mcp_process(&process_info) {
+    if !ax_studio_utils::network::is_orphaned_mcp_process(&process_info) {
         log::warn!(
-            "Port {} occupied by non-Ax-Fabric process '{}' (PID {})",
+            "Port {} occupied by non-Ax-Studio process '{}' (PID {})",
             port,
             process_info.name,
             process_info.pid
@@ -728,7 +728,7 @@ pub async fn kill_orphaned_mcp_process_with_app<R: Runtime>(
 
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
-    if ax_fabric_utils::network::is_port_available(port) {
+    if ax_studio_utils::network::is_port_available(port) {
         log::info!("Cleaned up orphaned process on port {}", port);
         Ok(true)
     } else {
@@ -857,7 +857,7 @@ pub async fn stop_mcp_servers_with_context<R: Runtime>(
         let mut result = Vec::new();
         for key in keys {
             if let Some(service) = servers_map.remove(&key) {
-                let port = if key == "Ax-Fabric Browser MCP" {
+                let port = if key == "Ax-Studio Browser MCP" {
                     let active_servers = state.mcp_active_servers.lock().await;
                     active_servers.get(&key).and_then(|config| {
                         config
@@ -903,7 +903,7 @@ pub async fn stop_mcp_servers_with_context<R: Runtime>(
                     .map(|r| r.is_ok())
                     .unwrap_or(false);
 
-                if name == "Ax-Fabric Browser MCP" {
+                if name == "Ax-Studio Browser MCP" {
                     if let Some(port) = port {
                         use crate::core::mcp::lockfile::delete_lock_file;
                         if success {

@@ -7,11 +7,11 @@ wget https://github.com/AppImage/appimagetool/releases/download/continuous/appim
 chmod +x "${APPIMAGETOOL}"
 
 if [ "${RELEASE_CHANNEL}" != "stable" ]; then
-    APP_DIR=./src-tauri/target/release/bundle/appimage/Jan-${RELEASE_CHANNEL}.AppDir
-    LIB_DIR=$APP_DIR/usr/lib/Jan-${RELEASE_CHANNEL}/binaries
+    APP_DIR=./src-tauri/target/release/bundle/appimage/AxStudio-${RELEASE_CHANNEL}.AppDir
+    LIB_DIR=$APP_DIR/usr/lib/AxStudio-${RELEASE_CHANNEL}/binaries
 else
-    APP_DIR=./src-tauri/target/release/bundle/appimage/Jan.AppDir
-    LIB_DIR=$APP_DIR/usr/lib/Jan/binaries
+    APP_DIR=./src-tauri/target/release/bundle/appimage/AxStudio.AppDir
+    LIB_DIR=$APP_DIR/usr/lib/AxStudio/binaries
 fi
 
 # bundle additional resources in the AppDir without pulling in their dependencies

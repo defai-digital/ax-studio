@@ -35,8 +35,8 @@ export default memo(function DropdownToolsAvailable({
   onOpenChange,
 }: DropdownToolsAvailableProps) {
   const allTools = useAppState((state) => state.tools)
-  // Filter out Ax-Fabric Browser MCP tools
-  const tools = allTools.filter((tool) => tool.server !== 'Ax-Fabric Browser MCP')
+  // Filter out Ax-Studio Browser MCP tools
+  const tools = allTools.filter((tool) => tool.server !== 'Ax-Studio Browser MCP')
   const [isOpen, setIsOpen] = useState(false)
   const { t } = useTranslation()
 

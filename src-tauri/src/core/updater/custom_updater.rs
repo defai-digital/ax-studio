@@ -1,5 +1,5 @@
 /**
- * Custom Updater for Ax-Fabric with HMAC request signing
+ * Custom Updater for Ax-Studio with HMAC request signing
  *
  * This module provides a custom update checker that:
  * 1. Reads endpoints from tauri.conf.json (plugins.updater.endpoints)
@@ -7,7 +7,7 @@
  * 3. Remaining endpoints are FALLBACK - no signing needed
  *
  * Convention: The first endpoint in the list should be the signed endpoint
- * (e.g., https://updates.axfabric.ai/update-check)
+ * (e.g., https://updates.axstudio.ai/update-check)
  */
 use super::hmac_client::SignedRequestHeaders;
 use reqwest::Client;
@@ -16,9 +16,9 @@ use std::time::Duration;
 use thiserror::Error;
 
 /// Secret key for HMAC signature
-/// - In CI: Set AX_FABRIC_SIGNING_KEY environment variable at build time
+/// - In CI: Set AX_STUDIO_SIGNING_KEY environment variable at build time
 /// - In local dev: Falls back to a test key
-const SECRET_KEY: &str = match option_env!("AX_FABRIC_SIGNING_KEY") {
+const SECRET_KEY: &str = match option_env!("AX_STUDIO_SIGNING_KEY") {
     Some(key) => key,
     None => "local-dev-test-key-not-for-production",
 };
@@ -82,11 +82,11 @@ impl CustomUpdater {
         })
     }
 
-    /// Build User-Agent header: Ax-Fabric/{version} ({os}; {arch})
+    /// Build User-Agent header: Ax-Studio/{version} ({os}; {arch})
     fn build_user_agent(app_version: &str) -> String {
         let os = std::env::consts::OS;
         let arch = std::env::consts::ARCH;
-        format!("Ax-Fabric/{} ({}; {})", app_version, os, arch)
+        format!("Ax-Studio/{} ({}; {})", app_version, os, arch)
     }
 
     /// Check for updates using endpoints list

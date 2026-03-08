@@ -2,8 +2,8 @@
  * Models Service Types
  */
 
-import { SessionInfo, modelInfo, ThreadMessage, UnloadResult } from '@ax-fabric/core'
-import { Model as CoreModel } from '@ax-fabric/core'
+import { SessionInfo, modelInfo, ThreadMessage, UnloadResult } from '@ax-studio/core'
+import { Model as CoreModel } from '@ax-studio/core'
 
 // Types for model catalog
 export interface ModelQuant {

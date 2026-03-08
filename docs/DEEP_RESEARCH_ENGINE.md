@@ -1,6 +1,6 @@
 # Deep Research Engine
 
-Ax-Fabric's built-in autonomous research agent. Given a plain-language query, it decomposes the question, searches the web, scrapes and summarises sources, and streams a cited, long-form report — all without leaving the app.
+Ax-Studio's built-in autonomous research agent. Given a plain-language query, it decomposes the question, searches the web, scrapes and summarises sources, and streams a cited, long-form report — all without leaving the app.
 
 ---
 

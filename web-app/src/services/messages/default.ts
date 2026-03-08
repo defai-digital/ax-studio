@@ -7,7 +7,7 @@ import {
   ConversationalExtension,
   ExtensionTypeEnum,
   ThreadMessage,
-} from '@ax-fabric/core'
+} from '@ax-studio/core'
 import { TEMPORARY_CHAT_ID } from '@/constants/chat'
 import type { MessagesService } from './types'
 

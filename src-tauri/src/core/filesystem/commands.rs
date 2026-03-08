@@ -147,7 +147,7 @@ pub fn write_yaml(
 ) -> Result<(), String> {
     // TODO: have an internal function to check scope
     let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app.clone());
-    let save_path = ax_fabric_utils::normalize_path(&app_data_folder.join(save_path));
+    let save_path = ax_studio_utils::normalize_path(&app_data_folder.join(save_path));
     if !save_path.starts_with(&app_data_folder) {
         return Err(format!(
             "Error: save path {} is not under app_data_folder {}",
@@ -167,7 +167,7 @@ pub fn read_yaml<R: Runtime>(
     path: &str,
 ) -> Result<serde_json::Value, String> {
     let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app.clone());
-    let path = ax_fabric_utils::normalize_path(&app_data_folder.join(path));
+    let path = ax_studio_utils::normalize_path(&app_data_folder.join(path));
     if !path.starts_with(&app_data_folder) {
         return Err(format!(
             "Error: path {} is not under app_data_folder {}",
@@ -188,9 +188,9 @@ pub fn decompress<R: Runtime>(
     output_dir: &str,
 ) -> Result<(), String> {
     let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app.clone());
-    let path_buf = ax_fabric_utils::normalize_path(&app_data_folder.join(path));
+    let path_buf = ax_studio_utils::normalize_path(&app_data_folder.join(path));
 
-    let output_dir_buf = ax_fabric_utils::normalize_path(&app_data_folder.join(output_dir));
+    let output_dir_buf = ax_studio_utils::normalize_path(&app_data_folder.join(output_dir));
     if !output_dir_buf.starts_with(&app_data_folder) {
         return Err(format!(
             "Error: output directory {} is not under app_data_folder {}",
@@ -211,7 +211,7 @@ pub fn decompress<R: Runtime>(
     // Use short path on Windows to handle paths with spaces
     #[cfg(windows)]
     let file = {
-        if let Some(short_path) = ax_fabric_utils::path::get_short_path(&path_buf) {
+        if let Some(short_path) = ax_studio_utils::path::get_short_path(&path_buf) {
             fs::File::open(&short_path).map_err(|e| e.to_string())?
         } else {
             fs::File::open(&path_buf).map_err(|e| e.to_string())?

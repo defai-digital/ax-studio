@@ -49,16 +49,16 @@ def get_computer_config():
             "os_type": "linux"
         }
 
-def get_default_ax_fabric_path():
-    """Get default Ax-Fabric app path based on OS"""
+def get_default_ax_studio_path():
+    """Get default Ax-Studio app path based on OS"""
     if IS_WINDOWS:
         # Try multiple common locations on Windows
         possible_paths = [
-            os.path.expanduser(r"~\AppData\Local\Programs\ax-fabric\Ax-Fabric.exe"),
-            os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'ax-fabric', 'Ax-Fabric.exe'),
-            os.path.join(os.environ.get('APPDATA', ''), 'ax-fabric', 'Ax-Fabric.exe'),
-            r"C:\Program Files\ax-fabric\Ax-Fabric.exe",
-            r"C:\Program Files (x86)\ax-fabric\Ax-Fabric.exe"
+            os.path.expanduser(r"~\AppData\Local\Programs\ax-studio\Ax-Studio.exe"),
+            os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'ax-studio', 'Ax-Studio.exe'),
+            os.path.join(os.environ.get('APPDATA', ''), 'ax-studio', 'Ax-Studio.exe'),
+            r"C:\Program Files\ax-studio\Ax-Studio.exe",
+            r"C:\Program Files (x86)\ax-studio\Ax-Studio.exe"
         ]
         
         # Return first existing path, or first option as default
@@ -72,10 +72,10 @@ def get_default_ax_fabric_path():
     elif IS_LINUX:
         # Linux possible locations
         possible_paths = [
-            "/usr/bin/Ax-Fabric",
-            "/usr/local/bin/Ax-Fabric",
-            os.path.expanduser("~/Applications/Ax-Fabric/Ax-Fabric"),
-            "/opt/Ax-Fabric/Ax-Fabric"
+            "/usr/bin/Ax-Studio",
+            "/usr/local/bin/Ax-Studio",
+            os.path.expanduser("~/Applications/Ax-Studio/Ax-Studio"),
+            "/opt/Ax-Studio/Ax-Studio"
         ]
         
         # Return first existing path, or first option as default
@@ -84,13 +84,13 @@ def get_default_ax_fabric_path():
                 return path
         
         # Default to nightly build path
-        return "/usr/bin/Ax-Fabric"
+        return "/usr/bin/Ax-Studio"
     
     elif IS_MACOS:
         # macOS defaults
         possible_paths = [
-            "/Applications/Ax-Fabric.app/Contents/MacOS/Ax-Fabric",
-            os.path.expanduser("~/Applications/Ax-Fabric.app/Contents/MacOS/Ax-Fabric")
+            "/Applications/Ax-Studio.app/Contents/MacOS/Ax-Studio",
+            os.path.expanduser("~/Applications/Ax-Studio.app/Contents/MacOS/Ax-Studio")
         ]
         
         for path in possible_paths:
@@ -101,7 +101,7 @@ def get_default_ax_fabric_path():
     
     else:
         # Unknown platform
-        return "ax-fabric"
+        return "ax-studio"
 
 def start_computer_server():
     """Start computer server in background thread"""
@@ -177,8 +177,8 @@ Examples:
   # Run with ReportPortal integration
   python main.py --enable-reportportal --rp-token YOUR_TOKEN
   
-  # Run with custom Ax-Fabric app path
-  python main.py --app-path "C:/Custom/Path/Ax-Fabric.exe"
+  # Run with custom Ax-Studio app path
+  python main.py --app-path "C:/Custom/Path/Ax-Studio.exe"
   
   # Run with different model
   python main.py --model-name "gpt-4" --model-base-url "https://api.openai.com/v1"
@@ -188,8 +188,8 @@ Examples:
         """
     )
     
-    # Get default Ax-Fabric path
-    default_ax_fabric_path = get_default_ax_fabric_path()
+    # Get default Ax-Studio path
+    default_ax_studio_path = get_default_ax_studio_path()
     
     # Computer server arguments
     server_group = parser.add_argument_group('Computer Server Configuration')
@@ -210,7 +210,7 @@ Examples:
     )
     rp_group.add_argument(
         '--rp-endpoint',
-        default=os.getenv('RP_ENDPOINT', 'https://reportportal.axfabric.ai'),
+        default=os.getenv('RP_ENDPOINT', 'https://reportportal.axstudio.ai'),
         help='ReportPortal endpoint URL (env: RP_ENDPOINT, default: %(default)s)'
     )
     rp_group.add_argument(
@@ -229,17 +229,17 @@ Examples:
         help='Custom launch name for ReportPortal (env: LAUNCH_NAME, default: auto-generated with timestamp)'
     )
     
-    # Ax-Fabric app arguments
-    app_group = parser.add_argument_group('Ax-Fabric Application Configuration')
+    # Ax-Studio app arguments
+    app_group = parser.add_argument_group('Ax-Studio Application Configuration')
     app_group.add_argument(
         '--app-path',
-        default=os.getenv('AX_FABRIC_APP_PATH', default_ax_fabric_path),
-        help=f'Path to Ax-Fabric application executable (env: AX_FABRIC_APP_PATH, default: auto-detected or {default_ax_fabric_path})'
+        default=os.getenv('AX_STUDIO_APP_PATH', default_ax_studio_path),
+        help=f'Path to Ax-Studio application executable (env: AX_STUDIO_APP_PATH, default: auto-detected or {default_ax_studio_path})'
     )
     app_group.add_argument(
         '--process-name',
-        default=os.getenv('AX_FABRIC_PROCESS_NAME', 'Ax-Fabric.exe' if IS_WINDOWS else ('Ax-Fabric' if IS_MACOS else 'Ax-Fabric-nightly')),
-        help='Ax-Fabric process name for monitoring (env: AX_FABRIC_PROCESS_NAME, default: platform-specific)'
+        default=os.getenv('AX_STUDIO_PROCESS_NAME', 'Ax-Studio.exe' if IS_WINDOWS else ('Ax-Studio' if IS_MACOS else 'Ax-Studio-nightly')),
+        help='Ax-Studio process name for monitoring (env: AX_STUDIO_PROCESS_NAME, default: platform-specific)'
     )
     
     # Model/Agent arguments
@@ -328,9 +328,9 @@ async def main():
         logger.info(f"Tests directory: {args.tests_dir}")
         logger.info(f"Max turns per test: {args.max_turns}")
         logger.info(f"Delay between tests: {args.delay_between_tests}s")
-        logger.info(f"Ax-Fabric app path: {args.app_path}")
-        logger.info(f"Ax-Fabric app exists: {os.path.exists(args.app_path)}")
-        logger.info(f"Ax-Fabric process name: {args.process_name}")
+        logger.info(f"Ax-Studio app path: {args.app_path}")
+        logger.info(f"Ax-Studio app exists: {os.path.exists(args.app_path)}")
+        logger.info(f"Ax-Studio process name: {args.process_name}")
         logger.info(f"Model: {args.model_name}")
         logger.info(f"Model URL: {args.model_base_url}")
         logger.info(f"Model provider: {args.model_provider}")

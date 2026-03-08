@@ -4,7 +4,7 @@ import { SystemEvent } from '@/types/events'
 import { useAppState } from './useAppState'
 import { useToolAvailable } from './useToolAvailable'
 import { ExtensionManager } from '@/lib/extension'
-import { ExtensionTypeEnum, MCPExtension } from '@ax-fabric/core'
+import { ExtensionTypeEnum, MCPExtension } from '@ax-studio/core'
 
 export const useTools = () => {
   const updateTools = useAppState((state) => state.updateTools)

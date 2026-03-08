@@ -1,20 +1,20 @@
 /**
- * Ax-Fabric Retrieval Service client
+ * Ax-Studio Retrieval Service client
  *
  * Replaces the deleted RAGExtension.  All retrieval operations (tool listing,
  * tool calls, document parsing) are delegated to the self-hosted Retrieval
  * Service via HTTP.  The service URL is read from the persisted
- * useAxFabricConfig store (defaults to http://127.0.0.1:8001).
+ * useAxStudioConfig store (defaults to http://127.0.0.1:8001).
  */
 
 import type { RAGService } from './types'
-import type { MCPTool, MCPToolCallResult } from '@ax-fabric/core'
+import type { MCPTool, MCPToolCallResult } from '@ax-studio/core'
 
 const DEFAULT_RETRIEVAL_URL = 'http://127.0.0.1:8001'
 
 function getRetrievalServiceUrl(): string {
   try {
-    const stored = localStorage.getItem('ax-fabric-service-config')
+    const stored = localStorage.getItem('ax-studio-service-config')
     if (stored) {
       const parsed = JSON.parse(stored) as { state?: { config?: { retrievalServiceUrl?: string } } }
       return parsed?.state?.config?.retrievalServiceUrl || DEFAULT_RETRIEVAL_URL

@@ -49,7 +49,7 @@ on:
         required: false
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD:
         required: false
-      AX_FABRIC_SIGNING_KEY:
+      AX_STUDIO_SIGNING_KEY:
         required: false
     outputs:
       WIN_SIG:
@@ -165,8 +165,8 @@ jobs:
               new_build_version="${base_version}.${t_value}"
           }
           generate_build_version ${{ inputs.new_version }}
-          sed -i "s/ax_fabric_version/$new_base_version/g" ./src-tauri/tauri.bundle.windows.nsis.template
-          sed -i "s/ax_fabric_build/$new_build_version/g" ./src-tauri/tauri.bundle.windows.nsis.template
+          sed -i "s/ax_studio_version/$new_base_version/g" ./src-tauri/tauri.bundle.windows.nsis.template
+          sed -i "s/ax_studio_build/$new_build_version/g" ./src-tauri/tauri.bundle.windows.nsis.template
           
           echo "---------tauri.windows.conf.json---------"
           cat ./src-tauri/tauri.windows.conf.json
@@ -178,14 +178,14 @@ jobs:
           # Change app name for beta and nightly builds
           if [ "${{ inputs.channel }}" != "stable" ]; then
             if [[ "${{ inputs.channel }}" == "nightly" ]]; then
-              jq '.plugins.updater.endpoints = ["https://apps-nightly.axfabric.ai/update-check", "https://delta.axfabric.ai/${{ inputs.channel }}/latest.json"]' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
+              jq '.plugins.updater.endpoints = ["https://apps-nightly.axstudio.ai/update-check", "https://delta.axstudio.ai/${{ inputs.channel }}/latest.json"]' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
             else
-              jq '.plugins.updater.endpoints = ["https://delta.axfabric.ai/${{ inputs.channel }}/latest.json"]' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
+              jq '.plugins.updater.endpoints = ["https://delta.axstudio.ai/${{ inputs.channel }}/latest.json"]' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
             fi
             mv /tmp/tauri.conf.json ./src-tauri/tauri.conf.json
             
             # Update product name
-            jq --arg name "Ax-Fabric-${{ inputs.channel }}" '.productName = $name' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
+            jq --arg name "Ax-Studio-${{ inputs.channel }}" '.productName = $name' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
             mv /tmp/tauri.conf.json ./src-tauri/tauri.conf.json
 
             chmod +x .github/scripts/rename-tauri-app.sh
@@ -195,7 +195,7 @@ jobs:
             cat ./src-tauri/tauri.conf.json
 
             # Update Cargo.toml
-            ctoml ./src-tauri/Cargo.toml package.name "Ax-Fabric-${{ inputs.channel }}"
+            ctoml ./src-tauri/Cargo.toml package.name "Ax-Studio-${{ inputs.channel }}"
             ctoml ./src-tauri/Cargo.toml dependencies.tauri.features[] "devtools"
             echo "------------------"
             cat ./src-tauri/Cargo.toml
@@ -203,11 +203,11 @@ jobs:
             chmod +x .github/scripts/rename-workspace.sh
             .github/scripts/rename-workspace.sh ./package.json ${{ inputs.channel }}
             cat ./package.json
-            sed -i "s/ax_fabric_productname/Ax-Fabric-${{ inputs.channel }}/g" ./src-tauri/tauri.bundle.windows.nsis.template
-            sed -i "s/ax_fabric_mainbinaryname/ax-fabric-${{ inputs.channel }}/g" ./src-tauri/tauri.bundle.windows.nsis.template
+            sed -i "s/ax_studio_productname/Ax-Studio-${{ inputs.channel }}/g" ./src-tauri/tauri.bundle.windows.nsis.template
+            sed -i "s/ax_studio_mainbinaryname/ax-studio-${{ inputs.channel }}/g" ./src-tauri/tauri.bundle.windows.nsis.template
           else
-            sed -i "s/ax_fabric_productname/Ax-Fabric/g" ./src-tauri/tauri.bundle.windows.nsis.template
-            sed -i "s/ax_fabric_mainbinaryname/ax-fabric/g" ./src-tauri/tauri.bundle.windows.nsis.template
+            sed -i "s/ax_studio_productname/Ax-Studio/g" ./src-tauri/tauri.bundle.windows.nsis.template
+            sed -i "s/ax_studio_mainbinaryname/ax-studio/g" ./src-tauri/tauri.bundle.windows.nsis.template
           fi
           echo "---------nsis.template---------"
           cat ./src-tauri/tauri.bundle.windows.nsis.template
@@ -242,27 +242,27 @@ jobs:
           POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          AX_FABRIC_SIGNING_KEY: ${{ secrets.AX_FABRIC_SIGNING_KEY }}
+          AX_STUDIO_SIGNING_KEY: ${{ secrets.AX_STUDIO_SIGNING_KEY }}
 
       - name: Upload NSIS Installer Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ax-fabric-windows-exe-${{ inputs.new_version }}
+          name: ax-studio-windows-exe-${{ inputs.new_version }}
           path: |
             ./src-tauri/target/release/bundle/nsis/*.exe
       - name: Upload MSI Installer Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ax-fabric-windows-msi-${{ inputs.new_version }}
+          name: ax-studio-windows-msi-${{ inputs.new_version }}
           path: |
             ./src-tauri/target/release/bundle/msi/*.msi
       
       - name: Upload Portable Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ax-fabric-windows-portable-${{ inputs.new_version }}
+          name: ax-studio-windows-portable-${{ inputs.new_version }}
           path: |
-            ./src-tauri/target/release/Ax-Fabric*.exe
+            ./src-tauri/target/release/Ax-Studio*.exe
 
       ## Set output filename for windows
       - name: Set output filename for windows
@@ -270,25 +270,25 @@ jobs:
         run: |
           cd ./src-tauri/target/release/bundle/nsis
           if [ "${{ inputs.channel }}" != "stable" ]; then
-            FILE_NAME=Ax-Fabric-${{ inputs.channel }}_${{ inputs.new_version }}_x64-setup.exe
-            WIN_SIG=$(cat Ax-Fabric-${{ inputs.channel }}_${{ inputs.new_version }}_x64-setup.exe.sig)
+            FILE_NAME=Ax-Studio-${{ inputs.channel }}_${{ inputs.new_version }}_x64-setup.exe
+            WIN_SIG=$(cat Ax-Studio-${{ inputs.channel }}_${{ inputs.new_version }}_x64-setup.exe.sig)
 
-            MSI_FILE="Ax-Fabric-${{ inputs.channel }}_${{ inputs.new_version }}_x64_en-US.msi"
-            PORTABLE_FILE_NAME="Ax-Fabric-${{ inputs.channel }}_${{ inputs.new_version }}_x64-portable.exe"
+            MSI_FILE="Ax-Studio-${{ inputs.channel }}_${{ inputs.new_version }}_x64_en-US.msi"
+            PORTABLE_FILE_NAME="Ax-Studio-${{ inputs.channel }}_${{ inputs.new_version }}_x64-portable.exe"
           else
-            FILE_NAME=Ax-Fabric_${{ inputs.new_version }}_x64-setup.exe
-            WIN_SIG=$(cat Ax-Fabric_${{ inputs.new_version }}_x64-setup.exe.sig)
+            FILE_NAME=Ax-Studio_${{ inputs.new_version }}_x64-setup.exe
+            WIN_SIG=$(cat Ax-Studio_${{ inputs.new_version }}_x64-setup.exe.sig)
             
-            MSI_FILE="Ax-Fabric_${{ inputs.new_version }}_x64_en-US.msi"
-            PORTABLE_FILE_NAME="Ax-Fabric_${{ inputs.new_version }}_x64-portable.exe"
+            MSI_FILE="Ax-Studio_${{ inputs.new_version }}_x64_en-US.msi"
+            PORTABLE_FILE_NAME="Ax-Studio_${{ inputs.new_version }}_x64-portable.exe"
           fi
           # go to ./src-tauri/target/release
           cd ../..
 
           # find the actual portable exe produced by the build
-          PORTABLE_SRC=$(ls -1 Ax-Fabric*.exe | head -n 1)
+          PORTABLE_SRC=$(ls -1 Ax-Studio*.exe | head -n 1)
           if [ -z "$PORTABLE_SRC" ] || [ ! -f "$PORTABLE_SRC" ]; then
-            echo "Error: portable exe matching 'Ax-Fabric*.exe' not found in $(pwd)" >&2
+            echo "Error: portable exe matching 'Ax-Studio*.exe' not found in $(pwd)" >&2
             exit 1
           fi
           # copy to deterministic versioned filename

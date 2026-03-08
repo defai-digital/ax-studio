@@ -4,7 +4,7 @@
 
 import { models as providerModels } from 'token.js'
 import { predefinedProviders } from '@/constants/providers'
-import { EngineManager, SettingComponentProps } from '@ax-fabric/core'
+import { EngineManager, SettingComponentProps } from '@ax-studio/core'
 import { ModelCapabilities } from '@/types/models'
 import { modelSettings } from '@/lib/predefined'
 import { ExtensionManager } from '@/lib/extension'

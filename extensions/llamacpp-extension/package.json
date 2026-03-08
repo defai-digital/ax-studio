@@ -1,12 +1,12 @@
 {
-  "name": "@ax-fabric/llamacpp-extension",
+  "name": "@ax-studio/llamacpp-extension",
   "productName": "llama.cpp Inference Engine",
   "version": "1.0.0",
-  "description": "This extension enables llama.cpp local inference for Ax-Fabric",
+  "description": "This extension enables llama.cpp local inference for Ax-Studio",
   "main": "dist/index.js",
   "module": "dist/module.js",
   "engine": "llamacpp",
-  "author": "Ax-Fabric <service@axfabric.ai>",
+  "author": "Ax-Studio <service@axstudio.ai>",
   "license": "UNLICENSED",
   "scripts": {
     "build": "rolldown -c rolldown.config.mjs",
@@ -22,8 +22,8 @@
     "vitest": "3.2.4"
   },
   "dependencies": {
-    "@ax-fabric/core": "../../core/package.tgz",
-    "@ax-fabric/tauri-plugin-llamacpp-api": "link:../../src-tauri/plugins/tauri-plugin-llamacpp",
+    "@ax-studio/core": "../../core/package.tgz",
+    "@ax-studio/tauri-plugin-llamacpp-api": "link:../../src-tauri/plugins/tauri-plugin-llamacpp",
     "@tauri-apps/api": "2.8.0",
     "@tauri-apps/plugin-http": "2.5.0",
     "@tauri-apps/plugin-log": "^2.6.0",

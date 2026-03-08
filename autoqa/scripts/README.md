@@ -7,18 +7,18 @@ This directory contains platform-specific scripts used by the AutoQA GitHub Acti
 ```text
 autoqa/scripts/
 ├── setup_permissions.sh        # Setup executable permissions for all scripts
-├── windows_cleanup.ps1          # Windows: Clean existing Ax-Fabric installations
-├── windows_download.ps1         # Windows: Download Ax-Fabric app installer
-├── windows_install.ps1          # Windows: Install Ax-Fabric app
+├── windows_cleanup.ps1          # Windows: Clean existing Ax-Studio installations
+├── windows_download.ps1         # Windows: Download Ax-Studio app installer
+├── windows_install.ps1          # Windows: Install Ax-Studio app
 ├── windows_post_cleanup.ps1     # Windows: Post-test cleanup
 ├── run_tests.ps1               # Windows: Run AutoQA tests
-├── ubuntu_cleanup.sh           # Ubuntu: Clean existing Ax-Fabric installations
-├── ubuntu_download.sh          # Ubuntu: Download Ax-Fabric app (.deb)
-├── ubuntu_install.sh           # Ubuntu: Install Ax-Fabric app
+├── ubuntu_cleanup.sh           # Ubuntu: Clean existing Ax-Studio installations
+├── ubuntu_download.sh          # Ubuntu: Download Ax-Studio app (.deb)
+├── ubuntu_install.sh           # Ubuntu: Install Ax-Studio app
 ├── ubuntu_post_cleanup.sh      # Ubuntu: Post-test cleanup
-├── macos_cleanup.sh            # macOS: Clean existing Ax-Fabric installations
-├── macos_download.sh           # macOS: Download Ax-Fabric app (.dmg)
-├── macos_install.sh            # macOS: Install Ax-Fabric app
+├── macos_cleanup.sh            # macOS: Clean existing Ax-Studio installations
+├── macos_download.sh           # macOS: Download Ax-Studio app (.dmg)
+├── macos_install.sh            # macOS: Install Ax-Studio app
 ├── macos_post_cleanup.sh       # macOS: Post-test cleanup
 ├── run_tests.sh                # Unix: Run AutoQA tests (Ubuntu/macOS)
 ├── README.md                   # This file
@@ -29,23 +29,23 @@ autoqa/scripts/
 
 ### Windows Scripts (.ps1)
 
-- **windows_cleanup.ps1**: Removes existing Ax-Fabric installations and kills running processes
-- **windows_download.ps1**: Downloads Ax-Fabric installer with priority-based URL selection
-- **windows_install.ps1**: Installs Ax-Fabric app and sets environment variables
+- **windows_cleanup.ps1**: Removes existing Ax-Studio installations and kills running processes
+- **windows_download.ps1**: Downloads Ax-Studio installer with priority-based URL selection
+- **windows_install.ps1**: Installs Ax-Studio app and sets environment variables
 - **windows_post_cleanup.ps1**: Comprehensive cleanup after tests including uninstallation
 - **run_tests.ps1**: Runs the AutoQA Python tests with proper arguments
 
 ### Ubuntu Scripts (.sh)
 
-- **ubuntu_cleanup.sh**: Removes existing Ax-Fabric installations and kills running processes
-- **ubuntu_download.sh**: Downloads Ax-Fabric .deb package with priority-based URL selection
-- **ubuntu_install.sh**: Installs Ax-Fabric .deb package and sets environment variables
+- **ubuntu_cleanup.sh**: Removes existing Ax-Studio installations and kills running processes
+- **ubuntu_download.sh**: Downloads Ax-Studio .deb package with priority-based URL selection
+- **ubuntu_install.sh**: Installs Ax-Studio .deb package and sets environment variables
 - **ubuntu_post_cleanup.sh**: Comprehensive cleanup after tests including package removal
 
 ### macOS Scripts (.sh)
 
-- **macos_cleanup.sh**: Removes existing Ax-Fabric installations and kills running processes
-- **macos_download.sh**: Downloads Ax-Fabric .dmg package with priority-based URL selection
+- **macos_cleanup.sh**: Removes existing Ax-Studio installations and kills running processes
+- **macos_download.sh**: Downloads Ax-Studio .dmg package with priority-based URL selection
 - **macos_install.sh**: Mounts DMG, extracts .app, and installs to Applications
 - **macos_post_cleanup.sh**: Comprehensive cleanup after tests
 
@@ -66,12 +66,12 @@ These scripts are called from the `.github/workflows/autoqa.yml` workflow file:
     ./autoqa/scripts/setup_permissions.sh
 
 # Then use scripts without chmod
-- name: Clean existing Ax-Fabric installations
+- name: Clean existing Ax-Studio installations
   run: |
     ./autoqa/scripts/ubuntu_cleanup.sh
 
 # Windows example (no chmod needed)
-- name: Clean existing Ax-Fabric installations
+- name: Clean existing Ax-Studio installations
   shell: powershell
   run: |
     .\autoqa\scripts\windows_cleanup.ps1
@@ -110,7 +110,7 @@ When modifying these scripts:
 
 Scripts set these environment variables for subsequent workflow steps:
 
-- `JAN_APP_URL`: The selected Ax-Fabric app download URL
+- `JAN_APP_URL`: The selected Ax-Studio app download URL
 - `IS_NIGHTLY`: Boolean flag indicating if it's a nightly build
-- `AX_FABRIC_APP_PATH`: Path to the installed Ax-Fabric executable
-- `AX_FABRIC_PROCESS_NAME`: Name of the Ax-Fabric process for monitoring
+- `AX_STUDIO_APP_PATH`: Path to the installed Ax-Studio executable
+- `AX_STUDIO_PROCESS_NAME`: Name of the Ax-Studio process for monitoring

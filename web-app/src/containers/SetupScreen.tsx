@@ -1,8 +1,8 @@
 /**
- * Ax-Fabric Setup / Onboarding Screen
+ * Ax-Studio Setup / Onboarding Screen
  *
  * Shown on first launch.  Replaces the original local-model download flow with
- * an Ax-Fabric backend service configuration step so the user can point the
+ * an Ax-Studio backend service configuration step so the user can point the
  * app at their self-hosted services before entering the main UI.
  */
 
@@ -11,7 +11,7 @@ import { localStorageKey } from '@/constants/localStorage'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useState } from 'react'
-import { useAxFabricConfig } from '@/stores/useAxFabricConfig'
+import { useAxStudioConfig } from '@/stores/useAxStudioConfig'
 import HeaderPage from './HeaderPage'
 
 interface SetupScreenProps {
@@ -20,7 +20,7 @@ interface SetupScreenProps {
 
 function SetupScreen({ onComplete }: SetupScreenProps) {
   const { t } = useTranslation()
-  const { config, setConfig } = useAxFabricConfig()
+  const { config, setConfig } = useAxStudioConfig()
 
   const [apiServiceUrl, setApiServiceUrl] = useState(config.apiServiceUrl)
   const [retrievalServiceUrl, setRetrievalServiceUrl] = useState(
@@ -53,8 +53,8 @@ function SetupScreen({ onComplete }: SetupScreenProps) {
           <div className="mb-8 text-center">
             <div className="size-16 bg-secondary/60 rounded-2xl flex items-center justify-center mx-auto mb-4">
               <img
-                src="/images/ax-fabric-logo.png"
-                alt="Ax-Fabric"
+                src="/images/ax-studio-logo.png"
+                alt="Ax-Studio"
                 className="size-10 object-contain"
                 onError={(e) => {
                   // Fallback if logo not yet added
@@ -63,12 +63,12 @@ function SetupScreen({ onComplete }: SetupScreenProps) {
               />
             </div>
             <h1 className="font-studio font-medium text-2xl mb-2">
-              {t('setup:welcome', { defaultValue: 'Welcome to Ax-Fabric' })}
+              {t('setup:welcome', { defaultValue: 'Welcome to Ax-Studio' })}
             </h1>
             <p className="text-muted-foreground text-sm">
               {t('setup:configureServices', {
                 defaultValue:
-                  'Connect Ax-Fabric to your backend services to get started. You can update these URLs anytime in Settings.',
+                  'Connect Ax-Studio to your backend services to get started. You can update these URLs anytime in Settings.',
               })}
             </p>
           </div>

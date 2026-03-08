@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { DefaultThreadsService } from '../threads/default'
 import { ExtensionManager } from '@/lib/extension'
-import { ConversationalExtension, ExtensionTypeEnum } from '@ax-fabric/core'
+import { ConversationalExtension, ExtensionTypeEnum } from '@ax-studio/core'
 
 // Mock ExtensionManager
 vi.mock('@/lib/extension', () => ({
@@ -352,7 +352,7 @@ describe('DefaultThreadsService', () => {
         id: '1',
         title: 'New Thread',
         updated: 1234567890,
-        assistants: [{ ...realAssistant, model: { id: '*', engine: 'ax-fabric' } }],
+        assistants: [{ ...realAssistant, model: { id: '*', engine: 'ax-studio' } }],
         metadata: { order: 1 },
       }
 
@@ -366,7 +366,7 @@ describe('DefaultThreadsService', () => {
         expect.objectContaining({
           assistants: [
             expect.objectContaining({
-              model: { id: '*', engine: 'ax-fabric' },
+              model: { id: '*', engine: 'ax-studio' },
             }),
           ],
         })
@@ -427,8 +427,8 @@ describe('DefaultThreadsService', () => {
           assistants: [
             {
               model: { id: 'gpt-4', engine: 'openai' },
-              id: 'ax-fabric',
-              name: 'Ax-Fabric',
+              id: 'ax-studio',
+              name: 'Ax-Studio',
             },
           ],
         })
@@ -457,7 +457,7 @@ describe('DefaultThreadsService', () => {
         expect.objectContaining({
           assistants: [
             expect.objectContaining({
-              model: { id: '*', engine: 'ax-fabric' },
+              model: { id: '*', engine: 'ax-studio' },
             }),
           ],
         })

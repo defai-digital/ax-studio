@@ -7,7 +7,7 @@ vi.mock('@/lib/utils', () => ({
   isDev: vi.fn(() => false),
 }))
 
-vi.mock('@ax-fabric/core', () => ({
+vi.mock('@ax-studio/core', () => ({
   events: {
     on: vi.fn(),
     off: vi.fn(),
@@ -65,7 +65,7 @@ Object.defineProperty(global, 'AUTO_UPDATER_DISABLED', {
 })
 
 import { isDev } from '@/lib/utils'
-import { events } from '@ax-fabric/core'
+import { events } from '@ax-studio/core'
 
 describe('useAppUpdater', () => {
   const mockEvents = events as any

@@ -1,7 +1,7 @@
 import { ExtensionManager } from '@/lib/extension'
 import { APIs } from '@/lib/service'
 import { EventEmitter } from '@/services/events/EventEmitter'
-import { EngineManager, ModelManager } from '@ax-fabric/core'
+import { EngineManager, ModelManager } from '@ax-studio/core'
 import { PropsWithChildren, useCallback, useEffect, useState } from 'react'
 
 export function ExtensionProvider({ children }: PropsWithChildren) {

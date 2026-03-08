@@ -6,26 +6,26 @@
       rel="icon"
       type="image/png"
       sizes="32x32"
-      href="/images/ax-fabric-logo.png"
+      href="/images/ax-studio-logo.png"
     />
     
     <link
       rel="icon"
       type="image/png"
       sizes="16x16"
-      href="/images/ax-fabric-logo.png"
+      href="/images/ax-studio-logo.png"
     />
-    <link rel="apple-touch-icon" href="/images/ax-fabric-logo.png" />
+    <link rel="apple-touch-icon" href="/images/ax-studio-logo.png" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0, viewport-fit=cover"
     />
-    <title>Ax-Fabric</title>
+    <title>Ax-Studio</title>
     <link rel="stylesheet" href="/src/loader.css" />
   </head>
   <body>
     <div id="initial-loader">
-      <img src="/images/ax-fabric-logo.png" alt="Ax-Fabric Logo" />
+      <img src="/images/ax-studio-logo.png" alt="Ax-Studio Logo" />
     </div>
     <div id="root"></div>
     <script>
@@ -49,7 +49,7 @@
             'tool-availability',
             'favorite-models',
             'thread-management',
-            'ax-fabric-service-config',
+            'ax-studio-service-config',
           ]
 
           for (const key of jsonStorageKeys) {
@@ -74,7 +74,7 @@
           const root = document.getElementById('root')
           if (!root || root.childElementCount > 0) return
           root.innerHTML =
-            '<div style="height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;text-align:center;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#666;">Ax-Fabric failed to initialize. Please restart the app.</div>'
+            '<div style="height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;text-align:center;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#666;">Ax-Studio failed to initialize. Please restart the app.</div>'
         }
 
         const startupFailSafe = () => {

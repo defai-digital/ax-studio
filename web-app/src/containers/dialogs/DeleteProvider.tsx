@@ -12,7 +12,7 @@ import {
 
 import { toast } from 'sonner'
 import { CardItem } from '../Card'
-import { EngineManager } from '@ax-fabric/core'
+import { EngineManager } from '@ax-studio/core'
 import { useModelProvider } from '@/hooks/useModelProvider'
 import { useRouter } from '@tanstack/react-router'
 import { route } from '@/constants/routes'

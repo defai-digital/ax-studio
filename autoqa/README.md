@@ -1,10 +1,10 @@
 # E2E Test Runner with ReportPortal Integration
 
-🚀 An automated end-to-end test runner for Ax-Fabric application with ReportPortal integration, screen recording, and comprehensive test monitoring.
+🚀 An automated end-to-end test runner for Ax-Studio application with ReportPortal integration, screen recording, and comprehensive test monitoring.
 
 ## Features
 
-- ✅ **Automated Ax-Fabric App Testing**: Automatically starts/stops Ax-Fabric application
+- ✅ **Automated Ax-Studio App Testing**: Automatically starts/stops Ax-Studio application
 - 🖥️ **Auto Computer Server**: Automatically starts computer server in background
 - 📹 **Screen Recording**: Records test execution for debugging
 - 📊 **ReportPortal Integration**: Optional test results upload to ReportPortal
@@ -16,7 +16,7 @@
 ## Prerequisites
 
 - Python 3.8+
-- Ax-Fabric application installed
+- Ax-Studio application installed
 - Windows Sandbox (for computer provider)
 - Computer server package installed
 - Required Python packages (see requirements.txt)
@@ -37,10 +37,10 @@ cd autoqa
 pip install -r requirements.txt
 ```
 
-3. Ensure Ax-Fabric application is installed in one of the default locations:
-   - Windows: `%LOCALAPPDATA%\Programs\ax-fabric\Ax-Fabric.exe`
-   - macOS: `~/Applications/Ax-Fabric.app/Contents/MacOS/Ax-Fabric`
-   - Linux: `ax-fabric` (in PATH)
+3. Ensure Ax-Studio application is installed in one of the default locations:
+   - Windows: `%LOCALAPPDATA%\Programs\ax-studio\Ax-Studio.exe`
+   - macOS: `~/Applications/Ax-Studio.app/Contents/MacOS/Ax-Studio`
+   - Linux: `ax-studio` (in PATH)
 
 ## Quick Start
 
@@ -53,8 +53,8 @@ python main.py
 # Run with custom test directory
 python main.py --tests-dir "my_tests"
 
-# Run with custom Ax-Fabric app path
-python main.py --app-path "C:/Custom/Path/Ax-Fabric.exe"
+# Run with custom Ax-Studio app path
+python main.py --app-path "C:/Custom/Path/Ax-Studio.exe"
 
 # Skip auto computer server start (if already running)
 python main.py --skip-server-start
@@ -84,12 +84,12 @@ python main.py \
 | `--skip-server-start`   | `SKIP_SERVER_START`   | `false`                         | Skip automatic computer server startup            |
 | **ReportPortal**        |
 | `--enable-reportportal` | `ENABLE_REPORTPORTAL` | `false`                         | Enable ReportPortal integration                   |
-| `--rp-endpoint`         | `RP_ENDPOINT`         | `https://reportportal.axfabric.ai` | ReportPortal endpoint URL                         |
+| `--rp-endpoint`         | `RP_ENDPOINT`         | `https://reportportal.axstudio.ai` | ReportPortal endpoint URL                         |
 | `--rp-project`          | `RP_PROJECT`          | `default_personal`              | ReportPortal project name                         |
 | `--rp-token`            | `RP_TOKEN`            | -                               | ReportPortal API token (required when RP enabled) |
-| **Ax-Fabric Application**     |
-| `--app-path`        | `AX_FABRIC_APP_PATH`        | _auto-detected_                 | Path to Ax-Fabric application executable                |
-| `--process-name`    | `AX_FABRIC_PROCESS_NAME`    | `Ax-Fabric.exe`                       | Ax-Fabric process name for monitoring                   |
+| **Ax-Studio Application**     |
+| `--app-path`        | `AX_STUDIO_APP_PATH`        | _auto-detected_                 | Path to Ax-Studio application executable                |
+| `--process-name`    | `AX_STUDIO_PROCESS_NAME`    | `Ax-Studio.exe`                       | Ax-Studio process name for monitoring                   |
 | **Model Configuration** |
 | `--model-name`          | `MODEL_NAME`          | `ByteDance-Seed/UI-TARS-1.5-7B` | AI model name                                     |
 | `--model-base-url`      | `MODEL_BASE_URL`      | `http://10.200.108.58:1234/v1`  | Model API endpoint                                |
@@ -114,9 +114,9 @@ RP_ENDPOINT=https://reportportal.example.com
 RP_PROJECT=my_project
 RP_TOKEN=your_secret_token
 
-# Ax-Fabric Application
-AX_FABRIC_APP_PATH=C:\Custom\Path\Ax-Fabric.exe
-AX_FABRIC_PROCESS_NAME=Ax-Fabric.exe
+# Ax-Studio Application
+AX_STUDIO_APP_PATH=C:\Custom\Path\Ax-Studio.exe
+AX_STUDIO_PROCESS_NAME=Ax-Studio.exe
 
 # Model Configuration
 MODEL_NAME=gpt-4
@@ -141,7 +141,7 @@ DELAY_BETWEEN_TESTS=5
 Example test file (`tests/basic/login_test.txt`):
 
 ```
-Test the login functionality of Ax-Fabric application.
+Test the login functionality of Ax-Studio application.
 Navigate to login screen, enter valid credentials, and verify successful login.
 ```
 
@@ -150,7 +150,7 @@ Navigate to login screen, enter valid credentials, and verify successful login.
 ```
 autoqa/
 ├── main.py                 # Main test runner
-├── utils.py               # Ax-Fabric app utilities
+├── utils.py               # Ax-Studio app utilities
 ├── test_runner.py         # Test execution logic
 ├── screen_recorder.py     # Screen recording functionality
 ├── reportportal_handler.py # ReportPortal integration
@@ -279,11 +279,11 @@ When enabled, results are uploaded to ReportPortal including:
    python main.py --skip-server-start
    ```
 
-2. **Ax-Fabric app not found**:
+2. **Ax-Studio app not found**:
 
    ```bash
    # Specify custom path
-   python main.py --app-path "D:/Apps/Ax-Fabric/Ax-Fabric.exe"
+   python main.py --app-path "D:/Apps/Ax-Studio/Ax-Studio.exe"
    ```
 
 3. **Windows dependencies missing**:

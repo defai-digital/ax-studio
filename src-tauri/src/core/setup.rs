@@ -179,10 +179,10 @@ pub fn migrate_mcp_servers(
         }
     }
     if mcp_version < 2 {
-        log::info!("Migrating MCP schema version 2: Adding Ax-Fabric Browser MCP");
+        log::info!("Migrating MCP schema version 2: Adding Ax-Studio Browser MCP");
         let result = add_server_config(
             app_handle.clone(),
-            "Ax-Fabric Browser MCP".to_string(),
+            "Ax-Studio Browser MCP".to_string(),
             serde_json::json!({
                 "command": "npx",
                 "args": ["-y", "search-mcp-server@latest"],
@@ -195,7 +195,7 @@ pub fn migrate_mcp_servers(
             }),
         );
         if let Err(e) = result {
-            log::error!("Failed to add Ax-Fabric Browser MCP server config: {e}");
+            log::error!("Failed to add Ax-Studio Browser MCP server config: {e}");
         }
     }
     if mcp_version < 3 {
@@ -303,7 +303,7 @@ pub fn setup_mcp<R: Runtime>(app: &App<R>) {
 
 #[cfg(desktop)]
 pub fn setup_tray(app: &App) -> tauri::Result<TrayIcon> {
-    let show_i = MenuItem::with_id(app.handle(), "open", "Open Ax-Fabric", true, None::<&str>)?;
+    let show_i = MenuItem::with_id(app.handle(), "open", "Open Ax-Studio", true, None::<&str>)?;
     let quit_i = MenuItem::with_id(app.handle(), "quit", "Quit", true, None::<&str>)?;
     let separator_i = PredefinedMenuItem::separator(app.handle())?;
     let menu = Menu::with_items(app.handle(), &[&show_i, &separator_i, &quit_i])?;

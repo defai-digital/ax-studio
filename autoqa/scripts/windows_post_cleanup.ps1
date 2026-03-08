@@ -7,68 +7,68 @@ param(
 
 Write-Host "Cleaning up after tests..."
 
-# Kill any running Ax-Fabric processes (both regular and nightly)
-Get-Process -Name "Ax-Fabric" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-Get-Process -Name "ax-fabric" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-Get-Process -Name "Ax-Fabric-nightly" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-Get-Process -Name "ax-fabric-nightly" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+# Kill any running Ax-Studio processes (both regular and nightly)
+Get-Process -Name "Ax-Studio" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process -Name "ax-studio" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process -Name "Ax-Studio-nightly" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process -Name "ax-studio-nightly" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
-# Remove Ax-Fabric data folders (both regular and nightly)
-$axFabricAppData = "$env:APPDATA\Ax-Fabric"
-$axFabricNightlyAppData = "$env:APPDATA\Ax-Fabric-nightly"
-$axFabricLocalAppData = "$env:LOCALAPPDATA\ai.axfabric.app"
-$axFabricNightlyLocalAppData = "$env:LOCALAPPDATA\ax-fabric-nightly.ai.app"
-$axFabricProgramsPath = "$env:LOCALAPPDATA\Programs\Ax-Fabric"
-$axFabricNightlyProgramsPath = "$env:LOCALAPPDATA\Programs\Ax-Fabric-nightly"
+# Remove Ax-Studio data folders (both regular and nightly)
+$axStudioAppData = "$env:APPDATA\Ax-Studio"
+$axStudioNightlyAppData = "$env:APPDATA\Ax-Studio-nightly"
+$axStudioLocalAppData = "$env:LOCALAPPDATA\ai.axstudio.app"
+$axStudioNightlyLocalAppData = "$env:LOCALAPPDATA\ax-studio-nightly.ai.app"
+$axStudioProgramsPath = "$env:LOCALAPPDATA\Programs\Ax-Studio"
+$axStudioNightlyProgramsPath = "$env:LOCALAPPDATA\Programs\Ax-Studio-nightly"
 
-if (Test-Path $axFabricAppData) {
-    Write-Host "Removing $axFabricAppData"
-    Remove-Item -Path $axFabricAppData -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path $axStudioAppData) {
+    Write-Host "Removing $axStudioAppData"
+    Remove-Item -Path $axStudioAppData -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-if (Test-Path $axFabricNightlyAppData) {
-    Write-Host "Removing $axFabricNightlyAppData"
-    Remove-Item -Path $axFabricNightlyAppData -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path $axStudioNightlyAppData) {
+    Write-Host "Removing $axStudioNightlyAppData"
+    Remove-Item -Path $axStudioNightlyAppData -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-if (Test-Path $axFabricLocalAppData) {
-    Write-Host "Removing $axFabricLocalAppData"
-    Remove-Item -Path $axFabricLocalAppData -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path $axStudioLocalAppData) {
+    Write-Host "Removing $axStudioLocalAppData"
+    Remove-Item -Path $axStudioLocalAppData -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-if (Test-Path $axFabricNightlyLocalAppData) {
-    Write-Host "Removing $axFabricNightlyLocalAppData"
-    Remove-Item -Path $axFabricNightlyLocalAppData -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path $axStudioNightlyLocalAppData) {
+    Write-Host "Removing $axStudioNightlyLocalAppData"
+    Remove-Item -Path $axStudioNightlyLocalAppData -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-if (Test-Path $axFabricProgramsPath) {
-    Write-Host "Removing $axFabricProgramsPath"
-    Remove-Item -Path $axFabricProgramsPath -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path $axStudioProgramsPath) {
+    Write-Host "Removing $axStudioProgramsPath"
+    Remove-Item -Path $axStudioProgramsPath -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-if (Test-Path $axFabricNightlyProgramsPath) {
-    Write-Host "Removing $axFabricNightlyProgramsPath"
-    Remove-Item -Path $axFabricNightlyProgramsPath -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path $axStudioNightlyProgramsPath) {
+    Write-Host "Removing $axStudioNightlyProgramsPath"
+    Remove-Item -Path $axStudioNightlyProgramsPath -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-# Remove Ax-Fabric extensions folder
-$axFabricExtensionsPath = "$env:USERPROFILE\ax-fabric\extensions"
-if (Test-Path $axFabricExtensionsPath) {
-    Write-Host "Removing $axFabricExtensionsPath"
-    Remove-Item -Path $axFabricExtensionsPath -Recurse -Force -ErrorAction SilentlyContinue
+# Remove Ax-Studio extensions folder
+$axStudioExtensionsPath = "$env:USERPROFILE\ax-studio\extensions"
+if (Test-Path $axStudioExtensionsPath) {
+    Write-Host "Removing $axStudioExtensionsPath"
+    Remove-Item -Path $axStudioExtensionsPath -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-# Try to uninstall Ax-Fabric app silently
+# Try to uninstall Ax-Studio app silently
 try {
     $isNightly = [System.Convert]::ToBoolean($IsNightly)
 
     # Determine uninstaller path based on nightly flag
     if ($isNightly) {
-        $uninstallerPath = "$env:LOCALAPPDATA\Programs\ax-fabric-nightly\uninstall.exe"
-        $installPath = "$env:LOCALAPPDATA\Programs\ax-fabric-nightly"
+        $uninstallerPath = "$env:LOCALAPPDATA\Programs\ax-studio-nightly\uninstall.exe"
+        $installPath = "$env:LOCALAPPDATA\Programs\ax-studio-nightly"
     } else {
-        $uninstallerPath = "$env:LOCALAPPDATA\Programs\ax-fabric\uninstall.exe"
-        $installPath = "$env:LOCALAPPDATA\Programs\ax-fabric"
+        $uninstallerPath = "$env:LOCALAPPDATA\Programs\ax-studio\uninstall.exe"
+        $installPath = "$env:LOCALAPPDATA\Programs\ax-studio"
     }
 
     Write-Host "Looking for uninstaller at: $uninstallerPath"
@@ -86,15 +86,15 @@ try {
         }
     }
 
-    Write-Host "Ax-Fabric app cleanup completed"
+    Write-Host "Ax-Studio app cleanup completed"
 }
 catch {
-    Write-Warning "Failed to uninstall Ax-Fabric app cleanly: $_"
+    Write-Warning "Failed to uninstall Ax-Studio app cleanly: $_"
     Write-Host "Manual cleanup may be required"
 }
 
 # Clean up downloaded installer
-$installerPath = "$env:TEMP\ax-fabric-installer.exe"
+$installerPath = "$env:TEMP\ax-studio-installer.exe"
 if (Test-Path $installerPath) {
     Remove-Item -Path $installerPath -Force -ErrorAction SilentlyContinue
 }

@@ -2,7 +2,7 @@ use futures_util::StreamExt;
 use hyper::body::Bytes;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Request, Response, Server, StatusCode};
-use ax_fabric_utils::{is_cors_header, is_valid_host, remove_prefix};
+use ax_studio_utils::{is_cors_header, is_valid_host, remove_prefix};
 use reqwest::Client;
 use serde_json;
 use std::collections::HashMap;
@@ -684,7 +684,7 @@ async fn proxy_request<R: tauri::Runtime>(
     let original_path = parts.uri.path();
     let destination_path = get_destination_path(original_path, &config.prefix);
 
-    // === Ax-Fabric Backend Service Routes ===
+    // === Ax-Studio Backend Service Routes ===
     // Routes matching /retrieval/*, /agents/*, /vectors/* are forwarded directly
     // to the configured backend services without going through the provider_configs system.
     if destination_path.starts_with("/retrieval/")
@@ -693,7 +693,7 @@ async fn proxy_request<R: tauri::Runtime>(
     {
         let service_base = {
             let state = app_handle.state::<AppState>();
-            let service_config = state.ax_fabric_service_config.lock().await;
+            let service_config = state.ax_studio_service_config.lock().await;
             if destination_path.starts_with("/retrieval/") {
                 service_config.retrieval_service_url.clone()
             } else if destination_path.starts_with("/agents/") {
@@ -712,7 +712,7 @@ async fn proxy_request<R: tauri::Runtime>(
                 &config.trusted_hosts,
             );
             return Ok(error_response
-                .body(Body::from("Ax-Fabric service URL is not configured"))
+                .body(Body::from("Ax-Studio service URL is not configured"))
                 .unwrap());
         }
 
@@ -740,7 +740,7 @@ async fn proxy_request<R: tauri::Runtime>(
         };
 
         log::info!(
-            "Ax-Fabric service proxy: {} {} → {}",
+            "Ax-Studio service proxy: {} {} → {}",
             method,
             destination_path,
             target_url
@@ -781,7 +781,7 @@ async fn proxy_request<R: tauri::Runtime>(
                                 }
                             }
                             Err(e) => {
-                                log::error!("Ax-Fabric service stream error: {e}");
+                                log::error!("Ax-Studio service stream error: {e}");
                                 break;
                             }
                         }
@@ -790,7 +790,7 @@ async fn proxy_request<R: tauri::Runtime>(
                 return Ok(builder.body(resp_body).unwrap());
             }
             Err(e) => {
-                log::error!("Ax-Fabric service proxy error: {e}");
+                log::error!("Ax-Studio service proxy error: {e}");
                 let mut error_response = Response::builder().status(StatusCode::BAD_GATEWAY);
                 error_response = add_cors_headers_with_host_and_origin(
                     error_response,
@@ -799,7 +799,7 @@ async fn proxy_request<R: tauri::Runtime>(
                     &config.trusted_hosts,
                 );
                 return Ok(error_response
-                    .body(Body::from(format!("Ax-Fabric service error: {e}")))
+                    .body(Body::from(format!("Ax-Studio service error: {e}")))
                     .unwrap());
             }
         }
@@ -1656,7 +1656,7 @@ async fn start_server_internal<R: tauri::Runtime>(
             return Err(Box::new(e));
         }
     };
-    log::info!("Ax-Fabric API server started on http://{addr}");
+    log::info!("Ax-Studio API server started on http://{addr}");
 
     let server_task = tauri::async_runtime::spawn(async move {
         if let Err(e) = server.await {
@@ -1668,7 +1668,7 @@ async fn start_server_internal<R: tauri::Runtime>(
 
     *handle_guard = Some(server_task);
     let actual_port = addr.port();
-    log::info!("Ax-Fabric API server started successfully on port {actual_port}");
+    log::info!("Ax-Studio API server started successfully on port {actual_port}");
     Ok(actual_port)
 }
 
@@ -1680,7 +1680,7 @@ pub async fn stop_server(
     if let Some(handle) = handle_guard.take() {
         handle.abort();
         *handle_guard = None;
-        log::info!("Ax-Fabric API server stopped");
+        log::info!("Ax-Studio API server stopped");
     } else {
         log::debug!("Server was not running");
     }

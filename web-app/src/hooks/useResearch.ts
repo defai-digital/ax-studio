@@ -8,7 +8,7 @@ import { ModelFactory } from '@/lib/model-factory'
 import { newUserThreadContent, newAssistantThreadContent } from '@/lib/completion'
 import { useChatSessions } from '@/stores/chat-session-store'
 import { convertThreadMessageToUIMessage } from '@/lib/messages'
-import type { ThreadMessage } from '@ax-fabric/core'
+import type { ThreadMessage } from '@ax-studio/core'
 import {
   PLANNER_PROMPT,
   SUMMARISE_PROMPT,

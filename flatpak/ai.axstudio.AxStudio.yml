@@ -1,8 +1,8 @@
-id: ai.axfabric.AxFabric
+id: ai.axstudio.AxStudio
 runtime: org.gnome.Platform
 runtime-version: '49'
 sdk: org.gnome.Sdk
-command: Ax-Fabric
+command: Ax-Studio
 finish-args:
   - --socket=wayland # Permission needed to show the window
   - --socket=fallback-x11 # Permission needed to show the window on X11
@@ -75,25 +75,25 @@ modules:
       - type: patch
         path: patches/fix-cstdint.patch
 
-  - name: ax-fabric-binary
+  - name: ax-studio-binary
     buildsystem: simple
     sources:
       - type: file
-        url: https://catalog.axfabric.ai/flatpak/AxFabric_amd64.deb
+        url: https://catalog.axstudio.ai/flatpak/AxStudio_amd64.deb
         sha256: de852b052cf85007f8ac9728c0607926af2c1d7375ee1652d31d5e91be4a6283
         only-arches: [x86_64]
       - type: file
-        path: ai.axfabric.AxFabric.metainfo.xml
+        path: ai.axstudio.AxStudio.metainfo.xml
     build-commands:
       - ar -x *.deb
       - tar -xf data.tar.gz
-      - 'install -Dm755 usr/bin/Ax-Fabric /app/bin/Ax-Fabric'
+      - 'install -Dm755 usr/bin/Ax-Studio /app/bin/Ax-Studio'
       - 'install -Dm755 usr/bin/bun /app/bin/bun'
       - 'install -Dm755 usr/bin/uv /app/bin/uv'
       - cp -rv usr/lib/* /app/lib/.
-      - install -Dm644 usr/share/applications/Ax-Fabric.desktop /app/share/applications/ai.axfabric.AxFabric.desktop
-      - desktop-file-edit --set-key=Exec --set-value=/app/bin/Ax-Fabric --set-icon=ai.axfabric.AxFabric /app/share/applications/ai.axfabric.AxFabric.desktop
-      - install -Dm644 usr/share/icons/hicolor/128x128/apps/Ax-Fabric.png /app/share/icons/hicolor/128x128/apps/ai.axfabric.AxFabric.png
-      - install -Dm644 usr/share/icons/hicolor/32x32/apps/Ax-Fabric.png /app/share/icons/hicolor/32x32/apps/ai.axfabric.AxFabric.png
-      - install -Dm644 usr/share/icons/hicolor/256x256@2/apps/Ax-Fabric.png /app/share/icons/hicolor/256x256@2/apps/ai.axfabric.AxFabric.png
-      - install -Dm644 ai.axfabric.AxFabric.metainfo.xml /app/share/metainfo/ai.axfabric.AxFabric.metainfo.xml
+      - install -Dm644 usr/share/applications/Ax-Studio.desktop /app/share/applications/ai.axstudio.AxStudio.desktop
+      - desktop-file-edit --set-key=Exec --set-value=/app/bin/Ax-Studio --set-icon=ai.axstudio.AxStudio /app/share/applications/ai.axstudio.AxStudio.desktop
+      - install -Dm644 usr/share/icons/hicolor/128x128/apps/Ax-Studio.png /app/share/icons/hicolor/128x128/apps/ai.axstudio.AxStudio.png
+      - install -Dm644 usr/share/icons/hicolor/32x32/apps/Ax-Studio.png /app/share/icons/hicolor/32x32/apps/ai.axstudio.AxStudio.png
+      - install -Dm644 usr/share/icons/hicolor/256x256@2/apps/Ax-Studio.png /app/share/icons/hicolor/256x256@2/apps/ai.axstudio.AxStudio.png
+      - install -Dm644 ai.axstudio.AxStudio.metainfo.xml /app/share/metainfo/ai.axstudio.AxStudio.metainfo.xml

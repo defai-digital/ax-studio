@@ -1,8 +1,8 @@
-# Contributing to Ax-Fabric Extensions
+# Contributing to Ax-Studio Extensions
 
 [← Back to Main Contributing Guide](../CONTRIBUTING.md)
 
-Extensions add specific features to Ax-Fabric as self-contained modules.
+Extensions add specific features to Ax-Studio as self-contained modules.
 
 ## Current Extensions
 
@@ -48,7 +48,7 @@ my-extension/
 ### Basic Extension
 
 ```typescript
-import { Extension } from '@ax-fabric/core'
+import { Extension } from '@ax-studio/core'
 
 export default class MyExtension extends Extension {
   async onLoad() {
@@ -93,7 +93,7 @@ async onLoad() {
 
 ## Extension Lifecycle
 
-1. **Ax-Fabric starts** → Discovers extensions
+1. **Ax-Studio starts** → Discovers extensions
 2. **Loading** → Calls `onLoad()` method  
 3. **Active** → Extension responds to events
 4. **Unloading** → Calls `onUnload()` on shutdown
@@ -114,7 +114,7 @@ console.log(window.core.api)
 ## Common Issues
 
 **Extension not loading?**
-- Check package.json format: `@ax-fabric/extension-name`
+- Check package.json format: `@ax-studio/extension-name`
 - Ensure `onLoad()` doesn't throw errors
 - Verify exports in index.ts
 
@@ -132,6 +132,6 @@ console.log(window.core.api)
 
 ## Dependencies
 
-- **@ax-fabric/core** - Core SDK and extension system
+- **@ax-studio/core** - Core SDK and extension system
 - **TypeScript** - Type safety
 - **Rolldown** - Bundling

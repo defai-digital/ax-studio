@@ -6,8 +6,8 @@
       "checking": "正在檢查擴充功能狀態..."
     },
     "notInstalled": {
-      "title": "Ax-Fabric 在您的瀏覽器中完成任務",
-      "description": "安裝擴充功能以授予 Ax-Fabric 瀏覽器存取權限",
+      "title": "Ax-Studio 在您的瀏覽器中完成任務",
+      "description": "安裝擴充功能以授予 Ax-Studio 瀏覽器存取權限",
       "getExtension": "取得擴充功能"
     }
   },
@@ -56,7 +56,7 @@
   "serverStatusInactive": "伺服器 {{serverKey}} 停用成功",
   "runtimeSettings": {
     "title": "執行階段設定",
-    "description": "設定 Ax-Fabric 如何管理及重試 MCP 伺服器。",
+    "description": "設定 Ax-Studio 如何管理及重試 MCP 伺服器。",
     "toolCallTimeout": "工具呼叫逾時（秒）",
     "toolCallTimeoutDesc": "等待 MCP 工具回應的最長時間，超過即逾時。"
   }

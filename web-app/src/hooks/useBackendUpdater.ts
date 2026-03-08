@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { events } from '@ax-fabric/core'
+import { events } from '@ax-studio/core'
 import { ExtensionManager } from '@/lib/extension'
 
 export interface BackendUpdateInfo {
@@ -40,7 +40,7 @@ export interface BackendUpdateState {
  */
 function getLlamacppExtension(): LlamacppExtension | null {
   const manager = ExtensionManager.getInstance()
-  let ext = manager.getByName('@ax-fabric/llamacpp-extension')
+  let ext = manager.getByName('@ax-studio/llamacpp-extension')
 
   if (!ext) {
     ext =

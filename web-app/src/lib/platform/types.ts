@@ -41,7 +41,7 @@ export enum PlatformFeature {
   // Analytics and telemetry
   ANALYTICS = 'analytics',
 
-  // Web-specific automatic model selection from Ax-Fabric provider
+  // Web-specific automatic model selection from Ax-Studio provider
   WEB_AUTO_MODEL_SELECTION = 'webAutoModelSelection',
 
   // Model provider settings page management

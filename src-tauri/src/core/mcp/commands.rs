@@ -43,7 +43,7 @@ pub async fn deactivate_mcp_server<R: Runtime>(
     log::info!("Deactivating MCP server: {name}");
 
     // Get port from config before removing (for lock file cleanup later)
-    let bridge_port = if name == "Ax-Fabric Browser MCP" {
+    let bridge_port = if name == "Ax-Studio Browser MCP" {
         let active_servers = state.mcp_active_servers.lock().await;
         active_servers.get(&name).and_then(|config| {
             config
@@ -90,8 +90,8 @@ pub async fn deactivate_mcp_server<R: Runtime>(
         let mut pids = state.mcp_server_pids.lock().await;
         pids.remove(&name);
     }
-    // Delete lock file if this is Ax-Fabric Browser MCP and we have a port
-    if name == "Ax-Fabric Browser MCP" {
+    // Delete lock file if this is Ax-Studio Browser MCP and we have a port
+    if name == "Ax-Studio Browser MCP" {
         if let Some(port) = bridge_port {
             use crate::core::mcp::lockfile::delete_lock_file;
 
@@ -383,16 +383,16 @@ pub async fn get_mcp_configs<R: Runtime>(app: AppHandle<R>) -> Result<String, St
         mutated = true;
     }
 
-    // Migration: Add Ax-Fabric Browser MCP if not present
+    // Migration: Add Ax-Studio Browser MCP if not present
     let mcp_servers = config_object
         .get_mut("mcpServers")
         .and_then(|v| v.as_object_mut())
         .ok_or("mcpServers is not an object")?;
 
-    if !mcp_servers.contains_key("Ax-Fabric Browser MCP") {
-        log::info!("Migrating config: Adding 'Ax-Fabric Browser MCP' server");
+    if !mcp_servers.contains_key("Ax-Studio Browser MCP") {
+        log::info!("Migrating config: Adding 'Ax-Studio Browser MCP' server");
         mcp_servers.insert(
-            "Ax-Fabric Browser MCP".to_string(),
+            "Ax-Studio Browser MCP".to_string(),
             json!({
                 "command": "npx",
                 "args": ["-y", "search-mcp-server@latest"],
@@ -457,13 +457,13 @@ fn get_result_text(result: &rmcp::model::CallToolResult) -> Option<&str> {
         .map(|t| t.text.as_str())
 }
 
-/// Check if Ax-Fabric Browser extension is connected via MCP
+/// Check if Ax-Studio Browser extension is connected via MCP
 #[tauri::command]
-pub async fn check_ax_fabric_browser_extension_connected(
+pub async fn check_ax_studio_browser_extension_connected(
     state: State<'_, AppState>,
 ) -> Result<bool, String> {
     let servers = state.mcp_servers.lock().await;
-    let service = match servers.get("Ax-Fabric Browser MCP") {
+    let service = match servers.get("Ax-Studio Browser MCP") {
         Some(s) => s,
         None => return Ok(false),
     };

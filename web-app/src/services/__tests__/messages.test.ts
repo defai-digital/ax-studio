@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { DefaultMessagesService } from '../messages/default'
 import { ExtensionManager } from '@/lib/extension'
-import { ExtensionTypeEnum } from '@ax-fabric/core'
+import { ExtensionTypeEnum } from '@ax-studio/core'
 
 // Mock the ExtensionManager
 vi.mock('@/lib/extension', () => ({

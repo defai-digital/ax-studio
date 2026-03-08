@@ -67,7 +67,7 @@ import {
   ThreadMessage,
   fs,
   VectorDBExtension,
-} from '@ax-fabric/core'
+} from '@ax-studio/core'
 import { ExtensionManager } from '@/lib/extension'
 import { useAttachments } from '@/hooks/useAttachments'
 import { toast } from 'sonner'
@@ -315,7 +315,7 @@ const ChatInput = memo(function ChatInput({
 
   // Check if there are active MCP servers
   const hasActiveMCPServers =
-    tools.filter((tool) => tool.server !== 'Ax-Fabric Browser MCP').length > 0
+    tools.filter((tool) => tool.server !== 'Ax-Studio Browser MCP').length > 0
 
   // Get MCP extension and its custom component
   const extensionManager = ExtensionManager.getInstance()

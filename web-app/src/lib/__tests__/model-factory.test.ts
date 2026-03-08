@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ModelFactory } from '../model-factory'
-import type { ProviderObject } from '@ax-fabric/core'
+import type { ProviderObject } from '@ax-studio/core'
 
 // Mock the Tauri invoke function
 vi.mock('@tauri-apps/api/core', () => ({

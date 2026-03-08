@@ -1,5 +1,5 @@
 /**
- * The `EventName` enumeration contains the names of all the available events in the Ax-Fabric platform.
+ * The `EventName` enumeration contains the names of all the available events in the Ax-Studio platform.
  */
 export enum ModelEvent {
   /** The `OnModelInit` event is emitted when a model inits. */

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { DefaultModelsService } from '../models/default'
 import type { HuggingFaceRepo, CatalogModel } from '../models/types'
-import { EngineManager, events, DownloadEvent } from '@ax-fabric/core'
+import { EngineManager, events, DownloadEvent } from '@ax-studio/core'
 
 const { mockEvents, mockDownloadEvent } = vi.hoisted(() => ({
   mockEvents: {
@@ -13,7 +13,7 @@ const { mockEvents, mockDownloadEvent } = vi.hoisted(() => ({
 }))
 
 // Mock EngineManager and events
-vi.mock('@ax-fabric/core', () => ({
+vi.mock('@ax-studio/core', () => ({
   EngineManager: {
     instance: vi.fn(),
   },

@@ -1,7 +1,7 @@
 /**
  * Model Factory
  *
- * All inference requests are routed through the Ax-Fabric local proxy server
+ * All inference requests are routed through the Ax-Studio local proxy server
  * (default: http://127.0.0.1:1337/v1).  The proxy holds provider API keys in
  * the Rust backend, injects auth headers, and forwards to the correct upstream
  * API (OpenAI, Anthropic, Gemini, Groq, Ollama, LM Studio, your FastAPI, etc.).
@@ -161,7 +161,7 @@ function createCustomFetch(
 /**
  * Factory for creating language models.
  *
- * All providers (cloud and local) are routed through the Ax-Fabric local proxy
+ * All providers (cloud and local) are routed through the Ax-Studio local proxy
  * (port 1337 by default).  The proxy handles:
  *   - API key injection from secure Rust backend storage
  *   - Provider-specific header requirements (e.g. anthropic-version)

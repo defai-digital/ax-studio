@@ -2,7 +2,7 @@
  * Assistants Service Types
  */
 
-import { Assistant } from '@ax-fabric/core'
+import { Assistant } from '@ax-studio/core'
 
 export interface AssistantsService {
   getAssistants(): Promise<Assistant[] | null>

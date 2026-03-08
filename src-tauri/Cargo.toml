@@ -1,10 +1,10 @@
 [package]
-name = "ax-fabric"
+name = "ax-studio"
 version = "0.1.0"
-description = "Ax-Fabric — AI desktop application powered by your own backend services."
-authors = ["Ax-Fabric"]
+description = "Ax-Studio — AI desktop application powered by your own backend services."
+authors = ["Ax-Studio"]
 license = "MIT"
-repository = "https://github.com/ax-fabric/ax-fabric"
+repository = "https://github.com/ax-studio/ax-studio"
 edition = "2021"
 rust-version = "1.77.2"
 resolver = "2"
@@ -61,7 +61,7 @@ futures-util = "0.3.31"
 hex = "0.4"
 hmac = "0.12"
 hyper = { version = "0.14", features = ["server"] }
-ax-fabric-utils = { path = "./utils", package = "ax-fabric-utils" }
+ax-studio-utils = { path = "./utils", package = "ax-studio-utils" }
 libloading = "0.8.7"
 log = "0.4"
 rand = "0.8"

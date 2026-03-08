@@ -1,11 +1,11 @@
 /**
- * Ax-Fabric llama.cpp Extension — Backend Manager
+ * Ax-Studio llama.cpp Extension — Backend Manager
  *
  * Manages llama.cpp binary downloads, version detection, and updates.
- * Written from scratch for Ax-Fabric (UNLICENSED).
+ * Written from scratch for Ax-Studio (UNLICENSED).
  */
 
-import { getAppDataFolderPath, joinPath, fs, events } from '@ax-fabric/core'
+import { getAppDataFolderPath, joinPath, fs, events } from '@ax-studio/core'
 import { invoke } from '@tauri-apps/api/core'
 import {
   getLocalInstalledBackendsInternal,
@@ -18,7 +18,7 @@ import {
   BackendVersion,
   BestBackendResult,
   UpdateCheckResult,
-} from '@ax-fabric/tauri-plugin-llamacpp-api'
+} from '@ax-studio/tauri-plugin-llamacpp-api'
 import { getProxyConfig, buildProxyArg } from './util'
 
 // Build-time constants — see env.d.ts for declarations
@@ -48,7 +48,7 @@ export async function getBackendDir(version: string, backend: string): Promise<s
  * Get the absolute path to the llama-server executable for a given backend.
  * Searches multiple possible structures:
  *  1. llama-{version}/llama-server  (ggml-org official releases)
- *  2. build/bin/llama-server        (janhq fork releases)
+ *  2. build/bin/llama-server        (fork releases)
  *  3. llama-server                  (flat / direct in root)
  */
 export async function getBackendExePath(version: string, backend: string): Promise<string> {
@@ -89,7 +89,7 @@ export async function isBackendInstalled(version: string, backend: string): Prom
 /**
  * Get the absolute path to the ax-serving binary.
  * Searches:
- *  1. ~/.ax-fabric/ax-serving/ax-serving (app data directory)
+ *  1. ~/.ax-studio/ax-serving/ax-serving (app data directory)
  *  2. /usr/local/bin/ax-serving (Homebrew / pkg install)
  *  3. ax-serving on PATH (fallback — will be resolved by the OS)
  */
@@ -183,7 +183,7 @@ async function getHardwareInfo(): Promise<HardwareInfo> {
 
   try {
     const hw = await (window as any).core?.extensionManager
-      ?.getByName('@ax-fabric/hardware-extension')
+      ?.getByName('@ax-studio/hardware-extension')
       ?.getHardwareInfo?.()
     if (hw) {
       return {
@@ -231,7 +231,7 @@ export async function downloadBackend(
   if (!(await fs.existsSync(destDir))) await fs.mkdir(destDir)
 
   const downloadExt = (window as any).core?.extensionManager?.getByName(
-    '@ax-fabric/download-extension'
+    '@ax-studio/download-extension'
   )
   if (!downloadExt) throw new Error('Download extension not available')
 

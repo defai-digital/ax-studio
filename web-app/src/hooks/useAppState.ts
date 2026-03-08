@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { ThreadMessage } from '@ax-fabric/core'
+import { ThreadMessage } from '@ax-studio/core'
 import { MCPTool } from '@/types/completion'
 import { ChatCompletionMessageToolCall } from 'openai/resources'
 

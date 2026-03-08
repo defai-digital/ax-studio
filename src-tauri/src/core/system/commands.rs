@@ -33,7 +33,7 @@ fn write_env_to_shell(
     env_file_path: &str,
     env_vars: &[(String, String)],
 ) -> Result<(), String> {
-    let marker = "# Ax-Fabric Local API Server - Claude Code Config";
+    let marker = "# Ax-Studio Local API Server - Claude Code Config";
     let new_entries: String = env_vars
         .iter()
         .map(|(k, v)| format!("export {}='{}'\n", k, v))
@@ -43,9 +43,9 @@ fn write_env_to_shell(
     let cleaned: Vec<&str> = existing_content
         .split('\n')
         .filter(|line| {
-            // Remove Ax-Fabric config markers and existing ANTHROPIC env vars to replace them
+            // Remove Ax-Studio config markers and existing ANTHROPIC env vars to replace them
             !line.starts_with(marker)
-                && !line.starts_with("# Ax-Fabric Local API Server")
+                && !line.starts_with("# Ax-Studio Local API Server")
                 && !line.starts_with("export ANTHROPIC_")
         })
         .collect();
@@ -194,7 +194,7 @@ pub fn launch_claude_code_with_config(
 
     env_vars.push((
         "ANTHROPIC_AUTH_TOKEN".to_string(),
-        api_key.unwrap_or_else(|| "ax-fabric".to_string()),
+        api_key.unwrap_or_else(|| "ax-studio".to_string()),
     ));
 
     if let Some(model) = big_model {
@@ -248,14 +248,14 @@ pub fn launch_claude_code_with_config(
             }
             Err(_) => {
                 // Use admin privileges to write
-                let marker = "# Ax-Fabric Local API Server - Claude Code Config";
+                let marker = "# Ax-Studio Local API Server - Claude Code Config";
                 let existing_content =
                     std::fs::read_to_string(&env_file_path).unwrap_or_default();
                 let cleaned: Vec<&str> = existing_content
                     .split('\n')
                     .filter(|line| {
                         !line.starts_with(marker)
-                            && !line.starts_with("# Ax-Fabric Local API Server")
+                            && !line.starts_with("# Ax-Studio Local API Server")
                             && !line.starts_with("export ANTHROPIC_")
                     })
                     .collect();
@@ -270,7 +270,7 @@ pub fn launch_claude_code_with_config(
                 let final_content = cleaned.join("\n") + "\n" + &new_block + marker;
 
                 // Write to a temp file first, then use osascript to move it
-                let temp_script_path = format!("{}/.ax_fabric_env_update.sh", home_dir);
+                let temp_script_path = format!("{}/.ax_studio_env_update.sh", home_dir);
                 std::fs::write(&temp_script_path, &final_content).map_err(|e| e.to_string())?;
 
                 // Use admin privileges to move the temp file
@@ -304,9 +304,9 @@ pub fn launch_claude_code_with_config(
                 return Ok(());
             }
             Err(_) => {
-                let ax_fabric_config_dir = format!("{}/.config/ax-fabric", home_dir);
+                let ax_studio_config_dir = format!("{}/.config/ax-studio", home_dir);
                 let ext = if shell_name == "bash" { "bash" } else { "zsh" };
-                let env_file = format!("{}/claude-code-env.{}", ax_fabric_config_dir, ext);
+                let env_file = format!("{}/claude-code-env.{}", ax_studio_config_dir, ext);
                 return Err(format!("NEED_PERMISSION:{}", env_file));
             }
         }

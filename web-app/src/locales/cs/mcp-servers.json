@@ -6,8 +6,8 @@
       "checking": "Kontrola stavu rozšíření..."
     },
     "notInstalled": {
-      "title": "Ax-Fabric dokončuje úkoly ve vašem prohlížeči",
-      "description": "Nainstalujte rozšíření pro přístup Ax-Fabric k prohlížeči",
+      "title": "Ax-Studio dokončuje úkoly ve vašem prohlížeči",
+      "description": "Nainstalujte rozšíření pro přístup Ax-Studio k prohlížeči",
       "getExtension": "Získat rozšíření"
     }
   },
@@ -56,7 +56,7 @@
   "serverStatusInactive": "Server {{serverKey}} byl úspěšně deaktivován",
   "runtimeSettings": {
     "title": "Nastavení běhového prostředí",
-    "description": "Nakonfigurujte, jak Ax-Fabric spravuje a opakuje pokusy se servery MCP.",
+    "description": "Nakonfigurujte, jak Ax-Studio spravuje a opakuje pokusy se servery MCP.",
     "toolCallTimeout": "Časový limit volání nástroje (sekundy)",
     "toolCallTimeoutDesc": "Maximální doba čekání na odpověď nástroje MCP před vypršením časového limitu."
   }

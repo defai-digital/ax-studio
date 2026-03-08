@@ -8,7 +8,7 @@
 
 import { TauriCoreService } from './tauri'
 import type { ExtensionManifest } from '@/lib/extension'
-import AxFabricConversationalExtension from '@ax-fabric/conversational-extension'
+import AxStudioConversationalExtension from '@ax-studio/conversational-extension'
 
 export class MobileCoreService extends TauriCoreService {
   /**
@@ -45,9 +45,9 @@ export class MobileCoreService extends TauriCoreService {
    * Private method to return pre-bundled mobile extensions
    */
   private getBundledExtensions(): ExtensionManifest[] {
-    const conversationalExt = new AxFabricConversationalExtension(
+    const conversationalExt = new AxStudioConversationalExtension(
       'built-in',
-      '@ax-fabric/conversational-extension',
+      '@ax-studio/conversational-extension',
       'Conversational Extension',
       true,
       'Manages conversation threads and messages',
@@ -56,7 +56,7 @@ export class MobileCoreService extends TauriCoreService {
 
     return [
       {
-        name: '@ax-fabric/conversational-extension',
+        name: '@ax-studio/conversational-extension',
         productName: 'Conversational Extension',
         url: 'built-in',
         active: true,

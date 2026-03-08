@@ -1,9 +1,9 @@
 /**
- * Ax-Fabric Uploads Service
+ * Ax-Studio Uploads Service
  *
  * Handles document and image ingestion.  File attachments are sent to the
  * self-hosted Retrieval Service for parsing, chunking, and embedding.
- * The service URL is read from the persisted useAxFabricConfig store
+ * The service URL is read from the persisted useAxStudioConfig store
  * (defaults to http://127.0.0.1:8001).
  */
 
@@ -15,7 +15,7 @@ const DEFAULT_RETRIEVAL_URL = 'http://127.0.0.1:8001'
 
 function getRetrievalServiceUrl(): string {
   try {
-    const stored = localStorage.getItem('ax-fabric-service-config')
+    const stored = localStorage.getItem('ax-studio-service-config')
     if (stored) {
       const parsed = JSON.parse(stored) as { state?: { config?: { retrievalServiceUrl?: string } } }
       return parsed?.state?.config?.retrievalServiceUrl || DEFAULT_RETRIEVAL_URL

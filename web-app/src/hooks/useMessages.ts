@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { ThreadMessage } from '@ax-fabric/core'
+import { ThreadMessage } from '@ax-studio/core'
 import { getServiceHub } from '@/hooks/useServiceHub'
 
 type MessageState = {

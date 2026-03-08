@@ -2,7 +2,7 @@
  * Default Analytic Service - Web implementation
  */
 
-import { AppConfiguration } from '@ax-fabric/core'
+import { AppConfiguration } from '@ax-studio/core'
 import type { AnalyticService } from './types'
 
 export class DefaultAnalyticService implements AnalyticService {

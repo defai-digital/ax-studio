@@ -1249,9 +1249,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@ax-fabric/core@workspace:*, @ax-fabric/core@workspace:core":
+"@ax-studio/core@workspace:*, @ax-studio/core@workspace:core":
   version: 0.0.0-use.local
-  resolution: "@ax-fabric/core@workspace:core"
+  resolution: "@ax-studio/core@workspace:core"
   dependencies:
     "@npmcli/arborist": "npm:^7.1.0"
     "@types/node": "npm:^22.10.0"
@@ -1276,15 +1276,15 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@ax-fabric/web-app@workspace:web-app":
+"@ax-studio/web-app@workspace:web-app":
   version: 0.0.0-use.local
-  resolution: "@ax-fabric/web-app@workspace:web-app"
+  resolution: "@ax-studio/web-app@workspace:web-app"
   dependencies:
     "@ai-sdk/anthropic": "npm:^2.0.0"
     "@ai-sdk/openai": "npm:^2.0.0"
     "@ai-sdk/openai-compatible": "npm:^1.0.28"
     "@ai-sdk/react": "npm:2.0.138"
-    "@ax-fabric/core": "workspace:*"
+    "@ax-studio/core": "workspace:*"
     "@dnd-kit/core": "npm:6.3.1"
     "@dnd-kit/modifiers": "npm:9.0.0"
     "@dnd-kit/sortable": "npm:10.0.0"
@@ -10062,9 +10062,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ax-fabric-app@workspace:.":
+"ax-studio-app@workspace:.":
   version: 0.0.0-use.local
-  resolution: "ax-fabric-app@workspace:."
+  resolution: "ax-studio-app@workspace:."
   dependencies:
     "@tauri-apps/cli": "npm:^2.7.0"
     "@vitest/coverage-v8": "npm:^3.1.3"

@@ -21,9 +21,9 @@ if IS_WINDOWS:
         gw = None
         logger.warning("pygetwindow not available on this system")
 
-def is_app_running(app_process_name="Ax-Fabric.exe"):
+def is_app_running(app_process_name="Ax-Studio.exe"):
     """
-    Check if Ax-Fabric application is currently running
+    Check if Ax-Studio application is currently running
     """
     for proc in psutil.process_iter(['pid', 'name']):
         try:
@@ -33,40 +33,40 @@ def is_app_running(app_process_name="Ax-Fabric.exe"):
             pass
     return False
 
-def force_close_app(app_process_name="Ax-Fabric.exe"):
+def force_close_app(app_process_name="Ax-Studio.exe"):
     """
-    Force close Ax-Fabric application if it's running
+    Force close Ax-Studio application if it's running
     """
-    logger.info("Checking for running Ax-Fabric processes...")
+    logger.info("Checking for running Ax-Studio processes...")
     closed_any = False
 
     for proc in psutil.process_iter(['pid', 'name']):
         try:
             if proc.info['name'] and app_process_name.lower() in proc.info['name'].lower():
-                logger.info(f"Force closing Ax-Fabric process (PID: {proc.info['pid']})")
+                logger.info(f"Force closing Ax-Studio process (PID: {proc.info['pid']})")
                 proc.kill()
                 closed_any = True
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             pass
 
     if closed_any:
-        logger.info("Waiting for Ax-Fabric processes to terminate...")
+        logger.info("Waiting for Ax-Studio processes to terminate...")
         time.sleep(3)  # Wait for processes to fully terminate
     else:
-        logger.info("No Ax-Fabric processes found running")
+        logger.info("No Ax-Studio processes found running")
 
 def find_app_window_linux():
     """
-    Find Ax-Fabric window on Linux using wmctrl
+    Find Ax-Studio window on Linux using wmctrl
     """
     try:
         result = subprocess.run(['wmctrl', '-l'], capture_output=True, text=True, timeout=10)
         if result.returncode == 0:
             for line in result.stdout.split('\n'):
-                if 'ax-fabric' in line.lower() or 'Ax-Fabric' in line:
+                if 'ax-studio' in line.lower() or 'Ax-Studio' in line:
                     # Extract window ID (first column)
                     window_id = line.split()[0]
-                    logger.info(f"Found Ax-Fabric window with ID: {window_id}")
+                    logger.info(f"Found Ax-Studio window with ID: {window_id}")
                     return window_id
     except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError) as e:
         logger.warning(f"wmctrl command failed: {e}")
@@ -74,7 +74,7 @@ def find_app_window_linux():
 
 def maximize_app_window_linux():
     """
-    Maximize Ax-Fabric window on Linux using wmctrl
+    Maximize Ax-Studio window on Linux using wmctrl
     """
     window_id = find_app_window_linux()
     if window_id:
@@ -82,20 +82,20 @@ def maximize_app_window_linux():
             # Maximize window using wmctrl
             subprocess.run(['wmctrl', '-i', '-r', window_id, '-b', 'add,maximized_vert,maximized_horz'],
                          timeout=5)
-            logger.info("Ax-Fabric window maximized using wmctrl")
+            logger.info("Ax-Studio window maximized using wmctrl")
             return True
         except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:
             logger.warning(f"Failed to maximize with wmctrl: {e}")
 
     # Fallback: Try xdotool
     try:
-        result = subprocess.run(['xdotool', 'search', '--name', 'Ax-Fabric'],
+        result = subprocess.run(['xdotool', 'search', '--name', 'Ax-Studio'],
                               capture_output=True, text=True, timeout=5)
         if result.returncode == 0 and result.stdout.strip():
             window_id = result.stdout.strip().split('\n')[0]
             subprocess.run(['xdotool', 'windowactivate', window_id], timeout=5)
             subprocess.run(['xdotool', 'key', 'alt+F10'], timeout=5)  # Maximize shortcut
-            logger.info("Ax-Fabric window maximized using xdotool")
+            logger.info("Ax-Studio window maximized using xdotool")
             return True
     except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError) as e:
         logger.warning(f"xdotool command failed: {e}")
@@ -104,13 +104,13 @@ def maximize_app_window_linux():
 
 def find_app_window_macos():
     """
-    Find Ax-Fabric window on macOS using AppleScript
+    Find Ax-Studio window on macOS using AppleScript
     """
     try:
-        # AppleScript to find Ax-Fabric window
+        # AppleScript to find Ax-Studio window
         script = '''
         tell application "System Events"
-            set appProcesses to (every process whose name contains "Ax-Fabric")
+            set appProcesses to (every process whose name contains "Ax-Studio")
             if length of appProcesses > 0 then
                 return name of first item of appProcesses
             else
@@ -122,7 +122,7 @@ def find_app_window_macos():
                               capture_output=True, text=True, timeout=10)
         if result.returncode == 0 and result.stdout.strip():
             app_name = result.stdout.strip()
-            logger.info(f"Found Ax-Fabric app: {app_name}")
+            logger.info(f"Found Ax-Studio app: {app_name}")
             return app_name
     except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError) as e:
         logger.warning(f"AppleScript command failed: {e}")
@@ -130,7 +130,7 @@ def find_app_window_macos():
 
 def maximize_app_window_macos():
     """
-    Maximize Ax-Fabric window on macOS using AppleScript
+    Maximize Ax-Studio window on macOS using AppleScript
     """
     app_name = find_app_window_macos()
     if app_name:
@@ -148,7 +148,7 @@ def maximize_app_window_macos():
             '''
             result = subprocess.run(['osascript', '-e', script], timeout=10)
             if result.returncode == 0:
-                logger.info("Ax-Fabric window maximized using AppleScript")
+                logger.info("Ax-Studio window maximized using AppleScript")
                 return True
         except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:
             logger.warning(f"Failed to maximize with AppleScript: {e}")
@@ -167,7 +167,7 @@ def maximize_app_window_macos():
 
 def maximize_app_window():
     """
-    Find and maximize Ax-Fabric window (cross-platform)
+    Find and maximize Ax-Studio window (cross-platform)
     """
     try:
         # Wait a bit for window to appear
@@ -180,13 +180,13 @@ def maximize_app_window():
             return maximize_app_window_macos()
 
         elif IS_WINDOWS and gw:
-            # Method 1: Try to find window by title containing "Ax-Fabric"
-            windows = gw.getWindowsWithTitle("Ax-Fabric")
+            # Method 1: Try to find window by title containing "Ax-Studio"
+            windows = gw.getWindowsWithTitle("Ax-Studio")
             if windows:
                 app_window = windows[0]
-                logger.info(f"Found Ax-Fabric window: {app_window.title}")
+                logger.info(f"Found Ax-Studio window: {app_window.title}")
                 app_window.maximize()
-                logger.info("Ax-Fabric window maximized using pygetwindow")
+                logger.info("Ax-Studio window maximized using pygetwindow")
                 return True
 
         # Fallback methods for both platforms
@@ -199,7 +199,7 @@ def maximize_app_window():
         return True
 
     except Exception as e:
-        logger.warning(f"Could not maximize Ax-Fabric window: {e}")
+        logger.warning(f"Could not maximize Ax-Studio window: {e}")
 
         # Method 3: Platform-specific fallback
         try:
@@ -211,7 +211,7 @@ def maximize_app_window():
                 pyautogui.hotkey('alt', 'F10')
             elif IS_MACOS:
                 logger.info("Trying macOS specific maximize")
-                pyautogui.hotkey('cmd', 'tab')  # Switch to Ax-Fabric if it's running
+                pyautogui.hotkey('cmd', 'tab')  # Switch to Ax-Studio if it's running
                 time.sleep(0.5)
             return True
         except Exception as e2:
@@ -220,27 +220,27 @@ def maximize_app_window():
 
 def start_app(app_path=None):
     """
-    Start Ax-Fabric application in maximized window (cross-platform)
+    Start Ax-Studio application in maximized window (cross-platform)
     """
     # Set default path based on platform
     if app_path is None:
         if IS_WINDOWS:
-            app_path = os.path.expanduser(r"~\AppData\Local\Programs\ax-fabric\Ax-Fabric.exe")
+            app_path = os.path.expanduser(r"~\AppData\Local\Programs\ax-studio\Ax-Studio.exe")
         elif IS_LINUX:
-            app_path = "/usr/bin/ax-fabric"
+            app_path = "/usr/bin/ax-studio"
         elif IS_MACOS:
-            app_path = "/Applications/Ax-Fabric.app/Contents/MacOS/Ax-Fabric"
+            app_path = "/Applications/Ax-Studio.app/Contents/MacOS/Ax-Studio"
         else:
             raise NotImplementedError(f"Platform {platform.system()} not supported")
 
-    logger.info(f"Starting Ax-Fabric application from: {app_path}")
+    logger.info(f"Starting Ax-Studio application from: {app_path}")
 
     if not os.path.exists(app_path):
-        logger.error(f"Ax-Fabric executable not found at: {app_path}")
-        raise FileNotFoundError(f"Ax-Fabric app not found at {app_path}")
+        logger.error(f"Ax-Studio executable not found at: {app_path}")
+        raise FileNotFoundError(f"Ax-Studio app not found at {app_path}")
 
     try:
-        # Start the Ax-Fabric application
+        # Start the Ax-Studio application
         if IS_WINDOWS:
             subprocess.Popen([app_path], shell=True)
         elif IS_LINUX:
@@ -249,9 +249,9 @@ def start_app(app_path=None):
             subprocess.Popen([app_path], env=env)
         elif IS_MACOS:
             # On macOS, use 'open' command to launch .app bundle properly
-            if app_path.endswith('.app/Contents/MacOS/Ax-Fabric'):
+            if app_path.endswith('.app/Contents/MacOS/Ax-Studio'):
                 # Use the .app bundle path instead
-                app_bundle = app_path.replace('/Contents/MacOS/Ax-Fabric', '')
+                app_bundle = app_path.replace('/Contents/MacOS/Ax-Studio', '')
                 subprocess.Popen(['open', app_bundle])
             elif app_path.endswith('.app'):
                 # Direct .app bundle
@@ -265,25 +265,25 @@ def start_app(app_path=None):
                 subprocess.Popen([app_path])
         else:
             raise NotImplementedError(f"Platform {platform.system()} not supported")
-        logger.info("Ax-Fabric application started")
+        logger.info("Ax-Studio application started")
 
         # Wait for app to fully load
-        logger.info("Waiting for Ax-Fabric application to initialize...")
+        logger.info("Waiting for Ax-Studio application to initialize...")
         time.sleep(5)
 
         # Try to maximize the window
         if maximize_app_window():
-            logger.info("Ax-Fabric application maximized successfully")
+            logger.info("Ax-Studio application maximized successfully")
         else:
-            logger.warning("Could not maximize Ax-Fabric application window")
+            logger.warning("Could not maximize Ax-Studio application window")
 
         # Wait a bit more after maximizing
         time.sleep(10)
-        logger.info("Ax-Fabric application should be ready, waiting for additional setup...")
+        logger.info("Ax-Studio application should be ready, waiting for additional setup...")
         time.sleep(10)  # Additional wait to ensure everything is ready
 
     except Exception as e:
-        logger.error(f"Error starting Ax-Fabric application: {e}")
+        logger.error(f"Error starting Ax-Studio application: {e}")
         raise
 
 def scan_test_files(tests_dir="tests"):

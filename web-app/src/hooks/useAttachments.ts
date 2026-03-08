@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { type SettingComponentProps } from '@ax-fabric/core'
+import { type SettingComponentProps } from '@ax-studio/core'
 
 export type AttachmentsSettings = {
   enabled: boolean

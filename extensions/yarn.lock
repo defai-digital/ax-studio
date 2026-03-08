@@ -5,11 +5,11 @@ __metadata:
   version: 8
   cacheKey: 10c0
 
-"@ax-fabric/assistant-extension@workspace:assistant-extension":
+"@ax-studio/assistant-extension@workspace:assistant-extension":
   version: 0.0.0-use.local
-  resolution: "@ax-fabric/assistant-extension@workspace:assistant-extension"
+  resolution: "@ax-studio/assistant-extension@workspace:assistant-extension"
   dependencies:
-    "@ax-fabric/core": ../../core/package.tgz
+    "@ax-studio/core": ../../core/package.tgz
     cpx: "npm:1.5.0"
     rimraf: "npm:6.0.1"
     rolldown: "npm:1.0.0-beta.1"
@@ -19,11 +19,11 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@ax-fabric/conversational-extension@workspace:conversational-extension":
+"@ax-studio/conversational-extension@workspace:conversational-extension":
   version: 0.0.0-use.local
-  resolution: "@ax-fabric/conversational-extension@workspace:conversational-extension"
+  resolution: "@ax-studio/conversational-extension@workspace:conversational-extension"
   dependencies:
-    "@ax-fabric/core": ../../core/package.tgz
+    "@ax-studio/core": ../../core/package.tgz
     cpx: "npm:1.5.0"
     rimraf: "npm:6.0.1"
     rolldown: "npm:1.0.0-beta.1"
@@ -32,59 +32,59 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@ax-fabric/core@file:../../core/package.tgz::locator=%40ax-fabric%2Fassistant-extension%40workspace%3Aassistant-extension":
+"@ax-studio/core@file:../../core/package.tgz::locator=%40ax-studio%2Fassistant-extension%40workspace%3Aassistant-extension":
   version: 0.1.10
-  resolution: "@ax-fabric/core@file:../../core/package.tgz#../../core/package.tgz::hash=0ac0dc&locator=%40ax-fabric%2Fassistant-extension%40workspace%3Aassistant-extension"
+  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=48a438&locator=%40ax-studio%2Fassistant-extension%40workspace%3Aassistant-extension"
   dependencies:
     rxjs: "npm:^7.8.1"
     ulidx: "npm:^2.3.0"
   peerDependencies:
     react: 19.0.0
-  checksum: 10c0/3187c5c7213360129206eab68ded114b2fcd0a03728eda65cd9b6f8db69047d12de1a950dc41de92ef558b6428116c27242b678e201b66fd81447df279b093f8
+  checksum: 10c0/2c9210d4fa4c1e05ac15a5b29ef1abd93b514eed6d65fe752ab3096e06753a9835969b7f1f1a7a550f389d05df73e247e7627488c1f90787d85af45b4d5f4fb2
   languageName: node
   linkType: hard
 
-"@ax-fabric/core@file:../../core/package.tgz::locator=%40ax-fabric%2Fconversational-extension%40workspace%3Aconversational-extension":
+"@ax-studio/core@file:../../core/package.tgz::locator=%40ax-studio%2Fconversational-extension%40workspace%3Aconversational-extension":
   version: 0.1.10
-  resolution: "@ax-fabric/core@file:../../core/package.tgz#../../core/package.tgz::hash=0ac0dc&locator=%40ax-fabric%2Fconversational-extension%40workspace%3Aconversational-extension"
+  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=48a438&locator=%40ax-studio%2Fconversational-extension%40workspace%3Aconversational-extension"
   dependencies:
     rxjs: "npm:^7.8.1"
     ulidx: "npm:^2.3.0"
   peerDependencies:
     react: 19.0.0
-  checksum: 10c0/3187c5c7213360129206eab68ded114b2fcd0a03728eda65cd9b6f8db69047d12de1a950dc41de92ef558b6428116c27242b678e201b66fd81447df279b093f8
+  checksum: 10c0/2c9210d4fa4c1e05ac15a5b29ef1abd93b514eed6d65fe752ab3096e06753a9835969b7f1f1a7a550f389d05df73e247e7627488c1f90787d85af45b4d5f4fb2
   languageName: node
   linkType: hard
 
-"@ax-fabric/core@file:../../core/package.tgz::locator=%40ax-fabric%2Fdownload-extension%40workspace%3Adownload-extension":
+"@ax-studio/core@file:../../core/package.tgz::locator=%40ax-studio%2Fdownload-extension%40workspace%3Adownload-extension":
   version: 0.1.10
-  resolution: "@ax-fabric/core@file:../../core/package.tgz#../../core/package.tgz::hash=0ac0dc&locator=%40ax-fabric%2Fdownload-extension%40workspace%3Adownload-extension"
+  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=48a438&locator=%40ax-studio%2Fdownload-extension%40workspace%3Adownload-extension"
   dependencies:
     rxjs: "npm:^7.8.1"
     ulidx: "npm:^2.3.0"
   peerDependencies:
     react: 19.0.0
-  checksum: 10c0/3187c5c7213360129206eab68ded114b2fcd0a03728eda65cd9b6f8db69047d12de1a950dc41de92ef558b6428116c27242b678e201b66fd81447df279b093f8
+  checksum: 10c0/2c9210d4fa4c1e05ac15a5b29ef1abd93b514eed6d65fe752ab3096e06753a9835969b7f1f1a7a550f389d05df73e247e7627488c1f90787d85af45b4d5f4fb2
   languageName: node
   linkType: hard
 
-"@ax-fabric/core@file:../../core/package.tgz::locator=%40ax-fabric%2Fllamacpp-extension%40workspace%3Allamacpp-extension":
+"@ax-studio/core@file:../../core/package.tgz::locator=%40ax-studio%2Fllamacpp-extension%40workspace%3Allamacpp-extension":
   version: 0.1.10
-  resolution: "@ax-fabric/core@file:../../core/package.tgz#../../core/package.tgz::hash=0ac0dc&locator=%40ax-fabric%2Fllamacpp-extension%40workspace%3Allamacpp-extension"
+  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=48a438&locator=%40ax-studio%2Fllamacpp-extension%40workspace%3Allamacpp-extension"
   dependencies:
     rxjs: "npm:^7.8.1"
     ulidx: "npm:^2.3.0"
   peerDependencies:
     react: 19.0.0
-  checksum: 10c0/3187c5c7213360129206eab68ded114b2fcd0a03728eda65cd9b6f8db69047d12de1a950dc41de92ef558b6428116c27242b678e201b66fd81447df279b093f8
+  checksum: 10c0/2c9210d4fa4c1e05ac15a5b29ef1abd93b514eed6d65fe752ab3096e06753a9835969b7f1f1a7a550f389d05df73e247e7627488c1f90787d85af45b4d5f4fb2
   languageName: node
   linkType: hard
 
-"@ax-fabric/download-extension@workspace:download-extension":
+"@ax-studio/download-extension@workspace:download-extension":
   version: 0.0.0-use.local
-  resolution: "@ax-fabric/download-extension@workspace:download-extension"
+  resolution: "@ax-studio/download-extension@workspace:download-extension"
   dependencies:
-    "@ax-fabric/core": ../../core/package.tgz
+    "@ax-studio/core": ../../core/package.tgz
     "@tauri-apps/api": "npm:2.8.0"
     cpx: "npm:1.5.0"
     rimraf: "npm:6.0.1"
@@ -95,12 +95,12 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@ax-fabric/llamacpp-extension@workspace:llamacpp-extension":
+"@ax-studio/llamacpp-extension@workspace:llamacpp-extension":
   version: 0.0.0-use.local
-  resolution: "@ax-fabric/llamacpp-extension@workspace:llamacpp-extension"
+  resolution: "@ax-studio/llamacpp-extension@workspace:llamacpp-extension"
   dependencies:
-    "@ax-fabric/core": ../../core/package.tgz
-    "@ax-fabric/tauri-plugin-llamacpp-api": "link:../../src-tauri/plugins/tauri-plugin-llamacpp"
+    "@ax-studio/core": ../../core/package.tgz
+    "@ax-studio/tauri-plugin-llamacpp-api": "link:../../src-tauri/plugins/tauri-plugin-llamacpp"
     "@tauri-apps/api": "npm:2.8.0"
     "@tauri-apps/plugin-http": "npm:2.5.0"
     "@tauri-apps/plugin-log": "npm:^2.6.0"
@@ -114,9 +114,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@ax-fabric/tauri-plugin-llamacpp-api@link:../../src-tauri/plugins/tauri-plugin-llamacpp::locator=%40ax-fabric%2Fllamacpp-extension%40workspace%3Allamacpp-extension":
+"@ax-studio/tauri-plugin-llamacpp-api@link:../../src-tauri/plugins/tauri-plugin-llamacpp::locator=%40ax-studio%2Fllamacpp-extension%40workspace%3Allamacpp-extension":
   version: 0.0.0-use.local
-  resolution: "@ax-fabric/tauri-plugin-llamacpp-api@link:../../src-tauri/plugins/tauri-plugin-llamacpp::locator=%40ax-fabric%2Fllamacpp-extension%40workspace%3Allamacpp-extension"
+  resolution: "@ax-studio/tauri-plugin-llamacpp-api@link:../../src-tauri/plugins/tauri-plugin-llamacpp::locator=%40ax-studio%2Fllamacpp-extension%40workspace%3Allamacpp-extension"
   languageName: node
   linkType: soft
 

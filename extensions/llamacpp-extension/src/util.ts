@@ -1,7 +1,7 @@
 /**
- * Ax-Fabric llama.cpp Extension — Utility Functions
+ * Ax-Studio llama.cpp Extension — Utility Functions
  *
- * Written from scratch for Ax-Fabric (UNLICENSED).
+ * Written from scratch for Ax-Studio (UNLICENSED).
  */
 
 export interface ProxyConfig {

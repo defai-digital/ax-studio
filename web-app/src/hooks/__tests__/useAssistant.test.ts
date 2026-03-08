@@ -53,7 +53,7 @@ describe('useAssistant', () => {
 
     const updatedAssistant = {
       ...defaultAssistant,
-      name: 'Updated Ax-Fabric',
+      name: 'Updated Ax-Studio',
       description: 'Updated description',
     }
 
@@ -61,7 +61,7 @@ describe('useAssistant', () => {
       result.current.updateAssistant(updatedAssistant)
     })
 
-    expect(result.current.assistants[0].name).toBe('Updated Ax-Fabric')
+    expect(result.current.assistants[0].name).toBe('Updated Ax-Studio')
     expect(result.current.assistants[0].description).toBe('Updated description')
   })
 
@@ -89,7 +89,7 @@ describe('useAssistant', () => {
     })
 
     expect(result.current.assistants).toHaveLength(1)
-    expect(result.current.assistants[0].id).toBe('ax-fabric')
+    expect(result.current.assistants[0].id).toBe('ax-studio')
   })
 
   it('should set current assistant', () => {
@@ -147,8 +147,8 @@ describe('useAssistant', () => {
   it('should maintain assistant structure', () => {
     const { result } = renderHook(() => useAssistant())
 
-    expect(result.current.currentAssistant.id).toBe('ax-fabric')
-    expect(result.current.currentAssistant.name).toBe('Ax-Fabric')
+    expect(result.current.currentAssistant.id).toBe('ax-studio')
+    expect(result.current.currentAssistant.name).toBe('Ax-Studio')
     expect(result.current.currentAssistant.avatar).toBe('🧵')
     expect(result.current.currentAssistant.instructions).toContain(
       'Before engaging any tools, articulate your complete thought process in natural language'
@@ -172,13 +172,13 @@ describe('useAssistant', () => {
 
     const updatedDefaultAssistant = {
       ...defaultAssistant,
-      name: 'Updated Ax-Fabric Name',
+      name: 'Updated Ax-Studio Name',
     }
 
     act(() => {
       result.current.updateAssistant(updatedDefaultAssistant)
     })
 
-    expect(result.current.currentAssistant.name).toBe('Updated Ax-Fabric Name')
+    expect(result.current.currentAssistant.name).toBe('Updated Ax-Studio Name')
   })
 })

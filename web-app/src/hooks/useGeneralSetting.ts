@@ -39,7 +39,7 @@ export const useGeneralSetting = create<GeneralSettingState>()(
       setHuggingfaceToken: (token) => {
         set({ huggingfaceToken: token })
         ExtensionManager.getInstance()
-          .getByName('@ax-fabric/download-extension')
+          .getByName('@ax-studio/download-extension')
           ?.getSettings()
           .then((settings) => {
             if (settings) {
@@ -50,7 +50,7 @@ export const useGeneralSetting = create<GeneralSettingState>()(
                 return e
               })
               ExtensionManager.getInstance()
-                .getByName('@ax-fabric/download-extension')
+                .getByName('@ax-studio/download-extension')
                 ?.updateSettings(newSettings)
             }
           })

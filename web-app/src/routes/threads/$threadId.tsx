@@ -34,7 +34,7 @@ import {
   MessageStatus,
   ChatCompletionRole,
   ContentType,
-} from '@ax-fabric/core'
+} from '@ax-studio/core'
 import { createImageAttachment } from '@/types/attachment'
 import {
   useChatAttachments,
@@ -50,7 +50,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { IconAlertCircle } from '@tabler/icons-react'
 import { useToolApproval } from '@/hooks/useToolApproval'
 import DropdownModelProvider from '@/containers/DropdownModelProvider'
-import { ExtensionTypeEnum, VectorDBExtension } from '@ax-fabric/core'
+import { ExtensionTypeEnum, VectorDBExtension } from '@ax-studio/core'
 import { ExtensionManager } from '@/lib/extension'
 import { Columns2, X } from 'lucide-react'
 import { toast } from 'sonner'

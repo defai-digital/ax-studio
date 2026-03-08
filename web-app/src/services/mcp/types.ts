@@ -2,7 +2,7 @@
  * MCP Service Types
  */
 
-import { MCPTool, MCPToolCallResult } from '@ax-fabric/core'
+import { MCPTool, MCPToolCallResult } from '@ax-studio/core'
 import type { MCPServerConfig, MCPServers, MCPSettings } from '@/hooks/useMCPServers'
 
 export interface MCPConfig {

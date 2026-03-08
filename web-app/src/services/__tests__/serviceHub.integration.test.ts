@@ -11,8 +11,8 @@ vi.mock('@/lib/platform/utils', () => ({
   isAndroid: vi.fn().mockReturnValue(false)
 }))
 
-// Mock @ax-fabric/core EngineManager to prevent initialization issues
-vi.mock('@ax-fabric/core', () => ({
+// Mock @ax-studio/core EngineManager to prevent initialization issues
+vi.mock('@ax-studio/core', () => ({
   EngineManager: {
     instance: vi.fn(() => ({
       engines: new Map()

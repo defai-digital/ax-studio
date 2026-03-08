@@ -296,9 +296,9 @@ describe('extractFactsFromPatterns', () => {
       expect(facts.get('project')).toBe('User is working on website')
     })
 
-    it('should extract "my project is Ax Fabric"', () => {
-      const facts = extractFactsFromPatterns('my project is Ax Fabric.')
-      expect(facts.get('project')).toBe("User's project is Ax Fabric")
+    it('should extract "my project is Ax Studio"', () => {
+      const facts = extractFactsFromPatterns('my project is Ax Studio.')
+      expect(facts.get('project')).toBe("User's project is Ax Studio")
     })
   })
 

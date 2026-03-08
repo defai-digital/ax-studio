@@ -3,15 +3,15 @@
 <plist version="1.0">
 <dict>
   <key>CFBundleIdentifier</key>
-  <string>ai.axfabric.app</string>
+  <string>ai.axstudio.app</string>
   <key>CFBundleURLTypes</key>
   <array>
     <dict>
       <key>CFBundleURLName</key>
-      <string>ai.axfabric.app</string>
+      <string>ai.axstudio.app</string>
       <key>CFBundleURLSchemes</key>
       <array>
-        <string>axfabric</string>
+        <string>axstudio</string>
       </array>
     </dict>
   </array>

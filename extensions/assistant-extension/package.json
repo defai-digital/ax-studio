@@ -1,11 +1,11 @@
 {
-  "name": "@ax-fabric/assistant-extension",
-  "productName": "Ax-Fabric Assistant",
+  "name": "@ax-studio/assistant-extension",
+  "productName": "Ax-Studio Assistant",
   "version": "1.0.2",
   "description": "Powers the default AI assistant that works with all your installed models.",
   "main": "dist/index.js",
   "node": "dist/node/index.js",
-  "author": "Ax-Fabric",
+  "author": "Ax-Studio",
   "license": "UNLICENSED",
   "scripts": {
     "build": "rolldown -c rolldown.config.mjs",
@@ -19,7 +19,7 @@
     "typescript": "5.9.2"
   },
   "dependencies": {
-    "@ax-fabric/core": "../../core/package.tgz",
+    "@ax-studio/core": "../../core/package.tgz",
     "ts-loader": "^9.5.0"
   },
   "files": [
@@ -28,7 +28,7 @@
     "README.md"
   ],
   "bundleDependencies": [
-    "@ax-fabric/core"
+    "@ax-studio/core"
   ],
   "installConfig": {
     "hoistingLimits": "workspaces"

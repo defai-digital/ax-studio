@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { type ThreadMessage } from '@ax-fabric/core'
+import { type ThreadMessage } from '@ax-studio/core'
 import { Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 

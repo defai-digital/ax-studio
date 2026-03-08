@@ -35,7 +35,7 @@ export const PlatformFeatures: Record<PlatformFeature, boolean> = {
   [PlatformFeature.HTTPS_PROXY]:
     isPlatformTauri() && !isPlatformIOS() && !isPlatformAndroid(),
 
-  // Default model providers (OpenAI, Anthropic, etc.) - disabled for web-only Ax-Fabric builds
+  // Default model providers (OpenAI, Anthropic, etc.) - disabled for web-only Ax-Studio builds
   [PlatformFeature.DEFAULT_PROVIDERS]: isPlatformTauri(),
 
   // Projects management
@@ -46,7 +46,7 @@ export const PlatformFeatures: Record<PlatformFeature, boolean> = {
   [PlatformFeature.ANALYTICS]:
     isPlatformTauri() && !isPlatformIOS() && !isPlatformAndroid(),
 
-  // Web-specific automatic model selection from Ax-Fabric provider - enabled for web only
+  // Web-specific automatic model selection from Ax-Studio provider - enabled for web only
   [PlatformFeature.WEB_AUTO_MODEL_SELECTION]: !isPlatformTauri(),
 
   // Model provider settings page management - disabled for web only

@@ -1,10 +1,10 @@
 [package]
 name = "tauri-plugin-llamacpp"
 version = "0.6.599"
-authors = ["Ax-Fabric <service@axfabric.ai>"]
-description = "Tauri plugin for managing Ax-Fabric LlamaCpp server processes and model loading"
+authors = ["Ax-Studio <service@axstudio.ai>"]
+description = "Tauri plugin for managing Ax-Studio LlamaCpp server processes and model loading"
 license = "MIT"
-repository = "https://github.com/ax-fabric/ax-fabric"
+repository = "https://github.com/ax-studio/ax-studio"
 edition = "2021"
 rust-version = "1.77.2"
 exclude = ["/examples", "/dist-js", "/guest-js", "/node_modules"]
@@ -14,7 +14,7 @@ links = "tauri-plugin-llamacpp"
 base64 = "0.22.1"
 byteorder = "1.5.0"
 hmac = "0.12.1"
-ax-fabric-utils = { path = "../../utils", package = "ax-fabric-utils" }
+ax-studio-utils = { path = "../../utils", package = "ax-studio-utils" }
 log = "0.4"
 rand = "0.8"
 serde = { version = "1.0", features = ["derive"] }

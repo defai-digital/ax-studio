@@ -320,10 +320,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
-name = "ax-fabric"
+name = "ax-studio"
 version = "0.1.0"
 dependencies = [
- "ax-fabric-utils",
+ "ax-studio-utils",
  "chrono",
  "dirs",
  "env",
@@ -376,7 +376,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ax-fabric-utils"
+name = "ax-studio-utils"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -6115,7 +6115,7 @@ dependencies = [
 name = "tauri-plugin-llamacpp"
 version = "0.6.599"
 dependencies = [
- "ax-fabric-utils",
+ "ax-studio-utils",
  "base64 0.22.1",
  "byteorder",
  "hmac",

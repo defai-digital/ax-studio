@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Android Development Environment Setup for Ax-Fabric
+# Android Development Environment Setup for Ax-Studio
 
 # Ensure rustup's Rust toolchain is used instead of Homebrew's
 export PATH="$HOME/.cargo/bin:$PATH"

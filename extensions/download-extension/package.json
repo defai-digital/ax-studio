@@ -1,10 +1,10 @@
 {
-  "name": "@ax-fabric/download-extension",
+  "name": "@ax-studio/download-extension",
   "productName": "Download Manager",
   "version": "1.0.0",
-  "description": "Download and manage files and AI models in Ax-Fabric.",
+  "description": "Download and manage files and AI models in Ax-Studio.",
   "main": "dist/index.js",
-  "author": "Ax-Fabric",
+  "author": "Ax-Studio",
   "license": "UNLICENSED",
   "scripts": {
     "test": "vitest run",
@@ -25,7 +25,7 @@
     "README.md"
   ],
   "dependencies": {
-    "@ax-fabric/core": "../../core/package.tgz",
+    "@ax-studio/core": "../../core/package.tgz",
     "@tauri-apps/api": "2.8.0"
   },
   "bundleDependencies": [],

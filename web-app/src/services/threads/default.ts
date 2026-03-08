@@ -3,7 +3,7 @@
  */
 
 import { ExtensionManager } from '@/lib/extension'
-import { ConversationalExtension, ExtensionTypeEnum } from '@ax-fabric/core'
+import { ConversationalExtension, ExtensionTypeEnum } from '@ax-studio/core'
 import type { ThreadsService } from './types'
 import { TEMPORARY_CHAT_ID } from '@/constants/chat'
 
@@ -75,7 +75,7 @@ export class DefaultThreadsService implements ThreadsService {
             ...thread.assistants![0],
             model: {
               id: thread.model?.id ?? '*',
-              engine: thread.model?.provider ?? 'ax-fabric',
+              engine: thread.model?.provider ?? 'ax-studio',
             },
           },
         ]
@@ -86,7 +86,7 @@ export class DefaultThreadsService implements ThreadsService {
             name: 'Model',
             model: {
               id: thread.model?.id ?? '*',
-              engine: thread.model?.provider ?? 'ax-fabric',
+              engine: thread.model?.provider ?? 'ax-studio',
             },
           },
         ]
@@ -139,7 +139,7 @@ export class DefaultThreadsService implements ThreadsService {
           return {
             model: {
               id: thread.model?.id ?? '*',
-              engine: thread.model?.provider ?? 'ax-fabric',
+              engine: thread.model?.provider ?? 'ax-studio',
             },
             id: e.id,
             name: e.name,
@@ -149,10 +149,10 @@ export class DefaultThreadsService implements ThreadsService {
           {
             model: {
               id: thread.model?.id ?? '*',
-              engine: thread.model?.provider ?? 'ax-fabric',
+              engine: thread.model?.provider ?? 'ax-studio',
             },
-            id: 'ax-fabric',
-            name: 'Ax-Fabric',
+            id: 'ax-studio',
+            name: 'Ax-Studio',
           },
         ],
         metadata: {

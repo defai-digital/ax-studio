@@ -3,7 +3,7 @@ use sysinfo::{Pid, System};
 use tauri::{Manager, Runtime, State};
 
 use crate::state::{LlamacppState, SessionInfo};
-use ax_fabric_utils::generate_random_port;
+use ax_studio_utils::generate_random_port;
 
 /// Check if a process is running by PID
 pub async fn is_process_running_by_pid<R: Runtime>(

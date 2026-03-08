@@ -1,4 +1,4 @@
-import { AIEngine, BaseExtension, ExtensionTypeEnum } from '@ax-fabric/core'
+import { AIEngine, BaseExtension, ExtensionTypeEnum } from '@ax-studio/core'
 
 import { getServiceHub } from '@/hooks/useServiceHub'
 

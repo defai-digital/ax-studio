@@ -1,5 +1,5 @@
 {
-  "name": "@ax-fabric/tauri-plugin-llamacpp-api",
+  "name": "@ax-studio/tauri-plugin-llamacpp-api",
   "version": "0.6.6",
   "private": true,
   "description": "",

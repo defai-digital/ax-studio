@@ -6,8 +6,8 @@
       "checking": "Checking extension status..."
     },
     "notInstalled": {
-      "title": "Ax-Fabric completes tasks in your browser",
-      "description": "Install the extension to give Ax-Fabric browser access",
+      "title": "Ax-Studio completes tasks in your browser",
+      "description": "Install the extension to give Ax-Studio browser access",
       "getExtension": "Get Extension"
     }
   },
@@ -56,7 +56,7 @@
   "serverStatusInactive": "Server {{serverKey}} deactivated successfully",
   "runtimeSettings": {
     "title": "Runtime Settings",
-    "description": "Configure how Ax-Fabric manages and retries MCP servers.",
+    "description": "Configure how Ax-Studio manages and retries MCP servers.",
     "toolCallTimeout": "Tool call timeout (seconds)",
     "toolCallTimeoutDesc": "Maximum time to wait for an MCP tool response before timing out."
   }

@@ -26,7 +26,7 @@
     /* Url */
     "paths": {
       "@/*": ["./src/*"],
-      "@ax-fabric/conversational-extension": ["../extensions/conversational-extension/src/index.ts"]
+      "@ax-studio/conversational-extension": ["../extensions/conversational-extension/src/index.ts"]
     }
   },
   "include": ["src"],

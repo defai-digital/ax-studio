@@ -81,7 +81,7 @@ fn get_session_id_fallback() -> String {
     let hostname = hostname::get()
         .map(|h| h.to_string_lossy().to_string())
         .unwrap_or_else(|_| "unknown".to_string());
-    format!("axfabric-{}-{}", hostname, std::process::id())
+    format!("axstudio-{}-{}", hostname, std::process::id())
 }
 
 #[cfg(test)]

@@ -5,27 +5,27 @@ IS_NIGHTLY="$1"
 
 echo "Cleaning up after tests..."
 
-# Kill any running Ax-Fabric processes (both regular and nightly)
-pkill -f "Ax-Fabric" || true
-pkill -f "ax-fabric" || true
-pkill -f "Ax-Fabric-nightly" || true
-pkill -f "ax-fabric-nightly" || true
+# Kill any running Ax-Studio processes (both regular and nightly)
+pkill -f "Ax-Studio" || true
+pkill -f "ax-studio" || true
+pkill -f "Ax-Studio-nightly" || true
+pkill -f "ax-studio-nightly" || true
 
-# Remove Ax-Fabric data folders (both regular and nightly)
-rm -rf ~/.config/Ax-Fabric
-rm -rf ~/.config/Ax-Fabric-nightly
-rm -rf ~/.local/share/Ax-Fabric
-rm -rf ~/.local/share/Ax-Fabric-nightly
-rm -rf ~/.cache/ax-fabric
-rm -rf ~/.cache/ax-fabric-nightly
-rm -rf ~/.local/share/ax-fabric-nightly.ai.app
-rm -rf ~/.local/share/ai.axfabric.app
+# Remove Ax-Studio data folders (both regular and nightly)
+rm -rf ~/.config/Ax-Studio
+rm -rf ~/.config/Ax-Studio-nightly
+rm -rf ~/.local/share/Ax-Studio
+rm -rf ~/.local/share/Ax-Studio-nightly
+rm -rf ~/.cache/ax-studio
+rm -rf ~/.cache/ax-studio-nightly
+rm -rf ~/.local/share/ax-studio-nightly.ai.app
+rm -rf ~/.local/share/ai.axstudio.app
 
-# Try to uninstall Ax-Fabric app
+# Try to uninstall Ax-Studio app
 if [ "$IS_NIGHTLY" = "true" ]; then
-    PACKAGE_NAME="ax-fabric-nightly"
+    PACKAGE_NAME="ax-studio-nightly"
 else
-    PACKAGE_NAME="ax-fabric"
+    PACKAGE_NAME="ax-studio"
 fi
 
 echo "Attempting to uninstall package: $PACKAGE_NAME"
@@ -39,6 +39,6 @@ else
 fi
 
 # Clean up downloaded installer
-rm -f "/tmp/ax-fabric-installer.deb"
+rm -f "/tmp/ax-studio-installer.deb"
 
 echo "Cleanup completed"

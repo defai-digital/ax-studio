@@ -18,7 +18,7 @@ export class TauriHardwareService extends DefaultHardwareService {
   async getLlamacppDevices(): Promise<DeviceList[]> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ext = (window as any).core?.extensionManager?.getByName(
-      '@ax-fabric/llamacpp-extension'
+      '@ax-studio/llamacpp-extension'
     )
     if (!ext) return []
 

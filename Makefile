@@ -1,10 +1,10 @@
-# Makefile for Ax-Fabric App - Build, Lint, Test, and Clean
+# Makefile for Ax-Studio App - Build, Lint, Test, and Clean
 
 REPORT_PORTAL_URL ?= ""
 REPORT_PORTAL_API_KEY ?= ""
 REPORT_PORTAL_PROJECT_NAME ?= ""
-REPORT_PORTAL_LAUNCH_NAME ?= "Ax-Fabric App"
-REPORT_PORTAL_DESCRIPTION ?= "Ax-Fabric App report"
+REPORT_PORTAL_LAUNCH_NAME ?= "Ax-Studio App"
+REPORT_PORTAL_DESCRIPTION ?= "Ax-Studio App report"
 
 # Default target, does nothing
 all:
@@ -130,7 +130,7 @@ ifeq ($(OS),Windows_NT)
 	-powershell -Command "Remove-Item -Recurse -Force ./electron/pre-install/*.tgz"
 	-powershell -Command "Remove-Item -Recurse -Force ./src-tauri/resources"
 	-powershell -Command "Remove-Item -Recurse -Force ./src-tauri/target"
-	-powershell -Command "if (Test-Path \"$($env:USERPROFILE)\ax-fabric\extensions\") { Remove-Item -Path \"$($env:USERPROFILE)\ax-fabric\extensions\" -Recurse -Force }"
+	-powershell -Command "if (Test-Path \"$($env:USERPROFILE)\ax-studio\extensions\") { Remove-Item -Path \"$($env:USERPROFILE)\ax-studio\extensions\" -Recurse -Force }"
 else ifeq ($(shell uname -s),Linux)
 	find . -name "node_modules" -type d -prune -exec rm -rf '{}' +
 	find . -name ".next" -type d -exec rm -rf '{}' +
@@ -146,8 +146,8 @@ else ifeq ($(shell uname -s),Linux)
 	rm -rf ./electron/pre-install/*.tgz
 	rm -rf ./src-tauri/resources
 	rm -rf ./src-tauri/target
-	rm -rf "~/ax-fabric/extensions"
-	rm -rf "~/.cache/ax-fabric*"
+	rm -rf "~/ax-studio/extensions"
+	rm -rf "~/.cache/ax-studio*"
 	rm -rf "./.cache"
 else
 	find . -name "node_modules" -type d -prune -exec rm -rfv '{}' +
@@ -163,6 +163,6 @@ else
 	rm -rfv ./electron/pre-install/*.tgz
 	rm -rfv ./src-tauri/resources
 	rm -rfv ./src-tauri/target
-	rm -rfv ~/ax-fabric/extensions
-	rm -rfv ~/Library/Caches/ax-fabric*
+	rm -rfv ~/ax-studio/extensions
+	rm -rfv ~/Library/Caches/ax-studio*
 endif

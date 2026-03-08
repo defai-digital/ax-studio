@@ -25,7 +25,7 @@ export function PromptAnalytic() {
       <div className="flex items-center gap-2">
         <IconFileTextShield className="text-muted-foreground" />
         <h2 className="font-medium">
-          {t('helpUsImproveJan')}
+          {t('helpUsImproveAxStudio')}
         </h2>
       </div>
       <p className="mt-2 text-xs text-muted-foreground leading-normal">
@@ -35,7 +35,7 @@ export function PromptAnalytic() {
         <span className="font-medium text-muted-foreground">{`Settings > Privacy.`}</span>
       </p>
       <p className="mt-2 text-sm">
-        Would you like to help us to improve Ax-Fabric?
+        Would you like to help us to improve Ax-Studio?
       </p>
       <div className="mt-4 flex justify-end space-x-2">
         <Button

@@ -3,7 +3,7 @@ use crate::core::app::commands::get_app_data_folder_path;
 use crate::core::updater::session::get_session_id;
 use crate::core::updater::hmac_client::SignedRequestHeaders;
 use futures_util::StreamExt;
-use ax_fabric_utils::normalize_path;
+use ax_studio_utils::normalize_path;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use std::collections::HashMap;
 use std::path::Path;
@@ -16,11 +16,11 @@ use url::Url;
 
 // ===== CONSTANTS =====
 
-/// Ax-Fabric mirror prefix for HuggingFace downloads
+/// Ax-Studio mirror prefix for HuggingFace downloads
 /// CDN mirrors are disabled until the domains are provisioned.
-/// Set these to valid URLs when cdn.axfabric.ai is available.
-const AX_FABRIC_MIRROR_PREFIX_STABLE: &str = "";
-const AX_FABRIC_MIRROR_PREFIX_NIGHTLY: &str = "";
+/// Set these to valid URLs when cdn.axstudio.ai is available.
+const AX_STUDIO_MIRROR_PREFIX_STABLE: &str = "";
+const AX_STUDIO_MIRROR_PREFIX_NIGHTLY: &str = "";
 
 /// Domains that should use mirror download with fallback
 /// Empty list effectively disables mirror attempts.
@@ -35,16 +35,16 @@ fn is_nightly_build() -> bool {
 /// Get the appropriate mirror prefix based on build type
 fn get_mirror_prefix() -> &'static str {
     if is_nightly_build() {
-        AX_FABRIC_MIRROR_PREFIX_NIGHTLY
+        AX_STUDIO_MIRROR_PREFIX_NIGHTLY
     } else {
-        AX_FABRIC_MIRROR_PREFIX_STABLE
+        AX_STUDIO_MIRROR_PREFIX_STABLE
     }
 }
 
 /// Secret key for HMAC request authentication
-/// - In CI: Set AX_FABRIC_SIGNING_KEY environment variable at build time
+/// - In CI: Set AX_STUDIO_SIGNING_KEY environment variable at build time
 /// - In local dev: Falls back to a test key
-const SECRET_KEY: &str = match option_env!("AX_FABRIC_SIGNING_KEY") {
+const SECRET_KEY: &str = match option_env!("AX_STUDIO_SIGNING_KEY") {
     Some(key) => key,
     None => "local-dev-test-key-not-for-production",
 };
@@ -55,9 +55,9 @@ pub fn err_to_string<E: std::fmt::Display>(e: E) -> String {
     format!("Error: {e}")
 }
 
-/// Converts a URL to Ax-Fabric mirror URL if applicable
-/// e.g., https://huggingface.co/... -> https://cdn.axfabric.ai/huggingface.co/...
-/// or for nightly: https://huggingface.co/... -> https://cdn-nightly.axfabric.ai/huggingface.co/...
+/// Converts a URL to Ax-Studio mirror URL if applicable
+/// e.g., https://huggingface.co/... -> https://cdn.axstudio.ai/huggingface.co/...
+/// or for nightly: https://huggingface.co/... -> https://cdn-nightly.axstudio.ai/huggingface.co/...
 pub fn convert_to_mirror_url(url: &str) -> Option<String> {
     let parsed = Url::parse(url).ok()?;
     let host = parsed.host_str()?;
@@ -178,7 +178,7 @@ async fn validate_downloaded_file(
     if let Some(expected_sha256) = &item.sha256 {
         log::info!("Starting Hash verification for {}", item.url);
 
-        match ax_fabric_utils::crypto::compute_file_sha256_with_cancellation(save_path, cancel_token)
+        match ax_studio_utils::crypto::compute_file_sha256_with_cancellation(save_path, cancel_token)
             .await
         {
             Ok(computed_sha256) => {
@@ -433,7 +433,7 @@ pub async fn _download_files_internal(
 
         if !save_path.starts_with(&app_data_folder) {
             return Err(format!(
-                "Path {} is outside of Ax-Fabric data folder {}",
+                "Path {} is outside of Ax-Studio data folder {}",
                 save_path.display(),
                 app_data_folder.display()
             ));
@@ -647,7 +647,7 @@ async fn download_single_file(
     
     // Log which URL is being used for download
     if actual_url != item.url {
-        log::info!("Downloading via Ax-Fabric mirror: {}", actual_url);
+        log::info!("Downloading via Ax-Studio mirror: {}", actual_url);
     }
     
     let mut stream = resp.bytes_stream();
@@ -746,14 +746,14 @@ pub async fn _get_maybe_resume_with_fallback(
 ) -> Result<(reqwest::Response, String), String> {
     // Try mirror URL first if applicable
     if let Some(mirror_url) = convert_to_mirror_url(url) {
-        log::info!("Attempting download from Ax-Fabric mirror: {}", mirror_url);
+        log::info!("Attempting download from Ax-Studio mirror: {}", mirror_url);
         match _get_maybe_resume_with_hmac(client, &mirror_url, start_bytes).await {
             Ok(resp) => {
-                log::info!("Successfully connected to Ax-Fabric mirror");
+                log::info!("Successfully connected to Ax-Studio mirror");
                 return Ok((resp, mirror_url));
             }
             Err(e) => {
-                log::warn!("Ax-Fabric mirror download failed: {}. Falling back to original URL...", e);
+                log::warn!("Ax-Studio mirror download failed: {}. Falling back to original URL...", e);
             }
         }
     }
@@ -764,7 +764,7 @@ pub async fn _get_maybe_resume_with_fallback(
     Ok((resp, url.to_string()))
 }
 
-/// Download from URL with HMAC headers for Ax-Fabric mirror authentication
+/// Download from URL with HMAC headers for Ax-Studio mirror authentication
 async fn _get_maybe_resume_with_hmac(
     client: &reqwest::Client,
     url: &str,
@@ -789,7 +789,7 @@ async fn _get_maybe_resume_with_hmac(
     }
 
     // Use a short timeout for mirror requests so that an unreachable CDN
-    // (e.g. cdn.axfabric.ai not yet live) fails fast and falls back to the
+    // (e.g. cdn.axstudio.ai not yet live) fails fast and falls back to the
     // original URL instead of blocking the download for 30+ seconds.
     let resp = tokio::time::timeout(
         Duration::from_secs(15),

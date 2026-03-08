@@ -1,5 +1,5 @@
 import { localStorageKey } from '@/constants/localStorage'
-import type { ModelInfo } from '@ax-fabric/core'
+import type { ModelInfo } from '@ax-studio/core'
 
 export const getLastUsedModel = (): {
   provider: string

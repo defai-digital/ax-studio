@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - .github/workflows/ax-fabric-linter-and-test.yml
+      - .github/workflows/ax-studio-linter-and-test.yml
       - 'web/**'
       - 'joi/**'
       - 'package.json'
@@ -21,7 +21,7 @@ on:
       - main
       - release/**
     paths:
-      - .github/workflows/ax-fabric-linter-and-test.yml
+      - .github/workflows/ax-studio-linter-and-test.yml
       - 'web/**'
       - 'joi/**'
       - 'package.json'
@@ -51,7 +51,7 @@ jobs:
       - name: 'Cleanup cache'
         continue-on-error: true
         run: |
-          rm -rf ~/ax-fabric
+          rm -rf ~/ax-studio
           make clean
 
       - name: Config Yarn
@@ -92,7 +92,7 @@ jobs:
       - name: 'Cleanup cache'
         continue-on-error: true
         run: |
-          rm -rf ~/ax-fabric
+          rm -rf ~/ax-studio
           make clean
 
       - name: Config Yarn
@@ -134,7 +134,7 @@ jobs:
         shell: powershell
         continue-on-error: true
         run: |
-          $path = "$Env:APPDATA\Ax-Fabric"
+          $path = "$Env:APPDATA\Ax-Studio"
           if (Test-Path $path) {
               Remove-Item "\\?\$path" -Recurse -Force
           } else {
@@ -176,7 +176,7 @@ jobs:
         shell: powershell
         continue-on-error: true
         run: |
-          $path = "$Env:APPDATA\Ax-Fabric"
+          $path = "$Env:APPDATA\Ax-Studio"
           if (Test-Path $path) {
               Remove-Item "\\?\$path" -Recurse -Force
           } else {
@@ -237,7 +237,7 @@ jobs:
       - name: 'Cleanup cache'
         continue-on-error: true
         run: |
-          rm -rf ~/ax-fabric
+          rm -rf ~/ax-studio
           make clean
 
       - name: Config Yarn
@@ -278,7 +278,7 @@ jobs:
       - name: 'Cleanup cache'
         continue-on-error: true
         run: |
-          rm -rf ~/ax-fabric
+          rm -rf ~/ax-studio
           make clean
 
       - name: Config Yarn

@@ -3,13 +3,13 @@ import {
   Thread,
   ThreadAssistantInfo,
   ThreadMessage,
-} from '@ax-fabric/core'
+} from '@ax-studio/core'
 
 /**
- * AxFabricConversationalExtension is a ConversationalExtension implementation that provides
+ * AxStudioConversationalExtension is a ConversationalExtension implementation that provides
  * functionality for managing threads.
  */
-export default class AxFabricConversationalExtension extends ConversationalExtension {
+export default class AxStudioConversationalExtension extends ConversationalExtension {
   /**
    * Called when the extension is loaded.
    */

@@ -3,7 +3,7 @@
  */
 
 import { ExtensionManager } from '@/lib/extension'
-import { Assistant, AssistantExtension, ExtensionTypeEnum } from '@ax-fabric/core'
+import { Assistant, AssistantExtension, ExtensionTypeEnum } from '@ax-studio/core'
 import type { AssistantsService } from './types'
 
 export class DefaultAssistantsService implements AssistantsService {

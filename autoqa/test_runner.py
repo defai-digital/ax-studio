@@ -16,7 +16,7 @@ from reportportal_client.helpers import timestamp
 logger = logging.getLogger(__name__)
 
 async def run_single_test_with_timeout(computer, test_data, rp_client, launch_id, max_turns=30,
-                                     app_path=None, app_process_name="Ax-Fabric.exe", agent_config=None,
+                                     app_path=None, app_process_name="Ax-Studio.exe", agent_config=None,
                                      enable_reportportal=False):
     """
     Run a single test case with turn count monitoring, forced stop, and screen recording
@@ -79,12 +79,12 @@ async def run_single_test_with_timeout(computer, test_data, rp_client, launch_id
     recorder = ScreenRecorder(video_path, fps=10)
     
     try:
-        # Step 1: Check and force close Ax-Fabric app if running
+        # Step 1: Check and force close Ax-Studio app if running
         if is_app_running(app_process_name):
-            logger.info("Ax-Fabric application is running, force closing...")
+            logger.info("Ax-Studio application is running, force closing...")
             force_close_app(app_process_name)
 
-        # Step 2: Start Ax-Fabric app in maximized mode
+        # Step 2: Start Ax-Studio app in maximized mode
         if app_path:
             start_app(app_path)
         else:
@@ -314,7 +314,7 @@ async def run_single_test_with_timeout(computer, test_data, rp_client, launch_id
             if not enable_reportportal:
                 logger.warning(f"[INFO] LOCAL RESULT: {path} - {final_status} ({status_message})")
         
-        # Step 9: Always force close Ax-Fabric app after test completion
+        # Step 9: Always force close Ax-Studio app after test completion
         logger.info(f"Cleaning up after test: {path}")
         force_close_app(app_process_name)
         

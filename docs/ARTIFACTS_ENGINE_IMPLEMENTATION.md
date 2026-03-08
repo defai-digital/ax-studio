@@ -32,7 +32,7 @@
 
 ## 1. What Was Built
 
-The Artifacts Engine lets the AI model generate **self-contained, interactive, renderable outputs** that the user can preview directly inside Ax-Fabric without copy-pasting into an external tool.
+The Artifacts Engine lets the AI model generate **self-contained, interactive, renderable outputs** that the user can preview directly inside Ax-Studio without copy-pasting into an external tool.
 
 | Capability | Status |
 |---|---|
@@ -60,7 +60,7 @@ Before this feature, when a model generated a complete HTML page, an interactive
 
 **The goal**: make AI-generated UIs as immediate as AI-generated text — you ask, you see it rendered, you iterate in the same window.
 
-This is the same problem that Anthropic's Claude.ai Artifacts and Lobe Chat's Artifacts feature solved for web users. We implemented a native desktop equivalent for Ax-Fabric.
+This is the same problem that Anthropic's Claude.ai Artifacts and Lobe Chat's Artifacts feature solved for web users. We implemented a native desktop equivalent for Ax-Studio.
 
 ---
 
@@ -72,7 +72,7 @@ This is the same problem that Anthropic's Claude.ai Artifacts and Lobe Chat's Ar
 
 ### What we took from Lobe Chat's approach
 
-| Concept | Lobe Chat | Ax-Fabric |
+| Concept | Lobe Chat | Ax-Studio |
 |---|---|---|
 | Sandboxed iframe rendering | `<iframe sandbox srcdoc>` | Same approach |
 | Code / Preview tab switcher | Tab UI per artifact block | Same UX pattern |
@@ -83,7 +83,7 @@ This is the same problem that Anthropic's Claude.ai Artifacts and Lobe Chat's Ar
 
 ### What we did differently
 
-| Topic | Lobe Chat | Ax-Fabric |
+| Topic | Lobe Chat | Ax-Studio |
 |---|---|---|
 | Runtime environment | Web browser / Next.js | Tauri 2 desktop app (WebView2 on Windows) |
 | CDN scripts | Loaded from CDN in iframe | **Bundled locally** in `public/vendor/` — offline-first |

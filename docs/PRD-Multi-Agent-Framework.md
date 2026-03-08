@@ -1,4 +1,4 @@
-# PRD: Multi-Agent Framework for Ax-Fabric
+# PRD: Multi-Agent Framework for Ax-Studio
 
 **Version**: 5.0
 **Date**: 2026-03-05
@@ -11,7 +11,7 @@
 
 ### 1.1 Problem Statement
 
-Ax-Fabric currently supports single-agent conversations — one AI model with one system prompt handles the entire user request. For complex tasks (research reports, code reviews, multi-step analysis), users must manually orchestrate multi-step workflows by chaining prompts. There is no way for specialized AI personas to collaborate on a single request.
+Ax-Studio currently supports single-agent conversations — one AI model with one system prompt handles the entire user request. For complex tasks (research reports, code reviews, multi-step analysis), users must manually orchestrate multi-step workflows by chaining prompts. There is no way for specialized AI personas to collaborate on a single request.
 
 ### 1.2 Objective
 
@@ -147,7 +147,7 @@ Orchestrator synthesizes and streams final response to user
 | `proxy.rs`                         | **No**     | Already routes all LLM calls; no new endpoints needed                                                                                          |
 | ServiceHub                         | **No**     | Existing assistants service handles persistence                                                                                                |
 | MCP tools pipeline                 | **No**     | Tools already loaded/filtered per thread; just scope per agent                                                                                 |
-| `@ax-fabric/core` Assistant type   | **Yes**    | Add `parameters` field (currently only in frontend `threads.d.ts`, missing from core)                                                          |
+| `@ax-studio/core` Assistant type   | **Yes**    | Add `parameters` field (currently only in frontend `threads.d.ts`, missing from core)                                                          |
 
 
 ---
@@ -156,13 +156,13 @@ Orchestrator synthesizes and streams final response to user
 
 ### 3.1 Core Assistant Type Reconciliation (Prerequisite)
 
-**Issue**: The `@ax-fabric/core` `Assistant` type at `core/src/types/assistant/assistantEntity.ts` lacks a `parameters` field. The frontend `threads.d.ts` has it as `parameters: Record<string, unknown>`, but core does not. This MUST be reconciled before adding agent fields.
+**Issue**: The `@ax-studio/core` `Assistant` type at `core/src/types/assistant/assistantEntity.ts` lacks a `parameters` field. The frontend `threads.d.ts` has it as `parameters: Record<string, unknown>`, but core does not. This MUST be reconciled before adding agent fields.
 
 **Action**: Add `parameters?: Record<string, unknown>` to the core `Assistant` type to match the frontend. This ensures backward compatibility (optional field) and enables agent-specific inference parameters.
 
 ### 3.2 Extended Assistant (Agent Definition)
 
-Extend the existing `Assistant` type from `@ax-fabric/core` rather than creating a new entity:
+Extend the existing `Assistant` type from `@ax-studio/core` rather than creating a new entity:
 
 ```typescript
 // ──── Extended fields on the existing Assistant type ────
@@ -1766,7 +1766,7 @@ Storage: `{app_data_dir}/agent-run-logs/{thread_id}/{run_id}.json`
 **Goal**: Users can create agents and use a team with router-mode delegation, with cost controls and observability from day one.
 
 1. **Reconcile core `Assistant` type** — add `parameters?: Record<string, unknown>` to `core/src/types/assistant/assistantEntity.ts` to match frontend `threads.d.ts`
-2. Extend `Assistant` type in `@ax-fabric/core` with agent fields (`type`, `role`, `goal`, `model_override_id`, `tool_scope`, `max_steps`, `timeout`, `max_result_tokens`)
+2. Extend `Assistant` type in `@ax-studio/core` with agent fields (`type`, `role`, `goal`, `model_override_id`, `tool_scope`, `max_steps`, `timeout`, `max_result_tokens`)
 3. Create `AgentTeam` type and `agent-team-store.ts` Zustand store
 4. Add Tauri IPC commands for agent team CRUD (4 commands) + run log persistence (3 commands)
 5. Implement `buildDelegationTools()` in `CustomChatTransport` using `ToolLoopAgent` sub-agents with:
@@ -1894,14 +1894,14 @@ Agents and assistants share 90% of their structure (name, avatar, instructions, 
 - No data migration needed
 - Single source of truth for AI persona definitions
 
-**Prerequisite**: The core `@ax-fabric/core` `Assistant` type must be reconciled with the frontend `threads.d.ts` type (missing `parameters` field in core). See Section 3.1.
+**Prerequisite**: The core `@ax-studio/core` `Assistant` type must be reconciled with the frontend `threads.d.ts` type (missing `parameters` field in core). See Section 3.1.
 
 ### 9.4 Why File-Based Team Storage (not SQLite)?
 
 Agent teams are small JSON documents (< 5KB each), created/edited infrequently. File-based storage:
 
 - Is inspectable and debuggable
-- Consistent with how Ax-Fabric stores other config data
+- Consistent with how Ax-Studio stores other config data
 - No schema migrations
 - Easy export/import (just copy the JSON file)
 
@@ -2366,7 +2366,7 @@ npx vitest watch web-app/src/lib/__tests__/multi-agent*.test.ts
 | Do we need a test mode (mock/record/replay) in production code?   | **No**                   | Use `MockLanguageModelV3` from `ai/test` in Vitest. No test infrastructure in production code (Section 12)                                         |
 | Do we need optional agents that can be skipped?                   | **Yes, simple**          | `optional: boolean` field + orchestrator prompt says "skip if not needed" (Section 4.14). No complex activation conditions                         |
 | Do we need USD cost tracking?                                     | **No**                   | Users connect their own API keys with provider-specific pricing. We track input/output tokens per agent (Section 11); USD calculation is user-side |
-| Do we need distributed execution for agents?                      | **No**                   | Ax-Fabric is a desktop app. All agents run client-side via AI SDK. Distributed execution contradicts the core design                               |
+| Do we need distributed execution for agents?                      | **No**                   | Ax-Studio is a desktop app. All agents run client-side via AI SDK. Distributed execution contradicts the core design                               |
 
 
 ---

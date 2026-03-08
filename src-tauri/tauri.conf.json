@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Ax-Fabric",
+  "productName": "Ax-Studio",
   "version": "0.1.0",
-  "identifier": "ai.axfabric.app",
+  "identifier": "ai.axstudio.app",
   "build": {
     "frontendDist": "../web-app/dist",
     "devUrl": "http://localhost:1420",
@@ -44,10 +44,10 @@
       "resolve": true
     },
     "updater": {
-      "pubkey": "PLACEHOLDER_REPLACE_WITH_AX_FABRIC_SIGNING_KEY",
+      "pubkey": "PLACEHOLDER_REPLACE_WITH_AX_STUDIO_SIGNING_KEY",
       "endpoints": [
-        "https://updates.axfabric.ai/update-check",
-        "https://github.com/ax-fabric/ax-fabric/releases/latest/download/latest.json"
+        "https://updates.axstudio.ai/update-check",
+        "https://github.com/ax-studio/ax-studio/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"
@@ -55,7 +55,7 @@
     }
   },
   "bundle": {
-    "publisher": "Ax-Fabric",
+    "publisher": "Ax-Studio",
     "active": true,
     "createUpdaterArtifacts": false,
     "icon": [

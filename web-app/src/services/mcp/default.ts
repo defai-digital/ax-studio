@@ -2,7 +2,7 @@
  * Default MCP Service - Generic implementation with minimal returns
  */
 
-import { MCPTool, MCPToolCallResult } from '@ax-fabric/core'
+import { MCPTool, MCPToolCallResult } from '@ax-studio/core'
 import type { MCPServerConfig } from '@/hooks/useMCPServers'
 import type { MCPService, MCPConfig, ToolCallWithCancellationResult } from './types'
 

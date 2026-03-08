@@ -213,7 +213,7 @@ describe('useGeneralSetting', () => {
       })
 
       expect(mockExtensionManager.getInstance).toHaveBeenCalled()
-      expect(mockGetByName).toHaveBeenCalledWith('@ax-fabric/download-extension')
+      expect(mockGetByName).toHaveBeenCalledWith('@ax-studio/download-extension')
 
       // Wait for async operations
       await new Promise((resolve) => setTimeout(resolve, 0))

@@ -49,7 +49,7 @@ on:
         required: false
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD:
         required: false
-      AX_FABRIC_SIGNING_KEY:
+      AX_STUDIO_SIGNING_KEY:
         required: false
     outputs:
       MAC_UNIVERSAL_SIG:
@@ -139,9 +139,9 @@ jobs:
           # Change app name for beta and nightly builds
           if [ "${{ inputs.channel }}" != "stable" ]; then
             if [[ "${{ inputs.channel }}" == "nightly" ]]; then
-              jq '.plugins.updater.endpoints = ["https://apps-nightly.axfabric.ai/update-check", "https://delta.axfabric.ai/${{ inputs.channel }}/latest.json"]' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
+              jq '.plugins.updater.endpoints = ["https://apps-nightly.axstudio.ai/update-check", "https://delta.axstudio.ai/${{ inputs.channel }}/latest.json"]' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
             else
-              jq '.plugins.updater.endpoints = ["https://delta.axfabric.ai/${{ inputs.channel }}/latest.json"]' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
+              jq '.plugins.updater.endpoints = ["https://delta.axstudio.ai/${{ inputs.channel }}/latest.json"]' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
             fi
             mv /tmp/tauri.conf.json ./src-tauri/tauri.conf.json
 
@@ -151,7 +151,7 @@ jobs:
             cat ./src-tauri/tauri.conf.json
 
             # Update Cargo.toml
-            ctoml ./src-tauri/Cargo.toml package.name "Ax-Fabric-${{ inputs.channel }}"
+            ctoml ./src-tauri/Cargo.toml package.name "Ax-Studio-${{ inputs.channel }}"
             ctoml ./src-tauri/Cargo.toml dependencies.tauri.features[] "devtools"
             echo "------------------"
             cat ./src-tauri/Cargo.toml
@@ -195,7 +195,7 @@ jobs:
           APPLE_API_KEY_PATH: /tmp/notary-key.p8
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          AX_FABRIC_SIGNING_KEY: ${{ secrets.AX_FABRIC_SIGNING_KEY }}
+          AX_STUDIO_SIGNING_KEY: ${{ secrets.AX_STUDIO_SIGNING_KEY }}
 
       # Publish app
 
@@ -204,7 +204,7 @@ jobs:
         if: inputs.public_provider != 'github'
         uses: actions/upload-artifact@v4
         with:
-          name: ax-fabric-${{ inputs.channel }}-mac-universal-${{ inputs.new_version }}.dmg
+          name: ax-studio-${{ inputs.channel }}-mac-universal-${{ inputs.new_version }}.dmg
           path: |
             ./src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
 
@@ -213,17 +213,17 @@ jobs:
         run: |
           cd ./src-tauri/target/universal-apple-darwin/release/bundle/macos
           if [ "${{ inputs.channel }}" != "stable" ]; then
-            zip -r ax-fabric-${{ inputs.channel }}-mac-universal-${{ inputs.new_version }}.zip Ax-Fabric-${{ inputs.channel }}.app
-            FILE_NAME=ax-fabric-${{ inputs.channel }}-mac-universal-${{ inputs.new_version }}.zip
-            DMG_NAME=Ax-Fabric-${{ inputs.channel }}_${{ inputs.new_version }}_universal.dmg
-            MAC_UNIVERSAL_SIG=$(cat Ax-Fabric-${{ inputs.channel }}.app.tar.gz.sig)
-            TAR_NAME=Ax-Fabric-${{ inputs.channel }}.app.tar.gz
+            zip -r ax-studio-${{ inputs.channel }}-mac-universal-${{ inputs.new_version }}.zip Ax-Studio-${{ inputs.channel }}.app
+            FILE_NAME=ax-studio-${{ inputs.channel }}-mac-universal-${{ inputs.new_version }}.zip
+            DMG_NAME=Ax-Studio-${{ inputs.channel }}_${{ inputs.new_version }}_universal.dmg
+            MAC_UNIVERSAL_SIG=$(cat Ax-Studio-${{ inputs.channel }}.app.tar.gz.sig)
+            TAR_NAME=Ax-Studio-${{ inputs.channel }}.app.tar.gz
           else
-            zip -r ax-fabric-mac-universal-${{ inputs.new_version }}.zip Ax-Fabric.app
-            FILE_NAME=ax-fabric-mac-universal-${{ inputs.new_version }}.zip
-            MAC_UNIVERSAL_SIG=$(cat Ax-Fabric.app.tar.gz.sig)
-            DMG_NAME=Ax-Fabric_${{ inputs.new_version }}_universal.dmg
-            TAR_NAME=Ax-Fabric.app.tar.gz
+            zip -r ax-studio-mac-universal-${{ inputs.new_version }}.zip Ax-Studio.app
+            FILE_NAME=ax-studio-mac-universal-${{ inputs.new_version }}.zip
+            MAC_UNIVERSAL_SIG=$(cat Ax-Studio.app.tar.gz.sig)
+            DMG_NAME=Ax-Studio_${{ inputs.new_version }}_universal.dmg
+            TAR_NAME=Ax-Studio.app.tar.gz
           fi
 
           echo "::set-output name=MAC_UNIVERSAL_SIG::$MAC_UNIVERSAL_SIG"
@@ -239,9 +239,9 @@ jobs:
           cd ./src-tauri/target/universal-apple-darwin/release/bundle
 
           # Upload for tauri updater
-          aws s3 cp ./dmg/Ax-Fabric-${{ inputs.channel }}_${{ inputs.new_version }}_universal.dmg s3://${{ secrets.DELTA_AWS_S3_BUCKET_NAME }}/temp-${{ inputs.channel }}/Ax-Fabric-${{ inputs.channel }}_${{ inputs.new_version }}_universal.dmg
-          aws s3 cp ./macos/Ax-Fabric-${{ inputs.channel }}.app.tar.gz s3://${{ secrets.DELTA_AWS_S3_BUCKET_NAME }}/temp-${{ inputs.channel }}/Ax-Fabric-${{ inputs.channel }}_${{ inputs.new_version }}.app.tar.gz
-          aws s3 cp ./macos/Ax-Fabric-${{ inputs.channel }}.app.tar.gz.sig s3://${{ secrets.DELTA_AWS_S3_BUCKET_NAME }}/temp-${{ inputs.channel }}/Ax-Fabric-${{ inputs.channel }}_${{ inputs.new_version }}.app.tar.gz.sig
+          aws s3 cp ./dmg/Ax-Studio-${{ inputs.channel }}_${{ inputs.new_version }}_universal.dmg s3://${{ secrets.DELTA_AWS_S3_BUCKET_NAME }}/temp-${{ inputs.channel }}/Ax-Studio-${{ inputs.channel }}_${{ inputs.new_version }}_universal.dmg
+          aws s3 cp ./macos/Ax-Studio-${{ inputs.channel }}.app.tar.gz s3://${{ secrets.DELTA_AWS_S3_BUCKET_NAME }}/temp-${{ inputs.channel }}/Ax-Studio-${{ inputs.channel }}_${{ inputs.new_version }}.app.tar.gz
+          aws s3 cp ./macos/Ax-Studio-${{ inputs.channel }}.app.tar.gz.sig s3://${{ secrets.DELTA_AWS_S3_BUCKET_NAME }}/temp-${{ inputs.channel }}/Ax-Studio-${{ inputs.channel }}_${{ inputs.new_version }}.app.tar.gz.sig
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.DELTA_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.DELTA_AWS_SECRET_ACCESS_KEY }}

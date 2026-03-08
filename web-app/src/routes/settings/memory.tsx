@@ -189,7 +189,7 @@ function MemorySettings() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `ax-fabric-memories-${Date.now()}.json`
+    a.download = `ax-studio-memories-${Date.now()}.json`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)

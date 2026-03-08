@@ -134,7 +134,7 @@ describe('TauriPathService', () => {
 
     it('should handle paths with spaces in fallback', async () => {
       mockBasename.mockRejectedValue(new Error('Test error'))
-      const result = await pathService.basename('C:\\Program Files\\Ax-Fabric\\my model.gguf')
+      const result = await pathService.basename('C:\\Program Files\\Ax-Studio\\my model.gguf')
       expect(result).toBe('my model.gguf')
     })
 

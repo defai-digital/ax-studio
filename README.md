@@ -1,13 +1,13 @@
-# Ax-Fabric
+# Ax-Studio
 
-**Ax-Fabric** is an open-source AI desktop application built on [Tauri](https://tauri.app/). It connects to any cloud AI provider through a clean, unified interface and integrates with your own backend services for retrieval, agents, and vector storage.
+**Ax-Studio** is an open-source AI desktop application built on [Tauri](https://tauri.app/). It connects to any cloud AI provider through a clean, unified interface and integrates with your own backend services for retrieval, agents, and vector storage.
 
 <p align="center">
-  <img alt="GitHub commit activity" src="https://img.shields.io/github/commit-activity/m/ax-fabric/ax-fabric"/>
-  <img alt="Github Last Commit" src="https://img.shields.io/github/last-commit/ax-fabric/ax-fabric"/>
-  <img alt="Github Contributors" src="https://img.shields.io/github/contributors/ax-fabric/ax-fabric"/>
-  <img alt="GitHub closed issues" src="https://img.shields.io/github/issues-closed/ax-fabric/ax-fabric"/>
-  <img alt="License" src="https://img.shields.io/github/license/ax-fabric/ax-fabric"/>
+  <img alt="GitHub commit activity" src="https://img.shields.io/github/commit-activity/m/ax-studio/ax-studio"/>
+  <img alt="Github Last Commit" src="https://img.shields.io/github/last-commit/ax-studio/ax-studio"/>
+  <img alt="Github Contributors" src="https://img.shields.io/github/contributors/ax-studio/ax-studio"/>
+  <img alt="GitHub closed issues" src="https://img.shields.io/github/issues-closed/ax-studio/ax-studio"/>
+  <img alt="License" src="https://img.shields.io/github/license/ax-studio/ax-studio"/>
 </p>
 
 ---
@@ -17,7 +17,7 @@
 ## Features
 
 - **Multi-Provider Chat** — Connect to OpenAI, Anthropic, Mistral, Groq, Azure, Gemini, HuggingFace, OpenRouter, or any OpenAI-compatible endpoint
-- **Ax-Fabric Backend Integration** — Point the app at your self-hosted services for model inference, retrieval, agent orchestration, and vector storage
+- **Ax-Studio Backend Integration** — Point the app at your self-hosted services for model inference, retrieval, agent orchestration, and vector storage
 - **Model Context Protocol (MCP)** — Plug in MCP servers to give the AI access to tools, APIs, and external data sources
 - **Conversation Management** — Persistent threads with full message history, custom assistants, and project workspaces
 - **Model Catalog** — Browse and download GGUF models from HuggingFace directly inside the app
@@ -30,7 +30,7 @@
 
 ## Installation
 
-Download the latest release for your platform from [GitHub Releases](https://github.com/ax-fabric/ax-fabric/releases):
+Download the latest release for your platform from [GitHub Releases](https://github.com/ax-studio/ax-studio/releases):
 
 | Platform | Download |
 |---|---|
@@ -38,13 +38,13 @@ Download the latest release for your platform from [GitHub Releases](https://git
 | **Windows** | `.exe` installer |
 | **Linux** (Debian/Ubuntu) | `.deb` |
 | **Linux** (All distros) | `.AppImage` |
-| **Linux** (Sandboxed) | Flatpak via [Flathub](https://flathub.org/apps/ai.axfabric.AxFabric) |
+| **Linux** (Sandboxed) | Flatpak via [Flathub](https://flathub.org/apps/ai.axstudio.AxStudio) |
 
 ---
 
 ## Architecture
 
-Ax-Fabric is a [Tauri 2](https://tauri.app/) application: a **React** frontend embedded in a native **Rust** host.
+Ax-Studio is a [Tauri 2](https://tauri.app/) application: a **React** frontend embedded in a native **Rust** host.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -64,12 +64,12 @@ Ax-Fabric is a [Tauri 2](https://tauri.app/) application: a **React** frontend e
 │  │  File system ─── Thread storage ─── Download mgr   │  │
 │  │  MCP server manager (rmcp) ─── Provider configs    │  │
 │  │  Local API proxy ─── App updater ─── Extension     │  │
-│  │  loader ─── Ax-Fabric service config               │  │
+│  │  loader ─── Ax-Studio service config               │  │
 │  └────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────┘
          │                              │
          ▼                              ▼
-  Cloud AI Providers          Ax-Fabric Backend Services
+  Cloud AI Providers          Ax-Studio Backend Services
   (OpenAI, Anthropic,         (API Service, Retrieval,
    Mistral, Groq, etc.)        Agents, AkiDB)
 ```
@@ -80,7 +80,7 @@ Ax-Fabric is a [Tauri 2](https://tauri.app/) application: a **React** frontend e
 |---|---|
 | `web-app/` | React 19 frontend (Vite + TanStack Router) |
 | `src-tauri/` | Rust backend — IPC commands, file I/O, MCP, downloads |
-| `core/` | `@ax-fabric/core` — extension interfaces and type definitions |
+| `core/` | `@ax-studio/core` — extension interfaces and type definitions |
 | `extensions/` | Bundled extensions (assistant, conversation, download) |
 | `flatpak/` | Linux Flatpak packaging manifests |
 
@@ -88,7 +88,7 @@ Ax-Fabric is a [Tauri 2](https://tauri.app/) application: a **React** frontend e
 
 ## Backend Services
 
-Ax-Fabric is designed to work with four self-hosted backend services. Configure their URLs on first launch (or anytime in Settings → General):
+Ax-Studio is designed to work with four self-hosted backend services. Configure their URLs on first launch (or anytime in Settings → General):
 
 | Service | Default URL | Purpose |
 |---|---|---|
@@ -113,14 +113,14 @@ You can also skip backend setup and connect directly to cloud providers using AP
 | Google Gemini | Cloud | Gemini Pro/Flash |
 | OpenRouter | Aggregator | 100+ models via a single key |
 | HuggingFace | Cloud / Hub | Inference API + model downloads |
-| Ax-Fabric API | Self-hosted | Your own inference backend |
+| Ax-Studio API | Self-hosted | Your own inference backend |
 | Any OpenAI-compatible | Self-hosted | vLLM, Ollama, Text Generation WebUI, etc. |
 
 ---
 
 ## MCP (Model Context Protocol)
 
-Ax-Fabric has built-in support for [MCP](https://modelcontextprotocol.io/) servers. MCP lets you give the AI access to tools, databases, APIs, and other external systems.
+Ax-Studio has built-in support for [MCP](https://modelcontextprotocol.io/) servers. MCP lets you give the AI access to tools, databases, APIs, and other external systems.
 
 **Add an MCP server** in Settings → MCP Servers. Supported transports:
 - **stdio** — Child process with stdin/stdout communication
@@ -145,8 +145,8 @@ Once connected, available tools appear in the chat interface and can be toggled 
 ### Quick Start
 
 ```bash
-git clone https://github.com/ax-fabric/ax-fabric
-cd ax-fabric
+git clone https://github.com/ax-studio/ax-studio
+cd ax-studio
 make dev
 ```
 
@@ -170,7 +170,7 @@ make dev
 ```bash
 yarn install
 yarn build:tauri:plugin:api    # Build Tauri plugin bindings
-yarn build:core                # Build @ax-fabric/core
+yarn build:core                # Build @ax-studio/core
 yarn build:extensions          # Bundle extensions
 yarn dev:tauri                 # Launch dev server
 ```
@@ -212,7 +212,7 @@ yarn build:tauri:linux     # Linux packages (.deb + .AppImage)
 ## Project Structure
 
 ```
-ax-fabric/
+ax-studio/
 ├── web-app/                   # React frontend
 │   └── src/
 │       ├── components/        # UI components
@@ -241,7 +241,7 @@ ax-fabric/
 │           ├── updater/       # App auto-updater
 │           └── state.rs       # Shared AppState (Mutex-guarded)
 │
-├── core/                      # @ax-fabric/core TypeScript library
+├── core/                      # @ax-studio/core TypeScript library
 ├── extensions/                # Bundled extensions
 │   ├── assistant-extension/   # Default AI assistant
 │   ├── conversational-extension/  # Conversation persistence
@@ -287,4 +287,4 @@ Built on the shoulders of:
 - [Tauri](https://tauri.app/) — Cross-platform desktop framework
 - [Vercel AI SDK](https://sdk.vercel.ai/) — AI streaming and provider abstraction
 - [rmcp](https://github.com/modelcontextprotocol/rust-sdk) — Rust MCP client
-- [Jan](https://github.com/ax-fabric/ax-fabric) — Original open-source AI desktop app that inspired this fork
+- [Jan](https://github.com/ax-studio/ax-studio) — Original open-source AI desktop app that inspired this fork

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { initializeServiceHub } from '@/services'
 import { initializeServiceHubStore } from '@/hooks/useServiceHub'
-import { useAxFabricConfig } from '@/stores/useAxFabricConfig'
+import { useAxStudioConfig } from '@/stores/useAxStudioConfig'
 
 interface ServiceHubProviderProps {
   children: React.ReactNode
@@ -13,7 +13,7 @@ export function ServiceHubProvider({ children }: ServiceHubProviderProps) {
   useEffect(() => {
     // Sync persisted service URLs to the Rust backend so the proxy server
     // can forward /retrieval/*, /agents/*, /vectors/* to the correct services.
-    useAxFabricConfig.getState().syncToBackend().catch(() => {
+    useAxStudioConfig.getState().syncToBackend().catch(() => {
       // Non-fatal: may not be in Tauri context
     })
 

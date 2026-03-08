@@ -19,7 +19,7 @@ use crate::process::{
     get_random_available_port, is_process_running_by_pid,
 };
 use crate::state::{LLamaBackendSession, LlamacppState, SessionInfo};
-use ax_fabric_utils::{
+use ax_studio_utils::{
     add_cuda_paths, binary_requires_cuda, setup_library_path, setup_windows_process_flags,
 };
 

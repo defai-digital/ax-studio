@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { Extension, ExtensionManager } from '../extension'
 
 // Mock dependencies
-vi.mock('@ax-fabric/core', () => ({
+vi.mock('@ax-studio/core', () => ({
   AIEngine: class MockAIEngine {},
   BaseExtension: class MockBaseExtension {},
   ExtensionTypeEnum: {

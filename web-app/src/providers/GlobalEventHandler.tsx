@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { events, ModelEvent, AppEvent, DownloadEvent } from '@ax-fabric/core'
+import { events, ModelEvent, AppEvent, DownloadEvent } from '@ax-studio/core'
 import { useModelProvider } from '@/hooks/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useDownloadStore } from '@/hooks/useDownloadStore'

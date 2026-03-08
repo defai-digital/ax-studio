@@ -1,8 +1,8 @@
 /**
- * Ax-Fabric Backend Service Configuration Store
+ * Ax-Studio Backend Service Configuration Store
  *
  * Persists the four backend service URLs in localStorage so the app
- * can connect to the user's self-hosted Ax-Fabric backend services.
+ * can connect to the user's self-hosted Ax-Studio backend services.
  *
  * Defaults assume all services run on localhost with sequential ports:
  *   API Service       → http://127.0.0.1:8000
@@ -15,7 +15,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { invoke } from '@tauri-apps/api/core'
 
-export interface AxFabricServiceConfig {
+export interface AxStudioServiceConfig {
   /** FastAPI inference proxy — OpenAI-compatible /v1/chat/completions */
   apiServiceUrl: string
   /** FastAPI retrieval service — document ingest + semantic search */
@@ -26,9 +26,9 @@ export interface AxFabricServiceConfig {
   akidbUrl: string
 }
 
-interface AxFabricConfigState {
-  config: AxFabricServiceConfig
-  setConfig: (updates: Partial<AxFabricServiceConfig>) => Promise<void>
+interface AxStudioConfigState {
+  config: AxStudioServiceConfig
+  setConfig: (updates: Partial<AxStudioServiceConfig>) => Promise<void>
   getRetrievalUrl: () => string
   getAgentsUrl: () => string
   getAkidbUrl: () => string
@@ -37,14 +37,27 @@ interface AxFabricConfigState {
   syncToBackend: () => Promise<void>
 }
 
-const DEFAULTS: AxFabricServiceConfig = {
+// Migrate localStorage from old ax-fabric key on first load
+if (typeof window !== 'undefined') {
+  const oldKey = 'ax-fabric-service-config'
+  const newKey = 'ax-studio-service-config'
+  if (!localStorage.getItem(newKey)) {
+    const oldState = localStorage.getItem(oldKey)
+    if (oldState) {
+      localStorage.setItem(newKey, oldState)
+      localStorage.removeItem(oldKey)
+    }
+  }
+}
+
+const DEFAULTS: AxStudioServiceConfig = {
   apiServiceUrl: 'http://127.0.0.1:8000',
   retrievalServiceUrl: 'http://127.0.0.1:8001',
   agentsServiceUrl: 'http://127.0.0.1:8002',
   akidbUrl: 'http://127.0.0.1:8003',
 }
 
-export const useAxFabricConfig = create<AxFabricConfigState>()(
+export const useAxStudioConfig = create<AxStudioConfigState>()(
   persist(
     (set, get) => ({
       config: { ...DEFAULTS },
@@ -68,7 +81,7 @@ export const useAxFabricConfig = create<AxFabricConfigState>()(
       syncToBackend: async () => {
         try {
           const { config } = get()
-          await invoke('update_ax_fabric_service_config', {
+          await invoke('update_ax_studio_service_config', {
             config: {
               api_service_url: config.apiServiceUrl,
               retrieval_service_url: config.retrievalServiceUrl,
@@ -78,12 +91,12 @@ export const useAxFabricConfig = create<AxFabricConfigState>()(
           })
         } catch (e) {
           // Not fatal — the app may be running in web/non-Tauri mode
-          console.warn('Could not sync Ax-Fabric service config to backend:', e)
+          console.warn('Could not sync Ax-Studio service config to backend:', e)
         }
       },
     }),
     {
-      name: 'ax-fabric-service-config',
+      name: 'ax-studio-service-config',
     }
   )
 )

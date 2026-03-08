@@ -7,7 +7,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 }))
 
 // Mock EngineManager
-vi.mock('@ax-fabric/core', async (importOriginal) => {
+vi.mock('@ax-studio/core', async (importOriginal) => {
   const actual = await importOriginal()
   return {
     ...actual,
@@ -32,7 +32,7 @@ vi.mock('../models', () => ({
   stopAllModels: vi.fn(),
 }))
 
-vi.mock('@ax-fabric/core', () => ({
+vi.mock('@ax-studio/core', () => ({
   fs: {
     rm: vi.fn(),
   },
@@ -122,19 +122,19 @@ describe('TauriAppService', () => {
 
   describe('getAppDataFolder', () => {
     it('should get app data folder path', async () => {
-      const mockConfig = { data_folder: '/path/to/ax-fabric/data' }
+      const mockConfig = { data_folder: '/path/to/ax-studio/data' }
       mockWindow.core.api.getAppConfigurations.mockResolvedValue(mockConfig)
 
       const result = await appService.getAppDataFolder()
 
       expect(mockWindow.core.api.getAppConfigurations).toHaveBeenCalled()
-      expect(result).toBe('/path/to/ax-fabric/data')
+      expect(result).toBe('/path/to/ax-studio/data')
     })
   })
 
   describe('relocateAppDataFolder', () => {
     it('should relocate app data folder', async () => {
-      const newPath = '/new/path/to/ax-fabric/data'
+      const newPath = '/new/path/to/ax-studio/data'
       mockWindow.core.api.changeAppDataFolder.mockResolvedValue(undefined)
 
       await appService.relocateAppDataFolder(newPath)

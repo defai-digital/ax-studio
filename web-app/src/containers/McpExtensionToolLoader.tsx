@@ -1,5 +1,5 @@
 import { ComponentType } from 'react'
-import { MCPTool, MCPToolComponentProps } from '@ax-fabric/core'
+import { MCPTool, MCPToolComponentProps } from '@ax-studio/core'
 import { useToolAvailable } from '@/hooks/useToolAvailable'
 import { useThreads } from '@/hooks/useThreads'
 

@@ -1,17 +1,17 @@
 #!/bin/bash
-# macOS install script for Ax-Fabric app
+# macOS install script for Ax-Studio app
 
-echo "Installing Ax-Fabric app from DMG..."
+echo "Installing Ax-Studio app from DMG..."
 
 # Mount the DMG
-hdiutil attach "/tmp/ax-fabric-installer.dmg" -mountpoint "/tmp/ax-fabric-mount"
+hdiutil attach "/tmp/ax-studio-installer.dmg" -mountpoint "/tmp/ax-studio-mount"
 
 # Find the .app file in the mounted DMG
-APP_FILE=$(find "/tmp/ax-fabric-mount" -name "*.app" -type d | head -1)
+APP_FILE=$(find "/tmp/ax-studio-mount" -name "*.app" -type d | head -1)
 
 if [ -z "$APP_FILE" ]; then
     echo "[Failed] No .app file found in DMG"
-    hdiutil detach "/tmp/ax-fabric-mount" || true
+    hdiutil detach "/tmp/ax-studio-mount" || true
     exit 1
 fi
 
@@ -21,7 +21,7 @@ echo "Found app file: $APP_FILE"
 cp -R "$APP_FILE" /Applications/
 
 # Unmount the DMG
-hdiutil detach "/tmp/ax-fabric-mount"
+hdiutil detach "/tmp/ax-studio-mount"
 
 # Determine app name and executable path
 APP_NAME=$(basename "$APP_FILE")
@@ -40,8 +40,8 @@ find "/Applications/$APP_NAME/Contents/MacOS/" -type f -perm +111 -ls
 APP_BASE_NAME=$(basename "$APP_NAME" .app)
 POTENTIAL_EXECUTABLES=(
     "/Applications/$APP_NAME/Contents/MacOS/$APP_BASE_NAME"
-    "/Applications/$APP_NAME/Contents/MacOS/Ax-Fabric"
-    "/Applications/$APP_NAME/Contents/MacOS/Ax-Fabric-nightly"
+    "/Applications/$APP_NAME/Contents/MacOS/Ax-Studio"
+    "/Applications/$APP_NAME/Contents/MacOS/Ax-Studio-nightly"
 )
 
 APP_PATH=""
@@ -73,19 +73,19 @@ echo "Executable path: $APP_PATH"
 echo "Process name: $PROCESS_NAME"
 
 # Export for test step
-echo "AX_FABRIC_APP_PATH=$APP_PATH" >> $GITHUB_ENV
+echo "AX_STUDIO_APP_PATH=$APP_PATH" >> $GITHUB_ENV
 echo "PROCESS_NAME=$PROCESS_NAME" >> $GITHUB_ENV
 
-echo "[INFO] Waiting for Ax-Fabric app first initialization (120 seconds)..."
-echo "This allows Ax-Fabric to complete its initial setup and configuration"
+echo "[INFO] Waiting for Ax-Studio app first initialization (120 seconds)..."
+echo "This allows Ax-Studio to complete its initial setup and configuration"
 sleep 120
 echo "[SUCCESS] Initialization wait completed"
 
 # Verify installation
 if [ -f "$APP_PATH" ]; then
-    echo "[SUCCESS] Ax-Fabric app installed successfully"
+    echo "[SUCCESS] Ax-Studio app installed successfully"
     ls -la "/Applications/$APP_NAME"
 else
-    echo "[FAILED] Ax-Fabric app installation failed - executable not found"
+    echo "[FAILED] Ax-Studio app installation failed - executable not found"
     exit 1
 fi

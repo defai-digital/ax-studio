@@ -1,5 +1,5 @@
-import { MCPTool } from '@ax-fabric/core'
-import type { MCPToolCallResult } from '@ax-fabric/core'
+import { MCPTool } from '@ax-studio/core'
+import type { MCPToolCallResult } from '@ax-studio/core'
 
 export interface RAGService {
   // Return tools exposed by RAG-related extensions (e.g., retrieval, list_attachments)

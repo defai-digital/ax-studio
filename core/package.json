@@ -1,12 +1,12 @@
 {
-  "name": "@ax-fabric/core",
+  "name": "@ax-studio/core",
   "version": "0.1.10",
-  "description": "Core library for the Ax-Fabric AI application framework",
+  "description": "Core library for the Ax-Studio AI application framework",
   "keywords": [
-    "ax-fabric",
+    "ax-studio",
     "core"
   ],
-  "homepage": "https://axfabric.ai",
+  "homepage": "https://axstudio.ai",
   "license": "UNLICENSED",
   "main": "dist/index.js",
   "typings": "dist/types/index.d.ts",
@@ -14,7 +14,7 @@
     "dist",
     "types"
   ],
-  "author": "Ax-Fabric",
+  "author": "Ax-Studio",
   "scripts": {
     "lint": "tslint --project tsconfig.json -t codeFrame 'src/**/*.ts' 'test/**/*.ts'",
     "test": "vitest run",

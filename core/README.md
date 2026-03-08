@@ -1,4 +1,4 @@
-## @ax-fabric/core
+## @ax-studio/core
 
 > This module includes functions for communicating with core APIs, registering app extensions, and exporting type definitions.
 
@@ -8,7 +8,7 @@
 
 ```js
 // Web / extension runtime
-import * as core from '@ax-fabric/core'
+import * as core from '@ax-studio/core'
 ```
 
 ## Build an Extension
@@ -21,13 +21,13 @@ import * as core from '@ax-fabric/core'
    2. Rename the extension class from `SampleExtension` to your preferred extension name.
    3. Import modules from the core package.
       ```ts
-      import * as core from '@ax-fabric/core'
+      import * as core from '@ax-studio/core'
       ```
    4. In the `onLoad()` method, add your code:
 
       ```ts
       // Example of listening to app events and providing customized inference logic:
-      import * as core from '@ax-fabric/core'
+      import * as core from '@ax-studio/core'
 
       export default class MyExtension extends BaseExtension {
         // On extension load
@@ -41,7 +41,7 @@ import * as core from '@ax-fabric/core'
           const content: ThreadContent = {
             type: ContentType.Text,
             text: {
-              value: "I'm Ax-Fabric Assistant!",
+              value: "I'm Ax-Studio Assistant!",
               annotations: [],
             },
           }
@@ -65,4 +65,4 @@ import * as core from '@ax-fabric/core'
       ```bash
       yarn build
       ```
-   4. Select the generated .tgz from Ax-Fabric > Settings > Extensions > Manual Installation.
+   4. Select the generated .tgz from Ax-Studio > Settings > Extensions > Manual Installation.
