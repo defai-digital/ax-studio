@@ -57,7 +57,7 @@ pub enum RunningServiceEnum {
     NoInit(RunningService<RoleClient, ()>),
     WithInit(RunningService<RoleClient, InitializeRequestParam>),
 }
-pub type SharedMcpServers = Arc<Mutex<HashMap<String, RunningServiceEnum>>>;
+pub type SharedMcpServers = Arc<Mutex<HashMap<String, Arc<RunningServiceEnum>>>>;
 
 pub struct AppState {
     pub app_token: Option<String>,

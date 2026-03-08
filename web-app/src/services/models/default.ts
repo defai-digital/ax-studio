@@ -208,7 +208,7 @@ export class DefaultModelsService implements ModelsService {
     modelPath: string,
     mmprojPath?: string,
     hfToken?: string,
-    skipVerification: boolean = true
+    skipVerification: boolean = false
   ): Promise<void> {
     let modelSha256: string | undefined
     let modelSize: number | undefined
@@ -475,7 +475,7 @@ export class DefaultModelsService implements ModelsService {
       }
 
       return {
-        isValid: true,
+        isValid: false,
         error: 'Validation method not available',
       }
     } catch (error) {
@@ -494,7 +494,7 @@ export class DefaultModelsService implements ModelsService {
     try {
       const engine = this.getEngine('llamacpp') as AIEngine & {
         getTokensCount?: (opts: {
-          model: string
+          modelId: string
           messages: Array<{
             role: string
             content:
@@ -579,7 +579,7 @@ export class DefaultModelsService implements ModelsService {
           )
 
         return await engine.getTokensCount({
-          model: modelId,
+          modelId,
           messages: transformedMessages,
           chat_template_kwargs: {
             enable_thinking: false,

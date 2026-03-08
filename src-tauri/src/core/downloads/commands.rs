@@ -2,6 +2,7 @@ use super::helpers::{_download_files_internal, err_to_string};
 use super::models::DownloadItem;
 use crate::core::app::commands::get_app_data_folder_path;
 use crate::core::state::AppState;
+use ax_fabric_utils::normalize_path;
 use std::collections::HashMap;
 use tauri::{Runtime, State};
 use tokio_util::sync::CancellationToken;
@@ -26,13 +27,13 @@ pub async fn download_files<R: Runtime>(
             .cancel_tokens
             .insert(task_id.to_string(), cancel_token.clone());
     }
-    // TODO: Support resuming downloads when FE is ready
+    // Resume is handled in helpers via .tmp/.url sidecar files.
     let result = _download_files_internal(
         app.clone(),
         &items,
         &headers,
         task_id,
-        false,
+        true,
         cancel_token.clone(),
     )
     .await;
@@ -47,8 +48,15 @@ pub async fn download_files<R: Runtime>(
     if cancel_token.is_cancelled() {
         let app_data_folder = get_app_data_folder_path(app.clone());
         for item in items {
-            let save_path = app_data_folder.join(&item.save_path);
-            let _ = std::fs::remove_file(&save_path); // don't check error
+            let save_path = normalize_path(&app_data_folder.join(&item.save_path));
+            if save_path.starts_with(&app_data_folder) {
+                let _ = std::fs::remove_file(&save_path); // best-effort cleanup
+            } else {
+                log::warn!(
+                    "Skipped unsafe cleanup path outside app data folder: {}",
+                    save_path.display()
+                );
+            }
         }
     }
 

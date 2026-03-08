@@ -32,7 +32,8 @@ export class TauriHardwareService extends DefaultHardwareService {
   }
 
   async setActiveGpus(data: { gpus: number[] }): Promise<void> {
-    // TODO: llama.cpp extension should handle this
+    // Intentionally no-op in Phase 7 UI.
+    // Local GPU selection UI was removed from active product flows.
     console.log(data)
   }
 }

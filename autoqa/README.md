@@ -1,4 +1,4 @@
-# E2E Test Runner with ReportPortal Integration
+# Ax-Fabric Automated Quality Assurance (AutoQA)
 
 🚀 An automated end-to-end test runner for Ax-Studio application with ReportPortal integration, screen recording, and comprehensive test monitoring.
 
@@ -26,14 +26,7 @@
 1. Clone the repository:
 
 ```bash
-git clone <repository-url>
-cd autoqa
-```
-
-2. Install dependencies:
-
-```bash
-## For Windows and Linux
+# From the root autoqa/ directory
 pip install -r requirements.txt
 ```
 
@@ -215,52 +208,48 @@ SKIP_SERVER_START=false \
 python main.py
 ```
 
-## Computer Server Management
-
-The test runner automatically manages the computer server:
-
-### Automatic Server Management (Default)
-
-- **Auto-start**: Computer server starts automatically in background thread
-- **Auto-cleanup**: Server stops when main program exits (daemon thread)
-- **Error handling**: Graceful fallback if server fails to start
-
-### Manual Server Management
-
+### Advanced Run (Reporting Mode)
 ```bash
-# If you prefer to manage computer server manually:
-python -m computer_server  # In separate terminal
-
-# Then run tests without auto-start:
-python main.py --skip-server-start
+# Run with ReportPortal reporting enabled
+export RP_TOKEN="your-token"
+python main.py --enable-reportportal --rp-project "my_project"
 ```
 
-### Server Logs
+## Writing New Test Cases
 
+Test cases are simple `.txt` files containing instructions for the AI agent to follow. Place these files in the `tests/` directory.
+
+### Example Test File (`tests/chat/simple-ask.txt`)
+```text
+Open the Ax-Fabric application.
+Switch the model to "GPT-4o".
+Send a message: "What is the capital of France?".
+Verify that the response mentions "Paris".
 ```
-2025-07-15 15:30:45 - INFO - Starting computer server in background...
-2025-07-15 15:30:45 - INFO - Calling computer_server.run_cli()...
-2025-07-15 15:30:45 - INFO - Computer server thread started
-2025-07-15 15:30:50 - INFO - Computer server is running successfully
-```
 
-## Output
+### Organization
+Tests can be nested in directories (e.g., `tests/ui/`, `tests/inference/`). The runner recursively searches for `.txt` files in the specified directory (`--tests-dir`).
 
-### Local Development
+## Project Structure
 
-- **Console logs**: Detailed execution information
-- **Screen recordings**: Saved to `recordings/` directory as MP4 files
-- **Trajectories**: Agent interaction data in `trajectories/` directory
-- **Local results**: Test results logged to console
+- **`main.py`**: Entry point for the test runner.
+- **`test_runner.py`**: Core logic for orchestrating test execution.
+- **`screen_recorder.py`**: Handles FFmpeg recording processes.
+- **`reportportal_handler.py`**: Manages communication with the ReportPortal API.
+- **`utils.py`**: Helper functions for platform-specific path resolution and process management.
+- **`tests/`**: Directory for test definitions (agent prompts).
+- **`recordings/`**: Output directory for generated `.mp4` files (auto-created).
+- **`trajectories/`**: Output directory for agent step logs (auto-created).
 
-### ReportPortal Integration
+## Configuration Reference
 
-When enabled, results are uploaded to ReportPortal including:
-
-- Test execution status (PASSED/FAILED)
-- Screen recordings as attachments
-- Detailed turn-by-turn interaction logs
-- Error messages and debugging information
+| Argument | Description | Default |
+| :--- | :--- | :--- |
+| `--tests-dir` | Directory to search for test files. | `tests` |
+| `--max-turns` | Maximum number of turns an agent can take. | `30` |
+| `--app-path` | Path to the Ax-Fabric executable. | _auto-detected_ |
+| `--model-name` | The model to use for the AI agent. | `gpt-4o` |
+| `--enable-reportportal` | Enable ReportPortal reporting. | `false` |
 
 ## Troubleshooting
 

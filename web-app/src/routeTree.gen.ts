@@ -20,6 +20,7 @@ import { Route as SettingsMemoryRouteImport } from './routes/settings/memory'
 import { Route as SettingsMcpServersRouteImport } from './routes/settings/mcp-servers'
 import { Route as SettingsLocalApiServerRouteImport } from './routes/settings/local-api-server'
 import { Route as SettingsInterfaceRouteImport } from './routes/settings/interface'
+import { Route as SettingsIntegrationsRouteImport } from './routes/settings/integrations'
 import { Route as SettingsHttpsProxyRouteImport } from './routes/settings/https-proxy'
 import { Route as SettingsHardwareRouteImport } from './routes/settings/hardware'
 import { Route as SettingsGeneralRouteImport } from './routes/settings/general'
@@ -87,6 +88,11 @@ const SettingsLocalApiServerRoute = SettingsLocalApiServerRouteImport.update({
 const SettingsInterfaceRoute = SettingsInterfaceRouteImport.update({
   id: '/settings/interface',
   path: '/settings/interface',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsIntegrationsRoute = SettingsIntegrationsRouteImport.update({
+  id: '/settings/integrations',
+  path: '/settings/integrations',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsHttpsProxyRoute = SettingsHttpsProxyRouteImport.update({
@@ -171,6 +177,7 @@ export interface FileRoutesByFullPath {
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/hardware': typeof SettingsHardwareRoute
   '/settings/https-proxy': typeof SettingsHttpsProxyRoute
+  '/settings/integrations': typeof SettingsIntegrationsRoute
   '/settings/interface': typeof SettingsInterfaceRoute
   '/settings/local-api-server': typeof SettingsLocalApiServerRoute
   '/settings/mcp-servers': typeof SettingsMcpServersRoute
@@ -197,6 +204,7 @@ export interface FileRoutesByTo {
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/hardware': typeof SettingsHardwareRoute
   '/settings/https-proxy': typeof SettingsHttpsProxyRoute
+  '/settings/integrations': typeof SettingsIntegrationsRoute
   '/settings/interface': typeof SettingsInterfaceRoute
   '/settings/local-api-server': typeof SettingsLocalApiServerRoute
   '/settings/mcp-servers': typeof SettingsMcpServersRoute
@@ -224,6 +232,7 @@ export interface FileRoutesById {
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/hardware': typeof SettingsHardwareRoute
   '/settings/https-proxy': typeof SettingsHttpsProxyRoute
+  '/settings/integrations': typeof SettingsIntegrationsRoute
   '/settings/interface': typeof SettingsInterfaceRoute
   '/settings/local-api-server': typeof SettingsLocalApiServerRoute
   '/settings/mcp-servers': typeof SettingsMcpServersRoute
@@ -252,6 +261,7 @@ export interface FileRouteTypes {
     | '/settings/general'
     | '/settings/hardware'
     | '/settings/https-proxy'
+    | '/settings/integrations'
     | '/settings/interface'
     | '/settings/local-api-server'
     | '/settings/mcp-servers'
@@ -278,6 +288,7 @@ export interface FileRouteTypes {
     | '/settings/general'
     | '/settings/hardware'
     | '/settings/https-proxy'
+    | '/settings/integrations'
     | '/settings/interface'
     | '/settings/local-api-server'
     | '/settings/mcp-servers'
@@ -304,6 +315,7 @@ export interface FileRouteTypes {
     | '/settings/general'
     | '/settings/hardware'
     | '/settings/https-proxy'
+    | '/settings/integrations'
     | '/settings/interface'
     | '/settings/local-api-server'
     | '/settings/mcp-servers'
@@ -331,6 +343,7 @@ export interface RootRouteChildren {
   SettingsGeneralRoute: typeof SettingsGeneralRoute
   SettingsHardwareRoute: typeof SettingsHardwareRoute
   SettingsHttpsProxyRoute: typeof SettingsHttpsProxyRoute
+  SettingsIntegrationsRoute: typeof SettingsIntegrationsRoute
   SettingsInterfaceRoute: typeof SettingsInterfaceRoute
   SettingsLocalApiServerRoute: typeof SettingsLocalApiServerRoute
   SettingsMcpServersRoute: typeof SettingsMcpServersRoute
@@ -420,6 +433,13 @@ declare module '@tanstack/react-router' {
       path: '/settings/interface'
       fullPath: '/settings/interface'
       preLoaderRoute: typeof SettingsInterfaceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings/integrations': {
+      id: '/settings/integrations'
+      path: '/settings/integrations'
+      fullPath: '/settings/integrations'
+      preLoaderRoute: typeof SettingsIntegrationsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings/https-proxy': {
@@ -531,6 +551,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsGeneralRoute: SettingsGeneralRoute,
   SettingsHardwareRoute: SettingsHardwareRoute,
   SettingsHttpsProxyRoute: SettingsHttpsProxyRoute,
+  SettingsIntegrationsRoute: SettingsIntegrationsRoute,
   SettingsInterfaceRoute: SettingsInterfaceRoute,
   SettingsLocalApiServerRoute: SettingsLocalApiServerRoute,
   SettingsMcpServersRoute: SettingsMcpServersRoute,

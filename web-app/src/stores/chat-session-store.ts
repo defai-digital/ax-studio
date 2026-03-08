@@ -23,6 +23,7 @@ export type ChatSession = {
 
 interface ChatSessionState {
   sessions: Record<string, ChatSession>;
+  standaloneData: Record<string, SessionData>;
   activeConversationId?: string;
   setActiveConversationId: (conversationId?: string) => void;
   ensureSession: (
@@ -54,11 +55,9 @@ const createSessionData = (): SessionData => ({
   idMap: new Map<string, string>(),
 });
 
-// Standalone data store for sessions that don't have a Chat yet
-const standaloneData: Record<string, SessionData> = {};
-
 export const useChatSessions = create<ChatSessionState>((set, get) => ({
   sessions: {},
+  standaloneData: {},
   activeConversationId: undefined,
   setActiveConversationId: (conversationId) =>
     set({ activeConversationId: conversationId }),
@@ -96,8 +95,9 @@ export const useChatSessions = create<ChatSessionState>((set, get) => ({
       : undefined;
 
     // Use existing standalone data if available, otherwise create new
-    const data = standaloneData[sessionId] ?? createSessionData();
-    delete standaloneData[sessionId]; // Move to session
+    const data = get().standaloneData[sessionId] ?? createSessionData();
+    // Move from standalone to session
+    const { [sessionId]: _, ...remainingStandalone } = get().standaloneData;
 
     const newSession: ChatSession = {
       chat,
@@ -114,6 +114,7 @@ export const useChatSessions = create<ChatSessionState>((set, get) => ({
         ...state.sessions,
         [sessionId]: newSession,
       },
+      standaloneData: remainingStandalone,
     }));
 
     return chat;
@@ -124,10 +125,15 @@ export const useChatSessions = create<ChatSessionState>((set, get) => ({
       return existing.data;
     }
     // Return or create standalone data for sessions without a Chat yet
-    if (!standaloneData[sessionId]) {
-      standaloneData[sessionId] = createSessionData();
+    const standalone = get().standaloneData;
+    if (!standalone[sessionId]) {
+      const newData = createSessionData();
+      set((state) => ({
+        standaloneData: { ...state.standaloneData, [sessionId]: newData },
+      }));
+      return newData;
     }
-    return standaloneData[sessionId];
+    return standalone[sessionId];
   },
   updateStatus: (sessionId, status) => {
     set((state) => {
@@ -193,7 +199,11 @@ export const useChatSessions = create<ChatSessionState>((set, get) => ({
   removeSession: (sessionId) => {
     const existing = get().sessions[sessionId];
     if (!existing) {
-      delete standaloneData[sessionId];
+      // Remove from standalone data immutably
+      set((state) => {
+        const { [sessionId]: _, ...rest } = state.standaloneData;
+        return { standaloneData: rest };
+      });
       return;
     }
 
@@ -202,9 +212,9 @@ export const useChatSessions = create<ChatSessionState>((set, get) => ({
       if (!state.sessions[sessionId]) {
         return state;
       }
-      const rest = { ...state.sessions };
-      delete rest[sessionId];
-      return { sessions: rest };
+      const { [sessionId]: _s, ...restSessions } = state.sessions;
+      const { [sessionId]: _d, ...restStandalone } = state.standaloneData;
+      return { sessions: restSessions, standaloneData: restStandalone };
     });
 
     // Then cleanup (existing is a copy, safe to use after removal)
@@ -220,8 +230,6 @@ export const useChatSessions = create<ChatSessionState>((set, get) => ({
     } catch (error) {
       console.error("Failed to stop chat session", error);
     }
-
-    delete standaloneData[sessionId];
   },
   clearSessions: () => {
     const sessions = get().sessions;
@@ -240,11 +248,6 @@ export const useChatSessions = create<ChatSessionState>((set, get) => ({
       }
     });
 
-    // Clear standalone data
-    Object.keys(standaloneData).forEach((key) => {
-      delete standaloneData[key];
-    });
-
-    set({ sessions: {}, activeConversationId: undefined });
+    set({ sessions: {}, standaloneData: {}, activeConversationId: undefined });
   },
 }));

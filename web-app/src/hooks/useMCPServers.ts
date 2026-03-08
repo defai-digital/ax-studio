@@ -12,6 +12,8 @@ export type MCPServerConfig = {
   headers?: Record<string, string>
   timeout?: number
   official?: boolean
+  managed?: boolean
+  integration?: string
 }
 
 // Define the structure of all MCP servers

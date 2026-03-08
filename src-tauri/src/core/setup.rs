@@ -35,7 +35,7 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
     let pre_install_path = app
         .path()
         .resource_dir()
-        .unwrap()
+        .map_err(|e| format!("Failed to get resource dir: {e}"))?
         .join("resources")
         .join("pre-install");
 
@@ -339,9 +339,7 @@ pub fn setup_mcp<R: Runtime>(app: &App<R>) {
         if let Err(e) = run_mcp_commands(&app_handle, servers).await {
             log::error!("Failed to run mcp commands: {e}");
         }
-        app_handle
-            .emit("mcp-update", "MCP servers updated")
-            .unwrap();
+        let _ = app_handle.emit("mcp-update", "MCP servers updated");
     });
 }
 
@@ -352,7 +350,10 @@ pub fn setup_tray(app: &App) -> tauri::Result<TrayIcon> {
     let separator_i = PredefinedMenuItem::separator(app.handle())?;
     let menu = Menu::with_items(app.handle(), &[&show_i, &separator_i, &quit_i])?;
     TrayIconBuilder::with_id("tray")
-        .icon(app.default_window_icon().unwrap().clone())
+        .icon(app.default_window_icon().cloned().unwrap_or_else(|| {
+            log::warn!("No default window icon configured, using empty icon");
+            tauri::image::Image::new(&[], 0, 0)
+        }))
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_tray_icon_event(|tray, event| match event {
@@ -375,9 +376,10 @@ pub fn setup_tray(app: &App) -> tauri::Result<TrayIcon> {
         })
         .on_menu_event(|app, event| match event.id.as_ref() {
             "open" => {
-                let window = app.get_webview_window("main").unwrap();
-                window.show().unwrap();
-                window.set_focus().unwrap();
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
             }
             "quit" => {
                 app.exit(0);

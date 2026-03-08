@@ -20,7 +20,9 @@
 - **Ax-Studio Backend Integration** — Point the app at your self-hosted services for model inference, retrieval, agent orchestration, and vector storage
 - **Model Context Protocol (MCP)** — Plug in MCP servers to give the AI access to tools, APIs, and external data sources
 - **Conversation Management** — Persistent threads with full message history, custom assistants, and project workspaces
+- **Workspaces & Projects** — Organize your chats into distinct projects, manage project-specific local files, and export conversation data
 - **Model Catalog** — Browse and download GGUF models from HuggingFace directly inside the app
+- **Voice Interaction** — Built-in support for Speech-to-Text (STT) and Text-to-Speech (TTS) for a hands-free AI experience
 - **Local API Server** — OpenAI-compatible API on `localhost:1337` for other applications to consume
 - **Extension System** — TypeScript-based extension API for adding providers, tools, and capabilities
 - **Cross-Platform** — Ships as native installers for macOS, Windows, and Linux (including Flatpak)

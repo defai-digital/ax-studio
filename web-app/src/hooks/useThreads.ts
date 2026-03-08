@@ -108,12 +108,14 @@ export const useThreads = create<ThreadState>()((set, get) => ({
   },
   toggleFavorite: (threadId) => {
     set((state) => {
+      if (!state.threads[threadId]) return state
       getServiceHub()
         .threads()
         .updateThread({
           ...state.threads[threadId],
           isFavorite: !state.threads[threadId].isFavorite,
         })
+        .catch(console.error)
       return {
         threads: {
           ...state.threads,
@@ -131,7 +133,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { [threadId]: _, ...remainingThreads } = state.threads
 
-      getServiceHub().threads().deleteThread(threadId)
+      getServiceHub().threads().deleteThread(threadId).catch(console.error)
 
       return {
         threads: remainingThreads,
@@ -166,7 +168,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
 
       // Delete threads
       threadsToDeleteIds.forEach((threadId) => {
-        getServiceHub().threads().deleteThread(threadId)
+        getServiceHub().threads().deleteThread(threadId).catch(console.error)
       })
 
       // Keep favorite threads and threads with project metadata
@@ -197,7 +199,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
 
       // Delete all threads
       allThreadIds.forEach((threadId) => {
-        getServiceHub().threads().deleteThread(threadId)
+        getServiceHub().threads().deleteThread(threadId).catch(console.error)
       })
 
       return {
@@ -221,7 +223,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
 
       // Delete threads belonging to this project
       threadsToDeleteIds.forEach((threadId) => {
-        getServiceHub().threads().deleteThread(threadId)
+        getServiceHub().threads().deleteThread(threadId).catch(console.error)
       })
 
       // Keep threads that don't belong to this project
@@ -259,6 +261,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
         getServiceHub()
           .threads()
           .updateThread({ ...thread, isFavorite: false })
+          .catch(console.error)
       })
       return { threads: updatedThreads }
     })
@@ -344,6 +347,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
             ...currentThread,
             assistants: assistant ? [{ ...assistant, model: currentThread.model }] : [],
           })
+          .catch(console.error)
       return {
         threads: {
           ...state.threads,
@@ -364,6 +368,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
         getServiceHub()
           .threads()
           .updateThread({ ...currentThread, model })
+          .catch(console.error)
       return {
         threads: {
           ...state.threads,
@@ -384,7 +389,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
         title: newTitle,
         updated: Date.now() / 1000,
       }
-      getServiceHub().threads().updateThread(updatedThread) // External call, order is fine
+      getServiceHub().threads().updateThread(updatedThread).catch(console.error)
       const newThreads = { ...state.threads, [threadId]: updatedThread }
       return {
         threads: newThreads,
@@ -417,7 +422,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       updatedThreads[threadId] = updatedThread
 
       // Update the backend for the main thread
-      getServiceHub().threads().updateThread(updatedThread)
+      getServiceHub().threads().updateThread(updatedThread).catch(console.error)
 
       return {
         threads: updatedThreads,
@@ -443,7 +448,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
         updated: Date.now() / 1000,
       }
 
-      getServiceHub().threads().updateThread(updatedThread)
+      getServiceHub().threads().updateThread(updatedThread).catch(console.error)
 
       const newThreads = { ...state.threads, [threadId]: updatedThread }
       return {

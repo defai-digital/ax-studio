@@ -14,7 +14,7 @@ core/lib/**
 *.tsbuildinfo
 test_results.html
 pre-install
-
+*.md
 # docs
 docs/yarn.lock
 src-tauri/resources/lib
@@ -31,10 +31,18 @@ Claude.md
 archive/
 .cache/
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+.venv/
+
 # auto qa
 autoqa/trajectories
 autoqa/recordings
-autoqa/__pycache__
 
 # Astro / Starlight specific
 website/dist/

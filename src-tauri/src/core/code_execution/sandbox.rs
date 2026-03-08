@@ -108,9 +108,8 @@ pub fn is_docker_running() -> bool {
 // Sandbox container health check
 // ---------------------------------------------------------------------------
 
-/// Returns true if the sandbox port is accepting TCP connections.
-/// Uses a plain TCP socket — no reqwest, no async HTTP — to avoid runtime
-/// issues inside the Tauri process on Windows.
+/// Returns true if the sandbox is accepting TCP connections AND responds to HTTP.
+/// First does a TCP connect check (fast), then verifies with an HTTP GET.
 pub async fn is_sandbox_ready(base_url: &str) -> bool {
     use std::net::TcpStream;
 
@@ -129,7 +128,7 @@ pub async fn is_sandbox_ready(base_url: &str) -> bool {
         format!("{host_port}:8080")
     };
 
-    tokio::task::spawn_blocking(move || {
+    let tcp_ok = tokio::task::spawn_blocking(move || {
         TcpStream::connect_timeout(
             &addr.parse().unwrap_or_else(|_| "127.0.0.1:8080".parse().unwrap()),
             Duration::from_secs(3),
@@ -137,7 +136,27 @@ pub async fn is_sandbox_ready(base_url: &str) -> bool {
         .is_ok()
     })
     .await
-    .unwrap_or(false)
+    .unwrap_or(false);
+
+    if !tcp_ok {
+        return false;
+    }
+
+    // Verify with HTTP GET to confirm the service is actually ready
+    let client = match reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+
+    client
+        .get(format!("{}/health", base_url))
+        .send()
+        .await
+        .map(|r| r.status().is_success() || r.status().as_u16() == 404)
+        .unwrap_or(false)
 }
 
 // ---------------------------------------------------------------------------
@@ -146,7 +165,7 @@ pub async fn is_sandbox_ready(base_url: &str) -> bool {
 
 /// Attempt to start the ax-sandbox container.
 /// Handles the "already running" case gracefully.
-pub fn start_sandbox_container() -> Result<(), String> {
+pub fn start_sandbox_container(port: u16) -> Result<(), String> {
     let docker = find_docker_binary().ok_or("Docker not found. Please install Docker Desktop.")?;
 
     // Try to start an existing stopped container first
@@ -161,13 +180,13 @@ pub fn start_sandbox_container() -> Result<(), String> {
     }
 
     // Container doesn't exist — create and run it
+    let port_mapping = format!("{}:8080", port);
     let result = Command::new(&docker)
         .args([
             "run",
             "-d",
             "--name", "ax-sandbox",
-            "--security-opt", "seccomp=unconfined",
-            "-p", "8080:8080",
+            "-p", &port_mapping,
             "ghcr.io/agent-infra/sandbox:latest",
         ])
         .output()
@@ -231,7 +250,6 @@ pub async fn execute_via_sandbox(
 ) -> Result<SandboxExecutionResult, String> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(timeout_secs + 10))
-        .connection_verbose(true)
         .build()
         .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
 
@@ -334,17 +352,37 @@ pub struct SandboxStatus {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Remove ANSI escape sequences (e.g. \x1b[31m) from a string.
+/// Remove ANSI escape sequences (e.g. \x1b[31m, OSC \x1b]...\x07, single-char \x1bX) from a string.
 fn strip_ansi(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut chars = s.chars().peekable();
     while let Some(c) = chars.next() {
         if c == '\x1b' {
-            // consume until a letter that ends the escape sequence
-            if chars.peek() == Some(&'[') {
-                chars.next();
-                for nc in chars.by_ref() {
-                    if nc.is_ascii_alphabetic() { break; }
+            match chars.peek() {
+                Some(&'[') => {
+                    // CSI sequence: consume until a letter
+                    chars.next();
+                    for nc in chars.by_ref() {
+                        if nc.is_ascii_alphabetic() { break; }
+                    }
+                }
+                Some(&']') => {
+                    // OSC sequence: consume until BEL (\x07) or ST (\x1b\\)
+                    chars.next();
+                    while let Some(nc) = chars.next() {
+                        if nc == '\x07' { break; }
+                        if nc == '\x1b' && chars.peek() == Some(&'\\') {
+                            chars.next();
+                            break;
+                        }
+                    }
+                }
+                Some(nc) if nc.is_ascii_alphabetic() => {
+                    // Single-char escape (e.g. \x1bM): consume the letter
+                    chars.next();
+                }
+                _ => {
+                    // Unknown escape, skip
                 }
             }
         } else {

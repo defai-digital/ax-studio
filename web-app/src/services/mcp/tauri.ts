@@ -31,7 +31,13 @@ export class TauriMCPService extends DefaultMCPService {
       return defaultResponse()
     }
 
-    const parsed = JSON.parse(configString) as MCPConfig & Record<string, unknown>
+    let parsed: MCPConfig & Record<string, unknown>
+    try {
+      parsed = JSON.parse(configString) as MCPConfig & Record<string, unknown>
+    } catch {
+      console.error('Failed to parse MCP config JSON:', configString)
+      return defaultResponse()
+    }
 
     if (!parsed || typeof parsed !== 'object') {
       return defaultResponse()
@@ -58,11 +64,11 @@ export class TauriMCPService extends DefaultMCPService {
   }
 
   async getTools(): Promise<MCPTool[]> {
-    return window.core?.api?.getTools()
+    return (await window.core?.api?.getTools()) ?? []
   }
 
   async getConnectedServers(): Promise<string[]> {
-    return window.core?.api?.getConnectedServers()
+    return (await window.core?.api?.getConnectedServers()) ?? []
   }
 
   async callTool(args: {
@@ -70,7 +76,7 @@ export class TauriMCPService extends DefaultMCPService {
     serverName?: string
     arguments: object
   }): Promise<{ error: string; content: { text: string }[] }> {
-    return window.core?.api?.callTool(args)
+    return (await window.core?.api?.callTool(args)) ?? { error: 'MCP service unavailable', content: [] }
   }
 
   callToolWithCancellation(args: {

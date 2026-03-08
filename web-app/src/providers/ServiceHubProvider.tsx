@@ -9,6 +9,7 @@ interface ServiceHubProviderProps {
 
 export function ServiceHubProvider({ children }: ServiceHubProviderProps) {
   const [isReady, setIsReady] = useState(false)
+  const [initError, setInitError] = useState<string | null>(null)
 
   useEffect(() => {
     // Sync persisted service URLs to the Rust backend so the proxy server
@@ -25,9 +26,27 @@ export function ServiceHubProvider({ children }: ServiceHubProviderProps) {
       })
       .catch((error) => {
         console.error('Service initialization failed:', error)
-        setIsReady(true) // Still render to show error state
+        const message = error instanceof Error ? error.message : 'Unknown error'
+        setInitError(message)
+        setIsReady(true)
       })
   }, [])
 
-  return <>{isReady && children}</>
+  if (!isReady) return null
+
+  if (initError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-6 text-center">
+        <div className="max-w-lg space-y-3">
+          <h1 className="text-lg font-semibold">Ax-Fabric failed to initialize</h1>
+          <p className="text-sm text-muted-foreground">
+            Service startup failed. Please restart the app.
+          </p>
+          <p className="text-xs text-muted-foreground/80">{initError}</p>
+        </div>
+      </div>
+    )
+  }
+
+  return <>{children}</>
 }

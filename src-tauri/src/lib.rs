@@ -151,6 +151,13 @@ pub fn run() {
         core::agent_run_logs::save_agent_run_log,
         core::agent_run_logs::list_agent_run_logs,
         core::agent_run_logs::get_agent_run_log,
+        // Integration commands
+        core::integrations::commands::save_integration_token,
+        core::integrations::commands::delete_integration_token,
+        core::integrations::commands::get_integration_status,
+        core::integrations::commands::get_all_integration_statuses,
+        core::integrations::commands::validate_integration_token,
+        core::integrations::commands::start_oauth_flow,
     ]);
 
     // Mobile: no updater commands
@@ -253,6 +260,13 @@ pub fn run() {
         core::agent_run_logs::save_agent_run_log,
         core::agent_run_logs::list_agent_run_logs,
         core::agent_run_logs::get_agent_run_log,
+        // Integration commands
+        core::integrations::commands::save_integration_token,
+        core::integrations::commands::delete_integration_token,
+        core::integrations::commands::get_integration_status,
+        core::integrations::commands::get_all_integration_statuses,
+        core::integrations::commands::validate_integration_token,
+        core::integrations::commands::start_oauth_flow,
     ]);
 
     let app = app_builder

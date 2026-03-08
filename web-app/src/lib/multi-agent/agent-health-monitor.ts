@@ -16,17 +16,17 @@ export class AgentHealthMonitor {
 
     if (circuit.state === 'open') {
       if (Date.now() - circuit.lastFailure > RESET_TIMEOUT_MS) {
-        // Allow one probe. Stay 'open' so concurrent calls are blocked.
+        // Transition to half-open and allow one probe call.
         // If the probe succeeds, recordSuccess() will close the circuit.
-        // If it fails, recordFailure() keeps it open with a fresh timer.
+        // If it fails, recordFailure() reopens it with a fresh timer.
+        circuit.state = 'half-open'
         return true
       }
       return false
     }
 
-    // half-open state should not normally be reached (we removed the transition above),
-    // but handle it defensively by allowing a call
-    return true
+    // half-open: already probing, block concurrent calls
+    return false
   }
 
   recordSuccess(agentId: string): void {

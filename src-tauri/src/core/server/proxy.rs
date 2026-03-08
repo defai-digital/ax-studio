@@ -65,7 +65,7 @@ fn transform_anthropic_to_openai(body: &serde_json::Value) -> Option<serde_json:
 
     // Pass through common parameters
     for key in &[
-        // "max_tokens",
+        "max_tokens",
         "temperature",
         "top_p",
         "top_k",
@@ -1367,9 +1367,16 @@ async fn proxy_request<R: tauri::Runtime>(
                     log::info!("Fallback to chat completions: {chat_url}");
 
                     // Create a fresh client for the fallback to avoid connection pool issues
-                    let fallback_client = Client::builder()
-                        .build()
-                        .expect("Failed to create fallback client");
+                    let fallback_client = match Client::builder().build() {
+                        Ok(c) => c,
+                        Err(e) => {
+                            log::error!("Failed to create fallback client: {e}");
+                            return Ok(Response::builder()
+                                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                                .body(Body::from(format!("Failed to create fallback client: {e}")))
+                                .unwrap());
+                        }
+                    };
 
                     let mut fallback_req = fallback_client.post(&chat_url);
 
@@ -1606,7 +1613,7 @@ async fn start_server_internal<R: tauri::Runtime>(
     prefix: String,
     proxy_api_key: String,
     trusted_hosts: Vec<Vec<String>>,
-    proxy_timeout: u64,
+    _proxy_timeout: u64,
     app_handle: tauri::AppHandle<R>,
 ) -> Result<u16, Box<dyn std::error::Error + Send + Sync>> {
     let mut handle_guard = server_handle.lock().await;
@@ -1627,7 +1634,7 @@ async fn start_server_internal<R: tauri::Runtime>(
     };
 
     let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(proxy_timeout))
+        .connect_timeout(std::time::Duration::from_secs(30))
         .pool_max_idle_per_host(10)
         .pool_idle_timeout(std::time::Duration::from_secs(30))
         .build()?;
@@ -1713,13 +1720,20 @@ async fn transform_and_forward_stream<S>(
     let mut text_block_index: Option<usize> = None;
     let mut tool_blocks: HashMap<usize, usize> = HashMap::new(); // OAI tool index -> Anthropic block index
     let mut next_block_index: usize = 0;
+    let mut line_buffer = String::new();
 
     while let Some(chunk_result) = stream.next().await {
         match chunk_result {
             Ok(chunk) => {
                 let chunk_str = String::from_utf8_lossy(&chunk);
+                line_buffer.push_str(&chunk_str);
 
-                for line in chunk_str.lines() {
+                // Process only complete lines; keep partial last line in buffer
+                let lines: Vec<&str> = line_buffer.split('\n').collect();
+                let complete_lines = &lines[..lines.len() - 1];
+                let remainder = lines[lines.len() - 1];
+
+                for line in complete_lines {
                     if !line.starts_with("data:") {
                         continue;
                     }
@@ -1785,7 +1799,7 @@ async fn transform_and_forward_stream<S>(
                         None => continue,
                     };
                     let finish_reason = choice.and_then(|c| c.get("finish_reason"));
-                    let has_finish = finish_reason.is_some() && !finish_reason.unwrap().is_null();
+                    let has_finish = finish_reason.map_or(false, |v| !v.is_null());
 
                     // First chunk: send message_start
                     if is_first {
@@ -1978,10 +1992,30 @@ async fn transform_and_forward_stream<S>(
                         return;
                     }
                 }
+                line_buffer = remainder.to_string();
             }
             Err(e) => {
                 log::error!("Stream error: {e}");
                 break;
+            }
+        }
+    }
+    // Process any remaining data in line_buffer after stream ends
+    if !line_buffer.trim().is_empty() {
+        for line in line_buffer.split('\n') {
+            if line.starts_with("data:") {
+                let json_str = line.trim_start_matches("data:").trim();
+                if json_str == "[DONE]" {
+                    break;
+                }
+                if let Ok(data) = serde_json::from_str::<serde_json::Value>(json_str) {
+                    log::debug!("Processing remaining buffered SSE line after stream end");
+                    // Forward as raw SSE to avoid duplicating the full processing logic
+                    let forward = format!("data: {}\n\n", data);
+                    if sender.send_data(Bytes::from(forward)).await.is_err() {
+                        break;
+                    }
+                }
             }
         }
     }

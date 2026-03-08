@@ -40,8 +40,23 @@ pub fn mv<R: Runtime>(app_handle: tauri::AppHandle<R>, args: Vec<String>) -> Res
         return Err("mv error: Invalid argument - source and destination required".to_string());
     }
 
+    let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app_handle.clone());
     let source = resolve_path(app_handle.clone(), &args[0]);
     let destination = resolve_path(app_handle, &args[1]);
+
+    if !source.starts_with(&app_data_folder) {
+        return Err(format!(
+            "mv error: source path {} is not under app data folder",
+            source.display()
+        ));
+    }
+
+    if !destination.starts_with(&app_data_folder) {
+        return Err(format!(
+            "mv error: destination path {} is not under app data folder",
+            destination.display()
+        ));
+    }
 
     if !source.exists() {
         return Err("mv error: Source path does not exist".to_string());
@@ -59,9 +74,18 @@ pub fn join_path<R: Runtime>(
         return Err("join_path error: Invalid argument".to_string());
     }
 
+    let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app_handle.clone());
     let path = resolve_path(app_handle, &args[0]);
     let joined_path = args[1..].iter().fold(path, |acc, part| acc.join(part));
-    Ok(joined_path.to_string_lossy().to_string())
+    // Normalize to resolve any ".." segments from subsequent args
+    let normalized = ax_fabric_utils::normalize_path(&joined_path);
+    if !normalized.starts_with(&app_data_folder) {
+        return Err(format!(
+            "join_path error: result path {} is outside app data folder",
+            normalized.display()
+        ));
+    }
+    Ok(normalized.to_string_lossy().to_string())
 }
 
 #[tauri::command]
@@ -118,7 +142,9 @@ pub fn write_file_sync<R: Runtime>(
 
     let path = resolve_path(app_handle, &args[0]);
     let content = &args[1];
-    fs::write(&path, content).map_err(|e| e.to_string())
+    let tmp_path = path.with_extension("tmp");
+    fs::write(&tmp_path, content).map_err(|e| e.to_string())?;
+    fs::rename(&tmp_path, &path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -155,9 +181,12 @@ pub fn write_yaml(
             app_data_folder.to_string_lossy(),
         ));
     }
-    let file = fs::File::create(&save_path).map_err(|e| e.to_string())?;
+    let tmp_path = save_path.with_extension("yaml.tmp");
+    let file = fs::File::create(&tmp_path).map_err(|e| e.to_string())?;
     let mut writer = std::io::BufWriter::new(file);
     serde_yaml::to_writer(&mut writer, &data).map_err(|e| e.to_string())?;
+    drop(writer);
+    fs::rename(&tmp_path, &save_path).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -223,7 +252,18 @@ pub fn decompress<R: Runtime>(
     if path.ends_with(".tar.gz") {
         let tar = flate2::read::GzDecoder::new(file);
         let mut archive = tar::Archive::new(tar);
-        archive.unpack(&output_dir_buf).map_err(|e| e.to_string())?;
+        for entry in archive.entries().map_err(|e| e.to_string())? {
+            let mut entry = entry.map_err(|e| e.to_string())?;
+            let entry_path = entry.path().map_err(|e| e.to_string())?;
+            let full_path = ax_fabric_utils::normalize_path(&output_dir_buf.join(&entry_path));
+            if !full_path.starts_with(&output_dir_buf) {
+                return Err(format!(
+                    "Tar entry path traversal blocked: {}",
+                    entry_path.display()
+                ));
+            }
+            entry.unpack(&full_path).map_err(|e| e.to_string())?;
+        }
     } else if path.ends_with(".zip") {
         let mut zip = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
         for i in 0..zip.len() {

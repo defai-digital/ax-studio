@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useState, useRef, useMemo, useCallback, memo } from 'react'
 import {
   Popover,
@@ -15,7 +14,6 @@ import { route } from '@/constants/routes'
 import { useThreads } from '@/hooks/useThreads'
 import { ModelSetting } from '@/containers/ModelSetting'
 import ProvidersAvatar from '@/containers/ProvidersAvatar'
-import { ModelSupportStatus } from '@/containers/ModelSupportStatus'
 import { Fzf } from 'fzf'
 import { localStorageKey } from '@/constants/localStorage'
 import { useTranslation } from '@/i18n/react-i18next-compat'
@@ -82,14 +80,6 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
     },
     [providers]
   )
-
-  // Helper function to get context size from model settings
-  const getContextSize = useCallback((): number => {
-    if (!selectedModel?.settings?.ctx_len?.controller_props?.value) {
-      return 8192 // Default context size
-    }
-    return selectedModel.settings.ctx_len.controller_props.value as number
-  }, [selectedModel?.settings?.ctx_len?.controller_props?.value])
 
   // Initialize model provider - avoid race conditions with manual selections
   useEffect(() => {
@@ -347,12 +337,6 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
                 provider={provider}
               />
             )}
-          <ModelSupportStatus
-            modelId={selectedModel?.id}
-            provider={selectedProvider}
-            contextSize={getContextSize()}
-            className="ml-0.5 shrink-0"
-          />
         </div>
         </PopoverTrigger>
 

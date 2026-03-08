@@ -79,7 +79,8 @@ export const useMessages = create<MessageState>()((set, get) => ({
     })
   },
   deleteMessage: (threadId, messageId) => {
-    getServiceHub().messages().deleteMessage(threadId, messageId)
+    const previousMessages = get().messages[threadId]
+    // Optimistic update
     set((state) => ({
       messages: {
         ...state.messages,
@@ -89,6 +90,15 @@ export const useMessages = create<MessageState>()((set, get) => ({
           ) || [],
       },
     }))
+    getServiceHub().messages().deleteMessage(threadId, messageId).catch((error) => {
+      console.error('Failed to delete message, rolling back:', error)
+      // Rollback on failure
+      if (previousMessages) {
+        set((state) => ({
+          messages: { ...state.messages, [threadId]: previousMessages },
+        }))
+      }
+    })
   },
   clearAllMessages: () => {
     set({ messages: {} })

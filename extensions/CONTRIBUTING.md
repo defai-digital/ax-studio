@@ -6,69 +6,60 @@ Extensions add specific features to Ax-Studio as self-contained modules.
 
 ## Current Extensions
 
-### `/assistant-extension`
-- Assistant CRUD operations
-- `src/index.ts` - Main implementation
+- **`assistant-extension/`**: CRUD operations for AI assistants.
+- **`conversational-extension/`**: Logic for managing threads and messages.
+- **`download-extension/`**: Downloads models from HuggingFace with progress tracking.
+- **`llamacpp-extension/`**: Local model inference via `llama.cpp`.
 
-### `/conversational-extension` 
-- Message handling, conversation state
-- `src/index.ts` - Chat logic
+## Quick Start: "Hello World" Extension
 
-### `/download-extension`
-- Model downloads with progress tracking
-- `src/index.ts` - Download logic
-- `settings.json` - Download settings
-
-### `/llamacpp-extension`
-- Local model inference via llama.cpp
-- `src/index.ts` - Entry point
-- `src/backend.ts` - llama.cpp integration
-- `settings.json` - Model settings
-
-## Creating Extensions
-
-### Setup
-
+### 1. Create the Directory
 ```bash
-mkdir my-extension
-cd my-extension  
+mkdir extensions/hello-world
+cd extensions/hello-world
 yarn init
 ```
 
-### Structure
-
-```
-my-extension/
-├── package.json
-├── rolldown.config.mjs
-├── src/index.ts
-└── settings.json (optional)
-```
-
-### Basic Extension
-
-```typescript
-import { Extension } from '@ax-studio/core'
-
-export default class MyExtension extends Extension {
-  async onLoad() {
-    // Extension initialization
-  }
-  
-  async onUnload() {
-    // Cleanup
+### 2. Configure `package.json`
+Ensure your `package.json` follows this format:
+```json
+{
+  "name": "@ax-fabric/hello-world",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "dependencies": {
+    "@ax-fabric/core": "../../core/package.tgz"
+  },
+  "scripts": {
+    "build": "rolldown -c rolldown.config.mjs"
   }
 }
 ```
 
-## Building & Testing
+### 3. Implement `src/index.ts`
+```typescript
+import { Extension } from '@ax-studio/core'
 
+export default class HelloWorld extends BaseExtension {
+  async onLoad() {
+    console.log('Hello world extension loaded!');
+    
+    // Register a simple command that can be called from the UI
+    this.registerService('greet', {
+      sayHi: async (name: string) => `Hello, ${name}!`
+    });
+  }
+
+  async onUnload() {
+    console.log('Hello world extension unloaded');
+  }
+}
+```
+
+### 4. Build and Install
 ```bash
-# Build extension
 yarn build
-
-# Run tests
-yarn test
+# This creates a .tgz file. Install it in Ax-Fabric via Settings > Extensions.
 ```
 
 ## Common Patterns

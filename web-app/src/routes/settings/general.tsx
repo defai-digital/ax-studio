@@ -51,6 +51,7 @@ function General() {
     applyMode,
     setApplyMode,
   } = useGeneralSetting()
+  const safeGlobalDefaultPrompt = globalDefaultPrompt ?? ''
   const serviceHub = useServiceHub()
 
   const openFileTitle = (): string => {
@@ -231,7 +232,7 @@ function General() {
                 actions={
                   <div className="w-full max-w-xl space-y-2">
                     <Textarea
-                      value={globalDefaultPrompt}
+                      value={safeGlobalDefaultPrompt}
                       onChange={(event) =>
                         setGlobalDefaultPrompt(event.target.value)
                       }
@@ -239,7 +240,7 @@ function General() {
                       placeholder={fallbackDefaultPrompt}
                     />
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>{globalDefaultPrompt.length} characters</span>
+                      <span>{safeGlobalDefaultPrompt.length} characters</span>
                       <Button
                         variant="ghost"
                         size="sm"
