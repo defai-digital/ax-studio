@@ -7,6 +7,7 @@
   "compilerOptions": {
     "paths": {
       "@/*": ["./src/*"],
+      "@ax-fabric/core": ["../core/dist/types/index.d.ts"],
       "@ax-fabric/conversational-extension": ["../extensions/conversational-extension/src/index.ts"]
     }
   }

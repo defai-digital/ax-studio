@@ -1,68 +1,106 @@
-## @ax-fabric/core
+# @ax-fabric/core
 
-> This module includes functions for communicating with core APIs, registering app extensions, and exporting type definitions.
+The Core SDK for the Ax-Fabric AI application framework. This library provides the essential TypeScript interfaces, base classes, and system bridges required to build and extend Ax-Fabric.
 
-## Usage
+## Roles & Responsibilities
 
-### Import the package
+1.  **System Bridge**: Exposes native Tauri functionality (File System, OS, Shell) to the frontend via a unified `core.api` object.
+2.  **Extension System**: Defines the `Extension` base class and lifecycle hooks (`onLoad`, `onUnload`) for modular feature development.
+3.  **Type Definitions**: Serves as the single source of truth for shared data structures (Messages, Threads, Models, Settings).
+4.  **Event Bus**: Provides a global event system for communication between the core app and installed extensions.
 
-```js
-// Web / extension runtime
-import * as core from '@ax-fabric/core'
+## Installation
+
+```bash
+# In a workspace package (e.g., an extension)
+yarn add @ax-fabric/core
 ```
 
-## Build an Extension
+## Core API Reference
 
-1. Download an extension template.
+The Core SDK attaches itself to the global scope as `window.core` (in the browser) or `globalThis.core` (in extensions).
 
-2. Update the source code:
+### Filesystem API
+```typescript
+import { fs } from '@ax-fabric/core';
 
-   1. Open `index.ts` in your code editor.
-   2. Rename the extension class from `SampleExtension` to your preferred extension name.
-   3. Import modules from the core package.
-      ```ts
-      import * as core from '@ax-fabric/core'
-      ```
-   4. In the `onLoad()` method, add your code:
+// Read a file from the app data folder
+const content = await fs.readFile('settings.json');
 
-      ```ts
-      // Example of listening to app events and providing customized inference logic:
-      import * as core from '@ax-fabric/core'
+// Check if a file exists
+const exists = await fs.exists('models/llama3.gguf');
+```
 
-      export default class MyExtension extends BaseExtension {
-        // On extension load
-        onLoad() {
-          core.events.on(MessageEvent.OnMessageSent, (data) => MyExtension.inference(data, this))
-        }
+### Event System
+```typescript
+import { events } from '@ax-fabric/core';
 
-        // Customized inference logic
-        private static inference(incomingMessage: MessageRequestData) {
-          // Prepare customized message content
-          const content: ThreadContent = {
-            type: ContentType.Text,
-            text: {
-              value: "I'm Ax-Fabric Assistant!",
-              annotations: [],
-            },
-          }
+// Listen for new messages
+events.on('message:received', (msg) => {
+  console.log('New message:', msg.text);
+});
 
-          // Modify message and send out
-          const outGoingMessage: ThreadMessage = {
-            ...incomingMessage,
-            content,
-          }
-        }
-      }
-      ```
+// Emit a custom event
+events.emit('my-extension:action', { status: 'success' });
+```
 
-3. Build the extension:
-   1. Navigate to the extension directory.
-   2. Install dependencies.
-      ```bash
-      yarn install
-      ```
-   3. Compile the source code.
-      ```bash
-      yarn build
-      ```
-   4. Select the generated .tgz from Ax-Fabric > Settings > Extensions > Manual Installation.
+## Service Abstractions
+
+The Core SDK provides abstractions for interacting with Ax-Fabric's specialized backend services.
+
+### AkiDB (Vector Storage)
+AkiDB is a specialized vector database service. The Core SDK allows extensions to store and query embeddings.
+- **`core.api.akidb.store(vector, metadata)`**: Persist a vector embedding.
+- **`core.api.akidb.query(vector, topK)`**: Perform a similarity search.
+
+### Retrieval Service
+Handles document ingestion and semantic search orchestration.
+- **`core.api.retrieval.ingest(filePath)`**: Processes a local file (PDF, TXT, etc.) into the vector store.
+- **`core.api.retrieval.search(query)`**: Returns relevant context chunks for a given natural language query.
+
+## Creating an Extension
+
+All Ax-Fabric extensions must extend the `BaseExtension` class provided by the Core SDK.
+
+```typescript
+import { BaseExtension, MessageEvent } from '@ax-fabric/core';
+
+export default class MyCustomExtension extends BaseExtension {
+  /**
+   * Called when the extension is loaded by the application.
+   * Use this to register services, listen to events, or initialize state.
+   */
+  async onLoad() {
+    console.log('MyCustomExtension loaded!');
+
+    this.on(MessageEvent.OnMessageSent, (data) => {
+      // Intercept and process outgoing messages
+      console.log('Intercepted message:', data.content);
+    });
+  }
+
+  /**
+   * Called when the extension is disabled or the app is shutting down.
+   * Perform cleanup here (e.g., unsubscribing from external streams).
+   */
+  async onUnload() {
+    console.log('MyCustomExtension unloaded');
+  }
+}
+```
+
+## Development
+
+### Building the SDK
+```bash
+# From the root or core/ directory
+yarn build
+```
+
+The build process uses `tsc` for type generation and `rolldown` for bundling. The output is located in the `dist/` directory.
+
+### Testing
+```bash
+yarn test
+```
+Tests are written with `vitest` and cover core logic, event propagation, and utility functions.

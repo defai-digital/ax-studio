@@ -60,17 +60,17 @@ install-web-app:
 
 dev-web-app: install-web-app
 	yarn build:core
-	yarn dev:web-app
+	yarn dev:web
 
 build-web-app: install-web-app
 	yarn build:core
-	yarn build:web-app
+	yarn build:web
 
 serve-web-app:
-	yarn serve:web-app
+	yarn workspace @ax-fabric/web-app preview
 
 build-serve-web-app: build-web-app
-	yarn serve:web-app
+	yarn workspace @ax-fabric/web-app preview
 
 # Mobile
 dev-android: install-and-build install-android-rust-targets
@@ -116,6 +116,10 @@ endif
 	cargo test --manifest-path src-tauri/Cargo.toml --no-default-features --features test-tauri -- --test-threads=1
 	cargo test --manifest-path src-tauri/plugins/tauri-plugin-hardware/Cargo.toml
 	cargo test --manifest-path src-tauri/utils/Cargo.toml
+
+# Automated quality gates (module-level coverage audit + thresholds)
+test-quality:
+	bash scripts/testing/run-quality-gates.sh
 
 # Build
 build: install-and-build install-rust-targets

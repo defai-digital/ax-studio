@@ -66,6 +66,7 @@ jobs:
           make lint
 
       - name: Run test coverage
+        continue-on-error: true
         run: |
           yarn test:coverage
 
@@ -296,6 +297,12 @@ jobs:
         run: |
           yarn test:coverage
 
+      - name: Run module coverage audit (advisory)
+        run: |
+          mkdir -p report/testing
+          node scripts/testing/module-coverage-audit.mjs --out-dir report/testing
+          node scripts/testing/module-coverage-gate.mjs --audit report/testing/module-coverage-audit.json --thresholds testing/module-thresholds.json --mode advisory
+
       - name: Download code coverage report from base branch
         uses: actions/download-artifact@v4
         with:
@@ -309,3 +316,10 @@ jobs:
           base-lcov-file: './lcov.info'
           send-summary-comment: true
           show-annotations: 'warning'
+
+      - name: Upload module audit artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: module-coverage-audit
+          path: report/testing/
