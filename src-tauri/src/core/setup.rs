@@ -200,13 +200,57 @@ pub fn migrate_mcp_servers(
     }
     if mcp_version < 3 {
         log::info!("Migrating MCP schema version 3: Updating Exa to streamable HTTP");
-        if let Err(e) = migrate_exa_to_http(app_handle) {
+        if let Err(e) = migrate_exa_to_http(app_handle.clone()) {
             log::error!("Failed to migrate Exa to HTTP: {e}");
         }
     }
-    store.set("mcp_version", 3);
+    if mcp_version < 4 {
+        log::info!("Migrating MCP schema version 4: Adding ax-fabric MCP server");
+        let mcp_config = resolve_ax_fabric_mcp_config();
+        let result = add_server_config(app_handle, "ax-fabric".to_string(), mcp_config);
+        if let Err(e) = result {
+            log::error!("Failed to add ax-fabric MCP server config: {e}");
+        }
+    }
+    store.set("mcp_version", 4);
     store.save().expect("Failed to save store");
     Ok(())
+}
+
+/// Build the MCP server config for ax-fabric.
+/// If a local CLI is found on disk, uses `node <path> mcp server`.
+/// Otherwise falls back to `npx -y @ax-fabric/fabric-ingest mcp server`.
+fn resolve_ax_fabric_mcp_config() -> serde_json::Value {
+    // Check for a local development installation
+    if let Some(home) = dirs::home_dir() {
+        let local_path = home
+            .join("Downloads")
+            .join("ax-fabric")
+            .join("packages")
+            .join("fabric-ingest")
+            .join("dist")
+            .join("cli.js");
+        if local_path.exists() {
+            let cli_str = local_path.to_string_lossy().to_string();
+            log::info!("Found local ax-fabric CLI at {cli_str}");
+            return serde_json::json!({
+                "command": "node",
+                "args": [cli_str, "mcp", "server"],
+                "env": {},
+                "active": false,
+                "official": true
+            });
+        }
+    }
+
+    // Fallback: use npx
+    serde_json::json!({
+        "command": "npx",
+        "args": ["-y", "@ax-fabric/fabric-ingest", "mcp", "server"],
+        "env": {},
+        "active": false,
+        "official": true
+    })
 }
 
 fn migrate_exa_to_http(app_handle: tauri::AppHandle) -> Result<(), String> {

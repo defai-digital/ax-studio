@@ -1,26 +1,125 @@
 import { create } from 'zustand'
 import { invoke } from '@tauri-apps/api/core'
 
-export type AkidbConfig = {
-  'data-folder': string
-  frequency: number // minutes between reconciliation scans; 0 = real-time only
+// ─── Config types matching the Rust AkidbConfig struct ─────────────────────
+
+export type IngestSource = {
+  path: string
 }
 
+export type IngestChunking = {
+  chunk_size: number
+  overlap: number
+}
+
+export type FabricSection = {
+  data_root: string
+  max_storage_gb: number
+}
+
+export type AkidbSection = {
+  root: string
+  collection: string
+  metric: 'cosine' | 'l2' | 'dot'
+  dimension: number
+}
+
+export type IngestSection = {
+  sources: IngestSource[]
+  chunking: IngestChunking
+}
+
+export type EmbedderSection = {
+  type: 'local' | 'http' | 'cloudflare' | 'mcp'
+  model_id: string
+  dimension: number
+  batch_size: number
+  base_url?: string
+  api_key?: string
+  api_key_env?: string
+}
+
+export type ScheduleSection = {
+  interval_minutes: number
+}
+
+export type AkidbConfig = {
+  fabric: FabricSection
+  akidb: AkidbSection
+  ingest: IngestSection
+  embedder: EmbedderSection
+  schedule?: ScheduleSection
+}
+
+export type AkidbStatus = {
+  status: 'idle' | 'syncing' | 'error'
+  config_loaded: boolean
+  data_folder: string | null
+  last_sync_at: string | null
+  total_files: number
+  indexed_files: number
+  pending_files: number
+  error_files: number
+  daemon_pid: number | null
+}
+
+// ─── Default config factory ────────────────────────────────────────────────
+
+export function createDefaultConfig(dataFolder?: string): AkidbConfig {
+  return {
+    fabric: {
+      data_root: '~/.ax-fabric/data',
+      max_storage_gb: 50,
+    },
+    akidb: {
+      root: '~/.ax-fabric/data/akidb',
+      collection: 'default',
+      metric: 'cosine',
+      dimension: 1536,
+    },
+    ingest: {
+      sources: dataFolder ? [{ path: dataFolder }] : [],
+      chunking: {
+        chunk_size: 2800,
+        overlap: 0.15,
+      },
+    },
+    embedder: {
+      type: 'http',
+      model_id: 'gte-qwen2-1.5b-instruct-q4_k_m',
+      dimension: 1536,
+      batch_size: 4,
+      timeout_ms: 120000,
+      base_url: 'http://127.0.0.1:18080',
+    },
+    schedule: {
+      interval_minutes: 60,
+    },
+  }
+}
+
+// ─── Store ─────────────────────────────────────────────────────────────────
+
 type AkidbConfigStore = {
-  config: AkidbConfig | null // null = ~/.akidb/config.yaml does not exist yet
+  config: AkidbConfig | null
+  status: AkidbStatus | null
   loading: boolean
   saving: boolean
   error: string | null
 
-  /** Read current config from ~/.akidb/config.yaml via Tauri command */
+  /** Read current config from ~/.ax-fabric/config.yaml via Tauri command */
   load: () => Promise<void>
 
-  /** Write updated config to ~/.akidb/config.yaml via Tauri command */
+  /** Write updated config to ~/.ax-fabric/config.yaml via Tauri command */
   save: (config: AkidbConfig) => Promise<void>
+
+  /** Read daemon status from ~/.ax-fabric/status.json via Tauri command */
+  loadStatus: () => Promise<void>
 }
 
 export const useAkidbConfig = create<AkidbConfigStore>()((set) => ({
   config: null,
+  status: null,
   loading: false,
   saving: false,
   error: null,
@@ -44,9 +143,18 @@ export const useAkidbConfig = create<AkidbConfigStore>()((set) => ({
       set({ config })
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e) })
-      throw e // re-throw so the calling component can show a toast
+      throw e
     } finally {
       set({ saving: false })
+    }
+  },
+
+  loadStatus: async () => {
+    try {
+      const status = await invoke<AkidbStatus | null>('read_akidb_status')
+      set({ status })
+    } catch {
+      set({ status: null })
     }
   },
 }))

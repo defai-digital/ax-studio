@@ -57,6 +57,13 @@ pub const DEFAULT_MCP_CONFIG: &str = r#"{
       "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
       "env": {},
       "active": false
+    },
+    "ax-fabric": {
+      "command": "npx",
+      "args": ["-y", "@ax-fabric/fabric-ingest", "mcp", "server"],
+      "env": {},
+      "active": false,
+      "official": true
     }
   },
   "mcpSettings": {

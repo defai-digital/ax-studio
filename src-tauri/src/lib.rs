@@ -69,6 +69,7 @@ pub fn run() {
         core::filesystem::commands::write_binary_file,
         core::filesystem::commands::read_akidb_config,
         core::filesystem::commands::write_akidb_config,
+        core::filesystem::commands::read_akidb_status,
         // App configuration commands
         core::app::commands::get_app_configurations,
         core::app::commands::get_user_home_path,
@@ -173,6 +174,7 @@ pub fn run() {
         core::filesystem::commands::write_binary_file,
         core::filesystem::commands::read_akidb_config,
         core::filesystem::commands::write_akidb_config,
+        core::filesystem::commands::read_akidb_status,
         // App configuration commands
         core::app::commands::get_app_configurations,
         core::app::commands::get_user_home_path,

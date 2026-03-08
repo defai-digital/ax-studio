@@ -354,23 +354,265 @@ pub fn write_binary_file(path: String, hex_data: String) -> Result<(), String> {
     std::fs::write(&path, &data).map_err(|e| e.to_string())
 }
 
-// AkiDB config file management — reads/writes ~/.akidb/config.yaml
+// ax-fabric config file management — reads/writes ~/.ax-fabric/config.yaml
 // Uses dirs crate to resolve home directory; bypasses app_data_folder scope restriction
-// because AkiDB is a separate autonomous daemon that owns its own config path.
+// because ax-fabric is a separate autonomous daemon that owns its own config path.
 
+/// Top-level ax-fabric config matching the Zod schema in fabric-ingest/config-loader.ts
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct AkidbConfig {
-    #[serde(rename = "data-folder")]
-    pub data_folder: String,
-    pub frequency: u32, // minutes between reconciliation scans; 0 = real-time only
+    #[serde(default)]
+    pub fabric: FabricSection,
+    #[serde(default)]
+    pub akidb: AkidbSection,
+    #[serde(default)]
+    pub ingest: IngestSection,
+    #[serde(default)]
+    pub embedder: EmbedderSection,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schedule: Option<ScheduleSection>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chunking: Option<ChunkingSection>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lifecycle: Option<LifecycleSection>,
 }
 
-/// Read ~/.akidb/config.yaml and return the parsed config, or None if the file does not exist yet.
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct FabricSection {
+    #[serde(default = "default_data_root")]
+    pub data_root: String,
+    #[serde(default = "default_max_storage_gb")]
+    pub max_storage_gb: f64,
+}
+
+impl Default for FabricSection {
+    fn default() -> Self {
+        Self {
+            data_root: default_data_root(),
+            max_storage_gb: default_max_storage_gb(),
+        }
+    }
+}
+
+fn default_data_root() -> String {
+    "~/.ax-fabric/data".to_string()
+}
+fn default_max_storage_gb() -> f64 {
+    50.0
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct AkidbSection {
+    #[serde(default = "default_akidb_root")]
+    pub root: String,
+    #[serde(default = "default_collection")]
+    pub collection: String,
+    #[serde(default = "default_metric")]
+    pub metric: String,
+    #[serde(default = "default_dimension")]
+    pub dimension: u32,
+}
+
+impl Default for AkidbSection {
+    fn default() -> Self {
+        Self {
+            root: default_akidb_root(),
+            collection: default_collection(),
+            metric: default_metric(),
+            dimension: default_dimension(),
+        }
+    }
+}
+
+fn default_akidb_root() -> String {
+    "~/.ax-fabric/data/akidb".to_string()
+}
+fn default_collection() -> String {
+    "default".to_string()
+}
+fn default_metric() -> String {
+    "cosine".to_string()
+}
+fn default_dimension() -> u32 {
+    1536
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct IngestSection {
+    #[serde(default)]
+    pub sources: Vec<IngestSource>,
+    #[serde(default)]
+    pub chunking: IngestChunking,
+}
+
+impl Default for IngestSection {
+    fn default() -> Self {
+        Self {
+            sources: vec![],
+            chunking: IngestChunking::default(),
+        }
+    }
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct IngestSource {
+    pub path: String,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct IngestChunking {
+    #[serde(default = "default_chunk_size")]
+    pub chunk_size: u32,
+    #[serde(default = "default_overlap")]
+    pub overlap: f64,
+}
+
+impl Default for IngestChunking {
+    fn default() -> Self {
+        Self {
+            chunk_size: default_chunk_size(),
+            overlap: default_overlap(),
+        }
+    }
+}
+
+fn default_chunk_size() -> u32 {
+    2800
+}
+fn default_overlap() -> f64 {
+    0.15
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct EmbedderSection {
+    #[serde(default = "default_embedder_type", rename = "type")]
+    pub embedder_type: String,
+    #[serde(default = "default_model_id")]
+    pub model_id: String,
+    #[serde(default = "default_embedder_dimension")]
+    pub dimension: u32,
+    #[serde(default = "default_batch_size")]
+    pub batch_size: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_key_env: Option<String>,
+}
+
+impl Default for EmbedderSection {
+    fn default() -> Self {
+        Self {
+            embedder_type: default_embedder_type(),
+            model_id: default_model_id(),
+            dimension: default_embedder_dimension(),
+            batch_size: default_batch_size(),
+            base_url: Some("http://127.0.0.1:18080".to_string()),
+            api_key: None,
+            api_key_env: None,
+        }
+    }
+}
+
+fn default_embedder_type() -> String {
+    "http".to_string()
+}
+fn default_model_id() -> String {
+    "gte-qwen2-1.5b-instruct-q4_k_m".to_string()
+}
+fn default_embedder_dimension() -> u32 {
+    1536
+}
+fn default_batch_size() -> u32 {
+    64
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct ScheduleSection {
+    #[serde(default = "default_interval_minutes")]
+    pub interval_minutes: u32,
+}
+
+impl Default for ScheduleSection {
+    fn default() -> Self {
+        Self {
+            interval_minutes: default_interval_minutes(),
+        }
+    }
+}
+
+fn default_interval_minutes() -> u32 {
+    60
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct ChunkingSection {
+    #[serde(default = "default_chunking_strategy")]
+    pub default_strategy: String,
+    #[serde(default = "default_max_chunk_size")]
+    pub max_chunk_size: u32,
+    #[serde(default = "default_chunking_overlap")]
+    pub overlap: u32,
+}
+
+fn default_chunking_strategy() -> String {
+    "structured".to_string()
+}
+fn default_max_chunk_size() -> u32 {
+    2800
+}
+fn default_chunking_overlap() -> u32 {
+    200
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct LifecycleSection {
+    #[serde(default = "default_store_chunk_text")]
+    pub store_chunk_text: bool,
+    #[serde(default = "default_compact_threshold")]
+    pub compact_threshold: u32,
+    #[serde(default = "default_archive_retention_days")]
+    pub archive_retention_days: u32,
+}
+
+fn default_store_chunk_text() -> bool {
+    true
+}
+fn default_compact_threshold() -> u32 {
+    50
+}
+fn default_archive_retention_days() -> u32 {
+    7
+}
+
+/// Daemon status read from ~/.ax-fabric/status.json
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct AkidbStatus {
+    pub status: String,
+    pub config_loaded: bool,
+    #[serde(default)]
+    pub data_folder: Option<String>,
+    #[serde(default)]
+    pub last_sync_at: Option<String>,
+    #[serde(default)]
+    pub total_files: u64,
+    #[serde(default)]
+    pub indexed_files: u64,
+    #[serde(default)]
+    pub pending_files: u64,
+    #[serde(default)]
+    pub error_files: u64,
+    #[serde(default)]
+    pub daemon_pid: Option<u32>,
+}
+
+/// Read ~/.ax-fabric/config.yaml and return the parsed config, or None if the file does not exist.
 #[tauri::command]
 pub fn read_akidb_config() -> Result<Option<AkidbConfig>, String> {
-    let home = dirs::home_dir()
-        .ok_or_else(|| "Cannot determine home directory".to_string())?;
-    let config_path = home.join(".akidb").join("config.yaml");
+    let home =
+        dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
+    let config_path = home.join(".ax-fabric").join("config.yaml");
 
     if !config_path.exists() {
         return Ok(None);
@@ -379,22 +621,40 @@ pub fn read_akidb_config() -> Result<Option<AkidbConfig>, String> {
     let file = fs::File::open(&config_path).map_err(|e| e.to_string())?;
     let reader = std::io::BufReader::new(file);
     let config: AkidbConfig = serde_yaml::from_reader(reader)
-        .map_err(|e| format!("Failed to parse ~/.akidb/config.yaml: {e}"))?;
+        .map_err(|e| format!("Failed to parse ~/.ax-fabric/config.yaml: {e}"))?;
     Ok(Some(config))
 }
 
-/// Write ~/.akidb/config.yaml, creating ~/.akidb/ if it does not exist.
+/// Write ~/.ax-fabric/config.yaml, creating ~/.ax-fabric/ if it does not exist.
 #[tauri::command]
 pub fn write_akidb_config(config: AkidbConfig) -> Result<(), String> {
-    let home = dirs::home_dir()
-        .ok_or_else(|| "Cannot determine home directory".to_string())?;
-    let config_dir = home.join(".akidb");
+    let home =
+        dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
+    let config_dir = home.join(".ax-fabric");
 
     fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
 
     let config_path = config_dir.join("config.yaml");
     let yaml = serde_yaml::to_string(&config)
-        .map_err(|e| format!("Failed to serialize AkiDB config: {e}"))?;
+        .map_err(|e| format!("Failed to serialize ax-fabric config: {e}"))?;
     fs::write(&config_path, yaml).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Read ~/.ax-fabric/status.json written by the daemon each cycle.
+/// Returns None if the file does not exist (daemon not running or never ran).
+#[tauri::command]
+pub fn read_akidb_status() -> Result<Option<AkidbStatus>, String> {
+    let home =
+        dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
+    let status_path = home.join(".ax-fabric").join("status.json");
+
+    if !status_path.exists() {
+        return Ok(None);
+    }
+
+    let content = fs::read_to_string(&status_path).map_err(|e| e.to_string())?;
+    let status: AkidbStatus = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse ~/.ax-fabric/status.json: {e}"))?;
+    Ok(Some(status))
 }
