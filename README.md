@@ -1,12 +1,12 @@
-# Ax-Studio
+# AX Studio
 
 The Open-Source AI Desktop Application
 
-Ax-Studio is a native desktop app that connects any AI provider to your own backend services — local inference, retrieval, agents, vector storage, and MCP tools — through a single unified interface.
+AX Studio is a native desktop app that connects any AI provider to your own backend services — local inference, retrieval, agents, vector storage, and MCP tools — through a single unified interface.
 
 Status: Open Source (Apache-2.0) | Tauri 2 + React 19 | macOS · Windows · Linux | v0.92
 
-> What Ax-Studio does: turns cloud and local AI providers into a production-ready desktop experience with conversation management, local inference, MCP integrations, artifact rendering, and a multi-agent framework.
+> What AX Studio does: turns cloud and local AI providers into a production-ready desktop experience with conversation management, local inference, MCP integrations, artifact rendering, and a multi-agent framework.
 
 > Why teams use it: same chat interface, but with your own inference backend, your own retrieval layer, and full control over where your data lives.
 
@@ -41,9 +41,9 @@ On first launch, go to **Settings → AI Providers** and add an API key for any 
 
 ---
 
-## Why Ax-Studio
+## Why AX Studio
 
-Most AI desktop apps are thin wrappers around a single provider. Ax-Studio focuses on what happens around inference.
+Most AI desktop apps are thin wrappers around a single provider. AX Studio focuses on what happens around inference.
 
 - Unified interface across 10+ cloud providers and any OpenAI-compatible endpoint
 - First-class local inference via llama.cpp and ax-serving
@@ -59,7 +59,7 @@ Most AI desktop apps are thin wrappers around a single provider. Ax-Studio focus
 
 ## Core Capabilities
 
-| Capability | Ax-Studio |
+| Capability | AX Studio |
 |---|---|
 | Multi-provider chat (OpenAI, Anthropic, Mistral, Groq, Gemini, Azure, OpenRouter, HuggingFace) | ✅ |
 | Local inference via llama.cpp + ax-serving | ✅ |
@@ -100,7 +100,7 @@ Most AI desktop apps are thin wrappers around a single provider. Ax-Studio focus
 
 ## Backend Services
 
-Ax-Studio integrates with four self-hosted backend services. Configure URLs in **Settings → General**:
+AX Studio integrates with four self-hosted backend services. Configure URLs in **Settings → General**:
 
 | Service | Default URL | Purpose |
 |---|---|---|
@@ -115,7 +115,7 @@ Cloud-only usage works without any backend setup — just add provider API keys.
 
 ## MCP (Model Context Protocol)
 
-Ax-Studio has a built-in MCP client. Add any MCP server in **Settings → MCP Servers**.
+AX Studio has a built-in MCP client. Add any MCP server in **Settings → MCP Servers**.
 
 Supported transports:
 - **stdio** — Child process with stdin/stdout
@@ -127,14 +127,14 @@ Connected tools appear in the chat interface and can be toggled per-thread.
 
 ## Local Inference
 
-Ax-Studio supports running models entirely on your machine via two paths:
+AX Studio supports running models entirely on your machine via two paths:
 
 **llama.cpp extension** — bundled extension that manages llama-server processes and GGUF model loading directly from the app.
 
 **ax-serving** — connect to a running [ax-serving](https://github.com/defai-digital/ax-serving) instance for production-style local inference with queuing, health-aware routing, and runtime load/unload.
 
 ```bash
-# Point Ax-Studio at a local ax-serving instance
+# Point AX Studio at a local ax-serving instance
 Settings → AI Providers → Ax-Serving → http://127.0.0.1:18080
 ```
 
@@ -190,7 +190,7 @@ Download the latest release from [GitHub Releases](https://github.com/defai-digi
 
 ## Architecture
 
-Ax-Studio is a [Tauri 2](https://tauri.app/) application: a React frontend embedded in a native Rust host.
+AX Studio is a [Tauri 2](https://tauri.app/) application: a React frontend embedded in a native Rust host.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
