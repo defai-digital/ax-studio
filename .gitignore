@@ -71,3 +71,12 @@ test-data
 llm-docs
 .claude/agents
 .claude
+
+# Local AI tool configs
+.automatosx/
+.ax-grok/
+.gemini/
+opencode.json
+automatosx/
+agent-teams/
+.mcp.json
