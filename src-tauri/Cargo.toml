@@ -1,6 +1,6 @@
 [package]
 name = "ax-studio"
-version = "0.95.0"
+version = "0.9.5"
 description = "Ax-Studio — AI desktop application powered by your own backend services."
 authors = ["Ax-Studio"]
 license = "MIT"
