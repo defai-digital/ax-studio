@@ -183,7 +183,7 @@ export const useAgentTeamStore = create<AgentTeamState>((set, get) => ({
         avatar: '',
         created_at: Date.now(),
         description: agentDef.description,
-        instructions: agentDef.instructions,
+        instructions: agentDef.instructions ?? '',
         parameters: agentDef.parameters ?? {},
         type: 'agent',
         role: agentDef.role,

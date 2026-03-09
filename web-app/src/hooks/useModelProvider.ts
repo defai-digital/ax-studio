@@ -1,8 +1,8 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
-import { getServiceHub } from '@/hooks/useServiceHub'
 import { ANTHROPIC_DEFAULT_HEADERS } from '@/constants/providers'
+import { mergeProviders } from '@/lib/providers/model-provider-merge'
 
 type ModelProviderState = {
   providers: ModelProvider[]
@@ -10,7 +10,7 @@ type ModelProviderState = {
   selectedModel: Model | null
   deletedModels: string[]
   getModelBy: (modelId: string) => Model | undefined
-  setProviders: (providers: ModelProvider[]) => void
+  setProviders: (providers: ModelProvider[], pathSep?: string) => void
   getProviderByName: (providerName: string) => ModelProvider | undefined
   updateProvider: (providerName: string, data: Partial<ModelProvider>) => void
   selectModelProvider: (
@@ -36,98 +36,15 @@ export const useModelProvider = create<ModelProviderState>()(
         if (!provider) return undefined
         return provider.models.find((model) => model.id === modelId)
       },
-      setProviders: (providers) =>
-        set((state) => {
-          const existingProviders = state.providers
-            .map((provider) => {
-              return {
-                ...provider,
-                models: provider.models.filter(
-                  (e) =>
-                    ('id' in e || 'model' in e) &&
-                    typeof (e.id ?? e.model) === 'string'
-                ),
-              }
-            })
-          // Ensure deletedModels is always an array
-          const currentDeletedModels = Array.isArray(state.deletedModels)
-            ? state.deletedModels
-            : []
-
-          const updatedProviders = providers.map((provider) => {
-            const existingProvider = existingProviders.find(
-              (x) => x.provider === provider.provider
-            )
-            const models = (existingProvider?.models || []).filter(
-              (e) =>
-                ('id' in e || 'model' in e) &&
-                typeof (e.id ?? e.model) === 'string'
-            )
-            const mergedModels = [
-              ...(provider?.models ?? []).filter(
-                (e) =>
-                  ('id' in e || 'model' in e) &&
-                  typeof (e.id ?? e.model) === 'string' &&
-                  !models.some((m) => m.id === e.id) &&
-                  !currentDeletedModels.includes(e.id)
-              ),
-              ...models,
-            ]
-            const updatedModels = provider.models?.map((model) => {
-              const settings =
-                models.find(
-                  (m) =>
-                    m.id
-                      .split(':')
-                      .slice(0, 2)
-                      .join(getServiceHub().path().sep()) === model.id
-                )?.settings || model.settings
-              const existingModel = models.find((m) => m.id === model.id)
-              const mergedCapabilities = [
-                ...(model.capabilities || []),
-                ...(existingModel?.capabilities || []).filter(
-                  (cap) => !(model.capabilities || []).includes(cap)
-                ),
-              ]
-              return {
-                ...model,
-                settings: settings,
-                capabilities: mergedCapabilities.length > 0 ? mergedCapabilities : undefined,
-                displayName: existingModel?.displayName || model.displayName,
-              }
-            })
-
-            return {
-              ...provider,
-              models: provider.persist ? updatedModels : mergedModels,
-              settings: provider.settings.map((setting) => {
-                const existingSetting = provider.persist
-                  ? undefined
-                  : existingProvider?.settings?.find(
-                      (x) => x.key === setting.key
-                    )
-                return {
-                  ...setting,
-                  controller_props: {
-                    ...setting.controller_props,
-                    ...(existingSetting?.controller_props || {}),
-                  },
-                }
-              }),
-              api_key: existingProvider?.api_key || provider.api_key,
-              base_url: existingProvider?.base_url || provider.base_url,
-              active: existingProvider ? existingProvider?.active : true,
-            }
-          })
-          return {
-            providers: [
-              ...updatedProviders,
-              ...existingProviders.filter(
-                (e) => !updatedProviders.some((p) => p.provider === e.provider)
-              ),
-            ],
-          }
-        }),
+      setProviders: (providers, pathSep = '/') =>
+        set((state) => ({
+          providers: mergeProviders(
+            providers,
+            state.providers,
+            state.deletedModels,
+            pathSep
+          ),
+        })),
       updateProvider: (providerName, data) => {
         set((state) => ({
           providers: state.providers.map((provider) => {

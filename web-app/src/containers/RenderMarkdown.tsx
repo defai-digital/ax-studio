@@ -1,5 +1,6 @@
 import { type ReactNode, memo, useMemo } from 'react'
 import { AXMarkdown, axDefaultRehypePlugins } from '@/lib/markdown/renderer'
+import type { MermaidErrorComponentProps } from 'streamdown'
 import { cn, disableIndentedCodeBlockPlugin } from '@/lib/utils'
 import { cjk } from '@streamdown/cjk'
 import { code } from '@streamdown/code'
@@ -413,7 +414,7 @@ function RenderMarkdownComponent({
         mermaid={{
           config: { theme: mermaidTheme },
           errorComponent: messageId
-            ? (props) => <MermaidError messageId={messageId} {...props} />
+            ? (props: MermaidErrorComponentProps) => <MermaidError messageId={messageId} {...props} />
             : undefined,
         }}
       >

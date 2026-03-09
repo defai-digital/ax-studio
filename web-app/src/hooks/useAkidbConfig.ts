@@ -34,6 +34,7 @@ export type EmbedderSection = {
   model_id: string
   dimension: number
   batch_size: number
+  timeout_ms?: number
   base_url?: string
   api_key?: string
   api_key_env?: string

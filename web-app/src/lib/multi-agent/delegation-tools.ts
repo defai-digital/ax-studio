@@ -176,10 +176,11 @@ Capabilities: ${agent.description ?? agent.role ?? agent.name}`,
           })
 
           // Run sub-agent with scoped prompt (not messages)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const result = await subAgent.generate({
             prompt: scopedPrompt,
             abortSignal: agentAbortSignal,
-          })
+          } as any)
 
           // Track tokens
           const agentTokens = result.usage?.totalTokens ?? 0

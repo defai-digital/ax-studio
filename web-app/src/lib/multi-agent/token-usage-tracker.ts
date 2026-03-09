@@ -17,7 +17,8 @@ export class TokenUsageTracker {
     return this.consumed >= this.budget
   }
 
-  budgetExhausted(): StopCondition<Record<string, never>> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  budgetExhausted(): StopCondition<any> {
     return ({ steps }) => {
       if (this.budget <= 0) return false
       const orchestratorTokens = steps.reduce(

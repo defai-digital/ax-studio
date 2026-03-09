@@ -1,15 +1,14 @@
+mod commands;
 mod core;
+
 use ax_studio_utils::generate_app_token;
 use core::{
-    app::commands::get_app_data_folder_path,
     downloads::models::DownloadManagerState,
     mcp::models::McpSettings,
-    setup::{self, setup_mcp},
+    setup,
     state::{AppState, AxStudioServiceConfig},
 };
 use std::{collections::HashMap, sync::Arc};
-use tauri::{Emitter, Manager, RunEvent};
-use tauri_plugin_store::StoreExt;
 use tokio::sync::Mutex;
 
 #[cfg_attr(
@@ -21,8 +20,7 @@ pub fn run() {
     #[cfg(desktop)]
     {
         builder = builder.plugin(tauri_plugin_single_instance::init(|_app, argv, _cwd| {
-          println!("a new app instance was opened with {argv:?} and the deep link event was already triggered");
-          // when defining deep link schemes at runtime, you must also check `argv` here
+            println!("a new app instance was opened with {argv:?} and the deep link event was already triggered");
         }));
     }
 
@@ -34,244 +32,21 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init());
 
     #[cfg(feature = "deep-link")]
-    {
-        app_builder = app_builder.plugin(tauri_plugin_deep_link::init());
-    }
-
+    { app_builder = app_builder.plugin(tauri_plugin_deep_link::init()); }
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    {
-        app_builder = app_builder.plugin(tauri_plugin_hardware::init());
-    }
-
+    { app_builder = app_builder.plugin(tauri_plugin_hardware::init()); }
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    {
-        app_builder = app_builder.plugin(tauri_plugin_llamacpp::init());
-    }
+    { app_builder = app_builder.plugin(tauri_plugin_llamacpp::init()); }
 
     // Desktop: include updater commands
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    let app_builder = app_builder.invoke_handler(tauri::generate_handler![
-        // FS commands - Deprecate soon
-        core::filesystem::commands::join_path,
-        core::filesystem::commands::mkdir,
-        core::filesystem::commands::exists_sync,
-        core::filesystem::commands::readdir_sync,
-        core::filesystem::commands::read_file_sync,
-        core::filesystem::commands::rm,
-        core::filesystem::commands::mv,
-        core::filesystem::commands::file_stat,
-        core::filesystem::commands::write_file_sync,
-        core::filesystem::commands::write_yaml,
-        core::filesystem::commands::read_yaml,
-        core::filesystem::commands::decompress,
-        core::filesystem::commands::open_dialog,
-        core::filesystem::commands::save_dialog,
-        core::filesystem::commands::write_binary_file,
-        core::filesystem::commands::write_text_file,
-        core::filesystem::commands::read_akidb_config,
-        core::filesystem::commands::write_akidb_config,
-        core::filesystem::commands::read_akidb_status,
-        // App configuration commands
-        core::app::commands::get_app_configurations,
-        core::app::commands::get_user_home_path,
-        core::app::commands::update_app_configuration,
-        core::app::commands::get_app_data_folder_path,
-        core::app::commands::get_configuration_file_path,
-        core::app::commands::default_data_folder_path,
-        core::app::commands::change_app_data_folder,
-        core::app::commands::app_token,
-        // Extension commands
-        core::extensions::commands::get_app_extensions_path,
-        core::extensions::commands::install_extensions,
-        core::extensions::commands::get_active_extensions,
-        // System commands
-        core::system::commands::relaunch,
-        core::system::commands::open_app_directory,
-        core::system::commands::open_file_explorer,
-        core::system::commands::factory_reset,
-        core::system::commands::read_logs,
-        core::system::commands::is_library_available,
-        core::system::commands::launch_claude_code_with_config,
-        // Server commands
-        core::server::commands::start_server,
-        core::server::commands::stop_server,
-        core::server::commands::get_server_status,
-        // Remote provider commands
-        core::server::remote_provider_commands::register_provider_config,
-        core::server::remote_provider_commands::register_provider_configs_batch,
-        core::server::remote_provider_commands::unregister_provider_config,
-        core::server::remote_provider_commands::get_provider_config,
-        core::server::remote_provider_commands::list_provider_configs,
-        // Ax-Studio backend service config commands
-        core::server::remote_provider_commands::get_ax_studio_service_config,
-        core::server::remote_provider_commands::update_ax_studio_service_config,
-        // MCP commands
-        core::mcp::commands::get_tools,
-        core::mcp::commands::call_tool,
-        core::mcp::commands::cancel_tool_call,
-        core::mcp::commands::restart_mcp_servers,
-        core::mcp::commands::get_connected_servers,
-        core::mcp::commands::save_mcp_configs,
-        core::mcp::commands::get_mcp_configs,
-        core::mcp::commands::activate_mcp_server,
-        core::mcp::commands::deactivate_mcp_server,
-        core::mcp::commands::check_ax_studio_browser_extension_connected,
-        // Threads
-        core::threads::commands::list_threads,
-        core::threads::commands::create_thread,
-        core::threads::commands::modify_thread,
-        core::threads::commands::delete_thread,
-        core::threads::commands::list_messages,
-        core::threads::commands::create_message,
-        core::threads::commands::modify_message,
-        core::threads::commands::delete_message,
-        core::threads::commands::get_thread_assistant,
-        core::threads::commands::create_thread_assistant,
-        core::threads::commands::modify_thread_assistant,
-        // Download
-        core::downloads::commands::download_files,
-        core::downloads::commands::cancel_download_task,
-        // Code execution
-        core::code_execution::commands::execute_python_code,
-        core::code_execution::commands::check_sandbox_status,
-        core::code_execution::commands::start_sandbox,
-        core::code_execution::commands::stop_sandbox,
-        core::code_execution::commands::reset_sandbox_session,
-        core::code_execution::commands::update_sandbox_url,
-        // Research commands
-        core::research::commands::scrape_url,
-        core::research::commands::web_search,
-        // Custom updater commands (desktop only)
-        core::updater::commands::check_for_app_updates,
-        core::updater::commands::is_update_available,
-        // Agent teams
-        core::agent_teams::list_agent_teams,
-        core::agent_teams::get_agent_team,
-        core::agent_teams::save_agent_team,
-        core::agent_teams::delete_agent_team,
-        // Agent run logs
-        core::agent_run_logs::save_agent_run_log,
-        core::agent_run_logs::list_agent_run_logs,
-        core::agent_run_logs::get_agent_run_log,
-        // Integration commands
-        core::integrations::commands::save_integration_token,
-        core::integrations::commands::delete_integration_token,
-        core::integrations::commands::get_integration_status,
-        core::integrations::commands::get_all_integration_statuses,
-        core::integrations::commands::validate_integration_token,
-        core::integrations::commands::start_oauth_flow,
-    ]);
+    let app_builder =
+        app_builder.invoke_handler(commands::desktop_handlers!(tauri::generate_handler));
 
     // Mobile: no updater commands
     #[cfg(any(target_os = "android", target_os = "ios"))]
-    let app_builder = app_builder.invoke_handler(tauri::generate_handler![
-        // FS commands - Deperecate soon
-        core::filesystem::commands::join_path,
-        core::filesystem::commands::mkdir,
-        core::filesystem::commands::exists_sync,
-        core::filesystem::commands::readdir_sync,
-        core::filesystem::commands::read_file_sync,
-        core::filesystem::commands::rm,
-        core::filesystem::commands::mv,
-        core::filesystem::commands::file_stat,
-        core::filesystem::commands::write_file_sync,
-        core::filesystem::commands::write_yaml,
-        core::filesystem::commands::read_yaml,
-        core::filesystem::commands::decompress,
-        core::filesystem::commands::open_dialog,
-        core::filesystem::commands::save_dialog,
-        core::filesystem::commands::write_binary_file,
-        core::filesystem::commands::write_text_file,
-        core::filesystem::commands::read_akidb_config,
-        core::filesystem::commands::write_akidb_config,
-        core::filesystem::commands::read_akidb_status,
-        // App configuration commands
-        core::app::commands::get_app_configurations,
-        core::app::commands::get_user_home_path,
-        core::app::commands::update_app_configuration,
-        core::app::commands::get_app_data_folder_path,
-        core::app::commands::get_configuration_file_path,
-        core::app::commands::default_data_folder_path,
-        core::app::commands::change_app_data_folder,
-        core::app::commands::app_token,
-        // Extension commands
-        core::extensions::commands::get_app_extensions_path,
-        core::extensions::commands::install_extensions,
-        core::extensions::commands::get_active_extensions,
-        // System commands
-        core::system::commands::relaunch,
-        core::system::commands::open_app_directory,
-        core::system::commands::open_file_explorer,
-        core::system::commands::factory_reset,
-        core::system::commands::read_logs,
-        core::system::commands::is_library_available,
-        core::system::commands::launch_claude_code_with_config,
-        // Server commands
-        core::server::commands::start_server,
-        core::server::commands::stop_server,
-        core::server::commands::get_server_status,
-        // Remote provider commands
-        core::server::remote_provider_commands::register_provider_config,
-        core::server::remote_provider_commands::register_provider_configs_batch,
-        core::server::remote_provider_commands::unregister_provider_config,
-        core::server::remote_provider_commands::get_provider_config,
-        core::server::remote_provider_commands::list_provider_configs,
-        // Ax-Studio backend service config commands
-        core::server::remote_provider_commands::get_ax_studio_service_config,
-        core::server::remote_provider_commands::update_ax_studio_service_config,
-        // MCP commands
-        core::mcp::commands::get_tools,
-        core::mcp::commands::call_tool,
-        core::mcp::commands::cancel_tool_call,
-        core::mcp::commands::restart_mcp_servers,
-        core::mcp::commands::get_connected_servers,
-        core::mcp::commands::save_mcp_configs,
-        core::mcp::commands::get_mcp_configs,
-        core::mcp::commands::activate_mcp_server,
-        core::mcp::commands::deactivate_mcp_server,
-        core::mcp::commands::check_ax_studio_browser_extension_connected,
-        // Threads
-        core::threads::commands::list_threads,
-        core::threads::commands::create_thread,
-        core::threads::commands::modify_thread,
-        core::threads::commands::delete_thread,
-        core::threads::commands::list_messages,
-        core::threads::commands::create_message,
-        core::threads::commands::modify_message,
-        core::threads::commands::delete_message,
-        core::threads::commands::get_thread_assistant,
-        core::threads::commands::create_thread_assistant,
-        core::threads::commands::modify_thread_assistant,
-        // Download
-        core::downloads::commands::download_files,
-        core::downloads::commands::cancel_download_task,
-        // Code execution
-        core::code_execution::commands::execute_python_code,
-        core::code_execution::commands::check_sandbox_status,
-        core::code_execution::commands::start_sandbox,
-        core::code_execution::commands::stop_sandbox,
-        core::code_execution::commands::reset_sandbox_session,
-        core::code_execution::commands::update_sandbox_url,
-        // Research commands
-        core::research::commands::scrape_url,
-        core::research::commands::web_search,
-        // Agent teams
-        core::agent_teams::list_agent_teams,
-        core::agent_teams::get_agent_team,
-        core::agent_teams::save_agent_team,
-        core::agent_teams::delete_agent_team,
-        // Agent run logs
-        core::agent_run_logs::save_agent_run_log,
-        core::agent_run_logs::list_agent_run_logs,
-        core::agent_run_logs::get_agent_run_log,
-        // Integration commands
-        core::integrations::commands::save_integration_token,
-        core::integrations::commands::delete_integration_token,
-        core::integrations::commands::get_integration_status,
-        core::integrations::commands::get_all_integration_statuses,
-        core::integrations::commands::validate_integration_token,
-        core::integrations::commands::start_oauth_flow,
-    ]);
+    let app_builder =
+        app_builder.invoke_handler(commands::mobile_handlers!(tauri::generate_handler));
 
     let app = app_builder
         .manage(AppState {
@@ -292,136 +67,9 @@ pub fn run() {
             sandbox_url: Arc::new(Mutex::new("http://127.0.0.1:8080".to_string())),
             approved_save_paths: Arc::new(Mutex::new(std::collections::HashSet::new())),
         })
-        .setup(|app| {
-            app.handle().plugin(
-                tauri_plugin_log::Builder::default()
-                    .level(log::LevelFilter::Debug)
-                    .targets([
-                        tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
-                        tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview),
-                        tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Folder {
-                            path: get_app_data_folder_path(app.handle().clone()).join("logs"),
-                            file_name: Some("app".to_string()),
-                        }),
-                    ])
-                    .build(),
-            )?;
-            #[cfg(not(any(target_os = "ios", target_os = "android")))]
-            app.handle()
-                .plugin(tauri_plugin_updater::Builder::new().build())?;
-
-            // Start migration
-            let mut store_path = get_app_data_folder_path(app.handle().clone());
-            store_path.push("store.json");
-            let store = app
-                .handle()
-                .store(store_path)
-                .expect("Store not initialized");
-            let stored_version = store
-                .get("version")
-                .and_then(|v| v.as_str().map(String::from))
-                .unwrap_or_default();
-            let app_version = app.config().version.clone().unwrap_or_default();
-            // Migrate extensions
-            if let Err(e) =
-                setup::install_extensions(app.handle().clone(), stored_version != app_version)
-            {
-                log::error!("Failed to install extensions: {e}");
-            }
-
-            // Migrate MCP servers
-            if let Err(e) = setup::migrate_mcp_servers(app.handle().clone(), store.clone()) {
-                log::error!("Failed to migrate MCP servers: {e}");
-            }
-
-            // Store the new app version
-            store.set("version", serde_json::json!(app_version));
-            store.save().expect("Failed to save store");
-            // Migration completed
-
-            #[cfg(desktop)]
-            if option_env!("ENABLE_SYSTEM_TRAY_ICON").unwrap_or("false") == "true" {
-                log::info!("Enabling system tray icon");
-                let _ = setup::setup_tray(app);
-            }
-
-            #[cfg(all(feature = "deep-link", any(windows, target_os = "linux")))]
-            {
-                use tauri_plugin_deep_link::DeepLinkExt;
-                app.deep_link().register_all()?;
-            }
-
-            // Initialize SQLite database for mobile platforms
-            #[cfg(any(target_os = "android", target_os = "ios"))]
-            {
-                let app_handle = app.handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    if let Err(e) = crate::core::threads::db::init_database(&app_handle).await {
-                        log::error!("Failed to initialize mobile database: {}", e);
-                    }
-                });
-            }
-
-            setup_mcp(app);
-            setup::setup_theme_listener(app)?;
-            Ok(())
-        })
+        .setup(|app| Ok(setup::app_setup(app)?))
         .build(tauri::generate_context!())
         .expect("error while running tauri application");
-    // Handle app lifecycle events
-    app.run(|app, event| {
-        if let RunEvent::Exit = event {
-            let app_handle = app.clone();
 
-            #[cfg(not(any(target_os = "ios", target_os = "android")))]
-            {
-                if let Some(window) = app_handle.get_webview_window("main") {
-                    let _ = window.emit("app-shutting-down", ());
-                    let _ = window.hide();
-                }
-            }
-
-            let state = app_handle.state::<AppState>();
-
-            // Check if cleanup already ran
-            let cleanup_already_running = tokio::task::block_in_place(|| {
-                tauri::async_runtime::block_on(async {
-                    let handle = state.background_cleanup_handle.lock().await;
-                    handle.is_some()
-                })
-            });
-
-            if cleanup_already_running {
-                return;
-            }
-
-            // Run cleanup synchronously and WAIT for it to complete
-            tokio::task::block_in_place(|| {
-                tauri::async_runtime::block_on(async {
-                    use crate::core::mcp::helpers::background_cleanup_mcp_servers;
-
-                    let state = app_handle.state::<AppState>();
-
-                    // Increase timeout to 10 seconds and log if it times out
-                    let cleanup_future = background_cleanup_mcp_servers(&app_handle, &state);
-                    match tokio::time::timeout(tokio::time::Duration::from_secs(10), cleanup_future)
-                        .await
-                    {
-                        Ok(_) => log::info!("MCP cleanup completed successfully"),
-                        Err(_) => log::warn!("MCP cleanup timed out after 10 seconds"),
-                    }
-
-                    // Kill any running llama.cpp server processes
-                    #[cfg(not(any(target_os = "ios", target_os = "android")))]
-                    {
-                        let _ = tauri_plugin_llamacpp::cleanup_llama_processes(app_handle.clone())
-                            .await;
-                        log::info!("llama.cpp process cleanup completed");
-                    }
-
-                    log::info!("App cleanup completed");
-                });
-            });
-        }
-    });
+    app.run(setup::app_run_handler);
 }

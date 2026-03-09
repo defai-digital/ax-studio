@@ -752,7 +752,7 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
                 // Check if the last evaluator approved the output
                 if (steps && steps.length > 0) {
                   const lastStep = steps[steps.length - 1]
-                  const lastToolResult = lastStep?.messages
+                  const lastToolResult = lastStep?.response?.messages
                     ?.filter((m: { role: string }) => m.role === 'tool')
                     ?.pop()
                   const resultText = typeof lastToolResult?.content === 'string'
@@ -799,15 +799,15 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
             // Keep tool call/result pairs from trimmed steps to maintain API validity
             const trimmedSteps = steps.slice(1, -8)
             const toolRelatedMessages = trimmedSteps.flatMap((s) =>
-              s.messages.filter((m) =>
+              (s.response?.messages ?? []).filter((m: { role: string }) =>
                 m.role === 'tool' ||
                 (m.role === 'assistant' && (m as { tool_calls?: unknown[] }).tool_calls?.length)
               )
             )
             result.messages = [
-              ...steps[0].messages,
+              ...(steps[0].response?.messages ?? []),
               ...toolRelatedMessages,
-              ...steps.slice(-8).flatMap((s) => s.messages),
+              ...steps.slice(-8).flatMap((s) => s.response?.messages ?? []),
             ]
           }
 
@@ -822,8 +822,9 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
 
       const orchestratorResult = orchestrator.stream({
         messages: modelMessages,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         abortSignal: options.abortSignal,
-      })
+      } as any)
 
       // Wrap in createUIMessageStream for data part support
       return createUIMessageStream({
@@ -833,14 +834,15 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
           try {
             await writer.merge(
               orchestratorResult.toUIMessageStream({
-                onFinish: async ({ totalUsage }) => {
-                  runLog.setOrchestratorTokens(
+                onFinish: async () => {
+                  const totalUsage = await orchestratorResult.totalUsage
+                  runLog!.setOrchestratorTokens(
                     totalUsage?.totalTokens ?? 0
                   )
 
                   // Detect zero-delegation runs: the model didn't call any
                   // delegation tools, so no agents ran and output is empty.
-                  const logData = runLog.getData()
+                  const logData = runLog!.getData()
                   if (logData.steps.length === 0) {
                     console.warn(
                       '[MultiAgent] Orchestrator finished without delegating to any agent. ' +
@@ -849,20 +851,21 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
                     )
                     // Write a visible error message so the user isn't left with blank output
                     writer.write({
-                      type: 'text',
-                      text: `\n\n> **Agent Team Notice:** The orchestrator model did not delegate to any agents. ` +
+                      type: 'text-delta',
+                      id: 'agent-notice',
+                      delta: `\n\n> **Agent Team Notice:** The orchestrator model did not delegate to any agents. ` +
                         `This usually means the model doesn't support tool calling reliably. ` +
                         `Try switching to a model that supports tool calling (e.g. GPT-4o, Claude, Gemini, Llama 4 Scout).`,
                     })
                   }
 
-                  runLog.complete()
-                  await persistRunLog(runLog)
+                  runLog!.complete()
+                  await persistRunLog(runLog!)
 
                   // Emit run log summary as data part for UI
-                  this.emitDataPart('runLog', runLog.getData())
+                  this.emitDataPart('runLog', runLog!.getData())
 
-                  const usage = runLog.getUsage()
+                  const usage = runLog!.getUsage()
                   if (this.onTokenUsage) {
                     this.onTokenUsage(
                       {
@@ -887,12 +890,13 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
               ? ' This model may not support forced tool calling (`tool_choice: required`). Try a model with full tool-calling support (e.g. GPT-4o, Claude, Gemini).'
               : ''
             writer.write({
-              type: 'text',
-              text: `\n\n> **Agent Team Error:** ${errMsg}${hint}`,
+              type: 'text-delta',
+              id: 'agent-error',
+              delta: `\n\n> **Agent Team Error:** ${errMsg}${hint}`,
             })
-            runLog.fail(errMsg)
-            persistRunLog(runLog).catch(() => {})
-            this.emitDataPart('runLog', runLog.getData())
+            runLog!.fail(errMsg)
+            persistRunLog(runLog!).catch(() => {})
+            this.emitDataPart('runLog', runLog!.getData())
           } finally {
             this.streamWriter = null
           }

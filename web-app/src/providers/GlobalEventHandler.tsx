@@ -41,7 +41,7 @@ export function GlobalEventHandler() {
       if (event.key === 'version_backend') {
         try {
           const updatedProviders = await serviceHub.providers().getProviders()
-          setProviders(updatedProviders)
+          setProviders(updatedProviders, serviceHub.path().sep())
         } catch (error) {
           console.error('Failed to refresh providers after settingsChanged:', error)
         }
@@ -181,7 +181,7 @@ export function GlobalEventHandler() {
       // Refresh providers list to show the newly downloaded model
       try {
         const updatedProviders = await serviceHub.providers().getProviders()
-        setProviders(updatedProviders)
+        setProviders(updatedProviders, serviceHub.path().sep())
       } catch (error) {
         console.error('Failed to refresh providers after import:', error)
       }

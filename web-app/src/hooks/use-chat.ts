@@ -1,6 +1,4 @@
-import {
-  CustomChatTransport,
-} from '@/lib/custom-chat-transport'
+import { createChatTransport } from '@/lib/chat/chat-transport-factory'
 import {
   Chat,
   type UIMessage,
@@ -34,7 +32,7 @@ type CustomChatOptions = Omit<ChatInit<UIMessage>, 'transport'> &
 export function useChat(
   options?: CustomChatOptions
 ) {
-  const transportRef = useRef<CustomChatTransport | undefined>(undefined) // Using a ref here so we can update the model used in the transport without having to reload the page or recreate the transport
+  const transportRef = useRef<ReturnType<typeof createChatTransport> | undefined>(undefined)
   const {
     sessionId,
     sessionTitle,
@@ -46,10 +44,16 @@ export function useChat(
     onCostApproval,
     ...chatInitOptions
   } = options ?? {}
-  // Stabilize inferenceParameters reference to avoid infinite useEffect loops
-  const inferenceParametersJson = JSON.stringify(rawInferenceParameters)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const inferenceParameters = useMemo(() => rawInferenceParameters, [inferenceParametersJson])
+  // Stabilize inferenceParameters: update the ref only when content changes,
+  // so effects that depend on it do not fire on referential re-renders.
+  const inferenceParametersRef = useRef(rawInferenceParameters)
+  const inferenceParametersJsonRef = useRef('')
+  const currentJson = JSON.stringify(rawInferenceParameters)
+  if (currentJson !== inferenceParametersJsonRef.current) {
+    inferenceParametersJsonRef.current = currentJson
+    inferenceParametersRef.current = rawInferenceParameters
+  }
+  const inferenceParameters = inferenceParametersRef.current
   const ensureSession = useChatSessions((state) => state.ensureSession)
   const setSessionTitle = useChatSessions((state) => state.setSessionTitle)
   const updateStatus = useChatSessions((state) => state.updateStatus)
@@ -62,16 +66,11 @@ export function useChat(
     ? useChatSessions.getState().sessions[sessionId]?.transport
     : undefined
 
-  // Create transport immediately with modelId and provider
+  // Create transport immediately; reuse existing session transport if present.
   if (!transportRef.current) {
     transportRef.current =
       existingSessionTransport ??
-      new CustomChatTransport(
-        systemMessage,
-        sessionId,
-        inferenceParameters,
-        modelOverrideId
-      )
+      createChatTransport({ systemMessage, sessionId, inferenceParameters, modelOverrideId })
   } else if (
     existingSessionTransport &&
     transportRef.current !== existingSessionTransport
@@ -119,18 +118,24 @@ export function useChat(
     }
   }, [onTokenUsage])
 
-  // Memoize to prevent calling ensureSession (which has side effects) on every render
+  // Keep chatInitOptions in a ref so the Chat factory always uses the latest
+  // callbacks without making them useMemo dependencies (which would recreate
+  // the session on every prop change).
+  const chatInitOptionsRef = useRef(chatInitOptions)
+  chatInitOptionsRef.current = chatInitOptions
+
+  // ensureSession is idempotent for existing sessions — calling it again with
+  // a changed sessionTitle just updates the title without recreating the Chat.
   const chat = useMemo(() => {
     if (!sessionId || !transportRef.current) return undefined
 
     return ensureSession(
       sessionId,
       transportRef.current,
-      () => new Chat({ ...chatInitOptions, transport: transportRef.current }),
+      () => new Chat({ ...chatInitOptionsRef.current, transport: transportRef.current }),
       sessionTitle
     )
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, ensureSession])
+  }, [sessionId, ensureSession, sessionTitle])
 
   useEffect(() => {
     if (sessionId && sessionTitle) {

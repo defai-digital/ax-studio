@@ -208,7 +208,7 @@ function parseExaResults(result: MCPToolCallResult): {
     if (rawResults.length > 0) {
       const sources = rawResults
         .map((r) => ({
-          url: r.url ?? (r as Record<string, unknown>).id as string ?? '',
+          url: r.url ?? ((r as unknown) as Record<string, unknown>).id as string ?? '',
           title: r.title ?? r.url ?? '',
           snippet: r.highlights?.[0] ?? r.text?.slice(0, 200) ?? r.snippet ?? '',
           score: r.score,
@@ -339,10 +339,8 @@ function saveMessageToChat(threadId: string, msg: ThreadMessage) {
   if (session) {
     const uiMsg = convertThreadMessageToUIMessage(msg)
     if (uiMsg) {
-      // Use setMessages for proper React reactivity
-      if (typeof session.chat.setMessages === 'function') {
-        session.chat.setMessages([...session.chat.messages, uiMsg])
-      }
+      // Use messages setter for proper React reactivity
+      session.chat.messages = [...session.chat.messages, uiMsg]
     }
   }
 }
@@ -681,7 +679,7 @@ export function useResearch(threadId: string) {
         const { textStream } = streamText({
           model,
           messages: [{ role: 'user', content: writerPrompt }],
-          maxTokens: 12000,
+          maxOutputTokens: 12000,
           abortSignal: signal,
         })
         for await (const chunk of textStream) {
@@ -713,7 +711,7 @@ export function useResearch(threadId: string) {
           const { textStream: contStream } = streamText({
             model,
             messages: [{ role: 'user', content: continuePrompt }],
-            maxTokens: 4000,
+            maxOutputTokens: 4000,
             abortSignal: signal,
           })
           for await (const chunk of contStream) {
@@ -737,7 +735,7 @@ export function useResearch(threadId: string) {
           const { textStream: conclusionStream } = streamText({
             model,
             messages: [{ role: 'user', content: conclusionPrompt }],
-            maxTokens: 800,
+            maxOutputTokens: 800,
             abortSignal: signal,
           })
           for await (const chunk of conclusionStream) {

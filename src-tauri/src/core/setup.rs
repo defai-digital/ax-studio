@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 use tar::Archive;
-use tauri::{App, Emitter, Manager, Runtime, WindowEvent, Wry};
+use tauri::{App, Emitter, Manager, RunEvent, Runtime, WindowEvent, Wry};
 
 #[cfg(desktop)]
 use tauri::{
@@ -439,4 +439,112 @@ fn setup_window_theme_listener<R: Runtime>(
             let _ = app_handle_clone.emit("theme-changed", theme_str);
         }
     });
+}
+
+/// Tauri `.setup()` callback — runs once after the app is built.
+pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
+    app.handle().plugin(
+        tauri_plugin_log::Builder::default()
+            .level(log::LevelFilter::Debug)
+            .targets([
+                tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview),
+                tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Folder {
+                    path: get_app_data_folder_path(app.handle().clone()).join("logs"),
+                    file_name: Some("app".to_string()),
+                }),
+            ])
+            .build(),
+    )?;
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    app.handle()
+        .plugin(tauri_plugin_updater::Builder::new().build())?;
+
+    let mut store_path = get_app_data_folder_path(app.handle().clone());
+    store_path.push("store.json");
+    let store = app.handle().store(store_path).expect("Store not initialized");
+    let stored_version = store
+        .get("version")
+        .and_then(|v| v.as_str().map(String::from))
+        .unwrap_or_default();
+    let app_version = app.config().version.clone().unwrap_or_default();
+    if let Err(e) = install_extensions(app.handle().clone(), stored_version != app_version) {
+        log::error!("Failed to install extensions: {e}");
+    }
+    if let Err(e) = migrate_mcp_servers(app.handle().clone(), store.clone()) {
+        log::error!("Failed to migrate MCP servers: {e}");
+    }
+    store.set("version", serde_json::json!(app_version));
+    store.save().expect("Failed to save store");
+
+    #[cfg(desktop)]
+    if option_env!("ENABLE_SYSTEM_TRAY_ICON").unwrap_or("false") == "true" {
+        log::info!("Enabling system tray icon");
+        let _ = setup_tray(app);
+    }
+    #[cfg(all(feature = "deep-link", any(windows, target_os = "linux")))]
+    {
+        use tauri_plugin_deep_link::DeepLinkExt;
+        app.deep_link().register_all()?;
+    }
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        let app_handle = app.handle().clone();
+        tauri::async_runtime::spawn(async move {
+            if let Err(e) = crate::core::threads::db::init_database(&app_handle).await {
+                log::error!("Failed to initialize mobile database: {}", e);
+            }
+        });
+    }
+
+    setup_mcp(app);
+    setup_theme_listener(app)?;
+    Ok(())
+}
+
+/// Tauri `.run()` event handler — handles app lifecycle events.
+pub fn app_run_handler(app: &tauri::AppHandle, event: RunEvent) {
+    if let RunEvent::Exit = event {
+        let app_handle = app.clone();
+        #[cfg(not(any(target_os = "ios", target_os = "android")))]
+        {
+            if let Some(window) = app_handle.get_webview_window("main") {
+                let _ = window.emit("app-shutting-down", ());
+                let _ = window.hide();
+            }
+        }
+        let state = app_handle.state::<super::state::AppState>();
+        let cleanup_already_running = tokio::task::block_in_place(|| {
+            tauri::async_runtime::block_on(async {
+                let handle = state.background_cleanup_handle.lock().await;
+                handle.is_some()
+            })
+        });
+        if cleanup_already_running {
+            return;
+        }
+        tokio::task::block_in_place(|| {
+            tauri::async_runtime::block_on(async {
+                use crate::core::mcp::helpers::background_cleanup_mcp_servers;
+                let state = app_handle.state::<super::state::AppState>();
+                let cleanup_future = background_cleanup_mcp_servers(&app_handle, &state);
+                match tokio::time::timeout(
+                    tokio::time::Duration::from_secs(10),
+                    cleanup_future,
+                )
+                .await
+                {
+                    Ok(_) => log::info!("MCP cleanup completed successfully"),
+                    Err(_) => log::warn!("MCP cleanup timed out after 10 seconds"),
+                }
+                #[cfg(not(any(target_os = "ios", target_os = "android")))]
+                {
+                    let _ =
+                        tauri_plugin_llamacpp::cleanup_llama_processes(app_handle.clone()).await;
+                    log::info!("llama.cpp process cleanup completed");
+                }
+                log::info!("App cleanup completed");
+            });
+        });
+    }
 }

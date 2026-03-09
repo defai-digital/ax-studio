@@ -71,7 +71,7 @@ export class DefaultRAGService implements RAGService {
           content: [{ type: 'text', text: 'Retrieval tool call returned unexpected format' }],
         }
       }
-      return result.data
+      return result.data as MCPToolCallResult
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       return {
