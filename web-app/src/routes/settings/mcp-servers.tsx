@@ -33,6 +33,31 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 
+// Descriptions and setup hints for official MCP servers
+const OFFICIAL_SERVER_HINTS: Record<
+  string,
+  { description: string; hint: string; link?: { label: string; url: string } }
+> = {
+  'ax-fabric': {
+    description:
+      'Knowledge base powered by AkiDB. Provides semantic search, document ingestion, and RAG tools for your local files.',
+    hint: 'To use from source: set command to "node" and first arg to the path of your ax-fabric cli.js, followed by "mcp" and "server". If installed via npm: set command to "npx" with args "-y @ax-fabric/fabric-ingest mcp server".',
+    link: {
+      label: 'ax-fabric Documentation',
+      url: 'https://github.com/defai-digital/ax-fabric',
+    },
+  },
+  'Ax-Studio Browser MCP': {
+    description:
+      'Connect your browser to Ax-Studio for web search and page content extraction.',
+    hint: 'Requires the Ax-Studio Browser Extension installed in your Chrome-based browser.',
+    link: {
+      label: 'Install Extension',
+      url: 'https://chromewebstore.google.com/detail/jan-browser-mcp/mkciifcjehgnpaigoiaakdgabbpfpmal',
+    },
+  },
+}
+
 // Function to mask sensitive URL parameters
 const maskSensitiveUrl = (url: string) => {
   if (!url) return url
@@ -513,20 +538,24 @@ function MCPServersDesktop() {
                                       .join(', ')}
                                   </div>
                                 )}
-                              {config.official && (
-                                <div className="mt-2 text-xs text-muted-foreground pt-2">
+                              {OFFICIAL_SERVER_HINTS[key] && (
+                                <div className="mt-2 text-xs text-muted-foreground border-t border-border/40 pt-2">
                                   <p className="mb-1">
-                                    Requires Ax-Studio Browser Extension to be installed
-                                    in your Chrome-based browser.
+                                    {OFFICIAL_SERVER_HINTS[key].description}
                                   </p>
-                                  <a
-                                    href="https://chromewebstore.google.com/search/browser%20mcp"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-blue-500 hover:underline"
-                                  >
-                                    Find a compatible Browser MCP Extension →
-                                  </a>
+                                  <p className="mb-1 text-amber-500/80">
+                                    {OFFICIAL_SERVER_HINTS[key].hint}
+                                  </p>
+                                  {OFFICIAL_SERVER_HINTS[key].link && (
+                                    <a
+                                      href={OFFICIAL_SERVER_HINTS[key].link!.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-500 hover:underline"
+                                    >
+                                      {OFFICIAL_SERVER_HINTS[key].link!.label} →
+                                    </a>
+                                  )}
                                 </div>
                               )}
                             </>

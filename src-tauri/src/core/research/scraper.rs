@@ -42,7 +42,7 @@ fn extract_text(html: &str) -> String {
     let document = Html::parse_document(html);
 
     // Remove noise elements
-    let noise_selector = Selector::parse("script, style, nav, footer, aside, .ad, noscript")
+    let _noise_selector = Selector::parse("script, style, nav, footer, aside, .ad, noscript")
         .expect("static selector");
 
     // Collect text from body, skipping noise nodes

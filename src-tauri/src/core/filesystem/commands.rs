@@ -168,7 +168,7 @@ pub fn join_path<R: Runtime>(
     let path = resolve_path(app_handle, &args[0]);
     let joined_path = args[1..].iter().fold(path, |acc, part| acc.join(part));
     // Normalize to resolve any ".." segments from subsequent args
-    let normalized = ax_fabric_utils::normalize_path(&joined_path);
+    let normalized = ax_studio_utils::normalize_path(&joined_path);
     if !normalized.starts_with(&app_data_folder) {
         return Err(format!(
             "join_path error: result path {} is outside app data folder",
@@ -345,7 +345,7 @@ pub fn decompress<R: Runtime>(
         for entry in archive.entries().map_err(|e| e.to_string())? {
             let mut entry = entry.map_err(|e| e.to_string())?;
             let entry_path = entry.path().map_err(|e| e.to_string())?;
-            let full_path = ax_fabric_utils::normalize_path(&output_dir_buf.join(&entry_path));
+            let full_path = ax_studio_utils::normalize_path(&output_dir_buf.join(&entry_path));
             if !full_path.starts_with(&output_dir_buf) {
                 return Err(format!(
                     "Tar entry path traversal blocked: {}",

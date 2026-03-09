@@ -1276,12 +1276,6 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@ax-studio/remend@workspace:*, @ax-studio/remend@workspace:packages/remend":
-  version: 0.0.0-use.local
-  resolution: "@ax-studio/remend@workspace:packages/remend"
-  languageName: unknown
-  linkType: soft
-
 "@ax-studio/web-app@workspace:web-app":
   version: 0.0.0-use.local
   resolution: "@ax-studio/web-app@workspace:web-app"
@@ -1389,7 +1383,7 @@ __metadata:
     serve: "npm:14.2.5"
     shiki: "npm:^3.19.0"
     sonner: "npm:2.0.5"
-    streamdown: "workspace:*"
+    streamdown: "npm:^2.4.0"
     tailwind-merge: "npm:3.3.1"
     tailwindcss: "npm:4.1.17"
     token.js: "npm:token.js-fork@0.7.31"
@@ -19333,7 +19327,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"rehype-harden@npm:^1.1.7":
+"rehype-harden@npm:^1.1.8":
   version: 1.1.8
   resolution: "rehype-harden@npm:1.1.8"
   dependencies:
@@ -19539,6 +19533,13 @@ __metadata:
     mdast-util-to-markdown: "npm:^2.0.0"
     unified: "npm:^11.0.0"
   checksum: 10c0/0cdb37ce1217578f6f847c7ec9f50cbab35df5b9e3903d543e74b405404e67c07defcb23cd260a567b41b769400f6de03c2c3d9cd6ae7a6707d5c8d89ead489f
+  languageName: node
+  linkType: hard
+
+"remend@npm:1.2.2":
+  version: 1.2.2
+  resolution: "remend@npm:1.2.2"
+  checksum: 10c0/e5ff2a4d908114942507765b787e497853a3f58a81adb07f49502bb5e1b9ce492b977fe8cc5b00eb633cd9858b507ee0d0331bd3d667a30e3228ff2ef08332ca
   languageName: node
   linkType: hard
 
@@ -20760,30 +20761,31 @@ __metadata:
   languageName: node
   linkType: hard
 
-"streamdown@workspace:*, streamdown@workspace:packages/streamdown":
-  version: 0.0.0-use.local
-  resolution: "streamdown@workspace:packages/streamdown"
+"streamdown@npm:^2.4.0":
+  version: 2.4.0
+  resolution: "streamdown@npm:2.4.0"
   dependencies:
-    "@ax-studio/remend": "workspace:*"
     clsx: "npm:^2.1.1"
     hast-util-to-jsx-runtime: "npm:^2.3.6"
     html-url-attributes: "npm:^3.0.1"
     marked: "npm:^17.0.1"
-    rehype-harden: "npm:^1.1.7"
+    rehype-harden: "npm:^1.1.8"
     rehype-raw: "npm:^7.0.0"
     rehype-sanitize: "npm:^6.0.0"
     remark-gfm: "npm:^4.0.1"
-    remark-math: "npm:^6.0.0"
     remark-parse: "npm:^11.0.0"
     remark-rehype: "npm:^11.1.2"
-    shiki: "npm:^3.19.0"
+    remend: "npm:1.2.2"
     tailwind-merge: "npm:^3.4.0"
     unified: "npm:^11.0.5"
     unist-util-visit: "npm:^5.0.0"
+    unist-util-visit-parents: "npm:^6.0.0"
   peerDependencies:
     react: ^18.0.0 || ^19.0.0
-  languageName: unknown
-  linkType: soft
+    react-dom: ^18.0.0 || ^19.0.0
+  checksum: 10c0/64c43d8e73c693b992bd5b8e7ec007451474c7fdc4358509f3235b4b545096db19381503725afe62b48f223eb017ab745562b0ff97949dc2c4a4adc7369e71e8
+  languageName: node
+  linkType: hard
 
 "string-width-cjs@npm:string-width@^4.2.0, string-width@npm:^4.1.0":
   version: 4.2.3

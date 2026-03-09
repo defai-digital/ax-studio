@@ -2,7 +2,7 @@ use super::helpers::{_download_files_internal, err_to_string};
 use super::models::DownloadItem;
 use crate::core::app::commands::get_app_data_folder_path;
 use crate::core::state::AppState;
-use ax_fabric_utils::normalize_path;
+use ax_studio_utils::normalize_path;
 use std::collections::HashMap;
 use tauri::{Runtime, State};
 use tokio_util::sync::CancellationToken;

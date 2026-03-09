@@ -206,7 +206,7 @@ pub fn migrate_mcp_servers(
     }
     if mcp_version < 4 {
         log::info!("Migrating MCP schema version 4: Adding AX Studio MCP server");
-        let mcp_config = resolve_ax_studio_mcp_config();
+        let mcp_config = resolve_ax_fabric_mcp_config();
         let result = add_server_config(app_handle.clone(), "ax-studio".to_string(), mcp_config);
         if let Err(e) = result {
             log::error!("Failed to add AX Studio MCP server config: {e}");
@@ -225,35 +225,11 @@ pub fn migrate_mcp_servers(
 
 const AX_STUDIO_MCP_PACKAGE: &str = "@ax-studio/fabric-ingest";
 
-/// Build the MCP server config for AX Studio.
-/// If a local CLI is found on disk, uses `node <path> mcp server`.
-/// Otherwise falls back to `npx -y @ax-studio/fabric-ingest mcp server`.
-fn resolve_ax_studio_mcp_config() -> serde_json::Value {
-    // Check for a local development installation
-    if let Some(home) = dirs::home_dir() {
-        for repo_dir in ["ax-studio", "ax-fabric"] {
-            let local_path = home
-                .join("Downloads")
-                .join(repo_dir)
-                .join("packages")
-                .join("fabric-ingest")
-                .join("dist")
-                .join("cli.js");
-            if local_path.exists() {
-                let cli_str = local_path.to_string_lossy().to_string();
-                log::info!("Found local AX Studio MCP CLI at {cli_str}");
-                return serde_json::json!({
-                    "command": "node",
-                    "args": [cli_str, "mcp", "server"],
-                    "env": {},
-                    "active": false,
-                    "official": true
-                });
-            }
-        }
-    }
-
-    // Fallback: use npx
+/// Build the default MCP server config for ax-fabric.
+/// Uses npx as the default command which will work once the package is
+/// published to npm. Users can override the command and path via
+/// Settings → MCP Servers in the UI.
+fn resolve_ax_fabric_mcp_config() -> serde_json::Value {
     serde_json::json!({
         "command": "npx",
         "args": ["-y", AX_STUDIO_MCP_PACKAGE, "mcp", "server"],

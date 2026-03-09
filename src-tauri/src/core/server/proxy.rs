@@ -835,10 +835,10 @@ async fn proxy_request<R: tauri::Runtime>(
 
     // Initialize variables that will be set in the match
     let mut session_api_key: Option<String> = None;
-    let mut buffered_body: Option<Bytes> = None;
+    let mut buffered_body: Option<Bytes>;
     let mut target_base_url: Option<String> = None;
     let mut is_anthropic_messages = false;
-    let mut provider_name: Option<String> = None;
+    let mut provider_name: Option<String>;
     // Provider-specific custom headers collected during routing, applied to outbound request
     let mut provider_custom_headers: Vec<ProviderCustomHeader> = vec![];
 
