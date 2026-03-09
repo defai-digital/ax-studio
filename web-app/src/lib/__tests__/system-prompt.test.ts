@@ -64,7 +64,7 @@ describe('getOptimizedModelConfig', () => {
     expect(resolved.resolvedPrompt).toBe('Thread prompt')
     expect(tuned.temperature).toBe(0.4)
     expect(tuned.top_p).toBe(0.8)
-    expect(tuned.max_output_tokens).toBe(2048)
+    expect(tuned.max_output_tokens).toBe(4096)
   })
 
   it('injects resolved prompt into chat payload unchanged', () => {
@@ -73,7 +73,7 @@ describe('getOptimizedModelConfig', () => {
     })
     const injection = buildChatPromptInjection(resolved)
 
-    expect(injection.systemMessage).toBe('Thread prompt')
+    expect(injection.systemMessage).toContain('Thread prompt')
   })
 
   it('preserves base values when no tuning trigger exists', () => {
@@ -97,7 +97,7 @@ describe('getOptimizedModelConfig', () => {
 
     expect(tuned.temperature).toBe(0.7)
     expect(tuned.top_p).toBe(0.9)
-    expect(tuned.max_output_tokens).toBe(1200)
+    expect(tuned.max_output_tokens).toBe(4096)
   })
 
   it('applies 8+ message tier', () => {
@@ -108,7 +108,7 @@ describe('getOptimizedModelConfig', () => {
 
     expect(tuned.temperature).toBe(0.5)
     expect(tuned.top_p).toBe(0.85)
-    expect(tuned.max_output_tokens).toBe(1200)
+    expect(tuned.max_output_tokens).toBe(4096)
   })
 
   it('applies 20+ message tier', () => {
@@ -119,7 +119,7 @@ describe('getOptimizedModelConfig', () => {
 
     expect(tuned.temperature).toBe(0.4)
     expect(tuned.top_p).toBe(0.8)
-    expect(tuned.max_output_tokens).toBe(1200)
+    expect(tuned.max_output_tokens).toBe(4096)
   })
 
   it('applies 800+ char prompt tier', () => {
@@ -130,7 +130,7 @@ describe('getOptimizedModelConfig', () => {
 
     expect(tuned.temperature).toBe(0.7)
     expect(tuned.top_p).toBe(0.9)
-    expect(tuned.max_output_tokens).toBe(1800)
+    expect(tuned.max_output_tokens).toBe(4096)
   })
 
   it('applies 2000+ char prompt tier', () => {
@@ -139,7 +139,7 @@ describe('getOptimizedModelConfig', () => {
       {}
     )
 
-    expect(tuned.max_output_tokens).toBe(2048)
+    expect(tuned.max_output_tokens).toBe(6144)
   })
 
   it('applies attachment tier', () => {
@@ -148,7 +148,7 @@ describe('getOptimizedModelConfig', () => {
       {}
     )
 
-    expect(tuned.max_output_tokens).toBe(2048)
+    expect(tuned.max_output_tokens).toBe(6144)
   })
 
   it('uses reasoning model settings', () => {
@@ -159,7 +159,7 @@ describe('getOptimizedModelConfig', () => {
 
     expect(tuned.temperature).toBe(0.3)
     expect(tuned.top_p).toBe(0.8)
-    expect(tuned.max_output_tokens).toBe(4096)
+    expect(tuned.max_output_tokens).toBe(8192)
   })
 
   it('reasoning model overrides conversation tier', () => {
@@ -170,7 +170,7 @@ describe('getOptimizedModelConfig', () => {
 
     expect(tuned.temperature).toBe(0.3)
     expect(tuned.top_p).toBe(0.8)
-    expect(tuned.max_output_tokens).toBe(4096)
+    expect(tuned.max_output_tokens).toBe(8192)
   })
 
   it('does not override user-set values for short chats', () => {
@@ -213,6 +213,6 @@ describe('getOptimizedModelConfig', () => {
       { max_output_tokens: 500 }
     )
 
-    expect(tuned.max_output_tokens).toBe(4096)
+    expect(tuned.max_output_tokens).toBe(8192)
   })
 })

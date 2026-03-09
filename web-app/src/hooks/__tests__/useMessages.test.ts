@@ -23,6 +23,7 @@ describe('useMessages', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockDeleteMessage.mockResolvedValue(undefined)
     // Reset store state
     useMessages.setState({ messages: {} })
   })

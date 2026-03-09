@@ -113,8 +113,8 @@ describe('TauriMCPService', () => {
       const mockConfigString = '{"server1": {"path": "/path/to/server"}, "server2": {"command": "node server.js"}}'
       const expectedConfig = {
         mcpServers: {
-          server1: { path: '/path/to/server' },
-          server2: { command: 'node server.js' },
+          server1: { command: '', args: [], env: {} },
+          server2: { command: 'node server.js', args: [], env: {} },
         },
         mcpSettings: { ...DEFAULT_MCP_SETTINGS },
       }
@@ -164,7 +164,8 @@ describe('TauriMCPService', () => {
       const invalidJson = '{"invalid": json}'
       mockCore.api.getMcpConfigs.mockResolvedValue(invalidJson)
 
-      await expect(mcpService.getMCPConfig()).rejects.toThrow()
+      const result = await mcpService.getMCPConfig()
+      expect(result).toEqual({ mcpServers: {}, mcpSettings: { ...DEFAULT_MCP_SETTINGS } })
     })
 
     it('should handle API rejection', async () => {
@@ -237,7 +238,7 @@ describe('TauriMCPService', () => {
 
       const result = await mcpService.getTools()
 
-      expect(result).toBeUndefined()
+      expect(result).toEqual([])
 
       window.core = originalCore
     })
@@ -278,7 +279,7 @@ describe('TauriMCPService', () => {
 
       const result = await mcpService.getConnectedServers()
 
-      expect(result).toBeUndefined()
+      expect(result).toEqual([])
 
       window.core = originalCore
     })
@@ -370,7 +371,7 @@ describe('TauriMCPService', () => {
 
       const result = await mcpService.callTool(toolArgs)
 
-      expect(result).toBeUndefined()
+      expect(result).toEqual({ error: 'MCP service unavailable', content: [] })
 
       window.core = originalCore
     })

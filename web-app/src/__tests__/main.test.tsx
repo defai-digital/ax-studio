@@ -27,6 +27,12 @@ vi.mock('../routeTree.gen', () => ({
 vi.mock('../index.css', () => ({}))
 vi.mock('../i18n', () => ({}))
 
+// jsdom doesn't implement URL.createObjectURL
+if (typeof URL.createObjectURL === 'undefined') {
+  URL.createObjectURL = vi.fn(() => 'blob:mock-url')
+  URL.revokeObjectURL = vi.fn()
+}
+
 describe('main.tsx', () => {
   let mockGetElementById: any
   let mockRootElement: any

@@ -81,6 +81,9 @@ function isExaRateLimitError(err: unknown): boolean {
   return isExaRateLimitMessage(getErrorMessage(err))
 }
 
+/** Exported for unit testing only — not part of the public hook API. */
+export const __researchTestUtils = { isExaRateLimitMessage, isExaRateLimitError }
+
 /**
  * Sequential Exa gate — only one search runs at a time, with a 1.5 s gap.
  * Reset at the start of each research run so stale chains don't carry over.
