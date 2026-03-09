@@ -3,7 +3,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { events, AppEvent } from '@ax-studio/core'
 import type { UpdateInfo } from '@/services/updater/types'
 import { SystemEvent } from '@/types/events'
-import { getServiceHub } from '@/hooks/useServiceHub'
+import { useServiceHub } from '@/hooks/useServiceHub'
 
 export interface UpdateState {
   isUpdateAvailable: boolean
@@ -16,6 +16,7 @@ export interface UpdateState {
 }
 
 export const useAppUpdater = () => {
+  const serviceHub = useServiceHub()
   const [updateState, setUpdateState] = useState<UpdateState>({
     isUpdateAvailable: false,
     updateInfo: null,
@@ -70,7 +71,7 @@ export const useAppUpdater = () => {
 
         if (!isDev()) {
           // Production mode - use actual Tauri updater
-          const update = await getServiceHub().updater().check()
+          const update = await serviceHub.updater().check()
 
           if (update) {
             if (AUTO_UPDATER_DISABLED) {
@@ -169,11 +170,11 @@ export const useAppUpdater = () => {
 
       let downloaded = 0
       let contentLength = 0
-      await getServiceHub().models().stopAllModels()
-      getServiceHub().events().emit(SystemEvent.KILL_SIDECAR)
+      await serviceHub.models().stopAllModels()
+      serviceHub.events().emit(SystemEvent.KILL_SIDECAR)
       await new Promise((resolve) => setTimeout(resolve, 1000))
 
-      await getServiceHub().updater().downloadAndInstallWithProgress((event) => {
+      await serviceHub.updater().downloadAndInstallWithProgress((event) => {
         switch (event.event) {
           case 'Started':
             contentLength = event.data?.contentLength || 0

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { getServiceHub } from '@/hooks/useServiceHub'
+import { useServiceHub } from '@/hooks/useServiceHub'
 import { SystemEvent } from '@/types/events'
 import { useAppState } from './useAppState'
 import { useToolAvailable } from './useToolAvailable'
@@ -7,6 +7,7 @@ import { ExtensionManager } from '@/lib/extension'
 import { ExtensionTypeEnum, MCPExtension } from '@ax-studio/core'
 
 export const useTools = () => {
+  const serviceHub = useServiceHub()
   const updateTools = useAppState((state) => state.updateTools)
   const updateMcpToolNames = useAppState((state) => state.updateMcpToolNames)
   const updateRagToolNames = useAppState((state) => state.updateRagToolNames)
@@ -21,7 +22,7 @@ export const useTools = () => {
         )
 
         // Fetch MCP tools
-        const mcpTools = await getServiceHub().mcp().getTools()
+        const mcpTools = await serviceHub.mcp().getTools()
 
         // Update MCP tools
         updateTools(mcpTools)
@@ -43,7 +44,7 @@ export const useTools = () => {
 
       // Fetch RAG tools from the Retrieval Service (fails silently when service is offline)
       try {
-        const ragTools = await getServiceHub().rag().getTools()
+        const ragTools = await serviceHub.rag().getTools()
         updateRagToolNames(ragTools.map((t) => t.name))
       } catch {
         updateRagToolNames([])
@@ -52,7 +53,7 @@ export const useTools = () => {
     setTools()
 
     let unsubscribe = () => {}
-    getServiceHub().events().listen(SystemEvent.MCP_UPDATE, setTools).then((unsub) => {
+    serviceHub.events().listen(SystemEvent.MCP_UPDATE, setTools).then((unsub) => {
       // Unsubscribe from the event when the component unmounts
       unsubscribe = unsub
     }).catch((error) => {

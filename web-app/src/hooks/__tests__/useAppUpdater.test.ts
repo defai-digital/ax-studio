@@ -32,20 +32,22 @@ const mockUpdaterCheck = vi.fn()
 const mockUpdaterDownloadAndInstall = vi.fn()
 const mockUpdaterDownloadAndInstallWithProgress = vi.fn()
 const mockEventsEmit = vi.fn()
-vi.mock('@/hooks/useServiceHub', () => ({
-  getServiceHub: () => ({
-    models: () => ({
-      stopAllModels: mockStopAllModels,
-    }),
-    updater: () => ({
-      check: mockUpdaterCheck,
-      downloadAndInstall: mockUpdaterDownloadAndInstall,
-      downloadAndInstallWithProgress: mockUpdaterDownloadAndInstallWithProgress,
-    }),
-    events: () => ({
-      emit: mockEventsEmit,
-    }),
+const mockServiceHub = {
+  models: () => ({
+    stopAllModels: mockStopAllModels,
   }),
+  updater: () => ({
+    check: mockUpdaterCheck,
+    downloadAndInstall: mockUpdaterDownloadAndInstall,
+    downloadAndInstallWithProgress: mockUpdaterDownloadAndInstallWithProgress,
+  }),
+  events: () => ({
+    emit: mockEventsEmit,
+  }),
+}
+vi.mock('@/hooks/useServiceHub', () => ({
+  getServiceHub: () => mockServiceHub,
+  useServiceHub: () => mockServiceHub,
 }))
 
 // Mock global window.core

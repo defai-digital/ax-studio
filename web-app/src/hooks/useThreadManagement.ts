@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { getServiceHub } from '@/hooks/useServiceHub'
+import { getServiceHub, useServiceHub } from '@/hooks/useServiceHub'
 import { useThreads } from '@/hooks/useThreads'
 import type { ThreadFolder } from '@/services/projects/types'
 import { useEffect } from 'react'
@@ -141,13 +141,14 @@ const useThreadManagementStore = create<ThreadManagementState>()((set, get) => (
 }))
 
 export const useThreadManagement = () => {
+  const serviceHub = useServiceHub()
   const store = useThreadManagementStore()
 
   // Load projects from service on mount
   useEffect(() => {
     const syncProjects = async () => {
       try {
-        const projectsService = getServiceHub().projects()
+        const projectsService = serviceHub.projects()
         const projects = await projectsService.getProjects()
         useThreadManagementStore.setState({ folders: projects })
       } catch (error) {

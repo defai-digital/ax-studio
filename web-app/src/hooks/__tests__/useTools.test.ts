@@ -21,18 +21,20 @@ vi.mock('../useAppState', () => ({
 }))
 
 // Mock the ServiceHub
-vi.mock('@/hooks/useServiceHub', () => ({
-  getServiceHub: () => ({
-    mcp: () => ({
-      getTools: mockGetTools,
-    }),
-    rag: () => ({
-      getTools: vi.fn(() => Promise.resolve([])),
-    }),
-    events: () => ({
-      listen: mockListen,
-    }),
+const mockServiceHub = () => ({
+  mcp: () => ({
+    getTools: mockGetTools,
   }),
+  rag: () => ({
+    getTools: vi.fn(() => Promise.resolve([])),
+  }),
+  events: () => ({
+    listen: mockListen,
+  }),
+})
+vi.mock('@/hooks/useServiceHub', () => ({
+  getServiceHub: mockServiceHub,
+  useServiceHub: mockServiceHub,
 }))
 
 describe('useTools', () => {
