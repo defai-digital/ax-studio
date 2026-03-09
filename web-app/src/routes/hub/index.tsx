@@ -184,6 +184,7 @@ function HubContent() {
     showOnlyDownloaded,
     huggingFaceRepo,
     searchOptions,
+    getProviderByName,
   ])
 
   // Dynamic estimate size based on model state

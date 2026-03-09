@@ -1,3 +1,8 @@
+/// Windows process-creation flag that suppresses the console window for child
+/// processes. Used when spawning MCP servers and helper commands on Windows.
+#[cfg(windows)]
+pub const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 // Default MCP runtime settings
 pub const DEFAULT_MCP_TOOL_CALL_TIMEOUT_SECS: u64 = 30;
 pub const DEFAULT_MCP_BASE_RESTART_DELAY_MS: u64 = 1000; // Start with 1 second

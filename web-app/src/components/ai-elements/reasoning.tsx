@@ -103,7 +103,7 @@ export const Reasoning = memo(
         setIsOpen,
         duration,
       }),
-      [isStreaming, isOpen, duration]
+      [isStreaming, isOpen, setIsOpen, duration]
     )
 
     return (

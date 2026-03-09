@@ -14,6 +14,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { invoke } from '@tauri-apps/api/core'
+import { DEFAULT_SERVICE_URLS } from '@/constants/services'
+import { localStorageKey } from '@/constants/localStorage'
 
 export interface AxStudioServiceConfig {
   /** FastAPI inference proxy — OpenAI-compatible /v1/chat/completions */
@@ -38,15 +40,14 @@ interface AxStudioConfigState {
 }
 
 const LEGACY_SERVICE_CONFIG_KEYS = ['ax-fabric-service-config']
-const AX_STUDIO_SERVICE_CONFIG_KEY = 'ax-studio-service-config'
 
 // Migrate localStorage from earlier service-config keys on first load.
 if (typeof window !== 'undefined') {
-  if (!localStorage.getItem(AX_STUDIO_SERVICE_CONFIG_KEY)) {
+  if (!localStorage.getItem(localStorageKey.serviceConfig)) {
     for (const legacyKey of LEGACY_SERVICE_CONFIG_KEYS) {
       const oldState = localStorage.getItem(legacyKey)
       if (oldState) {
-        localStorage.setItem(AX_STUDIO_SERVICE_CONFIG_KEY, oldState)
+        localStorage.setItem(localStorageKey.serviceConfig, oldState)
         localStorage.removeItem(legacyKey)
         break
       }
@@ -55,10 +56,10 @@ if (typeof window !== 'undefined') {
 }
 
 const DEFAULTS: AxStudioServiceConfig = {
-  apiServiceUrl: 'http://127.0.0.1:8000',
-  retrievalServiceUrl: 'http://127.0.0.1:8001',
-  agentsServiceUrl: 'http://127.0.0.1:8002',
-  akidbUrl: 'http://127.0.0.1:8003',
+  apiServiceUrl: DEFAULT_SERVICE_URLS.apiService,
+  retrievalServiceUrl: DEFAULT_SERVICE_URLS.retrieval,
+  agentsServiceUrl: DEFAULT_SERVICE_URLS.agents,
+  akidbUrl: DEFAULT_SERVICE_URLS.akidb,
 }
 
 export const useAxStudioConfig = create<AxStudioConfigState>()(
@@ -100,7 +101,7 @@ export const useAxStudioConfig = create<AxStudioConfigState>()(
       },
     }),
     {
-      name: AX_STUDIO_SERVICE_CONFIG_KEY,
+      name: localStorageKey.serviceConfig,
     }
   )
 )

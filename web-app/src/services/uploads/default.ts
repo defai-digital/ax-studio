@@ -10,37 +10,8 @@
 import type { UploadsService, UploadResult } from './types'
 import type { Attachment } from '@/types/attachment'
 import { ulid } from 'ulidx'
-import { serviceConfigStorageSchema } from '@/schemas/config.schema'
 import { ingestResponseSchema } from '@/schemas/uploads.schema'
-
-const DEFAULT_RETRIEVAL_URL = 'http://127.0.0.1:8001'
-
-function getRetrievalServiceUrl(): string {
-  try {
-    const stored = localStorage.getItem('ax-studio-service-config')
-    if (stored) {
-      const parsed = serviceConfigStorageSchema.safeParse(JSON.parse(stored))
-      if (parsed.success) {
-        return parsed.data.state?.config?.retrievalServiceUrl ?? DEFAULT_RETRIEVAL_URL
-      }
-    }
-  } catch {
-    console.warn('Failed to read retrieval service URL from localStorage')
-  }
-  return DEFAULT_RETRIEVAL_URL
-}
-
-async function doFetch(
-  url: string,
-  init?: RequestInit
-): Promise<Response> {
-  try {
-    const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http')
-    return tauriFetch(url, init)
-  } catch {
-    return fetch(url, init)
-  }
-}
+import { getRetrievalServiceUrl, doFetch } from '@/services/retrieval/client'
 
 export class DefaultUploadsService implements UploadsService {
   async ingestImage(_threadId: string, attachment: Attachment): Promise<UploadResult> {

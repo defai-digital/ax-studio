@@ -19,7 +19,10 @@ use tokio::{
 
 use crate::core::{
     app::commands::get_app_data_folder_path,
-    mcp::models::{McpServerConfig, McpSettings},
+    mcp::{
+        constants::CREATE_NO_WINDOW,
+        models::{McpServerConfig, McpSettings},
+    },
     state::{AppState, RunningServiceEnum, SharedMcpServers},
 };
 use ax_studio_utils::{can_override_npx, can_override_uvx};
@@ -473,7 +476,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
         }
         #[cfg(windows)]
         {
-            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW: prevents shell window on Windows
+            cmd.creation_flags(CREATE_NO_WINDOW);
         }
 
         cmd.kill_on_drop(true);
@@ -810,7 +813,7 @@ async fn kill_process_by_pid(pid: u32) -> Result<(), String> {
     cmd.args(&["/F", "/PID", &pid.to_string()]);
 
     #[cfg(windows)]
-    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    cmd.creation_flags(CREATE_NO_WINDOW);
 
     let output = cmd
         .output()

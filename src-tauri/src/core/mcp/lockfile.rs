@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager, Runtime};
+#[cfg(windows)]
+use crate::core::mcp::constants::CREATE_NO_WINDOW;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpLockFile {
@@ -95,7 +97,7 @@ pub fn is_process_alive(pid: u32) -> bool {
         cmd.args(&["/FI", &format!("PID eq {}", pid), "/NH"]);
 
         #[cfg(windows)]
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        cmd.creation_flags(CREATE_NO_WINDOW);
 
         let output = cmd.output();
 

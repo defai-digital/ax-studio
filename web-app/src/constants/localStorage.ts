@@ -1,4 +1,5 @@
 export const localStorageKey = {
+  serviceConfig: 'ax-studio-service-config',
   LeftPanel: 'left-panel',
   threads: 'threads',
   messages: 'messages',

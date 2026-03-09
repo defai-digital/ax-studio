@@ -26,7 +26,7 @@ function IntegrationsPage() {
 
   useEffect(() => {
     refreshStatuses()
-  }, [])
+  }, [refreshStatuses])
 
   const handleConnect = (integration: Integration) => {
     setSelectedIntegration(integration)

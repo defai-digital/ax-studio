@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
 import { getServiceHub } from '@/hooks/useServiceHub'
+import { ANTHROPIC_DEFAULT_HEADERS } from '@/constants/providers'
 
 type ModelProviderState = {
   providers: ModelProvider[]
@@ -250,16 +251,7 @@ export const useModelProvider = create<ModelProviderState>()(
               }
 
               if (!provider.custom_header) {
-                provider.custom_header = [
-                  {
-                    header: 'anthropic-version',
-                    value: '2023-06-01',
-                  },
-                  {
-                    header: 'anthropic-dangerous-direct-browser-access',
-                    value: 'true',
-                  },
-                ]
+                provider.custom_header = [...ANTHROPIC_DEFAULT_HEADERS]
               }
             }
 

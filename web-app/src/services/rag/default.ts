@@ -10,38 +10,7 @@
 import type { RAGService } from './types'
 import type { MCPTool, MCPToolCallResult } from '@ax-studio/core'
 import { getToolsResponseSchema, mcpToolCallResultSchema, parseDocumentResponseSchema } from '@/schemas/rag.schema'
-import { serviceConfigStorageSchema } from '@/schemas/config.schema'
-
-const DEFAULT_RETRIEVAL_URL = 'http://127.0.0.1:8001'
-
-function getRetrievalServiceUrl(): string {
-  try {
-    const stored = localStorage.getItem('ax-studio-service-config')
-    if (stored) {
-      const parsed = serviceConfigStorageSchema.safeParse(JSON.parse(stored))
-      if (parsed.success) {
-        return parsed.data.state?.config?.retrievalServiceUrl ?? DEFAULT_RETRIEVAL_URL
-      }
-    }
-  } catch {
-    console.warn('Failed to read retrieval service URL from localStorage')
-  }
-  return DEFAULT_RETRIEVAL_URL
-}
-
-async function doFetch(
-  url: string,
-  init?: RequestInit
-): Promise<Response> {
-  // Use Tauri's fetch plugin when available (avoids CORS restrictions on desktop).
-  // Falls back to the browser fetch on web/mobile.
-  try {
-    const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http')
-    return tauriFetch(url, init)
-  } catch {
-    return fetch(url, init)
-  }
-}
+import { getRetrievalServiceUrl, doFetch } from '@/services/retrieval/client'
 
 export class DefaultRAGService implements RAGService {
   async getTools(): Promise<MCPTool[]> {

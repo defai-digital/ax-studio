@@ -1,3 +1,14 @@
+export const ANTHROPIC_VERSION_HEADER = 'anthropic-version'
+export const ANTHROPIC_VERSION_VALUE = '2023-06-01'
+export const ANTHROPIC_BROWSER_ACCESS_HEADER = 'anthropic-dangerous-direct-browser-access'
+export const ANTHROPIC_BROWSER_ACCESS_VALUE = 'true'
+
+/** Default custom headers required for direct Anthropic API access from a browser. */
+export const ANTHROPIC_DEFAULT_HEADERS = [
+  { header: ANTHROPIC_VERSION_HEADER, value: ANTHROPIC_VERSION_VALUE },
+  { header: ANTHROPIC_BROWSER_ACCESS_HEADER, value: ANTHROPIC_BROWSER_ACCESS_VALUE },
+] as const
+
 export const openAIProviderSettings = [
   {
     key: 'api-key',
@@ -127,16 +138,7 @@ export const predefinedProviders = [
       },
     ],
     models: [],
-    custom_header: [
-      {
-        header: 'anthropic-version',
-        value: '2023-06-01'
-      },
-      {
-        header: 'anthropic-dangerous-direct-browser-access',
-        value: 'true'
-      }
-    ]
+    custom_header: [...ANTHROPIC_DEFAULT_HEADERS]
   },
   {
     active: true,
