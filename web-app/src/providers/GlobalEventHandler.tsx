@@ -177,7 +177,7 @@ export function GlobalEventHandler() {
   // ─── Model import / validation events ──────────────────────────────────────
 
   useEffect(() => {
-    const handleModelImported = async (_payload: any) => {
+    const handleModelImported = async () => {
       // Refresh providers list to show the newly downloaded model
       try {
         const updatedProviders = await serviceHub.providers().getProviders()
@@ -191,7 +191,7 @@ export function GlobalEventHandler() {
       )
     }
 
-    const handleModelValidationFailed = (_payload: any) => {
+    const handleModelValidationFailed = () => {
       toast.error(
         t('settings:llamacpp.errors.modelValidationFailed' as Parameters<typeof t>[0])
       )
@@ -210,34 +210,35 @@ export function GlobalEventHandler() {
 
   const { updateProgress, removeDownload, removeLocalDownloadingModel } = useDownloadStore()
 
+  type DownloadState = {
+    modelId: string
+    percent?: number
+    transferred?: number
+    total?: number
+    size?: { transferred?: number; total?: number }
+  }
+
   useEffect(() => {
-    const onFileDownloadUpdate = (state: any) => {
-      // Be resilient to different payload structures
+    const onFileDownloadUpdate = (state: DownloadState) => {
       const modelId = state.modelId
-      const percent = state.percent ?? (state.total ? state.transferred / state.total : 0)
+      const percent = state.percent ?? (state.total ? (state.transferred ?? 0) / state.total : 0)
       const transferred = state.size?.transferred ?? state.transferred ?? 0
       const total = state.size?.total ?? state.total ?? 0
 
-      updateProgress(
-        modelId,
-        percent,
-        modelId,
-        transferred,
-        total
-      )
+      updateProgress(modelId, percent, modelId, transferred, total)
     }
 
-    const onFileDownloadSuccess = (state: any) => {
+    const onFileDownloadSuccess = (state: DownloadState) => {
       removeDownload(state.modelId)
       removeLocalDownloadingModel(state.modelId)
     }
 
-    const onFileDownloadError = (state: any) => {
+    const onFileDownloadError = (state: DownloadState) => {
       removeDownload(state.modelId)
       removeLocalDownloadingModel(state.modelId)
     }
 
-    const onFileDownloadStopped = (state: any) => {
+    const onFileDownloadStopped = (state: DownloadState) => {
       removeDownload(state.modelId)
       removeLocalDownloadingModel(state.modelId)
     }

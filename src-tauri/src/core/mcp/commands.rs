@@ -172,7 +172,10 @@ pub async fn get_tools(state: State<'_, AppState>) -> Result<Vec<ToolWithServer>
     // Collect server refs under lock, then drop lock before querying
     let server_refs: Vec<(String, Arc<crate::core::state::RunningServiceEnum>)> = {
         let servers = state.mcp_servers.lock().await;
-        servers.iter().map(|(name, svc)| (name.clone(), svc.clone())).collect()
+        servers
+            .iter()
+            .map(|(name, svc)| (name.clone(), svc.clone()))
+            .collect()
     };
 
     for (server_name, service) in &server_refs {
@@ -248,12 +251,14 @@ pub async fn call_tool(
 
         let refs: Vec<(String, Arc<crate::core::state::RunningServiceEnum>)> =
             if let Some(ref server) = server_name {
-                servers.iter()
+                servers
+                    .iter()
                     .filter(|(name, _)| *name == server)
                     .map(|(name, svc)| (name.clone(), svc.clone()))
                     .collect()
             } else {
-                servers.iter()
+                servers
+                    .iter()
                     .map(|(name, svc)| (name.clone(), svc.clone()))
                     .collect()
             };

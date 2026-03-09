@@ -1,68 +1,34 @@
-## @ax-studio/core
+# @ax-studio/core
 
-> This module includes functions for communicating with core APIs, registering app extensions, and exporting type definitions.
+Shared TypeScript SDK for AX Studio.
 
-## Usage
+This package provides shared contracts, browser-facing APIs, and extension-facing building blocks used by the web app and packaged extensions.
 
-### Import the package
+## Install / Consume
 
-```js
-// Web / extension runtime
+Within this repository, consumers reference the workspace package directly:
+
+```ts
 import * as core from '@ax-studio/core'
 ```
 
-## Build an Extension
+## Common Commands
 
-1. Download an extension template.
+From the repository root:
 
-2. Update the source code:
+```bash
+yarn workspace @ax-studio/core build
+yarn workspace @ax-studio/core test
+yarn workspace @ax-studio/core test:coverage
+```
 
-   1. Open `index.ts` in your code editor.
-   2. Rename the extension class from `SampleExtension` to your preferred extension name.
-   3. Import modules from the core package.
-      ```ts
-      import * as core from '@ax-studio/core'
-      ```
-   4. In the `onLoad()` method, add your code:
+## Responsibilities
 
-      ```ts
-      // Example of listening to app events and providing customized inference logic:
-      import * as core from '@ax-studio/core'
+- shared type definitions
+- extension system contracts
+- browser-facing APIs used across packages
+- stable interfaces consumed by the app and extensions
 
-      export default class MyExtension extends BaseExtension {
-        // On extension load
-        onLoad() {
-          core.events.on(MessageEvent.OnMessageSent, (data) => MyExtension.inference(data, this))
-        }
+## Contributor Guide
 
-        // Customized inference logic
-        private static inference(incomingMessage: MessageRequestData) {
-          // Prepare customized message content
-          const content: ThreadContent = {
-            type: ContentType.Text,
-            text: {
-              value: "I'm Ax-Studio Assistant!",
-              annotations: [],
-            },
-          }
-
-          // Modify message and send out
-          const outGoingMessage: ThreadMessage = {
-            ...incomingMessage,
-            content,
-          }
-        }
-      }
-      ```
-
-3. Build the extension:
-   1. Navigate to the extension directory.
-   2. Install dependencies.
-      ```bash
-      yarn install
-      ```
-   3. Compile the source code.
-      ```bash
-      yarn build
-      ```
-   4. Select the generated .tgz from Ax-Studio > Settings > Extensions > Manual Installation.
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for package-specific development guidance.

@@ -38,7 +38,7 @@ export function ServiceHubProvider({ children }: ServiceHubProviderProps) {
     return (
       <div className="flex min-h-screen items-center justify-center p-6 text-center">
         <div className="max-w-lg space-y-3">
-          <h1 className="text-lg font-semibold">Ax-Fabric failed to initialize</h1>
+          <h1 className="text-lg font-semibold">AX Studio failed to initialize</h1>
           <p className="text-sm text-muted-foreground">
             Service startup failed. Please restart the app.
           </p>

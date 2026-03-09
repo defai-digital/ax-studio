@@ -1,128 +1,56 @@
-# Contributing to Ax-Studio Extensions
+# Contributing to Extensions
 
-[← Back to Main Contributing Guide](../CONTRIBUTING.md)
+[Back to main contributing guide](../CONTRIBUTING.md)
 
-Extensions add specific features to Ax-Studio as self-contained modules.
+Extensions package feature logic that can be loaded by AX Studio. They should stay focused, composable, and aligned with the `@ax-studio/core` contracts.
 
 ## Current Extensions
 
-- **`assistant-extension/`**: CRUD operations for AI assistants.
-- **`conversational-extension/`**: Logic for managing threads and messages.
-- **`download-extension/`**: Downloads models from HuggingFace with progress tracking.
-- **`llamacpp-extension/`**: Local model inference via `llama.cpp`.
+- `assistant-extension/`
+- `conversational-extension/`
+- `download-extension/`
+- `llamacpp-extension/`
 
-## Quick Start: "Hello World" Extension
+## Workspace Commands
 
-### 1. Create the Directory
-```bash
-mkdir extensions/hello-world
-cd extensions/hello-world
-yarn init
-```
-
-### 2. Configure `package.json`
-Ensure your `package.json` follows this format:
-```json
-{
-  "name": "@ax-fabric/hello-world",
-  "version": "1.0.0",
-  "main": "dist/index.js",
-  "dependencies": {
-    "@ax-fabric/core": "../../core/package.tgz"
-  },
-  "scripts": {
-    "build": "rolldown -c rolldown.config.mjs"
-  }
-}
-```
-
-### 3. Implement `src/index.ts`
-```typescript
-import { Extension } from '@ax-studio/core'
-
-export default class HelloWorld extends BaseExtension {
-  async onLoad() {
-    console.log('Hello world extension loaded!');
-    
-    // Register a simple command that can be called from the UI
-    this.registerService('greet', {
-      sayHi: async (name: string) => `Hello, ${name}!`
-    });
-  }
-
-  async onUnload() {
-    console.log('Hello world extension unloaded');
-  }
-}
-```
-
-### 4. Build and Install
-```bash
-yarn build
-# This creates a .tgz file. Install it in Ax-Fabric via Settings > Extensions.
-```
-
-## Common Patterns
-
-### Service Registration
-```typescript
-async onLoad() {
-  this.registerService('myService', {
-    doSomething: async () => 'result'
-  })
-}
-```
-
-### Event Handling  
-```typescript
-async onLoad() {
-  this.on('model:loaded', (model) => {
-    console.log('Model loaded:', model.id)
-  })
-}
-```
-
-## Extension Lifecycle
-
-1. **Ax-Studio starts** → Discovers extensions
-2. **Loading** → Calls `onLoad()` method  
-3. **Active** → Extension responds to events
-4. **Unloading** → Calls `onUnload()` on shutdown
-
-## Debugging Extensions
+From the repository root:
 
 ```bash
-# Check if extension loaded
-console.log(window.core.extensions)
-
-# Debug extension events
-this.on('*', console.log)
-
-# Check extension services
-console.log(window.core.api)
+yarn build:extensions
 ```
 
-## Common Issues
+From the `extensions/` workspace when working on extension packages directly:
 
-**Extension not loading?**
-- Check package.json format: `@ax-studio/extension-name`
-- Ensure `onLoad()` doesn't throw errors
-- Verify exports in index.ts
+```bash
+yarn install
+yarn workspaces foreach -Apt run build:publish
+```
 
-**Events not working?**
-- Check event name spelling
-- Ensure listeners are set up in `onLoad()`
+## Authoring Expectations
 
-## Best Practices
+- Use `@ax-studio/core`, not legacy package names
+- Keep one extension focused on one domain or feature area
+- Clean up resources on unload
+- Avoid hidden coupling between extensions
+- Add tests where the extension package already supports them
 
-- Keep extensions focused on one feature
-- Use async/await for all operations
-- Clean up resources in onUnload()
-- Handle errors gracefully
-- Don't depend on other extensions
+## Typical Extension Shape
 
-## Dependencies
+An extension package usually contains:
 
-- **@ax-studio/core** - Core SDK and extension system
-- **TypeScript** - Type safety
-- **Rolldown** - Bundling
+- `src/` implementation
+- package metadata
+- a build step that emits a distributable `.tgz`
+
+Installation in the app uses the packaged artifact through the extensions settings UI.
+
+## Common Pitfalls
+
+- stale package names copied from older examples
+- extension code assuming another extension is always present
+- lifecycle cleanup being skipped for listeners or long-running tasks
+
+## Related Docs
+
+- [Core SDK Guide](../core/CONTRIBUTING.md)
+- [Assistant extension README](./assistant-extension/README.md)

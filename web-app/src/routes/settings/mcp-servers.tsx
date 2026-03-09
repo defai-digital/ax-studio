@@ -519,13 +519,16 @@ function MCPServersDesktop() {
                                     Requires Ax-Studio Browser Extension to be installed
                                     in your Chrome-based browser.
                                   </p>
+                                  <p className="mb-1">
+                                    The published Chrome extension still uses the legacy Jan name.
+                                  </p>
                                   <a
                                     href="https://chromewebstore.google.com/detail/jan-browser-mcp/mkciifcjehgnpaigoiaakdgabbpfppal"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="text-blue-500 hover:underline"
                                   >
-                                    Install Extension →
+                                    Install Browser MCP Extension →
                                   </a>
                                 </div>
                               )}

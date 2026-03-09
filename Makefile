@@ -67,10 +67,10 @@ build-web-app: install-web-app
 	yarn build:web
 
 serve-web-app:
-	yarn workspace @ax-fabric/web-app preview
+	yarn workspace @ax-studio/web-app preview
 
 build-serve-web-app: build-web-app
-	yarn workspace @ax-fabric/web-app preview
+	yarn workspace @ax-studio/web-app preview
 
 # Mobile
 dev-android: install-and-build install-android-rust-targets

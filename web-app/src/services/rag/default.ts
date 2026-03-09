@@ -9,6 +9,8 @@
 
 import type { RAGService } from './types'
 import type { MCPTool, MCPToolCallResult } from '@ax-studio/core'
+import { getToolsResponseSchema, mcpToolCallResultSchema, parseDocumentResponseSchema } from '@/schemas/rag.schema'
+import { serviceConfigStorageSchema } from '@/schemas/config.schema'
 
 const DEFAULT_RETRIEVAL_URL = 'http://127.0.0.1:8001'
 
@@ -16,11 +18,13 @@ function getRetrievalServiceUrl(): string {
   try {
     const stored = localStorage.getItem('ax-studio-service-config')
     if (stored) {
-      const parsed = JSON.parse(stored) as { state?: { config?: { retrievalServiceUrl?: string } } }
-      return parsed?.state?.config?.retrievalServiceUrl || DEFAULT_RETRIEVAL_URL
+      const parsed = serviceConfigStorageSchema.safeParse(JSON.parse(stored))
+      if (parsed.success) {
+        return parsed.data.state?.config?.retrievalServiceUrl ?? DEFAULT_RETRIEVAL_URL
+      }
     }
   } catch {
-    // ignore parse errors
+    console.warn('Failed to read retrieval service URL from localStorage')
   }
   return DEFAULT_RETRIEVAL_URL
 }
@@ -49,7 +53,12 @@ export class DefaultRAGService implements RAGService {
         return []
       }
       const data = await response.json()
-      return Array.isArray(data?.tools) ? (data.tools as MCPTool[]) : []
+      const parsed = getToolsResponseSchema.safeParse(data)
+      if (!parsed.success) {
+        console.warn('Retrieval service /tools response did not match expected schema:', parsed.error.message)
+        return []
+      }
+      return parsed.data.tools as MCPTool[]
     } catch (e) {
       console.warn('Retrieval service getTools unavailable:', e)
       return []
@@ -85,7 +94,15 @@ export class DefaultRAGService implements RAGService {
           ],
         }
       }
-      return (await response.json()) as MCPToolCallResult
+      const result = mcpToolCallResultSchema.safeParse(await response.json())
+      if (!result.success) {
+        console.warn('Retrieval service /tools/call response did not match expected schema:', result.error.message)
+        return {
+          error: 'Unexpected response format from retrieval service',
+          content: [{ type: 'text', text: 'Retrieval tool call returned unexpected format' }],
+        }
+      }
+      return result.data
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       return {
@@ -113,7 +130,7 @@ export class DefaultRAGService implements RAGService {
         return ''
       }
       const data = await response.json()
-      return typeof data?.content === 'string' ? data.content : ''
+      return parseDocumentResponseSchema.safeParse(data).data?.content ?? ''
     } catch (e) {
       console.debug('Retrieval service parseDocument unavailable:', e)
       return ''

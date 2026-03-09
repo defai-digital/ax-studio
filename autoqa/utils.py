@@ -242,7 +242,7 @@ def start_app(app_path=None):
     try:
         # Start the Ax-Studio application
         if IS_WINDOWS:
-            subprocess.Popen([app_path], shell=True)
+            subprocess.Popen([app_path])
         elif IS_LINUX:
             # On Linux, start with DISPLAY environment variable
             env = os.environ.copy()

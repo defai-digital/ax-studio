@@ -17,7 +17,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import { Streamdown } from 'streamdown'
+import { AXMarkdown } from '@/lib/markdown/renderer'
 import { Shimmer } from './shimmer'
 
 type ReasoningContextValue = {
@@ -188,9 +188,9 @@ export const ReasoningContent = memo(
       {...props}
     >
       <div className="ml-2 pl-4 border-l-2 border-dotted">
-        <Streamdown animate={true} animationDuration={500} {...props}>
+        <AXMarkdown animate={true} animationDuration={500} {...props}>
           {children}
-        </Streamdown>
+        </AXMarkdown>
       </div>
     </CollapsibleContent>
   )

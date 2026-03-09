@@ -36,7 +36,7 @@ export default function AkidbConfigPanel() {
   const [embeddingModel, setEmbeddingModel] = useState('gte-qwen2-1.5b-instruct-q4_k_m')
   const [embeddingDimension, setEmbeddingDimension] = useState(1536)
 
-  // Load config from ~/.ax-fabric/config.yaml on mount
+  // Load config from the AX Studio path, with legacy fallback handled by Rust.
   useEffect(() => {
     load()
   }, [load])
@@ -81,7 +81,7 @@ export default function AkidbConfigPanel() {
     [],
   )
 
-  // Build and write full ~/.ax-fabric/config.yaml
+  // Build and write the full config payload; Rust mirrors the legacy path for compatibility.
   const handleSave = useCallback(async () => {
     if (!dataFolder.trim()) {
       toast.error('Please select a data folder')

@@ -46,9 +46,15 @@ pub async fn list_agent_teams(app: AppHandle) -> Result<Vec<AgentTeam>, String> 
                         match fs::read_to_string(entry.path()) {
                             Ok(content) => match serde_json::from_str::<AgentTeam>(&content) {
                                 Ok(team) => teams.push(team),
-                                Err(e) => log::warn!("Skipping malformed team file {:?}: {}", entry.path(), e),
+                                Err(e) => log::warn!(
+                                    "Skipping malformed team file {:?}: {}",
+                                    entry.path(),
+                                    e
+                                ),
                             },
-                            Err(e) => log::warn!("Failed to read team file {:?}: {}", entry.path(), e),
+                            Err(e) => {
+                                log::warn!("Failed to read team file {:?}: {}", entry.path(), e)
+                            }
                         }
                     }
                 }
@@ -66,8 +72,7 @@ pub async fn get_agent_team(app: AppHandle, team_id: String) -> Result<AgentTeam
         return Err("Invalid team_id format".to_string());
     }
     let path = teams_dir(&app)?.join(format!("{}.json", team_id));
-    let content =
-        fs::read_to_string(&path).map_err(|e| format!("Team not found: {}", e))?;
+    let content = fs::read_to_string(&path).map_err(|e| format!("Team not found: {}", e))?;
     serde_json::from_str(&content).map_err(|e| e.to_string())
 }
 

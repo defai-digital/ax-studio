@@ -1,0 +1,48 @@
+Security Remediation PRD
+
+Summary
+
+This change closes three native-side security gaps in AX Studio:
+
+1. Unscoped file writes from the renderer via `write_binary_file`
+2. Provider secret disclosure through Tauri provider-config read commands
+3. Missing OAuth `state` validation in the Google Workspace callback flow
+
+Goals
+
+- Ensure binary export writes only to user-approved save destinations
+- Prevent renderer-accessible commands from returning provider API keys or secret header values
+- Bind OAuth callbacks to the exact browser session initiated by the app
+- Add focused regression coverage for the new security controls
+
+Non-Goals
+
+- Redesign the entire filesystem API surface in this change
+- Rework provider persistence or move secrets to a new storage backend
+- Replace the OAuth PKCE flow or supported integrations
+
+Requirements
+
+1. File Export Authorization
+- `save_dialog` must register the returned path as a one-time approved write target
+- `write_binary_file` must reject paths that were not approved by `save_dialog`
+- Path comparison must use normalized absolute paths to avoid trivial path confusion
+- Approval should be consumed on first successful use
+
+2. Provider Config Redaction
+- `get_provider_config` and `list_provider_configs` must not return `api_key`
+- Secret custom-header values must not be returned to the renderer
+- Returned data must still be useful for UI/debugging by including non-secret metadata
+
+3. OAuth Callback Validation
+- The app must generate a cryptographically random `state` token per OAuth flow
+- The authorization URL must include that `state`
+- The callback handler must reject missing or mismatched `state` values
+- Tests must cover the accepted and rejected callback cases
+
+Success Criteria
+
+- Arbitrary renderer-triggered file writes outside approved export targets are blocked
+- Provider config read commands cannot be used to exfiltrate stored secrets
+- OAuth callbacks without the correct `state` fail before token exchange
+- Focused Rust tests pass for the new guardrails

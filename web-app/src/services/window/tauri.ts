@@ -5,6 +5,7 @@
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow'
 import type { WindowConfig, WebviewWindowInstance } from './types'
 import { DefaultWindowService } from './default'
+import { themeStorageSchema } from '@/schemas/window.schema'
 
 export class TauriWindowService extends DefaultWindowService {
   async createWebviewWindow(
@@ -17,23 +18,18 @@ export class TauriWindowService extends DefaultWindowService {
 
       if (storedTheme) {
         try {
-          const themeData = JSON.parse(storedTheme)
-          const activeTheme = themeData?.state?.activeTheme
-          const isDark = themeData?.state?.isDark
-
-          // Set theme based on stored preference
-          if (activeTheme === 'auto') {
-            theme = undefined // Let OS decide
-          } else if (
-            activeTheme === 'dark' ||
-            (activeTheme === 'auto' && isDark)
-          ) {
-            theme = 'dark'
-          } else if (
-            activeTheme === 'light' ||
-            (activeTheme === 'auto' && !isDark)
-          ) {
-            theme = 'light'
+          const themeData = themeStorageSchema.safeParse(JSON.parse(storedTheme))
+          if (themeData.success) {
+            const activeTheme = themeData.data.state?.activeTheme
+            const isDark = themeData.data.state?.isDark
+            if (activeTheme === 'dark' || (activeTheme === 'auto' && isDark)) {
+              theme = 'dark'
+            } else if (activeTheme === 'light' || (activeTheme === 'auto' && !isDark)) {
+              theme = 'light'
+            }
+            // 'auto' with no isDark → undefined, let OS decide
+          } else {
+            console.warn('Theme localStorage data did not match expected schema:', themeData.error.message)
           }
         } catch (e) {
           console.warn('Failed to parse theme from localStorage:', e)

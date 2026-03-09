@@ -1203,12 +1203,16 @@ function ThreadDetail() {
   // Ref for reasoning container auto-scroll
   const reasoningContainerRef = useRef<HTMLDivElement>(null)
 
-  // Auto-scroll reasoning container to bottom during streaming
+  // Auto-scroll reasoning container to bottom during streaming.
+  // Wrapped in rAF to batch layout reads and avoid forced synchronous reflow
+  // on every streaming token.
   useEffect(() => {
-    if (status === 'streaming' && reasoningContainerRef.current) {
-      reasoningContainerRef.current.scrollTop =
-        reasoningContainerRef.current.scrollHeight
-    }
+    if (status !== 'streaming' || !reasoningContainerRef.current) return
+    const el = reasoningContainerRef.current
+    const raf = requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight
+    })
+    return () => cancelAnimationFrame(raf)
   }, [status, chatMessages])
 
   useEffect(() => {
@@ -1543,47 +1547,50 @@ function ThreadDetail() {
   // Handle regenerate from any message (user or assistant)
   // - For user messages: keeps the user message, deletes all after, regenerates assistant response
   // - For assistant messages: finds the closest preceding user message, deletes from there
-  const handleRegenerate = (messageId?: string) => {
-    const currentLocalMessages = useMessages.getState().getMessages(threadId)
+  const handleRegenerate = useCallback(
+    (messageId?: string) => {
+      const currentLocalMessages = useMessages.getState().getMessages(threadId)
 
-    // If regenerating from a specific message, delete all messages after it
-    if (messageId) {
-      // Find the message in the current chat messages
-      const messageIndex = currentLocalMessages.findIndex(
-        (m) => m.id === messageId
-      )
+      // If regenerating from a specific message, delete all messages after it
+      if (messageId) {
+        // Find the message in the current chat messages
+        const messageIndex = currentLocalMessages.findIndex(
+          (m) => m.id === messageId
+        )
 
-      if (messageIndex !== -1) {
-        const selectedMessage = currentLocalMessages[messageIndex]
+        if (messageIndex !== -1) {
+          const selectedMessage = currentLocalMessages[messageIndex]
 
-        // If it's an assistant message, find the closest preceding user message
-        let deleteFromIndex = messageIndex
-        if (selectedMessage.role === 'assistant') {
-          // Look backwards to find the closest user message
-          for (let i = messageIndex - 1; i >= 0; i--) {
-            if (currentLocalMessages[i].role === 'user') {
-              deleteFromIndex = i
-              break
+          // If it's an assistant message, find the closest preceding user message
+          let deleteFromIndex = messageIndex
+          if (selectedMessage.role === 'assistant') {
+            // Look backwards to find the closest user message
+            for (let i = messageIndex - 1; i >= 0; i--) {
+              if (currentLocalMessages[i].role === 'user') {
+                deleteFromIndex = i
+                break
+              }
             }
           }
-        }
 
-        // Get all messages after the delete point
-        const messagesToDelete = currentLocalMessages.slice(deleteFromIndex + 1)
+          // Get all messages after the delete point
+          const messagesToDelete = currentLocalMessages.slice(deleteFromIndex + 1)
 
-        // Delete from backend storage
-        if (messagesToDelete.length > 0) {
-          messagesToDelete.forEach((msg) => {
-            deleteMessage(threadId, msg.id)
-          })
+          // Delete from backend storage
+          if (messagesToDelete.length > 0) {
+            messagesToDelete.forEach((msg) => {
+              deleteMessage(threadId, msg.id)
+            })
+          }
         }
       }
-    }
 
-    // Call the AI SDK regenerate function - it will handle truncating the UI messages
-    // and generating a new response from the selected message
-    regenerate(messageId ? { messageId } : undefined)
-  }
+      // Call the AI SDK regenerate function - it will handle truncating the UI messages
+      // and generating a new response from the selected message
+      regenerate(messageId ? { messageId } : undefined)
+    },
+    [threadId, deleteMessage, regenerate]
+  )
 
   // Handle edit message - updates the message and regenerates from it
   const handleEditMessage = useCallback(

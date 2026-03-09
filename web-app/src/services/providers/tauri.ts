@@ -11,6 +11,7 @@ import { ExtensionManager } from '@/lib/extension'
 import { fetch as fetchTauri } from '@tauri-apps/plugin-http'
 import { DefaultProvidersService } from './default'
 import { getModelCapabilities } from '@/lib/models'
+import { providerModelsResponseSchema } from '@/schemas/providers.schema'
 
 export class TauriProvidersService extends DefaultProvidersService {
   fetch(): typeof fetch {
@@ -23,9 +24,8 @@ export class TauriProvidersService extends DefaultProvidersService {
       const builtinProviders = predefinedProviders.map((provider) => {
         let models = provider.models as Model[]
         if (Object.keys(providerModels).includes(provider.provider)) {
-          const builtInModels = providerModels[
-            provider.provider as unknown as keyof typeof providerModels
-          ].models as unknown as string[]
+          const providerKey = provider.provider as keyof typeof providerModels
+          const builtInModels = (providerModels[providerKey]?.models ?? []) as string[]
 
           if (Array.isArray(builtInModels)) {
             models = builtInModels.map((model) => {
@@ -190,30 +190,26 @@ export class TauriProvidersService extends DefaultProvidersService {
       }
 
       const data = await response.json()
-
-      // Handle different response formats that providers might use
-      if (data.data && Array.isArray(data.data)) {
-        // OpenAI format: { data: [{ id: "model-id" }, ...] }
-        return data.data
-          .map((model: { id: string }) => model.id)
-          .filter(Boolean)
-      } else if (Array.isArray(data)) {
-        // Direct array format: ["model-id1", "model-id2", ...]
-        return data
-          .filter(Boolean)
-          .map((model) =>
-            typeof model === 'object' && 'id' in model ? model.id : model
-          )
-      } else if (data.models && Array.isArray(data.models)) {
-        // Alternative format: { models: [...] }
-        return data.models
-          .map((model: string | { id: string }) =>
-            typeof model === 'string' ? model : model.id
-          )
-          .filter(Boolean)
-      } else {
+      const parsed = providerModelsResponseSchema.safeParse(data)
+      if (!parsed.success) {
         console.warn('Unexpected response format from provider API:', data)
         return []
+      }
+
+      const result = parsed.data
+      if ('data' in result) {
+        // OpenAI format: { data: [{ id: "model-id" }, ...] }
+        return result.data.map((m) => m.id).filter(Boolean)
+      } else if ('models' in result) {
+        // Alternative format: { models: [...] }
+        return result.models
+          .map((m) => (typeof m === 'string' ? m : m.id))
+          .filter(Boolean)
+      } else {
+        // Direct array format: ["model-id1", { id: "model-id2" }, ...]
+        return (result as Array<string | { id: string }>)
+          .map((m) => (typeof m === 'string' ? m : m.id))
+          .filter(Boolean)
       }
     } catch (error) {
       console.error('Error fetching models from provider:', error)

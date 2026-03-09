@@ -1,119 +1,58 @@
 # Contributing to Tauri Plugins
 
-[← Back to Main Contributing Guide](../../CONTRIBUTING.md) | [← Back to Tauri Guide](../CONTRIBUTING.md)
+[Back to main contributing guide](../../CONTRIBUTING.md) | [Back to Tauri backend guide](../CONTRIBUTING.md)
 
-Native Rust plugins for hardware access, process management, and system integration.
+`src-tauri/plugins/` contains Rust plugins used by AX Studio for specialized native integrations.
 
 ## Current Plugins
 
-### `/tauri-plugin-hardware`
-- Hardware detection (CPU, GPU, memory)
+- `tauri-plugin-hardware/` hardware and system information
+- `tauri-plugin-llamacpp/` llama.cpp process and inference integration
 
-### `/tauri-plugin-llamacpp`  
-- llama.cpp process management and model inference
+## When to Add a Plugin
 
-## Plugin Structure
+Use a plugin when the behavior is:
 
-```
+- native-specific
+- reusable at the plugin boundary
+- permission-sensitive
+- awkward to keep inside the general backend command layer
+
+Do not create a plugin just to avoid organizing code inside `src-tauri/src/core/`.
+
+## Typical Structure
+
+```text
 tauri-plugin-name/
-├── Cargo.toml
-├── src/lib.rs          # Plugin entry point
-├── src/commands.rs     # Tauri commands
-├── guest-js/index.ts   # JavaScript API
-└── permissions/default.toml
+  Cargo.toml
+  src/
+  guest-js/
+  permissions/
 ```
 
-## Development
+## Common Commands
 
-### Creating Plugins
-
-Assuming that your new plugin name is `my-plugin`
+Run commands from the specific plugin directory unless noted otherwise.
 
 ```bash
-# with npx
-npx @tauri-apps/cli plugin new my-plugin
-
-# with cargo
-cargo tauri plugin new my-plugin
-
-cd tauri-plugin-my-plugin
-```
-
-### Plugin Registration
-
-```rust
-use tauri::{plugin::{Builder, TauriPlugin}, Runtime};
-
-pub fn init<R: Runtime>() -> TauriPlugin<R> {
-    Builder::new("my-plugin")
-        .invoke_handler(tauri::generate_handler![commands::my_command])
-        .build()
-}
-```
-
-### Commands & JavaScript API
-
-```rust
-#[tauri::command]
-pub async fn my_command(param: String) -> Result<String, Error> {
-    Ok(format!("Result: {}", param))
-}
-```
-
-```typescript
-import { invoke } from '@tauri-apps/api/core'
-
-export async function myCommand(param: string): Promise<string> {
-  return await invoke('plugin:my-plugin|my_command', { param })
-}
-```
-
-### Building & Testing
-
-```bash
-cargo build    # Build plugin
-yarn build     # Build JavaScript
-cargo test     # Run tests
-```
-
-## Security Considerations
-
-```toml
-# permissions/default.toml - Be specific
-[[permission]]
-identifier = "allow-hardware-info"
-description = "Read system hardware information"
-
-# Never use wildcards in production
-# ❌ identifier = "allow-*"
-# ✅ identifier = "allow-specific-action"
-```
-
-## Testing Plugins
-
-```bash
-# Test plugin in isolation
-cd tauri-plugin-my-plugin
 cargo test
-
-# Test with main app
-cd ../../
-yarn tauri dev
-
-# Test JavaScript API
-yarn build && node -e "const plugin = require('./dist-js'); console.log(plugin)"
+cargo build
 ```
 
-## Best Practices
+Test the plugin through the main app from the repository root when integration behavior matters:
 
-- Use secure permission configurations
-- Validate all command inputs
-- Handle platform differences properly
-- Clean up resources in Drop implementations
-- Test on all target platforms
+```bash
+make dev
+```
 
-## Dependencies
+## Expectations
 
-- **Tauri** - Plugin framework
-- **Serde** - JSON serialization
-- **Tokio** - Async runtime (if needed)
+- validate command inputs
+- define explicit permissions
+- handle platform differences intentionally
+- keep plugin APIs small and clear
+- test plugin behavior in isolation and, where needed, through the app
+
+## Security Notes
+
+Permission files should stay specific. Avoid wildcard-style permissions and make the allowed surface easy to reason about during review.

@@ -27,10 +27,7 @@ pub async fn save_integration_token(
 
 /// Delete all credentials for an integration.
 #[tauri::command]
-pub async fn delete_integration_token(
-    app: AppHandle,
-    integration: String,
-) -> Result<(), String> {
+pub async fn delete_integration_token(app: AppHandle, integration: String) -> Result<(), String> {
     let store = app
         .store(STORE_NAME)
         .map_err(|e| format!("Failed to open store: {e}"))?;
@@ -48,10 +45,7 @@ pub async fn delete_integration_token(
 
 /// Check if credentials exist for a given integration (returns bool, never the token).
 #[tauri::command]
-pub async fn get_integration_status(
-    app: AppHandle,
-    integration: String,
-) -> Result<bool, String> {
+pub async fn get_integration_status(app: AppHandle, integration: String) -> Result<bool, String> {
     let store = app
         .store(STORE_NAME)
         .map_err(|e| format!("Failed to open store: {e}"))?;
@@ -60,9 +54,7 @@ pub async fn get_integration_status(
 
 /// Return a map of integration_id → has_credentials for all known integrations.
 #[tauri::command]
-pub async fn get_all_integration_statuses(
-    app: AppHandle,
-) -> Result<HashMap<String, bool>, String> {
+pub async fn get_all_integration_statuses(app: AppHandle) -> Result<HashMap<String, bool>, String> {
     let env_keys = integration_env_keys();
     let store = app
         .store(STORE_NAME)
@@ -114,24 +106,22 @@ pub async fn start_oauth_flow(
                 .trim();
             let scopes = super::constants::google_workspace_scopes();
 
-            let tokens = oauth::initiate_google_oauth(&app, client_id, client_secret, scopes).await?;
+            let tokens =
+                oauth::initiate_google_oauth(&app, client_id, client_secret, scopes).await?;
 
             // Write config files for the MCP server
             oauth::write_google_workspace_config(client_id, client_secret, &tokens)?;
 
-            // Save client credentials to store (for re-auth if needed)
-            let mut store_creds = HashMap::new();
-            store_creds.insert("client_id".to_string(), client_id.clone());
-            store_creds.insert("client_secret".to_string(), client_secret.clone());
-
             let store = app
                 .store(STORE_NAME)
                 .map_err(|e| format!("Failed to open store: {e}"))?;
-            store.set(&cred_key("google-workspace"), serde_json::json!(store_creds));
+            store.delete(&cred_key("google-workspace"));
 
             Ok("Google Workspace authorized successfully".to_string())
         }
-        _ => Err(format!("OAuth flow not supported for integration: {integration}")),
+        _ => Err(format!(
+            "OAuth flow not supported for integration: {integration}"
+        )),
     }
 }
 
@@ -166,7 +156,7 @@ async fn validate_github(credentials: &HashMap<String, String>) -> Result<String
     let resp = client
         .get(url)
         .header("Authorization", format!("Bearer {token}"))
-        .header("User-Agent", "ax-fabric")
+        .header("User-Agent", "ax-studio")
         .send()
         .await
         .map_err(|e| format!("Request failed: {e}"))?;

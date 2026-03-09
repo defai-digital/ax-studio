@@ -5,6 +5,7 @@
 import { ulid } from 'ulidx'
 import type { ProjectsService, ThreadFolder } from './types'
 import { localStorageKey } from '@/constants/localStorage'
+import { projectsStorageSchema } from '@/schemas/projects.schema'
 
 export class DefaultProjectsService implements ProjectsService {
   private storageKey = localStorageKey.threadManagement
@@ -13,8 +14,12 @@ export class DefaultProjectsService implements ProjectsService {
     try {
       const stored = localStorage.getItem(this.storageKey)
       if (!stored) return []
-      const data = JSON.parse(stored)
-      return data.state?.folders || []
+      const parsed = projectsStorageSchema.safeParse(JSON.parse(stored))
+      if (!parsed.success) {
+        console.warn('Projects localStorage data did not match expected schema:', parsed.error.message)
+        return []
+      }
+      return (parsed.data.state?.folders ?? []) as ThreadFolder[]
     } catch (error) {
       console.error('Error loading projects from localStorage:', error)
       return []

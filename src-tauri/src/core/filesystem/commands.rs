@@ -2,9 +2,76 @@
 // It's added to ensure the legacy implementation from frontend still functions before removal.
 use super::helpers::resolve_path;
 use super::models::{DialogOpenOptions, FileStat};
+use crate::core::state::AppState;
 use rfd::AsyncFileDialog;
 use std::fs;
+use std::path::{Path, PathBuf};
 use tauri::Runtime;
+use tauri::State;
+
+fn ax_studio_config_dir(home: &Path) -> PathBuf {
+    home.join(".ax-studio")
+}
+
+fn legacy_fabric_config_dir(home: &Path) -> PathBuf {
+    home.join(".ax-fabric")
+}
+
+fn preferred_akidb_config_path(home: &Path) -> PathBuf {
+    ax_studio_config_dir(home).join("config.yaml")
+}
+
+fn legacy_akidb_config_path(home: &Path) -> PathBuf {
+    legacy_fabric_config_dir(home).join("config.yaml")
+}
+
+fn preferred_akidb_status_path(home: &Path) -> PathBuf {
+    ax_studio_config_dir(home).join("status.json")
+}
+
+fn legacy_akidb_status_path(home: &Path) -> PathBuf {
+    legacy_fabric_config_dir(home).join("status.json")
+}
+
+fn normalize_save_target_path(path: &str) -> Result<PathBuf, String> {
+    let path = PathBuf::from(path);
+    if !path.is_absolute() {
+        return Err("save path must be absolute".to_string());
+    }
+
+    let file_name = path
+        .file_name()
+        .ok_or_else(|| "save path must include a file name".to_string())?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| "save path must include a parent directory".to_string())?;
+
+    let canonical_parent = parent
+        .canonicalize()
+        .unwrap_or_else(|_| ax_studio_utils::normalize_path(Path::new(parent)));
+    Ok(canonical_parent.join(file_name))
+}
+
+fn approve_save_target(
+    approved_save_paths: &mut std::collections::HashSet<PathBuf>,
+    path: &str,
+) -> Result<(), String> {
+    let normalized = normalize_save_target_path(path)?;
+    approved_save_paths.insert(normalized);
+    Ok(())
+}
+
+fn consume_approved_save_target(
+    approved_save_paths: &mut std::collections::HashSet<PathBuf>,
+    path: &str,
+) -> Result<PathBuf, String> {
+    let normalized = normalize_save_target_path(path)?;
+    if approved_save_paths.remove(&normalized) {
+        Ok(normalized)
+    } else {
+        Err("write_binary_file error: path was not approved by save dialog".to_string())
+    }
+}
 
 #[tauri::command]
 pub fn rm<R: Runtime>(app_handle: tauri::AppHandle<R>, args: Vec<String>) -> Result<(), String> {
@@ -349,7 +416,10 @@ pub async fn open_dialog(
 }
 
 #[tauri::command]
-pub async fn save_dialog(options: Option<DialogOpenOptions>) -> Result<Option<String>, String> {
+pub async fn save_dialog(
+    state: State<'_, AppState>,
+    options: Option<DialogOpenOptions>,
+) -> Result<Option<String>, String> {
     let mut dialog = AsyncFileDialog::new();
 
     if let Some(opts) = options {
@@ -382,23 +452,51 @@ pub async fn save_dialog(options: Option<DialogOpenOptions>) -> Result<Option<St
     }
 
     let result = dialog.save_file().await;
-    Ok(result.map(|file| file.path().to_string_lossy().to_string()))
+    let save_path = result.map(|file| file.path().to_string_lossy().to_string());
+
+    if let Some(path) = &save_path {
+        let mut approved_save_paths = state.approved_save_paths.lock().await;
+        approve_save_target(&mut approved_save_paths, path)?;
+    }
+
+    Ok(save_path)
 }
 
 /// Write binary data (hex-encoded) to a file path.
 /// Used by the diagram export flow on platforms where blob: anchor downloads
 /// do not work (macOS WKWebView, Tauri WebView2 on Windows).
 #[tauri::command]
-pub fn write_binary_file(path: String, hex_data: String) -> Result<(), String> {
+pub async fn write_binary_file(
+    state: State<'_, AppState>,
+    path: String,
+    hex_data: String,
+) -> Result<(), String> {
     let data = hex::decode(&hex_data).map_err(|e| e.to_string())?;
-    std::fs::write(&path, &data).map_err(|e| e.to_string())
+    let normalized_path = {
+        let mut approved_save_paths = state.approved_save_paths.lock().await;
+        consume_approved_save_target(&mut approved_save_paths, &path)?
+    };
+    std::fs::write(&normalized_path, &data).map_err(|e| e.to_string())
 }
 
-// ax-fabric config file management — reads/writes ~/.ax-fabric/config.yaml
-// Uses dirs crate to resolve home directory; bypasses app_data_folder scope restriction
-// because ax-fabric is a separate autonomous daemon that owns its own config path.
+#[tauri::command]
+pub async fn write_text_file(
+    state: State<'_, AppState>,
+    path: String,
+    content: String,
+) -> Result<(), String> {
+    let normalized_path = {
+        let mut approved_save_paths = state.approved_save_paths.lock().await;
+        consume_approved_save_target(&mut approved_save_paths, &path)?
+    };
+    std::fs::write(&normalized_path, content).map_err(|e| e.to_string())
+}
 
-/// Top-level ax-fabric config matching the Zod schema in fabric-ingest/config-loader.ts
+// Knowledge-base daemon config management.
+// Uses dirs crate to resolve home directory; bypasses app_data_folder scope restriction
+// because the external daemon owns its config path outside the app data folder.
+
+/// Top-level legacy fabric-ingest config matching the Zod schema in fabric-ingest/config-loader.ts
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct AkidbConfig {
     #[serde(default)]
@@ -435,7 +533,7 @@ impl Default for FabricSection {
 }
 
 fn default_data_root() -> String {
-    "~/.ax-fabric/data".to_string()
+    "~/.ax-studio/data".to_string()
 }
 fn default_max_storage_gb() -> f64 {
     50.0
@@ -465,7 +563,7 @@ impl Default for AkidbSection {
 }
 
 fn default_akidb_root() -> String {
-    "~/.ax-fabric/data/akidb".to_string()
+    "~/.ax-studio/data/akidb".to_string()
 }
 fn default_collection() -> String {
     "default".to_string()
@@ -626,7 +724,7 @@ fn default_archive_retention_days() -> u32 {
     7
 }
 
-/// Daemon status read from ~/.ax-fabric/status.json
+/// Daemon status read from the preferred AX Studio path, with legacy fallback.
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct AkidbStatus {
     pub status: String,
@@ -647,54 +745,73 @@ pub struct AkidbStatus {
     pub daemon_pid: Option<u32>,
 }
 
-/// Read ~/.ax-fabric/config.yaml and return the parsed config, or None if the file does not exist.
+/// Read the AX Studio knowledge-base config, falling back to the legacy fabric-ingest path.
 #[tauri::command]
 pub fn read_akidb_config() -> Result<Option<AkidbConfig>, String> {
-    let home =
-        dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
-    let config_path = home.join(".ax-fabric").join("config.yaml");
+    let home = dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
+    let config_path = preferred_akidb_config_path(&home);
+    let legacy_path = legacy_akidb_config_path(&home);
 
-    if !config_path.exists() {
+    let path_to_read = if config_path.exists() {
+        config_path
+    } else if legacy_path.exists() {
+        legacy_path
+    } else {
         return Ok(None);
-    }
+    };
 
-    let file = fs::File::open(&config_path).map_err(|e| e.to_string())?;
+    let file = fs::File::open(&path_to_read).map_err(|e| e.to_string())?;
     let reader = std::io::BufReader::new(file);
-    let config: AkidbConfig = serde_yaml::from_reader(reader)
-        .map_err(|e| format!("Failed to parse ~/.ax-fabric/config.yaml: {e}"))?;
+    let config: AkidbConfig = serde_yaml::from_reader(reader).map_err(|e| {
+        format!(
+            "Failed to parse knowledge-base config {}: {e}",
+            path_to_read.display()
+        )
+    })?;
     Ok(Some(config))
 }
 
-/// Write ~/.ax-fabric/config.yaml, creating ~/.ax-fabric/ if it does not exist.
+/// Write the AX Studio knowledge-base config and mirror it to the legacy path for compatibility.
 #[tauri::command]
 pub fn write_akidb_config(config: AkidbConfig) -> Result<(), String> {
-    let home =
-        dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
-    let config_dir = home.join(".ax-fabric");
+    let home = dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
+    let config_dir = ax_studio_config_dir(&home);
+    let legacy_dir = legacy_fabric_config_dir(&home);
 
     fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
+    fs::create_dir_all(&legacy_dir).map_err(|e| e.to_string())?;
 
-    let config_path = config_dir.join("config.yaml");
+    let config_path = preferred_akidb_config_path(&home);
+    let legacy_path = legacy_akidb_config_path(&home);
     let yaml = serde_yaml::to_string(&config)
-        .map_err(|e| format!("Failed to serialize ax-fabric config: {e}"))?;
-    fs::write(&config_path, yaml).map_err(|e| e.to_string())?;
+        .map_err(|e| format!("Failed to serialize knowledge-base config: {e}"))?;
+    fs::write(&config_path, &yaml).map_err(|e| e.to_string())?;
+    fs::write(&legacy_path, yaml).map_err(|e| e.to_string())?;
     Ok(())
 }
 
-/// Read ~/.ax-fabric/status.json written by the daemon each cycle.
+/// Read the AX Studio knowledge-base daemon status, with legacy fallback.
 /// Returns None if the file does not exist (daemon not running or never ran).
 #[tauri::command]
 pub fn read_akidb_status() -> Result<Option<AkidbStatus>, String> {
-    let home =
-        dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
-    let status_path = home.join(".ax-fabric").join("status.json");
+    let home = dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
+    let status_path = preferred_akidb_status_path(&home);
+    let legacy_path = legacy_akidb_status_path(&home);
 
-    if !status_path.exists() {
+    let path_to_read = if status_path.exists() {
+        status_path
+    } else if legacy_path.exists() {
+        legacy_path
+    } else {
         return Ok(None);
-    }
+    };
 
-    let content = fs::read_to_string(&status_path).map_err(|e| e.to_string())?;
-    let status: AkidbStatus = serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse ~/.ax-fabric/status.json: {e}"))?;
+    let content = fs::read_to_string(&path_to_read).map_err(|e| e.to_string())?;
+    let status: AkidbStatus = serde_json::from_str(&content).map_err(|e| {
+        format!(
+            "Failed to parse daemon status {}: {e}",
+            path_to_read.display()
+        )
+    })?;
     Ok(Some(status))
 }

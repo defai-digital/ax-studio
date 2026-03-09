@@ -29,10 +29,7 @@ fn detect_shell_env_file(home_dir: &str, is_macos: bool) -> (&'static str, Strin
 }
 
 // Helper function to write env vars to a shell config file
-fn write_env_to_shell(
-    env_file_path: &str,
-    env_vars: &[(String, String)],
-) -> Result<(), String> {
+fn write_env_to_shell(env_file_path: &str, env_vars: &[(String, String)]) -> Result<(), String> {
     let marker = "# Ax-Studio Local API Server - Claude Code Config";
     let new_entries: String = env_vars
         .iter()
@@ -240,7 +237,11 @@ pub fn launch_claude_code_with_config(
     if cfg!(target_os = "macos") {
         let home_dir = std::env::var("HOME").map_err(|e| e.to_string())?;
         let (shell_name, env_file_path) = detect_shell_env_file(&home_dir, true);
-        log::info!("Detected shell: {}, writing env to: {}", shell_name, env_file_path);
+        log::info!(
+            "Detected shell: {}, writing env to: {}",
+            shell_name,
+            env_file_path
+        );
 
         // Try direct write first
         match std::fs::OpenOptions::new()
@@ -255,8 +256,7 @@ pub fn launch_claude_code_with_config(
             Err(_) => {
                 // Use admin privileges to write
                 let marker = "# Ax-Studio Local API Server - Claude Code Config";
-                let existing_content =
-                    std::fs::read_to_string(&env_file_path).unwrap_or_default();
+                let existing_content = std::fs::read_to_string(&env_file_path).unwrap_or_default();
                 let cleaned: Vec<&str> = existing_content
                     .split('\n')
                     .filter(|line| {
@@ -269,10 +269,10 @@ pub fn launch_claude_code_with_config(
                 let env_content: String = env_vars
                     .iter()
                     .map(|(k, v)| {
-            // Escape single quotes to prevent shell injection
-            let escaped_v = v.replace('\'', "'\\''");
-            format!("export {}='{}'\n", k, escaped_v)
-        })
+                        // Escape single quotes to prevent shell injection
+                        let escaped_v = v.replace('\'', "'\\''");
+                        format!("export {}='{}'\n", k, escaped_v)
+                    })
                     .collect();
 
                 let new_block = format!("{}\n{}", marker, env_content);
@@ -295,14 +295,21 @@ pub fn launch_claude_code_with_config(
                     .output()
                     .map_err(|e| e.to_string())?;
 
-                log::info!("Env vars written to {} with admin privileges", env_file_path);
+                log::info!(
+                    "Env vars written to {} with admin privileges",
+                    env_file_path
+                );
                 return Ok(());
             }
         }
     } else if cfg!(target_os = "linux") {
         let home_dir = std::env::var("HOME").map_err(|e| e.to_string())?;
         let (shell_name, env_file_path) = detect_shell_env_file(&home_dir, false);
-        log::info!("Detected shell: {}, writing env to: {}", shell_name, env_file_path);
+        log::info!(
+            "Detected shell: {}, writing env to: {}",
+            shell_name,
+            env_file_path
+        );
 
         match std::fs::OpenOptions::new()
             .write(true)

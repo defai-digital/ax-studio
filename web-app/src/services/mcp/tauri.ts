@@ -8,6 +8,7 @@ import { DEFAULT_MCP_SETTINGS } from '@/hooks/useMCPServers'
 import type { MCPServerConfig, MCPServers, MCPSettings } from '@/hooks/useMCPServers'
 import type { MCPConfig } from './types'
 import { DefaultMCPService } from './default'
+import { mcpServersSchema, mcpSettingsSchema } from '@/schemas/mcp.schema'
 
 export class TauriMCPService extends DefaultMCPService {
   async updateMCPConfig(configs: string): Promise<void> {
@@ -46,15 +47,20 @@ export class TauriMCPService extends DefaultMCPService {
     const { mcpServers, mcpSettings, ...legacyServers } = parsed
     const hasLegacyServers = Object.keys(legacyServers).length > 0
 
-    const normalizedServers: MCPServers =
-      (isPlainObject(mcpServers) ? (mcpServers as MCPServers) : undefined) ??
-      (hasLegacyServers && isPlainObject(legacyServers)
-        ? (legacyServers as MCPServers)
-        : ({} as MCPServers))
+    // Try the explicit mcpServers field first, fall back to legacy top-level keys
+    let serversParsed = mcpServersSchema.safeParse(mcpServers)
+    if (!serversParsed.success && hasLegacyServers) {
+      serversParsed = mcpServersSchema.safeParse(legacyServers)
+    }
+    if (!serversParsed.success) {
+      console.warn('MCP servers config did not match expected schema:', serversParsed.error.message)
+    }
+    const normalizedServers: MCPServers = (serversParsed.success ? serversParsed.data : {}) as MCPServers
 
+    const settingsParsed = mcpSettingsSchema.safeParse(mcpSettings)
     const normalizedSettings: MCPSettings = {
       ...DEFAULT_MCP_SETTINGS,
-      ...(isPlainObject(mcpSettings) ? (mcpSettings as MCPSettings) : {}),
+      ...(settingsParsed.success ? settingsParsed.data : {}),
     }
 
     return {
@@ -118,8 +124,4 @@ export class TauriMCPService extends DefaultMCPService {
     return await invoke('deactivate_mcp_server', { name })
   }
 
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

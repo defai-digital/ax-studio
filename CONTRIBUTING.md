@@ -1,252 +1,137 @@
-# Contributing to Ax-Studio
+# Contributing to AX Studio
 
-First off, thank you for considering contributing to Ax-Studio. It's people like you that make Ax-Studio such an amazing project.
+This repository is a Yarn workspace for the AX Studio desktop application. The app combines a React frontend, a Rust Tauri host, shared TypeScript packages, and packaged extensions.
 
-Ax-Studio is an AI assistant that can run 100% offline on your device. Think ChatGPT, but private, local, and under your complete control. If you're thinking about contributing, you're already awesome - let's make AI accessible to everyone, one commit at a time.
+Use this file as the contributor entry point, then follow the package-specific guides for the area you are changing.
 
-## Quick Links to Component Guides
+## Start Here
 
-- **[Web App](./web-app/CONTRIBUTING.md)** - React UI and logic
-- **[Core SDK](./core/CONTRIBUTING.md)** - TypeScript SDK and extension system
-- **[Extensions](./extensions/CONTRIBUTING.md)** - Supportive modules for the frontend
-- **[Tauri Backend](./src-tauri/CONTRIBUTING.md)** - Rust native integration
-- **[Tauri Plugins](./src-tauri/plugins/CONTRIBUTING.md)** - Hardware and system plugins
+- [Quickstart](./QUICKSTART.md)
+- [Web App Guide](./web-app/CONTRIBUTING.md)
+- [Core SDK Guide](./core/CONTRIBUTING.md)
+- [Extensions Guide](./extensions/CONTRIBUTING.md)
+- [Tauri Backend Guide](./src-tauri/CONTRIBUTING.md)
+- [Tauri Plugins Guide](./src-tauri/plugins/CONTRIBUTING.md)
+- [Docs Index](./docs/README.md)
 
-## How Ax-Studio Actually Works
+## Repository Overview
 
-Ax-Studio is a desktop app that runs local AI models. Here's how the components actually connect:
+| Path | Purpose |
+| --- | --- |
+| `web-app/` | React frontend, routes, components, stores, services |
+| `core/` | Shared TypeScript SDK used by the app and extensions |
+| `extensions/` | Packaged feature extensions |
+| `src-tauri/` | Rust host app, IPC commands, capabilities, plugins |
+| `autoqa/` | Automated quality assurance and end-to-end runners |
+| `docs/` | Product notes, architecture docs, PRDs, ADR-style design docs |
+| `scripts/` | Build, test, and quality-gate utilities |
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                   Web App (Frontend)                     │
-│                      (web-app/)                          │
-│  • React UI                                              │
-│  • Chat Interface                                        │
-│  • Settings Pages                                        │
-│  • Model Hub                                             │
-└────────────┬─────────────────────────────┬───────────────┘
-             │                             │
-             │ imports                     │ imports
-             ▼                             ▼
-  ┌──────────────────────┐      ┌──────────────────────┐
-  │     Core SDK         │      │     Extensions       │
-  │      (core/)         │      │   (extensions/)      │
-  │                      │      │                      │
-  │ • TypeScript APIs    │◄─────│ • Assistant Mgmt     │
-  │ • Extension System   │ uses │ • Conversations      │
-  │ • Event Bus          │      │ • Downloads          │
-  │ • Type Definitions   │      │ • LlamaCPP           │
-  └──────────┬───────────┘      └───────────┬──────────┘
-             │                              │
-             │   ┌──────────────────────┐   │
-             │   │       Web App        │   │
-             │   └──────────┬───────────┘   │
-             │              │               │
-             └──────────────┼───────────────┘
-                            │
-                            ▼
-                        Tauri IPC
-                    (invoke commands)
-                            │
-                            ▼
-┌───────────────────────────────────────────────────────────┐
-│                   Tauri Backend (Rust)                    │
-│                      (src-tauri/)                         │
-│                                                           │
-│  • Window Management        • File System Access          │
-│  • Process Control          • System Integration          │
-│  • IPC Command Handler      • Security & Permissions      │
-└───────────────────────────┬───────────────────────────────┘
-                            │
-                            │
-                            ▼
-┌───────────────────────────────────────────────────────────┐
-│                   Tauri Plugins (Rust)                    │
-│                   (src-tauri/plugins/)                    │
-│                                                           │
-│     ┌──────────────────┐        ┌──────────────────┐      │
-│     │  Hardware Plugin │        │  LlamaCPP Plugin │      │
-│     │                  │        │                  │      │
-│     │ • CPU/GPU Info   │        │ • Process Mgmt   │      │
-│     │ • Memory Stats   │        │ • Model Loading  │      │
-│     │ • System Info    │        │ • Inference      │      │
-│     └──────────────────┘        └──────────────────┘      │
-└───────────────────────────────────────────────────────────┘
-```
+## Prerequisites
 
-### The Communication Flow
+- Node.js 20+
+- Yarn `4.5.3`
+- Rust toolchain
+- Tauri CLI
 
-1. **JavaScript Layer Relationships**:
-   - Web App imports Core SDK and Extensions as JavaScript modules
-   - Extensions use Core SDK for shared functionality
-   - All run in the browser/webview context
+Install Tauri CLI if needed:
 
-2. **All Three → Backend**: Through Tauri IPC
-   - **Web App** → Backend: `await invoke('app_command', data)`
-   - **Core SDK** → Backend: `await invoke('core_command', data)`
-   - **Extensions** → Backend: `await invoke('ext_command', data)`
-   - Each component can independently call backend commands
-
-3. **Backend → Plugins**: Native Rust integration
-   - Backend loads plugins as Rust libraries
-   - Direct function calls, no IPC overhead
-
-4. **Response Flow**: 
-   - Plugin → Backend → IPC → Requester (Web App/Core/Extension) → UI updates
-
-### Real-World Example: Loading a Model
-
-Here's what actually happens when you click "Download Llama 3":
-
-1. **Web App** (`web-app/`) - User clicks download button
-2. **Extension** (`extensions/download-extension`) - Handles the download logic
-3. **Tauri Backend** (`src-tauri/`) - Actually downloads the file to disk
-4. **Extension** (`extensions/llamacpp-extension`) - Prepares model for loading
-5. **Tauri Plugin** (`src-tauri/plugins/llamacpp`) - Starts llama.cpp process
-6. **Hardware Plugin** (`src-tauri/plugins/hardware`) - Detects GPU, optimizes settings
-7. **Model ready!** - User can start chatting
-
-## Project Structure
-
-```
-ax-studio/
-├── web-app/              # React frontend (what users see)
-├── src-tauri/            # Rust backend (system integration)
-│   ├── src/core/         # Core Tauri commands
-│   └── plugins/          # Tauri plugins (hardware, llamacpp)
-├── core/                 # TypeScript SDK (API layer)
-├── extensions/           # JavaScript extensions
-│   ├── assistant-extension/
-│   ├── conversational-extension/
-│   ├── download-extension/
-│   └── llamacpp-extension/
-├── docs/                 # Documentation website
-├── website/              # Marketing website
-├── autoqa/               # Automated testing
-├── scripts/              # Build utilities
-│
-├── package.json          # Root workspace configuration
-├── Makefile              # Build automation commands  
-├── LICENSE               # Apache 2.0 license
-└── README.md             # Project overview
+```bash
+cargo install tauri-cli
 ```
 
 ## Development Setup
 
-### The Scenic Route (Build from Source)
+The default development flow from the repository root is:
 
-**Prerequisites:**
-- Node.js ≥ 20.0.0
-- Yarn ≥ 1.22.0
-- Rust (for Tauri)
-- Make ≥ 3.81
-
-**Option 1: The Easy Way (Make)**
 ```bash
-git clone https://github.com/ax-studio/ax-studio
+git clone https://github.com/defai-digital/ax-studio
 cd ax-studio
 make dev
 ```
 
-## How Can I Contribute?
+`make dev` installs dependencies, builds the shared packages and extensions, downloads required binaries, and launches the Tauri app in development mode.
 
-### Reporting Bugs
-
-- **Ensure the bug was not already reported** by searching on GitHub under [Issues](https://github.com/ax-studio/ax-studio/issues)
-- If you're unable to find an open issue addressing the problem, [open a new one](https://github.com/ax-studio/ax-studio/issues/new)
-- Include your system specs and error logs - it helps a ton
-
-### Suggesting Enhancements
-
-- Open a new issue with a clear title and description
-- Explain why this enhancement would be useful
-- Include mockups or examples if you can
-
-### Your First Code Contribution
-
-**Choose Your Adventure:**
-- **Frontend UI and logic** → `web-app/`
-- **Shared API declarations** → `core/`
-- **Backend system integration** → `src-tauri/`
-- **Business logic features** → `extensions/`
-- **Dedicated backend handler** → `src-tauri/plugins/`
-
-**The Process:**
-1. Fork the repo
-2. Create a new branch (`git checkout -b feature-name`)
-3. Make your changes (and write tests!)
-4. Commit your changes (`git commit -am 'Add some feature'`)
-5. Push to the branch (`git push origin feature-name`)
-6. Open a new Pull Request against `dev` branch
-
-## Testing
+Useful alternatives:
 
 ```bash
-yarn test                    # All tests
-cd src-tauri && cargo test  # Rust tests
-cd autoqa && python main.py # End-to-end tests
+make dev-web-app
+make lint
+make test
+yarn test:coverage
+bash scripts/testing/run-quality-gates.sh
 ```
 
-## Code Standards
+## How the Pieces Fit Together
 
-### TypeScript/JavaScript
-- TypeScript required (we're not animals)
-- ESLint + Prettier
-- Functional React components
-- Proper typing (no `any` - seriously!)
+At a high level:
+
+- `web-app/` renders the UI and user workflows
+- `core/` provides shared TypeScript contracts and extension-facing APIs
+- `extensions/` package feature logic that is loaded by the application
+- `src-tauri/` handles native capabilities, local filesystem access, downloads, and process management
+- `src-tauri/plugins/` contains lower-level Rust plugins for specialized native integrations
+
+Most frontend-to-native communication happens through Tauri IPC, while shared app logic is exposed through the core SDK and extension system.
+
+## Choosing Where to Work
+
+- UI, routes, settings, and interaction behavior: `web-app/`
+- Shared TypeScript contracts and extension interfaces: `core/`
+- Feature packaging and extension lifecycle code: `extensions/`
+- Native app commands, capabilities, and system integration: `src-tauri/`
+- Plugin-specific native behavior: `src-tauri/plugins/`
+- End-to-end testing and automation flows: `autoqa/`
+
+## Testing Expectations
+
+Add or update tests when you change behavior.
+
+Common commands:
+
+```bash
+yarn test
+make test
+cargo test --manifest-path src-tauri/Cargo.toml
+```
+
+For focused work, package-level guides list more targeted commands.
+
+## Coding Standards
+
+### TypeScript
+
+- Prefer explicit types and avoid `any`
+- Keep React components functional and strongly typed
+- Follow workspace ESLint and Prettier conventions
+- Add or update tests for changed behavior
 
 ### Rust
-- `cargo fmt` + `cargo clippy`
-- `Result<T, E>` for error handling
-- Document public APIs
 
-## Git Conventions
+- Run `cargo fmt`
+- Run `cargo clippy -- -D warnings` for touched crates when practical
+- Validate command inputs and use structured error handling
 
-### Branches
-- `main` - stable releases
-- `dev` - development (target this for PRs)
-- `feature/*` - new features
-- `fix/*` - bug fixes
+## Pull Requests
 
-### Commit Messages
-- Use the present tense ("Add feature" not "Added feature")
-- Be descriptive but concise
-- Reference issues when applicable
+- Target the `dev` branch
+- Use conventional commit style such as `feat:`, `fix:`, `docs:`, `chore:`
+- Keep changes focused
+- Include any relevant screenshots, logs, or reproduction notes
+- Follow the checklist in [`.github/pull_request_template.md`](./.github/pull_request_template.md)
 
-Examples:
-```
-feat: add support for Qwen models
-fix: resolve memory leak in model loading
-docs: update installation instructions
-```
+## Documentation Changes
 
-## Troubleshooting
+Documentation improvements are welcome and needed. Prefer:
 
-If things go sideways:
+- one canonical source for setup instructions
+- package-specific docs that describe only that package
+- stable guides in `README.md` or `CONTRIBUTING.md`
+- planning material and drafts under `docs/`
 
-1. **Check our [troubleshooting docs](https://axstudio.ai/docs/desktop/troubleshooting)**
-2. **Clear everything and start fresh:** `make clean` then `make dev`
-3. **Copy your error logs and system specs**
-4. **Ask for help in our [Discord](https://discord.gg/FTk2MvZwJH)** `#🆘|ax-studio-help` channel
-
-Common issues:
-- **Build failures**: Check Node.js and Rust versions
-- **Extension not loading**: Verify it's properly registered
-- **Model not working**: Check hardware requirements and GPU drivers
+If a doc is historical, exploratory, or design-only, label it clearly so readers do not mistake it for current user guidance.
 
 ## Getting Help
 
-- [Documentation](https://axstudio.ai/docs) - The manual you should read
-- [Discord Community](https://discord.gg/FTk2MvZwJH) - Where the community lives
-- [GitHub Issues](https://github.com/ax-studio/ax-studio/issues) - Report bugs here
-- [GitHub Discussions](https://github.com/ax-studio/ax-studio/discussions) - Ask questions
-
-## License
-
-Apache 2.0 - Because sharing is caring. See [LICENSE](./LICENSE) for the legal stuff.
-
-## Additional Notes
-
-We're building something pretty cool here - an AI assistant that respects your privacy and runs entirely on your machine. Every contribution, no matter how small, helps make AI more accessible to everyone.
-
-Thanks for being part of the journey. Let's build the future of local AI together! 🚀
+- Open or search GitHub issues in the repository
+- Use the package-specific contributing guides for area-specific conventions
+- When updating docs, prefer fixing inaccurate instructions rather than adding more parallel guidance

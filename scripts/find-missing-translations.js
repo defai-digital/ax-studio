@@ -1,5 +1,5 @@
 /**
- * Script to find missing translations in locale files for Jan
+ * Script to find missing translations in locale files for AX Studio
  *
  * Usage:
  *   node scripts/find-missing-translations.js [options]
@@ -28,7 +28,7 @@ const args = process.argv.slice(2).reduce((acc, arg) => {
 // Show help if requested
 if (args.help) {
   console.log(`
-Find Missing Translations for Jan
+Find Missing Translations for AX Studio
 
 A utility script to identify missing translations across locale files.
 Compares non-English locale files to the English ones to find any missing keys.
@@ -234,7 +234,7 @@ function outputResults(missingTranslations) {
 // Main function to find missing translations
 function findMissingTranslations() {
   try {
-    console.log('Starting translation check for Jan web-app...')
+    console.log('Starting translation check for AX Studio web-app...')
 
     const hasMissingTranslations = checkTranslations()
 

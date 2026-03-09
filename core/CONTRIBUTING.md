@@ -1,71 +1,51 @@
-# Contributing to Ax-Studio Core
+# Contributing to the Core SDK
 
-[← Back to Main Contributing Guide](../CONTRIBUTING.md)
+[Back to main contributing guide](../CONTRIBUTING.md)
 
-TypeScript SDK providing extension system, APIs, and type definitions for all Ax-Studio components.
+`@ax-studio/core` is the shared TypeScript SDK used by the app and packaged extensions. It defines contracts, shared APIs, and extension-facing building blocks.
 
-## Key Directories
+## What Lives Here
 
-- **`/src/browser`** - Core APIs (events, extensions, file system)
-- **`/src/browser/extensions`** - Built-in extensions (assistant, inference, conversational)
-- **`/src/types`** - TypeScript type definitions
-- **`/src/test`** - Testing utilities
+- `src/browser/` browser-facing core APIs
+- `src/browser/extensions/` extension system internals
+- `src/types/` shared type definitions
+- tests and build configuration for the SDK package
 
-## Development
+## Common Commands
 
-### Key Principles
-
-1. **Platform Agnostic** - Works everywhere (browser, Node.js)
-2. **Extension-Based** - New features = new extensions  
-3. **Type Everything** - TypeScript required
-4. **Event-Driven** - Components communicate via events
-
-### Building & Testing
+Run these from `core/` or from the repository root with `yarn workspace`.
 
 ```bash
-# Build the SDK
-yarn build
-
-# Run tests  
-yarn test
-
-# Watch mode
-yarn test:watch
+yarn workspace @ax-studio/core build
+yarn workspace @ax-studio/core test
+yarn workspace @ax-studio/core test:coverage
 ```
 
-### Event System
+The root `make dev` and `make test` flows already build this package as part of the workspace.
 
-```typescript
-// Emit events
-events.emit('model:loaded', { modelId: 'llama-3' })
+## Expectations
 
-// Listen for events
-events.on('model:loaded', (data) => {
-  console.log('Model loaded:', data.modelId)
-})
-```
+- Keep exports intentional and stable
+- Preserve compatibility for existing consumers in `web-app/` and `extensions/`
+- Prefer explicit types over loose shapes
+- Add tests when changing contracts, event behavior, or shared helpers
 
-## Testing
+## Typical Change Areas
 
-```typescript
-describe('MyFeature', () => {
-  it('should do something', () => {
-    const result = doSomething()
-    expect(result).toBe('expected')
-  })
-})
-```
+- extension lifecycle APIs
+- shared event or messaging contracts
+- browser-side abstractions used by the web app and extensions
+- types that need to remain aligned across packages
 
-## Best Practices
+## Testing Guidance
 
-- Keep it simple
-- Use TypeScript fully (no `any`)
-- Write tests for critical features
-- Follow existing patterns
-- Export new modules in index files
+When changing shared contracts, verify both:
 
-## Dependencies
+- type-level usage still compiles for downstream consumers
+- runtime behavior is covered with Vitest where applicable
 
-- **TypeScript** - Type safety
-- **Rolldown** - Bundling
-- **Vitest** - Testing
+## Common Pitfalls
+
+- changing exports without checking downstream imports
+- widening types in ways that make extension behavior less predictable
+- mixing package-internal helpers with public API surface without clear intent

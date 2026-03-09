@@ -490,7 +490,8 @@ async fn schedule_mcp_start_task<R: Runtime>(
             if obj.get("managed").and_then(|v| v.as_bool()) == Some(true) {
                 if let Some(integration_id) = obj.get("integration").and_then(|v| v.as_str()) {
                     match crate::core::integrations::commands::read_credentials(
-                        &app, integration_id,
+                        &app,
+                        integration_id,
                     ) {
                         Ok(creds) => {
                             let env_keys =
@@ -891,13 +892,15 @@ pub async fn stop_mcp_servers_with_context<R: Runtime>(
     // Read port from mcp_active_servers FIRST to avoid nested lock acquisition
     let browser_mcp_port: Option<u16> = {
         let active_servers = state.mcp_active_servers.lock().await;
-        active_servers.get("Ax-Fabric Browser MCP").and_then(|config| {
-            config
-                .get("env")
-                .and_then(|e| e.get("BRIDGE_PORT"))
-                .and_then(|p| p.as_str())
-                .and_then(|s| s.parse::<u16>().ok())
-        })
+        active_servers
+            .get("Ax-Studio Browser MCP")
+            .and_then(|config| {
+                config
+                    .get("env")
+                    .and_then(|e| e.get("BRIDGE_PORT"))
+                    .and_then(|p| p.as_str())
+                    .and_then(|s| s.parse::<u16>().ok())
+            })
     };
 
     let servers_to_stop: Vec<(String, Arc<RunningServiceEnum>, Option<u16>)> = {
@@ -907,7 +910,7 @@ pub async fn stop_mcp_servers_with_context<R: Runtime>(
         let mut result = Vec::new();
         for key in keys {
             if let Some(service) = servers_map.remove(&key) {
-                let port = if key == "Ax-Fabric Browser MCP" {
+                let port = if key == "Ax-Studio Browser MCP" {
                     browser_mcp_port
                 } else {
                     None

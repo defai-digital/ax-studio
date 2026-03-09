@@ -60,7 +60,10 @@ async fn search_duckduckgo(
              AppleWebKit/537.36 (KHTML, like Gecko) \
              Chrome/124.0.0.0 Safari/537.36",
         )
-        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+        .header(
+            "Accept",
+            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        )
         .header("Accept-Language", "en-US,en;q=0.9")
         .timeout(Duration::from_secs(12))
         .send()
@@ -86,7 +89,11 @@ async fn search_duckduckgo(
             let title = el.text().collect::<String>().trim().to_string();
             let href = el.value().attr("href").unwrap_or("");
             let url = decode_ddg_url(href)?;
-            if title.is_empty() { None } else { Some((title, url)) }
+            if title.is_empty() {
+                None
+            } else {
+                Some((title, url))
+            }
         })
         .collect();
 
@@ -99,7 +106,11 @@ async fn search_duckduckgo(
         .into_iter()
         .zip(snippets.into_iter().chain(std::iter::repeat(String::new())))
         .take(num_results)
-        .map(|((title, url), snippet)| WebSearchResult { url, title, snippet })
+        .map(|((title, url), snippet)| WebSearchResult {
+            url,
+            title,
+            snippet,
+        })
         .collect();
 
     Ok(results)

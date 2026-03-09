@@ -1526,7 +1526,7 @@ const ChatInput = memo(function ChatInput({
                             onClick={() => {
                               setSelectedAssistant(undefined)
                               if (effectiveThreadId) {
-                                updateCurrentThreadAssistant(undefined as unknown as Assistant)
+                                updateCurrentThreadAssistant(undefined)
                               }
                             }}
                           >

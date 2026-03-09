@@ -1,9 +1,9 @@
 use super::models::{DownloadEvent, DownloadItem, ProgressTracker, ProxyConfig};
 use crate::core::app::commands::get_app_data_folder_path;
-use crate::core::updater::session::get_session_id;
 use crate::core::updater::hmac_client::SignedRequestHeaders;
-use futures_util::StreamExt;
+use crate::core::updater::session::get_session_id;
 use ax_studio_utils::normalize_path;
+use futures_util::StreamExt;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use std::collections::HashMap;
 use std::path::Path;
@@ -61,15 +61,18 @@ pub fn err_to_string<E: std::fmt::Display>(e: E) -> String {
 pub fn convert_to_mirror_url(url: &str) -> Option<String> {
     let parsed = Url::parse(url).ok()?;
     let host = parsed.host_str()?;
-    
+
     // Check if the domain should use mirror
-    if MIRROR_DOMAINS.iter().any(|domain| host == *domain || host.ends_with(&format!(".{}", domain))) {
+    if MIRROR_DOMAINS
+        .iter()
+        .any(|domain| host == *domain || host.ends_with(&format!(".{}", domain)))
+    {
         // Remove the scheme (https://) and any leading slashes to avoid // in path
         let url_without_scheme = url
             .strip_prefix("https://")
             .or_else(|| url.strip_prefix("http://"))?
             .trim_start_matches('/');
-            
+
         Some(format!("{}{}", get_mirror_prefix(), url_without_scheme))
     } else {
         None
@@ -106,7 +109,7 @@ async fn validate_downloaded_file(
     }
 
     // Use model_id from item if available, otherwise extract from save path
-    
+
     let model_id = item
         .model_id
         .as_ref()
@@ -178,8 +181,11 @@ async fn validate_downloaded_file(
     if let Some(expected_sha256) = &item.sha256 {
         log::info!("Starting Hash verification for {}", item.url);
 
-        match ax_studio_utils::crypto::compute_file_sha256_with_cancellation(save_path, cancel_token)
-            .await
+        match ax_studio_utils::crypto::compute_file_sha256_with_cancellation(
+            save_path,
+            cancel_token,
+        )
+        .await
         {
             Ok(computed_sha256) => {
                 if computed_sha256 != *expected_sha256 {
@@ -641,15 +647,23 @@ async fn download_single_file(
     // Emit an initial progress event now that we have an accurate total.
     // This replaces "Initializing download..." in the UI with "0.00 / X.XX GB (0%)"
     // as soon as the download connection is established.
-    progress_tracker.update_progress(&file_id, initial_progress).await;
+    progress_tracker
+        .update_progress(&file_id, initial_progress)
+        .await;
     let (init_transferred, init_total) = progress_tracker.get_total_progress().await;
-    let _ = app.emit(&evt_name, DownloadEvent { transferred: init_transferred, total: init_total });
-    
+    let _ = app.emit(
+        &evt_name,
+        DownloadEvent {
+            transferred: init_transferred,
+            total: init_total,
+        },
+    );
+
     // Log which URL is being used for download
     if actual_url != item.url {
         log::info!("Downloading via Ax-Studio mirror: {}", actual_url);
     }
-    
+
     let mut stream = resp.bytes_stream();
 
     let file = if should_resume {
@@ -671,9 +685,7 @@ async fn download_single_file(
     while let Some(chunk) = stream.next().await {
         if cancel_token.is_cancelled() {
             if !should_resume {
-                tokio::fs::remove_file(&tmp_save_path)
-                    .await
-                    .ok();
+                tokio::fs::remove_file(&tmp_save_path).await.ok();
             }
             log::info!("Download cancelled: {}", item.url);
             return Err("Download cancelled".to_string());
@@ -753,11 +765,14 @@ pub async fn _get_maybe_resume_with_fallback(
                 return Ok((resp, mirror_url));
             }
             Err(e) => {
-                log::warn!("Ax-Studio mirror download failed: {}. Falling back to original URL...", e);
+                log::warn!(
+                    "Ax-Studio mirror download failed: {}. Falling back to original URL...",
+                    e
+                );
             }
         }
     }
-    
+
     // Fallback to original URL (no HMAC headers needed)
     log::info!("Downloading from original URL: {}", url);
     let resp = _get_maybe_resume_internal(client, url, start_bytes).await?;
@@ -791,14 +806,11 @@ async fn _get_maybe_resume_with_hmac(
     // Use a short timeout for mirror requests so that an unreachable CDN
     // (e.g. cdn.axstudio.ai not yet live) fails fast and falls back to the
     // original URL instead of blocking the download for 30+ seconds.
-    let resp = tokio::time::timeout(
-        Duration::from_secs(15),
-        request.send(),
-    )
-    .await
-    .map_err(|_| "Mirror request timed out after 15s".to_string())?
-    .map_err(err_to_string)?;
-    
+    let resp = tokio::time::timeout(Duration::from_secs(15), request.send())
+        .await
+        .map_err(|_| "Mirror request timed out after 15s".to_string())?
+        .map_err(err_to_string)?;
+
     if start_bytes > 0 {
         if resp.status() != reqwest::StatusCode::PARTIAL_CONTENT {
             return Err(format!(
@@ -814,7 +826,7 @@ async fn _get_maybe_resume_with_hmac(
             resp.text().await.unwrap_or_default()
         ));
     }
-    
+
     Ok(resp)
 }
 

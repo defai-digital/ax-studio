@@ -44,7 +44,7 @@ struct SandboxData {
 struct SandboxOutput {
     output_type: String,
     // stream fields
-    name: Option<String>,   // "stdout" | "stderr"
+    name: Option<String>, // "stdout" | "stderr"
     text: Option<String>,
     // display_data / execute_result fields
     data: Option<serde_json::Value>, // {"image/png": "b64", "text/html": "...", ...}
@@ -130,7 +130,9 @@ pub async fn is_sandbox_ready(base_url: &str) -> bool {
 
     let tcp_ok = tokio::task::spawn_blocking(move || {
         TcpStream::connect_timeout(
-            &addr.parse().unwrap_or_else(|_| "127.0.0.1:8080".parse().unwrap()),
+            &addr
+                .parse()
+                .unwrap_or_else(|_| "127.0.0.1:8080".parse().unwrap()),
             Duration::from_secs(3),
         )
         .is_ok()
@@ -169,9 +171,7 @@ pub fn start_sandbox_container(port: u16) -> Result<(), String> {
     let docker = find_docker_binary().ok_or("Docker not found. Please install Docker Desktop.")?;
 
     // Try to start an existing stopped container first
-    let start_result = Command::new(&docker)
-        .args(["start", "ax-sandbox"])
-        .output();
+    let start_result = Command::new(&docker).args(["start", "ax-sandbox"]).output();
 
     if let Ok(out) = start_result {
         if out.status.success() {
@@ -185,8 +185,10 @@ pub fn start_sandbox_container(port: u16) -> Result<(), String> {
         .args([
             "run",
             "-d",
-            "--name", "ax-sandbox",
-            "-p", &port_mapping,
+            "--name",
+            "ax-sandbox",
+            "-p",
+            &port_mapping,
             "ghcr.io/agent-infra/sandbox:latest",
         ])
         .output()
@@ -260,12 +262,10 @@ pub async fn execute_via_sandbox(
         timeout: timeout_secs,
     };
 
-    let response = client
-        .post(&url)
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to reach sandbox: {e}. Is the sandbox container running?"))?;
+    let response =
+        client.post(&url).json(&body).send().await.map_err(|e| {
+            format!("Failed to reach sandbox: {e}. Is the sandbox container running?")
+        })?;
 
     let api_response: SandboxApiResponse = response
         .json()
@@ -305,11 +305,18 @@ pub async fn execute_via_sandbox(
                 if let Some(mime_map) = out.data {
                     // Prefer image/png first, then html, then plain text
                     if let Some(png) = mime_map.get("image/png").and_then(|v| v.as_str()) {
-                        outputs.push(OutputItem::Image { data: png.trim().to_string() });
+                        outputs.push(OutputItem::Image {
+                            data: png.trim().to_string(),
+                        });
                     } else if let Some(html) = mime_map.get("text/html").and_then(|v| v.as_str()) {
-                        outputs.push(OutputItem::Html { data: html.to_string() });
-                    } else if let Some(plain) = mime_map.get("text/plain").and_then(|v| v.as_str()) {
-                        outputs.push(OutputItem::Text { data: plain.to_string() });
+                        outputs.push(OutputItem::Html {
+                            data: html.to_string(),
+                        });
+                    } else if let Some(plain) = mime_map.get("text/plain").and_then(|v| v.as_str())
+                    {
+                        outputs.push(OutputItem::Text {
+                            data: plain.to_string(),
+                        });
                     }
                 }
             }
@@ -331,7 +338,12 @@ pub async fn execute_via_sandbox(
 
     Ok(SandboxExecutionResult {
         session_id: data.session_id,
-        result: ExecutionResult { stdout, stderr, outputs, error },
+        result: ExecutionResult {
+            stdout,
+            stderr,
+            outputs,
+            error,
+        },
     })
 }
 
@@ -363,14 +375,18 @@ fn strip_ansi(s: &str) -> String {
                     // CSI sequence: consume until a letter
                     chars.next();
                     for nc in chars.by_ref() {
-                        if nc.is_ascii_alphabetic() { break; }
+                        if nc.is_ascii_alphabetic() {
+                            break;
+                        }
                     }
                 }
                 Some(&']') => {
                     // OSC sequence: consume until BEL (\x07) or ST (\x1b\\)
                     chars.next();
                     while let Some(nc) = chars.next() {
-                        if nc == '\x07' { break; }
+                        if nc == '\x07' {
+                            break;
+                        }
                         if nc == '\x1b' && chars.peek() == Some(&'\\') {
                             chars.next();
                             break;

@@ -55,7 +55,10 @@ fn extract_text(html: &str) -> String {
             // Skip children of noise elements
             if let Some(parent_element) = node.parent().and_then(|p| p.value().as_element()) {
                 let tag = parent_element.name();
-                if matches!(tag, "script" | "style" | "nav" | "footer" | "aside" | "noscript") {
+                if matches!(
+                    tag,
+                    "script" | "style" | "nav" | "footer" | "aside" | "noscript"
+                ) {
                     continue;
                 }
             }
@@ -70,16 +73,18 @@ fn extract_text(html: &str) -> String {
         }
     }
 
-    // Deduplicate whitespace
-    let collapsed: String = text
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
-
-    // Cap to 8 000 chars
-    if collapsed.chars().count() > 8_000 {
-        collapsed.chars().take(8_000).collect()
-    } else {
-        collapsed
+    // Deduplicate whitespace — fold avoids the intermediate Vec<&str> allocation
+    let mut collapsed = String::with_capacity(text.len().min(16_384));
+    for word in text.split_whitespace() {
+        if !collapsed.is_empty() {
+            collapsed.push(' ');
+        }
+        collapsed.push_str(word);
     }
+
+    // Cap to 8 000 chars — single pass via char_indices avoids iterating twice
+    if let Some((byte_idx, _)) = collapsed.char_indices().nth(8_000) {
+        collapsed.truncate(byte_idx);
+    }
+    collapsed
 }

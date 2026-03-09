@@ -1,128 +1,81 @@
-# Contributing to Jan Web App
+# Contributing to the Web App
 
-[← Back to Main Contributing Guide](../CONTRIBUTING.md)
+[Back to main contributing guide](../CONTRIBUTING.md)
 
-React frontend using TypeScript, TanStack Router, Radix UI, and Tailwind CSS. State is managed by React State and Zustand.
+The web app is the React frontend for AX Studio. It handles chat UX, settings, routing, artifacts, and most of the desktop-visible product behavior.
 
-## Key Directories
+## What Lives Here
 
-- **`/src/components/ui`** - UI components (buttons, dialogs, inputs)
-- **`/src/containers`** - Complex feature components (ChatInput, ThreadContent)  
-- **`/src/hooks`** - Custom React hooks (useChat, useThreads, useAppState)
-- **`/src/routes`** - TanStack Router pages
-- **`/src/services`** - API layer for backend communication
-- **`/src/types`** - TypeScript definitions
+- `src/components/` reusable UI primitives
+- `src/containers/` feature-level UI and larger composed views
+- `src/routes/` TanStack Router routes
+- `src/stores/` Zustand stores
+- `src/lib/` provider, service, and shared frontend logic
+- `src/hooks/` custom hooks
+- `src/locales/` translations
 
-## Development
+## Common Commands
 
-### Component Example
-
-```tsx
-interface Props {
-  title: string
-  onAction?: () => void
-}
-
-export const MyComponent: React.FC<Props> = ({ title, onAction }) => {
-  return (
-    <div className="flex items-center gap-2">
-      <h2>{title}</h2>
-      <Button onClick={onAction}>Action</Button>
-    </div>
-  )
-}
-```
-
-### Routing
-
-```tsx
-export const Route = createFileRoute('/settings/general')({
-  component: GeneralSettings
-})
-```
-
-### Building & Testing
+Run these from the repository root unless noted otherwise.
 
 ```bash
-# Development
-yarn dev
-yarn build
-yarn test
+make dev-web-app
+yarn workspace @ax-studio/web-app dev
+yarn workspace @ax-studio/web-app build
+yarn workspace @ax-studio/web-app lint
+yarn workspace @ax-studio/web-app test
 ```
 
-### State Management
+Use `make dev-web-app` for a frontend-only loop. Use `make dev` when you need the full Tauri shell and native integrations.
 
-```tsx
-// Local state
-const [value, setValue] = useState<string>('')
+## Working Model
 
-// Global state (Zustand)
-export const useAppState = create<AppState>((set) => ({
-  data: null,
-  setData: (data) => set({ data })
-}))
-```
+- Routes define top-level application screens
+- Stores manage persistent application state
+- `src/lib/` contains shared frontend logic that should not be duplicated across components
+- Tauri calls should generally be wrapped behind services or hooks instead of being scattered through leaf components
 
-### Tauri Integration
+## UI and React Expectations
 
-```tsx
-import { invoke } from '@tauri-apps/api/tauri'
+- Keep components functional and strongly typed
+- Avoid `any` unless there is a concrete reason
+- Prefer composition over deep prop drilling where existing store or provider patterns fit
+- Follow existing route, store, and service patterns before introducing new abstractions
+- All user-facing strings should go through i18n
+
+## Tauri Integration
+
+Browser mode and desktop mode are not equivalent. If a feature depends on native APIs, test it through the Tauri app as well.
+
+Typical Tauri usage:
+
+```ts
+import { invoke } from '@tauri-apps/api/core'
 
 const result = await invoke('command_name', { param: 'value' })
 ```
 
-## Performance Tips
+Prefer placing that call inside a service or hook so the UI layer stays simple.
 
-```tsx
-// Use React.memo for expensive components
-const ExpensiveComponent = React.memo(({ data }) => {
-  return <div>{processData(data)}</div>
-})
+## Testing
 
-// Debounce frequent updates
-const debouncedValue = useDebounce(searchTerm, 300)
-
-// Virtual scrolling for large lists
-import { VariableSizeList } from 'react-window'
-```
-
-## Debugging
+Frontend tests use Vitest.
 
 ```bash
-# React DevTools
-# Install browser extension, then:
-# - Inspect component tree
-# - Debug hooks and state
-# - Profile performance
-
-# Debug Tauri commands
-console.log(await window.__TAURI__.invoke('command_name'))
-
-# Check for console errors
-# Press F12 → Console tab
+yarn workspace @ax-studio/web-app test
+yarn workspace @ax-studio/web-app test:coverage
 ```
 
-## Accessibility Guidelines
+Add tests when you change behavior in:
 
-- Use semantic HTML (`<button>`, `<nav>`, `<main>`)
-- Add ARIA labels: `aria-label`, `aria-describedby`
-- Ensure keyboard navigation works
-- Test with screen readers
-- Maintain color contrast ratios
+- route logic
+- hooks
+- stores
+- rendering behavior with meaningful state transitions
 
-## Best Practices
+## Common Pitfalls
 
-- Keep components small and focused
-- Use TypeScript fully (no `any`)
-- Handle loading and error states
-- Follow accessibility guidelines
-- Extract business logic into hooks
-
-## Dependencies
-
-- **React** - UI framework
-- **TypeScript** - Type safety
-- **TanStack Router** - Type-safe routing
-- **Radix UI** - Accessible components
-- **Tailwind CSS** - Utility-first styling
-- **Zustand** - State management
+- Browser mode can hide native integration issues
+- Translation keys drift if English strings are added directly in components
+- Provider logic becomes hard to maintain if duplicated across routes or containers
+- Large UI features usually need both state and rendering tests

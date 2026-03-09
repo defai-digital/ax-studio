@@ -32,6 +32,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@ax-studio/core': path.resolve(__dirname, '../core/src/index.ts'),
     },
   },
   define: {

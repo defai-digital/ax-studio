@@ -146,7 +146,7 @@ async function saveBlobNative(blob: Blob, filename: string): Promise<void> {
       } else {
         // SVG / MMD are plain text
         const text = await blob.text()
-        await invoke('write_file_sync', { args: [savePath, text] })
+        await invoke('write_text_file', { path: savePath, content: text })
       }
 
     } else if ('showSaveFilePicker' in window) {

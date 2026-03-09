@@ -1,18 +1,21 @@
+use ax_studio_utils::{is_cors_header, is_valid_host, remove_prefix};
 use futures_util::StreamExt;
 use hyper::body::Bytes;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Request, Response, Server, StatusCode};
-use ax_studio_utils::{is_cors_header, is_valid_host, remove_prefix};
 use reqwest::Client;
 use serde_json;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::Manager;
 use tokio::sync::Mutex;
 
 use crate::core::state::{AppState, ProviderCustomHeader, ServerHandle};
+
+static SERVER_CORS_ENABLED: AtomicBool = AtomicBool::new(false);
 
 /// Transform Anthropic /messages API body to OpenAI /chat/completions body
 fn transform_anthropic_to_openai(body: &serde_json::Value) -> Option<serde_json::Value> {
@@ -102,8 +105,14 @@ fn convert_messages(
             let text: String = blocks
                 .iter()
                 .filter_map(|b| b.get("text").and_then(|t| t.as_str()))
-                .collect::<Vec<_>>()
-                .join("\n");
+                .enumerate()
+                .fold(String::new(), |mut acc, (i, s)| {
+                    if i > 0 {
+                        acc.push('\n');
+                    }
+                    acc.push_str(s);
+                    acc
+                });
             if !text.is_empty() {
                 openai_messages.push(serde_json::json!({
                     "role": "system",
@@ -245,8 +254,14 @@ fn convert_messages(
                 let text: String = content_array
                     .iter()
                     .filter_map(|b| b.get("text").and_then(|t| t.as_str()))
-                    .collect::<Vec<_>>()
-                    .join("\n");
+                    .enumerate()
+                    .fold(String::new(), |mut acc, (i, s)| {
+                        if i > 0 {
+                            acc.push('\n');
+                        }
+                        acc.push_str(s);
+                        acc
+                    });
                 openai_messages.push(serde_json::json!({
                     "role": role,
                     "content": text
@@ -319,8 +334,14 @@ fn extract_tool_result_content(content: Option<&serde_json::Value>) -> String {
                     None
                 }
             })
-            .collect::<Vec<_>>()
-            .join("\n"),
+            .enumerate()
+            .fold(String::new(), |mut acc, (i, s)| {
+                if i > 0 {
+                    acc.push('\n');
+                }
+                acc.push_str(s);
+                acc
+            }),
         Some(c) => c.to_string(),
         None => String::new(),
     }
@@ -412,6 +433,7 @@ pub struct ProxyConfig {
     pub prefix: String,
     pub proxy_api_key: String,
     pub trusted_hosts: Vec<Vec<String>>,
+    pub cors_enabled: bool,
     pub host: String,
     pub port: u16,
 }
@@ -429,6 +451,12 @@ async fn proxy_request<R: tauri::Runtime>(
     app_handle: tauri::AppHandle<R>,
 ) -> Result<Response<Body>, hyper::Error> {
     if req.method() == hyper::Method::OPTIONS {
+        if !config.cors_enabled {
+            return Ok(Response::builder()
+                .status(StatusCode::FORBIDDEN)
+                .body(Body::from("CORS is disabled"))
+                .unwrap());
+        }
         log::debug!(
             "Handling CORS preflight request from {:?} {:?}",
             req.headers().get(hyper::header::HOST),
@@ -843,46 +871,45 @@ async fn proxy_request<R: tauri::Runtime>(
             match serde_json::from_slice::<serde_json::Value>(&body_bytes) {
                 Ok(json_body) => {
                     if let Some(model_id) = json_body.get("model").and_then(|v| v.as_str()) {
+                        // Single lock acquisition: resolve provider and extract all config data at once
                         let state = app_handle.state::<AppState>();
-                        let provider_configs = state.provider_configs.lock().await;
-
-                        // Try to find a provider for this model
-                        provider_name = provider_configs
-                            .iter()
-                            .find(|(_, config)| config.models.iter().any(|m| m == model_id))
-                            .map(|(_, config)| config.provider.clone())
-                            .or_else(|| {
-                                if let Some(sep_pos) = model_id.find('/') {
-                                    let potential_provider: &str = &model_id[..sep_pos];
-                                    if provider_configs.contains_key(potential_provider) {
-                                        return Some(potential_provider.to_string());
-                                    }
-                                }
-                                provider_configs.get(model_id).map(|c| c.provider.clone())
-                            });
-
-                        drop(provider_configs);
-
-                        if let Some(ref p) = provider_name {
-                            log::info!("Using remote provider '{p}' for model '{model_id}'");
-                            let state = app_handle.state::<AppState>();
+                        {
                             let provider_configs = state.provider_configs.lock().await;
-                            let provider_config = provider_configs.get(p.as_str()).cloned();
-                            drop(provider_configs);
 
-                            if let Some(provider_cfg) = provider_config {
-                                target_base_url = provider_cfg.base_url.clone().map(|url| {
-                                    let trimmed = url
-                                        .trim_end_matches('/')
-                                        .trim_end_matches("/messages")
-                                        .trim_end_matches("/chat/completions")
-                                        .trim_end_matches("/completions");
-                                    format!("{trimmed}/messages")
+                            let found = provider_configs
+                                .iter()
+                                .find(|(_, config)| config.models.iter().any(|m| m == model_id))
+                                .map(|(_, config)| config.provider.clone())
+                                .or_else(|| {
+                                    if let Some(sep_pos) = model_id.find('/') {
+                                        let potential_provider: &str = &model_id[..sep_pos];
+                                        if provider_configs.contains_key(potential_provider) {
+                                            return Some(potential_provider.to_string());
+                                        }
+                                    }
+                                    provider_configs.get(model_id).map(|c| c.provider.clone())
                                 });
-                                session_api_key = provider_cfg.api_key.clone();
-                                provider_custom_headers = provider_cfg.custom_headers.clone();
+
+                            if let Some(ref p) = found {
+                                log::info!("Using remote provider '{p}' for model '{model_id}'");
+                                if let Some(provider_cfg) = provider_configs.get(p.as_str()) {
+                                    target_base_url = provider_cfg.base_url.clone().map(|url| {
+                                        let trimmed = url
+                                            .trim_end_matches('/')
+                                            .trim_end_matches("/messages")
+                                            .trim_end_matches("/chat/completions")
+                                            .trim_end_matches("/completions");
+                                        format!("{trimmed}/messages")
+                                    });
+                                    session_api_key = provider_cfg.api_key.clone();
+                                    provider_custom_headers = provider_cfg.custom_headers.clone();
+                                }
                             }
-                        } else {
+                            provider_name = found;
+                            // lock released here
+                        }
+
+                        if provider_name.is_none() {
                             // No remote provider configured for this model
                             log::warn!("No remote provider configured for model_id: {model_id}");
                             let mut error_response =
@@ -957,76 +984,64 @@ async fn proxy_request<R: tauri::Runtime>(
                     if let Some(model_id) = json_body.get("model").and_then(|v| v.as_str()) {
                         log::debug!("Extracted model_id: {model_id}");
 
-                        // First, check if there's a registered remote provider for this model
+                        // Single lock acquisition: resolve provider and extract all config at once
                         let state = app_handle.state::<AppState>();
-                        let provider_configs = state.provider_configs.lock().await;
-
-                        // Try to find a provider that has this model configured
-                        provider_name = provider_configs
-                            .iter()
-                            .find(|(_, config)| {
-                                // Check if any model in this provider matches
-                                config.models.iter().any(|m| m == model_id)
-                            })
-                            .map(|(_, config)| config.provider.clone())
-                            .or_else(|| {
-                                // Try to find by provider name in model_id (e.g., "anthropic/claude-3-opus")
-                                if let Some(sep_pos) = model_id.find('/') {
-                                    let potential_provider: &str = &model_id[..sep_pos];
-                                    if provider_configs.contains_key(potential_provider) {
-                                        return Some(potential_provider.to_string());
-                                    }
-                                }
-                                // Also check if the model_id itself matches a provider name
-                                provider_configs.get(model_id).map(|c| c.provider.clone())
-                            });
-
-                        drop(provider_configs);
-
-                        if let Some(ref provider) = provider_name {
-                            // Found a remote provider, stream the response directly
-                            log::info!("Found remote provider '{provider}' for model '{model_id}'");
-
-                            // Get the provider config
-                            let state = app_handle.state::<AppState>();
+                        {
                             let provider_configs = state.provider_configs.lock().await;
-                            let provider_config = provider_configs.get(provider.as_str()).cloned();
 
-                            // Log registered providers for debugging
                             log::debug!(
                                 "Registered providers: {:?}",
                                 provider_configs.keys().collect::<Vec<_>>()
                             );
 
-                            drop(provider_configs);
+                            let found = provider_configs
+                                .iter()
+                                .find(|(_, config)| config.models.iter().any(|m| m == model_id))
+                                .map(|(_, config)| config.provider.clone())
+                                .or_else(|| {
+                                    if let Some(sep_pos) = model_id.find('/') {
+                                        let potential_provider: &str = &model_id[..sep_pos];
+                                        if provider_configs.contains_key(potential_provider) {
+                                            return Some(potential_provider.to_string());
+                                        }
+                                    }
+                                    provider_configs.get(model_id).map(|c| c.provider.clone())
+                                });
 
-                            if let Some(provider_cfg) = provider_config {
-                                if let Some(api_url) = provider_cfg.base_url.clone() {
-                                    // Strip known endpoint suffixes from base_url before
-                                    // appending destination_path.  Providers like Cloudflare
-                                    // gateway have base_urls that already include the endpoint
-                                    // (e.g. ".../compat/chat/completions").  Without stripping,
-                                    // the final URL would be doubled.
-                                    let trimmed_url = api_url
-                                        .trim_end_matches('/')
-                                        .trim_end_matches("/chat/completions")
-                                        .trim_end_matches("/completions")
-                                        .trim_end_matches("/embeddings")
-                                        .trim_end_matches("/messages");
-                                    target_base_url = Some(format!("{trimmed_url}{destination_path}"));
+                            if let Some(ref provider) = found {
+                                log::info!(
+                                    "Found remote provider '{provider}' for model '{model_id}'"
+                                );
+                                if let Some(provider_cfg) = provider_configs.get(provider.as_str())
+                                {
+                                    if let Some(ref api_url) = provider_cfg.base_url {
+                                        // Strip known endpoint suffixes from base_url before
+                                        // appending destination_path.  Providers like Cloudflare
+                                        // gateway have base_urls that already include the endpoint
+                                        // (e.g. ".../compat/chat/completions").  Without stripping,
+                                        // the final URL would be doubled.
+                                        let trimmed_url = api_url
+                                            .trim_end_matches('/')
+                                            .trim_end_matches("/chat/completions")
+                                            .trim_end_matches("/completions")
+                                            .trim_end_matches("/embeddings")
+                                            .trim_end_matches("/messages");
+                                        target_base_url =
+                                            Some(format!("{trimmed_url}{destination_path}"));
+                                    } else {
+                                        target_base_url = None;
+                                    }
+                                    session_api_key = provider_cfg.api_key.clone();
+                                    provider_custom_headers = provider_cfg.custom_headers.clone();
                                 } else {
-                                    target_base_url = None;
+                                    log::error!("Provider config not found for '{provider}'");
                                 }
-                                if let Some(api_key_value) = provider_cfg.api_key.clone() {
-                                    session_api_key = Some(api_key_value);
-                                } else {
-                                    session_api_key = None;
-                                }
-                                provider_custom_headers = provider_cfg.custom_headers.clone();
-                            } else {
-                                log::error!("Provider config not found for '{provider}'");
                             }
-                        } else {
+                            provider_name = found;
+                            // lock released here
+                        }
+
+                        if provider_name.is_none() {
                             // No remote provider configured for this model
                             log::warn!("No remote provider configured for model_id: {model_id}");
                             let mut error_response =
@@ -1111,10 +1126,7 @@ async fn proxy_request<R: tauri::Runtime>(
                 &config.trusted_hosts,
             );
 
-            log::debug!(
-                "Returning {} remote models",
-                remote_models.len(),
-            );
+            log::debug!("Returning {} remote models", remote_models.len(),);
 
             return Ok(response_builder.body(Body::from(body_str)).unwrap());
         }
@@ -1557,6 +1569,10 @@ fn add_cors_headers_with_host_and_origin(
     origin: &str,
     _trusted_hosts: &[Vec<String>],
 ) -> hyper::http::response::Builder {
+    if !SERVER_CORS_ENABLED.load(Ordering::Relaxed) {
+        return builder;
+    }
+
     let mut builder = builder;
     let allow_origin_header = if !origin.is_empty() {
         origin.to_string()
@@ -1590,6 +1606,7 @@ pub async fn start_server<R: tauri::Runtime>(
     prefix: String,
     proxy_api_key: String,
     trusted_hosts: Vec<Vec<String>>,
+    cors_enabled: bool,
     proxy_timeout: u64,
     app_handle: tauri::AppHandle<R>,
 ) -> Result<u16, Box<dyn std::error::Error + Send + Sync>> {
@@ -1600,6 +1617,7 @@ pub async fn start_server<R: tauri::Runtime>(
         prefix,
         proxy_api_key,
         trusted_hosts,
+        cors_enabled,
         proxy_timeout,
         app_handle,
     )
@@ -1613,6 +1631,7 @@ async fn start_server_internal<R: tauri::Runtime>(
     prefix: String,
     proxy_api_key: String,
     trusted_hosts: Vec<Vec<String>>,
+    cors_enabled: bool,
     _proxy_timeout: u64,
     app_handle: tauri::AppHandle<R>,
 ) -> Result<u16, Box<dyn std::error::Error + Send + Sync>> {
@@ -1629,9 +1648,12 @@ async fn start_server_internal<R: tauri::Runtime>(
         prefix,
         proxy_api_key,
         trusted_hosts,
+        cors_enabled,
         host: host.clone(),
         port,
     };
+
+    SERVER_CORS_ENABLED.store(cors_enabled, Ordering::Relaxed);
 
     let client = Client::builder()
         .connect_timeout(std::time::Duration::from_secs(30))
@@ -1646,12 +1668,7 @@ async fn start_server_internal<R: tauri::Runtime>(
 
         async move {
             Ok::<_, Infallible>(service_fn(move |req| {
-                proxy_request(
-                    req,
-                    client.clone(),
-                    config.clone(),
-                    app_handle.clone(),
-                )
+                proxy_request(req, client.clone(), config.clone(), app_handle.clone())
             }))
         }
     });

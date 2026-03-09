@@ -36,21 +36,22 @@ export const useTokensCount = (
   const latestCalculationRef = useRef<(() => Promise<void>) | null>(null)
   const requestIdRef = useRef(0)
   const { prompt } = usePrompt()
-  const messageSignature = useMemo(
-    () =>
-      JSON.stringify(
-        messages.map((message) => ({
-          role: message.role,
-          content:
-            message.content?.map((item) => ({
-              type: item.type,
-              text: item.text?.value ?? '',
-              image: item.image_url?.url ?? '',
-            })) ?? [],
-        }))
-      ),
-    [messages]
-  )
+  // Lightweight fingerprint: avoids JSON.stringify on the full message tree.
+  // Uses message count + total content length + last role — changes on every
+  // streaming token (content grows) without serialising the entire array.
+  const messageSignature = useMemo(() => {
+    if (messages.length === 0) return ''
+    let totalLen = 0
+    for (const m of messages) {
+      if (m.content) {
+        for (const item of m.content) {
+          totalLen += item.text?.value?.length ?? 0
+          totalLen += item.image_url?.url?.length ?? 0
+        }
+      }
+    }
+    return `${messages.length}:${totalLen}:${messages[messages.length - 1].role}`
+  }, [messages])
 
   const getMaxTokens = useCallback((): number | undefined => {
     const raw =

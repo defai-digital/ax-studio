@@ -1,75 +1,52 @@
-# Create a Ax-Studio Extension using Typescript
+# AX Studio Assistant Extension Template
 
-Use this template to bootstrap the creation of a TypeScript Ax-Studio extension. 🚀
+This package is a starting point for building an AX Studio extension in TypeScript.
 
-## Create Your Own Extension
+## What It Is For
 
-To create your own extension, you can use this repository as a template! Just follow the below instructions:
+Use this template when you want to create an extension package that integrates with the AX Studio extension system and `@ax-studio/core`.
 
-1. Click the Use this template button at the top of the repository
-2. Select Create a new repository
-3. Select an owner and name for your new repository
-4. Click Create repository
-5. Clone your new repository
+## Basic Flow
 
-## Initial Setup
+1. Copy this package as the basis for a new extension.
+2. Update `package.json` metadata for your extension name and description.
+3. Replace the implementation in `src/` with your extension logic.
+4. Build the package and install the generated artifact in AX Studio.
 
-After you've cloned the repository to your local machine or codespace, you'll need to perform some initial setup steps before you can develop your extension.
+## Local Setup
 
-> [!NOTE]
->
-> You'll need to have a reasonably modern version of
-> [Node.js](https://nodejs.org) handy. If you are using a version manager like
-> [`nodenv`](https://github.com/nodenv/nodenv) or
-> [`nvm`](https://github.com/nvm-sh/nvm), you can run `nodenv install` in the
-> root of your repository to install the version specified in
-> [`package.json`](./package.json). Otherwise, 20.x or later should work!
+Use Node.js 20+.
 
-1. :hammer_and_wrench: Install the dependencies
+Install dependencies:
 
-   ```bash
-   npm install
-   ```
+```bash
+npm install
+```
 
-1. :building_construction: Package the TypeScript for distribution
+Build the distributable package:
 
-   ```bash
-   npm run bundle
-   ```
+```bash
+npm run bundle
+```
 
-1. :white_check_mark: Check your artifact
+This produces a `.tgz` artifact that can be installed through the app’s extension settings.
 
-   There will be a tgz file in your extension directory now
+## Coding Notes
 
-## Update the Extension Metadata
+- extension logic is typically asynchronous
+- use `@ax-studio/core` for shared contracts and events
+- keep extension code focused on one feature area
 
-The [`package.json`](package.json) file defines metadata about your extension, such as
-extension name, main entry, description and version.
+Example:
 
-When you copy this repository, update `package.json` with the name, description for your extension.
+```ts
+import { events, MessageEvent, MessageRequest } from '@ax-studio/core'
 
-## Update the Extension Code
+function onStart(): Promise<any> {
+  return events.on(MessageEvent.OnMessageSent, (data: MessageRequest) =>
+    this.inference(data)
+  )
+}
+```
 
-The [`src/`](./src/) directory is the heart of your extension! This contains the
-source code that will be run when your extension functions are invoked. You can replace the
-contents of this directory with your own code.
-
-There are a few things to keep in mind when writing your extension code:
-
-- Most Ax-Studio Extension functions are processed asynchronously.
-  In `index.ts`, you will see that the extension function will return a `Promise<any>`.
-
-  ```typescript
-  import { events, MessageEvent, MessageRequest } from '@ax-studio/core'
-
-  function onStart(): Promise<any> {
-    return events.on(MessageEvent.OnMessageSent, (data: MessageRequest) =>
-      this.inference(data)
-    )
-  }
-  ```
-
-  For more information about the Ax-Studio Extension Core module, see the
-  [documentation](https://github.com/ax-studio/ax-studio/blob/main/core/README.md).
-
-So, what are you waiting for? Go ahead and start customizing your extension!
+See the shared SDK guide in [core/README.md](../../core/README.md).

@@ -12,7 +12,25 @@ import {
   useRef,
   useState,
 } from "react";
-import { type BundledLanguage, codeToHtml, type ShikiTransformer } from "shiki";
+import { createHighlighter, type BundledLanguage, type Highlighter, type ShikiTransformer } from "shiki";
+
+// --- Singleton highlighter (shared across all CodeBlock instances) ---
+let _highlighterPromise: Promise<Highlighter> | null = null;
+const _loadedLangs = new Set<string>();
+
+function getHighlighter(): Promise<Highlighter> {
+  if (!_highlighterPromise) {
+    _highlighterPromise = createHighlighter({
+      themes: ["one-light", "one-dark-pro"],
+      langs: [],
+    });
+  }
+  return _highlighterPromise;
+}
+
+// --- LRU-style cache bounded to 200 entries ---
+const MAX_CACHE_SIZE = 200;
+const _htmlCache = new Map<string, [string, string]>();
 
 type CodeBlockProps = HTMLAttributes<HTMLDivElement> & {
   code: string;
@@ -52,23 +70,32 @@ export async function highlightCode(
   code: string,
   language: BundledLanguage,
   showLineNumbers = false,
-) {
+): Promise<[string, string]> {
+  const cacheKey = `${language}:${showLineNumbers ? "1" : "0"}:${code}`;
+  const cached = _htmlCache.get(cacheKey);
+  if (cached) return cached;
+
   const transformers: ShikiTransformer[] = showLineNumbers
     ? [lineNumberTransformer]
     : [];
 
-  return await Promise.all([
-    codeToHtml(code, {
-      lang: language,
-      theme: "one-light",
-      transformers,
-    }),
-    codeToHtml(code, {
-      lang: language,
-      theme: "one-dark-pro",
-      transformers,
-    }),
-  ]);
+  const hl = await getHighlighter();
+  if (!_loadedLangs.has(language)) {
+    await hl.loadLanguage(language);
+    _loadedLangs.add(language);
+  }
+
+  const result: [string, string] = [
+    hl.codeToHtml(code, { lang: language, theme: "one-light", transformers }),
+    hl.codeToHtml(code, { lang: language, theme: "one-dark-pro", transformers }),
+  ];
+
+  if (_htmlCache.size >= MAX_CACHE_SIZE) {
+    const firstKey = _htmlCache.keys().next().value;
+    if (firstKey !== undefined) _htmlCache.delete(firstKey);
+  }
+  _htmlCache.set(cacheKey, result);
+  return result;
 }
 
 export const CodeBlock = ({
@@ -81,19 +108,19 @@ export const CodeBlock = ({
 }: CodeBlockProps) => {
   const [html, setHtml] = useState<string>("");
   const [darkHtml, setDarkHtml] = useState<string>("");
-  const mounted = useRef(false);
+  const cancelledRef = useRef(false);
 
   useEffect(() => {
+    cancelledRef.current = false;
     highlightCode(code, language, showLineNumbers).then(([light, dark]) => {
-      if (!mounted.current) {
+      if (!cancelledRef.current) {
         setHtml(light);
         setDarkHtml(dark);
-        mounted.current = true;
       }
     });
 
     return () => {
-      mounted.current = false;
+      cancelledRef.current = true;
     };
   }, [code, language, showLineNumbers]);
 

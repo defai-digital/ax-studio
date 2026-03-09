@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class ScreenRecorder:
     def __init__(self, output_path, fps=10):
         self.output_path = output_path
-        self.fps = fps
+        self.fps = max(1, fps)
         self.recording = False
         self.writer = None
         self.thread = None
@@ -55,6 +55,11 @@ class ScreenRecorder:
                 self.fps, 
                 screen_size
             )
+
+            if not self.writer.isOpened():
+                raise RuntimeError(f"Could not open video writer for {self.output_path}")
+
+            next_frame_at = time.perf_counter()
             
             while self.recording:
                 try:
@@ -70,8 +75,13 @@ class ScreenRecorder:
                     # Write frame
                     self.writer.write(frame)
                     
-                    # Control FPS
-                    time.sleep(1.0 / self.fps)
+                    # Control FPS without accumulating drift from capture time.
+                    next_frame_at += 1.0 / self.fps
+                    sleep_for = next_frame_at - time.perf_counter()
+                    if sleep_for > 0:
+                        time.sleep(sleep_for)
+                    else:
+                        next_frame_at = time.perf_counter()
                     
                 except Exception as e:
                     logger.error(f"Error capturing frame: {e}")

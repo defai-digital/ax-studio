@@ -330,8 +330,9 @@ export default function WorkspaceChatsDialog({
         })
         if (!savePath) return
 
-        await serviceHub.core().invoke('write_file_sync', {
-          args: [savePath, fileContent],
+        await serviceHub.core().invoke('write_text_file', {
+          path: savePath,
+          content: fileContent,
         })
       } else {
         downloadTextFile(fileContent, fileName, config.mimeType)

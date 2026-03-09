@@ -1,6 +1,6 @@
 import { type ReactNode, memo, useMemo } from 'react'
+import { AXMarkdown, axDefaultRehypePlugins } from '@/lib/markdown/renderer'
 import { cn, disableIndentedCodeBlockPlugin } from '@/lib/utils'
-import { defaultRehypePlugins, Streamdown } from 'streamdown'
 import { cjk } from '@streamdown/cjk'
 import { code } from '@streamdown/code'
 import { mermaid } from '@streamdown/mermaid'
@@ -384,7 +384,7 @@ function RenderMarkdownComponent({
         className
       )}
     >
-      <Streamdown
+      <AXMarkdown
         animate={true}
         animationDuration={500}
         linkSafety={{
@@ -397,7 +397,7 @@ function RenderMarkdownComponent({
         remarkPlugins={[remarkGfm, remarkMath, disableIndentedCodeBlockPlugin]}
         rehypePlugins={[
           rehypeKatex,
-          defaultRehypePlugins.harden,
+          axDefaultRehypePlugins.harden,
         ]}
         components={mergedComponents}
         plugins={{
@@ -418,7 +418,7 @@ function RenderMarkdownComponent({
         }}
       >
         {normalizedContent}
-      </Streamdown>
+      </AXMarkdown>
     </div>
   )
 }

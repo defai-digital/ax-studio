@@ -37,7 +37,7 @@ interface AxStudioConfigState {
   syncToBackend: () => Promise<void>
 }
 
-// Migrate localStorage from old ax-fabric key on first load
+// Migrate localStorage from the old AX Fabric key on first load.
 if (typeof window !== 'undefined') {
   const oldKey = 'ax-fabric-service-config'
   const newKey = 'ax-studio-service-config'

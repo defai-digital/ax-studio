@@ -60,7 +60,7 @@ export async function getBackendExePath(version: string, backend: string): Promi
   const ggmlPath = await joinPath([dir, `llama-${version}`, binary])
   if (await fs.existsSync(ggmlPath)) return ggmlPath
 
-  // Check janhq structure: build/bin/llama-server
+  // Check legacy fork structure: build/bin/llama-server
   const buildPath = await joinPath([dir, 'build', 'bin', binary])
   if (await fs.existsSync(buildPath)) return buildPath
 

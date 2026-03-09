@@ -23,7 +23,8 @@ import type {
   CatalogModel,
   ModelValidationResult,
 } from './types'
-import staticCatalog from '@/data/model-catalog.json'
+import { getBundledModelCatalog } from './catalog'
+import { huggingFaceRepoSchema } from '@/schemas/models.schema'
 
 // Default provider for local inference
 const defaultProvider = 'llamacpp'
@@ -42,7 +43,7 @@ export class DefaultModelsService implements ModelsService {
   }
 
   async fetchModelCatalog(): Promise<ModelCatalog> {
-    return staticCatalog as ModelCatalog
+    return getBundledModelCatalog()
   }
 
   async fetchHuggingFaceRepo(
@@ -82,7 +83,12 @@ export class DefaultModelsService implements ModelsService {
       }
 
       const repoData = await response.json()
-      return repoData
+      const parsed = huggingFaceRepoSchema.safeParse(repoData)
+      if (!parsed.success) {
+        console.warn('HuggingFace API response did not match expected schema:', parsed.error.message)
+        return null
+      }
+      return parsed.data
     } catch (error) {
       console.error('Error fetching HuggingFace repository:', error)
       return null

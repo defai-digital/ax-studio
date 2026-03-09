@@ -10,10 +10,12 @@ from agent import ComputerAgent, LLM
 
 from utils import is_app_running, force_close_app, start_app, get_latest_trajectory_folder
 from screen_recorder import ScreenRecorder
-from reportportal_handler import upload_test_results_to_rp
+from reportportal_handler import upload_test_results_to_rp, maybe_upload_attachment
 from reportportal_client.helpers import timestamp
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_RECORDING_FPS = int(os.getenv("AUTOQA_RECORDING_FPS", "5"))
 
 async def run_single_test_with_timeout(computer, test_data, rp_client, launch_id, max_turns=30,
                                      app_path=None, app_process_name="Ax-Studio.exe", agent_config=None,
@@ -72,11 +74,13 @@ async def run_single_test_with_timeout(computer, test_data, rp_client, launch_id
     
     trajectory_dir = None
     agent_task = None
+    monitor_thread_obj = None
     monitor_stop_event = threading.Event()
     force_stopped_due_to_turns = False  # Track if test was force stopped
+    loop = asyncio.get_running_loop()
     
     # Initialize screen recorder
-    recorder = ScreenRecorder(video_path, fps=10)
+    recorder = ScreenRecorder(video_path, fps=DEFAULT_RECORDING_FPS)
     
     try:
         # Step 1: Check and force close Ax-Studio app if running
@@ -130,7 +134,7 @@ async def run_single_test_with_timeout(computer, test_data, rp_client, launch_id
                                     force_stopped_due_to_turns = True  # Mark as force stopped
                                     # Cancel the agent task
                                     if agent_task and not agent_task.done():
-                                        agent_task.cancel()
+                                        loop.call_soon_threadsafe(agent_task.cancel)
                                     monitor_stop_event.set()
                                     return
                     
@@ -181,6 +185,8 @@ async def run_single_test_with_timeout(computer, test_data, rp_client, launch_id
         finally:
             # Stop monitoring
             monitor_stop_event.set()
+            if monitor_thread_obj:
+                monitor_thread_obj.join(timeout=1)
             
     except Exception as e:
         logger.error(f"Error running test {path}: {e}")
@@ -235,16 +241,14 @@ async def run_single_test_with_timeout(computer, test_data, rp_client, launch_id
                     if video_path and os.path.exists(video_path):
                         try:
                             with open(video_path, "rb") as video_file:
-                                rp_client.log(
-                                    time=timestamp(),
+                                maybe_upload_attachment(
+                                    client=rp_client,
+                                    item_id=test_item_id,
                                     level="INFO",
                                     message="[INFO] Screen recording of failed test",
-                                    item_id=test_item_id,
-                                    attachment={
-                                        "name": f"failed_test_recording_{formatted_test_path}.mp4",
-                                        "data": video_file.read(),
-                                        "mime": "video/x-msvideo"
-                                    }
+                                    attachment_name=f"failed_test_recording_{formatted_test_path}.mp4",
+                                    attachment_data=video_file.read(),
+                                    mime_type="video/mp4"
                                 )
                         except Exception as e:
                             logger.error(f"Error uploading video for failed test: {e}")

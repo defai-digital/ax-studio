@@ -1,4 +1,5 @@
 mod core;
+use ax_studio_utils::generate_app_token;
 use core::{
     app::commands::get_app_data_folder_path,
     downloads::models::DownloadManagerState,
@@ -6,7 +7,6 @@ use core::{
     setup::{self, setup_mcp},
     state::{AppState, AxStudioServiceConfig},
 };
-use ax_studio_utils::generate_app_token;
 use std::{collections::HashMap, sync::Arc};
 use tauri::{Emitter, Manager, RunEvent};
 use tauri_plugin_store::StoreExt;
@@ -67,6 +67,7 @@ pub fn run() {
         core::filesystem::commands::open_dialog,
         core::filesystem::commands::save_dialog,
         core::filesystem::commands::write_binary_file,
+        core::filesystem::commands::write_text_file,
         core::filesystem::commands::read_akidb_config,
         core::filesystem::commands::write_akidb_config,
         core::filesystem::commands::read_akidb_status,
@@ -97,6 +98,7 @@ pub fn run() {
         core::server::commands::get_server_status,
         // Remote provider commands
         core::server::remote_provider_commands::register_provider_config,
+        core::server::remote_provider_commands::register_provider_configs_batch,
         core::server::remote_provider_commands::unregister_provider_config,
         core::server::remote_provider_commands::get_provider_config,
         core::server::remote_provider_commands::list_provider_configs,
@@ -179,6 +181,7 @@ pub fn run() {
         core::filesystem::commands::open_dialog,
         core::filesystem::commands::save_dialog,
         core::filesystem::commands::write_binary_file,
+        core::filesystem::commands::write_text_file,
         core::filesystem::commands::read_akidb_config,
         core::filesystem::commands::write_akidb_config,
         core::filesystem::commands::read_akidb_status,
@@ -209,6 +212,7 @@ pub fn run() {
         core::server::commands::get_server_status,
         // Remote provider commands
         core::server::remote_provider_commands::register_provider_config,
+        core::server::remote_provider_commands::register_provider_configs_batch,
         core::server::remote_provider_commands::unregister_provider_config,
         core::server::remote_provider_commands::get_provider_config,
         core::server::remote_provider_commands::list_provider_configs,
@@ -286,6 +290,7 @@ pub fn run() {
             ax_studio_service_config: Arc::new(Mutex::new(AxStudioServiceConfig::default())),
             sandbox_sessions: Arc::new(Mutex::new(HashMap::new())),
             sandbox_url: Arc::new(Mutex::new("http://127.0.0.1:8080".to_string())),
+            approved_save_paths: Arc::new(Mutex::new(std::collections::HashSet::new())),
         })
         .setup(|app| {
             app.handle().plugin(
@@ -409,7 +414,8 @@ pub fn run() {
                     // Kill any running llama.cpp server processes
                     #[cfg(not(any(target_os = "ios", target_os = "android")))]
                     {
-                        let _ = tauri_plugin_llamacpp::cleanup_llama_processes(app_handle.clone()).await;
+                        let _ = tauri_plugin_llamacpp::cleanup_llama_processes(app_handle.clone())
+                            .await;
                         log::info!("llama.cpp process cleanup completed");
                     }
 

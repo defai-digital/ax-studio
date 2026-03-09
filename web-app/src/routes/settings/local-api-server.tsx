@@ -97,6 +97,7 @@ function LocalAPIServerContent() {
   }, [serviceHub, setServerStatus])
 
   const [isModelLoading, setIsModelLoading] = useState(false)
+  const requiresApiKey = corsEnabled || serverHost !== '127.0.0.1'
 
   const toggleAPIServer = async () => {
     // Validate API key before starting server
@@ -106,10 +107,15 @@ function LocalAPIServerContent() {
         description: `Attempting to start server on port ${serverPort}`,
       })
 
-      // if (!apiKey || apiKey.toString().trim().length === 0) {
-      //   setShowApiKeyError(true)
-      //   return
-      // }
+      if (requiresApiKey && (!apiKey || apiKey.toString().trim().length === 0)) {
+        setShowApiKeyError(true)
+        setServerStatus('stopped')
+        toast.error('API key required', {
+          description:
+            'Set an API key before enabling CORS or binding the local API server to a non-loopback host.',
+        })
+        return
+      }
 
       setShowApiKeyError(false)
 

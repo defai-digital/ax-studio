@@ -1,7 +1,9 @@
 use super::commands::*;
 use crate::core::app::commands::get_app_data_folder_path;
+use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::Write;
+use std::path::PathBuf;
 use tauri::test::mock_app;
 
 #[test]
@@ -87,4 +89,24 @@ fn test_readdir_sync() {
     assert_eq!(result.len(), 2);
 
     let _ = fs::remove_dir_all(dir_path);
+}
+
+#[test]
+fn test_consume_approved_save_target_allows_once() {
+    let temp_dir = std::env::temp_dir().join("ax-studio-filesystem-tests");
+    fs::create_dir_all(&temp_dir).unwrap();
+    let save_path = temp_dir.join("figure.png");
+
+    let mut approved = HashSet::<PathBuf>::new();
+    approve_save_target(&mut approved, save_path.to_str().unwrap()).unwrap();
+
+    let resolved =
+        consume_approved_save_target(&mut approved, save_path.to_str().unwrap()).unwrap();
+    assert_eq!(resolved, save_path);
+    assert!(consume_approved_save_target(&mut approved, save_path.to_str().unwrap()).is_err());
+}
+
+#[test]
+fn test_normalize_save_target_path_rejects_relative_paths() {
+    assert!(normalize_save_target_path("relative/file.txt").is_err());
 }

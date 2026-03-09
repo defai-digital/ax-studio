@@ -8,7 +8,7 @@
 
 import { TauriCoreService } from './tauri'
 import type { ExtensionManifest } from '@/lib/extension'
-import type { BaseExtension } from '@ax-fabric/core'
+import type { BaseExtension } from '@ax-studio/core'
 import AxStudioConversationalExtension from '@ax-studio/conversational-extension'
 
 export class MobileCoreService extends TauriCoreService {

@@ -45,7 +45,7 @@ export const useLocalApiServer = create<LocalApiServerState>()(
       setServerPort: (value) => set({ serverPort: value }),
       apiPrefix: '/v1',
       setApiPrefix: (value) => set({ apiPrefix: value }),
-      corsEnabled: true,
+      corsEnabled: false,
       setCorsEnabled: (value) => set({ corsEnabled: value }),
       verboseLogs: true,
       setVerboseLogs: (value) => set({ verboseLogs: value }),

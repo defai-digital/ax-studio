@@ -205,41 +205,49 @@ pub fn migrate_mcp_servers(
         }
     }
     if mcp_version < 4 {
-        log::info!("Migrating MCP schema version 4: Adding ax-fabric MCP server");
-        let mcp_config = resolve_ax_fabric_mcp_config();
-        let result = add_server_config(app_handle, "ax-fabric".to_string(), mcp_config);
+        log::info!("Migrating MCP schema version 4: Adding AX Studio MCP server");
+        let mcp_config = resolve_ax_studio_mcp_config();
+        let result = add_server_config(app_handle.clone(), "ax-studio".to_string(), mcp_config);
         if let Err(e) = result {
-            log::error!("Failed to add ax-fabric MCP server config: {e}");
+            log::error!("Failed to add AX Studio MCP server config: {e}");
         }
     }
-    store.set("mcp_version", 4);
+    if mcp_version < 5 {
+        log::info!("Migrating MCP schema version 5: Renaming ax-fabric MCP server to ax-studio");
+        if let Err(e) = rename_mcp_server_key(app_handle, "ax-fabric", "ax-studio") {
+            log::error!("Failed to rename ax-fabric MCP server config: {e}");
+        }
+    }
+    store.set("mcp_version", 5);
     store.save().expect("Failed to save store");
     Ok(())
 }
 
-/// Build the MCP server config for ax-fabric.
+/// Build the MCP server config for AX Studio.
 /// If a local CLI is found on disk, uses `node <path> mcp server`.
 /// Otherwise falls back to `npx -y @ax-fabric/fabric-ingest mcp server`.
-fn resolve_ax_fabric_mcp_config() -> serde_json::Value {
+fn resolve_ax_studio_mcp_config() -> serde_json::Value {
     // Check for a local development installation
     if let Some(home) = dirs::home_dir() {
-        let local_path = home
-            .join("Downloads")
-            .join("ax-fabric")
-            .join("packages")
-            .join("fabric-ingest")
-            .join("dist")
-            .join("cli.js");
-        if local_path.exists() {
-            let cli_str = local_path.to_string_lossy().to_string();
-            log::info!("Found local ax-fabric CLI at {cli_str}");
-            return serde_json::json!({
-                "command": "node",
-                "args": [cli_str, "mcp", "server"],
-                "env": {},
-                "active": false,
-                "official": true
-            });
+        for repo_dir in ["ax-studio", "ax-fabric"] {
+            let local_path = home
+                .join("Downloads")
+                .join(repo_dir)
+                .join("packages")
+                .join("fabric-ingest")
+                .join("dist")
+                .join("cli.js");
+            if local_path.exists() {
+                let cli_str = local_path.to_string_lossy().to_string();
+                log::info!("Found local AX Studio MCP CLI at {cli_str}");
+                return serde_json::json!({
+                    "command": "node",
+                    "args": [cli_str, "mcp", "server"],
+                    "env": {},
+                    "active": false,
+                    "official": true
+                });
+            }
         }
     }
 
@@ -251,6 +259,41 @@ fn resolve_ax_fabric_mcp_config() -> serde_json::Value {
         "active": false,
         "official": true
     })
+}
+
+fn rename_mcp_server_key(
+    app_handle: tauri::AppHandle,
+    old_key: &str,
+    new_key: &str,
+) -> Result<(), String> {
+    let config_path = get_app_data_folder_path(app_handle).join("mcp_config.json");
+
+    if !config_path.exists() {
+        return Ok(());
+    }
+
+    let config_str =
+        fs::read_to_string(&config_path).map_err(|e| format!("Failed to read MCP config: {e}"))?;
+
+    let mut config: serde_json::Value = serde_json::from_str(&config_str)
+        .map_err(|e| format!("Failed to parse MCP config: {e}"))?;
+
+    if let Some(servers) = config.get_mut("mcpServers").and_then(|s| s.as_object_mut()) {
+        if !servers.contains_key(new_key) {
+            if let Some(old_value) = servers.remove(old_key) {
+                servers.insert(new_key.to_string(), old_value);
+            }
+        }
+    }
+
+    fs::write(
+        &config_path,
+        serde_json::to_string_pretty(&config)
+            .map_err(|e| format!("Failed to serialize MCP config: {e}"))?,
+    )
+    .map_err(|e| format!("Failed to write MCP config: {e}"))?;
+
+    Ok(())
 }
 
 fn migrate_exa_to_http(app_handle: tauri::AppHandle) -> Result<(), String> {

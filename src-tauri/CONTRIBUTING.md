@@ -1,70 +1,56 @@
-# Contributing to Tauri Backend
+# Contributing to the Tauri Backend
 
-The Rust backend handles native system integration, high-performance file operations, and low-level process management for Ax-Fabric. It leverages [Tauri 2](https://v2.tauri.app/) for the IPC bridge between the frontend and the OS.
+[Back to main contributing guide](../CONTRIBUTING.md)
 
-## Core Modules
+`src-tauri/` contains the Rust host application for AX Studio. This layer handles native system access, IPC commands, local storage, downloads, integrations, and other desktop-specific behavior.
 
-- **`/src/core/app`**: Application configuration and state management.
-- **`/src/core/downloads`**: Multi-threaded model downloader with progress reporting.
-- **`/src/core/filesystem`**: Secure file I/O commands with scoped access.
-- **`/src/core/mcp`**: Integration with the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/).
-- **`/src/core/server`**: Local API proxy for exposing AI models to other apps.
-- **`/src/core/threads`**: Persistent conversation storage using local databases.
-- **`/utils`**: Shared utility crate for cryptography, HTTP clients, and path manipulation.
+## Core Areas
 
-## Security & Capabilities
+- `src/core/app/` application configuration and state
+- `src/core/downloads/` download management
+- `src/core/extensions/` extension-related native hooks
+- `src/core/filesystem/` scoped file access
+- `src/core/integrations/` integration-specific native logic
+- `src/core/mcp/` MCP process and tool management
+- `src/core/research/` research-related native flows
+- `src/core/server/` local API server features
+- `src/core/system/` OS and system-level behavior
+- `src/core/threads/` conversation persistence
+- `src/core/updater/` application update behavior
 
-Tauri 2 uses a capability-based security model. Permissions for frontend commands are defined in JSON files within the `capabilities/` directory.
+## Security Model
 
-- **`default.json`**: Basic permissions granted to all windows.
-- **`desktop.json`**: Permissions specific to the desktop version.
-- **Scoping**: File system access is strictly scoped to the application data directory. Avoid using absolute paths unless explicitly permitted.
+Tauri permissions are capability-based. When adding or changing commands, review the files under `capabilities/` and update permissions intentionally.
 
-## Development
+## Common Commands
 
-### Adding a New Tauri Command
-
-1.  **Define the Command** in a module (e.g., `src/core/my_mod.rs`):
-    ```rust
-    #[tauri::command]
-    pub async fn my_command(data: String) -> Result<String, String> {
-        Ok(format!("Received: {}", data))
-    }
-    ```
-2.  **Register the Command** in `src/lib.rs`:
-    ```rust
-    tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![my_command])
-    ```
-3.  **Grant Permissions** in `capabilities/default.json`:
-    ```json
-    {
-      "permissions": ["my-command:allow-my_command"]
-    }
-    ```
-
-## Building & Testing
+From the repository root:
 
 ```bash
-# Development (with hot reload)
 yarn dev:tauri
-
-# Run Rust tests
-cargo test --all-features
-
-# Run Clippy (linter)
-cargo clippy -- -D warnings
+cargo test --manifest-path src-tauri/Cargo.toml
+cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+cargo fmt --manifest-path src-tauri/Cargo.toml
 ```
 
-## Best Practices
+## Expectations
 
-- **Async Everywhere**: Use `async` for all I/O or long-running commands to avoid blocking the main thread.
-- **Error Handling**: Use `thiserror` for defining clear, structured error types. Always return `Result<T, E>` to the frontend.
-- **State Access**: Use `tauri::State` to access global application state securely across commands.
-- **Validation**: Never trust data coming from the frontend; validate all inputs.
+- validate all inputs coming from the frontend
+- keep filesystem access scoped and explicit
+- use structured error handling
+- update capabilities when adding new IPC surface
+- add tests for behavior changes where practical
 
-## Common Issues
+## Typical Workflow for a New Command
 
-- **Serialization Failures**: Ensure all structs returned to the frontend implement `serde::Serialize`.
-- **Target Mismatch**: If you encounter issues with native dependencies (like `ring`), try `cargo clean` and rebuild.
-- **Permission Denied**: Check the `capabilities/` directory if a frontend command fails with a 403-like error.
+1. Add the Rust implementation in the relevant `src/core/*` area.
+2. Register or expose the command through the existing backend wiring.
+3. Update capability files if the command requires permissions.
+4. Wire frontend usage through a service or hook rather than spreading raw IPC calls.
+5. Test both success and failure paths.
+
+## Common Pitfalls
+
+- forgetting capability updates after adding a command
+- assuming browser-mode frontend behavior matches desktop behavior
+- returning poorly structured errors to the UI

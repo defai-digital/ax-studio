@@ -3,6 +3,7 @@ use hyper::{Body, Request, Response, Server, StatusCode};
 use rand::Rng;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+use std::net::IpAddr;
 
 use std::sync::Arc;
 use tokio::sync::oneshot;
@@ -22,6 +23,12 @@ pub struct OAuthTokens {
 fn generate_code_verifier() -> String {
     let mut rng = rand::thread_rng();
     let bytes: Vec<u8> = (0..64).map(|_| rng.gen::<u8>()).collect();
+    base64url_encode(&bytes)
+}
+
+fn generate_state_token() -> String {
+    let mut rng = rand::thread_rng();
+    let bytes: Vec<u8> = (0..32).map(|_| rng.gen::<u8>()).collect();
     base64url_encode(&bytes)
 }
 
@@ -90,6 +97,7 @@ pub async fn initiate_google_oauth(
     // Generate PKCE pair
     let code_verifier = generate_code_verifier();
     let code_challenge = compute_code_challenge(&code_verifier);
+    let expected_state = generate_state_token();
 
     // Find an available port (returns bound listener to avoid TOCTOU race)
     let (listener, port) = find_available_port().await?;
@@ -105,6 +113,7 @@ pub async fn initiate_google_oauth(
         .append_pair("code_challenge_method", "S256")
         .append_pair("access_type", "offline")
         .append_pair("prompt", "consent")
+        .append_pair("state", &expected_state)
         .finish();
     let auth_url = format!("{GOOGLE_AUTH_URL}?{params}");
 
@@ -115,12 +124,12 @@ pub async fn initiate_google_oauth(
     // Build the hyper service
     let make_svc = make_service_fn(move |_| {
         let tx = Arc::clone(&tx);
+        let expected_state = expected_state.clone();
         async move {
             Ok::<_, hyper::Error>(service_fn(move |req: Request<Body>| {
                 let tx = Arc::clone(&tx);
-                async move {
-                    handle_oauth_callback(req, tx).await
-                }
+                let expected_state = expected_state.clone();
+                async move { handle_oauth_callback(req, tx, expected_state).await }
             }))
         }
     });
@@ -159,13 +168,21 @@ pub async fn initiate_google_oauth(
     let _ = server_handle.await;
 
     // Exchange authorization code for tokens
-    exchange_code_for_tokens(client_id, client_secret, &code, &redirect_uri, &code_verifier).await
+    exchange_code_for_tokens(
+        client_id,
+        client_secret,
+        &code,
+        &redirect_uri,
+        &code_verifier,
+    )
+    .await
 }
 
 /// Handle the OAuth callback request from Google.
 async fn handle_oauth_callback(
     req: Request<Body>,
     tx: Arc<tokio::sync::Mutex<Option<oneshot::Sender<Result<String, String>>>>>,
+    expected_state: String,
 ) -> Result<Response<Body>, hyper::Error> {
     let uri = req.uri().to_string();
 
@@ -182,13 +199,7 @@ async fn handle_oauth_callback(
         .map(|(k, v)| (k.to_string(), v.to_string()))
         .collect();
 
-    let result = if let Some(code) = params.get("code") {
-        Ok(code.clone())
-    } else if let Some(error) = params.get("error") {
-        Err(format!("Google authorization denied: {error}"))
-    } else {
-        Err("No authorization code received".to_string())
-    };
+    let result = extract_oauth_result(&params, &expected_state);
 
     // Send the result through the channel
     if let Some(sender) = tx.lock().await.take() {
@@ -201,7 +212,7 @@ async fn handle_oauth_callback(
 <body style="font-family: system-ui; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f8f9fa;">
 <div style="text-align: center; padding: 2rem;">
 <h2 style="color: #1a73e8;">Authorization Successful</h2>
-<p>You can close this tab and return to Ax-Fabric.</p>
+<p>You can close this tab and return to AX Studio.</p>
 </div></body></html>"#;
 
     Ok(Response::builder()
@@ -209,6 +220,26 @@ async fn handle_oauth_callback(
         .header("Content-Type", "text/html")
         .body(Body::from(html))
         .unwrap())
+}
+
+fn extract_oauth_result(
+    params: &HashMap<String, String>,
+    expected_state: &str,
+) -> Result<String, String> {
+    let returned_state = params
+        .get("state")
+        .ok_or_else(|| "Missing OAuth state parameter".to_string())?;
+    if returned_state != expected_state {
+        return Err("OAuth state mismatch".to_string());
+    }
+
+    if let Some(code) = params.get("code") {
+        Ok(code.clone())
+    } else if let Some(error) = params.get("error") {
+        Err(format!("Google authorization denied: {error}"))
+    } else {
+        Err("No authorization code received".to_string())
+    }
 }
 
 /// Exchange the authorization code for access and refresh tokens.
@@ -268,9 +299,7 @@ async fn exchange_code_for_tokens(
         );
     }
 
-    let expires_in = body
-        .get("expires_in")
-        .and_then(|v| v.as_u64());
+    let expires_in = body.get("expires_in").and_then(|v| v.as_u64());
 
     let expiry_timestamp = expires_in.map(|secs| {
         std::time::SystemTime::now()
@@ -300,6 +329,14 @@ pub fn write_google_workspace_config(
     let tokens_dir = config_dir.join("tokens");
     std::fs::create_dir_all(&tokens_dir)
         .map_err(|e| format!("Failed to create config directory: {e}"))?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let dir_mode = std::fs::Permissions::from_mode(0o700);
+        let _ = std::fs::set_permissions(&config_dir, dir_mode.clone());
+        let _ = std::fs::set_permissions(&tokens_dir, dir_mode);
+    }
 
     // Write credentials.json (top-level)
     let credentials = serde_json::json!({
@@ -395,10 +432,14 @@ pub fn validate_google_workspace_config() -> Result<String, String> {
     let content = std::fs::read_to_string(&token_path)
         .map_err(|e| format!("Failed to read token file: {e}"))?;
 
-    let token: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse token file: {e}"))?;
+    let token: serde_json::Value =
+        serde_json::from_str(&content).map_err(|e| format!("Failed to parse token file: {e}"))?;
 
-    if token.get("refresh_token").and_then(|v| v.as_str()).is_some() {
+    if token
+        .get("refresh_token")
+        .and_then(|v| v.as_str())
+        .is_some()
+    {
         Ok("Google Workspace authorized".to_string())
     } else {
         Err("Token file exists but missing refresh_token. Please re-authorize.".to_string())
@@ -416,4 +457,69 @@ pub fn cleanup_google_workspace_config() -> Result<(), String> {
             .map_err(|e| format!("Failed to remove config directory: {e}"))?;
     }
     Ok(())
+}
+
+pub fn is_allowed_sandbox_url(url: &str) -> bool {
+    let parsed = match url::Url::parse(url) {
+        Ok(parsed) => parsed,
+        Err(_) => return false,
+    };
+
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return false;
+    }
+
+    match parsed.host_str() {
+        Some("localhost") => true,
+        Some(host) => host
+            .parse::<IpAddr>()
+            .map(|ip| ip.is_loopback())
+            .unwrap_or(false),
+        None => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{extract_oauth_result, is_allowed_sandbox_url};
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_extract_oauth_result_accepts_matching_state() {
+        let params = HashMap::from([
+            ("state".to_string(), "expected".to_string()),
+            ("code".to_string(), "auth-code".to_string()),
+        ]);
+
+        let result = extract_oauth_result(&params, "expected").unwrap();
+        assert_eq!(result, "auth-code");
+    }
+
+    #[test]
+    fn test_extract_oauth_result_rejects_missing_state() {
+        let params = HashMap::from([("code".to_string(), "auth-code".to_string())]);
+
+        let result = extract_oauth_result(&params, "expected");
+        assert_eq!(result.unwrap_err(), "Missing OAuth state parameter");
+    }
+
+    #[test]
+    fn test_extract_oauth_result_rejects_mismatched_state() {
+        let params = HashMap::from([
+            ("state".to_string(), "wrong".to_string()),
+            ("code".to_string(), "auth-code".to_string()),
+        ]);
+
+        let result = extract_oauth_result(&params, "expected");
+        assert_eq!(result.unwrap_err(), "OAuth state mismatch");
+    }
+
+    #[test]
+    fn test_is_allowed_sandbox_url_only_accepts_loopback_hosts() {
+        assert!(is_allowed_sandbox_url("http://127.0.0.1:8080"));
+        assert!(is_allowed_sandbox_url("https://localhost:8443"));
+        assert!(is_allowed_sandbox_url("http://[::1]:8080"));
+        assert!(!is_allowed_sandbox_url("http://example.com:8080"));
+        assert!(!is_allowed_sandbox_url("file:///tmp/test"));
+    }
 }

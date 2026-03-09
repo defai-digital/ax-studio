@@ -5,6 +5,7 @@ import argparse
 import threading
 import time
 import platform
+import sys
 from datetime import datetime
 from computer import Computer
 from reportportal_client import RPClient
@@ -110,7 +111,6 @@ def start_computer_server():
         
         # Import computer_server module
         import computer_server
-        import sys
         
         # Start server in a separate thread
         def run_server():
@@ -309,7 +309,7 @@ async def main():
         server_thread = start_computer_server()
         if server_thread is None:
             logger.error("Failed to start computer server. Exiting...")
-            return
+            raise SystemExit(1)
     else:
         logger.info("Skipping computer server startup (assuming it's already running)")
     

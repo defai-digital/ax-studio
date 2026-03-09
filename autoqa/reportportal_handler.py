@@ -1,5 +1,6 @@
 import os
 import json
+import ast
 import mimetypes
 import re
 import logging
@@ -8,6 +9,113 @@ import platform
 from reportportal_client.helpers import timestamp
 
 logger = logging.getLogger(__name__)
+
+MAX_TEXT_LOG_BYTES = 256 * 1024
+MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
+UPLOAD_BINARY_ARTIFACTS = os.getenv("AUTOQA_UPLOAD_BINARY_ARTIFACTS", "false").lower() == "true"
+UPLOAD_APP_LOGS = os.getenv("AUTOQA_UPLOAD_APP_LOGS", "false").lower() == "true"
+
+SECRET_PATTERNS = [
+    re.compile(r'(?i)\b(authorization|api[_-]?key|token|secret|password)\b\s*[:=]\s*["\']?([^\s,"\'}]+)'),
+    re.compile(r'(?i)\b(bearer)\s+([a-z0-9\-._~+/]+=*)'),
+]
+
+
+def sanitize_text(value, limit_bytes=MAX_TEXT_LOG_BYTES):
+    if value is None:
+        return ""
+
+    sanitized = str(value)
+    for pattern in SECRET_PATTERNS:
+        sanitized = pattern.sub(lambda match: f"{match.group(1)}=[REDACTED]", sanitized)
+
+    encoded = sanitized.encode("utf-8", errors="replace")
+    if len(encoded) <= limit_bytes:
+        return sanitized
+
+    truncated = encoded[:limit_bytes].decode("utf-8", errors="ignore")
+    return f"{truncated}\n...[truncated]"
+
+
+def sanitize_json(value):
+    if isinstance(value, dict):
+        sanitized = {}
+        for key, nested_value in value.items():
+            if re.search(r'(?i)(authorization|api[_-]?key|token|secret|password)', str(key)):
+                sanitized[key] = "[REDACTED]"
+            else:
+                sanitized[key] = sanitize_json(nested_value)
+        return sanitized
+
+    if isinstance(value, list):
+        return [sanitize_json(item) for item in value]
+
+    if isinstance(value, str):
+        return sanitize_text(value, limit_bytes=16 * 1024)
+
+    return value
+
+
+def turn_sort_key(name):
+    match = re.search(r'(\d+)$', name)
+    if match:
+        return int(match.group(1))
+    return -1
+
+
+def sorted_turn_folders(names):
+    return sorted(names, key=lambda name: (turn_sort_key(name), name))
+
+
+def maybe_upload_attachment(client, item_id, level, message, attachment_name, attachment_data, mime_type):
+    if not UPLOAD_BINARY_ARTIFACTS:
+        client.log(
+            time=timestamp(),
+            level="INFO",
+            message=f"{message} [binary attachment upload disabled]",
+            item_id=item_id
+        )
+        return
+
+    if len(attachment_data) > MAX_ATTACHMENT_BYTES:
+        client.log(
+            time=timestamp(),
+            level="WARNING",
+            message=f"{message} [attachment skipped: {len(attachment_data)} bytes exceeds {MAX_ATTACHMENT_BYTES} byte limit]",
+            item_id=item_id
+        )
+        return
+
+    client.log(
+        time=timestamp(),
+        level=level,
+        message=message,
+        item_id=item_id,
+        attachment={
+            "name": attachment_name,
+            "data": attachment_data,
+            "mime": mime_type
+        }
+    )
+
+
+def parse_result_payload(content):
+    if not content:
+        return None
+
+    for candidate in re.findall(r'\{.*?\}', content, flags=re.DOTALL):
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError:
+            try:
+                parsed = ast.literal_eval(candidate)
+            except (ValueError, SyntaxError):
+                continue
+
+        if isinstance(parsed, dict) and "result" in parsed and isinstance(parsed["result"], bool):
+            return parsed["result"]
+
+    return None
 
 def upload_turn_folder(client, test_item_id, turn_path, turn_name, force_fail=False):
     """
@@ -29,11 +137,11 @@ def upload_turn_folder(client, test_item_id, turn_path, turn_name, force_fail=Fa
         if fname.endswith(".json"):
             try:
                 with open(fpath, "r", encoding="utf-8") as f:
-                    data = json.load(f)
+                    data = sanitize_json(json.load(f))
                 client.log(
                     time=timestamp(),
                     level="INFO",
-                    message=f"[{fname}]\n{json.dumps(data, indent=2)}",
+                    message=sanitize_text(f"[{fname}]\n{json.dumps(data, indent=2)}"),
                     item_id=step_item_id
                 )
                 uploaded = True
@@ -49,16 +157,14 @@ def upload_turn_folder(client, test_item_id, turn_path, turn_name, force_fail=Fa
         elif fname.endswith(".png"):
             try:
                 with open(fpath, "rb") as img_file:
-                    client.log(
-                        time=timestamp(),
+                    maybe_upload_attachment(
+                        client=client,
+                        item_id=step_item_id,
                         level="INFO",
                         message=f"Screenshot: {fname}",
-                        item_id=step_item_id,
-                        attachment={
-                            "name": fname,
-                            "data": img_file.read(),
-                            "mime": mimetypes.guess_type(fname)[0] or "image/png"
-                        }
+                        attachment_name=fname,
+                        attachment_data=img_file.read(),
+                        mime_type=mimetypes.guess_type(fname)[0] or "image/png"
                     )
                 uploaded = True
             except Exception as e:
@@ -109,7 +215,7 @@ def extract_test_result_from_trajectory(trajectory_dir):
             return False
         
         # Sort to get the last turn
-        last_turn = sorted(turn_folders)[-1]
+        last_turn = sorted_turn_folders(turn_folders)[-1]
         last_turn_path = os.path.join(trajectory_dir, last_turn)
         
         logger.info(f"Checking result in last turn: {last_turn}")
@@ -136,24 +242,18 @@ def extract_test_result_from_trajectory(trajectory_dir):
             last_choice = data['response']['choices'][-1]
             if 'message' in last_choice and 'content' in last_choice['message']:
                 content = last_choice['message']['content']
-                logger.info(f"Last response content: {content}")
-                
-                # Look for result patterns - need to check both True and False
-                true_pattern = r'\{\s*"result"\s*:\s*True\s*\}'
-                false_pattern = r'\{\s*"result"\s*:\s*False\s*\}'
-                
-                true_match = re.search(true_pattern, content)
-                false_match = re.search(false_pattern, content)
-                
-                if true_match:
-                    logger.info(f"Found test result: True - PASSED")
+                logger.info(f"Last response content preview: {sanitize_text(content, limit_bytes=1024)}")
+
+                result = parse_result_payload(content)
+                if result is True:
+                    logger.info("Found test result: True - PASSED")
                     return True
-                elif false_match:
-                    logger.info(f"Found test result: False - FAILED")
+                if result is False:
+                    logger.info("Found test result: False - FAILED")
                     return False
-                else:
-                    logger.warning("No valid result pattern found in response content - marking as FAILED")
-                    return False
+
+                logger.warning("No valid result payload found in response content - marking as FAILED")
+                return False
         
         logger.warning("Could not extract content from response structure")
         return False
@@ -193,8 +293,18 @@ def upload_ax_studio_logs(client, test_item_id, is_nightly=False, max_log_files=
     """
     Upload Ax-Studio application log files to ReportPortal
     """
-    log_patterns = get_ax_studio_log_paths(is_nightly)
     app_type = "nightly" if is_nightly else "regular"
+
+    if not UPLOAD_APP_LOGS:
+        client.log(
+            time=timestamp(),
+            level="INFO",
+            message=f"[INFO] Ax-Studio {app_type} application log upload disabled",
+            item_id=test_item_id
+        )
+        return
+
+    log_patterns = get_ax_studio_log_paths(is_nightly)
     
     logger.info(f"Looking for Ax-Studio {app_type} logs...")
     
@@ -229,14 +339,13 @@ def upload_ax_studio_logs(client, test_item_id, is_nightly=False, max_log_files=
                 file_size = os.path.getsize(log_file)
                 file_name = os.path.basename(log_file)
                 
-                # Check file size limit (50MB = 50 * 1024 * 1024 bytes)
-                max_file_size = 50 * 1024 * 1024  # 50MB
+                max_file_size = MAX_ATTACHMENT_BYTES
                 if file_size > max_file_size:
                     logger.warning(f"Log file {file_name} is too large ({file_size} bytes > {max_file_size} bytes), skipping upload")
                     client.log(
                         time=timestamp(),
                         level="WARNING",
-                        message=f"[INFO] Log file {file_name} skipped (size: {file_size} bytes > 50MB limit)",
+                        message=f"[INFO] Log file {file_name} skipped (size: {file_size} bytes exceeds upload limit)",
                         item_id=test_item_id
                     )
                     continue
@@ -245,19 +354,16 @@ def upload_ax_studio_logs(client, test_item_id, is_nightly=False, max_log_files=
                 
                 # Read log file content (safe to read since we checked size)
                 with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
-                    log_content = f.read()
+                    log_content = sanitize_text(f.read())
                 
-                # Upload as text attachment
-                client.log(
-                    time=timestamp(),
+                maybe_upload_attachment(
+                    client=client,
+                    item_id=test_item_id,
                     level="INFO",
                     message=f"[INFO] Ax-Studio {app_type} application log: {file_name}",
-                    item_id=test_item_id,
-                    attachment={
-                        "name": f"ax_studio_{app_type}_log_{i}_{file_name}",
-                        "data": log_content.encode('utf-8'),
-                        "mime": "text/plain"
-                    }
+                    attachment_name=f"ax_studio_{app_type}_log_{i}_{file_name}",
+                    attachment_data=log_content.encode('utf-8'),
+                    mime_type="text/plain"
                 )
                 
                 logger.info(f"Successfully uploaded log: {file_name}")
@@ -313,16 +419,14 @@ def upload_test_results_to_rp(client, launch_id, test_path, trajectory_dir, forc
         if video_path and os.path.exists(video_path):
             try:
                 with open(video_path, "rb") as video_file:
-                    client.log(
-                        time=timestamp(),
+                    maybe_upload_attachment(
+                        client=client,
+                        item_id=test_item_id,
                         level="INFO",
                         message="Screen recording of test execution",
-                        item_id=test_item_id,
-                        attachment={
-                            "name": f"test_recording_{formatted_test_path}.mp4",
-                            "data": video_file.read(),
-                            "mime": "video/x-msvideo"
-                        }
+                        attachment_name=f"test_recording_{formatted_test_path}.mp4",
+                        attachment_data=video_file.read(),
+                        mime_type="video/mp4"
                     )
                 logger.info(f"Uploaded video for failed test: {video_path}")
             except Exception as e:
@@ -380,16 +484,14 @@ def upload_test_results_to_rp(client, launch_id, test_path, trajectory_dir, forc
                 with open(video_path, "rb") as video_file:
                     video_data = video_file.read()
                     logger.info(f"Read video data: {len(video_data)} bytes")
-                    client.log(
-                        time=timestamp(),
+                    maybe_upload_attachment(
+                        client=client,
+                        item_id=test_item_id,
                         level="INFO",
                         message="[INFO] Screen recording of test execution",
-                        item_id=test_item_id,
-                        attachment={
-                            "name": f"test_recording_{formatted_test_path}.mp4",
-                            "data": video_data,
-                            "mime": "video/x-msvideo"
-                        }
+                        attachment_name=f"test_recording_{formatted_test_path}.mp4",
+                        attachment_data=video_data,
+                        mime_type="video/mp4"
                     )
                 logger.info(f"Successfully uploaded screen recording: {video_path}")
             except Exception as e:
@@ -417,7 +519,7 @@ def upload_test_results_to_rp(client, launch_id, test_path, trajectory_dir, forc
         # If test failed, mark all turns as failed
         force_fail_turns = (final_status == "FAILED")
         
-        for turn_folder in sorted(turn_folders):
+        for turn_folder in sorted_turn_folders(turn_folders):
             turn_path = os.path.join(trajectory_dir, turn_folder)
             upload_turn_folder(client, test_item_id, turn_path, turn_folder, force_fail=force_fail_turns)
         

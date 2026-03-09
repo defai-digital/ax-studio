@@ -68,11 +68,11 @@ export type AkidbStatus = {
 export function createDefaultConfig(dataFolder?: string): AkidbConfig {
   return {
     fabric: {
-      data_root: '~/.ax-fabric/data',
+      data_root: '~/.ax-studio/data',
       max_storage_gb: 50,
     },
     akidb: {
-      root: '~/.ax-fabric/data/akidb',
+      root: '~/.ax-studio/data/akidb',
       collection: 'default',
       metric: 'cosine',
       dimension: 1536,
@@ -107,13 +107,13 @@ type AkidbConfigStore = {
   saving: boolean
   error: string | null
 
-  /** Read current config from ~/.ax-fabric/config.yaml via Tauri command */
+  /** Read current config from the AX Studio path, with legacy fallback via Tauri */
   load: () => Promise<void>
 
-  /** Write updated config to ~/.ax-fabric/config.yaml via Tauri command */
+  /** Write updated config to the AX Studio path and mirror legacy compatibility files */
   save: (config: AkidbConfig) => Promise<void>
 
-  /** Read daemon status from ~/.ax-fabric/status.json via Tauri command */
+  /** Read daemon status from the AX Studio path, with legacy fallback */
   loadStatus: () => Promise<void>
 }
 

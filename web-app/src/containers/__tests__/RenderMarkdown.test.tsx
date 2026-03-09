@@ -213,19 +213,20 @@ describe('RenderMarkdown', () => {
 </html>
 \`\`\`
 `
-    const { container, findByText}  = render(
+    const { container } = render(
       <RenderMarkdown
         content={contentWithFencedCodeBlock}
       />
     )
-    // Wait for the code content to be rendered (async operation)
-    await findByText('<!DOCTYPE html>', { exact: false })
     const markdownContainer = container.querySelector('.markdown')
-    const text = markdownContainer?.textContent || ''
-      // Check that the code content is present
-    expect(text).toContain('<!DOCTYPE html>')
-    expect(text).toContain('<html lang="en">')
-    expect(text).toContain('Welcome to My Website')
+    const previewFrame = markdownContainer?.querySelector(
+      'iframe[title="Artifact Preview"]'
+    ) as HTMLIFrameElement | null
+
+    expect(previewFrame).toBeTruthy()
+    expect(previewFrame?.srcdoc).toContain('<!DOCTYPE html>')
+    expect(previewFrame?.srcdoc).toContain('<html lang="en">')
+    expect(previewFrame?.srcdoc).toContain('Welcome to My Website')
   })
   describe('LaTeX normalization - display math', () => {
     it('converts \\[...\\] to $$ display math', () => {
@@ -265,4 +266,3 @@ describe('RenderMarkdown', () => {
     })
   })
 })
-

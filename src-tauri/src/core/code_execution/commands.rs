@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-use crate::core::state::AppState;
 use super::sandbox::{
-    self, SandboxStatus,
-    execute_via_sandbox, is_docker_running, is_sandbox_ready,
-    start_sandbox_container, stop_sandbox_container, wait_for_sandbox,
+    self, execute_via_sandbox, is_docker_running, is_sandbox_ready, start_sandbox_container,
+    stop_sandbox_container, wait_for_sandbox, SandboxStatus,
 };
+use crate::core::integrations::oauth::is_allowed_sandbox_url;
+use crate::core::state::AppState;
 
 // ---------------------------------------------------------------------------
 // Public output types (consumed by the frontend — do not change shape)
@@ -64,13 +64,7 @@ pub async fn execute_python_code(
             .and_then(|id| sessions.get(id).cloned())
     };
 
-    let exec_result = execute_via_sandbox(
-        &base_url,
-        session_id.as_deref(),
-        &code,
-        60,
-    )
-    .await?;
+    let exec_result = execute_via_sandbox(&base_url, session_id.as_deref(), &code, 60).await?;
 
     // Persist the (possibly new) session id for this thread
     if let Some(ref tid) = thread_id {
@@ -86,9 +80,7 @@ pub async fn execute_python_code(
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-pub async fn check_sandbox_status(
-    state: State<'_, AppState>,
-) -> Result<SandboxStatus, String> {
+pub async fn check_sandbox_status(state: State<'_, AppState>) -> Result<SandboxStatus, String> {
     let base_url = state.sandbox_url.lock().await.clone();
 
     // Run both checks concurrently — docker check is blocking so we offload it
@@ -121,9 +113,7 @@ pub async fn check_sandbox_status(
 /// Start the ax-sandbox Docker container and wait until it is ready.
 /// Returns Ok(()) once the sandbox is accepting requests.
 #[tauri::command]
-pub async fn start_sandbox(
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn start_sandbox(state: State<'_, AppState>) -> Result<(), String> {
     let base_url = state.sandbox_url.lock().await.clone();
 
     // Already running? Nothing to do.
@@ -155,9 +145,7 @@ pub async fn start_sandbox(
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-pub async fn stop_sandbox(
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn stop_sandbox(state: State<'_, AppState>) -> Result<(), String> {
     tokio::task::spawn_blocking(stop_sandbox_container)
         .await
         .map_err(|e| e.to_string())?
@@ -194,10 +182,10 @@ pub async fn reset_sandbox_session(
 
 /// Override the sandbox base URL (e.g. to use a remote sandbox or a non-8080 port).
 #[tauri::command]
-pub async fn update_sandbox_url(
-    state: State<'_, AppState>,
-    url: String,
-) -> Result<(), String> {
+pub async fn update_sandbox_url(state: State<'_, AppState>, url: String) -> Result<(), String> {
+    if !is_allowed_sandbox_url(&url) {
+        return Err("Sandbox URL must use http(s) and point to a loopback host".to_string());
+    }
     let mut sandbox_url = state.sandbox_url.lock().await;
     *sandbox_url = url;
     Ok(())

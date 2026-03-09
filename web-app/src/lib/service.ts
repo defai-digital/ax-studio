@@ -87,6 +87,12 @@ export const APIs = {
               prefix: pickString(raw, ['prefix']),
               api_key: pickString(raw, ['api_key', 'apiKey']),
               trusted_hosts: pickStringArray(raw, ['trusted_hosts', 'trustedHosts']),
+              cors_enabled:
+                typeof raw.isCorsEnabled === 'boolean'
+                  ? raw.isCorsEnabled
+                  : typeof raw.cors_enabled === 'boolean'
+                    ? raw.cors_enabled
+                    : undefined,
               proxy_timeout: pickNumber(raw, ['proxy_timeout', 'proxyTimeout']),
             }
             return getServiceHub().core().invoke(command, { config })

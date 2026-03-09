@@ -1,4 +1,8 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+    sync::Arc,
+};
 
 use crate::core::{downloads::models::DownloadManagerState, mcp::models::McpSettings};
 use rmcp::{
@@ -79,6 +83,8 @@ pub struct AppState {
     pub sandbox_sessions: Arc<Mutex<HashMap<String, String>>>,
     /// Base URL for the agent-infra/sandbox container
     pub sandbox_url: Arc<Mutex<String>>,
+    /// One-time write targets approved via native save dialog
+    pub approved_save_paths: Arc<Mutex<HashSet<PathBuf>>>,
 }
 
 impl RunningServiceEnum {

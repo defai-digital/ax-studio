@@ -7,8 +7,18 @@ pub fn integration_env_keys() -> HashMap<&'static str, Vec<&'static str>> {
     m.insert("linear", vec!["LINEAR_API_KEY"]);
     m.insert("notion", vec!["NOTION_TOKEN"]);
     m.insert("slack", vec!["SLACK_BOT_TOKEN"]);
-    m.insert("jira", vec!["ATLASSIAN_API_TOKEN", "ATLASSIAN_USER_EMAIL", "ATLASSIAN_SITE_NAME"]);
-    m.insert("gitlab", vec!["GITLAB_PERSONAL_ACCESS_TOKEN", "GITLAB_API_URL"]);
+    m.insert(
+        "jira",
+        vec![
+            "ATLASSIAN_API_TOKEN",
+            "ATLASSIAN_USER_EMAIL",
+            "ATLASSIAN_SITE_NAME",
+        ],
+    );
+    m.insert(
+        "gitlab",
+        vec!["GITLAB_PERSONAL_ACCESS_TOKEN", "GITLAB_API_URL"],
+    );
     m.insert("sentry", vec!["SENTRY_ACCESS_TOKEN"]);
     m.insert("todoist", vec!["TODOIST_API_TOKEN"]);
     m.insert("postgres", vec!["POSTGRES_CONNECTION_STRING"]);

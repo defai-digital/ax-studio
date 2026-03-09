@@ -14,6 +14,8 @@ import { AppEvent, events } from '@ax-studio/core'
 import { SystemEvent } from '@/types/events'
 import { isDev } from '@/lib/utils'
 import { invoke } from '@tauri-apps/api/core'
+import { deepLinkPayloadSchema } from '@/schemas/events.schema'
+import { assistantsSchema } from '@/schemas/assistants.schema'
 
 type ProviderCustomHeader = {
   header: string
@@ -28,45 +30,38 @@ type RegisterProviderRequest = {
   models: string[]
 }
 
-async function registerRemoteProvider(provider: ModelProvider) {
-  // Local providers (llamacpp, mlx, ollama) are registered by the ExtensionManager/EngineManager.
-  // We only register remote providers that have an API key with the Rust backend.
-  const isLocalProvider = ['llamacpp', 'mlx', 'ollama'].includes(provider.provider)
-  if (isLocalProvider) return
+// Batch-register all eligible remote providers in a single Tauri invoke call
+async function registerRemoteProvidersBatch(providers: ModelProvider[]) {
+  const requests: RegisterProviderRequest[] = providers
+    .filter((p) => !['llamacpp', 'mlx', 'ollama'].includes(p.provider) && p.api_key)
+    .map((p) => ({
+      provider: p.provider,
+      api_key: p.api_key,
+      base_url: p.base_url,
+      custom_headers: (p.custom_header || []).map((h) => ({
+        header: h.header,
+        value: h.value,
+      })),
+      models: p.models.map((e) => e.id),
+    }))
 
-  // Skip providers without API key (they can't make requests)
-  if (!provider.api_key) {
-    console.log(`Provider ${provider.provider} has no API key, skipping registration`)
-    return
-  }
-
-  const request: RegisterProviderRequest = {
-    provider: provider.provider,
-    api_key: provider.api_key,
-    base_url: provider.base_url,
-    custom_headers: (provider.custom_header || []).map((h) => ({
-      header: h.header,
-      value: h.value,
-    })),
-    models: provider.models.map(e => e.id)
-  }
+  if (requests.length === 0) return
 
   try {
-    await invoke('register_provider_config', { request })
-    console.log(`Registered remote provider: ${provider.provider}`)
+    await invoke('register_provider_configs_batch', { requests })
+    console.log(`Registered ${requests.length} remote providers in batch`)
   } catch (error) {
-    console.error(`Failed to register provider ${provider.provider}:`, error)
+    console.error('Failed to batch-register providers:', error)
   }
 }
 
 // Effect to sync remote providers when providers change
 const syncRemoteProviders = () => {
   const providers = useModelProvider.getState().providers
-  providers.forEach((provider) => {
-    if (provider.active && provider.api_key) {
-      registerRemoteProvider(provider)
-    }
-  })
+  const eligible = providers.filter((p) => p.active && p.api_key)
+  if (eligible.length > 0) {
+    registerRemoteProvidersBatch(eligible)
+  }
 }
 
 export function DataProvider() {
@@ -99,8 +94,8 @@ export function DataProvider() {
     console.log('Initializing DataProvider...')
     serviceHub.providers().getProviders().then((providers) => {
       setProviders(providers)
-      // Register remote providers with the backend
-      providers.forEach(registerRemoteProvider)
+      // Register remote providers with the backend (batch)
+      registerRemoteProvidersBatch(providers)
     }).catch((error) => {
       console.error('Failed to load providers:', error)
     })
@@ -118,10 +113,12 @@ export function DataProvider() {
       .assistants()
       .getAssistants()
       .then((data) => {
-        // Only update assistants if we have valid data
-        if (data && Array.isArray(data) && data.length > 0) {
-          setAssistants(data as unknown as Assistant[])
+        const parsed = assistantsSchema.safeParse(data)
+        if (parsed.success && parsed.data.length > 0) {
+          setAssistants(parsed.data as Assistant[])
           initializeWithLastUsed()
+        } else if (!parsed.success) {
+          console.warn('Assistants data did not match expected schema:', parsed.error.message)
         }
       })
       .catch((error) => {
@@ -137,8 +134,12 @@ export function DataProvider() {
     serviceHub
       .events()
       .listen(SystemEvent.DEEP_LINK, (event) => {
-        const deep_link = event.payload as string
-        handleDeepLink([deep_link])
+        const parsed = deepLinkPayloadSchema.safeParse(event.payload)
+        if (!parsed.success) {
+          console.error('Invalid deep link payload:', event.payload)
+          return
+        }
+        handleDeepLink([parsed.data])
       })
       .then((unsub) => {
         unsubscribe = unsub
@@ -193,7 +194,7 @@ export function DataProvider() {
     const handleModelImported = () => {
       serviceHub.providers().getProviders().then((providers) => {
         setProviders(providers)
-        providers.forEach(registerRemoteProvider)
+        registerRemoteProvidersBatch(providers)
       })
     }
     events.on(AppEvent.onModelImported, handleModelImported)

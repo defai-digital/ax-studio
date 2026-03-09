@@ -77,9 +77,15 @@ pub async fn list_agent_run_logs(
                                     total_tokens: log.total_tokens,
                                     started_at: log.started_at,
                                 }),
-                                Err(e) => log::warn!("Skipping malformed run log {:?}: {}", entry.path(), e),
+                                Err(e) => log::warn!(
+                                    "Skipping malformed run log {:?}: {}",
+                                    entry.path(),
+                                    e
+                                ),
                             },
-                            Err(e) => log::warn!("Failed to read run log {:?}: {}", entry.path(), e),
+                            Err(e) => {
+                                log::warn!("Failed to read run log {:?}: {}", entry.path(), e)
+                            }
                         }
                     }
                 }
@@ -101,7 +107,6 @@ pub async fn get_agent_run_log(
         return Err("Invalid run_id format".to_string());
     }
     let path = run_logs_dir(&app, &thread_id)?.join(format!("{}.json", run_id));
-    let content =
-        fs::read_to_string(&path).map_err(|e| format!("Run log not found: {}", e))?;
+    let content = fs::read_to_string(&path).map_err(|e| format!("Run log not found: {}", e))?;
     serde_json::from_str(&content).map_err(|e| e.to_string())
 }
