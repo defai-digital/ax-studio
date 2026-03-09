@@ -58,7 +58,7 @@ function SetupScreen({ onComplete }: SetupScreenProps) {
                 className="size-10 object-contain"
                 onError={(e) => {
                   // Fallback if logo not yet added
-                  ;(e.target as HTMLImageElement).style.display = 'none'
+                  (e.target as HTMLImageElement).style.display = 'none'
                 }}
               />
             </div>

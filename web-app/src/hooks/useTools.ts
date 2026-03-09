@@ -58,7 +58,7 @@ export const useTools = () => {
     }).catch((error) => {
       console.error('Failed to set up MCP update listener:', error)
     })
-    return unsubscribe
+    return () => unsubscribe()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 }

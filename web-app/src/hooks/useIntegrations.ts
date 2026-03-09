@@ -18,7 +18,7 @@ type IntegrationStoreState = {
   testConnection: (id: string, credentials: Record<string, string>) => Promise<string>
 }
 
-export const useIntegrations = create<IntegrationStoreState>()((set, get) => ({
+export const useIntegrations = create<IntegrationStoreState>()((set) => ({
   statuses: Object.fromEntries(INTEGRATIONS.map((i) => [i.id, 'idle' as IntegrationStatus])),
   errors: {},
 

@@ -753,7 +753,7 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
                 if (steps && steps.length > 0) {
                   const lastStep = steps[steps.length - 1]
                   const lastToolResult = lastStep?.messages
-                    ?.filter((m: any) => m.role === 'tool')
+                    ?.filter((m: { role: string }) => m.role === 'tool')
                     ?.pop()
                   const resultText = typeof lastToolResult?.content === 'string'
                     ? lastToolResult.content
@@ -801,7 +801,7 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
             const toolRelatedMessages = trimmedSteps.flatMap((s) =>
               s.messages.filter((m) =>
                 m.role === 'tool' ||
-                (m.role === 'assistant' && (m as any).tool_calls?.length)
+                (m.role === 'assistant' && (m as { tool_calls?: unknown[] }).tool_calls?.length)
               )
             )
             result.messages = [

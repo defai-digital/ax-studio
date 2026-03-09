@@ -43,7 +43,7 @@ export function SourcesList({ sources }: SourcesListProps) {
               alt=""
               className="shrink-0 w-4 h-4 mt-0.5 rounded-sm"
               onError={(e) => {
-                ;(e.target as HTMLImageElement).style.display = 'none'
+                (e.target as HTMLImageElement).style.display = 'none'
               }}
             />
             <div className="flex-1 min-w-0">

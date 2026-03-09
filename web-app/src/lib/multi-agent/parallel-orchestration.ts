@@ -13,7 +13,7 @@ import type { AgentHealthMonitor } from './agent-health-monitor'
 import type { MultiAgentRunLog } from './run-log'
 import type { AgentDef } from './delegation-tools'
 import { resolveToolsForAgent } from './delegation-tools'
-import { handleSubAgentError, isAbortError } from './error-handling'
+import { isAbortError } from './error-handling'
 import { buildOrchestratorPrompt } from './orchestrator-prompt'
 import { extractAgentText } from './extract-agent-text'
 

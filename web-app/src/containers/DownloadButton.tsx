@@ -96,7 +96,7 @@ export function DownloadButtonPlaceholder({
     }
   }, [modelId])
 
-  const isRecommendedModel = useCallback((_modelId: string) => {
+  const isRecommendedModel = useCallback((_: string) => {
     return false
   }, [])
 

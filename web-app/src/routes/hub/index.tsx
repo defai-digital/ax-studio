@@ -119,7 +119,7 @@ function HubContent() {
 
   // Sorting functionality
   const sortedModels = useMemo(() => {
-    let sorted = [...sources]
+    const sorted = [...sources]
 
     // Apply sorting
     if (sortSelected === 'most-downloaded') {
@@ -284,7 +284,7 @@ function HubContent() {
 
   const navigate = useNavigate()
 
-  const isRecommendedModel = useCallback((_modelId: string) => {
+  const isRecommendedModel = useCallback((_: string) => {
     return false
   }, [])
 

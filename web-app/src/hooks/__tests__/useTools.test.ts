@@ -5,12 +5,19 @@ import { SystemEvent } from '@/types/events'
 // Mock functions
 const mockGetTools = vi.fn()
 const mockUpdateTools = vi.fn()
+const mockUpdateMcpToolNames = vi.fn()
+const mockUpdateRagToolNames = vi.fn()
 const mockListen = vi.fn()
 const mockUnsubscribe = vi.fn()
 
 // Mock useAppState
 vi.mock('../useAppState', () => ({
-  useAppState: (selector: any) => selector({ updateTools: mockUpdateTools }),
+  useAppState: (selector: any) =>
+    selector({
+      updateTools: mockUpdateTools,
+      updateMcpToolNames: mockUpdateMcpToolNames,
+      updateRagToolNames: mockUpdateRagToolNames,
+    }),
 }))
 
 // Mock the ServiceHub
@@ -20,7 +27,7 @@ vi.mock('@/hooks/useServiceHub', () => ({
       getTools: mockGetTools,
     }),
     rag: () => ({
-      getToolNames: vi.fn(() => Promise.resolve([])),
+      getTools: vi.fn(() => Promise.resolve([])),
     }),
     events: () => ({
       listen: mockListen,

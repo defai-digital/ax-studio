@@ -1,4 +1,4 @@
-import { type ReactNode, memo, useCallback, useMemo } from 'react'
+import { type ReactNode, memo, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { useCodeExecution, type ExecutionResult } from '@/hooks/useCodeExecution'
 import { Button } from '@/components/ui/button'

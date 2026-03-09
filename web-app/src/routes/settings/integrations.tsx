@@ -58,7 +58,7 @@ function IntegrationsPage() {
       await disconnect(selectedIntegration.id)
       toast.success(`${selectedIntegration.name} disconnected`)
       refreshStatuses()
-    } catch (error) {
+    } catch {
       toast.error(`Failed to disconnect ${selectedIntegration.name}`)
     }
   }

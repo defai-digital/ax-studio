@@ -38,13 +38,13 @@ const OFFICIAL_SERVER_HINTS: Record<
   string,
   { description: string; hint: string; link?: { label: string; url: string } }
 > = {
-  'ax-fabric': {
+  'ax-studio': {
     description:
       'Knowledge base powered by AkiDB. Provides semantic search, document ingestion, and RAG tools for your local files.',
-    hint: 'To use from source: set command to "node" and first arg to the path of your ax-fabric cli.js, followed by "mcp" and "server". If installed via npm: set command to "npx" with args "-y @ax-fabric/fabric-ingest mcp server".',
+    hint: 'To use from source: set command to "node" and first arg to the path of your ax-studio cli.js, followed by "mcp" and "server". If installed via npm: set command to "npx" with args "-y @ax-studio/fabric-ingest mcp server".',
     link: {
-      label: 'ax-fabric Documentation',
-      url: 'https://github.com/defai-digital/ax-fabric',
+      label: 'AX Studio Documentation',
+      url: 'https://github.com/defai-digital/ax-studio',
     },
   },
   'Ax-Studio Browser MCP': {

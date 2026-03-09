@@ -99,10 +99,11 @@ export class TauriMCPService extends DefaultMCPService {
     const token = args.cancellationToken ?? `tool_call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
     // Create the tool call promise with cancellation token
-    const promise = window.core?.api?.callTool({
-      ...args,
-      cancellationToken: token
-    })
+    const promise: Promise<{ error: string; content: { text: string }[] }> =
+      window.core?.api?.callTool({
+        ...args,
+        cancellationToken: token
+      }) ?? Promise.reject(new Error('MCP service unavailable'))
 
     // Create cancel function
     const cancel = async () => {
