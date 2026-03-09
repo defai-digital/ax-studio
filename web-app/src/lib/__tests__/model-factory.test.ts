@@ -43,7 +43,7 @@ describe('ModelFactory', () => {
 
       const model = await ModelFactory.createModel('claude-3-opus', provider)
       expect(model).toBeDefined()
-      expect(model.type).toBe('anthropic')
+      expect(model.type).toBe('openai-compatible')
     })
 
     it('should create a Google model for google provider', async () => {

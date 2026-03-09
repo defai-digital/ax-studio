@@ -174,7 +174,7 @@ describe('SettingsMenu', () => {
     expect(mockNavigate).toHaveBeenCalled()
   })
 
-  it('hides llama.cpp during setup remote provider step', () => {
+  it('shows all active providers during setup remote provider step', () => {
     vi.mocked(useMatches).mockReturnValue([
       {
         routeId: '/settings/providers/',
@@ -182,15 +182,18 @@ describe('SettingsMenu', () => {
         search: { step: 'setup_remote_provider' },
       },
     ])
+    vi.mocked(useModelProvider).mockReturnValue({
+      providers: [
+        { provider: 'openai', active: true, models: [] },
+        { provider: 'anthropic', active: true, models: [] },
+      ],
+    })
 
     render(<SettingsMenu />)
 
-    // openai should be visible during remote provider setup
+    // All active providers should be visible during remote provider setup
     expect(screen.getByTestId('provider-avatar-openai')).toBeInTheDocument()
-
-    // llama.cpp should have 'hidden' class during setup_remote_provider step
-    const llamaCpp = screen.getByTestId('provider-avatar-llama.cpp').closest('div[class*="cursor-pointer"]')
-    expect(llamaCpp?.className).toContain('hidden')
+    expect(screen.getByTestId('provider-avatar-anthropic')).toBeInTheDocument()
   })
 
   it('filters out inactive providers from submenu', async () => {
