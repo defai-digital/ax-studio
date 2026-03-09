@@ -9,6 +9,7 @@
  * - Handle /remember and /forget slash commands
  */
 import { useCallback, useMemo, useRef } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 import { type UIMessage } from '@ai-sdk/react'
 import { useChatSessions } from '@/stores/chat-session-store'
@@ -25,7 +26,7 @@ import { type ThreadMessage } from '@ax-studio/core'
 
 export function useThreadMemory(threadId: string) {
   const memoryEnabled = useMemory((state) => state.memoryEnabled)
-  const defaultMemories = useMemory((state) => state.memories['default'] || [])
+  const defaultMemories = useMemory(useShallow((state) => state.memories['default'] || []))
 
   // Memoized system prompt suffix — rebuilds when memory is toggled or memories change
   const memorySuffix = useMemo(() => {

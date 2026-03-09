@@ -129,6 +129,123 @@ describe('useModelProvider - displayName functionality', () => {
     expect(provider?.models[0].displayName).toBe('My Custom Model')
   })
 
+  it('refreshes selectedModel when setProviders replaces model metadata', () => {
+    const { result } = renderHook(() => useModelProvider())
+
+    act(() => {
+      useModelProvider.setState({
+        providers: [
+          {
+            provider: 'test-provider',
+            active: true,
+            models: [
+              {
+                id: 'vision-model',
+                capabilities: ['completion'],
+              },
+            ],
+            settings: [],
+          },
+        ] as any,
+        selectedProvider: 'test-provider',
+        selectedModel: {
+          id: 'vision-model',
+          capabilities: ['completion'],
+        } as any,
+        deletedModels: [],
+      })
+    })
+
+    act(() => {
+      result.current.setProviders([
+        {
+          provider: 'test-provider',
+          active: true,
+          persist: true,
+          models: [
+            {
+              id: 'vision-model',
+              capabilities: ['completion', 'vision'],
+            },
+          ],
+          settings: [],
+        },
+      ] as any)
+    })
+
+    expect(result.current.selectedModel?.capabilities).toContain('vision')
+  })
+
+  it('clears selectedModel when the selected model is deleted', () => {
+    const { result } = renderHook(() => useModelProvider())
+
+    act(() => {
+      useModelProvider.setState({
+        providers: [
+          {
+            provider: 'test-provider',
+            active: true,
+            models: [
+              {
+                id: 'model-a',
+                capabilities: ['completion'],
+              },
+            ],
+            settings: [],
+          },
+        ] as any,
+        selectedProvider: 'test-provider',
+        selectedModel: {
+          id: 'model-a',
+          capabilities: ['completion'],
+        } as any,
+        deletedModels: [],
+      })
+    })
+
+    act(() => {
+      result.current.deleteModel('model-a')
+    })
+
+    expect(result.current.selectedProvider).toBe('test-provider')
+    expect(result.current.selectedModel).toBeNull()
+  })
+
+  it('clears selected provider and model when the selected provider is deleted', () => {
+    const { result } = renderHook(() => useModelProvider())
+
+    act(() => {
+      useModelProvider.setState({
+        providers: [
+          {
+            provider: 'test-provider',
+            active: true,
+            models: [
+              {
+                id: 'model-a',
+                capabilities: ['completion'],
+              },
+            ],
+            settings: [],
+          },
+        ] as any,
+        selectedProvider: 'test-provider',
+        selectedModel: {
+          id: 'model-a',
+          capabilities: ['completion'],
+        } as any,
+        deletedModels: [],
+      })
+    })
+
+    act(() => {
+      result.current.deleteProvider('test-provider')
+    })
+
+    expect(result.current.selectedProvider).toBe('')
+    expect(result.current.selectedModel).toBeNull()
+  })
+
   it('should provide basic functionality without breaking existing behavior', () => {
     const { result } = renderHook(() => useModelProvider())
 

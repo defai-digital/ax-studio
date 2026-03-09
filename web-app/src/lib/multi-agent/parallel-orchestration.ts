@@ -131,10 +131,10 @@ export function buildParallelOrchestration(
               stopWhen: stepCountIs(agent.max_steps ?? 10),
             })
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const result = await subAgent.generate({
               prompt: task,
               abortSignal: agentAbortSignal,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
             } as any)
 
             const agentTokens = result.usage?.totalTokens ?? 0

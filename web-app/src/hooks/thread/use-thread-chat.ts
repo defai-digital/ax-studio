@@ -102,10 +102,13 @@ export function useThreadChat({
       return
     }
 
+    let ignore = false
+
     serviceHub
       .messages()
       .fetchMessages(threadId)
       .then((fetchedMessages) => {
+        if (ignore) return
         if (fetchedMessages && fetchedMessages.length > 0) {
           const currentLocalMessages = useMessages
             .getState()
@@ -132,6 +135,8 @@ export function useThreadChat({
           loadedThreadRef.current = threadId
         }
       })
+
+    return () => { ignore = true }
   }, [threadId, serviceHub, setMessages, setChatMessages])
 
   // ─── Send message ───────────────────────────────────────────────────────────

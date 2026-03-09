@@ -13,7 +13,7 @@ use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
 };
-use tauri_plugin_store::Store;
+use tauri_plugin_store::{Store, StoreExt};
 
 use crate::core::app::commands::get_app_data_folder_path;
 use crate::core::mcp::constants::DEFAULT_MCP_CONFIG;

@@ -87,7 +87,7 @@ export function SplitThreadPane({
   const selectedModel = useModelProvider((state) => state.selectedModel)
   const { globalDefaultPrompt, autoTuningEnabled } = useGeneralSetting()
   const memoryEnabled = useMemory((state) => state.memoryEnabled)
-  const defaultMemories = useMemory((state) => state.memories['default'] || [])
+  const defaultMemories = useMemory(useShallow((state) => state.memories['default'] || []))
   const messageCount = useMessages(
     (state) => state.messages[threadId]?.length ?? 0
   )
@@ -287,15 +287,18 @@ export function SplitThreadPane({
   }, [thread?.metadata?.threadPrompt])
 
   useEffect(() => {
+    let ignore = false
     serviceHub
       .messages()
       .fetchMessages(threadId)
       .then((fetchedMessages) => {
+        if (ignore) return
         if (fetchedMessages && fetchedMessages.length > 0) {
           setMessages(threadId, fetchedMessages)
           setChatMessages(convertThreadMessagesToUIMessages(fetchedMessages))
         }
       })
+    return () => { ignore = true }
   }, [serviceHub, setChatMessages, setMessages, threadId])
 
   const handleSubmit = async (

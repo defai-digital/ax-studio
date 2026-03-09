@@ -4,6 +4,43 @@ import { localStorageKey } from '@/constants/localStorage'
 import { ANTHROPIC_DEFAULT_HEADERS } from '@/constants/providers'
 import { mergeProviders } from '@/lib/providers/model-provider-merge'
 
+function syncSelectedModel(
+  providers: ModelProvider[],
+  selectedProvider: string,
+  selectedModel: Model | null
+): Pick<ModelProviderState, 'selectedProvider' | 'selectedModel'> {
+  if (!selectedProvider) {
+    return {
+      selectedProvider: '',
+      selectedModel: null,
+    }
+  }
+
+  const provider = providers.find(
+    (item) => item.provider === selectedProvider
+  )
+
+  if (!provider) {
+    return {
+      selectedProvider: '',
+      selectedModel: null,
+    }
+  }
+
+  if (!selectedModel?.id) {
+    return {
+      selectedProvider,
+      selectedModel: null,
+    }
+  }
+
+  return {
+    selectedProvider,
+    selectedModel:
+      provider.models.find((model) => model.id === selectedModel.id) ?? null,
+  }
+}
+
 type ModelProviderState = {
   providers: ModelProvider[]
   selectedProvider: string
@@ -37,17 +74,26 @@ export const useModelProvider = create<ModelProviderState>()(
         return provider.models.find((model) => model.id === modelId)
       },
       setProviders: (providers, pathSep = '/') =>
-        set((state) => ({
-          providers: mergeProviders(
+        set((state) => {
+          const mergedProviders = mergeProviders(
             providers,
             state.providers,
             state.deletedModels,
             pathSep
-          ),
-        })),
+          )
+
+          return {
+            providers: mergedProviders,
+            ...syncSelectedModel(
+              mergedProviders,
+              state.selectedProvider,
+              state.selectedModel
+            ),
+          }
+        }),
       updateProvider: (providerName, data) => {
-        set((state) => ({
-          providers: state.providers.map((provider) => {
+        set((state) => {
+          const providers = state.providers.map((provider) => {
             if (provider.provider === providerName) {
               return {
                 ...provider,
@@ -55,8 +101,17 @@ export const useModelProvider = create<ModelProviderState>()(
               }
             }
             return provider
-          }),
-        }))
+          })
+
+          return {
+            providers,
+            ...syncSelectedModel(
+              providers,
+              state.selectedProvider,
+              state.selectedModel
+            ),
+          }
+        })
       },
       getProviderByName: (providerName: string) => {
         const provider = get().providers.find(
@@ -92,17 +147,24 @@ export const useModelProvider = create<ModelProviderState>()(
             ? state.deletedModels
             : []
 
+          const providers = state.providers.map((provider) => {
+            const models = provider.models.filter(
+              (model) => model.id !== modelId
+            )
+            return {
+              ...provider,
+              models,
+            }
+          })
+
           return {
-            providers: state.providers.map((provider) => {
-              const models = provider.models.filter(
-                (model) => model.id !== modelId
-              )
-              return {
-                ...provider,
-                models,
-              }
-            }),
+            providers,
             deletedModels: [...currentDeletedModels, modelId],
+            ...syncSelectedModel(
+              providers,
+              state.selectedProvider,
+              state.selectedModel
+            ),
           }
         })
       },
@@ -112,11 +174,20 @@ export const useModelProvider = create<ModelProviderState>()(
         }))
       },
       deleteProvider: (providerName: string) => {
-        set((state) => ({
-          providers: state.providers.filter(
+        set((state) => {
+          const providers = state.providers.filter(
             (provider) => provider.provider !== providerName
-          ),
-        }))
+          )
+
+          return {
+            providers,
+            ...syncSelectedModel(
+              providers,
+              state.selectedProvider,
+              state.selectedModel
+            ),
+          }
+        })
       },
     }),
     {

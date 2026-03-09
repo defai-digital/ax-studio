@@ -80,7 +80,6 @@ const ChatInput = memo(function ChatInput({
   useTools()
 
   const selectedModel = useModelProvider((state) => state.selectedModel)
-  const selectedProvider = useModelProvider((state) => state.selectedProvider)
   const assistants = useAssistant((state) => state.assistants)
 
   const threadMessages = useMessages(
@@ -117,7 +116,7 @@ const ChatInput = memo(function ChatInput({
   // Vision capability check
   useEffect(() => {
     setHasMmproj(Boolean(selectedModel?.capabilities?.includes('vision')))
-  }, [selectedModel, selectedProvider])
+  }, [selectedModel])
 
   // Focus management
   useEffect(() => {
@@ -172,7 +171,6 @@ const ChatInput = memo(function ChatInput({
   const {
     handleAttachDocsIngest,
     ingestingDocs,
-    processNewDocumentAttachments,
     handleRemoveAttachment,
   } = useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId })
 
@@ -213,8 +211,6 @@ const ChatInput = memo(function ChatInput({
       base64: a.base64 || '',
       dataUrl: a.dataUrl!,
     }))
-
-  void processNewDocumentAttachments // kept for external callers via hook
 
   return (
     <div className="relative overflow-hidden">
