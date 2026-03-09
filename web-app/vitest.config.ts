@@ -20,6 +20,13 @@ export default defineConfig({
         'src/**/*.test.tsx',
         'src/test/**/*',
       ],
+      thresholds: {
+        // Global safety-net thresholds — per-module gates are in testing/module-thresholds.json
+        lines: 30,
+        functions: 30,
+        branches: 20,
+        statements: 30,
+      },
     },
   },
   resolve: {
