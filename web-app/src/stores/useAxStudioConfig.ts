@@ -37,15 +37,19 @@ interface AxStudioConfigState {
   syncToBackend: () => Promise<void>
 }
 
-// Migrate localStorage from the old AX Fabric key on first load.
+const LEGACY_SERVICE_CONFIG_KEYS = ['ax-fabric-service-config']
+const AX_STUDIO_SERVICE_CONFIG_KEY = 'ax-studio-service-config'
+
+// Migrate localStorage from earlier service-config keys on first load.
 if (typeof window !== 'undefined') {
-  const oldKey = 'ax-fabric-service-config'
-  const newKey = 'ax-studio-service-config'
-  if (!localStorage.getItem(newKey)) {
-    const oldState = localStorage.getItem(oldKey)
-    if (oldState) {
-      localStorage.setItem(newKey, oldState)
-      localStorage.removeItem(oldKey)
+  if (!localStorage.getItem(AX_STUDIO_SERVICE_CONFIG_KEY)) {
+    for (const legacyKey of LEGACY_SERVICE_CONFIG_KEYS) {
+      const oldState = localStorage.getItem(legacyKey)
+      if (oldState) {
+        localStorage.setItem(AX_STUDIO_SERVICE_CONFIG_KEY, oldState)
+        localStorage.removeItem(legacyKey)
+        break
+      }
     }
   }
 }
@@ -96,7 +100,7 @@ export const useAxStudioConfig = create<AxStudioConfigState>()(
       },
     }),
     {
-      name: 'ax-studio-service-config',
+      name: AX_STUDIO_SERVICE_CONFIG_KEY,
     }
   )
 )

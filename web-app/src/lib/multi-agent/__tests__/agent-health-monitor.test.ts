@@ -62,11 +62,10 @@ describe('AgentHealthMonitor', () => {
     monitor.recordFailure('agent-1')
     expect(monitor.getStatus('agent-1')).toBe('unavailable')
 
-    // After reset timeout, shouldCall allows a probe but circuit stays open
-    // until recordSuccess is called
+    // After reset timeout, shouldCall transitions circuit to half-open (probe allowed)
     vi.advanceTimersByTime(31000)
-    monitor.shouldCall('agent-1') // allows probe, stays open
-    expect(monitor.getStatus('agent-1')).toBe('unavailable')
+    monitor.shouldCall('agent-1') // transitions to half-open
+    expect(monitor.getStatus('agent-1')).toBe('degraded')
 
     // After successful probe, circuit closes
     monitor.recordSuccess('agent-1')

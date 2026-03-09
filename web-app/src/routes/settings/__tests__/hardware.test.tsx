@@ -59,9 +59,19 @@ vi.mock('@/hooks/useHardware', () => ({
   }),
 }))
 
+vi.mock('@/hooks/useLlamacppDevices', () => ({
+  useLlamacppDevices: () => ({
+    devices: [{ id: 'gpu-0', name: 'RTX 3080', activated: true }],
+    loading: false,
+    error: null,
+    toggleDevice: vi.fn(),
+    fetchDevices: vi.fn(),
+  }),
+}))
+
 vi.mock('@/hooks/useModelProvider', () => ({
   useModelProvider: () => ({
-    providers: [],
+    providers: [{ provider: 'llamacpp', active: true, models: [] }],
     getProviderByName: vi.fn(() => undefined),
   }),
 }))
@@ -161,7 +171,7 @@ describe('Hardware Settings', () => {
     render(<Component />)
     
     await waitFor(() => {
-      expect(screen.getByText('GPUs')).toBeInTheDocument()
+      expect(screen.getByText('settings:hardware.gpus')).toBeInTheDocument()
       expect(screen.getByText('RTX 3080')).toBeInTheDocument()
     })
   })

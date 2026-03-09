@@ -13,7 +13,7 @@ fn ax_studio_config_dir(home: &Path) -> PathBuf {
     home.join(".ax-studio")
 }
 
-fn legacy_fabric_config_dir(home: &Path) -> PathBuf {
+fn legacy_config_dir(home: &Path) -> PathBuf {
     home.join(".ax-fabric")
 }
 
@@ -22,7 +22,7 @@ fn preferred_akidb_config_path(home: &Path) -> PathBuf {
 }
 
 fn legacy_akidb_config_path(home: &Path) -> PathBuf {
-    legacy_fabric_config_dir(home).join("config.yaml")
+    legacy_config_dir(home).join("config.yaml")
 }
 
 fn preferred_akidb_status_path(home: &Path) -> PathBuf {
@@ -30,7 +30,30 @@ fn preferred_akidb_status_path(home: &Path) -> PathBuf {
 }
 
 fn legacy_akidb_status_path(home: &Path) -> PathBuf {
-    legacy_fabric_config_dir(home).join("status.json")
+    legacy_config_dir(home).join("status.json")
+}
+
+fn migrate_legacy_akidb_file(
+    home: &Path,
+    legacy_path: &Path,
+    preferred_path: &Path,
+) -> Result<(), String> {
+    if preferred_path.exists() || !legacy_path.exists() {
+        return Ok(());
+    }
+
+    if let Some(parent) = preferred_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+
+    fs::copy(legacy_path, preferred_path).map_err(|e| {
+        format!(
+            "Failed to migrate legacy knowledge-base file {} to {}: {e}",
+            legacy_path.display(),
+            preferred_path.display()
+        )
+    })?;
+    Ok(())
 }
 
 fn normalize_save_target_path(path: &str) -> Result<PathBuf, String> {
@@ -745,17 +768,17 @@ pub struct AkidbStatus {
     pub daemon_pid: Option<u32>,
 }
 
-/// Read the AX Studio knowledge-base config, falling back to the legacy fabric-ingest path.
+/// Read the AX Studio knowledge-base config, migrating a legacy config file if needed.
 #[tauri::command]
 pub fn read_akidb_config() -> Result<Option<AkidbConfig>, String> {
     let home = dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
     let config_path = preferred_akidb_config_path(&home);
     let legacy_path = legacy_akidb_config_path(&home);
 
+    migrate_legacy_akidb_file(&home, &legacy_path, &config_path)?;
+
     let path_to_read = if config_path.exists() {
         config_path
-    } else if legacy_path.exists() {
-        legacy_path
     } else {
         return Ok(None);
     };
@@ -771,26 +794,22 @@ pub fn read_akidb_config() -> Result<Option<AkidbConfig>, String> {
     Ok(Some(config))
 }
 
-/// Write the AX Studio knowledge-base config and mirror it to the legacy path for compatibility.
+/// Write the AX Studio knowledge-base config to the preferred AX Studio path.
 #[tauri::command]
 pub fn write_akidb_config(config: AkidbConfig) -> Result<(), String> {
     let home = dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
     let config_dir = ax_studio_config_dir(&home);
-    let legacy_dir = legacy_fabric_config_dir(&home);
 
     fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
-    fs::create_dir_all(&legacy_dir).map_err(|e| e.to_string())?;
 
     let config_path = preferred_akidb_config_path(&home);
-    let legacy_path = legacy_akidb_config_path(&home);
     let yaml = serde_yaml::to_string(&config)
         .map_err(|e| format!("Failed to serialize knowledge-base config: {e}"))?;
     fs::write(&config_path, &yaml).map_err(|e| e.to_string())?;
-    fs::write(&legacy_path, yaml).map_err(|e| e.to_string())?;
     Ok(())
 }
 
-/// Read the AX Studio knowledge-base daemon status, with legacy fallback.
+/// Read the AX Studio knowledge-base daemon status, migrating a legacy status file if needed.
 /// Returns None if the file does not exist (daemon not running or never ran).
 #[tauri::command]
 pub fn read_akidb_status() -> Result<Option<AkidbStatus>, String> {
@@ -798,10 +817,10 @@ pub fn read_akidb_status() -> Result<Option<AkidbStatus>, String> {
     let status_path = preferred_akidb_status_path(&home);
     let legacy_path = legacy_akidb_status_path(&home);
 
+    migrate_legacy_akidb_file(&home, &legacy_path, &status_path)?;
+
     let path_to_read = if status_path.exists() {
         status_path
-    } else if legacy_path.exists() {
-        legacy_path
     } else {
         return Ok(None);
     };

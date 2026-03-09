@@ -223,9 +223,11 @@ pub fn migrate_mcp_servers(
     Ok(())
 }
 
+const AX_STUDIO_MCP_PACKAGE: &str = "@ax-studio/fabric-ingest";
+
 /// Build the MCP server config for AX Studio.
 /// If a local CLI is found on disk, uses `node <path> mcp server`.
-/// Otherwise falls back to `npx -y @ax-fabric/fabric-ingest mcp server`.
+/// Otherwise falls back to `npx -y @ax-studio/fabric-ingest mcp server`.
 fn resolve_ax_studio_mcp_config() -> serde_json::Value {
     // Check for a local development installation
     if let Some(home) = dirs::home_dir() {
@@ -254,7 +256,7 @@ fn resolve_ax_studio_mcp_config() -> serde_json::Value {
     // Fallback: use npx
     serde_json::json!({
         "command": "npx",
-        "args": ["-y", "@ax-fabric/fabric-ingest", "mcp", "server"],
+        "args": ["-y", AX_STUDIO_MCP_PACKAGE, "mcp", "server"],
         "env": {},
         "active": false,
         "official": true
