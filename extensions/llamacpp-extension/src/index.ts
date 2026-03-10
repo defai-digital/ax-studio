@@ -74,6 +74,7 @@ import {
   mergeEmbedResponses,
   EmbeddingResponse,
 } from './util'
+import { decideLocalProviderSync } from './provider-sync'
 
 // Build-time constants — see env.d.ts for declarations
 
@@ -168,7 +169,11 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   }
 
   override async onUnload(): Promise<void> {
-    // Stop ax-serving if it's running
+    const loadedModels = await this.getLoadedModels().catch(() => [] as string[])
+    for (const modelId of loadedModels) {
+      await this.unload(modelId).catch(() => {})
+    }
+
     if (this.axServingPid > 0) {
       try {
         await unloadLlamaModel(this.axServingPid)
@@ -177,6 +182,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       this.axServingPort = 0
       this.axServingSessions.clear()
     }
+    await this._syncLocalProviderRegistration()
 
     for (const off of this.cleanupListeners) {
       try { off() } catch {}
@@ -550,20 +556,11 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     }
     this.axServingSessions.set(modelId, session)
 
-    // Register model with the proxy so it can route requests
-    try {
-      await invoke('register_provider_config', {
-        request: {
-          provider: this.providerId,
-          base_url: `http://127.0.0.1:${this.axServingPort}/v1`,
-          api_key: '',
-          custom_headers: [],
-          models: [modelId],
-        },
-      })
-    } catch (regErr) {
-      console.warn('[llamacpp] Failed to register ax-serving provider with proxy:', regErr)
-    }
+    await this._syncLocalProviderRegistration({
+      port: this.axServingPort,
+      apiKey: '',
+      models: [modelId],
+    })
 
     events.emit(ModelEvent.OnModelReady, {
       modelId,
@@ -622,6 +619,71 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     this.axServingPort = session.port
     this.axServingPid = session.pid
     console.log(`[llamacpp] ax-serving started (PID=${session.pid}, port=${session.port})`)
+  }
+
+  private async _syncLocalProviderRegistration(preferred?: {
+    port?: number
+    apiKey?: string
+    models?: string[]
+  }) {
+    const llamacppModels = await getLoadedModels().catch(() => [] as string[])
+    const axServingModels = Array.from(this.axServingSessions.keys())
+    const firstAxServingSession = this.axServingSessions.values().next().value as
+      | SessionInfo
+      | undefined
+    const loadedModels = [...new Set([...llamacppModels, ...axServingModels])]
+    const fallbackSession =
+      llamacppModels.length > 0
+        ? await findSessionByModel(llamacppModels[0]).catch(() => null)
+        : null
+
+    const decision = decideLocalProviderSync({
+      loadedModels,
+      llamacppModels,
+      axServingModels,
+      axServingPort: this.axServingPort || firstAxServingSession?.port || 0,
+      preferred,
+      fallbackSession,
+    })
+
+    if (decision.action === 'unregister') {
+      try {
+        await invoke('unregister_provider_config', { provider: this.providerId })
+      } catch (err) {
+        console.warn('[llamacpp] Failed to unregister provider from proxy:', err)
+      }
+      return
+    }
+
+    if (decision.action === 'skip') {
+      console.warn('[llamacpp] Skipping provider sync because no active port is available')
+      return
+    }
+
+    if (
+      decision.models.length === 1 &&
+      llamacppModels.length > 1 &&
+      axServingModels.length === 0 &&
+      !preferred?.models
+    ) {
+      console.warn(
+        '[llamacpp] Multiple process-based models are loaded, but only one can be routed through the proxy at a time.'
+      )
+    }
+
+    try {
+      await invoke('register_provider_config', {
+        request: {
+          provider: this.providerId,
+          base_url: `http://127.0.0.1:${decision.port}/v1`,
+          api_key: decision.apiKey,
+          custom_headers: [],
+          models: decision.models,
+        },
+      })
+    } catch (regErr) {
+      console.warn('[llamacpp] Failed to register provider with proxy:', regErr)
+    }
   }
 
   // ─── llamacpp load path ────────────────────────────────────────────────────
@@ -700,19 +762,11 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
     // Register the local provider with the Rust proxy SYNCHRONOUSLY before
     // returning, so the proxy is ready to route requests immediately.
-    try {
-      await invoke('register_provider_config', {
-        request: {
-          provider: this.providerId,
-          base_url: `http://localhost:${session.port}/v1`,
-          api_key: session.api_key ?? '',
-          custom_headers: [],
-          models: [modelId],
-        },
-      })
-    } catch (regErr) {
-      console.warn('[llamacpp] Failed to register provider with proxy:', regErr)
-    }
+    await this._syncLocalProviderRegistration({
+      port: session.port,
+      apiKey: session.api_key ?? '',
+      models: [modelId],
+    })
 
     events.emit(ModelEvent.OnModelReady, {
       modelId,
@@ -745,8 +799,10 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     return exePath
   }
 
-  /** Unload all active text models except the one about to be loaded */
-  private async _unloadActiveTextModels(excludeModelId: string): Promise<void> {
+  private async _unloadLoadedModels(
+    excludeModelId: string,
+    shouldUnload: (session: SessionInfo) => boolean
+  ): Promise<void> {
     try {
       // Collect all loaded model IDs from both engines
       const llamacppIds = await getLoadedModels().catch(() => [] as string[])
@@ -760,13 +816,13 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         try {
           // Check ax-serving sessions first
           const axSession = this.axServingSessions.get(id)
-          if (axSession && !axSession.is_embedding) {
+          if (axSession && shouldUnload(axSession)) {
             await this.unload(id)
             continue
           }
           // Check llamacpp sessions
           const session = await findSessionByModel(id)
-          if (session && !session.is_embedding) {
+          if (session && shouldUnload(session)) {
             await this.unload(id)
           }
         } catch (e) {
@@ -774,8 +830,13 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         }
       }
     } catch (e) {
-      console.warn('[llamacpp] _unloadActiveTextModels error:', e)
+      console.warn('[llamacpp] _unloadLoadedModels error:', e)
     }
+  }
+
+  /** Unload all active text models except the one about to be loaded */
+  private async _unloadActiveTextModels(excludeModelId: string): Promise<void> {
+    await this._unloadLoadedModels(excludeModelId, (session) => !session.is_embedding)
   }
 
   /**
@@ -787,8 +848,8 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     console.log(`[llamacpp] Engine switch: ${from} → ${to}, unloading active text models`)
 
     const doSwitch = async () => {
-      // 1. Unload all active text models from both engines
-      await this._unloadActiveTextModels('')
+      // 1. Unload all active models so provider routing cannot point at mixed engines.
+      await this._unloadLoadedModels('', () => true)
 
       // 2. If we are leaving ax-serving, stop its process and reset state
       if (from === 'ax-serving' && this.axServingPid > 0) {
@@ -802,6 +863,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         this.axServingPort = 0
         this.axServingSessions.clear()
       }
+      await this._syncLocalProviderRegistration()
     }
 
     doSwitch().catch((e) =>
@@ -832,6 +894,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
           console.warn('[llamacpp] ax-serving unload HTTP error:', e)
         }
         this.axServingSessions.delete(sessionId)
+        await this._syncLocalProviderRegistration()
         events.emit(ModelEvent.OnModelStopped, { modelId: sessionId })
         return { success: true }
       }
@@ -843,6 +906,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       }
       events.emit(ModelEvent.OnModelStop, { modelId: sessionId })
       const result = await unloadLlamaModel(session.pid)
+      await this._syncLocalProviderRegistration()
       events.emit(ModelEvent.OnModelStopped, { modelId: sessionId })
       return result
     } catch (e: any) {
@@ -994,6 +1058,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         // Check if our model is still loaded (may have been evicted by LRU/idle)
         if (Array.isArray(health.loaded_models) && !health.loaded_models.includes(modelId)) {
           this.axServingSessions.delete(modelId)
+          await this._syncLocalProviderRegistration()
           throw new Error(`Model "${modelId}" was evicted by ax-serving. Please reload.`)
         }
       } catch (e: any) {
@@ -1003,6 +1068,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         this.axServingPid = 0
         this.axServingPort = 0
         this.axServingSessions.clear()
+        await this._syncLocalProviderRegistration()
         throw new Error(`ax-serving is not responding. Please reload the model.`)
       }
       return
@@ -1205,6 +1271,29 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     } catch {
       return Array.from(this.axServingSessions.keys())
     }
+  }
+
+  async syncModelRoute(modelId: string): Promise<void> {
+    const axSession = this.axServingSessions.get(modelId)
+    if (axSession) {
+      await this._syncLocalProviderRegistration({
+        port: axSession.port,
+        apiKey: '',
+        models: [modelId],
+      })
+      return
+    }
+
+    const session = await findSessionByModel(modelId)
+    if (!session) {
+      throw new Error(`Model "${modelId}" is not loaded. Load it first.`)
+    }
+
+    await this._syncLocalProviderRegistration({
+      port: session.port,
+      apiKey: session.api_key ?? '',
+      models: [modelId],
+    })
   }
 
   // ─── isToolSupported() ────────────────────────────────────────────────────

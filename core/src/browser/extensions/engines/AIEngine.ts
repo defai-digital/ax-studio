@@ -275,6 +275,14 @@ export abstract class AIEngine extends BaseExtension {
   abstract unload(sessionId: string): Promise<UnloadResult>
 
   /**
+   * Re-syncs proxy routing for an already loaded model when the caller wants
+   * to make it the active inference target again.
+   *
+   * Engines that do not manage proxy-backed local routes can ignore this.
+   */
+  async syncModelRoute(_modelId: string): Promise<void> {}
+
+  /**
    * Sends a chat request to the model
    */
   abstract chat(

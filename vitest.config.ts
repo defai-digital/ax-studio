@@ -8,6 +8,9 @@ export default defineConfig({
 
       // Web-app package - use its own vitest config
       './web-app',
+
+      // llama.cpp extension - unit tests for local engine lifecycle helpers
+      './extensions/llamacpp-extension',
     ],
     coverage: {
       provider: 'v8',

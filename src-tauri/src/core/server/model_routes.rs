@@ -63,22 +63,27 @@ fn extract_model_id(body_bytes: &[u8]) -> Result<String, String> {
 fn find_provider_name(
     provider_configs: &HashMap<String, ProviderConfig>,
     model_id: &str,
-) -> Option<String> {
-    provider_configs
-        .iter()
-        .find(|(_, config)| config.models.iter().any(|m| m == model_id))
-        .map(|(_, config)| config.provider.clone())
-        .or_else(|| {
-            if let Some(sep_pos) = model_id.find('/') {
-                let potential_provider = &model_id[..sep_pos];
-                if provider_configs.contains_key(potential_provider) {
-                    return Some(potential_provider.to_string());
-                }
-            }
-            provider_configs
-                .get(model_id)
-                .map(|config| config.provider.clone())
-        })
+) -> Result<Option<String>, String> {
+    if let Some(sep_pos) = model_id.find('/') {
+        let potential_provider = &model_id[..sep_pos];
+        if provider_configs.contains_key(potential_provider) {
+            return Ok(Some(potential_provider.to_string()));
+        }
+    }
+
+    let matching_providers: Vec<String> = provider_configs
+        .values()
+        .filter(|config| config.models.iter().any(|m| m == model_id))
+        .map(|config| config.provider.clone())
+        .collect();
+
+    match matching_providers.as_slice() {
+        [] => Ok(provider_configs.get(model_id).map(|config| config.provider.clone())),
+        [provider] => Ok(Some(provider.clone())),
+        _ => Err(format!(
+            "Model '{model_id}' is configured for multiple providers. Use 'provider/model' to disambiguate."
+        )),
+    }
 }
 
 fn build_upstream_url(
@@ -105,16 +110,23 @@ fn resolve_provider_config_from_map(
     model_id: &str,
     destination_path: &str,
     is_anthropic_messages: bool,
-) -> Option<ResolvedProviderConfig> {
-    let provider_name = find_provider_name(provider_configs, model_id)?;
-    let provider_cfg = provider_configs.get(provider_name.as_str())?;
-    let base_url = provider_cfg.base_url.as_deref()?;
+) -> Result<Option<ResolvedProviderConfig>, String> {
+    let provider_name = match find_provider_name(provider_configs, model_id)? {
+        Some(provider_name) => provider_name,
+        None => return Ok(None),
+    };
+    let Some(provider_cfg) = provider_configs.get(provider_name.as_str()) else {
+        return Ok(None);
+    };
+    let Some(base_url) = provider_cfg.base_url.as_deref() else {
+        return Ok(None);
+    };
 
-    Some(ResolvedProviderConfig {
+    Ok(Some(ResolvedProviderConfig {
         target_base_url: build_upstream_url(base_url, destination_path, is_anthropic_messages),
         session_api_key: provider_cfg.api_key.clone(),
         provider_custom_headers: provider_cfg.custom_headers.clone(),
-    })
+    }))
 }
 
 /// Resolve the provider for a POST model request (reads body, looks up provider config).
@@ -179,18 +191,28 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
     };
 
     match resolved {
-        Some(resolved) => Ok(ProviderResolution {
+        Ok(Some(resolved)) => Ok(ProviderResolution {
             target_base_url: resolved.target_base_url,
             session_api_key: resolved.session_api_key,
             provider_custom_headers: resolved.provider_custom_headers,
             is_anthropic_messages,
             buffered_body: body_bytes,
         }),
-        None => {
+        Ok(None) => {
             log::warn!("No remote provider configured for model_id: {model_id}");
             Err(error_response(
                 StatusCode::NOT_FOUND,
                 format!("No remote provider configured for model '{model_id}'"),
+                host_header,
+                origin_header,
+                config,
+            ))
+        }
+        Err(message) => {
+            log::warn!("Ambiguous provider resolution for model_id {model_id}: {message}");
+            Err(error_response(
+                StatusCode::CONFLICT,
+                message,
                 host_header,
                 origin_header,
                 config,
@@ -507,13 +529,13 @@ mod tests {
         );
 
         assert_eq!(
-            find_provider_name(&providers, "gpt-4.1"),
+            find_provider_name(&providers, "gpt-4.1").expect("provider should resolve"),
             Some("openai".to_string())
         );
     }
 
     #[test]
-    fn find_provider_name_falls_back_to_provider_prefix() {
+    fn find_provider_name_prefers_provider_prefix() {
         let mut providers = HashMap::new();
         providers.insert(
             "anthropic".to_string(),
@@ -521,8 +543,30 @@ mod tests {
         );
 
         assert_eq!(
-            find_provider_name(&providers, "anthropic/claude-3-7-sonnet"),
+            find_provider_name(&providers, "anthropic/claude-3-7-sonnet")
+                .expect("provider prefix should resolve"),
             Some("anthropic".to_string())
+        );
+    }
+
+    #[test]
+    fn find_provider_name_rejects_ambiguous_plain_model_ids() {
+        let mut providers = HashMap::new();
+        providers.insert(
+            "openai".to_string(),
+            make_provider("openai", Some("https://api.openai.com/v1"), &["gpt-4.1"]),
+        );
+        providers.insert(
+            "openrouter".to_string(),
+            make_provider("openrouter", Some("https://openrouter.ai/api/v1"), &["gpt-4.1"]),
+        );
+
+        assert_eq!(
+            find_provider_name(&providers, "gpt-4.1"),
+            Err(
+                "Model 'gpt-4.1' is configured for multiple providers. Use 'provider/model' to disambiguate."
+                    .to_string()
+            )
         );
     }
 
@@ -556,6 +600,7 @@ mod tests {
 
         let resolved =
             resolve_provider_config_from_map(&providers, "gpt-4.1", "/chat/completions", false)
+                .expect("provider lookup should succeed")
                 .expect("provider should resolve");
 
         assert_eq!(
@@ -564,6 +609,26 @@ mod tests {
         );
         assert_eq!(resolved.session_api_key.as_deref(), Some("sk-test"));
         assert_eq!(resolved.provider_custom_headers.len(), 1);
+    }
+
+    #[test]
+    fn resolve_provider_config_from_map_returns_error_for_ambiguous_model() {
+        let mut providers = HashMap::new();
+        providers.insert(
+            "openai".to_string(),
+            make_provider("openai", Some("https://api.openai.com/v1"), &["gpt-4.1"]),
+        );
+        providers.insert(
+            "openrouter".to_string(),
+            make_provider("openrouter", Some("https://openrouter.ai/api/v1"), &["gpt-4.1"]),
+        );
+
+        assert!(matches!(
+            resolve_provider_config_from_map(&providers, "gpt-4.1", "/chat/completions", false),
+            Err(message)
+                if message
+                    == "Model 'gpt-4.1' is configured for multiple providers. Use 'provider/model' to disambiguate."
+        ));
     }
 
     #[test]

@@ -17,6 +17,7 @@ import type { CostEstimate } from './multi-agent/cost-estimation'
 import { executeSingleAgentStream } from './transport/single-agent-transport'
 import { executeMultiAgentStream } from './transport/multi-agent-transport'
 import type { TokenUsageCallback, ServiceHub, SendMessagesOptions } from './transport/transport-types'
+import { prepareProviderForChat } from './chat/model-session'
 
 export type { TokenUsageCallback }
 
@@ -191,21 +192,7 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
     }
 
     const activeProvider = useModelProvider.getState().getProviderByName(providerId) ?? provider
-    const isLocalProvider = ['llamacpp', 'mlx', 'ollama'].includes(activeProvider.provider)
-    if (!activeProvider.api_key && !isLocalProvider) {
-      throw new Error(
-        `No API key configured for provider "${activeProvider.provider}". ` +
-        `Go to Settings → AI Providers and add your API key.`
-      )
-    }
-
-    if (isLocalProvider) {
-      try {
-        await getServiceHub().models().startModel(activeProvider, modelId)
-      } catch (loadError) {
-        throw new Error(`Failed to load model "${modelId}": ${loadError instanceof Error ? loadError.message : String(loadError)}`)
-      }
-    }
+    await prepareProviderForChat(getServiceHub(), activeProvider, modelId)
 
     const currentAssistant = useAssistant.getState().currentAssistant
     const inferenceParams = { ...(currentAssistant?.parameters ?? {}), ...(this.inferenceParameters ?? {}) }

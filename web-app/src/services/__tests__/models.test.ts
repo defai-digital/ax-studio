@@ -38,6 +38,7 @@ describe('DefaultModelsService', () => {
     getLoadedModels: vi.fn(),
     unload: vi.fn(),
     load: vi.fn(),
+    syncModelRoute: vi.fn(),
     isModelSupported: vi.fn(),
     isToolSupported: vi.fn(),
     checkMmprojExists: vi.fn(),
@@ -264,6 +265,47 @@ describe('DefaultModelsService', () => {
       expect(mockEngine.load).toBeCalledTimes(0)
       await expect(modelsService.startModel(provider, model)).resolves.toBe(
         undefined
+      )
+    })
+
+    it('should resync route when a loaded local model is reused', async () => {
+      const provider = {
+        provider: 'llamacpp',
+        models: [{ id: 'model1', settings: {} }],
+      } as any
+
+      mockEngine.getLoadedModels.mockResolvedValue({
+        includes: (value: string) => value === 'model1',
+      })
+
+      await expect(modelsService.startModel(provider, 'model1')).resolves.toBe(
+        undefined
+      )
+
+      expect(mockEngine.syncModelRoute).toHaveBeenCalledWith('model1')
+      expect(mockEngine.load).not.toHaveBeenCalled()
+    })
+
+    it('should load normally when engine returns no loaded models list', async () => {
+      const provider = {
+        provider: 'llamacpp',
+        models: [{ id: 'model1', settings: {} }],
+      } as any
+      const mockSession = { id: 'session1' }
+
+      mockEngine.getLoadedModels.mockResolvedValue(undefined)
+      mockEngine.load.mockResolvedValue(mockSession)
+
+      await expect(modelsService.startModel(provider, 'model1')).resolves.toEqual(
+        mockSession
+      )
+
+      expect(mockEngine.syncModelRoute).not.toHaveBeenCalled()
+      expect(mockEngine.load).toHaveBeenCalledWith(
+        'model1',
+        {},
+        false,
+        false
       )
     })
   })

@@ -34,6 +34,13 @@ export class DefaultModelsService implements ModelsService {
     return EngineManager.instance().get(provider) as AIEngine | undefined
   }
 
+  private async syncLoadedModelRoute(
+    engine: AIEngine,
+    model: string
+  ): Promise<void> {
+    await engine.syncModelRoute(model)
+  }
+
   async getModel(modelId: string): Promise<modelInfo | undefined> {
     return this.getEngine()?.get(modelId)
   }
@@ -331,8 +338,11 @@ export class DefaultModelsService implements ModelsService {
     const engine = this.getEngine(provider.provider)
     if (!engine) return undefined
 
-    const loadedModels = await engine.getLoadedModels()
-    if (loadedModels.includes(model)) return undefined
+    const loadedModels = (await engine.getLoadedModels()) ?? []
+    if (loadedModels.includes(model)) {
+      await this.syncLoadedModelRoute(engine, model)
+      return undefined
+    }
 
     // Find the model configuration to get settings
     const modelConfig = provider.models.find((m) => m.id === model)

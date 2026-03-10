@@ -6,7 +6,6 @@ import { useDownloadStore } from '@/hooks/useDownloadStore'
 import { useAppState } from '@/hooks/useAppState'
 import { toast } from 'sonner'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { invoke } from '@tauri-apps/api/core'
 
 // Map Rust error code strings to i18n keys in settings:llamacpp.errors
 const ERROR_CODE_MAP: Record<string, string> = {
@@ -36,9 +35,9 @@ export function GlobalEventHandler() {
     const handleSettingsChanged = async (event: {
       key: string
       value: string
-    }) => {
+    } | null) => {
       // Refresh providers when version_backend changes so the UI shows the new value
-      if (event.key === 'version_backend') {
+      if (event?.key === 'version_backend') {
         try {
           const updatedProviders = await serviceHub.providers().getProviders()
           setProviders(updatedProviders, serviceHub.path().sep())
@@ -61,8 +60,8 @@ export function GlobalEventHandler() {
   useEffect(() => {
     /**
      * OnModelReady — the llamacpp extension emits this after a model is loaded.
-     * Payload includes port and api_key so we can register the local
-     * llama-server with the Rust proxy (provider_configs).
+     * The engine layer is responsible for proxy registration; the app only
+     * refreshes active-model state here.
      */
     const handleModelReady = async (payload: {
       modelId?: string
@@ -70,28 +69,6 @@ export function GlobalEventHandler() {
       api_key?: string
       provider?: string
     }) => {
-      const { modelId, port, api_key, provider } = payload ?? {}
-      if (!modelId || !port || !provider) return
-
-      // Register the local provider with the Rust proxy so chat requests are routed correctly
-      const localProviders = ['llamacpp', 'mlx', 'ollama']
-      if (localProviders.includes(provider)) {
-        try {
-          await invoke('register_provider_config', {
-            request: {
-              provider,
-              base_url: `http://localhost:${port}/v1`,
-              api_key: api_key ?? '',
-              custom_headers: [],
-              models: [modelId],
-            },
-          })
-          console.log(`Registered local provider '${provider}' (model: ${modelId}) with proxy at port ${port}`)
-        } catch (error) {
-          console.error('Failed to register local provider with proxy:', error)
-        }
-      }
-
       // Update active models list
       try {
         const active = await serviceHub.models().getActiveModels()
