@@ -41,12 +41,12 @@ pub fn run() {
     // Desktop: include updater commands
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let app_builder =
-        app_builder.invoke_handler(commands::desktop_handlers!(tauri::generate_handler));
+        app_builder.invoke_handler(commands::desktop_handlers!());
 
     // Mobile: no updater commands
     #[cfg(any(target_os = "android", target_os = "ios"))]
     let app_builder =
-        app_builder.invoke_handler(commands::mobile_handlers!(tauri::generate_handler));
+        app_builder.invoke_handler(commands::mobile_handlers!());
 
     let app = app_builder
         .manage(AppState {

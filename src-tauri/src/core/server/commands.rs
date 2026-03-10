@@ -1,6 +1,6 @@
 use tauri::{AppHandle, Runtime, State};
 
-use crate::core::server::proxy;
+use crate::core::server::proxy_server;
 use crate::core::state::AppState;
 
 #[derive(serde::Deserialize)]
@@ -44,7 +44,7 @@ pub async fn start_server<R: Runtime>(
 
     let server_handle = state.server_handle.clone();
 
-    let actual_port = proxy::start_server(
+    let actual_port = proxy_server::start_server(
         server_handle,
         host,
         port,
@@ -77,7 +77,7 @@ mod tests {
 pub async fn stop_server(state: State<'_, AppState>) -> Result<(), String> {
     let server_handle = state.server_handle.clone();
 
-    proxy::stop_server(server_handle)
+    proxy_server::stop_server(server_handle)
         .await
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -87,5 +87,5 @@ pub async fn stop_server(state: State<'_, AppState>) -> Result<(), String> {
 pub async fn get_server_status(state: State<'_, AppState>) -> Result<bool, String> {
     let server_handle = state.server_handle.clone();
 
-    Ok(proxy::is_server_running(server_handle).await)
+    Ok(proxy_server::is_server_running(server_handle).await)
 }

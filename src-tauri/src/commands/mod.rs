@@ -1,8 +1,8 @@
-/// Expands to `$mac![all desktop handler paths]`.
-/// Usage: `commands::desktop_handlers!(tauri::generate_handler)`
+/// Expands to `tauri::generate_handler![all desktop handlers]`.
+/// Usage: `commands::desktop_handlers!()`
 macro_rules! desktop_handlers {
-    ($mac:path) => {
-        $mac![
+    () => {
+        tauri::generate_handler![
             // FS commands - Deprecate soon
             crate::core::filesystem::commands::join_path,
             crate::core::filesystem::commands::mkdir,
@@ -117,11 +117,11 @@ macro_rules! desktop_handlers {
 }
 pub(crate) use desktop_handlers;
 
-/// Expands to `$mac![all mobile handler paths]` (identical to desktop, minus updater commands).
-/// Usage: `commands::mobile_handlers!(tauri::generate_handler)`
+/// Expands to `tauri::generate_handler![all mobile handlers]` (identical to desktop, minus updater commands).
+/// Usage: `commands::mobile_handlers!()`
 macro_rules! mobile_handlers {
-    ($mac:path) => {
-        $mac![
+    () => {
+        tauri::generate_handler![
             // FS commands - Deprecate soon
             crate::core::filesystem::commands::join_path,
             crate::core::filesystem::commands::mkdir,

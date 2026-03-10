@@ -17,12 +17,11 @@ use tokio::{
     time::{sleep, timeout},
 };
 
+#[cfg(windows)]
+use crate::core::mcp::constants::CREATE_NO_WINDOW;
 use crate::core::{
     app::commands::get_app_data_folder_path,
-    mcp::{
-        constants::CREATE_NO_WINDOW,
-        models::{McpServerConfig, McpSettings},
-    },
+    mcp::models::{McpServerConfig, McpSettings},
     state::{AppState, RunningServiceEnum, SharedMcpServers},
 };
 use ax_studio_utils::{can_override_npx, can_override_uvx};
