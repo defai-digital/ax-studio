@@ -6,14 +6,15 @@ use hyper::body::Bytes;
 use hyper::{Body, Response, StatusCode};
 use reqwest::Client;
 use serde_json;
+use std::collections::HashMap;
 use tauri::Manager;
 
-use crate::core::state::{AppState, ProviderCustomHeader};
 use super::provider_adapter::{
     forward_non_streaming, transform_and_forward_stream, transform_anthropic_to_openai,
 };
 use super::proxy::ProxyConfig;
 use super::security::add_cors_headers_with_host_and_origin;
+use crate::core::state::{AppState, ProviderConfig, ProviderCustomHeader};
 
 /// Result of resolving a model route — all data needed to send the upstream request.
 pub(super) struct ProviderResolution {
@@ -22,6 +23,98 @@ pub(super) struct ProviderResolution {
     pub provider_custom_headers: Vec<ProviderCustomHeader>,
     pub is_anthropic_messages: bool,
     pub buffered_body: Bytes,
+}
+
+#[derive(Clone)]
+struct ResolvedProviderConfig {
+    target_base_url: String,
+    session_api_key: Option<String>,
+    provider_custom_headers: Vec<ProviderCustomHeader>,
+}
+
+fn error_response(
+    status: StatusCode,
+    message: impl Into<String>,
+    host_header: &str,
+    origin_header: &str,
+    config: &ProxyConfig,
+) -> Response<Body> {
+    let mut builder = Response::builder().status(status);
+    builder = add_cors_headers_with_host_and_origin(
+        builder,
+        host_header,
+        origin_header,
+        &config.trusted_hosts,
+    );
+    builder.body(Body::from(message.into())).unwrap()
+}
+
+fn extract_model_id(body_bytes: &[u8]) -> Result<String, String> {
+    let json_body = serde_json::from_slice::<serde_json::Value>(body_bytes)
+        .map_err(|e| format!("Invalid JSON body: {e}"))?;
+
+    json_body
+        .get("model")
+        .and_then(|value| value.as_str())
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| "Request body must contain a 'model' field".to_string())
+}
+
+fn find_provider_name(
+    provider_configs: &HashMap<String, ProviderConfig>,
+    model_id: &str,
+) -> Option<String> {
+    provider_configs
+        .iter()
+        .find(|(_, config)| config.models.iter().any(|m| m == model_id))
+        .map(|(_, config)| config.provider.clone())
+        .or_else(|| {
+            if let Some(sep_pos) = model_id.find('/') {
+                let potential_provider = &model_id[..sep_pos];
+                if provider_configs.contains_key(potential_provider) {
+                    return Some(potential_provider.to_string());
+                }
+            }
+            provider_configs
+                .get(model_id)
+                .map(|config| config.provider.clone())
+        })
+}
+
+fn build_upstream_url(
+    base_url: &str,
+    destination_path: &str,
+    is_anthropic_messages: bool,
+) -> String {
+    let trimmed = base_url
+        .trim_end_matches('/')
+        .trim_end_matches("/messages")
+        .trim_end_matches("/chat/completions")
+        .trim_end_matches("/completions")
+        .trim_end_matches("/embeddings");
+
+    if is_anthropic_messages {
+        format!("{trimmed}/messages")
+    } else {
+        format!("{trimmed}{destination_path}")
+    }
+}
+
+fn resolve_provider_config_from_map(
+    provider_configs: &HashMap<String, ProviderConfig>,
+    model_id: &str,
+    destination_path: &str,
+    is_anthropic_messages: bool,
+) -> Option<ResolvedProviderConfig> {
+    let provider_name = find_provider_name(provider_configs, model_id)?;
+    let provider_cfg = provider_configs.get(provider_name.as_str())?;
+    let base_url = provider_cfg.base_url.as_deref()?;
+
+    Some(ResolvedProviderConfig {
+        target_base_url: build_upstream_url(base_url, destination_path, is_anthropic_messages),
+        session_api_key: provider_cfg.api_key.clone(),
+        provider_custom_headers: provider_cfg.custom_headers.clone(),
+    })
 }
 
 /// Resolve the provider for a POST model request (reads body, looks up provider config).
@@ -34,309 +127,74 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
     config: &ProxyConfig,
     app_handle: &tauri::AppHandle<R>,
 ) -> Result<ProviderResolution, Response<Body>> {
-    if destination_path == "/messages" {
-        let is_anthropic_messages = true;
-        log::info!(
-            "Handling POST request to /messages with chat/completions fallback on error",
-        );
-        let body_bytes = match hyper::body::to_bytes(body).await {
-            Ok(bytes) => bytes,
-            Err(_) => {
-                let mut error_response =
-                    Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR);
-                error_response = add_cors_headers_with_host_and_origin(
-                    error_response,
-                    host_header,
-                    origin_header,
-                    &config.trusted_hosts,
-                );
-                return Err(error_response
-                    .body(Body::from("Failed to read request body"))
-                    .unwrap());
-            }
-        };
-
-        // Parse body to get model_id for routing (don't transform yet)
-        match serde_json::from_slice::<serde_json::Value>(&body_bytes) {
-            Ok(json_body) => {
-                if let Some(model_id) = json_body.get("model").and_then(|v| v.as_str()) {
-                    let mut target_base_url: Option<String> = None;
-                    let mut session_api_key: Option<String> = None;
-                    let mut provider_custom_headers: Vec<ProviderCustomHeader> = vec![];
-                    let provider_name: Option<String>;
-
-                    // Single lock acquisition: resolve provider and extract all config data at once
-                    let state = app_handle.state::<AppState>();
-                    {
-                        let provider_configs = state.provider_configs.lock().await;
-
-                        let found = provider_configs
-                            .iter()
-                            .find(|(_, config)| config.models.iter().any(|m| m == model_id))
-                            .map(|(_, config)| config.provider.clone())
-                            .or_else(|| {
-                                if let Some(sep_pos) = model_id.find('/') {
-                                    let potential_provider: &str = &model_id[..sep_pos];
-                                    if provider_configs.contains_key(potential_provider) {
-                                        return Some(potential_provider.to_string());
-                                    }
-                                }
-                                provider_configs.get(model_id).map(|c| c.provider.clone())
-                            });
-
-                        if let Some(ref p) = found {
-                            log::info!("Using remote provider '{p}' for model '{model_id}'");
-                            if let Some(provider_cfg) = provider_configs.get(p.as_str()) {
-                                target_base_url = provider_cfg.base_url.clone().map(|url| {
-                                    let trimmed = url
-                                        .trim_end_matches('/')
-                                        .trim_end_matches("/messages")
-                                        .trim_end_matches("/chat/completions")
-                                        .trim_end_matches("/completions");
-                                    format!("{trimmed}/messages")
-                                });
-                                session_api_key = provider_cfg.api_key.clone();
-                                provider_custom_headers = provider_cfg.custom_headers.clone();
-                            }
-                        }
-                        provider_name = found;
-                        // lock released here
-                    }
-
-                    if provider_name.is_none() {
-                        // No remote provider configured for this model
-                        log::warn!("No remote provider configured for model_id: {model_id}");
-                        let mut error_response =
-                            Response::builder().status(StatusCode::NOT_FOUND);
-                        error_response = add_cors_headers_with_host_and_origin(
-                            error_response,
-                            host_header,
-                            origin_header,
-                            &config.trusted_hosts,
-                        );
-                        return Err(error_response
-                            .body(Body::from(format!(
-                                "No remote provider configured for model '{model_id}'"
-                            )))
-                            .unwrap());
-                    }
-
-                    let upstream_url = match target_base_url {
-                        Some(url) => url,
-                        None => {
-                            log::error!(
-                                "Internal API server routing error: target is None after successful lookup"
-                            );
-                            let mut error_response =
-                                Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR);
-                            error_response = add_cors_headers_with_host_and_origin(
-                                error_response,
-                                host_header,
-                                origin_header,
-                                &config.trusted_hosts,
-                            );
-                            return Err(error_response
-                                .body(Body::from("Internal routing error"))
-                                .unwrap());
-                        }
-                    };
-
-                    return Ok(ProviderResolution {
-                        target_base_url: upstream_url,
-                        session_api_key,
-                        provider_custom_headers,
-                        is_anthropic_messages,
-                        buffered_body: body_bytes,
-                    });
-                } else {
-                    let error_msg = "Request body must contain a 'model' field";
-                    log::warn!("POST body for /messages missing 'model' field");
-                    let mut error_response =
-                        Response::builder().status(StatusCode::BAD_REQUEST);
-                    error_response = add_cors_headers_with_host_and_origin(
-                        error_response,
-                        host_header,
-                        origin_header,
-                        &config.trusted_hosts,
-                    );
-                    return Err(error_response.body(Body::from(error_msg)).unwrap());
-                }
-            }
-            Err(e) => {
-                log::warn!("Failed to parse POST body for /messages as JSON: {e}");
-                let mut error_response = Response::builder().status(StatusCode::BAD_REQUEST);
-                error_response = add_cors_headers_with_host_and_origin(
-                    error_response,
-                    host_header,
-                    origin_header,
-                    &config.trusted_hosts,
-                );
-                let error_msg = format!("Invalid JSON body: {}", e);
-                return Err(error_response.body(Body::from(error_msg)).unwrap());
-            }
-        }
+    let is_anthropic_messages = destination_path == "/messages";
+    if is_anthropic_messages {
+        log::info!("Handling POST request to /messages with chat/completions fallback on error");
     } else {
-        // /chat/completions, /completions, /embeddings, /messages/count_tokens
-        log::info!(
-            "Handling POST request to {destination_path} requiring model lookup in body",
+        log::info!("Handling POST request to {destination_path} requiring model lookup in body");
+    }
+
+    let body_bytes = hyper::body::to_bytes(body).await.map_err(|_| {
+        error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to read request body",
+            host_header,
+            origin_header,
+            config,
+        )
+    })?;
+
+    let model_id = extract_model_id(&body_bytes).map_err(|message| {
+        if is_anthropic_messages {
+            log::warn!("POST body for /messages rejected: {message}");
+        } else {
+            log::warn!("POST body for {destination_path} rejected: {message}");
+        }
+        error_response(
+            StatusCode::BAD_REQUEST,
+            message,
+            host_header,
+            origin_header,
+            config,
+        )
+    })?;
+
+    log::debug!("Extracted model_id: {model_id}");
+
+    let state = app_handle.state::<AppState>();
+    let resolved = {
+        let provider_configs = state.provider_configs.lock().await;
+
+        log::debug!(
+            "Registered providers: {:?}",
+            provider_configs.keys().collect::<Vec<_>>()
         );
-        let body_bytes = match hyper::body::to_bytes(body).await {
-            Ok(bytes) => bytes,
-            Err(_) => {
-                let mut error_response =
-                    Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR);
-                error_response = add_cors_headers_with_host_and_origin(
-                    error_response,
-                    host_header,
-                    origin_header,
-                    &config.trusted_hosts,
-                );
-                return Err(error_response
-                    .body(Body::from("Failed to read request body"))
-                    .unwrap());
-            }
-        };
 
-        match serde_json::from_slice::<serde_json::Value>(&body_bytes) {
-            Ok(json_body) => {
-                if let Some(model_id) = json_body.get("model").and_then(|v| v.as_str()) {
-                    log::debug!("Extracted model_id: {model_id}");
+        resolve_provider_config_from_map(
+            &provider_configs,
+            &model_id,
+            destination_path,
+            is_anthropic_messages,
+        )
+    };
 
-                    let mut target_base_url: Option<String> = None;
-                    let mut session_api_key: Option<String> = None;
-                    let mut provider_custom_headers: Vec<ProviderCustomHeader> = vec![];
-                    let provider_name: Option<String>;
-
-                    // Single lock acquisition: resolve provider and extract all config at once
-                    let state = app_handle.state::<AppState>();
-                    {
-                        let provider_configs = state.provider_configs.lock().await;
-
-                        log::debug!(
-                            "Registered providers: {:?}",
-                            provider_configs.keys().collect::<Vec<_>>()
-                        );
-
-                        let found = provider_configs
-                            .iter()
-                            .find(|(_, config)| config.models.iter().any(|m| m == model_id))
-                            .map(|(_, config)| config.provider.clone())
-                            .or_else(|| {
-                                if let Some(sep_pos) = model_id.find('/') {
-                                    let potential_provider: &str = &model_id[..sep_pos];
-                                    if provider_configs.contains_key(potential_provider) {
-                                        return Some(potential_provider.to_string());
-                                    }
-                                }
-                                provider_configs.get(model_id).map(|c| c.provider.clone())
-                            });
-
-                        if let Some(ref provider) = found {
-                            log::info!(
-                                "Found remote provider '{provider}' for model '{model_id}'"
-                            );
-                            if let Some(provider_cfg) = provider_configs.get(provider.as_str())
-                            {
-                                if let Some(ref api_url) = provider_cfg.base_url {
-                                    // Strip known endpoint suffixes from base_url before
-                                    // appending destination_path.  Providers like Cloudflare
-                                    // gateway have base_urls that already include the endpoint
-                                    // (e.g. ".../compat/chat/completions").  Without stripping,
-                                    // the final URL would be doubled.
-                                    let trimmed_url = api_url
-                                        .trim_end_matches('/')
-                                        .trim_end_matches("/chat/completions")
-                                        .trim_end_matches("/completions")
-                                        .trim_end_matches("/embeddings")
-                                        .trim_end_matches("/messages");
-                                    target_base_url =
-                                        Some(format!("{trimmed_url}{destination_path}"));
-                                } else {
-                                    target_base_url = None;
-                                }
-                                session_api_key = provider_cfg.api_key.clone();
-                                provider_custom_headers = provider_cfg.custom_headers.clone();
-                            } else {
-                                log::error!("Provider config not found for '{provider}'");
-                            }
-                        }
-                        provider_name = found;
-                        // lock released here
-                    }
-
-                    if provider_name.is_none() {
-                        // No remote provider configured for this model
-                        log::warn!("No remote provider configured for model_id: {model_id}");
-                        let mut error_response =
-                            Response::builder().status(StatusCode::NOT_FOUND);
-                        error_response = add_cors_headers_with_host_and_origin(
-                            error_response,
-                            host_header,
-                            origin_header,
-                            &config.trusted_hosts,
-                        );
-                        return Err(error_response
-                            .body(Body::from(format!(
-                                "No remote provider configured for model '{model_id}'"
-                            )))
-                            .unwrap());
-                    }
-
-                    let upstream_url = match target_base_url {
-                        Some(url) => url,
-                        None => {
-                            log::error!(
-                                "Internal API server routing error: target is None after successful lookup"
-                            );
-                            let mut error_response =
-                                Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR);
-                            error_response = add_cors_headers_with_host_and_origin(
-                                error_response,
-                                host_header,
-                                origin_header,
-                                &config.trusted_hosts,
-                            );
-                            return Err(error_response
-                                .body(Body::from("Internal routing error"))
-                                .unwrap());
-                        }
-                    };
-
-                    return Ok(ProviderResolution {
-                        target_base_url: upstream_url,
-                        session_api_key,
-                        provider_custom_headers,
-                        is_anthropic_messages: false,
-                        buffered_body: body_bytes,
-                    });
-                } else {
-                    let error_msg = "Request body must contain a 'model' field";
-                    log::warn!(
-                        "POST body for {destination_path} is missing 'model' field or it's not a string"
-                    );
-                    let mut error_response =
-                        Response::builder().status(StatusCode::BAD_REQUEST);
-                    error_response = add_cors_headers_with_host_and_origin(
-                        error_response,
-                        host_header,
-                        origin_header,
-                        &config.trusted_hosts,
-                    );
-                    return Err(error_response.body(Body::from(error_msg)).unwrap());
-                }
-            }
-            Err(e) => {
-                log::warn!("Failed to parse POST body for {destination_path} as JSON: {e}");
-                let mut error_response = Response::builder().status(StatusCode::BAD_REQUEST);
-                error_response = add_cors_headers_with_host_and_origin(
-                    error_response,
-                    host_header,
-                    origin_header,
-                    &config.trusted_hosts,
-                );
-                let error_msg = format!("Invalid JSON body: {}", e);
-                return Err(error_response.body(Body::from(error_msg)).unwrap());
-            }
+    match resolved {
+        Some(resolved) => Ok(ProviderResolution {
+            target_base_url: resolved.target_base_url,
+            session_api_key: resolved.session_api_key,
+            provider_custom_headers: resolved.provider_custom_headers,
+            is_anthropic_messages,
+            buffered_body: body_bytes,
+        }),
+        None => {
+            log::warn!("No remote provider configured for model_id: {model_id}");
+            Err(error_response(
+                StatusCode::NOT_FOUND,
+                format!("No remote provider configured for model '{model_id}'"),
+                host_header,
+                origin_header,
+                config,
+            ))
         }
     }
 }
@@ -620,5 +478,101 @@ pub(super) async fn dispatch_to_upstream(
             );
             Ok(error_response.body(Body::from(error_msg)).unwrap())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_provider(provider: &str, base_url: Option<&str>, models: &[&str]) -> ProviderConfig {
+        ProviderConfig {
+            provider: provider.to_string(),
+            api_key: Some("sk-test".to_string()),
+            base_url: base_url.map(ToOwned::to_owned),
+            custom_headers: vec![ProviderCustomHeader {
+                header: "X-Test".to_string(),
+                value: "1".to_string(),
+            }],
+            models: models.iter().map(|model| model.to_string()).collect(),
+        }
+    }
+
+    #[test]
+    fn find_provider_name_matches_explicit_model_membership() {
+        let mut providers = HashMap::new();
+        providers.insert(
+            "openai".to_string(),
+            make_provider("openai", Some("https://api.openai.com/v1"), &["gpt-4.1"]),
+        );
+
+        assert_eq!(
+            find_provider_name(&providers, "gpt-4.1"),
+            Some("openai".to_string())
+        );
+    }
+
+    #[test]
+    fn find_provider_name_falls_back_to_provider_prefix() {
+        let mut providers = HashMap::new();
+        providers.insert(
+            "anthropic".to_string(),
+            make_provider("anthropic", Some("https://api.anthropic.com/v1"), &[]),
+        );
+
+        assert_eq!(
+            find_provider_name(&providers, "anthropic/claude-3-7-sonnet"),
+            Some("anthropic".to_string())
+        );
+    }
+
+    #[test]
+    fn build_upstream_url_normalizes_known_suffixes() {
+        assert_eq!(
+            build_upstream_url(
+                "https://gateway.example.com/compat/chat/completions",
+                "/chat/completions",
+                false,
+            ),
+            "https://gateway.example.com/compat/chat/completions"
+        );
+        assert_eq!(
+            build_upstream_url("https://api.anthropic.com/v1/messages", "/messages", true,),
+            "https://api.anthropic.com/v1/messages"
+        );
+    }
+
+    #[test]
+    fn resolve_provider_config_from_map_builds_expected_target() {
+        let mut providers = HashMap::new();
+        providers.insert(
+            "openai".to_string(),
+            make_provider(
+                "openai",
+                Some("https://api.openai.com/v1/chat/completions"),
+                &["gpt-4.1"],
+            ),
+        );
+
+        let resolved =
+            resolve_provider_config_from_map(&providers, "gpt-4.1", "/chat/completions", false)
+                .expect("provider should resolve");
+
+        assert_eq!(
+            resolved.target_base_url,
+            "https://api.openai.com/v1/chat/completions"
+        );
+        assert_eq!(resolved.session_api_key.as_deref(), Some("sk-test"));
+        assert_eq!(resolved.provider_custom_headers.len(), 1);
+    }
+
+    #[test]
+    fn extract_model_id_requires_valid_json_and_model_field() {
+        assert_eq!(
+            extract_model_id(br#"{"model":"gpt-4.1"}"#).expect("valid model"),
+            "gpt-4.1"
+        );
+        assert!(extract_model_id(br#"{"messages":[]}"#).is_err());
+        assert!(extract_model_id(br#"not-json"#).is_err());
     }
 }

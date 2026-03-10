@@ -111,6 +111,6 @@ export async function searchWikipedia(
   return data.query.search.map((r) => ({
     url: `https://en.wikipedia.org/wiki/${encodeURIComponent(r.title.replace(/ /g, '_'))}`,
     title: r.title,
-    snippet: r.snippet.replace(/<[^>]*>/g, '').trim(),
+    snippet: r.snippet.replace(/<[^>]*>/g, '').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#039;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim(),
   }))
 }

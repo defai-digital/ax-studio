@@ -75,7 +75,7 @@ export function convertUIMessageToThreadMessage(
   const toolCalls = (uiMessage.parts as any[])
     .filter((part) => part.type.startsWith('tool'))
     .map((part) => {
-      const toolName = part.type.replace('tool-', '')
+      const toolName = part.toolInvocation?.toolName ?? part.type.replace('tool-', '')
       return {
         tool: {
           id: part.toolCallId || part.toolInvocationId,

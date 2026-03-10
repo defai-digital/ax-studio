@@ -188,7 +188,7 @@ export function useThreadTools({
                 state: 'output-error',
                 tool: toolCall.toolName,
                 toolCallId: toolCall.toolCallId,
-                errorText: `Error: ${JSON.stringify(error)}`,
+                errorText: `Error: ${error instanceof Error ? error.message : String(error)}`,
               })
             }
           }

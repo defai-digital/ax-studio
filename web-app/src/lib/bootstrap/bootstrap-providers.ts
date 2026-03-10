@@ -10,35 +10,7 @@ import { deepLinkPayloadSchema } from '@/schemas/events.schema'
 import { assistantsSchema } from '@/schemas/assistants.schema'
 import { SystemEvent } from '@/types/events'
 import { type BootstrapResult, ok, fail } from './bootstrap-result'
-import { invoke } from '@tauri-apps/api/core'
-
-type ProviderCustomHeader = { header: string; value: string }
-type RegisterProviderRequest = {
-  provider: string
-  api_key?: string
-  base_url?: string
-  custom_headers: ProviderCustomHeader[]
-  models: string[]
-}
-
-async function registerRemoteProvidersBatch(providers: ModelProvider[]): Promise<void> {
-  const requests: RegisterProviderRequest[] = providers
-    .filter((p) => !['llamacpp', 'mlx', 'ollama'].includes(p.provider) && p.api_key)
-    .map((p) => ({
-      provider: p.provider,
-      api_key: p.api_key,
-      base_url: p.base_url,
-      custom_headers: (p.custom_header || []).map((h) => ({
-        header: h.header,
-        value: h.value,
-      })),
-      models: p.models.map((e) => e.id),
-    }))
-
-  if (requests.length === 0) return
-
-  await invoke('register_provider_configs_batch', { requests })
-}
+import { syncRemoteProviders } from '@/lib/providers/provider-sync'
 
 export type BootstrapProvidersInput = {
   serviceHub: ServiceHub
@@ -80,7 +52,7 @@ export async function bootstrapProviders(input: BootstrapProvidersInput): Promis
         .getProviders()
         .then((providers) => {
           setProviders(providers, serviceHub.path().sep())
-          return registerRemoteProvidersBatch(providers).catch((err) =>
+          return syncRemoteProviders(providers).catch((err) =>
             console.error('Failed to batch-register providers:', err)
           )
         })

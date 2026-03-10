@@ -15,6 +15,7 @@ import { bootstrapThreads } from '@/lib/bootstrap/bootstrap-threads'
 import { bootstrapUpdater } from '@/lib/bootstrap/bootstrap-updater'
 import { bootstrapEvents } from '@/lib/bootstrap/bootstrap-events'
 import { bootstrapLocalApi } from '@/lib/bootstrap/bootstrap-local-api'
+import { syncRemoteProviders as syncRemoteProviderConfigs } from '@/lib/providers/provider-sync'
 
 export function DataProvider() {
   const { setProviders, providers } = useModelProvider()
@@ -132,25 +133,8 @@ export function DataProvider() {
 // ─── Standalone helpers ───────────────────────────────────────────────────────
 
 async function syncRemoteProviders(providers: ModelProvider[]) {
-  const eligible = providers.filter((p) => p.active && p.api_key)
-  if (eligible.length === 0) return
   try {
-    const { invoke } = await import('@tauri-apps/api/core')
-    const requests = eligible
-      .filter((p) => !['llamacpp', 'mlx', 'ollama'].includes(p.provider))
-      .map((p) => ({
-        provider: p.provider,
-        api_key: p.api_key,
-        base_url: p.base_url,
-        custom_headers: (p.custom_header || []).map((h) => ({
-          header: h.header,
-          value: h.value,
-        })),
-        models: p.models.map((e) => e.id),
-      }))
-    if (requests.length > 0) {
-      await invoke('register_provider_configs_batch', { requests })
-    }
+    await syncRemoteProviderConfigs(providers)
   } catch (error) {
     console.error('Failed to sync remote providers:', error)
   }

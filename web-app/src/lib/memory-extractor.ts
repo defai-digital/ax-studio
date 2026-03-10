@@ -223,12 +223,15 @@ function isSameCategory(category: string, existingFact: string): boolean {
     case 'workplace':
       return existingFact.includes('user works at') || existingFact.includes('works for')
     case 'occupation':
-      return existingFact.includes('user is a ') && (
-        existingFact.includes('engineer') || existingFact.includes('developer') ||
-        existingFact.includes('designer') || existingFact.includes('student') ||
-        existingFact.includes('manager') || existingFact.includes('doctor') ||
-        existingFact.includes("user's job") || existingFact.includes('user is a')
-      )
+      return existingFact.includes("user's job") ||
+        (existingFact.includes('user is a ') && (
+          existingFact.includes('engineer') || existingFact.includes('developer') ||
+          existingFact.includes('designer') || existingFact.includes('student') ||
+          existingFact.includes('manager') || existingFact.includes('doctor') ||
+          existingFact.includes('analyst') || existingFact.includes('architect') ||
+          existingFact.includes('consultant') || existingFact.includes('founder') ||
+          existingFact.includes('teacher') || existingFact.includes('scientist')
+        ))
     case 'location':
       return existingFact.includes('user lives in') || existingFact.includes('user is from')
     case 'age':
@@ -252,7 +255,10 @@ function isSameCategory(category: string, existingFact: string): boolean {
         existingFact.includes("user's son") || existingFact.includes("user's daughter")
     case 'pet':
       return existingFact.includes('user has a dog') || existingFact.includes('user has a cat') ||
-        existingFact.includes('user has a bird') || existingFact.includes('user has a')
+        existingFact.includes('user has a bird') || existingFact.includes('user has a fish') ||
+        existingFact.includes('user has a hamster') || existingFact.includes('user has a rabbit') ||
+        existingFact.includes('user has a parrot') || existingFact.includes('user has a turtle') ||
+        existingFact.includes('user has a snake') || existingFact.includes("user's pet")
     case 'education':
       return existingFact.includes('user studied') || existingFact.includes('user has a') && existingFact.includes('degree') ||
         existingFact.includes('user graduated')
