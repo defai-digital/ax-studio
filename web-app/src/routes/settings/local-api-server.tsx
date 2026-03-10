@@ -507,7 +507,7 @@ function LocalAPIServerContent() {
                     <Input
                       className="h-8 w-56 text-sm"
                       value={localServiceUrls.apiServiceUrl}
-                      placeholder="http://127.0.0.1:8000"
+                      placeholder="http://127.0.0.1:18080"
                       onChange={(e) =>
                         setLocalServiceUrls((s) => ({
                           ...s,

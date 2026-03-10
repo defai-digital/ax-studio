@@ -87,7 +87,7 @@ function SetupScreen({ onComplete }: SetupScreenProps) {
               <Input
                 value={apiServiceUrl}
                 onChange={(e) => setApiServiceUrl(e.target.value)}
-                placeholder="http://127.0.0.1:8000"
+                placeholder="http://127.0.0.1:18080"
                 className="h-8 text-sm font-mono"
               />
             </div>

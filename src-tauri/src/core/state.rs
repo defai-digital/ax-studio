@@ -36,7 +36,7 @@ pub struct ProviderCustomHeader {
 /// Defaults point to localhost with per-service ports.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AxStudioServiceConfig {
-    /// API Service — OpenAI-compatible model inference proxy (FastAPI)
+    /// API Service — OpenAI-compatible model inference proxy (ax-serving)
     pub api_service_url: String,
     /// Retrieval Service — document ingestion, embedding, semantic search (FastAPI)
     pub retrieval_service_url: String,
@@ -49,7 +49,7 @@ pub struct AxStudioServiceConfig {
 impl Default for AxStudioServiceConfig {
     fn default() -> Self {
         Self {
-            api_service_url: "http://127.0.0.1:8000".to_string(),
+            api_service_url: "http://127.0.0.1:18080".to_string(),
             retrieval_service_url: "http://127.0.0.1:8001".to_string(),
             agents_service_url: "http://127.0.0.1:8002".to_string(),
             akidb_url: "http://127.0.0.1:8003".to_string(),

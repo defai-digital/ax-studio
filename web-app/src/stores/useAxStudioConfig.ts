@@ -5,7 +5,7 @@
  * can connect to the user's self-hosted Ax-Studio backend services.
  *
  * Defaults assume all services run on localhost with sequential ports:
- *   API Service       → http://127.0.0.1:8000
+ *   API Service       → http://127.0.0.1:18080
  *   Retrieval Service → http://127.0.0.1:8001
  *   Agents Service    → http://127.0.0.1:8002
  *   AkiDB             → http://127.0.0.1:8003
@@ -18,7 +18,7 @@ import { DEFAULT_SERVICE_URLS } from '@/constants/services'
 import { localStorageKey } from '@/constants/localStorage'
 
 export interface AxStudioServiceConfig {
-  /** FastAPI inference proxy — OpenAI-compatible /v1/chat/completions */
+  /** ax-serving inference proxy — OpenAI-compatible /v1/chat/completions */
   apiServiceUrl: string
   /** FastAPI retrieval service — document ingest + semantic search */
   retrievalServiceUrl: string
