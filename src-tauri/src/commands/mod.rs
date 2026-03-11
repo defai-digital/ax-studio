@@ -23,6 +23,7 @@ macro_rules! desktop_handlers {
             crate::core::filesystem::commands::read_akidb_config,
             crate::core::filesystem::commands::write_akidb_config,
             crate::core::filesystem::commands::read_akidb_status,
+            crate::core::filesystem::commands::akidb_sync_now,
             // App configuration commands
             crate::core::app::commands::get_app_configurations,
             crate::core::app::commands::get_user_home_path,
@@ -54,9 +55,6 @@ macro_rules! desktop_handlers {
             crate::core::server::remote_provider_commands::unregister_provider_config,
             crate::core::server::remote_provider_commands::get_provider_config,
             crate::core::server::remote_provider_commands::list_provider_configs,
-            // Ax-Studio backend service config commands
-            crate::core::server::remote_provider_commands::get_ax_studio_service_config,
-            crate::core::server::remote_provider_commands::update_ax_studio_service_config,
             // MCP commands
             crate::core::mcp::commands::get_tools,
             crate::core::mcp::commands::call_tool,
@@ -142,6 +140,7 @@ macro_rules! mobile_handlers {
             crate::core::filesystem::commands::read_akidb_config,
             crate::core::filesystem::commands::write_akidb_config,
             crate::core::filesystem::commands::read_akidb_status,
+            crate::core::filesystem::commands::akidb_sync_now,
             // App configuration commands
             crate::core::app::commands::get_app_configurations,
             crate::core::app::commands::get_user_home_path,
@@ -173,9 +172,6 @@ macro_rules! mobile_handlers {
             crate::core::server::remote_provider_commands::unregister_provider_config,
             crate::core::server::remote_provider_commands::get_provider_config,
             crate::core::server::remote_provider_commands::list_provider_configs,
-            // Ax-Studio backend service config commands
-            crate::core::server::remote_provider_commands::get_ax_studio_service_config,
-            crate::core::server::remote_provider_commands::update_ax_studio_service_config,
             // MCP commands
             crate::core::mcp::commands::get_tools,
             crate::core::mcp::commands::call_tool,

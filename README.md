@@ -2,7 +2,7 @@
 
 The Open-Source AI Desktop Application
 
-AX Studio is a native desktop app that connects any AI provider to your own backend services — local inference, retrieval, agents, vector storage, and MCP tools — through a single unified interface.
+AX Studio is a native desktop app that connects any AI provider — cloud or self-hosted — through a single unified interface with MCP tools, local inference, and knowledge base integration.
 
 Status: Open Source (Apache-2.0) | Tauri 2 + React 19 | macOS · Windows · Linux | v0.92
 
@@ -97,19 +97,6 @@ Most AI desktop apps are thin wrappers around a single provider. AX Studio focus
 | Any OpenAI-compatible endpoint | Self-hosted |
 
 ---
-
-## Backend Services
-
-AX Studio integrates with four self-hosted backend services. Configure URLs in **Settings → General**:
-
-| Service | Default URL | Purpose |
-|---|---|---|
-| API Service | `http://127.0.0.1:8000` | OpenAI-compatible inference proxy |
-| Retrieval Service | `http://127.0.0.1:8001` | Document ingestion, embeddings, semantic search |
-| Agents Service | `http://127.0.0.1:8002` | Agent orchestration and execution |
-| AkiDB | `http://127.0.0.1:8003` | Vector database REST API |
-
-Cloud-only usage works without any backend setup — just add provider API keys.
 
 ---
 

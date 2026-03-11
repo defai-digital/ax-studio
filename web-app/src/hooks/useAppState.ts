@@ -20,7 +20,6 @@ type AppState = {
   streamingContent?: ThreadMessage
   loadingModel?: boolean
   tools: MCPTool[]
-  ragToolNames: Set<string>
   mcpToolNames: Set<string>
   serverStatus: 'running' | 'stopped' | 'pending'
   abortControllers: Record<string, AbortController>
@@ -38,7 +37,6 @@ type AppState = {
   ) => void
   updateLoadingModel: (loading: boolean) => void
   updateTools: (tools: MCPTool[]) => void
-  updateRagToolNames: (names: string[]) => void
   updateMcpToolNames: (names: string[]) => void
   setAbortController: (threadId: string, controller: AbortController) => void
   updateTokenSpeed: (message: ThreadMessage, increment?: number) => void
@@ -60,7 +58,6 @@ export const useAppState = create<AppState>()((set) => ({
   streamingContent: undefined,
   loadingModel: false,
   tools: [],
-  ragToolNames: new Set<string>(),
   mcpToolNames: new Set<string>(),
   serverStatus: 'stopped',
   abortControllers: {},
@@ -89,9 +86,6 @@ export const useAppState = create<AppState>()((set) => ({
   },
   updateTools: (tools) => {
     set({ tools })
-  },
-  updateRagToolNames: (names) => {
-    set({ ragToolNames: new Set(names) })
   },
   updateMcpToolNames: (names) => {
     set({ mcpToolNames: new Set(names) })

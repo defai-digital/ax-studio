@@ -8,7 +8,7 @@ import { useChat } from '@/hooks/use-chat'
 import { useModelProvider } from '@/hooks/useModelProvider'
 import { useGeneralSetting } from '@/hooks/useGeneralSetting'
 import { useMessages } from '@/hooks/useMessages'
-import { useToolAvailable } from '@/hooks/useToolAvailable'
+
 import { extractContentPartsFromUIMessage } from '@/lib/messages'
 import {
   DIAGRAM_FORMAT_INSTRUCTION,
@@ -108,13 +108,12 @@ function ThreadDetail() {
 
   persistMessageOnFinishRef.current = persistMessageOnFinish
 
-  const disabledTools = useToolAvailable((state) => state.getDisabledToolsForThread(threadId))
   const reasoningContainerRef = useRef<HTMLDivElement>(null)
 
   // ─── Effects ──────────────────────────────────────────────────────────────
   useThreadEffects({
     threadId, thread, chatMessages, status, assistants, selectedModel,
-    updateRagToolsAvailability, disabledTools, activeTeamId, setTeamTokensUsed,
+    updateRagToolsAvailability, activeTeamId, setTeamTokensUsed,
     reasoningContainerRef, setCurrentThreadId, setCurrentAssistant,
     processAndSendMessage, handleResearchCommand, updateThread, setThreadPromptDraft,
   })

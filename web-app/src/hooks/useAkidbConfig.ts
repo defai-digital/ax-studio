@@ -101,11 +101,18 @@ export function createDefaultConfig(dataFolder?: string): AkidbConfig {
 
 // ─── Store ─────────────────────────────────────────────────────────────────
 
+type AkidbSyncResult = {
+  success: boolean
+  stdout: string
+  stderr: string
+}
+
 type AkidbConfigStore = {
   config: AkidbConfig | null
   status: AkidbStatus | null
   loading: boolean
   saving: boolean
+  syncing: boolean
   error: string | null
 
   /** Read current config from the AX Studio path, with legacy fallback via Tauri */
@@ -116,13 +123,17 @@ type AkidbConfigStore = {
 
   /** Read daemon status from the AX Studio path, with legacy fallback */
   loadStatus: () => Promise<void>
+
+  /** Trigger a one-shot knowledge-base sync (daemon --once) */
+  syncNow: () => Promise<AkidbSyncResult>
 }
 
-export const useAkidbConfig = create<AkidbConfigStore>()((set) => ({
+export const useAkidbConfig = create<AkidbConfigStore>()((set, get) => ({
   config: null,
   status: null,
   loading: false,
   saving: false,
+  syncing: false,
   error: null,
 
   load: async () => {
@@ -156,6 +167,22 @@ export const useAkidbConfig = create<AkidbConfigStore>()((set) => ({
       set({ status })
     } catch {
       set({ status: null })
+    }
+  },
+
+  syncNow: async () => {
+    set({ syncing: true, error: null })
+    try {
+      const result = await invoke<AkidbSyncResult>('akidb_sync_now')
+      // Refresh status after sync completes
+      await get().loadStatus()
+      return result
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      set({ error: msg })
+      throw e
+    } finally {
+      set({ syncing: false })
     }
   },
 }))

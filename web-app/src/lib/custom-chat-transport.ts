@@ -26,7 +26,6 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
   private tools: Record<string, Tool> = {}
   private onTokenUsage?: TokenUsageCallback
   private modelSupportsTools = false
-  private hasDocuments = false
   private systemMessage?: string
   private serviceHub: ServiceHub | null
   private threadId?: string
@@ -65,9 +64,8 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
     } catch { return null }
   }
 
-  async updateRagToolsAvailability(hasDocuments: boolean, modelSupportsTools: boolean, ragFeatureAvailable: boolean) {
+  async updateRagToolsAvailability(_hasDocuments: boolean, modelSupportsTools: boolean, _ragFeatureAvailable: boolean) {
     this.modelSupportsTools = modelSupportsTools
-    this.hasDocuments = ragFeatureAvailable && hasDocuments
     await this.refreshTools()
   }
 
@@ -100,21 +98,6 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
           }
         } catch (error) { console.warn('Failed to load MCP tools:', error) }
 
-        if (this.hasDocuments) {
-          try {
-            const ragTools = await this.serviceHub.rag().getTools()
-            if (Array.isArray(ragTools) && ragTools.length > 0) {
-              ragTools.forEach((tool) => {
-                if (!isToolDisabled('retrieval', tool.name)) {
-                  toolsRecord[tool.name] = {
-                    description: tool.description,
-                    inputSchema: jsonSchema(tool.inputSchema as Record<string, unknown>),
-                  } as Tool
-                }
-              })
-            }
-          } catch (error) { console.warn('Failed to load RAG tools (retrieval service may be offline):', error) }
-        }
       }
     }
 

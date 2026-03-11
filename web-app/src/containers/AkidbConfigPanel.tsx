@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { toast } from 'sonner'
-import { IconDatabase, IconFolder } from '@tabler/icons-react'
+import { IconDatabase, IconFolder, IconRefresh } from '@tabler/icons-react'
 import { Card, CardItem } from '@/containers/Card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -28,7 +28,7 @@ const EMBEDDING_MODEL_OPTIONS = [
 ]
 
 export default function AkidbConfigPanel() {
-  const { config, status, loading, saving, load, save, loadStatus } =
+  const { config, status, loading, saving, syncing, load, save, loadStatus, syncNow } =
     useAkidbConfig()
 
   const [dataFolder, setDataFolder] = useState('')
@@ -141,6 +141,19 @@ export default function AkidbConfigPanel() {
     }
   }, [config, dataFolder, embeddingModel, embeddingDimension, frequency, save])
 
+  const handleSyncNow = useCallback(async () => {
+    try {
+      const result = await syncNow()
+      if (result.success) {
+        toast.success('Knowledge base sync completed')
+      } else {
+        toast.error(result.stderr || 'Sync failed — check logs for details')
+      }
+    } catch {
+      toast.error('Failed to start sync')
+    }
+  }, [syncNow])
+
   if (loading) {
     return (
       <Card
@@ -235,10 +248,19 @@ export default function AkidbConfigPanel() {
         }
       />
 
-      {/* Save button */}
-      <div className="flex mt-2 justify-end">
-        <Button size="sm" onClick={handleSave} disabled={saving}>
+      {/* Save & Sync buttons */}
+      <div className="flex mt-2 justify-end gap-2">
+        <Button size="sm" onClick={handleSave} disabled={saving || syncing}>
           {saving ? 'Saving...' : 'Save'}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleSyncNow}
+          disabled={syncing || !dataFolder.trim()}
+        >
+          <IconRefresh size={14} className={syncing ? 'mr-1 animate-spin' : 'mr-1'} />
+          {syncing ? 'Syncing...' : 'Sync Now'}
         </Button>
       </div>
 

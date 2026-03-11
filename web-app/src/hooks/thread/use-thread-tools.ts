@@ -124,7 +124,6 @@ export function useThreadTools({
       toolCallAbortController.current = new AbortController()
       const signal = toolCallAbortController.current.signal
 
-      const ragToolNames = useAppState.getState().ragToolNames
       const mcpToolNames = useAppState.getState().mcpToolNames
 
       ;(async () => {
@@ -150,15 +149,7 @@ export function useThreadTools({
 
             let result
 
-            if (ragToolNames.has(toolName)) {
-              result = await serviceHub.rag().callTool({
-                toolName,
-                arguments: toolCall.input,
-                threadId,
-                projectId,
-                scope: projectId ? 'project' : 'thread',
-              })
-            } else if (mcpToolNames.has(toolName)) {
+            if (mcpToolNames.has(toolName)) {
               result = await serviceHub.mcp().callTool({
                 toolName,
                 arguments: toolCall.input,

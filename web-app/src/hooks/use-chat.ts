@@ -60,7 +60,7 @@ export function useChat(
 
   // Get serviceHub and model metadata from app state
   const mcpToolNames = useAppState((state) => state.mcpToolNames)
-  const ragToolNames = useAppState((state) => state.ragToolNames)
+
 
   const existingSessionTransport = sessionId
     ? useChatSessions.getState().sessions[sessionId]?.transport
@@ -212,7 +212,7 @@ export function useChat(
       // This ensures the transport has the latest tools when MCP server status changes
       transportRef.current.refreshTools()
     }
-  }, [mcpToolNames, ragToolNames])
+  }, [mcpToolNames])
 
   // Expose method to update RAG tools availability
   const updateRagToolsAvailability = useCallback(

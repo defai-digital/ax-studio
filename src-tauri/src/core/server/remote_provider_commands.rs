@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-use crate::core::state::{AppState, AxStudioServiceConfig, ProviderConfig};
+use crate::core::state::{AppState, ProviderConfig};
 
 /// Custom header for provider requests
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -152,26 +152,6 @@ pub async fn list_provider_configs(
     Ok(configs.values().map(redact_provider_config).collect())
 }
 
-/// Get the current Ax-Studio backend service configuration
-#[tauri::command]
-pub async fn get_ax_studio_service_config(
-    state: State<'_, AppState>,
-) -> Result<AxStudioServiceConfig, String> {
-    let config = state.ax_studio_service_config.lock().await;
-    Ok(config.clone())
-}
-
-/// Update the Ax-Studio backend service URLs
-#[tauri::command]
-pub async fn update_ax_studio_service_config(
-    state: State<'_, AppState>,
-    config: AxStudioServiceConfig,
-) -> Result<(), String> {
-    let mut current = state.ax_studio_service_config.lock().await;
-    *current = config;
-    log::info!("Updated Ax-Studio service configuration");
-    Ok(())
-}
 
 #[cfg(test)]
 mod tests {

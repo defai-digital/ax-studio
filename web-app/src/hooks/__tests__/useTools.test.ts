@@ -6,7 +6,6 @@ import { SystemEvent } from '@/types/events'
 const mockGetTools = vi.fn()
 const mockUpdateTools = vi.fn()
 const mockUpdateMcpToolNames = vi.fn()
-const mockUpdateRagToolNames = vi.fn()
 const mockListen = vi.fn()
 const mockUnsubscribe = vi.fn()
 
@@ -16,7 +15,6 @@ vi.mock('../useAppState', () => ({
     selector({
       updateTools: mockUpdateTools,
       updateMcpToolNames: mockUpdateMcpToolNames,
-      updateRagToolNames: mockUpdateRagToolNames,
     }),
 }))
 
@@ -24,9 +22,6 @@ vi.mock('../useAppState', () => ({
 const mockServiceHub = () => ({
   mcp: () => ({
     getTools: mockGetTools,
-  }),
-  rag: () => ({
-    getTools: vi.fn(() => Promise.resolve([])),
   }),
   events: () => ({
     listen: mockListen,

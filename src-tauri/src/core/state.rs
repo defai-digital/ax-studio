@@ -32,30 +32,6 @@ pub struct ProviderCustomHeader {
     pub value: String,
 }
 
-/// URLs for the four Ax-Studio backend services.
-/// Defaults point to localhost with per-service ports.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct AxStudioServiceConfig {
-    /// API Service — OpenAI-compatible model inference proxy (ax-serving)
-    pub api_service_url: String,
-    /// Retrieval Service — document ingestion, embedding, semantic search (FastAPI)
-    pub retrieval_service_url: String,
-    /// Agents Service — AI agent orchestration (FastAPI)
-    pub agents_service_url: String,
-    /// AkiDB — vector database REST API
-    pub akidb_url: String,
-}
-
-impl Default for AxStudioServiceConfig {
-    fn default() -> Self {
-        Self {
-            api_service_url: "http://127.0.0.1:18080".to_string(),
-            retrieval_service_url: "http://127.0.0.1:8001".to_string(),
-            agents_service_url: "http://127.0.0.1:8002".to_string(),
-            akidb_url: "http://127.0.0.1:8003".to_string(),
-        }
-    }
-}
 
 pub enum RunningServiceEnum {
     NoInit(RunningService<RoleClient, ()>),
@@ -77,8 +53,6 @@ pub struct AppState {
     pub mcp_server_pids: Arc<Mutex<HashMap<String, u32>>>,
     /// Remote provider configurations (e.g., Anthropic, OpenAI, etc.)
     pub provider_configs: Arc<Mutex<HashMap<String, ProviderConfig>>>,
-    /// Ax-Studio backend service URLs (Retrieval, Agents, AkiDB, API Service)
-    pub ax_studio_service_config: Arc<Mutex<AxStudioServiceConfig>>,
     /// Jupyter session ids per thread (thread_id → sandbox session_id)
     pub sandbox_sessions: Arc<Mutex<HashMap<String, String>>>,
     /// Base URL for the agent-infra/sandbox container

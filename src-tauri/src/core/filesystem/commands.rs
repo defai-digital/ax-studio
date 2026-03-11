@@ -6,7 +6,8 @@ use crate::core::state::AppState;
 use rfd::AsyncFileDialog;
 use std::fs;
 use std::path::{Path, PathBuf};
-use tauri::Runtime;
+use std::process::Stdio;
+use tauri::{Manager, Runtime};
 use tauri::State;
 
 fn ax_studio_config_dir(home: &Path) -> PathBuf {
@@ -655,6 +656,8 @@ pub struct EmbedderSection {
     #[serde(default = "default_batch_size")]
     pub batch_size: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_ms: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub base_url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub api_key: Option<String>,
@@ -669,6 +672,7 @@ impl Default for EmbedderSection {
             model_id: default_model_id(),
             dimension: default_embedder_dimension(),
             batch_size: default_batch_size(),
+            timeout_ms: Some(120000),
             base_url: Some("http://127.0.0.1:18080".to_string()),
             api_key: None,
             api_key_env: None,
@@ -794,43 +798,190 @@ pub fn read_akidb_config() -> Result<Option<AkidbConfig>, String> {
     Ok(Some(config))
 }
 
-/// Write the AX Studio knowledge-base config to the preferred AX Studio path.
+/// Write the AX Studio knowledge-base config to the preferred AX Studio path
+/// and mirror to the legacy `~/.ax-fabric/config.yaml` so the daemon picks it up.
 #[tauri::command]
 pub fn write_akidb_config(config: AkidbConfig) -> Result<(), String> {
     let home = dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
-    let config_dir = ax_studio_config_dir(&home);
-
-    fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
-
-    let config_path = preferred_akidb_config_path(&home);
     let yaml = serde_yaml::to_string(&config)
         .map_err(|e| format!("Failed to serialize knowledge-base config: {e}"))?;
+
+    // Write to preferred path (~/.ax-studio/config.yaml)
+    let config_dir = ax_studio_config_dir(&home);
+    fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
+    let config_path = preferred_akidb_config_path(&home);
     fs::write(&config_path, &yaml).map_err(|e| e.to_string())?;
+
+    // Mirror to legacy path (~/.ax-fabric/config.yaml) so the daemon reads it
+    let legacy_dir = legacy_config_dir(&home);
+    fs::create_dir_all(&legacy_dir).map_err(|e| e.to_string())?;
+    let legacy_path = legacy_akidb_config_path(&home);
+    fs::write(&legacy_path, &yaml).map_err(|e| e.to_string())?;
+
     Ok(())
 }
 
-/// Read the AX Studio knowledge-base daemon status, migrating a legacy status file if needed.
-/// Returns None if the file does not exist (daemon not running or never ran).
+/// Read the AX Studio knowledge-base daemon status.
+/// The daemon writes to `~/.ax-fabric/status.json`, so we read from there directly.
 #[tauri::command]
 pub fn read_akidb_status() -> Result<Option<AkidbStatus>, String> {
     let home = dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
-    let status_path = preferred_akidb_status_path(&home);
-    let legacy_path = legacy_akidb_status_path(&home);
+    let status_path = legacy_akidb_status_path(&home);
 
-    migrate_legacy_akidb_file(&home, &legacy_path, &status_path)?;
-
-    let path_to_read = if status_path.exists() {
-        status_path
-    } else {
+    if !status_path.exists() {
         return Ok(None);
-    };
+    }
 
-    let content = fs::read_to_string(&path_to_read).map_err(|e| e.to_string())?;
+    let content = fs::read_to_string(&status_path).map_err(|e| e.to_string())?;
     let status: AkidbStatus = serde_json::from_str(&content).map_err(|e| {
         format!(
             "Failed to parse daemon status {}: {e}",
-            path_to_read.display()
+            status_path.display()
         )
     })?;
     Ok(Some(status))
+}
+
+/// Result returned by the `akidb_sync_now` command.
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct AkidbSyncResult {
+    pub success: bool,
+    pub stdout: String,
+    pub stderr: String,
+}
+
+/// Resolved command and arguments for spawning the fabric-ingest CLI.
+struct FabricCliCommand {
+    program: String,
+    args: Vec<String>,
+}
+
+/// Resolve the fabric-ingest CLI command from the MCP config.
+/// Falls back to `npx -y @ax-studio/fabric-ingest` if the config is missing.
+fn resolve_fabric_cli_command<R: Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> Result<FabricCliCommand, String> {
+    let mut path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Cannot resolve app data dir: {e}"))?;
+    path.push("mcp_config.json");
+
+    if path.exists() {
+        let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        if let Ok(configs) = serde_json::from_str::<serde_json::Value>(&content) {
+            // MCP config nests servers under "mcpServers"
+            let servers = configs
+                .get("mcpServers")
+                .or(Some(&configs));
+            if let Some(servers) = servers {
+                if let Some(server) =
+                    servers.get("ax-studio").or_else(|| servers.get("ax-fabric"))
+                {
+                    let command = server
+                        .get("command")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("npx")
+                        .to_string();
+                    let args: Vec<String> = server
+                        .get("args")
+                        .and_then(|a| a.as_array())
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|v| v.as_str().map(String::from))
+                                // Strip the MCP-specific trailing args ("mcp", "server")
+                                // since we want to invoke "daemon --once" instead
+                                .take_while(|a| a != "mcp")
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    return Ok(FabricCliCommand {
+                        program: command,
+                        args,
+                    });
+                }
+            }
+        }
+    }
+
+    // Fallback: resolve the local fabric-ingest CLI from the sibling ax-fabric repo.
+    // The package is not published to npm, so npx cannot fetch it.
+    let home = dirs::home_dir().ok_or("Cannot determine home directory")?;
+    let local_cli = home
+        .join("Documents/Defai/ax/ax-fabric/packages/fabric-ingest/dist/cli.js");
+    if local_cli.exists() {
+        log::info!(
+            "resolve_fabric_cli_command: using local CLI at {}",
+            local_cli.display()
+        );
+        return Ok(FabricCliCommand {
+            program: "node".to_string(),
+            args: vec![local_cli.to_string_lossy().to_string()],
+        });
+    }
+
+    Err(
+        "Could not resolve fabric-ingest CLI. Ensure the ax-studio MCP server is configured or the local fabric-ingest package is built."
+            .to_string(),
+    )
+}
+
+/// Trigger a one-shot knowledge-base sync by spawning the fabric-ingest daemon.
+#[tauri::command]
+pub async fn akidb_sync_now<R: Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<AkidbSyncResult, String> {
+    let cli = resolve_fabric_cli_command(&app)?;
+
+    log::info!(
+        "akidb_sync_now: spawning {} {:?} daemon --once",
+        cli.program,
+        cli.args
+    );
+
+    let output = tokio::process::Command::new(&cli.program)
+        .args(&cli.args)
+        .arg("daemon")
+        .arg("--once")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await
+        .map_err(|e| format!("Failed to spawn daemon: {e}"))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let success = output.status.success();
+
+    // Always log stdout/stderr to a debug file for troubleshooting
+    let debug_path = std::path::PathBuf::from("/tmp/akidb-tauri-sync.log");
+    let debug_msg = format!(
+        "[{}] exit={} success={}\n--- stdout ---\n{}\n--- stderr ---\n{}\n---\n",
+        chrono::Utc::now().to_rfc3339(),
+        output.status,
+        success,
+        stdout,
+        stderr
+    );
+    let _ = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&debug_path)
+        .and_then(|mut f| {
+            use std::io::Write;
+            f.write_all(debug_msg.as_bytes())
+        });
+
+    if success {
+        log::info!("akidb_sync_now: completed successfully");
+    } else {
+        log::warn!("akidb_sync_now: exited with status {}", output.status);
+        log::warn!("akidb_sync_now stderr: {stderr}");
+    }
+
+    Ok(AkidbSyncResult {
+        success,
+        stdout,
+        stderr,
+    })
 }

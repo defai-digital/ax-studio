@@ -7,7 +7,7 @@ use hyper::{Body, Request, Response, StatusCode};
 use reqwest::Client;
 
 use super::security::add_cors_headers_with_host_and_origin;
-use super::{gateway_routes, model_routes, service_routing};
+use super::{gateway_routes, model_routes};
 
 /// Configuration for the proxy server
 #[derive(Clone)]
@@ -327,18 +327,6 @@ pub(super) async fn proxy_request<R: tauri::Runtime>(
     }
 
     let destination_path = path.clone();
-
-    // Backend service routing (/retrieval/*, /agents/*, /vectors/*)
-    // Check path before moving body — only forward body to service handler when path matches.
-    if destination_path.starts_with("/retrieval/")
-        || destination_path.starts_with("/agents/")
-        || destination_path.starts_with("/vectors/")
-    {
-        return service_routing::handle_service_route(
-            &destination_path, method.clone(), &headers, body,
-            &host_header, &origin_header, &config, &client, &app_handle,
-        ).await.unwrap_or_else(|| unreachable!("path check guarantees Some"));
-    }
 
     // Static / meta routes (GET only — no body needed)
     match (method.clone(), destination_path.as_str()) {

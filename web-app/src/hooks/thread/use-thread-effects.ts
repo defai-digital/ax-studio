@@ -7,9 +7,6 @@
  */
 import { useEffect, useRef } from 'react'
 import type { UIMessage } from '@ai-sdk/react'
-import { ExtensionTypeEnum, VectorDBExtension } from '@ax-studio/core'
-import { ExtensionManager } from '@/lib/extension'
-import { useAttachments } from '@/hooks/useAttachments'
 import { SESSION_STORAGE_PREFIX, SESSION_STORAGE_KEY } from '@/constants/chat'
 
 export type ThreadEffectsInput = {
@@ -20,7 +17,6 @@ export type ThreadEffectsInput = {
   assistants: Assistant[]
   selectedModel: Model | undefined
   updateRagToolsAvailability: (hasDocuments: boolean, modelSupportsTools: boolean, ragAvailable: boolean) => void
-  disabledTools: unknown
   activeTeamId: string | undefined
   setTeamTokensUsed: (tokens: number) => void
   reasoningContainerRef: React.RefObject<HTMLDivElement>
@@ -40,7 +36,6 @@ export function useThreadEffects({
   assistants,
   selectedModel,
   updateRagToolsAvailability,
-  disabledTools,
   activeTeamId,
   setTeamTokensUsed,
   reasoningContainerRef,
@@ -60,43 +55,12 @@ export function useThreadEffects({
     )
   }, [thread?.metadata?.threadPrompt, setThreadPromptDraft])
 
-  // ─── RAG tools availability ───────────────────────────────────────────────
+  // ─── Model tool support ──────────────────────────────────────────────────
   useEffect(() => {
-    const checkDocumentsAvailability = async () => {
-      const hasThreadDocuments = Boolean(thread?.metadata?.hasDocuments)
-      let hasProjectDocuments = false
-
-      const projectId = thread?.metadata?.project?.id
-      if (projectId) {
-        try {
-          const ext = ExtensionManager.getInstance().get<VectorDBExtension>(
-            ExtensionTypeEnum.VectorDB
-          )
-          if (ext?.listAttachmentsForProject) {
-            const projectFiles = await ext.listAttachmentsForProject(projectId)
-            hasProjectDocuments = projectFiles.length > 0
-          }
-        } catch (error) {
-          console.warn('Failed to check project files:', error)
-        }
-      }
-
-      const hasDocuments = hasThreadDocuments || hasProjectDocuments
-      const ragFeatureAvailable = Boolean(useAttachments.getState().enabled)
-      const modelSupportsTools =
-        selectedModel?.capabilities?.includes('tools') ?? false
-
-      updateRagToolsAvailability(hasDocuments, modelSupportsTools, ragFeatureAvailable)
-    }
-
-    checkDocumentsAvailability()
-  }, [
-    thread?.metadata?.hasDocuments,
-    thread?.metadata?.project?.id,
-    selectedModel?.capabilities,
-    updateRagToolsAvailability,
-    disabledTools,
-  ])
+    const modelSupportsTools =
+      selectedModel?.capabilities?.includes('tools') ?? false
+    updateRagToolsAvailability(false, modelSupportsTools, false)
+  }, [selectedModel?.capabilities, updateRagToolsAvailability])
 
   // ─── Team token usage ─────────────────────────────────────────────────────
   useEffect(() => {

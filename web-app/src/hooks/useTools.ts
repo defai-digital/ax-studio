@@ -10,7 +10,7 @@ export const useTools = () => {
   const serviceHub = useServiceHub()
   const updateTools = useAppState((state) => state.updateTools)
   const updateMcpToolNames = useAppState((state) => state.updateMcpToolNames)
-  const updateRagToolNames = useAppState((state) => state.updateRagToolNames)
+
   const { isDefaultsInitialized, setDefaultDisabledTools, markDefaultsAsInitialized } = useToolAvailable()
 
   useEffect(() => {
@@ -42,13 +42,6 @@ export const useTools = () => {
         console.error('Failed to fetch MCP tools:', error)
       }
 
-      // Fetch RAG tools from the Retrieval Service (fails silently when service is offline)
-      try {
-        const ragTools = await serviceHub.rag().getTools()
-        updateRagToolNames(ragTools.map((t) => t.name))
-      } catch {
-        updateRagToolNames([])
-      }
     }
     setTools()
 

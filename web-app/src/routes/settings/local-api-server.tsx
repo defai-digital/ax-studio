@@ -13,8 +13,7 @@ import { ApiPrefixInput } from '@/containers/ApiPrefixInput'
 import { TrustedHostsInput } from '@/containers/TrustedHostsInput'
 import { useLocalApiServer } from '@/hooks/useLocalApiServer'
 import { useAppState } from '@/hooks/useAppState'
-import { useAxStudioConfig } from '@/stores/useAxStudioConfig'
-import { Input } from '@/components/ui/input'
+
 import { useModelProvider } from '@/hooks/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { IconSettings2 } from '@tabler/icons-react'
@@ -72,9 +71,6 @@ function LocalAPIServerContent() {
   const [showApiKeyError, setShowApiKeyError] = useState(false)
   const setActiveModels = useAppState((state) => state.setActiveModels)
 
-  const { config: serviceConfig, setConfig: setServiceConfig } = useAxStudioConfig()
-  const [localServiceUrls, setLocalServiceUrls] = useState(serviceConfig)
-  const [serviceConfigSaved, setServiceConfigSaved] = useState(false)
 
   useEffect(() => {
     const checkServerStatus = async () => {
@@ -254,11 +250,6 @@ function LocalAPIServerContent() {
     }
   }
 
-  const handleSaveServiceConfig = async () => {
-    await setServiceConfig(localServiceUrls)
-    setServiceConfigSaved(true)
-    setTimeout(() => setServiceConfigSaved(false), 2000)
-  }
 
   const isServerRunning = serverStatus !== 'stopped'
 
@@ -487,92 +478,6 @@ function LocalAPIServerContent() {
                     </a>
                   }
                 />
-              </Card>
-
-              {/* Ax-Studio Backend Services Configuration */}
-              <Card
-                header={
-                  <div className="mb-3 flex w-full items-center gap-3">
-                    <IconSettings2 size={20} className="shrink-0 text-muted-foreground" />
-                    <h1 className="text-foreground font-medium text-base">
-                      Ax-Studio Backend Services
-                    </h1>
-                  </div>
-                }
-              >
-                <CardItem
-                  title="API Service URL"
-                  description="OpenAI-compatible model inference endpoint."
-                  actions={
-                    <Input
-                      className="h-8 w-56 text-sm"
-                      value={localServiceUrls.apiServiceUrl}
-                      placeholder="http://127.0.0.1:18080"
-                      onChange={(e) =>
-                        setLocalServiceUrls((s) => ({
-                          ...s,
-                          apiServiceUrl: e.target.value,
-                        }))
-                      }
-                    />
-                  }
-                />
-                <CardItem
-                  title="Retrieval Service URL"
-                  description="Document parsing, embedding, and semantic search."
-                  actions={
-                    <Input
-                      className="h-8 w-56 text-sm"
-                      value={localServiceUrls.retrievalServiceUrl}
-                      placeholder="http://127.0.0.1:8001"
-                      onChange={(e) =>
-                        setLocalServiceUrls((s) => ({
-                          ...s,
-                          retrievalServiceUrl: e.target.value,
-                        }))
-                      }
-                    />
-                  }
-                />
-                <CardItem
-                  title="Agents Service URL"
-                  description="AI agent orchestration and execution."
-                  actions={
-                    <Input
-                      className="h-8 w-56 text-sm"
-                      value={localServiceUrls.agentsServiceUrl}
-                      placeholder="http://127.0.0.1:8002"
-                      onChange={(e) =>
-                        setLocalServiceUrls((s) => ({
-                          ...s,
-                          agentsServiceUrl: e.target.value,
-                        }))
-                      }
-                    />
-                  }
-                />
-                <CardItem
-                  title="AkiDB URL"
-                  description="Vector database REST API."
-                  actions={
-                    <Input
-                      className="h-8 w-56 text-sm"
-                      value={localServiceUrls.akidbUrl}
-                      placeholder="http://127.0.0.1:8003"
-                      onChange={(e) =>
-                        setLocalServiceUrls((s) => ({
-                          ...s,
-                          akidbUrl: e.target.value,
-                        }))
-                      }
-                    />
-                  }
-                />
-                <div className="flex mt-2 justify-end">
-                  <Button size="sm" onClick={handleSaveServiceConfig}>
-                    {serviceConfigSaved ? 'Saved!' : 'Save'}
-                  </Button>
-                </div>
               </Card>
 
               {/* AkiDB folder sync configuration */}

@@ -6,7 +6,7 @@ use core::{
     downloads::models::DownloadManagerState,
     mcp::models::McpSettings,
     setup,
-    state::{AppState, AxStudioServiceConfig},
+    state::AppState,
 };
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
@@ -62,7 +62,6 @@ pub fn run() {
             background_cleanup_handle: Arc::new(Mutex::new(None)),
             mcp_server_pids: Arc::new(Mutex::new(HashMap::new())),
             provider_configs: Arc::new(Mutex::new(HashMap::new())),
-            ax_studio_service_config: Arc::new(Mutex::new(AxStudioServiceConfig::default())),
             sandbox_sessions: Arc::new(Mutex::new(HashMap::new())),
             sandbox_url: Arc::new(Mutex::new("http://127.0.0.1:8080".to_string())),
             approved_save_paths: Arc::new(Mutex::new(std::collections::HashSet::new())),
