@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button'
 import {
   IconLoader,
   IconRefresh,
+  IconSearch,
 } from '@tabler/icons-react'
 import { toast } from 'sonner'
 import { useEffect, useState } from 'react'
@@ -42,6 +43,7 @@ function ProviderDetail() {
   const serviceHub = useServiceHub()
   const [refreshingModels, setRefreshingModels] = useState(false)
   const [importingModel, setImportingModel] = useState<string | null>(null)
+  const [modelSearch, setModelSearch] = useState('')
   const { providerName } = useParams({ from: Route.id })
   const { getProviderByName, updateProvider } = useModelProvider()
   const provider = getProviderByName(providerName)
@@ -258,6 +260,19 @@ function ProviderDetail() {
                       {t('providers:models')}
                     </h1>
                     <div className="flex items-center gap-2">
+                      <div className="relative">
+                        <IconSearch
+                          size={14}
+                          className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+                        />
+                        <input
+                          type="text"
+                          value={modelSearch}
+                          onChange={(e) => setModelSearch(e.target.value)}
+                          placeholder={t('common:searchModels')}
+                          className="h-7 w-40 rounded-md border border-input bg-background pl-7 pr-2 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                        />
+                      </div>
                       {provider && (
                         <>
                           <Button
@@ -286,7 +301,17 @@ function ProviderDetail() {
                 }
               >
                 {provider?.models.length ? (
-                  provider?.models.map((model, modelIndex) => {
+                  provider?.models
+                    .filter((model) => {
+                      if (!modelSearch) return true
+                      const search = modelSearch.toLowerCase()
+                      return (
+                        model.id.toLowerCase().includes(search) ||
+                        model.name?.toLowerCase().includes(search) ||
+                        getModelDisplayName(model).toLowerCase().includes(search)
+                      )
+                    })
+                    .map((model, modelIndex) => {
                     const capabilities = model.capabilities || []
                     return (
                       <CardItem
