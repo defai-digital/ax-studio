@@ -45,6 +45,7 @@ import {
 import { ResearchPanel } from '@/components/research/ResearchPanel'
 import { useResearchPanel } from '@/hooks/useResearchPanel'
 import { useResearch } from '@/hooks/useResearch'
+import { useThreadTools } from '@/hooks/thread/use-thread-tools'
 import { MessageItem } from '@/containers/MessageItem'
 
 /** Parse /research[:mode] prefix into a depth number (2=Standard, 3=Deep). */
@@ -87,6 +88,10 @@ export function SplitThreadPane({
   const messageCount = useMessages(
     (state) => state.messages[threadId]?.length ?? 0
   )
+  const projectId = thread?.metadata?.project?.id
+  const {
+    followUpMessage, onToolCall, startToolExecution, onCostApproval,
+  } = useThreadTools({ threadId, projectId })
   const [showThreadPromptEditor, setShowThreadPromptEditor] = useState(false)
   const [threadPromptDraft, setThreadPromptDraft] = useState('')
   const reasoningContainerRef = useRef<HTMLDivElement>(null)
@@ -163,18 +168,22 @@ export function SplitThreadPane({
     error,
     setMessages: setChatMessages,
     regenerate,
+    addToolOutput,
   } = useChat({
     sessionId: threadId,
     sessionTitle: thread?.title,
     systemMessage: promptResolution.resolvedPrompt + memorySuffix + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION + ARTIFACT_FORMAT_INSTRUCTION,
     modelOverrideId: optimizedModelConfig.modelId,
     activeTeamId: (thread?.metadata?.agent_team_id as string) ?? undefined,
+    onCostApproval,
     inferenceParameters: {
       temperature: optimizedModelConfig.temperature,
       top_p: optimizedModelConfig.top_p,
       max_output_tokens: optimizedModelConfig.max_output_tokens,
     },
     experimental_throttle: 50,
+    onToolCall,
+    sendAutomaticallyWhen: followUpMessage,
     onFinish: ({ message, isAbort }) => {
       if (!isAbort && message.role === 'assistant') {
         const contentParts = extractContentPartsFromUIMessage(message)
@@ -264,6 +273,8 @@ export function SplitThreadPane({
           setChatMessages(cleaned)
         }
       }
+
+      startToolExecution(addToolOutput)
     },
   })
 
