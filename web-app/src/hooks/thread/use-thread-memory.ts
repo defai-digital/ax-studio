@@ -25,8 +25,14 @@ import {
 import { type ThreadMessage } from '@ax-studio/core'
 
 export function useThreadMemory(threadId: string) {
-  const memoryEnabled = useMemory((state) => state.memoryEnabled)
+  const isMemoryEnabledForThread = useMemory((state) => state.isMemoryEnabledForThread)
+  const globalMemoryEnabled = useMemory((state) => state.memoryEnabled)
+  const memoryEnabledPerThread = useMemory((state) => state.memoryEnabledPerThread)
   const defaultMemories = useMemory(useShallow((state) => state.memories['default'] || []))
+
+  const memoryEnabled = threadId in memoryEnabledPerThread
+    ? memoryEnabledPerThread[threadId]
+    : globalMemoryEnabled
 
   // Memoized system prompt suffix — rebuilds when memory is toggled or memories change
   const memorySuffix = useMemo(() => {
@@ -71,7 +77,7 @@ export function useThreadMemory(threadId: string) {
         }
       }
 
-      if (isNewMessage && useMemory.getState().isMemoryEnabled() && contentParts.length > 0) {
+      if (isNewMessage && useMemory.getState().isMemoryEnabledForThread(threadId) && contentParts.length > 0) {
         let toasted = false
 
         // Step 1: Apply LLM delta ops (surgical add/update/delete)
@@ -108,7 +114,7 @@ export function useThreadMemory(threadId: string) {
       }
 
       // Strip memory_extract tags from the live UI chat messages
-      if (useMemory.getState().isMemoryEnabled()) {
+      if (useMemory.getState().isMemoryEnabledForThread(threadId)) {
         const sessions = useChatSessions.getState().sessions[threadId]
         if (sessions?.chat.messages) {
           const cleaned = sessions.chat.messages.map((msg) => {

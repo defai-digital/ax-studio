@@ -26,12 +26,14 @@ import { cn } from '@/lib/utils'
 interface DropdownToolsAvailableProps {
   children: (isOpen: boolean, toolsCount: number) => React.ReactNode
   initialMessage?: boolean
+  threadId?: string
   onOpenChange?: (isOpen: boolean) => void
 }
 
 export default memo(function DropdownToolsAvailable({
   children,
   initialMessage = false,
+  threadId,
   onOpenChange,
 }: DropdownToolsAvailableProps) {
   const tools = useAppState((state) => state.tools)
@@ -42,7 +44,9 @@ export default memo(function DropdownToolsAvailable({
     setIsOpen(open)
     onOpenChange?.(open)
   }
-  const { getCurrentThread } = useThreads()
+  const currentThreadId = useThreads((state) =>
+    threadId ?? state.getCurrentThread()?.id
+  )
   const {
     isToolDisabled,
     setToolDisabledForThread,
@@ -52,14 +56,14 @@ export default memo(function DropdownToolsAvailable({
     getDefaultDisabledTools,
   } = useToolAvailable()
 
-  const currentThread = getCurrentThread()
+  const effectiveThreadId = threadId ?? currentThreadId
 
   // Separate effect for thread initialization - only when we have tools and a new thread
   useEffect(() => {
-    if (tools.length > 0 && currentThread?.id) {
-      initializeThreadTools(currentThread.id, tools)
+    if (tools.length > 0 && effectiveThreadId) {
+      initializeThreadTools(effectiveThreadId, tools)
     }
-  }, [currentThread?.id, tools, initializeThreadTools])
+  }, [effectiveThreadId, tools, initializeThreadTools])
 
   const handleToolToggle = (serverName: string, toolName: string, checked: boolean) => {
     if (initialMessage) {
@@ -73,9 +77,9 @@ export default memo(function DropdownToolsAvailable({
       } else {
         setDefaultDisabledTools([...currentDefaults, toolKey])
       }
-    } else if (currentThread?.id) {
+    } else if (effectiveThreadId) {
       // Update tools for specific thread
-      setToolDisabledForThread(currentThread.id, serverName, toolName, checked)
+      setToolDisabledForThread(effectiveThreadId, serverName, toolName, checked)
     }
   }
 
@@ -84,9 +88,9 @@ export default memo(function DropdownToolsAvailable({
       // Use default tools for index page
       const toolKey = `${serverName}::${toolName}`
       return !getDefaultDisabledTools().includes(toolKey)
-    } else if (currentThread?.id) {
+    } else if (effectiveThreadId) {
       // Use thread-specific tools
-      return !isToolDisabled(currentThread.id, serverName, toolName)
+      return !isToolDisabled(effectiveThreadId, serverName, toolName)
     }
     return false
   }
@@ -111,8 +115,8 @@ export default memo(function DropdownToolsAvailable({
   const getEnabledToolsCount = (): number => {
     const disabledToolKeys = initialMessage
       ? getDefaultDisabledTools()
-      : currentThread?.id
-        ? getDisabledToolsForThread(currentThread.id)
+      : effectiveThreadId
+        ? getDisabledToolsForThread(effectiveThreadId)
         : []
     return tools.filter((tool) => {
       const toolKey = `${tool.server}::${tool.name}`

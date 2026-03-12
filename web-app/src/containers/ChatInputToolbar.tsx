@@ -282,6 +282,7 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                   hasActiveMCPServers={hasActiveMCPServers}
                   selectedModelHasTools={selectedModel?.capabilities?.includes('tools') ?? false}
                   initialMessage={initialMessage}
+                  threadId={effectiveThreadId}
                   MCPToolComponent={MCPToolComponent}
                 />
               ) : (
@@ -294,6 +295,7 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                     >
                       <DropdownToolsAvailable
                         initialMessage={initialMessage}
+                        threadId={effectiveThreadId}
                         onOpenChange={(isOpen) => {
                           setDropdownToolsAvailable(isOpen)
                           if (isOpen) setTooltipToolsAvailable(false)

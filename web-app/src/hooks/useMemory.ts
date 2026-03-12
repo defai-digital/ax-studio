@@ -16,10 +16,13 @@ export type MemoryEntry = {
 type MemoryState = {
   memories: Record<string, MemoryEntry[]>
   memoryEnabled: boolean
+  memoryEnabledPerThread: Record<string, boolean>
   memoryVersion: number
 
   isMemoryEnabled: () => boolean
   toggleMemory: () => void
+  isMemoryEnabledForThread: (threadId: string) => boolean
+  toggleMemoryForThread: (threadId: string) => void
   addMemories: (userId: string, entries: MemoryEntry[]) => void
   replaceMemories: (userId: string, facts: string[], threadId: string) => void
   importMemories: (userId: string, entries: MemoryEntry[]) => void
@@ -34,6 +37,7 @@ export const useMemory = create<MemoryState>()(
     (set, get) => ({
       memories: {},
       memoryEnabled: false,
+      memoryEnabledPerThread: {},
       memoryVersion: 0,
 
       isMemoryEnabled: () => {
@@ -44,6 +48,28 @@ export const useMemory = create<MemoryState>()(
         set((state) => ({
           memoryEnabled: !state.memoryEnabled,
         }))
+      },
+
+      isMemoryEnabledForThread: (threadId: string) => {
+        const state = get()
+        if (threadId in state.memoryEnabledPerThread) {
+          return state.memoryEnabledPerThread[threadId]
+        }
+        return state.memoryEnabled
+      },
+
+      toggleMemoryForThread: (threadId: string) => {
+        set((state) => {
+          const current = threadId in state.memoryEnabledPerThread
+            ? state.memoryEnabledPerThread[threadId]
+            : state.memoryEnabled
+          return {
+            memoryEnabledPerThread: {
+              ...state.memoryEnabledPerThread,
+              [threadId]: !current,
+            },
+          }
+        })
       },
 
       addMemories: (userId: string, entries: MemoryEntry[]) => {

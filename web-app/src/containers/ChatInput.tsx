@@ -57,9 +57,25 @@ const ChatInput = memo(function ChatInput({
   const setGlobalPrompt = usePrompt((state) => state.setPrompt)
   const currentThreadId = useThreads((state) => state.currentThreadId)
   const effectiveThreadId = threadId ?? currentThreadId
-  const isMemoryEnabled = useMemory((state) => state.memoryEnabled)
-  const toggleMemory = useMemory((state) => state.toggleMemory)
+  const globalMemoryEnabled = useMemory((state) => state.memoryEnabled)
+  const isMemoryEnabledForThread = useMemory((state) => state.isMemoryEnabledForThread)
+  const toggleMemoryGlobal = useMemory((state) => state.toggleMemory)
+  const toggleMemoryForThread = useMemory((state) => state.toggleMemoryForThread)
+  const memoryEnabledPerThread = useMemory((state) => state.memoryEnabledPerThread)
   const memoryCount = useMemory((state) => (state.memories['default'] || []).length)
+
+  const isMemoryEnabled = effectiveThreadId
+    ? (effectiveThreadId in memoryEnabledPerThread
+        ? memoryEnabledPerThread[effectiveThreadId]
+        : globalMemoryEnabled)
+    : globalMemoryEnabled
+  const toggleMemory = useCallback(() => {
+    if (effectiveThreadId) {
+      toggleMemoryForThread(effectiveThreadId)
+    } else {
+      toggleMemoryGlobal()
+    }
+  }, [effectiveThreadId, toggleMemoryForThread, toggleMemoryGlobal])
   const currentThread = useThreads((state) =>
     effectiveThreadId ? state.threads[effectiveThreadId] : state.getCurrentThread()
   )

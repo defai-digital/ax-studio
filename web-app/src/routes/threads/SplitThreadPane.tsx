@@ -78,7 +78,11 @@ export function SplitThreadPane({
   const selectedProvider = useModelProvider((state) => state.selectedProvider)
   const selectedModel = useModelProvider((state) => state.selectedModel)
   const { globalDefaultPrompt, autoTuningEnabled } = useGeneralSetting()
-  const memoryEnabled = useMemory((state) => state.memoryEnabled)
+  const globalMemoryEnabled = useMemory((state) => state.memoryEnabled)
+  const memoryEnabledPerThread = useMemory((state) => state.memoryEnabledPerThread)
+  const memoryEnabled = threadId in memoryEnabledPerThread
+    ? memoryEnabledPerThread[threadId]
+    : globalMemoryEnabled
   const defaultMemories = useMemory(useShallow((state) => state.memories['default'] || []))
   const messageCount = useMessages(
     (state) => state.messages[threadId]?.length ?? 0
@@ -187,7 +191,7 @@ export function SplitThreadPane({
           }
         }
 
-        if (isNewMessage && useMemory.getState().isMemoryEnabled() && contentParts.length > 0) {
+        if (isNewMessage && useMemory.getState().isMemoryEnabledForThread(threadId) && contentParts.length > 0) {
           let toasted = false
 
           if (allOps.length > 0) {
@@ -241,7 +245,7 @@ export function SplitThreadPane({
         }
       }
 
-      if (useMemory.getState().isMemoryEnabled()) {
+      if (useMemory.getState().isMemoryEnabledForThread(threadId)) {
         const sessions = useChatSessions.getState().sessions[threadId]
         if (sessions?.chat.messages) {
           const cleaned = sessions.chat.messages.map((msg) => {
