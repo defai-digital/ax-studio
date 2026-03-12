@@ -177,7 +177,7 @@ describe('ServiceHub Integration Tests', () => {
   describe('Service Access', () => {
     it('should provide access to all required services', () => {
       const services = [
-        'theme', 'window', 'events', 'hardware', 'app', 'analytic',
+        'theme', 'window', 'events', 'hardware', 'app',
         'messages', 'mcp', 'threads', 'providers', 'models', 'assistants',
         'dialog', 'opener', 'updater', 'path', 'core', 'deeplink'
       ]

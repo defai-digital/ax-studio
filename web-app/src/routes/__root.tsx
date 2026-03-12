@@ -10,9 +10,6 @@ import { DataProvider } from '@/providers/DataProvider'
 import { route } from '@/constants/routes'
 import { ExtensionProvider } from '@/providers/ExtensionProvider'
 import { ToasterProvider } from '@/providers/ToasterProvider'
-import { useAnalytic } from '@/hooks/useAnalytic'
-import { PromptAnalytic } from '@/containers/analytics/PromptAnalytic'
-import { AnalyticProvider } from '@/providers/AnalyticProvider'
 import { useLeftPanel } from '@/hooks/useLeftPanel'
 import ToolApproval from '@/containers/dialogs/ToolApproval'
 import { TranslationProvider } from '@/i18n/TranslationContext'
@@ -31,7 +28,6 @@ export const Route = createRootRoute({
 })
 
 const AppLayout = () => {
-  const { productAnalyticPrompt } = useAnalytic()
   const {
     open: isLeftPanelOpen,
     setLeftPanel,
@@ -47,7 +43,6 @@ const AppLayout = () => {
         defaultWidth={sidebarWidth}
         onWidthChange={setLeftPanelWidth}
       >
-        <AnalyticProvider />
         <KeyboardShortcutsProvider />
         {/* Fake absolute panel top to enable window drag */}
         {!IS_MACOS && <WindowControls />}
@@ -60,7 +55,6 @@ const AppLayout = () => {
           </div>
         </SidebarInset>
 
-        {productAnalyticPrompt && <PromptAnalytic />}
       </SidebarProvider>
     </div>
   )

@@ -42,10 +42,6 @@ export const PlatformFeatures: Record<PlatformFeature, boolean> = {
   [PlatformFeature.PROJECTS]:
     isPlatformTauri() && !isPlatformIOS() && !isPlatformAndroid(),
 
-  // Analytics and telemetry - disabled for web
-  [PlatformFeature.ANALYTICS]:
-    isPlatformTauri() && !isPlatformIOS() && !isPlatformAndroid(),
-
   // Web-specific automatic model selection from Ax-Studio provider - enabled for web only
   [PlatformFeature.WEB_AUTO_MODEL_SELECTION]: !isPlatformTauri(),
 

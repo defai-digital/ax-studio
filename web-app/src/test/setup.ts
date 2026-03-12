@@ -40,11 +40,6 @@ const mockServiceHub = {
     relocateAppDataFolder: vi.fn().mockResolvedValue(undefined),
     getAppDataFolder: vi.fn().mockResolvedValue('/mock/app/data'),
   }),
-  analytic: () => ({
-    track: vi.fn(),
-    identify: vi.fn(),
-    page: vi.fn(),
-  }),
   messages: () => ({
     createMessage: vi.fn().mockResolvedValue({ id: 'test-message' }),
     deleteMessage: vi.fn().mockResolvedValue(undefined),

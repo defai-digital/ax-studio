@@ -186,8 +186,6 @@ jobs:
           NODE_OPTIONS: "--max-old-space-size=4196"
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APP_PATH: '.'
-          POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
-          POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
           APPLE_CERTIFICATE: ${{ secrets.CODE_SIGN_P12_BASE64 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.CODE_SIGN_P12_PASSWORD }}
           APPLE_API_ISSUER: ${{ secrets.NOTARY_ISSUER }}

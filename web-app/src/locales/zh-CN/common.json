@@ -17,7 +17,6 @@
   "recents": "最近",
   "hub": "中心",
   "helpSupport": "帮助与支持",
-  "helpUsImproveAxStudio": "帮助我们改进 Ax-Studio",
   "unstarAll": "取消所有收藏",
   "unstar": "取消收藏",
   "deleteAll": "全部删除",
@@ -99,7 +98,7 @@
     "increaseContextSizeDescription": "您想要增加上下文大小吗？",
     "increaseContextSize": "增加上下文大小"
   },
-    "customAvatar": "自定义头像",
+  "customAvatar": "自定义头像",
   "editAssistant": "编辑助手",
   "appName": "AX Studio",
   "metadata": "元数据",
