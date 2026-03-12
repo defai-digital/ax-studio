@@ -23,13 +23,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ArrowRight, PlusIcon, AppWindowIcon, SearchIcon } from 'lucide-react'
 import {
-  IconPhoto,
   IconAtom,
   IconTool,
   IconCodeCircle2,
   IconPlayerStopFilled,
-  IconPaperclip,
-  IconLoader2,
   IconUser,
   IconBrain,
   IconHierarchy2,
@@ -39,7 +36,6 @@ import { TokenCounter } from '@/components/TokenCounter'
 import { AvatarEmoji } from '@/containers/AvatarEmoji'
 import DropdownToolsAvailable from '@/containers/DropdownToolsAvailable'
 import { McpExtensionToolLoader } from './McpExtensionToolLoader'
-import type { Attachment } from '@/types/attachment'
 import type { ThreadMessage } from '@ax-studio/core'
 
 const ARTIFACT_PROMPTS = [
@@ -69,17 +65,9 @@ type Props = {
   // Layout state
   isStreaming: boolean
   prompt: string
-  ingestingAny: boolean
-  ingestingDocs: boolean
   // Textarea ref (for quick-prompt focus)
   textareaRef: React.RefObject<HTMLTextAreaElement>
   setPrompt: (v: string) => void
-  // Image attachment
-  handleImagePickerClick: () => void
-  fileInputRef: React.RefObject<HTMLInputElement>
-  handleFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void
-  // Document attachment
-  handleAttachDocsIngest: () => Promise<void>
   // Model capabilities
   selectedModel: Model | undefined
   // Assistant selector
@@ -107,7 +95,6 @@ type Props = {
   // Token counter
   tokenCounterCompact: boolean
   threadMessages: ThreadMessage[]
-  attachments: Attachment[]
   // Actions
   stopStreaming: (threadId: string) => void
   handleSendMessage: (prompt: string) => Promise<void>
@@ -116,14 +103,8 @@ type Props = {
 export const ChatInputToolbar = memo(function ChatInputToolbar({
   isStreaming,
   prompt,
-  ingestingAny,
-  ingestingDocs,
   textareaRef,
   setPrompt,
-  handleImagePickerClick,
-  fileInputRef,
-  handleFileChange,
-  handleAttachDocsIngest,
   selectedModel,
   projectId,
   initialMessage,
@@ -145,7 +126,6 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
   memoryCount,
   tokenCounterCompact,
   threadMessages,
-  attachments,
   stopStreaming,
   handleSendMessage,
 }: Props) {
@@ -161,16 +141,6 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
       }
     }, 0)
   }
-
-  const uploadedFileProps = attachments
-    .filter((a) => a.type === 'image' && a.dataUrl)
-    .map((a) => ({
-      name: a.name,
-      type: a.mimeType || '',
-      size: a.size || 0,
-      base64: a.base64 || '',
-      dataUrl: a.dataUrl!,
-    }))
 
   return (
     <div className="absolute z-20 bg-transparent bottom-0 w-full p-2">
@@ -191,28 +161,6 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
-                <DropdownMenuItem onClick={handleImagePickerClick}>
-                  <IconPhoto size={18} className="text-muted-foreground" />
-                  <span>Add Images</span>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    className="hidden"
-                    multiple
-                    onChange={handleFileChange}
-                  />
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={handleAttachDocsIngest}
-                  disabled={!selectedModel?.capabilities?.includes('tools')}
-                >
-                  {ingestingDocs ? (
-                    <IconLoader2 size={18} className="text-muted-foreground animate-spin" />
-                  ) : (
-                    <IconPaperclip size={18} className="text-muted-foreground" />
-                  )}
-                  <span>{ingestingDocs ? 'Indexing documents…' : 'Add documents or files'}</span>
-                </DropdownMenuItem>
                 {!projectId && (
                   <DropdownMenuSub>
                     <DropdownMenuSubTrigger>
@@ -400,7 +348,7 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
         <div className="flex items-center gap-2">
           {tokenCounterCompact && !initialMessage && (threadMessages?.length > 0 || prompt.trim().length > 0) && (
             <div className="flex-1 flex justify-center">
-              <TokenCounter messages={threadMessages || []} compact={true} uploadedFiles={uploadedFileProps} />
+              <TokenCounter messages={threadMessages || []} compact={true} />
             </div>
           )}
 
@@ -417,7 +365,7 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
             <Button
               variant="default"
               size="icon-sm"
-              disabled={!prompt.trim() || ingestingAny}
+              disabled={!prompt.trim()}
               data-test-id="send-message-button"
               onClick={() => handleSendMessage(prompt)}
               className="rounded-full mr-1 mb-1"

@@ -206,10 +206,10 @@ describe('useMCPServers', () => {
       // Create a server with multiple properties including official, type, timeout, headers
       const initialServerConfig: MCPServerConfig = {
         command: 'npx',
-        args: ['-y', 'search-mcp-server@latest'],
+        args: ['-y', 'some-mcp-server@latest'],
         env: {
-          BRIDGE_HOST: '127.0.0.1',
-          BRIDGE_PORT: '17389',
+          HOST: '127.0.0.1',
+          PORT: '17389',
           API_KEY: 'secret-key',
         },
         type: 'stdio',
@@ -227,8 +227,8 @@ describe('useMCPServers', () => {
         command: 'node', // Change command
         args: ['updated-server.js'], // Change args
         env: {
-          BRIDGE_HOST: '127.0.0.1',
-          BRIDGE_PORT: '18000', // Changed port
+          HOST: '127.0.0.1',
+          PORT: '18000', // Changed port
         },
         // official, type, timeout, headers are preserved via spread
       }
@@ -254,8 +254,8 @@ describe('useMCPServers', () => {
       expect(editedServer?.command).toBe('node')
       expect(editedServer?.args).toEqual(['updated-server.js'])
       expect(editedServer?.env).toEqual({
-        BRIDGE_HOST: '127.0.0.1',
-        BRIDGE_PORT: '18000',
+        HOST: '127.0.0.1',
+        PORT: '18000',
       })
 
       // Verify that untouched properties ARE preserved (except active which can have side effects)

@@ -16,10 +16,6 @@ import { useMessages } from '@/hooks/useMessages'
 import { useShallow } from 'zustand/react/shallow'
 import { ExtensionTypeEnum, MCPExtension } from '@ax-studio/core'
 import { ExtensionManager } from '@/lib/extension'
-import { NEW_THREAD_ATTACHMENT_KEY, useChatAttachments } from '@/hooks/useChatAttachments'
-import { ChatInputAttachments } from '@/components/ChatInputAttachments'
-import { useImageAttachmentHandler } from '@/hooks/use-image-attachment-handler'
-import { useDocumentAttachmentHandler } from '@/hooks/use-document-attachment-handler'
 import { useChatSendHandler } from '@/hooks/use-chat-send-handler'
 import { ChatInputToolbar } from '@/containers/ChatInputToolbar'
 import { TokenCounter } from '@/components/TokenCounter'
@@ -32,10 +28,7 @@ type ChatInputProps = {
   initialMessage?: boolean
   projectId?: string
   threadId?: string
-  onSubmit?: (
-    text: string,
-    files?: Array<{ type: string; mediaType: string; url: string }>
-  ) => void
+  onSubmit?: (text: string) => void
   onStop?: () => void
   chatStatus?: ChatStatus
 }
@@ -50,13 +43,11 @@ const ChatInput = memo(function ChatInput({
   chatStatus,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const [isFocused, setIsFocused] = useState(false)
   const [rows, setRows] = useState(1)
   const [message, setMessage] = useState('')
   const [dropdownToolsAvailable, setDropdownToolsAvailable] = useState(false)
   const [tooltipToolsAvailable, setTooltipToolsAvailable] = useState(false)
-  const [hasMmproj, setHasMmproj] = useState(false)
   const [selectedAssistant, setSelectedAssistant] = useState<Assistant | undefined>(undefined)
 
   const abortControllers = useAppState((state) => state.abortControllers)
@@ -89,11 +80,6 @@ const ChatInput = memo(function ChatInput({
   )
 
   const maxRows = 10
-  const attachmentsKey = effectiveThreadId ?? NEW_THREAD_ATTACHMENT_KEY
-  const attachments = useChatAttachments(
-    useCallback((state) => state.getAttachments(attachmentsKey), [attachmentsKey])
-  )
-  const transferAttachments = useChatAttachments((state) => state.transferAttachments)
 
   const [localPrompt, setLocalPrompt] = useState('')
   const prompt = threadId ? localPrompt : globalPrompt
@@ -104,19 +90,6 @@ const ChatInput = memo(function ChatInput({
     },
     [setGlobalPrompt, threadId]
   )
-
-  const lastTransferredThreadId = useRef<string | null>(null)
-  useEffect(() => {
-    if (effectiveThreadId && lastTransferredThreadId.current !== effectiveThreadId) {
-      transferAttachments(NEW_THREAD_ATTACHMENT_KEY, effectiveThreadId)
-      lastTransferredThreadId.current = effectiveThreadId
-    }
-  }, [effectiveThreadId, transferAttachments])
-
-  // Vision capability check
-  useEffect(() => {
-    setHasMmproj(Boolean(selectedModel?.capabilities?.includes('vision')))
-  }, [selectedModel])
 
   // Focus management
   useEffect(() => {
@@ -147,37 +120,7 @@ const ChatInput = memo(function ChatInput({
     if (tooltipToolsAvailable && dropdownToolsAvailable) setTooltipToolsAvailable(false)
   }, [dropdownToolsAvailable, tooltipToolsAvailable])
 
-  // Domain hooks
-  const ingestingAny = attachments.some((a) => a.processing)
-
-  const {
-    isDragOver,
-    handleFileChange,
-    handleImagePickerClick,
-    handleDragEnter,
-    handleDragLeave,
-    handleDragOver,
-    handleDrop,
-    handlePaste,
-  } = useImageAttachmentHandler({
-    attachmentsKey,
-    effectiveThreadId,
-    fileInputRef,
-    textareaRef,
-    hasMmproj,
-    setMessage,
-  })
-
-  const {
-    handleAttachDocsIngest,
-    ingestingDocs,
-    handleRemoveAttachment,
-  } = useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId })
-
   const { handleSendMessage } = useChatSendHandler({
-    attachmentsKey,
-    attachments,
-    ingestingAny,
     onSubmit,
     projectId,
     assistants,
@@ -196,21 +139,11 @@ const ChatInput = memo(function ChatInput({
     [abortControllers, cancelToolCall, onStop]
   )
 
-  const hasActiveMCPServers = tools.filter((tool) => tool.server !== 'Ax-Studio Browser MCP').length > 0
+  const hasActiveMCPServers = tools.length > 0
   const extensionManager = ExtensionManager.getInstance()
   const mcpExtension = extensionManager.get<MCPExtension>(ExtensionTypeEnum.MCP)
   const MCPToolComponent = mcpExtension?.getToolComponent?.()
   const isStreaming = chatStatus === 'submitted' || chatStatus === 'streaming'
-
-  const uploadedFileProps = attachments
-    .filter((a) => a.type === 'image' && a.dataUrl)
-    .map((a) => ({
-      name: a.name,
-      type: a.mimeType || '',
-      size: a.size || 0,
-      base64: a.base64 || '',
-      dataUrl: a.dataUrl!,
-    }))
 
   return (
     <div className="relative overflow-hidden">
@@ -232,16 +165,9 @@ const ChatInput = memo(function ChatInput({
           <div
             className={cn(
               'relative z-20 px-0 pb-10 border rounded-3xl border-input bg-white dark:bg-input/30',
-              isFocused && 'ring-1 ring-ring/50',
-              isDragOver && 'ring-2 ring-ring/50 border-primary'
+              isFocused && 'ring-1 ring-ring/50'
             )}
-            data-drop-zone={hasMmproj ? 'true' : undefined}
-            onDragEnter={hasMmproj ? handleDragEnter : undefined}
-            onDragLeave={hasMmproj ? handleDragLeave : undefined}
-            onDragOver={hasMmproj ? handleDragOver : undefined}
-            onDrop={hasMmproj ? handleDrop : undefined}
           >
-            <ChatInputAttachments attachments={attachments} onRemove={handleRemoveAttachment} />
             <TextareaAutosize
               ref={textareaRef}
               minRows={2}
@@ -258,12 +184,11 @@ const ChatInput = memo(function ChatInput({
                 const isComposing = e.nativeEvent.isComposing || e.keyCode === 229
                 if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
                   e.preventDefault()
-                  if (!isStreaming && prompt.trim() && !ingestingAny) {
+                  if (!isStreaming && prompt.trim()) {
                     handleSendMessage(prompt)
                   }
                 }
               }}
-              onPaste={handlePaste}
               placeholder={t('common:placeholder.chatInput')}
               autoFocus
               spellCheck={spellCheckChatInput}
@@ -282,14 +207,8 @@ const ChatInput = memo(function ChatInput({
         <ChatInputToolbar
           isStreaming={isStreaming}
           prompt={prompt}
-          ingestingAny={ingestingAny}
-          ingestingDocs={ingestingDocs}
           textareaRef={textareaRef}
           setPrompt={setPrompt}
-          handleImagePickerClick={handleImagePickerClick}
-          fileInputRef={fileInputRef}
-          handleFileChange={handleFileChange}
-          handleAttachDocsIngest={handleAttachDocsIngest}
           selectedModel={selectedModel}
           projectId={projectId}
           initialMessage={initialMessage}
@@ -311,7 +230,6 @@ const ChatInput = memo(function ChatInput({
           memoryCount={memoryCount}
           tokenCounterCompact={tokenCounterCompact}
           threadMessages={threadMessages || []}
-          attachments={attachments}
           stopStreaming={stopStreaming}
           handleSendMessage={handleSendMessage}
         />
@@ -323,10 +241,7 @@ const ChatInput = memo(function ChatInput({
             {message}
             <IconX
               className="size-3 text-muted-foreground cursor-pointer"
-              onClick={() => {
-                setMessage('')
-                if (fileInputRef.current) fileInputRef.current.value = ''
-              }}
+              onClick={() => setMessage('')}
             />
           </div>
         </div>
@@ -334,7 +249,7 @@ const ChatInput = memo(function ChatInput({
 
       {!tokenCounterCompact && !initialMessage && (threadMessages?.length > 0 || prompt.trim().length > 0) && (
         <div className="flex-1 w-full flex justify-start px-2">
-          <TokenCounter messages={threadMessages || []} uploadedFiles={uploadedFileProps} />
+          <TokenCounter messages={threadMessages || []} />
         </div>
       )}
     </div>

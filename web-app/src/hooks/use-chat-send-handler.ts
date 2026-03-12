@@ -5,7 +5,6 @@
  * new-thread creation + sessionStorage + navigation path.
  */
 import { useCallback } from 'react'
-import { toast } from 'sonner'
 import { useRouter } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import {
@@ -18,17 +17,9 @@ import { defaultModel } from '@/lib/models'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useModelProvider } from '@/hooks/useModelProvider'
 import { useThreads } from '@/hooks/useThreads'
-import { useChatAttachments } from '@/hooks/useChatAttachments'
-import type { Attachment } from '@/types/attachment'
 
 type Input = {
-  attachmentsKey: string
-  attachments: Attachment[]
-  ingestingAny: boolean
-  onSubmit?: (
-    text: string,
-    files?: Array<{ type: string; mediaType: string; url: string }>
-  ) => void
+  onSubmit?: (text: string) => void
   projectId?: string
   assistants: Assistant[]
   selectedAssistant: Assistant | undefined
@@ -42,9 +33,6 @@ type Result = {
 }
 
 export function useChatSendHandler({
-  attachmentsKey,
-  attachments,
-  ingestingAny,
   onSubmit,
   projectId,
   assistants,
@@ -57,7 +45,6 @@ export function useChatSendHandler({
   const selectedModel = useModelProvider((s) => s.selectedModel)
   const selectedProvider = useModelProvider((s) => s.selectedProvider)
   const createThread = useThreads((s) => s.createThread)
-  const clearAttachmentsForThread = useChatAttachments((s) => s.clearAttachments)
   const router = useRouter()
 
   const handleSendMessage = useCallback(
@@ -67,27 +54,13 @@ export function useChatSendHandler({
         return
       }
       if (!prompt.trim()) return
-      if (ingestingAny) {
-        toast.info('Please wait for attachments to finish processing')
-        return
-      }
 
       setMessage('')
 
-      // Build file parts for image attachments (shared between both paths)
-      const files = attachments
-        .filter((att) => att.type === 'image' && att.dataUrl)
-        .map((att) => ({
-          type: 'file',
-          mediaType: att.mimeType ?? 'image/jpeg',
-          url: att.dataUrl!,
-        }))
-
       if (onSubmit) {
         // AI SDK path — caller owns thread management
-        onSubmit(prompt, files.length > 0 ? files : undefined)
+        onSubmit(prompt)
         setPrompt('')
-        clearAttachmentsForThread(attachmentsKey)
         return
       }
 
@@ -96,7 +69,7 @@ export function useChatSendHandler({
         `${TEMPORARY_CHAT_QUERY_ID}=true`
       )
 
-      const messagePayload = { text: prompt, files: files.length > 0 ? files : [] }
+      const messagePayload = { text: prompt }
 
       if (isTemporaryChat) {
         sessionStorage.setItem(
@@ -166,15 +139,10 @@ export function useChatSendHandler({
       }
 
       setPrompt('')
-      clearAttachmentsForThread(attachmentsKey)
     },
     [
-      attachments,
-      attachmentsKey,
       assistants,
-      clearAttachmentsForThread,
       createThread,
-      ingestingAny,
       onSubmit,
       projectId,
       router,

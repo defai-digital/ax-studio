@@ -53,10 +53,6 @@ pub struct AppState {
     pub mcp_server_pids: Arc<Mutex<HashMap<String, u32>>>,
     /// Remote provider configurations (e.g., Anthropic, OpenAI, etc.)
     pub provider_configs: Arc<Mutex<HashMap<String, ProviderConfig>>>,
-    /// Jupyter session ids per thread (thread_id → sandbox session_id)
-    pub sandbox_sessions: Arc<Mutex<HashMap<String, String>>>,
-    /// Base URL for the agent-infra/sandbox container
-    pub sandbox_url: Arc<Mutex<String>>,
     /// One-time write targets approved via native save dialog
     pub approved_save_paths: Arc<Mutex<HashSet<PathBuf>>>,
 }

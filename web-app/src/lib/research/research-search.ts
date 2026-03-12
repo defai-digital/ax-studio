@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import type { ResearchSource } from '@/hooks/useResearchPanel'
-import type { MCPToolCallResult, NativeSearchResult, WikiSearchResult } from './research-types'
+import type { MCPToolCallResult, WikiSearchResult } from './research-types'
 
 /** Thrown when Exa is rate-limited and all retries are exhausted. */
 export class ExaRateLimitError extends Error {
@@ -72,23 +72,6 @@ export async function exaSearch(
   )
 
   return result
-}
-
-/**
- * Call the Rust `web_search` command which queries free SearXNG public
- * instances via reqwest. No API key required.
- */
-export async function freeWebSearch(
-  question: string,
-  numResults: number,
-  signal?: AbortSignal
-): Promise<ResearchSource[]> {
-  if (signal?.aborted) return []
-  const results = await invoke<NativeSearchResult[]>('web_search', {
-    query: question,
-    numResults,
-  })
-  return results.map((r) => ({ url: r.url, title: r.title, snippet: r.snippet }))
 }
 
 export async function searchWikipedia(

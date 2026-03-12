@@ -3,7 +3,6 @@ use std::collections::HashMap;
 /// Maps integration ID to the environment variable name(s) needed by the MCP server.
 pub fn integration_env_keys() -> HashMap<&'static str, Vec<&'static str>> {
     let mut m = HashMap::new();
-    m.insert("github", vec!["GITHUB_PERSONAL_ACCESS_TOKEN"]);
     m.insert("linear", vec!["LINEAR_API_KEY"]);
     m.insert("notion", vec!["NOTION_TOKEN"]);
     m.insert("slack", vec!["SLACK_BOT_TOKEN"]);
@@ -38,7 +37,6 @@ pub fn google_workspace_scopes() -> &'static str {
 /// Validation endpoints for each integration.
 pub fn integration_validation_url(integration: &str) -> Option<&'static str> {
     match integration {
-        "github" => Some("https://api.github.com/user"),
         "linear" => Some("https://api.linear.app/graphql"),
         "notion" => Some("https://api.notion.com/v1/users/me"),
         "slack" => Some("https://slack.com/api/auth.test"),

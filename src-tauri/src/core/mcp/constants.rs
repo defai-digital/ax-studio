@@ -11,16 +11,6 @@ pub const DEFAULT_MCP_BACKOFF_MULTIPLIER: f64 = 2.0; // Double the delay each ti
 
 pub const DEFAULT_MCP_CONFIG: &str = r#"{
   "mcpServers": {
-    "Ax-Studio Browser MCP": {
-      "command": "npx",
-      "args": ["-y", "search-mcp-server@latest"],
-      "env": {
-        "BRIDGE_HOST": "127.0.0.1",
-        "BRIDGE_PORT": "17389"
-      },
-      "active": false,
-      "official": true
-    },
     "exa": {
       "type": "http",
       "url": "https://mcp.exa.ai/mcp",
@@ -28,24 +18,6 @@ pub const DEFAULT_MCP_CONFIG: &str = r#"{
       "args": [],
       "env": {},
       "active": true
-    },
-    "browsermcp": {
-      "command": "npx",
-      "args": ["@browsermcp/mcp"],
-      "env": {},
-      "active": false
-    },
-    "fetch": {
-      "command": "uvx",
-      "args": ["mcp-server-fetch"],
-      "env": {},
-      "active": false
-    },
-    "serper": {
-      "command": "npx",
-      "args": ["-y", "serper-search-scrape-mcp-server"],
-      "env": { "SERPER_API_KEY": "YOUR_SERPER_API_KEY_HERE" },
-      "active": false
     },
     "filesystem": {
       "command": "npx",

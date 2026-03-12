@@ -21,25 +21,6 @@ export type Integration = {
 
 export const INTEGRATIONS: Integration[] = [
   {
-    id: 'github',
-    name: 'GitHub',
-    description: 'Access repositories, issues, pull requests, and code search.',
-    icon: '/icons/integrations/github.svg',
-    category: 'development',
-    mcpPackage: '@modelcontextprotocol/server-github',
-    mcpCommand: 'npx',
-    mcpArgs: ['-y', '@modelcontextprotocol/server-github'],
-    fields: [
-      {
-        key: 'GITHUB_PERSONAL_ACCESS_TOKEN',
-        label: 'Personal Access Token',
-        type: 'password',
-        placeholder: 'ghp_xxxxxxxxxxxx',
-        docsUrl: 'https://github.com/settings/tokens',
-      },
-    ],
-  },
-  {
     id: 'linear',
     name: 'Linear',
     description: 'Manage issues, projects, and teams in Linear.',

@@ -14,15 +14,8 @@ import { useServiceHub } from '@/hooks/useServiceHub'
 import { useThreads } from '@/hooks/useThreads'
 import { useMessages } from '@/hooks/useMessages'
 import { useModelProvider } from '@/hooks/useModelProvider'
-import {
-  useChatAttachments,
-  NEW_THREAD_ATTACHMENT_KEY,
-} from '@/hooks/useChatAttachments'
-import { useAttachments } from '@/hooks/useAttachments'
 import { useChatSessions } from '@/stores/chat-session-store'
-import { processAttachmentsForSend } from '@/lib/attachmentProcessing'
 import { newUserThreadContent } from '@/lib/completion'
-import { createImageAttachment } from '@/types/attachment'
 import { convertThreadMessagesToUIMessages } from '@/lib/messages'
 import {
   ThreadMessage,
@@ -30,8 +23,6 @@ import {
   ChatCompletionRole,
   ContentType,
 } from '@ax-studio/core'
-
-export type FileItem = { type: string; mediaType: string; url: string }
 
 type SendMessageFn = (args: { parts: any[]; id: string; metadata: unknown }) => void // eslint-disable-line @typescript-eslint/no-explicit-any
 type RegenerateFn = (args?: { messageId?: string }) => void
@@ -52,7 +43,7 @@ export type ThreadChatParams = {
 }
 
 export type ThreadChatResult = {
-  processAndSendMessage: (text: string, files?: FileItem[]) => Promise<void>
+  processAndSendMessage: (text: string) => Promise<void>
   persistMessageOnFinish: (message: UIMessage, contentParts: ThreadMessage['content']) => void
   handleRegenerate: (messageId?: string) => void
   handleEditMessage: (messageId: string, newText: string) => void
@@ -77,15 +68,9 @@ export function useThreadChat({
   const deleteMessage = useMessages((state) => state.deleteMessage)
   const setMessages = useMessages((state) => state.setMessages)
   const renameThread = useThreads((state) => state.renameThread)
-  const getAttachments = useChatAttachments((state) => state.getAttachments)
-  const clearAttachmentsForThread = useChatAttachments(
-    (state) => state.clearAttachments
-  )
   const selectedProvider = useModelProvider((state) => state.selectedProvider)
   const selectedModel = useModelProvider((state) => state.selectedModel)
   const getProviderByName = useModelProvider((state) => state.getProviderByName)
-
-  const attachmentsKey = threadId ?? NEW_THREAD_ATTACHMENT_KEY
 
   // ─── Message loading ────────────────────────────────────────────────────────
 
@@ -142,7 +127,7 @@ export function useThreadChat({
   // ─── Send message ───────────────────────────────────────────────────────────
 
   const processAndSendMessage = useCallback(
-    async (text: string, files?: FileItem[]) => {
+    async (text: string) => {
       const normalizedText = text.trim()
       lastUserInputRef.current = normalizedText
 
@@ -161,92 +146,31 @@ export function useThreadChat({
         renameThread(threadId, normalizedText)
       }
 
-      // Get all attachments from the store (includes both images and documents)
-      const allAttachments = getAttachments(attachmentsKey)
-
-      // Convert image files to attachments for persistence
-      const imageAttachments = files?.map((file) => {
-        const base64 = file.url.split(',')[1] || ''
-        return createImageAttachment({
-          name: `image-${Date.now()}`,
-          mimeType: file.mediaType,
-          dataUrl: file.url,
-          base64,
-          size: Math.ceil((base64.length * 3) / 4),
-        })
-      })
-
-      const combinedAttachments = [
-        ...(imageAttachments || []),
-        ...allAttachments.filter((a) => a.type === 'document'),
-      ]
-
-      let processedAttachments = combinedAttachments
-      const projectId = thread?.metadata?.project?.id
-      if (combinedAttachments.length > 0) {
-        try {
-          const parsePreference = useAttachments.getState().parseMode
-          const result = await processAttachmentsForSend({
-            attachments: combinedAttachments,
-            threadId,
-            projectId,
-            serviceHub,
-            selectedProvider,
-            parsePreference,
-          })
-          processedAttachments = result.processedAttachments
-          if (result.hasEmbeddedDocuments) {
-            useThreads.getState().updateThread(threadId, {
-              metadata: { hasDocuments: true },
-            })
-          }
-        } catch (error) {
-          console.error('Failed to process attachments:', error)
-          return
-        }
-      }
-
       const messageId = generateId()
       const userMessage = newUserThreadContent(
         threadId,
         text,
-        processedAttachments,
+        undefined,
         messageId
       )
       addMessage(userMessage)
 
-      const parts: Array<
-        | { type: 'text'; text: string }
-        | { type: 'file'; mediaType: string; url: string }
-      > = [
-        {
-          type: 'text',
-          text: userMessage.content[0].text?.value ?? text,
-        },
-      ]
-
-      files?.forEach((file) => {
-        parts.push({ type: 'file', mediaType: file.mediaType, url: file.url })
-      })
-
       sendMessage({
-        parts,
+        parts: [
+          {
+            type: 'text',
+            text: userMessage.content[0].text?.value ?? text,
+          },
+        ],
         id: messageId,
         metadata: userMessage.metadata,
       })
-
-      clearAttachmentsForThread(attachmentsKey)
     },
     [
       threadId,
       thread,
       addMessage,
       renameThread,
-      getAttachments,
-      attachmentsKey,
-      clearAttachmentsForThread,
-      serviceHub,
-      selectedProvider,
       sendMessage,
       handleRememberCommand,
       handleForgetCommand,

@@ -108,7 +108,7 @@ function ExecutionOutput({ result }: { result: ExecutionResult }) {
             <div
               key={i}
               className="overflow-x-auto text-xs [&_.dataframe]:w-full [&_.dataframe]:border-collapse [&_.dataframe_th]:px-3 [&_.dataframe_th]:py-1.5 [&_.dataframe_th]:bg-muted [&_.dataframe_th]:text-left [&_.dataframe_th]:font-semibold [&_.dataframe_th]:border [&_.dataframe_th]:border-border [&_.dataframe_td]:px-3 [&_.dataframe_td]:py-1.5 [&_.dataframe_td]:border [&_.dataframe_td]:border-border [&_.dataframe_tr:hover]:bg-muted/40"
-              // biome-ignore lint/security/noDangerouslySetInnerHtml: sandbox execution output, sanitized via DOM-based sanitizer
+              // biome-ignore lint/security/noDangerouslySetInnerHtml: execution output, sanitized via DOM-based sanitizer
               dangerouslySetInnerHTML={{ __html: sanitizeHtml(o.data) }}
             />
           ))}
@@ -155,20 +155,18 @@ export const PythonCodeBlock = memo(function PythonCodeBlock({
   children,
   threadId,
 }: PythonCodeBlockProps) {
-  const { state, execute, reset, resetSession } = useCodeExecution(threadId)
+  const { state, execute, reset } = useCodeExecution(threadId)
 
   const isChecking = state.status === 'checking'
-  const isStarting = state.status === 'starting_sandbox'
   const isRunning = state.status === 'running'
-  const isBusy = isChecking || isStarting || isRunning
+  const isBusy = isChecking || isRunning
   const isDone = state.status === 'done'
   const isError = state.status === 'error'
-  const isUnavailable = state.status === 'sandbox_unavailable'
+  const isUnavailable = state.status === 'python_unavailable'
   const showResults = isDone || isError
 
   const runLabel = () => {
     if (isChecking) return 'Checking…'
-    if (isStarting) return 'Starting sandbox…'
     if (isRunning) return 'Running…'
     return 'Run'
   }
@@ -180,13 +178,11 @@ export const PythonCodeBlock = memo(function PythonCodeBlock({
         {children}
       </div>
 
-      {/* Docker / sandbox not available warning */}
+      {/* Python not available warning */}
       {isUnavailable && (
         <div className="flex items-center gap-2 px-3 py-2 mb-1 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 text-xs text-amber-700 dark:text-amber-400">
           <SquareTerminalIcon size={13} className="shrink-0" />
-          {state.dockerAvailable
-            ? 'Sandbox container not found. Click Run to start it automatically.'
-            : 'Docker is not running. Please start Docker Desktop, then click Run again.'}
+          Python is not installed or not in PATH. Please install Python, then click Run again.
         </div>
       )}
 
@@ -213,27 +209,15 @@ export const PythonCodeBlock = memo(function PythonCodeBlock({
             )}
           </Button>
         ) : (
-          <>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground gap-1.5"
-              onClick={reset}
-            >
-              <RotateCcwIcon size={12} />
-              Run again
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground gap-1.5"
-              onClick={resetSession}
-              title="Wipe all variables from the kernel — other code blocks in this chat that depend on these variables will stop working until re-run"
-            >
-              <SquareTerminalIcon size={12} />
-              Clear kernel
-            </Button>
-          </>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground gap-1.5"
+            onClick={reset}
+          >
+            <RotateCcwIcon size={12} />
+            Run again
+          </Button>
         )}
       </div>
 

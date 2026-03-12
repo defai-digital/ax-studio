@@ -20,10 +20,6 @@ import {
 } from '@/lib/messages'
 import { newUserThreadContent } from '@/lib/completion'
 import { ThreadMessage, MessageStatus, ChatCompletionRole } from '@ax-studio/core'
-import { createImageAttachment } from '@/types/attachment'
-import { useChatAttachments } from '@/hooks/useChatAttachments'
-import { processAttachmentsForSend } from '@/lib/attachmentProcessing'
-import { useAttachments } from '@/hooks/useAttachments'
 import { PromptProgress } from '@/components/PromptProgress'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -79,10 +75,6 @@ export function SplitThreadPane({
   const addMessage = useMessages((state) => state.addMessage)
   const updateMessage = useMessages((state) => state.updateMessage)
   const deleteMessage = useMessages((state) => state.deleteMessage)
-  const getAttachments = useChatAttachments((state) => state.getAttachments)
-  const clearAttachmentsForThread = useChatAttachments(
-    (state) => state.clearAttachments
-  )
   const selectedProvider = useModelProvider((state) => state.selectedProvider)
   const selectedModel = useModelProvider((state) => state.selectedModel)
   const { globalDefaultPrompt, autoTuningEnabled } = useGeneralSetting()
@@ -301,10 +293,7 @@ export function SplitThreadPane({
     return () => { ignore = true }
   }, [serviceHub, setChatMessages, setMessages, threadId])
 
-  const handleSubmit = async (
-    text: string,
-    files?: Array<{ type: string; mediaType: string; url: string }>
-  ) => {
+  const handleSubmit = async (text: string) => {
     const normalizedText = text.trim()
     lastUserInputRef.current = normalizedText
 
@@ -358,69 +347,20 @@ export function SplitThreadPane({
       renameThread(threadId, normalizedText)
     }
 
-    const allAttachments = getAttachments(threadId)
-    const imageAttachments = files?.map((file) => {
-      const base64 = file.url.split(',')[1] || ''
-      return createImageAttachment({
-        name: `image-${Date.now()}`,
-        mimeType: file.mediaType,
-        dataUrl: file.url,
-        base64,
-        size: Math.ceil((base64.length * 3) / 4),
-      })
-    })
-    const combinedAttachments = [
-      ...(imageAttachments || []),
-      ...allAttachments.filter((a) => a.type === 'document'),
-    ]
-    let processedAttachments = combinedAttachments
-
-    if (combinedAttachments.length > 0) {
-      try {
-        const parsePreference = useAttachments.getState().parseMode
-        const result = await processAttachmentsForSend({
-          attachments: combinedAttachments,
-          threadId,
-          projectId: thread?.metadata?.project?.id,
-          serviceHub,
-          selectedProvider,
-          parsePreference,
-        })
-        processedAttachments = result.processedAttachments
-        if (result.hasEmbeddedDocuments) {
-          useThreads.getState().updateThread(threadId, {
-            metadata: { ...thread?.metadata, hasDocuments: true },
-          })
-        }
-      } catch {
-        return
-      }
-    }
-
     const messageId = generateId()
     const userMessage = newUserThreadContent(
       threadId,
       normalizedText,
-      processedAttachments,
+      undefined,
       messageId
     )
     addMessage(userMessage)
 
-    const parts: Array<
-      | { type: 'text'; text: string }
-      | { type: 'file'; mediaType: string; url: string }
-    > = [{ type: 'text', text: userMessage.content[0].text?.value ?? normalizedText }]
-
-    files?.forEach((file) => {
-      parts.push({ type: 'file', mediaType: file.mediaType, url: file.url })
-    })
-
     sendMessage({
-      parts,
+      parts: [{ type: 'text', text: userMessage.content[0].text?.value ?? normalizedText }],
       id: messageId,
       metadata: userMessage.metadata,
     })
-    clearAttachmentsForThread(threadId)
   }
 
   return (

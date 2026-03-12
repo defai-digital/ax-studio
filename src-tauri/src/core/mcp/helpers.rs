@@ -419,30 +419,6 @@ async fn schedule_mcp_start_task<R: Runtime>(
             }
         }
     } else {
-        if name == "Ax-Studio Browser MCP" {
-            if let Some(port_str) = config_params.envs.get("BRIDGE_PORT") {
-                if let Some(port_str) = port_str.as_str() {
-                    if let Ok(port) = port_str.parse::<u16>() {
-                        if !ax_studio_utils::network::is_port_available(port) {
-                            log::warn!("Port {} occupied, attempting cleanup", port);
-                            match kill_orphaned_mcp_process_with_app(&app, port).await {
-                                Ok(true) => {
-                                    log::info!("Cleaned up orphaned process on port {}", port);
-                                }
-                                Ok(false) => {
-                                    return Err(format!(
-                                        "Port {} is already in use. Please close the application using this port or restart Ax-Studio.",
-                                        port
-                                    ));
-                                }
-                                Err(e) => return Err(e),
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         let mut cmd = Command::new(config_params.command.clone());
         let bun_x_path = if cfg!(windows) {
             bin_path.join("bun.exe")
@@ -583,20 +559,6 @@ async fn schedule_mcp_start_task<R: Runtime>(
 
         if !server_still_running {
             return Err(format!("MCP server {name} quit immediately after starting"));
-        }
-
-        // Create lock file for Ax-Studio Browser MCP
-        if name == "Ax-Studio Browser MCP" {
-            if let Some(port_str) = config_params.envs.get("BRIDGE_PORT") {
-                if let Some(port_str) = port_str.as_str() {
-                    if let Ok(port) = port_str.parse::<u16>() {
-                        use crate::core::mcp::lockfile::create_lock_file;
-                        if let Err(e) = create_lock_file(&app, port, &name) {
-                            log::warn!("Failed to create lock file for port {}: {}", port, e);
-                        }
-                    }
-                }
-            }
         }
 
         emit_mcp_update_event(&app, &name);
@@ -891,34 +853,14 @@ pub async fn stop_mcp_servers_with_context<R: Runtime>(
         let pids = state.mcp_server_pids.lock().await;
         pids.clone()
     };
-    // Read port from mcp_active_servers FIRST to avoid nested lock acquisition
-    let browser_mcp_port: Option<u16> = {
-        let active_servers = state.mcp_active_servers.lock().await;
-        active_servers
-            .get("Ax-Studio Browser MCP")
-            .and_then(|config| {
-                config
-                    .get("env")
-                    .and_then(|e| e.get("BRIDGE_PORT"))
-                    .and_then(|p| p.as_str())
-                    .and_then(|s| s.parse::<u16>().ok())
-            })
-    };
-
-    let servers_to_stop: Vec<(String, Arc<RunningServiceEnum>, Option<u16>)> = {
+    let servers_to_stop: Vec<(String, Arc<RunningServiceEnum>)> = {
         let mut servers_map = state.mcp_servers.lock().await;
         let keys: Vec<String> = servers_map.keys().cloned().collect();
 
         let mut result = Vec::new();
         for key in keys {
             if let Some(service) = servers_map.remove(&key) {
-                let port = if key == "Ax-Studio Browser MCP" {
-                    browser_mcp_port
-                } else {
-                    None
-                };
-
-                result.push((key, service, port));
+                result.push((key, service));
             }
         }
         result
@@ -930,13 +872,12 @@ pub async fn stop_mcp_servers_with_context<R: Runtime>(
 
     let server_names: Vec<String> = servers_to_stop
         .iter()
-        .map(|(name, _, _)| name.clone())
+        .map(|(name, _)| name.clone())
         .collect();
     let per_server_timeout = context.per_server_timeout();
     let stop_handles: Vec<_> = servers_to_stop
         .into_iter()
-        .map(|(name, service, port)| {
-            let app_clone = app.clone();
+        .map(|(name, service)| {
 
             tauri::async_runtime::spawn(async move {
                 let cancel_future = async {
@@ -954,16 +895,6 @@ pub async fn stop_mcp_servers_with_context<R: Runtime>(
                     .await
                     .map(|r| r.is_ok())
                     .unwrap_or(false);
-
-                if name == "Ax-Studio Browser MCP" {
-                    if let Some(port) = port {
-                        use crate::core::mcp::lockfile::delete_lock_file;
-                        if success {
-                            tokio::time::sleep(Duration::from_millis(100)).await;
-                        }
-                        let _ = delete_lock_file(&app_clone, port);
-                    }
-                }
 
                 (name, success)
             })

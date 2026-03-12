@@ -14,19 +14,15 @@ export type ExecutionResult = {
 }
 
 export type SandboxStatus = {
-  dockerAvailable: boolean
-  sandboxReady: boolean
-  sandboxUrl: string
-  debugInfo: string
+  pythonAvailable: boolean
 }
 
 export type ExecutionState =
   | { status: 'idle' }
   | { status: 'checking' }
-  | { status: 'starting_sandbox' }
   | { status: 'running' }
   | { status: 'done'; result: ExecutionResult }
-  | { status: 'sandbox_unavailable'; dockerAvailable: boolean }
+  | { status: 'python_unavailable' }
   | { status: 'error'; message: string }
 
 export function useCodeExecution(threadId?: string) {
@@ -37,16 +33,10 @@ export function useCodeExecution(threadId?: string) {
 
     try {
       const status = await invoke<SandboxStatus>('check_sandbox_status')
-      console.log('[CEE] sandbox status:', status.debugInfo)
 
-      if (!status.sandboxReady) {
-        if (!status.dockerAvailable) {
-          setState({ status: 'sandbox_unavailable', dockerAvailable: false })
-          return
-        }
-        // Docker is available but sandbox is not running — auto-start it
-        setState({ status: 'starting_sandbox' })
-        await invoke('start_sandbox')
+      if (!status.pythonAvailable) {
+        setState({ status: 'python_unavailable' })
+        return
       }
 
       setState({ status: 'running' })

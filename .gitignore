@@ -80,3 +80,7 @@ opencode.json
 automatosx/
 agent-teams/
 .mcp.json
+
+# Merge conflict artifacts
+*.orig
+*.rej

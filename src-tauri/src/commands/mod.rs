@@ -65,7 +65,6 @@ macro_rules! desktop_handlers {
             crate::core::mcp::commands::get_mcp_configs,
             crate::core::mcp::commands::activate_mcp_server,
             crate::core::mcp::commands::deactivate_mcp_server,
-            crate::core::mcp::commands::check_ax_studio_browser_extension_connected,
             // Threads
             crate::core::threads::commands::list_threads,
             crate::core::threads::commands::create_thread,
@@ -84,13 +83,9 @@ macro_rules! desktop_handlers {
             // Code execution
             crate::core::code_execution::commands::execute_python_code,
             crate::core::code_execution::commands::check_sandbox_status,
-            crate::core::code_execution::commands::start_sandbox,
-            crate::core::code_execution::commands::stop_sandbox,
             crate::core::code_execution::commands::reset_sandbox_session,
-            crate::core::code_execution::commands::update_sandbox_url,
             // Research commands
             crate::core::research::commands::scrape_url,
-            crate::core::research::commands::web_search,
             // Custom updater commands (desktop only)
             crate::core::updater::commands::check_for_app_updates,
             crate::core::updater::commands::is_update_available,
@@ -182,7 +177,6 @@ macro_rules! mobile_handlers {
             crate::core::mcp::commands::get_mcp_configs,
             crate::core::mcp::commands::activate_mcp_server,
             crate::core::mcp::commands::deactivate_mcp_server,
-            crate::core::mcp::commands::check_ax_studio_browser_extension_connected,
             // Threads
             crate::core::threads::commands::list_threads,
             crate::core::threads::commands::create_thread,
@@ -201,13 +195,9 @@ macro_rules! mobile_handlers {
             // Code execution
             crate::core::code_execution::commands::execute_python_code,
             crate::core::code_execution::commands::check_sandbox_status,
-            crate::core::code_execution::commands::start_sandbox,
-            crate::core::code_execution::commands::stop_sandbox,
             crate::core::code_execution::commands::reset_sandbox_session,
-            crate::core::code_execution::commands::update_sandbox_url,
             // Research commands
             crate::core::research::commands::scrape_url,
-            crate::core::research::commands::web_search,
             // Agent teams
             crate::core::agent_teams::list_agent_teams,
             crate::core::agent_teams::get_agent_team,

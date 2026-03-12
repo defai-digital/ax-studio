@@ -16,13 +16,12 @@ export type ThreadEffectsInput = {
   status: string
   assistants: Assistant[]
   selectedModel: Model | undefined
-  updateRagToolsAvailability: (hasDocuments: boolean, modelSupportsTools: boolean, ragAvailable: boolean) => void
   activeTeamId: string | undefined
   setTeamTokensUsed: (tokens: number) => void
   reasoningContainerRef: React.RefObject<HTMLDivElement>
   setCurrentThreadId: (id?: string) => void
   setCurrentAssistant: (assistant: Assistant) => void
-  processAndSendMessage: (text: string, files?: Array<{ type: string; mediaType: string; url: string }>) => Promise<void>
+  processAndSendMessage: (text: string) => Promise<void>
   handleResearchCommand: (text: string) => boolean
   updateThread: (id: string, updates: Partial<Thread>) => void
   setThreadPromptDraft: (draft: string) => void
@@ -35,7 +34,6 @@ export function useThreadEffects({
   status,
   assistants,
   selectedModel,
-  updateRagToolsAvailability,
   activeTeamId,
   setTeamTokensUsed,
   reasoningContainerRef,
@@ -54,13 +52,6 @@ export function useThreadEffects({
         : ''
     )
   }, [thread?.metadata?.threadPrompt, setThreadPromptDraft])
-
-  // ─── Model tool support ──────────────────────────────────────────────────
-  useEffect(() => {
-    const modelSupportsTools =
-      selectedModel?.capabilities?.includes('tools') ?? false
-    updateRagToolsAvailability(false, modelSupportsTools, false)
-  }, [selectedModel?.capabilities, updateRagToolsAvailability])
 
   // ─── Team token usage ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -136,12 +127,9 @@ export function useThreadEffects({
       initialMessageSentRef.current = true
       ;(async () => {
         try {
-          const message = JSON.parse(storedMessage) as {
-            text: string
-            files?: Array<{ type: string; mediaType: string; url: string }>
-          }
+          const message = JSON.parse(storedMessage) as { text: string }
           if (handleResearchCommand(message.text)) return
-          await processAndSendMessage(message.text, message.files)
+          await processAndSendMessage(message.text)
         } catch (error) {
           console.error('Failed to parse initial message:', error)
         }

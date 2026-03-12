@@ -5,8 +5,6 @@ import { Textarea } from '@/components/ui/textarea'
 import ChatInput from '@/containers/ChatInput'
 import { MessagesArea } from './MessagesArea'
 
-type FileItem = { type: string; mediaType: string; url: string }
-
 export type MainThreadPaneProps = {
   threadId: string
   thread: Thread | undefined
@@ -16,7 +14,7 @@ export type MainThreadPaneProps = {
   error?: Error | null
   stop: () => void
   threadModel: Thread['model'] | undefined
-  handleSubmit: (text: string, files?: FileItem[]) => Promise<void>
+  handleSubmit: (text: string) => Promise<void>
   handleRegenerate: (messageId?: string) => void
   handleEditMessage: (messageId: string, newText: string) => void
   handleDeleteMessage: (messageId: string) => void

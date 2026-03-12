@@ -62,8 +62,6 @@ pub fn run() {
             background_cleanup_handle: Arc::new(Mutex::new(None)),
             mcp_server_pids: Arc::new(Mutex::new(HashMap::new())),
             provider_configs: Arc::new(Mutex::new(HashMap::new())),
-            sandbox_sessions: Arc::new(Mutex::new(HashMap::new())),
-            sandbox_url: Arc::new(Mutex::new("http://127.0.0.1:8080".to_string())),
             approved_save_paths: Arc::new(Mutex::new(std::collections::HashSet::new())),
         })
         .setup(|app| Ok(setup::app_setup(app)?))

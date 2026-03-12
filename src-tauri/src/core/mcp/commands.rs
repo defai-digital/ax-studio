@@ -42,20 +42,6 @@ pub async fn deactivate_mcp_server<R: Runtime>(
 ) -> Result<(), String> {
     log::info!("Deactivating MCP server: {name}");
 
-    // Get port from config before removing (for lock file cleanup later)
-    let bridge_port = if name == "Ax-Studio Browser MCP" {
-        let active_servers = state.mcp_active_servers.lock().await;
-        active_servers.get(&name).and_then(|config| {
-            config
-                .get("env")
-                .and_then(|envs| envs.get("BRIDGE_PORT"))
-                .and_then(|port| port.as_str())
-                .and_then(|port_str| port_str.parse::<u16>().ok())
-        })
-    } else {
-        None
-    };
-
     // First, mark server as manually deactivated
     // Remove from active servers list
     {
@@ -93,17 +79,6 @@ pub async fn deactivate_mcp_server<R: Runtime>(
         let mut pids = state.mcp_server_pids.lock().await;
         pids.remove(&name);
     }
-    // Delete lock file if this is Ax-Studio Browser MCP and we have a port
-    if name == "Ax-Studio Browser MCP" {
-        if let Some(port) = bridge_port {
-            use crate::core::mcp::lockfile::delete_lock_file;
-
-            if let Err(e) = delete_lock_file(&app, port) {
-                log::warn!("Failed to delete lock file for port {}: {}", port, e);
-            }
-        }
-    }
-
     log::info!("Server {name} stopped successfully and marked as deactivated.");
 
     // Emit mcp-update event so frontend can refresh tools list
@@ -410,28 +385,16 @@ pub async fn get_mcp_configs<R: Runtime>(app: AppHandle<R>) -> Result<String, St
         mutated = true;
     }
 
-    // Migration: Add Ax-Studio Browser MCP if not present
     let mcp_servers = config_object
         .get_mut("mcpServers")
         .and_then(|v| v.as_object_mut())
         .ok_or("mcpServers is not an object")?;
 
-    if !mcp_servers.contains_key("Ax-Studio Browser MCP") {
-        log::info!("Migrating config: Adding 'Ax-Studio Browser MCP' server");
-        mcp_servers.insert(
-            "Ax-Studio Browser MCP".to_string(),
-            json!({
-                "command": "npx",
-                "args": ["-y", "search-mcp-server@latest"],
-                "env": {
-                    "BRIDGE_HOST": "127.0.0.1",
-                    "BRIDGE_PORT": "17389"
-                },
-                "active": false,
-                "official": true
-            }),
-        );
-        mutated = true;
+    // Remove deprecated MCP servers if present (features removed)
+    for key in &["Ax-Studio Browser MCP", "browsermcp", "fetch", "serper", "integration-github"] {
+        if mcp_servers.remove(*key).is_some() {
+            mutated = true;
+        }
     }
 
     // Persist any mutations back to disk
@@ -453,141 +416,6 @@ pub async fn get_mcp_configs<R: Runtime>(app: AppHandle<R>) -> Result<String, St
 
     serde_json::to_string_pretty(&config_value)
         .map_err(|e| format!("Failed to serialize MCP config: {e}"))
-}
-
-/// Check if error indicates extension not connected
-pub(crate) fn is_extension_not_connected_error(text: &str) -> bool {
-    const PATTERNS: &[&str] = &[
-        "not connected to bridge",
-        "not responding to ping",
-        "extension not connected",
-    ];
-    const KEYWORD_PAIRS: &[(&str, &str)] = &[
-        ("browser", "not connected"),
-        ("browser", "not responding"),
-        ("tool", "not found"),
-    ];
-
-    let text_lower = text.to_lowercase();
-    PATTERNS.iter().any(|p| text_lower.contains(p))
-        || KEYWORD_PAIRS
-            .iter()
-            .any(|(a, b)| text_lower.contains(a) && text_lower.contains(b))
-}
-
-/// Extract text response from tool result
-fn get_result_text(result: &rmcp::model::CallToolResult) -> Option<&str> {
-    result
-        .content
-        .first()
-        .and_then(|c| c.as_text())
-        .map(|t| t.text.as_str())
-}
-
-/// Check if Ax-Studio Browser extension is connected via MCP
-#[tauri::command]
-pub async fn check_ax_studio_browser_extension_connected(
-    state: State<'_, AppState>,
-) -> Result<bool, String> {
-    // Clone Arc ref and drop lock before any await calls
-    let service = {
-        let servers = state.mcp_servers.lock().await;
-        match servers.get("Ax-Studio Browser MCP") {
-            Some(s) => s.clone(),
-            None => return Ok(false),
-        }
-    };
-
-    // Check available tools (lock is dropped)
-    let tools = match timeout(Duration::from_secs(2), service.list_all_tools()).await {
-        Ok(Ok(tools)) if !tools.is_empty() => tools,
-        _ => return Ok(false),
-    };
-
-    let has_ping = tools.iter().any(|t| t.name == "ping");
-
-    // Try simple ping first if available
-    if has_ping {
-        match try_ping_tool(&service).await {
-            PingResult::Connected => return Ok(true),
-            PingResult::NotConnected => return Ok(false),
-            PingResult::ToolNotAvailable => {
-                log::debug!("ping unavailable, trying browser_snapshot");
-            }
-        }
-    }
-
-    // Fallback to browser_snapshot
-    try_browser_snapshot_tool(&service).await
-}
-
-enum PingResult {
-    Connected,
-    NotConnected,
-    ToolNotAvailable,
-}
-
-async fn try_ping_tool(service: &RunningServiceEnum) -> PingResult {
-    let result = timeout(
-        Duration::from_secs(3),
-        service.call_tool(CallToolRequestParam {
-            name: "ping".into(),
-            arguments: Some(Map::new()),
-        }),
-    )
-    .await;
-
-    match result {
-        Ok(Ok(res)) => {
-            if let Some(text) = get_result_text(&res) {
-                if text == "pong" {
-                    return PingResult::Connected;
-                }
-                if is_extension_not_connected_error(text) {
-                    return PingResult::NotConnected;
-                }
-            }
-            if res.is_error == Some(true) {
-                return PingResult::NotConnected;
-            }
-            PingResult::Connected
-        }
-        Ok(Err(e)) => {
-            if is_extension_not_connected_error(&e.to_string()) {
-                PingResult::NotConnected
-            } else {
-                PingResult::ToolNotAvailable
-            }
-        }
-        Err(_) => PingResult::NotConnected,
-    }
-}
-
-async fn try_browser_snapshot_tool(service: &RunningServiceEnum) -> Result<bool, String> {
-    let result = timeout(
-        // Snapshot tool is very time-consuming
-        // Extend timeout to make sure the tool call has enough time to succeed
-        Duration::from_secs(20),
-        service.call_tool(CallToolRequestParam {
-            name: "browser_snapshot".into(),
-            arguments: Some(Map::new()),
-        }),
-    )
-    .await;
-
-    match result {
-        Ok(Ok(res)) => {
-            if res.is_error == Some(true) {
-                if let Some(text) = get_result_text(&res) {
-                    if is_extension_not_connected_error(text) {
-                        return Ok(false);
-                    }
-                }
-            }
-            Ok(true)
-        }
-        Ok(Err(_)) | Err(_) => Ok(false),
-    }
 }
 
 #[tauri::command]

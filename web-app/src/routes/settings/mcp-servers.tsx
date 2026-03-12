@@ -47,15 +47,6 @@ const OFFICIAL_SERVER_HINTS: Record<
       url: 'https://github.com/defai-digital/ax-studio',
     },
   },
-  'Ax-Studio Browser MCP': {
-    description:
-      'Connect your browser to Ax-Studio for web search and page content extraction.',
-    hint: 'Requires the Ax-Studio Browser Extension installed in your Chrome-based browser.',
-    link: {
-      label: 'Install Extension',
-      url: 'https://chromewebstore.google.com/detail/jan-browser-mcp/mkciifcjehgnpaigoiaakdgabbpfpmal',
-    },
-  },
 }
 
 // Function to mask sensitive URL parameters

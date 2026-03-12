@@ -27,8 +27,6 @@ import { MainThreadPane } from './MainThreadPane'
 import { Columns2 } from 'lucide-react'
 import { toast } from 'sonner'
 
-type FileItem = { type: string; mediaType: string; url: string }
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AgentTeam = any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -43,7 +41,7 @@ export type ThreadViewProps = {
   status: string
   error: Error | null | undefined
   stop: () => void
-  handleSubmit: (text: string, files?: FileItem[]) => Promise<void>
+  handleSubmit: (text: string) => Promise<void>
   handleRegenerate: (messageId?: string) => void
   handleEditMessage: (messageId: string, newText: string) => void
   handleDeleteMessage: (messageId: string) => void
@@ -276,34 +274,40 @@ export function ThreadView({
           <div className="grid grid-cols-2 gap-2 px-2 pb-2 h-full">
             {splitPaneOrder.map((pane) =>
               pane === 'main' ? (
-                <MainThreadPane
-                  key="main-pane"
-                  threadId={threadId}
-                  thread={thread}
-                  threadLogo={threadLogo}
-                  chatMessages={chatMessages}
-                  status={status}
-                  stop={stop}
-                  threadModel={threadModel}
-                  handleSubmit={handleSubmit}
-                  handleRegenerate={handleRegenerate}
-                  handleEditMessage={handleEditMessage}
-                  handleDeleteMessage={handleDeleteMessage}
-                  reasoningContainerRef={reasoningContainerRef}
-                  showThreadPromptEditor={showThreadPromptEditor}
-                  setShowThreadPromptEditor={setShowThreadPromptEditor}
-                  threadPromptDraft={threadPromptDraft}
-                  setThreadPromptDraft={setThreadPromptDraft}
-                  promptResolution={promptResolution}
-                  updateThread={updateThread}
-                  isSplitView
-                  onSplitClose={() => {
-                    if (!splitThreadId) return
-                    setSplitThreadId(null)
-                    setSplitDirection(null)
-                    navigate({ to: '/threads/$threadId', params: { threadId: splitThreadId } })
-                  }}
-                />
+                <div key="main-pane" className="relative h-full">
+                  {pinnedResearch && (
+                    <div className="absolute inset-0 z-10 flex flex-col bg-background rounded-md border overflow-hidden">
+                      <ResearchPanel threadId={threadId} onClose={() => clearResearch(threadId)} />
+                    </div>
+                  )}
+                  <MainThreadPane
+                    threadId={threadId}
+                    thread={thread}
+                    threadLogo={threadLogo}
+                    chatMessages={chatMessages}
+                    status={status}
+                    stop={stop}
+                    threadModel={threadModel}
+                    handleSubmit={handleSubmit}
+                    handleRegenerate={handleRegenerate}
+                    handleEditMessage={handleEditMessage}
+                    handleDeleteMessage={handleDeleteMessage}
+                    reasoningContainerRef={reasoningContainerRef}
+                    showThreadPromptEditor={showThreadPromptEditor}
+                    setShowThreadPromptEditor={setShowThreadPromptEditor}
+                    threadPromptDraft={threadPromptDraft}
+                    setThreadPromptDraft={setThreadPromptDraft}
+                    promptResolution={promptResolution}
+                    updateThread={updateThread}
+                    isSplitView
+                    onSplitClose={() => {
+                      if (!splitThreadId) return
+                      setSplitThreadId(null)
+                      setSplitDirection(null)
+                      navigate({ to: '/threads/$threadId', params: { threadId: splitThreadId } })
+                    }}
+                  />
+                </div>
               ) : (
                 <SplitThreadPane
                   key="split-pane"

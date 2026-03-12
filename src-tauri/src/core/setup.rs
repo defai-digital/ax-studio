@@ -178,26 +178,7 @@ pub fn migrate_mcp_servers(
             log::error!("Failed to add server config: {e}");
         }
     }
-    if mcp_version < 2 {
-        log::info!("Migrating MCP schema version 2: Adding Ax-Studio Browser MCP");
-        let result = add_server_config(
-            app_handle.clone(),
-            "Ax-Studio Browser MCP".to_string(),
-            serde_json::json!({
-                "command": "npx",
-                "args": ["-y", "search-mcp-server@latest"],
-                "env": {
-                    "BRIDGE_HOST": "127.0.0.1",
-                    "BRIDGE_PORT": "17389"
-                },
-                "active": false,
-                "official": true
-            }),
-        );
-        if let Err(e) = result {
-            log::error!("Failed to add Ax-Studio Browser MCP server config: {e}");
-        }
-    }
+    // Migration version 2 was Browser MCP (removed)
     if mcp_version < 3 {
         log::info!("Migrating MCP schema version 3: Updating Exa to streamable HTTP");
         if let Err(e) = migrate_exa_to_http(app_handle.clone()) {
@@ -214,11 +195,17 @@ pub fn migrate_mcp_servers(
     }
     if mcp_version < 5 {
         log::info!("Migrating MCP schema version 5: Renaming ax-fabric MCP server to ax-studio");
-        if let Err(e) = rename_mcp_server_key(app_handle, "ax-fabric", "ax-studio") {
+        if let Err(e) = rename_mcp_server_key(app_handle.clone(), "ax-fabric", "ax-studio") {
             log::error!("Failed to rename ax-fabric MCP server config: {e}");
         }
     }
-    store.set("mcp_version", 5);
+    if mcp_version < 6 {
+        log::info!("Migrating MCP schema version 6: Removing deprecated integration-github MCP server");
+        if let Err(e) = remove_mcp_server_keys(app_handle, &["integration-github"]) {
+            log::error!("Failed to remove integration-github: {e}");
+        }
+    }
+    store.set("mcp_version", 6);
     store.save().expect("Failed to save store");
     Ok(())
 }
@@ -270,6 +257,40 @@ fn rename_mcp_server_key(
             .map_err(|e| format!("Failed to serialize MCP config: {e}"))?,
     )
     .map_err(|e| format!("Failed to write MCP config: {e}"))?;
+
+    Ok(())
+}
+
+fn remove_mcp_server_keys(app_handle: tauri::AppHandle, keys: &[&str]) -> Result<(), String> {
+    let config_path = get_app_data_folder_path(app_handle).join("mcp_config.json");
+
+    if !config_path.exists() {
+        return Ok(());
+    }
+
+    let config_str =
+        fs::read_to_string(&config_path).map_err(|e| format!("Failed to read MCP config: {e}"))?;
+
+    let mut config: serde_json::Value = serde_json::from_str(&config_str)
+        .map_err(|e| format!("Failed to parse MCP config: {e}"))?;
+
+    let mut changed = false;
+    if let Some(servers) = config.get_mut("mcpServers").and_then(|s| s.as_object_mut()) {
+        for key in keys {
+            if servers.remove(*key).is_some() {
+                changed = true;
+            }
+        }
+    }
+
+    if changed {
+        fs::write(
+            &config_path,
+            serde_json::to_string_pretty(&config)
+                .map_err(|e| format!("Failed to serialize MCP config: {e}"))?,
+        )
+        .map_err(|e| format!("Failed to write MCP config: {e}"))?;
+    }
 
     Ok(())
 }

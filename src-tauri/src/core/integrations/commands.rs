@@ -132,7 +132,6 @@ pub async fn validate_integration_token(
     credentials: HashMap<String, String>,
 ) -> Result<String, String> {
     match integration.as_str() {
-        "github" => validate_github(&credentials).await,
         "linear" => validate_linear(&credentials).await,
         "notion" => validate_notion(&credentials).await,
         "slack" => validate_slack(&credentials).await,
@@ -143,39 +142,6 @@ pub async fn validate_integration_token(
         "postgres" => validate_postgres(&credentials).await,
         "google-workspace" => validate_google_workspace().await,
         _ => Err(format!("Unknown integration: {integration}")),
-    }
-}
-
-async fn validate_github(credentials: &HashMap<String, String>) -> Result<String, String> {
-    let token = credentials
-        .get("GITHUB_PERSONAL_ACCESS_TOKEN")
-        .ok_or("Missing GITHUB_PERSONAL_ACCESS_TOKEN")?;
-    let url = integration_validation_url("github").unwrap();
-
-    let client = reqwest::Client::new();
-    let resp = client
-        .get(url)
-        .header("Authorization", format!("Bearer {token}"))
-        .header("User-Agent", "ax-studio")
-        .send()
-        .await
-        .map_err(|e| format!("Request failed: {e}"))?;
-
-    if resp.status().is_success() {
-        let body: serde_json::Value = resp
-            .json()
-            .await
-            .map_err(|e| format!("Failed to parse response: {e}"))?;
-        let login = body
-            .get("login")
-            .and_then(|v| v.as_str())
-            .unwrap_or("unknown");
-        Ok(format!("Authenticated as {login}"))
-    } else {
-        Err(format!(
-            "Authentication failed (HTTP {}). Check your token.",
-            resp.status()
-        ))
     }
 }
 

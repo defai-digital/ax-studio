@@ -12,7 +12,6 @@ import ThreadList from '@/containers/ThreadList'
 import { AvatarEmoji } from '@/containers/AvatarEmoji'
 
 import { FolderPenIcon, MessageCircle, MoreHorizontal, PencilIcon, Trash2 } from 'lucide-react'
-import ProjectFiles from '@/containers/ProjectFiles'
 import DropdownModelProvider from '@/containers/DropdownModelProvider'
 import {
   DropdownMenu,
@@ -243,8 +242,6 @@ function ProjectPageContent() {
               </Button>
             </div>
 
-            {/* Files Section */}
-            <ProjectFiles projectId={projectId} lng={i18n.language} />
           </div>
         </div>
       </div>

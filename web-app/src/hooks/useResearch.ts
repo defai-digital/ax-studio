@@ -14,7 +14,6 @@ import {
 import { newUserThreadContent, newAssistantThreadContent } from '@/lib/completion'
 import {
   exaSearch,
-  freeWebSearch,
   searchWikipedia,
   normalizeUrl,
   isExaRateLimitMessage,
@@ -115,48 +114,7 @@ export function useResearch(threadId: string) {
           }
 
           if (usedLLMFallback) {
-            // Tier 1: SearXNG via Rust backend
-            let freeSources: ResearchSource[] = []
-            try {
-              addStep({ type: 'searching', query: `DuckDuckGo: ${question}` })
-              freeSources = await freeWebSearch(question, numResults, signal)
-            } catch (err) {
-              if ((err as Error).name === 'AbortError') throw err
-            }
-
-            if (freeSources.length > 0) {
-              addStep({ type: 'searching', query: `DuckDuckGo: ${freeSources.length} results` })
-              for (const r of freeSources) {
-                if (allSources.length < MAX_SOURCES && !allSources.find((s) => normalizeUrl(s.url) === normalizeUrl(r.url))) {
-                  allSources.push(r)
-                }
-              }
-              const freeSummaries: string[] = []
-              for (const r of freeSources) {
-                if (signal.aborted) break
-                addStep({ type: 'scraping', message: `Scraping: ${r.title || r.url}` })
-                let pageText = r.snippet || r.title || ''
-                if (depth > 1) {
-                  const scraped = await scrapeWithTimeout(r.url, signal)
-                  if (scraped.length > 100) pageText = scraped
-                }
-                addStep({ type: 'summarising', message: `Summarising: ${r.title || r.url}` })
-                try {
-                  const { text: summary } = await generateText({
-                    model,
-                    messages: [{ role: 'user', content: SUMMARISE_PROMPT(question, pageText) }],
-                    abortSignal: signal,
-                  })
-                  freeSummaries.push(`Source: ${r.url}\n${summary}`)
-                } catch (err) {
-                  if ((err as Error).name === 'AbortError') throw err
-                  freeSummaries.push(`Source: ${r.url}\n${pageText.slice(0, 500)}`)
-                }
-              }
-              return freeSummaries.filter(Boolean)
-            }
-
-            // Tier 2: Wikipedia
+            // Fallback: Wikipedia
             try {
               addStep({ type: 'searching', query: `Wikipedia: ${question}` })
               const wikiResults = await searchWikipedia(question, numResults, signal)

@@ -77,7 +77,7 @@ function ThreadDetail() {
 
   const {
     messages: chatMessages, status, error, sendMessage, regenerate,
-    setMessages: setChatMessages, stop, addToolOutput, updateRagToolsAvailability,
+    setMessages: setChatMessages, stop, addToolOutput,
   } = useChat({
     sessionId: threadId,
     sessionTitle: thread?.title,
@@ -113,16 +113,16 @@ function ThreadDetail() {
   // ─── Effects ──────────────────────────────────────────────────────────────
   useThreadEffects({
     threadId, thread, chatMessages, status, assistants, selectedModel,
-    updateRagToolsAvailability, activeTeamId, setTeamTokensUsed,
+    activeTeamId, setTeamTokensUsed,
     reasoningContainerRef, setCurrentThreadId, setCurrentAssistant,
     processAndSendMessage, handleResearchCommand, updateThread, setThreadPromptDraft,
   })
 
   // ─── Submit handler ───────────────────────────────────────────────────────
   const handleSubmit = useCallback(
-    async (text: string, files?: Array<{ type: string; mediaType: string; url: string }>) => {
+    async (text: string) => {
       if (handleResearchCommand(text)) return
-      await processAndSendMessage(text, files)
+      await processAndSendMessage(text)
     },
     [processAndSendMessage, handleResearchCommand]
   )

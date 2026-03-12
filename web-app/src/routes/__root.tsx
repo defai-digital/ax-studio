@@ -17,7 +17,6 @@ import { useLeftPanel } from '@/hooks/useLeftPanel'
 import ToolApproval from '@/containers/dialogs/ToolApproval'
 import { TranslationProvider } from '@/i18n/TranslationContext'
 import OutOfContextPromiseModal from '@/containers/dialogs/OutOfContextDialog'
-import AttachmentIngestionDialog from '@/containers/dialogs/AttachmentIngestionDialog'
 import { useEffect } from 'react'
 import GlobalError from '@/containers/GlobalError'
 import { GlobalEventHandler } from '@/providers/GlobalEventHandler'
@@ -133,7 +132,6 @@ function RootLayout() {
           </ExtensionProvider>
           {/* <TanStackRouterDevtools position="bottom-right" /> */}
           <ToolApproval />
-          <AttachmentIngestionDialog />
           <OutOfContextPromiseModal />
         </TranslationProvider>
       </ServiceHubProvider>

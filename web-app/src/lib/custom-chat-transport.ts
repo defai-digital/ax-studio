@@ -101,37 +101,6 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
       }
     }
 
-    if (!isToolDisabled('built-in', 'generate_diagram')) {
-      toolsRecord['generate_diagram'] = {
-        description:
-          'Generate a visual Mermaid diagram. ALWAYS call this proactively — never wait to be asked. ' +
-          'Use it whenever a visual aids understanding. Type selection guide:\n' +
-          '• mindmap — "what are the concepts/parts/ideas of X", conceptual overviews\n' +
-          '• flowchart — step-by-step processes, decision trees, algorithms, how X works\n' +
-          '• sequenceDiagram — message passing between distinct actors/systems (login, API calls)\n' +
-          '• classDiagram — object models, class hierarchies, OOP structure\n' +
-          '• erDiagram — database schemas, entity relationships\n' +
-          '• stateDiagram-v2 — states and transitions of a system or object\n' +
-          '• gantt — project timelines, schedules, task planning\n' +
-          '• mindmap — also use for listing main topics, categories, or branches of a subject',
-        inputSchema: jsonSchema({
-          type: 'object',
-          properties: {
-            title: { type: 'string', description: 'Short descriptive title for the diagram' },
-            diagramType: {
-              type: 'string',
-              enum: ['flowchart','sequenceDiagram','classDiagram','erDiagram','stateDiagram-v2','gantt','mindmap','timeline','gitGraph','pie'],
-              description: 'Mermaid diagram type.',
-            },
-            source: { type: 'string', description: 'Complete valid Mermaid syntax, without the ```mermaid fence' },
-          },
-          required: ['title', 'diagramType', 'source'],
-        }),
-        execute: async ({ title, diagramType, source }: { title: string; diagramType: string; source: string }) =>
-          ({ title, diagramType, source }),
-      } as Tool
-    }
-
     this.tools = toolsRecord
   }
 

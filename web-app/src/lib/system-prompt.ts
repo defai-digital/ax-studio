@@ -35,34 +35,27 @@ export const fallbackDefaultPrompt = 'You are a helpful assistant.'
 
 /**
  * Appended to every resolved system prompt regardless of source.
- * Instructs the model to proactively call `generate_diagram` whenever a
- * visual would aid understanding, and guides diagram-type selection.
- * Also ensures the Mermaid fallback (text path) uses correct syntax.
+ * Instructs the model to only produce Mermaid diagrams when explicitly
+ * requested by the user, and provides syntax guidelines.
  */
 export const DIAGRAM_FORMAT_INSTRUCTION = `
 
 ## Diagram rules
 
-When a diagram would help clarify your answer, include exactly one diagram alongside your explanation — never instead of it. Always write your full text explanation first, then add a single diagram after it.
+NEVER include diagrams, flowcharts, or mermaid code blocks unless the user explicitly asks for one (e.g. "draw a diagram", "show me a flowchart", "visualize this"). By default, always respond with text only.
 
-Add a diagram when the question involves:
-- concepts / parts / ideas of X → mindmap
-- how X works / steps of X / flow of X → flowchart
-- how X and Y communicate / interact → sequenceDiagram
-- class or object structure of X → classDiagram
-- database schema / tables for X → erDiagram
-- states / lifecycle of X → stateDiagram-v2
-
-If a \`generate_diagram\` tool is available, call it after writing your explanation. Otherwise output a Mermaid code fence after your text:
+When a diagram IS explicitly requested, use a mermaid code fence:
 \`\`\`mermaid
 <valid mermaid syntax>
 \`\`\`
 
-Mermaid syntax rules — follow these to avoid parse errors:
-- Always wrap node labels in double quotes when they contain parentheses, apostrophes, angle brackets, pipes, or any special character: A["Recipient's Device"] not A[Recipient's Device], A["Setup (X3DH)"] not A[Setup (X3DH)]
-- Use \`<br/>\` inside quoted labels for line breaks: A["Line one<br/>Line two"]
-
-Never use PlantUML, ASCII art, or plain bullet lists as a substitute for a diagram.`
+Mermaid syntax rules (only when generating a requested diagram):
+- Wrap node labels in double quotes when they contain special characters: A["Label (with parens)"]
+- classDiagram: use \`List~Task~\` not \`List<Task>\`, no \`enum {A, B}\` in class body
+- erDiagram: quote SQL reserved words: \`"ORDER"\` not \`ORDER\`
+- sequenceDiagram: every message on a single line
+- stateDiagram: always use \`stateDiagram-v2\`
+- gantt: every task needs format \`Task Name :status, YYYY-MM-DD, duration\``
 
 const normalizePrompt = (value: unknown): string | null => {
   if (typeof value !== 'string') return null
