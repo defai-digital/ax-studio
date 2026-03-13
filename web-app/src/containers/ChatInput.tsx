@@ -11,6 +11,7 @@ import { MovingBorder } from './MovingBorder'
 import type { ChatStatus } from 'ai'
 import { useAssistant } from '@/hooks/useAssistant'
 import { useMemory } from '@/hooks/useMemory'
+import { useLocalKnowledge } from '@/hooks/useLocalKnowledge'
 import { useTools } from '@/hooks/useTools'
 import { useMessages } from '@/hooks/useMessages'
 import { useShallow } from 'zustand/react/shallow'
@@ -76,6 +77,24 @@ const ChatInput = memo(function ChatInput({
       toggleMemoryGlobal()
     }
   }, [effectiveThreadId, toggleMemoryForThread, toggleMemoryGlobal])
+
+  const globalLocalKnowledgeEnabled = useLocalKnowledge((state) => state.localKnowledgeEnabled)
+  const localKnowledgeEnabledPerThread = useLocalKnowledge((state) => state.localKnowledgeEnabledPerThread)
+  const toggleLocalKnowledgeGlobal = useLocalKnowledge((state) => state.toggleLocalKnowledge)
+  const toggleLocalKnowledgeForThread = useLocalKnowledge((state) => state.toggleLocalKnowledgeForThread)
+
+  const isLocalKnowledgeEnabled = effectiveThreadId
+    ? (effectiveThreadId in localKnowledgeEnabledPerThread
+        ? localKnowledgeEnabledPerThread[effectiveThreadId]
+        : globalLocalKnowledgeEnabled)
+    : globalLocalKnowledgeEnabled
+  const toggleLocalKnowledge = useCallback(() => {
+    if (effectiveThreadId) {
+      toggleLocalKnowledgeForThread(effectiveThreadId)
+    } else {
+      toggleLocalKnowledgeGlobal()
+    }
+  }, [effectiveThreadId, toggleLocalKnowledgeForThread, toggleLocalKnowledgeGlobal])
   const currentThread = useThreads((state) =>
     effectiveThreadId ? state.threads[effectiveThreadId] : state.getCurrentThread()
   )
@@ -244,6 +263,8 @@ const ChatInput = memo(function ChatInput({
           isMemoryEnabled={isMemoryEnabled}
           toggleMemory={toggleMemory}
           memoryCount={memoryCount}
+          isLocalKnowledgeEnabled={isLocalKnowledgeEnabled}
+          toggleLocalKnowledge={toggleLocalKnowledge}
           tokenCounterCompact={tokenCounterCompact}
           threadMessages={threadMessages || []}
           stopStreaming={stopStreaming}

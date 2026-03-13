@@ -9,6 +9,7 @@ import {
 } from 'ai'
 import { useServiceStore, getServiceHub } from '@/hooks/useServiceHub'
 import { useToolAvailable } from '@/hooks/useToolAvailable'
+import { useLocalKnowledge } from '@/hooks/useLocalKnowledge'
 import { ModelFactory } from './model-factory'
 import { useModelProvider } from '@/hooks/useModelProvider'
 import { useAssistant } from '@/hooks/useAssistant'
@@ -83,12 +84,17 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
       const modelSupportsTools = selectedModel?.capabilities?.includes('tools') ?? this.modelSupportsTools
 
       if (modelSupportsTools) {
+        const localKnowledgeEnabled = this.threadId
+          ? useLocalKnowledge.getState().isLocalKnowledgeEnabledForThread(this.threadId)
+          : useLocalKnowledge.getState().localKnowledgeEnabled
+
         try {
           const mcpTools = await this.serviceHub.mcp().getTools()
           if (Array.isArray(mcpTools) && mcpTools.length > 0) {
             mcpTools.forEach((tool) => {
               const serverName = (tool as { server?: string }).server || 'unknown'
               if (!isToolDisabled(serverName, tool.name)) {
+                if (serverName === 'ax-studio' && !localKnowledgeEnabled) return
                 toolsRecord[tool.name] = {
                   description: tool.description,
                   inputSchema: jsonSchema(tool.inputSchema as Record<string, unknown>),

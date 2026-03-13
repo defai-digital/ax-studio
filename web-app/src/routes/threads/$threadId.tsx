@@ -14,9 +14,11 @@ import {
   DIAGRAM_FORMAT_INSTRUCTION,
   CODE_EXECUTION_INSTRUCTION,
   ARTIFACT_FORMAT_INSTRUCTION,
+  LOCAL_KNOWLEDGE_INSTRUCTION,
 } from '@/lib/system-prompt'
 import type { UIMessage } from '@ai-sdk/react'
 import { useThreadMemory } from '@/hooks/thread/use-thread-memory'
+import { useLocalKnowledge } from '@/hooks/useLocalKnowledge'
 import { useThreadArtifacts } from '@/hooks/thread/use-thread-artifacts'
 import { useThreadResearch } from '@/hooks/thread/use-thread-research'
 import { useThreadChat } from '@/hooks/thread/use-thread-chat'
@@ -49,6 +51,7 @@ function ThreadDetail() {
   // ─── Domain hooks ─────────────────────────────────────────────────────────
   const { memorySuffix, lastUserInputRef, processMemoryOnFinish, handleRememberCommand, handleForgetCommand } =
     useThreadMemory(threadId)
+  const localKnowledgeActive = useLocalKnowledge((state) => state.isLocalKnowledgeEnabledForThread(threadId))
   const projectId = thread?.metadata?.project?.id
   const { pinnedArtifact, clearArtifact } = useThreadArtifacts(threadId)
   const { pinnedResearch, clearResearch, handleResearchCommand } = useThreadResearch(threadId)
@@ -81,7 +84,7 @@ function ThreadDetail() {
   } = useChat({
     sessionId: threadId,
     sessionTitle: thread?.title,
-    systemMessage: promptResolution.resolvedPrompt + memorySuffix + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION + ARTIFACT_FORMAT_INSTRUCTION,
+    systemMessage: promptResolution.resolvedPrompt + memorySuffix + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION + ARTIFACT_FORMAT_INSTRUCTION + (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : ''),
     modelOverrideId: optimizedModelConfig.modelId,
     activeTeamId,
     onCostApproval,

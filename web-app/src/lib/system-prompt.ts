@@ -212,6 +212,21 @@ Rules:
 - When asked to fix or update an artifact, always output the full updated version in a new artifact block.
 - Keep artifacts self-contained — inline all styles, use no external imports beyond the available runtime (React 18, Chart.js 4, Vega-Lite 5, standard HTML/CSS/JS).`
 
+export const LOCAL_KNOWLEDGE_INSTRUCTION = `
+
+## Local knowledge base
+
+You MUST follow this exact sequence for every user message — no exceptions:
+
+Step 1: Call \`fabric_search\` ONCE with the user's query. Do NOT call it again.
+Step 2: Call \`fabric_extract\` on every file path returned by \`fabric_search\` to retrieve the full content.
+Step 3: Answer using ONLY the content returned by the tools. Do not use training data.
+
+Rules:
+- Never call \`fabric_search\` more than once per message. If the first search returns no results, go straight to Step 3 and say: "I could not find relevant information in the knowledge base."
+- Never skip \`fabric_extract\`. Always extract the full file content after searching.
+- Never say you cannot access the knowledge base.`
+
 export const buildChatPromptInjection = (
   resolved: ResolvedSystemPrompt
 ): ChatPromptInjection => {

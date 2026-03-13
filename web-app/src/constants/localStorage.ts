@@ -27,6 +27,7 @@ export const localStorageKey = {
   modelSupportCache: 'ax-studio-model-support-cache',
   recentSearches: 'recent-searches',
   memoryStore: 'memory-store',
+  localKnowledgeStore: 'local-knowledge-store',
 }
 
 export const CACHE_EXPIRY_MS = 1000 * 60 * 60 * 24

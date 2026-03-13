@@ -220,6 +220,11 @@ export function useChat(
     }
   }, [mcpToolNames])
 
+  // Expose method to push a system message directly to the transport (bypasses React render cycle)
+  const updateSystemMessageDirect = useCallback((msg: string | undefined) => {
+    transportRef.current?.updateSystemMessage(msg)
+  }, [])
+
   // Expose method to update RAG tools availability
   const updateRagToolsAvailability = useCallback(
     async (
@@ -241,5 +246,6 @@ export function useChat(
   return {
     ...chatResult,
     updateRagToolsAvailability,
+    updateSystemMessageDirect,
   }
 }
