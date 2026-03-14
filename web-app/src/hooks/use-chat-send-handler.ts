@@ -125,6 +125,14 @@ export function useChatSendHandler({
           projectMetadata
         )
 
+        const storedTeamId = sessionStorage.getItem(SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID)
+        if (storedTeamId) {
+          sessionStorage.removeItem(SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID)
+          useThreads.getState().updateThread(newThread.id, {
+            metadata: { ...(newThread.metadata ?? {}), agent_team_id: storedTeamId },
+          })
+        }
+
         setSelectedAssistant(undefined)
 
         sessionStorage.setItem(

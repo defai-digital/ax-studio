@@ -23,7 +23,14 @@ import { ThreadMessage, MessageStatus, ChatCompletionRole } from '@ax-studio/cor
 import { PromptProgress } from '@/components/PromptProgress'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { X } from 'lucide-react'
+import { useAgentTeamStore } from '@/stores/agent-team-store'
 import { toast } from 'sonner'
 import { useGeneralSetting } from '@/hooks/useGeneralSetting'
 import { useMemory } from '@/hooks/useMemory'
@@ -90,8 +97,13 @@ export function SplitThreadPane({
   )
   const projectId = thread?.metadata?.project?.id
   const {
-    followUpMessage, onToolCall, startToolExecution, onCostApproval,
+    followUpMessage, onToolCall, startToolExecution, onCostApproval, handleTeamChange,
   } = useThreadTools({ threadId, projectId })
+  const agentTeams = useAgentTeamStore((s) => s.teams)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const activeTeamId = (thread?.metadata?.agent_team_id as string) ?? undefined
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const activeTeam = agentTeams.find((t: any) => t.id === activeTeamId)
   const [showThreadPromptEditor, setShowThreadPromptEditor] = useState(false)
   const [threadPromptDraft, setThreadPromptDraft] = useState('')
   const reasoningContainerRef = useRef<HTMLDivElement>(null)
@@ -398,6 +410,24 @@ export function SplitThreadPane({
         </div>
         {onClose && (
           <div className="flex items-center gap-1 shrink-0">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant={activeTeamId ? 'secondary' : 'outline'} size="sm">
+                  {activeTeam ? activeTeam.name : 'Agent Team'}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => handleTeamChange(undefined)}>
+                  No Team (single agent)
+                </DropdownMenuItem>
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                {agentTeams.map((team: any) => (
+                  <DropdownMenuItem key={team.id} onSelect={() => handleTeamChange(team.id)}>
+                    {team.name}{team.id === activeTeamId && ' ✓'}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               variant="outline"
               size="sm"
