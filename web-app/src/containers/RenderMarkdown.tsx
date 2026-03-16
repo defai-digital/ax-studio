@@ -1,15 +1,13 @@
-import { type ReactNode, memo, useMemo } from 'react'
+import { type ReactNode, memo, useMemo, useState, useEffect, useRef } from 'react'
 import { AXMarkdown, axDefaultRehypePlugins } from '@/lib/markdown/renderer'
-import type { MermaidErrorComponentProps } from 'streamdown'
 import { cn, disableIndentedCodeBlockPlugin } from '@/lib/utils'
 import { cjk } from '@streamdown/cjk'
 import { code } from '@streamdown/code'
-import { mermaid } from '@streamdown/mermaid'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
-import { MermaidError } from '@/components/MermaidError'
+import mermaidLib from 'mermaid'
 import { useTheme } from '@/hooks/useTheme'
 import { PythonCodeBlock } from '@/components/ai-elements/PythonCodeBlock'
 import { ArtifactBlock } from '@/components/ai-elements/ArtifactBlock'
@@ -66,7 +64,7 @@ function sanitizeMermaidFences(input: string): string {
 
   // Step 2: Process every (now properly closed) mermaid fence.
   return text.replace(
-    /(```mermaid\n)([\s\S]*?)(```)/g,
+    /(```mermaid[^\n]*\n)([\s\S]*?)(```)/g,
     (_full, open, body: string, close) => {
       let fixed = body.trimStart()
 
@@ -81,7 +79,7 @@ function sanitizeMermaidFences(input: string): string {
         .split('\n')
         .map((line) =>
           line.replace(
-            /\[(?!["[/\\(>])([^\]\n"]+)\]/g,
+            /\[(?!["[/\\(>|])([^\]\n"]+)\]/g,
             (_m, inner) => {
               if (!UNSAFE.test(inner)) return _m
               return `["${inner.replace(/"/g, '\\"')}"]`
@@ -217,22 +215,108 @@ function getPythonCode(preNode: unknown): string | null {
   return looksLikePython ? code : null
 }
 
-const ARTIFACT_LANG_RE = /^language-artifact-(html|react|svg|chartjs|vega)$/i
+/** Returns true if the HAST pre node wraps a mermaid code block. */
+function isMermaidNode(preNode: unknown): boolean {
+  if (!preNode || typeof preNode !== 'object') return false
+  const node = preNode as Record<string, unknown>
+  const children = node.children as unknown[] | undefined
+  if (!Array.isArray(children) || children.length === 0) return false
 
-// Plain language classes that can be promoted to artifacts via the Render button
-// Maps Streamdown class name → ArtifactType
-const RENDERABLE_LANG_MAP: Record<string, ArtifactType> = {
-  'language-html': 'html',
-  'language-jsx': 'react',
-  'language-tsx': 'react',
-  'language-react': 'react',
-  'language-svg': 'svg',
+  const codeEl = children[0] as Record<string, unknown>
+  if (!codeEl || codeEl.tagName !== 'code') return false
+
+  const props = codeEl.properties as Record<string, unknown> | undefined
+  const classes = props?.className
+  if (!Array.isArray(classes)) return false
+
+  return classes.some(
+    (c) => typeof c === 'string' && /^language-mermaid$/i.test(c)
+  )
 }
 
 /**
- * If a HAST pre node wraps an artifact code block (explicit artifact-* fence,
- * or a full HTML document in a plain ```html block), returns the type and source.
- * Returns null otherwise.
+ * Extract all mermaid diagram sources from a sanitized markdown string.
+ * Returns them in document order so they can be matched to HAST nodes by index.
+ * We use the raw string rather than HAST text extraction because Shiki's
+ * line-span format can strip newlines from the HAST, breaking line-sensitive
+ * parsers (Gantt, mindmap, sequence, etc.).
+ *
+ * The fence pattern is lenient: allows optional trailing content on the
+ * opening line (e.g. "```mermaid " with a trailing space).
+ */
+function extractMermaidBlocks(content: string): string[] {
+  const blocks: string[] = []
+  // [^\n]* allows trailing spaces or other chars after "mermaid" on the fence line
+  const regex = /```mermaid[^\n]*\n([\s\S]*?)```/g
+  let match
+  while ((match = regex.exec(content)) !== null) {
+    const source = match[1].trim()
+    if (source) blocks.push(source)
+  }
+  return blocks
+}
+
+let mermaidInitialized = false
+
+/** Renders a mermaid diagram directly via mermaidLib, bypassing Streamdown's plugin. */
+function MermaidDiagram({ source, theme }: { source: string; theme: string }) {
+  const [svgContent, setSvgContent] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!mermaidInitialized) {
+      mermaidLib.initialize({ startOnLoad: false, securityLevel: 'loose', theme: theme as never })
+      mermaidInitialized = true
+    } else {
+      mermaidLib.initialize({ startOnLoad: false, securityLevel: 'loose', theme: theme as never })
+    }
+
+    const id = `mermaid-${Math.random().toString(36).slice(2)}`
+    mermaidLib
+      .render(id, source)
+      .then(({ svg }) => {
+        setSvgContent(svg)
+        setError(null)
+      })
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : String(err))
+        setSvgContent(null)
+      })
+  }, [source, theme])
+
+  if (error) {
+    return (
+      <div className="rounded border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive my-2">
+        Mermaid error: {error}
+      </div>
+    )
+  }
+  if (!svgContent) return null
+  return (
+    <div
+      className="my-2 overflow-x-auto"
+      // biome-ignore lint/security/noDangerouslySetInnerHtml: trusted mermaid SVG output
+      dangerouslySetInnerHTML={{ __html: svgContent }}
+    />
+  )
+}
+
+const ARTIFACT_LANG_RE = /^language-artifact-(html|react|svg|chartjs|vega)$/i
+
+// JSX/TSX/React/SVG blocks are always auto-rendered as artifacts (no click required)
+const AUTO_RENDER_LANGS = new Set(['language-jsx', 'language-tsx', 'language-react'])
+
+// HTML blocks show a "Render" button (may be code snippets, not full artifacts)
+const RENDER_BUTTON_LANG_MAP: Record<string, ArtifactType> = {
+  'language-html': 'html',
+}
+
+/**
+ * If a HAST pre node wraps an artifact code block, returns the type and source.
+ * Handles:
+ *   1. Explicit artifact-* fences (artifact-html, artifact-react, etc.)
+ *   2. Full HTML documents in plain ```html blocks (<!DOCTYPE html or <html)
+ *   3. JSX / TSX / React blocks — always auto-rendered as React artifacts
  */
 function getArtifactInfo(preNode: unknown): { type: ArtifactType; source: string } | null {
   if (!preNode || typeof preNode !== 'object') return null
@@ -255,9 +339,18 @@ function getArtifactInfo(preNode: unknown): { type: ArtifactType; source: string
     return { type: match[1].toLowerCase() as ArtifactType, source: extractHastText(codeEl) }
   }
 
-  // 2. Auto-detect full HTML documents in plain ```html blocks
-  const isHtml = strClasses.some((c) => c === 'language-html')
-  if (isHtml) {
+  // 2. JSX / TSX / React blocks — auto-render without requiring a button click
+  if (strClasses.some((c) => AUTO_RENDER_LANGS.has(c))) {
+    return { type: 'react', source: extractHastText(codeEl) }
+  }
+
+  // 3. SVG blocks — always visual, always auto-render
+  if (strClasses.some((c) => c === 'language-svg')) {
+    return { type: 'svg', source: extractHastText(codeEl) }
+  }
+
+  // 4. Auto-detect full HTML documents in plain ```html blocks
+  if (strClasses.some((c) => c === 'language-html')) {
     const source = extractHastText(codeEl)
     if (/^<!DOCTYPE\s+html|^<html/i.test(source.trim())) {
       return { type: 'html', source }
@@ -268,9 +361,9 @@ function getArtifactInfo(preNode: unknown): { type: ArtifactType; source: string
 }
 
 /**
- * If a HAST pre node wraps a plain html/jsx/tsx/svg block (not already an
- * artifact), returns the type and source so a Render button can be shown.
- * Returns null if it's already handled by getArtifactInfo or is not renderable.
+ * If a HAST pre node wraps a plain html/svg block that isn't a full document,
+ * returns the type and source so a "Render" button can be shown.
+ * JSX/TSX/React are handled by getArtifactInfo and never reach this function.
  */
 function getRenderableInfo(preNode: unknown): { type: ArtifactType; source: string } | null {
   if (!preNode || typeof preNode !== 'object') return null
@@ -288,7 +381,7 @@ function getRenderableInfo(preNode: unknown): { type: ArtifactType; source: stri
   const strClasses = classes.filter((c): c is string => typeof c === 'string')
 
   for (const cls of strClasses) {
-    const type = RENDERABLE_LANG_MAP[cls]
+    const type = RENDER_BUTTON_LANG_MAP[cls]
     if (type) {
       return { type, source: extractHastText(codeEl) }
     }
@@ -307,12 +400,23 @@ function RenderMarkdownComponent({
 }: MarkdownProps) {
   const { isDark } = useTheme()
   const mermaidTheme = isDark ? 'dark' : 'default'
+  const mermaidThemeRef = useRef(mermaidTheme)
+  mermaidThemeRef.current = mermaidTheme
 
   // Memoize the normalized content to avoid reprocessing on every render
   const normalizedContent = useMemo(
     () => sanitizeMermaidFences(normalizeLatex(content)),
     [content]
   )
+
+  // Extract mermaid block sources directly from the string (in document order).
+  // Accessed via ref so preOverride closure doesn't need it as a dep.
+  const mermaidBlocksRef = useRef<string[]>([])
+  mermaidBlocksRef.current = useMemo(() => extractMermaidBlocks(normalizedContent), [normalizedContent])
+
+  // Counter reset at the start of every render so each render pass indexes from 0.
+  const mermaidIdxRef = useRef(0)
+  mermaidIdxRef.current = 0
 
   /**
    * Custom `pre` component:
@@ -328,6 +432,30 @@ function RenderMarkdownComponent({
     () =>
       ({ node, children }: { node?: unknown; children?: ReactNode }) => {
         if (!isUser && !isStreaming) {
+          // Debug: log first code block we encounter so devs can verify detection
+          if (import.meta.env.DEV) {
+            const _codeEl = (node as Record<string, unknown>)?.children?.[0] as Record<string, unknown> | undefined
+            const _cls = (_codeEl?.properties as Record<string, unknown> | undefined)?.className
+            if (Array.isArray(_cls) && _cls.length > 0) {
+              console.debug('[RenderMarkdown] pre node classes:', _cls)
+            }
+          }
+
+          // 0. Mermaid diagrams — use source extracted from the raw content string
+          //    to avoid Shiki stripping newlines from the HAST text nodes.
+          if (isMermaidNode(node)) {
+            // Primary: indexed lookup from pre-extracted string blocks
+            const indexed = mermaidBlocksRef.current[mermaidIdxRef.current++]
+            // Fallback: walk the HAST text nodes (handles edge cases where
+            // the extraction regex didn't match the fence)
+            const hastSource = indexed === undefined
+              ? extractHastText((node as Record<string, unknown>).children?.[0]).trim()
+              : undefined
+            const source = indexed ?? hastSource ?? ''
+            if (!source) return <>{children}</>
+            return <MermaidDiagram source={source} theme={mermaidThemeRef.current} />
+          }
+
           // 1. Explicit artifact-* fences + auto-detected full HTML docs
           const artifactInfo = getArtifactInfo(node)
           if (artifactInfo !== null) {
@@ -403,19 +531,7 @@ function RenderMarkdownComponent({
         components={mergedComponents}
         plugins={{
           code: code,
-          mermaid: mermaid,
           cjk: cjk,
-        }}
-        controls={{
-          mermaid: {
-            fullscreen: false,
-          },
-        }}
-        mermaid={{
-          config: { theme: mermaidTheme },
-          errorComponent: messageId
-            ? (props: MermaidErrorComponentProps) => <MermaidError messageId={messageId} {...props} />
-            : undefined,
         }}
       >
         {normalizedContent}
