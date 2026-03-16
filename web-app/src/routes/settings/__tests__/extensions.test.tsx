@@ -224,6 +224,6 @@ describe('Extensions Settings Route', () => {
     render(<Component />)
 
     const settingsContent = screen.getByTestId('settings-menu').nextElementSibling
-    expect(settingsContent).toHaveClass('p-4', 'pt-0', 'w-full', 'overflow-y-auto')
+    expect(settingsContent).toHaveClass('flex-1', 'overflow-y-auto')
   })
 })

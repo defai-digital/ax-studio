@@ -1,10 +1,4 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { useTranslation } from '@/i18n/react-i18next-compat'
+import { X } from 'lucide-react'
 
 interface ImageModalProps {
   image: { url: string; alt: string } | null
@@ -12,28 +6,29 @@ interface ImageModalProps {
 }
 
 const ImageModal = ({ image, onClose }: ImageModalProps) => {
-  const { t } = useTranslation()
+  if (!image) return null
 
   return (
-    <Dialog open={!!image} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] p-0">
-        <DialogHeader className="p-6 pb-2">
-          <DialogTitle>{image?.alt || t('common:image')}</DialogTitle>
-        </DialogHeader>
-        <div className="flex justify-center items-center p-6 pt-2">
-          {image && (
-            <img
-              src={image.url}
-              alt={image.alt}
-              className="max-w-full max-h-[70vh] object-contain rounded-md"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none'
-              }}
-            />
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md"
+      onClick={onClose}
+    >
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+      >
+        <X className="size-5" />
+      </button>
+      <img
+        src={image.url}
+        alt={image.alt || 'Preview'}
+        className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg"
+        onClick={(e) => e.stopPropagation()}
+        onError={(e) => {
+          e.currentTarget.style.display = 'none'
+        }}
+      />
+    </div>
   )
 }
 

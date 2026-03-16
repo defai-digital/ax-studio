@@ -21,7 +21,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu'
-import { ArrowRight, PlusIcon, AppWindowIcon, SearchIcon } from 'lucide-react'
+import { ArrowUp, PlusIcon, AppWindowIcon, SearchIcon } from 'lucide-react'
 import {
   IconAtom,
   IconTool,
@@ -37,6 +37,7 @@ import { AvatarEmoji } from '@/containers/AvatarEmoji'
 import DropdownToolsAvailable from '@/containers/DropdownToolsAvailable'
 import { McpExtensionToolLoader } from './McpExtensionToolLoader'
 import type { ThreadMessage } from '@ax-studio/core'
+import type { MCPTool } from '@/types/completion'
 
 const ARTIFACT_PROMPTS = [
   { label: 'HTML Page',        prompt: 'Build an artifact-html page for '            },
@@ -66,7 +67,7 @@ type Props = {
   isStreaming: boolean
   prompt: string
   // Textarea ref (for quick-prompt focus)
-  textareaRef: React.RefObject<HTMLTextAreaElement>
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>
   setPrompt: (v: string) => void
   // Model capabilities
   selectedModel: Model | undefined
@@ -80,7 +81,7 @@ type Props = {
   effectiveThreadId?: string
   assistants: Assistant[]
   // MCP tools
-  tools: Tool[]
+  tools: MCPTool[]
   hasActiveMCPServers: boolean
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   MCPToolComponent: any
@@ -143,7 +144,7 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
   }
 
   return (
-    <div className="absolute z-20 bg-transparent bottom-0 w-full p-2">
+    <div className="absolute z-20 bg-transparent bottom-0 w-full px-2 pb-2 pt-1">
       <div className="flex justify-between items-center w-full">
         {/* Left: action buttons */}
         <div className="px-1 flex items-center gap-1 flex-1 min-w-0">
@@ -344,8 +345,13 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
           </div>
         </div>
 
-        {/* Right: token counter + send/stop */}
+        {/* Right: keyboard hints + token counter + send/stop */}
         <div className="flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-2 text-[10px] text-muted-foreground/50 mr-1">
+            <span>⏎ Send</span>
+            <span>⇧⏎ Newline</span>
+          </div>
+
           {tokenCounterCompact && !initialMessage && (threadMessages?.length > 0 || prompt.trim().length > 0) && (
             <div className="flex-1 flex justify-center">
               <TokenCounter messages={threadMessages || []} compact={true} />
@@ -368,9 +374,9 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
               disabled={!prompt.trim()}
               data-test-id="send-message-button"
               onClick={() => handleSendMessage(prompt)}
-              className="rounded-full mr-1 mb-1"
+              className="rounded-full mr-1 mb-1 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white border-0 shadow-sm"
             >
-              <ArrowRight className="text-primary-fg" />
+              <ArrowUp className="text-white" />
             </Button>
           )}
         </div>

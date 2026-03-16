@@ -380,19 +380,18 @@ function RenderMarkdownComponent({
   return (
     <div
       className={cn(
-        'markdown break-words select-text overflow-hidden min-w-0',
+        'markdown break-words select-text overflow-hidden min-w-0 text-[14px] leading-relaxed',
         isUser && 'is-user',
         className
       )}
     >
       <AXMarkdown
-        animate={true}
-        animationDuration={500}
+        animated={true}
         linkSafety={{
           enabled: false,
         }}
         className={cn(
-          'w-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
+          'w-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:border-b [&_h2]:border-border [&_h2]:pb-1.5 [&_h2]:mt-5 [&_h2]:mb-2 [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-1.5 [&_strong]:font-semibold',
           className
         )}
         remarkPlugins={[remarkGfm, remarkMath, disableIndentedCodeBlockPlugin]}
@@ -402,7 +401,8 @@ function RenderMarkdownComponent({
         ]}
         components={mergedComponents}
         plugins={{
-          code: code,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          code: code as any,
           mermaid: mermaid,
           cjk: cjk,
         }}

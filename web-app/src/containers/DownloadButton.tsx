@@ -11,6 +11,7 @@ import { AppEvent, DownloadEvent, DownloadState, events } from '@ax-studio/core'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { DEFAULT_MODEL_QUANTIZATIONS } from '@/constants/models'
+import { ExternalLink, Download } from 'lucide-react'
 
 type ModelProps = {
   model: CatalogModel
@@ -102,15 +103,15 @@ export function DownloadButtonPlaceholder({
 
   if ((model.quants?.length ?? 0) === 0) {
     return (
-      <div className="flex items-center gap-2">
-        <a
-          href={`https://huggingface.co/${model.model_name}`}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Button size="sm">View on HuggingFace</Button>
-        </a>
-      </div>
+      <a
+        href={`https://huggingface.co/${model.model_name}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted hover:bg-accent text-foreground/70 hover:text-foreground text-[12px] font-medium transition-colors border border-border/50"
+      >
+        <ExternalLink className="size-3.5 shrink-0" />
+        <span className="truncate">HuggingFace</span>
+      </a>
     )
   }
 
@@ -162,15 +163,17 @@ export function DownloadButtonPlaceholder({
           {t('hub:newChat')}
         </Button>
       ) : (
-        <Button
+        <button
           data-test-id={`hub-model-${modelId}`}
-          variant="outline"
-          size="sm"
           onClick={handleDownload}
-          className={cn(isDownloading && 'hidden')}
+          className={cn(
+            'flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted hover:bg-accent text-foreground/70 hover:text-foreground text-[12px] font-medium transition-colors border border-border/50',
+            isDownloading && 'hidden'
+          )}
         >
+          <Download className="size-3.5" />
           {t('hub:download')}
-        </Button>
+        </button>
       )}
     </div>
   )

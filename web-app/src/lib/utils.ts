@@ -87,6 +87,54 @@ export function getProviderLogo(provider: string) {
   }
 }
 
+export function getProviderColor(provider: string): string {
+  switch (provider) {
+    case 'openai':
+      return '#10a37f'
+    case 'anthropic':
+      return '#cc7e3a'
+    case 'gemini':
+      return '#4285f4'
+    case 'groq':
+      return '#f97316'
+    case 'mistral':
+      return '#ff7000'
+    case 'openrouter':
+      return '#6366f1'
+    case 'huggingface':
+      return '#ffcc00'
+    case 'azure':
+      return '#0078d4'
+    case 'cohere':
+      return '#39594d'
+    default:
+      return '#6b7280'
+  }
+}
+
+export function getProviderDescription(provider: string): string {
+  switch (provider) {
+    case 'openai':
+      return 'GPT-4o, o1, and more'
+    case 'anthropic':
+      return 'Claude 3.5, Claude 4'
+    case 'gemini':
+      return 'Gemini Pro and Ultra'
+    case 'groq':
+      return 'Ultra-fast inference'
+    case 'mistral':
+      return 'Mistral Large, Codestral'
+    case 'openrouter':
+      return 'Multi-provider API gateway'
+    case 'huggingface':
+      return 'Open-source model hub'
+    case 'azure':
+      return 'Azure OpenAI Service'
+    default:
+      return 'Custom model provider'
+  }
+}
+
 export const getProviderTitle = (provider: string) => {
   switch (provider) {
     case 'openai':

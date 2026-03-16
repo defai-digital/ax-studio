@@ -2,6 +2,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { Route as ProvidersRoute } from '../index'
 
+const mockUpdateProvider = vi.fn()
+const mockAddProvider = vi.fn()
+let mockProviders: any[] = []
+
 // Mock dependencies
 vi.mock('@/containers/SettingsMenu', () => ({
   default: () => <div data-testid="settings-menu">Settings Menu</div>,
@@ -13,35 +17,19 @@ vi.mock('@/containers/HeaderPage', () => ({
   ),
 }))
 
-vi.mock('@/containers/Card', () => ({
-  Card: ({ header, children }: { header?: React.ReactNode; children: React.ReactNode }) => (
-    <div data-testid="card">
-      {header && <div data-testid="card-header">{header}</div>}
-      {children}
-    </div>
-  ),
-  CardItem: ({ title, description, actions }: { title?: string; description?: string; actions?: React.ReactNode }) => (
-    <div data-testid="card-item" data-title={title}>
-      {title && <div data-testid="card-item-title">{title}</div>}
-      {description && <div data-testid="card-item-description">{description}</div>}
-      {actions && <div data-testid="card-item-actions">{actions}</div>}
-    </div>
-  ),
-}))
-
 vi.mock('@/containers/ProvidersAvatar', () => ({
-  default: ({ provider }: { provider: string }) => (
-    <div data-testid="providers-avatar" data-provider={provider}>
-      Provider Avatar: {provider}
+  default: ({ provider }: { provider: { provider: string } }) => (
+    <div data-testid="providers-avatar" data-provider={provider.provider}>
+      Provider Avatar: {provider.provider}
     </div>
   ),
 }))
 
 vi.mock('@/hooks/useModelProvider', () => ({
   useModelProvider: () => ({
-    providers: [],
-    addProvider: vi.fn(),
-    updateProvider: vi.fn(),
+    providers: mockProviders,
+    addProvider: mockAddProvider,
+    updateProvider: mockUpdateProvider,
   }),
 }))
 
@@ -51,16 +39,17 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
       if (key === 'providerAlreadyExists') {
         return `Provider ${options?.name} already exists`
       }
-      return key
+      return options?.defaultValue || key
     },
   }),
 }))
 
 vi.mock('@/lib/utils', () => ({
   getProviderTitle: (provider: string) => `${provider} Provider`,
+  getProviderColor: () => '#6366f1',
+  getProviderDescription: () => 'Test description',
   cn: (...args: any[]) => args.filter(Boolean).join(' '),
 }))
-
 
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: (path: string) => (config: any) => ({
@@ -144,6 +133,7 @@ vi.mock('@/constants/routes', () => ({
 describe('Providers Settings Route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockProviders = []
   })
 
   it('should render the providers settings page', () => {
@@ -155,44 +145,56 @@ describe('Providers Settings Route', () => {
     expect(screen.getByText('common:settings')).toBeInTheDocument()
   })
 
-  it('should render providers card with header', () => {
+  it('should render section header with title and description', () => {
     const Component = ProvidersRoute.component as React.ComponentType
     render(<Component />)
 
-    expect(screen.getByTestId('card')).toBeInTheDocument()
-    expect(screen.getByTestId('card-header')).toBeInTheDocument()
+    expect(screen.getAllByText('common:modelProviders').length).toBeGreaterThan(0)
+    expect(screen.getByText('Connect external APIs and local model engines.')).toBeInTheDocument()
   })
 
-  it('should render list of providers', () => {
+  it('should render empty state with no providers', () => {
     const Component = ProvidersRoute.component as React.ComponentType
     render(<Component />)
 
-    // With empty providers array, should still render the page structure
-    expect(screen.getByTestId('card')).toBeInTheDocument()
+    expect(screen.getByTestId('header-page')).toBeInTheDocument()
+    expect(screen.getByTestId('settings-menu')).toBeInTheDocument()
   })
 
-  it('should render provider avatars', () => {
+  it('should render providers when data is available', () => {
+    mockProviders = [
+      { provider: 'openai', active: true, models: [{ id: 'gpt-4' }], settings: [], api_key: 'sk-test' },
+      { provider: 'anthropic', active: false, models: [], settings: [] },
+    ]
+
     const Component = ProvidersRoute.component as React.ComponentType
     render(<Component />)
 
-    // With empty providers array, should still render the page structure
-    expect(screen.getByTestId('card')).toBeInTheDocument()
+    expect(screen.getByText('openai Provider')).toBeInTheDocument()
+    expect(screen.getByText('anthropic Provider')).toBeInTheDocument()
   })
 
-  it('should render provider titles', () => {
+  it('should render active badge for active providers', () => {
+    mockProviders = [
+      { provider: 'openai', active: true, models: [], settings: [] },
+    ]
+
     const Component = ProvidersRoute.component as React.ComponentType
     render(<Component />)
 
-    // With empty providers array, should still render the page structure
-    expect(screen.getByTestId('card')).toBeInTheDocument()
+    expect(screen.getByText('Active')).toBeInTheDocument()
   })
 
   it('should render provider switches', () => {
+    mockProviders = [
+      { provider: 'openai', active: true, models: [], settings: [] },
+    ]
+
     const Component = ProvidersRoute.component as React.ComponentType
     render(<Component />)
 
-    // With empty providers array, should still render the page structure
-    expect(screen.getByTestId('card')).toBeInTheDocument()
+    const switches = screen.getAllByTestId('switch')
+    expect(switches.length).toBeGreaterThan(0)
   })
 
   it('should render add provider dialog', () => {
@@ -223,11 +225,16 @@ describe('Providers Settings Route', () => {
   })
 
   it('should handle provider switch toggle', () => {
+    mockProviders = [
+      { provider: 'openai', active: true, models: [], settings: [] },
+    ]
+
     const Component = ProvidersRoute.component as React.ComponentType
     render(<Component />)
 
-    // With empty providers array, should still render the page structure
-    expect(screen.getByTestId('card')).toBeInTheDocument()
+    const switchEl = screen.getByTestId('switch')
+    fireEvent.click(switchEl)
+    expect(mockUpdateProvider).toHaveBeenCalled()
   })
 
   it('should handle add provider button click', () => {
@@ -266,12 +273,12 @@ describe('Providers Settings Route', () => {
 
     const container = screen.getByTestId('header-page')
     expect(container).toBeInTheDocument()
-    
+
     const settingsMenu = screen.getByTestId('settings-menu')
     expect(settingsMenu).toBeInTheDocument()
   })
 
-  it('should render settings buttons for each provider', () => {
+  it('should render add provider button', () => {
     const Component = ProvidersRoute.component as React.ComponentType
     render(<Component />)
 
@@ -298,11 +305,14 @@ describe('Providers Settings Route', () => {
     }
   })
 
-  it('should render provider with proper data structure', () => {
+  it('should render provider with model count and description', () => {
+    mockProviders = [
+      { provider: 'openai', active: true, models: [{ id: 'm1' }, { id: 'm2' }], settings: [] },
+    ]
+
     const Component = ProvidersRoute.component as React.ComponentType
     render(<Component />)
 
-    // With empty providers array, should still render the page structure
-    expect(screen.getByTestId('card')).toBeInTheDocument()
+    expect(screen.getByText(/2 models/)).toBeInTheDocument()
   })
 })

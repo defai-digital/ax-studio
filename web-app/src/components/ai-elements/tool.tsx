@@ -86,37 +86,42 @@ export type ToolHeaderProps = {
   className?: string
 }
 
-const getStatusText = (status: ToolUIPart['state'], toolName: string) => {
-  const isRunning = status === 'input-streaming' || status === 'input-available'
-  // @ts-expect-error state only available in AI SDK v6
-  const hasError = status === 'output-error' || status === 'output-denied'
-
-  if (isRunning) {
-    return `Running ${toolName.replaceAll('_', ' ')}...`
-  }
-  if (hasError) {
-    return `${toolName.replaceAll('_', ' ')} failed`
-  }
-  return `Used ${toolName.replaceAll('_', ' ')}`
-}
-
 export const ToolHeader = memo(
   ({ className, title, state, type }: ToolHeaderProps) => {
     const { isOpen } = useTool()
     const toolName = title ?? type.split('-').slice(1).join('-')
+    const isRunning = state === 'input-streaming' || state === 'input-available'
+    // @ts-expect-error state only available in AI SDK v6
+    const hasError = state === 'output-error' || state === 'output-denied'
 
     return (
       <CollapsibleTrigger
         className={cn(
-          'flex w-full items-center gap-2 text-muted-foreground text-sm transition-colors capitalize',
+          'flex w-full items-center gap-2 text-[12px] font-medium text-muted-foreground transition-all px-3 py-2 rounded-xl border hover:bg-muted/60',
+          isOpen
+            ? 'bg-muted/30 border-border/50'
+            : 'border-border/50 bg-muted/30',
           className
         )}
       >
-        <WrenchIcon className="size-4" />
-        <span>{getStatusText(state, toolName)}</span>
+        <WrenchIcon className="size-3.5 text-indigo-500 shrink-0" />
+        <span className="font-mono capitalize">{toolName.replaceAll('_', ' ')}</span>
+        {isRunning ? (
+          <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500">
+            running
+          </span>
+        ) : hasError ? (
+          <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-destructive/10 text-destructive">
+            failed
+          </span>
+        ) : (
+          <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600">
+            completed
+          </span>
+        )}
         <ChevronDownIcon
           className={cn(
-            'size-4 transition-transform',
+            'size-3.5 text-muted-foreground/50 transition-transform',
             isOpen ? 'rotate-180' : 'rotate-0'
           )}
         />
@@ -131,13 +136,13 @@ export const ToolContent = memo(
   ({ className, children, ...props }: ToolContentProps) => (
     <CollapsibleContent
       className={cn(
-        'mt-4 text-sm relative',
+        'mt-2 text-sm relative',
         'data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 text-muted-foreground outline-none data-[state=closed]:animate-out data-[state=open]:animate-in',
         className
       )}
       {...props}
     >
-      <div className="ml-2 pl-4 border-l-2 border-dotted">
+      <div className="ml-2 pl-4 border-l-2 border-indigo-500/20">
         {children}
       </div>
     </CollapsibleContent>

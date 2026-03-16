@@ -96,7 +96,7 @@ export const DialogAddModel = ({ provider, trigger }: DialogAddModelProps) => {
         <div className="space-y-2">
           <label
             htmlFor="model-id"
-            className="text-sm font-medium inline-block"
+            className="text-[13px] text-muted-foreground mb-1.5 inline-block"
           >
             {t('providers:addModel.modelId')}{' '}
             <span className="text-destructive">*</span>

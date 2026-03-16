@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/sidebar"
 import { useThreadManagement } from "@/hooks/useThreadManagement"
 import { Link, useNavigate } from "@tanstack/react-router"
-
+import { useTranslation } from "@/i18n/react-i18next-compat"
 
 import { useState } from "react"
 import type { ThreadFolder } from "@/services/projects/types"
@@ -43,6 +43,7 @@ function ProjectItem({
   onDelete: (project: ThreadFolder) => void
 }) {
 
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const logo = item.logo?.trim()
 
@@ -81,16 +82,16 @@ function ProjectItem({
             navigate({ to: '/project/$projectId', params: { projectId: item.id } })
           }}>
             <FolderOpenIcon className="text-muted-foreground" />
-            <span>View Project</span>
+            <span>{t('common:projects.viewProject')}</span>
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => onEdit(item)}>
             <FolderEditIcon className="text-muted-foreground" />
-            <span>Edit Project</span>
+            <span>{t('common:projects.editProject')}</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onSelect={() => onDelete(item)}>
             <Trash2 />
-            <span>Delete Project</span>
+            <span>{t('common:projects.deleteProject')}</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -99,6 +100,7 @@ function ProjectItem({
 }
 
 export function NavProjects() {
+  const { t } = useTranslation()
   const { isMobile } = useSidebar()
   const { folders, updateFolder } = useThreadManagement()
 
@@ -142,7 +144,7 @@ export function NavProjects() {
   return (
     <>
       <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-        <SidebarGroupLabel>Projects</SidebarGroupLabel>
+        <SidebarGroupLabel>{t('common:projects.title')}</SidebarGroupLabel>
         <SidebarMenu>
           {folders.map((item) => (
             <ProjectItem

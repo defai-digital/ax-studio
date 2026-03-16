@@ -10,7 +10,6 @@ import {
   DialogHeader,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 
 interface AddProviderDialogProps {
   onCreateProvider: (name: string) => void
@@ -67,38 +66,39 @@ export function AddProviderDialog({
       >
         <DialogHeader>
           <DialogTitle>{t('provider:addOpenAIProvider')}</DialogTitle>
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="mt-2"
-            placeholder={t('provider:enterNameForProvider')}
-            onKeyDown={handleKeyDown}
-          />
-          <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-            <DialogClose asChild>
-              <Button
-                variant="link"
-                size="sm"
-                className="hover:no-underline w-full sm:w-auto"
-                onClick={handleCancel}
-              >
-                {t('common:cancel')}
-              </Button>
-            </DialogClose>
-            <DialogClose asChild>
-              <Button
-                ref={createButtonRef}
-                disabled={!name.trim()}
-                onClick={handleCreate}
-                className="w-full sm:w-auto"
-                size="sm"
-                aria-label={t('common:create')}
-              >
-                {t('common:create')}
-              </Button>
-            </DialogClose>
-          </DialogFooter>
         </DialogHeader>
+        <input
+          data-testid="input"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="w-full px-4 py-2.5 rounded-xl bg-muted/50 border border-border/50 outline-none text-[14px] focus:border-primary/30 transition-colors"
+          placeholder={t('provider:enterNameForProvider')}
+          onKeyDown={handleKeyDown}
+        />
+        <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+          <DialogClose asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full sm:w-auto"
+              onClick={handleCancel}
+            >
+              {t('common:cancel')}
+            </Button>
+          </DialogClose>
+          <DialogClose asChild>
+            <Button
+              ref={createButtonRef}
+              disabled={!name.trim()}
+              onClick={handleCreate}
+              className="w-full sm:w-auto"
+              size="sm"
+              aria-label={t('common:create')}
+            >
+              {t('common:create')}
+            </Button>
+          </DialogClose>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

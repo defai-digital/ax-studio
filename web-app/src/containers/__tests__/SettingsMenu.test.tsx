@@ -1,9 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import userEvent from '@testing-library/user-event'
 import SettingsMenu from '../SettingsMenu'
-import { useNavigate, useMatches } from '@tanstack/react-router'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useMatches } from '@tanstack/react-router'
 
 // Mock global platform constants - simulate desktop (Tauri) environment
 Object.defineProperty(global, 'IS_IOS', { value: false, writable: true })
@@ -18,7 +16,6 @@ vi.mock('@tanstack/react-router', () => ({
     </a>
   ),
   useMatches: vi.fn(),
-  useNavigate: vi.fn(),
 }))
 
 vi.mock('@/i18n/react-i18next-compat', () => ({
@@ -27,58 +24,33 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useGeneralSetting', () => ({
-  useGeneralSetting: vi.fn(() => ({})),
-}))
-
-vi.mock('@/hooks/useModelProvider', () => ({
-  useModelProvider: vi.fn(() => ({
-    providers: [
-      {
-        provider: 'openai',
-        active: true,
-        models: [],
-      },
-      {
-        provider: 'anthropic',
-        active: true,
-        models: [],
-      },
-    ],
-  })),
-}))
-
 vi.mock('@/lib/utils', () => ({
   cn: (...args: any[]) => args.filter(Boolean).join(' '),
-  getProviderTitle: (provider: string) => provider,
 }))
-
-vi.mock('@/containers/ProvidersAvatar', () => ({
-  default: ({ provider }: { provider: any }) => (
-    <div data-testid={`provider-avatar-${provider.provider}`}>
-      {provider.provider}
-    </div>
-  ),
-}))
-
 
 describe('SettingsMenu', () => {
-  const mockNavigate = vi.fn()
   const mockMatches = [
     {
       routeId: '/settings/general',
+      pathname: '/settings/general',
       params: {},
     },
   ]
 
   beforeEach(() => {
     vi.clearAllMocks()
-
-    vi.mocked(useNavigate).mockReturnValue(mockNavigate)
     vi.mocked(useMatches).mockReturnValue(mockMatches)
   })
 
-  it('renders all menu items', () => {
+  it('renders all settings page links', () => {
+    render(<SettingsMenu />)
+
+    const links = screen.getAllByRole('link')
+    // Should have at least the main settings pages
+    expect(links.length).toBeGreaterThanOrEqual(10)
+  })
+
+  it('renders text labels for menu items', () => {
     render(<SettingsMenu />)
 
     expect(screen.getByText('common:general')).toBeInTheDocument()
@@ -87,7 +59,7 @@ describe('SettingsMenu', () => {
     expect(screen.getByText('common:modelProviders')).toBeInTheDocument()
   })
 
-  it('renders keyboard shortcuts and other settings', () => {
+  it('renders all settings labels', () => {
     render(<SettingsMenu />)
     expect(screen.getByText('common:keyboardShortcuts')).toBeInTheDocument()
     expect(screen.getByText('common:hardware')).toBeInTheDocument()
@@ -96,132 +68,62 @@ describe('SettingsMenu', () => {
     expect(screen.getByText('common:mcp-servers')).toBeInTheDocument()
   })
 
-  it('shows provider expansion chevron when providers are active', () => {
+  it('renders correct link hrefs for each settings page', () => {
     render(<SettingsMenu />)
 
-    // There should be at least one button (the chevron)
-    const chevronButtons = screen.getAllByRole('button')
-    expect(chevronButtons.length).toBeGreaterThan(0)
+    const links = screen.getAllByRole('link')
+    const hrefs = links.map((link) => link.getAttribute('href'))
+
+    expect(hrefs).toContain('/settings/general')
+    expect(hrefs).toContain('/settings/interface')
+    expect(hrefs).toContain('/settings/privacy')
+    expect(hrefs).toContain('/settings/providers')
   })
 
-  it('shows expanded providers by default', () => {
+  it('renders group headers', () => {
     render(<SettingsMenu />)
 
-    // Providers are NOT expanded by default (expandedProviders starts as false)
-    // They only expand when the chevron is clicked or when on a provider route
-    expect(screen.queryByTestId('provider-avatar-openai')).not.toBeInTheDocument()
+    expect(screen.getByText('App')).toBeInTheDocument()
+    expect(screen.getByText('AI')).toBeInTheDocument()
+    expect(screen.getByText('Advanced')).toBeInTheDocument()
+    expect(screen.getByText('Other')).toBeInTheDocument()
   })
 
-  it('collapses providers submenu when chevron is clicked', async () => {
-    const user = userEvent.setup()
+  it('highlights active menu item', () => {
     render(<SettingsMenu />)
 
-    // Providers are NOT visible initially (collapsed by default)
-    expect(screen.queryByTestId('provider-avatar-openai')).not.toBeInTheDocument()
-
-    // Click the chevron to expand
-    const chevronButtons = screen.getAllByRole('button')
-    const chevron = chevronButtons[0]
-    await user.click(chevron)
-
-    // After clicking, providers should be visible
-    expect(screen.getByTestId('provider-avatar-openai')).toBeInTheDocument()
+    const generalLink = screen
+      .getByText('common:general')
+      .closest('a')
+    expect(generalLink?.className).toContain('bg-primary/10')
+    expect(generalLink?.className).toContain('text-primary')
   })
 
-  it('auto-expands providers when on provider route', () => {
+  it('does not highlight inactive menu items', () => {
+    render(<SettingsMenu />)
+
+    const interfaceLink = screen
+      .getByText('common:interface')
+      .closest('a')
+    expect(interfaceLink?.className).toContain('text-muted-foreground')
+    expect(interfaceLink?.className).not.toContain('bg-primary/10')
+  })
+
+  it('highlights model providers when on provider sub-route', () => {
     vi.mocked(useMatches).mockReturnValue([
       {
         routeId: '/settings/providers/$providerName',
+        pathname: '/settings/providers/openai',
         params: { providerName: 'openai' },
       },
     ])
 
     render(<SettingsMenu />)
 
-    expect(screen.getByTestId('provider-avatar-openai')).toBeInTheDocument()
-  })
-
-  it('highlights active provider in submenu', () => {
-    vi.mocked(useMatches).mockReturnValue([
-      {
-        routeId: '/settings/providers/$providerName',
-        params: { providerName: 'openai' },
-      },
-    ])
-
-    render(<SettingsMenu />)
-
-    const openaiProvider = screen
-      .getByTestId('provider-avatar-openai')
-      .closest('div')
-    expect(openaiProvider).toBeInTheDocument()
-  })
-
-  it('navigates to provider when provider is clicked', async () => {
-    const user = userEvent.setup()
-    render(<SettingsMenu />)
-
-    // Providers are collapsed by default, first click chevron to expand
-    const chevronButtons = screen.getAllByRole('button')
-    await user.click(chevronButtons[0])
-
-    // Now click on a provider
-    const openaiProvider = screen
-      .getByTestId('provider-avatar-openai')
-      .closest('div[class*="cursor-pointer"]')
-    await user.click(openaiProvider!)
-
-    expect(mockNavigate).toHaveBeenCalled()
-  })
-
-  it('shows all active providers during setup remote provider step', () => {
-    vi.mocked(useMatches).mockReturnValue([
-      {
-        routeId: '/settings/providers/',
-        params: {},
-        search: { step: 'setup_remote_provider' },
-      },
-    ])
-    vi.mocked(useModelProvider).mockReturnValue({
-      providers: [
-        { provider: 'openai', active: true, models: [] },
-        { provider: 'anthropic', active: true, models: [] },
-      ],
-    })
-
-    render(<SettingsMenu />)
-
-    // All active providers should be visible during remote provider setup
-    expect(screen.getByTestId('provider-avatar-openai')).toBeInTheDocument()
-    expect(screen.getByTestId('provider-avatar-anthropic')).toBeInTheDocument()
-  })
-
-  it('filters out inactive providers from submenu', async () => {
-    const user = userEvent.setup()
-    vi.mocked(useModelProvider).mockReturnValue({
-      providers: [
-        {
-          provider: 'openai',
-          active: true,
-          models: [],
-        },
-        {
-          provider: 'anthropic',
-          active: false,
-          models: [],
-        },
-      ],
-    })
-
-    render(<SettingsMenu />)
-
-    // Providers are collapsed by default, click chevron to expand
-    const chevronButtons = screen.getAllByRole('button')
-    await user.click(chevronButtons[0])
-
-    expect(screen.getByTestId('provider-avatar-openai')).toBeInTheDocument()
-    expect(
-      screen.queryByTestId('provider-avatar-anthropic')
-    ).not.toBeInTheDocument()
+    const providersLink = screen
+      .getByText('common:modelProviders')
+      .closest('a')
+    expect(providersLink?.className).toContain('bg-primary/10')
+    expect(providersLink?.className).toContain('text-primary')
   })
 })

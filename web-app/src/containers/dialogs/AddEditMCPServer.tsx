@@ -400,10 +400,10 @@ export default function AddEditMCPServer({
         {isToggled ? (
           <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm mb-2 inline-block">
+              <label className="text-[13px] text-muted-foreground mb-1.5 inline-block">
                 {t('mcp-servers:editJson.placeholder')}
               </label>
-              <div className="border  rounded-md overflow-hidden">
+              <div className="border border-border/50 rounded-xl overflow-hidden">
                 <CodeEditor
                   value={jsonContent}
                   language="json"
@@ -436,7 +436,7 @@ export default function AddEditMCPServer({
         ) : (
           <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm mb-2 inline-block">
+              <label className="text-[13px] text-muted-foreground mb-1.5 inline-block">
                 {t('mcp-servers:serverName')}
               </label>
               <Input
@@ -448,7 +448,7 @@ export default function AddEditMCPServer({
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm mb-2 inline-block">
+              <label className="text-[13px] text-muted-foreground mb-1.5 inline-block">
                 Transport Type
               </label>
               <RadioGroup
@@ -490,7 +490,7 @@ export default function AddEditMCPServer({
 
             {transportType === 'stdio' ? (
               <div className="space-y-2">
-                <label className="text-sm mb-2 inline-block">
+                <label className="text-[13px] text-muted-foreground mb-1.5 inline-block">
                   {t('mcp-servers:command')}
                 </label>
                 <Input
@@ -501,7 +501,7 @@ export default function AddEditMCPServer({
               </div>
             ) : (
               <div className="space-y-2">
-                <label className="text-sm mb-2 inline-block">URL</label>
+                <label className="text-[13px] text-muted-foreground mb-1.5 inline-block">URL</label>
                 <Input
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
@@ -513,7 +513,7 @@ export default function AddEditMCPServer({
             {transportType === 'stdio' && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-sm">
+                  <label className="text-[13px] text-muted-foreground">
                     {t('mcp-servers:arguments')}
                   </label>
                   <div
@@ -561,7 +561,7 @@ export default function AddEditMCPServer({
             {transportType === 'stdio' && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-sm">{t('mcp-servers:envVars')}</label>
+                  <label className="text-[13px] text-muted-foreground">{t('mcp-servers:envVars')}</label>
                   <div
                     className="size-6 cursor-pointer flex items-center justify-center rounded hover:bg-secondary transition-all duration-200 ease-in-out"
                     onClick={handleAddEnv}
@@ -605,7 +605,7 @@ export default function AddEditMCPServer({
               <>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-sm">Headers</label>
+                    <label className="text-[13px] text-muted-foreground">Headers</label>
                     <div
                       className="size-6 cursor-pointer flex items-center justify-center rounded hover:bg-secondary transition-all duration-200 ease-in-out"
                       onClick={handleAddHeader}
@@ -648,7 +648,7 @@ export default function AddEditMCPServer({
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm mb-2 inline-block">
+                  <label className="text-[13px] text-muted-foreground mb-1.5 inline-block">
                     Timeout (seconds)
                   </label>
                   <Input
@@ -664,7 +664,7 @@ export default function AddEditMCPServer({
         )}
 
         <DialogFooter>
-          <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
             {t('common:cancel')}
           </Button>
           <Button

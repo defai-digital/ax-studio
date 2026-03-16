@@ -1,9 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Card, CardItem } from '@/containers/Card'
 import HeaderPage from '@/containers/HeaderPage'
 import SettingsMenu from '@/containers/SettingsMenu'
 import { useModelProvider } from '@/hooks/useModelProvider'
-import { cn, getProviderTitle, getModelDisplayName } from '@/lib/utils'
+import { cn, getProviderTitle, getProviderColor, getModelDisplayName } from '@/lib/utils'
 import { createFileRoute, Link, useParams } from '@tanstack/react-router'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import Capabilities from '@/containers/Capabilities'
@@ -19,12 +18,13 @@ import { useServiceHub } from '@/hooks/useServiceHub'
 import { Button } from '@/components/ui/button'
 import {
   IconLoader,
-  IconRefresh,
 } from '@tabler/icons-react'
+import { RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { useEffect, useState } from 'react'
 import { predefinedProviders } from '@/constants/providers'
 import { DialogAddModel } from '@/containers/dialogs/AddModel'
+import ProvidersAvatar from '@/containers/ProvidersAvatar'
 
 // as route.threadsDetail
 export const Route = createFileRoute('/settings/providers/$providerName')({
@@ -45,6 +45,7 @@ function ProviderDetail() {
   const { providerName } = useParams({ from: Route.id })
   const { getProviderByName, updateProvider } = useModelProvider()
   const provider = getProviderByName(providerName)
+  const providerColor = getProviderColor(providerName)
 
   // Clear importing state when model appears in the provider's model list
   useEffect(() => {
@@ -135,8 +136,6 @@ function ProviderDetail() {
     }
   }
 
-
-
   return (
     <div className="flex flex-col h-svh w-full">
       <HeaderPage>
@@ -146,86 +145,103 @@ function ProviderDetail() {
           </span>
         </div>
       </HeaderPage>
-      <div className="flex h-[calc(100%-60px)]">
+      <div className="flex flex-1 min-h-0">
         <SettingsMenu />
-        <div className="p-4 pt-0 w-full overflow-y-auto">
-          <div className="flex flex-col justify-between gap-4 gap-y-3 w-full">
-            <div className="flex items-center justify-between">
-              <h1 className="font-medium text-base">
-                {getProviderTitle(providerName)}
-              </h1>
+        <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+          {/* Sticky header with provider avatar */}
+          <div className="flex items-center gap-3 px-8 py-5 border-b border-border/40 bg-background sticky top-0 z-10">
+            <div
+              className="size-7 rounded-lg flex items-center justify-center shadow-sm"
+              style={{
+                backgroundColor: providerColor + '18',
+                border: `1px solid ${providerColor}30`,
+              }}
+            >
+              <ProvidersAvatar provider={provider ?? { provider: providerName, active: true, models: [], settings: [] } as ProviderObject} />
             </div>
+            <h1 className="text-foreground tracking-tight" style={{ fontSize: '16px', fontWeight: 600 }}>
+              {getProviderTitle(providerName)}
+            </h1>
+          </div>
 
-            <div className="flex flex-col gap-3">
-              {/* Settings */}
-              <Card>
-                {provider?.settings.map((setting, settingIndex) => {
-                  // Use the DynamicController component
-                  const actionComponent = (
-                    <div className="mt-2">
-                      <DynamicControllerSetting
-                        controllerType={setting.controller_type}
-                        controllerProps={setting.controller_props}
-                        className={cn(setting.key === 'device' && 'hidden')}
-                        onChange={(newValue) => {
-                          if (provider) {
-                            const newSettings = [...provider.settings]
-                            ;(
-                              newSettings[settingIndex].controller_props as {
-                                value: string | boolean | number
+          <div className="px-8 py-7">
+            <div className="max-w-2xl space-y-6">
+              {/* Settings Section */}
+              <div>
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h2 className="text-foreground tracking-tight mb-1" style={{ fontSize: '16px', fontWeight: 600 }}>
+                      {t('provider:configuration', { defaultValue: 'Configuration' })}
+                    </h2>
+                    <p className="text-muted-foreground" style={{ fontSize: '13px' }}>
+                      {t('provider:configurationDesc', { defaultValue: 'API credentials and endpoint settings.' })}
+                    </p>
+                  </div>
+                </div>
+
+                <Card>
+                  {provider?.settings.map((setting, settingIndex) => {
+                    const actionComponent = (
+                      <div className="mt-2">
+                        <DynamicControllerSetting
+                          controllerType={setting.controller_type}
+                          controllerProps={setting.controller_props}
+                          className={cn(setting.key === 'device' && 'hidden')}
+                          onChange={(newValue) => {
+                            if (provider) {
+                              const newSettings = [...provider.settings]
+                              ;(
+                                newSettings[settingIndex].controller_props as {
+                                  value: string | boolean | number
+                                }
+                              ).value = newValue
+
+                              const updateObj: Partial<ModelProvider> = {
+                                settings: newSettings,
                               }
-                            ).value = newValue
+                              const settingKey = setting.key
+                              if (
+                                settingKey === 'api-key' &&
+                                typeof newValue === 'string'
+                              ) {
+                                updateObj.api_key = newValue
+                              } else if (
+                                settingKey === 'base-url' &&
+                                typeof newValue === 'string'
+                              ) {
+                                updateObj.base_url = newValue
+                              }
 
-                            const updateObj: Partial<ModelProvider> = {
-                              settings: newSettings,
+                              serviceHub
+                                .providers()
+                                .updateSettings(
+                                  providerName,
+                                  updateObj.settings ?? []
+                                )
+                              updateProvider(providerName, {
+                                ...provider,
+                                ...updateObj,
+                              })
                             }
-                            const settingKey = setting.key
-                            if (
-                              settingKey === 'api-key' &&
-                              typeof newValue === 'string'
-                            ) {
-                              updateObj.api_key = newValue
-                            } else if (
-                              settingKey === 'base-url' &&
-                              typeof newValue === 'string'
-                            ) {
-                              updateObj.base_url = newValue
-                            }
+                          }}
+                        />
+                      </div>
+                    )
 
-                            serviceHub
-                              .providers()
-                              .updateSettings(
-                                providerName,
-                                updateObj.settings ?? []
-                              )
-                            updateProvider(providerName, {
-                              ...provider,
-                              ...updateObj,
-                            })
-                          }
-                        }}
-                      />
-                    </div>
-                  )
-
-                  return (
-                    <CardItem
-                      key={settingIndex}
-                      title={setting.title}
-                      className={cn(setting.key === 'device' && 'hidden')}
-                      column={
-                        setting.controller_type === 'input' &&
-                        setting.controller_props.type !== 'number'
-                          ? true
-                          : false
-                      }
-                      description={
-                        <>
+                    return (
+                      <CardItem
+                        key={settingIndex}
+                        title={setting.title}
+                        className={cn(setting.key === 'device' && 'hidden')}
+                        column={
+                          setting.controller_type === 'input' &&
+                          setting.controller_props.type !== 'number'
+                        }
+                        description={
                           <RenderMarkdown
                             className="![>p]:text-muted-foreground select-none"
                             content={setting.description}
                             components={{
-                              // Make links open in a new tab
                               a: ({ ...props }) => {
                                 return (
                                   <a
@@ -240,134 +256,140 @@ function ProviderDetail() {
                               ),
                             }}
                           />
-                        </>
-                      }
-                      actions={actionComponent}
-                    />
-                  )
-                })}
-
-                <DeleteProvider provider={provider} />
-              </Card>
-
-              {/* Models */}
-              <Card
-                header={
-                  <div className="flex items-center justify-between mb-4">
-                    <h1 className="text-foreground font-medium text-base">
-                      {t('providers:models')}
-                    </h1>
-                    <div className="flex items-center gap-2">
-                      {provider && (
-                        <>
-                          <Button
-                            variant="secondary"
-                            size="icon-xs"
-                            onClick={handleRefreshModels}
-                            disabled={refreshingModels}
-                          >
-                            {refreshingModels ? (
-                              <IconLoader
-                                size={18}
-                                className="text-muted-foreground animate-spin"
-                              />
-                            ) : (
-                              <IconRefresh
-                                size={18}
-                                className="text-muted-foreground"
-                              />
-                            )}
-                          </Button>
-                          <DialogAddModel provider={provider} />
-                        </>
-                      )}
-                    </div>
-                  </div>
-                }
-              >
-                {provider?.models.length ? (
-                  provider?.models.map((model, modelIndex) => {
-                    const capabilities = model.capabilities || []
-                    return (
-                      <CardItem
-                        key={modelIndex}
-                        title={
-                          <div className="flex items-center gap-2">
-                            <h1
-                              className="font-medium line-clamp-1"
-                              title={model.id}
-                            >
-                              {getModelDisplayName(model)}
-                            </h1>
-                            <Capabilities capabilities={capabilities} />
-                          </div>
                         }
-                        actions={
-                          <div className="flex items-center gap-0.5">
-                            <DialogEditModel
-                              provider={provider}
-                              modelId={model.id}
-                            />
-                            {model.settings && (
-                              <ModelSetting provider={provider} model={model} />
-                            )}
-                            {((provider &&
-                              !predefinedProviders.some(
-                                (p) => p.provider === provider.provider
-                              )) ||
-                              (provider &&
-                                predefinedProviders.some(
-                                  (p) => p.provider === provider.provider
-                                ) &&
-                                Boolean(provider.api_key?.length))) && (
-                              <FavoriteModelAction model={model} />
-                            )}
-                            <DialogDeleteModel
-                              provider={provider}
-                              modelId={model.id}
-                            />
-                          </div>
-                        }
+                        actions={actionComponent}
                       />
                     )
-                  })
-                ) : (
-                  <div className="-mt-2">
-                    <div className="flex items-center gap-2">
-                      <h6 className="font-medium text-base">
-                        {t('providers:noModelFound')}
-                      </h6>
-                    </div>
-                    <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
-                      {t('providers:noModelFoundDesc')}
-                      &nbsp;
-                      <Link to={route.hub.index}>{t('common:hub')}</Link>
+                  })}
+
+                  <DeleteProvider provider={provider} />
+                </Card>
+              </div>
+
+              {/* Models Section */}
+              <div>
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h2 className="text-foreground tracking-tight mb-1" style={{ fontSize: '16px', fontWeight: 600 }}>
+                      {t('providers:models')}
+                    </h2>
+                    <p className="text-muted-foreground" style={{ fontSize: '13px' }}>
+                      {t('provider:modelsDesc', { defaultValue: 'Available models for this provider.' })}
                     </p>
                   </div>
-                )}
-                {/* Show importing skeleton first if there's one */}
-                {importingModel && (
-                  <CardItem
-                    key="importing-skeleton"
-                    title={
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-2 animate-pulse">
-                          <div className="flex gap-2 px-2 py-1 rounded-full text-xs">
+                  <div className="flex items-center gap-2 shrink-0 ml-4">
+                    {provider && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-lg h-8 text-[12px]"
+                          onClick={handleRefreshModels}
+                          disabled={refreshingModels}
+                        >
+                          {refreshingModels ? (
                             <IconLoader
-                              size={16}
-                              className="animate-spin"
+                              size={14}
+                              className="text-muted-foreground animate-spin mr-1.5"
                             />
-                            Importing...
-                          </div>
-                          <h1 className="font-medium line-clamp-1">
-                            {importingModel}
-                          </h1>
-                        </div>
+                          ) : (
+                            <RefreshCw className="size-3 mr-1.5" />
+                          )}
+                          {t('provider:refresh', { defaultValue: 'Refresh' })}
+                        </Button>
+                        <DialogAddModel provider={provider} />
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <Card>
+                  {provider?.models.length ? (
+                    provider?.models.map((model, modelIndex) => {
+                      const capabilities = model.capabilities || []
+                      return (
+                        <CardItem
+                          key={modelIndex}
+                          title={
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="font-medium line-clamp-1"
+                                title={model.id}
+                              >
+                                {getModelDisplayName(model)}
+                              </span>
+                              <Capabilities capabilities={capabilities} />
+                            </div>
+                          }
+                          actions={
+                            <div className="flex items-center gap-0.5">
+                              <DialogEditModel
+                                provider={provider}
+                                modelId={model.id}
+                              />
+                              {model.settings && (
+                                <ModelSetting provider={provider} model={model} />
+                              )}
+                              {((provider &&
+                                !predefinedProviders.some(
+                                  (p) => p.provider === provider.provider
+                                )) ||
+                                (provider &&
+                                  predefinedProviders.some(
+                                    (p) => p.provider === provider.provider
+                                  ) &&
+                                  Boolean(provider.api_key?.length))) && (
+                                <FavoriteModelAction model={model} />
+                              )}
+                              <DialogDeleteModel
+                                provider={provider}
+                                modelId={model.id}
+                              />
+                            </div>
+                          }
+                        />
+                      )
+                    })
+                  ) : (
+                    <div className="px-5 py-4">
+                      <div className="flex items-center gap-2">
+                        <h6 className="font-medium" style={{ fontSize: '13px' }}>
+                          {t('providers:noModelFound')}
+                        </h6>
                       </div>
-                    }
-                  />
-                )}
-              </Card>
+                      <p className="text-muted-foreground mt-1 leading-relaxed" style={{ fontSize: '12px' }}>
+                        {t('providers:noModelFoundDesc')}
+                        &nbsp;
+                        <Link to={route.hub.index} className="text-primary hover:underline">
+                          {t('common:hub')}
+                        </Link>
+                      </p>
+                    </div>
+                  )}
+                  {/* Show importing skeleton first if there's one */}
+                  {importingModel && (
+                    <CardItem
+                      key="importing-skeleton"
+                      title={
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 animate-pulse">
+                            <div className="flex gap-2 px-2 py-1 rounded-full text-xs">
+                              <IconLoader
+                                size={16}
+                                className="animate-spin"
+                              />
+                              Importing...
+                            </div>
+                            <span className="font-medium line-clamp-1">
+                              {importingModel}
+                            </span>
+                          </div>
+                        </div>
+                      }
+                    />
+                  )}
+                </Card>
+              </div>
             </div>
           </div>
         </div>

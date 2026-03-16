@@ -3,6 +3,8 @@ import { route } from '@/constants/routes'
 import HeaderPage from '@/containers/HeaderPage'
 import SettingsMenu from '@/containers/SettingsMenu'
 import { Fragment, useEffect, useState } from 'react'
+import { Link as LinkIcon } from 'lucide-react'
+import { useTranslation } from '@/i18n/react-i18next-compat'
 import { INTEGRATIONS } from '@/lib/integrations-registry'
 import type { Integration } from '@/lib/integrations-registry'
 import { useIntegrations } from '@/hooks/useIntegrations'
@@ -18,6 +20,7 @@ export const Route = createFileRoute(route.settings.integrations as any)({
 })
 
 function IntegrationsPage() {
+  const { t } = useTranslation()
   const { statuses, refreshStatuses, connect, connectOAuth, disconnect, testConnection } = useIntegrations()
 
   const [connectModalOpen, setConnectModalOpen] = useState(false)
@@ -76,18 +79,22 @@ function IntegrationsPage() {
             <span className="font-medium text-base font-studio">Settings</span>
           </div>
         </HeaderPage>
-        <div className="flex h-[calc(100%-60px)]">
+        <div className="flex flex-1 min-h-0">
           <SettingsMenu />
-          <div className="p-4 pt-0 w-full overflow-y-auto">
-            <div className="flex flex-col gap-3 w-full">
-              <div className="flex flex-col mb-2">
-                <h1 className="text-foreground font-medium text-base font-studio">
-                  Integrations
-                </h1>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Connect your tools with one click. Credentials are encrypted and stored locally.
-                </p>
+          <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+            <div className="flex items-center gap-3 px-8 py-5 border-b border-border/40 bg-background sticky top-0 z-10">
+              <div className="size-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+                <LinkIcon className="size-3.5 text-white" strokeWidth={2.5} />
               </div>
+              <h1 className="text-foreground tracking-tight" style={{ fontSize: '16px', fontWeight: 600 }}>
+                {t('common:integrations')}
+              </h1>
+            </div>
+            <div className="px-8 py-7">
+              <div className="max-w-2xl space-y-6">
+              <p className="text-sm text-muted-foreground">
+                Connect your tools with one click. Credentials are encrypted and stored locally.
+              </p>
 
               {INTEGRATIONS.map((integration) => (
                 <IntegrationCard
@@ -98,6 +105,7 @@ function IntegrationsPage() {
                   onDisconnect={() => handleDisconnect(integration)}
                 />
               ))}
+              </div>
             </div>
           </div>
         </div>

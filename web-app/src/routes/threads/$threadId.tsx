@@ -41,7 +41,7 @@ function ThreadDetail() {
   useTools()
 
   const thread = useThreads(useShallow((state) => state.threads[threadId]))
-  const selectedModel = useModelProvider((state) => state.selectedModel)
+  const selectedModel = useModelProvider((state) => state.selectedModel) ?? undefined
   const selectedProvider = useModelProvider((state) => state.selectedProvider)
   const { globalDefaultPrompt, autoTuningEnabled } = useGeneralSetting()
   const threadMessageCount = useMessages((state) => state.messages[threadId]?.length ?? 0)

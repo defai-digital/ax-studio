@@ -1,4 +1,5 @@
-import type { UIMessage, LanguageModelUsage } from '@ai-sdk/react'
+import type { UIMessage } from '@ai-sdk/react'
+import type { LanguageModelUsage } from 'ai'
 import type { ChatRequestOptions, UIMessageChunk } from 'ai'
 
 export type TokenUsageCallback = (

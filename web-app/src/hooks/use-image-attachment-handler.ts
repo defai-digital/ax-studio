@@ -9,7 +9,7 @@ import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useChatAttachments } from '@/hooks/useChatAttachments'
-import { createImageAttachment } from '@/types/attachment'
+import { createImageAttachment, type Attachment } from '@/types/attachment'
 import { isPlatformTauri } from '@/lib/platform/utils'
 
 export type ImageAttachmentHandlerParams = {
@@ -74,7 +74,7 @@ export function useImageAttachmentHandler({
       })
 
       const preparedFiles = await (async () => {
-        const result = []
+        const result: Attachment[] = []
         for (const file of validFiles) {
           const detectedType = file.type || getFileTypeFromExtension(file.name)
           const actualType = getFileTypeFromExtension(file.name) || detectedType
@@ -103,7 +103,7 @@ export function useImageAttachmentHandler({
       })()
 
       let duplicates: string[] = []
-      let newFiles = []
+      let newFiles: Attachment[] = []
 
       setAttachmentsForThread(attachmentsKey, (currentAttachments) => {
         const existingImageNames = new Set(

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { FileText, Trash2, UploadIcon } from 'lucide-react'
+import { FileText, UploadIcon, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Tooltip,
@@ -370,7 +370,9 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
   return (
     <div className="p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-medium">{t('common:projects.files')}</h3>
+        <span style={{ fontSize: '13px', fontWeight: 500 }}>
+          {t('common:projects.files')}
+        </span>
         <Button
           variant="outline"
           size="sm"
@@ -378,9 +380,9 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
           disabled={uploading}
         >
           {uploading ? (
-            <IconLoader2 className="size-4 animate-spin" />
+            <IconLoader2 className="size-3.5 animate-spin" />
           ) : (
-            <UploadIcon className="size-4" />
+            <UploadIcon className="size-3.5" />
           )}
           <span>Upload</span>
         </Button>
@@ -393,18 +395,18 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
       ) : isEmpty ? (
         <div
           className={cn(
-            'flex flex-col items-center justify-center py-8 px-4 rounded-lg border border-dashed cursor-pointer transition-colors',
+            'flex flex-col items-center justify-center py-8 px-4 rounded-xl border-2 border-dashed cursor-pointer transition-all',
             isDragging
-              ? 'bg-primary/10 border-primary'
-              : 'bg-secondary/30 border-border hover:bg-secondary/50'
+              ? 'border-primary bg-primary/5'
+              : 'border-border/50 hover:bg-muted/30'
           )}
           onClick={handleUpload}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
-          <FileText className="size-8 text-muted-foreground/50 mb-3" />
-          <p className="text-sm text-muted-foreground text-center">
+          <FileText className="size-6 mx-auto mb-2 text-muted-foreground/30" />
+          <p className="text-[12px] text-muted-foreground/50 text-center">
             {t('common:projects.filesDescription')}
           </p>
         </div>
@@ -421,55 +423,52 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
           {files.map((file) => (
             <div
               key={file.id}
-              className={cn(
-                'flex items-center gap-2 p-2 rounded-lg',
-                'bg-secondary/30 border border-border/50',
-                'group hover:bg-secondary/50 transition-colors'
-              )}
+              className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/30 group"
             >
-              <div className="shrink-0">
-                <IconPaperclip className="size-5 text-muted-foreground" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <p className="text-sm font-medium truncate">{file.name}</p>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="text-xs">{file.name}</p>
-                  </TooltipContent>
-                </Tooltip>
-                <p className="text-xs text-muted-foreground">
-                  {file.size ? formatBytes(file.size) : ''}
-                  {file.chunk_count > 0 &&
-                    ` · ${t('common:files.chunksCount', { count: file.chunk_count })}`}
-                </p>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className="opacity-0 group-hover:opacity-100 transition-opacity"
+              <IconPaperclip className="size-3.5 text-muted-foreground shrink-0" />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="text-[13px] flex-1 truncate">
+                    {file.name}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">{file.name}</p>
+                </TooltipContent>
+              </Tooltip>
+              {file.size ? (
+                <span className="text-[11px] text-muted-foreground shrink-0">
+                  {formatBytes(file.size)}
+                </span>
+              ) : null}
+              {file.chunk_count > 0 && (
+                <span className="text-[11px] text-muted-foreground shrink-0">
+                  {file.chunk_count} chunks
+                </span>
+              )}
+              <button
+                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
                 onClick={() => handleDeleteFile(file.id)}
               >
-                <Trash2 className="size-3.5 text-muted-foreground hover:text-destructive" />
-              </Button>
+                <X className="size-3" />
+              </button>
             </div>
           ))}
 
           <div
           className={cn(
-            'flex mt-2 flex-col items-center justify-center py-8 px-4 rounded-lg border border-dashed cursor-pointer transition-colors',
+            'flex mt-3 flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed cursor-pointer transition-all',
             isDragging
-              ? 'bg-primary/10 border-primary'
-              : 'bg-secondary/30 border-border hover:bg-secondary/50'
+              ? 'border-primary bg-primary/5'
+              : 'border-border/50 hover:bg-muted/30'
           )}
           onClick={handleUpload}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
-          <FileText className="size-8 text-muted-foreground/50 mb-3" />
-          <p className="text-sm text-muted-foreground text-center">
+          <FileText className="size-6 mx-auto mb-2 text-muted-foreground/30" />
+          <p className="text-[12px] text-muted-foreground/50 text-center">
             {t('common:projects.filesDescription')}
           </p>
         </div>

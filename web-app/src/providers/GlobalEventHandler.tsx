@@ -63,7 +63,7 @@ export function GlobalEventHandler() {
      * The engine layer is responsible for proxy registration; the app only
      * refreshes active-model state here.
      */
-    const handleModelReady = async (payload: {
+    const handleModelReady = async (_payload: {
       modelId?: string
       port?: number
       api_key?: string

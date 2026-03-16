@@ -7,6 +7,7 @@ import { ShortcutAction, PlatformShortcuts, type ShortcutSpec } from '@/lib/shor
 import { PlatformMetaKey } from '@/containers/PlatformMetaKey'
 import { Kbd, KbdGroup } from '@/components/ui/kbd'
 import HeaderPage from '@/containers/HeaderPage'
+import { Keyboard as KeyboardIcon } from 'lucide-react'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const Route = createFileRoute(route.settings.shortcuts as any)({
@@ -80,10 +81,19 @@ function Shortcuts() {
           <span className='font-medium text-base font-studio'>{t('common:settings')}</span>
         </div>
       </HeaderPage>
-      <div className="flex h-[calc(100%-60px)]">
+      <div className="flex flex-1 min-h-0">
         <SettingsMenu />
-        <div className="p-4 pt-0 w-full overflow-y-auto">
-          <div className="flex flex-col justify-between gap-4 gap-y-3 w-full">
+        <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+          <div className="flex items-center gap-3 px-8 py-5 border-b border-border/40 bg-background sticky top-0 z-10">
+            <div className="size-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+              <KeyboardIcon className="size-3.5 text-white" strokeWidth={2.5} />
+            </div>
+            <h1 className="text-foreground tracking-tight" style={{ fontSize: '16px', fontWeight: 600 }}>
+              {t('common:keyboardShortcuts')}
+            </h1>
+          </div>
+          <div className="px-8 py-7">
+            <div className="max-w-2xl space-y-6">
             {/* Application */}
             <Card title={t('settings:shortcuts.application')}>
               <CardItem
@@ -149,6 +159,7 @@ function Shortcuts() {
                 actions={<ShortcutLabel action={ShortcutAction.GO_TO_SETTINGS} />}
               />
             </Card>
+          </div>
           </div>
         </div>
       </div>

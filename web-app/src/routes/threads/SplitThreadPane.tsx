@@ -75,7 +75,6 @@ export function SplitThreadPane({
   const addMessage = useMessages((state) => state.addMessage)
   const updateMessage = useMessages((state) => state.updateMessage)
   const deleteMessage = useMessages((state) => state.deleteMessage)
-  const selectedProvider = useModelProvider((state) => state.selectedProvider)
   const selectedModel = useModelProvider((state) => state.selectedModel)
   const { globalDefaultPrompt, autoTuningEnabled } = useGeneralSetting()
   const memoryEnabled = useMemory((state) => state.memoryEnabled)
@@ -484,14 +483,20 @@ export function SplitThreadPane({
           <ConversationScrollButton />
         </Conversation>
       </div>
-      <div className="p-2">
-        <ChatInput
-          threadId={threadId}
-          model={thread?.model}
-          onSubmit={handleSubmit}
-          onStop={stop}
-          chatStatus={status}
+      <div className="relative">
+        <div
+          className="absolute -top-8 left-0 right-0 h-8 pointer-events-none z-10"
+          style={{ background: 'linear-gradient(to top, var(--background) 20%, transparent)' }}
         />
+        <div className="p-2">
+          <ChatInput
+            threadId={threadId}
+            model={thread?.model}
+            onSubmit={handleSubmit}
+            onStop={stop}
+            chatStatus={status}
+          />
+        </div>
       </div>
     </div>
   )

@@ -9,9 +9,17 @@ import { useTranslation } from '@/i18n/react-i18next-compat'
 import ChatInput from '@/containers/ChatInput'
 import HeaderPage from '@/containers/HeaderPage'
 import ThreadList from '@/containers/ThreadList'
+import ProjectFiles from '@/containers/ProjectFiles'
 import { AvatarEmoji } from '@/containers/AvatarEmoji'
 
-import { FolderPenIcon, MessageCircle, MoreHorizontal, PencilIcon, Trash2 } from 'lucide-react'
+import {
+  FolderOpen,
+  FolderPenIcon,
+  MessageCircle,
+  MoreHorizontal,
+  PencilIcon,
+  Trash2,
+} from 'lucide-react'
 import DropdownModelProvider from '@/containers/DropdownModelProvider'
 import {
   DropdownMenu,
@@ -35,7 +43,9 @@ function ProjectPageContent() {
   const { projectId } = useParams({ from: '/project/$projectId' })
   const { getFolderById, updateFolder } = useThreadManagement()
   const threads = useThreads((state) => state.threads)
-  const deleteAllThreadsByProject = useThreads((state) => state.deleteAllThreadsByProject)
+  const deleteAllThreadsByProject = useThreads(
+    (state) => state.deleteAllThreadsByProject,
+  )
   const { assistants } = useAssistant()
 
   const [editDialogOpen, setEditDialogOpen] = useState(false)
@@ -62,7 +72,7 @@ function ProjectPageContent() {
     name: string,
     assistantId?: string,
     logo?: string,
-    projectPrompt?: string | null
+    projectPrompt?: string | null,
   ) => {
     if (project) {
       await updateFolder(project.id, name, assistantId, logo, projectPrompt)
@@ -97,25 +107,38 @@ function ProjectPageContent() {
         </div>
       </HeaderPage>
 
-      <div className="h-full relative flex flex-col px-4 md:px-8 py-4 overflow-y-auto">
-        <div className="mx-auto w-full md:w-4/5 xl:w-4/6">
-          {/* Project Name with Dropdown */}
-          <div className="flex items-center justify-between gap-2 mb-4">
-            <div className="flex items-center gap-2">
-              {project.logo && (
-                <img
-                  src={project.logo}
-                  alt={project.name}
-                  className="size-7 rounded-md object-cover"
-                />
-              )}
-              <h1 className="text-2xl font-semibold">{project.name}</h1>
+      {/* Project Header */}
+      <div className="border-b border-border/50 bg-background px-6 py-4">
+        <div className="max-w-3xl mx-auto">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                {project.logo ? (
+                  <img
+                    src={project.logo}
+                    alt={project.name}
+                    className="size-6 rounded-md object-cover"
+                  />
+                ) : (
+                  <FolderOpen className="size-5 text-primary" />
+                )}
+              </div>
+              <div>
+                <h1 style={{ fontSize: '20px', fontWeight: 600 }}>
+                  {project.name}
+                </h1>
+                <div className="text-[12px] text-muted-foreground">
+                  {projectThreads.length}{' '}
+                  {projectThreads.length === 1
+                    ? 'conversation'
+                    : 'conversations'}
+                </div>
+              </div>
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-xs">
+                <Button variant="outline" size="sm">
                   <MoreHorizontal className="size-4" />
-                  <span className="sr-only">More options</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -134,29 +157,37 @@ function ProjectPageContent() {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+        </div>
+      </div>
 
+      {/* Content */}
+      <div
+        className="flex-1 overflow-y-auto px-6 py-6"
+        style={{ scrollbarWidth: 'thin' }}
+      >
+        <div className="max-w-3xl mx-auto space-y-8">
           {/* Chat Input */}
-          <div className="mb-6">
-            <ChatInput
-              showSpeedToken={false}
-              initialMessage={true}
-              projectId={projectId}
-            />
-          </div>
+          <ChatInput
+            showSpeedToken={false}
+            initialMessage={true}
+            projectId={projectId}
+          />
 
-          {/* Conversation Section */}
-          {projectThreads.length > 0 && (
-            <div className="flex flex-col mb-6">
-              <div className="flex items-center justify-between gap-2 mb-4">
-                <h2 className="text-base font-medium">
-                  {t('projects.conversation')}
+          {/* Conversations */}
+          {projectThreads.length > 0 ? (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h2 style={{ fontSize: '15px', fontWeight: 600 }}>
+                  Conversations
                 </h2>
-                <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
+                <DropdownMenu
+                  open={dropdownOpen}
+                  onOpenChange={setDropdownOpen}
+                >
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon-xs">
+                    <button className="text-muted-foreground hover:text-foreground transition-colors">
                       <MoreHorizontal className="size-4" />
-                      <span className="sr-only">More options</span>
-                    </Button>
+                    </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent side="right" align="start">
                     <DeleteAllThreadsInProjectDialog
@@ -168,80 +199,109 @@ function ProjectPageContent() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
-              <SidebarMenu>
+              <SidebarMenu className="gap-2">
                 <ThreadList
                   threads={projectThreads}
                   currentProjectId={projectId}
                 />
               </SidebarMenu>
             </div>
-          )}
-
-          {/* Empty State */}
-          {projectThreads.length === 0 && (
-            <div className="flex flex-col items-center justify-center pt-6 pb-12 text-center bg-card rounded-xl border mb-6">
-              <MessageCircle className="size-8 text-muted-foreground/50 mb-3" />
-              <h3 className="text-base font-medium text-foreground mb-1">
-                {t('projects.noConversationsIn', { projectName: project.name })}
+          ) : (
+            /* Empty State */
+            <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-border/50">
+              <MessageCircle className="size-8 text-muted-foreground/30 mb-3" />
+              <h3
+                style={{ fontSize: '15px', fontWeight: 500 }}
+                className="text-foreground mb-1"
+              >
+                {t('projects.noConversationsIn', {
+                  projectName: project.name,
+                })}
               </h3>
-              <p className="text-sm text-muted-foreground">
-                {t('projects.startNewConversation', { projectName: project.name })}
+              <p className="text-[12px] text-muted-foreground">
+                {t('projects.startNewConversation', {
+                  projectName: project.name,
+                })}
               </p>
             </div>
           )}
 
-          {/* Project Settings Card */}
-          <div className="rounded-xl border border-border overflow-hidden mb-6 bg-card">
-            {/* Assistant Section */}
-            <div className="flex items-center justify-between p-4 border-b border-border">
-              <div className="flex flex-col gap-1">
-                <h3 className="text-sm font-medium">{t('projects.addProjectDialog.assistant')}</h3>
-                {projectAssistant ? (
-                  <div className="flex items-center gap-1.5 mt-1">
-                    {projectAssistant.avatar && (
+          {/* Project Settings */}
+          <div>
+            <h2
+              style={{ fontSize: '15px', fontWeight: 600 }}
+              className="mb-3"
+            >
+              {t('projects.addProjectDialog.settings', {
+                defaultValue: 'Project Settings',
+              })}
+            </h2>
+
+            {/* Assistant Card */}
+            <div className="rounded-xl border border-border/50 p-4 mb-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="size-9 rounded-lg bg-muted flex items-center justify-center">
+                    {projectAssistant?.avatar ? (
                       <AvatarEmoji
                         avatar={projectAssistant.avatar}
-                        imageClassName="w-4 h-4 object-contain"
-                        textClassName="text-sm"
+                        imageClassName="w-5 h-5 object-contain"
+                        textClassName="text-base"
                       />
+                    ) : (
+                      <span className="text-lg">🤖</span>
                     )}
-                    <span className="text-sm text-muted-foreground">{projectAssistant.name}</span>
                   </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    {t('projects.noAssistantAssigned')}
-                  </p>
-                )}
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: 500 }}>
+                      {projectAssistant?.name ||
+                        t('projects.noAssistantAssigned')}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {projectAssistant
+                        ? t('projects.addProjectDialog.assistant')
+                        : t('projects.noAssistantAssigned')}
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditDialogOpen(true)}
+                >
+                  {t('common:change', { defaultValue: 'Change' })}
+                </Button>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setEditDialogOpen(true)}
-              >
-                <PencilIcon className="size-3" />
-                <span>{t('common:edit')}</span>
-              </Button>
             </div>
 
-            <div className="flex items-center justify-between p-4 border-b border-border">
-              <div className="flex flex-col gap-1">
-                <h3 className="text-sm font-medium">System Prompt</h3>
-                <p className="text-sm text-muted-foreground">
-                  {project.projectPrompt?.trim()
-                    ? 'Using Project Prompt'
-                    : 'Inheriting from Global'}
-                </p>
+            {/* System Prompt Card */}
+            <div className="rounded-xl border border-border/50 p-4 mb-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: 500 }}>
+                    System Prompt
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {project.projectPrompt?.trim()
+                      ? 'Using Project Prompt'
+                      : 'Inheriting from Global'}
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditDialogOpen(true)}
+                >
+                  <PencilIcon className="size-3" />
+                  <span>{t('common:edit')}</span>
+                </Button>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setEditDialogOpen(true)}
-              >
-                <PencilIcon className="size-3" />
-                <span>{t('common:edit')}</span>
-              </Button>
             </div>
 
+            {/* Project Files Card */}
+            <div className="rounded-xl border border-border/50 overflow-hidden">
+              <ProjectFiles projectId={projectId} lng={i18n.language} />
+            </div>
           </div>
         </div>
       </div>

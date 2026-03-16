@@ -7,7 +7,6 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
-import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 
 import { useModelProvider } from '@/hooks/useModelProvider'
@@ -198,40 +197,38 @@ export const DialogEditModel = ({
         <div className="py-1">
           <label
             htmlFor="display-name"
-            className="text-sm font-medium mb-3 block"
+            className="text-[13px] text-muted-foreground mb-1.5 block"
           >
             Display Name
           </label>
-          <Input
+          <input
             id="display-name"
             value={displayName}
             onChange={(e) => handleDisplayNameChange(e.target.value)}
             placeholder="Enter display name"
-            className="w-full"
+            className="w-full px-4 py-2.5 rounded-xl bg-muted/50 border border-border/50 outline-none text-[14px] focus:border-primary/30 transition-colors"
             disabled={isLoading}
           />
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-[11px] text-muted-foreground/50 mt-1">
             This is the name that will be shown in the interface. The original model file remains unchanged.
           </p>
         </div>
 
         {/* Warning Banner */}
-        <div className="bg-secondary border  rounded-md p-3">
-          <div className="flex items-start space-x-3">
-            <IconAlertTriangle className="size-5 text-yellow-600 mt-0.5 shrink-0" />
-            <div className="text-sm">
-              <p className="font-medium mb-1">
-                {t('providers:editModel.warning.title')}
-              </p>
-              <p className="text-muted-foreground">
-                {t('providers:editModel.warning.description')}
-              </p>
-            </div>
+        <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/5 border border-amber-500/10">
+          <IconAlertTriangle className="size-4 text-amber-500 shrink-0 mt-0.5" />
+          <div className="text-[12px]">
+            <p className="font-medium mb-0.5 text-foreground">
+              {t('providers:editModel.warning.title')}
+            </p>
+            <p className="text-muted-foreground">
+              {t('providers:editModel.warning.description')}
+            </p>
           </div>
         </div>
 
         <div className="py-1">
-          <h3 className="text-sm font-medium mb-3">
+          <h3 className="text-[13px] text-muted-foreground mb-3">
             {t('providers:editModel.capabilities')}
           </h3>
           <div className="space-y-4">

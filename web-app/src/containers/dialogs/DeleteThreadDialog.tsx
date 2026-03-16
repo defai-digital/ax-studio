@@ -90,6 +90,7 @@ export function DeleteThreadDialog({
         </DialogTrigger>
       )}
       <DialogContent
+        className="max-w-[380px]"
         onOpenAutoFocus={(e) => {
           e.preventDefault()
           deleteButtonRef.current?.focus()
@@ -100,25 +101,24 @@ export function DeleteThreadDialog({
           <DialogDescription>
             {t('common:dialogs.deleteThread.description')}
           </DialogDescription>
-          <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-            <DialogClose asChild>
-              <Button variant="ghost" size="sm" className="w-full sm:w-auto">
-                {t('common:cancel')}
-              </Button>
-            </DialogClose>
-            <Button
-              ref={deleteButtonRef}
-              variant="destructive"
-              onClick={handleDelete}
-              onKeyDown={handleKeyDown}
-              size="sm"
-              className="w-full sm:w-auto"
-              aria-label={`${t('common:delete')} ${thread.title || t('common:newThread')}`}
-            >
-              {t('common:delete')}
-            </Button>
-          </DialogFooter>
         </DialogHeader>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="outline" size="sm">
+              {t('common:cancel')}
+            </Button>
+          </DialogClose>
+          <Button
+            ref={deleteButtonRef}
+            variant="destructive"
+            onClick={handleDelete}
+            onKeyDown={handleKeyDown}
+            size="sm"
+            aria-label={`${t('common:delete')} ${thread.title || t('common:newThread')}`}
+          >
+            {t('common:delete')}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

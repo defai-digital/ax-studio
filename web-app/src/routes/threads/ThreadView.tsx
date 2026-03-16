@@ -8,6 +8,7 @@
 import type { RefObject } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import type { UIMessage } from '@ai-sdk/react'
+import type { ChatStatus } from 'ai'
 import HeaderPage from '@/containers/HeaderPage'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -38,7 +39,7 @@ export type ThreadViewProps = {
   threadModel: Thread['model'] | undefined
   threadLogo: string
   chatMessages: UIMessage[]
-  status: string
+  status: ChatStatus
   error: Error | null | undefined
   stop: () => void
   handleSubmit: (text: string) => Promise<void>
@@ -46,10 +47,12 @@ export type ThreadViewProps = {
   handleEditMessage: (messageId: string, newText: string) => void
   handleDeleteMessage: (messageId: string) => void
   handleContextSizeIncrease: () => Promise<void>
-  reasoningContainerRef: RefObject<HTMLDivElement>
-  pinnedArtifact: boolean | undefined
+  reasoningContainerRef: RefObject<HTMLDivElement | null>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  pinnedArtifact: any
   clearArtifact: (threadId: string) => void
-  pinnedResearch: boolean | undefined
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  pinnedResearch: any
   clearResearch: (threadId: string) => void
   splitPaneOrder: string[] | null
   splitThreadId: string | null

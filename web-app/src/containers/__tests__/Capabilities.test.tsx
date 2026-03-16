@@ -84,4 +84,45 @@ describe('Capabilities', () => {
 
     expect(container).toBeInTheDocument()
   })
+
+  // Phase 4: Colored badge pill styling
+  it('should render badges with colored pill styling', () => {
+    const { container } = render(<Capabilities capabilities={['tools']} />)
+    const badge = container.querySelector('span')
+    expect(badge).toBeInTheDocument()
+    // Should have colored badge pill classes
+    expect(badge?.className).toContain('inline-flex')
+    expect(badge?.className).toContain('rounded')
+    expect(badge?.className).toContain('px-1.5')
+    expect(badge?.className).toContain('py-0.5')
+  })
+
+  it('should apply correct color for tools badge (blue)', () => {
+    const { container } = render(<Capabilities capabilities={['tools']} />)
+    const badge = container.querySelector('span')
+    expect(badge?.className).toContain('bg-blue-500/10')
+    expect(badge?.className).toContain('text-blue-600')
+  })
+
+  it('should apply correct color for vision badge (violet)', () => {
+    const { container } = render(<Capabilities capabilities={['vision']} />)
+    const badge = container.querySelector('span')
+    expect(badge?.className).toContain('bg-violet-500/10')
+    expect(badge?.className).toContain('text-violet-600')
+  })
+
+  it('should apply correct color for reasoning badge (amber)', () => {
+    const { container } = render(<Capabilities capabilities={['reasoning']} />)
+    const badge = container.querySelector('span')
+    expect(badge?.className).toContain('bg-amber-500/10')
+    expect(badge?.className).toContain('text-amber-600')
+  })
+
+  it('should filter out proactive capability', () => {
+    const { container } = render(<Capabilities capabilities={['proactive', 'tools']} />)
+    // Only tools badge should render, not proactive
+    const badges = container.querySelectorAll('span[title]')
+    expect(badges).toHaveLength(1)
+    expect(badges[0].getAttribute('title')).toBe('tools')
+  })
 })

@@ -13,6 +13,8 @@ import {
   useState,
 } from "react";
 import { createHighlighter, type BundledLanguage, type Highlighter, type ShikiTransformer } from "shiki";
+import { axStudioLightTheme } from "@/lib/shiki-theme-light";
+import { axStudioDarkTheme } from "@/lib/shiki-theme-dark";
 
 // --- Singleton highlighter (shared across all CodeBlock instances) ---
 let _highlighterPromise: Promise<Highlighter> | null = null;
@@ -21,7 +23,7 @@ const _loadedLangs = new Set<string>();
 function getHighlighter(): Promise<Highlighter> {
   if (!_highlighterPromise) {
     _highlighterPromise = createHighlighter({
-      themes: ["one-light", "one-dark-pro"],
+      themes: [axStudioLightTheme, axStudioDarkTheme],
       langs: [],
     });
   }
@@ -86,8 +88,8 @@ export async function highlightCode(
   }
 
   const result: [string, string] = [
-    hl.codeToHtml(code, { lang: language, theme: "one-light", transformers }),
-    hl.codeToHtml(code, { lang: language, theme: "one-dark-pro", transformers }),
+    hl.codeToHtml(code, { lang: language, theme: "ax-studio-light", transformers }),
+    hl.codeToHtml(code, { lang: language, theme: "ax-studio-dark", transformers }),
   ];
 
   if (_htmlCache.size >= MAX_CACHE_SIZE) {
@@ -128,19 +130,19 @@ export const CodeBlock = ({
     <CodeBlockContext.Provider value={{ code }}>
       <div
         className={cn(
-          "group relative w-full overflow-hidden bg-background text-foreground",
+          "group relative w-full overflow-hidden rounded-xl border border-border dark:border-white/6 bg-background dark:bg-[#0d1117]",
           className,
         )}
         {...props}
       >
         <div className="relative">
           <div
-            className="overflow-auto dark:hidden [&>pre]:m-0 [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-foreground! [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
+            className="overflow-auto dark:hidden [&>pre]:m-0 [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
             // biome-ignore lint/security/noDangerouslySetInnerHtml: "this is needed."
             dangerouslySetInnerHTML={{ __html: html }}
           />
           <div
-            className="hidden overflow-auto dark:block [&>pre]:m-0 [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-foreground! [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
+            className="hidden overflow-auto dark:block [&>pre]:m-0 [&>pre]:bg-transparent! [&>pre]:p-4 [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
             // biome-ignore lint/security/noDangerouslySetInnerHtml: "this is needed."
             dangerouslySetInnerHTML={{ __html: darkHtml }}
           />
@@ -150,7 +152,6 @@ export const CodeBlock = ({
             </div>
           )}
         </div>
-        {/* <CodeBlockCopyButton className="absolute top-0 right-0"/> */}
       </div>
     </CodeBlockContext.Provider>
   );

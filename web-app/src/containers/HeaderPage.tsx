@@ -4,7 +4,7 @@ import {
   IconLayoutSidebar,
 } from '@tabler/icons-react'
 import { ReactNode, memo } from 'react'
-import { Button } from "@/components/ui/button"
+import { Button } from '@/components/ui/button'
 
 type HeaderPageProps = {
   children?: ReactNode
@@ -29,7 +29,7 @@ const HeaderPage = memo(function HeaderPage({ children }: HeaderPageProps) {
           <Button
             variant="ghost"
             size="icon-sm"
-            className='rounded-full relative z-50'
+            className="rounded-full relative z-50"
             onClick={() => setLeftPanel(!open)}
             aria-label="Toggle sidebar"
           >

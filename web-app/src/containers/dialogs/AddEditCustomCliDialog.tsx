@@ -7,7 +7,6 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { IconPlus, IconTrash } from '@tabler/icons-react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 type EnvVar = { key: string; value: string }
@@ -111,7 +110,7 @@ export default function AddEditCustomCliDialog({
           {/* Environment Variables */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-sm">Environment Variables</label>
+              <label className="text-[13px] text-muted-foreground">Environment Variables</label>
               <div
                 className="size-6 cursor-pointer flex items-center justify-center rounded hover:bg-secondary transition-all duration-200 ease-in-out"
                 onClick={handleAddEnv}
@@ -122,17 +121,17 @@ export default function AddEditCustomCliDialog({
 
             {envVars.map((env, index) => (
               <div key={`env-${index}`} className="flex items-center gap-2">
-                <Input
+                <input
                   value={env.key}
                   onChange={(e) => handleEnvKeyChange(index, e.target.value)}
                   placeholder="Key"
-                  className="flex-1"
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-muted/50 border border-border/50 outline-none text-[14px] focus:border-primary/30 transition-colors"
                 />
-                <Input
+                <input
                   value={env.value}
                   onChange={(e) => handleEnvValueChange(index, e.target.value)}
                   placeholder="Value"
-                  className="flex-1"
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-muted/50 border border-border/50 outline-none text-[14px] focus:border-primary/30 transition-colors"
                 />
                 {envVars.length > 1 && (
                   <div
@@ -148,7 +147,7 @@ export default function AddEditCustomCliDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
             {t('common:cancel')}
           </Button>
           <Button

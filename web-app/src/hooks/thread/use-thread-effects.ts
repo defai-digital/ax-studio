@@ -18,7 +18,7 @@ export type ThreadEffectsInput = {
   selectedModel: Model | undefined
   activeTeamId: string | undefined
   setTeamTokensUsed: (tokens: number) => void
-  reasoningContainerRef: React.RefObject<HTMLDivElement>
+  reasoningContainerRef: React.RefObject<HTMLDivElement | null>
   setCurrentThreadId: (id?: string) => void
   setCurrentAssistant: (assistant: Assistant) => void
   processAndSendMessage: (text: string) => Promise<void>
@@ -33,7 +33,7 @@ export function useThreadEffects({
   chatMessages,
   status,
   assistants,
-  selectedModel,
+  selectedModel: _selectedModel,
   activeTeamId,
   setTeamTokensUsed,
   reasoningContainerRef,

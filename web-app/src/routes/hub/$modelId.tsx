@@ -7,10 +7,9 @@ import {
 } from '@tanstack/react-router'
 import {
   IconArrowLeft,
-  IconDownload,
-  IconClock,
-  IconFileCode,
 } from '@tabler/icons-react'
+import { Eye, Wrench, Calendar, Download, ExternalLink, HardDrive, Atom } from 'lucide-react'
+import { motion } from 'motion/react'
 import { route } from '@/constants/routes'
 import { useModelSources } from '@/hooks/useModelSources'
 import { extractModelName, extractDescription } from '@/lib/models'
@@ -21,7 +20,7 @@ import { useServiceHub } from '@/hooks/useServiceHub'
 import type { CatalogModel, ModelQuant } from '@/services/models/types'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
-import { cn, sanitizeModelId } from '@/lib/utils'
+import { sanitizeModelId } from '@/lib/utils'
 import { useGeneralSetting } from '@/hooks/useGeneralSetting'
 import { useModelProvider } from '@/hooks/useModelProvider'
 import { ModelInfoHoverCard } from '@/containers/ModelInfoHoverCard'
@@ -231,18 +230,17 @@ function HubModelDetailContent() {
     return (
       <div className="flex flex-col h-svh w-full">
         <HeaderPage>
-          <Button
-          onClick={() => navigate({ to: route.hub.index })}
-          aria-label="Go back"
-          variant="ghost"
-          size="sm"
-        >
-          <IconArrowLeft size={18} className="text-muted-foreground" />
-          <span className="text-foreground">Back to Hub</span>
-        </Button>
+          <button
+            onClick={() => navigate({ to: route.hub.index })}
+            className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+            style={{ fontSize: '13px' }}
+          >
+            <IconArrowLeft size={16} />
+            Back to Hub
+          </button>
         </HeaderPage>
         <div className="flex-1 flex items-center justify-center">
-          <p className="text-muted-foreground">Model not found</p>
+          <p className="text-[14px] text-muted-foreground">Model not found</p>
         </div>
       </div>
     )
@@ -250,272 +248,293 @@ function HubModelDetailContent() {
 
   return (
     <div className="flex flex-col h-svh w-full">
+      {/* Back Button */}
       <HeaderPage>
-        <div className="flex items-center gap-2 w-full relative">
-          <Button
-            onClick={() => navigate({ to: route.hub.index })}
-            aria-label="Go back"
-            variant="ghost"
-            size="sm"
-          >
-            <IconArrowLeft size={18} className="text-muted-foreground" />
-            <span className="text-foreground">Back to Hub</span>
-          </Button>
-        </div>
+        <button
+          onClick={() => navigate({ to: route.hub.index })}
+          className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+          style={{ fontSize: '13px' }}
+        >
+          <IconArrowLeft size={16} />
+          Back to Hub
+        </button>
       </HeaderPage>
 
-      <div className="flex-1 overflow-y-auto ">
-        <div className="md:w-4/5 mx-auto">
-          <div className="max-w-4xl mx-auto p-6">
-            {/* Model Header */}
-            <div className="mb-8">
-              <h1
-                className="text-2xl font-semibold mb-4 capitalize wrap-break-word line-clamp-2"
-                title={
-                  extractModelName(modelData.model_name) ||
-                  modelData.model_name
-                }
-              >
-                {extractModelName(modelData.model_name) ||
-                  modelData.model_name}
-              </h1>
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto px-6 py-6" style={{ scrollbarWidth: 'thin' }}>
+        <div className="max-w-4xl mx-auto">
+          {/* Model Header */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8"
+          >
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h1
+                  className="mb-2 capitalize wrap-break-word line-clamp-2"
+                  style={{ fontSize: '24px', fontWeight: 600 }}
+                  title={
+                    extractModelName(modelData.model_name) ||
+                    modelData.model_name
+                  }
+                >
+                  {extractModelName(modelData.model_name) ||
+                    modelData.model_name}
+                </h1>
 
-              {/* Stats */}
-              <div className="flex items-center gap-4 text-sm text-foreground mb-4 flex-wrap">
-                {modelData.developer && (
-                  <>
-                    <span>By {modelData.developer}</span>
-                  </>
-                )}
-                <div className="flex items-center gap-2">
-                  <IconDownload size={16} />
-                  <span>{modelData.downloads || 0} Downloads</span>
+                {/* Stats line */}
+                <div className="flex items-center gap-3 text-[13px] text-muted-foreground mb-3">
+                  {modelData.developer && (
+                    <>
+                      <span>by {modelData.developer}</span>
+                      <span className="text-muted-foreground/30">&middot;</span>
+                    </>
+                  )}
+                  <span className="flex items-center gap-1">
+                    <Download className="size-3" />
+                    {modelData.downloads || 0} Downloads
+                  </span>
+                  {modelData.created_at && (
+                    <>
+                      <span className="text-muted-foreground/30">&middot;</span>
+                      <span className="flex items-center gap-1">
+                        <Calendar className="size-3" />
+                        Updated {formatDate(modelData.created_at)}
+                      </span>
+                    </>
+                  )}
                 </div>
-                {modelData.created_at && (
-                  <div className="flex items-center gap-2">
-                    <IconClock size={16} />
-                    <span>Updated {formatDate(modelData.created_at)}</span>
+
+                {/* Description */}
+                {modelData.description && (
+                  <div className="text-[14px] text-muted-foreground/80 max-w-2xl mb-3">
+                    <RenderMarkdown
+                      className="select-none reset-heading"
+                      components={{
+                        a: ({ ...props }) => (
+                          <a
+                            {...props}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          />
+                        ),
+                      }}
+                      content={
+                        extractDescription(modelData.description) ||
+                        modelData.description
+                      }
+                    />
                   </div>
                 )}
-              </div>
 
-              {/* Description */}
-              {modelData.description && (
-                <div className="text-muted-foreground mb-4">
-                  <RenderMarkdown
-                    className="select-none reset-heading"
-                    components={{
-                      a: ({ ...props }) => (
-                        <a
-                          {...props}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        />
-                      ),
-                    }}
-                    content={
-                      extractDescription(modelData.description) ||
-                      modelData.description
-                    }
-                  />
-                </div>
-              )}
-
-              {/* Tags */}
-              {tags.length > 0 && (
-                <div className="flex gap-2 flex-wrap">
+                {/* Tags & Capability Badges */}
+                <div className="flex items-center gap-2 flex-wrap mt-3">
                   {tags.map((tag) => (
                     <span
                       key={tag}
-                      className="px-3 py-1 text-sm bg-secondary rounded-md"
+                      className="px-2.5 py-0.5 rounded-md bg-muted text-[12px] text-muted-foreground"
                     >
                       {tag}
                     </span>
                   ))}
-                </div>
-              )}
-            </div>
-
-            {/* Variants Section */}
-            {modelData.quants && modelData.quants.length > 0 && (
-              <div className="mb-8">
-                <div className="flex items-center gap-2 mb-4">
-                  <IconFileCode size={20} className="text-muted-foreground" />
-                  <h2 className="text-lg font-semibold text-foreground">
-                    Variants ({modelData.quants.length})
-                  </h2>
-                </div>
-
-                <div className="w-full overflow-x-auto">
-                  <table className="w-full min-w-[500px]">
-                    <thead>
-                      <tr className="border-b ">
-                        <th className="text-left py-3 px-2 text-sm font-medium">
-                          Version
-                        </th>
-                        <th className="text-left py-3 px-2 text-sm font-medium">
-                          Format
-                        </th>
-                        <th className="text-left py-3 px-2 text-sm font-medium">
-                          Size
-                        </th>
-                        <th></th>
-                        <th className="text-right py-3 px-2 text-sm font-medium">
-                          Action
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {modelData.quants.map((variant) => {
-                        const isDownloading =
-                          localDownloadingModels.has(variant.model_id) ||
-                          downloadProcesses.some(
-                            (e) => e.id === variant.model_id
-                          )
-                        const downloadProgress =
-                          downloadProcesses.find(
-                            (e) => e.id === variant.model_id
-                          )?.progress || 0
-                        // Check if model is already downloaded by looking
-                        // at the llamacpp provider's installed models list
-                        const isDownloaded = !!llamaProvider?.models.some(
-                          (m: { id: string }) =>
-                            m.id === variant.model_id ||
-                            m.id === `${modelData.developer}/${sanitizeModelId(variant.model_id.split('/').pop() || '')}`
-                        )
-
-                        // Extract format from model_id
-                        const format = variant.model_id
-                          .toLowerCase()
-                          .includes('tensorrt')
-                          ? 'TensorRT'
-                          : 'GGUF'
-
-                        // Extract version name (remove format suffix)
-                        const versionName = variant.model_id
-                          .replace(/_GGUF$/i, '')
-                          .replace(/-GGUF$/i, '')
-                          .replace(/_TensorRT$/i, '')
-                          .replace(/-TensorRT$/i, '')
-
-                        return (
-                          <tr
-                            key={variant.model_id}
-                            className="border-b border-border"
-                          >
-                            <td className="py-3 px-2">
-                              <span className="text-sm font-medium">
-                                {versionName}
-                              </span>
-                            </td>
-                            <td className="py-3 px-2">
-                              <span className="text-sm text-muted-foreground">
-                                {format}
-                              </span>
-                            </td>
-                            <td className="py-3 px-2">
-                              <span className="text-sm text-muted-foreground">
-                                {variant.file_size}
-                              </span>
-                            </td>
-                            <td>
-                              <ModelInfoHoverCard
-                                model={modelData}
-                                variant={variant}
-                                defaultModelQuantizations={
-                                  DEFAULT_MODEL_QUANTIZATIONS
-                                }
-                                modelSupportStatus={modelSupportStatus}
-                                onCheckModelSupport={checkModelSupport}
-                              />
-                            </td>
-                            <td className="py-3 px-2 text-right ml-auto">
-                              {(() => {
-                                if (isDownloading && !isDownloaded) {
-                                  return (
-                                    <div className="flex items-center justify-end gap-2">
-                                      <Progress
-                                        value={downloadProgress * 100}
-                                        className="w-12"
-                                      />
-                                      <span className="text-xs text-muted-foreground text-right">
-                                        {Math.round(downloadProgress * 100)}%
-                                      </span>
-                                    </div>
-                                  )
-                                }
-
-                                if (isDownloaded) {
-                                  return (
-                                    <Button
-                                      variant="default"
-                                      size="sm"
-                                      onClick={() =>
-                                        handleUseModel(variant.model_id)
-                                      }
-                                    >
-                                      {t('hub:newChat')}
-                                    </Button>
-                                  )
-                                }
-
-                                return (
-                                  <Button
-                                    size="sm"
-                                    onClick={() => {
-                                      addLocalDownloadingModel(
-                                        variant.model_id
-                                      )
-                                      serviceHub
-                                        .models()
-                                        .pullModelWithMetadata(
-                                          variant.model_id,
-                                          variant.path,
-                                          (
-                                            modelData.mmproj_models?.find(
-                                              (e) =>
-                                                e.model_id.toLowerCase() ===
-                                                'mmproj-f16'
-                                            ) || modelData.mmproj_models?.[0]
-                                          )?.path,
-                                          huggingfaceToken
-                                        )
-                                    }}
-                                    className={cn(isDownloading && 'hidden')}
-                                    variant="outline"
-                                  >
-                                    Download
-                                  </Button>
-                                )
-                              })()}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                  {modelData.mmproj_models && modelData.mmproj_models.length > 0 && (
+                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-violet-500/10 text-violet-600 dark:text-violet-400 text-[11px]">
+                      <Eye className="size-3" /> Vision
+                    </span>
+                  )}
+                  {modelData.tools && (
+                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[11px]">
+                      <Wrench className="size-3" /> Tools
+                    </span>
+                  )}
                 </div>
               </div>
-            )}
 
-            {/* README Section */}
-            {modelData.readme && (
-              <div className="mb-8">
-                <div className="flex items-center gap-2 mb-4">
-                  <IconFileCode size={20} className="text-muted-foreground" />
-                  <h2 className="text-lg font-semibold">
-                    README
-                  </h2>
+              {/* HuggingFace link */}
+              <a
+                href={`https://huggingface.co/${modelData.model_name}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border/50 hover:border-border text-[13px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+              >
+                <ExternalLink className="size-3.5" />
+                View on HuggingFace
+              </a>
+            </div>
+          </motion.div>
+
+          {/* Variants Section */}
+          {modelData.quants && modelData.quants.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="mb-8"
+            >
+              <h2 style={{ fontSize: '16px', fontWeight: 600 }} className="mb-3">
+                Available Variants ({modelData.quants.length})
+              </h2>
+
+              <div className="rounded-2xl border border-border/50 overflow-hidden shadow-sm">
+                {/* Header row */}
+                <div className="grid grid-cols-[1fr_100px_100px_60px_140px] px-5 py-2.5 bg-muted/30 border-b border-border/30 text-[11px] tracking-wider uppercase text-muted-foreground/60">
+                  <span>Version</span>
+                  <span>Format</span>
+                  <span>Size</span>
+                  <span>Info</span>
+                  <span className="text-right">Action</span>
                 </div>
 
+                {/* Data rows */}
+                {modelData.quants.map((variant) => {
+                  const isDownloading =
+                    localDownloadingModels.has(variant.model_id) ||
+                    downloadProcesses.some(
+                      (e) => e.id === variant.model_id
+                    )
+                  const downloadProgress =
+                    downloadProcesses.find(
+                      (e) => e.id === variant.model_id
+                    )?.progress || 0
+                  // Check if model is already downloaded by looking
+                  // at the llamacpp provider's installed models list
+                  const isDownloaded = !!llamaProvider?.models.some(
+                    (m: { id: string }) =>
+                      m.id === variant.model_id ||
+                      m.id === `${modelData.developer}/${sanitizeModelId(variant.model_id.split('/').pop() || '')}`
+                  )
+
+                  // Extract format from model_id
+                  const format = variant.model_id
+                    .toLowerCase()
+                    .includes('tensorrt')
+                    ? 'TensorRT'
+                    : 'GGUF'
+
+                  // Extract version name (remove format suffix)
+                  const versionName = variant.model_id
+                    .replace(/_GGUF$/i, '')
+                    .replace(/-GGUF$/i, '')
+                    .replace(/_TensorRT$/i, '')
+                    .replace(/-TensorRT$/i, '')
+
+                  return (
+                    <div
+                      key={variant.model_id}
+                      className="grid grid-cols-[1fr_100px_100px_60px_140px] items-center px-5 py-3 border-b border-border/20 last:border-0 hover:bg-muted/10 transition-colors"
+                    >
+                      <span className="text-[14px]" style={{ fontWeight: 500 }}>
+                        {versionName}
+                      </span>
+                      <span className="text-[12px] text-muted-foreground">
+                        <span className="px-2 py-0.5 rounded bg-muted">{format}</span>
+                      </span>
+                      <span className="text-[13px] text-muted-foreground flex items-center gap-1">
+                        <HardDrive className="size-3" />
+                        {variant.file_size}
+                      </span>
+                      <span>
+                        <ModelInfoHoverCard
+                          model={modelData}
+                          variant={variant}
+                          defaultModelQuantizations={
+                            DEFAULT_MODEL_QUANTIZATIONS
+                          }
+                          modelSupportStatus={modelSupportStatus}
+                          onCheckModelSupport={checkModelSupport}
+                        />
+                      </span>
+                      <div className="flex justify-end">
+                        {(() => {
+                          if (isDownloading && !isDownloaded) {
+                            return (
+                              <div className="flex items-center justify-end gap-2">
+                                <Progress
+                                  value={downloadProgress * 100}
+                                  className="w-16 h-1.5"
+                                />
+                                <span className="text-[11px] text-muted-foreground text-right">
+                                  {Math.round(downloadProgress * 100)}%
+                                </span>
+                              </div>
+                            )
+                          }
+
+                          if (isDownloaded) {
+                            return (
+                              <Button
+                                variant="default"
+                                size="sm"
+                                className="rounded-lg"
+                                onClick={() =>
+                                  handleUseModel(variant.model_id)
+                                }
+                              >
+                                {t('hub:newChat')}
+                              </Button>
+                            )
+                          }
+
+                          return (
+                            <Button
+                              size="sm"
+                              className="rounded-lg"
+                              onClick={() => {
+                                addLocalDownloadingModel(
+                                  variant.model_id
+                                )
+                                serviceHub
+                                  .models()
+                                  .pullModelWithMetadata(
+                                    variant.model_id,
+                                    variant.path,
+                                    (
+                                      modelData.mmproj_models?.find(
+                                        (e) =>
+                                          e.model_id.toLowerCase() ===
+                                          'mmproj-f16'
+                                      ) || modelData.mmproj_models?.[0]
+                                    )?.path,
+                                    huggingfaceToken
+                                  )
+                              }}
+                              variant="outline"
+                            >
+                              <Download className="size-3.5 mr-1.5" />
+                              Download
+                            </Button>
+                          )
+                        })()}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </motion.div>
+          )}
+
+          {/* README Section */}
+          {modelData.readme && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="mb-8"
+            >
+              <h2 style={{ fontSize: '16px', fontWeight: 600 }} className="mb-3">
+                README
+              </h2>
+
+              <div className="rounded-xl border border-border/50 p-6 bg-card">
                 {isLoadingReadme ? (
                   <div className="flex items-center justify-center py-8">
-                    <span className="text-muted-foreground">
+                    <span className="text-[13px] text-muted-foreground">
                       Loading README...
                     </span>
                   </div>
                 ) : readmeContent ? (
-                  <div className="prose prose-invert max-w-none">
+                  <div className="prose-sm max-w-none">
                     <RenderMarkdown
                       className="text-muted-foreground"
                       components={{
@@ -532,14 +551,14 @@ function HubModelDetailContent() {
                   </div>
                 ) : (
                   <div className="flex items-center justify-center py-8">
-                    <span className="text-muted-foreground">
+                    <span className="text-[13px] text-muted-foreground">
                       Failed to load README
                     </span>
                   </div>
                 )}
               </div>
-            )}
-          </div>
+            </motion.div>
+          )}
         </div>
       </div>
     </div>

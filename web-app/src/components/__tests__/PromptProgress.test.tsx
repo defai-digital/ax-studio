@@ -40,11 +40,9 @@ describe('PromptProgress', () => {
 
     mockUseAppState.mockReturnValue(mockProgress)
 
-    const { container } = render(<PromptProgress />)
+    render(<PromptProgress />)
 
-    // Component should render Loader when total is 0
-    const loader = container.querySelector('svg.animate-spin')
-    expect(loader).not.toBeNull()
-    expect(loader?.classList.contains('animate-spin')).toBe(true)
+    // Component should render the streaming indicator (Thinking...) when total is 0
+    expect(screen.getByText('Thinking...')).toBeInTheDocument()
   })
 })

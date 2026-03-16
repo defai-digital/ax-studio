@@ -46,10 +46,10 @@ export default function ChangeDataFolderLocation({
 
         <div className="space-y-4">
           <div>
-            <h4 className="text-sm font-medium mb-2">
+            <h4 className="text-[13px] text-muted-foreground mb-1.5">
               {t('settings:dialogs.changeDataFolder.currentLocation')}
             </h4>
-            <div className="bg-secondary border p-2 rounded-lg">
+            <div className="bg-muted/50 border border-border/50 p-2.5 rounded-xl">
               <code className="text-xs text-muted-foreground break-all">
                 {currentPath}
               </code>
@@ -57,10 +57,10 @@ export default function ChangeDataFolderLocation({
           </div>
 
           <div>
-            <h4 className="text-sm font-medium mb-2">
+            <h4 className="text-[13px] text-muted-foreground mb-1.5">
               {t('settings:dialogs.changeDataFolder.newLocation')}
             </h4>
-            <div className="bg-secondary border p-2 rounded-lg">
+            <div className="bg-muted/50 border border-border/50 p-2.5 rounded-xl">
               <code className="text-xs break-all">{newPath}</code>
             </div>
           </div>
@@ -68,7 +68,7 @@ export default function ChangeDataFolderLocation({
 
         <DialogFooter className="flex items-center gap-2">
           <DialogClose asChild>
-            <Button variant="ghost" size="sm">
+            <Button variant="outline" size="sm">
               {t('settings:dialogs.changeDataFolder.cancel')}
             </Button>
           </DialogClose>

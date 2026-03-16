@@ -55,7 +55,7 @@ export function DeleteAssistantDialog({
         </DialogHeader>
         <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
             onClick={handleCancel}
             className="w-full sm:w-auto"

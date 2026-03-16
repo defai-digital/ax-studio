@@ -15,9 +15,36 @@ import { Fragment, memo } from 'react'
 
 interface CapabilitiesProps {
   capabilities: string[]
+  /** When true, renders lightweight badges with title attrs instead of Radix Tooltips. */
+  compact?: boolean
 }
 
-const Capabilities = memo(function Capabilities({ capabilities }: CapabilitiesProps) {
+const capabilityStyles: Record<string, string> = {
+  tools: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  vision: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
+  reasoning: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+  embeddings: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  web_search: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400',
+}
+
+function getIcon(capability: string) {
+  switch (capability) {
+    case 'vision': return <IconEye className="size-2.5" />
+    case 'tools': return <IconTool className="size-2.5" />
+    case 'reasoning': return <IconAtom className="size-2.5" />
+    case 'embeddings': return <IconCodeCircle2 className="size-2.5" />
+    case 'web_search': return <IconWorld className="size-2.5" />
+    default: return null
+  }
+}
+
+function getTooltipLabel(capability: string) {
+  if (capability === 'web_search') return 'Web Search'
+  if (capability === 'embeddings') return 'Embedding Model (for RAG/vectors, not chat)'
+  return capability
+}
+
+const Capabilities = memo(function Capabilities({ capabilities, compact }: CapabilitiesProps) {
   if (!capabilities.length) return null
 
   // Filter out proactive capability as it's now managed in MCP settings
@@ -26,52 +53,41 @@ const Capabilities = memo(function Capabilities({ capabilities }: CapabilitiesPr
   })
 
   return (
-    <div className="flex gap-0.5">
+    <div className="flex gap-1">
       {filteredCapabilities.map((capability: string, capIndex: number) => {
-        let icon = null
+        const icon = getIcon(capability)
+        if (!icon) return null
 
-        // Embedding models get special treatment with a distinct visual style
-        const isEmbedding = capability === 'embeddings'
+        const badgeStyle = capabilityStyles[capability] || 'bg-muted text-muted-foreground'
+        const badgeCls = `inline-flex items-center px-1.5 py-0.5 rounded text-[10px] ${badgeStyle}`
 
-        if (capability === 'vision') {
-          icon = <IconEye className="size-4" />
-        } else if (capability === 'tools') {
-          icon = <IconTool className="size-3.5" />
-        } else if (capability === 'reasoning') {
-          icon = <IconAtom className="size-3.5" />
-        } else if (capability === 'embeddings' || isEmbedding) {
-          icon = <IconCodeCircle2 className="size-3.5" />
-        } else if (capability === 'web_search') {
-          icon = <IconWorld className="size-3.5" />
-        } else {
-          icon = null
+        // Compact mode: simple span with title — avoids Radix Tooltip overhead
+        if (compact) {
+          return (
+            <span
+              key={`capability-${capIndex}`}
+              className={badgeCls}
+              title={getTooltipLabel(capability)}
+            >
+              {icon}
+            </span>
+          )
         }
 
         return (
           <Fragment key={`capability-${capIndex}`}>
-            {icon && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span
-                      className="flex items-center gap-1 size-5 hover:bg-secondary rounded text-muted-foreground justify-center last:mr-1 transition-all"
-                      title={capability}
-                    >
-                      {icon}
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>
-                      {capability === 'web_search'
-                        ? 'Web Search'
-                        : capability === 'embeddings'
-                          ? 'Embedding Model (for RAG/vectors, not chat)'
-                          : capability}
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className={badgeCls} title={capability}>
+                    {icon}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{getTooltipLabel(capability)}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </Fragment>
         )
       })}

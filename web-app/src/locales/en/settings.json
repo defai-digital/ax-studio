@@ -245,6 +245,7 @@
     "revealLogs": "Reveal Logs",
     "factoryResetTitle": "Reset to Factory Settings",
     "factoryResetDesc": "This will reset all app settings to their defaults. This can't be undone. We only recommend this if the app is corrupted.",
+    "factoryResetWarning": "This action cannot be undone. All custom settings, provider configurations, and assistant profiles will be reset.",
     "cancel": "Cancel",
     "reset": "Reset",
     "huggingfaceToken": "HuggingFace Token",

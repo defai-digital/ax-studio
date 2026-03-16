@@ -26,6 +26,8 @@ import {
   IconDownload,
   IconUpload,
 } from '@tabler/icons-react'
+import { Users } from 'lucide-react'
+import { useTranslation } from '@/i18n/react-i18next-compat'
 import { AgentTeamBuilder } from '@/components/AgentTeamBuilder'
 import { TEMPLATES } from '@/lib/multi-agent/templates'
 import type { AgentTeam } from '@/types/agent-team'
@@ -45,6 +47,7 @@ const ORCHESTRATION_LABELS: Record<string, string> = {
 }
 
 function AgentTeamsContent() {
+  const { t } = useTranslation()
   const {
     teams,
     isLoaded,
@@ -239,10 +242,20 @@ function AgentTeamsContent() {
           </div>
         </div>
       </HeaderPage>
-      <div className="flex h-[calc(100%-60px)]">
+      <div className="flex flex-1 min-h-0">
         <div className="flex h-svh w-full">
           <SettingsMenu />
-          <div className="space-y-3 p-4 pt-0 w-full overflow-y-auto">
+          <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+            <div className="flex items-center gap-3 px-8 py-5 border-b border-border/40 bg-background sticky top-0 z-10">
+              <div className="size-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+                <Users className="size-3.5 text-white" strokeWidth={2.5} />
+              </div>
+              <h1 className="text-foreground tracking-tight" style={{ fontSize: '16px', fontWeight: 600 }}>
+                {t('common:agentTeams')}
+              </h1>
+            </div>
+            <div className="px-8 py-7">
+              <div className="max-w-2xl space-y-6">
             {!isLoaded ? (
               <div className="text-muted-foreground text-sm p-4">
                 Loading teams...
@@ -336,6 +349,8 @@ function AgentTeamsContent() {
                 )
               })
             )}
+              </div>
+            </div>
           </div>
 
           {/* Team Editor */}
