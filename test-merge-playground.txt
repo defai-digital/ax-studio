@@ -1,0 +1,2 @@
+This is a test file for the merge playground branch.
+Created to safely test merging other branches without affecting feature/ui-redesign.
