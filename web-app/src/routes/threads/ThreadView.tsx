@@ -165,23 +165,25 @@ export function ThreadView({
                 </Button>
               </>
             )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant={activeTeamId ? 'secondary' : 'outline'} size="sm">
-                  {activeTeam ? activeTeam.name : 'Agent Team'}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => handleTeamChange(undefined)}>
-                  No Team (single agent)
-                </DropdownMenuItem>
-                {agentTeams.map((team: AgentTeam) => (
-                  <DropdownMenuItem key={team.id} onSelect={() => handleTeamChange(team.id)}>
-                    {team.name}{team.id === activeTeamId && ' ✓'}
+            {!splitPaneOrder && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant={activeTeamId ? 'secondary' : 'outline'} size="sm">
+                    {activeTeam ? activeTeam.name : 'Agent Team'}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => handleTeamChange(undefined)}>
+                    No Team (single agent)
                   </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  {agentTeams.map((team: AgentTeam) => (
+                    <DropdownMenuItem key={team.id} onSelect={() => handleTeamChange(team.id)}>
+                      {team.name}{team.id === activeTeamId && ' ✓'}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             {activeTeamId && activeTeamSnapshot && activeTeam && (
               <Button
                 variant="outline"
@@ -302,6 +304,10 @@ export function ThreadView({
                     setThreadPromptDraft={setThreadPromptDraft}
                     promptResolution={promptResolution}
                     updateThread={updateThread}
+                    agentTeams={agentTeams}
+                    activeTeamId={activeTeamId}
+                    activeTeam={activeTeam}
+                    handleTeamChange={handleTeamChange}
                     isSplitView
                     onSplitClose={() => {
                       if (!splitThreadId) return

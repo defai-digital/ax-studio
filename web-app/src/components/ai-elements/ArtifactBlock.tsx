@@ -1,5 +1,5 @@
-import { type ReactNode, memo, useState } from 'react'
-import { CopyIcon, CheckIcon, ExternalLinkIcon, CodeIcon, EyeIcon } from 'lucide-react'
+import { type ReactNode, Component, memo, useState } from 'react'
+import { CopyIcon, CheckIcon, ExternalLinkIcon, CodeIcon, EyeIcon, AlertCircleIcon } from 'lucide-react'
 import { type ArtifactType } from '@/lib/artifact-harness'
 import { useArtifactPanel } from '@/hooks/useArtifactPanel'
 import { ArtifactPreview } from './ArtifactPreview'
@@ -11,6 +11,27 @@ interface ArtifactBlockProps {
   threadId?: string
   /** Already syntax-highlighted JSX from Streamdown */
   children: ReactNode
+}
+
+class PreviewErrorBoundary extends Component<
+  { children: ReactNode },
+  { error: string | null }
+> {
+  state = { error: null }
+  static getDerivedStateFromError(err: unknown) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="flex items-start gap-2 px-3 py-3 text-destructive text-xs">
+          <AlertCircleIcon size={13} className="mt-0.5 shrink-0" />
+          <span>Failed to render artifact: {this.state.error}</span>
+        </div>
+      )
+    }
+    return this.props.children
+  }
 }
 
 const TYPE_LABEL: Record<ArtifactType, string> = {
@@ -122,7 +143,9 @@ export const ArtifactBlock = memo(function ArtifactBlock({
       {/* Preview tab — sandboxed iframe */}
       {activeTab === 'preview' && (
         <div className="h-[480px]">
-          <ArtifactPreview type={type} source={source} />
+          <PreviewErrorBoundary>
+            <ArtifactPreview type={type} source={source} />
+          </PreviewErrorBoundary>
         </div>
       )}
     </div>

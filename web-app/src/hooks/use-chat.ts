@@ -143,9 +143,15 @@ export function useChat(
     }
   }, [sessionId, sessionTitle, setSessionTitle])
 
+  // Extract tool-related callbacks so they are always forwarded to the SDK hook,
+  // regardless of whether we provide a Chat instance or raw transport+options.
+  // The Chat instance stores the initial callbacks, but the hook needs them too
+  // so it can orchestrate the full tool-call lifecycle (sendAutomaticallyWhen, etc.).
+  const { onToolCall, onFinish, sendAutomaticallyWhen, ...restChatInitOptions } = chatInitOptions
+
   const chatResult = useChatSDK({
     ...(chat
-      ? { chat }
+      ? { chat, onToolCall, onFinish, sendAutomaticallyWhen }
       : { transport: transportRef.current, ...chatInitOptions }),
     experimental_throttle: options?.experimental_throttle,
     resume: false,
@@ -214,6 +220,11 @@ export function useChat(
     }
   }, [mcpToolNames])
 
+  // Expose method to push a system message directly to the transport (bypasses React render cycle)
+  const updateSystemMessageDirect = useCallback((msg: string | undefined) => {
+    transportRef.current?.updateSystemMessage(msg)
+  }, [])
+
   // Expose method to update RAG tools availability
   const updateRagToolsAvailability = useCallback(
     async (
@@ -235,5 +246,6 @@ export function useChat(
   return {
     ...chatResult,
     updateRagToolsAvailability,
+    updateSystemMessageDirect,
   }
 }

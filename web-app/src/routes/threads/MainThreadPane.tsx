@@ -3,6 +3,12 @@ import type { UIMessage } from '@ai-sdk/react'
 import type { ChatStatus } from 'ai'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import ChatInput from '@/containers/ChatInput'
 import { MessagesArea } from './MessagesArea'
 
@@ -30,6 +36,13 @@ export type MainThreadPaneProps = {
   hasPanels?: boolean
   isSplitView?: boolean
   onSplitClose?: () => void
+  // Team selector (split view only)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  agentTeams?: any[]
+  activeTeamId?: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  activeTeam?: any
+  handleTeamChange?: (teamId: string | undefined) => void
 }
 
 export function MainThreadPane({
@@ -56,6 +69,10 @@ export function MainThreadPane({
   hasPanels = false,
   isSplitView = false,
   onSplitClose,
+  agentTeams = [],
+  activeTeamId,
+  activeTeam,
+  handleTeamChange,
 }: MainThreadPaneProps) {
   const containerCls = isSplitView
     ? 'h-full rounded-xl border bg-background overflow-hidden flex flex-col relative'
@@ -81,6 +98,26 @@ export function MainThreadPane({
               <span className="truncate">{title}</span>
             </div>
             <div className="flex items-center gap-1 shrink-0">
+              {handleTeamChange && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant={activeTeamId ? 'secondary' : 'outline'} size="sm">
+                      {activeTeam ? activeTeam.name : 'Agent Team'}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={() => handleTeamChange(undefined)}>
+                      No Team (single agent)
+                    </DropdownMenuItem>
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    {agentTeams.map((team: any) => (
+                      <DropdownMenuItem key={team.id} onSelect={() => handleTeamChange(team.id)}>
+                        {team.name}{team.id === activeTeamId && ' ✓'}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
               <Button variant="outline" size="sm" onClick={() => setShowThreadPromptEditor((v) => !v)}>
                 Thread Prompt
               </Button>

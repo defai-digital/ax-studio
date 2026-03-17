@@ -30,6 +30,7 @@ import {
   IconUser,
   IconBrain,
   IconHierarchy2,
+  IconDatabase,
 } from '@tabler/icons-react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { TokenCounter } from '@/components/TokenCounter'
@@ -93,6 +94,9 @@ type Props = {
   isMemoryEnabled: boolean
   toggleMemory: () => void
   memoryCount: number
+  // Local knowledge
+  isLocalKnowledgeEnabled: boolean
+  toggleLocalKnowledge: () => void
   // Token counter
   tokenCounterCompact: boolean
   threadMessages: ThreadMessage[]
@@ -125,6 +129,8 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
   isMemoryEnabled,
   toggleMemory,
   memoryCount,
+  isLocalKnowledgeEnabled,
+  toggleLocalKnowledge,
   tokenCounterCompact,
   threadMessages,
   stopStreaming,
@@ -283,6 +289,7 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                   hasActiveMCPServers={hasActiveMCPServers}
                   selectedModelHasTools={selectedModel?.capabilities?.includes('tools') ?? false}
                   initialMessage={initialMessage}
+                  threadId={effectiveThreadId}
                   MCPToolComponent={MCPToolComponent}
                 />
               ) : (
@@ -295,6 +302,7 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                     >
                       <DropdownToolsAvailable
                         initialMessage={initialMessage}
+                        threadId={effectiveThreadId}
                         onOpenChange={(isOpen) => {
                           setDropdownToolsAvailable(isOpen)
                           if (isOpen) setTooltipToolsAvailable(false)
@@ -329,6 +337,20 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
               </TooltipTrigger>
               <TooltipContent>
                 <p>{isMemoryEnabled ? `Memory (${memoryCount})` : 'Memory'}</p>
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon-xs" onClick={() => toggleLocalKnowledge()}>
+                  <IconDatabase
+                    size={18}
+                    className={cn(isLocalKnowledgeEnabled ? 'text-primary' : 'text-muted-foreground')}
+                  />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Local Knowledge{isLocalKnowledgeEnabled ? ' (active)' : ''}</p>
               </TooltipContent>
             </Tooltip>
 

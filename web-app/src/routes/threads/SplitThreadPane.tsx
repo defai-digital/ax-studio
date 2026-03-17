@@ -23,7 +23,14 @@ import { ThreadMessage, MessageStatus, ChatCompletionRole } from '@ax-studio/cor
 import { PromptProgress } from '@/components/PromptProgress'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { X } from 'lucide-react'
+import { useAgentTeamStore } from '@/stores/agent-team-store'
 import { toast } from 'sonner'
 import { useGeneralSetting } from '@/hooks/useGeneralSetting'
 import { useMemory } from '@/hooks/useMemory'
@@ -45,6 +52,7 @@ import {
 import { ResearchPanel } from '@/components/research/ResearchPanel'
 import { useResearchPanel } from '@/hooks/useResearchPanel'
 import { useResearch } from '@/hooks/useResearch'
+import { useThreadTools } from '@/hooks/thread/use-thread-tools'
 import { MessageItem } from '@/containers/MessageItem'
 
 /** Parse /research[:mode] prefix into a depth number (2=Standard, 3=Deep). */
@@ -77,11 +85,24 @@ export function SplitThreadPane({
   const deleteMessage = useMessages((state) => state.deleteMessage)
   const selectedModel = useModelProvider((state) => state.selectedModel)
   const { globalDefaultPrompt, autoTuningEnabled } = useGeneralSetting()
-  const memoryEnabled = useMemory((state) => state.memoryEnabled)
+  const globalMemoryEnabled = useMemory((state) => state.memoryEnabled)
+  const memoryEnabledPerThread = useMemory((state) => state.memoryEnabledPerThread)
+  const memoryEnabled = threadId in memoryEnabledPerThread
+    ? memoryEnabledPerThread[threadId]
+    : globalMemoryEnabled
   const defaultMemories = useMemory(useShallow((state) => state.memories['default'] || []))
   const messageCount = useMessages(
     (state) => state.messages[threadId]?.length ?? 0
   )
+  const projectId = thread?.metadata?.project?.id
+  const {
+    followUpMessage, onToolCall, startToolExecution, onCostApproval, handleTeamChange,
+  } = useThreadTools({ threadId, projectId })
+  const agentTeams = useAgentTeamStore((s) => s.teams)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const activeTeamId = (thread?.metadata?.agent_team_id as string) ?? undefined
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const activeTeam = agentTeams.find((t: any) => t.id === activeTeamId)
   const [showThreadPromptEditor, setShowThreadPromptEditor] = useState(false)
   const [threadPromptDraft, setThreadPromptDraft] = useState('')
   const reasoningContainerRef = useRef<HTMLDivElement>(null)
@@ -158,18 +179,22 @@ export function SplitThreadPane({
     error,
     setMessages: setChatMessages,
     regenerate,
+    addToolOutput,
   } = useChat({
     sessionId: threadId,
     sessionTitle: thread?.title,
     systemMessage: promptResolution.resolvedPrompt + memorySuffix + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION + ARTIFACT_FORMAT_INSTRUCTION,
     modelOverrideId: optimizedModelConfig.modelId,
     activeTeamId: (thread?.metadata?.agent_team_id as string) ?? undefined,
+    onCostApproval,
     inferenceParameters: {
       temperature: optimizedModelConfig.temperature,
       top_p: optimizedModelConfig.top_p,
       max_output_tokens: optimizedModelConfig.max_output_tokens,
     },
     experimental_throttle: 50,
+    onToolCall,
+    sendAutomaticallyWhen: followUpMessage,
     onFinish: ({ message, isAbort }) => {
       if (!isAbort && message.role === 'assistant') {
         const contentParts = extractContentPartsFromUIMessage(message)
@@ -186,7 +211,7 @@ export function SplitThreadPane({
           }
         }
 
-        if (isNewMessage && useMemory.getState().isMemoryEnabled() && contentParts.length > 0) {
+        if (isNewMessage && useMemory.getState().isMemoryEnabledForThread(threadId) && contentParts.length > 0) {
           let toasted = false
 
           if (allOps.length > 0) {
@@ -240,7 +265,7 @@ export function SplitThreadPane({
         }
       }
 
-      if (useMemory.getState().isMemoryEnabled()) {
+      if (useMemory.getState().isMemoryEnabledForThread(threadId)) {
         const sessions = useChatSessions.getState().sessions[threadId]
         if (sessions?.chat.messages) {
           const cleaned = sessions.chat.messages.map((msg) => {
@@ -259,6 +284,8 @@ export function SplitThreadPane({
           setChatMessages(cleaned)
         }
       }
+
+      startToolExecution(addToolOutput)
     },
   })
 
@@ -382,6 +409,24 @@ export function SplitThreadPane({
         </div>
         {onClose && (
           <div className="flex items-center gap-1 shrink-0">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant={activeTeamId ? 'secondary' : 'outline'} size="sm">
+                  {activeTeam ? activeTeam.name : 'Agent Team'}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => handleTeamChange(undefined)}>
+                  No Team (single agent)
+                </DropdownMenuItem>
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                {agentTeams.map((team: any) => (
+                  <DropdownMenuItem key={team.id} onSelect={() => handleTeamChange(team.id)}>
+                    {team.name}{team.id === activeTeamId && ' ✓'}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               variant="outline"
               size="sm"

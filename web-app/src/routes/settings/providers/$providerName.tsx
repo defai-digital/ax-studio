@@ -42,6 +42,7 @@ function ProviderDetail() {
   const serviceHub = useServiceHub()
   const [refreshingModels, setRefreshingModels] = useState(false)
   const [importingModel, setImportingModel] = useState<string | null>(null)
+  const [modelSearch, setModelSearch] = useState('')
   const { providerName } = useParams({ from: Route.id })
   const { getProviderByName, updateProvider } = useModelProvider()
   const provider = getProviderByName(providerName)

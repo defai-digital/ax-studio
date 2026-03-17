@@ -256,7 +256,7 @@ export function useThreadTools({
 
   const handleTeamChange = useCallback(
     async (teamId: string | undefined) => {
-      if (!serviceHub || !threadId) return
+      if (!threadId) return
       await updateThread(threadId, {
         metadata: {
           ...(thread?.metadata ?? {}),
@@ -266,7 +266,7 @@ export function useThreadTools({
         },
       })
     },
-    [serviceHub, threadId, thread?.metadata, updateThread]
+    [threadId, thread?.metadata, updateThread]
   )
 
   return {
