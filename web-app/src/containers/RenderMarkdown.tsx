@@ -573,7 +573,6 @@ function RenderMarkdownComponent({
         plugins={{
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           code: code as any,
-          mermaid: mermaid,
           cjk: cjk,
         }}
       >

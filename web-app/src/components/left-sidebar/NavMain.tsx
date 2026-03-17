@@ -144,16 +144,6 @@ export function NavMain() {
       icon: LayoutList,
       onClick: () => setWorkspaceChatsOpen(true),
     },
-    {
-      title: 'speech.speechToText',
-      icon: Mic,
-      onClick: () => setSpeechToTextOpen(true),
-    },
-    {
-      title: 'speech.textToSpeech',
-      icon: AudioLines,
-      onClick: () => setTextToSpeechOpen(true),
-    },
   ]
 
   return (
