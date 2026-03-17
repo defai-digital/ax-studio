@@ -53,21 +53,33 @@ export function buildHtmlHarness(source: string): string {
   const isFullDoc = /^<!DOCTYPE\s+html/i.test(trimmed) || /^<html/i.test(trimmed)
 
   if (isFullDoc) {
-    const bodyClose = trimmed.lastIndexOf('</body>')
-    if (bodyClose !== -1) {
-      return trimmed.slice(0, bodyClose) + '\n' + ERROR_REPORTER + '\n' + trimmed.slice(bodyClose)
+    // Inject IFRAME_CSP as the very first child of <head> (before any scripts or
+    // stylesheets) so WKWebView's CSP is overridden before any resource loads.
+    let doc = trimmed
+    const headOpenMatch = doc.match(/<head[^>]*>/i)
+    if (headOpenMatch && headOpenMatch.index !== undefined) {
+      const insertAt = headOpenMatch.index + headOpenMatch[0].length
+      doc = doc.slice(0, insertAt) + '\n  ' + IFRAME_CSP + doc.slice(insertAt)
+    } else {
+      // No <head> tag at all — inject after <html> open or after <!DOCTYPE>
+      doc = doc.replace(/(<html[^>]*>)/i, `$1\n<head>\n  ${IFRAME_CSP}\n</head>`)
     }
-    return trimmed + '\n' + ERROR_REPORTER
+    // Inject error reporter before </body>
+    const bodyClose = doc.lastIndexOf('</body>')
+    if (bodyClose !== -1) {
+      return doc.slice(0, bodyClose) + '\n' + ERROR_REPORTER + '\n' + doc.slice(bodyClose)
+    }
+    return doc + '\n' + ERROR_REPORTER
   }
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="background:#fff;color-scheme:light;">
 <head>
   <meta charset="utf-8">
   ${IFRAME_CSP}
   <meta name="viewport" content="width=device-width, initial-scale=1">
   ${ERROR_REPORTER}
-  <style>${BASE_STYLES}</style>
+  <style>${BASE_STYLES} html{background:#fff;color-scheme:light;} body{background:#fff;}</style>
 </head>
 <body>
 ${trimmed}
@@ -109,10 +121,39 @@ ${ERROR_REPORTER}
 // ---------------------------------------------------------------------------
 
 /**
+ * Fixes string literals that were accidentally split across multiple lines by
+ * the model. A newline inside a JS string literal is ALWAYS a syntax error, so
+ * it is always safe to join the broken line with the next one.
+ *
+ * Uses a regex approach rather than manual quote-state tracking to avoid false
+ * positives from apostrophes in JSX text content (e.g. "I'm") or comments.
+ *
+ * Runs in a loop until stable so cascaded wraps (3+ lines) are all fixed.
+ */
+function joinMultilineStrings(source: string): string {
+  // Regex for a double-quoted partial string followed by a line-break:
+  //   "  — opening quote
+  //   [^"\\\n]*  — any chars except closing quote, backslash, or newline
+  //   (?:\\.[^"\\\n]*)*  — optionally: escape sequence then more safe chars
+  //   \n[ \t]*  — the illegal newline + leading whitespace on the next line
+  const dq = /"([^"\\\n]*(?:\\.[^"\\\n]*)*)\n[ \t]*/g
+  const sq = /'([^'\\\n]*(?:\\.[^'\\\n]*)*)\n[ \t]*/g
+
+  let result = source
+  let prev = ''
+  while (result !== prev) {
+    prev = result
+    result = result.replace(dq, '"$1 ')
+    result = result.replace(sq, "'$1 ")
+  }
+  return result
+}
+
+/**
  * Strips ES module syntax that breaks non-module execution.
  */
 export function preprocessReactSource(source: string): string {
-  return source
+  return joinMultilineStrings(source)
     // Remove: import ... from 'react'
     .replace(/^import\s+.*?\s+from\s+['"]react['"]\s*;?\s*$/gm, '')
     // Remove: import ... from 'react-dom'
@@ -125,7 +166,8 @@ export function preprocessReactSource(source: string): string {
     // Convert: export default class App → class App
     .replace(/\bexport\s+default\s+class\s+(\w+)/g, 'class $1')
     // Convert: export default <identifier> → const App = <identifier>
-    .replace(/\bexport\s+default\s+(\w+)\s*;?/g, 'const App = $1;')
+    // Skip when identifier is already "App" to avoid "const App = App" self-reference
+    .replace(/\bexport\s+default\s+(\w+)\s*;?/g, (_, name) => name === 'App' ? '' : `const App = ${name};`)
     // Remove: export { ... }
     .replace(/\bexport\s*\{[^}]*\}\s*;?/g, '')
     // Strip export modifier from export const/let/var/function/class
@@ -142,12 +184,14 @@ function buildReactHarnessInline(
   const escaped = transformedSource.replace(/<\/script>/gi, '<\\/script>')
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="background:#fff;color-scheme:light;">
 <head>
   <meta charset="utf-8">
+  ${IFRAME_CSP}
   <meta name="viewport" content="width=device-width, initial-scale=1">
   ${ERROR_REPORTER}
-  <style>${BASE_STYLES}</style>
+  <style>${BASE_STYLES} html,body{height:100%;background:#fff;color-scheme:light;} #root{min-height:100%;}</style>
+  <script src="https://cdn.tailwindcss.com"><\/script>
   <script>${reactJs}<\/script>
   <script>${reactDomJs}<\/script>
 </head>
@@ -214,9 +258,9 @@ function buildChartJsHarnessInline(source: string, chartJs: string): string {
   ${ERROR_REPORTER}
   <style>
     ${BASE_STYLES}
-    html, body { height: 100%; }
+    html, body { height: 100%; background: #fff; color-scheme: light; }
     body { display: flex; align-items: center; justify-content: center; padding: 16px; }
-    canvas { max-width: 100%; max-height: 100vh; }
+    canvas { max-width: 100%; max-height: 90vh; }
   </style>
   <script>${chartJs}<\/script>
 </head>
@@ -254,8 +298,8 @@ function buildVegaHarnessInline(source: string, vegaJs: string, vegaLiteJs: stri
   ${ERROR_REPORTER}
   <style>
     ${BASE_STYLES}
-    html, body { height: 100%; }
-    body { display: flex; align-items: center; justify-content: center; padding: 16px; }
+    html { background: #fff; color-scheme: light; }
+    body { background: #fff; min-height: 100%; padding: 16px; overflow: auto; }
     #vis { width: 100%; }
   </style>
   <script>${vegaJs}<\/script>

@@ -99,6 +99,48 @@ function sanitizeMermaidFences(input: string): string {
         }
       }
 
+      // Fix 5: strip unsupported class/classDef/style blocks from erDiagram.
+      // These cause "got 'BLOCK_START'" parse errors — only entity definitions
+      // and relationship lines are valid inside an erDiagram.
+      if (/^erDiagram\b/i.test(firstLine)) {
+        fixed = fixed.replace(/^[ \t]*(?:class|classDef|style)\s+\S[^{]*\{[^}]*\}/gm, '')
+        // Collapse any blank lines left behind
+        fixed = fixed.replace(/\n{3,}/g, '\n\n')
+      }
+
+      // Fix 6: strip inline parenthesised text from mindmap node labels.
+      // In Mermaid mindmap, `(text)` is shape syntax, so "CNN (Convolutional)"
+      // causes a parse error. Keep the inner text, drop the parens.
+      if (/^mindmap\b/i.test(firstLine)) {
+        fixed = fixed
+          .split('\n')
+          .map((line) => {
+            const trimmed = line.trimStart()
+            // Leave empty lines, comments, and lines that intentionally start
+            // with a shape specifier (e.g. `((root))`, `[rect]`, `{{cloud}}`)
+            if (!trimmed || trimmed.startsWith('%%') || /^[\[({]/.test(trimmed)) return line
+            // Remove " (inner text)" patterns — keep the inner text, drop parens
+            return line.replace(/\s+\(([^)\n]*)\)/g, (_, inner) => inner ? ` ${inner}` : '')
+          })
+          .join('\n')
+      }
+
+      // Fix 7: flatten composite state blocks in stateDiagram to prevent
+      // "would create a cycle" errors. When the AI writes:
+      //   state Processing { [*] --> SuccessState }
+      // and SuccessState also appears at the outer level, Mermaid tries to
+      // make SuccessState a child of Processing — which creates a cycle.
+      // Strip the `state X { }` wrapper and promote inner lines to the
+      // outer level. Run in a loop to handle nested composite states.
+      if (/^stateDiagram(?:-v2)?\b/i.test(firstLine)) {
+        let prev = ''
+        while (fixed !== prev) {
+          prev = fixed
+          fixed = fixed.replace(/^[ \t]*state\s+[^\n{]+\{[ \t]*\n([\s\S]*?)\n[ \t]*\}/gm, '$1')
+        }
+        fixed = fixed.replace(/\n{3,}/g, '\n\n')
+      }
+
       return open + fixed + close
     }
   )
