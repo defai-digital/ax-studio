@@ -43,10 +43,10 @@ export const useDownloadStore = create<DownloadState>((set) => ({
         ...state.downloads,
         [id]: {
           ...state.downloads[id],
-          name: name || state.downloads[id]?.name || '',
+          name: name ?? state.downloads[id]?.name ?? '',
           progress,
-          current: current || state.downloads[id]?.current || 0,
-          total: total || state.downloads[id]?.total || 0,
+          current: current ?? state.downloads[id]?.current ?? 0,
+          total: total ?? state.downloads[id]?.total ?? 0,
         },
       },
     })),

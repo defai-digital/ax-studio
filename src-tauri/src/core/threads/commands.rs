@@ -115,7 +115,11 @@ pub async fn modify_thread<R: Runtime>(
     let data = serde_json::to_string_pretty(&thread).map_err(|e| e.to_string())?;
     let tmp_path = path.with_extension("json.tmp");
     fs::write(&tmp_path, &data).map_err(|e| e.to_string())?;
-    fs::rename(&tmp_path, &path).map_err(|e| e.to_string())?;
+    if let Err(e) = fs::rename(&tmp_path, &path) {
+        // Clean up orphaned tmp file on rename failure
+        let _ = fs::remove_file(&tmp_path);
+        return Err(e.to_string());
+    }
     Ok(())
 }
 
@@ -131,11 +135,18 @@ pub async fn delete_thread<R: Runtime>(
     }
 
     // Use file-based storage on desktop
-    let thread_dir = get_thread_dir(app_handle.clone(), &thread_id);
-    if thread_dir.exists() {
-        let _ = fs::remove_dir_all(thread_dir);
+    // Acquire per-thread lock before deleting to prevent race with concurrent writes
+    {
+        let lock = get_lock_for_thread(&thread_id).await;
+        let _guard = lock.lock().await;
+
+        let thread_dir = get_thread_dir(app_handle.clone(), &thread_id);
+        if thread_dir.exists() {
+            fs::remove_dir_all(&thread_dir)
+                .map_err(|e| format!("Failed to delete thread directory: {e}"))?;
+        }
     }
-    // Clean up the per-thread lock entry
+    // Clean up the per-thread lock entry after releasing the guard
     remove_lock_for_thread(&thread_id).await;
     Ok(())
 }

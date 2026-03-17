@@ -53,7 +53,12 @@ pub async fn init_database<R: Runtime>(app: &AppHandle<R>) -> Result<(), String>
         .await
         .map_err(|e| format!("Failed to create connection pool: {}", e))?;
 
-    // Run migrations
+    // Run migrations inside a transaction so partial schema is never committed
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| format!("Failed to begin migration transaction: {}", e))?;
+
     sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS threads (
@@ -64,7 +69,7 @@ pub async fn init_database<R: Runtime>(app: &AppHandle<R>) -> Result<(), String>
         );
         "#,
     )
-    .execute(&pool)
+    .execute(&mut *tx)
     .await
     .map_err(|e| format!("Failed to create threads table: {}", e))?;
 
@@ -79,20 +84,24 @@ pub async fn init_database<R: Runtime>(app: &AppHandle<R>) -> Result<(), String>
         );
         "#,
     )
-    .execute(&pool)
+    .execute(&mut *tx)
     .await
     .map_err(|e| format!("Failed to create messages table: {}", e))?;
 
     // Create indexes
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id);")
-        .execute(&pool)
+        .execute(&mut *tx)
         .await
         .map_err(|e| format!("Failed to create thread_id index: {}", e))?;
 
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);")
-        .execute(&pool)
+        .execute(&mut *tx)
         .await
         .map_err(|e| format!("Failed to create created_at index: {}", e))?;
+
+    tx.commit()
+        .await
+        .map_err(|e| format!("Failed to commit migrations: {}", e))?;
 
     // Store pool globally
     DB_POOL

@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
-import { createFileRoute, useParams } from '@tanstack/react-router'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createFileRoute, useNavigate, useParams } from '@tanstack/react-router'
 import { useThreads } from '@/hooks/useThreads'
 import { useShallow } from 'zustand/react/shallow'
 import { useAssistant } from '@/hooks/useAssistant'
@@ -32,7 +32,22 @@ export const Route = createFileRoute('/threads/$threadId')({
 
 function ThreadDetail() {
   const { threadId } = useParams({ from: Route.id })
+  const navigate = useNavigate()
+  const thread = useThreads(useShallow((state) => state.threads[threadId]))
 
+  // Redirect to home if thread doesn't exist (invalid ID or deleted thread)
+  useEffect(() => {
+    if (!thread) {
+      navigate({ to: '/' })
+    }
+  }, [thread, navigate])
+
+  if (!thread) return null
+
+  return <ThreadDetailInner key={threadId} threadId={threadId} />
+}
+
+function ThreadDetailInner({ threadId }: { threadId: string }) {
   // ─── Store subscriptions ──────────────────────────────────────────────────
   const updateThread = useThreads((state) => state.updateThread)
   const setCurrentThreadId = useThreads((state) => state.setCurrentThreadId)

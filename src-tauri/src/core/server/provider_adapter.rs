@@ -375,8 +375,13 @@ fn transform_openai_response_to_anthropic(response: &serde_json::Value) -> serde
                 .and_then(|f| f.get("arguments"))
                 .and_then(|a| a.as_str())
                 .unwrap_or("{}");
-            let input: serde_json::Value =
-                serde_json::from_str(arguments).unwrap_or(serde_json::json!({}));
+            let input: serde_json::Value = match serde_json::from_str(arguments) {
+                Ok(v) => v,
+                Err(e) => {
+                    log::warn!("Failed to parse tool arguments for '{}': {e}, falling back to {{}}", name);
+                    serde_json::json!({})
+                }
+            };
 
             content_blocks.push(serde_json::json!({
                 "type": "tool_use",
@@ -440,12 +445,22 @@ pub(super) async fn transform_and_forward_stream<S>(
     let mut tool_blocks: HashMap<usize, usize> = HashMap::new(); // OAI tool index -> Anthropic block index
     let mut next_block_index: usize = 0;
     let mut line_buffer = String::new();
+    // Guard against unbounded memory growth from malformed SSE (missing newlines)
+    const MAX_LINE_BUFFER: usize = 1_048_576; // 1 MB
 
     while let Some(chunk_result) = stream.next().await {
         match chunk_result {
             Ok(chunk) => {
                 let chunk_str = String::from_utf8_lossy(&chunk);
                 line_buffer.push_str(&chunk_str);
+
+                if line_buffer.len() > MAX_LINE_BUFFER {
+                    log::error!(
+                        "SSE line buffer exceeded {} bytes, aborting stream",
+                        MAX_LINE_BUFFER
+                    );
+                    break;
+                }
 
                 // Process only complete lines; keep partial last line in buffer
                 let lines: Vec<&str> = line_buffer.split('\n').collect();
@@ -719,24 +734,14 @@ pub(super) async fn transform_and_forward_stream<S>(
             }
         }
     }
-    // Process any remaining data in line_buffer after stream ends
+    // Any remaining data in line_buffer after stream ends is incomplete/untransformed.
+    // Drop it with a warning rather than forwarding in the wrong format (OpenAI raw
+    // mixed into an Anthropic-format stream), which would corrupt the client's parser.
     if !line_buffer.trim().is_empty() {
-        for line in line_buffer.split('\n') {
-            if line.starts_with("data:") {
-                let json_str = line.trim_start_matches("data:").trim();
-                if json_str == "[DONE]" {
-                    break;
-                }
-                if let Ok(data) = serde_json::from_str::<serde_json::Value>(json_str) {
-                    log::debug!("Processing remaining buffered SSE line after stream end");
-                    // Forward as raw SSE to avoid duplicating the full processing logic
-                    let forward = format!("data: {}\n\n", data);
-                    if sender.send_data(Bytes::from(forward)).await.is_err() {
-                        break;
-                    }
-                }
-            }
-        }
+        log::warn!(
+            "Stream ended with {} bytes of untransformed data in buffer, dropping",
+            line_buffer.len()
+        );
     }
     log::debug!("Streaming complete (Anthropic format)");
 }

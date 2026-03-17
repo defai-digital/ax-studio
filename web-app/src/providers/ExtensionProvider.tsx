@@ -29,9 +29,15 @@ export function ExtensionProvider({ children }: PropsWithChildren) {
   }, [])
 
   useEffect(() => {
-    setupExtensions()
+    let cancelled = false
+    setupExtensions().then(() => {
+      if (cancelled) {
+        ExtensionManager.getInstance().unload()
+      }
+    })
 
     return () => {
+      cancelled = true
       ExtensionManager.getInstance().unload()
     }
   }, [setupExtensions])

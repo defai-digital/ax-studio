@@ -276,7 +276,7 @@ fn validate_request(
         log::debug!("Bypassing authorization check for whitelisted path: {path}");
     }
 
-    if path.contains("/configs") {
+    if path == "/configs" || path.starts_with("/configs/") || path.starts_with("/configs?") {
         let mut error_response = Response::builder().status(StatusCode::NOT_FOUND);
         error_response = add_cors_headers_with_host_and_origin(
             error_response,

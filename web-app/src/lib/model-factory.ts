@@ -131,6 +131,9 @@ function createGeminiPatchedFetch(baseFetch: typeof httpFetch): typeof httpFetch
 
         controller.enqueue(encoder.encode(patched.join('\n') + '\n'))
       },
+      cancel() {
+        reader.cancel()
+      },
     })
 
     return new Response(transformedBody, {

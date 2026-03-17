@@ -232,6 +232,9 @@ function MemorySettings() {
           toast.error('Failed to parse JSON file')
         }
       }
+      reader.onerror = () => {
+        toast.error('Failed to read file')
+      }
       reader.readAsText(file)
       // Reset the input so the same file can be re-imported
       e.target.value = ''

@@ -50,17 +50,18 @@ pub async fn deactivate_mcp_server<R: Runtime>(
         log::info!("Removed MCP server {name} from active servers list");
     }
 
-    // Now remove and stop the server
+    // Clone the Arc reference first (without removing from map) so the server
+    // stays tracked if cancellation fails.
     let servers = state.mcp_servers.clone();
-    let mut servers_map = servers.lock().await;
+    let service = {
+        let servers_map = servers.lock().await;
+        servers_map
+            .get(&name)
+            .cloned()
+            .ok_or_else(|| format!("Server {name} not found"))?
+    };
 
-    let service = servers_map
-        .remove(&name)
-        .ok_or_else(|| format!("Server {name} not found"))?;
-
-    // Release the lock before calling cancel
-    drop(servers_map);
-
+    // Attempt cancellation while server is still in the map
     match Arc::try_unwrap(service) {
         Ok(RunningServiceEnum::NoInit(service)) => {
             log::info!("Stopping server {name}...");
@@ -71,8 +72,14 @@ pub async fn deactivate_mcp_server<R: Runtime>(
             service.cancel().await.map_err(|e| e.to_string())?;
         }
         Err(_arc) => {
-            log::warn!("Server {name} still has active references, will be dropped when last reference is released");
+            log::warn!("Server {name} still has active references, marking for removal");
         }
+    }
+
+    // Only remove from map after cancellation attempt succeeds
+    {
+        let mut servers_map = servers.lock().await;
+        servers_map.remove(&name);
     }
 
     {
@@ -245,6 +252,11 @@ pub async fn call_tool(
 
     if server_not_found {
         if let Some(ref server) = server_name {
+            // Clean up cancellation token before early return
+            if let Some(token) = &cancellation_token {
+                let mut cancellations = state.tool_call_cancellations.lock().await;
+                cancellations.remove(token);
+            }
             return Err(format!("Server '{server}' not found"));
         }
     }
@@ -266,7 +278,14 @@ pub async fn call_tool(
 
     let service = match target_service {
         Some(s) => s,
-        None => return Err(format!("Tool {tool_name} not found")),
+        None => {
+            // Clean up cancellation token before early return
+            if let Some(token) = &cancellation_token {
+                let mut cancellations = state.tool_call_cancellations.lock().await;
+                cancellations.remove(token);
+            }
+            return Err(format!("Tool {tool_name} not found"));
+        }
     };
 
     // Phase 2: Call the tool without holding the servers lock
@@ -327,7 +346,7 @@ pub async fn cancel_tool_call(
     if let Some(cancel_tx) = cancellations.remove(&cancellation_token) {
         // Send cancellation signal - ignore if receiver is already dropped
         let _ = cancel_tx.send(());
-        println!("Tool call with token {cancellation_token} cancelled");
+        log::info!("Tool call with token {cancellation_token} cancelled");
         Ok(())
     } else {
         Err(format!("Cancellation token {cancellation_token} not found"))
@@ -368,7 +387,9 @@ pub async fn get_mcp_configs<R: Runtime>(app: AppHandle<R>) -> Result<String, St
     }
 
     let mut mutated = false;
-    let config_object = config_value.as_object_mut().unwrap();
+    let config_object = config_value
+        .as_object_mut()
+        .ok_or("MCP config must be a JSON object")?;
 
     let settings = parse_mcp_settings(config_object.get("mcpSettings"));
     if !config_object.contains_key("mcpSettings") {
@@ -434,7 +455,9 @@ pub async fn save_mcp_configs<R: Runtime>(
         return Err("MCP config must be a JSON object".to_string());
     }
 
-    let config_object = config_value.as_object_mut().unwrap();
+    let config_object = config_value
+        .as_object_mut()
+        .ok_or("MCP config must be a JSON object")?;
     let settings = parse_mcp_settings(config_object.get("mcpSettings"));
 
     if !config_object.contains_key("mcpSettings") {
