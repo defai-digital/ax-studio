@@ -39,7 +39,6 @@ vi.mock('@/hooks/useThreads', () => ({
 vi.mock('@/hooks/useGeneralSetting', () => ({
   useGeneralSetting: () => ({
     globalDefaultPrompt: 'You are a helpful assistant.',
-    autoTuningEnabled: false,
   }),
 }))
 
@@ -63,7 +62,6 @@ vi.mock('@/lib/system-prompt', () => ({
     resolvedPrompt: 'You are a helpful assistant.',
     source: 'global',
   }),
-  getOptimizedModelConfig: (_ctx: any, base: any) => base,
 }))
 
 vi.mock('@/containers/ChatInput', () => ({
@@ -96,6 +94,12 @@ vi.mock('@/components/ui/button', () => ({
 
 vi.mock('@/components/ui/textarea', () => ({
   Textarea: (props: any) => <textarea {...props} />,
+}))
+
+vi.mock('@/components/ui/tooltip', () => ({
+  Tooltip: ({ children }: any) => <>{children}</>,
+  TooltipTrigger: ({ children }: any) => <>{children}</>,
+  TooltipContent: () => null,
 }))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
@@ -186,7 +190,7 @@ describe('Home Page (index.tsx) — Manual Test Protocol', () => {
     expect(screen.getAllByText('Write').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('Analyze')).toBeInTheDocument()
     expect(screen.getByText('Ideate')).toBeInTheDocument()
-    // "Debug" appears as both a tag and part of "Debug code" label and the "Debug" button
+    // "Debug" appears as both a tag and part of "Debug code" label
     expect(screen.getAllByText('Debug').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('Research')).toBeInTheDocument()
   })
@@ -229,13 +233,13 @@ describe('Home Page (index.tsx) — Manual Test Protocol', () => {
       screen.queryByPlaceholderText(/Set a prompt for the new thread/)
     ).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByText('Thread Prompt'))
+    fireEvent.click(screen.getByLabelText('Thread Prompt'))
 
     expect(
       screen.getByPlaceholderText(/Set a prompt for the new thread/)
     ).toBeInTheDocument()
 
-    fireEvent.click(screen.getByText('Thread Prompt'))
+    fireEvent.click(screen.getByLabelText('Thread Prompt'))
     expect(
       screen.queryByPlaceholderText(/Set a prompt for the new thread/)
     ).not.toBeInTheDocument()
@@ -245,7 +249,7 @@ describe('Home Page (index.tsx) — Manual Test Protocol', () => {
   it('persists thread prompt draft to sessionStorage', async () => {
     renderIndex()
 
-    fireEvent.click(screen.getByText('Thread Prompt'))
+    fireEvent.click(screen.getByLabelText('Thread Prompt'))
     const textarea = screen.getByPlaceholderText(/Set a prompt for the new thread/)
 
     await act(async () => {
@@ -255,37 +259,17 @@ describe('Home Page (index.tsx) — Manual Test Protocol', () => {
     expect(sessionStorage.getItem('new-thread-prompt')).toBe('Custom system prompt')
   })
 
-  // Protocol #13: Debug panel toggle
-  it('toggles debug panel on button click', () => {
-    renderIndex()
-
-    expect(screen.queryByText('Source:')).not.toBeInTheDocument()
-
-    // "Debug" text exists in multiple places (button + tag), find the button specifically
-    const debugButtons = screen.getAllByText('Debug')
-    // The button is the one rendered by the Button mock (not inside a prompt card)
-    const debugButton = debugButtons.find(
-      (el) => el.tagName === 'BUTTON' && !el.closest('.group')
-    ) ?? debugButtons[0]
-    fireEvent.click(debugButton)
-
-    expect(screen.getByText('Source:')).toBeInTheDocument()
-    expect(screen.getByText('global')).toBeInTheDocument()
-    expect(screen.getByText('Auto Tuning:')).toBeInTheDocument()
-    expect(screen.getByText('Disabled')).toBeInTheDocument()
-  })
-
   // Protocol #14: Agent team selector renders
   it('renders agent team selector', () => {
     renderIndex()
-    expect(screen.getByText('Agent Team')).toBeInTheDocument()
+    expect(screen.getByLabelText('Agent Team')).toBeInTheDocument()
   })
 
   // Protocol #15: Split view menu renders
   it('renders split view with left/right options', () => {
     renderIndex()
 
-    expect(screen.getByText('Split View')).toBeInTheDocument()
+    expect(screen.getByLabelText('Split View')).toBeInTheDocument()
     expect(screen.getByText('Split Left')).toBeInTheDocument()
     expect(screen.getByText('Split Right')).toBeInTheDocument()
   })

@@ -86,7 +86,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   // ─── UI state ─────────────────────────────────────────────────────────────
   const [threadPromptDraft, setThreadPromptDraft] = useState('')
   const [showThreadPromptEditor, setShowThreadPromptEditor] = useState(false)
-  const [showPromptDebug, setShowPromptDebug] = useState(false)
 
   // ─── Chat session ─────────────────────────────────────────────────────────
   // Ref holds persistMessageOnFinish to break the useChat ↔ useThreadChat circular dep
@@ -182,11 +181,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
       setShowThreadPromptEditor={setShowThreadPromptEditor}
       threadPromptDraft={threadPromptDraft}
       setThreadPromptDraft={setThreadPromptDraft}
-      showPromptDebug={showPromptDebug}
-      setShowPromptDebug={setShowPromptDebug}
       promptResolution={promptResolution}
-      optimizedModelConfig={optimizedModelConfig}
-      autoTuningEnabled={autoTuningEnabled}
       updateThread={updateThread}
       activeTeam={activeTeam}
       activeTeamId={activeTeamId}

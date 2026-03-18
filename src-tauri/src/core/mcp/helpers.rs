@@ -563,14 +563,21 @@ async fn schedule_mcp_start_task<R: Runtime>(
         let verification_delay = Duration::from_millis(500);
         sleep(verification_delay).await;
 
-        // Check if server is still running after the verification delay
-        let server_still_running = {
+        // Check if server is still in the map AND responsive (quick health ping)
+        let service = {
             let servers_map = servers.lock().await;
-            servers_map.contains_key(&name)
+            servers_map.get(&name).cloned()
         };
-
-        if !server_still_running {
-            return Err(format!("MCP server {name} quit immediately after starting"));
+        match service {
+            None => {
+                return Err(format!("MCP server {name} quit immediately after starting"));
+            }
+            Some(svc) => {
+                if let Err(_) = timeout(Duration::from_secs(3), svc.list_all_tools()).await {
+                    log::warn!("MCP server {name} started but failed initial health check (timed out)");
+                    // Don't fail — the background health monitor will handle it
+                }
+            }
         }
 
         emit_mcp_update_event(&app, &name);

@@ -13,10 +13,14 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { GripVertical, MoreHorizontal, Pin, PinOff, Pencil, Trash2 } from 'lucide-react'
-import { useMemo, useRef, useState } from 'react'
+import { Download, GripVertical, MoreHorizontal, Pin, PinOff, Pencil, Trash2 } from 'lucide-react'
+import { exportThread, exportAllThreads } from '@/lib/thread-export'
+import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import { useThreads } from '@/hooks/useThreads'
 import ThreadList from '@/containers/ThreadList'
 import { DeleteAllThreadsDialog } from '@/containers/dialogs/DeleteAllThreadsDialog'
@@ -77,6 +81,27 @@ export function NavChats() {
           </SidebarGroupAction>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="right" align="start">
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger className="gap-2">
+              <Download className="size-4" />
+              <span>Export All Chats</span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="min-w-36">
+              <DropdownMenuItem onSelect={() => { setDropdownOpen(false); exportAllThreads('json') }}>
+                <span>JSON</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => { setDropdownOpen(false); exportAllThreads('csv') }}>
+                <span>CSV</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => { setDropdownOpen(false); exportAllThreads('alpaca') }}>
+                <span>JSON (Alpaca)</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => { setDropdownOpen(false); exportAllThreads('openai-jsonl') }}>
+                <span>JSONL (OpenAI)</span>
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuSeparator />
           <DeleteAllThreadsDialog
             onDeleteAll={deleteAllThreads}
             onDropdownClose={() => setDropdownOpen(false)}
@@ -113,7 +138,7 @@ export function NavChats() {
   )
 }
 
-function PinnedThreadItem({
+const PinnedThreadItem = memo(function PinnedThreadItem({
   thread,
   onTogglePin,
   onRename,
@@ -161,6 +186,26 @@ function PinnedThreadItem({
             <PinOff className="size-4" />
             <span>{t('common:unpin')}</span>
           </DropdownMenuItem>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger className="gap-2">
+              <Download className="size-4" />
+              <span>Export Chat</span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="min-w-36">
+              <DropdownMenuItem onSelect={() => exportThread(thread, 'json')}>
+                <span>JSON</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => exportThread(thread, 'csv')}>
+                <span>CSV</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => exportThread(thread, 'alpaca')}>
+                <span>JSON (Alpaca)</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => exportThread(thread, 'openai-jsonl')}>
+                <span>JSONL (OpenAI)</span>
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onSelect={() => setDeleteConfirmOpen(true)}>
             <Trash2 className="size-4" />
@@ -187,7 +232,7 @@ function PinnedThreadItem({
       />
     </SidebarMenuItem>
   )
-}
+})
 
 function DraggablePinnedList({
   threads,
@@ -207,16 +252,16 @@ function DraggablePinnedList({
   const dragItemRef = useRef<string | null>(null)
   const dragOverRef = useRef<string | null>(null)
 
-  const handleDragStart = (threadId: string) => {
+  const handleDragStart = useCallback((threadId: string) => {
     dragItemRef.current = threadId
-  }
+  }, [])
 
-  const handleDragOver = (e: React.DragEvent, threadId: string) => {
+  const handleDragOver = useCallback((e: React.DragEvent, threadId: string) => {
     e.preventDefault()
     dragOverRef.current = threadId
-  }
+  }, [])
 
-  const handleDrop = () => {
+  const handleDrop = useCallback(() => {
     if (!dragItemRef.current || !dragOverRef.current) return
     if (dragItemRef.current === dragOverRef.current) return
 
@@ -231,7 +276,7 @@ function DraggablePinnedList({
 
     dragItemRef.current = null
     dragOverRef.current = null
-  }
+  }, [pinnedIds, onReorder])
 
   return (
     <>

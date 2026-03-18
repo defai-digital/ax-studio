@@ -80,7 +80,7 @@ export function ThemeToggle() {
                 setExpanded(!expanded)
               }}
               onDoubleClick={() => setExpanded(!expanded)}
-              className="p-2 rounded-lg hover:bg-sidebar-accent transition-colors text-sidebar-foreground/50 hover:text-sidebar-foreground relative"
+              className="p-1 rounded-md hover:bg-sidebar-accent transition-colors text-sidebar-foreground/50 hover:text-sidebar-foreground relative"
             >
               <AnimatePresence mode="wait">
                 <motion.div

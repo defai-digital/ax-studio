@@ -21,10 +21,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useThreads } from '@/hooks/useThreads'
 import DropdownModelProvider from '@/containers/DropdownModelProvider'
 import { useGeneralSetting } from '@/hooks/useGeneralSetting'
-import {
-  resolveSystemPrompt,
-  getOptimizedModelConfig,
-} from '@/lib/system-prompt'
+import { resolveSystemPrompt } from '@/lib/system-prompt'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -40,8 +37,15 @@ import {
   Bolt,
   Shield,
   Wrench,
+  MessageSquareText,
+  Users,
   type LucideIcon,
 } from 'lucide-react'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -101,11 +105,10 @@ function Index() {
   const search = useSearch({ from: route.home as any })
   const selectedModel = search.model
   const { setCurrentThreadId, createThread } = useThreads()
-  const { globalDefaultPrompt, autoTuningEnabled } = useGeneralSetting()
+  const { globalDefaultPrompt } = useGeneralSetting()
   useTools()
 
   const [showThreadPromptEditor, setShowThreadPromptEditor] = useState(false)
-  const [showPromptDebug, setShowPromptDebug] = useState(false)
   const [threadPromptDraft, setThreadPromptDraft] = useState(
     () => sessionStorage.getItem(SESSION_STORAGE_KEY.NEW_THREAD_PROMPT) || ''
   )
@@ -134,26 +137,6 @@ function Index() {
       ),
     [globalDefaultPrompt, threadPromptDraft]
   )
-
-  const optimizedModelConfig = useMemo(() => {
-    const modelId = selectedModel?.id ?? activeModel?.id
-    const baseConfig = {
-      temperature: undefined as number | undefined,
-      top_p: undefined as number | undefined,
-      max_output_tokens: undefined as number | undefined,
-      modelId,
-    }
-    if (!autoTuningEnabled) return baseConfig
-    return getOptimizedModelConfig(
-      {
-        promptLength: promptResolution.resolvedPrompt.length,
-        messageCount: 0,
-        hasAttachments: false,
-        modelCapabilities: activeModel?.capabilities,
-      },
-      baseConfig
-    )
-  }, [autoTuningEnabled, promptResolution.resolvedPrompt.length, selectedModel?.id, activeModel?.id, activeModel?.capabilities])
 
   const handleSplit = useCallback(
     async (direction: 'left' | 'right') => {
@@ -219,8 +202,73 @@ function Index() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <HeaderPage>
-        <div className="flex items-center gap-2 w-full">
+        <div className="flex items-center w-full pr-4">
           <DropdownModelProvider model={selectedModel} useLastUsedModel />
+          <div className="flex items-center gap-1 ml-auto shrink-0">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={showThreadPromptEditor ? 'secondary' : 'ghost'}
+                  size="icon-sm"
+                  aria-label="Thread Prompt"
+                  onClick={() => setShowThreadPromptEditor((v) => !v)}
+                >
+                  <MessageSquareText className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Thread Prompt</TooltipContent>
+            </Tooltip>
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant={selectedTeamId ? 'secondary' : 'ghost'}
+                      size="icon-sm"
+                      aria-label="Agent Team"
+                    >
+                      <Users className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">{selectedTeam ? selectedTeam.name : 'Agent Team'}</TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => setSelectedTeamId(undefined)}>
+                  No Team (single agent)
+                </DropdownMenuItem>
+                {agentTeams.map((team) => (
+                  <DropdownMenuItem
+                    key={team.id}
+                    onSelect={() => setSelectedTeamId(team.id)}
+                  >
+                    {team.name}
+                    {team.id === selectedTeamId && ' ✓'}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon-sm" aria-label="Split View">
+                      <Columns2 className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Split View</TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => handleSplit('left')}>
+                  Split Left
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => handleSplit('right')}>
+                  Split Right
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </HeaderPage>
       <div className="flex flex-1 flex-col min-h-0 relative overflow-hidden">
@@ -271,69 +319,6 @@ function Index() {
               </motion.p>
             </div>
 
-            {/* Action buttons */}
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15, duration: 0.4 }}
-              className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mb-4"
-            >
-              <Button
-                variant={showThreadPromptEditor ? 'secondary' : 'outline'}
-                size="sm"
-                onClick={() => setShowThreadPromptEditor((v) => !v)}
-              >
-                Thread Prompt
-              </Button>
-              <Button
-                variant={showPromptDebug ? 'secondary' : 'outline'}
-                size="sm"
-                onClick={() => setShowPromptDebug((v) => !v)}
-              >
-                Debug
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant={selectedTeamId ? 'secondary' : 'outline'}
-                    size="sm"
-                  >
-                    {selectedTeam ? selectedTeam.name : 'Agent Team'}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="center">
-                  <DropdownMenuItem onSelect={() => setSelectedTeamId(undefined)}>
-                    No Team (single agent)
-                  </DropdownMenuItem>
-                  {agentTeams.map((team) => (
-                    <DropdownMenuItem
-                      key={team.id}
-                      onSelect={() => setSelectedTeamId(team.id)}
-                    >
-                      {team.name}
-                      {team.id === selectedTeamId && ' ✓'}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <Columns2 className="size-4" />
-                    <span>Split View</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="center">
-                  <DropdownMenuItem onSelect={() => handleSplit('left')}>
-                    Split Left
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => handleSplit('right')}>
-                    Split Right
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </motion.div>
-
             {/* Thread prompt editor */}
             {showThreadPromptEditor && (
               <div className="mb-2 rounded-md border bg-card p-2 sm:p-3 space-y-2">
@@ -359,34 +344,6 @@ function Index() {
                     Clear
                   </Button>
                 </div>
-              </div>
-            )}
-
-            {/* Debug panel */}
-            {showPromptDebug && (
-              <div className="mb-2 rounded-md border bg-card p-2 sm:p-3 text-xs space-y-1">
-                <p>
-                  <span className="font-medium">Source:</span> {promptResolution.source}
-                </p>
-                <p>
-                  <span className="font-medium">Auto Tuning:</span>{' '}
-                  {autoTuningEnabled ? 'Enabled' : 'Disabled'}
-                </p>
-                <p>
-                  <span className="font-medium">temperature:</span>{' '}
-                  {optimizedModelConfig.temperature ?? 'default'}
-                </p>
-                <p>
-                  <span className="font-medium">top_p:</span>{' '}
-                  {optimizedModelConfig.top_p ?? 'default'}
-                </p>
-                <p>
-                  <span className="font-medium">max_output_tokens:</span>{' '}
-                  {optimizedModelConfig.max_output_tokens ?? 'default'}
-                </p>
-                <pre className="bg-muted rounded p-2 whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
-                  {promptResolution.resolvedPrompt}
-                </pre>
               </div>
             )}
 

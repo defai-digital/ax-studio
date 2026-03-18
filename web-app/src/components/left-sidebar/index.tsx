@@ -17,7 +17,6 @@ import {
   SidebarHeader,
   SidebarRail,
 } from '@/components/ui/sidebar'
-import { cn } from '@/lib/utils'
 import { Zap } from 'lucide-react'
 import { IconBrandDiscord } from '@tabler/icons-react'
 import {
@@ -36,39 +35,31 @@ export function LeftSidebar() {
   return (
     <div className="relative z-50">
       <Sidebar variant="sidebar" collapsible="icon">
-        {/* Header — matches Figma: px-4 pt-4 pb-3 */}
+        {/* Header — matches Figma: px-3 pt-4 pb-3 */}
         <SidebarHeader className="flex px-3 pt-4 pb-3">
-          {/* Collapsed: logo icon only (above the trigger row) */}
-          {!IS_MACOS && (
-            <div className="hidden group-data-[collapsible=icon]:flex justify-center mb-1">
-              <div className="size-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                <Zap className="size-4 text-white" strokeWidth={2.5} />
-              </div>
+          {/* Collapsed: logo icon only */}
+          <div className="hidden group-data-[collapsible=icon]:flex justify-center mb-1">
+            <div className="size-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-md shadow-indigo-500/20">
+              <Zap className="size-3.5 text-white" strokeWidth={2.5} />
             </div>
-          )}
-          <div
-            className={cn(
-              'flex items-center w-full justify-between px-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0',
-              IS_MACOS && 'justify-end',
-            )}
-          >
-            {/* Expanded: logo + title + badge */}
-            {!IS_MACOS && (
-              <div className="flex items-center gap-2.5 group-data-[collapsible=icon]:hidden">
-                <div className="size-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                  <Zap className="size-3.5 text-white" strokeWidth={2.5} />
-                </div>
-                <div className="flex items-center">
-                  <span className="text-sidebar-foreground font-semibold tracking-tight" style={{ fontSize: '14px' }}>
-                    Ax Studio
-                  </span>
-                  <span className="text-[10px] px-1 py-0.5 rounded bg-sidebar-primary/20 text-sidebar-primary ml-1.5">
-                    v2
-                  </span>
-                </div>
+          </div>
+          {/* Expanded: logo + title + actions */}
+          <div className="flex items-center w-full justify-between group-data-[collapsible=icon]:hidden">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="size-6 shrink-0 rounded-md bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
+                <Zap className="size-3 text-white" strokeWidth={2.5} />
               </div>
-            )}
-            <SidebarTrigger className="p-1.5 rounded-lg text-sidebar-foreground/30 hover:text-sidebar-foreground hover:bg-sidebar-accent! relative z-50 group-data-[collapsible=icon]:hidden" />
+              <span className="text-sidebar-foreground font-semibold tracking-tight whitespace-nowrap text-[13px]">
+                Ax Studio
+              </span>
+              <span className="text-[9px] px-1 py-0.5 rounded bg-sidebar-primary/20 text-sidebar-primary shrink-0">
+                v{VERSION}
+              </span>
+            </div>
+            <div className="flex items-center gap-0.5 shrink-0">
+              <ThemeToggle />
+              <SidebarTrigger className="p-1 rounded-md text-sidebar-foreground/30 hover:text-sidebar-foreground hover:bg-sidebar-accent!" />
+            </div>
           </div>
           <NavMain />
         </SidebarHeader>
@@ -107,7 +98,6 @@ export function LeftSidebar() {
           </SidebarMenu>
 
           <div className="px-1 pb-1 space-y-0.5 group-data-[collapsible=icon]:hidden">
-            <ThemeToggle />
             <DownloadManagement />
             <a
               href="https://discord.gg/cd5AD5zY6U"

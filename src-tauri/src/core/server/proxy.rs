@@ -245,17 +245,28 @@ fn validate_request(
     }
 
     if !is_whitelisted_path && !config.proxy_api_key.is_empty() {
+        // Use constant-time comparison for token validation to prevent timing attacks
+        let constant_time_eq = |a: &str, b: &str| -> bool {
+            if a.len() != b.len() {
+                return false;
+            }
+            a.bytes()
+                .zip(b.bytes())
+                .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+                == 0
+        };
+
         let auth_valid = headers
             .get(hyper::header::AUTHORIZATION)
             .and_then(|v| v.to_str().ok())
             .and_then(|auth_str| auth_str.strip_prefix("Bearer "))
-            .map(|token| token == config.proxy_api_key)
+            .map(|token| constant_time_eq(token, &config.proxy_api_key))
             .unwrap_or(false);
 
         let api_key_valid = headers
             .get("X-Api-Key")
             .and_then(|v| v.to_str().ok())
-            .map(|key| key == config.proxy_api_key)
+            .map(|key| constant_time_eq(key, &config.proxy_api_key))
             .unwrap_or(false);
 
         if !auth_valid && !api_key_valid {
