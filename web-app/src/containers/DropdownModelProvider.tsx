@@ -5,26 +5,38 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { useModelProvider } from '@/hooks/useModelProvider'
-import { cn, getProviderTitle, getModelDisplayName } from '@/lib/utils'
+import { cn, getProviderTitle, getModelDisplayName, getProviderColor } from '@/lib/utils'
 import { highlightFzfMatch } from '@/utils/highlight'
 import Capabilities from './Capabilities'
-import { IconSettings, IconX } from '@tabler/icons-react'
 import { useNavigate } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import { useThreads } from '@/hooks/useThreads'
 import { ModelSetting } from '@/containers/ModelSetting'
-import ProvidersAvatar from '@/containers/ProvidersAvatar'
 import { Fzf } from 'fzf'
 import { localStorageKey } from '@/constants/localStorage'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useFavoriteModel } from '@/hooks/useFavoriteModel'
 import { predefinedProviders } from '@/constants/providers'
+import { ChevronDown, Search, Check, Star, CircleOff, Settings, X } from 'lucide-react'
 import { getLastUsedModel } from '@/utils/getModelToStart'
-import { ChevronsUpDown } from 'lucide-react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 
 type DropdownModelProviderProps = {
   model?: ThreadModel
   useLastUsedModel?: boolean
+}
+
+/** Format a token count into a human-readable context window string. */
+function formatContextWindow(model: Model): string | null {
+  // Model metadata may include context window info under various keys
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const m = model as any
+  const tokens: number | undefined =
+    m.contextWindow ?? m.context_length ?? m.maxTokens
+  if (!tokens || typeof tokens !== 'number') return null
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(0)}M context`
+  if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(0)}K context`
+  return `${tokens} context`
 }
 
 interface SearchableModel {
@@ -33,6 +45,39 @@ interface SearchableModel {
   searchStr: string
   value: string
   highlightedId?: string
+}
+
+// ── Flat row types for the virtualizer ────────────────────────────────────
+type FlatRow =
+  | { type: 'fav-header' }
+  | { type: 'fav-divider' }
+  | { type: 'provider-header'; providerKey: string; providerInfo: ModelProvider }
+  | { type: 'model-item'; item: SearchableModel; keyPrefix?: string }
+  | { type: 'empty-search'; searchValue: string }
+
+const ROW_HEIGHT_HEADER = 28
+const ROW_HEIGHT_ITEM = 36
+const ROW_HEIGHT_DIVIDER = 12
+const ROW_HEIGHT_EMPTY = 100
+
+/** Virtualize only when the flattened list exceeds this threshold. */
+const VIRTUALIZE_THRESHOLD = 80
+
+/** Maximum search results rendered — prevents DOM thrashing on broad queries. */
+const MAX_SEARCH_RESULTS = 100
+
+function estimateRowHeight(row: FlatRow) {
+  switch (row.type) {
+    case 'fav-header':
+    case 'provider-header':
+      return ROW_HEIGHT_HEADER
+    case 'model-item':
+      return ROW_HEIGHT_ITEM
+    case 'fav-divider':
+      return ROW_HEIGHT_DIVIDER
+    case 'empty-search':
+      return ROW_HEIGHT_EMPTY
+  }
 }
 
 // Helper functions for localStorage
@@ -47,6 +92,182 @@ const setLastUsedModel = (provider: string, model: string) => {
   }
 }
 
+// ── Memoized model item row ───────────────────────────────────────────────
+type ModelItemProps = {
+  searchableModel: SearchableModel
+  isSelected: boolean
+  isFavorite: boolean
+  color: string
+  onSelect: (m: SearchableModel) => void
+  onToggleFavorite: (m: Model) => void
+}
+
+const ModelItem = memo(function ModelItem({
+  searchableModel,
+  isSelected,
+  isFavorite,
+  color,
+  onSelect,
+  onToggleFavorite,
+}: ModelItemProps) {
+  const capabilities = searchableModel.model.capabilities || []
+
+  return (
+    <div
+      title={searchableModel.model.id}
+      role="button"
+      tabIndex={0}
+      onClick={() => onSelect(searchableModel)}
+      onKeyDown={(e) => { if (e.key === 'Enter') onSelect(searchableModel) }}
+      className={cn(
+        'w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors cursor-pointer',
+        isSelected ? 'bg-primary/5' : 'hover:bg-muted/50'
+      )}
+    >
+      {/* Selection indicator with provider color */}
+      <div
+        className="size-5 rounded-md flex items-center justify-center shrink-0"
+        style={{ backgroundColor: color + '20' }}
+      >
+        {isSelected && <Check className="size-3" style={{ color }} />}
+      </div>
+
+      {/* Model info */}
+      <div className="flex-1 min-w-0">
+        <span
+          className={cn('truncate block', isSelected ? 'text-primary' : 'text-foreground/80')}
+          style={{ fontSize: '13px', fontWeight: isSelected ? 500 : 400 }}
+        >
+          {getModelDisplayName(searchableModel.model)}
+        </span>
+        {(() => {
+          const ctx = formatContextWindow(searchableModel.model)
+          return ctx ? (
+            <span className="text-[11px] text-muted-foreground/40">{ctx}</span>
+          ) : null
+        })()}
+      </div>
+
+      {/* Capability badges — compact (no Radix Tooltips) for performance */}
+      {capabilities.length > 0 && (
+        <div className="shrink-0">
+          <Capabilities capabilities={capabilities} compact />
+        </div>
+      )}
+
+      {/* Star toggle */}
+      <button
+        type="button"
+        data-testid={`star-toggle-${searchableModel.model.id}`}
+        className="shrink-0 p-0.5 rounded hover:bg-muted transition-colors"
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggleFavorite(searchableModel.model)
+        }}
+      >
+        <Star
+          className={cn(
+            'size-3',
+            isFavorite
+              ? 'text-amber-500 fill-amber-500'
+              : 'text-muted-foreground/30 hover:text-muted-foreground/60'
+          )}
+        />
+      </button>
+    </div>
+  )
+})
+
+// ── Virtualized list (only mounted when row count > VIRTUALIZE_THRESHOLD) ─
+type VirtualizedListProps = {
+  flatRows: FlatRow[]
+  renderRow: (row: FlatRow) => React.ReactNode
+  searchValue: string
+}
+
+function VirtualizedList({ flatRows, renderRow, searchValue }: VirtualizedListProps) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  const virtualizer = useVirtualizer({
+    count: flatRows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: (index) => estimateRowHeight(flatRows[index]),
+    overscan: 8,
+  })
+
+  // Reset scroll position when search changes
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = 0
+    }
+  }, [searchValue])
+
+  return (
+    <div
+      ref={scrollRef}
+      className="max-h-[360px] overflow-y-auto"
+      style={{ scrollbarWidth: 'thin' }}
+    >
+      <div
+        style={{
+          height: virtualizer.getTotalSize(),
+          width: '100%',
+          position: 'relative',
+        }}
+      >
+        {virtualizer.getVirtualItems().map((virtualRow) => (
+          <div
+            key={virtualRow.index}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              transform: `translateY(${virtualRow.start}px)`,
+            }}
+          >
+            {renderRow(flatRows[virtualRow.index])}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Plain list (small lists — no virtualization overhead) ─────────────────
+type PlainListProps = {
+  flatRows: FlatRow[]
+  renderRow: (row: FlatRow) => React.ReactNode
+}
+
+function getRowKey(row: FlatRow, index: number): string {
+  switch (row.type) {
+    case 'fav-header':
+      return 'fav-header'
+    case 'fav-divider':
+      return 'fav-divider'
+    case 'provider-header':
+      return `ph-${row.providerKey}`
+    case 'model-item':
+      return `${row.keyPrefix ?? ''}${row.item.value}`
+    case 'empty-search':
+      return 'empty-search'
+    default:
+      return `row-${index}`
+  }
+}
+
+function PlainList({ flatRows, renderRow }: PlainListProps) {
+  return (
+    <div className="max-h-[360px] overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+      {flatRows.map((row, i) => (
+        <div key={getRowKey(row, i)}>{renderRow(row)}</div>
+      ))}
+    </div>
+  )
+}
+
+// ── Main component ────────────────────────────────────────────────────────
 const DropdownModelProvider = memo(function DropdownModelProvider({
   model,
   useLastUsedModel = false,
@@ -63,12 +284,18 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
   const { updateCurrentThreadModel } = useThreads()
   const navigate = useNavigate()
   const { t } = useTranslation()
-  const { favoriteModels } = useFavoriteModel()
+  const { favoriteModels, toggleFavorite } = useFavoriteModel()
 
   // Search state
   const [open, setOpen] = useState(false)
   const [searchValue, setSearchValue] = useState('')
   const searchInputRef = useRef<HTMLInputElement>(null)
+
+  // O(1) favorite lookup instead of O(n) per item
+  const favoriteIdSet = useMemo(
+    () => new Set(favoriteModels.map((f) => f.id)),
+    [favoriteModels]
+  )
 
   // Helper function to check if a model exists in providers
   const checkModelExists = useCallback(
@@ -81,8 +308,15 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
     [providers]
   )
 
+  // Track whether the user manually selected a model (prevents provider-refresh from reverting)
+  const userSelectedRef = useRef(false)
+
   // Initialize model provider - avoid race conditions with manual selections
   useEffect(() => {
+    // Skip re-initialization if the user manually selected a model and
+    // the trigger is just a provider list refresh (not a model prop change).
+    if (userSelectedRef.current) return
+
     const initializeModel = () => {
       // Auto select model when existing thread is passed
       if (model) {
@@ -112,6 +346,12 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
     // selectedModel and selectedProvider intentionally excluded to prevent race conditions
   ])
 
+  // Reset the manual-selection guard when the thread model prop changes
+  // (e.g. user navigates to a different thread)
+  useEffect(() => {
+    userSelectedRef.current = false
+  }, [model?.id, model?.provider])
+
   // Update display model when selection changes
   useEffect(() => {
     if (selectedProvider && selectedModel) {
@@ -127,10 +367,10 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
     if (!open) {
       requestAnimationFrame(() => setSearchValue(''))
     } else {
-      // Focus search input when opening
-      setTimeout(() => {
+      // Focus search input after Radix Popover finishes opening
+      requestAnimationFrame(() => {
         searchInputRef.current?.focus()
-      }, 100)
+      })
     }
   }, [])
 
@@ -193,16 +433,20 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
 
   // Get favorite models that are currently available
   const favoriteItems = useMemo(() => {
-    return searchableItems.filter((item) =>
-      favoriteModels.some((fav) => fav.id === item.model.id)
-    )
-  }, [searchableItems, favoriteModels])
+    return searchableItems.filter((item) => favoriteIdSet.has(item.model.id))
+  }, [searchableItems, favoriteIdSet])
 
-  // Filter models based on search value
+  // Filter models based on search value — capped for performance
   const filteredItems = useMemo(() => {
     if (!searchValue) return searchableItems
 
-    return fzfInstance.find(searchValue.toLowerCase()).map((result) => {
+    const results = fzfInstance.find(searchValue.toLowerCase())
+    // Cap results to prevent excessive DOM work on broad queries
+    const capped = results.length > MAX_SEARCH_RESULTS
+      ? results.slice(0, MAX_SEARCH_RESULTS)
+      : results
+
+    return capped.map((result) => {
       const item = result.item
       const positions = Array.from(result.positions) || []
       const highlightedId = highlightFzfMatch(
@@ -262,17 +506,51 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
       }
 
       // When not searching, exclude favorite models from regular provider sections
-      const isFavorite = favoriteModels.some((fav) => fav.id === item.model.id)
-      if (!searchValue && isFavorite) return // Skip adding this item to regular provider section
+      if (!searchValue && favoriteIdSet.has(item.model.id)) return
 
       groups[providerKey].push(item)
     })
 
     return groups
-  }, [filteredItems, providers, searchValue, favoriteModels])
+  }, [filteredItems, providers, searchValue, favoriteIdSet])
+
+  // ── Flatten grouped data into a single row array ────────────────────────
+  const flatRows = useMemo<FlatRow[]>(() => {
+    const rows: FlatRow[] = []
+
+    // Empty search state
+    if (Object.keys(groupedItems).length === 0 && searchValue) {
+      rows.push({ type: 'empty-search', searchValue })
+      return rows
+    }
+
+    // Favorites section (only when not searching)
+    if (!searchValue && favoriteItems.length > 0) {
+      rows.push({ type: 'fav-header' })
+      for (const item of favoriteItems) {
+        rows.push({ type: 'model-item', item, keyPrefix: 'fav' })
+      }
+      rows.push({ type: 'fav-divider' })
+    }
+
+    // Provider groups
+    for (const [providerKey, models] of Object.entries(groupedItems)) {
+      const providerInfo = providers.find((p) => p.provider === providerKey)
+      if (!providerInfo) continue
+      rows.push({ type: 'provider-header', providerKey, providerInfo })
+      for (const item of models) {
+        rows.push({ type: 'model-item', item })
+      }
+    }
+
+    return rows
+  }, [groupedItems, favoriteItems, searchValue, providers])
 
   const handleSelect = useCallback(
     async (searchableModel: SearchableModel) => {
+      // Mark as user-initiated so provider refreshes don't revert the choice
+      userSelectedRef.current = true
+
       // Immediately update display to prevent double-click issues
       setDisplayModel(getModelDisplayName(searchableModel.model))
       setSearchValue('')
@@ -299,6 +577,76 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
     ]
   )
 
+  // ── Render a single row ─────────────────────────────────────────────────
+  const renderRow = useCallback((row: FlatRow) => {
+    switch (row.type) {
+      case 'fav-header':
+        return (
+          <div className="px-3 pt-2 pb-1 flex items-center gap-1.5 text-[10px] tracking-widest uppercase text-muted-foreground/40 font-semibold">
+            <Star className="size-2.5 fill-amber-500 text-amber-500" />
+            {t('common:favorites')}
+          </div>
+        )
+
+      case 'fav-divider':
+        return <div className="h-px bg-border/50 mx-3 my-1.5" />
+
+      case 'provider-header':
+        return (
+          <div className="flex items-center justify-between px-3 pt-2 pb-1">
+            <div className="flex items-center gap-1.5">
+              <div
+                className="size-3 rounded-sm shrink-0"
+                style={{ backgroundColor: getProviderColor(row.providerKey) }}
+              />
+              <span className="text-[10px] tracking-widest uppercase text-muted-foreground/40 font-semibold">
+                {getProviderTitle(row.providerInfo.provider)}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="p-0.5 rounded hover:bg-muted text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation()
+                navigate({
+                  to: route.settings.providers,
+                  params: { providerName: row.providerInfo.provider },
+                })
+                setOpen(false)
+              }}
+            >
+              <Settings className="size-3" />
+            </button>
+          </div>
+        )
+
+      case 'model-item':
+        return (
+          <ModelItem
+            searchableModel={row.item}
+            isSelected={
+              selectedModel?.id === row.item.model.id &&
+              selectedProvider === row.item.provider.provider
+            }
+            isFavorite={favoriteIdSet.has(row.item.model.id)}
+            color={getProviderColor(row.item.provider.provider)}
+            onSelect={handleSelect}
+            onToggleFavorite={toggleFavorite}
+          />
+        )
+
+      case 'empty-search':
+        return (
+          <div className="py-8 text-center">
+            <CircleOff className="size-8 text-muted-foreground/20 mx-auto mb-2" />
+            <p className="text-[13px] text-muted-foreground">
+              {t('common:noModelsFoundFor', { searchValue: row.searchValue })}
+            </p>
+          </div>
+        )
+    }
+  }, [selectedModel?.id, selectedProvider, favoriteIdSet, handleSelect, toggleFavorite, navigate, t])
+
   const currentModel = selectedModel?.id
     ? getModelBy(selectedModel?.id)
     : undefined
@@ -307,224 +655,92 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
 
   const provider = getProviderByName(selectedProvider)
 
+  const useVirtual = flatRows.length > VIRTUALIZE_THRESHOLD
+
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
-        <PopoverTrigger asChild>
-          <div className="border relative z-20 px-4 py-1.5 flex items-center gap-1.5 rounded-full">
-            <button
-              type="button"
-              className="font-medium cursor-pointer flex items-center gap-1.5 relative z-20 max-w-50"
-            >
-              {provider && (
-                <div className="shrink-0">
-                  <ProvidersAvatar provider={provider} />
-                </div>
+      <PopoverTrigger asChild>
+        <div className="relative z-30 flex items-center gap-1">
+          <button
+            type="button"
+            className="relative z-30 flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted/60 transition-all group border border-transparent hover:border-border/50"
+          >
+            {/* Provider color indicator */}
+            <div
+              className="size-5 rounded-md shrink-0"
+              style={{ backgroundColor: getProviderColor(selectedProvider) }}
+            />
+            <span
+              className={cn(
+                'text-foreground/90 truncate max-w-[160px]',
+                !selectedModel?.id && 'text-muted-foreground'
               )}
-              <span
-                className={cn(
-                  'text-foreground truncate leading-normal',
-                  !selectedModel?.id && 'text-muted-foreground'
-                )}
-              >
-                {displayModel}
-              </span>
-              <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
-            </button>
-          {currentModel?.settings &&
-            provider && (
-              <ModelSetting
-                model={currentModel as Model}
-                provider={provider}
-              />
-            )}
+              style={{ fontSize: '13px', fontWeight: 500 }}
+            >
+              {displayModel}
+            </span>
+            <ChevronDown className="size-3.5 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
+          </button>
+          {currentModel?.settings && provider && (
+            <ModelSetting
+              model={currentModel as Model}
+              provider={provider}
+            />
+          )}
         </div>
-        </PopoverTrigger>
+      </PopoverTrigger>
 
       <PopoverContent
-        className={cn(
-          'w-70 p-0 backdrop-blur-2xl bg-background/95 border',
-          searchValue.length === 0 && 'h-80'
-        )}
+        className="w-[320px] p-0 rounded-xl overflow-hidden border-border/60 shadow-2xl"
         align="start"
-        // sideOffset={16}
-        // alignOffset={-10}
+        sideOffset={8}
         side="bottom"
-        avoidCollisions={searchValue.length === 0 ? true : false}
       >
-        <div className="flex flex-col size-full">
+        <div className="flex flex-col">
           {/* Search input */}
-          <div className="relative p-2 border-b">
+          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border/50">
+            <Search className="size-3.5 text-muted-foreground shrink-0" />
             <input
               ref={searchInputRef}
               value={searchValue}
               onChange={(e) => setSearchValue(e.target.value)}
               placeholder={t('common:searchModels')}
-              className="text-sm font-normal outline-0"
+              className="flex-1 bg-transparent outline-none placeholder:text-muted-foreground/40"
+              style={{ fontSize: '13px' }}
             />
-            {searchValue.length > 0 && (
-              <div className="absolute right-2 top-0 bottom-0 flex items-center justify-center">
-                <IconX
-                  size={16}
-                  className="text-muted-foreground cursor-pointer"
-                  onClick={onClearSearch}
-                />
-              </div>
+            {searchValue && (
+              <button
+                type="button"
+                onClick={onClearSearch}
+                className="text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+              >
+                <X className="size-3.5" />
+              </button>
             )}
           </div>
 
-          {/* Model list */}
-          <div className="max-h-80 overflow-y-auto">
-            {Object.keys(groupedItems).length === 0 && searchValue ? (
-              <div className="py-3 px-4 text-sm ">
-                {t('common:noModelsFoundFor', { searchValue })}
-              </div>
-            ) : (
-              <div className="py-1">
-                {/* Favorites section - only show when not searching */}
-                {!searchValue && favoriteItems.length > 0 && (
-                  <div className="bg-secondary/30 rounded-sm m-2 py-1">
-                    {/* Favorites header */}
-                    <div className="flex items-center gap-1.5 px-2 py-1">
-                      <span className="text-sm font-medium text-muted-foreground">
-                        {t('common:favorites')}
-                      </span>
-                    </div>
+          {/* Model list — virtualized for large lists, plain for small */}
+          {useVirtual ? (
+            <VirtualizedList flatRows={flatRows} renderRow={renderRow} searchValue={searchValue} />
+          ) : (
+            <PlainList flatRows={flatRows} renderRow={renderRow} />
+          )}
 
-                    {/* Favorite models */}
-                    {favoriteItems.map((searchableModel) => {
-                      const isSelected =
-                        selectedModel?.id === searchableModel.model.id &&
-                        selectedProvider === searchableModel.provider.provider
-                      const capabilities =
-                        searchableModel.model.capabilities || []
-
-                      return (
-                        <div
-                          key={`fav-${searchableModel.value}`}
-                          title={searchableModel.model.id}
-                          onClick={() => handleSelect(searchableModel)}
-                          className={cn(
-                            'mx-1 mb-1 px-2 py-1.5 rounded-sm cursor-pointer flex items-center gap-2 transition-all duration-200',
-                            'hover:bg-secondary/40',
-                            isSelected &&
-                              'bg-secondary/50'
-                          )}
-                        >
-                          <div className="flex items-center gap-1 flex-1 min-w-0">
-                            <div className="shrink-0 -ml-1">
-                              <ProvidersAvatar
-                                provider={searchableModel.provider}
-                              />
-                            </div>
-                            <span className="text-sm truncate">
-                              {getModelDisplayName(searchableModel.model)}
-                            </span>
-                            <div className="flex-1"></div>
-                            {capabilities.length > 0 && (
-                              <div className="shrink-0 -mr-1.5">
-                                <Capabilities capabilities={capabilities} />
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-
-                {/* Divider between favorites and regular providers */}
-                {favoriteItems.length > 0 && (
-                  <div className="border-b mx-2"></div>
-                )}
-
-                {/* Regular provider sections */}
-                {Object.entries(groupedItems).map(([providerKey, models]) => {
-                  const providerInfo = providers.find(
-                    (p) => p.provider === providerKey
-                  )
-
-                  if (!providerInfo) return null
-
-                  return (
-                    <div
-                      key={providerKey}
-                      className="bg-secondary/30 first:mt-0 rounded-sm my-1.5 mx-1.5 first:mb-0 py-1"
-                    >
-                      {/* Provider header */}
-                      <div className="flex items-center justify-between px-2 py-1">
-                        <div className="flex items-center gap-1.5">
-                          <ProvidersAvatar provider={providerInfo} />
-                          <span className="capitalize text-sm font-medium text-muted-foreground">
-                            {getProviderTitle(providerInfo.provider)}
-                          </span>
-                        </div>
-
-                        <div
-                          className="size-6 cursor-pointer flex items-center justify-center rounded-sm bg-secondary-foreground/8 transition-all duration-200 ease-in-out"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            navigate({
-                              to: route.settings.providers,
-                              params: { providerName: providerInfo.provider },
-                            })
-                            setOpen(false)
-                          }}
-                        >
-                          <IconSettings
-                            size={16}
-                            className="text-muted-foreground"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Models for this provider */}
-                      {models.length === 0 ? (
-                        // Show message when provider has no available models
-                        <></>
-                      ) : (
-                        models.map((searchableModel) => {
-                          const isSelected =
-                            selectedModel?.id === searchableModel.model.id &&
-                            selectedProvider ===
-                              searchableModel.provider.provider
-                          const capabilities =
-                            searchableModel.model.capabilities || []
-
-                          return (
-                            <div
-                              key={searchableModel.value}
-                              title={searchableModel.model.id}
-                              onClick={() => handleSelect(searchableModel)}
-                              className={cn(
-                                'mx-1 mb-1 px-2 py-1.5 rounded-sm cursor-pointer flex items-center gap-2 transition-all duration-200',
-                                'hover:bg-secondary/40',
-                                isSelected &&
-                                  'bg-secondary/60 hover:bg-secondary/60'
-                              )}
-                            >
-                              <div className="flex items-center gap-2 flex-1 min-w-0">
-                                <span
-                                  className="text-sm truncate"
-                                  title={searchableModel.model.id}
-                                >
-                                  {getModelDisplayName(searchableModel.model)}
-                                </span>
-                                <div className="flex-1"></div>
-                                {capabilities.length > 0 && (
-                                  <div className="shrink-0 -mr-1.5">
-                                    <Capabilities capabilities={capabilities} />
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )
-                        })
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
+          {/* Footer */}
+          <div className="px-3 py-2 border-t border-border/50 flex items-center justify-between">
+            <span className="text-[11px] text-muted-foreground/40">
+              {t('common:modelsCount', { count: searchableItems.length })}
+            </span>
+            <button
+              type="button"
+              className="text-[11px] text-primary/70 hover:text-primary transition-colors"
+              onClick={() => {
+                navigate({ to: route.settings.model_providers })
+                setOpen(false)
+              }}
+            >
+              {t('common:manageProviders')}
+            </button>
           </div>
         </div>
       </PopoverContent>

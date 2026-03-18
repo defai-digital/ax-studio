@@ -32,21 +32,26 @@ export function CardItem({
     <>
       <div
         className={cn(
-          'flex justify-between mt-2 first:mt-0 border-b border-border/40 pb-3 last:border-none last:pb-0 gap-8',
+          'flex justify-between gap-6 px-5 py-4',
+          'border-b border-border/40 last:border-none',
           descriptionOutside && 'border-0',
           align === 'start' && 'items-start',
           align === 'center' && 'items-center',
           align === 'end' && 'items-end',
-          column && 'flex-col gap-y-0 items-start',
+          column && 'flex-col gap-y-2 items-start',
           className
         )}
       >
-        <div className="space-y-1.5">
-          <h1 className="font-medium text-foreground">{title}</h1>
+        <div className="flex-1 min-w-0 space-y-0.5">
+          {title && (
+            <div className="font-medium text-foreground" style={{ fontSize: '13px' }}>
+              {title}
+            </div>
+          )}
           {description && (
-            <span className="text-muted-foreground leading-normal">
+            <div className="text-muted-foreground leading-relaxed" style={{ fontSize: '12px' }}>
               {description}
-            </span>
+            </div>
           )}
         </div>
         {actions && (
@@ -62,9 +67,9 @@ export function CardItem({
         )}
       </div>
       {descriptionOutside && (
-        <span className="text-muted-foreground leading-normal">
+        <div className="px-5 pb-4 text-muted-foreground leading-relaxed" style={{ fontSize: '12px' }}>
           {descriptionOutside}
-        </span>
+        </div>
       )}
     </>
   )
@@ -72,13 +77,15 @@ export function CardItem({
 
 export function Card({ title, children, header }: CardProps) {
   return (
-    <div className="bg-card p-4 rounded-lg text-muted-foreground w-full">
+    <div className="rounded-xl border border-border/50 bg-card shadow-sm overflow-hidden w-full">
+      {header && <div className="px-5 pt-5">{header}</div>}
       {title && (
-        <h1 className="text-foreground font-studio font-medium text-base mb-4">
-          {title}
-        </h1>
+        <div className="px-5 pt-5 pb-1">
+          <h2 className="text-foreground font-semibold tracking-tight" style={{ fontSize: '14px' }}>
+            {title}
+          </h2>
+        </div>
       )}
-      {header && header}
       {children}
     </div>
   )

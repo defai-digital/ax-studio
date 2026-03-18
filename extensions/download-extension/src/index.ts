@@ -30,6 +30,16 @@ export default class AxStudioDownloadManager extends BaseExtension {
 
   async onUnload() {}
 
+  /**
+   * Sanitize a task ID so it is safe to use in Tauri event names.
+   * Tauri 2 only allows alphanumeric, `-`, `/`, `:`, and `_` characters.
+   * Dots and other characters in model IDs (e.g. "Qwen3.5-27B") would
+   * cause listen() to throw "invalid args `event`".
+   */
+  private _sanitizeTaskId(taskId: string): string {
+    return taskId.replace(/[^a-zA-Z0-9\-/_:]/g, '_')
+  }
+
   async downloadFile(
     url: string,
     savePath: string,
@@ -58,9 +68,12 @@ export default class AxStudioDownloadManager extends BaseExtension {
     taskId: string,
     onProgress?: (transferred: number, total: number) => void
   ) {
+    // Sanitize taskId for Tauri event name compatibility
+    const safeTaskId = this._sanitizeTaskId(taskId)
+
     // relay tauri events to onProgress callback
     const unlisten = await listen<DownloadEvent>(
-      `download-${taskId}`,
+      `download-${safeTaskId}`,
       (event) => {
         if (onProgress) {
           let payload = event.payload
@@ -72,7 +85,7 @@ export default class AxStudioDownloadManager extends BaseExtension {
     try {
       await invoke<void>('download_files', {
         items,
-        taskId,
+        taskId: safeTaskId,
         headers: this._getHeaders(),
       })
     } catch (error) {
@@ -84,8 +97,9 @@ export default class AxStudioDownloadManager extends BaseExtension {
   }
 
   async cancelDownload(taskId: string) {
+    const safeTaskId = this._sanitizeTaskId(taskId)
     try {
-      await invoke<void>('cancel_download_task', { taskId })
+      await invoke<void>('cancel_download_task', { taskId: safeTaskId })
     } catch (error) {
       console.error('Error cancelling download:', error)
       throw error

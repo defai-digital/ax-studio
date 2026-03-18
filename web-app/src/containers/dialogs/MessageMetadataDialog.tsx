@@ -59,7 +59,7 @@ export function MessageMetadataDialog({
         <DialogHeader>
           <DialogTitle>{t('common:dialogs.messageMetadata.title')}</DialogTitle>
           <div className="space-y-2 mt-4">
-            <div className="border  rounded-md">
+            <div className="border border-border/50 rounded-xl overflow-hidden">
               <CodeEditor
                 value={JSON.stringify(metadata || {}, null, 2)}
                 language="json"

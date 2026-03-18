@@ -153,7 +153,7 @@ export default function AddProjectDialog({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={t('projects.addProjectDialog.namePlaceholder')}
-              className="mt-1"
+              className="w-full px-4 py-2.5 rounded-xl bg-muted/50 border border-border/50 outline-none text-[14px] focus:border-primary/30 transition-colors"
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !isButtonDisabled) {
@@ -163,7 +163,7 @@ export default function AddProjectDialog({
             />
           </div>
           <div>
-            <label className="text-sm font-medium mb-1.5 block">
+            <label className="text-[13px] text-muted-foreground mb-1.5 block">
               {t('projects.addProjectDialog.logoUrl', { defaultValue: 'Logo URL (optional)' })}
             </label>
             <Input
@@ -189,29 +189,29 @@ export default function AddProjectDialog({
             )}
           </div>
           <div>
-            <label className="text-sm font-medium mb-1.5 block">
-              Project Prompt Override (optional)
+            <label className="text-[13px] text-muted-foreground mb-1.5 block">
+              {t('projects.addProjectDialog.projectPromptLabel')}
             </label>
             <Textarea
               value={projectPrompt}
               onChange={(e) => setProjectPrompt(e.target.value)}
               className="min-h-24"
-              placeholder="Leave empty to inherit global prompt."
+              placeholder={t('projects.addProjectDialog.projectPromptPlaceholder')}
             />
             <div className="mt-2 flex justify-end">
               <Button
                 type="button"
                 size="sm"
-                variant="ghost"
+                variant="outline"
                 onClick={() => setProjectPrompt('')}
                 disabled={!projectPrompt.trim()}
               >
-                Clear Override
+                {t('projects.addProjectDialog.clearOverride')}
               </Button>
             </div>
           </div>
           <div>
-            <label className="text-sm font-medium mb-1.5 block">
+            <label className="text-[13px] text-muted-foreground mb-1.5 block">
               {t('projects.addProjectDialog.assistant')}
             </label>
             <DropdownMenu>
@@ -278,7 +278,7 @@ export default function AddProjectDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button size="sm" variant="ghost" onClick={handleCancel}>
+          <Button size="sm" variant="outline" onClick={handleCancel}>
             {t('cancel')}
           </Button>
           <Button size="sm" onClick={handleSave} disabled={Boolean(isButtonDisabled)}>

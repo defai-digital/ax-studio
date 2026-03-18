@@ -49,15 +49,23 @@ export async function executeSingleAgentStream(
     tools: shouldEnableTools ? tools : undefined,
     toolChoice: shouldEnableTools ? 'auto' : undefined,
     system: systemMessage,
-    stopWhen: shouldEnableTools ? stepCountIs(3) : stepCountIs(1),
+    stopWhen: shouldEnableTools ? stepCountIs(5) : stepCountIs(1),
   })
 
   let tokensPerSecond = 0
+  let totalChars = 0
 
   return result.toUIMessageStream({
     messageMetadata: ({ part }) => {
-      if (part.type === 'start' && !streamStartTime) {
-        streamStartTime = Date.now()
+      if (part.type === 'text-delta') {
+        // AI SDK v5 fullStream text-delta parts use `text` (not `textDelta`).
+        // Start timing from the FIRST token so TTFT (prefill/queue time) is
+        // excluded — this gives pure generation speed, not end-to-end latency.
+        const text = (part as { type: 'text-delta'; text: string }).text ?? ''
+        if (!streamStartTime && text.length > 0) {
+          streamStartTime = Date.now()
+        }
+        totalChars += text.length
       }
 
       if (part.type === 'finish-step') {
@@ -77,9 +85,14 @@ export async function executeSingleAgentStream(
         const outputTokens = usage?.outputTokens ?? 0
         const inputTokens = usage?.inputTokens
 
+        // Fall back to character-count estimate (~4 chars per token) when the
+        // server does not return usage statistics (e.g. ax-serving without
+        // stream_options.include_usage support).
+        const tokenCount = outputTokens > 0 ? outputTokens : Math.ceil(totalChars / 4)
+
         let tokenSpeed: number
-        if (durationSec > 0 && outputTokens > 0) {
-          tokenSpeed = tokensPerSecond > 0 ? tokensPerSecond : outputTokens / durationSec
+        if (durationSec > 0 && tokenCount > 0) {
+          tokenSpeed = tokensPerSecond > 0 ? tokensPerSecond : tokenCount / durationSec
         } else {
           tokenSpeed = 0
         }
@@ -87,12 +100,12 @@ export async function executeSingleAgentStream(
         return {
           usage: {
             inputTokens,
-            outputTokens,
-            totalTokens: usage?.totalTokens ?? (inputTokens ?? 0) + outputTokens,
+            outputTokens: tokenCount,
+            totalTokens: usage?.totalTokens ?? (inputTokens ?? 0) + tokenCount,
           },
           tokenSpeed: {
             tokenSpeed: Math.round(tokenSpeed * 10) / 10,
-            tokenCount: outputTokens,
+            tokenCount,
             durationMs,
           },
         }

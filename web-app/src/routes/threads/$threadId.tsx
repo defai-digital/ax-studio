@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
-import { createFileRoute, useParams } from '@tanstack/react-router'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createFileRoute, useNavigate, useParams } from '@tanstack/react-router'
 import { useThreads } from '@/hooks/useThreads'
 import { useShallow } from 'zustand/react/shallow'
 import { useAssistant } from '@/hooks/useAssistant'
@@ -14,9 +14,11 @@ import {
   DIAGRAM_FORMAT_INSTRUCTION,
   CODE_EXECUTION_INSTRUCTION,
   ARTIFACT_FORMAT_INSTRUCTION,
+  LOCAL_KNOWLEDGE_INSTRUCTION,
 } from '@/lib/system-prompt'
 import type { UIMessage } from '@ai-sdk/react'
 import { useThreadMemory } from '@/hooks/thread/use-thread-memory'
+import { useLocalKnowledge } from '@/hooks/useLocalKnowledge'
 import { useThreadArtifacts } from '@/hooks/thread/use-thread-artifacts'
 import { useThreadResearch } from '@/hooks/thread/use-thread-research'
 import { useThreadChat } from '@/hooks/thread/use-thread-chat'
@@ -32,7 +34,22 @@ export const Route = createFileRoute('/threads/$threadId')({
 
 function ThreadDetail() {
   const { threadId } = useParams({ from: Route.id })
+  const navigate = useNavigate()
+  const thread = useThreads(useShallow((state) => state.threads[threadId]))
 
+  // Redirect to home if thread doesn't exist (invalid ID or deleted thread)
+  useEffect(() => {
+    if (!thread) {
+      navigate({ to: '/' })
+    }
+  }, [thread, navigate])
+
+  if (!thread) return null
+
+  return <ThreadDetailInner key={threadId} threadId={threadId} />
+}
+
+function ThreadDetailInner({ threadId }: { threadId: string }) {
   // ─── Store subscriptions ──────────────────────────────────────────────────
   const updateThread = useThreads((state) => state.updateThread)
   const setCurrentThreadId = useThreads((state) => state.setCurrentThreadId)
@@ -41,7 +58,7 @@ function ThreadDetail() {
   useTools()
 
   const thread = useThreads(useShallow((state) => state.threads[threadId]))
-  const selectedModel = useModelProvider((state) => state.selectedModel)
+  const selectedModel = useModelProvider((state) => state.selectedModel) ?? undefined
   const selectedProvider = useModelProvider((state) => state.selectedProvider)
   const { globalDefaultPrompt, autoTuningEnabled } = useGeneralSetting()
   const threadMessageCount = useMessages((state) => state.messages[threadId]?.length ?? 0)
@@ -49,6 +66,7 @@ function ThreadDetail() {
   // ─── Domain hooks ─────────────────────────────────────────────────────────
   const { memorySuffix, lastUserInputRef, processMemoryOnFinish, handleRememberCommand, handleForgetCommand } =
     useThreadMemory(threadId)
+  const localKnowledgeActive = useLocalKnowledge((state) => state.isLocalKnowledgeEnabledForThread(threadId))
   const projectId = thread?.metadata?.project?.id
   const { pinnedArtifact, clearArtifact } = useThreadArtifacts(threadId)
   const { pinnedResearch, clearResearch, handleResearchCommand } = useThreadResearch(threadId)
@@ -68,7 +86,6 @@ function ThreadDetail() {
   // ─── UI state ─────────────────────────────────────────────────────────────
   const [threadPromptDraft, setThreadPromptDraft] = useState('')
   const [showThreadPromptEditor, setShowThreadPromptEditor] = useState(false)
-  const [showPromptDebug, setShowPromptDebug] = useState(false)
 
   // ─── Chat session ─────────────────────────────────────────────────────────
   // Ref holds persistMessageOnFinish to break the useChat ↔ useThreadChat circular dep
@@ -81,7 +98,7 @@ function ThreadDetail() {
   } = useChat({
     sessionId: threadId,
     sessionTitle: thread?.title,
-    systemMessage: promptResolution.resolvedPrompt + memorySuffix + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION + ARTIFACT_FORMAT_INSTRUCTION,
+    systemMessage: promptResolution.resolvedPrompt + memorySuffix + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION + ARTIFACT_FORMAT_INSTRUCTION + (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : ''),
     modelOverrideId: optimizedModelConfig.modelId,
     activeTeamId,
     onCostApproval,
@@ -164,11 +181,7 @@ function ThreadDetail() {
       setShowThreadPromptEditor={setShowThreadPromptEditor}
       threadPromptDraft={threadPromptDraft}
       setThreadPromptDraft={setThreadPromptDraft}
-      showPromptDebug={showPromptDebug}
-      setShowPromptDebug={setShowPromptDebug}
       promptResolution={promptResolution}
-      optimizedModelConfig={optimizedModelConfig}
-      autoTuningEnabled={autoTuningEnabled}
       updateThread={updateThread}
       activeTeam={activeTeam}
       activeTeamId={activeTeamId}

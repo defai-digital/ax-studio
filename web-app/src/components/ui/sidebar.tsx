@@ -25,7 +25,7 @@ const SIDEBAR_COOKIE_NAME = "sidebar:state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 const SIDEBAR_WIDTH = "15rem";
 const SIDEBAR_WIDTH_MOBILE = "18rem";
-const SIDEBAR_WIDTH_ICON = "5rem";
+const SIDEBAR_WIDTH_ICON = "3.75rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 
 //* new constants for sidebar resizing
@@ -241,7 +241,7 @@ const Sidebar = React.forwardRef<
 			return (
 				<div
 					className={cn(
-						"flex h-full w-(--sidebar-width) flex-col bg-clip-padding bg-linear-to-b from-sidebar dark:from-sidebar/70 to-background text-sidebar-foreground",
+						"flex h-full w-(--sidebar-width) flex-col bg-clip-padding bg-sidebar text-sidebar-foreground",
 						className,
 					)}
 					ref={ref}
@@ -258,7 +258,7 @@ const Sidebar = React.forwardRef<
 					<SheetContent
 						data-sidebar="sidebar"
 						data-mobile="true"
-						className="w-(--sidebar-width) bg-clip-padding bg-linear-to-b from-sidebar dark:from-sidebar/70 to-background p-0 text-sidebar-foreground [&>button]:hidden"
+						className="w-(--sidebar-width) bg-clip-padding bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
 						style={
 							{
 								"--sidebar-width": SIDEBAR_WIDTH_MOBILE,
@@ -314,7 +314,7 @@ const Sidebar = React.forwardRef<
 				>
 					<div
 						data-sidebar="sidebar"
-						className="flex bg-clip-padding h-full w-full flex-col bg-linear-to-b from-sidebar dark:from-sidebar/70 to-background group-data-[variant=floating]:rounded-xl group-data-[variant=floating]:shadow group-data-[variant=floating]:border group-data-[variant=floating]:border-sidebar-border"
+						className="flex bg-clip-padding h-full w-full flex-col bg-sidebar group-data-[variant=floating]:rounded-xl group-data-[variant=floating]:shadow group-data-[variant=floating]:border group-data-[variant=floating]:border-sidebar-border"
 					>
 						{children}
 					</div>

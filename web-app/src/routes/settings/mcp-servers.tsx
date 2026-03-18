@@ -9,6 +9,7 @@ import {
   IconTrash,
   IconCodeCircle,
 } from '@tabler/icons-react'
+import { Wrench } from 'lucide-react'
 import {
   useMCPServers,
   MCPServerConfig,
@@ -388,10 +389,19 @@ function MCPServersDesktop() {
             </Button>
           </div>
         </HeaderPage>
-        <div className="flex h-[calc(100%-60px)]">
+        <div className="flex flex-1 min-h-0">
           <SettingsMenu />
-          <div className="p-4 pt-0 w-full overflow-y-auto">
-            <div className="flex flex-col justify-between gap-4 gap-y-3 w-full">
+          <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+            <div className="flex items-center gap-3 px-8 py-5 border-b border-border/40 bg-background sticky top-0 z-10">
+              <div className="size-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+                <Wrench className="size-3.5 text-white" strokeWidth={2.5} />
+              </div>
+              <h1 className="text-foreground tracking-tight" style={{ fontSize: '16px', fontWeight: 600 }}>
+                {t('common:mcp-servers')}
+              </h1>
+            </div>
+            <div className="px-8 py-7">
+              <div className="max-w-2xl space-y-6">
               <Card
                 header={
                   <div className="flex flex-col mb-4">
@@ -623,6 +633,7 @@ function MCPServersDesktop() {
                   </Card>
                 ))
               )}
+              </div>
             </div>
           </div>
         </div>

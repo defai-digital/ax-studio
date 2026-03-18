@@ -35,6 +35,9 @@ export const useTokensCount = (
   const debounceTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const latestCalculationRef = useRef<(() => Promise<void>) | null>(null)
   const requestIdRef = useRef(0)
+  // Backoff: after consecutive apply-template failures, pause retries for 30s
+  const consecutiveErrorsRef = useRef(0)
+  const backoffUntilRef = useRef(0)
   const { prompt } = usePrompt()
   // Lightweight fingerprint: avoids JSON.stringify on the full message tree.
   // Uses message count + total content length + last role — changes on every
@@ -62,6 +65,9 @@ export const useTokensCount = (
   }, [selectedModel])
 
   const runTokenCalculation = useCallback(async () => {
+    // Skip if still within backoff window (consecutive failures)
+    if (Date.now() < backoffUntilRef.current) return
+
     const requestId = ++requestIdRef.current
     const maxTokens = getMaxTokens()
 
@@ -89,6 +95,9 @@ export const useTokensCount = (
 
       if (requestId !== requestIdRef.current) return
 
+      // Success — reset error backoff
+      consecutiveErrorsRef.current = 0
+
       const percentage =
         maxTokens && maxTokens > 0 ? (tokenCount / maxTokens) * 100 : undefined
 
@@ -101,6 +110,19 @@ export const useTokensCount = (
       })
     } catch (error) {
       if (requestId !== requestIdRef.current) return
+
+      const msg = error instanceof Error ? error.message : String(error)
+      // 404 means the endpoint doesn't exist on this backend (e.g. ax-serving).
+      // Back off for 1 hour immediately — retrying will never succeed.
+      if (msg.includes('404')) {
+        backoffUntilRef.current = Date.now() + 60 * 60 * 1000
+      } else {
+        consecutiveErrorsRef.current += 1
+        if (consecutiveErrorsRef.current >= 3) {
+          backoffUntilRef.current = Date.now() + 30_000
+        }
+      }
+
       setTokenData({
         tokenCount: 0,
         maxTokens,

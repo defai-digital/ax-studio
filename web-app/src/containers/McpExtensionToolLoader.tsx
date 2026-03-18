@@ -8,6 +8,7 @@ interface McpExtensionToolLoaderProps {
   hasActiveMCPServers: boolean
   selectedModelHasTools: boolean
   initialMessage?: boolean
+  threadId?: string
   MCPToolComponent?: ComponentType<MCPToolComponentProps> | null
 }
 
@@ -16,12 +17,15 @@ export const McpExtensionToolLoader = ({
   hasActiveMCPServers,
   selectedModelHasTools,
   initialMessage,
+  threadId,
   MCPToolComponent,
 }: McpExtensionToolLoaderProps) => {
   // Get tool management hooks
   const { isToolDisabled, setToolDisabledForThread, setDefaultDisabledTools, getDefaultDisabledTools } = useToolAvailable()
-  const { getCurrentThread } = useThreads()
-  const currentThread = getCurrentThread()
+  const currentThreadId = useThreads((state) =>
+    threadId ?? state.getCurrentThread()?.id
+  )
+  const effectiveThreadId = threadId ?? currentThreadId
 
   // Handle tool toggle for custom component
   const handleToolToggle = (toolName: string, enabled: boolean) => {
@@ -37,8 +41,8 @@ export const McpExtensionToolLoader = ({
       } else {
         setDefaultDisabledTools([...currentDefaults, toolKey])
       }
-    } else if (currentThread?.id) {
-      setToolDisabledForThread(currentThread.id, tool.server, toolName, enabled)
+    } else if (effectiveThreadId) {
+      setToolDisabledForThread(effectiveThreadId, tool.server, toolName, enabled)
     }
   }
 
@@ -50,8 +54,8 @@ export const McpExtensionToolLoader = ({
 
     if (initialMessage) {
       return !getDefaultDisabledTools().includes(toolKey)
-    } else if (currentThread?.id) {
-      return !isToolDisabled(currentThread.id, tool.server, toolName)
+    } else if (effectiveThreadId) {
+      return !isToolDisabled(effectiveThreadId, tool.server, toolName)
     }
     return false
   }

@@ -181,7 +181,7 @@ pub async fn monitor_mcp_server_handle(
             }
         }
 
-        let health_check_result = {
+        let (health_check_result, service_snapshot) = {
             let service = {
                 let servers = servers_state.lock().await;
                 match servers.get(&name) {
@@ -193,7 +193,7 @@ pub async fn monitor_mcp_server_handle(
                 }
             };
             // Lock is dropped here — health check runs without holding the lock
-            match timeout(Duration::from_secs(2), service.list_all_tools()).await {
+            let result = match timeout(Duration::from_secs(2), service.list_all_tools()).await {
                 Ok(Ok(_)) => true,
                 Ok(Err(e)) => {
                     log::warn!("MCP server {name} health check failed: {e}");
@@ -203,15 +203,26 @@ pub async fn monitor_mcp_server_handle(
                     log::warn!("MCP server {name} health check timed out");
                     false
                 }
-            }
+            };
+            (result, service)
         };
 
         if !health_check_result {
-            // Server failed health check - remove from map, then cancel without lock
+            // Server failed health check — only remove if it's the same instance we checked.
+            // A concurrent restart may have replaced it with a fresh server.
             log::error!("MCP server {name} failed health check, removing from active servers");
             let service = {
                 let mut servers = servers_state.lock().await;
-                servers.remove(&name)
+                if let Some(current) = servers.get(&name) {
+                    if Arc::ptr_eq(current, &service_snapshot) {
+                        servers.remove(&name)
+                    } else {
+                        log::info!("MCP server {name} was replaced since health check, skipping removal");
+                        None
+                    }
+                } else {
+                    None
+                }
             };
             // Lock dropped — cancel without holding it
             if let Some(service) = service {
@@ -278,10 +289,11 @@ async fn schedule_mcp_start_task<R: Runtime>(
     config: Value,
 ) -> Result<(), String> {
     let app_path = get_app_data_folder_path(app.clone());
-    let exe_path = env::current_exe().expect("Failed to get current exe path");
+    let exe_path = env::current_exe()
+        .map_err(|e| format!("Failed to get current exe path: {e}"))?;
     let exe_parent_path = exe_path
         .parent()
-        .expect("Executable must have a parent directory");
+        .ok_or("Executable must have a parent directory")?;
     let bin_path = exe_parent_path.to_path_buf();
 
     let config_params = extract_command_args(&config)
@@ -312,7 +324,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
                 })
                 .connect_timeout(config_params.timeout.unwrap_or(Duration::MAX))
                 .build()
-                .unwrap(),
+                .map_err(|e| format!("Failed to build HTTP client for {name}: {e}"))?,
             StreamableHttpClientTransportConfig {
                 uri: config_params.url.unwrap().into(),
                 ..Default::default()
@@ -375,7 +387,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
                 })
                 .connect_timeout(config_params.timeout.unwrap_or(Duration::MAX))
                 .build()
-                .unwrap(),
+                .map_err(|e| format!("Failed to build SSE client for {name}: {e}"))?,
             rmcp::transport::sse_client::SseClientConfig {
                 sse_endpoint: config_params.url.unwrap().into(),
                 ..Default::default()
@@ -533,13 +545,13 @@ async fn schedule_mcp_start_task<R: Runtime>(
             }
             Err(_) => {
                 let mut buffer = String::new();
-                let error = match stderr
-                    .expect("stderr must be piped")
-                    .read_to_string(&mut buffer)
-                    .await
-                {
-                    Ok(_) => format!("Failed to start MCP server {name}: {buffer}"),
-                    Err(_) => format!("Failed to read MCP server {name} stderr"),
+                let error = if let Some(mut stderr_reader) = stderr {
+                    match stderr_reader.read_to_string(&mut buffer).await {
+                        Ok(_) => format!("Failed to start MCP server {name}: {buffer}"),
+                        Err(_) => format!("Failed to read MCP server {name} stderr"),
+                    }
+                } else {
+                    format!("Failed to start MCP server {name} (stderr not available)")
                 };
                 log::error!("{error}");
                 return Err(error);
@@ -551,14 +563,21 @@ async fn schedule_mcp_start_task<R: Runtime>(
         let verification_delay = Duration::from_millis(500);
         sleep(verification_delay).await;
 
-        // Check if server is still running after the verification delay
-        let server_still_running = {
+        // Check if server is still in the map AND responsive (quick health ping)
+        let service = {
             let servers_map = servers.lock().await;
-            servers_map.contains_key(&name)
+            servers_map.get(&name).cloned()
         };
-
-        if !server_still_running {
-            return Err(format!("MCP server {name} quit immediately after starting"));
+        match service {
+            None => {
+                return Err(format!("MCP server {name} quit immediately after starting"));
+            }
+            Some(svc) => {
+                if let Err(_) = timeout(Duration::from_secs(3), svc.list_all_tools()).await {
+                    log::warn!("MCP server {name} started but failed initial health check (timed out)");
+                    // Don't fail — the background health monitor will handle it
+                }
+            }
         }
 
         emit_mcp_update_event(&app, &name);

@@ -3,7 +3,6 @@
  * Pure async function; no React, no Zustand imports.
  */
 import type { ServiceHub } from '@/services/index'
-import type { Thread } from '@ax-studio/core'
 import { type BootstrapResult, ok, fail } from './bootstrap-result'
 
 export type BootstrapThreadsInput = {

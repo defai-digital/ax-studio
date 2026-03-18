@@ -52,10 +52,11 @@ When a diagram IS explicitly requested, use a mermaid code fence:
 Mermaid syntax rules (only when generating a requested diagram):
 - Wrap node labels in double quotes when they contain special characters: A["Label (with parens)"]
 - classDiagram: use \`List~Task~\` not \`List<Task>\`, no \`enum {A, B}\` in class body
-- erDiagram: quote SQL reserved words: \`"ORDER"\` not \`ORDER\`
+- erDiagram: quote SQL reserved words: \`"ORDER"\` not \`ORDER\`; NEVER add \`class\`, \`classDef\`, or \`style\` blocks — only entity definitions and relationship lines are valid in erDiagram
 - sequenceDiagram: every message on a single line
-- stateDiagram: always use \`stateDiagram-v2\`
-- gantt: every task needs format \`Task Name :status, YYYY-MM-DD, duration\``
+- stateDiagram: always use \`stateDiagram-v2\`; use ONLY flat transition lines (e.g. \`A --> B\`); NEVER use composite state blocks (\`state X { ... }\`) — they cause "would create a cycle" parse errors
+- gantt: every task needs format \`Task Name :status, YYYY-MM-DD, duration\`
+- mindmap: node labels must be plain text only — NEVER use \`()\`, \`[]\`, or \`{{}}\` inside node label text (they are shape-syntax tokens); write abbreviations without parentheses e.g. "CNN" not "CNN (Convolutional)"`
 
 const normalizePrompt = (value: unknown): string | null => {
   if (typeof value !== 'string') return null
@@ -170,17 +171,23 @@ export const CODE_EXECUTION_INSTRUCTION = `
 
 ## Python code execution
 
-You have a Python code execution engine. When asked to:
-- Plot, chart, or visualize data → write Python using matplotlib or seaborn
-- Create or display a table / DataFrame → write Python using pandas
+Tool priority — always pick the best tool in this order:
+1. **Mermaid diagram** — for Gantt charts, flowcharts, ER diagrams, sequence diagrams, mind maps, etc. (see Diagram rules above)
+2. **Artifact** (\`artifact-chartjs\` or \`artifact-vega\`) — for interactive bar, line, pie, scatter, or other charts that do not need computation
+3. **Python** — only when actual computation is required: statistical analysis, data processing, machine learning, simulations, or generating a chart from real computed data
+
+Use Python when asked to:
 - Run a calculation, simulation, or algorithm → write Python
-- Generate any output that requires computation → write Python
+- Process or analyse data that requires computation → write Python
+- Create or display a table / DataFrame → write Python using pandas
+- Generate a chart that genuinely requires computed data (not just static sample data) → write Python using matplotlib or seaborn
 
 Rules:
-- ALWAYS write a \`\`\`python code block — never say "I cannot create visualizations" or "I cannot run code"
+- NEVER use Python just to draw a static chart — use Mermaid or an artifact instead
+- ALWAYS write a \`\`\`python code block when Python is the right tool — never say "I cannot run code"
 - Use \`plt.show()\` for charts — figures are captured automatically
 - For DataFrames always put \`df\` or \`display(df)\` as the LAST line — NEVER use \`print(df)\` (it outputs plain text, not a styled table)
-- Import libraries at the top of the code block (matplotlib, pandas, numpy, seaborn are available)
+- Import libraries at the top of the code block; commonly used ones are matplotlib, pandas, numpy, seaborn — if a package is missing the user will see a ModuleNotFoundError and can install it
 - Keep code self-contained — define all data inside the block`
 
 /**
@@ -211,6 +218,21 @@ Rules:
 - Vega-Lite artifacts (\`artifact-vega\`) must be a valid Vega-Lite v5 JSON spec (with \`$schema\`, \`data\`, and \`mark\` or \`layer\`/\`hconcat\`/\`vconcat\`).
 - When asked to fix or update an artifact, always output the full updated version in a new artifact block.
 - Keep artifacts self-contained — inline all styles, use no external imports beyond the available runtime (React 18, Chart.js 4, Vega-Lite 5, standard HTML/CSS/JS).`
+
+export const LOCAL_KNOWLEDGE_INSTRUCTION = `
+
+## Local knowledge base
+
+You MUST follow this exact sequence for every user message — no exceptions:
+
+Step 1: Call \`fabric_search\` ONCE with the user's query. Do NOT call it again.
+Step 2: Call \`fabric_extract\` on every file path returned by \`fabric_search\` to retrieve the full content.
+Step 3: Answer using ONLY the content returned by the tools. Do not use training data.
+
+Rules:
+- Never call \`fabric_search\` more than once per message. If the first search returns no results, go straight to Step 3 and say: "I could not find relevant information in the knowledge base."
+- Never skip \`fabric_extract\`. Always extract the full file content after searching.
+- Never say you cannot access the knowledge base.`
 
 export const buildChatPromptInjection = (
   resolved: ResolvedSystemPrompt

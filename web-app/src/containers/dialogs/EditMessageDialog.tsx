@@ -10,8 +10,8 @@ import {
   DialogHeader,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { IconFile, IconPencil, IconX } from '@tabler/icons-react'
+import { FileText, X } from 'lucide-react'
+import { IconPencil } from '@tabler/icons-react'
 import {
   extractFilesFromPrompt,
   injectFilesIntoPrompt,
@@ -36,7 +36,7 @@ export function EditMessageDialog({
   const [isOpen, setIsOpen] = useState(false)
   const { files: initialFiles, cleanPrompt: initialCleanPrompt } = useMemo(
     () => extractFilesFromPrompt(message),
-    [message]
+    [message],
   )
   const [draft, setDraft] = useState(initialCleanPrompt)
   const [keptImages, setKeptImages] = useState<string[]>(imageUrls || [])
@@ -100,90 +100,101 @@ export function EditMessageDialog({
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>{triggerElement || defaultTrigger}</DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-w-[520px]">
         <DialogHeader>
           <DialogTitle>{t('common:dialogs.editMessage.title')}</DialogTitle>
-          {(keptImages.length > 0 || keptFiles.length > 0) && (
-            <div className="mt-2 space-y-2">
-              <div className="flex gap-3 flex-wrap">
-                {keptImages.map((imageUrl, index) => (
-                  <div
-                    key={`img-${index}`}
-                    className="relative border rounded-lg size-14"
-                  >
-                    <img
-                      className="object-cover w-full h-full rounded-lg"
-                      src={imageUrl}
-                      alt={`Attached image ${index + 1}`}
-                    />
-                    <div
-                      className="absolute -top-1 -right-2.5 bg-destructive size-5 flex rounded-full items-center justify-center cursor-pointer"
-                      onClick={() =>
-                        setKeptImages((prev) =>
-                          prev.filter((_, i) => i !== index)
-                        )
-                      }
-                    >
-                      <IconX className="text-destructive-fg" size={16} />
-                    </div>
-                  </div>
-                ))}
-                {keptFiles.map((file) => (
-                  <div
-                    key={file.id}
-                    className="relative border rounded-lg px-3 py-2 flex items-center gap-2 bg-muted"
-                  >
-                    <IconFile size={16} className="text-muted-foreground" />
-                    <span className="text-sm max-w-32 truncate">
-                      {file.name}
-                    </span>
-                    <div
-                      className="absolute -top-1 -right-2.5 bg-destructive size-5 flex rounded-full items-center justify-center cursor-pointer"
-                      onClick={() =>
-                        setKeptFiles((prev) =>
-                          prev.filter((f) => f.id !== file.id)
-                        )
-                      }
-                    >
-                      <IconX className="text-destructive-fg" size={16} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          <Textarea
-            ref={textareaRef}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            className="mt-2 resize-none w-full min-h-24"
-            onKeyDown={handleKeyDown}
-            placeholder={t('common:dialogs.editMessage.title')}
-            aria-label={t('common:dialogs.editMessage.title')}
-          />
-          <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-            <DialogClose asChild>
-              <Button variant="ghost" size="sm" className="w-full sm:w-auto">
-                {t('common:cancel')}
-              </Button>
-            </DialogClose>
-            <Button
-              disabled={
-                (draft === initialCleanPrompt &&
-                  JSON.stringify(imageUrls || []) ===
-                    JSON.stringify(keptImages) &&
-                  JSON.stringify(initialFiles) ===
-                    JSON.stringify(keptFiles)) ||
-                !draft.trim()
-              }
-              onClick={handleSave}
-              size="sm"
-              className="w-full sm:w-auto"
-            >
-              {t('common:save')}
-            </Button>
-          </DialogFooter>
         </DialogHeader>
+
+        {/* Attached files */}
+        {keptFiles.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {keptFiles.map((file) => (
+              <div
+                key={file.id}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 border border-border/50"
+              >
+                <FileText className="size-3.5 text-muted-foreground" />
+                <span className="text-[12px] max-w-32 truncate">
+                  {file.name}
+                </span>
+                <button
+                  onClick={() =>
+                    setKeptFiles((prev) =>
+                      prev.filter((f) => f.id !== file.id),
+                    )
+                  }
+                  className="p-0.5 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Attached images */}
+        {keptImages.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {keptImages.map((imageUrl, index) => (
+              <div
+                key={`img-${index}`}
+                className="relative size-14 rounded-lg overflow-hidden group border border-border/50"
+              >
+                <img
+                  className="object-cover w-full h-full"
+                  src={imageUrl}
+                  alt={`Attached image ${index + 1}`}
+                />
+                <button
+                  onClick={() =>
+                    setKeptImages((prev) =>
+                      prev.filter((_, i) => i !== index),
+                    )
+                  }
+                  className="absolute -top-1 -right-1 p-0.5 rounded-full bg-destructive text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <textarea
+          ref={textareaRef}
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={handleKeyDown}
+          className="w-full min-h-[140px] px-4 py-3 rounded-2xl bg-muted/30 border border-border/50 outline-none text-[14px] resize-y focus:border-primary/50 transition-colors"
+          style={{ lineHeight: '1.6' }}
+          placeholder={t('common:dialogs.editMessage.title')}
+          aria-label={t('common:dialogs.editMessage.title')}
+        />
+        <div className="text-[11px] text-muted-foreground/50">
+          {t('common:dialogs.editMessage.helpText')}
+        </div>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="outline" size="sm">
+              {t('common:cancel')}
+            </Button>
+          </DialogClose>
+          <Button
+            disabled={
+              (draft === initialCleanPrompt &&
+                JSON.stringify(imageUrls || []) ===
+                  JSON.stringify(keptImages) &&
+                JSON.stringify(initialFiles) ===
+                  JSON.stringify(keptFiles)) ||
+              !draft.trim()
+            }
+            onClick={handleSave}
+            size="sm"
+          >
+            {t('common:save')}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

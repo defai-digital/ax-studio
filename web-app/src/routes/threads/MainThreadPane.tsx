@@ -1,7 +1,15 @@
 import type { RefObject } from 'react'
 import type { UIMessage } from '@ai-sdk/react'
+import type { ChatStatus } from 'ai'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { MessageSquareText, Users } from 'lucide-react'
 import ChatInput from '@/containers/ChatInput'
 import { MessagesArea } from './MessagesArea'
 
@@ -10,7 +18,7 @@ export type MainThreadPaneProps = {
   thread: Thread | undefined
   threadLogo: string
   chatMessages: UIMessage[]
-  status: string
+  status: ChatStatus
   error?: Error | null
   stop: () => void
   threadModel: Thread['model'] | undefined
@@ -19,7 +27,7 @@ export type MainThreadPaneProps = {
   handleEditMessage: (messageId: string, newText: string) => void
   handleDeleteMessage: (messageId: string) => void
   handleContextSizeIncrease?: () => Promise<void>
-  reasoningContainerRef: RefObject<HTMLDivElement>
+  reasoningContainerRef: RefObject<HTMLDivElement | null>
   showThreadPromptEditor: boolean
   setShowThreadPromptEditor: (show: boolean | ((v: boolean) => boolean)) => void
   threadPromptDraft: string
@@ -29,6 +37,13 @@ export type MainThreadPaneProps = {
   hasPanels?: boolean
   isSplitView?: boolean
   onSplitClose?: () => void
+  // Team selector (split view only)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  agentTeams?: any[]
+  activeTeamId?: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  activeTeam?: any
+  handleTeamChange?: (teamId: string | undefined) => void
 }
 
 export function MainThreadPane({
@@ -55,15 +70,19 @@ export function MainThreadPane({
   hasPanels = false,
   isSplitView = false,
   onSplitClose,
+  agentTeams = [],
+  activeTeamId,
+  activeTeam,
+  handleTeamChange,
 }: MainThreadPaneProps) {
   const containerCls = isSplitView
-    ? 'h-full rounded-md border bg-background overflow-hidden flex flex-col relative'
+    ? 'h-full rounded-xl border bg-background overflow-hidden flex flex-col relative'
     : hasPanels
-      ? 'h-full rounded-md border bg-background overflow-hidden flex flex-col'
+      ? 'h-full rounded-xl border bg-background overflow-hidden flex flex-col'
       : 'flex flex-1 flex-col h-full overflow-hidden'
 
-  const contentCls = isSplitView || hasPanels ? 'mx-auto w-full px-2' : 'mx-auto w-full md:w-4/5 xl:w-4/6'
-  const inputCls = isSplitView || hasPanels ? 'p-2' : 'py-4 mx-auto w-full md:w-4/5 xl:w-4/6'
+  const contentCls = isSplitView || hasPanels ? 'mx-auto w-full px-2' : 'mx-auto w-full max-w-2xl px-4 sm:px-6'
+  const inputCls = isSplitView || hasPanels ? 'p-2' : 'py-4 mx-auto w-full max-w-2xl px-4 sm:px-6'
 
   const title = thread?.title || (isSplitView ? 'Current Thread' : 'New Thread')
 
@@ -79,9 +98,38 @@ export function MainThreadPane({
               )}
               <span className="truncate">{title}</span>
             </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <Button variant="outline" size="sm" onClick={() => setShowThreadPromptEditor((v) => !v)}>
-                Thread Prompt
+            <div className="flex items-center gap-0.5 shrink-0">
+              {handleTeamChange && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant={activeTeamId ? 'secondary' : 'ghost'}
+                      size="icon-xs"
+                      title={activeTeam ? activeTeam.name : 'Agent Team'}
+                    >
+                      <Users className="size-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={() => handleTeamChange(undefined)}>
+                      No Team (single agent)
+                    </DropdownMenuItem>
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    {agentTeams.map((team: any) => (
+                      <DropdownMenuItem key={team.id} onSelect={() => handleTeamChange(team.id)}>
+                        {team.name}{team.id === activeTeamId && ' ✓'}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              <Button
+                variant={showThreadPromptEditor ? 'secondary' : 'ghost'}
+                size="icon-xs"
+                title="Thread Prompt"
+                onClick={() => setShowThreadPromptEditor((v) => !v)}
+              >
+                <MessageSquareText className="size-3.5" />
               </Button>
               <Button variant="ghost" size="icon-xs" className="shrink-0" onClick={onSplitClose}>
                 <span className="size-4">✕</span>
@@ -129,8 +177,8 @@ export function MainThreadPane({
         const titleMatchesFirst = firstMsgText && title === firstMsgText
         if (titleMatchesFirst && !threadLogo) return null
         return (
-          <div className="px-4 md:px-8 pb-2 shrink-0">
-            <div className="mx-auto w-full md:w-4/5 xl:w-4/6 flex items-center gap-2 min-w-0">
+          <div className="px-4 sm:px-6 pb-2 shrink-0">
+            <div className="mx-auto w-full max-w-2xl flex items-center gap-2 min-w-0">
               {threadLogo && (
                 <img src={threadLogo} alt={title} className="size-5 rounded-sm object-cover shrink-0" />
               )}
@@ -148,6 +196,7 @@ export function MainThreadPane({
             status={status}
             error={error}
             threadId={threadId}
+            thread={thread}
             reasoningContainerRef={reasoningContainerRef}
             handleRegenerate={handleRegenerate}
             handleEditMessage={handleEditMessage}
@@ -155,8 +204,14 @@ export function MainThreadPane({
             handleContextSizeIncrease={handleContextSizeIncrease}
             contentCls={contentCls}
           />
-          <div className={inputCls}>
-            <ChatInput threadId={threadId} model={threadModel} onSubmit={handleSubmit} onStop={stop} chatStatus={status} />
+          <div className="relative">
+            <div
+              className="absolute -top-8 left-0 right-0 h-8 pointer-events-none z-10"
+              style={{ background: 'linear-gradient(to top, var(--background) 20%, transparent)' }}
+            />
+            <div className={inputCls}>
+              <ChatInput threadId={threadId} model={threadModel} onSubmit={handleSubmit} onStop={stop} chatStatus={status} />
+            </div>
           </div>
         </div>
       ) : (
@@ -166,6 +221,7 @@ export function MainThreadPane({
             status={status}
             error={error}
             threadId={threadId}
+            thread={thread}
             reasoningContainerRef={reasoningContainerRef}
             handleRegenerate={handleRegenerate}
             handleEditMessage={handleEditMessage}
@@ -173,8 +229,15 @@ export function MainThreadPane({
             handleContextSizeIncrease={handleContextSizeIncrease}
             contentCls={contentCls}
           />
-          <div className={inputCls}>
-            <ChatInput threadId={threadId} model={threadModel} onSubmit={handleSubmit} onStop={stop} chatStatus={status} />
+          <div className="relative">
+            {/* Gradient fade from messages to input */}
+            <div
+              className="absolute -top-8 left-0 right-0 h-8 pointer-events-none z-10"
+              style={{ background: 'linear-gradient(to top, var(--background) 20%, transparent)' }}
+            />
+            <div className={inputCls}>
+              <ChatInput threadId={threadId} model={threadModel} onSubmit={handleSubmit} onStop={stop} chatStatus={status} />
+            </div>
           </div>
         </>
       )}

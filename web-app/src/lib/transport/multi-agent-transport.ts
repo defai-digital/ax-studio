@@ -336,14 +336,17 @@ export async function executeMultiAgentStream(
       persistRunLog(runLog).catch(() => {})
     }
 
-    emitDataPart('agentStatus', {
-      agent_id: 'orchestrator',
-      agent_name: 'Orchestrator',
-      status: 'error',
-      tokens_used: 0,
-      error: `Multi-agent failed: ${error instanceof Error ? error.message : String(error)}. Falling back to single-agent mode.`,
+    const errMsg = error instanceof Error ? error.message : String(error)
+    const fallbackStream = await onFallbackToSingleAgent(options)
+    return createUIMessageStream({
+      execute: async ({ writer }) => {
+        writer.write({
+          type: 'text-delta',
+          id: 'agent-error-notice',
+          delta: `> **Agent Team Error:** ${errMsg}. Falling back to single-agent mode.\n\n`,
+        })
+        await writer.merge(fallbackStream)
+      },
     })
-
-    return onFallbackToSingleAgent(options)
   }
 }

@@ -12,6 +12,7 @@ import { toast } from 'sonner'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useThreads } from '@/hooks/useThreads'
 import { useThreadManagement } from '@/hooks/useThreadManagement'
+import { AlertTriangle } from 'lucide-react'
 
 interface DeleteProjectDialogProps {
   open: boolean
@@ -82,8 +83,20 @@ export function DeleteProjectDialog({
             )}
           </DialogDescription>
         </DialogHeader>
+        {hasThreads && (
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/5 border border-amber-500/10">
+            <AlertTriangle className="size-4 text-amber-500 shrink-0 mt-0.5" />
+            <span className="text-[12px] text-muted-foreground">
+              {t('projects.deleteProjectDialog.unassignWarning')}
+            </span>
+          </div>
+        )}
         <DialogFooter>
-          <Button size="sm" variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
             {t('cancel')}
           </Button>
           <Button

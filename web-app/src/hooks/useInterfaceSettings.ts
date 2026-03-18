@@ -10,7 +10,7 @@ export const ACCENT_COLORS = [
     name: 'Gray',
     value: 'gray',
     thumb: '#3F3F46',
-    primary: '#f17455',
+    primary: '#6366f1',
     sidebar: { light: '#f1f1f1', dark: '#171717' },
   },
   {
@@ -88,14 +88,13 @@ export const ACCENT_COLORS = [
 export type AccentColorValue = (typeof ACCENT_COLORS)[number]['value']
 const DEFAULT_ACCENT_COLOR: AccentColorValue = 'gray'
 
-const applyAccentColorToDOM = (colorValue: string, isDark: boolean) => {
+export const applyAccentColorToDOM = (colorValue: string, _isDark: boolean) => {
   const color = ACCENT_COLORS.find((c) => c.value === colorValue)
   if (!color) return
 
   const root = document.documentElement
-  const sidebarColor = isDark ? color.sidebar.dark : color.sidebar.light
-
-  root.style.setProperty('--sidebar', sidebarColor)
+  // Sidebar always stays dark regardless of theme
+  root.style.setProperty('--sidebar', color.sidebar.dark)
   root.style.setProperty('--primary', color.primary)
 }
 

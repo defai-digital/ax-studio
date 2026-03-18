@@ -43,12 +43,11 @@ export const useGeneralSetting = create<GeneralSettingState>()(
           ?.getSettings()
           .then((settings) => {
             if (settings) {
-              const newSettings = settings.map((e) => {
-                if (e.key === 'hf-token') {
-                  e.controllerProps.value = token
-                }
-                return e
-              })
+              const newSettings = settings.map((e) =>
+                e.key === 'hf-token'
+                  ? { ...e, controllerProps: { ...e.controllerProps, value: token } }
+                  : e
+              )
               ExtensionManager.getInstance()
                 .getByName('@ax-studio/download-extension')
                 ?.updateSettings(newSettings)

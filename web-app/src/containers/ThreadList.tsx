@@ -1,9 +1,9 @@
-import { Folder, ImagePlus, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react'
+import { Download, Folder, ImagePlus, MessageCircle, MoreHorizontal, Pencil, Pin, PinOff, Trash2, X } from 'lucide-react'
+import { exportThread } from '@/lib/thread-export'
 import { useThreads } from '@/hooks/useThreads'
 import { useMessages } from '@/hooks/useMessages'
 import { useThreadManagement } from '@/hooks/useThreadManagement'
-import { useServiceHub } from '@/hooks/useServiceHub'
-import { useEffect, useRef } from 'react'
+import { useCallback } from 'react'
 
 import {
   DropdownMenu,
@@ -16,6 +16,13 @@ import {
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu'
+import {
   SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -27,7 +34,6 @@ import { Link } from '@tanstack/react-router'
 import { RenameThreadDialog, DeleteThreadDialog } from '@/containers/dialogs'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { ThreadMessage } from '@ax-studio/core'
 import {
   Dialog,
   DialogContent,
@@ -38,15 +44,29 @@ import {
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 
+function formatRelativeTime(timestamp: number): string {
+  const now = Date.now() / 1000
+  const diff = now - timestamp
+  if (diff < 60) return 'Just now'
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`
+  return new Date(timestamp * 1000).toLocaleDateString()
+}
+
 const ThreadItem = memo(
   ({
     thread,
     isMobile,
     currentProjectId,
+    onTogglePin,
+    isPinned,
   }: {
     thread: Thread
     isMobile: boolean
     currentProjectId?: string
+    onTogglePin?: (threadId: string) => void
+    isPinned?: boolean
   }) => {
     const deleteThread = useThreads((state) => state.deleteThread)
     const renameThread = useThreads((state) => state.renameThread)
@@ -59,56 +79,18 @@ const ThreadItem = memo(
     const [logoDialogOpen, setLogoDialogOpen] = useState(false)
     const [chatLogo, setChatLogo] = useState('')
 
-    const serviceHub = useServiceHub()
-    const getMessages = useMessages((state) => state.getMessages)
-    const setMessages = useMessages((state) => state.setMessages)
-
-    // Use a ref to track if messages have been loaded
-    const messagesLoadedRef = useRef(false)
-    // Track current messages for comparison
-    const messagesLengthRef = useRef(0)
-
-    // Get messages reactively via ref tracking (to avoid infinite re-renders)
-    const [messages, setLocalMessages] = useState<ThreadMessage[]>(() =>
-      getMessages(thread.id)
-    )
-
-    // Fetch messages if not loaded yet
-    useEffect(() => {
-      const currentMessages = getMessages(thread.id)
-
-      // Initial load: no messages yet, fetch them
-      if (currentMessages.length === 0 && !messagesLoadedRef.current) {
-        messagesLoadedRef.current = true
-        serviceHub
-          .messages()
-          .fetchMessages(thread.id)
-          .then((fetchedMessages) => {
-            if (fetchedMessages) {
-              setMessages(thread.id, fetchedMessages)
-              setLocalMessages(fetchedMessages)
-              messagesLengthRef.current = fetchedMessages.length
-            }
-          })
-          .catch(() => {
-            messagesLoadedRef.current = false
-          })
-        return
-      }
-
-      // Only update local state if messages length changed (prevents re-renders during streaming)
-      if (currentMessages.length !== messagesLengthRef.current) {
-        setLocalMessages(currentMessages)
-        messagesLengthRef.current = currentMessages.length
-      }
-    }, [thread.id, serviceHub, getMessages, setMessages])
+    // Read messages from store only if already loaded (no fetching in sidebar)
+    const messages = useMessages((state) => state.messages[thread.id])
 
     const lastUserMessageText = useMemo(() => {
-      const userMessages = messages.filter((m) => m.role === 'user')
-      const lastUserMessage = userMessages[userMessages.length - 1]
-      if (!lastUserMessage) return undefined
-      const textContent = lastUserMessage.content?.find((c) => c.type === 'text')
-      return textContent?.text?.value
+      if (!messages || messages.length === 0) return undefined
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === 'user') {
+          const textContent = messages[i].content?.find((c) => c.type === 'text')
+          return textContent?.text?.value
+        }
+      }
+      return undefined
     }, [messages])
 
     const plainTitleForRename = useMemo(() => {
@@ -131,7 +113,7 @@ const ThreadItem = memo(
         .sort((a, b) => b.updated_at - a.updated_at)
     }, [folders, currentProjectId, thread.metadata?.project?.id])
 
-    const assignThreadToProject = (threadId: string, projectId: string) => {
+    const assignThreadToProject = useCallback((threadId: string, projectId: string) => {
       const project = getFolderById(projectId)
       if (project && updateThread) {
         const projectMetadata = {
@@ -151,9 +133,9 @@ const ThreadItem = memo(
 
         toast.success(`Thread assigned to "${project.name}" successfully`)
       }
-    }
+    }, [getFolderById, updateThread, thread.metadata])
 
-    const handleSaveChatLogo = () => {
+    const handleSaveChatLogo = useCallback(() => {
       const normalizedLogo = chatLogo.trim()
       updateThread(thread.id, {
         metadata: {
@@ -167,9 +149,9 @@ const ThreadItem = memo(
           ? t('common:chatLogoSaved', { defaultValue: 'Chat logo saved.' })
           : t('common:chatLogoRemoved', { defaultValue: 'Chat logo removed.' })
       )
-    }
+    }, [chatLogo, updateThread, thread.id, thread.metadata, t])
 
-    const handleChatLogoFileChange = (file?: File) => {
+    const handleChatLogoFileChange = useCallback((file?: File) => {
       if (!file) return
       const reader = new FileReader()
       reader.onload = () => {
@@ -179,29 +161,49 @@ const ThreadItem = memo(
         toast.error(t('error'))
       }
       reader.readAsDataURL(file)
-    }
+    }, [t])
 
     return (
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
       <SidebarMenuItem>
-        {currentProjectId ? 
-          <Link to="/threads/$threadId" params={{ threadId: thread.id }} className="bg-card dark:bg-secondary/20 px-4 py-4 border hover:dark:bg-secondary/30 rounded-lg block">
-              <div className="flex items-center gap-2">
-                {currentChatLogo && (
-                  <img
-                    src={currentChatLogo}
-                    alt={thread.title || t('common:newThread')}
-                    className="size-4 rounded-sm object-cover"
-                  />
-                )}
-                <span>{thread.title || t('common:newThread')}</span>
-              </div>
-              {currentProjectId && lastUserMessageText && (
-                <div className="text-muted-foreground text-xs mt-1 line-clamp-1 pr-10">
-                  {lastUserMessageText}
+        {currentProjectId ?
+          <Link
+            to="/threads/$threadId"
+            params={{ threadId: thread.id }}
+            className="flex items-start gap-3 p-4 rounded-xl border border-border/50 hover:border-border hover:bg-muted/20 transition-all block"
+          >
+            <MessageCircle className="size-4 text-muted-foreground mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  {currentChatLogo && (
+                    <img
+                      src={currentChatLogo}
+                      alt={thread.title || t('common:newThread')}
+                      className="size-4 rounded-sm object-cover shrink-0"
+                      loading="lazy"
+                    />
+                  )}
+                  <span
+                    className="truncate"
+                    style={{ fontSize: '14px', fontWeight: 500 }}
+                  >
+                    {thread.title || t('common:newThread')}
+                  </span>
                 </div>
+                <span className="text-[11px] text-muted-foreground shrink-0">
+                  {formatRelativeTime(thread.updated)}
+                </span>
+              </div>
+              {lastUserMessageText && (
+                <p className="text-[12px] text-muted-foreground mt-0.5 truncate pr-8">
+                  {lastUserMessageText}
+                </p>
               )}
+            </div>
           </Link>
-          : 
+          :
           <SidebarMenuButton asChild>
             <Link to="/threads/$threadId" params={{ threadId: thread.id }}>
               {currentChatLogo && (
@@ -209,6 +211,7 @@ const ThreadItem = memo(
                   src={currentChatLogo}
                   alt={thread.title || t('common:newThread')}
                   className="size-4 rounded-sm object-cover"
+                  loading="lazy"
                 />
               )}
               <span>{thread.title || t('common:newThread')}</span>
@@ -219,7 +222,7 @@ const ThreadItem = memo(
           <DropdownMenuTrigger asChild>
             <SidebarMenuAction
               showOnHover
-              className={cn("hover:bg-sidebar-foreground/8", currentProjectId && 'mt-4 mr-2')}
+              className={cn("hover:bg-sidebar-foreground/8", currentProjectId && 'mt-3.5 mr-2')}
             >
               <MoreHorizontal />
               <span className="sr-only">More</span>
@@ -234,6 +237,21 @@ const ThreadItem = memo(
               <Pencil className="size-4" />
               <span>{t('common:rename')}</span>
             </DropdownMenuItem>
+            {onTogglePin && (
+              <DropdownMenuItem onSelect={() => onTogglePin(thread.id)}>
+                {isPinned ? (
+                  <>
+                    <PinOff className="size-4" />
+                    <span>Unpin</span>
+                  </>
+                ) : (
+                  <>
+                    <Pin className="size-4" />
+                    <span>Pin</span>
+                  </>
+                )}
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem
               onSelect={() => {
                 setChatLogo(currentChatLogo)
@@ -273,6 +291,26 @@ const ThreadItem = memo(
                     </DropdownMenuItem>
                   ))
                 )}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="gap-2">
+                <Download className="size-4" />
+                <span>Export Chat</span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="min-w-36">
+                <DropdownMenuItem onSelect={() => exportThread(thread, 'json')}>
+                  <span>JSON</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => exportThread(thread, 'csv')}>
+                  <span>CSV</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => exportThread(thread, 'alpaca')}>
+                  <span>JSON (Alpaca)</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => exportThread(thread, 'openai-jsonl')}>
+                  <span>JSONL (OpenAI)</span>
+                </DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
             {thread.metadata?.project && (
@@ -377,6 +415,37 @@ const ThreadItem = memo(
           </DialogContent>
         </Dialog>
       </SidebarMenuItem>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-48">
+          <ContextMenuItem onSelect={() => setRenameOpen(true)}>
+            <Pencil className="size-4 mr-2" />
+            <span>{t('common:rename')}</span>
+          </ContextMenuItem>
+          {onTogglePin && (
+            <ContextMenuItem onSelect={() => onTogglePin(thread.id)}>
+              {isPinned ? (
+                <>
+                  <PinOff className="size-4 mr-2" />
+                  <span>Unpin</span>
+                </>
+              ) : (
+                <>
+                  <Pin className="size-4 mr-2" />
+                  <span>Pin</span>
+                </>
+              )}
+            </ContextMenuItem>
+          )}
+          <ContextMenuSeparator />
+          <ContextMenuItem
+            className="text-destructive focus:text-destructive"
+            onSelect={() => setDeleteConfirmOpen(true)}
+          >
+            <Trash2 className="size-4 mr-2" />
+            <span>{t('common:delete')}</span>
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
     )
   }
 )
@@ -384,9 +453,11 @@ const ThreadItem = memo(
 type ThreadListProps = {
   threads: Thread[]
   currentProjectId?: string
+  onTogglePin?: (threadId: string) => void
+  pinnedSet?: Set<string>
 }
 
-function ThreadList({ threads, currentProjectId }: ThreadListProps) {
+function ThreadList({ threads, currentProjectId, onTogglePin, pinnedSet }: ThreadListProps) {
   const { isMobile } = useSidebar()
 
   const sortedThreads = useMemo(() => {
@@ -403,6 +474,8 @@ function ThreadList({ threads, currentProjectId }: ThreadListProps) {
           thread={thread}
           isMobile={isMobile}
           currentProjectId={currentProjectId}
+          onTogglePin={onTogglePin}
+          isPinned={pinnedSet?.has(thread.id)}
         />
       ))}
     </>

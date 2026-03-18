@@ -149,18 +149,21 @@ export const ReasoningTrigger = memo(
     return (
       <CollapsibleTrigger
         className={cn(
-          'flex w-full items-center gap-2 text-muted-foreground text-sm transition-colors hover:text-foreground',
+          'flex w-fit items-center gap-2 text-muted-foreground text-[12px] font-medium transition-all hover:text-foreground px-3 py-2 rounded-xl border group/reasoning',
+          isOpen
+            ? 'bg-violet-500/5 border-violet-500/20'
+            : 'border-border hover:bg-muted/50',
           className
         )}
         {...props}
       >
         {children ?? (
           <>
-            <BrainIcon className="size-4" />
+            <BrainIcon className="size-3.5 text-violet-500" />
             {getThinkingMessage(isStreaming, duration)}
             <ChevronDownIcon
               className={cn(
-                'size-4 transition-transform',
+                'size-3.5 text-muted-foreground transition-transform',
                 isOpen ? 'rotate-180' : 'rotate-0'
               )}
             />
@@ -181,14 +184,14 @@ export const ReasoningContent = memo(
   ({ className, children, ...props }: ReasoningContentProps) => (
     <CollapsibleContent
       className={cn(
-        'mt-4 text-sm relative',
+        'mt-2 text-[13px] relative',
         'data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 text-muted-foreground outline-none data-[state=closed]:animate-out data-[state=open]:animate-in',
         className
       )}
       {...props}
     >
-      <div className="ml-2 pl-4 border-l-2 border-dotted">
-        <AXMarkdown animate={true} animationDuration={500} {...props}>
+      <div className="pl-4 border-l-2 border-violet-500/25 py-1 italic leading-relaxed">
+        <AXMarkdown animated={true}>
           {children}
         </AXMarkdown>
       </div>

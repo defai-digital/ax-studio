@@ -7,10 +7,10 @@ import { IconX } from '@tabler/icons-react'
 import { useGeneralSetting } from '@/hooks/useGeneralSetting'
 import { useModelProvider } from '@/hooks/useModelProvider'
 import { useAppState } from '@/hooks/useAppState'
-import { MovingBorder } from './MovingBorder'
 import type { ChatStatus } from 'ai'
 import { useAssistant } from '@/hooks/useAssistant'
 import { useMemory } from '@/hooks/useMemory'
+import { useLocalKnowledge } from '@/hooks/useLocalKnowledge'
 import { useTools } from '@/hooks/useTools'
 import { useMessages } from '@/hooks/useMessages'
 import { useShallow } from 'zustand/react/shallow'
@@ -20,6 +20,7 @@ import { useChatSendHandler } from '@/hooks/use-chat-send-handler'
 import { ChatInputToolbar } from '@/containers/ChatInputToolbar'
 import { TokenCounter } from '@/components/TokenCounter'
 import { useTranslation } from '@/i18n/react-i18next-compat'
+import { Wrench, Globe, Atom, Code2 } from 'lucide-react'
 
 type ChatInputProps = {
   className?: string
@@ -57,9 +58,43 @@ const ChatInput = memo(function ChatInput({
   const setGlobalPrompt = usePrompt((state) => state.setPrompt)
   const currentThreadId = useThreads((state) => state.currentThreadId)
   const effectiveThreadId = threadId ?? currentThreadId
-  const isMemoryEnabled = useMemory((state) => state.memoryEnabled)
-  const toggleMemory = useMemory((state) => state.toggleMemory)
+  const globalMemoryEnabled = useMemory((state) => state.memoryEnabled)
+  const isMemoryEnabledForThread = useMemory((state) => state.isMemoryEnabledForThread)
+  const toggleMemoryGlobal = useMemory((state) => state.toggleMemory)
+  const toggleMemoryForThread = useMemory((state) => state.toggleMemoryForThread)
+  const memoryEnabledPerThread = useMemory((state) => state.memoryEnabledPerThread)
   const memoryCount = useMemory((state) => (state.memories['default'] || []).length)
+
+  const isMemoryEnabled = effectiveThreadId
+    ? (effectiveThreadId in memoryEnabledPerThread
+        ? memoryEnabledPerThread[effectiveThreadId]
+        : globalMemoryEnabled)
+    : globalMemoryEnabled
+  const toggleMemory = useCallback(() => {
+    if (effectiveThreadId) {
+      toggleMemoryForThread(effectiveThreadId)
+    } else {
+      toggleMemoryGlobal()
+    }
+  }, [effectiveThreadId, toggleMemoryForThread, toggleMemoryGlobal])
+
+  const globalLocalKnowledgeEnabled = useLocalKnowledge((state) => state.localKnowledgeEnabled)
+  const localKnowledgeEnabledPerThread = useLocalKnowledge((state) => state.localKnowledgeEnabledPerThread)
+  const toggleLocalKnowledgeGlobal = useLocalKnowledge((state) => state.toggleLocalKnowledge)
+  const toggleLocalKnowledgeForThread = useLocalKnowledge((state) => state.toggleLocalKnowledgeForThread)
+
+  const isLocalKnowledgeEnabled = effectiveThreadId
+    ? (effectiveThreadId in localKnowledgeEnabledPerThread
+        ? localKnowledgeEnabledPerThread[effectiveThreadId]
+        : globalLocalKnowledgeEnabled)
+    : globalLocalKnowledgeEnabled
+  const toggleLocalKnowledge = useCallback(() => {
+    if (effectiveThreadId) {
+      toggleLocalKnowledgeForThread(effectiveThreadId)
+    } else {
+      toggleLocalKnowledgeGlobal()
+    }
+  }, [effectiveThreadId, toggleLocalKnowledgeForThread, toggleLocalKnowledgeGlobal])
   const currentThread = useThreads((state) =>
     effectiveThreadId ? state.threads[effectiveThreadId] : state.getCurrentThread()
   )
@@ -70,7 +105,7 @@ const ChatInput = memo(function ChatInput({
 
   useTools()
 
-  const selectedModel = useModelProvider((state) => state.selectedModel)
+  const selectedModel = useModelProvider((state) => state.selectedModel) ?? undefined
   const assistants = useAssistant((state) => state.assistants)
 
   const threadMessages = useMessages(
@@ -79,7 +114,7 @@ const ChatInput = memo(function ChatInput({
     )
   )
 
-  const maxRows = 10
+  const maxRows = 8
 
   const [localPrompt, setLocalPrompt] = useState('')
   const prompt = threadId ? localPrompt : globalPrompt
@@ -146,35 +181,37 @@ const ChatInput = memo(function ChatInput({
   const isStreaming = chatStatus === 'submitted' || chatStatus === 'streaming'
 
   return (
-    <div className="relative overflow-hidden">
+    <div className="relative">
       <div className="relative">
-        <div
-          className={cn(
-            'relative overflow-hidden p-0.5 rounded-3xl',
-            isStreaming && 'opacity-70'
-          )}
-        >
+        <div className="relative rounded-2xl">
+          {/* Streaming glow border — spinning conic gradient */}
           {isStreaming && (
-            <div className="absolute inset-0">
-              <MovingBorder rx="10%" ry="10%">
-                <div className="h-100 w-100 bg-[radial-gradient(var(--app-primary),transparent_60%)]" />
-              </MovingBorder>
+            <div className="absolute -inset-[1px] rounded-2xl overflow-hidden pointer-events-none z-0">
+              <div
+                className="absolute inset-0 streaming-glow-spin"
+                style={{
+                  background:
+                    'conic-gradient(from 0deg, transparent 0%, #6366f1 20%, #8b5cf6 40%, transparent 60%)',
+                }}
+              />
+              <div className="absolute inset-[1.5px] rounded-[14px] bg-white dark:bg-zinc-900" />
             </div>
           )}
-
           <div
             className={cn(
-              'relative z-20 px-0 pb-10 border rounded-3xl border-input bg-white dark:bg-input/30',
-              isFocused && 'ring-1 ring-ring/50'
+              'relative z-10 px-0 pb-10 border rounded-2xl border-input bg-white dark:bg-zinc-900 transition-shadow',
+              isFocused && !isStreaming && 'ring-2 ring-primary/25 border-primary/30',
+              isStreaming && 'border-transparent'
             )}
           >
             <TextareaAutosize
               ref={textareaRef}
               minRows={2}
               rows={1}
-              maxRows={10}
+              maxRows={8}
               value={prompt}
               data-testid="chat-input"
+              data-chat-input=""
               onChange={(e) => {
                 setPrompt(e.target.value)
                 const newRows = (e.target.value.match(/\n/g) || []).length + 1
@@ -190,13 +227,14 @@ const ChatInput = memo(function ChatInput({
                 }
               }}
               placeholder={t('common:placeholder.chatInput')}
+              aria-label={t('common:placeholder.chatInput')}
               autoFocus
               spellCheck={spellCheckChatInput}
               data-gramm={spellCheckChatInput}
               data-gramm_editor={spellCheckChatInput}
               data-gramm_grammarly={spellCheckChatInput}
               className={cn(
-                'bg-transparent pt-4 w-full shrink-0 border-none resize-none outline-0 px-4 break-words',
+                'bg-transparent pt-4 w-full shrink-0 border-none resize-none outline-0 px-4 break-words text-[14px]',
                 rows < maxRows && 'scrollbar-hide',
                 className
               )}
@@ -228,6 +266,8 @@ const ChatInput = memo(function ChatInput({
           isMemoryEnabled={isMemoryEnabled}
           toggleMemory={toggleMemory}
           memoryCount={memoryCount}
+          isLocalKnowledgeEnabled={isLocalKnowledgeEnabled}
+          toggleLocalKnowledge={toggleLocalKnowledge}
           tokenCounterCompact={tokenCounterCompact}
           threadMessages={threadMessages || []}
           stopStreaming={stopStreaming}
@@ -252,6 +292,62 @@ const ChatInput = memo(function ChatInput({
           <TokenCounter messages={threadMessages || []} />
         </div>
       )}
+
+      {/* Capability indicators + keyboard hints */}
+      <div className="flex items-center gap-0.5 px-2 pt-1.5 pb-0.5">
+        <button
+          type="button"
+          className={cn(
+            'flex items-center gap-1 px-2 py-1 rounded-md transition-colors text-[11px]',
+            hasActiveMCPServers
+              ? 'text-indigo-500 hover:bg-muted/60'
+              : 'text-muted-foreground/30 hover:text-muted-foreground/50'
+          )}
+        >
+          <Wrench className="size-3" />
+          <span className="hidden sm:inline">Tools{hasActiveMCPServers ? ` (${tools.length})` : ''}</span>
+        </button>
+        <button
+          type="button"
+          className={cn(
+            'flex items-center gap-1 px-2 py-1 rounded-md transition-colors text-[11px]',
+            selectedModel?.capabilities?.includes('web_search')
+              ? 'text-cyan-500 hover:bg-muted/60'
+              : 'text-muted-foreground/30 hover:text-muted-foreground/50'
+          )}
+        >
+          <Globe className="size-3" />
+          <span className="hidden sm:inline">Web</span>
+        </button>
+        <button
+          type="button"
+          className={cn(
+            'flex items-center gap-1 px-2 py-1 rounded-md transition-colors text-[11px]',
+            selectedModel?.capabilities?.includes('reasoning')
+              ? 'text-violet-500 hover:bg-muted/60'
+              : 'text-muted-foreground/30 hover:text-muted-foreground/50'
+          )}
+        >
+          <Atom className="size-3" />
+          <span className="hidden sm:inline">Reasoning</span>
+        </button>
+        <button
+          type="button"
+          className={cn(
+            'flex items-center gap-1 px-2 py-1 rounded-md transition-colors text-[11px]',
+            selectedModel
+              ? 'text-emerald-500 hover:bg-muted/60'
+              : 'text-muted-foreground/30 hover:text-muted-foreground/50'
+          )}
+        >
+          <Code2 className="size-3" />
+          <span className="hidden sm:inline">Code</span>
+        </button>
+        <div className="flex-1" />
+        <span className="text-[11px] text-muted-foreground/30">
+          ⏎ Send &nbsp;·&nbsp; ⇧⏎ Newline
+        </span>
+      </div>
     </div>
   )
 })

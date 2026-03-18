@@ -3,6 +3,8 @@ import { useCallback, useMemo, useState, useRef, useEffect } from 'react'
 import { route } from '@/constants/routes'
 import SettingsMenu from '@/containers/SettingsMenu'
 import HeaderPage from '@/containers/HeaderPage'
+import { useTranslation } from '@/i18n/react-i18next-compat'
+import { Brain } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -136,6 +138,7 @@ function MemoryRow({
 const EMPTY_MEMORIES: MemoryEntry[] = []
 
 function MemorySettings() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const memoryEnabled = useMemory((state) => state.memoryEnabled)
   const toggleMemory = useMemory((state) => state.toggleMemory)
@@ -229,6 +232,9 @@ function MemorySettings() {
           toast.error('Failed to parse JSON file')
         }
       }
+      reader.onerror = () => {
+        toast.error('Failed to read file')
+      }
       reader.readAsText(file)
       // Reset the input so the same file can be re-imported
       e.target.value = ''
@@ -243,10 +249,19 @@ function MemorySettings() {
           <span className="font-medium text-base font-studio">Settings</span>
         </div>
       </HeaderPage>
-      <div className="flex h-[calc(100%-60px)]">
+      <div className="flex flex-1 min-h-0">
         <SettingsMenu />
-        <div className="p-4 pt-0 w-full overflow-y-auto">
-          <div className="flex flex-col justify-between gap-4 gap-y-3 w-full">
+        <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+          <div className="flex items-center gap-3 px-8 py-5 border-b border-border/40 bg-background sticky top-0 z-10">
+            <div className="size-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+              <Brain className="size-3.5 text-white" strokeWidth={2.5} />
+            </div>
+            <h1 className="text-foreground tracking-tight" style={{ fontSize: '16px', fontWeight: 600 }}>
+              {t('common:memory')}
+            </h1>
+          </div>
+          <div className="px-8 py-7">
+            <div className="max-w-2xl space-y-6">
             {/* Enable/Disable Toggle */}
             <Card
               header={
@@ -351,6 +366,7 @@ function MemorySettings() {
                 />
               </div>
             </Card>
+          </div>
           </div>
         </div>
       </div>

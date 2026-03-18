@@ -51,7 +51,7 @@ async fn start_server_internal<R: tauri::Runtime>(
     proxy_api_key: String,
     trusted_hosts: Vec<Vec<String>>,
     cors_enabled: bool,
-    _proxy_timeout: u64,
+    proxy_timeout: u64,
     app_handle: tauri::AppHandle<R>,
 ) -> Result<u16, Box<dyn std::error::Error + Send + Sync>> {
     let mut handle_guard = server_handle.lock().await;
@@ -74,8 +74,11 @@ async fn start_server_internal<R: tauri::Runtime>(
 
     SERVER_CORS_ENABLED.store(cors_enabled, Ordering::Relaxed);
 
+    // Use user-configured timeout for overall request, cap connect timeout at 30s
+    let connect_timeout_secs = proxy_timeout.min(30);
     let client = Client::builder()
-        .connect_timeout(std::time::Duration::from_secs(30))
+        .connect_timeout(std::time::Duration::from_secs(connect_timeout_secs))
+        .timeout(std::time::Duration::from_secs(proxy_timeout))
         .pool_max_idle_per_host(10)
         .pool_idle_timeout(std::time::Duration::from_secs(30))
         .build()?;

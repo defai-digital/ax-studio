@@ -23,7 +23,7 @@ export const huggingFaceRepoSchema = z.object({
   tags: z.array(z.string()),
   pipeline_tag: z.string().optional(),
   createdAt: z.string(),
-  last_modified: z.string(),
+  last_modified: z.string().optional(),
   private: z.boolean(),
   disabled: z.boolean(),
   gated: z.union([z.boolean(), z.string()]),

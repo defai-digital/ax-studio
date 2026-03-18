@@ -11,12 +11,20 @@ export class EventEmitter {
     this.handlers = new Map<string, Function[]>()
   }
 
-  public on(eventName: string, handler: Function): void {
+  /**
+   * Register an event handler. Returns an unsubscribe function so callers
+   * using inline lambdas can still remove their listener without keeping
+   * a reference to the original function.
+   */
+  public on(eventName: string, handler: Function): () => void {
     if (!this.handlers.has(eventName)) {
       this.handlers.set(eventName, [])
     }
 
     this.handlers.get(eventName)?.push(handler)
+
+    // Return an unsubscribe function that captures the exact handler reference
+    return () => this.off(eventName, handler)
   }
 
   public off(eventName: string, handler: Function): void {

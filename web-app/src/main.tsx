@@ -162,7 +162,7 @@ async function saveBlobNative(blob: Blob, filename: string): Promise<void> {
 
     } else {
       // Last-resort: data URI (limited browser environments)
-      await new Promise<void>((resolve) => {
+      await new Promise<void>((resolve, reject) => {
         const reader = new FileReader()
         reader.onload = () => {
           const a = document.createElement('a')
@@ -173,6 +173,7 @@ async function saveBlobNative(blob: Blob, filename: string): Promise<void> {
           document.body.removeChild(a)
           resolve()
         }
+        reader.onerror = () => reject(reader.error ?? new Error('Failed to read blob'))
         reader.readAsDataURL(blob)
       })
     }

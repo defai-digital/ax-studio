@@ -16,7 +16,7 @@ export type BootstrapProvidersInput = {
   serviceHub: ServiceHub
   setProviders: (providers: ModelProvider[], pathSep: string) => void
   setServers: (servers: Record<string, MCPServerConfig>) => void
-  setSettings: (settings: MCPSettings) => void
+  setSettings: (settings: MCPSettings | null) => void
   setAssistants: (assistants: Assistant[]) => void
   initializeWithLastUsed: () => void
   onDeepLink: (urls: string[] | null) => void

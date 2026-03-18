@@ -29,6 +29,7 @@ import { AgentOutputCard } from '@/components/AgentOutputCard'
 import { RunLogSummary } from '@/components/RunLogViewer'
 import type { AgentStatusData } from '@/types/agent-data-parts'
 import type { RunLogData } from '@/lib/multi-agent/run-log'
+import { Zap, GitBranch, ThumbsUp, ThumbsDown } from 'lucide-react'
 
 const CHAT_STATUS = {
   STREAMING: 'streaming',
@@ -155,14 +156,14 @@ export const MessageItem = memo(
         <div key={`${message.id}-${partIndex}`} className="w-full min-w-0 overflow-hidden">
           {message.role === 'user' ? (
             <div className="flex justify-end w-full h-full text-start break-words whitespace-normal">
-              <div className="bg-secondary relative text-foreground p-2 rounded-md inline-block max-w-[80%]">
+              <div className="relative max-w-[80%]">
                 {/* Show attached files if any */}
                 {attachedFiles.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-3">
+                  <div className="flex flex-wrap gap-2 mb-2 justify-end">
                     {attachedFiles.map((file: FileMetadata, idx: number) => (
                       <div
                         key={`file-${idx}-${file.id}`}
-                        className="flex items-center gap-1.5 px-2 py-1 rounded-sm bg-secondary border text-xs"
+                        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-muted border border-border/50 text-[12px]"
                       >
                         <IconPaperclip
                           size={14}
@@ -170,8 +171,8 @@ export const MessageItem = memo(
                         />
                         <span className="font-medium">{file.name}</span>
                         {file.injectionMode && (
-                          <span className="text-muted-foreground">
-                            ({file.injectionMode})
+                          <span className="text-muted-foreground text-[11px]">
+                            {file.injectionMode}
                           </span>
                         )}
                       </div>
@@ -179,7 +180,10 @@ export const MessageItem = memo(
                   </div>
                 )}
                 {displayText && (
-                  <div className="select-text whitespace-pre-wrap break-words overflow-hidden">
+                  <div
+                    className="px-4 py-3 rounded-2xl rounded-tr-sm text-white shadow-sm select-text whitespace-pre-wrap break-words overflow-hidden"
+                    style={{ background: 'linear-gradient(135deg, #6366f1, #7c3aed)', fontSize: '14px', lineHeight: '1.6' }}
+                  >
                     {displayText}
                   </div>
                 )}
@@ -221,7 +225,7 @@ export const MessageItem = memo(
                 <img
                   src={part.url}
                   alt={part.filename || 'Uploaded attachment'}
-                  className="size-20 rounded-lg object-cover border cursor-pointer"
+                  className="size-20 rounded-xl object-cover border border-border/50 cursor-pointer shadow-sm hover:shadow-md transition-shadow"
                   onClick={() =>
                     setPreviewImage({ url: part.url!, filename: part.filename })
                   }
@@ -238,7 +242,7 @@ export const MessageItem = memo(
             <img
               src={part.url}
               alt={part.filename || 'Generated image'}
-              className="max-w-full rounded-md cursor-pointer"
+              className="max-w-full rounded-xl cursor-pointer shadow-sm hover:shadow-md transition-shadow"
               onClick={() =>
                 setPreviewImage({ url: part.url!, filename: part.filename })
               }
@@ -260,7 +264,7 @@ export const MessageItem = memo(
       return (
         <Reasoning
           key={`${message.id}-${partIndex}`}
-          className="w-full text-muted-foreground"
+          className="w-full text-muted-foreground mb-3"
           isStreaming={isStreaming && isLastPart}
           defaultOpen={shouldBeOpen}
         >
@@ -335,7 +339,7 @@ export const MessageItem = memo(
         <Tool
           key={`${message.id}-${partIndex}`}
           state={part.state}
-          className="mb-4"
+          className="mb-3"
         >
           <ToolHeader
             title={toolName}
@@ -384,50 +388,24 @@ export const MessageItem = memo(
       return lastIndex
     }, [message.parts])
 
-    return (
-      <div className="w-full mb-4">
-
-        {/* Render message parts */}
-        {message.parts.map((part, i) => {
-          switch (part.type) {
-            case CONTENT_TYPE.TEXT:
-              return renderTextPart(part as { type: 'text'; text: string }, i)
-            case CONTENT_TYPE.FILE:
-              return renderFilePart(part as any, i)
-            case CONTENT_TYPE.REASONING:
-              return renderReasoningPart(
-                part as { type: 'reasoning'; text: string },
-                i
-              )
-            case 'data-agentStatus': {
-              const data = (part as any).data as AgentStatusData
-              // Skip superseded status parts (e.g., 'running' followed by 'complete')
-              if (latestAgentStatusIndex.get(data.agent_id) !== i) return null
-              return (
-                <AgentOutputCard
-                  key={`agent-${data.agent_id}-${i}`}
-                  agentName={data.agent_name}
-                  agentRole={data.agent_role}
-                  status={data.status}
-                  tokensUsed={data.tokens_used}
-                  toolCalls={data.tool_calls}
-                  error={data.error}
-                  isCollapsed={data.status === 'complete' && !isLastMessage}
-                />
-              )
+    // User message layout
+    if (message.role === 'user') {
+      return (
+        <div className="w-full mb-2 group/message">
+          {/* Render message parts */}
+          {message.parts.map((part, i) => {
+            switch (part.type) {
+              case CONTENT_TYPE.TEXT:
+                return renderTextPart(part as { type: 'text'; text: string }, i)
+              case CONTENT_TYPE.FILE:
+                return renderFilePart(part as any, i)
+              default:
+                return null
             }
-            case 'data-runLog': {
-              const data = (part as any).data as RunLogData
-              return <RunLogSummary key={`runlog-${data.id}`} runLog={data} />
-            }
-            default:
-              return renderToolPart(part, i)
-          }
-        })}
+          })}
 
-        {/* Message actions for user messages */}
-        {message.role === 'user' && (
-          <div className="flex items-center justify-end gap-1 text-muted-foreground text-xs mt-4">
+          {/* Message actions for user messages */}
+          <div className="flex items-center justify-end gap-0.5 mt-1 opacity-0 group-hover/message:opacity-100 transition-opacity">
             <CopyButton text={getFullTextContent()} />
 
             {onEdit && status !== CHAT_STATUS.STREAMING && (
@@ -442,25 +420,85 @@ export const MessageItem = memo(
               <DeleteMessageDialog onDelete={handleDelete} />
             )}
           </div>
-        )}
 
-        {/* Message actions for assistant messages (non-tool) */}
-        {message.role === 'assistant' && (
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mt-1">
+          {/* Image Preview Dialog */}
+          {previewImage && (
+            <div
+              className="fixed inset-0 z-100 bg-black/70 backdrop-blur-md flex items-center justify-center cursor-pointer"
+              onClick={() => setPreviewImage(null)}
+            >
+              <img
+                src={previewImage.url}
+                alt={previewImage.filename || 'Preview'}
+                className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg"
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    // Assistant message layout
+    return (
+      <div className="w-full mb-2 group/message">
+        <div className="flex w-full gap-3">
+          {/* Avatar */}
+          <div
+            className="size-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 shadow-md"
+            style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
+          >
+            <Zap className="size-4 text-white" strokeWidth={2.5} />
+          </div>
+
+          <div className="flex flex-col min-w-0 flex-1">
+            {/* Render message parts */}
+            {message.parts.map((part, i) => {
+              switch (part.type) {
+                case CONTENT_TYPE.TEXT:
+                  return renderTextPart(part as { type: 'text'; text: string }, i)
+                case CONTENT_TYPE.FILE:
+                  return renderFilePart(part as any, i)
+                case CONTENT_TYPE.REASONING:
+                  return renderReasoningPart(
+                    part as { type: 'reasoning'; text: string },
+                    i
+                  )
+                case 'data-agentStatus': {
+                  const data = (part as any).data as AgentStatusData
+                  // Skip superseded status parts (e.g., 'running' followed by 'complete')
+                  if (latestAgentStatusIndex.get(data.agent_id) !== i) return null
+                  return (
+                    <AgentOutputCard
+                      key={`agent-${data.agent_id}-${i}`}
+                      agentName={data.agent_name}
+                      agentRole={data.agent_role}
+                      status={data.status}
+                      tokensUsed={data.tokens_used}
+                      toolCalls={data.tool_calls}
+                      error={data.error}
+                      isCollapsed={data.status === 'complete' && !isLastMessage}
+                    />
+                  )
+                }
+                case 'data-runLog': {
+                  const data = (part as any).data as RunLogData
+                  return <RunLogSummary key={`runlog-${data.id}`} runLog={data} />
+                }
+                default:
+                  return renderToolPart(part, i)
+              }
+            })}
+
+            {/* Action Bar */}
+            <div className="flex items-center justify-between mt-2 opacity-0 group-hover/message:opacity-100 transition-opacity">
               <div
                 className={cn(
-                  'flex items-center gap-1',
+                  'flex items-center gap-0.5',
                   isStreaming && 'hidden'
                 )}
               >
                 <CopyButton text={getFullTextContent()} />
-
-                {onEdit && !isStreaming && (
-                  <EditMessageDialog
-                    message={getFullTextContent()}
-                    onSave={handleEdit}
-                  />
-                )}
 
                 {onDelete && !isStreaming && (
                   <DeleteMessageDialog onDelete={handleDelete} />
@@ -472,10 +510,51 @@ export const MessageItem = memo(
                     size="icon-xs"
                     onClick={handleRegenerate}
                     title="Regenerate response"
+                    aria-label="Regenerate response"
+                    className="text-muted-foreground/50 hover:text-foreground"
                   >
-                    <IconRefresh size={16} />
+                    <IconRefresh size={14} />
                   </Button>
                 )}
+
+                {/* Fork conversation — disabled until fork logic is implemented */}
+                {/* TODO: Wire to fork/branch logic when available */}
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  disabled
+                  title="Fork conversation"
+                  aria-label="Fork conversation"
+                  className="text-muted-foreground/50 hover:text-violet-500 disabled:opacity-30"
+                >
+                  <GitBranch className="size-3.5" />
+                </Button>
+
+                {/* Thumbs up / down rating */}
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  title="Good response"
+                  aria-label="Good response"
+                  className="text-muted-foreground/50 hover:text-emerald-500"
+                  onClick={() => {
+                    // TODO: Store rating in message metadata when rating infrastructure exists
+                  }}
+                >
+                  <ThumbsUp className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  title="Poor response"
+                  aria-label="Poor response"
+                  className="text-muted-foreground/50 hover:text-rose-500"
+                  onClick={() => {
+                    // TODO: Store rating in message metadata when rating infrastructure exists
+                  }}
+                >
+                  <ThumbsDown className="size-3.5" />
+                </Button>
               </div>
 
               <TokenSpeedIndicator
@@ -485,18 +564,19 @@ export const MessageItem = memo(
                 }
               />
             </div>
-          )}
+          </div>
+        </div>
 
         {/* Image Preview Dialog */}
         {previewImage && (
           <div
-            className="fixed inset-0 z-100 bg-black/50 backdrop-blur-md flex items-center justify-center cursor-pointer"
+            className="fixed inset-0 z-100 bg-black/70 backdrop-blur-md flex items-center justify-center cursor-pointer"
             onClick={() => setPreviewImage(null)}
           >
             <img
               src={previewImage.url}
               alt={previewImage.filename || 'Preview'}
-              className="max-h-[90vh] max-w-[90vw] object-contain"
+              className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg"
               onClick={(e) => e.stopPropagation()}
             />
           </div>

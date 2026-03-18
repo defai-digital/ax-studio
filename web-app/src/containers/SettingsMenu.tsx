@@ -1,245 +1,215 @@
 import { Link } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { useState, useEffect } from 'react'
-import {
-  IconChevronDown,
-  IconChevronRight,
-} from '@tabler/icons-react'
-import { useMatches, useNavigate } from '@tanstack/react-router'
+import { useMatches } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
 
-import { useModelProvider } from '@/hooks/useModelProvider'
-import { getProviderTitle } from '@/lib/utils'
-import ProvidersAvatar from '@/containers/ProvidersAvatar'
 import { PlatformFeatures, PlatformFeature } from '@/lib/platform'
+import {
+  Settings,
+  Palette,
+  Shield,
+  Keyboard,
+  Plug,
+  Bot,
+  FileText,
+  Wrench,
+  Cpu,
+  Cog,
+  Server,
+  Globe,
+  Brain,
+  Users,
+  Link as LinkIcon,
+} from 'lucide-react'
+
+type SettingsMenuItem = {
+  title: string
+  route: string
+  isEnabled: boolean
+  icon: React.ReactNode
+  group: 'App' | 'AI' | 'Advanced' | 'Other'
+}
 
 const SettingsMenu = () => {
   const { t } = useTranslation()
-  const [expandedProviders, setExpandedProviders] = useState(false)
   const matches = useMatches()
-  const navigate = useNavigate()
 
-  const { providers } = useModelProvider()
-
-  // Filter providers that have active API keys (or are llama.cpp which doesn't need one)
-  // On web: exclude llamacpp provider as it's not available
-  const activeProviders = providers.filter((provider) => {
-    if (!provider.active) return false
-
-    return true
-  })
-
-  // Check if current route has a providerName parameter and expand providers submenu
-  useEffect(() => {
-    const hasProviderName = matches.some(
-      (match) =>
-        match.routeId === '/settings/providers/$providerName' &&
-        'providerName' in match.params
-    )
-    const isProvidersRoute = matches.some(
-      (match) => match.routeId === '/settings/providers/'
-    )
-    if (hasProviderName || isProvidersRoute) {
-      setExpandedProviders(true)
-    }
-  }, [matches])
-
-  // Check if we're in the setup remote provider step
-  const stepSetupRemoteProvider = matches.some(
-    (match) =>
-      match.search &&
-      typeof match.search === 'object' &&
-      'step' in match.search &&
-      match.search.step === 'setup_remote_provider'
-  )
-
-  const menuSettings = [
+  const menuSettings: SettingsMenuItem[] = [
+    // App group
     {
       title: 'common:general',
       route: route.settings.general,
-      hasSubMenu: false,
       isEnabled: true,
+      icon: <Settings className="size-3.5" />,
+      group: 'App',
     },
     {
       title: 'common:interface',
       route: route.settings.interface,
-      hasSubMenu: false,
       isEnabled: true,
+      icon: <Palette className="size-3.5" />,
+      group: 'App',
     },
     {
       title: 'common:privacy',
       route: route.settings.privacy,
-      hasSubMenu: false,
       isEnabled: true,
-    },
-    {
-      title: 'common:memory',
-      route: route.settings.memory,
-      hasSubMenu: false,
-      isEnabled: true,
-    },
-    {
-      title: 'common:modelProviders',
-      route: route.settings.model_providers,
-      hasSubMenu: activeProviders.length > 0,
-      isEnabled: true,
-    },
-    {
-      title: 'common:assistants',
-      route: route.settings.assistant,
-      hasSubMenu: false,
-      isEnabled: true,
-    },
-    {
-      title: 'common:agentTeams',
-      route: route.settings.agent_teams,
-      hasSubMenu: false,
-      isEnabled: true,
+      icon: <Shield className="size-3.5" />,
+      group: 'App',
     },
     {
       title: 'common:keyboardShortcuts',
       route: route.settings.shortcuts,
-      hasSubMenu: false,
       isEnabled: true,
+      icon: <Keyboard className="size-3.5" />,
+      group: 'App',
+    },
+    // AI group
+    {
+      title: 'common:modelProviders',
+      route: route.settings.model_providers,
+      isEnabled: true,
+      icon: <Plug className="size-3.5" />,
+      group: 'AI',
     },
     {
-      title: 'common:hardware',
-      route: route.settings.hardware,
-      hasSubMenu: false,
+      title: 'common:assistants',
+      route: route.settings.assistant,
       isEnabled: true,
+      icon: <Bot className="size-3.5" />,
+      group: 'AI',
     },
     {
-      title: 'common:integrations',
-      route: route.settings.integrations,
-      hasSubMenu: false,
+      title: 'common:attachments',
+      route: route.settings.attachments,
       isEnabled: true,
+      icon: <FileText className="size-3.5" />,
+      group: 'AI',
     },
     {
       title: 'common:mcp-servers',
       route: route.settings.mcp_servers,
-      hasSubMenu: false,
       isEnabled: true,
+      icon: <Wrench className="size-3.5" />,
+      group: 'AI',
     },
+    // Advanced group
     {
-      title: 'common:local_api_server',
-      route: route.settings.local_api_server,
-      hasSubMenu: false,
+      title: 'common:hardware',
+      route: route.settings.hardware,
       isEnabled: true,
-    },
-    {
-      title: 'common:https_proxy',
-      route: route.settings.https_proxy,
-      hasSubMenu: false,
-      isEnabled: true,
+      icon: <Cpu className="size-3.5" />,
+      group: 'Advanced',
     },
     {
       title: 'common:engineSettings',
       route: route.settings.engine_settings,
-      hasSubMenu: false,
       isEnabled: PlatformFeatures[PlatformFeature.LOCAL_INFERENCE],
+      icon: <Cog className="size-3.5" />,
+      group: 'Advanced',
     },
-    // Hide Extension settings for now
-    // {
-    //   title: 'common:extensions',
-    //   route: route.settings.extensions,
-    //   hasSubMenu: false,
-    //   isEnabled: true,
-    // },
+    {
+      title: 'common:local_api_server',
+      route: route.settings.local_api_server,
+      isEnabled: true,
+      icon: <Server className="size-3.5" />,
+      group: 'Advanced',
+    },
+    {
+      title: 'common:https_proxy',
+      route: route.settings.https_proxy,
+      isEnabled: true,
+      icon: <Globe className="size-3.5" />,
+      group: 'Advanced',
+    },
+    // Other group
+    {
+      title: 'common:memory',
+      route: route.settings.memory,
+      isEnabled: true,
+      icon: <Brain className="size-3.5" />,
+      group: 'Other',
+    },
+    {
+      title: 'common:agentTeams',
+      route: route.settings.agent_teams,
+      isEnabled: true,
+      icon: <Users className="size-3.5" />,
+      group: 'Other',
+    },
+    {
+      title: 'common:integrations',
+      route: route.settings.integrations,
+      isEnabled: true,
+      icon: <LinkIcon className="size-3.5" />,
+      group: 'Other',
+    },
   ]
 
-  const toggleProvidersExpansion = () => {
-    setExpandedProviders(!expandedProviders)
-  }
+  const groups: { key: string; label: string }[] = [
+    { key: 'App', label: 'App' },
+    { key: 'AI', label: 'AI' },
+    { key: 'Advanced', label: 'Advanced' },
+    { key: 'Other', label: 'Other' },
+  ]
 
   return (
-    <>
-      <div
-        className='h-full w-54 shrink-0 px-1.5 flex'
-      >
-        <div className="flex flex-col gap-1 w-full font-medium">
-          {menuSettings.map((menu) => {
-            if (!menu.isEnabled) {
-              return null
-            }
-            return (
-              <div key={menu.title}>
-                <Link
-                  to={menu.route}
-                  className="block px-2 gap-1.5 cursor-pointer hover:dark:bg-secondary/60 hover:bg-secondary py-1 w-full rounded-sm [&.active]:dark:bg-secondary/80 [&.active]:bg-secondary"
-                >
-                  <div className="flex items-center justify-between">
-                    <span>
+    <div
+      className="w-56 shrink-0 border-r border-border/40 py-5 px-3 flex flex-col overflow-y-auto bg-muted/10"
+      style={{ scrollbarWidth: 'none' }}
+    >
+      {groups.map((group, groupIndex) => {
+        const groupItems = menuSettings.filter(
+          (m) => m.group === group.key && m.isEnabled
+        )
+        if (groupItems.length === 0) return null
+
+        return (
+          <div key={group.key} className="w-full flex flex-col">
+            {groupIndex > 0 && <div className="h-px bg-border/40 my-3" />}
+            <span className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground/40 px-3 mb-2">
+              {group.label}
+            </span>
+            <div className="flex flex-col gap-0.5">
+              {groupItems.map((menu) => {
+                const isActive = matches.some(
+                  (match) =>
+                    match.pathname === menu.route ||
+                    (menu.route === route.settings.model_providers &&
+                      (match.routeId === '/settings/providers/' ||
+                        match.routeId === '/settings/providers/$providerName'))
+                )
+
+                return (
+                  <Link
+                    key={menu.title}
+                    to={menu.route}
+                    className={cn(
+                      'flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all',
+                      isActive
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+                    )}
+                  >
+                    {menu.icon}
+                    <span
+                      className="truncate flex-1"
+                      style={{ fontSize: '13px' }}
+                    >
                       {t(menu.title)}
                     </span>
-                    {menu.hasSubMenu && (
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          toggleProvidersExpansion()
-                        }}
-                        className="text-muted-foreground/60 hover:text-muted-foreground/80"
-                      >
-                        {expandedProviders ? (
-                          <IconChevronDown size={16} />
-                        ) : (
-                          <IconChevronRight size={16} />
-                        )}
-                      </button>
+                    {isActive && (
+                      <div className="ml-auto size-1.5 rounded-full bg-primary" />
                     )}
-                  </div>
-                </Link>
-
-                {/* Sub-menu for model providers */}
-                {menu.hasSubMenu && expandedProviders && (
-                  <div className="ml-2 mt-1 space-y-1">
-                    {activeProviders.map((provider) => {
-                      const isActive = matches.some(
-                        (match) =>
-                          match.routeId ===
-                            '/settings/providers/$providerName' &&
-                          'providerName' in match.params &&
-                          match.params.providerName === provider.provider
-                      )
-
-                      return (
-                        <div key={provider.provider}>
-                          <div
-                            className={cn(
-                              'flex px-2 items-center gap-1.5 cursor-pointer hover:bg-secondary/60 py-1 w-full rounded-sm [&.active]:bg-secondary/80 text-foreground',
-                              isActive && 'bg-secondary'
-                            )}
-                            onClick={() =>
-                              navigate({
-                                to: route.settings.providers,
-                                params: {
-                                  providerName: provider.provider,
-                                },
-                                ...(stepSetupRemoteProvider
-                                  ? {
-                                      search: { step: 'setup_remote_provider' },
-                                    }
-                                  : {}),
-                              })
-                            }
-                          >
-                            <ProvidersAvatar provider={provider} />
-                            <div className="truncate">
-                              <span>{getProviderTitle(provider.provider)}</span>
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    </>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
+    </div>
   )
 }
 

@@ -21,14 +21,14 @@ describe('Switch', () => {
     render(<Switch />)
     
     const switchElement = document.querySelector('[data-slot="switch"]')
-    expect(switchElement).toHaveClass('relative', 'peer', 'cursor-pointer', 'inline-flex', 'h-[18px]', 'w-8.5', 'shrink-0', 'items-center', 'rounded-full')
+    expect(switchElement).toHaveClass('relative', 'peer', 'cursor-pointer', 'inline-flex', 'h-[1.15rem]', 'w-8', 'shrink-0', 'items-center', 'rounded-full')
   })
 
   it('renders thumb with correct styling', () => {
     render(<Switch />)
 
     const thumb = document.querySelector('[data-slot="switch-thumb"]')
-    expect(thumb).toHaveClass('bg-background', 'pointer-events-none', 'block', 'size-4', 'rounded-full', 'ring-0', 'transition-transform')
+    expect(thumb).toHaveClass('pointer-events-none', 'block', 'size-4', 'rounded-full', 'ring-0', 'transition-transform', 'bg-card')
   })
 
   it('renders with custom className', () => {
@@ -173,7 +173,7 @@ describe('Switch', () => {
     render(<Switch />)
     
     const switchElement = document.querySelector('[data-slot="switch"]')
-    expect(switchElement).toHaveClass('focus-visible:ring-0', 'focus-visible:border-none')
+    expect(switchElement).toHaveClass('focus-visible:ring-[3px]', 'focus-visible:border-ring')
   })
 
   it('handles checked state styling', () => {
@@ -187,6 +187,6 @@ describe('Switch', () => {
     render(<Switch checked={false} />)
 
     const switchElement = document.querySelector('[data-slot="switch"]')
-    expect(switchElement).toHaveClass('data-[state=unchecked]:bg-input')
+    expect(switchElement).toHaveClass('data-[state=unchecked]:bg-switch-background', 'dark:data-[state=unchecked]:bg-input/80')
   })
 })

@@ -106,7 +106,7 @@ export const DialogDeleteModel = ({
 
         <DialogFooter className="mt-2">
           <DialogClose asChild>
-            <Button variant="ghost" size="sm">
+            <Button variant="outline" size="sm">
               {t('providers:deleteModel.cancel')}
             </Button>
           </DialogClose>

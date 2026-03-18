@@ -110,7 +110,7 @@ const DialogAppUpdater = () => {
                 </Button>
                 <div className="flex gap-x-2">
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
                     onClick={() => setRemindMeLater(true)}
                   >

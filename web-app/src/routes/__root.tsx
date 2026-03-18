@@ -1,4 +1,4 @@
-﻿import { createRootRoute, Outlet } from '@tanstack/react-router'
+import { createRootRoute, Outlet, useLocation } from '@tanstack/react-router'
 // import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 
 import DialogAppUpdater from '@/containers/dialogs/AppUpdater'
@@ -21,11 +21,34 @@ import { ServiceHubProvider } from '@/providers/ServiceHubProvider'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { LeftSidebar } from '@/components/left-sidebar'
 import { WindowControls } from '@/components/WindowControls'
+import { motion } from 'motion/react'
+import { pageVariants, pageTransition } from '@/lib/animations'
 
 export const Route = createRootRoute({
   component: RootLayout,
   errorComponent: ({ error }) => <GlobalError error={error} />,
 })
+
+const PageTransition = ({ children }: { children: React.ReactNode }) => {
+  const location = useLocation()
+  // Group all /settings/* routes under one key so the sidebar doesn't
+  // unmount/remount (flicker) when switching between settings tabs.
+  const animationKey = location.pathname.startsWith('/settings')
+    ? '/settings'
+    : location.pathname
+  return (
+    <motion.div
+      key={animationKey}
+      initial="initial"
+      animate="animate"
+      variants={pageVariants}
+      transition={pageTransition}
+      className="size-full"
+    >
+      {children}
+    </motion.div>
+  )
+}
 
 const AppLayout = () => {
   const {
@@ -36,7 +59,7 @@ const AppLayout = () => {
   } = useLeftPanel()
 
   return (
-    <div className="bg-neutral-50 dark:bg-background size-full relative overflow-hidden">
+    <div className="bg-background size-full relative overflow-hidden">
       <SidebarProvider
         open={isLeftPanelOpen}
         onOpenChange={setLeftPanel}
@@ -50,11 +73,12 @@ const AppLayout = () => {
         <DialogAppUpdater />
         <LeftSidebar />
         <SidebarInset>
-          <div className="bg-neutral-50 dark:bg-background w-full flex-1 min-h-0 overflow-hidden">
-            <Outlet />
+          <div className="bg-background w-full flex-1 min-h-0 overflow-hidden">
+            <PageTransition>
+              <Outlet />
+            </PageTransition>
           </div>
         </SidebarInset>
-
       </SidebarProvider>
     </div>
   )

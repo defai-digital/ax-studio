@@ -254,7 +254,7 @@ export default function AddEditAssistant({
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <div className="relative">
-              <label className="text-sm mb-2 inline-block">
+              <label className="text-[13px] text-muted-foreground mb-1.5 inline-block">
                 {t('assistants:emoji')}
               </label>
               <div
@@ -295,7 +295,7 @@ export default function AddEditAssistant({
             </div>
 
             <div className="space-y-2 w-full">
-              <label className="text-sm mb-2 inline-block">
+              <label className="text-[13px] text-muted-foreground mb-1.5 inline-block">
                 {t(`common:name`)}
               </label>
               <Input
@@ -317,7 +317,7 @@ export default function AddEditAssistant({
           )}
 
           <div className="space-y-2">
-            <label className="text-sm mb-2 inline-block">
+            <label className="text-[13px] text-muted-foreground mb-1.5 inline-block">
               {t('assistants:description')}
             </label>
             <Textarea
@@ -329,7 +329,7 @@ export default function AddEditAssistant({
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm mb-2 inline-block">
+            <label className="text-[13px] text-muted-foreground mb-1.5 inline-block">
               {t('assistants:instructions')}
             </label>
             <Textarea
@@ -339,14 +339,14 @@ export default function AddEditAssistant({
               className="resize-none"
               rows={4}
             />
-            <div className="text-xs text-muted-foreground">
+            <div className="text-[11px] text-muted-foreground/50">
               {t('assistants:instructionsDateHint')}
             </div>
           </div>
 
           <div className="space-y-2 my-4 mt-6">
             <div className="flex items-center justify-between">
-              <label className="text-sm">{t('common:settings')}</label>
+              <label className="text-[13px] text-muted-foreground">{t('common:settings')}</label>
             </div>
             {/* <div className="flex justify-between items-center gap-2">
               <div className="w-full">
@@ -368,7 +368,7 @@ export default function AddEditAssistant({
 
           <div className="space-y-2 my-4">
             <div className="flex items-center justify-between">
-              <label className="text-sm">
+              <label className="text-[13px] text-muted-foreground">
                 {t('assistants:predefinedParameters')}
               </label>
             </div>
@@ -427,7 +427,7 @@ export default function AddEditAssistant({
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-sm">{t('assistants:parameters')}</label>
+              <label className="text-[13px] text-muted-foreground">{t('assistants:parameters')}</label>
               <Button
                 variant="ghost"
                 size="icon-xs"

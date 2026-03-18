@@ -10,7 +10,6 @@ import {
   DialogHeader,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { IconEdit } from '@tabler/icons-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { toast } from 'sonner'
@@ -95,34 +94,33 @@ export function RenameThreadDialog({
           </DropdownMenuItem>
         </DialogTrigger>
       )}
-      <DialogContent>
+      <DialogContent className="max-w-[400px]">
         <DialogHeader>
           <DialogTitle>{t('common:threadTitle')}</DialogTitle>
-          <Input
-            ref={inputRef}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="mt-2"
-            onKeyDown={handleKeyDown}
-            placeholder={t('common:threadTitle')}
-            aria-label={t('common:threadTitle')}
-          />
-          <DialogFooter className="mt-2 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-            <DialogClose asChild>
-              <Button variant="ghost" size="sm" className="w-full sm:w-auto">
-                {t('common:cancel')}
-              </Button>
-            </DialogClose>
-            <Button
-              disabled={!title.trim() || title.trim() === plainTitleForRename}
-              onClick={handleRename}
-              size="sm"
-              className="w-full sm:w-auto"
-            >
-              {t('common:rename')}
-            </Button>
-          </DialogFooter>
         </DialogHeader>
+        <input
+          ref={inputRef}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className="w-full px-4 py-2.5 rounded-xl bg-muted/50 border border-border/50 outline-none text-[14px] focus:border-primary/30 transition-colors"
+          onKeyDown={handleKeyDown}
+          placeholder={t('common:threadTitle')}
+          aria-label={t('common:threadTitle')}
+        />
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="outline" size="sm">
+              {t('common:cancel')}
+            </Button>
+          </DialogClose>
+          <Button
+            disabled={!title.trim() || title.trim() === plainTitleForRename}
+            onClick={handleRename}
+            size="sm"
+          >
+            {t('common:rename')}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

@@ -345,15 +345,37 @@ pub fn decompress<R: Runtime>(
         let mut archive = tar::Archive::new(tar);
         for entry in archive.entries().map_err(|e| e.to_string())? {
             let mut entry = entry.map_err(|e| e.to_string())?;
-            let entry_path = entry.path().map_err(|e| e.to_string())?;
-            let full_path = ax_studio_utils::normalize_path(&output_dir_buf.join(&entry_path));
+            let entry_path_string = entry
+                .path()
+                .map_err(|e| e.to_string())?
+                .to_string_lossy()
+                .to_string();
+            let full_path = ax_studio_utils::normalize_path(
+                &output_dir_buf.join(&entry_path_string),
+            );
             if !full_path.starts_with(&output_dir_buf) {
                 return Err(format!(
                     "Tar entry path traversal blocked: {}",
-                    entry_path.display()
+                    entry_path_string
                 ));
             }
-            entry.unpack(&full_path).map_err(|e| e.to_string())?;
+            // Ensure parent directories exist — tar archives may omit
+            // intermediate directory entries (e.g. llama.cpp releases).
+            if let Some(parent) = full_path.parent() {
+                fs::create_dir_all(parent).map_err(|e| {
+                    format!(
+                        "Failed to create parent directory {}: {e}",
+                        parent.display()
+                    )
+                })?;
+            }
+            entry.unpack(&full_path).map_err(|e| {
+                format!(
+                    "failed to unpack `{}` into `{}`: {e}",
+                    entry_path_string,
+                    full_path.display()
+                )
+            })?;
         }
     } else if path.ends_with(".zip") {
         let mut zip = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;

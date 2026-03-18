@@ -29,6 +29,16 @@ pub fn create_lock_file<R: Runtime>(
 ) -> Result<(), String> {
     let lock_path = get_lock_file_path(app, port);
 
+    // Warn if overwriting an existing lock file
+    if lock_path.exists() {
+        if let Some(existing) = read_lock_file(app, port) {
+            log::warn!(
+                "Overwriting existing lock file for port {} (PID {}, server '{}')",
+                port, existing.pid, existing.server_name
+            );
+        }
+    }
+
     // Ensure parent directory exists
     if let Some(parent) = lock_path.parent() {
         fs::create_dir_all(parent)

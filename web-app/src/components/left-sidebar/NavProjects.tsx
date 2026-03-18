@@ -3,6 +3,7 @@ import {
   FolderIcon,
   FolderOpenIcon,
   MoreHorizontal,
+  Plus,
   Trash2,
 } from "lucide-react"
 
@@ -15,6 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import {
   SidebarGroup,
+  SidebarGroupAction,
   SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuAction,
@@ -24,12 +26,13 @@ import {
 } from "@/components/ui/sidebar"
 import { useThreadManagement } from "@/hooks/useThreadManagement"
 import { Link, useNavigate } from "@tanstack/react-router"
-
+import { useTranslation } from "@/i18n/react-i18next-compat"
 
 import { useState } from "react"
 import type { ThreadFolder } from "@/services/projects/types"
 import AddProjectDialog from "@/containers/dialogs/AddProjectDialog"
 import { DeleteProjectDialog } from "@/containers/dialogs/DeleteProjectDialog"
+import { useProjectDialog } from "@/hooks/useProjectDialog"
 
 function ProjectItem({
   item,
@@ -43,6 +46,7 @@ function ProjectItem({
   onDelete: (project: ThreadFolder) => void
 }) {
 
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const logo = item.logo?.trim()
 
@@ -81,16 +85,16 @@ function ProjectItem({
             navigate({ to: '/project/$projectId', params: { projectId: item.id } })
           }}>
             <FolderOpenIcon className="text-muted-foreground" />
-            <span>View Project</span>
+            <span>{t('common:projects.viewProject')}</span>
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => onEdit(item)}>
             <FolderEditIcon className="text-muted-foreground" />
-            <span>Edit Project</span>
+            <span>{t('common:projects.editProject')}</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onSelect={() => onDelete(item)}>
             <Trash2 />
-            <span>Delete Project</span>
+            <span>{t('common:projects.deleteProject')}</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -99,12 +103,29 @@ function ProjectItem({
 }
 
 export function NavProjects() {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
   const { isMobile } = useSidebar()
-  const { folders, updateFolder } = useThreadManagement()
+  const { folders, addFolder, updateFolder } = useThreadManagement()
+  const { open: createDialogOpen, setOpen: setCreateDialogOpen } = useProjectDialog()
 
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedProject, setSelectedProject] = useState<ThreadFolder | null>(null)
+
+  const handleCreate = async (
+    name: string,
+    assistantId?: string,
+    logo?: string,
+    projectPrompt?: string | null
+  ) => {
+    const newProject = await addFolder(name, assistantId, logo, projectPrompt)
+    setCreateDialogOpen(false)
+    navigate({
+      to: '/project/$projectId',
+      params: { projectId: newProject.id },
+    })
+  }
 
   const handleEdit = (project: ThreadFolder) => {
     setSelectedProject(project)
@@ -135,14 +156,18 @@ export function NavProjects() {
     }
   }
 
-  if (folders.length === 0) {
-    return null
-  }
-
   return (
     <>
       <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-        <SidebarGroupLabel>Projects</SidebarGroupLabel>
+        <SidebarGroupLabel>{t('common:projects.title')}</SidebarGroupLabel>
+        <SidebarGroupAction
+          className="hover:bg-sidebar-foreground/8"
+          title={t('common:projects.new')}
+          onClick={() => setCreateDialogOpen(true)}
+        >
+          <Plus className="text-muted-foreground" />
+          <span className="sr-only">{t('common:projects.new')}</span>
+        </SidebarGroupAction>
         <SidebarMenu>
           {folders.map((item) => (
             <ProjectItem
@@ -155,6 +180,13 @@ export function NavProjects() {
           ))}
         </SidebarMenu>
       </SidebarGroup>
+
+      <AddProjectDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        editingKey={null}
+        onSave={handleCreate}
+      />
 
       <AddProjectDialog
         open={editDialogOpen}

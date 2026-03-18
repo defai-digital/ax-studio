@@ -4,6 +4,7 @@ import { IconArrowDown } from '@tabler/icons-react'
 import type { ComponentProps } from 'react'
 import { useCallback, memo } from 'react'
 import { StickToBottom, useStickToBottomContext } from 'use-stick-to-bottom'
+import { AnimatePresence, motion } from 'motion/react'
 
 export type ConversationProps = ComponentProps<typeof StickToBottom>
 
@@ -23,7 +24,7 @@ export type ConversationContentProps = ComponentProps<typeof StickToBottom.Conte
 
 export const ConversationContent = memo(({ className, ...props }: ConversationContentProps) => (
   <StickToBottom.Content
-    className={cn('flex flex-col gap-x-8 gap-y-2 px-2 min-w-0', className)}
+    className={cn('flex flex-col gap-x-8 gap-y-3 px-2 min-w-0', className)}
     scrollClassName="!overflow-x-hidden"
     {...props}
   />
@@ -79,20 +80,30 @@ export const ConversationScrollButton = ({
   }, [scrollToBottom])
 
   return (
-    !isAtBottom && (
-      <Button
-        className={cn(
-          'absolute bottom-4 left-[50%] translate-x-[-50%] rounded-full',
-          className
-        )}
-        onClick={handleScrollToBottom}
-        size="icon"
-        type="button"
-        variant="outline"
-        {...props}
-      >
-        <IconArrowDown className="size-4" />
-      </Button>
-    )
+    <AnimatePresence>
+      {!isAtBottom && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.8, y: 10 }}
+          className="absolute bottom-4 left-[50%] translate-x-[-50%] z-20"
+        >
+          <Button
+            className={cn(
+              'rounded-full shadow-lg hover:shadow-xl transition-shadow flex items-center gap-1.5 text-[12px] text-muted-foreground',
+              className
+            )}
+            onClick={handleScrollToBottom}
+            size="sm"
+            type="button"
+            variant="outline"
+            {...props}
+          >
+            <IconArrowDown className="size-3.5" />
+            Scroll to bottom
+          </Button>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

@@ -46,7 +46,10 @@ fn error_response(
         origin_header,
         &config.trusted_hosts,
     );
-    builder.body(Body::from(message.into())).unwrap()
+    builder.body(Body::from(message.into())).unwrap_or_else(|e| {
+        log::error!("Failed to build error response: {e}");
+        Response::new(Body::from("Internal server error"))
+    })
 }
 
 fn extract_model_id(body_bytes: &[u8]) -> Result<String, String> {
@@ -270,7 +273,13 @@ pub(super) async fn dispatch_to_upstream(
 
     // Apply provider-specific custom headers from provider_configs
     // (e.g., anthropic-version: 2023-06-01 for Anthropic's OpenAI-compatible endpoint)
+    // Skip reserved headers that could override auth or routing set above.
     for ch in &provider_custom_headers {
+        let h = ch.header.to_ascii_lowercase();
+        if h == "host" || h == "authorization" || h == "x-api-key" {
+            log::debug!("Skipping reserved custom header '{}'", ch.header);
+            continue;
+        }
         outbound_req = outbound_req.header(ch.header.as_str(), ch.value.as_str());
     }
 
@@ -318,19 +327,9 @@ pub(super) async fn dispatch_to_upstream(
                     let chat_url = format!("{}/chat/completions", url);
                     log::info!("Fallback to chat completions: {chat_url}");
 
-                    // Create a fresh client for the fallback to avoid connection pool issues
-                    let fallback_client = match Client::builder().build() {
-                        Ok(c) => c,
-                        Err(e) => {
-                            log::error!("Failed to create fallback client: {e}");
-                            return Ok(Response::builder()
-                                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                                .body(Body::from(format!("Failed to create fallback client: {e}")))
-                                .unwrap());
-                        }
-                    };
-
-                    let mut fallback_req = fallback_client.post(&chat_url);
+                    // Reuse existing client — the primary request has completed so
+                    // its connection is back in the pool.
+                    let mut fallback_req = client.post(&chat_url);
 
                     // Ensure Content-Type is set and prevent compression
                     fallback_req = fallback_req.header("Content-Type", "application/json");
@@ -371,7 +370,7 @@ pub(super) async fn dispatch_to_upstream(
                             );
                             return Ok(error_response
                                 .body(Body::from(fallback_error))
-                                .unwrap());
+                                .unwrap_or_else(|_| Response::new(Body::from("Internal server error"))));
                         }
 
                         let mut builder = Response::builder().status(fallback_status);
@@ -410,7 +409,7 @@ pub(super) async fn dispatch_to_upstream(
                             }
                         });
 
-                        return Ok(builder.body(body).unwrap());
+                        return Ok(builder.body(body).unwrap_or_else(|_| Response::new(Body::from("Internal server error"))));
                     } else if let Err(ref err) = fallback_response {
                         log::error!("Chat completions fallback failed: {}", err);
                     }
@@ -424,7 +423,7 @@ pub(super) async fn dispatch_to_upstream(
                     origin_header,
                     &config.trusted_hosts,
                 );
-                return Ok(error_response.body(Body::from(error_body)).unwrap());
+                return Ok(error_response.body(Body::from(error_body)).unwrap_or_else(|_| Response::new(Body::from("Internal server error"))));
             } else if is_error {
                 // Non-/messages error - return error response with body
                 let error_body = response
@@ -444,7 +443,7 @@ pub(super) async fn dispatch_to_upstream(
                     origin_header,
                     &config.trusted_hosts,
                 );
-                return Ok(error_response.body(Body::from(error_body)).unwrap());
+                return Ok(error_response.body(Body::from(error_body)).unwrap_or_else(|_| Response::new(Body::from("Internal server error"))));
             }
 
             // Success case - stream the response
@@ -486,7 +485,7 @@ pub(super) async fn dispatch_to_upstream(
                 log::debug!("Streaming complete to client");
             });
 
-            Ok(builder.body(body).unwrap())
+            Ok(builder.body(body).unwrap_or_else(|_| Response::new(Body::from("Internal server error"))))
         }
         Err(e) => {
             let error_msg = format!("Proxy request to model failed: {e}");
@@ -498,7 +497,7 @@ pub(super) async fn dispatch_to_upstream(
                 origin_header,
                 &config.trusted_hosts,
             );
-            Ok(error_response.body(Body::from(error_msg)).unwrap())
+            Ok(error_response.body(Body::from(error_msg)).unwrap_or_else(|_| Response::new(Body::from("Internal server error"))))
         }
     }
 }

@@ -78,25 +78,25 @@ export function DeleteAllThreadsDialog({
           <DialogDescription>
             {t('common:dialogs.deleteAllThreads.description')}
           </DialogDescription>
-          <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-            <DialogClose asChild>
-              <Button variant="ghost" size="sm" className="w-full sm:w-auto">
-                {t('common:cancel')}
-              </Button>
-            </DialogClose>
-            <Button
-              ref={deleteButtonRef}
-              variant="destructive"
-              onClick={handleDeleteAll}
-              onKeyDown={handleKeyDown}
-              size="sm"
-              className="w-full sm:w-auto"
-              aria-label={t('common:deleteAll')}
-            >
-              {t('common:deleteAll')}
-            </Button>
-          </DialogFooter>
         </DialogHeader>
+        <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+          <DialogClose asChild>
+            <Button variant="outline" size="sm" className="w-full sm:w-auto">
+              {t('common:cancel')}
+            </Button>
+          </DialogClose>
+          <Button
+            ref={deleteButtonRef}
+            variant="destructive"
+            onClick={handleDeleteAll}
+            onKeyDown={handleKeyDown}
+            size="sm"
+            className="w-full sm:w-auto"
+            aria-label={t('common:deleteAll')}
+          >
+            {t('common:deleteAll')}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

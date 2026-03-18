@@ -120,6 +120,11 @@ export function useThreadChat({
           loadedThreadRef.current = threadId
         }
       })
+      .catch((error) => {
+        if (!ignore) {
+          console.error(`Failed to fetch messages for thread ${threadId}:`, error)
+        }
+      })
 
     return () => { ignore = true }
   }, [threadId, serviceHub, setMessages, setChatMessages])
@@ -303,9 +308,11 @@ export function useThreadChat({
   const handleDeleteMessage = useCallback(
     (messageId: string) => {
       deleteMessage(threadId, messageId)
-      setChatMessages(chatMessages.filter((msg) => msg.id !== messageId))
+      // Read fresh chat messages from the session store to avoid stale closure
+      const currentMessages = useChatSessions.getState().sessions[threadId]?.chat.messages ?? []
+      setChatMessages(currentMessages.filter((msg) => msg.id !== messageId))
     },
-    [threadId, deleteMessage, chatMessages, setChatMessages]
+    [threadId, deleteMessage, setChatMessages]
   )
 
   // ─── Context size increase ──────────────────────────────────────────────────

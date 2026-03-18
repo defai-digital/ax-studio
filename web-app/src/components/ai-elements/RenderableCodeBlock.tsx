@@ -41,17 +41,16 @@ export const RenderableCodeBlock = memo(function RenderableCodeBlock({
   }
 
   return (
-    <div className="relative group">
-      {/* Render button — top-right, appears on hover */}
+    <div className="relative">
+      {/* Render button — always visible in top-right corner */}
       <button
         onClick={() => setRendered(true)}
         title={`Render as ${TYPE_LABEL[type]} artifact`}
         className={cn(
           'absolute top-2 right-2 z-10',
           'flex items-center gap-1 px-2 py-1 rounded text-xs font-medium',
-          'bg-muted/80 text-muted-foreground border border-border',
-          'opacity-0 group-hover:opacity-100 transition-opacity',
-          'hover:bg-background hover:text-foreground hover:border-primary/40'
+          'bg-muted text-muted-foreground border border-border',
+          'hover:bg-background hover:text-foreground hover:border-primary/40 transition-colors'
         )}
       >
         <AppWindowIcon size={12} />

@@ -53,7 +53,7 @@ export default function AttachmentIngestionDialog() {
         </div>
 
         <DialogFooter className="flex gap-2 sm:justify-end">
-          <Button size="sm" variant="ghost" onClick={cancel}>
+          <Button size="sm" variant="outline" onClick={cancel}>
             {t('common:cancel')}
           </Button>
           <Button

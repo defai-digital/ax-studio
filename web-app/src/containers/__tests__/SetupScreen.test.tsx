@@ -1,171 +1,253 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import { RouterProvider, createRouter, createRootRoute, createMemoryHistory } from '@tanstack/react-router'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import SetupScreen from '../SetupScreen'
 
-// Mock the hooks
+// ── Mocks ────────────────────────────────────────────────
+
+const mockSetTheme = vi.fn()
+const mockUpdateProvider = vi.fn()
+
+vi.mock('@/hooks/useTheme', () => ({
+  useTheme: vi.fn(() => ({
+    activeTheme: 'auto',
+    setTheme: mockSetTheme,
+    isDark: true,
+    setIsDark: vi.fn(),
+  })),
+}))
+
 vi.mock('@/hooks/useModelProvider', () => ({
   useModelProvider: vi.fn(() => ({
-    providers: [],
+    providers: [
+      { provider: 'llamacpp', active: true },
+      { provider: 'openai', active: false },
+      { provider: 'anthropic', active: true },
+      { provider: 'groq', active: false },
+      { provider: 'google', active: false },
+    ],
+    updateProvider: mockUpdateProvider,
     selectedProvider: '',
+    selectedModel: null,
     setProviders: vi.fn(),
     addProvider: vi.fn(),
   })),
 }))
 
-vi.mock('@/hooks/useAppState', () => ({
-  useAppState: (selector: any) => selector({
-    engineReady: true,
-    setEngineReady: vi.fn(),
-  }),
-}))
-
 vi.mock('@/i18n/react-i18next-compat', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (_key: string, opts?: { defaultValue?: string }) => opts?.defaultValue ?? _key,
   }),
 }))
 
-// Mock the services
-vi.mock('@/services/models', () => ({
-  fetchModelCatalog: vi.fn(() => Promise.resolve([])),
-  startModel: vi.fn(() => Promise.resolve()),
+vi.mock('@/containers/HeaderPage', () => ({
+  default: ({ children }: { children?: React.ReactNode }) => (
+    <div data-testid="header-page">{children}</div>
+  ),
 }))
 
-vi.mock('@/services/app', () => ({
-  relaunch: vi.fn(),
-  getSystemInfo: vi.fn(() => Promise.resolve({ platform: 'darwin', arch: 'x64' })),
-}))
-
-// Mock UI components
 vi.mock('@/components/ui/button', () => ({
-  Button: ({ children, onClick, asChild, ...props }: any) => {
-    if (asChild) {
-      return <div onClick={onClick} {...props}>{children}</div>
-    }
-    return <button onClick={onClick} {...props}>{children}</button>
+  Button: ({ children, onClick, ...props }: any) => (
+    <button onClick={onClick} {...props}>{children}</button>
+  ),
+}))
+
+// motion/react mock — render children immediately, no animations
+vi.mock('motion/react', () => ({
+  motion: {
+    div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+    h1: ({ children, ...props }: any) => <h1 {...props}>{children}</h1>,
+    p: ({ children, ...props }: any) => <p {...props}>{children}</p>,
+    button: ({ children, onClick, ...props }: any) => (
+      <button onClick={onClick} {...props}>{children}</button>
+    ),
+  },
+  AnimatePresence: ({ children }: any) => <>{children}</>,
+}))
+
+vi.mock('@/constants/localStorage', () => ({
+  localStorageKey: {
+    setupCompleted: 'setup-completed',
   },
 }))
 
-vi.mock('@tanstack/react-router', async () => {
-  const actual = await vi.importActual('@tanstack/react-router')
-  return {
-    ...actual,
-    Link: ({ children, to, ...props }: any) => (
-      <a href={to} {...props}>{children}</a>
-    ),
-  }
-})
+// ── Helpers ──────────────────────────────────────────────
 
-// Create a mock component for testing
-const MockSetupScreen = () => (
-  <div data-testid="setup-screen">
-    <h1>setup:welcome</h1>
-    <div>Setup steps content</div>
-    <a role="link" href="/next">Next Step</a>
-    <div>Provider selection content</div>
-    <div>System information content</div>
-  </div>
-)
+function renderSetup(onComplete = vi.fn()) {
+  return { onComplete, ...render(<SetupScreen onComplete={onComplete} />) }
+}
 
-describe('SetupScreen', () => {
-  const createTestRouter = () => {
-    const rootRoute = createRootRoute({
-      component: MockSetupScreen,
-    })
+function clickButton(label: string) {
+  const btn = screen.getByText(label, { exact: false })
+  fireEvent.click(btn)
+}
 
-    return createRouter({
-      routeTree: rootRoute,
-      history: createMemoryHistory({
-        initialEntries: ['/'],
-      }),
-    })
-  }
+// ── Tests ────────────────────────────────────────────────
 
-  const renderSetupScreen = () => {
-    return render(<MockSetupScreen />)
-  }
-
-  const renderWithRouter = () => {
-    const router = createTestRouter()
-    return render(<RouterProvider router={router} />)
-  }
-
+describe('SetupScreen — Manual Test Protocol', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
   })
 
-  it('renders setup screen', () => {
-    renderSetupScreen()
-
-    expect(screen.getByText('setup:welcome')).toBeInTheDocument()
+  // Protocol #1: First-run onboarding renders
+  it('renders the onboarding wizard', () => {
+    renderSetup()
+    expect(screen.getByText('Welcome to Ax-Studio')).toBeInTheDocument()
   })
 
-  it('renders welcome message', () => {
-    renderSetupScreen()
+  // Protocol #2: Navigate through all 5 steps
+  it('navigates through all 5 steps: Welcome → Theme → Providers → Privacy → Ready', () => {
+    renderSetup()
 
-    expect(screen.getByText('setup:welcome')).toBeInTheDocument()
+    // Step 0: Welcome
+    expect(screen.getByText('Welcome to Ax-Studio')).toBeInTheDocument()
+    expect(screen.getByText('Local AI Models')).toBeInTheDocument()
+    expect(screen.getByText('Lightning Fast')).toBeInTheDocument()
+    expect(screen.getByText('Private & Secure')).toBeInTheDocument()
+    expect(screen.getByText('Tool Use & MCP')).toBeInTheDocument()
+
+    // Step 0 has Skip button (not Back)
+    expect(screen.getByText('Skip')).toBeInTheDocument()
+    expect(screen.getByText('Continue')).toBeInTheDocument()
+
+    // Navigate to Step 1: Theme
+    clickButton('Continue')
+    expect(screen.getByText('Choose your theme')).toBeInTheDocument()
+    expect(screen.getByText('Light')).toBeInTheDocument()
+    expect(screen.getByText('Dark')).toBeInTheDocument()
+    expect(screen.getByText('System')).toBeInTheDocument()
+
+    // Now has Back button instead of Skip
+    expect(screen.getByText('Back')).toBeInTheDocument()
+
+    // Navigate to Step 2: Providers
+    clickButton('Continue')
+    expect(screen.getByText('Set up providers')).toBeInTheDocument()
+    expect(screen.getByText('Local (LlamaCPP)')).toBeInTheDocument()
+    expect(screen.getByText('OpenAI')).toBeInTheDocument()
+    expect(screen.getByText('Anthropic')).toBeInTheDocument()
+    expect(screen.getByText('Groq')).toBeInTheDocument()
+    expect(screen.getByText('Google Gemini')).toBeInTheDocument()
+    expect(screen.getByText('Recommended')).toBeInTheDocument()
+
+    // Navigate to Step 3: Privacy
+    clickButton('Continue')
+    expect(screen.getByText('Your privacy matters')).toBeInTheDocument()
+    expect(screen.getByText('Local-first')).toBeInTheDocument()
+    expect(screen.getByText('No telemetry')).toBeInTheDocument()
+    expect(screen.getByText('Your keys, your control')).toBeInTheDocument()
+    expect(screen.getByText('Open source')).toBeInTheDocument()
+
+    // Navigate to Step 4: Ready
+    clickButton('Continue')
+    expect(screen.getByText("You're all set!")).toBeInTheDocument()
+    expect(screen.getByText('New chat')).toBeInTheDocument()
+    expect(screen.getByText('Search')).toBeInTheDocument()
+    expect(screen.getByText('New project')).toBeInTheDocument()
+    expect(screen.getByText('Toggle sidebar')).toBeInTheDocument()
+    expect(screen.getByText('⌘ N')).toBeInTheDocument()
+    expect(screen.getByText('⌘ K')).toBeInTheDocument()
+
+    // Final step shows "Get Started" instead of "Continue"
+    expect(screen.getByText('Get Started')).toBeInTheDocument()
+    expect(screen.queryByText('Continue')).not.toBeInTheDocument()
   })
 
-  it('renders setup steps', () => {
-    renderSetupScreen()
+  // Protocol #3: Theme step applies immediately
+  it('calls setTheme when a theme option is clicked', () => {
+    renderSetup()
+    clickButton('Continue') // Go to Theme step
 
-    // Check for setup step indicators or content
-    const setupContent = screen.getByText('Setup steps content')
-    expect(setupContent).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Dark'))
+    expect(mockSetTheme).toHaveBeenCalledWith('dark')
+
+    fireEvent.click(screen.getByText('Light'))
+    expect(mockSetTheme).toHaveBeenCalledWith('light')
+
+    fireEvent.click(screen.getByText('System'))
+    expect(mockSetTheme).toHaveBeenCalledWith('auto')
   })
 
-  it('renders provider selection', () => {
-    renderSetupScreen()
+  // Protocol #4: Providers step toggles
+  it('calls updateProvider when a provider is toggled', () => {
+    renderSetup()
+    clickButton('Continue') // Theme
+    clickButton('Continue') // Providers
 
-    // Look for provider-related content
-    const providerContent = screen.getByText('Provider selection content')
-    expect(providerContent).toBeInTheDocument()
+    // Click OpenAI (currently inactive, should toggle to active)
+    fireEvent.click(screen.getByText('OpenAI'))
+    expect(mockUpdateProvider).toHaveBeenCalledWith('openai', { active: true })
+
+    // Click LlamaCPP (currently active, should toggle to inactive)
+    fireEvent.click(screen.getByText('Local (LlamaCPP)'))
+    expect(mockUpdateProvider).toHaveBeenCalledWith('llamacpp', { active: false })
   })
 
-  it('renders with proper styling', () => {
-    renderSetupScreen()
+  // Protocol #5: Get Started sets localStorage and calls onComplete
+  it('completes setup: sets localStorage and calls onComplete', () => {
+    const { onComplete } = renderSetup()
 
-    const setupContainer = screen.getByTestId('setup-screen')
-    expect(setupContainer).toBeInTheDocument()
+    // Navigate to final step
+    clickButton('Continue') // 1
+    clickButton('Continue') // 2
+    clickButton('Continue') // 3
+    clickButton('Continue') // 4
+
+    clickButton('Get Started')
+
+    expect(localStorage.getItem('setup-completed')).toBe('true')
+    expect(onComplete).toHaveBeenCalledOnce()
   })
 
-  it('handles setup completion', () => {
-    renderSetupScreen()
+  // Protocol #1 variant: Skip button on step 0 also completes setup
+  it('skip button completes setup immediately', () => {
+    const { onComplete } = renderSetup()
 
-    // The component should render without errors
-    expect(screen.getByText('setup:welcome')).toBeInTheDocument()
+    clickButton('Skip')
+
+    expect(localStorage.getItem('setup-completed')).toBe('true')
+    expect(onComplete).toHaveBeenCalledOnce()
   })
 
-  it('renders next step button', () => {
-    renderSetupScreen()
+  // Back navigation works
+  it('back button navigates to previous step', () => {
+    renderSetup()
 
-    // Look for links that act as buttons/next steps
-    const links = screen.getAllByRole('link')
-    expect(links.length).toBeGreaterThan(0)
+    clickButton('Continue') // Go to Theme
+    expect(screen.getByText('Choose your theme')).toBeInTheDocument()
 
-    // Check that the Next Step link is present
-    expect(screen.getByText('Next Step')).toBeInTheDocument()
+    clickButton('Back') // Back to Welcome
+    expect(screen.getByText('Welcome to Ax-Studio')).toBeInTheDocument()
   })
 
-  it('handles provider configuration', () => {
-    renderSetupScreen()
-
-    // Component should render provider configuration options
-    expect(screen.getByText('Provider selection content')).toBeInTheDocument()
+  // Progress dots: 5 dots rendered
+  it('renders 5 progress dots', () => {
+    const { container } = renderSetup()
+    // Progress dots are in the first flex gap-2 mb-8 container
+    const dotsContainer = container.querySelector('.gap-2.mb-8')
+    expect(dotsContainer).toBeInTheDocument()
+    const dots = dotsContainer!.querySelectorAll('.rounded-full')
+    expect(dots).toHaveLength(5)
   })
 
-  it('displays system information', () => {
-    renderSetupScreen()
-
-    // Component should display system-related information
-    expect(screen.getByText('System information content')).toBeInTheDocument()
+  // HeaderPage is rendered
+  it('renders HeaderPage', () => {
+    renderSetup()
+    expect(screen.getByTestId('header-page')).toBeInTheDocument()
   })
 
-  it('handles model installation', () => {
-    renderSetupScreen()
+  // Cannot go past step 4 or before step 0
+  it('does not go past the last step or before the first step', () => {
+    renderSetup()
 
-    // Component should handle model installation process
-    expect(screen.getByTestId('setup-screen')).toBeInTheDocument()
+    // Navigate to last step
+    clickButton('Continue') // 1
+    clickButton('Continue') // 2
+    clickButton('Continue') // 3
+    clickButton('Continue') // 4
+
+    expect(screen.getByText("You're all set!")).toBeInTheDocument()
+    // No "Continue" button on last step — only "Get Started"
+    expect(screen.queryByText('Continue')).not.toBeInTheDocument()
   })
 })

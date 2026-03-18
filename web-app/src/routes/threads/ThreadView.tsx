@@ -8,6 +8,7 @@
 import type { RefObject } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import type { UIMessage } from '@ai-sdk/react'
+import type { ChatStatus } from 'ai'
 import HeaderPage from '@/containers/HeaderPage'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -24,7 +25,7 @@ import { TeamVariablePrompt } from '@/components/TeamVariablePrompt'
 import { CostApprovalModal } from '@/components/CostApprovalModal'
 import { SplitThreadPane } from './SplitThreadPane'
 import { MainThreadPane } from './MainThreadPane'
-import { Columns2 } from 'lucide-react'
+import { Columns2, MessageSquareText, Users } from 'lucide-react'
 import { toast } from 'sonner'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -38,7 +39,7 @@ export type ThreadViewProps = {
   threadModel: Thread['model'] | undefined
   threadLogo: string
   chatMessages: UIMessage[]
-  status: string
+  status: ChatStatus
   error: Error | null | undefined
   stop: () => void
   handleSubmit: (text: string) => Promise<void>
@@ -46,10 +47,12 @@ export type ThreadViewProps = {
   handleEditMessage: (messageId: string, newText: string) => void
   handleDeleteMessage: (messageId: string) => void
   handleContextSizeIncrease: () => Promise<void>
-  reasoningContainerRef: RefObject<HTMLDivElement>
-  pinnedArtifact: boolean | undefined
+  reasoningContainerRef: RefObject<HTMLDivElement | null>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  pinnedArtifact: any
   clearArtifact: (threadId: string) => void
-  pinnedResearch: boolean | undefined
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  pinnedResearch: any
   clearResearch: (threadId: string) => void
   splitPaneOrder: string[] | null
   splitThreadId: string | null
@@ -60,16 +63,7 @@ export type ThreadViewProps = {
   setShowThreadPromptEditor: (show: boolean | ((v: boolean) => boolean)) => void
   threadPromptDraft: string
   setThreadPromptDraft: (draft: string) => void
-  showPromptDebug: boolean
-  setShowPromptDebug: (show: boolean | ((v: boolean) => boolean)) => void
   promptResolution: { source: string; resolvedPrompt: string }
-  optimizedModelConfig: {
-    temperature?: number
-    top_p?: number
-    max_output_tokens?: number
-    modelId?: string
-  }
-  autoTuningEnabled: boolean
   updateThread: (id: string, updates: Partial<Thread>) => void
   activeTeam: AgentTeam
   activeTeamId: string | undefined
@@ -112,11 +106,7 @@ export function ThreadView({
   setShowThreadPromptEditor,
   threadPromptDraft,
   setThreadPromptDraft,
-  showPromptDebug,
-  setShowPromptDebug,
   promptResolution,
-  optimizedModelConfig,
-  autoTuningEnabled,
   updateThread,
   activeTeam,
   activeTeamId,
@@ -136,54 +126,50 @@ export function ThreadView({
   return (
     <div className="flex flex-col h-[calc(100dvh-(env(safe-area-inset-bottom)+env(safe-area-inset-top)))]">
       <HeaderPage>
-        <div className="flex items-center w-full pr-2">
+        <div className="flex items-center w-full pr-4">
           <DropdownModelProvider model={threadModel} />
-        </div>
-      </HeaderPage>
-      <div className="flex flex-1 flex-col h-full overflow-hidden">
-        {/* ── Toolbar ── */}
-        <div className="px-4 md:px-8 pb-2 shrink-0">
-          <div className="mx-auto w-full md:w-4/5 xl:w-4/6 flex items-center justify-end gap-2">
+          <div className="flex items-center gap-1 ml-auto shrink-0">
             {!splitPaneOrder && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowThreadPromptEditor((v) => !v)}
-                >
-                  Thread Prompt
-                </Button>
-                <Button
-                  variant={showPromptDebug ? 'secondary' : 'outline'}
-                  size="sm"
-                  onClick={() => setShowPromptDebug((v) => !v)}
-                >
-                  Debug
-                </Button>
-              </>
+              <Button
+                variant={showThreadPromptEditor ? 'secondary' : 'ghost'}
+                size="icon-sm"
+                aria-label="Thread Prompt"
+                title="Thread Prompt"
+                onClick={() => setShowThreadPromptEditor((v) => !v)}
+              >
+                <MessageSquareText className="size-4" />
+              </Button>
             )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant={activeTeamId ? 'secondary' : 'outline'} size="sm">
-                  {activeTeam ? activeTeam.name : 'Agent Team'}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => handleTeamChange(undefined)}>
-                  No Team (single agent)
-                </DropdownMenuItem>
-                {agentTeams.map((team: AgentTeam) => (
-                  <DropdownMenuItem key={team.id} onSelect={() => handleTeamChange(team.id)}>
-                    {team.name}{team.id === activeTeamId && ' ✓'}
+            {!splitPaneOrder && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant={activeTeamId ? 'secondary' : 'ghost'}
+                    size="icon-sm"
+                    aria-label="Agent Team"
+                    title={activeTeam ? activeTeam.name : 'Agent Team'}
+                  >
+                    <Users className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => handleTeamChange(undefined)}>
+                    No Team (single agent)
                   </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  {agentTeams.map((team: AgentTeam) => (
+                    <DropdownMenuItem key={team.id} onSelect={() => handleTeamChange(team.id)}>
+                      {team.name}{team.id === activeTeamId && ' ✓'}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             {activeTeamId && activeTeamSnapshot && activeTeam && (
               <Button
-                variant="outline"
-                size="sm"
-                className="text-xs"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Update Team Config"
+                title="Update Team Config"
                 onClick={async () => {
                   await updateThread(threadId, {
                     metadata: { ...(thread?.metadata ?? {}), agent_team_snapshot: null },
@@ -191,13 +177,18 @@ export function ThreadView({
                   toast.success('Team config will refresh on next run')
                 }}
               >
-                Update Config
+                <span className="size-4 flex items-center justify-center text-xs font-bold text-amber-500">!</span>
               </Button>
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Columns2 className="size-4" /><span>Split View</span>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Split View"
+                  title="Split View"
+                >
+                  <Columns2 className="size-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -211,9 +202,14 @@ export function ThreadView({
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+        </div>
+      </HeaderPage>
+      <div className="flex flex-1 flex-col h-full overflow-hidden">
+        {/* ── Panels ── */}
+        <div className="px-4 md:px-8 shrink-0">
           {/* Team info bar */}
           {!splitPaneOrder && activeTeam && (
-            <div className="mx-auto w-full md:w-4/5 xl:w-4/6 mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="mx-auto w-full md:w-4/5 xl:w-4/6 pb-2 flex items-center gap-2 text-xs text-muted-foreground">
               <span>{activeTeam.name}</span>
               <span>&middot;</span>
               <span>{activeTeam.agent_ids.length} agent{activeTeam.agent_ids.length !== 1 ? 's' : ''}</span>
@@ -255,17 +251,6 @@ export function ThreadView({
               </div>
             </div>
           )}
-          {/* Debug panel */}
-          {!splitPaneOrder && showPromptDebug && (
-            <div className="mx-auto w-full md:w-4/5 xl:w-4/6 mt-2 rounded-md border bg-card p-3 text-xs space-y-1">
-              <p><span className="font-medium">Source:</span> {promptResolution.source}</p>
-              <p><span className="font-medium">Auto Tuning:</span> {autoTuningEnabled ? 'Enabled' : 'Disabled'}</p>
-              <p><span className="font-medium">temperature:</span> {optimizedModelConfig.temperature ?? 'default'}</p>
-              <p><span className="font-medium">top_p:</span> {optimizedModelConfig.top_p ?? 'default'}</p>
-              <p><span className="font-medium">max_output_tokens:</span> {optimizedModelConfig.max_output_tokens ?? 'default'}</p>
-              <pre className="bg-muted rounded p-2 whitespace-pre-wrap break-words">{promptResolution.resolvedPrompt}</pre>
-            </div>
-          )}
         </div>
 
         {/* ── Body ── */}
@@ -299,6 +284,10 @@ export function ThreadView({
                     setThreadPromptDraft={setThreadPromptDraft}
                     promptResolution={promptResolution}
                     updateThread={updateThread}
+                    agentTeams={agentTeams}
+                    activeTeamId={activeTeamId}
+                    activeTeam={activeTeam}
+                    handleTeamChange={handleTeamChange}
                     isSplitView
                     onSplitClose={() => {
                       if (!splitThreadId) return
