@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button'
 import {
   IconLoader,
 } from '@tabler/icons-react'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { useEffect, useState } from 'react'
 import { predefinedProviders } from '@/constants/providers'
@@ -279,6 +279,18 @@ function ProviderDetail() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0 ml-4">
+                    <div className="relative">
+                      <Search
+                        className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground size-3.5"
+                      />
+                      <input
+                        type="text"
+                        value={modelSearch}
+                        onChange={(e) => setModelSearch(e.target.value)}
+                        placeholder={t('common:searchModels', { defaultValue: 'Search models...' })}
+                        className="h-8 w-44 rounded-lg border border-input bg-background pl-8 pr-2 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                      />
+                    </div>
                     {provider && (
                       <>
                         <Button
@@ -306,7 +318,17 @@ function ProviderDetail() {
 
                 <Card>
                   {provider?.models.length ? (
-                    provider?.models.map((model, modelIndex) => {
+                    provider?.models
+                    .filter((model) => {
+                      if (!modelSearch) return true
+                      const search = modelSearch.toLowerCase()
+                      return (
+                        model.id.toLowerCase().includes(search) ||
+                        model.name?.toLowerCase().includes(search) ||
+                        getModelDisplayName(model).toLowerCase().includes(search)
+                      )
+                    })
+                    .map((model, modelIndex) => {
                       const capabilities = model.capabilities || []
                       return (
                         <CardItem
