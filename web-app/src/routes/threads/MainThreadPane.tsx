@@ -9,11 +9,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
 import { MessageSquareText, Users } from 'lucide-react'
 import ChatInput from '@/containers/ChatInput'
 import { MessagesArea } from './MessagesArea'
@@ -106,16 +101,15 @@ export function MainThreadPane({
             <div className="flex items-center gap-0.5 shrink-0">
               {handleTeamChange && (
                 <DropdownMenu>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant={activeTeamId ? 'secondary' : 'ghost'} size="icon-xs">
-                          <Users className="size-3.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">{activeTeam ? activeTeam.name : 'Agent Team'}</TooltipContent>
-                  </Tooltip>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant={activeTeamId ? 'secondary' : 'ghost'}
+                      size="icon-xs"
+                      title={activeTeam ? activeTeam.name : 'Agent Team'}
+                    >
+                      <Users className="size-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onSelect={() => handleTeamChange(undefined)}>
                       No Team (single agent)
@@ -129,18 +123,14 @@ export function MainThreadPane({
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={showThreadPromptEditor ? 'secondary' : 'ghost'}
-                    size="icon-xs"
-                    onClick={() => setShowThreadPromptEditor((v) => !v)}
-                  >
-                    <MessageSquareText className="size-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Thread Prompt</TooltipContent>
-              </Tooltip>
+              <Button
+                variant={showThreadPromptEditor ? 'secondary' : 'ghost'}
+                size="icon-xs"
+                title="Thread Prompt"
+                onClick={() => setShowThreadPromptEditor((v) => !v)}
+              >
+                <MessageSquareText className="size-3.5" />
+              </Button>
               <Button variant="ghost" size="icon-xs" className="shrink-0" onClick={onSplitClose}>
                 <span className="size-4">✕</span>
               </Button>

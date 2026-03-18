@@ -42,11 +42,6 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -205,34 +200,26 @@ function Index() {
         <div className="flex items-center w-full pr-4">
           <DropdownModelProvider model={selectedModel} useLastUsedModel />
           <div className="flex items-center gap-1 ml-auto shrink-0">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={showThreadPromptEditor ? 'secondary' : 'ghost'}
-                  size="icon-sm"
-                  aria-label="Thread Prompt"
-                  onClick={() => setShowThreadPromptEditor((v) => !v)}
-                >
-                  <MessageSquareText className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Thread Prompt</TooltipContent>
-            </Tooltip>
+            <Button
+              variant={showThreadPromptEditor ? 'secondary' : 'ghost'}
+              size="icon-sm"
+              aria-label="Thread Prompt"
+              title="Thread Prompt"
+              onClick={() => setShowThreadPromptEditor((v) => !v)}
+            >
+              <MessageSquareText className="size-4" />
+            </Button>
             <DropdownMenu>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant={selectedTeamId ? 'secondary' : 'ghost'}
-                      size="icon-sm"
-                      aria-label="Agent Team"
-                    >
-                      <Users className="size-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">{selectedTeam ? selectedTeam.name : 'Agent Team'}</TooltipContent>
-              </Tooltip>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant={selectedTeamId ? 'secondary' : 'ghost'}
+                  size="icon-sm"
+                  aria-label="Agent Team"
+                  title={selectedTeam ? selectedTeam.name : 'Agent Team'}
+                >
+                  <Users className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onSelect={() => setSelectedTeamId(undefined)}>
                   No Team (single agent)
@@ -249,16 +236,16 @@ function Index() {
               </DropdownMenuContent>
             </DropdownMenu>
             <DropdownMenu>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon-sm" aria-label="Split View">
-                      <Columns2 className="size-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Split View</TooltipContent>
-              </Tooltip>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Split View"
+                  title="Split View"
+                >
+                  <Columns2 className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onSelect={() => handleSplit('left')}>
                   Split Left

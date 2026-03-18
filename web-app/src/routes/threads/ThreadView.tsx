@@ -27,11 +27,6 @@ import { SplitThreadPane } from './SplitThreadPane'
 import { MainThreadPane } from './MainThreadPane'
 import { Columns2, MessageSquareText, Users } from 'lucide-react'
 import { toast } from 'sonner'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AgentTeam = any
@@ -135,31 +130,28 @@ export function ThreadView({
           <DropdownModelProvider model={threadModel} />
           <div className="flex items-center gap-1 ml-auto shrink-0">
             {!splitPaneOrder && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={showThreadPromptEditor ? 'secondary' : 'ghost'}
-                    size="icon-sm"
-                    onClick={() => setShowThreadPromptEditor((v) => !v)}
-                  >
-                    <MessageSquareText className="size-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Thread Prompt</TooltipContent>
-              </Tooltip>
+              <Button
+                variant={showThreadPromptEditor ? 'secondary' : 'ghost'}
+                size="icon-sm"
+                aria-label="Thread Prompt"
+                title="Thread Prompt"
+                onClick={() => setShowThreadPromptEditor((v) => !v)}
+              >
+                <MessageSquareText className="size-4" />
+              </Button>
             )}
             {!splitPaneOrder && (
               <DropdownMenu>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant={activeTeamId ? 'secondary' : 'ghost'} size="icon-sm">
-                        <Users className="size-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">{activeTeam ? activeTeam.name : 'Agent Team'}</TooltipContent>
-                </Tooltip>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant={activeTeamId ? 'secondary' : 'ghost'}
+                    size="icon-sm"
+                    aria-label="Agent Team"
+                    title={activeTeam ? activeTeam.name : 'Agent Team'}
+                  >
+                    <Users className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onSelect={() => handleTeamChange(undefined)}>
                     No Team (single agent)
@@ -173,35 +165,32 @@ export function ThreadView({
               </DropdownMenu>
             )}
             {activeTeamId && activeTeamSnapshot && activeTeam && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={async () => {
-                      await updateThread(threadId, {
-                        metadata: { ...(thread?.metadata ?? {}), agent_team_snapshot: null },
-                      })
-                      toast.success('Team config will refresh on next run')
-                    }}
-                  >
-                    <span className="size-4 flex items-center justify-center text-xs font-bold text-amber-500">!</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Update Team Config</TooltipContent>
-              </Tooltip>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Update Team Config"
+                title="Update Team Config"
+                onClick={async () => {
+                  await updateThread(threadId, {
+                    metadata: { ...(thread?.metadata ?? {}), agent_team_snapshot: null },
+                  })
+                  toast.success('Team config will refresh on next run')
+                }}
+              >
+                <span className="size-4 flex items-center justify-center text-xs font-bold text-amber-500">!</span>
+              </Button>
             )}
             <DropdownMenu>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon-sm">
-                      <Columns2 className="size-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Split View</TooltipContent>
-              </Tooltip>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Split View"
+                  title="Split View"
+                >
+                  <Columns2 className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onSelect={() => handleSplit('left')}>Split Left</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => handleSplit('right')}>Split Right</DropdownMenuItem>
