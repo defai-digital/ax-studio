@@ -41,9 +41,10 @@ const mockServiceHub = {
     getAppDataFolder: vi.fn().mockResolvedValue('/mock/app/data'),
   }),
   messages: () => ({
-    createMessage: vi.fn().mockResolvedValue({ id: 'test-message' }),
+    createMessage: vi.fn().mockImplementation((msg) => Promise.resolve(msg)),
     deleteMessage: vi.fn().mockResolvedValue(undefined),
     updateMessage: vi.fn().mockResolvedValue(undefined),
+    modifyMessage: vi.fn().mockResolvedValue(undefined),
     getMessages: vi.fn().mockResolvedValue([]),
     getMessage: vi.fn().mockResolvedValue(null),
     fetchMessages: vi.fn().mockResolvedValue([]),
@@ -90,6 +91,7 @@ const mockServiceHub = {
     getActiveModels: vi.fn().mockResolvedValue([]),
     isModelSupported: vi.fn().mockResolvedValue('GREEN'),
     checkMmprojExists: vi.fn().mockResolvedValue(true), // cspell: disable-line
+    stopModel: vi.fn().mockResolvedValue(undefined),
     stopAllModels: vi.fn().mockResolvedValue(undefined),
   }),
   assistants: () => ({

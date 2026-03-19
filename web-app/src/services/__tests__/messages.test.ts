@@ -2,33 +2,37 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { DefaultMessagesService } from '../messages/default'
 import { ExtensionManager } from '@/lib/extension'
 import { ExtensionTypeEnum } from '@ax-studio/core'
+import { TEMPORARY_CHAT_ID } from '@/constants/chat'
 
 // Mock the ExtensionManager
 vi.mock('@/lib/extension', () => ({
   ExtensionManager: {
     getInstance: vi.fn(() => ({
-      get: vi.fn()
-    }))
-  }
+      get: vi.fn(),
+    })),
+  },
 }))
 
 describe('DefaultMessagesService', () => {
   let messagesService: DefaultMessagesService
-  
+
   const mockExtension = {
     listMessages: vi.fn(),
     createMessage: vi.fn(),
-    deleteMessage: vi.fn()
+    modifyMessage: vi.fn(),
+    deleteMessage: vi.fn(),
   }
 
   const mockExtensionManager = {
-    get: vi.fn()
+    get: vi.fn(),
   }
 
   beforeEach(() => {
     messagesService = new DefaultMessagesService()
     vi.clearAllMocks()
-    vi.mocked(ExtensionManager.getInstance).mockReturnValue(mockExtensionManager)
+    vi.mocked(ExtensionManager.getInstance).mockReturnValue(
+      mockExtensionManager as ReturnType<typeof ExtensionManager.getInstance>
+    )
     mockExtensionManager.get.mockReturnValue(mockExtension)
   })
 
@@ -37,13 +41,15 @@ describe('DefaultMessagesService', () => {
       const threadId = 'thread-123'
       const mockMessages = [
         { id: 'msg-1', threadId, content: 'Hello', role: 'user' },
-        { id: 'msg-2', threadId, content: 'Hi there!', role: 'assistant' }
+        { id: 'msg-2', threadId, content: 'Hi there!', role: 'assistant' },
       ]
       mockExtension.listMessages.mockResolvedValue(mockMessages)
 
       const result = await messagesService.fetchMessages(threadId)
 
-      expect(mockExtensionManager.get).toHaveBeenCalledWith(ExtensionTypeEnum.Conversational)
+      expect(mockExtensionManager.get).toHaveBeenCalledWith(
+        ExtensionTypeEnum.Conversational
+      )
       expect(mockExtension.listMessages).toHaveBeenCalledWith(threadId)
       expect(result).toEqual(mockMessages)
     })
@@ -54,19 +60,20 @@ describe('DefaultMessagesService', () => {
 
       const result = await messagesService.fetchMessages(threadId)
 
-      expect(mockExtensionManager.get).toHaveBeenCalledWith(ExtensionTypeEnum.Conversational)
+      expect(mockExtensionManager.get).toHaveBeenCalledWith(
+        ExtensionTypeEnum.Conversational
+      )
       expect(result).toEqual([])
     })
 
     it('should return empty array when listMessages fails', async () => {
       const threadId = 'thread-123'
-      const error = new Error('Failed to list messages')
-      mockExtension.listMessages.mockRejectedValue(error)
+      mockExtension.listMessages.mockRejectedValue(
+        new Error('Failed to list messages')
+      )
 
       const result = await messagesService.fetchMessages(threadId)
 
-      expect(mockExtensionManager.get).toHaveBeenCalledWith(ExtensionTypeEnum.Conversational)
-      expect(mockExtension.listMessages).toHaveBeenCalledWith(threadId)
       expect(result).toEqual([])
     })
 
@@ -78,49 +85,140 @@ describe('DefaultMessagesService', () => {
 
       expect(result).toEqual([])
     })
+
+    it('should return empty array for TEMPORARY_CHAT_ID without calling extension', async () => {
+      const result = await messagesService.fetchMessages(TEMPORARY_CHAT_ID)
+
+      expect(result).toEqual([])
+      expect(mockExtensionManager.get).not.toHaveBeenCalled()
+    })
   })
 
   describe('createMessage', () => {
     it('should create message successfully', async () => {
-      const message = { id: 'msg-1', threadId: 'thread-123', content: 'Hello', role: 'user' }
+      const message = {
+        id: 'msg-1',
+        thread_id: 'thread-123',
+        content: 'Hello',
+        role: 'user',
+      }
       mockExtension.createMessage.mockResolvedValue(message)
 
-      const result = await messagesService.createMessage(message)
+      const result = await messagesService.createMessage(message as never)
 
-      expect(mockExtensionManager.get).toHaveBeenCalledWith(ExtensionTypeEnum.Conversational)
+      expect(mockExtensionManager.get).toHaveBeenCalledWith(
+        ExtensionTypeEnum.Conversational
+      )
       expect(mockExtension.createMessage).toHaveBeenCalledWith(message)
       expect(result).toEqual(message)
     })
 
     it('should return original message when extension not found', async () => {
       mockExtensionManager.get.mockReturnValue(null)
-      const message = { id: 'msg-1', threadId: 'thread-123', content: 'Hello', role: 'user' }
+      const message = {
+        id: 'msg-1',
+        thread_id: 'thread-123',
+        content: 'Hello',
+        role: 'user',
+      }
 
-      const result = await messagesService.createMessage(message)
+      const result = await messagesService.createMessage(message as never)
 
-      expect(mockExtensionManager.get).toHaveBeenCalledWith(ExtensionTypeEnum.Conversational)
       expect(result).toEqual(message)
     })
 
     it('should return original message when createMessage fails', async () => {
-      const message = { id: 'msg-1', threadId: 'thread-123', content: 'Hello', role: 'user' }
-      const error = new Error('Failed to create message')
-      mockExtension.createMessage.mockRejectedValue(error)
+      const message = {
+        id: 'msg-1',
+        thread_id: 'thread-123',
+        content: 'Hello',
+        role: 'user',
+      }
+      mockExtension.createMessage.mockRejectedValue(
+        new Error('Failed to create message')
+      )
 
-      const result = await messagesService.createMessage(message)
+      const result = await messagesService.createMessage(message as never)
 
-      expect(mockExtensionManager.get).toHaveBeenCalledWith(ExtensionTypeEnum.Conversational)
-      expect(mockExtension.createMessage).toHaveBeenCalledWith(message)
       expect(result).toEqual(message)
     })
 
-    it('should handle undefined createMessage response', async () => {
-      const message = { id: 'msg-1', threadId: 'thread-123', content: 'Hello', role: 'user' }
-      mockExtension.createMessage.mockReturnValue(undefined)
+    it('should return message immediately for TEMPORARY_CHAT_ID without calling extension', async () => {
+      const message = {
+        id: 'msg-1',
+        thread_id: TEMPORARY_CHAT_ID,
+        content: 'Hello',
+        role: 'user',
+      }
 
-      const result = await messagesService.createMessage(message)
+      const result = await messagesService.createMessage(message as never)
 
       expect(result).toEqual(message)
+      expect(mockExtensionManager.get).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('modifyMessage', () => {
+    it('should modify message successfully', async () => {
+      const message = {
+        id: 'msg-1',
+        thread_id: 'thread-123',
+        content: 'Updated',
+        role: 'user',
+      }
+      mockExtension.modifyMessage.mockResolvedValue(message)
+
+      const result = await messagesService.modifyMessage(message as never)
+
+      expect(mockExtensionManager.get).toHaveBeenCalledWith(
+        ExtensionTypeEnum.Conversational
+      )
+      expect(mockExtension.modifyMessage).toHaveBeenCalledWith(message)
+      expect(result).toEqual(message)
+    })
+
+    it('should return original message when extension not found', async () => {
+      mockExtensionManager.get.mockReturnValue(null)
+      const message = {
+        id: 'msg-1',
+        thread_id: 'thread-123',
+        content: 'Updated',
+        role: 'user',
+      }
+
+      const result = await messagesService.modifyMessage(message as never)
+
+      expect(result).toEqual(message)
+    })
+
+    it('should return original message when modifyMessage fails', async () => {
+      const message = {
+        id: 'msg-1',
+        thread_id: 'thread-123',
+        content: 'Updated',
+        role: 'user',
+      }
+      mockExtension.modifyMessage.mockRejectedValue(
+        new Error('Failed to modify')
+      )
+
+      const result = await messagesService.modifyMessage(message as never)
+
+      expect(result).toEqual(message)
+    })
+
+    it('should return message immediately for TEMPORARY_CHAT_ID without calling extension', async () => {
+      const message = {
+        id: 'msg-1',
+        thread_id: TEMPORARY_CHAT_ID,
+        content: 'Updated',
+        role: 'user',
+      }
+
+      const result = await messagesService.modifyMessage(message as never)
+
+      expect(result).toEqual(message)
+      expect(mockExtensionManager.get).not.toHaveBeenCalled()
     })
   })
 
@@ -132,30 +230,42 @@ describe('DefaultMessagesService', () => {
 
       const result = await messagesService.deleteMessage(threadId, messageId)
 
-      expect(mockExtensionManager.get).toHaveBeenCalledWith(ExtensionTypeEnum.Conversational)
-      expect(mockExtension.deleteMessage).toHaveBeenCalledWith(threadId, messageId)
+      expect(mockExtensionManager.get).toHaveBeenCalledWith(
+        ExtensionTypeEnum.Conversational
+      )
+      expect(mockExtension.deleteMessage).toHaveBeenCalledWith(
+        threadId,
+        messageId
+      )
       expect(result).toBeUndefined()
     })
 
     it('should return undefined when extension not found', async () => {
       mockExtensionManager.get.mockReturnValue(null)
-      const threadId = 'thread-123'
-      const messageId = 'msg-1'
 
-      const result = await messagesService.deleteMessage(threadId, messageId)
+      const result = await messagesService.deleteMessage('thread-123', 'msg-1')
 
-      expect(mockExtensionManager.get).toHaveBeenCalledWith(ExtensionTypeEnum.Conversational)
       expect(result).toBeUndefined()
     })
 
     it('should handle deleteMessage error', async () => {
-      const threadId = 'thread-123'
-      const messageId = 'msg-1'
-      const error = new Error('Failed to delete message')
-      mockExtension.deleteMessage.mockRejectedValue(error)
+      mockExtension.deleteMessage.mockRejectedValue(
+        new Error('Failed to delete message')
+      )
 
-      // Since deleteMessage doesn't have error handling, the error will propagate
-      await expect(messagesService.deleteMessage(threadId, messageId)).rejects.toThrow('Failed to delete message')
+      await expect(
+        messagesService.deleteMessage('thread-123', 'msg-1')
+      ).rejects.toThrow('Failed to delete message')
+    })
+
+    it('should return immediately for TEMPORARY_CHAT_ID without calling extension', async () => {
+      const result = await messagesService.deleteMessage(
+        TEMPORARY_CHAT_ID,
+        'msg-1'
+      )
+
+      expect(result).toBeUndefined()
+      expect(mockExtensionManager.get).not.toHaveBeenCalled()
     })
   })
 })

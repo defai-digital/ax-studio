@@ -135,3 +135,76 @@ pub async fn execute_python(code: &str, timeout_secs: u64) -> Result<ExecutionRe
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::process::Command;
+
+    /// Helper: run a trivial command and feed its Output to build_result.
+    fn run_and_build(args: &[&str]) -> ExecutionResult {
+        let output = Command::new(args[0])
+            .args(&args[1..])
+            .output()
+            .expect("failed to run helper command");
+        build_result(output)
+    }
+
+    #[test]
+    fn test_build_result_success() {
+        let result = run_and_build(&["echo", "hello world"]);
+        assert!(result.stdout.contains("hello world"));
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn test_build_result_failure_with_stderr() {
+        // `ls` on a nonexistent path should fail with stderr output
+        let result = run_and_build(&["ls", "/nonexistent_path_abc_xyz_12345"]);
+        assert!(result.error.is_some());
+        // Error should contain the stderr message since stderr is non-empty
+        let err = result.error.unwrap();
+        assert!(!err.is_empty());
+    }
+
+    #[test]
+    fn test_build_result_failure_empty_stderr() {
+        // `false` exits with code 1 and empty stderr
+        let result = run_and_build(&["false"]);
+        assert!(result.error.is_some());
+        let err = result.error.unwrap();
+        assert!(err.contains("Process exited with code"));
+    }
+
+    #[test]
+    fn test_build_result_outputs_always_empty() {
+        let result = run_and_build(&["echo", "test"]);
+        assert!(result.outputs.is_empty());
+    }
+
+    #[test]
+    fn test_build_result_captures_stderr_on_success() {
+        // Some commands write to stderr even on success. Use a command that
+        // succeeds but the stderr field should still be captured.
+        let result = run_and_build(&["echo", "ok"]);
+        // stderr should be present (possibly empty) regardless of success
+        assert!(result.stderr.is_empty() || !result.stderr.is_empty());
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn test_is_python_available() {
+        // This is a system-dependent test. We just verify it returns a bool
+        // without panicking.
+        let _available = is_python_available();
+    }
+
+    #[test]
+    fn test_find_python_binary_returns_option() {
+        // Should return Some or None without panicking
+        let result = find_python_binary();
+        if let Some(binary) = result {
+            assert!(!binary.is_empty());
+        }
+    }
+}

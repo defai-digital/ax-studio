@@ -10,6 +10,85 @@ fn is_valid_id(id: &str) -> bool {
             .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- is_valid_id ---
+
+    #[test]
+    fn test_is_valid_id_valid() {
+        assert!(is_valid_id("team-1"));
+        assert!(is_valid_id("my_team"));
+        assert!(is_valid_id("ABC123"));
+    }
+
+    #[test]
+    fn test_is_valid_id_invalid() {
+        assert!(!is_valid_id(""));
+        assert!(!is_valid_id("a/b"));
+        assert!(!is_valid_id("a b"));
+        assert!(!is_valid_id("../"));
+    }
+
+    // --- AgentTeam serialization ---
+
+    #[test]
+    fn test_agent_team_serialize_deserialize() {
+        let team = AgentTeam {
+            id: "team-abc".to_string(),
+            name: "Test Team".to_string(),
+            description: "A test team".to_string(),
+            orchestration: serde_json::json!({"type": "sequential"}),
+            orchestrator_instructions: Some("Do things in order".to_string()),
+            orchestrator_model_id: Some("gpt-4".to_string()),
+            agent_ids: vec!["agent-1".to_string(), "agent-2".to_string()],
+            variables: Some(vec![serde_json::json!({"name": "input", "type": "string"})]),
+            token_budget: Some(10000),
+            cost_approval_threshold: Some(0.5),
+            parallel_stagger_ms: Some(100),
+            created_at: 1700000000,
+            updated_at: 1700001000,
+        };
+
+        let json = serde_json::to_string(&team).unwrap();
+        let deserialized: AgentTeam = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.id, "team-abc");
+        assert_eq!(deserialized.name, "Test Team");
+        assert_eq!(deserialized.agent_ids.len(), 2);
+        assert_eq!(deserialized.token_budget, Some(10000));
+        assert_eq!(deserialized.cost_approval_threshold, Some(0.5));
+        assert_eq!(deserialized.parallel_stagger_ms, Some(100));
+    }
+
+    #[test]
+    fn test_agent_team_minimal() {
+        let team = AgentTeam {
+            id: "t1".to_string(),
+            name: "Min".to_string(),
+            description: String::new(),
+            orchestration: serde_json::json!(null),
+            orchestrator_instructions: None,
+            orchestrator_model_id: None,
+            agent_ids: vec![],
+            variables: None,
+            token_budget: None,
+            cost_approval_threshold: None,
+            parallel_stagger_ms: None,
+            created_at: 0,
+            updated_at: 0,
+        };
+
+        let json = serde_json::to_string(&team).unwrap();
+        let deserialized: AgentTeam = serde_json::from_str(&json).unwrap();
+
+        assert!(deserialized.orchestrator_instructions.is_none());
+        assert!(deserialized.variables.is_none());
+        assert!(deserialized.token_budget.is_none());
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentTeam {
     pub id: String,

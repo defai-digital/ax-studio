@@ -746,6 +746,325 @@ pub(super) async fn transform_and_forward_stream<S>(
     log::debug!("Streaming complete (Anthropic format)");
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- text_parts_to_content ---
+
+    #[test]
+    fn test_text_parts_to_content_empty() {
+        let result = text_parts_to_content(&[]);
+        assert_eq!(result, serde_json::Value::String(String::new()));
+    }
+
+    #[test]
+    fn test_text_parts_to_content_single_text() {
+        let parts = vec![serde_json::json!({"type": "text", "text": "hello"})];
+        let result = text_parts_to_content(&parts);
+        assert_eq!(result, serde_json::Value::String("hello".to_string()));
+    }
+
+    #[test]
+    fn test_text_parts_to_content_multiple_parts() {
+        let parts = vec![
+            serde_json::json!({"type": "text", "text": "hello"}),
+            serde_json::json!({"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}),
+        ];
+        let result = text_parts_to_content(&parts);
+        assert!(result.is_array());
+        assert_eq!(result.as_array().unwrap().len(), 2);
+    }
+
+    // --- extract_tool_result_content ---
+
+    #[test]
+    fn test_extract_tool_result_content_none() {
+        assert_eq!(extract_tool_result_content(None), "");
+    }
+
+    #[test]
+    fn test_extract_tool_result_content_string() {
+        let val = serde_json::json!("tool output");
+        assert_eq!(extract_tool_result_content(Some(&val)), "tool output");
+    }
+
+    #[test]
+    fn test_extract_tool_result_content_array_of_text_blocks() {
+        let val = serde_json::json!([
+            {"type": "text", "text": "line one"},
+            {"type": "text", "text": "line two"},
+            {"type": "image", "data": "ignored"}
+        ]);
+        assert_eq!(
+            extract_tool_result_content(Some(&val)),
+            "line one\nline two"
+        );
+    }
+
+    #[test]
+    fn test_extract_tool_result_content_object_fallback() {
+        let val = serde_json::json!({"key": "value"});
+        let result = extract_tool_result_content(Some(&val));
+        assert!(result.contains("key"));
+    }
+
+    // --- transform_anthropic_to_openai ---
+
+    #[test]
+    fn test_transform_anthropic_to_openai_basic() {
+        let body = serde_json::json!({
+            "model": "claude-3-opus",
+            "messages": [
+                {"role": "user", "content": "Hello"}
+            ],
+            "max_tokens": 1024
+        });
+        let result = transform_anthropic_to_openai(&body).unwrap();
+        assert_eq!(result["model"], "claude-3-opus");
+        assert_eq!(result["stream"], false);
+        assert_eq!(result["max_tokens"], 1024);
+        let msgs = result["messages"].as_array().unwrap();
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(msgs[0]["role"], "user");
+        assert_eq!(msgs[0]["content"], "Hello");
+    }
+
+    #[test]
+    fn test_transform_anthropic_to_openai_with_system_prompt() {
+        let body = serde_json::json!({
+            "model": "claude-3",
+            "system": "You are helpful.",
+            "messages": [
+                {"role": "user", "content": "Hi"}
+            ]
+        });
+        let result = transform_anthropic_to_openai(&body).unwrap();
+        let msgs = result["messages"].as_array().unwrap();
+        assert_eq!(msgs[0]["role"], "system");
+        assert_eq!(msgs[0]["content"], "You are helpful.");
+        assert_eq!(msgs[1]["role"], "user");
+    }
+
+    #[test]
+    fn test_transform_anthropic_to_openai_with_system_blocks() {
+        let body = serde_json::json!({
+            "model": "claude-3",
+            "system": [
+                {"type": "text", "text": "Part 1"},
+                {"type": "text", "text": "Part 2"}
+            ],
+            "messages": [
+                {"role": "user", "content": "Hi"}
+            ]
+        });
+        let result = transform_anthropic_to_openai(&body).unwrap();
+        let msgs = result["messages"].as_array().unwrap();
+        assert_eq!(msgs[0]["role"], "system");
+        assert_eq!(msgs[0]["content"], "Part 1\nPart 2");
+    }
+
+    #[test]
+    fn test_transform_anthropic_to_openai_with_tools() {
+        let body = serde_json::json!({
+            "model": "claude-3",
+            "messages": [{"role": "user", "content": "test"}],
+            "tools": [
+                {
+                    "name": "get_weather",
+                    "description": "Get weather",
+                    "input_schema": {"type": "object", "properties": {"city": {"type": "string"}}}
+                }
+            ]
+        });
+        let result = transform_anthropic_to_openai(&body).unwrap();
+        let tools = result["tools"].as_array().unwrap();
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0]["type"], "function");
+        assert_eq!(tools[0]["function"]["name"], "get_weather");
+    }
+
+    #[test]
+    fn test_transform_anthropic_to_openai_missing_model() {
+        let body = serde_json::json!({
+            "messages": [{"role": "user", "content": "Hi"}]
+        });
+        assert!(transform_anthropic_to_openai(&body).is_none());
+    }
+
+    #[test]
+    fn test_transform_anthropic_to_openai_stop_sequences() {
+        let body = serde_json::json!({
+            "model": "claude-3",
+            "messages": [{"role": "user", "content": "test"}],
+            "stop_sequences": ["STOP"]
+        });
+        let result = transform_anthropic_to_openai(&body).unwrap();
+        assert_eq!(result["stop"], serde_json::json!(["STOP"]));
+    }
+
+    // --- convert_messages with tool_use / tool_result ---
+
+    #[test]
+    fn test_convert_messages_assistant_tool_use() {
+        let messages = serde_json::json!([
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "Let me check"},
+                    {"type": "tool_use", "id": "tool_1", "name": "search", "input": {"q": "test"}}
+                ]
+            }
+        ]);
+        let result = convert_messages(&messages, None).unwrap();
+        let msgs = result.as_array().unwrap();
+        assert_eq!(msgs[0]["role"], "assistant");
+        assert_eq!(msgs[0]["content"], "Let me check");
+        assert_eq!(msgs[0]["tool_calls"][0]["id"], "tool_1");
+        assert_eq!(msgs[0]["tool_calls"][0]["function"]["name"], "search");
+    }
+
+    #[test]
+    fn test_convert_messages_user_tool_result() {
+        let messages = serde_json::json!([
+            {
+                "role": "user",
+                "content": [
+                    {"type": "tool_result", "tool_use_id": "tool_1", "content": "result text"},
+                    {"type": "text", "text": "What do you think?"}
+                ]
+            }
+        ]);
+        let result = convert_messages(&messages, None).unwrap();
+        let msgs = result.as_array().unwrap();
+        // tool results come first as role:"tool"
+        assert_eq!(msgs[0]["role"], "tool");
+        assert_eq!(msgs[0]["tool_call_id"], "tool_1");
+        assert_eq!(msgs[0]["content"], "result text");
+        // Then user text
+        assert_eq!(msgs[1]["role"], "user");
+        assert_eq!(msgs[1]["content"], "What do you think?");
+    }
+
+    // --- transform_openai_response_to_anthropic ---
+
+    #[test]
+    fn test_transform_openai_response_to_anthropic_text() {
+        let response = serde_json::json!({
+            "id": "chatcmpl-123",
+            "model": "gpt-4",
+            "choices": [{
+                "message": {"role": "assistant", "content": "Hello!"},
+                "finish_reason": "stop"
+            }],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5}
+        });
+        let result = transform_openai_response_to_anthropic(&response);
+        assert_eq!(result["type"], "message");
+        assert_eq!(result["role"], "assistant");
+        assert_eq!(result["stop_reason"], "end_turn");
+        let content = result["content"].as_array().unwrap();
+        assert_eq!(content[0]["type"], "text");
+        assert_eq!(content[0]["text"], "Hello!");
+    }
+
+    #[test]
+    fn test_transform_openai_response_to_anthropic_tool_calls() {
+        let response = serde_json::json!({
+            "id": "chatcmpl-456",
+            "model": "gpt-4",
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "content": null,
+                    "tool_calls": [{
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {
+                            "name": "get_weather",
+                            "arguments": "{\"city\":\"NYC\"}"
+                        }
+                    }]
+                },
+                "finish_reason": "tool_calls"
+            }]
+        });
+        let result = transform_openai_response_to_anthropic(&response);
+        assert_eq!(result["stop_reason"], "tool_use");
+        let content = result["content"].as_array().unwrap();
+        assert_eq!(content[0]["type"], "tool_use");
+        assert_eq!(content[0]["name"], "get_weather");
+        assert_eq!(content[0]["input"]["city"], "NYC");
+    }
+
+    #[test]
+    fn test_transform_openai_response_to_anthropic_length_finish() {
+        let response = serde_json::json!({
+            "id": "chatcmpl-789",
+            "model": "gpt-4",
+            "choices": [{
+                "message": {"role": "assistant", "content": "truncated"},
+                "finish_reason": "length"
+            }]
+        });
+        let result = transform_openai_response_to_anthropic(&response);
+        assert_eq!(result["stop_reason"], "max_tokens");
+    }
+
+    // --- sse_event ---
+
+    #[test]
+    fn test_sse_event_format() {
+        let data = serde_json::json!({"type": "message_start", "message": {}});
+        let bytes = sse_event(&data);
+        let s = String::from_utf8_lossy(&bytes);
+        assert!(s.starts_with("event: message_start\ndata: "));
+        assert!(s.ends_with("\n\n"));
+    }
+
+    #[test]
+    fn test_sse_event_default_type() {
+        let data = serde_json::json!({"foo": "bar"});
+        let bytes = sse_event(&data);
+        let s = String::from_utf8_lossy(&bytes);
+        assert!(s.starts_with("event: message\n"));
+    }
+
+    // --- convert_media_block ---
+
+    #[test]
+    fn test_convert_media_block_image() {
+        let block = serde_json::json!({
+            "type": "image",
+            "source": {
+                "data": "abc123",
+                "media_type": "image/png"
+            }
+        });
+        let mut parts = Vec::new();
+        convert_media_block(&block, &mut parts);
+        assert_eq!(parts.len(), 1);
+        assert_eq!(parts[0]["type"], "image_url");
+        assert_eq!(
+            parts[0]["image_url"]["url"],
+            "data:image/png;base64,abc123"
+        );
+    }
+
+    #[test]
+    fn test_convert_media_block_text_fallback() {
+        let block = serde_json::json!({
+            "type": "unknown",
+            "text": "some text"
+        });
+        let mut parts = Vec::new();
+        convert_media_block(&block, &mut parts);
+        assert_eq!(parts.len(), 1);
+        assert_eq!(parts[0]["type"], "text");
+        assert_eq!(parts[0]["text"], "some text");
+    }
+}
+
 /// Forward non-streaming OpenAI response as Anthropic /messages response
 pub(super) async fn forward_non_streaming(
     response_body: Result<Bytes, reqwest::Error>,

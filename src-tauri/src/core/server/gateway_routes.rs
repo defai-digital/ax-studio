@@ -178,6 +178,102 @@ pub(super) fn handle_static_asset(path: &str) -> Option<Response<Body>> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_config() -> ProxyConfig {
+        ProxyConfig {
+            prefix: "/v1".to_string(),
+            proxy_api_key: String::new(),
+            trusted_hosts: vec![],
+            cors_enabled: false,
+            host: "127.0.0.1".to_string(),
+            port: 1337,
+        }
+    }
+
+    #[test]
+    fn test_handle_static_asset_css() {
+        let resp = handle_static_asset("/docs/swagger-ui.css");
+        assert!(resp.is_some());
+        let resp = resp.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers()
+                .get(hyper::header::CONTENT_TYPE)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "text/css"
+        );
+    }
+
+    #[test]
+    fn test_handle_static_asset_js() {
+        let resp = handle_static_asset("/docs/swagger-ui-bundle.js");
+        assert!(resp.is_some());
+        let resp = resp.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers()
+                .get(hyper::header::CONTENT_TYPE)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "application/javascript"
+        );
+    }
+
+    #[test]
+    fn test_handle_static_asset_favicon() {
+        let resp = handle_static_asset("/favicon.ico");
+        assert!(resp.is_some());
+        assert_eq!(resp.unwrap().status(), StatusCode::OK);
+    }
+
+    #[test]
+    fn test_handle_static_asset_unknown_returns_none() {
+        assert!(handle_static_asset("/unknown/path").is_none());
+        assert!(handle_static_asset("/docs/other.js").is_none());
+    }
+
+    #[test]
+    fn test_handle_unknown_route_returns_404() {
+        let config = test_config();
+        let resp = handle_unknown_route(
+            "/nonexistent",
+            &hyper::Method::POST,
+            "localhost",
+            "",
+            &config,
+        );
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn test_handle_unknown_route_whitelisted_get_still_404() {
+        let config = test_config();
+        let resp = handle_unknown_route("/", &hyper::Method::GET, "localhost", "", &config);
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn test_handle_docs_root_route_returns_html() {
+        let config = test_config();
+        let resp = handle_docs_root_route("localhost", "", &config);
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers()
+                .get(hyper::header::CONTENT_TYPE)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "text/html"
+        );
+    }
+}
+
 /// Handle unrecognized routes — returns 404.
 pub(super) fn handle_unknown_route(
     destination_path: &str,

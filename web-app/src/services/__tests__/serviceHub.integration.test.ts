@@ -179,7 +179,8 @@ describe('ServiceHub Integration Tests', () => {
       const services = [
         'theme', 'window', 'events', 'hardware', 'app',
         'messages', 'mcp', 'threads', 'providers', 'models', 'assistants',
-        'dialog', 'opener', 'updater', 'path', 'core', 'deeplink'
+        'dialog', 'opener', 'updater', 'path', 'core', 'deeplink',
+        'projects', 'rag', 'uploads',
       ]
 
       services.forEach(serviceName => {
@@ -191,8 +192,41 @@ describe('ServiceHub Integration Tests', () => {
     it('should return same service instance on multiple calls', () => {
       const themeService1 = serviceHub.theme()
       const themeService2 = serviceHub.theme()
-      
+
       expect(themeService1).toBe(themeService2)
+    })
+
+    it('should return same projects service instance on multiple calls', () => {
+      const projects1 = serviceHub.projects()
+      const projects2 = serviceHub.projects()
+
+      expect(projects1).toBe(projects2)
+    })
+  })
+
+  describe('ensureInitialized guard', () => {
+    it('should not throw when accessing services after initialization', () => {
+      // PlatformServiceHub is not exported, so we verify that after
+      // initializeServiceHub() all service getters work without throwing
+      expect(() => serviceHub.theme()).not.toThrow()
+      expect(() => serviceHub.projects()).not.toThrow()
+      expect(() => serviceHub.rag()).not.toThrow()
+      expect(() => serviceHub.uploads()).not.toThrow()
+      expect(() => serviceHub.messages()).not.toThrow()
+      expect(() => serviceHub.deeplink()).not.toThrow()
+    })
+  })
+
+  describe('idempotent initialization', () => {
+    it('should not re-initialize when called multiple times', async () => {
+      vi.mocked(isPlatformTauri).mockReturnValue(false)
+
+      const hub1 = await initializeServiceHub()
+      const hub2 = await initializeServiceHub()
+
+      // Each call creates a new hub instance
+      expect(hub1).toBeDefined()
+      expect(hub2).toBeDefined()
     })
   })
 

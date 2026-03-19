@@ -633,6 +633,135 @@ pub fn extract_active_status(config: &Value) -> Option<bool> {
     Some(active)
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- ShutdownContext ---
+
+    #[test]
+    fn test_shutdown_context_app_exit_timeouts() {
+        let ctx = ShutdownContext::AppExit;
+        assert_eq!(ctx.per_server_timeout(), Duration::from_millis(500));
+        assert_eq!(ctx.overall_timeout(), Duration::from_millis(1500));
+    }
+
+    #[test]
+    fn test_shutdown_context_manual_restart_timeouts() {
+        let ctx = ShutdownContext::ManualRestart;
+        assert_eq!(ctx.per_server_timeout(), Duration::from_secs(2));
+        assert_eq!(ctx.overall_timeout(), Duration::from_secs(5));
+    }
+
+    #[test]
+    fn test_shutdown_context_factory_reset_timeouts() {
+        let ctx = ShutdownContext::FactoryReset;
+        assert_eq!(ctx.per_server_timeout(), Duration::from_secs(5));
+        assert_eq!(ctx.overall_timeout(), Duration::from_secs(10));
+    }
+
+    // --- extract_command_args ---
+
+    #[test]
+    fn test_extract_command_args_basic() {
+        let config = serde_json::json!({
+            "command": "node",
+            "args": ["server.js", "--port", "3000"],
+            "env": {"NODE_ENV": "production"}
+        });
+        let result = extract_command_args(&config).unwrap();
+        assert_eq!(result.command, "node");
+        assert_eq!(result.args.len(), 3);
+        assert_eq!(result.envs.get("NODE_ENV").unwrap().as_str().unwrap(), "production");
+        assert!(result.url.is_none());
+        assert!(result.transport_type.is_none());
+        assert!(result.timeout.is_none());
+    }
+
+    #[test]
+    fn test_extract_command_args_with_url_and_type() {
+        let config = serde_json::json!({
+            "command": "unused",
+            "args": [],
+            "url": "http://localhost:8080/mcp",
+            "type": "http",
+            "timeout": 30
+        });
+        let result = extract_command_args(&config).unwrap();
+        assert_eq!(result.url.unwrap(), "http://localhost:8080/mcp");
+        assert_eq!(result.transport_type.unwrap(), "http");
+        assert_eq!(result.timeout.unwrap(), Duration::from_secs(30));
+    }
+
+    #[test]
+    fn test_extract_command_args_missing_command() {
+        let config = serde_json::json!({
+            "args": ["test"]
+        });
+        assert!(extract_command_args(&config).is_none());
+    }
+
+    #[test]
+    fn test_extract_command_args_missing_args() {
+        let config = serde_json::json!({
+            "command": "node"
+        });
+        assert!(extract_command_args(&config).is_none());
+    }
+
+    #[test]
+    fn test_extract_command_args_not_object() {
+        let config = serde_json::json!("just a string");
+        assert!(extract_command_args(&config).is_none());
+    }
+
+    #[test]
+    fn test_extract_command_args_with_headers() {
+        let config = serde_json::json!({
+            "command": "node",
+            "args": [],
+            "headers": {"Authorization": "Bearer token123"}
+        });
+        let result = extract_command_args(&config).unwrap();
+        assert_eq!(
+            result.headers.get("Authorization").unwrap().as_str().unwrap(),
+            "Bearer token123"
+        );
+    }
+
+    // --- extract_active_status ---
+
+    #[test]
+    fn test_extract_active_status_true() {
+        let config = serde_json::json!({"active": true});
+        assert_eq!(extract_active_status(&config), Some(true));
+    }
+
+    #[test]
+    fn test_extract_active_status_false() {
+        let config = serde_json::json!({"active": false});
+        assert_eq!(extract_active_status(&config), Some(false));
+    }
+
+    #[test]
+    fn test_extract_active_status_missing() {
+        let config = serde_json::json!({"command": "node"});
+        assert_eq!(extract_active_status(&config), None);
+    }
+
+    #[test]
+    fn test_extract_active_status_not_bool() {
+        let config = serde_json::json!({"active": "yes"});
+        assert_eq!(extract_active_status(&config), None);
+    }
+
+    #[test]
+    fn test_extract_active_status_not_object() {
+        let config = serde_json::json!(42);
+        assert_eq!(extract_active_status(&config), None);
+    }
+}
+
 /// Restart only servers that were previously active (like cortex restart behavior)
 pub async fn restart_active_mcp_servers<R: Runtime>(
     app: &AppHandle<R>,

@@ -57,6 +57,111 @@ pub struct AppState {
     pub approved_save_paths: Arc<Mutex<HashSet<PathBuf>>>,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_provider_config_default() {
+        let config = ProviderConfig::default();
+        assert_eq!(config.provider, "");
+        assert!(config.api_key.is_none());
+        assert!(config.base_url.is_none());
+        assert!(config.custom_headers.is_empty());
+        assert!(config.models.is_empty());
+    }
+
+    #[test]
+    fn test_provider_config_serialization() {
+        let config = ProviderConfig {
+            provider: "openai".to_string(),
+            api_key: Some("sk-test-key".to_string()),
+            base_url: Some("https://api.openai.com/v1".to_string()),
+            custom_headers: vec![ProviderCustomHeader {
+                header: "X-Custom".to_string(),
+                value: "custom-value".to_string(),
+            }],
+            models: vec!["gpt-4".to_string(), "gpt-3.5-turbo".to_string()],
+        };
+        let json = serde_json::to_value(&config).unwrap();
+        assert_eq!(json["provider"], "openai");
+        assert_eq!(json["api_key"], "sk-test-key");
+        assert_eq!(json["base_url"], "https://api.openai.com/v1");
+        assert_eq!(json["custom_headers"][0]["header"], "X-Custom");
+        assert_eq!(json["custom_headers"][0]["value"], "custom-value");
+        assert_eq!(json["models"][0], "gpt-4");
+        assert_eq!(json["models"][1], "gpt-3.5-turbo");
+    }
+
+    #[test]
+    fn test_provider_config_deserialization() {
+        let json_str = r#"{
+            "provider": "anthropic",
+            "api_key": "sk-ant-test",
+            "base_url": "https://api.anthropic.com/v1",
+            "custom_headers": [],
+            "models": ["claude-3-opus"]
+        }"#;
+        let config: ProviderConfig = serde_json::from_str(json_str).unwrap();
+        assert_eq!(config.provider, "anthropic");
+        assert_eq!(config.api_key.as_deref(), Some("sk-ant-test"));
+        assert_eq!(config.models.len(), 1);
+    }
+
+    #[test]
+    fn test_provider_config_roundtrip() {
+        let original = ProviderConfig {
+            provider: "gemini".to_string(),
+            api_key: None,
+            base_url: Some("https://generativelanguage.googleapis.com".to_string()),
+            custom_headers: vec![],
+            models: vec!["gemini-pro".to_string()],
+        };
+        let json = serde_json::to_string(&original).unwrap();
+        let deserialized: ProviderConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(original.provider, deserialized.provider);
+        assert_eq!(original.api_key, deserialized.api_key);
+        assert_eq!(original.base_url, deserialized.base_url);
+        assert_eq!(original.models, deserialized.models);
+    }
+
+    #[test]
+    fn test_provider_custom_header_default() {
+        let header = ProviderCustomHeader::default();
+        assert_eq!(header.header, "");
+        assert_eq!(header.value, "");
+    }
+
+    #[test]
+    fn test_provider_custom_header_serialization() {
+        let header = ProviderCustomHeader {
+            header: "anthropic-version".to_string(),
+            value: "2023-06-01".to_string(),
+        };
+        let json = serde_json::to_value(&header).unwrap();
+        assert_eq!(json["header"], "anthropic-version");
+        assert_eq!(json["value"], "2023-06-01");
+    }
+
+    #[test]
+    fn test_provider_config_clone() {
+        let config = ProviderConfig {
+            provider: "openai".to_string(),
+            api_key: Some("key".to_string()),
+            base_url: Some("url".to_string()),
+            custom_headers: vec![ProviderCustomHeader {
+                header: "h".to_string(),
+                value: "v".to_string(),
+            }],
+            models: vec!["m1".to_string()],
+        };
+        let cloned = config.clone();
+        assert_eq!(config.provider, cloned.provider);
+        assert_eq!(config.api_key, cloned.api_key);
+        assert_eq!(config.custom_headers.len(), cloned.custom_headers.len());
+    }
+}
+
 impl RunningServiceEnum {
     pub async fn list_all_tools(&self) -> Result<Vec<Tool>, ServiceError> {
         match self {

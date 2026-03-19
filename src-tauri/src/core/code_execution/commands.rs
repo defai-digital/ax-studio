@@ -27,6 +27,110 @@ pub struct ExecutionResult {
     pub error: Option<String>,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_output_item_image_serialization() {
+        let item = OutputItem::Image {
+            data: "base64data".to_string(),
+        };
+        let json = serde_json::to_value(&item).unwrap();
+        assert_eq!(json["type"], "image");
+        assert_eq!(json["data"], "base64data");
+    }
+
+    #[test]
+    fn test_output_item_html_serialization() {
+        let item = OutputItem::Html {
+            data: "<table></table>".to_string(),
+        };
+        let json = serde_json::to_value(&item).unwrap();
+        assert_eq!(json["type"], "html");
+        assert_eq!(json["data"], "<table></table>");
+    }
+
+    #[test]
+    fn test_output_item_text_serialization() {
+        let item = OutputItem::Text {
+            data: "hello".to_string(),
+        };
+        let json = serde_json::to_value(&item).unwrap();
+        assert_eq!(json["type"], "text");
+        assert_eq!(json["data"], "hello");
+    }
+
+    #[test]
+    fn test_output_item_deserialization() {
+        let json_str = r#"{"type": "image", "data": "abc123"}"#;
+        let item: OutputItem = serde_json::from_str(json_str).unwrap();
+        match item {
+            OutputItem::Image { data } => assert_eq!(data, "abc123"),
+            _ => panic!("Expected Image variant"),
+        }
+    }
+
+    #[test]
+    fn test_execution_result_success() {
+        let result = ExecutionResult {
+            stdout: "output".to_string(),
+            stderr: "".to_string(),
+            outputs: vec![],
+            error: None,
+        };
+        let json = serde_json::to_value(&result).unwrap();
+        assert_eq!(json["stdout"], "output");
+        assert_eq!(json["stderr"], "");
+        assert!(json["outputs"].as_array().unwrap().is_empty());
+        assert!(json["error"].is_null());
+    }
+
+    #[test]
+    fn test_execution_result_with_error() {
+        let result = ExecutionResult {
+            stdout: "".to_string(),
+            stderr: "traceback".to_string(),
+            outputs: vec![],
+            error: Some("Process exited with code 1".to_string()),
+        };
+        let json = serde_json::to_value(&result).unwrap();
+        assert_eq!(json["error"], "Process exited with code 1");
+        assert_eq!(json["stderr"], "traceback");
+    }
+
+    #[test]
+    fn test_execution_result_with_outputs() {
+        let result = ExecutionResult {
+            stdout: "".to_string(),
+            stderr: "".to_string(),
+            outputs: vec![
+                OutputItem::Text {
+                    data: "line1".to_string(),
+                },
+                OutputItem::Image {
+                    data: "img".to_string(),
+                },
+            ],
+            error: None,
+        };
+        let json = serde_json::to_value(&result).unwrap();
+        let outputs = json["outputs"].as_array().unwrap();
+        assert_eq!(outputs.len(), 2);
+        assert_eq!(outputs[0]["type"], "text");
+        assert_eq!(outputs[1]["type"], "image");
+    }
+
+    #[test]
+    fn test_sandbox_status_serialization() {
+        let status = SandboxStatus {
+            python_available: true,
+        };
+        let json = serde_json::to_value(&status).unwrap();
+        assert_eq!(json["pythonAvailable"], true);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // execute_python_code — runs Python directly on the host
 // ---------------------------------------------------------------------------

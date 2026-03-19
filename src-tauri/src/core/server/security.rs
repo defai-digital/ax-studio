@@ -32,3 +32,83 @@ pub fn add_cors_headers_with_host_and_origin(
 
     builder
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cors_disabled_returns_builder_unchanged() {
+        SERVER_CORS_ENABLED.store(false, Ordering::Relaxed);
+        let builder = hyper::http::Response::builder();
+        let result =
+            add_cors_headers_with_host_and_origin(builder, "localhost", "http://example.com", &[]);
+        let resp = result.body(hyper::Body::empty()).unwrap();
+        assert!(resp.headers().get("Access-Control-Allow-Origin").is_none());
+    }
+
+    #[test]
+    fn test_cors_enabled_with_origin() {
+        SERVER_CORS_ENABLED.store(true, Ordering::Relaxed);
+        let builder = hyper::http::Response::builder();
+        let result = add_cors_headers_with_host_and_origin(
+            builder,
+            "localhost",
+            "http://example.com",
+            &[],
+        );
+        let resp = result.body(hyper::Body::empty()).unwrap();
+        assert_eq!(
+            resp.headers()
+                .get("Access-Control-Allow-Origin")
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "http://example.com"
+        );
+        assert_eq!(
+            resp.headers()
+                .get("Access-Control-Allow-Credentials")
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "true"
+        );
+        assert!(resp
+            .headers()
+            .get("Access-Control-Allow-Methods")
+            .is_some());
+        assert!(resp
+            .headers()
+            .get("Access-Control-Allow-Headers")
+            .is_some());
+        assert_eq!(
+            resp.headers().get("Vary").unwrap().to_str().unwrap(),
+            "Origin"
+        );
+        // Reset global state
+        SERVER_CORS_ENABLED.store(false, Ordering::Relaxed);
+    }
+
+    #[test]
+    fn test_cors_enabled_empty_origin_uses_wildcard() {
+        SERVER_CORS_ENABLED.store(true, Ordering::Relaxed);
+        let builder = hyper::http::Response::builder();
+        let result = add_cors_headers_with_host_and_origin(builder, "localhost", "", &[]);
+        let resp = result.body(hyper::Body::empty()).unwrap();
+        assert_eq!(
+            resp.headers()
+                .get("Access-Control-Allow-Origin")
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "*"
+        );
+        // Wildcard origin should NOT have credentials header
+        assert!(resp
+            .headers()
+            .get("Access-Control-Allow-Credentials")
+            .is_none());
+        SERVER_CORS_ENABLED.store(false, Ordering::Relaxed);
+    }
+}

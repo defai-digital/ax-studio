@@ -102,7 +102,12 @@ fn test_consume_approved_save_target_allows_once() {
 
     let resolved =
         consume_approved_save_target(&mut approved, save_path.to_str().unwrap()).unwrap();
-    assert_eq!(resolved, save_path);
+    // On macOS /var → /private/var after canonicalize, so compare canonical forms
+    let expected = temp_dir
+        .canonicalize()
+        .unwrap_or(temp_dir.clone())
+        .join("figure.png");
+    assert_eq!(resolved, expected);
     assert!(consume_approved_save_target(&mut approved, save_path.to_str().unwrap()).is_err());
 }
 

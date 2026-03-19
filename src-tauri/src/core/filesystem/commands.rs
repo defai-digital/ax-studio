@@ -57,7 +57,7 @@ fn migrate_legacy_akidb_file(
     Ok(())
 }
 
-fn normalize_save_target_path(path: &str) -> Result<PathBuf, String> {
+pub(crate) fn normalize_save_target_path(path: &str) -> Result<PathBuf, String> {
     let path = PathBuf::from(path);
     if !path.is_absolute() {
         return Err("save path must be absolute".to_string());
@@ -76,7 +76,7 @@ fn normalize_save_target_path(path: &str) -> Result<PathBuf, String> {
     Ok(canonical_parent.join(file_name))
 }
 
-fn approve_save_target(
+pub(crate) fn approve_save_target(
     approved_save_paths: &mut std::collections::HashSet<PathBuf>,
     path: &str,
 ) -> Result<(), String> {
@@ -85,7 +85,7 @@ fn approve_save_target(
     Ok(())
 }
 
-fn consume_approved_save_target(
+pub(crate) fn consume_approved_save_target(
     approved_save_paths: &mut std::collections::HashSet<PathBuf>,
     path: &str,
 ) -> Result<PathBuf, String> {

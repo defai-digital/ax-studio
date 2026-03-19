@@ -226,6 +226,58 @@ fn resolve_ax_fabric_mcp_config() -> serde_json::Value {
     })
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_resolve_ax_fabric_mcp_config_structure() {
+        let config = resolve_ax_fabric_mcp_config();
+        assert_eq!(config["command"], "npx");
+        let args = config["args"].as_array().unwrap();
+        assert_eq!(args.len(), 4);
+        assert_eq!(args[0], "-y");
+        assert_eq!(args[1], AX_STUDIO_MCP_PACKAGE);
+        assert_eq!(args[2], "mcp");
+        assert_eq!(args[3], "server");
+    }
+
+    #[test]
+    fn test_resolve_ax_fabric_mcp_config_fields() {
+        let config = resolve_ax_fabric_mcp_config();
+        assert_eq!(config["command"], "npx");
+        assert_eq!(config["active"], false);
+        assert_eq!(config["official"], true);
+        assert!(config["env"].is_object());
+        let args = config["args"].as_array().unwrap();
+        assert!(args.contains(&serde_json::json!("-y")));
+        assert!(args.contains(&serde_json::json!(AX_STUDIO_MCP_PACKAGE)));
+    }
+
+    #[test]
+    fn test_ax_studio_mcp_package_constant() {
+        assert_eq!(AX_STUDIO_MCP_PACKAGE, "@ax-studio/fabric-ingest");
+    }
+
+    #[test]
+    fn test_extract_extension_manifest_none_on_empty_archive() {
+        use std::io::Cursor;
+        use tar::Builder;
+
+        // Create an empty tar archive
+        let mut buf = Vec::new();
+        {
+            let mut builder = Builder::new(&mut buf);
+            builder.finish().unwrap();
+        }
+
+        let cursor = Cursor::new(buf);
+        let mut archive = tar::Archive::new(cursor);
+        let result = extract_extension_manifest(&mut archive).unwrap();
+        assert!(result.is_none());
+    }
+}
+
 fn rename_mcp_server_key(
     app_handle: tauri::AppHandle,
     old_key: &str,

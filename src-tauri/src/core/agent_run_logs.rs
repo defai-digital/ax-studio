@@ -10,6 +10,109 @@ fn is_valid_id(id: &str) -> bool {
             .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- is_valid_id ---
+
+    #[test]
+    fn test_is_valid_id_alphanumeric() {
+        assert!(is_valid_id("abc123"));
+        assert!(is_valid_id("ABC"));
+        assert!(is_valid_id("a"));
+    }
+
+    #[test]
+    fn test_is_valid_id_with_hyphens_and_underscores() {
+        assert!(is_valid_id("my-run-log"));
+        assert!(is_valid_id("my_run_log"));
+        assert!(is_valid_id("a-b_c-123"));
+    }
+
+    #[test]
+    fn test_is_valid_id_empty() {
+        assert!(!is_valid_id(""));
+    }
+
+    #[test]
+    fn test_is_valid_id_invalid_chars() {
+        assert!(!is_valid_id("path/traversal"));
+        assert!(!is_valid_id("has spaces"));
+        assert!(!is_valid_id("has.dot"));
+        assert!(!is_valid_id("../evil"));
+        assert!(!is_valid_id("semi;colon"));
+    }
+
+    // --- AgentRunLog serialization ---
+
+    #[test]
+    fn test_agent_run_log_serialize_deserialize() {
+        let log = AgentRunLog {
+            id: "run-001".to_string(),
+            team_id: "team-1".to_string(),
+            thread_id: "thread-1".to_string(),
+            status: "completed".to_string(),
+            steps: vec![serde_json::json!({"step": 1})],
+            total_tokens: 1500,
+            orchestrator_tokens: 500,
+            started_at: 1700000000,
+            completed_at: Some(1700001000),
+            error: None,
+        };
+
+        let json = serde_json::to_string(&log).unwrap();
+        let deserialized: AgentRunLog = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.id, "run-001");
+        assert_eq!(deserialized.team_id, "team-1");
+        assert_eq!(deserialized.status, "completed");
+        assert_eq!(deserialized.total_tokens, 1500);
+        assert_eq!(deserialized.completed_at, Some(1700001000));
+        assert!(deserialized.error.is_none());
+    }
+
+    #[test]
+    fn test_agent_run_log_with_error() {
+        let log = AgentRunLog {
+            id: "run-002".to_string(),
+            team_id: "team-1".to_string(),
+            thread_id: "thread-1".to_string(),
+            status: "failed".to_string(),
+            steps: vec![],
+            total_tokens: 100,
+            orchestrator_tokens: 100,
+            started_at: 1700000000,
+            completed_at: None,
+            error: Some("timeout".to_string()),
+        };
+
+        let json = serde_json::to_string(&log).unwrap();
+        let deserialized: AgentRunLog = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.error.unwrap(), "timeout");
+        assert!(deserialized.completed_at.is_none());
+    }
+
+    // --- AgentRunLogSummary ---
+
+    #[test]
+    fn test_agent_run_log_summary_serialize() {
+        let summary = AgentRunLogSummary {
+            id: "run-001".to_string(),
+            status: "completed".to_string(),
+            total_tokens: 1500,
+            started_at: 1700000000,
+        };
+
+        let json = serde_json::to_value(&summary).unwrap();
+        assert_eq!(json["id"], "run-001");
+        assert_eq!(json["status"], "completed");
+        assert_eq!(json["total_tokens"], 1500);
+        assert_eq!(json["started_at"], 1700000000u64);
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentRunLog {
     pub id: String,
