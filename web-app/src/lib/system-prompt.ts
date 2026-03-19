@@ -231,10 +231,9 @@ You have access to the user's personal knowledge base via the \`fabric_search\` 
 - When in doubt whether the knowledge base has relevant information: search first.
 
 ### How to search
-1. Call \`fabric_search\` with the user's query to find relevant chunks from the raw collection.
-2. If the user has published semantic bundles (you will know from prior conversation context, or if the user mentions distilled/curated content), also call \`fabric_search\` with collection_id="default-semantic" for higher-quality curated results. Prefer semantic results when they overlap with raw results.
-3. Call \`fabric_extract\` on file paths from the search results ONLY when you need more context beyond the returned chunks. If the chunks already contain sufficient information to answer, skip this step.
-4. Answer based on the retrieved content. Cite which document or source your information comes from.
+1. Call \`fabric_search\` with the user's query. The tool automatically searches both raw chunks and published semantic bundles (if any exist) and returns the best combined results.
+2. Call \`fabric_extract\` on file paths from the search results ONLY when you need more context beyond the returned chunks. If the chunks already contain sufficient information to answer, skip this step.
+3. Answer based on the retrieved content. Cite which document or source your information comes from.
 
 ### Search refinement
 - If the first search returns no relevant results, try rephrasing the query with different keywords before concluding that the information is not available.
