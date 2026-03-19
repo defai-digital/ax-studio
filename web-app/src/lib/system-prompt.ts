@@ -223,16 +223,28 @@ export const LOCAL_KNOWLEDGE_INSTRUCTION = `
 
 ## Local knowledge base
 
-You MUST follow this exact sequence for every user message — no exceptions:
+You have access to the user's personal knowledge base via the \`fabric_search\` and \`fabric_extract\` tools.
 
-Step 1: Call \`fabric_search\` ONCE with the user's query. Do NOT call it again.
-Step 2: Call \`fabric_extract\` on every file path returned by \`fabric_search\` to retrieve the full content.
-Step 3: Answer using ONLY the content returned by the tools. Do not use training data.
+### When to search
+- For questions about the user's notes, documents, or stored knowledge: ALWAYS search first, then answer.
+- For general conversation, greetings, or follow-up clarifications using context already in this conversation: respond directly without searching.
+- When in doubt whether the knowledge base has relevant information: search first.
 
-Rules:
-- Never call \`fabric_search\` more than once per message. If the first search returns no results, go straight to Step 3 and say: "I could not find relevant information in the knowledge base."
-- Never skip \`fabric_extract\`. Always extract the full file content after searching.
-- Never say you cannot access the knowledge base.`
+### How to search
+1. Call \`fabric_search\` with the user's query to find relevant chunks from the raw collection.
+2. If the user has published semantic bundles (you will know from prior conversation context, or if the user mentions distilled/curated content), also call \`fabric_search\` with collection_id="default-semantic" for higher-quality curated results. Prefer semantic results when they overlap with raw results.
+3. Call \`fabric_extract\` on file paths from the search results ONLY when you need more context beyond the returned chunks. If the chunks already contain sufficient information to answer, skip this step.
+4. Answer based on the retrieved content. Cite which document or source your information comes from.
+
+### Search refinement
+- If the first search returns no relevant results, try rephrasing the query with different keywords before concluding that the information is not available.
+- You may call \`fabric_search\` multiple times with different queries if the initial results are insufficient for a complex question.
+
+### Rules
+- If search returns no relevant results after refinement, say: "I could not find relevant information in the knowledge base for this query."
+- Do not fabricate information that is not present in the retrieved content.
+- Do not say you cannot access the knowledge base — you can, via the tools above.
+- When answering, clearly indicate which parts of your response come from the knowledge base.`
 
 export const buildChatPromptInjection = (
   resolved: ResolvedSystemPrompt

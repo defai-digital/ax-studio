@@ -188,14 +188,14 @@ describe('RenderMarkdown', () => {
         <h1>Welcome to My Website</h1>
         <p>A sample HTML document showcasing various HTML elements</p>
     </header>
-    
+
     <nav>
         <a href="#home">Home</a>
         <a href="#about">About</a>
         <a href="#services">Services</a>
         <a href="#contact">Contact</a>
     </nav>
-    
+
     <div class="container">
         <section id="home">
             <h2>Home</h2>
@@ -205,7 +205,7 @@ describe('RenderMarkdown', () => {
             </div>
         </section>
     </div>
-    
+
     <footer>
         <p>&copy; ${new Date().getFullYear()} My Sample Website. All rights reserved.</p>
     </footer>
@@ -223,10 +223,12 @@ describe('RenderMarkdown', () => {
       'iframe[title="Artifact Preview"]'
     ) as HTMLIFrameElement | null
 
+    // IframePreview uses blob: URL (not srcdoc) for Tauri/WKWebView compatibility.
+    // The blob URL is set asynchronously via buildHarnessAsync which depends on
+    // browser APIs not available in happy-dom. Verify the iframe element renders
+    // correctly — the actual content loading is covered by manual/e2e tests.
     expect(previewFrame).toBeTruthy()
-    expect(previewFrame?.srcdoc).toContain('<!DOCTYPE html>')
-    expect(previewFrame?.srcdoc).toContain('<html lang="en">')
-    expect(previewFrame?.srcdoc).toContain('Welcome to My Website')
+    expect(previewFrame?.title).toBe('Artifact Preview')
   })
   describe('LaTeX normalization - display math', () => {
     it('converts \\[...\\] to $$ display math', () => {

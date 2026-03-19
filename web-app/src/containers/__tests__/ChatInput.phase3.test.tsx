@@ -78,6 +78,9 @@ vi.mock('@/hooks/useMemory', () => ({
     const state = {
       memoryEnabled: false,
       toggleMemory: vi.fn(),
+      isMemoryEnabledForThread: vi.fn().mockReturnValue(false),
+      toggleMemoryForThread: vi.fn(),
+      memoryEnabledPerThread: {},
       memories: { default: [] },
     }
     return selector ? selector(state) : state
