@@ -212,12 +212,22 @@ When generating a **self-contained, renderable output** that the user can intera
 Rules:
 - Use artifacts for complete, standalone outputs — landing pages, interactive demos, data visualizations, SVG illustrations.
 - Do NOT use artifact fences for code examples, snippets, or partial code — only complete, immediately renderable output.
-- React artifacts must define a function component named \`App\` (e.g. \`function App() { ... }\`).
+- Do NOT output multiple artifact blocks for the same thing. If your first artifact attempt is complete, do not add alternative versions or fallback attempts in the same response.
+- React artifacts (\`artifact-react\`):
+  - Must define a function component named \`App\` (e.g. \`function App() { ... }\`).
+  - Do NOT include \`import\` statements — React, useState, useEffect, useRef, useCallback, useMemo, and other hooks are already available as globals.
+  - Do NOT use \`export default\`. Just define \`function App() { ... }\`.
+  - Use lowercase JavaScript keywords: \`const\`, \`function\`, \`return\`, \`if\`, \`true\`, \`false\`, \`null\` — NEVER \`Const\`, \`Function\`, \`Return\`, etc.
+  - Use lowercase HTML tags in JSX: \`<div>\`, \`<button>\`, \`<span>\` — NEVER \`<Div>\`, \`<Button>\`, \`<Span>\`.
+  - Use correct JSX attribute casing: \`className\`, \`onClick\`, \`onChange\` — NEVER \`ClassName\`, \`OnClick\`.
+  - NEVER use \`artifact-html\` with React/JSX code. Always use \`artifact-react\` for React components.
 - SVG artifacts must be a single \`<svg>\` element with a \`viewBox\` attribute.
-- Chart.js artifacts (\`artifact-chartjs\`) must be a valid Chart.js v4 config object (JSON with a \`type\` and \`data\` property). Callback functions in \`options\` are allowed.
-- Vega-Lite artifacts (\`artifact-vega\`) must be a valid Vega-Lite v5 JSON spec (with \`$schema\`, \`data\`, and \`mark\` or \`layer\`/\`hconcat\`/\`vconcat\`).
+- Chart.js artifacts (\`artifact-chartjs\`) must be ONLY the config object — no variable assignments, no imports, no surrounding code. Must have a \`type\` and \`data\` property. Callback functions in \`options\` are allowed.
+- Vega-Lite artifacts (\`artifact-vega\`) must be a valid Vega-Lite v5 JSON spec. Required: \`$schema\`, \`data\`, and \`mark\` (single chart) or \`layer\`/\`hconcat\`/\`vconcat\` (multi-chart). Do NOT use \`views\` — use \`vconcat\` or \`hconcat\` instead.
 - When asked to fix or update an artifact, always output the full updated version in a new artifact block.
-- Keep artifacts self-contained — inline all styles, use no external imports beyond the available runtime (React 18, Chart.js 4, Vega-Lite 5, standard HTML/CSS/JS).`
+- Keep artifacts self-contained — inline all styles, use no external imports beyond the available runtime (React 19, Tailwind CSS, Chart.js 4, Vega-Lite 5, standard HTML/CSS/JS).
+- React artifacts run in a single-file sandbox. Do NOT use \`fetch()\`, \`XMLHttpRequest\`, or any external API calls — they will fail due to sandbox restrictions. Use hardcoded sample data instead.
+- For styling in React artifacts, prefer Tailwind utility classes (available globally) or inline \`style={{}}\` objects. Do NOT put CSS in a string variable and render it as \`{styles}\` — use \`<style>\` tags directly in the JSX or inline styles.`
 
 export const LOCAL_KNOWLEDGE_INSTRUCTION = `
 

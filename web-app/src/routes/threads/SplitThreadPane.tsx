@@ -7,6 +7,7 @@ import { useMessages } from '@/hooks/useMessages'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useChat } from '@/hooks/use-chat'
 import { useModelProvider } from '@/hooks/useModelProvider'
+import { useAssistant } from '@/hooks/useAssistant'
 import {
   Conversation,
   ConversationContent,
@@ -74,6 +75,7 @@ export function SplitThreadPane({
 }) {
   const serviceHub = useServiceHub()
   const thread = useThreads(useShallow((state) => state.threads[threadId]))
+  const currentAssistant = useAssistant((state) => state.currentAssistant)
   const splitPinnedResearch = useResearchPanel((s) => s.getPinned(threadId))
   const clearResearch = useResearchPanel((s) => s.clearResearch)
   const { startResearch } = useResearch(threadId)
@@ -183,7 +185,7 @@ export function SplitThreadPane({
   } = useChat({
     sessionId: threadId,
     sessionTitle: thread?.title,
-    systemMessage: promptResolution.resolvedPrompt + memorySuffix + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION + ARTIFACT_FORMAT_INSTRUCTION,
+    systemMessage: promptResolution.resolvedPrompt + (currentAssistant?.instructions && currentAssistant.id !== 'ax-studio' ? '\n\n' + currentAssistant.instructions : '') + memorySuffix + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION + ARTIFACT_FORMAT_INSTRUCTION,
     modelOverrideId: optimizedModelConfig.modelId,
     activeTeamId: (thread?.metadata?.agent_team_id as string) ?? undefined,
     onCostApproval,

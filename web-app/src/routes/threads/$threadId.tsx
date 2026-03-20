@@ -55,6 +55,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   const setCurrentThreadId = useThreads((state) => state.setCurrentThreadId)
   const setCurrentAssistant = useAssistant((state) => state.setCurrentAssistant)
   const assistants = useAssistant((state) => state.assistants)
+  const currentAssistant = useAssistant((state) => state.currentAssistant)
   useTools()
 
   const thread = useThreads(useShallow((state) => state.threads[threadId]))
@@ -98,7 +99,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   } = useChat({
     sessionId: threadId,
     sessionTitle: thread?.title,
-    systemMessage: promptResolution.resolvedPrompt + memorySuffix + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION + ARTIFACT_FORMAT_INSTRUCTION + (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : ''),
+    systemMessage: promptResolution.resolvedPrompt + (currentAssistant?.instructions && currentAssistant.id !== 'ax-studio' ? '\n\n' + currentAssistant.instructions : '') + memorySuffix + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION + ARTIFACT_FORMAT_INSTRUCTION + (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : ''),
     modelOverrideId: optimizedModelConfig.modelId,
     activeTeamId,
     onCostApproval,

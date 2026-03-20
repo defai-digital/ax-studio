@@ -72,16 +72,24 @@ function toOpenAIParams(parameters: Record<string, unknown>): Record<string, unk
 }
 
 /**
- * Creates a fetch wrapper that patches Gemini's non-standard streaming tool_calls format.
+ * Creates a fetch wrapper that normalizes non-standard streaming SSE responses.
  *
- * Gemini's OpenAI-compatible SSE chunks omit the required `index` field on tool_calls
- * items.  The Vercel AI SDK validates this strictly.  This wrapper injects `index: i`
- * where it is missing so downstream parsing succeeds.
+ * The Vercel AI SDK validates streaming chunks strictly against the OpenAI spec.
+ * Several providers return slightly non-conformant responses that cause
+ * "Type validation failed" errors. This wrapper patches known issues:
  *
- * The proxy passes streaming bytes through unchanged, so we still need this patch
- * on the client side even when routing through the proxy.
+ * 1. **Missing tool_call index** (Gemini): Gemini's OpenAI-compatible SSE omits the
+ *    required `index` field on `choices[].delta.tool_calls[]` items.
+ *
+ * 2. **Numeric content** (Cloudflare Workers AI): Some models return
+ *    `choices[].delta.content` as a number (e.g. `0`) instead of a string (`"0"`).
+ *    This happens when the model outputs a digit token.
+ *
+ * 3. **Numeric role** (various): Some providers return `role` as a non-string value.
+ *
+ * Applied to ALL providers since the proxy passes streaming bytes through unchanged.
  */
-function createGeminiPatchedFetch(baseFetch: typeof httpFetch): typeof httpFetch {
+function createStreamingPatchFetch(baseFetch: typeof httpFetch): typeof httpFetch {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const response = await baseFetch(input, init)
     const contentType = response.headers.get('content-type') ?? ''
@@ -113,17 +121,41 @@ function createGeminiPatchedFetch(baseFetch: typeof httpFetch): typeof httpFetch
           if (json === '[DONE]') return line
           try {
             const parsed = JSON.parse(json)
-            if (Array.isArray(parsed.choices)) {
-              for (const choice of parsed.choices) {
-                if (Array.isArray(choice.delta?.tool_calls)) {
-                  choice.delta.tool_calls = choice.delta.tool_calls.map(
-                    (tc: Record<string, unknown>, i: number) =>
-                      typeof tc.index === 'number' ? tc : { index: i, ...tc }
-                  )
-                }
+            if (!Array.isArray(parsed.choices)) return line
+
+            let patched = false
+            for (const choice of parsed.choices) {
+              const delta = choice.delta
+              if (!delta) continue
+
+              // Fix 1: Coerce non-string `content` to string (Cloudflare Workers AI)
+              if ('content' in delta && delta.content != null && typeof delta.content !== 'string') {
+                delta.content = String(delta.content)
+                patched = true
+              }
+
+              // Fix 2: Inject missing `index` on tool_calls (Gemini)
+              if (Array.isArray(delta.tool_calls)) {
+                delta.tool_calls = delta.tool_calls.map(
+                  (tc: Record<string, unknown>, i: number) => {
+                    if (typeof tc.index !== 'number') {
+                      patched = true
+                      return { index: i, ...tc }
+                    }
+                    return tc
+                  }
+                )
+              }
+
+              // Fix 3: Coerce non-string `role` to string
+              if ('role' in delta && delta.role != null && typeof delta.role !== 'string') {
+                delta.role = String(delta.role)
+                patched = true
               }
             }
-            return `data: ${JSON.stringify(parsed)}`
+
+            // Only re-serialize if we actually changed something (avoid unnecessary work)
+            return patched ? `data: ${JSON.stringify(parsed)}` : line
           } catch {
             return line
           }
@@ -198,10 +230,9 @@ export class ModelFactory {
     const openAIParams = toOpenAIParams(parameters)
     const providerName = provider.provider.toLowerCase()
 
-    // Gemini's streaming SSE omits `index` on tool_calls — patch it on the way back.
-    // This is applied at the client level since the proxy passes streaming bytes through.
-    const isGemini = ['google', 'gemini'].includes(providerName)
-    const baseFetch = isGemini ? createGeminiPatchedFetch(httpFetch) : httpFetch
+    // Normalize non-standard streaming SSE responses from various providers.
+    // Applied to all providers since the proxy passes streaming bytes through unchanged.
+    const baseFetch = createStreamingPatchFetch(httpFetch)
     const fetchFn =
       Object.keys(openAIParams).length > 0
         ? createCustomFetch(baseFetch, openAIParams)

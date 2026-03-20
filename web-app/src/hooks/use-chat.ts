@@ -13,6 +13,7 @@ import { z } from 'zod/v4'
 import { useEffect, useMemo, useRef, useCallback } from 'react'
 import { useChatSessions } from '@/stores/chat-session-store'
 import { useAppState } from '@/hooks/useAppState'
+import { useLocalKnowledge } from '@/hooks/useLocalKnowledge'
 
 type CustomChatOptions = Omit<ChatInit<UIMessage>, 'transport'> &
   Pick<UseChatOptions<UIMessage>, 'experimental_throttle' | 'resume'> & {
@@ -60,6 +61,11 @@ export function useChat(
 
   // Get serviceHub and model metadata from app state
   const mcpToolNames = useAppState((state) => state.mcpToolNames)
+
+  // Subscribe to local knowledge toggle — refresh tools when it changes
+  const localKnowledgeEnabled = useLocalKnowledge((state) =>
+    sessionId ? state.isLocalKnowledgeEnabledForThread(sessionId) : state.localKnowledgeEnabled
+  )
 
 
   const existingSessionTransport = sessionId
@@ -219,6 +225,13 @@ export function useChat(
       transportRef.current.refreshTools()
     }
   }, [mcpToolNames])
+
+  // Refresh tools when local knowledge toggle changes — keeps tools list in sync with system prompt
+  useEffect(() => {
+    if (transportRef.current) {
+      transportRef.current.refreshTools()
+    }
+  }, [localKnowledgeEnabled])
 
   // Expose method to push a system message directly to the transport (bypasses React render cycle)
   const updateSystemMessageDirect = useCallback((msg: string | undefined) => {

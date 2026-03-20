@@ -125,42 +125,242 @@ ${ERROR_REPORTER}
  * the model. A newline inside a JS string literal is ALWAYS a syntax error, so
  * it is always safe to join the broken line with the next one.
  *
- * Uses a regex approach rather than manual quote-state tracking to avoid false
- * positives from apostrophes in JSX text content (e.g. "I'm") or comments.
- *
- * Runs in a loop until stable so cascaded wraps (3+ lines) are all fixed.
+ * Processes line-by-line to avoid false positives from apostrophes in comments
+ * (e.g. `// player doesn't overshoot`) and JSX text (`I'm`).
+ * Only attempts to join when a line ends with an unmatched quote that isn't
+ * inside a `//` comment.
  */
 function joinMultilineStrings(source: string): string {
-  // Regex for a double-quoted partial string followed by a line-break:
-  //   "  — opening quote
-  //   [^"\\\n]*  — any chars except closing quote, backslash, or newline
-  //   (?:\\.[^"\\\n]*)*  — optionally: escape sequence then more safe chars
-  //   \n[ \t]*  — the illegal newline + leading whitespace on the next line
-  const dq = /"([^"\\\n]*(?:\\.[^"\\\n]*)*)\n[ \t]*/g
-  const sq = /'([^'\\\n]*(?:\\.[^'\\\n]*)*)\n[ \t]*/g
+  const lines = source.split('\n')
+  const result: string[] = []
+  let i = 0
 
-  let result = source
-  let prev = ''
-  while (result !== prev) {
-    prev = result
-    result = result.replace(dq, '"$1 ')
-    result = result.replace(sq, "'$1 ")
+  while (i < lines.length) {
+    const line = lines[i]
+
+    // Check for unclosed double-quoted string at end of line (not inside a // comment)
+    const dqMatch = findUnclosedQuote(line, '"')
+    if (dqMatch !== -1 && i + 1 < lines.length) {
+      // Join with the next line and re-check (cascaded wraps)
+      lines[i + 1] = line + ' ' + lines[i + 1].trimStart()
+      i++
+      continue
+    }
+
+    // Check for unclosed single-quoted string at end of line (not inside a // comment)
+    const sqMatch = findUnclosedQuote(line, "'")
+    if (sqMatch !== -1 && i + 1 < lines.length) {
+      lines[i + 1] = line + ' ' + lines[i + 1].trimStart()
+      i++
+      continue
+    }
+
+    result.push(line)
+    i++
   }
+
+  return result.join('\n')
+}
+
+/**
+ * Returns the position of an unclosed target-quote at the end of a line,
+ * or -1 if no unclosed string of that type is found.
+ *
+ * Tracks ALL string types (single, double, backtick) so a `'` inside `"it's"`
+ * is correctly recognized as being inside a double-quoted string.
+ * Skips `//` comments and uses a JSX heuristic for apostrophes in text.
+ */
+function findUnclosedQuote(line: string, quote: string): number {
+  let inString: string | null = null // Current string delimiter (' or " or `)
+  let escaped = false
+  let openPos = -1 // Position where the unclosed target-quote opened
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+
+    if (escaped) {
+      escaped = false
+      continue
+    }
+
+    if (ch === '\\' && inString) {
+      escaped = true
+      continue
+    }
+
+    // Skip // comments (only outside strings)
+    if (!inString && ch === '/' && i + 1 < line.length && line[i + 1] === '/') {
+      break // Everything after // is a comment — no real strings here
+    }
+
+    // Track ALL string types so cross-quote context is correct
+    if (!inString && (ch === '"' || ch === "'" || ch === '`')) {
+      inString = ch
+      if (ch === quote) openPos = i
+    } else if (inString && ch === inString) {
+      inString = null
+      if (ch === quote) openPos = -1 // Target quote was properly closed
+    }
+  }
+
+  // Only report if the unclosed string is of the target quote type
+  if (inString !== quote || openPos === -1) {
+    return -1
+  }
+
+  // Heuristic: if text after the opening quote contains JSX tag markers
+  // (< or >), it's likely an apostrophe in JSX text, not a real string.
+  // e.g. <p>I'm happy</p> — the ' in I'm is not a string delimiter.
+  const afterQuote = line.slice(openPos + 1)
+  if (afterQuote.includes('>') || afterQuote.includes('<')) {
+    return -1
+  }
+
+  return openPos
+}
+
+/**
+ * Fix PascalCase JavaScript keywords and JSX HTML tags that small models produce.
+ *
+ * Small LLMs often generate `Const`, `Function`, `Return` instead of lowercase
+ * keywords, and `<Div>`, `<Button>` instead of `<div>`, `<button>`. In JSX,
+ * capitalized tags are interpreted as component references (which don't exist),
+ * and PascalCase keywords are syntax errors.
+ */
+function fixPascalCaseKeywordsAndTags(source: string): string {
+  // --- Fix JS keywords: Const → const, Function → function, etc. ---
+  // Only fix at word boundaries to avoid mangling identifiers like "Constructor"
+  const JS_KEYWORDS: Record<string, string> = {
+    Const: 'const', Let: 'let', Var: 'var',
+    Function: 'function', Return: 'return',
+    If: 'if', Else: 'else', For: 'for', While: 'while',
+    Switch: 'switch', Case: 'case', Break: 'break', Continue: 'continue',
+    Throw: 'throw', Try: 'try', Catch: 'catch', Finally: 'finally',
+    New: 'new', Delete: 'delete', Typeof: 'typeof', Instanceof: 'instanceof',
+    Void: 'void', In: 'in', Of: 'of',
+    True: 'true', False: 'false', Null: 'null', Undefined: 'undefined',
+    Class: 'class', Extends: 'extends', Super: 'super', This: 'this',
+    Import: 'import', Export: 'export', Default: 'default', From: 'from',
+    Async: 'async', Await: 'await', Yield: 'yield',
+  }
+  // Build one regex: \b(Const|Let|Var|...)\b
+  const kwPattern = new RegExp(
+    `\\b(${Object.keys(JS_KEYWORDS).join('|')})\\b`,
+    'g'
+  )
+  let result = source.replace(kwPattern, (m) => JS_KEYWORDS[m] ?? m)
+
+  // --- Fix JSX HTML tags: <Div> → <div>, </Button> → </button>, etc. ---
+  // Standard HTML elements that models capitalize. Only fix known safe tags
+  // to avoid lowercasing actual component names like <MyComponent>.
+  const HTML_TAGS = new Set([
+    'Div', 'Span', 'P', 'A', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
+    'Ul', 'Ol', 'Li', 'Table', 'Tr', 'Td', 'Th', 'Thead', 'Tbody',
+    'Form', 'Input', 'Button', 'Textarea', 'Select', 'Option', 'Label',
+    'Img', 'Video', 'Audio', 'Canvas', 'Svg', 'Path',
+    'Header', 'Footer', 'Nav', 'Main', 'Section', 'Article', 'Aside',
+    'Strong', 'Em', 'Code', 'Pre', 'Br', 'Hr',
+  ])
+  // Match opening/closing JSX tags: <Div, </Div, <Button, </Button, <H1, </H1
+  // Build a regex from the known tag set to avoid matching real component names
+  const tagAlternation = [...HTML_TAGS].join('|')
+  const tagPattern = new RegExp(`<(\\/?)(${tagAlternation})(\\s|>|\\/)`, 'g')
+  result = result.replace(
+    tagPattern,
+    (_match, slash: string, tag: string, after: string) =>
+      `<${slash}${tag.toLowerCase()}${after}`
+  )
+
+  // --- Fix common React hook casing: UseState → useState, UseEffect → useEffect ---
+  result = result
+    .replace(/\bUseState\b/g, 'useState')
+    .replace(/\bUseEffect\b/g, 'useEffect')
+    .replace(/\bUseCallback\b/g, 'useCallback')
+    .replace(/\bUseMemo\b/g, 'useMemo')
+    .replace(/\bUseRef\b/g, 'useRef')
+    .replace(/\bUseContext\b/g, 'useContext')
+    .replace(/\bUseReducer\b/g, 'useReducer')
+    .replace(/\bSetState\b/g, 'setState')
+
+  // --- Fix PascalCase JSX attributes: ClassName → className, OnClick → onClick ---
+  result = result
+    .replace(/\bClassName\b/g, 'className')
+    .replace(/\bOnClick\b/g, 'onClick')
+    .replace(/\bOnChange\b/g, 'onChange')
+    .replace(/\bOnSubmit\b/g, 'onSubmit')
+    .replace(/\bOnKeyDown\b/g, 'onKeyDown')
+    .replace(/\bOnKeyUp\b/g, 'onKeyUp')
+    .replace(/\bOnMouseOver\b/g, 'onMouseOver')
+    .replace(/\bOnMouseOut\b/g, 'onMouseOut')
+    .replace(/\bOnFocus\b/g, 'onFocus')
+    .replace(/\bOnBlur\b/g, 'onBlur')
+    .replace(/\bHtmlFor\b/g, 'htmlFor')
+    .replace(/\bTabIndex\b/g, 'tabIndex')
+
+  // --- Fix common global references: Document → document, Console → console ---
+  result = result
+    .replace(/\bDocument\b/g, 'document')
+    .replace(/\bConsole\b/g, 'console')
+    .replace(/\bWindow\b/g, 'window')
+
   return result
 }
 
 /**
  * Strips ES module syntax that breaks non-module execution.
+ *
+ * Uses a line-based state machine to handle multiline imports like:
+ *   import {
+ *     useState,
+ *     useEffect
+ *   } from 'react';
  */
 export function preprocessReactSource(source: string): string {
-  return joinMultilineStrings(source)
-    // Remove: import ... from 'react'
-    .replace(/^import\s+.*?\s+from\s+['"]react['"]\s*;?\s*$/gm, '')
-    // Remove: import ... from 'react-dom'
-    .replace(/^import\s+.*?\s+from\s+['"]react-dom[^'"]*['"]\s*;?\s*$/gm, '')
-    // Remove: any other import statements
-    .replace(/^import\s+.*?\s+from\s+['"][^'"]+['"]\s*;?\s*$/gm, '')
-    .replace(/^import\s+['"][^'"]+['"]\s*;?\s*$/gm, '')
+  const joined = joinMultilineStrings(source)
+
+  // --- Phase 0: Fix PascalCase keywords/tags from small models ---
+  const caseFixed = fixPascalCaseKeywordsAndTags(joined)
+
+  // --- Phase 1: Remove import statements (including multiline) ---
+  const lines = caseFixed.split('\n')
+  const output: string[] = []
+  let inMultilineImport = false
+
+  for (const line of lines) {
+    const trimmed = line.trimStart()
+
+    // If we're inside a multiline import, skip lines until `from '...'`
+    if (inMultilineImport) {
+      if (/\bfrom\s+['"][^'"]+['"]\s*;?\s*$/.test(trimmed)) {
+        inMultilineImport = false // closing line of multiline import
+      }
+      continue // skip this line (part of import)
+    }
+
+    // Single-line import: import ... from '...'
+    if (/^\s*import\s+.*?\s+from\s+['"][^'"]+['"]\s*;?\s*$/.test(line)) {
+      continue
+    }
+    // Side-effect import: import '...'
+    if (/^\s*import\s+['"][^'"]+['"]\s*;?\s*$/.test(line)) {
+      continue
+    }
+    // Start of multiline import: `import {` or `import type {` without `from` on same line
+    if (/^\s*import\s+(?:type\s+)?\{/.test(line) && !/\bfrom\s+['"]/.test(line)) {
+      inMultilineImport = true
+      continue
+    }
+    // Catch-all: any remaining `import` at line start that isn't dynamic import()
+    // This handles edge cases like indented imports or unusual formatting
+    if (/^\s*import\s+[^(]/.test(trimmed) && /\bfrom\s+['"]/.test(trimmed)) {
+      continue
+    }
+
+    output.push(line)
+  }
+
+  return output.join('\n')
+    // --- Phase 2: Strip export syntax ---
     // Convert: export default function App(...) → function App(...)
     .replace(/\bexport\s+default\s+function\s+(\w+)/g, 'function $1')
     // Convert: export default class App → class App
@@ -180,6 +380,7 @@ function buildReactHarnessInline(
   transformedSource: string,
   reactJs: string,
   reactDomJs: string,
+  tailwindJs: string,
 ): string {
   const escaped = transformedSource.replace(/<\/script>/gi, '<\\/script>')
 
@@ -191,7 +392,7 @@ function buildReactHarnessInline(
   <meta name="viewport" content="width=device-width, initial-scale=1">
   ${ERROR_REPORTER}
   <style>${BASE_STYLES} html,body{height:100%;background:#fff;color-scheme:light;} #root{min-height:100%;}</style>
-  <script src="https://cdn.tailwindcss.com"><\/script>
+  <script>${tailwindJs}<\/script>
   <script>${reactJs}<\/script>
   <script>${reactDomJs}<\/script>
 </head>
@@ -212,7 +413,7 @@ function buildReactHarnessInline(
   if (typeof React === 'undefined') { showErr('React failed to initialize'); return; }
   if (typeof ReactDOM === 'undefined') { showErr('ReactDOM failed to initialize'); return; }
 
-  // Expose destructured React hooks as locals so user code can call them without import
+  // Expose destructured React hooks and APIs as locals so user code can call them without import
   var useState = React.useState, useEffect = React.useEffect,
       useCallback = React.useCallback, useMemo = React.useMemo,
       useRef = React.useRef, useContext = React.useContext,
@@ -220,7 +421,12 @@ function buildReactHarnessInline(
       forwardRef = React.forwardRef, memo = React.memo,
       Fragment = React.Fragment, Children = React.Children,
       cloneElement = React.cloneElement, createElement = React.createElement,
-      isValidElement = React.isValidElement;
+      isValidElement = React.isValidElement,
+      Suspense = React.Suspense, lazy = React.lazy,
+      useId = React.useId, useTransition = React.useTransition,
+      useDeferredValue = React.useDeferredValue,
+      startTransition = React.startTransition,
+      createPortal = ReactDOM.createPortal;
 
   // Run user code + mount — all in one try so App function declarations are in scope
   try {
@@ -397,12 +603,13 @@ export async function buildHarnessAsync(
 
     case 'react': {
       const processed = preprocessReactSource(source)
-      const [transformedSource, reactJs, reactDomJs] = await Promise.all([
+      const [transformedSource, reactJs, reactDomJs, tailwindJs] = await Promise.all([
         transformJSX(processed, baseUrl),
         fetchVendor(baseUrl, 'react.production.min.js'),
         fetchVendor(baseUrl, 'react-dom.production.min.js'),
+        fetchVendor(baseUrl, 'tailwind.min.js'),
       ])
-      return buildReactHarnessInline(transformedSource, reactJs, reactDomJs)
+      return buildReactHarnessInline(transformedSource, reactJs, reactDomJs, tailwindJs)
     }
 
     case 'chartjs': {
