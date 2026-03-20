@@ -32,6 +32,7 @@ import {
 } from '@/lib/multi-agent/orchestrator-prompt'
 import { sanitize } from '@/lib/multi-agent/sanitize'
 import type { TokenUsageCallback, SendMessagesOptions } from './transport-types'
+import { stripUnavailableToolParts } from './transport-types'
 
 export interface MultiAgentConfig {
   teamId: string
@@ -281,7 +282,12 @@ export async function executeMultiAgentStream(
       },
     })
 
-    const modelMessages = convertToModelMessages(mapUserInlineAttachments(options.messages))
+    // Strip tool invocation parts for tools no longer available (e.g., local knowledge toggled off).
+    // Only check config.tools (MCP/RAG tools) — orchestratorTools are delegation tools that never
+    // appear in conversation history from prior turns.
+    const cleanedMessages = stripUnavailableToolParts(options.messages, new Set(Object.keys(config.tools)))
+
+    const modelMessages = convertToModelMessages(mapUserInlineAttachments(cleanedMessages))
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const orchestratorResult = orchestrator.stream({ messages: modelMessages, abortSignal: options.abortSignal } as any)
 

@@ -12,6 +12,7 @@ import { useTheme } from '@/hooks/useTheme'
 import { PythonCodeBlock } from '@/components/ai-elements/PythonCodeBlock'
 import { ArtifactBlock } from '@/components/ai-elements/ArtifactBlock'
 import { RenderableCodeBlock } from '@/components/ai-elements/RenderableCodeBlock'
+import { MermaidError } from '@/components/MermaidError'
 import type { ArtifactType } from '@/lib/artifact-harness'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -104,8 +105,12 @@ function sanitizeMermaidFences(input: string): string {
       // and relationship lines are valid inside an erDiagram.
       if (/^erDiagram\b/i.test(firstLine)) {
         fixed = fixed.replace(/^[ \t]*(?:class|classDef|style)\s+\S[^{]*\{[^}]*\}/gm, '')
-        // Collapse any blank lines left behind
-        fixed = fixed.replace(/\n{3,}/g, '\n\n')
+
+        // Fix 8: strip %% comments inside entity definitions (indented lines).
+        // ER diagrams don't support %% comments inside entity blocks —
+        // Mermaid throws "expecting ATTRIBUTE_WORD, got COMMENT".
+        // Top-level (column-0) comments are preserved.
+        fixed = fixed.replace(/^([ \t]+)%%.*$/gm, '')
       }
 
       // Fix 6: strip inline parenthesised text from mindmap node labels.
@@ -133,13 +138,27 @@ function sanitizeMermaidFences(input: string): string {
       // Strip the `state X { }` wrapper and promote inner lines to the
       // outer level. Run in a loop to handle nested composite states.
       if (/^stateDiagram(?:-v2)?\b/i.test(firstLine)) {
+        // Fix 9: unquote state identifiers in transitions.
+        // Mermaid expects bare identifiers: `Placed --> Confirmed`
+        // LLMs generate: `"Placed" --> "Confirmed"` which fails.
+        // Preserve quoted labels after `:` (e.g. State1 : "Label text").
+        fixed = fixed.replace(/"([A-Za-z_]\w*)"/g, (match, id, offset) => {
+          const before = fixed.slice(Math.max(0, offset - 3), offset)
+          if (/:\s*$/.test(before)) return match // preserve state description labels
+          return id
+        })
+
         let prev = ''
         while (fixed !== prev) {
           prev = fixed
           fixed = fixed.replace(/^[ \t]*state\s+[^\n{]+\{[ \t]*\n([\s\S]*?)\n[ \t]*\}/gm, '$1')
         }
-        fixed = fixed.replace(/\n{3,}/g, '\n\n')
       }
+
+      // Fix 10: collapse consecutive blank lines (all diagram types).
+      // Previous fixes may leave behind empty lines; 3+ consecutive
+      // newlines can cause spurious parse errors in some diagram types.
+      fixed = fixed.replace(/\n{3,}/g, '\n\n')
 
       return open + fixed + close
     }
@@ -300,37 +319,94 @@ function extractMermaidBlocks(content: string): string[] {
 
 let mermaidInitialized = false
 
-/** Renders a mermaid diagram directly via mermaidLib, bypassing Streamdown's plugin. */
+/** Renders a mermaid diagram directly via mermaidLib, bypassing Streamdown's plugin.
+ *  Uses a 2-attempt error-driven retry pipeline:
+ *    Attempt 1: render source as-is
+ *    Attempt 2: apply targeted fixes based on the error message pattern, re-render
+ */
 function MermaidDiagram({ source, theme }: { source: string; theme: string }) {
   const [svgContent, setSvgContent] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
 
   useEffect(() => {
-    if (!mermaidInitialized) {
-      mermaidLib.initialize({ startOnLoad: false, securityLevel: 'loose', theme: theme as never })
-      mermaidInitialized = true
-    } else {
-      mermaidLib.initialize({ startOnLoad: false, securityLevel: 'loose', theme: theme as never })
+    let cancelled = false
+
+    mermaidLib.initialize({ startOnLoad: false, securityLevel: 'loose', theme: theme as never })
+    mermaidInitialized = true
+
+    const renderWithRetry = async () => {
+      const id = `mermaid-${Math.random().toString(36).slice(2)}`
+
+      // Attempt 1: render as-is
+      try {
+        const { svg } = await mermaidLib.render(id, source)
+        if (!cancelled) {
+          setSvgContent(svg)
+          setError(null)
+        }
+        return
+      } catch (err1) {
+        const msg = err1 instanceof Error ? err1.message : String(err1)
+
+        // Attempt 2: apply targeted fixes based on error pattern
+        let patched = source
+        let changed = false
+
+        // Fix: strip all %% comments (ER + other diagrams)
+        if (/COMMENT|%%/.test(msg)) {
+          patched = patched.replace(/^[ \t]*%%.*$/gm, '')
+          changed = true
+        }
+        // Fix: unquote identifiers (state diagrams)
+        if (/STRING|quotes?|"/i.test(msg) && /stateDiagram/i.test(source.split('\n')[0] ?? '')) {
+          patched = patched.replace(/"([A-Za-z_]\w*)"/g, '$1')
+          changed = true
+        }
+        // Fix: CRLF line endings
+        if (/NEWLINE|newline/i.test(msg)) {
+          patched = patched.replace(/\r\n/g, '\n')
+          changed = true
+        }
+
+        if (changed && patched !== source) {
+          const retryId = `mermaid-retry-${Math.random().toString(36).slice(2)}`
+          try {
+            const { svg } = await mermaidLib.render(retryId, patched)
+            if (!cancelled) {
+              setSvgContent(svg)
+              setError(null)
+            }
+            return
+          } catch {
+            // Retry also failed — fall through to show original error
+          }
+        }
+
+        // All attempts failed
+        if (!cancelled) {
+          setError(msg)
+          setSvgContent(null)
+        }
+      }
     }
 
-    const id = `mermaid-${Math.random().toString(36).slice(2)}`
-    mermaidLib
-      .render(id, source)
-      .then(({ svg }) => {
-        setSvgContent(svg)
-        setError(null)
-      })
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : String(err))
-        setSvgContent(null)
-      })
-  }, [source, theme])
+    renderWithRetry()
+
+    return () => { cancelled = true }
+  }, [source, theme, retryCount])
 
   if (error) {
     return (
-      <div className="rounded border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive my-2">
-        Mermaid error: {error}
-      </div>
+      <MermaidError
+        error={error}
+        chart={source}
+        retry={() => {
+          setError(null)
+          setSvgContent(null)
+          setRetryCount((c) => c + 1)
+        }}
+      />
     )
   }
   if (!svgContent) return null

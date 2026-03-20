@@ -473,17 +473,60 @@ function buildChartJsHarnessInline(source: string, chartJs: string): string {
 <body>
   <canvas id="chart"></canvas>
   <script>
-try {
-  var config = eval('(' + ${JSON.stringify(escaped)} + ')');
-  var canvas = document.getElementById('chart');
-  new Chart(canvas, config);
-} catch (e) {
-  var el = document.createElement('div');
-  el.style.cssText = '${ERR_STYLE}';
-  el.textContent = String(e.message);
-  document.getElementById('chart').replaceWith(el);
-  window.parent.postMessage({ type: 'artifact-error', message: String(e.message), stack: String(e.stack) }, '*');
-}
+(function() {
+  var ERR = '${ERR_STYLE}';
+  function showErr(msg) {
+    var el = document.createElement('div');
+    el.style.cssText = ERR;
+    el.textContent = msg;
+    var canvas = document.getElementById('chart');
+    if (canvas) canvas.replaceWith(el); else document.body.appendChild(el);
+    window.parent.postMessage({ type: 'artifact-error', message: msg }, '*');
+  }
+
+  function isValidConfig(c) {
+    return c && typeof c === 'object' && typeof c.type === 'string' && c.data && typeof c.data === 'object';
+  }
+
+  function extractConfig(source) {
+    // Strategy 1: Direct eval — works for raw object literals and configs with callbacks
+    try {
+      var c1 = eval('(' + source + ')');
+      if (isValidConfig(c1)) return c1;
+    } catch(e) {}
+
+    // Strategy 2: Strip imports/exports/assignments, then eval
+    var cleaned = source
+      .replace(/^\\/\\/.*$/gm, '')
+      .replace(/^\\/\\*[\\s\\S]*?\\*\\//gm, '')
+      .replace(/^import\\b[^(].*$/gm, '')
+      .replace(/^export\\s+default\\s+/gm, '')
+      .replace(/^export\\s+(const|let|var)\\s+/gm, '$1 ')
+      .replace(/^(const|let|var)\\s+\\w+\\s*=\\s*/gm, '')
+      .replace(/;\\s*$/gm, '')
+      .trim();
+    if (cleaned) {
+      try {
+        var c2 = eval('(' + cleaned + ')');
+        if (isValidConfig(c2)) return c2;
+      } catch(e) {}
+    }
+
+    return null;
+  }
+
+  var source = ${JSON.stringify(escaped)};
+  try {
+    var config = extractConfig(source);
+    if (!config) {
+      showErr('Could not parse Chart.js config.\\nExpected an object like: { type: "bar", data: { labels: [...], datasets: [...] } }');
+      return;
+    }
+    new Chart(document.getElementById('chart'), config);
+  } catch (e) {
+    showErr(String(e.message));
+  }
+})();
   <\/script>
 </body>
 </html>`
@@ -532,6 +575,73 @@ function buildVegaHarnessInline(source: string, vegaJs: string, vegaLiteJs: stri
     showErr('Invalid JSON in Vega-Lite spec: ' + String(e.message));
     return;
   }
+
+  // --- normalizeSpec: fix common LLM mistakes before vegaEmbed() ---
+
+  // Rule 1: Convert invalid "views" array to "vconcat" (Vega-Lite v5)
+  if (spec.views && !spec.layer && !spec.hconcat && !spec.vconcat && !spec.concat) {
+    spec.vconcat = spec.views;
+    delete spec.views;
+  }
+
+  // Rule 2: Inherit parent mark into layer/concat children missing it
+  function inheritMark(parent, key) {
+    if (!Array.isArray(parent[key]) || !parent.mark) return;
+    var parentMark = parent.mark;
+    var anyMissing = false;
+    parent[key].forEach(function(sub) {
+      if (!sub.mark) { sub.mark = parentMark; anyMissing = true; }
+    });
+    if (anyMissing) delete parent.mark;
+  }
+  inheritMark(spec, 'layer');
+  inheritMark(spec, 'vconcat');
+  inheritMark(spec, 'hconcat');
+  inheritMark(spec, 'concat');
+
+  // Rule 3: Remove invalid encoding type values (let Vega-Lite auto-infer)
+  var VALID_ENC_TYPES = { quantitative: 1, temporal: 1, ordinal: 1, nominal: 1 };
+  function fixEncoding(enc) {
+    if (!enc || typeof enc !== 'object') return;
+    for (var ch in enc) {
+      if (enc[ch] && typeof enc[ch] === 'object' && enc[ch].type && !VALID_ENC_TYPES[enc[ch].type]) {
+        delete enc[ch].type;
+      }
+    }
+  }
+  fixEncoding(spec.encoding);
+  ['layer', 'vconcat', 'hconcat', 'concat'].forEach(function(key) {
+    if (Array.isArray(spec[key])) {
+      spec[key].forEach(function(sub) { fixEncoding(sub.encoding); });
+    }
+  });
+
+  // Rule 4: Migrate v4 select "multi" → v5 "point" with toggle
+  if (Array.isArray(spec.params)) {
+    spec.params.forEach(function(p) {
+      if (p.select && p.select.type === 'multi') {
+        p.select.type = 'point';
+        if (p.select.toggle === undefined) p.select.toggle = true;
+      }
+    });
+  }
+
+  // Rule 5: Propagate root data to vconcat/hconcat/concat children missing it
+  // (skip layer — Vega-Lite auto-inherits data in layers)
+  ['vconcat', 'hconcat', 'concat'].forEach(function(key) {
+    if (spec.data && Array.isArray(spec[key])) {
+      spec[key].forEach(function(sub) {
+        if (!sub.data) sub.data = spec.data;
+      });
+    }
+  });
+
+  // Rule 6: Fix object mark missing type
+  if (spec.mark && typeof spec.mark === 'object' && !spec.mark.type) {
+    spec.mark.type = 'point';
+  }
+
+  // --- end normalizeSpec ---
 
   // Ensure $schema is present so Vega-Lite uses the correct version defaults
   if (!spec.$schema) {

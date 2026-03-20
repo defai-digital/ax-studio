@@ -52,9 +52,9 @@ When a diagram IS explicitly requested, use a mermaid code fence:
 Mermaid syntax rules (only when generating a requested diagram):
 - Wrap node labels in double quotes when they contain special characters: A["Label (with parens)"]
 - classDiagram: use \`List~Task~\` not \`List<Task>\`, no \`enum {A, B}\` in class body
-- erDiagram: quote SQL reserved words: \`"ORDER"\` not \`ORDER\`; NEVER add \`class\`, \`classDef\`, or \`style\` blocks — only entity definitions and relationship lines are valid in erDiagram
+- erDiagram: quote SQL reserved words: \`"ORDER"\` not \`ORDER\`; NEVER add \`class\`, \`classDef\`, or \`style\` blocks — only entity definitions and relationship lines are valid in erDiagram; NEVER use \`%%\` comments inside entity definitions — comments are only allowed on their own line outside entity blocks
 - sequenceDiagram: every message on a single line
-- stateDiagram: always use \`stateDiagram-v2\`; use ONLY flat transition lines (e.g. \`A --> B\`); NEVER use composite state blocks (\`state X { ... }\`) — they cause "would create a cycle" parse errors
+- stateDiagram: always use \`stateDiagram-v2\`; use ONLY flat transition lines (e.g. \`A --> B\`); NEVER use composite state blocks (\`state X { ... }\`) — they cause "would create a cycle" parse errors; state names must be bare identifiers (\`Placed --> Confirmed\`), NEVER quoted strings (\`"Placed" --> "Confirmed"\`)
 - gantt: every task needs format \`Task Name :status, YYYY-MM-DD, duration\`
 - mindmap: node labels must be plain text only — NEVER use \`()\`, \`[]\`, or \`{{}}\` inside node label text (they are shape-syntax tokens); write abbreviations without parentheses e.g. "CNN" not "CNN (Convolutional)"`
 
