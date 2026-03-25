@@ -1,6 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { buildHarnessAsync, type ArtifactType } from '@/lib/artifact-harness'
-import { AlertCircleIcon } from 'lucide-react'
+import { AlertCircleIcon, RefreshCw, Copy } from 'lucide-react'
+
+const TYPE_LABELS: Record<ArtifactType, string> = {
+  html: 'HTML page',
+  react: 'React component',
+  svg: 'SVG graphic',
+  chartjs: 'Chart.js chart',
+  vega: 'Vega-Lite chart',
+}
 
 interface ArtifactPreviewProps {
   type: ArtifactType
@@ -37,7 +45,11 @@ function IframePreview({ type, source, version }: { type: ArtifactType; source: 
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [retryVersion, setRetryVersion] = useState(0)
+  const [copied, setCopied] = useState(false)
   const baseUrl = window.location.origin + '/'
+
+  const effectiveVersion = (version ?? 0) + retryVersion
 
   useEffect(() => {
     setLoading(true)
@@ -76,7 +88,7 @@ function IframePreview({ type, source, version }: { type: ArtifactType; source: 
       // Revoke only if onLoad hasn't consumed it yet
       if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = '' }
     }
-  }, [type, source, version]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [type, source, effectiveVersion]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Listen for runtime errors posted from inside the iframe
   useEffect(() => {
@@ -90,6 +102,21 @@ function IframePreview({ type, source, version }: { type: ArtifactType; source: 
     return () => window.removeEventListener('message', handler)
   }, [])
 
+  const handleRetry = useCallback(() => {
+    setError(null)
+    setRetryVersion((v) => v + 1)
+  }, [])
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(source)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // Clipboard API may fail in some contexts — silent fallback
+    }
+  }, [source])
+
   return (
     <div className="relative w-full h-full min-h-[300px] flex flex-col bg-white">
       {loading && !error && (
@@ -100,16 +127,47 @@ function IframePreview({ type, source, version }: { type: ArtifactType; source: 
 
       <iframe
         ref={iframeRef}
-        key={`${type}-${version ?? 0}`}
+        key={`${type}-${effectiveVersion}`}
         className="w-full flex-1 border-0 bg-white"
         style={{ colorScheme: 'light' }}
         title="Artifact Preview"
       />
 
       {error && (
-        <div className="absolute bottom-0 left-0 right-0 flex items-start gap-2 px-3 py-2 bg-destructive/10 border-t border-destructive/20 text-destructive text-xs">
-          <AlertCircleIcon size={13} className="mt-0.5 shrink-0" />
-          <span className="break-words">{error}</span>
+        <div className="absolute inset-0 flex items-center justify-center bg-white z-20">
+          <div className="max-w-md mx-auto p-6 text-center">
+            <AlertCircleIcon size={24} className="mx-auto mb-3 text-destructive" />
+            <p className="text-sm font-medium text-foreground mb-1">Rendering failed</p>
+            <p className="text-xs text-muted-foreground mb-4">
+              Could not render this {TYPE_LABELS[type]}.
+            </p>
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <button
+                type="button"
+                onClick={handleRetry}
+                className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent hover:text-accent-foreground"
+              >
+                <RefreshCw size={12} />
+                Retry
+              </button>
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent hover:text-accent-foreground"
+              >
+                <Copy size={12} />
+                {copied ? 'Copied' : 'Copy Source'}
+              </button>
+            </div>
+            <details className="text-left">
+              <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+                Error details
+              </summary>
+              <pre className="mt-2 p-2 bg-muted rounded text-xs font-mono text-destructive overflow-auto max-h-32 break-words whitespace-pre-wrap">
+                {error}
+              </pre>
+            </details>
+          </div>
         </div>
       )}
     </div>

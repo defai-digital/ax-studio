@@ -14,6 +14,7 @@ import { ModelFactory } from './model-factory'
 import { useModelProvider } from '@/hooks/useModelProvider'
 import { useAssistant } from '@/hooks/useAssistant'
 import { useThreads } from '@/hooks/useThreads'
+import { useFileRegistry, threadCollectionId, projectCollectionId } from '@/lib/file-registry'
 import type { CostEstimate } from './multi-agent/cost-estimation'
 import { executeSingleAgentStream } from './transport/single-agent-transport'
 import { executeMultiAgentStream } from './transport/multi-agent-transport'
@@ -103,6 +104,44 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
             })
           }
         } catch (error) { console.warn('Failed to load MCP tools:', error) }
+
+        // Load RAG tools when thread has indexed documents
+        try {
+          if (this.threadId) {
+            const threadMeta = this.getThreadMetadata()
+            const hasThreadDocsFlag = threadMeta?.hasDocuments === true
+            const threadProjectId = (threadMeta?.project as Record<string, unknown> | undefined)?.id as string | undefined
+
+            let hasProjectDocs = false
+            if (threadProjectId) {
+              hasProjectDocs = useFileRegistry.getState().hasFiles(projectCollectionId(threadProjectId))
+            }
+            const hasThreadFiles = useFileRegistry.getState().hasFiles(threadCollectionId(this.threadId))
+
+            // Correct stale hasDocuments metadata from the old fake pipeline:
+            // if the flag is true but no files exist in the registry, clear it.
+            if (hasThreadDocsFlag && !hasThreadFiles) {
+              try {
+                useThreads.getState().updateThread(this.threadId, {
+                  metadata: { hasDocuments: false },
+                })
+              } catch { /* best-effort correction */ }
+            }
+
+            if (hasThreadFiles || hasProjectDocs) {
+              const ragTools = await this.serviceHub.rag().getTools()
+              for (const tool of ragTools) {
+                const serverName = (tool as { server?: string }).server || 'unknown'
+                if (!isToolDisabled(serverName, tool.name)) {
+                  toolsRecord[tool.name] = {
+                    description: tool.description,
+                    inputSchema: jsonSchema(tool.inputSchema as Record<string, unknown>),
+                  } as Tool
+                }
+              }
+            }
+          }
+        } catch (error) { console.warn('Failed to load RAG tools:', error) }
 
       }
     }

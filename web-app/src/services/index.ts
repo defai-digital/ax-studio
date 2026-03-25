@@ -197,6 +197,17 @@ class PlatformServiceHub implements ServiceHub {
         this.deepLinkService = new deepLinkModule.TauriDeepLinkService()
       }
 
+      // Give RAG & Uploads services a back-reference so they can call
+      // serviceHub.mcp() for AkiDB operations.
+      if ('setServiceHub' in this.ragService) {
+        const svc = this.ragService as { setServiceHub: (h: ServiceHub) => void }
+        svc.setServiceHub(this)
+      }
+      if ('setServiceHub' in this.uploadsService) {
+        const svc = this.uploadsService as { setServiceHub: (h: ServiceHub) => void }
+        svc.setServiceHub(this)
+      }
+
       this.initialized = true
       console.log('Service hub initialized successfully')
     } catch (error) {

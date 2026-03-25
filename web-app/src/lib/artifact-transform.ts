@@ -33,7 +33,13 @@ export async function transformJSX(source: string, baseUrl: string): Promise<str
   await loadBabel(baseUrl)
   const Babel = (window as any).Babel
   const result = Babel.transform(source, {
-    presets: ['react'],
+    presets: [
+      'react',
+      // 'env' transforms modern JS (optional chaining, nullish coalescing, class fields, etc.)
+      // to ES5 so it runs in the sandboxed iframe without syntax errors.
+      // The bundled babel.min.js already includes preset-env — no bundle size increase.
+      ['env', { targets: { esmodules: true }, modules: false }],
+    ],
     filename: 'artifact.jsx',
   })
   return result.code as string

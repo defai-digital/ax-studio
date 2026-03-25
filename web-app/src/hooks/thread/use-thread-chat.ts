@@ -15,6 +15,7 @@ import { useThreads } from '@/hooks/useThreads'
 import { useMessages } from '@/hooks/useMessages'
 import { useModelProvider } from '@/hooks/useModelProvider'
 import { useChatSessions } from '@/stores/chat-session-store'
+import { useChatAttachments, NEW_THREAD_ATTACHMENT_KEY } from '@/hooks/useChatAttachments'
 import { newUserThreadContent } from '@/lib/completion'
 import { convertThreadMessagesToUIMessages } from '@/lib/messages'
 import {
@@ -152,24 +153,83 @@ export function useThreadChat({
       }
 
       const messageId = generateId()
+
+      // Grab any pending attachments for this thread.
+      // If documents are still processing (async MCP calls in flight), wait
+      // for them to finish before sending so the model receives the content.
+      const attachmentsKey = threadId || NEW_THREAD_ATTACHMENT_KEY
+
+      const getAttachments = () =>
+        useChatAttachments.getState().getAttachments(attachmentsKey)
+
+      let pendingAttachments = getAttachments()
+
+      // Wait up to 30 seconds for in-flight document processing to complete
+      if (pendingAttachments.some((a) => a.type === 'document' && (a.processing || (!a.processed && !a.error)))) {
+        const maxWaitMs = 30_000
+        const pollMs = 300
+        const start = Date.now()
+        while (Date.now() - start < maxWaitMs) {
+          await new Promise((r) => setTimeout(r, pollMs))
+          pendingAttachments = getAttachments()
+          const stillProcessing = pendingAttachments.some(
+            (a) => a.type === 'document' && (a.processing || (!a.processed && !a.error))
+          )
+          if (!stillProcessing) break
+        }
+        // Re-read after waiting
+        pendingAttachments = getAttachments()
+      }
+
+      // Only include fully processed attachments
+      const readyAttachments = pendingAttachments.filter((a) => {
+        if (a.type === 'image') return true
+        if (a.type === 'document') {
+          return a.processed === true && (a.inlineContent || a.id)
+        }
+        return false
+      })
+      const attachments = readyAttachments.length > 0 ? readyAttachments : undefined
+
       const userMessage = newUserThreadContent(
         threadId,
         text,
-        undefined,
+        attachments,
         messageId
       )
       addMessage(userMessage)
 
+      // Build parts: text + any image file parts
+      const parts: Array<{ type: string; text?: string; mediaType?: string; url?: string }> = [
+        {
+          type: 'text',
+          text: userMessage.content[0].text?.value ?? text,
+        },
+      ]
+
+      // Add image attachments as file parts for vision models
+      if (attachments) {
+        for (const att of attachments) {
+          if (att.type === 'image' && att.base64 && att.mimeType) {
+            parts.push({
+              type: 'file',
+              mediaType: att.mimeType,
+              url: `data:${att.mimeType};base64,${att.base64}`,
+            })
+          }
+        }
+      }
+
       sendMessage({
-        parts: [
-          {
-            type: 'text',
-            text: userMessage.content[0].text?.value ?? text,
-          },
-        ],
+        parts,
         id: messageId,
         metadata: userMessage.metadata,
       })
+
+      // Clear attachments after sending
+      if (pendingAttachments.length > 0) {
+        useChatAttachments.getState().clearAttachments(attachmentsKey)
+      }
     },
     [
       threadId,

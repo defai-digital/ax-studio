@@ -468,12 +468,23 @@ async fn schedule_mcp_start_task<R: Runtime>(
 
         cmd.kill_on_drop(true);
 
+        // Expand ~ to the user's home directory in args (shells do this
+        // automatically, but direct process spawning does not).
+        let home = dirs::home_dir();
         config_params
             .args
             .iter()
             .filter_map(Value::as_str)
             .for_each(|arg| {
-                cmd.arg(arg);
+                if arg.starts_with("~/") || arg == "~" {
+                    if let Some(ref h) = home {
+                        cmd.arg(h.join(&arg[2..]));
+                    } else {
+                        cmd.arg(arg);
+                    }
+                } else {
+                    cmd.arg(arg);
+                }
             });
         // Inject credentials from secure store for managed integrations
         if let Some(obj) = config.as_object() {

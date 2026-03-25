@@ -9,6 +9,7 @@ import {
 } from 'ai'
 import type { UIMessageChunk } from 'ai'
 import type { TokenUsageCallback } from './transport-types'
+import { stripUnavailableToolParts } from './transport-types'
 
 export interface SingleAgentConfig {
   model: LanguageModel
@@ -35,7 +36,12 @@ export async function executeSingleAgentStream(
     mapUserInlineAttachments,
   } = config
 
-  const modelMessages = convertToModelMessages(mapUserInlineAttachments(messages))
+  // Strip tool invocation parts for tools that are no longer available (e.g.,
+  // fabric_search / fabric_extract when local knowledge is toggled off mid-conversation).
+  // Without this, the LLM sees prior tool calls in history and tries to re-invoke them.
+  const cleanedMessages = stripUnavailableToolParts(messages, new Set(Object.keys(tools)))
+
+  const modelMessages = convertToModelMessages(mapUserInlineAttachments(cleanedMessages))
 
   const hasTools = Object.keys(tools).length > 0
   const shouldEnableTools = hasTools && modelSupportsTools

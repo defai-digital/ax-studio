@@ -7,9 +7,7 @@
 import { useCallback, useRef } from 'react'
 import {
   ContentType,
-  ExtensionTypeEnum,
   MessageStatus,
-  VectorDBExtension,
   type ThreadMessage,
   fs,
 } from '@ax-studio/core'
@@ -22,7 +20,7 @@ import { useChatAttachments } from '@/hooks/useChatAttachments'
 import { useAttachmentIngestionPrompt } from '@/hooks/useAttachmentIngestionPrompt'
 import { useThreads } from '@/hooks/useThreads'
 import { processAttachmentsForSend } from '@/lib/attachmentProcessing'
-import { ExtensionManager } from '@/lib/extension'
+import { useFileRegistry, threadCollectionId } from '@/lib/file-registry'
 import { createDocumentAttachment, type Attachment } from '@/types/attachment'
 
 const ATTACHMENT_AUTO_INLINE_FALLBACK_BYTES = 512 * 1024
@@ -109,7 +107,25 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
   // ─── processNewDocumentAttachments ───────────────────────────────────────
   const processNewDocumentAttachments = useCallback(
     async (docs: Attachment[]) => {
-      if (!docs.length || !effectiveThreadId) return
+      if (!docs.length) return
+
+      // Mark all docs as processing IMMEDIATELY so the send guard and
+      // readyAttachments filter can detect in-flight work before any async
+      // operations (model startup, prompt dialog, MCP calls) begin.
+      setAttachmentsForThread(attachmentsKey, (prev) =>
+        prev.map((att) => {
+          const isTarget = docs.some(
+            (d) => d.path && att.path && d.path === att.path
+          )
+          return isTarget ? { ...att, processing: true } : att
+        })
+      )
+
+      // On the home page effectiveThreadId is undefined — use a temporary ID
+      // so that inline parsing still works. Embeddings mode will use this as
+      // the AkiDB collection name; the real thread ID is patched later when
+      // the thread is created and attachments are transferred.
+      const processingThreadId = effectiveThreadId || '__pending__'
 
       const modelReady = await (async () => {
         if (!selectedModel?.id) return false
@@ -155,16 +171,10 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
           ? rawContextThreshold
           : undefined
 
-      const hasContextEstimate =
-        modelReady &&
-        typeof contextThreshold === 'number' &&
-        Number.isFinite(contextThreshold) &&
-        contextThreshold > 0
-
+      // Always ask the user how to process each document (inline vs embeddings).
+      // The dialog is rendered at root level in __root.tsx.
       const docsNeedingPrompt = docs.filter((doc) => {
-        if (doc.processed || doc.injectionMode) return false
-        const preference = doc.parseMode ?? parsePreference
-        return preference === 'prompt' || (preference === 'auto' && !hasContextEstimate)
+        return !doc.processed && !doc.injectionMode
       })
 
       const docChoices = new Map<string, 'inline' | 'embeddings'>()
@@ -219,7 +229,7 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
       try {
         const { processedAttachments, hasEmbeddedDocuments } = await processAttachmentsForSend({
           attachments: docs,
-          threadId: effectiveThreadId,
+          threadId: processingThreadId,
           serviceHub,
           selectedProvider,
           contextThreshold,
@@ -227,6 +237,15 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
           parsePreference,
           perFileChoices: docChoices.size > 0 ? docChoices : undefined,
           updateAttachmentProcessing,
+        })
+
+        console.log('[attachment-debug] processAttachmentsForSend result:', {
+          count: processedAttachments.length,
+          hasEmbeddedDocuments,
+          items: processedAttachments.map((a) => ({
+            name: a.name, processed: a.processed, injectionMode: a.injectionMode,
+            hasInlineContent: !!a.inlineContent, hasId: !!a.id, error: a.error,
+          })),
         })
 
         if (processedAttachments.length > 0) {
@@ -240,11 +259,21 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
           )
         }
 
-        if (hasEmbeddedDocuments) {
+        if (hasEmbeddedDocuments && effectiveThreadId) {
           useThreads.getState().updateThread(effectiveThreadId, { metadata: { hasDocuments: true } })
         }
       } catch (e) {
         console.error('Failed to process attachments:', e)
+        // Mark any still-processing attachments with error state
+        const errorMsg = e instanceof Error ? e.message : 'Processing failed'
+        setAttachmentsForThread(attachmentsKey, (prev) =>
+          prev.map((att) => {
+            if (att.type === 'document' && att.processing) {
+              return { ...att, processing: false, error: errorMsg }
+            }
+            return att
+          })
+        )
       }
     },
     [
@@ -274,6 +303,26 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
         toast.info('Attachments are disabled in Settings')
         return
       }
+
+      // Check MCP availability before opening file picker
+      try {
+        const tools = await serviceHub.mcp().getTools()
+        const hasAkidb = tools.some(
+          (t) => t.name === 'fabric_ingest_run' || t.name === 'fabric_extract'
+        )
+        if (!hasAkidb) {
+          toast.error('Document attachment requires the ax-studio MCP server', {
+            description: 'Enable it in Settings → MCP Servers',
+          })
+          return
+        }
+      } catch {
+        toast.error('Document attachment requires the ax-studio MCP server', {
+          description: 'Enable it in Settings → MCP Servers',
+        })
+        return
+      }
+
       const selection = await serviceHub.dialog().open({
         multiple: true,
         filters: [
@@ -361,22 +410,60 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
     async (indexToRemove: number) => {
       const attachmentToRemove = attachments[indexToRemove]
 
-      if (attachmentToRemove?.id && effectiveThreadId) {
+      if (attachmentToRemove?.id && effectiveThreadId && attachmentToRemove.type === 'document') {
+        const colId = threadCollectionId(effectiveThreadId)
+
+        // Best-effort: delete indexed chunks from AkiDB via MCP
         try {
-          if (attachmentToRemove.type === 'document') {
-            const vectorDBExtension = ExtensionManager.getInstance().get(
-              ExtensionTypeEnum.VectorDB
-            ) as VectorDBExtension | undefined
-            if (vectorDBExtension?.deleteFile) {
-              await vectorDBExtension.deleteFile(effectiveThreadId, attachmentToRemove.id)
+          // Search for all chunks belonging to this file
+          const searchResult = await serviceHub.mcp().callTool({
+            toolName: 'fabric_search',
+            arguments: {
+              query: '',
+              collection_id: colId,
+              top_k: 10000,
+              mode: 'keyword',
+              filters: { doc_id: attachmentToRemove.id },
+            },
+          })
+
+          if (!searchResult.error) {
+            const text = searchResult.content?.[0]?.text
+            if (text) {
+              try {
+                const parsed = JSON.parse(text)
+                const chunkIds = (parsed.results ?? [])
+                  .map((r: Record<string, unknown>) => r.chunkId ?? r.chunk_id)
+                  .filter(Boolean) as string[]
+
+                if (chunkIds.length > 0) {
+                  await serviceHub.mcp().callTool({
+                    toolName: 'akidb_delete_chunks',
+                    arguments: {
+                      collection_id: colId,
+                      chunk_ids: chunkIds,
+                      reason: 'file_deleted',
+                    },
+                  })
+                }
+              } catch {
+                // JSON parse failure — skip chunk deletion silently
+              }
             }
           }
         } catch (error) {
-          console.error('Failed to delete attachment from backend:', error)
-          toast.error('Failed to remove attachment', {
-            description: error instanceof Error ? error.message : String(error),
+          // AkiDB may not be running; deletion from registry still proceeds
+          console.warn('Failed to delete chunks from AkiDB:', error)
+        }
+
+        // Remove from the file registry (local tracking)
+        useFileRegistry.getState().removeFile(colId, attachmentToRemove.id)
+
+        // If no files left, clear the hasDocuments flag on the thread
+        if (!useFileRegistry.getState().hasFiles(colId)) {
+          useThreads.getState().updateThread(effectiveThreadId, {
+            metadata: { hasDocuments: false },
           })
-          return
         }
       }
 
@@ -384,7 +471,7 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
         prev.filter((_, index) => index !== indexToRemove)
       )
     },
-    [attachments, attachmentsKey, effectiveThreadId, setAttachmentsForThread]
+    [attachments, attachmentsKey, effectiveThreadId, serviceHub, setAttachmentsForThread]
   )
 
   return {

@@ -127,6 +127,15 @@ export function useThreadTools({
       const mcpToolNames = useAppState.getState().mcpToolNames
 
       ;(async () => {
+        // Cache RAG tool names once per execution batch
+        let ragToolNames: Set<string> | null = null
+        try {
+          const names = await serviceHub.rag().getToolNames()
+          ragToolNames = new Set(names)
+        } catch {
+          ragToolNames = new Set()
+        }
+
         for (const toolCall of sessionData.tools) {
           if (signal.aborted) break
 
@@ -149,7 +158,16 @@ export function useThreadTools({
 
             let result
 
-            if (mcpToolNames.has(toolName)) {
+            if (ragToolNames && ragToolNames.has(toolName)) {
+              // Route to RAG service (per-thread document retrieval via AkiDB)
+              result = await serviceHub.rag().callTool({
+                toolName,
+                arguments: toolCall.input as Record<string, unknown>,
+                threadId,
+                projectId,
+                scope: projectId ? 'project' : 'thread',
+              })
+            } else if (mcpToolNames.has(toolName)) {
               result = await serviceHub.mcp().callTool({
                 toolName,
                 arguments: toolCall.input,

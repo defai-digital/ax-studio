@@ -8,7 +8,7 @@ import {
 import {
   IconArrowLeft,
 } from '@tabler/icons-react'
-import { Eye, Wrench, Calendar, Download, ExternalLink, HardDrive, Atom } from 'lucide-react'
+import { Eye, Wrench, Calendar, Download, ExternalLink, HardDrive } from 'lucide-react'
 import { motion } from 'motion/react'
 import { route } from '@/constants/routes'
 import { useModelSources } from '@/hooks/useModelSources'

@@ -32,6 +32,7 @@ import {
 } from '@/lib/multi-agent/orchestrator-prompt'
 import { sanitize } from '@/lib/multi-agent/sanitize'
 import type { TokenUsageCallback, SendMessagesOptions } from './transport-types'
+import { stripUnavailableToolParts } from './transport-types'
 
 export interface MultiAgentConfig {
   teamId: string
@@ -74,6 +75,13 @@ export async function executeMultiAgentStream(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       streamWriter.write({ type: `data-${type}`, data } as any)
     }
+  }
+
+  /** Safely write a text message to the stream with proper text-start/delta/end lifecycle. */
+  const writeTextMessage = (writer: UIMessageStreamWriter, id: string, text: string): void => {
+    writer.write({ type: 'text-start', id })
+    writer.write({ type: 'text-delta', id, delta: text })
+    writer.write({ type: 'text-end', id })
   }
 
   try {
@@ -251,18 +259,35 @@ export async function executeMultiAgentStream(
               (m.role === 'assistant' && (m as { tool_calls?: unknown[] }).tool_calls?.length)
             )
           )
-          result.messages = [
+          const rawMessages = [
             ...(steps[0].response?.messages ?? []),
             ...toolRelatedMessages,
             ...steps.slice(-8).flatMap((s) => s.response?.messages ?? []),
           ]
+          // Ensure role alternation: strip consecutive same-role messages
+          // (except tool messages which follow assistant tool_calls)
+          const normalized: typeof rawMessages = []
+          for (const msg of rawMessages) {
+            const prev = normalized[normalized.length - 1]
+            if (prev && msg.role === prev.role && msg.role !== 'tool') {
+              // Skip consecutive same-role (merge would be lossy, skip is safer)
+              continue
+            }
+            normalized.push(msg)
+          }
+          result.messages = normalized
         }
 
         return Object.keys(result).length > 0 ? result : undefined
       },
     })
 
-    const modelMessages = convertToModelMessages(mapUserInlineAttachments(options.messages))
+    // Strip tool invocation parts for tools no longer available (e.g., local knowledge toggled off).
+    // Only check config.tools (MCP/RAG tools) — orchestratorTools are delegation tools that never
+    // appear in conversation history from prior turns.
+    const cleanedMessages = stripUnavailableToolParts(options.messages, new Set(Object.keys(config.tools)))
+
+    const modelMessages = convertToModelMessages(mapUserInlineAttachments(cleanedMessages))
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const orchestratorResult = orchestrator.stream({ messages: modelMessages, abortSignal: options.abortSignal } as any)
 
@@ -279,13 +304,10 @@ export async function executeMultiAgentStream(
                 const logData = runLog!.getData()
                 if (logData.steps.length === 0) {
                   console.warn(`[MultiAgent] Orchestrator finished without delegating to any agent. Model: ${activeModelId}, Mode: ${team.orchestration.mode}`)
-                  writer.write({
-                    type: 'text-delta',
-                    id: 'agent-notice',
-                    delta: `\n\n> **Agent Team Notice:** The orchestrator model did not delegate to any agents. ` +
-                      `This usually means the model doesn't support tool calling reliably. ` +
-                      `Try switching to a model that supports tool calling (e.g. GPT-4o, Claude, Gemini, Llama 4 Scout).`,
-                  })
+                  writeTextMessage(writer, 'agent-notice',
+                    `\n\n> **Agent Team Notice:** The orchestrator model did not delegate to any agents. ` +
+                    `This usually means the model doesn't support tool calling reliably. ` +
+                    `Try switching to a model that supports tool calling (e.g. GPT-4o, Claude, Gemini, Llama 4 Scout).`)
                 }
 
                 runLog!.complete()
@@ -309,15 +331,26 @@ export async function executeMultiAgentStream(
         } catch (streamError) {
           console.error('[MultiAgent] Orchestrator stream error:', streamError)
           const errMsg = streamError instanceof Error ? streamError.message : String(streamError)
-          const isBadRequest = /bad request|400|unsupported.*tool.?choice/i.test(errMsg)
-          const hint = isBadRequest
-            ? ' This model may not support forced tool calling (`tool_choice: required`). Try a model with full tool-calling support (e.g. GPT-4o, Claude, Gemini).'
-            : ''
-          writer.write({
-            type: 'text-delta',
-            id: 'agent-error',
-            delta: `\n\n> **Agent Team Error:** ${errMsg}${hint}`,
-          })
+
+          // Detect specific error patterns and provide actionable hints
+          let hint = ''
+          if (/bad request|400|unsupported.*tool.?choice/i.test(errMsg)) {
+            hint = ' This model may not support forced tool calling (`tool_choice: required`). Try a model with full tool-calling support (e.g. GPT-4o, Claude, Gemini).'
+          } else if (/roles must alternate|user\/assistant/i.test(errMsg)) {
+            hint = ' This model requires strict user/assistant role alternation which the multi-agent orchestrator cannot guarantee. Try a model with flexible message ordering (e.g. GPT-4o, Claude, Gemini).'
+          } else if (/type validation failed/i.test(errMsg)) {
+            hint = ' The model returned an unexpected response format. This often happens with local models. Try a cloud model with standard OpenAI-compatible responses.'
+          }
+
+          // Extract a cleaner message from verbose Type validation errors
+          let displayMsg = errMsg
+          if (/^Type validation failed/i.test(displayMsg) && displayMsg.length > 200) {
+            const innerMatch = displayMsg.match(/llama-server chat error \d+ [^:]+: (.*?)(?:","type")/s)
+            displayMsg = innerMatch
+              ? `Model error: ${innerMatch[1].replace(/\\n/g, ' ').replace(/\\"/g, '"').slice(0, 200)}`
+              : displayMsg.slice(0, 200) + '…'
+          }
+          writeTextMessage(writer, 'agent-error', `\n\n> **Agent Team Error:** ${displayMsg}${hint}`)
           runLog!.fail(errMsg)
           persistRunLog(runLog!).catch(() => {})
           emitDataPart('runLog', runLog!.getData())
@@ -340,11 +373,7 @@ export async function executeMultiAgentStream(
     const fallbackStream = await onFallbackToSingleAgent(options)
     return createUIMessageStream({
       execute: async ({ writer }) => {
-        writer.write({
-          type: 'text-delta',
-          id: 'agent-error-notice',
-          delta: `> **Agent Team Error:** ${errMsg}. Falling back to single-agent mode.\n\n`,
-        })
+        writeTextMessage(writer, 'agent-error-notice', `> **Agent Team Error:** ${errMsg}. Falling back to single-agent mode.\n\n`)
         await writer.merge(fallbackStream)
       },
     })

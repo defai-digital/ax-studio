@@ -26,6 +26,7 @@ export const localStorageKey = {
   recentSearches: 'recent-searches',
   memoryStore: 'memory-store',
   localKnowledgeStore: 'local-knowledge-store',
+  fileRegistryStore: 'file-registry-store',
 }
 
 export const CACHE_EXPIRY_MS = 1000 * 60 * 60 * 24

@@ -17,7 +17,10 @@ import { useShallow } from 'zustand/react/shallow'
 import { ExtensionTypeEnum, MCPExtension } from '@ax-studio/core'
 import { ExtensionManager } from '@/lib/extension'
 import { useChatSendHandler } from '@/hooks/use-chat-send-handler'
+import { useChatAttachments, NEW_THREAD_ATTACHMENT_KEY } from '@/hooks/useChatAttachments'
+import { useDocumentAttachmentHandler } from '@/hooks/use-document-attachment-handler'
 import { ChatInputToolbar } from '@/containers/ChatInputToolbar'
+import { ChatInputAttachments } from '@/components/ChatInputAttachments'
 import { TokenCounter } from '@/components/TokenCounter'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { Wrench, Globe, Atom, Code2 } from 'lucide-react'
@@ -59,7 +62,6 @@ const ChatInput = memo(function ChatInput({
   const currentThreadId = useThreads((state) => state.currentThreadId)
   const effectiveThreadId = threadId ?? currentThreadId
   const globalMemoryEnabled = useMemory((state) => state.memoryEnabled)
-  const isMemoryEnabledForThread = useMemory((state) => state.isMemoryEnabledForThread)
   const toggleMemoryGlobal = useMemory((state) => state.toggleMemory)
   const toggleMemoryForThread = useMemory((state) => state.toggleMemoryForThread)
   const memoryEnabledPerThread = useMemory((state) => state.memoryEnabledPerThread)
@@ -104,6 +106,34 @@ const ChatInput = memo(function ChatInput({
   const { t } = useTranslation()
 
   useTools()
+
+  // ─── Document attachments ──────────────────────────────────────────────
+  const attachmentsKey = effectiveThreadId || NEW_THREAD_ATTACHMENT_KEY
+  const pendingAttachments = useChatAttachments(
+    useCallback((state) => state.getAttachments(attachmentsKey), [attachmentsKey])
+  )
+  const transferAttachments = useChatAttachments((state) => state.transferAttachments)
+
+  // Transfer attachments from __new-thread__ → real threadId when thread is created
+  const lastTransferredThreadId = useRef<string | null>(null)
+  useEffect(() => {
+    if (
+      currentThreadId &&
+      lastTransferredThreadId.current !== currentThreadId
+    ) {
+      transferAttachments(NEW_THREAD_ATTACHMENT_KEY, currentThreadId)
+      lastTransferredThreadId.current = currentThreadId
+    }
+  }, [currentThreadId, transferAttachments])
+
+  const {
+    handleAttachDocsIngest,
+    handleRemoveAttachment,
+    ingestingDocs,
+  } = useDocumentAttachmentHandler({
+    attachmentsKey,
+    effectiveThreadId,
+  })
 
   const selectedModel = useModelProvider((state) => state.selectedModel) ?? undefined
   const assistants = useAssistant((state) => state.assistants)
@@ -221,7 +251,7 @@ const ChatInput = memo(function ChatInput({
                 const isComposing = e.nativeEvent.isComposing || e.keyCode === 229
                 if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
                   e.preventDefault()
-                  if (!isStreaming && prompt.trim()) {
+                  if (!isStreaming && prompt.trim() && !ingestingDocs) {
                     handleSendMessage(prompt)
                   }
                 }
@@ -239,6 +269,14 @@ const ChatInput = memo(function ChatInput({
                 className
               )}
             />
+
+            {/* Document attachment preview tiles */}
+            {pendingAttachments.length > 0 && (
+              <ChatInputAttachments
+                attachments={pendingAttachments}
+                onRemove={handleRemoveAttachment}
+              />
+            )}
           </div>
         </div>
 
@@ -272,6 +310,8 @@ const ChatInput = memo(function ChatInput({
           threadMessages={threadMessages || []}
           stopStreaming={stopStreaming}
           handleSendMessage={handleSendMessage}
+          onAttachDocuments={handleAttachDocsIngest}
+          ingestingDocs={ingestingDocs}
         />
       </div>
 

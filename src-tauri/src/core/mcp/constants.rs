@@ -37,7 +37,7 @@ pub const DEFAULT_MCP_CONFIG: &str = r#"{
     },
     "ax-studio": {
       "command": "node",
-      "args": ["~/Documents/Defai/ax/ax-fabric/packages/fabric-ingest/dist/cli.js", "mcp", "server"],
+      "args": ["--experimental-sqlite", "~/Documents/Defai/ax/ax-fabric/packages/fabric-ingest/dist/cli.js", "mcp", "server"],
       "env": {},
       "active": false,
       "official": true

@@ -14,9 +14,11 @@ import {
   SESSION_STORAGE_KEY,
 } from '@/constants/chat'
 import { defaultModel } from '@/lib/models'
+import { toast } from 'sonner'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useModelProvider } from '@/hooks/useModelProvider'
 import { useThreads } from '@/hooks/useThreads'
+import { useChatAttachments, NEW_THREAD_ATTACHMENT_KEY } from '@/hooks/useChatAttachments'
 
 type Input = {
   onSubmit?: (text: string) => void
@@ -55,6 +57,14 @@ export function useChatSendHandler({
       }
       if (!prompt.trim()) return
 
+      // Guard: don't send while attachments are processing
+      const pendingKey = useThreads.getState().currentThreadId || NEW_THREAD_ATTACHMENT_KEY
+      const pending = useChatAttachments.getState().getAttachments(pendingKey)
+      if (pending.some((a) => a.processing)) {
+        toast.info('Please wait for attachments to finish processing')
+        return
+      }
+
       setMessage('')
 
       if (onSubmit) {
@@ -77,6 +87,11 @@ export function useChatSendHandler({
           JSON.stringify(messagePayload)
         )
         sessionStorage.setItem('temp-chat-nav', 'true')
+        // Transfer pending attachments to the temporary chat ID
+        useChatAttachments.getState().transferAttachments(
+          NEW_THREAD_ATTACHMENT_KEY,
+          TEMPORARY_CHAT_ID
+        )
         router.navigate({
           to: route.threadsDetail,
           params: { threadId: TEMPORARY_CHAT_ID },
@@ -123,6 +138,12 @@ export function useChatSendHandler({
           prompt,
           assistant,
           projectMetadata
+        )
+
+        // Transfer pending attachments from the home-page key to the real thread
+        useChatAttachments.getState().transferAttachments(
+          NEW_THREAD_ATTACHMENT_KEY,
+          newThread.id
         )
 
         const storedTeamId = sessionStorage.getItem(SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID)

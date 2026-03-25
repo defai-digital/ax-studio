@@ -8,7 +8,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { IconPaperclip, IconX } from '@tabler/icons-react'
+import { IconLoader2, IconPaperclip, IconX } from '@tabler/icons-react'
 import type { Attachment } from '@/types/attachment'
 import { motion, AnimatePresence } from 'motion/react'
 
@@ -62,7 +62,8 @@ export function ChatInputAttachments({ attachments, onRemove }: Props) {
                         <div
                           className={cn(
                             'relative border rounded-xl size-14 overflow-hidden',
-                            'flex items-center justify-center bg-card/50'
+                            'flex items-center justify-center bg-card/50',
+                            att.error && 'border-destructive',
                           )}
                         >
                           {isImage && att.dataUrl ? (
@@ -71,6 +72,10 @@ export function ChatInputAttachments({ attachments, onRemove }: Props) {
                               src={att.dataUrl}
                               alt={att.name}
                             />
+                          ) : att.processing ? (
+                            <div className="flex items-center justify-center text-muted-foreground">
+                              <IconLoader2 size={18} className="animate-spin" />
+                            </div>
                           ) : (
                             <div className="flex flex-col items-center justify-center text-muted-foreground">
                               <IconPaperclip size={18} />
@@ -91,14 +96,20 @@ export function ChatInputAttachments({ attachments, onRemove }: Props) {
                           >
                             {att.name}
                           </div>
-                          <div className="opacity-70">
-                            {isImage
-                              ? att.mimeType || 'image'
-                              : ext
-                                ? `.${ext}`
-                                : 'document'}
-                            {att.size ? ` · ${formatBytes(att.size)}` : ''}
-                          </div>
+                          {att.error ? (
+                            <div className="text-destructive truncate max-w-52">
+                              {att.error}
+                            </div>
+                          ) : (
+                            <div className="opacity-70">
+                              {isImage
+                                ? att.mimeType || 'image'
+                                : ext
+                                  ? `.${ext}`
+                                  : 'document'}
+                              {att.size ? ` · ${formatBytes(att.size)}` : ''}
+                            </div>
+                          )}
                         </div>
                       </TooltipContent>
                     </Tooltip>

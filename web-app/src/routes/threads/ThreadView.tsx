@@ -23,7 +23,7 @@ import { ArtifactPanel } from '@/components/ai-elements/ArtifactPanel'
 import { ResearchPanel } from '@/components/research/ResearchPanel'
 import { TeamVariablePrompt } from '@/components/TeamVariablePrompt'
 import { CostApprovalModal } from '@/components/CostApprovalModal'
-import { SplitThreadPane } from './SplitThreadPane'
+import { SplitThreadContainer } from './SplitThreadContainer'
 import { MainThreadPane } from './MainThreadPane'
 import { Columns2, MessageSquareText, Users } from 'lucide-react'
 import { toast } from 'sonner'
@@ -271,12 +271,14 @@ export function ThreadView({
                     threadLogo={threadLogo}
                     chatMessages={chatMessages}
                     status={status}
+                    error={error}
                     stop={stop}
                     threadModel={threadModel}
                     handleSubmit={handleSubmit}
                     handleRegenerate={handleRegenerate}
                     handleEditMessage={handleEditMessage}
                     handleDeleteMessage={handleDeleteMessage}
+                    handleContextSizeIncrease={handleContextSizeIncrease}
                     reasoningContainerRef={reasoningContainerRef}
                     showThreadPromptEditor={showThreadPromptEditor}
                     setShowThreadPromptEditor={setShowThreadPromptEditor}
@@ -298,7 +300,7 @@ export function ThreadView({
                   />
                 </div>
               ) : (
-                <SplitThreadPane
+                <SplitThreadContainer
                   key="split-pane"
                   threadId={splitThreadId}
                   onClose={() => { setSplitThreadId(null); setSplitDirection(null) }}

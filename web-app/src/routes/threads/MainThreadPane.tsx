@@ -189,58 +189,30 @@ export function MainThreadPane({
       })()}
 
       {/* Messages + Input */}
-      {isSplitView ? (
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <MessagesArea
-            chatMessages={chatMessages}
-            status={status}
-            error={error}
-            threadId={threadId}
-            thread={thread}
-            reasoningContainerRef={reasoningContainerRef}
-            handleRegenerate={handleRegenerate}
-            handleEditMessage={handleEditMessage}
-            handleDeleteMessage={handleDeleteMessage}
-            handleContextSizeIncrease={handleContextSizeIncrease}
-            contentCls={contentCls}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <MessagesArea
+          chatMessages={chatMessages}
+          status={status}
+          error={error}
+          threadId={threadId}
+          thread={thread}
+          reasoningContainerRef={reasoningContainerRef}
+          handleRegenerate={handleRegenerate}
+          handleEditMessage={handleEditMessage}
+          handleDeleteMessage={handleDeleteMessage}
+          handleContextSizeIncrease={handleContextSizeIncrease}
+          contentCls={contentCls}
+        />
+        <div className="relative">
+          <div
+            className="absolute -top-8 left-0 right-0 h-8 pointer-events-none z-10"
+            style={{ background: 'linear-gradient(to top, var(--background) 20%, transparent)' }}
           />
-          <div className="relative">
-            <div
-              className="absolute -top-8 left-0 right-0 h-8 pointer-events-none z-10"
-              style={{ background: 'linear-gradient(to top, var(--background) 20%, transparent)' }}
-            />
-            <div className={inputCls}>
-              <ChatInput threadId={threadId} model={threadModel} onSubmit={handleSubmit} onStop={stop} chatStatus={status} />
-            </div>
+          <div className={inputCls}>
+            <ChatInput threadId={threadId} model={threadModel} onSubmit={handleSubmit} onStop={stop} chatStatus={status} />
           </div>
         </div>
-      ) : (
-        <>
-          <MessagesArea
-            chatMessages={chatMessages}
-            status={status}
-            error={error}
-            threadId={threadId}
-            thread={thread}
-            reasoningContainerRef={reasoningContainerRef}
-            handleRegenerate={handleRegenerate}
-            handleEditMessage={handleEditMessage}
-            handleDeleteMessage={handleDeleteMessage}
-            handleContextSizeIncrease={handleContextSizeIncrease}
-            contentCls={contentCls}
-          />
-          <div className="relative">
-            {/* Gradient fade from messages to input */}
-            <div
-              className="absolute -top-8 left-0 right-0 h-8 pointer-events-none z-10"
-              style={{ background: 'linear-gradient(to top, var(--background) 20%, transparent)' }}
-            />
-            <div className={inputCls}>
-              <ChatInput threadId={threadId} model={threadModel} onSubmit={handleSubmit} onStop={stop} chatStatus={status} />
-            </div>
-          </div>
-        </>
-      )}
+      </div>
     </div>
   )
 }
