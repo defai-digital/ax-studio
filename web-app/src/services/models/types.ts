@@ -56,7 +56,7 @@ export interface HuggingFaceRepo {
   tags: string[]
   pipeline_tag?: string
   createdAt: string
-  last_modified: string
+  last_modified?: string
   private: boolean
   disabled: boolean
   gated: boolean | string

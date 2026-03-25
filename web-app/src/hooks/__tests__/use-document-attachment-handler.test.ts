@@ -14,7 +14,6 @@ vi.mock('sonner', () => ({
 
 vi.mock('@ax-studio/core', () => ({
   ContentType: { Text: 'text' },
-  ExtensionTypeEnum: { VectorDB: 'vector-db' },
   MessageStatus: { Ready: 'ready' },
   fs: {
     fileStat: vi.fn().mockResolvedValue({ size: 1000 }),
@@ -26,14 +25,6 @@ vi.mock('@/lib/attachmentProcessing', () => ({
     processedAttachments: [],
     hasEmbeddedDocuments: false,
   }),
-}))
-
-vi.mock('@/lib/extension', () => ({
-  ExtensionManager: {
-    getInstance: () => ({
-      get: vi.fn().mockReturnValue(undefined),
-    }),
-  },
 }))
 
 vi.mock('@/types/attachment', () => ({
@@ -92,6 +83,7 @@ vi.mock('@/hooks/useThreads', () => {
 })
 
 const mockDialogOpen = vi.fn()
+const mockMcpCallTool = vi.fn().mockResolvedValue({ error: '', content: [{ text: '{"results":[]}' }] })
 
 vi.mock('@/hooks/useServiceHub', () => ({
   useServiceHub: () => ({
@@ -103,6 +95,13 @@ vi.mock('@/hooks/useServiceHub', () => ({
     }),
     uploads: () => ({}),
     projects: () => ({}),
+    mcp: () => ({
+      callTool: mockMcpCallTool,
+      getTools: vi.fn().mockResolvedValue([
+        { name: 'fabric_ingest_run', server: 'ax-studio' },
+        { name: 'fabric_extract', server: 'ax-studio' },
+      ]),
+    }),
   }),
   getServiceHub: () => ({}),
   initializeServiceHubStore: vi.fn(),
@@ -112,6 +111,7 @@ vi.mock('@/hooks/useServiceHub', () => ({
 // ─── Import ───────────────────────────────────────────────────────────────────
 
 import { useDocumentAttachmentHandler } from '../use-document-attachment-handler'
+import { useFileRegistry } from '@/lib/file-registry'
 import { toast } from 'sonner'
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -126,9 +126,10 @@ describe('useDocumentAttachmentHandler', () => {
     mockMaxFileSizeMB = 50
     mockSelectedModel = { id: 'model-1' }
     mockSelectedProvider = 'openai'
-    // Reset the Zustand store
+    // Reset the Zustand stores
     act(() => {
       useChatAttachments.setState({ attachmentsByThread: {} })
+      useFileRegistry.setState({ files: {} })
     })
   })
 
@@ -296,7 +297,10 @@ describe('useDocumentAttachmentHandler', () => {
     expect(processAttachmentsForSend).not.toHaveBeenCalled()
   })
 
-  it('processNewDocumentAttachments returns early with no effectiveThreadId', async () => {
+  it('processNewDocumentAttachments proceeds with temporary threadId when effectiveThreadId is undefined', async () => {
+    // Auto-resolve the ingestion prompt dialog (user picks 'embeddings')
+    mockShowPrompt.mockResolvedValue('embeddings')
+
     const { result } = renderHook(() =>
       useDocumentAttachmentHandler({
         attachmentsKey: ATTACHMENTS_KEY,
@@ -312,6 +316,175 @@ describe('useDocumentAttachmentHandler', () => {
       ])
     })
 
-    expect(processAttachmentsForSend).not.toHaveBeenCalled()
+    // Should still be called with a temporary threadId ('__pending__')
+    expect(processAttachmentsForSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: '__pending__',
+      })
+    )
+  })
+
+  // ── Deletion: file registry cleanup ────────────────────────────────────
+
+  it('removes file from registry when document attachment is removed', async () => {
+    // Seed file registry
+    act(() => {
+      useFileRegistry.getState().addFile('thread_thread-1', {
+        file_id: 'file-abc',
+        file_name: 'report.pdf',
+        file_path: '/tmp/report.pdf',
+        chunk_count: 5,
+        collection_id: 'thread_thread-1',
+        created_at: '2026-01-01T00:00:00Z',
+      })
+    })
+
+    // Seed attachment with matching id
+    act(() => {
+      useChatAttachments.getState().setAttachments(ATTACHMENTS_KEY, [
+        { name: 'report.pdf', type: 'document', id: 'file-abc', path: '/tmp/report.pdf' },
+      ])
+    })
+
+    const { result } = renderHook(() =>
+      useDocumentAttachmentHandler({
+        attachmentsKey: ATTACHMENTS_KEY,
+        effectiveThreadId: 'thread-1',
+      })
+    )
+
+    await act(async () => {
+      await result.current.handleRemoveAttachment(0)
+    })
+
+    // File should be gone from registry
+    expect(useFileRegistry.getState().listFiles('thread_thread-1')).toHaveLength(0)
+    // Attachment should be gone from store
+    expect(useChatAttachments.getState().getAttachments(ATTACHMENTS_KEY)).toHaveLength(0)
+  })
+
+  it('clears hasDocuments flag when last file is removed', async () => {
+    act(() => {
+      useFileRegistry.getState().addFile('thread_thread-1', {
+        file_id: 'only-file',
+        file_name: 'doc.pdf',
+        file_path: '/tmp/doc.pdf',
+        chunk_count: 3,
+        collection_id: 'thread_thread-1',
+        created_at: '2026-01-01T00:00:00Z',
+      })
+      useChatAttachments.getState().setAttachments(ATTACHMENTS_KEY, [
+        { name: 'doc.pdf', type: 'document', id: 'only-file' },
+      ])
+    })
+
+    const { result } = renderHook(() =>
+      useDocumentAttachmentHandler({
+        attachmentsKey: ATTACHMENTS_KEY,
+        effectiveThreadId: 'thread-1',
+      })
+    )
+
+    await act(async () => {
+      await result.current.handleRemoveAttachment(0)
+    })
+
+    expect(useFileRegistry.getState().hasFiles('thread_thread-1')).toBe(false)
+    expect(mockUpdateThread).toHaveBeenCalledWith('thread-1', {
+      metadata: { hasDocuments: false },
+    })
+  })
+
+  it('attempts to delete chunks from AkiDB when removing indexed document', async () => {
+    // Set up a search result with chunks
+    mockMcpCallTool.mockResolvedValueOnce({
+      error: '',
+      content: [{ text: JSON.stringify({ results: [
+        { chunkId: 'c1' },
+        { chunkId: 'c2' },
+      ] }) }],
+    }).mockResolvedValueOnce({
+      error: '',
+      content: [{ text: 'deleted' }],
+    })
+
+    act(() => {
+      useFileRegistry.getState().addFile('thread_thread-1', {
+        file_id: 'indexed-file',
+        file_name: 'indexed.pdf',
+        file_path: '/tmp/indexed.pdf',
+        chunk_count: 2,
+        collection_id: 'thread_thread-1',
+        created_at: '2026-01-01T00:00:00Z',
+      })
+      useChatAttachments.getState().setAttachments(ATTACHMENTS_KEY, [
+        { name: 'indexed.pdf', type: 'document', id: 'indexed-file' },
+      ])
+    })
+
+    const { result } = renderHook(() =>
+      useDocumentAttachmentHandler({
+        attachmentsKey: ATTACHMENTS_KEY,
+        effectiveThreadId: 'thread-1',
+      })
+    )
+
+    await act(async () => {
+      await result.current.handleRemoveAttachment(0)
+    })
+
+    // Should have called fabric_search then akidb_delete_chunks
+    expect(mockMcpCallTool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolName: 'fabric_search',
+        arguments: expect.objectContaining({
+          collection_id: 'thread_thread-1',
+          filters: { doc_id: 'indexed-file' },
+        }),
+      })
+    )
+    expect(mockMcpCallTool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolName: 'akidb_delete_chunks',
+        arguments: expect.objectContaining({
+          collection_id: 'thread_thread-1',
+          chunk_ids: ['c1', 'c2'],
+          reason: 'file_deleted',
+        }),
+      })
+    )
+  })
+
+  it('still removes from registry even if AkiDB call fails', async () => {
+    mockMcpCallTool.mockRejectedValueOnce(new Error('MCP unavailable'))
+
+    act(() => {
+      useFileRegistry.getState().addFile('thread_thread-1', {
+        file_id: 'fail-file',
+        file_name: 'fail.pdf',
+        file_path: '/tmp/fail.pdf',
+        chunk_count: 1,
+        collection_id: 'thread_thread-1',
+        created_at: '2026-01-01T00:00:00Z',
+      })
+      useChatAttachments.getState().setAttachments(ATTACHMENTS_KEY, [
+        { name: 'fail.pdf', type: 'document', id: 'fail-file' },
+      ])
+    })
+
+    const { result } = renderHook(() =>
+      useDocumentAttachmentHandler({
+        attachmentsKey: ATTACHMENTS_KEY,
+        effectiveThreadId: 'thread-1',
+      })
+    )
+
+    await act(async () => {
+      await result.current.handleRemoveAttachment(0)
+    })
+
+    // Registry should still be cleaned up despite MCP failure
+    expect(useFileRegistry.getState().hasFiles('thread_thread-1')).toBe(false)
+    expect(useChatAttachments.getState().getAttachments(ATTACHMENTS_KEY)).toHaveLength(0)
   })
 })

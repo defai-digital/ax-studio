@@ -12,8 +12,8 @@ import { toast } from 'sonner'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { createDocumentAttachment, type Attachment } from '@/types/attachment'
 import { useAttachments } from '@/hooks/useAttachments'
-import { ExtensionTypeEnum, FileStat, VectorDBExtension } from '@ax-studio/core'
-import { ExtensionManager } from '@/lib/extension'
+import { FileStat } from '@ax-studio/core'
+import { useFileRegistry, projectCollectionId } from '@/lib/file-registry'
 import { IconLoader2, IconPaperclip } from '@tabler/icons-react'
 
 type ProjectFilesProps = {
@@ -118,15 +118,18 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
   const loadProjectFiles = useCallback(async () => {
     setLoading(true)
     try {
-      const ext = ExtensionManager.getInstance().get<VectorDBExtension>(
-        ExtensionTypeEnum.VectorDB
+      const colId = projectCollectionId(projectId)
+      const entries = useFileRegistry.getState().listFiles(colId)
+      setFiles(
+        entries.map((e) => ({
+          id: e.file_id,
+          name: e.file_name,
+          path: e.file_path,
+          type: e.file_type,
+          size: e.file_size,
+          chunk_count: e.chunk_count,
+        }))
       )
-      if (ext?.listAttachmentsForProject) {
-        const projectFiles = await ext.listAttachmentsForProject(projectId)
-        setFiles(projectFiles)
-      } else {
-        setFiles([])
-      }
     } catch {
       setFiles([])
     } finally {
@@ -343,16 +346,12 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
 
   const handleDeleteFile = async (fileId: string) => {
     try {
-      const ext = ExtensionManager.getInstance().get<VectorDBExtension>(
-        ExtensionTypeEnum.VectorDB
+      const colId = projectCollectionId(projectId)
+      useFileRegistry.getState().removeFile(colId, fileId)
+      toast.success(
+        t('common:toast.fileDeleted.title') ?? 'File deleted successfully'
       )
-      if (ext?.deleteFileForProject) {
-        await ext.deleteFileForProject(projectId, fileId)
-        toast.success(
-          t('common:toast.fileDeleted.title') ?? 'File deleted successfully'
-        )
-        await loadProjectFiles()
-      }
+      await loadProjectFiles()
     } catch (error) {
       console.error('Failed to delete file:', error)
       toast.error(

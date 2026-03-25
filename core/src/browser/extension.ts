@@ -4,15 +4,12 @@ import { ModelManager } from './models'
 export enum ExtensionTypeEnum {
   Assistant = 'assistant',
   Conversational = 'conversational',
-  Inference = 'inference',
   Model = 'model',
   SystemMonitoring = 'systemMonitoring',
   MCP = 'mcp',
   HuggingFace = 'huggingFace',
   Engine = 'engine',
   Hardware = 'hardware',
-  RAG = 'rag',
-  VectorDB = 'vectorDB',
 }
 
 export interface ExtensionType {

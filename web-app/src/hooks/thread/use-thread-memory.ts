@@ -25,7 +25,6 @@ import {
 import { type ThreadMessage } from '@ax-studio/core'
 
 export function useThreadMemory(threadId: string) {
-  const isMemoryEnabledForThread = useMemory((state) => state.isMemoryEnabledForThread)
   const globalMemoryEnabled = useMemory((state) => state.memoryEnabled)
   const memoryEnabledPerThread = useMemory((state) => state.memoryEnabledPerThread)
   const defaultMemories = useMemory(useShallow((state) => state.memories['default'] || []))

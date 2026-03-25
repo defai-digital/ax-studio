@@ -201,11 +201,17 @@ pub fn migrate_mcp_servers(
     }
     if mcp_version < 6 {
         log::info!("Migrating MCP schema version 6: Removing deprecated integration-github MCP server");
-        if let Err(e) = remove_mcp_server_keys(app_handle, &["integration-github"]) {
+        if let Err(e) = remove_mcp_server_keys(app_handle.clone(), &["integration-github"]) {
             log::error!("Failed to remove integration-github: {e}");
         }
     }
-    store.set("mcp_version", 6);
+    if mcp_version < 7 {
+        log::info!("Migrating MCP schema version 7: Adding --experimental-sqlite flag to ax-studio MCP server");
+        if let Err(e) = patch_ax_studio_sqlite_flag(app_handle) {
+            log::error!("Failed to patch ax-studio sqlite flag: {e}");
+        }
+    }
+    store.set("mcp_version", 7);
     store.save().expect("Failed to save store");
     Ok(())
 }
@@ -331,6 +337,61 @@ fn remove_mcp_server_keys(app_handle: tauri::AppHandle, keys: &[&str]) -> Result
         for key in keys {
             if servers.remove(*key).is_some() {
                 changed = true;
+            }
+        }
+    }
+
+    if changed {
+        fs::write(
+            &config_path,
+            serde_json::to_string_pretty(&config)
+                .map_err(|e| format!("Failed to serialize MCP config: {e}"))?,
+        )
+        .map_err(|e| format!("Failed to write MCP config: {e}"))?;
+    }
+
+    Ok(())
+}
+
+/// Ensure the ax-studio MCP server args include `--experimental-sqlite`
+/// when the command is `node`.  Node.js requires this flag for `node:sqlite`
+/// which fabric-ingest's SemanticStore uses.
+fn patch_ax_studio_sqlite_flag(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let config_path = get_app_data_folder_path(app_handle).join("mcp_config.json");
+
+    if !config_path.exists() {
+        return Ok(());
+    }
+
+    let config_str =
+        fs::read_to_string(&config_path).map_err(|e| format!("Failed to read MCP config: {e}"))?;
+
+    let mut config: serde_json::Value = serde_json::from_str(&config_str)
+        .map_err(|e| format!("Failed to parse MCP config: {e}"))?;
+
+    let mut changed = false;
+    if let Some(server) = config
+        .get_mut("mcpServers")
+        .and_then(|s| s.as_object_mut())
+        .and_then(|s| s.get_mut("ax-studio"))
+        .and_then(|s| s.as_object_mut())
+    {
+        let is_node = server
+            .get("command")
+            .and_then(|c| c.as_str())
+            .map(|c| c == "node")
+            .unwrap_or(false);
+
+        if is_node {
+            if let Some(args) = server.get_mut("args").and_then(|a| a.as_array_mut()) {
+                let has_flag = args
+                    .iter()
+                    .any(|a| a.as_str() == Some("--experimental-sqlite"));
+                if !has_flag {
+                    // Insert at the front so it precedes the script path
+                    args.insert(0, serde_json::Value::String("--experimental-sqlite".to_string()));
+                    changed = true;
+                }
             }
         }
     }

@@ -317,8 +317,6 @@ function extractMermaidBlocks(content: string): string[] {
   return blocks
 }
 
-let mermaidInitialized = false
-
 /** Renders a mermaid diagram directly via mermaidLib, bypassing Streamdown's plugin.
  *  Uses a 2-attempt error-driven retry pipeline:
  *    Attempt 1: render source as-is
@@ -333,8 +331,6 @@ function MermaidDiagram({ source, theme }: { source: string; theme: string }) {
     let cancelled = false
 
     mermaidLib.initialize({ startOnLoad: false, securityLevel: 'loose', theme: theme as never })
-    mermaidInitialized = true
-
     const renderWithRetry = async () => {
       const id = `mermaid-${Math.random().toString(36).slice(2)}`
 
@@ -552,7 +548,7 @@ function RenderMarkdownComponent({
         if (!isUser && !isStreaming) {
           // Debug: log first code block we encounter so devs can verify detection
           if (import.meta.env.DEV) {
-            const _codeEl = (node as Record<string, unknown>)?.children?.[0] as Record<string, unknown> | undefined
+            const _codeEl = ((node as Record<string, unknown>)?.children as Record<string, unknown>[] | undefined)?.[0]
             const _cls = (_codeEl?.properties as Record<string, unknown> | undefined)?.className
             if (Array.isArray(_cls) && _cls.length > 0) {
               console.debug('[RenderMarkdown] pre node classes:', _cls)
@@ -567,7 +563,7 @@ function RenderMarkdownComponent({
             // Fallback: walk the HAST text nodes (handles edge cases where
             // the extraction regex didn't match the fence)
             const hastSource = indexed === undefined
-              ? extractHastText((node as Record<string, unknown>).children?.[0]).trim()
+              ? extractHastText(((node as Record<string, unknown>).children as unknown[] | undefined)?.[0]).trim()
               : undefined
             const source = indexed ?? hastSource ?? ''
             if (!source) return <>{children}</>

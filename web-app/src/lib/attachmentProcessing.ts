@@ -155,14 +155,16 @@ export const processAttachmentsForSend = async (
       }
 
       const canInline = !projectId && targetPreference !== 'embeddings' && !!doc.path
+      console.log('[AttachProc]', doc.name, { targetPreference, canInline, projectId: !!projectId })
 
       if (canInline) {
         try {
           parsedContent = await serviceHub
             .rag()
             .parseDocument?.(doc.path!, doc.fileType)
+          console.log('[AttachProc]', doc.name, 'parseDocument result:', parsedContent ? `${parsedContent.length} chars` : 'empty')
         } catch (err) {
-          console.warn(`Failed to parse ${doc.name} for inline use`, err)
+          console.warn(`[AttachProc] Failed to parse ${doc.name} for inline use`, err)
         }
       }
 
@@ -209,6 +211,8 @@ export const processAttachmentsForSend = async (
         // Project files always use embeddings
         targetMode = projectId ? 'embeddings' : (userChoice ?? autoFallbackMode ?? 'embeddings')
       }
+
+      console.log('[AttachProc]', doc.name, 'final decision:', { targetMode, hasParsedContent: !!parsedContent, parsedLength: parsedContent?.length })
 
       if (targetMode === 'inline' && parsedContent) {
         processedAttachments.push({

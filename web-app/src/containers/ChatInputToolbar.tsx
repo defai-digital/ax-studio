@@ -21,7 +21,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu'
-import { ArrowUp, PlusIcon, AppWindowIcon, SearchIcon } from 'lucide-react'
+import { ArrowUp, PlusIcon, AppWindowIcon, SearchIcon, Paperclip, Loader2 } from 'lucide-react'
 import {
   IconAtom,
   IconTool,
@@ -103,6 +103,8 @@ type Props = {
   // Actions
   stopStreaming: (threadId: string) => void
   handleSendMessage: (prompt: string) => Promise<void>
+  onAttachDocuments?: () => void
+  ingestingDocs?: boolean
 }
 
 export const ChatInputToolbar = memo(function ChatInputToolbar({
@@ -135,6 +137,8 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
   threadMessages,
   stopStreaming,
   handleSendMessage,
+  onAttachDocuments,
+  ingestingDocs,
 }: Props) {
   const { t } = useTranslation()
 
@@ -168,6 +172,16 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
+                {onAttachDocuments && (
+                  <DropdownMenuItem onClick={onAttachDocuments} disabled={ingestingDocs}>
+                    {ingestingDocs ? (
+                      <Loader2 size={18} className="text-muted-foreground animate-spin" />
+                    ) : (
+                      <Paperclip size={18} className="text-muted-foreground" />
+                    )}
+                    <span>{ingestingDocs ? 'Indexing documents...' : 'Attach Document'}</span>
+                  </DropdownMenuItem>
+                )}
                 {!projectId && (
                   <DropdownMenuSub>
                     <DropdownMenuSubTrigger>
@@ -393,7 +407,7 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
             <Button
               variant="default"
               size="icon-sm"
-              disabled={!prompt.trim()}
+              disabled={!prompt.trim() || ingestingDocs}
               data-test-id="send-message-button"
               onClick={() => handleSendMessage(prompt)}
               className="rounded-full mr-1 mb-1 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white border-0 shadow-sm"

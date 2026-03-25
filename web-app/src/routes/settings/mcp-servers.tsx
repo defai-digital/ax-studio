@@ -340,6 +340,13 @@ function MCPServersDesktop() {
               message: error,
               subtitle: t('mcp-servers:checkParams'),
             })
+            // Show a user-visible toast so the error isn't silently swallowed
+            const errMsg = typeof error === 'string'
+              ? error
+              : error instanceof Error ? error.message : String(error)
+            toast.error(`Failed to start MCP server "${serverKey}"`, {
+              description: errMsg.length > 300 ? errMsg.slice(0, 300) + '...' : errMsg,
+            })
           })
           .finally(() => {
             setLoadingServers((prev) => ({ ...prev, [serverKey]: false }))

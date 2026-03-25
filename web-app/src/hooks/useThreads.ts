@@ -4,6 +4,7 @@ import { getServiceHub } from '@/hooks/useServiceHub'
 import { Fzf } from 'fzf'
 import { TEMPORARY_CHAT_ID } from '@/constants/chat'
 import { useGeneralSetting } from '@/hooks/useGeneralSetting'
+import { useFileRegistry, threadCollectionId } from '@/lib/file-registry'
 type ThreadState = {
   threads: Record<string, Thread>
   currentThreadId?: string
@@ -135,6 +136,16 @@ export const useThreads = create<ThreadState>()((set, get) => ({
 
       getServiceHub().threads().deleteThread(threadId).catch(console.error)
 
+      // Clean up AkiDB collection and file registry for this thread
+      const colId = threadCollectionId(threadId)
+      useFileRegistry.getState().clearCollection(colId)
+      getServiceHub().mcp().callTool({
+        toolName: 'akidb_delete_collection',
+        arguments: { collection_id: colId },
+      }).catch(() => {
+        // Ignore — collection may not exist if no docs were ever attached
+      })
+
       return {
         threads: remainingThreads,
         searchIndex: new Fzf<Thread[]>(
@@ -166,9 +177,15 @@ export const useThreads = create<ThreadState>()((set, get) => ({
           !state.threads[threadId].metadata?.project
       )
 
-      // Delete threads
+      // Delete threads + clean up AkiDB collections
       threadsToDeleteIds.forEach((threadId) => {
         getServiceHub().threads().deleteThread(threadId).catch(console.error)
+        const colId = threadCollectionId(threadId)
+        useFileRegistry.getState().clearCollection(colId)
+        getServiceHub().mcp().callTool({
+          toolName: 'akidb_delete_collection',
+          arguments: { collection_id: colId },
+        }).catch(() => {})
       })
 
       // Keep favorite threads and threads with project metadata
@@ -197,9 +214,15 @@ export const useThreads = create<ThreadState>()((set, get) => ({
     set((state) => {
       const allThreadIds = Object.keys(state.threads)
 
-      // Delete all threads
+      // Delete all threads + clean up AkiDB collections
       allThreadIds.forEach((threadId) => {
         getServiceHub().threads().deleteThread(threadId).catch(console.error)
+        const colId = threadCollectionId(threadId)
+        useFileRegistry.getState().clearCollection(colId)
+        getServiceHub().mcp().callTool({
+          toolName: 'akidb_delete_collection',
+          arguments: { collection_id: colId },
+        }).catch(() => {})
       })
 
       return {
@@ -221,9 +244,15 @@ export const useThreads = create<ThreadState>()((set, get) => ({
           state.threads[threadId].metadata?.project?.id === projectId
       )
 
-      // Delete threads belonging to this project
+      // Delete threads belonging to this project + clean up AkiDB collections
       threadsToDeleteIds.forEach((threadId) => {
         getServiceHub().threads().deleteThread(threadId).catch(console.error)
+        const colId = threadCollectionId(threadId)
+        useFileRegistry.getState().clearCollection(colId)
+        getServiceHub().mcp().callTool({
+          toolName: 'akidb_delete_collection',
+          arguments: { collection_id: colId },
+        }).catch(() => {})
       })
 
       // Keep threads that don't belong to this project
