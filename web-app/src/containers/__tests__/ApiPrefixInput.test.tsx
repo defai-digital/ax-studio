@@ -75,4 +75,80 @@ describe('ApiPrefixInput', () => {
     const input = screen.getByTestId('prefix-input')
     expect(input).toHaveAttribute('placeholder', '/v1')
   })
+
+  it('accepts valid multi-segment prefix', () => {
+    render(<ApiPrefixInput />)
+    const input = screen.getByTestId('prefix-input')
+    fireEvent.change(input, { target: { value: '/api/v2' } })
+    fireEvent.blur(input)
+    expect(mockSetApiPrefix).toHaveBeenCalledWith('/api/v2')
+  })
+
+  it('accepts prefix with hyphens and underscores', () => {
+    render(<ApiPrefixInput />)
+    const input = screen.getByTestId('prefix-input')
+    fireEvent.change(input, { target: { value: '/my-api/v1_beta' } })
+    fireEvent.blur(input)
+    expect(mockSetApiPrefix).toHaveBeenCalledWith('/my-api/v1_beta')
+  })
+
+  it('rejects path traversal with ..', () => {
+    render(<ApiPrefixInput />)
+    const input = screen.getByTestId('prefix-input')
+    fireEvent.change(input, { target: { value: '/../etc/passwd' } })
+    fireEvent.blur(input)
+    expect(mockSetApiPrefix).not.toHaveBeenCalled()
+    expect(input).toHaveAttribute('value', '/v1')
+  })
+
+  it('rejects path traversal with .. in segments', () => {
+    render(<ApiPrefixInput />)
+    const input = screen.getByTestId('prefix-input')
+    fireEvent.change(input, { target: { value: '/api/../../secret' } })
+    fireEvent.blur(input)
+    expect(mockSetApiPrefix).not.toHaveBeenCalled()
+    expect(input).toHaveAttribute('value', '/v1')
+  })
+
+  it('rejects backslash path traversal', () => {
+    render(<ApiPrefixInput />)
+    const input = screen.getByTestId('prefix-input')
+    fireEvent.change(input, { target: { value: '/api\\..\\secret' } })
+    fireEvent.blur(input)
+    expect(mockSetApiPrefix).not.toHaveBeenCalled()
+    expect(input).toHaveAttribute('value', '/v1')
+  })
+
+  it('rejects prefix with special characters', () => {
+    render(<ApiPrefixInput />)
+    const input = screen.getByTestId('prefix-input')
+    fireEvent.change(input, { target: { value: '/api?<script>' } })
+    fireEvent.blur(input)
+    expect(mockSetApiPrefix).not.toHaveBeenCalled()
+    expect(input).toHaveAttribute('value', '/v1')
+  })
+
+  it('collapses multiple slashes', () => {
+    render(<ApiPrefixInput />)
+    const input = screen.getByTestId('prefix-input')
+    fireEvent.change(input, { target: { value: '//api///v1' } })
+    fireEvent.blur(input)
+    expect(mockSetApiPrefix).toHaveBeenCalledWith('/api/v1')
+  })
+
+  it('strips trailing slashes', () => {
+    render(<ApiPrefixInput />)
+    const input = screen.getByTestId('prefix-input')
+    fireEvent.change(input, { target: { value: '/api/v1/' } })
+    fireEvent.blur(input)
+    expect(mockSetApiPrefix).toHaveBeenCalledWith('/api/v1')
+  })
+
+  it('reverts to previous value on empty after trim', () => {
+    render(<ApiPrefixInput />)
+    const input = screen.getByTestId('prefix-input')
+    fireEvent.change(input, { target: { value: '   ' } })
+    fireEvent.blur(input)
+    expect(input).toHaveAttribute('value', '/v1')
+  })
 })

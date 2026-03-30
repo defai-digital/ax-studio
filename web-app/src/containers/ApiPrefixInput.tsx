@@ -3,6 +3,20 @@ import { useLocalApiServer } from '@/hooks/useLocalApiServer'
 import { cn } from '@/lib/utils'
 import { useState } from 'react'
 
+const PATH_TRAVERSAL_RE = /(?:\.\.|\/\.\.|\.(?=\/))/
+const VALID_PREFIX_RE = /^\/[a-zA-Z0-9_\-/]*$/
+
+function sanitizePrefix(raw: string): string {
+  let prefix = raw.trim().replace(/\\/g, '/')
+  if (!prefix.startsWith('/')) {
+    prefix = '/' + prefix
+  }
+  prefix = prefix.replace(/\/+/g, '/').replace(/\/+$/, '')
+  if (PATH_TRAVERSAL_RE.test(prefix)) return ''
+  if (!VALID_PREFIX_RE.test(prefix)) return ''
+  return prefix || '/'
+}
+
 export function ApiPrefixInput({
   isServerRunning,
 }: {
@@ -17,13 +31,13 @@ export function ApiPrefixInput({
   }
 
   const handleBlur = () => {
-    // Ensure prefix starts with a slash
-    let prefix = inputValue.trim()
-    if (!prefix.startsWith('/')) {
-      prefix = '/' + prefix
+    const prefix = sanitizePrefix(inputValue)
+    if (prefix) {
+      setApiPrefix(prefix)
+      setInputValue(prefix)
+    } else {
+      setInputValue(apiPrefix)
     }
-    setApiPrefix(prefix)
-    setInputValue(prefix)
   }
 
   return (
