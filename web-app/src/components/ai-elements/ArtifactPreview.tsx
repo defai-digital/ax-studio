@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
+import DOMPurify from 'dompurify'
 import { buildHarnessAsync, type ArtifactType } from '@/lib/artifact-harness'
 import { AlertCircleIcon, RefreshCw, Copy } from 'lucide-react'
 
@@ -21,11 +22,14 @@ interface ArtifactPreviewProps {
 // SVG — render inline (same as Mermaid), no iframe needed
 // ---------------------------------------------------------------------------
 function SvgPreview({ source }: { source: string }) {
+  const clean = useMemo(
+    () => DOMPurify.sanitize(source, { USE_PROFILES: { svg: true, svgFilters: true } }),
+    [source]
+  )
   return (
     <div
       className="w-full h-full min-h-[300px] flex items-center justify-center p-4 overflow-auto"
-      // biome-ignore lint/security/noDangerouslySetInnerHtml: trusted Claude-generated SVG
-      dangerouslySetInnerHTML={{ __html: source }}
+      dangerouslySetInnerHTML={{ __html: clean }}
     />
   )
 }
