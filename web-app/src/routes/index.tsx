@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router'
 import ChatInput from '@/containers/ChatInput'
 import HeaderPage from '@/containers/HeaderPage'
@@ -12,7 +11,7 @@ import { localStorageKey } from '@/constants/localStorage'
 import { SESSION_STORAGE_KEY } from '@/constants/chat'
 
 type SearchParams = {
-  'model'?: {
+  model?: {
     id: string
     provider: string
   }
@@ -50,7 +49,7 @@ import {
 import { useAgentTeamStore } from '@/stores/agent-team-store'
 import { motion } from 'motion/react'
 
-export const Route = createFileRoute(route.home as any)({
+export const Route = createFileRoute(route.home)({
   component: Index,
   validateSearch: (search: Record<string, unknown>): SearchParams => {
     const result: SearchParams = {
@@ -70,12 +69,48 @@ type SuggestedPrompt = {
 }
 
 const suggestedPrompts: SuggestedPrompt[] = [
-  { icon: Code2, label: 'Build REST API', prompt: 'Help me build a REST API with authentication and CRUD endpoints', tag: 'Code', color: 'indigo' },
-  { icon: PenTool, label: 'Write blog post', prompt: 'Write a blog post about the latest trends in AI technology', tag: 'Write', color: 'emerald' },
-  { icon: BarChart3, label: 'Analyze data', prompt: 'Analyze this dataset and provide insights with visualizations', tag: 'Analyze', color: 'cyan' },
-  { icon: Lightbulb, label: 'Brainstorm ideas', prompt: 'Brainstorm creative ideas for a new mobile app', tag: 'Ideate', color: 'amber' },
-  { icon: Bug, label: 'Debug code', prompt: 'Help me debug this code and find the root cause of the issue', tag: 'Debug', color: 'rose' },
-  { icon: Search, label: 'Research topic', prompt: 'Research and summarize the current state of quantum computing', tag: 'Research', color: 'violet' },
+  {
+    icon: Code2,
+    label: 'Build REST API',
+    prompt: 'Help me build a REST API with authentication and CRUD endpoints',
+    tag: 'Code',
+    color: 'indigo',
+  },
+  {
+    icon: PenTool,
+    label: 'Write blog post',
+    prompt: 'Write a blog post about the latest trends in AI technology',
+    tag: 'Write',
+    color: 'emerald',
+  },
+  {
+    icon: BarChart3,
+    label: 'Analyze data',
+    prompt: 'Analyze this dataset and provide insights with visualizations',
+    tag: 'Analyze',
+    color: 'cyan',
+  },
+  {
+    icon: Lightbulb,
+    label: 'Brainstorm ideas',
+    prompt: 'Brainstorm creative ideas for a new mobile app',
+    tag: 'Ideate',
+    color: 'amber',
+  },
+  {
+    icon: Bug,
+    label: 'Debug code',
+    prompt: 'Help me debug this code and find the root cause of the issue',
+    tag: 'Debug',
+    color: 'rose',
+  },
+  {
+    icon: Search,
+    label: 'Research topic',
+    prompt: 'Research and summarize the current state of quantum computing',
+    tag: 'Research',
+    color: 'violet',
+  },
 ]
 
 const capabilityBadges = [
@@ -96,8 +131,12 @@ const tagColorMap: Record<string, string> = {
 
 function Index() {
   const navigate = useNavigate()
-  const { providers, selectedModel: activeModel, selectedProvider } = useModelProvider()
-  const search = useSearch({ from: route.home as any })
+  const {
+    providers,
+    selectedModel: activeModel,
+    selectedProvider,
+  } = useModelProvider()
+  const search = useSearch({ from: route.home })
   const selectedModel = search.model
   const { setCurrentThreadId, createThread } = useThreads()
   const { globalDefaultPrompt } = useGeneralSetting()
@@ -113,7 +152,9 @@ function Index() {
   const agentTeamsLoaded = useAgentTeamStore((state) => state.isLoaded)
   const loadTeams = useAgentTeamStore((state) => state.loadTeams)
   const [selectedTeamId, setSelectedTeamId] = useState<string | undefined>(
-    () => sessionStorage.getItem(SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID) || undefined
+    () =>
+      sessionStorage.getItem(SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID) ||
+      undefined
   )
   const selectedTeam = agentTeams.find((t) => t.id === selectedTeamId)
 
@@ -125,11 +166,9 @@ function Index() {
 
   const promptResolution = useMemo(
     () =>
-      resolveSystemPrompt(
-        threadPromptDraft.trim() || null,
-        null,
-        { globalDefaultPrompt }
-      ),
+      resolveSystemPrompt(threadPromptDraft.trim() || null, null, {
+        globalDefaultPrompt,
+      }),
     [globalDefaultPrompt, threadPromptDraft]
   )
 
@@ -184,7 +223,10 @@ function Index() {
   // Persist selected team ID to sessionStorage so the new thread picks it up
   useEffect(() => {
     if (selectedTeamId) {
-      sessionStorage.setItem(SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID, selectedTeamId)
+      sessionStorage.setItem(
+        SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID,
+        selectedTeamId
+      )
     } else {
       sessionStorage.removeItem(SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID)
     }
@@ -263,7 +305,10 @@ function Index() {
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
           <div
             className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] opacity-[0.06] dark:opacity-[0.04]"
-            style={{ background: 'radial-gradient(ellipse, #6366f1 0%, transparent 70%)' }}
+            style={{
+              background:
+                'radial-gradient(ellipse, #6366f1 0%, transparent 70%)',
+            }}
           />
         </div>
 
@@ -273,11 +318,7 @@ function Index() {
             'flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col justify-center px-3 py-2 relative z-10'
           )}
         >
-          <div
-            className={cn(
-              'mx-auto w-full max-w-2xl min-w-0',
-            )}
-          >
+          <div className={cn('mx-auto w-full max-w-2xl min-w-0')}>
             {/* Hero section */}
             <div className="text-center mb-6">
               <motion.div
@@ -366,17 +407,20 @@ function Index() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 + i * 0.04, duration: 0.35 }}
                     onClick={() => {
-                      const input = document.querySelector<HTMLTextAreaElement>(
-                        '[data-chat-input]'
-                      )
+                      const input =
+                        document.querySelector<HTMLTextAreaElement>(
+                          '[data-chat-input]'
+                        )
                       if (input) {
                         const nativeInputValueSetter =
                           Object.getOwnPropertyDescriptor(
                             window.HTMLTextAreaElement.prototype,
-                            'value',
+                            'value'
                           )?.set
                         nativeInputValueSetter?.call(input, item.prompt)
-                        input.dispatchEvent(new Event('input', { bubbles: true }))
+                        input.dispatchEvent(
+                          new Event('input', { bubbles: true })
+                        )
                         input.focus()
                       }
                     }}
@@ -396,7 +440,8 @@ function Index() {
                         <span
                           className={cn(
                             'inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border font-medium',
-                            tagColorMap[item.color] ?? 'bg-muted text-muted-foreground',
+                            tagColorMap[item.color] ??
+                              'bg-muted text-muted-foreground'
                           )}
                         >
                           {item.tag}

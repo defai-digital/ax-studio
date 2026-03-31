@@ -392,8 +392,11 @@ function buildReactHarnessInline(
   <meta name="viewport" content="width=device-width, initial-scale=1">
   ${ERROR_REPORTER}
   <style>${BASE_STYLES} html,body{height:100%;background:#fff;color-scheme:light;} #root{min-height:100%;}</style>
+  {/* eslint-disable-next-line no-useless-escape */}
   <script>${tailwindJs}<\/script>
+  {/* eslint-disable-next-line no-useless-escape */}
   <script>${reactJs}<\/script>
+  {/* eslint-disable-next-line no-useless-escape */}
   <script>${reactDomJs}<\/script>
 </head>
 <body>

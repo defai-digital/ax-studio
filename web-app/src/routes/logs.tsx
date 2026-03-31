@@ -5,8 +5,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const Route = createFileRoute(route.appLogs as any)({
+export const Route = createFileRoute(route.appLogs)({
   component: LogsViewer,
 })
 

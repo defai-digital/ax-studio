@@ -50,8 +50,7 @@ function HubModelDetailContent() {
   const navigate = useNavigate()
   const { huggingfaceToken } = useGeneralSetting()
   const { sources, fetchSources } = useModelSources()
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const search = useSearch({ from: Route.id as any })
+  const search = useSearch({ from: Route.id })
 
   const getProviderByName = useModelProvider((state) => state.getProviderByName)
   const llamaProvider = getProviderByName('llamacpp')

@@ -33,7 +33,6 @@ import { SystemEvent } from '@/types/events'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-
 // Descriptions and setup hints for official MCP servers
 const OFFICIAL_SERVER_HINTS: Record<
   string,
@@ -101,8 +100,7 @@ const maskSensitiveUrl = (url: string) => {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const Route = createFileRoute(route.settings.mcp_servers as any)({
+export const Route = createFileRoute(route.settings.mcp_servers)({
   component: MCPServersDesktop,
 })
 
@@ -341,11 +339,15 @@ function MCPServersDesktop() {
               subtitle: t('mcp-servers:checkParams'),
             })
             // Show a user-visible toast so the error isn't silently swallowed
-            const errMsg = typeof error === 'string'
-              ? error
-              : error instanceof Error ? error.message : String(error)
+            const errMsg =
+              typeof error === 'string'
+                ? error
+                : error instanceof Error
+                  ? error.message
+                  : String(error)
             toast.error(`Failed to start MCP server "${serverKey}"`, {
-              description: errMsg.length > 300 ? errMsg.slice(0, 300) + '...' : errMsg,
+              description:
+                errMsg.length > 300 ? errMsg.slice(0, 300) + '...' : errMsg,
             })
           })
           .finally(() => {
@@ -388,9 +390,21 @@ function MCPServersDesktop() {
     <Fragment>
       <div className="flex flex-col h-svh w-full">
         <HeaderPage>
-          <div className={cn("flex items-center justify-between w-full mr-2 pr-3", !IS_MACOS && "pr-30")}>
-            <span className='font-medium text-base font-studio'>{t('common:settings')}</span>
-            <Button variant="outline" size="sm" onClick={() => handleOpenDialog()} className="relative z-50">
+          <div
+            className={cn(
+              'flex items-center justify-between w-full mr-2 pr-3',
+              !IS_MACOS && 'pr-30'
+            )}
+          >
+            <span className="font-medium text-base font-studio">
+              {t('common:settings')}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleOpenDialog()}
+              className="relative z-50"
+            >
               <IconPlus size={18} className="text-muted-foreground" />
               {t('mcp-servers:addServer')}
             </Button>
@@ -398,248 +412,262 @@ function MCPServersDesktop() {
         </HeaderPage>
         <div className="flex flex-1 min-h-0">
           <SettingsMenu />
-          <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+          <div
+            className="flex-1 overflow-y-auto"
+            style={{ scrollbarWidth: 'none' }}
+          >
             <div className="flex items-center gap-3 px-8 py-5 border-b border-border/40 bg-background sticky top-0 z-10">
-              <div className="size-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+              <div
+                className="size-7 rounded-lg flex items-center justify-center"
+                style={{
+                  background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                }}
+              >
                 <Wrench className="size-3.5 text-white" strokeWidth={2.5} />
               </div>
-              <h1 className="text-foreground tracking-tight" style={{ fontSize: '16px', fontWeight: 600 }}>
+              <h1
+                className="text-foreground tracking-tight"
+                style={{ fontSize: '16px', fontWeight: 600 }}
+              >
                 {t('common:mcp-servers')}
               </h1>
             </div>
             <div className="px-8 py-7">
               <div className="max-w-2xl space-y-6">
-              <Card
-                header={
-                  <div className="flex flex-col mb-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <h1 className="text-foreground font-medium text-base font-studio">
-                          {t('mcp-servers:title')}
-                        </h1>
-                        <div className="text-xs bg-secondary border text-muted-foreground rounded-full py-0.5 px-2">
-                          <span>{t('mcp-servers:experimental')}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-0.5">
-                        <Button
-                          onClick={() => handleOpenJsonEditor()}
-                          title={t('mcp-servers:editAllJson')}
-                          size="icon-xs"
-                          variant="ghost"
-                        >
-                          <IconCodeCircle
-                            size={18}
-                            className="text-muted-foreground"
-                          />
-                        </Button>
-                      </div>
-                    </div>
-                    <p className="text-sm mt-1">
-                      {t('mcp-servers:findMore')}{' '}
-                      <a
-                        href="https://mcp.so/"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline"
-                      >
-                        mcp.so
-                      </a>
-                    </p>
-                  </div>
-                }
-              >
-                <CardItem
-                  title={t('mcp-servers:allowPermissions')}
-                  description={t('mcp-servers:allowPermissionsDesc')}
-                  actions={
-                    <div className="shrink-0 ml-4">
-                      <Switch
-                        checked={allowAllMCPPermissions}
-                        onCheckedChange={setAllowAllMCPPermissions}
-                      />
-                    </div>
-                  }
-                />
-                <CardItem
-                  title={t('mcp-servers:runtimeSettings.toolCallTimeout')}
-                  description={t(
-                    'mcp-servers:runtimeSettings.toolCallTimeoutDesc'
-                  )}
-                  actions={
-                    <Input
-                      type="number"
-                      min={1}
-                      step={1}
-                      value={settings.toolCallTimeoutSeconds}
-                      onChange={(event) =>
-                        updateToolCallTimeout(event.target.value)
-                      }
-                      onBlur={() => {
-                        void syncServers()
-                      }}
-                      className="w-28"
-                    />
-                  }
-                />
-              </Card>
-
-              {Object.keys(mcpServers).length === 0 ? (
-                <div className="py-4 text-center font-medium text-muted-foreground">
-                  {t('mcp-servers:noServers')}
-                </div>
-              ) : (
-                Object.entries(mcpServers).map(([key, config], index) => (
-                  <Card key={`${key}-${index}`}>
-                    <CardItem
-                      align="start"
-                      title={
-                        <div className="flex items-center gap-x-2">
-                          <div
-                            className={twMerge(
-                              'size-2 rounded-full',
-                              connectedServers.includes(key)
-                                ? 'bg-green-600 dark:bg-green-600'
-                                : 'bg-secondary'
-                            )}
-                          />
-                          <h1 className="text-foreground text-base capitalize font-studio">
-                            {key}
+                <Card
+                  header={
+                    <div className="flex flex-col mb-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <h1 className="text-foreground font-medium text-base font-studio">
+                            {t('mcp-servers:title')}
                           </h1>
-                          {config.official && (
-                            <div className="flex items-center gap-1.5 px-2 py-0.5 text-xs bg-secondary border rounded-sm">
-                              <img
-                                src="/images/ax-studio-logo.png"
-                                alt="Ax-Studio"
-                                className="w-3 h-3 object-contain"
-                              />
-                              <span>Official</span>
-                            </div>
-                          )}
-                        </div>
-                      }
-                      descriptionOutside={
-                        <div className="text-sm text-muted-foreground">
-                          <div className="mb-1">
-                            Transport:{' '}
-                            <span className="uppercase">
-                              {config.type || 'stdio'}
-                            </span>
+                          <div className="text-xs bg-secondary border text-muted-foreground rounded-full py-0.5 px-2">
+                            <span>{t('mcp-servers:experimental')}</span>
                           </div>
-
-                          {config.type === 'stdio' || !config.type ? (
-                            <>
-                              <div>
-                                {t('mcp-servers:command')}: {config.command}
-                              </div>
-                              <div className="my-1 break-all">
-                                {t('mcp-servers:args')}:{' '}
-                                {config?.args?.join(', ')}
-                              </div>
-                              {config.env &&
-                                Object.keys(config.env).length > 0 && (
-                                  <div className="break-all">
-                                    {t('mcp-servers:env')}:{' '}
-                                    {Object.entries(config.env)
-                                      .map(([key]) => `${key}=******`)
-                                      .join(', ')}
-                                  </div>
-                                )}
-                              {OFFICIAL_SERVER_HINTS[key] && (
-                                <div className="mt-2 text-xs text-muted-foreground border-t border-border/40 pt-2">
-                                  <p className="mb-1">
-                                    {OFFICIAL_SERVER_HINTS[key].description}
-                                  </p>
-                                  <p className="mb-1 text-amber-500/80">
-                                    {OFFICIAL_SERVER_HINTS[key].hint}
-                                  </p>
-                                  {OFFICIAL_SERVER_HINTS[key].link && (
-                                    <a
-                                      href={OFFICIAL_SERVER_HINTS[key].link!.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-blue-500 hover:underline"
-                                    >
-                                      {OFFICIAL_SERVER_HINTS[key].link!.label} →
-                                    </a>
-                                  )}
-                                </div>
-                              )}
-                            </>
-                          ) : (
-                            <>
-                              <div className="break-all">
-                                URL: {maskSensitiveUrl(config.url || '')}
-                              </div>
-                              {config.headers &&
-                                Object.keys(config.headers).length > 0 && (
-                                  <div className="my-1 break-all">
-                                    Headers:{' '}
-                                    {Object.entries(config.headers)
-                                      .map(([key]) => `${key}=******`)
-                                      .join(', ')}
-                                  </div>
-                                )}
-                              {config.timeout && (
-                                <div>Timeout: {config.timeout}s</div>
-                              )}
-                            </>
-                          )}
                         </div>
-                      }
-                      actions={
+
                         <div className="flex items-center gap-0.5">
                           <Button
+                            onClick={() => handleOpenJsonEditor()}
+                            title={t('mcp-servers:editAllJson')}
                             size="icon-xs"
                             variant="ghost"
-                            onClick={() => handleOpenJsonEditor(key)}
-                            title={t('mcp-servers:editJson.title', {
-                              serverName: key,
-                            })}
                           >
                             <IconCodeCircle
                               size={18}
                               className="text-muted-foreground"
                             />
                           </Button>
-                          <Button
-                            size="icon-xs"
-                            variant="ghost"
-                            onClick={() => handleEdit(key)}
-                            title={t('mcp-servers:editServer')}
-                          >
-                            <IconPencil
-                              size={18}
-                              className="text-muted-foreground"
-                            />
-                          </Button>
-                          <Button
-                            size="icon-xs"
-                            variant="ghost"
-                            onClick={() => handleDeleteClick(key)}
-                            title={t('mcp-servers:deleteServer.title')}
-                          >
-                            <IconTrash
-                              size={18}
-                              className="text-muted-foreground"
-                            />
-                          </Button>
-                          <div className="ml-2">
-                            <Switch
-                              checked={config.active}
-                              loading={!!loadingServers[key]}
-                              onCheckedChange={(checked) =>
-                                toggleServer(key, checked)
-                              }
-                            />
-                          </div>
                         </div>
-                      }
-                    />
-                  </Card>
-                ))
-              )}
+                      </div>
+                      <p className="text-sm mt-1">
+                        {t('mcp-servers:findMore')}{' '}
+                        <a
+                          href="https://mcp.so/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          mcp.so
+                        </a>
+                      </p>
+                    </div>
+                  }
+                >
+                  <CardItem
+                    title={t('mcp-servers:allowPermissions')}
+                    description={t('mcp-servers:allowPermissionsDesc')}
+                    actions={
+                      <div className="shrink-0 ml-4">
+                        <Switch
+                          checked={allowAllMCPPermissions}
+                          onCheckedChange={setAllowAllMCPPermissions}
+                        />
+                      </div>
+                    }
+                  />
+                  <CardItem
+                    title={t('mcp-servers:runtimeSettings.toolCallTimeout')}
+                    description={t(
+                      'mcp-servers:runtimeSettings.toolCallTimeoutDesc'
+                    )}
+                    actions={
+                      <Input
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={settings.toolCallTimeoutSeconds}
+                        onChange={(event) =>
+                          updateToolCallTimeout(event.target.value)
+                        }
+                        onBlur={() => {
+                          void syncServers()
+                        }}
+                        className="w-28"
+                      />
+                    }
+                  />
+                </Card>
+
+                {Object.keys(mcpServers).length === 0 ? (
+                  <div className="py-4 text-center font-medium text-muted-foreground">
+                    {t('mcp-servers:noServers')}
+                  </div>
+                ) : (
+                  Object.entries(mcpServers).map(([key, config], index) => (
+                    <Card key={`${key}-${index}`}>
+                      <CardItem
+                        align="start"
+                        title={
+                          <div className="flex items-center gap-x-2">
+                            <div
+                              className={twMerge(
+                                'size-2 rounded-full',
+                                connectedServers.includes(key)
+                                  ? 'bg-green-600 dark:bg-green-600'
+                                  : 'bg-secondary'
+                              )}
+                            />
+                            <h1 className="text-foreground text-base capitalize font-studio">
+                              {key}
+                            </h1>
+                            {config.official && (
+                              <div className="flex items-center gap-1.5 px-2 py-0.5 text-xs bg-secondary border rounded-sm">
+                                <img
+                                  src="/images/ax-studio-logo.png"
+                                  alt="Ax-Studio"
+                                  className="w-3 h-3 object-contain"
+                                />
+                                <span>Official</span>
+                              </div>
+                            )}
+                          </div>
+                        }
+                        descriptionOutside={
+                          <div className="text-sm text-muted-foreground">
+                            <div className="mb-1">
+                              Transport:{' '}
+                              <span className="uppercase">
+                                {config.type || 'stdio'}
+                              </span>
+                            </div>
+
+                            {config.type === 'stdio' || !config.type ? (
+                              <>
+                                <div>
+                                  {t('mcp-servers:command')}: {config.command}
+                                </div>
+                                <div className="my-1 break-all">
+                                  {t('mcp-servers:args')}:{' '}
+                                  {config?.args?.join(', ')}
+                                </div>
+                                {config.env &&
+                                  Object.keys(config.env).length > 0 && (
+                                    <div className="break-all">
+                                      {t('mcp-servers:env')}:{' '}
+                                      {Object.entries(config.env)
+                                        .map(([key]) => `${key}=******`)
+                                        .join(', ')}
+                                    </div>
+                                  )}
+                                {OFFICIAL_SERVER_HINTS[key] && (
+                                  <div className="mt-2 text-xs text-muted-foreground border-t border-border/40 pt-2">
+                                    <p className="mb-1">
+                                      {OFFICIAL_SERVER_HINTS[key].description}
+                                    </p>
+                                    <p className="mb-1 text-amber-500/80">
+                                      {OFFICIAL_SERVER_HINTS[key].hint}
+                                    </p>
+                                    {OFFICIAL_SERVER_HINTS[key].link && (
+                                      <a
+                                        href={
+                                          OFFICIAL_SERVER_HINTS[key].link!.url
+                                        }
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-500 hover:underline"
+                                      >
+                                        {OFFICIAL_SERVER_HINTS[key].link!.label}{' '}
+                                        →
+                                      </a>
+                                    )}
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <div className="break-all">
+                                  URL: {maskSensitiveUrl(config.url || '')}
+                                </div>
+                                {config.headers &&
+                                  Object.keys(config.headers).length > 0 && (
+                                    <div className="my-1 break-all">
+                                      Headers:{' '}
+                                      {Object.entries(config.headers)
+                                        .map(([key]) => `${key}=******`)
+                                        .join(', ')}
+                                    </div>
+                                  )}
+                                {config.timeout && (
+                                  <div>Timeout: {config.timeout}s</div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        }
+                        actions={
+                          <div className="flex items-center gap-0.5">
+                            <Button
+                              size="icon-xs"
+                              variant="ghost"
+                              onClick={() => handleOpenJsonEditor(key)}
+                              title={t('mcp-servers:editJson.title', {
+                                serverName: key,
+                              })}
+                            >
+                              <IconCodeCircle
+                                size={18}
+                                className="text-muted-foreground"
+                              />
+                            </Button>
+                            <Button
+                              size="icon-xs"
+                              variant="ghost"
+                              onClick={() => handleEdit(key)}
+                              title={t('mcp-servers:editServer')}
+                            >
+                              <IconPencil
+                                size={18}
+                                className="text-muted-foreground"
+                              />
+                            </Button>
+                            <Button
+                              size="icon-xs"
+                              variant="ghost"
+                              onClick={() => handleDeleteClick(key)}
+                              title={t('mcp-servers:deleteServer.title')}
+                            >
+                              <IconTrash
+                                size={18}
+                                className="text-muted-foreground"
+                              />
+                            </Button>
+                            <div className="ml-2">
+                              <Switch
+                                checked={config.active}
+                                loading={!!loadingServers[key]}
+                                onCheckedChange={(checked) =>
+                                  toggleServer(key, checked)
+                                }
+                              />
+                            </div>
+                          </div>
+                        }
+                      />
+                    </Card>
+                  ))
+                )}
               </div>
             </div>
           </div>

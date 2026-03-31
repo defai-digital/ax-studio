@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import { useModelSources } from '@/hooks/useModelSources'
@@ -14,10 +13,7 @@ import {
 } from 'react'
 import { CardItem } from '@/containers/Card'
 import { extractModelName, extractDescription } from '@/lib/models'
-import {
-  IconDownload,
-  IconFileCode,
-} from '@tabler/icons-react'
+import { IconDownload, IconFileCode } from '@tabler/icons-react'
 import { Switch } from '@/components/ui/switch'
 import { ModelInfoHoverCard } from '@/containers/ModelInfoHoverCard'
 import {
@@ -61,7 +57,7 @@ type SearchParams = {
   repo: string
 }
 
-export const Route = createFileRoute(route.hub.index as any)({
+export const Route = createFileRoute(route.hub.index)({
   component: HubContent,
   validateSearch: (search: Record<string, unknown>): SearchParams => ({
     repo: search.repo as SearchParams['repo'],
@@ -98,20 +94,21 @@ function HubContent() {
 
   const [searchValue, setSearchValue] = useState('')
   const [sortSelected, setSortSelected] = useState('newest')
-  const [expandedModels, setExpandedModels] = useState<
-    Record<string, boolean>
-  >({})
+  const [expandedModels, setExpandedModels] = useState<Record<string, boolean>>(
+    {}
+  )
   const [isSearching, setIsSearching] = useState(false)
   const [activeFilter, setActiveFilter] = useState<FilterTag>('all')
-  const [huggingFaceRepo, setHuggingFaceRepo] =
-    useState<CatalogModel | null>(null)
+  const [huggingFaceRepo, setHuggingFaceRepo] = useState<CatalogModel | null>(
+    null
+  )
   const [modelSupportStatus, setModelSupportStatus] = useState<
     Record<string, 'RED' | 'YELLOW' | 'GREEN' | 'LOADING'>
   >({})
   const [isInitialLoad, setIsInitialLoad] = useState(true)
-  const addModelSourceTimeoutRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null)
+  const addModelSourceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  )
 
   const filters: {
     id: FilterTag
@@ -158,8 +155,7 @@ function HubContent() {
   }, [sortSelected, sources])
 
   // Filtered models (debounced search)
-  const [debouncedSearchValue, setDebouncedSearchValue] =
-    useState(searchValue)
+  const [debouncedSearchValue, setDebouncedSearchValue] = useState(searchValue)
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -199,9 +195,7 @@ function HubContent() {
         /^https?:\/\/[^/]+\//,
         ''
       )
-      filtered = fuse
-        .search(cleanedSearchValue)
-        .map((result) => result.item)
+      filtered = fuse.search(cleanedSearchValue).map((result) => result.item)
     }
     // Apply filter tags
     if (activeFilter === 'downloaded') {
@@ -384,10 +378,7 @@ function HubContent() {
               >
                 {t('hub:title') || 'Model Hub'}
               </h1>
-              <p
-                className="text-muted-foreground"
-                style={{ fontSize: '13px' }}
-              >
+              <p className="text-muted-foreground" style={{ fontSize: '13px' }}>
                 {t('hub:subtitle') ||
                   'Discover and download open-source AI models. Optimized for local inference.'}
               </p>
@@ -414,8 +405,7 @@ function HubContent() {
               </div>
               <input
                 placeholder={
-                  t('hub:searchPlaceholder') ||
-                  'Search models, developers...'
+                  t('hub:searchPlaceholder') || 'Search models, developers...'
                 }
                 value={searchValue}
                 onChange={handleSearchChange}
@@ -652,9 +642,7 @@ function HubContent() {
                                     : ''
                                 )}
                                 style={{ fontSize: '14px' }}
-                                title={
-                                  extractModelName(model.model_name) || ''
-                                }
+                                title={extractModelName(model.model_name) || ''}
                               >
                                 {extractModelName(model.model_name) || ''}
                               </h3>
@@ -723,8 +711,7 @@ function HubContent() {
                                   'ml-auto text-[10px] font-medium',
                                   compatStatus === 'GREEN' &&
                                     'text-emerald-500',
-                                  compatStatus === 'YELLOW' &&
-                                    'text-amber-500',
+                                  compatStatus === 'YELLOW' && 'text-amber-500',
                                   compatStatus === 'RED' && 'text-red-500'
                                 )}
                               >
@@ -764,9 +751,7 @@ function HubContent() {
                                 <button
                                   onClick={() => {
                                     if (defaultQuant) {
-                                      handleUseModel(
-                                        defaultQuant.model_id
-                                      )
+                                      handleUseModel(defaultQuant.model_id)
                                     }
                                   }}
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-[12px] font-medium shadow-sm transition-all hover:shadow-md"
@@ -809,9 +794,7 @@ function HubContent() {
                             onClick={(e) => e.stopPropagation()}
                           >
                             <Switch
-                              checked={
-                                !!expandedModels[model.model_name]
-                              }
+                              checked={!!expandedModels[model.model_name]}
                               onCheckedChange={() =>
                                 toggleModelExpansion(model.model_name)
                               }
@@ -860,12 +843,8 @@ function HubContent() {
                                         defaultModelQuantizations={
                                           DEFAULT_MODEL_QUANTIZATIONS
                                         }
-                                        modelSupportStatus={
-                                          modelSupportStatus
-                                        }
-                                        onCheckModelSupport={
-                                          checkModelSupport
-                                        }
+                                        modelSupportStatus={modelSupportStatus}
+                                        onCheckModelSupport={checkModelSupport}
                                       />
                                       <ModelDownloadAction
                                         variant={variant}

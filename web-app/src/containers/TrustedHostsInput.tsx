@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { cn } from '@/lib/utils'
 
-const HOSTNAME_RE = /^(?:(?:\d{1,3}\.){3}\d{1,3}|(?:[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])(?:\.(?:[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9]))*)(?::\d{1,5})?$/
+const HOSTNAME_RE = /^(?:(?:\d{1,3}\.){3}\d{1,3}|(?:[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])(?:\.(?:[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]))*)(?::\d{1,5})?$/
 
 function isValidHost(host: string): boolean {
   if (!host) return false

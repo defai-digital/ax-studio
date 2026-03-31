@@ -20,8 +20,16 @@ const mockProviders = [
     active: true,
     api_key: 'sk-test',
     models: [
-      { id: 'gpt-4o', displayName: 'GPT-4o', capabilities: ['tools', 'vision'] },
-      { id: 'gpt-4o-mini', displayName: 'GPT-4o Mini', capabilities: ['tools'] },
+      {
+        id: 'gpt-4o',
+        displayName: 'GPT-4o',
+        capabilities: ['tools', 'vision'],
+      },
+      {
+        id: 'gpt-4o-mini',
+        displayName: 'GPT-4o Mini',
+        capabilities: ['tools'],
+      },
     ],
     settings: [],
   },
@@ -30,13 +38,21 @@ const mockProviders = [
     active: true,
     api_key: 'sk-ant-test',
     models: [
-      { id: 'claude-3.5-sonnet', displayName: 'Claude 3.5 Sonnet', capabilities: ['tools', 'vision', 'reasoning'] },
+      {
+        id: 'claude-3.5-sonnet',
+        displayName: 'Claude 3.5 Sonnet',
+        capabilities: ['tools', 'vision', 'reasoning'],
+      },
     ],
     settings: [],
   },
 ]
 
-const mockSelectedModel = { id: 'gpt-4o', displayName: 'GPT-4o', capabilities: ['tools', 'vision'] }
+const mockSelectedModel = {
+  id: 'gpt-4o',
+  displayName: 'GPT-4o',
+  capabilities: ['tools', 'vision'],
+}
 
 // ── Mocks (before imports) ──────────────────────────
 
@@ -45,7 +61,8 @@ vi.mock('@/hooks/useModelProvider', () => ({
     providers: mockProviders,
     selectedProvider: 'openai',
     selectedModel: mockSelectedModel,
-    getProviderByName: (name: string) => mockProviders.find((p) => p.provider === name),
+    getProviderByName: (name: string) =>
+      mockProviders.find((p) => p.provider === name),
     selectModelProvider: mockSelectModelProvider,
     getModelBy: (id: string) => {
       for (const p of mockProviders) {
@@ -91,10 +108,7 @@ vi.mock('@/hooks/useFavoriteModel', () => ({
 }))
 
 vi.mock('@/constants/providers', () => ({
-  predefinedProviders: [
-    { provider: 'openai' },
-    { provider: 'anthropic' },
-  ],
+  predefinedProviders: [{ provider: 'openai' }, { provider: 'anthropic' }],
 }))
 
 vi.mock('@/utils/getModelToStart', () => ({
@@ -107,10 +121,18 @@ vi.mock('@/utils/highlight', () => ({
 
 // Mock UI components
 vi.mock('@/components/ui/popover', () => ({
-  Popover: ({ children, open }: any) => <div data-testid="popover" data-open={open}>{children}</div>,
-  PopoverTrigger: ({ children }: any) => <div data-testid="popover-trigger">{children}</div>,
+  Popover: ({ children, open }: any) => (
+    <div data-testid="popover" data-open={open}>
+      {children}
+    </div>
+  ),
+  PopoverTrigger: ({ children }: any) => (
+    <div data-testid="popover-trigger">{children}</div>
+  ),
   PopoverContent: ({ children, className }: any) => (
-    <div data-testid="popover-content" className={className}>{children}</div>
+    <div data-testid="popover-content" className={className}>
+      {children}
+    </div>
   ),
 }))
 
@@ -272,7 +294,10 @@ describe('DropdownModelProvider — Phase 4 Manual Test Protocol', () => {
       id: 'claude-3.5-sonnet',
       provider: 'anthropic',
     })
-    expect(mockSelectModelProvider).toHaveBeenCalledWith('anthropic', 'claude-3.5-sonnet')
+    expect(mockSelectModelProvider).toHaveBeenCalledWith(
+      'anthropic',
+      'claude-3.5-sonnet'
+    )
   })
 
   // Protocol #6: Favorites section — shows favorites at top with star icon
@@ -313,7 +338,9 @@ describe('DropdownModelProvider — Phase 4 Manual Test Protocol', () => {
     const content = screen.getByTestId('popover-content')
 
     // Find star toggle for claude-3.5-sonnet (not favorited)
-    const starToggle = content.querySelector('[data-testid="star-toggle-claude-3.5-sonnet"]')
+    const starToggle = content.querySelector(
+      '[data-testid="star-toggle-claude-3.5-sonnet"]'
+    )
     expect(starToggle).toBeInTheDocument()
 
     fireEvent.click(starToggle!)
@@ -328,7 +355,9 @@ describe('DropdownModelProvider — Phase 4 Manual Test Protocol', () => {
     render(<DropdownModelProvider />)
     const content = screen.getByTestId('popover-content')
 
-    const starToggle = content.querySelector('[data-testid="star-toggle-claude-3.5-sonnet"]')
+    const starToggle = content.querySelector(
+      '[data-testid="star-toggle-claude-3.5-sonnet"]'
+    )
     fireEvent.click(starToggle!)
 
     // toggleFavorite should be called but selectModelProvider should NOT
@@ -387,7 +416,7 @@ describe('DropdownModelProvider — Phase 4 Manual Test Protocol', () => {
     )
     fireEvent.click(manageButton!)
     expect(mockNavigate).toHaveBeenCalledWith(
-      expect.objectContaining({ to: '/settings/providers' })
+      expect.objectContaining({ to: '/settings/providers/' })
     )
   })
 
@@ -398,7 +427,10 @@ describe('DropdownModelProvider — Phase 4 Manual Test Protocol', () => {
 
     // Find Settings gear buttons — they have text-muted-foreground/30 class and are inside provider group headers
     const gearButtons = Array.from(content.querySelectorAll('button')).filter(
-      (b) => b.querySelector('svg') && b.className.includes('text-muted-foreground/30') && !b.getAttribute('data-testid')?.startsWith('star-toggle')
+      (b) =>
+        b.querySelector('svg') &&
+        b.className.includes('text-muted-foreground/30') &&
+        !b.getAttribute('data-testid')?.startsWith('star-toggle')
     )
     expect(gearButtons.length).toBeGreaterThanOrEqual(1)
 
@@ -414,14 +446,25 @@ describe('DropdownModelProvider — Phase 4 Manual Test Protocol', () => {
 
   // Protocol #12: Auto-detect — model prop auto-selects on mount
   it('auto-selects model when model prop is provided', () => {
-    render(<DropdownModelProvider model={{ id: 'gpt-4o', provider: 'openai' } as any} />)
+    render(
+      <DropdownModelProvider
+        model={{ id: 'gpt-4o', provider: 'openai' } as any}
+      />
+    )
     expect(mockSelectModelProvider).toHaveBeenCalledWith('openai', 'gpt-4o')
   })
 
   // Protocol #13: Thread-specific — model prop is independent per thread
   it('renders with model prop for thread-specific usage', () => {
-    render(<DropdownModelProvider model={{ id: 'claude-3.5-sonnet', provider: 'anthropic' } as any} />)
-    expect(mockSelectModelProvider).toHaveBeenCalledWith('anthropic', 'claude-3.5-sonnet')
+    render(
+      <DropdownModelProvider
+        model={{ id: 'claude-3.5-sonnet', provider: 'anthropic' } as any}
+      />
+    )
+    expect(mockSelectModelProvider).toHaveBeenCalledWith(
+      'anthropic',
+      'claude-3.5-sonnet'
+    )
   })
 
   // Protocol #14: Home page — works without model prop
@@ -470,8 +513,12 @@ describe('DropdownModelProvider — Phase 4 Manual Test Protocol', () => {
     render(<DropdownModelProvider />)
     const content = screen.getByTestId('popover-content')
     // gpt-4o is selected — its button should have bg-primary/5
-    const selectedItems = Array.from(content.querySelectorAll('div[title="gpt-4o"]'))
-    const hasSelectedClass = selectedItems.some((b) => b.className.includes('bg-primary/5'))
+    const selectedItems = Array.from(
+      content.querySelectorAll('div[title="gpt-4o"]')
+    )
+    const hasSelectedClass = selectedItems.some((b) =>
+      b.className.includes('bg-primary/5')
+    )
     expect(hasSelectedClass).toBe(true)
   })
 
