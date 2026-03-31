@@ -34,49 +34,49 @@ __metadata:
 
 "@ax-studio/core@file:../../core/package.tgz::locator=%40ax-studio%2Fassistant-extension%40workspace%3Aassistant-extension":
   version: 1.1.0
-  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=fe637f&locator=%40ax-studio%2Fassistant-extension%40workspace%3Aassistant-extension"
+  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=acf6ca&locator=%40ax-studio%2Fassistant-extension%40workspace%3Aassistant-extension"
   dependencies:
     rxjs: "npm:^7.8.1"
     ulidx: "npm:^2.3.0"
   peerDependencies:
     react: 19.0.0
-  checksum: 10c0/2becbbede4dc969d4406f9b028e9cac0d70a6ed9ced4a941616821fc98648dcdc03f0fb50371e99a05f0fff6a550c86f61bed10020b5cc2f026706fd90b36a4e
+  checksum: 10c0/96b8cf9b253a0bcd515017814fbce58f858637b6903dd0bc0be79ae7696862946bdbd2d5647008da9ee950b9e4a9f7df7f04608cf8f5c373af27768daea7a17e
   languageName: node
   linkType: hard
 
 "@ax-studio/core@file:../../core/package.tgz::locator=%40ax-studio%2Fconversational-extension%40workspace%3Aconversational-extension":
   version: 1.1.0
-  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=fe637f&locator=%40ax-studio%2Fconversational-extension%40workspace%3Aconversational-extension"
+  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=acf6ca&locator=%40ax-studio%2Fconversational-extension%40workspace%3Aconversational-extension"
   dependencies:
     rxjs: "npm:^7.8.1"
     ulidx: "npm:^2.3.0"
   peerDependencies:
     react: 19.0.0
-  checksum: 10c0/2becbbede4dc969d4406f9b028e9cac0d70a6ed9ced4a941616821fc98648dcdc03f0fb50371e99a05f0fff6a550c86f61bed10020b5cc2f026706fd90b36a4e
+  checksum: 10c0/96b8cf9b253a0bcd515017814fbce58f858637b6903dd0bc0be79ae7696862946bdbd2d5647008da9ee950b9e4a9f7df7f04608cf8f5c373af27768daea7a17e
   languageName: node
   linkType: hard
 
 "@ax-studio/core@file:../../core/package.tgz::locator=%40ax-studio%2Fdownload-extension%40workspace%3Adownload-extension":
   version: 1.1.0
-  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=fe637f&locator=%40ax-studio%2Fdownload-extension%40workspace%3Adownload-extension"
+  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=acf6ca&locator=%40ax-studio%2Fdownload-extension%40workspace%3Adownload-extension"
   dependencies:
     rxjs: "npm:^7.8.1"
     ulidx: "npm:^2.3.0"
   peerDependencies:
     react: 19.0.0
-  checksum: 10c0/2becbbede4dc969d4406f9b028e9cac0d70a6ed9ced4a941616821fc98648dcdc03f0fb50371e99a05f0fff6a550c86f61bed10020b5cc2f026706fd90b36a4e
+  checksum: 10c0/96b8cf9b253a0bcd515017814fbce58f858637b6903dd0bc0be79ae7696862946bdbd2d5647008da9ee950b9e4a9f7df7f04608cf8f5c373af27768daea7a17e
   languageName: node
   linkType: hard
 
 "@ax-studio/core@file:../../core/package.tgz::locator=%40ax-studio%2Fllamacpp-extension%40workspace%3Allamacpp-extension":
   version: 1.1.0
-  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=fe637f&locator=%40ax-studio%2Fllamacpp-extension%40workspace%3Allamacpp-extension"
+  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=acf6ca&locator=%40ax-studio%2Fllamacpp-extension%40workspace%3Allamacpp-extension"
   dependencies:
     rxjs: "npm:^7.8.1"
     ulidx: "npm:^2.3.0"
   peerDependencies:
     react: 19.0.0
-  checksum: 10c0/2becbbede4dc969d4406f9b028e9cac0d70a6ed9ced4a941616821fc98648dcdc03f0fb50371e99a05f0fff6a550c86f61bed10020b5cc2f026706fd90b36a4e
+  checksum: 10c0/96b8cf9b253a0bcd515017814fbce58f858637b6903dd0bc0be79ae7696862946bdbd2d5647008da9ee950b9e4a9f7df7f04608cf8f5c373af27768daea7a17e
   languageName: node
   linkType: hard
 

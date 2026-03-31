@@ -214,12 +214,13 @@ fn validate_request(
         if !host_header.is_empty() {
             if !is_valid_host(host_header, &config.trusted_hosts) {
                 let mut error_response = Response::builder().status(StatusCode::FORBIDDEN);
-                error_response = add_cors_headers_with_host_and_origin(
-                    error_response,
-                    host_header,
-                    origin_header,
-                    &config.trusted_hosts,
-                );
+            error_response = add_cors_headers_with_host_and_origin(
+                error_response,
+                host_header,
+                origin_header,
+                &config.trusted_hosts,
+                config.cors_enabled,
+            );
                 return Some(
                     error_response
                         .body(Body::from("Invalid host header"))
@@ -233,6 +234,7 @@ fn validate_request(
                 host_header,
                 origin_header,
                 &config.trusted_hosts,
+                config.cors_enabled,
             );
             return Some(
                 error_response
@@ -276,6 +278,7 @@ fn validate_request(
                 host_header,
                 origin_header,
                 &config.trusted_hosts,
+                config.cors_enabled,
             );
             return Some(
                 error_response
@@ -289,12 +292,13 @@ fn validate_request(
 
     if path == "/configs" || path.starts_with("/configs/") || path.starts_with("/configs?") {
         let mut error_response = Response::builder().status(StatusCode::NOT_FOUND);
-        error_response = add_cors_headers_with_host_and_origin(
-            error_response,
-            host_header,
-            origin_header,
-            &config.trusted_hosts,
-        );
+            error_response = add_cors_headers_with_host_and_origin(
+                error_response,
+                host_header,
+                origin_header,
+                &config.trusted_hosts,
+                config.cors_enabled,
+            );
         return Some(error_response.body(Body::from("Not Found")).unwrap());
     }
 
