@@ -12,7 +12,6 @@ use tauri::{command, AppHandle};
 pub async fn check_for_app_updates(
     app: AppHandle,
     nonce_seed: String,
-    current_version: String,
 ) -> Result<Option<UpdateInfo>, String> {
     // Get endpoints from tauri config
     let endpoints = get_updater_endpoints(&app);
@@ -22,6 +21,8 @@ pub async fn check_for_app_updates(
     }
 
     let updater = CustomUpdater::new().map_err(|e| e.to_string())?;
+
+    let current_version = app.package_info().version.to_string();
 
     let update_info = updater
         .check_for_updates(endpoints, &nonce_seed, &current_version)

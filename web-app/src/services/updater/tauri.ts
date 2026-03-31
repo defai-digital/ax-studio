@@ -1,6 +1,6 @@
 /**
  * Tauri Updater Service - Desktop implementation
- * 
+ *
  * This service uses a custom update check with HMAC request signing:
  * 1. First tries primary endpoint (from tauri.conf.json) with signed request
  * 2. Falls back to other endpoints without signing if primary fails
@@ -39,18 +39,21 @@ async function getNonceSeed(): Promise<string> {
     try {
       const store = await load(STORE_NAME, { autoSave: true, defaults: {} })
       let nonceSeed = await store.get<string>(NONCE_SEED_KEY)
-      
+
       if (!nonceSeed) {
         nonceSeed = crypto.randomUUID()
         await store.set(NONCE_SEED_KEY, nonceSeed)
         await store.save()
       }
-      
+
       cachedNonceSeed = nonceSeed
       return nonceSeed
     } catch (error) {
       // Fallback to random seed if store fails
-      console.warn('Failed to access store for nonce seed, using temporary seed:', error)
+      console.warn(
+        'Failed to access store for nonce seed, using temporary seed:',
+        error
+      )
       const tempSeed = crypto.randomUUID()
       cachedNonceSeed = tempSeed
       return tempSeed
@@ -63,16 +66,6 @@ async function getNonceSeed(): Promise<string> {
   return nonceSeedPromise
 }
 
-// Get current app version
-async function getCurrentVersion(): Promise<string> {
-  try {
-    const { getVersion } = await import('@tauri-apps/api/app')
-    return await getVersion()
-  } catch {
-    return '0.0.0'
-  }
-}
-
 export class TauriUpdaterService extends DefaultUpdaterService {
   /**
    * Check for updates using custom signed request for primary endpoint
@@ -81,7 +74,6 @@ export class TauriUpdaterService extends DefaultUpdaterService {
   async check(): Promise<UpdateInfo | null> {
     try {
       const nonceSeed = await getNonceSeed()
-      const currentVersion = await getCurrentVersion()
 
       // Try custom updater with request signing first
       try {
@@ -93,7 +85,6 @@ export class TauriUpdaterService extends DefaultUpdaterService {
           signature?: string
         } | null>('check_for_app_updates', {
           nonceSeed,
-          currentVersion,
         })
 
         if (customUpdate) {
@@ -106,12 +97,15 @@ export class TauriUpdaterService extends DefaultUpdaterService {
           }
         }
       } catch (customError) {
-        console.warn('Custom updater check failed, falling back to standard Tauri updater:', customError)
+        console.warn(
+          'Custom updater check failed, falling back to standard Tauri updater:',
+          customError
+        )
       }
 
       // Fallback to standard Tauri updater (uses tauri.conf.json endpoints)
       const update: Update | null = await check()
-      
+
       if (!update) return null
 
       return {
@@ -162,4 +156,3 @@ export class TauriUpdaterService extends DefaultUpdaterService {
     }
   }
 }
-
