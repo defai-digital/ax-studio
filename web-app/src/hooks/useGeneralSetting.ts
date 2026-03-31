@@ -23,7 +23,7 @@ type GeneralSettingState = {
 }
 
 // Custom storage that encrypts/decrypts sensitive fields
-const encryptedStorage: any = {
+const encryptedStorage = {
   getItem: (name: string) => {
     const item = localStorage.getItem(name)
     if (!item) return null
@@ -39,14 +39,17 @@ const encryptedStorage: any = {
       return null
     }
   },
-  setItem: (name: string, value: any) => {
+  setItem: (name: string, value: unknown) => {
     try {
-      const valueToStore = { ...value }
+      const valueToStore =
+        value && typeof value === 'object' ? { ...value } : value
       // Encrypt huggingfaceToken if it exists
-      if (valueToStore.state?.huggingfaceToken) {
-        valueToStore.state.huggingfaceToken = encrypt(
-          valueToStore.state.huggingfaceToken
-        )
+      const state = (valueToStore as Record<string, unknown>)?.state as Record<
+        string,
+        unknown
+      >
+      if (state?.huggingfaceToken) {
+        state.huggingfaceToken = encrypt(state.huggingfaceToken as string)
       }
       localStorage.setItem(name, JSON.stringify(valueToStore))
     } catch {
