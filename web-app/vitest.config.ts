@@ -19,6 +19,7 @@ export default defineConfig({
         'src/**/*.test.ts',
         'src/**/*.test.tsx',
         'src/test/**/*',
+        'public/vendor/**',
       ],
       thresholds: {
         // Global safety-net thresholds — per-module gates are in testing/module-thresholds.json
