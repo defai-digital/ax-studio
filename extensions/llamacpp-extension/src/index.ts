@@ -1736,10 +1736,13 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         expected
       )
       if (result !== undefined) return Boolean(result)
-      // If not available, skip validation
-      return true
-    } catch {
-      return true
+      // If not available, validation cannot proceed - this is a security error
+      throw new Error(
+        'SHA256 validation API unavailable - cannot verify file integrity'
+      )
+    } catch (error) {
+      // Never treat validation failure as success
+      throw new Error(`SHA256 validation failed: ${error}`)
     }
   }
 }
