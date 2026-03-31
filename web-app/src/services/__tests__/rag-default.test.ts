@@ -74,7 +74,7 @@ describe('DefaultRAGService', () => {
           },
         ],
       })
-      service.setServiceHub(hub)
+      service.setMcpService(hub.mcp())
 
       const result = await service.parseDocument('/tmp/doc.pdf')
       expect(result).toBe('Extracted document content here')
@@ -85,7 +85,7 @@ describe('DefaultRAGService', () => {
         error: 'file not found',
         content: [],
       })
-      service.setServiceHub(hub)
+      service.setMcpService(hub.mcp())
 
       const result = await service.parseDocument('/tmp/missing.pdf')
       expect(result).toBe('')
@@ -96,7 +96,7 @@ describe('DefaultRAGService', () => {
         error: '',
         content: [{ text: 'Plain text content directly' }],
       })
-      service.setServiceHub(hub)
+      service.setMcpService(hub.mcp())
 
       const result = await service.parseDocument('/tmp/doc.txt')
       expect(result).toBe('Plain text content directly')
@@ -123,9 +123,7 @@ describe('DefaultRAGService', () => {
           },
         ],
       })
-      service.setServiceHub({
-        mcp: () => ({ callTool: mockCallTool }),
-      } as unknown as ServiceHub)
+      service.setMcpService({ callTool: mockCallTool })
 
       const result = await service.callTool({
         toolName: 'retrieve',
@@ -144,7 +142,7 @@ describe('DefaultRAGService', () => {
             top_k: 5,
             mode: 'hybrid',
           }),
-        }),
+        })
       )
 
       const payload = JSON.parse(result.content[0].text)
@@ -159,9 +157,7 @@ describe('DefaultRAGService', () => {
         error: '',
         content: [{ text: JSON.stringify({ results: [] }) }],
       })
-      service.setServiceHub({
-        mcp: () => ({ callTool: mockCallTool }),
-      } as unknown as ServiceHub)
+      service.setMcpService({ callTool: mockCallTool })
 
       await service.callTool({
         toolName: 'retrieve',
@@ -175,12 +171,12 @@ describe('DefaultRAGService', () => {
           arguments: expect.objectContaining({
             collection_id: 'project_proj-1',
           }),
-        }),
+        })
       )
     })
 
     it('returns error when query is empty', async () => {
-      service.setServiceHub(makeServiceHub({ error: '', content: [] }))
+      service.setMcpService(makeServiceHub({ error: '', content: [] }).mcp())
       const result = await service.callTool({
         toolName: 'retrieve',
         arguments: {},
@@ -191,7 +187,7 @@ describe('DefaultRAGService', () => {
     })
 
     it('returns error when no thread/project context', async () => {
-      service.setServiceHub(makeServiceHub({ error: '', content: [] }))
+      service.setMcpService(makeServiceHub({ error: '', content: [] }).mcp())
       const result = await service.callTool({
         toolName: 'retrieve',
         arguments: { query: 'test' },

@@ -10,7 +10,6 @@
 
 import type { RAGService } from './types'
 import type { MCPTool, MCPToolCallResult } from '@ax-studio/core'
-import type { ServiceHub } from '@/services'
 import {
   useFileRegistry,
   threadCollectionId,
@@ -97,10 +96,10 @@ function fail(message: string): MCPToolCallResult {
 }
 
 export class DefaultRAGService implements RAGService {
-  private serviceHub: ServiceHub | null = null
+  private mcpService: any = null
 
-  setServiceHub(hub: ServiceHub): void {
-    this.serviceHub = hub
+  setMcpService(mcp: any): void {
+    this.mcpService = mcp
   }
 
   // ── Tool definitions ──────────────────────────────────────────────────
@@ -137,7 +136,7 @@ export class DefaultRAGService implements RAGService {
   // ── Document parsing (inline mode) ────────────────────────────────────
 
   async parseDocument(path: string, _type?: string): Promise<string> {
-    const hub = this.serviceHub
+    const hub = this.mcpService
     if (!hub) {
       console.warn('[RAG] parseDocument: ServiceHub not available')
       return ''
@@ -145,7 +144,7 @@ export class DefaultRAGService implements RAGService {
 
     console.log('[RAG] parseDocument: calling fabric_extract for', path)
     try {
-      const result = await hub.mcp().callTool({
+      const result = await hub.callTool({
         toolName: 'fabric_extract',
         arguments: { file_path: path },
       })
@@ -167,7 +166,11 @@ export class DefaultRAGService implements RAGService {
         console.log('[RAG] parseDocument success:', content.length, 'chars')
         return content
       } catch {
-        console.log('[RAG] parseDocument success (plain text):', text.length, 'chars')
+        console.log(
+          '[RAG] parseDocument success (plain text):',
+          text.length,
+          'chars'
+        )
         return text
       }
     } catch (err) {
@@ -198,7 +201,7 @@ export class DefaultRAGService implements RAGService {
     projectId?: string
     scope: 'project' | 'thread'
   }): Promise<MCPToolCallResult> {
-    const hub = this.serviceHub
+    const hub = this.mcpService
     if (!hub) return fail('Service hub not available')
 
     const collectionId = this.resolveCollectionId(args)
@@ -228,7 +231,7 @@ export class DefaultRAGService implements RAGService {
         }
       }
 
-      const result = await hub.mcp().callTool({
+      const result = await hub.callTool({
         toolName: 'fabric_search',
         arguments: searchArgs,
       })
@@ -270,7 +273,7 @@ export class DefaultRAGService implements RAGService {
       })
     } catch (err) {
       return fail(
-        `Retrieve error: ${err instanceof Error ? err.message : String(err)}`,
+        `Retrieve error: ${err instanceof Error ? err.message : String(err)}`
       )
     }
   }
@@ -306,7 +309,7 @@ export class DefaultRAGService implements RAGService {
     projectId?: string
     scope: 'project' | 'thread'
   }): Promise<MCPToolCallResult> {
-    const hub = this.serviceHub
+    const hub = this.mcpService
     if (!hub) return fail('Service hub not available')
 
     const collectionId = this.resolveCollectionId(args)
@@ -319,7 +322,7 @@ export class DefaultRAGService implements RAGService {
     if (!fileId) return fail('file_id is required')
 
     try {
-      const result = await hub.mcp().callTool({
+      const result = await hub.callTool({
         toolName: 'fabric_search',
         arguments: {
           query: '',
@@ -339,7 +342,12 @@ export class DefaultRAGService implements RAGService {
       try {
         parsed = JSON.parse(text)
       } catch {
-        return ok({ thread_id: args.threadId, scope: args.scope, file_id: fileId, chunks: [] })
+        return ok({
+          thread_id: args.threadId,
+          scope: args.scope,
+          file_id: fileId,
+          chunks: [],
+        })
       }
 
       const chunks = (parsed.results ?? []).map((r) => ({
@@ -358,7 +366,7 @@ export class DefaultRAGService implements RAGService {
       })
     } catch (err) {
       return fail(
-        `get_chunks error: ${err instanceof Error ? err.message : String(err)}`,
+        `get_chunks error: ${err instanceof Error ? err.message : String(err)}`
       )
     }
   }
