@@ -135,7 +135,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
 
   // ─── Chat session ─────────────────────────────────────────────────────────
   // Ref holds persistMessageOnFinish to break the useChat ↔ useThreadChat circular dep
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const persistMessageOnFinishRef = useRef<
     ((msg: UIMessage, parts: any[]) => void) | null
   >(null)

@@ -131,7 +131,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
   },
   deleteThread: (threadId) => {
     set((state) => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+       
       const { [threadId]: _, ...remainingThreads } = state.threads
 
       getServiceHub().threads().deleteThread(threadId).catch(console.error)

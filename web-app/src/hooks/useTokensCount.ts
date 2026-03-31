@@ -15,7 +15,7 @@ export interface TokenCountData {
 
 export const useTokensCount = (
   messages: ThreadMessage[] = [],
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   _uploadedFiles?: Array<{
     name: string
     type: string

@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 import { create } from 'zustand'
 import type { Chat, UIMessage } from '@ai-sdk/react'
 import type { ChatStatus } from 'ai'

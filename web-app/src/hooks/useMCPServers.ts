@@ -74,7 +74,7 @@ export const useMCPServers = create<MCPServerStoreState>()((set, get) => ({
   addServer: (key, config) =>
     set((state) => {
       // Remove the key first if it exists to maintain insertion order
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+       
       const { [key]: _, ...restServers } = state.mcpServers
       const mcpServers = { [key]: config, ...restServers }
       return { mcpServers }

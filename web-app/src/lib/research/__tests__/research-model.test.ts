@@ -13,7 +13,9 @@ vi.mock('@/lib/model-factory', () => ({
   },
 }))
 
+// @ts-ignore
 import { useModelProvider } from '@/hooks/useModelProvider'
+// @ts-ignore
 import { ModelFactory } from '@/lib/model-factory'
 import { buildResearchModel } from '../research-model'
 
