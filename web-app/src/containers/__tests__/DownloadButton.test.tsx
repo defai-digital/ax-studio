@@ -87,6 +87,8 @@ vi.mock('@/components/ui/progress', () => ({
 vi.mock('lucide-react', () => ({
   ExternalLink: () => <span data-testid="external-link-icon" />,
   Download: () => <span data-testid="download-icon" />,
+  Pause: () => <span data-testid="pause-icon" />,
+  Play: () => <span data-testid="play-icon" />,
 }))
 
 import { DownloadButtonPlaceholder } from '../DownloadButton'
@@ -99,7 +101,11 @@ describe('DownloadButtonPlaceholder', () => {
     downloads: 100,
     developer: 'test-dev',
     quants: [
-      { model_id: 'test-model-q4_k_m', path: '/path/to/model', file_size: '4GB' },
+      {
+        model_id: 'test-model-q4_k_m',
+        path: '/path/to/model',
+        file_size: '4GB',
+      },
     ],
   }
 
@@ -120,10 +126,7 @@ describe('DownloadButtonPlaceholder', () => {
     )
 
     const link = screen.getByText('HuggingFace').closest('a')
-    expect(link).toHaveAttribute(
-      'href',
-      'https://huggingface.co/test-model'
-    )
+    expect(link).toHaveAttribute('href', 'https://huggingface.co/test-model')
     expect(link).toHaveAttribute('target', '_blank')
   })
 
@@ -289,8 +292,6 @@ describe('DownloadButtonPlaceholder', () => {
     )
 
     fireEvent.click(screen.getByText('hub:download'))
-    expect(mockAddLocalDownloadingModel).toHaveBeenCalledWith(
-      'test-model-fp16'
-    )
+    expect(mockAddLocalDownloadingModel).toHaveBeenCalledWith('test-model-fp16')
   })
 })
