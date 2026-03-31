@@ -27,7 +27,7 @@ async function ensureAkidbAvailable(mcp: any): Promise<void> {
   try {
     const tools = await mcp.getTools()
     mcpAvailable = tools.some(
-      (t) => t.name === 'fabric_ingest_run' || t.name === 'fabric_search'
+      (t: any) => t.name === 'fabric_ingest_run' || t.name === 'fabric_search'
     )
     mcpAvailabilityChecked = true
   } catch {
