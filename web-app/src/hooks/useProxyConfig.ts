@@ -17,6 +17,7 @@ const encryptedStorage = {
       ),
     }
   },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setItem: (name: string, value: any) => {
     const encrypted = {
       ...value,
