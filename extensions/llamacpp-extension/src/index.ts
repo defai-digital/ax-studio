@@ -163,13 +163,17 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       versionBackend,
       this.autoUpdateEngine,
       (key: string, value: string) => this._updateSettingValue(key, value)
-    ).catch(e => console.error('[llamacpp] Background backend config failed:', e))
+    ).catch((e) =>
+      console.error('[llamacpp] Background backend config failed:', e)
+    )
 
     this.registerEngine()
   }
 
   override async onUnload(): Promise<void> {
-    const loadedModels = await this.getLoadedModels().catch(() => [] as string[])
+    const loadedModels = await this.getLoadedModels().catch(
+      () => [] as string[]
+    )
     for (const modelId of loadedModels) {
       await this.unload(modelId).catch(() => {})
     }
@@ -185,7 +189,9 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     await this._syncLocalProviderRegistration()
 
     for (const off of this.cleanupListeners) {
-      try { off() } catch {}
+      try {
+        off()
+      } catch {}
     }
     this.cleanupListeners = []
   }
@@ -207,15 +213,32 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     const isLinux = IS_LINUX
 
     switch (key) {
-      case 'auto_unload':       this.autoUnload = Boolean(v); break
-      case 'auto_update_engine':this.autoUpdateEngine = Boolean(v); break
-      case 'timeout':           this.timeout = Number(v) || 600; break
-      case 'mirostat':          this.mirostat = Number(v) || 0; break
-      case 'mirostat_lr':       this.mirostatLr = Number(v) || 0.1; break
-      case 'mirostat_ent':      this.mirostatEnt = Number(v) || 5.0; break
-      case 'grammar_file':      this.grammarFile = String(v ?? ''); break
-      case 'json_schema_file':  this.jsonSchemaFile = String(v ?? ''); break
-      default: break
+      case 'auto_unload':
+        this.autoUnload = Boolean(v)
+        break
+      case 'auto_update_engine':
+        this.autoUpdateEngine = Boolean(v)
+        break
+      case 'timeout':
+        this.timeout = Number(v) || 600
+        break
+      case 'mirostat':
+        this.mirostat = Number(v) || 0
+        break
+      case 'mirostat_lr':
+        this.mirostatLr = Number(v) || 0.1
+        break
+      case 'mirostat_ent':
+        this.mirostatEnt = Number(v) || 5.0
+        break
+      case 'grammar_file':
+        this.grammarFile = String(v ?? '')
+        break
+      case 'json_schema_file':
+        this.jsonSchemaFile = String(v ?? '')
+        break
+      default:
+        break
     }
 
     // Build LlamacppConfig fields from each setting
@@ -225,39 +248,105 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     const str = (x: any, def = '') => (x == null || x === '' ? def : String(x))
 
     switch (key) {
-      case 'version_backend':       cfg.version_backend = str(v); break
-      case 'auto_update_engine':    cfg.auto_update_engine = bool(v); break
-      case 'auto_unload':           cfg.auto_unload = bool(v); break
-      case 'timeout':               cfg.timeout = num(v, 600); break
-      case 'llamacpp_env':          cfg.llamacpp_env = str(v); break
-      case 'fit':                   cfg.fit = bool(v); break
-      case 'fit_target':            cfg.fit_target = str(v, '1024'); break
-      case 'fit_ctx':               cfg.fit_ctx = str(v, '4096'); break
-      case 'ctx_size':              cfg.ctx_size = num(v, 0); break
-      case 'threads':               cfg.threads = num(v, -1); break
-      case 'threads_batch':         cfg.threads_batch = num(v, -1); break
-      case 'n_predict':             cfg.n_predict = num(v, -1); break
-      case 'ubatch_size':           cfg.ubatch_size = num(v, 512); break
-      case 'device':                cfg.device = str(v); break
-      case 'split_mode':            cfg.split_mode = str(v, 'layer'); break
-      case 'main_gpu':              cfg.main_gpu = num(v, 0); break
-      case 'n_gpu_layers':          cfg.n_gpu_layers = num(v, -1); break
-      case 'flash_attn':            cfg.flash_attn = str(v, 'auto'); break
-      case 'cont_batching':         cfg.cont_batching = bool(v); break
-      case 'no_mmap':               cfg.no_mmap = bool(v); break
-      case 'mlock':                 cfg.mlock = bool(v); break
-      case 'no_kv_offload':         cfg.no_kv_offload = bool(v); break
-      case 'cache_type_k':          cfg.cache_type_k = str(v, 'f16'); break
-      case 'cache_type_v':          cfg.cache_type_v = str(v, 'f16'); break
-      case 'defrag_thold':          cfg.defrag_thold = num(v, 0.1); break
-      case 'rope_scaling':          cfg.rope_scaling = str(v, 'none'); break
-      case 'rope_scale':            cfg.rope_scale = num(v, 1.0); break
-      case 'rope_freq_base':        cfg.rope_freq_base = num(v, 0); break
-      case 'rope_freq_scale':       cfg.rope_freq_scale = num(v, 1.0); break
-      case 'ctx_shift':             cfg.ctx_shift = bool(v); break
-      case 'offload_mmproj':        cfg.offload_mmproj = bool(v); break
-      case 'cpu_moe':               cfg.cpu_moe = bool(v); break
-      case 'n_cpu_moe':             cfg.n_cpu_moe = num(v, 0); break
+      case 'version_backend':
+        cfg.version_backend = str(v)
+        break
+      case 'auto_update_engine':
+        cfg.auto_update_engine = bool(v)
+        break
+      case 'auto_unload':
+        cfg.auto_unload = bool(v)
+        break
+      case 'timeout':
+        cfg.timeout = num(v, 600)
+        break
+      case 'llamacpp_env':
+        cfg.llamacpp_env = str(v)
+        break
+      case 'fit':
+        cfg.fit = bool(v)
+        break
+      case 'fit_target':
+        cfg.fit_target = str(v, '1024')
+        break
+      case 'fit_ctx':
+        cfg.fit_ctx = str(v, '4096')
+        break
+      case 'ctx_size':
+        cfg.ctx_size = num(v, 0)
+        break
+      case 'threads':
+        cfg.threads = num(v, -1)
+        break
+      case 'threads_batch':
+        cfg.threads_batch = num(v, -1)
+        break
+      case 'n_predict':
+        cfg.n_predict = num(v, -1)
+        break
+      case 'ubatch_size':
+        cfg.ubatch_size = num(v, 512)
+        break
+      case 'device':
+        cfg.device = str(v)
+        break
+      case 'split_mode':
+        cfg.split_mode = str(v, 'layer')
+        break
+      case 'main_gpu':
+        cfg.main_gpu = num(v, 0)
+        break
+      case 'n_gpu_layers':
+        cfg.n_gpu_layers = num(v, -1)
+        break
+      case 'flash_attn':
+        cfg.flash_attn = str(v, 'auto')
+        break
+      case 'cont_batching':
+        cfg.cont_batching = bool(v)
+        break
+      case 'no_mmap':
+        cfg.no_mmap = bool(v)
+        break
+      case 'mlock':
+        cfg.mlock = bool(v)
+        break
+      case 'no_kv_offload':
+        cfg.no_kv_offload = bool(v)
+        break
+      case 'cache_type_k':
+        cfg.cache_type_k = str(v, 'f16')
+        break
+      case 'cache_type_v':
+        cfg.cache_type_v = str(v, 'f16')
+        break
+      case 'defrag_thold':
+        cfg.defrag_thold = num(v, 0.1)
+        break
+      case 'rope_scaling':
+        cfg.rope_scaling = str(v, 'none')
+        break
+      case 'rope_scale':
+        cfg.rope_scale = num(v, 1.0)
+        break
+      case 'rope_freq_base':
+        cfg.rope_freq_base = num(v, 0)
+        break
+      case 'rope_freq_scale':
+        cfg.rope_freq_scale = num(v, 1.0)
+        break
+      case 'ctx_shift':
+        cfg.ctx_shift = bool(v)
+        break
+      case 'offload_mmproj':
+        cfg.offload_mmproj = bool(v)
+        break
+      case 'cpu_moe':
+        cfg.cpu_moe = bool(v)
+        break
+      case 'n_cpu_moe':
+        cfg.n_cpu_moe = num(v, 0)
+        break
       case 'engine_type': {
         const prev = cfg.engine_type
         cfg.engine_type = str(v, 'llamacpp')
@@ -273,9 +362,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
   /** Persist a setting value update to localStorage */
   private async _updateSettingValue(key: string, value: string): Promise<void> {
-    await this.updateSettings([
-      { key, controllerProps: { value } as any },
-    ])
+    await this.updateSettings([{ key, controllerProps: { value } as any }])
   }
 
   // ─── Model directory helpers ───────────────────────────────────────────────
@@ -303,19 +390,26 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       const parsed = parseSimpleYaml(content)
       return {
         model_path: String(parsed.model_path ?? ''),
-        mmproj_path: parsed.mmproj_path ? String(parsed.mmproj_path) : undefined,
+        mmproj_path: parsed.mmproj_path
+          ? String(parsed.mmproj_path)
+          : undefined,
         name: String(parsed.name ?? modelId),
         size_bytes: Number(parsed.size_bytes ?? 0),
         embedding: Boolean(parsed.embedding),
         sha256: parsed.sha256 ? String(parsed.sha256) : undefined,
-        mmproj_sha256: parsed.mmproj_sha256 ? String(parsed.mmproj_sha256) : undefined,
+        mmproj_sha256: parsed.mmproj_sha256
+          ? String(parsed.mmproj_sha256)
+          : undefined,
       }
     } catch {
       return null
     }
   }
 
-  private async _writeModelConfig(modelId: string, cfg: ModelConfig): Promise<void> {
+  private async _writeModelConfig(
+    modelId: string,
+    cfg: ModelConfig
+  ): Promise<void> {
     const dir = await this._modelDir(modelId)
     if (!(await fs.existsSync(dir))) await fs.mkdir(dir)
     const ymlPath = await this._modelYmlPath(modelId)
@@ -343,7 +437,9 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
       // Ensure modelsDir ends with separator for reliable prefix stripping
       const sep = modelsDir.includes('\\') ? '\\' : '/'
-      const modelsDirPrefix = modelsDir.endsWith(sep) ? modelsDir : modelsDir + sep
+      const modelsDirPrefix = modelsDir.endsWith(sep)
+        ? modelsDir
+        : modelsDir + sep
 
       // DFS to discover model directories (handles nested IDs like "author/model")
       // readdirSync returns full absolute paths from the Rust backend
@@ -401,6 +497,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   // ─── get() ────────────────────────────────────────────────────────────────
 
   async get(modelId: string): Promise<modelInfo | undefined> {
+    this._validateModelId(modelId)
     const cfg = await this._readModelConfig(modelId)
     if (!cfg) return undefined
     const engineName = ENGINE
@@ -424,11 +521,17 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     isEmbedding?: boolean,
     bypassAutoUnload?: boolean
   ): Promise<SessionInfo> {
+    this._validateModelId(modelId)
     // Deduplicate concurrent load calls for the same model
     const existing = this.loadingModels.get(modelId)
     if (existing) return existing
 
-    const loadPromise = this._doLoad(modelId, overrideSettings, isEmbedding, bypassAutoUnload)
+    const loadPromise = this._doLoad(
+      modelId,
+      overrideSettings,
+      isEmbedding,
+      bypassAutoUnload
+    )
     this.loadingModels.set(modelId, loadPromise)
 
     try {
@@ -471,9 +574,17 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         }
       }
 
-      return await this._doLoadLlamacpp(modelId, cfg, overrideSettings, isEmbedding)
+      return await this._doLoadLlamacpp(
+        modelId,
+        cfg,
+        overrideSettings,
+        isEmbedding
+      )
     } catch (e: any) {
-      events.emit(ModelEvent.OnModelFail, { modelId, error: e?.message ?? String(e) })
+      events.emit(ModelEvent.OnModelFail, {
+        modelId,
+        error: e?.message ?? String(e),
+      })
       throw e
     }
   }
@@ -493,6 +604,11 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     const appData = await getAppDataFolderPath()
     const modelPath = await joinPath([appData, cfg.model_path])
 
+    // Security: Prevent path traversal from tampered model.yml
+    if (!modelPath.startsWith(appData + '/models')) {
+      throw new Error(`Model path traversal detected: ${modelPath}`)
+    }
+
     if (!(await fs.existsSync(modelPath))) {
       throw new Error(`Model file not found: ${modelPath}`)
     }
@@ -501,8 +617,14 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     let mmprojPath: string | undefined
     if (cfg.mmproj_path) {
       mmprojPath = await joinPath([appData, cfg.mmproj_path])
+      // Security: Prevent path traversal
+      if (!mmprojPath.startsWith(appData + '/models')) {
+        throw new Error(`Mmproj path traversal detected: ${mmprojPath}`)
+      }
       if (!(await fs.existsSync(mmprojPath))) {
-        console.warn(`[llamacpp] mmproj file not found: ${mmprojPath}, loading without vision`)
+        console.warn(
+          `[llamacpp] mmproj file not found: ${mmprojPath}, loading without vision`
+        )
         mmprojPath = undefined
       }
     }
@@ -525,19 +647,24 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     }
 
     // Load model via ax-serving REST API
-    const loadRes = await fetch(`http://127.0.0.1:${this.axServingPort}/v1/models`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(loadBody),
-      signal: AbortSignal.timeout(this.timeout * 1000),
-    })
+    const loadRes = await fetch(
+      `http://127.0.0.1:${this.axServingPort}/v1/models`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(loadBody),
+        signal: AbortSignal.timeout(this.timeout * 1000),
+      }
+    )
 
     if (loadRes.status === 409) {
       // Model already loaded — this is fine
       console.log(`[llamacpp] ax-serving: model "${modelId}" already loaded`)
     } else if (!loadRes.ok) {
       const errText = await loadRes.text()
-      throw new Error(`ax-serving failed to load model (${loadRes.status}): ${errText}`)
+      throw new Error(
+        `ax-serving failed to load model (${loadRes.status}): ${errText}`
+      )
     } else {
       const loadData = await loadRes.json()
       console.log(
@@ -576,13 +703,18 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     // Check if already running and healthy
     if (this.axServingPid > 0) {
       try {
-        const res = await fetch(`http://127.0.0.1:${this.axServingPort}/health`, {
-          signal: AbortSignal.timeout(3000),
-        })
+        const res = await fetch(
+          `http://127.0.0.1:${this.axServingPort}/health`,
+          {
+            signal: AbortSignal.timeout(3000),
+          }
+        )
         if (res.ok) return
       } catch {}
       // Not responding — kill the old process tree before restarting
-      console.warn('[llamacpp] ax-serving not responding, killing old process and restarting')
+      console.warn(
+        '[llamacpp] ax-serving not responding, killing old process and restarting'
+      )
       const oldPid = this.axServingPid
       this.axServingPid = 0
       this.axServingPort = 0
@@ -613,12 +745,16 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     const binaryPath = await getAxServingBinaryPath()
     const port = await getRandomPort()
 
-    console.log(`[llamacpp] Starting ax-serving at ${binaryPath} on port ${port}`)
+    console.log(
+      `[llamacpp] Starting ax-serving at ${binaryPath} on port ${port}`
+    )
     const session = await startAxServing(binaryPath, port, this.timeout)
 
     this.axServingPort = session.port
     this.axServingPid = session.pid
-    console.log(`[llamacpp] ax-serving started (PID=${session.pid}, port=${session.port})`)
+    console.log(
+      `[llamacpp] ax-serving started (PID=${session.pid}, port=${session.port})`
+    )
   }
 
   private async _syncLocalProviderRegistration(preferred?: {
@@ -628,9 +764,8 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   }) {
     const llamacppModels = await getLoadedModels().catch(() => [] as string[])
     const axServingModels = Array.from(this.axServingSessions.keys())
-    const firstAxServingSession = this.axServingSessions.values().next().value as
-      | SessionInfo
-      | undefined
+    const firstAxServingSession = this.axServingSessions.values().next()
+      .value as SessionInfo | undefined
     const loadedModels = [...new Set([...llamacppModels, ...axServingModels])]
     const fallbackSession =
       llamacppModels.length > 0
@@ -648,15 +783,22 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
     if (decision.action === 'unregister') {
       try {
-        await invoke('unregister_provider_config', { provider: this.providerId })
+        await invoke('unregister_provider_config', {
+          provider: this.providerId,
+        })
       } catch (err) {
-        console.warn('[llamacpp] Failed to unregister provider from proxy:', err)
+        console.warn(
+          '[llamacpp] Failed to unregister provider from proxy:',
+          err
+        )
       }
       return
     }
 
     if (decision.action === 'skip') {
-      console.warn('[llamacpp] Skipping provider sync because no active port is available')
+      console.warn(
+        '[llamacpp] Skipping provider sync because no active port is available'
+      )
       return
     }
 
@@ -698,7 +840,9 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     // Resolve backend binary
     const versionBackend = await this.getSetting<string>('version_backend', '')
     if (!versionBackend) {
-      throw new Error('No backend selected. Please configure the engine backend in settings.')
+      throw new Error(
+        'No backend selected. Please configure the engine backend in settings.'
+      )
     }
     const [version, ...rest] = versionBackend.split('/')
     const backend = rest.join('/')
@@ -707,9 +851,19 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     // Resolve absolute paths
     const appData = await getAppDataFolderPath()
     const modelPath = await joinPath([appData, cfg.model_path])
+
+    // Security: Prevent path traversal
+    if (!modelPath.startsWith(appData + '/models')) {
+      throw new Error(`Model path traversal detected: ${modelPath}`)
+    }
+
     const mmprojPath = cfg.mmproj_path
       ? await joinPath([appData, cfg.mmproj_path])
       : undefined
+
+    if (mmprojPath && !mmprojPath.startsWith(appData + '/models')) {
+      throw new Error(`Mmproj path traversal detected: ${mmprojPath}`)
+    }
 
     // Verify model file exists
     if (!(await fs.existsSync(modelPath))) {
@@ -724,7 +878,10 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     // Merge global config with per-model override settings
     // Per-model settings (ctx_size, n_gpu_layers, etc.) take precedence
     // Force engine_type to 'llamacpp' — this method always runs llama-server
-    const mergedConfig: Partial<LlamacppConfig> = { ...this.config, engine_type: 'llamacpp' }
+    const mergedConfig: Partial<LlamacppConfig> = {
+      ...this.config,
+      engine_type: 'llamacpp',
+    }
     if (overrideSettings) {
       for (const [key, value] of Object.entries(overrideSettings)) {
         if (value !== undefined && value !== '' && value !== null) {
@@ -778,7 +935,10 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   }
 
   /** Ensure backend binary is present, downloading if necessary */
-  private async _ensureBackend(version: string, backend: string): Promise<string> {
+  private async _ensureBackend(
+    version: string,
+    backend: string
+  ): Promise<string> {
     const key = `${version}_${backend}`
 
     // Coalesce concurrent download requests for the same backend
@@ -788,9 +948,11 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     const exePath = await getBackendExePath(version, backend)
     if (!(await fs.existsSync(exePath))) {
       if (!this.pendingDownloads.has(key)) {
-        const downloadPromise = downloadBackend(version, backend).finally(() => {
-          this.pendingDownloads.delete(key)
-        })
+        const downloadPromise = downloadBackend(version, backend).finally(
+          () => {
+            this.pendingDownloads.delete(key)
+          }
+        )
         this.pendingDownloads.set(key, downloadPromise)
       }
       await this.pendingDownloads.get(key)
@@ -836,7 +998,10 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
   /** Unload all active text models except the one about to be loaded */
   private async _unloadActiveTextModels(excludeModelId: string): Promise<void> {
-    await this._unloadLoadedModels(excludeModelId, (session) => !session.is_embedding)
+    await this._unloadLoadedModels(
+      excludeModelId,
+      (session) => !session.is_embedding
+    )
   }
 
   /**
@@ -845,7 +1010,9 @@ export default class AxStudioLlamacppExtension extends AIEngine {
    * because onSettingUpdate is synchronous.
    */
   private _handleEngineSwitch(from: string, to: string): void {
-    console.log(`[llamacpp] Engine switch: ${from} → ${to}, unloading active text models`)
+    console.log(
+      `[llamacpp] Engine switch: ${from} → ${to}, unloading active text models`
+    )
 
     const doSwitch = async () => {
       // 1. Unload all active models so provider routing cannot point at mixed engines.
@@ -855,7 +1022,9 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       if (from === 'ax-serving' && this.axServingPid > 0) {
         try {
           await unloadLlamaModel(this.axServingPid)
-          console.log('[llamacpp] ax-serving process stopped after engine switch')
+          console.log(
+            '[llamacpp] ax-serving process stopped after engine switch'
+          )
         } catch (e) {
           console.warn('[llamacpp] Failed to stop ax-serving process:', e)
         }
@@ -888,7 +1057,9 @@ export default class AxStudioLlamacppExtension extends AIEngine {
           )
           if (!res.ok && res.status !== 404) {
             const errText = await res.text()
-            console.warn(`[llamacpp] ax-serving unload warning (${res.status}): ${errText}`)
+            console.warn(
+              `[llamacpp] ax-serving unload warning (${res.status}): ${errText}`
+            )
           }
         } catch (e) {
           console.warn('[llamacpp] ax-serving unload HTTP error:', e)
@@ -940,7 +1111,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     }
 
     const headers: Record<string, string> = {
-      Authorization: `Bearer ${session.api_key}`,
+      'Authorization': `Bearer ${session.api_key}`,
       'Content-Type': 'application/json',
     }
 
@@ -954,7 +1125,9 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         signal: abortController?.signal,
       })
       if (!response.ok) {
-        throw new Error(`llama-server error ${response.status}: ${await response.text()}`)
+        throw new Error(
+          `llama-server error ${response.status}: ${await response.text()}`
+        )
       }
       const completion = (await response.json()) as chatCompletion
       const reason = completion.choices?.[0]?.finish_reason
@@ -984,7 +1157,9 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     })
 
     if (!response.ok) {
-      throw new Error(`llama-server error ${response.status}: ${await response.text()}`)
+      throw new Error(
+        `llama-server error ${response.status}: ${await response.text()}`
+      )
     }
 
     const reader = response.body!.getReader()
@@ -1042,7 +1217,11 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   }
 
   /** Health check — verify the inference server is alive */
-  private async _healthCheck(port: number, pid: number, modelId: string): Promise<void> {
+  private async _healthCheck(
+    port: number,
+    pid: number,
+    modelId: string
+  ): Promise<void> {
     const isAxServing = this.axServingSessions.has(modelId)
 
     if (isAxServing) {
@@ -1056,10 +1235,15 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         }
         const health = await res.json()
         // Check if our model is still loaded (may have been evicted by LRU/idle)
-        if (Array.isArray(health.loaded_models) && !health.loaded_models.includes(modelId)) {
+        if (
+          Array.isArray(health.loaded_models) &&
+          !health.loaded_models.includes(modelId)
+        ) {
           this.axServingSessions.delete(modelId)
           await this._syncLocalProviderRegistration()
-          throw new Error(`Model "${modelId}" was evicted by ax-serving. Please reload.`)
+          throw new Error(
+            `Model "${modelId}" was evicted by ax-serving. Please reload.`
+          )
         }
       } catch (e: any) {
         if (e?.message?.includes('evicted')) throw e
@@ -1069,7 +1253,9 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         this.axServingPort = 0
         this.axServingSessions.clear()
         await this._syncLocalProviderRegistration()
-        throw new Error(`ax-serving is not responding. Please reload the model.`)
+        throw new Error(
+          `ax-serving is not responding. Please reload the model.`
+        )
       }
       return
     }
@@ -1078,7 +1264,9 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     const alive = await isProcessRunning(pid)
     if (!alive) {
       await this.unload(modelId).catch(() => {})
-      throw new Error(`Model "${modelId}" process crashed. Please reload the model.`)
+      throw new Error(
+        `Model "${modelId}" process crashed. Please reload the model.`
+      )
     }
 
     try {
@@ -1090,7 +1278,11 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         throw new Error(`Model "${modelId}" server unavailable. Please reload.`)
       }
     } catch (e: any) {
-      if (e?.message?.includes('crashed') || e?.message?.includes('unavailable')) throw e
+      if (
+        e?.message?.includes('crashed') ||
+        e?.message?.includes('unavailable')
+      )
+        throw e
       // Timeout or network error — the server may still be initializing, continue
     }
   }
@@ -1100,7 +1292,9 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   async import(modelId: string, opts: ImportOptions): Promise<void> {
     // Validate model ID — no path traversal
     if (!/^[a-zA-Z0-9/\-_.]+$/.test(modelId) || modelId.includes('..')) {
-      throw new Error(`Invalid model ID: "${modelId}". Use only alphanumeric, /, -, _, . characters.`)
+      throw new Error(
+        `Invalid model ID: "${modelId}". Use only alphanumeric, /, -, _, . characters.`
+      )
     }
 
     const appData = await getAppDataFolderPath()
@@ -1119,7 +1313,10 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     if (modelPath.startsWith('http://') || modelPath.startsWith('https://')) {
       if (!downloadExt) throw new Error('Download extension not available')
 
-      events.emit(DownloadEvent.onFileDownloadStarted, { modelId, fileName: 'model.gguf' })
+      events.emit(DownloadEvent.onFileDownloadStarted, {
+        modelId,
+        fileName: 'model.gguf',
+      })
 
       const proxy = getProxyConfig()
       const proxyArg = buildProxyArg(proxy)
@@ -1141,23 +1338,40 @@ export default class AxStudioLlamacppExtension extends AIEngine {
           }
         )
       } catch (e) {
-        try { await fs.rm(modelFilePath) } catch {}
-        events.emit(DownloadEvent.onFileDownloadError, { modelId, error: String(e) })
+        try {
+          await fs.rm(modelFilePath)
+        } catch {}
+        events.emit(DownloadEvent.onFileDownloadError, {
+          modelId,
+          error: String(e),
+        })
         throw e
       }
 
-      events.emit(DownloadEvent.onFileDownloadSuccess, { modelId, fileName: 'model.gguf' })
+      events.emit(DownloadEvent.onFileDownloadSuccess, {
+        modelId,
+        fileName: 'model.gguf',
+      })
 
       // Validate SHA256 if provided
       if (opts.modelSha256) {
         events.emit(DownloadEvent.onModelValidationStarted, { modelId })
-        const valid = await this._validateSha256(modelFilePath, opts.modelSha256)
+        const valid = await this._validateSha256(
+          modelFilePath,
+          opts.modelSha256
+        )
         if (!valid) {
-          try { await fs.rm(modelFilePath) } catch {}
+          try {
+            await fs.rm(modelFilePath)
+          } catch {}
           events.emit(DownloadEvent.onModelValidationFailed, { modelId })
-          throw new Error(`SHA256 mismatch for model "${modelId}". File may be corrupted.`)
+          throw new Error(
+            `SHA256 mismatch for model "${modelId}". File may be corrupted.`
+          )
         }
-        events.emit(DownloadEvent.onFileDownloadAndVerificationSuccess, { modelId })
+        events.emit(DownloadEvent.onFileDownloadAndVerificationSuccess, {
+          modelId,
+        })
       }
     } else {
       // Local file — copy to models directory
@@ -1232,9 +1446,20 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     } catch {}
   }
 
+  // ─── helpers ─────────────────────────────────────────────────────────────
+
+  private _validateModelId(modelId: string): void {
+    if (!/^[a-zA-Z0-9/\-_.]+$/.test(modelId) || modelId.includes('..')) {
+      throw new Error(
+        `Invalid model ID: "${modelId}". Use only alphanumeric, /, -, _, . characters.`
+      )
+    }
+  }
+
   // ─── delete() / update() ──────────────────────────────────────────────────
 
   async delete(modelId: string): Promise<void> {
+    this._validateModelId(modelId)
     // Unload first if running (check both engines)
     try {
       if (this.axServingSessions.has(modelId)) {
@@ -1252,6 +1477,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   }
 
   async update(modelId: string, model: Partial<modelInfo>): Promise<void> {
+    this._validateModelId(modelId)
     const cfg = await this._readModelConfig(modelId)
     if (!cfg) return
     if (model.name) cfg.name = model.name
@@ -1304,6 +1530,8 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       if (!cfg) return false
       const appData = await getAppDataFolderPath()
       const modelPath = await joinPath([appData, cfg.model_path])
+      // Security: Prevent path traversal
+      if (!modelPath.startsWith(appData + '/models')) return false
       const meta: GgufMetadata = await readGgufMetadata(modelPath)
       const template = meta.metadata?.['tokenizer.chat_template'] ?? ''
       return template.toLowerCase().includes('tool')
@@ -1318,6 +1546,8 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       if (!cfg || !cfg.mmproj_path) return false
       const appData = await getAppDataFolderPath()
       const mmprojPath = await joinPath([appData, cfg.mmproj_path])
+      // Security: Prevent path traversal
+      if (!mmprojPath.startsWith(appData + '/models')) return false
       return await fs.existsSync(mmprojPath)
     } catch {
       return false
@@ -1328,7 +1558,10 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
   async getDevices(): Promise<DeviceList[]> {
     try {
-      const versionBackend = await this.getSetting<string>('version_backend', '')
+      const versionBackend = await this.getSetting<string>(
+        'version_backend',
+        ''
+      )
       if (!versionBackend) return []
       const [version, ...rest] = versionBackend.split('/')
       const backend = rest.join('/')
@@ -1359,19 +1592,23 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     const batchResults = []
 
     for (const batch of batches) {
-      const res = await fetch(`http://localhost:${session.port}/v1/embeddings`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.api_key}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          input: batch.inputs,
-          model: modelId,
-          encoding_format: 'float',
-        }),
-      })
-      if (!res.ok) throw new Error(`Embedding error: ${res.status} ${await res.text()}`)
+      const res = await fetch(
+        `http://localhost:${session.port}/v1/embeddings`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.api_key}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            input: batch.inputs,
+            model: modelId,
+            encoding_format: 'float',
+          }),
+        }
+      )
+      if (!res.ok)
+        throw new Error(`Embedding error: ${res.status} ${await res.text()}`)
       batchResults.push(await res.json())
     }
 
@@ -1387,7 +1624,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
     const baseUrl = `http://localhost:${session.port}`
     const headers = {
-      Authorization: `Bearer ${session.api_key}`,
+      'Authorization': `Bearer ${session.api_key}`,
       'Content-Type': 'application/json',
     }
 
@@ -1401,7 +1638,8 @@ export default class AxStudioLlamacppExtension extends AIEngine {
           chat_template_kwargs: { enable_thinking: false },
         }),
       })
-      if (!templateRes.ok) throw new Error(`apply-template ${templateRes.status}`)
+      if (!templateRes.ok)
+        throw new Error(`apply-template ${templateRes.status}`)
       const { prompt } = await templateRes.json()
 
       // Tokenize
@@ -1429,11 +1667,16 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     return getModelSize(path)
   }
 
-  async isModelSupported(path: string, ctxSize?: number): Promise<'GREEN' | 'YELLOW' | 'RED'> {
+  async isModelSupported(
+    path: string,
+    ctxSize?: number
+  ): Promise<'GREEN' | 'YELLOW' | 'RED'> {
     return isModelSupported(path, ctxSize)
   }
 
-  async validateGgufFile(path: string): Promise<{ isValid: boolean; error?: string; metadata?: GgufMetadata }> {
+  async validateGgufFile(
+    path: string
+  ): Promise<{ isValid: boolean; error?: string; metadata?: GgufMetadata }> {
     try {
       const metadata = await readGgufMetadata(path)
       return {
@@ -1456,7 +1699,9 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     return checkForBackendUpdate(versionBackend, remoteBackends)
   }
 
-  async updateBackend(targetVersionBackend: string): Promise<{ wasUpdated: boolean; newBackend: string }> {
+  async updateBackend(
+    targetVersionBackend: string
+  ): Promise<{ wasUpdated: boolean; newBackend: string }> {
     const current = await this.getSetting<string>('version_backend', '')
     const result = await updateBackend(targetVersionBackend, current)
     if (result.wasUpdated) {
@@ -1480,10 +1725,16 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
   // ─── SHA256 validation ────────────────────────────────────────────────────
 
-  private async _validateSha256(filePath: string, expected: string): Promise<boolean> {
+  private async _validateSha256(
+    filePath: string,
+    expected: string
+  ): Promise<boolean> {
     try {
       // Use the core API if available (Tauri backend provides this)
-      const result = await (window as any).core?.api?.validateSha256?.(filePath, expected)
+      const result = await (window as any).core?.api?.validateSha256?.(
+        filePath,
+        expected
+      )
       if (result !== undefined) return Boolean(result)
       // If not available, skip validation
       return true
