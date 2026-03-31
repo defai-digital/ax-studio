@@ -1,6 +1,34 @@
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
+import { persist } from 'zustand/middleware'
+import { AES, enc } from 'crypto-js'
 import { localStorageKey } from '@/constants/localStorage'
+
+const ENCRYPTION_KEY = 'ax-studio-secure-proxy-key'
+
+const encryptedStorage = {
+  getItem: (name: string) => {
+    const item = localStorage.getItem(name)
+    if (!item) return null
+    const parsed = JSON.parse(item)
+    return {
+      ...parsed,
+      proxyPassword: AES.decrypt(parsed.proxyPassword, ENCRYPTION_KEY).toString(
+        enc.Utf8
+      ),
+    }
+  },
+  setItem: (name: string, value: any) => {
+    const encrypted = {
+      ...value,
+      proxyPassword: AES.encrypt(
+        value.proxyPassword || '',
+        ENCRYPTION_KEY
+      ).toString(),
+    }
+    localStorage.setItem(name, JSON.stringify(encrypted))
+  },
+  removeItem: (name: string) => localStorage.removeItem(name),
+}
 
 type ProxyConfigState = {
   proxyEnabled: boolean
@@ -53,7 +81,7 @@ export const useProxyConfig = create<ProxyConfigState>()(
     }),
     {
       name: localStorageKey.settingProxyConfig,
-      storage: createJSONStorage(() => localStorage),
+      storage: encryptedStorage,
     }
   )
 )

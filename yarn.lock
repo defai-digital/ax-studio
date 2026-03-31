@@ -1326,6 +1326,7 @@ __metadata:
     "@testing-library/jest-dom": "npm:6.8.0"
     "@testing-library/react": "npm:16.3.0"
     "@testing-library/user-event": "npm:14.6.1"
+    "@types/crypto-js": "npm:^4"
     "@types/culori": "npm:2.1.1"
     "@types/dompurify": "npm:^3.2.0"
     "@types/istanbul-lib-report": "npm:3.0.3"
@@ -1346,6 +1347,7 @@ __metadata:
     class-variance-authority: "npm:^0.7.1"
     clsx: "npm:2.1.1"
     cmdk: "npm:^1.1.1"
+    crypto-js: "npm:^4.2.0"
     culori: "npm:4.0.1"
     dompurify: "npm:^3.3.3"
     emoji-picker-react: "npm:4.12.2"
@@ -8626,6 +8628,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/crypto-js@npm:^4":
+  version: 4.2.2
+  resolution: "@types/crypto-js@npm:4.2.2"
+  checksum: 10c0/760a2078f36f2a3a1089ef367b0d13229876adcf4bcd6e8824d00d9e9bfad8118dc7e6a3cc66322b083535e12be3a29044ccdc9603bfb12519ff61551a3322c6
+  languageName: node
+  linkType: hard
+
 "@types/culori@npm:2.1.1":
   version: 2.1.1
   resolution: "@types/culori@npm:2.1.1"
@@ -11377,6 +11386,13 @@ __metadata:
     randombytes: "npm:^2.1.0"
     randomfill: "npm:^1.0.4"
   checksum: 10c0/184a2def7b16628e79841243232ab5497f18d8e158ac21b7ce90ab172427d0a892a561280adc08f9d4d517bce8db2a5b335dc21abb970f787f8e874bd7b9db7d
+  languageName: node
+  linkType: hard
+
+"crypto-js@npm:^4.2.0":
+  version: 4.2.0
+  resolution: "crypto-js@npm:4.2.0"
+  checksum: 10c0/8fbdf9d56f47aea0794ab87b0eb9833baf80b01a7c5c1b0edc7faf25f662fb69ab18dc2199e2afcac54670ff0cd9607a9045a3f7a80336cccd18d77a55b9fdf0
   languageName: node
   linkType: hard
 
