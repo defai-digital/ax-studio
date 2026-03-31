@@ -3,7 +3,7 @@ use crate::core::app::commands::get_app_data_folder_path;
 use crate::core::updater::hmac_client::SignedRequestHeaders;
 use crate::core::updater::session::get_session_id;
 use ax_studio_utils::normalize_path;
-use futures_util::StreamExt;
+use futures_util::{future::join_all, StreamExt};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use std::collections::HashMap;
 use std::path::Path;
@@ -397,14 +397,27 @@ pub async fn _download_files_internal(
 
     let header_map = _convert_headers(headers).map_err(err_to_string)?;
 
-    // Calculate sizes for each file
+    // Calculate sizes for each file concurrently
+    let size_futures = items
+        .iter()
+        .map(|item| {
+            let item_url = item.url.clone();
+            let header_map = header_map.clone();
+            async move {
+                let client = _get_client_for_item(item, &header_map).map_err(err_to_string)?;
+                let size = _get_file_size(&client, &item_url)
+                    .await
+                    .map_err(err_to_string)?;
+                Ok::<_, String>((item_url, size))
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let size_results = join_all(size_futures).await;
     let mut file_sizes = HashMap::new();
-    for item in items.iter() {
-        let client = _get_client_for_item(item, &header_map).map_err(err_to_string)?;
-        let size = _get_file_size(&client, &item.url)
-            .await
-            .map_err(err_to_string)?;
-        file_sizes.insert(item.url.clone(), size);
+    for result in size_results {
+        let (url, size) = result?;
+        file_sizes.insert(url, size);
     }
 
     let total_size: u64 = file_sizes.values().sum();
