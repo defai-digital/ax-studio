@@ -168,6 +168,26 @@ pub async fn read_logs<R: Runtime>(app: AppHandle<R>) -> Result<String, String> 
 // check if a system library is available
 #[tauri::command]
 pub fn is_library_available(library: &str) -> bool {
+    // Security: Only allow known system libraries to prevent arbitrary library loading
+    const ALLOWED_LIBRARIES: &[&str] = &[
+        // Vulkan
+        "libvulkan.so.1",
+        "vulkan-1.dll",
+        // CUDA
+        "libcuda.so.1",
+        "nvcuda.dll",
+        // Metal
+        "Metal.framework/Metal",
+        // OpenGL (if needed)
+        "libGL.so.1",
+        "opengl32.dll",
+    ];
+
+    if !ALLOWED_LIBRARIES.contains(&library) {
+        log::warn!("Library {library} is not in the allow-list");
+        return false;
+    }
+
     match unsafe { libloading::Library::new(library) } {
         Ok(_) => true,
         Err(e) => {
