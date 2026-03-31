@@ -5,10 +5,15 @@ import {
   useNavigate,
   useSearch,
 } from '@tanstack/react-router'
+import { IconArrowLeft } from '@tabler/icons-react'
 import {
-  IconArrowLeft,
-} from '@tabler/icons-react'
-import { Eye, Wrench, Calendar, Download, ExternalLink, HardDrive } from 'lucide-react'
+  Eye,
+  Wrench,
+  Calendar,
+  Download,
+  ExternalLink,
+  HardDrive,
+} from 'lucide-react'
 import { motion } from 'motion/react'
 import { route } from '@/constants/routes'
 import { useModelSources } from '@/hooks/useModelSources'
@@ -40,7 +45,8 @@ export const Route = createFileRoute('/hub/$modelId')({
 
 function HubModelDetailContent() {
   const { t } = useTranslation()
-  const { modelId } = useParams({ from: Route.id })
+  const { modelId: rawModelId } = useParams({ from: Route.id })
+  const modelId = sanitizeModelId(rawModelId)
   const navigate = useNavigate()
   const { huggingfaceToken } = useGeneralSetting()
   const { sources, fetchSources } = useModelSources()
@@ -261,7 +267,10 @@ function HubModelDetailContent() {
       </HeaderPage>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-6 py-6" style={{ scrollbarWidth: 'thin' }}>
+      <div
+        className="flex-1 overflow-y-auto px-6 py-6"
+        style={{ scrollbarWidth: 'thin' }}
+      >
         <div className="max-w-4xl mx-auto">
           {/* Model Header */}
           <motion.div
@@ -338,11 +347,12 @@ function HubModelDetailContent() {
                       {tag}
                     </span>
                   ))}
-                  {modelData.mmproj_models && modelData.mmproj_models.length > 0 && (
-                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-violet-500/10 text-violet-600 dark:text-violet-400 text-[11px]">
-                      <Eye className="size-3" /> Vision
-                    </span>
-                  )}
+                  {modelData.mmproj_models &&
+                    modelData.mmproj_models.length > 0 && (
+                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-violet-500/10 text-violet-600 dark:text-violet-400 text-[11px]">
+                        <Eye className="size-3" /> Vision
+                      </span>
+                    )}
                   {modelData.tools && (
                     <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[11px]">
                       <Wrench className="size-3" /> Tools
@@ -372,7 +382,10 @@ function HubModelDetailContent() {
               transition={{ delay: 0.1 }}
               className="mb-8"
             >
-              <h2 style={{ fontSize: '16px', fontWeight: 600 }} className="mb-3">
+              <h2
+                style={{ fontSize: '16px', fontWeight: 600 }}
+                className="mb-3"
+              >
                 Available Variants ({modelData.quants.length})
               </h2>
 
@@ -390,19 +403,17 @@ function HubModelDetailContent() {
                 {modelData.quants.map((variant) => {
                   const isDownloading =
                     localDownloadingModels.has(variant.model_id) ||
-                    downloadProcesses.some(
-                      (e) => e.id === variant.model_id
-                    )
+                    downloadProcesses.some((e) => e.id === variant.model_id)
                   const downloadProgress =
-                    downloadProcesses.find(
-                      (e) => e.id === variant.model_id
-                    )?.progress || 0
+                    downloadProcesses.find((e) => e.id === variant.model_id)
+                      ?.progress || 0
                   // Check if model is already downloaded by looking
                   // at the llamacpp provider's installed models list
                   const isDownloaded = !!llamaProvider?.models.some(
                     (m: { id: string }) =>
                       m.id === variant.model_id ||
-                      m.id === `${modelData.developer}/${sanitizeModelId(variant.model_id.split('/').pop() || '')}`
+                      m.id ===
+                        `${modelData.developer}/${sanitizeModelId(variant.model_id.split('/').pop() || '')}`
                   )
 
                   // Extract format from model_id
@@ -428,7 +439,9 @@ function HubModelDetailContent() {
                         {versionName}
                       </span>
                       <span className="text-[12px] text-muted-foreground">
-                        <span className="px-2 py-0.5 rounded bg-muted">{format}</span>
+                        <span className="px-2 py-0.5 rounded bg-muted">
+                          {format}
+                        </span>
                       </span>
                       <span className="text-[13px] text-muted-foreground flex items-center gap-1">
                         <HardDrive className="size-3" />
@@ -467,9 +480,7 @@ function HubModelDetailContent() {
                                 variant="default"
                                 size="sm"
                                 className="rounded-lg"
-                                onClick={() =>
-                                  handleUseModel(variant.model_id)
-                                }
+                                onClick={() => handleUseModel(variant.model_id)}
                               >
                                 {t('hub:newChat')}
                               </Button>
@@ -481,9 +492,7 @@ function HubModelDetailContent() {
                               size="sm"
                               className="rounded-lg"
                               onClick={() => {
-                                addLocalDownloadingModel(
-                                  variant.model_id
-                                )
+                                addLocalDownloadingModel(variant.model_id)
                                 serviceHub
                                   .models()
                                   .pullModelWithMetadata(
@@ -522,7 +531,10 @@ function HubModelDetailContent() {
               transition={{ delay: 0.2 }}
               className="mb-8"
             >
-              <h2 style={{ fontSize: '16px', fontWeight: 600 }} className="mb-3">
+              <h2
+                style={{ fontSize: '16px', fontWeight: 600 }}
+                className="mb-3"
+              >
                 README
               </h2>
 
