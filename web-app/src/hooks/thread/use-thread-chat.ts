@@ -227,12 +227,7 @@ export function useThreadChat({
       addMessage(userMessage)
 
       // Build parts: text + any image file parts
-      const parts: Array<{
-        type: string
-        text?: string
-        mediaType?: string
-        url?: string
-      }> = [
+      const parts: MessagePart[] = [
         {
           type: 'text',
           text: userMessage.content[0].text?.value ?? text,
