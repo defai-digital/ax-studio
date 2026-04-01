@@ -615,16 +615,31 @@ fn emit_mcp_update_event<R: Runtime>(app: &AppHandle<R>, name: &str) {
 
 pub fn extract_command_args(config: &Value) -> Option<McpServerConfig> {
     let obj = config.as_object()?;
-    let command = obj.get("command")?.as_str()?.to_string();
+    let transport_type = obj.get("type").and_then(|t| t.as_str()).map(String::from);
+    let url = obj.get("url").and_then(|u| u.as_str()).map(String::from);
 
-    // Validate command against allow-list
-    if !ALLOWED_COMMANDS.contains(&command.as_str()) {
+    let is_http = transport_type.as_deref() == Some("http") && url.is_some();
+
+    let command = match obj.get("command").and_then(|c| c.as_str()) {
+        Some(cmd) if !cmd.is_empty() => cmd.to_string(),
+        _ => {
+            if is_http {
+                String::new()
+            } else {
+                return None;
+            }
+        }
+    };
+
+    if !is_http && !ALLOWED_COMMANDS.contains(&command.as_str()) {
         return None;
     }
 
-    let args = obj.get("args")?.as_array()?.clone();
-    let url = obj.get("url").and_then(|u| u.as_str()).map(String::from);
-    let transport_type = obj.get("type").and_then(|t| t.as_str()).map(String::from);
+    let args = obj
+        .get("args")
+        .and_then(|a| a.as_array())
+        .cloned()
+        .unwrap_or_default();
     let timeout = obj
         .get("timeout")
         .and_then(|t| t.as_u64())
@@ -733,7 +748,8 @@ mod tests {
         let config = serde_json::json!({
             "command": "node"
         });
-        assert!(extract_command_args(&config).is_none());
+        let result = extract_command_args(&config).unwrap();
+        assert!(result.args.is_empty());
     }
 
     #[test]
@@ -782,6 +798,21 @@ mod tests {
         assert_eq!(result.envs.get("SAFE_VAR").unwrap().as_str().unwrap(), "safe");
         assert!(result.envs.get("LD_PRELOAD").is_none());
         assert!(result.envs.get("PATH").is_none());
+    }
+
+    #[test]
+    fn test_extract_command_args_http_empty_command() {
+        let config = serde_json::json!({
+            "command": "",
+            "args": [],
+            "env": {},
+            "type": "http",
+            "url": "https://mcp.example.com/mcp"
+        });
+        let result = extract_command_args(&config).unwrap();
+        assert_eq!(result.transport_type.as_deref(), Some("http"));
+        assert_eq!(result.url.as_deref(), Some("https://mcp.example.com/mcp"));
+        assert!(result.command.is_empty());
     }
 
     #[test]
