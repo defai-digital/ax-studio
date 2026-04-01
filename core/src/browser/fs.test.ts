@@ -94,4 +94,48 @@ describe('fs module', () => {
     await fs.fileStat(path)
     expect(globalThis.core.api.fileStat).toHaveBeenCalledWith({ args: path })
   })
+
+  describe('path validation', () => {
+    it('should reject paths with directory traversal', () => {
+      expect(() => fs.writeFileSync('../../../etc/passwd', 'data')).toThrow('Path traversal not allowed: ../../../etc/passwd')
+      expect(() => fs.readFileSync('../secret/file')).toThrow('Path traversal not allowed: ../secret/file')
+      expect(() => fs.existsSync('file/../../../root')).toThrow('Path traversal not allowed: file/../../../root')
+    })
+
+    it('should reject absolute paths', () => {
+      expect(() => fs.writeFileSync('/etc/passwd', 'data')).toThrow('Absolute paths not allowed: /etc/passwd')
+      expect(() => fs.readFileSync('C:\\Windows\\System32')).toThrow('Absolute paths not allowed: C:\\Windows\\System32')
+    })
+
+    it('should reject paths with invalid characters', () => {
+      expect(() => fs.writeFileSync('file\0name', 'data')).toThrow('Invalid characters in path: file')
+      expect(() => fs.readFileSync('file\x01name')).toThrow('Invalid characters in path: file')
+    })
+
+    it('should accept valid relative paths', () => {
+      const validPath = 'data/files/myfile.txt'
+      fs.writeFileSync(validPath, 'data')
+      expect(globalThis.core.api.writeFileSync).toHaveBeenCalledWith({ args: [validPath, 'data'] })
+
+      fs.readFileSync(validPath)
+      expect(globalThis.core.api.readFileSync).toHaveBeenCalledWith({ args: [validPath] })
+    })
+
+    it('should validate both src and dest in copyFile', () => {
+      expect(() => fs.copyFile('../../../evil', 'safe')).toThrow('Path traversal not allowed: ../../../evil')
+      expect(() => fs.copyFile('safe', '/absolute')).toThrow('Absolute paths not allowed: /absolute')
+    })
+
+    it('should validate all paths in getGgufFiles', () => {
+      expect(() => fs.getGgufFiles(['safe/path', '../../../evil'])).toThrow('Path traversal not allowed: ../../../evil')
+    })
+
+    it('should validate path in fileStat', () => {
+      expect(() => fs.fileStat('../escape')).toThrow('Path traversal not allowed: ../escape')
+    })
+
+    it('should validate path in writeBlob', () => {
+      expect(() => fs.writeBlob('/root/file', 'data')).toThrow('Absolute paths not allowed: /root/file')
+    })
+  })
 })
