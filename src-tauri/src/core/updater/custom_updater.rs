@@ -16,12 +16,16 @@ use std::time::Duration;
 use thiserror::Error;
 
 /// Secret key for HMAC signature
-/// - In CI: Set AX_STUDIO_SIGNING_KEY environment variable at build time
-/// - In local dev: Falls back to a test key
+/// In release: Must be set via AX_STUDIO_SIGNING_KEY environment variable at build time
+/// In debug: Falls back to a debug key
+/// Must not be the default test key
+#[cfg(debug_assertions)]
 const SECRET_KEY: &str = match option_env!("AX_STUDIO_SIGNING_KEY") {
     Some(key) => key,
-    None => "local-dev-test-key-not-for-production",
+    None => "debug-mode-key",
 };
+#[cfg(not(debug_assertions))]
+const SECRET_KEY: &str = env!("AX_STUDIO_SIGNING_KEY");
 
 /// Timeout for HTTP requests
 const REQUEST_TIMEOUT_SECS: u64 = 30;
@@ -72,6 +76,9 @@ pub struct CustomUpdater {
 impl CustomUpdater {
     /// Create a new custom updater
     pub fn new() -> Result<Self, UpdateError> {
+        // Ensure the signing key is not the default test key
+        assert!(SECRET_KEY != "local-dev-test-key-not-for-production", "AX_STUDIO_SIGNING_KEY must not be the default test key");
+
         let client = Client::builder()
             .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
             .build()?;

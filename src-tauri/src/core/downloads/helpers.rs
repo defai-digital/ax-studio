@@ -42,12 +42,16 @@ fn get_mirror_prefix() -> &'static str {
 }
 
 /// Secret key for HMAC request authentication
-/// - In CI: Set AX_STUDIO_SIGNING_KEY environment variable at build time
-/// - In local dev: Falls back to a test key
+/// In release: Must be set via AX_STUDIO_SIGNING_KEY environment variable at build time
+/// In debug: Falls back to a debug key
+/// Must not be the default test key
+#[cfg(debug_assertions)]
 const SECRET_KEY: &str = match option_env!("AX_STUDIO_SIGNING_KEY") {
     Some(key) => key,
-    None => "local-dev-test-key-not-for-production",
+    None => "debug-mode-key",
 };
+#[cfg(not(debug_assertions))]
+const SECRET_KEY: &str = env!("AX_STUDIO_SIGNING_KEY");
 
 // ===== UTILITY FUNCTIONS =====
 
@@ -811,6 +815,9 @@ async fn _get_maybe_resume_with_hmac(
     url: &str,
     start_bytes: u64,
 ) -> Result<reqwest::Response, String> {
+    // Ensure the signing key is not the default test key
+    assert!(SECRET_KEY != "local-dev-test-key-not-for-production", "AX_STUDIO_SIGNING_KEY must not be the default test key");
+
     // Generate HMAC headers for request authentication
     let nonce_seed = get_download_nonce_seed();
     let app_version = get_app_version();
