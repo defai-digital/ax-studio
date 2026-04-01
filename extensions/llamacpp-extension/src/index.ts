@@ -605,7 +605,8 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     const modelPath = await joinPath([appData, cfg.model_path])
 
     // Security: Prevent path traversal from tampered model.yml
-    if (!modelPath.startsWith(appData + '/models')) {
+    const expectedBase = await joinPath([appData, 'llamacpp', 'models'])
+    if (!modelPath.startsWith(expectedBase)) {
       throw new Error(`Model path traversal detected: ${modelPath}`)
     }
 
@@ -618,7 +619,8 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     if (cfg.mmproj_path) {
       mmprojPath = await joinPath([appData, cfg.mmproj_path])
       // Security: Prevent path traversal
-      if (!mmprojPath.startsWith(appData + '/models')) {
+      const expectedMmprojBase = await joinPath([appData, 'llamacpp', 'models'])
+      if (!mmprojPath.startsWith(expectedMmprojBase)) {
         throw new Error(`Mmproj path traversal detected: ${mmprojPath}`)
       }
       if (!(await fs.existsSync(mmprojPath))) {
@@ -853,7 +855,8 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     const modelPath = await joinPath([appData, cfg.model_path])
 
     // Security: Prevent path traversal
-    if (!modelPath.startsWith(appData + '/models')) {
+    const expectedBase = await joinPath([appData, 'llamacpp', 'models'])
+    if (!modelPath.startsWith(expectedBase)) {
       throw new Error(`Model path traversal detected: ${modelPath}`)
     }
 
@@ -861,7 +864,8 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       ? await joinPath([appData, cfg.mmproj_path])
       : undefined
 
-    if (mmprojPath && !mmprojPath.startsWith(appData + '/models')) {
+    const expectedMmprojBase = await joinPath([appData, 'llamacpp', 'models'])
+    if (mmprojPath && !mmprojPath.startsWith(expectedMmprojBase)) {
       throw new Error(`Mmproj path traversal detected: ${mmprojPath}`)
     }
 
@@ -1531,7 +1535,8 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       const appData = await getAppDataFolderPath()
       const modelPath = await joinPath([appData, cfg.model_path])
       // Security: Prevent path traversal
-      if (!modelPath.startsWith(appData + '/models')) return false
+      const expectedBase = await joinPath([appData, 'llamacpp', 'models'])
+      if (!modelPath.startsWith(expectedBase)) return false
       const meta: GgufMetadata = await readGgufMetadata(modelPath)
       const template = meta.metadata?.['tokenizer.chat_template'] ?? ''
       return template.toLowerCase().includes('tool')
@@ -1547,7 +1552,8 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       const appData = await getAppDataFolderPath()
       const mmprojPath = await joinPath([appData, cfg.mmproj_path])
       // Security: Prevent path traversal
-      if (!mmprojPath.startsWith(appData + '/models')) return false
+      const expectedMmprojBase = await joinPath([appData, 'llamacpp', 'models'])
+      if (!mmprojPath.startsWith(expectedMmprojBase)) return false
       return await fs.existsSync(mmprojPath)
     } catch {
       return false
