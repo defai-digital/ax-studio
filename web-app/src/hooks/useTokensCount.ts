@@ -4,6 +4,52 @@ import { usePrompt } from './usePrompt'
 import { useModelProvider } from './useModelProvider'
 import { useServiceStore } from './useServiceHub'
 
+// Simple token estimation for hosted models when backend token counting is unavailable
+// Rough approximation: ~4 characters per token for English text
+const estimateTokensFromText = (text: string): number => {
+  if (!text || text.length === 0) return 0
+  // Basic estimation: 1 token per ~4 characters
+  return Math.ceil(text.length / 4)
+}
+
+// Check if a model provider is hosted (external API) rather than local
+const isHostedModel = (selectedModel: any, providers: any[]): boolean => {
+  if (!selectedModel?.id) {
+    console.log('isHostedModel: No selected model')
+    return false
+  }
+
+  // Find the provider for this model
+  const provider = providers.find(p =>
+    p.models?.some((m: any) => m.id === selectedModel.id)
+  )
+
+  if (!provider) {
+    console.log('isHostedModel: No provider found for model', selectedModel.id, 'from providers:', providers.map(p => p.provider))
+    return false
+  }
+
+  // Hosted providers typically have external URLs and require API keys
+  const hasExternalUrl = provider.base_url &&
+    !provider.base_url.includes('localhost') &&
+    !provider.base_url.includes('127.0.0.1') &&
+    !provider.base_url.includes('0.0.0.0')
+
+  const requiresApiKey = provider.settings?.some((s: any) => s.key === 'api-key')
+
+  const result = hasExternalUrl && requiresApiKey
+  console.log('isHostedModel:', {
+    modelId: selectedModel.id,
+    provider: provider.provider,
+    base_url: provider.base_url,
+    hasExternalUrl,
+    requiresApiKey,
+    result
+  })
+
+  return result
+}
+
 export interface TokenCountData {
   tokenCount: number
   maxTokens?: number
@@ -15,7 +61,7 @@ export interface TokenCountData {
 
 export const useTokensCount = (
   messages: ThreadMessage[] = [],
-   
+
   _uploadedFiles?: Array<{
     name: string
     type: string
@@ -26,6 +72,7 @@ export const useTokensCount = (
 ) => {
   const serviceHub = useServiceStore((state) => state.serviceHub)
   const selectedModel = useModelProvider((state) => state.selectedModel)
+  const providers = useModelProvider((state) => state.providers)
   const [tokenData, setTokenData] = useState<TokenCountData>({
     tokenCount: 0,
     loading: false,
@@ -57,12 +104,70 @@ export const useTokensCount = (
   }, [messages])
 
   const getMaxTokens = useCallback((): number | undefined => {
+    console.log('getMaxTokens: Model settings:', selectedModel?.settings)
     const raw =
       selectedModel?.settings?.ctx_len?.controller_props?.value ??
       selectedModel?.settings?.ctx_size?.controller_props?.value
     const parsed = Number(raw)
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
-  }, [selectedModel])
+    if (Number.isFinite(parsed) && parsed > 0) {
+      console.log('getMaxTokens: Found setting value:', parsed)
+      return parsed
+    }
+
+    // For hosted models without explicit settings, provide defaults based on model ID
+    // First check if this looks like a hosted model by examining the model ID patterns
+    // (even if providers aren't loaded yet)
+    const looksLikeHostedModel = selectedModel?.id && (
+      selectedModel.id.includes('gpt') ||
+      selectedModel.id.includes('claude') ||
+      selectedModel.id.includes('mistral') ||
+      selectedModel.id.includes('groq') ||
+      selectedModel.id.includes('gemini') ||
+      selectedModel.id.includes('deepseek') ||
+      selectedModel.id.includes('qwen') ||
+      // Check provider patterns in the model ID
+      selectedModel.id.includes('openai') ||
+      selectedModel.id.includes('anthropic') ||
+      selectedModel.id.includes('azure') ||
+      selectedModel.id.includes('openrouter')
+    )
+
+    const isHosted = looksLikeHostedModel || isHostedModel(selectedModel, providers)
+    if (isHosted && selectedModel?.id) {
+      // Common context lengths for popular models - more comprehensive patterns
+      const modelPatterns: Array<{ pattern: RegExp, tokens: number }> = [
+        // OpenAI models
+        { pattern: /gpt-4o/i, tokens: 128000 },
+        { pattern: /gpt-4-turbo/i, tokens: 128000 },
+        { pattern: /gpt-4/i, tokens: 8192 }, // This should match gpt-4, gpt-4-32k, etc.
+        { pattern: /gpt-3\.5-turbo/i, tokens: 16385 },
+
+        // Anthropic models
+        { pattern: /claude-3/i, tokens: 200000 }, // Covers all Claude 3 variants
+
+        // Other providers
+        { pattern: /mistral/i, tokens: 32000 },
+        { pattern: /groq/i, tokens: 128000 },
+        { pattern: /gemini/i, tokens: 32768 },
+        { pattern: /deepseek/i, tokens: 32768 },
+        { pattern: /qwen/i, tokens: 32768 },
+      ]
+
+      // Check if model ID matches any known patterns
+      for (const { pattern, tokens } of modelPatterns) {
+        if (pattern.test(selectedModel.id)) {
+          return tokens
+        }
+      }
+
+      // For any hosted model that doesn't match patterns, use a reasonable default
+      // Most modern LLMs have context windows of at least 8K tokens
+      return looksLikeHostedModel ? 8192 : 4096
+    }
+
+    console.log('useTokensCount: No max tokens found')
+    return undefined
+  }, [selectedModel, providers])
 
   const runTokenCalculation = useCallback(async () => {
     // Skip if still within backoff window (consecutive failures)
@@ -70,6 +175,7 @@ export const useTokensCount = (
 
     const requestId = ++requestIdRef.current
     const maxTokens = getMaxTokens()
+    const isHosted = isHostedModel(selectedModel, providers)
 
     if (!serviceHub || !selectedModel?.id || messages.length === 0) {
       if (requestId === requestIdRef.current) {
@@ -89,9 +195,31 @@ export const useTokensCount = (
     }
 
     try {
-      const tokenCount = await serviceHub
-        .models()
-        .getTokensCount(selectedModel.id, messages)
+      let tokenCount: number
+
+      if (isHosted) {
+        // For hosted models, use local token estimation
+        const messageText = messages
+          .map(msg => {
+            let text = ''
+            if (msg.content) {
+              for (const item of msg.content) {
+                text += item.text?.value || ''
+                // Note: We don't count image tokens in this simple estimation
+                // Could be enhanced later if needed
+              }
+            }
+            return text
+          })
+          .join(' ')
+
+        tokenCount = estimateTokensFromText(messageText)
+      } else {
+        // For local models, use the backend service
+        tokenCount = await serviceHub
+          .models()
+          .getTokensCount(selectedModel.id, messages)
+      }
 
       if (requestId !== requestIdRef.current) return
 
@@ -112,14 +240,18 @@ export const useTokensCount = (
       if (requestId !== requestIdRef.current) return
 
       const msg = error instanceof Error ? error.message : String(error)
-      // 404 means the endpoint doesn't exist on this backend (e.g. ax-serving).
-      // Back off for 1 hour immediately — retrying will never succeed.
-      if (msg.includes('404')) {
-        backoffUntilRef.current = Date.now() + 60 * 60 * 1000
-      } else {
-        consecutiveErrorsRef.current += 1
-        if (consecutiveErrorsRef.current >= 3) {
-          backoffUntilRef.current = Date.now() + 30_000
+
+      // For hosted models, 404 is expected - don't back off since we use local estimation
+      if (!isHosted) {
+        // 404 means the endpoint doesn't exist on this backend (e.g. ax-serving).
+        // Back off for 1 hour immediately — retrying will never succeed.
+        if (msg.includes('404')) {
+          backoffUntilRef.current = Date.now() + 60 * 60 * 1000
+        } else {
+          consecutiveErrorsRef.current += 1
+          if (consecutiveErrorsRef.current >= 3) {
+            backoffUntilRef.current = Date.now() + 30_000
+          }
         }
       }
 
@@ -132,7 +264,7 @@ export const useTokensCount = (
         error: error instanceof Error ? error.message : 'Failed to calculate tokens',
       })
     }
-  }, [getMaxTokens, messages, selectedModel?.id, serviceHub])
+  }, [getMaxTokens, messages, selectedModel, providers, serviceHub])
 
   useEffect(() => {
     latestCalculationRef.current = runTokenCalculation
