@@ -209,11 +209,11 @@ class PlatformServiceHub implements ServiceHub {
       // mcp() for AkiDB operations.
       if ('setMcpService' in this.ragService) {
         const svc = this.ragService as { setMcpService: (mcp: any) => void }
-        svc.setMcpService(this.mcp())
+        svc.setMcpService(this.mcpService)
       }
       if ('setMcpService' in this.uploadsService) {
         const svc = this.uploadsService as { setMcpService: (mcp: any) => void }
-        svc.setMcpService(this.mcp())
+        svc.setMcpService(this.mcpService)
       }
 
       this.initialized = true
