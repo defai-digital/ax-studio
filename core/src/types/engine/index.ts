@@ -93,7 +93,7 @@ export function validateTemplate(template: string): boolean {
 
   for (const pattern of codePatterns) {
     const matches = cleanedTemplate.match(pattern)
-    if (matches && matches.length > 2) { // Allow minimal structural characters
+    if (matches && matches.length > 0) { // Reject any code keywords
       return false
     }
   }
@@ -130,7 +130,7 @@ export type EngineMetadata = {
        * Template string for request transformation
        * @security Must be validated with validateTemplate() before use to prevent injection
        */
-      template?: string
+      template?: ValidatedTemplate
     }
   }
   transform_resp?: {
@@ -139,7 +139,7 @@ export type EngineMetadata = {
        * Template string for response transformation
        * @security Must be validated with validateTemplate() before use to prevent injection
        */
-      template?: string
+      template?: ValidatedTemplate
     }
   }
   explore_models_url?: string
