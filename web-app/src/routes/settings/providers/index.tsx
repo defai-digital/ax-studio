@@ -86,7 +86,10 @@ function ModelProviders() {
                   </p>
                 </div>
                 <div className="shrink-0 ml-4">
-                  <AddProviderDialog onCreateProvider={createProvider}>
+                  <AddProviderDialog
+                    onCreateProvider={createProvider}
+                    existingProviderNames={providers.map((p) => p.provider)}
+                  >
                     <Button className="rounded-lg h-8 text-[12px]">
                       <Plus className="size-3 mr-1.5" />
                       {t('provider:addProvider')}

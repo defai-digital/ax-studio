@@ -116,4 +116,152 @@ describe('AddProviderDialog', () => {
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(mockOnCreateProvider).toHaveBeenCalledWith('Enter Provider')
   })
+
+  describe('validation', () => {
+    it('shows error for duplicate provider name (case-insensitive)', () => {
+      render(
+        <AddProviderDialog
+          onCreateProvider={mockOnCreateProvider}
+          existingProviderNames={['OpenAI']}
+        >
+          <button>Add</button>
+        </AddProviderDialog>
+      )
+      fireEvent.change(screen.getByTestId('input'), {
+        target: { value: 'openai' },
+      })
+      expect(screen.getByTestId('validation-error')).toBeInTheDocument()
+      expect(screen.getByTestId('validation-error').textContent).toContain(
+        'already exists'
+      )
+      expect(screen.getByLabelText('common:create')).toBeDisabled()
+    })
+
+    it('shows error for name with special characters', () => {
+      render(
+        <AddProviderDialog onCreateProvider={mockOnCreateProvider}>
+          <button>Add</button>
+        </AddProviderDialog>
+      )
+      fireEvent.change(screen.getByTestId('input'), {
+        target: { value: 'My@Provider!' },
+      })
+      expect(screen.getByTestId('validation-error')).toBeInTheDocument()
+      expect(screen.getByTestId('validation-error').textContent).toContain(
+        'letters, numbers, spaces, hyphens, and underscores'
+      )
+    })
+
+    it('shows error for name with XSS script tags', () => {
+      render(
+        <AddProviderDialog onCreateProvider={mockOnCreateProvider}>
+          <button>Add</button>
+        </AddProviderDialog>
+      )
+      fireEvent.change(screen.getByTestId('input'), {
+        target: { value: '<script>alert("xss")</script>' },
+      })
+      expect(screen.getByTestId('validation-error')).toBeInTheDocument()
+    })
+
+    it('shows error for name with javascript: protocol', () => {
+      render(
+        <AddProviderDialog onCreateProvider={mockOnCreateProvider}>
+          <button>Add</button>
+        </AddProviderDialog>
+      )
+      fireEvent.change(screen.getByTestId('input'), {
+        target: { value: 'javascript:void(0)' },
+      })
+      expect(screen.getByTestId('validation-error')).toBeInTheDocument()
+    })
+
+    it('accepts valid name with hyphens and underscores', () => {
+      render(
+        <AddProviderDialog onCreateProvider={mockOnCreateProvider}>
+          <button>Add</button>
+        </AddProviderDialog>
+      )
+      fireEvent.change(screen.getByTestId('input'), {
+        target: { value: 'my-provider_v2' },
+      })
+      expect(screen.queryByTestId('validation-error')).not.toBeInTheDocument()
+      expect(screen.getByLabelText('common:create')).not.toBeDisabled()
+    })
+
+    it('does not call onCreateProvider when validation fails', () => {
+      render(
+        <AddProviderDialog
+          onCreateProvider={mockOnCreateProvider}
+          existingProviderNames={['existing']}
+        >
+          <button>Add</button>
+        </AddProviderDialog>
+      )
+      fireEvent.change(screen.getByTestId('input'), {
+        target: { value: 'existing' },
+      })
+      fireEvent.click(screen.getByLabelText('common:create'))
+      expect(mockOnCreateProvider).not.toHaveBeenCalled()
+    })
+
+    it('clears error when input is corrected', () => {
+      render(
+        <AddProviderDialog
+          onCreateProvider={mockOnCreateProvider}
+          existingProviderNames={['OpenAI']}
+        >
+          <button>Add</button>
+        </AddProviderDialog>
+      )
+      fireEvent.change(screen.getByTestId('input'), {
+        target: { value: 'OpenAI' },
+      })
+      expect(screen.getByTestId('validation-error')).toBeInTheDocument()
+
+      fireEvent.change(screen.getByTestId('input'), {
+        target: { value: 'MyProvider' },
+      })
+      expect(screen.queryByTestId('validation-error')).not.toBeInTheDocument()
+    })
+
+    it('clears error when dialog is cancelled', () => {
+      render(
+        <AddProviderDialog onCreateProvider={mockOnCreateProvider}>
+          <button>Add</button>
+        </AddProviderDialog>
+      )
+      fireEvent.change(screen.getByTestId('input'), {
+        target: { value: 'bad@name' },
+      })
+      expect(screen.getByTestId('validation-error')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByText('common:cancel'))
+    })
+
+    it('does not show error for empty input', () => {
+      render(
+        <AddProviderDialog onCreateProvider={mockOnCreateProvider}>
+          <button>Add</button>
+        </AddProviderDialog>
+      )
+      expect(screen.queryByTestId('validation-error')).not.toBeInTheDocument()
+    })
+
+    it('accepts name that differs in case from existing', () => {
+      render(
+        <AddProviderDialog
+          onCreateProvider={mockOnCreateProvider}
+          existingProviderNames={['OpenAI']}
+        >
+          <button>Add</button>
+        </AddProviderDialog>
+      )
+      fireEvent.change(screen.getByTestId('input'), {
+        target: { value: 'MyOpenAI' },
+      })
+      expect(screen.queryByTestId('validation-error')).not.toBeInTheDocument()
+      expect(screen.getByLabelText('common:create')).not.toBeDisabled()
+    })
+  })
 })
