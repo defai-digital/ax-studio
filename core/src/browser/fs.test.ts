@@ -102,9 +102,14 @@ describe('fs module', () => {
       expect(() => fs.existsSync('file/../../../root')).toThrow('Path traversal not allowed: file/../../../root')
     })
 
-    it('should reject absolute paths', () => {
-      expect(() => fs.writeFileSync('/etc/passwd', 'data')).toThrow('Absolute paths not allowed: /etc/passwd')
-      expect(() => fs.readFileSync('C:\\Windows\\System32')).toThrow('Absolute paths not allowed: C:\\Windows\\System32')
+    it('should allow absolute paths (Tauri handles sandboxing)', () => {
+      // Absolute paths are allowed - Tauri backend provides sandboxing
+      const validAbsolutePath = '/valid/path/file.txt'
+      fs.writeFileSync(validAbsolutePath, 'data')
+      expect(globalThis.core.api.writeFileSync).toHaveBeenCalledWith({ args: [validAbsolutePath, 'data'] })
+
+      fs.readFileSync('C:\\valid\\path\\file.txt')
+      expect(globalThis.core.api.readFileSync).toHaveBeenCalledWith({ args: ['C:\\valid\\path\\file.txt'] })
     })
 
     it('should reject paths with invalid characters', () => {
@@ -123,7 +128,8 @@ describe('fs module', () => {
 
     it('should validate both src and dest in copyFile', () => {
       expect(() => fs.copyFile('../../../evil', 'safe')).toThrow('Path traversal not allowed: ../../../evil')
-      expect(() => fs.copyFile('safe', '/absolute')).toThrow('Absolute paths not allowed: /absolute')
+      // Absolute paths are now allowed - Tauri provides sandboxing
+      expect(async () => await fs.copyFile('safe', '/absolute')).not.toThrow()
     })
 
     it('should validate all paths in getGgufFiles', () => {
@@ -134,8 +140,10 @@ describe('fs module', () => {
       expect(() => fs.fileStat('../escape')).toThrow('Path traversal not allowed: ../escape')
     })
 
-    it('should validate path in writeBlob', () => {
-      expect(() => fs.writeBlob('/root/file', 'data')).toThrow('Absolute paths not allowed: /root/file')
+    it('should validate path in writeBlob', async () => {
+      // Absolute paths are now allowed - Tauri provides sandboxing
+      await fs.writeBlob('/valid/path/file', 'data')
+      expect(globalThis.core.api.writeBlob).toHaveBeenCalledWith('/valid/path/file', 'data')
     })
   })
 })

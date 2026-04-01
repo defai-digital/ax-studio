@@ -3,7 +3,7 @@ import { FileStat } from '../types'
 /**
  * Validates a file path to prevent path traversal attacks.
  * @param path - The path to validate
- * @throws Error if the path contains traversal attempts or is outside allowed scope
+ * @throws Error if the path contains traversal attempts or invalid characters
  */
 const validatePath = (path: string): void => {
   if (typeof path !== 'string') {
@@ -15,15 +15,13 @@ const validatePath = (path: string): void => {
     throw new Error(`Path traversal not allowed: ${path}`)
   }
 
-  // Check for absolute paths that might be problematic
-  if (path.startsWith('/') || path.match(/^[A-Za-z]:/)) {
-    throw new Error(`Absolute paths not allowed: ${path}`)
-  }
-
   // Additional validation: no null bytes, control characters
   if (path.includes('\0') || /[\x00-\x1F\x7F-\x9F]/.test(path)) {
     throw new Error(`Invalid characters in path: ${path}`)
   }
+
+  // Allow absolute paths - the Tauri backend should handle sandboxing
+  // Only reject obvious traversal attempts and invalid characters
 }
 
 /**
