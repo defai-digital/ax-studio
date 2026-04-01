@@ -9,6 +9,11 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { generateId } from 'ai'
 import type { UIMessage } from '@ai-sdk/react'
+
+// Message parts for chat messages (Vercel AI SDK format)
+type MessagePart =
+  | { type: 'text'; text: string }
+  | { type: 'file'; mediaType: string; url: string }
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useThreads } from '@/hooks/useThreads'
 import { useMessages } from '@/hooks/useMessages'
@@ -28,10 +33,10 @@ import {
 } from '@ax-studio/core'
 
 type SendMessageFn = (args: {
-  parts: any[]
+  parts: MessagePart[]
   id: string
   metadata: unknown
-}) => void // eslint-disable-line @typescript-eslint/no-explicit-any
+}) => void  
 type RegenerateFn = (args?: { messageId?: string }) => void
 
 export type ThreadChatParams = {
