@@ -318,8 +318,21 @@ pub fn _get_client_for_item(
     if let Some(proxy_config) = &item.proxy {
         // Handle SSL verification settings
         if proxy_config.ignore_ssl.unwrap_or(false) {
+            // Security fix: Require SHA256 validation when SSL is disabled
+            if item.sha256.is_none() {
+                return Err(format!(
+                    "SSL certificate verification disabled for download from {}. \
+                    SHA256 hash validation is required for security but not provided. \
+                    Downloads without hash verification can be tampered with.",
+                    item.url
+                ));
+            }
             client_builder = client_builder.danger_accept_invalid_certs(true);
-            log::info!("SSL certificate verification disabled for URL {}", item.url);
+            log::warn!(
+                "⚠️ SSL certificate verification disabled for download from {}. \
+                Proceeding with SHA256 hash validation only.",
+                item.url
+            );
         }
 
         // Note: reqwest doesn't have fine-grained SSL verification controls
