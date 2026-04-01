@@ -70,6 +70,91 @@ describe('DefaultModelsService', () => {
     })
   })
 
+  describe('engine unavailability warnings', () => {
+    beforeEach(() => {
+      vi.clearAllMocks()
+    })
+
+    it('should throw descriptive error when engine unavailable for fetchModels', async () => {
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      mockEngineManager.get.mockReturnValue(undefined)
+
+      await expect(modelsService.fetchModels()).rejects.toThrow(
+        '[ModelsService] Cannot fetch models: engine "llamacpp" is not available.'
+      )
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[ModelsService] Engine "llamacpp" is not available. The engine may not be initialized or registered.'
+      )
+
+      consoleSpy.mockRestore()
+    })
+
+    it('should throw descriptive error when engine unavailable for pullModel', async () => {
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      mockEngineManager.get.mockReturnValue(undefined)
+
+      await expect(modelsService.pullModel('model1', '/path/to/model')).rejects.toThrow(
+        'Engine "llamacpp" is not available. Cannot pull model "model1".'
+      )
+
+      consoleSpy.mockRestore()
+    })
+
+    it('should log a warning when getEngine returns undefined for getActiveModels', async () => {
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      mockEngineManager.get.mockReturnValue(undefined)
+
+      const result = await modelsService.getActiveModels('llamacpp')
+
+      expect(result).toEqual([])
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[ModelsService] Engine "llamacpp" is not available. The engine may not be initialized or registered.'
+      )
+
+      consoleSpy.mockRestore()
+    })
+
+    it('should log a warning when getEngine returns undefined for getModel', async () => {
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      mockEngineManager.get.mockReturnValue(undefined)
+
+      const result = await modelsService.getModel('model1')
+
+      expect(result).toBeUndefined()
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[ModelsService] Engine "llamacpp" is not available. The engine may not be initialized or registered.'
+      )
+
+      consoleSpy.mockRestore()
+    })
+
+    it('should log a warning with correct provider name for getActiveModels with custom provider', async () => {
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      mockEngineManager.get.mockReturnValue(undefined)
+
+      const result = await modelsService.getActiveModels('mlx')
+
+      expect(result).toEqual([])
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[ModelsService] Engine "mlx" is not available. The engine may not be initialized or registered.'
+      )
+
+      consoleSpy.mockRestore()
+    })
+
+    it('should not log a warning when engine is available', async () => {
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      mockEngineManager.get.mockReturnValue(mockEngine)
+      mockEngine.list.mockResolvedValue([{ id: 'model1' }])
+
+      await modelsService.fetchModels()
+
+      expect(consoleSpy).not.toHaveBeenCalled()
+
+      consoleSpy.mockRestore()
+    })
+  })
+
   describe('fetchModelCatalog', () => {
     it('should return the bundled AX Studio model catalog', async () => {
       const result = await modelsService.fetchModelCatalog()

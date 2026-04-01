@@ -31,7 +31,13 @@ const defaultProvider = 'llamacpp'
 
 export class DefaultModelsService implements ModelsService {
   private getEngine(provider: string = defaultProvider) {
-    return EngineManager.instance().get(provider) as AIEngine | undefined
+    const engine = EngineManager.instance().get(provider) as AIEngine | undefined
+    if (!engine) {
+      console.warn(
+        `[ModelsService] Engine "${provider}" is not available. The engine may not be initialized or registered.`
+      )
+    }
+    return engine
   }
 
   private async syncLoadedModelRoute(
@@ -46,7 +52,13 @@ export class DefaultModelsService implements ModelsService {
   }
 
   async fetchModels(): Promise<modelInfo[]> {
-    return this.getEngine()?.list() ?? []
+    const engine = this.getEngine()
+    if (!engine) {
+      throw new Error(
+        `[ModelsService] Cannot fetch models: engine "${defaultProvider}" is not available. The engine may not be initialized or registered.`
+      )
+    }
+    return engine.list()
   }
 
   async fetchModelCatalog(): Promise<ModelCatalog> {
@@ -206,7 +218,13 @@ export class DefaultModelsService implements ModelsService {
     mmprojSha256?: string,
     mmprojSize?: number
   ): Promise<void> {
-    return this.getEngine()?.import(id, {
+    const engine = this.getEngine()
+    if (!engine) {
+      throw new Error(
+        `Engine "${defaultProvider}" is not available. Cannot pull model "${id}".`
+      )
+    }
+    return engine.import(id, {
       modelPath,
       mmprojPath,
       modelSha256,
@@ -309,7 +327,9 @@ export class DefaultModelsService implements ModelsService {
   }
 
   async getActiveModels(provider?: string): Promise<string[]> {
-    return this.getEngine(provider)?.getLoadedModels() ?? []
+    const engine = this.getEngine(provider)
+    if (!engine) return []
+    return engine.getLoadedModels() ?? []
   }
 
   async stopModel(
