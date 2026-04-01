@@ -322,6 +322,16 @@ pub fn write_google_workspace_config(
     client_secret: &str,
     tokens: &OAuthTokens,
 ) -> Result<(), String> {
+    // Security warning: OAuth tokens written as plaintext to filesystem
+    log::warn!(
+        "⚠️ SECURITY: OAuth tokens for Google Workspace written as plaintext JSON to ~/.google-mcp/. \
+        Consider using OS keychain or encrypted storage for production deployments."
+    );
+    // Security warning: OAuth tokens written as plaintext to filesystem
+    log::warn!(
+        "⚠️ SECURITY: OAuth tokens for Google Workspace written as plaintext JSON to ~/.google-mcp/. \
+        Consider using OS keychain or encrypted storage for production deployments."
+    );
     let config_dir = dirs::home_dir()
         .ok_or("Cannot determine home directory")?
         .join(".google-mcp");
