@@ -28,9 +28,9 @@ const validatePath = (path: string): void => {
 
 /**
  * Writes data to a file at the specified path.
- * @returns {Promise<any>} A Promise that resolves when the file is written successfully.
+ * @returns {Promise<void>} A Promise that resolves when the file is written successfully.
  */
-const writeFileSync = (...args: any[]) => {
+const writeFileSync = (...args: any[]): Promise<void> => {
   if (args.length > 0 && typeof args[0] === 'string') {
     validatePath(args[0])
   }
@@ -41,18 +41,18 @@ const writeFileSync = (...args: any[]) => {
  * Writes blob data to a file at the specified path.
  * @param path - The path to file.
  * @param data - The blob data.
- * @returns
+ * @returns {Promise<void>} A Promise that resolves when the blob is written successfully.
  */
-const writeBlob: (path: string, data: string) => Promise<any> = (path, data) => {
+const writeBlob: (path: string, data: string) => Promise<void> = (path, data) => {
   validatePath(path)
   return globalThis.core.api?.writeBlob(path, data)
 }
 
 /**
  * Reads the contents of a file at the specified path.
- * @returns {Promise<any>} A Promise that resolves with the contents of the file.
+ * @returns {Promise<string>} A Promise that resolves with the contents of the file.
  */
-const readFileSync = (...args: any[]) => {
+const readFileSync = (...args: any[]): Promise<string> => {
   if (args.length > 0 && typeof args[0] === 'string') {
     validatePath(args[0])
   }
@@ -61,9 +61,9 @@ const readFileSync = (...args: any[]) => {
 /**
  * Check whether the file exists
  * @param {string} path
- * @returns {boolean} A boolean indicating whether the path is a file.
+ * @returns {Promise<boolean>} A Promise that resolves with a boolean indicating whether the path exists.
  */
-const existsSync = (...args: any[]) => {
+const existsSync = (...args: any[]): Promise<boolean> => {
   if (args.length > 0 && typeof args[0] === 'string') {
     validatePath(args[0])
   }
@@ -71,9 +71,9 @@ const existsSync = (...args: any[]) => {
 }
 /**
  * List the directory files
- * @returns {Promise<any>} A Promise that resolves with the contents of the directory.
+ * @returns {Promise<string[]>} A Promise that resolves with an array of filenames in the directory.
  */
-const readdirSync = (...args: any[]) => {
+const readdirSync = (...args: any[]): Promise<string[]> => {
   if (args.length > 0 && typeof args[0] === 'string') {
     validatePath(args[0])
   }
@@ -81,9 +81,9 @@ const readdirSync = (...args: any[]) => {
 }
 /**
  * Creates a directory at the specified path.
- * @returns {Promise<any>} A Promise that resolves when the directory is created successfully.
+ * @returns {Promise<void>} A Promise that resolves when the directory is created successfully.
  */
-const mkdir = (...args: any[]) => {
+const mkdir = (...args: any[]): Promise<void> => {
   if (args.length > 0 && typeof args[0] === 'string') {
     validatePath(args[0])
   }
@@ -92,9 +92,9 @@ const mkdir = (...args: any[]) => {
 
 /**
  * Removes a directory at the specified path.
- * @returns {Promise<any>} A Promise that resolves when the directory is removed successfully.
+ * @returns {Promise<void>} A Promise that resolves when the directory is removed successfully.
  */
-const rm = (...args: any[]) => {
+const rm = (...args: any[]): Promise<void> => {
   if (args.length > 0 && typeof args[0] === 'string') {
     validatePath(args[0])
   }
@@ -103,16 +103,24 @@ const rm = (...args: any[]) => {
 
 /**
  * Moves a file from the source path to the destination path.
- * @returns {Promise<any>} A Promise that resolves when the file is moved successfully.
+ * @returns {Promise<void>} A Promise that resolves when the file is moved successfully.
  */
-const mv = (...args: any[]) => globalThis.core.api?.mv({ args })
+const mv = (...args: any[]): Promise<void> => {
+  if (args.length > 0 && typeof args[0] === 'string') {
+    validatePath(args[0])
+  }
+  if (args.length > 1 && typeof args[1] === 'string') {
+    validatePath(args[1])
+  }
+  return globalThis.core.api?.mv({ args })
+}
 
 /**
  * Deletes a file from the local file system.
  * @param {string} path - The path of the file to delete.
- * @returns {Promise<any>} A Promise that resolves when the file is deleted.
+ * @returns {Promise<void>} A Promise that resolves when the file is deleted.
  */
-const unlinkSync = (...args: any[]) => {
+const unlinkSync = (...args: any[]): Promise<void> => {
   if (args.length > 0 && typeof args[0] === 'string') {
     validatePath(args[0])
   }
@@ -121,8 +129,9 @@ const unlinkSync = (...args: any[]) => {
 
 /**
  * Appends data to a file at the specified path.
+ * @returns {Promise<void>} A Promise that resolves when the data is appended successfully.
  */
-const appendFileSync = (...args: any[]) => {
+const appendFileSync = (...args: any[]): Promise<void> => {
   if (args.length > 0 && typeof args[0] === 'string') {
     validatePath(args[0])
   }
@@ -144,10 +153,10 @@ const copyFile: (src: string, dest: string) => Promise<void> = (src, dest) => {
 /**
  * Gets the list of gguf files in a directory
  *
- * @param path - The paths to the file.
- * @returns {Promise<{any}>} - A promise that resolves with the list of gguf and non-gguf files
+ * @param paths - The paths to search for gguf files.
+ * @returns {Promise<{gguf: string[], nonGguf: string[]}>} - A promise that resolves with the list of gguf and non-gguf files
  */
-const getGgufFiles: (paths: string[]) => Promise<any> = (paths) => {
+const getGgufFiles: (paths: string[]) => Promise<{gguf: string[], nonGguf: string[]}> = (paths) => {
   paths.forEach(path => validatePath(path))
   return globalThis.core.api?.getGgufFiles(paths)
 }
