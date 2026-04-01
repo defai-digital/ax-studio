@@ -1117,20 +1117,29 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     // ── Download model file if URL provided ──
     const modelPath = opts.modelPath
     if (modelPath.startsWith('http://') || modelPath.startsWith('https://')) {
-      if (!downloadExt) throw new Error('Download extension not available')
+      console.log('[llamacpp] Download extension check:', !!downloadExt)
+      if (!downloadExt) {
+        const error = new Error('Download extension not available')
+        console.error('[llamacpp] Download extension unavailable:', error)
+        throw error
+      }
 
+      console.log('[llamacpp] Starting download for model:', modelId, 'from:', modelPath, 'to:', modelFilePath)
       events.emit(DownloadEvent.onFileDownloadStarted, { modelId, fileName: 'model.gguf' })
 
       const proxy = getProxyConfig()
       const proxyArg = buildProxyArg(proxy)
+      console.log('[llamacpp] Proxy config:', proxyArg)
 
       try {
+        console.log('[llamacpp] Calling downloadExt.downloadFile...')
         await downloadExt.downloadFile(
           modelPath,
           modelFilePath,
           `llamacpp-import-${modelId}`,
           proxyArg,
           (transferred: number, total: number) => {
+            console.log('[llamacpp] Download progress:', transferred, '/', total)
             events.emit(DownloadEvent.onFileDownloadUpdate, {
               modelId,
               fileName: 'model.gguf',
@@ -1140,7 +1149,9 @@ export default class AxStudioLlamacppExtension extends AIEngine {
             })
           }
         )
+        console.log('[llamacpp] Download completed successfully for model:', modelId)
       } catch (e) {
+        console.error('[llamacpp] Download failed for model:', modelId, 'error:', e)
         try { await fs.rm(modelFilePath) } catch {}
         events.emit(DownloadEvent.onFileDownloadError, { modelId, error: String(e) })
         throw e
