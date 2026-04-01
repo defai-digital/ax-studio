@@ -28,6 +28,23 @@ fn detect_shell_env_file(home_dir: &str, is_macos: bool) -> (&'static str, Strin
     }
 }
 
+// Validate environment variable key format: must match ^[A-Z_][A-Z0-9_]*$
+fn is_valid_env_key(key: &str) -> bool {
+    if key.is_empty() {
+        return false;
+    }
+    let chars: Vec<char> = key.chars().collect();
+    if !chars[0].is_ascii_uppercase() && chars[0] != '_' {
+        return false;
+    }
+    for &ch in &chars[1..] {
+        if !ch.is_ascii_uppercase() && !ch.is_ascii_digit() && ch != '_' {
+            return false;
+        }
+    }
+    true
+}
+
 // Helper function to write env vars to a shell config file
 fn write_env_to_shell(env_file_path: &str, env_vars: &[(String, String)]) -> Result<(), String> {
     let marker = "# Ax-Studio Local API Server - Claude Code Config";
@@ -238,6 +255,10 @@ pub fn launch_claude_code_with_config(
             env.get("key").and_then(|v| v.as_str()),
             env.get("value").and_then(|v| v.as_str()),
         ) {
+            // Validate env var key format to prevent shell injection
+            if !is_valid_env_key(key) {
+                return Err(format!("Invalid environment variable key: {}", key));
+            }
             env_vars.push((key.to_string(), value.to_string()));
         }
     }
@@ -273,53 +294,9 @@ pub fn launch_claude_code_with_config(
                 write_env_to_shell(&env_file_path, &env_vars)?;
                 return Ok(());
             }
-            Err(_) => {
-                // Use admin privileges to write
-                let marker = "# Ax-Studio Local API Server - Claude Code Config";
-                let existing_content = std::fs::read_to_string(&env_file_path).unwrap_or_default();
-                let cleaned: Vec<&str> = existing_content
-                    .split('\n')
-                    .filter(|line| {
-                        !line.starts_with(marker)
-                            && !line.starts_with("# Ax-Studio Local API Server")
-                            && !line.starts_with("export ANTHROPIC_")
-                    })
-                    .collect();
-
-                let env_content: String = env_vars
-                    .iter()
-                    .map(|(k, v)| {
-                        // Escape single quotes to prevent shell injection
-                        let escaped_v = v.replace('\'', "'\\''");
-                        format!("export {}='{}'\n", k, escaped_v)
-                    })
-                    .collect();
-
-                let new_block = format!("{}\n{}", marker, env_content);
-
-                let final_content = cleaned.join("\n") + "\n" + &new_block + marker;
-
-                // Write to a temp file first, then use osascript to move it
-                let temp_script_path = format!("{}/.ax_studio_env_update.sh", home_dir);
-                std::fs::write(&temp_script_path, &final_content).map_err(|e| e.to_string())?;
-
-                // Use admin privileges to move the temp file
-                let script = format!(
-                    r#"do shell script "cp '{}' '{}' && rm '{}' && echo 'Env vars written to {}'" with administrator privileges"#,
-                    temp_script_path, env_file_path, temp_script_path, env_file_path
-                );
-
-                std::process::Command::new("osascript")
-                    .arg("-e")
-                    .arg(&script)
-                    .output()
-                    .map_err(|e| e.to_string())?;
-
-                log::info!(
-                    "Env vars written to {} with admin privileges",
-                    env_file_path
-                );
-                return Ok(());
+            Err(e) => {
+                // Cannot write to shell config file - return error instead of escalating privileges
+                return Err(format!("Cannot write to shell config file {}: {}. Please ensure write permissions or configure manually.", env_file_path, e));
             }
         }
     } else if cfg!(target_os = "linux") {
@@ -364,5 +341,32 @@ pub fn launch_claude_code_with_config(
 
         log::info!("Environment variables set permanently in Windows registry.");
         return Ok(());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_valid_env_key_valid_keys() {
+        assert!(is_valid_env_key("ANTHROPIC_AUTH_TOKEN"));
+        assert!(is_valid_env_key("MY_VAR"));
+        assert!(is_valid_env_key("_PRIVATE_VAR"));
+        assert!(is_valid_env_key("VAR1"));
+        assert!(is_valid_env_key("A"));
+    }
+
+    #[test]
+    fn test_is_valid_env_key_invalid_keys() {
+        assert!(!is_valid_env_key(""));
+        assert!(!is_valid_env_key("lowercase"));
+        assert!(!is_valid_env_key("VAR-NAME"));
+        assert!(!is_valid_env_key("VAR.NAME"));
+        assert!(!is_valid_env_key("VAR NAME"));
+        assert!(!is_valid_env_key("VAR$(rm -rf /)"));
+        assert!(!is_valid_env_key("VAR\n"));
+        assert!(!is_valid_env_key("1VAR"));
+        assert!(!is_valid_env_key("VAR="));
     }
 }
