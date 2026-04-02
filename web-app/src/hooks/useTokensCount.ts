@@ -3,6 +3,7 @@ import { ThreadMessage } from '@ax-studio/core'
 import { usePrompt } from './usePrompt'
 import { useModelProvider } from './useModelProvider'
 import { useServiceStore } from './useServiceHub'
+import type { ModelProvider } from '@/types/modelProviders'
 
 // Simple token estimation for hosted models when backend token counting is unavailable
 // Rough approximation: ~4 characters per token for English text
@@ -13,19 +14,15 @@ const estimateTokensFromText = (text: string): number => {
 }
 
 // Check if a model provider is hosted (external API) rather than local
-const isHostedModel = (selectedModel: any, providers: any[]): boolean => {
-  if (!selectedModel?.id) {
-    console.log('isHostedModel: No selected model')
-    return false
-  }
+const isHostedModel = (selectedModel: { id?: string }, providers: ModelProvider[]): boolean => {
+  if (!selectedModel?.id) return false
 
   // Find the provider for this model
   const provider = providers.find(p =>
-    p.models?.some((m: any) => m.id === selectedModel.id)
+    p.models?.some((m) => m.id === selectedModel.id)
   )
 
   if (!provider) {
-    console.log('isHostedModel: No provider found for model', selectedModel.id, 'from providers:', providers.map(p => p.provider))
     return false
   }
 
@@ -35,19 +32,9 @@ const isHostedModel = (selectedModel: any, providers: any[]): boolean => {
     !provider.base_url.includes('127.0.0.1') &&
     !provider.base_url.includes('0.0.0.0')
 
-  const requiresApiKey = provider.settings?.some((s: any) => s.key === 'api-key')
+  const requiresApiKey = provider.settings?.some((s) => s.key === 'api-key')
 
-  const result = hasExternalUrl && requiresApiKey
-  console.log('isHostedModel:', {
-    modelId: selectedModel.id,
-    provider: provider.provider,
-    base_url: provider.base_url,
-    hasExternalUrl,
-    requiresApiKey,
-    result
-  })
-
-  return result
+  return hasExternalUrl && requiresApiKey
 }
 
 export interface TokenCountData {
