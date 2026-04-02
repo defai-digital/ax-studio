@@ -49,6 +49,7 @@ pub(super) async fn handle_models_route<R: tauri::Runtime>(
         host_header,
         origin_header,
         &config.trusted_hosts,
+        config.cors_enabled,
     );
 
     log::debug!("Returning {} remote models", remote_models.len());
@@ -136,6 +137,7 @@ pub(super) fn handle_docs_root_route(
         host_header,
         origin_header,
         &config.trusted_hosts,
+        config.cors_enabled,
     );
 
     response_builder.body(Body::from(html)).unwrap()
@@ -300,6 +302,7 @@ pub(super) fn handle_unknown_route(
             host_header,
             origin_header,
             &config.trusted_hosts,
+            config.cors_enabled,
         );
         error_response.body(Body::from("Not Found")).unwrap()
     } else {
@@ -312,6 +315,7 @@ pub(super) fn handle_unknown_route(
             host_header,
             origin_header,
             &config.trusted_hosts,
+            config.cors_enabled,
         );
         error_response.body(Body::from("Not Found")).unwrap()
     }

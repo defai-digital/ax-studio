@@ -45,6 +45,7 @@ fn error_response(
         host_header,
         origin_header,
         &config.trusted_hosts,
+        config.cors_enabled,
     );
     builder.body(Body::from(message.into())).unwrap_or_else(|e| {
         log::error!("Failed to build error response: {e}");
@@ -367,6 +368,7 @@ pub(super) async fn dispatch_to_upstream(
                                 host_header,
                                 origin_header,
                                 &config.trusted_hosts,
+                                config.cors_enabled,
                             );
                             return Ok(error_response
                                 .body(Body::from(fallback_error))
@@ -384,6 +386,7 @@ pub(super) async fn dispatch_to_upstream(
                             host_header,
                             origin_header,
                             &config.trusted_hosts,
+                            config.cors_enabled,
                         );
 
                         let is_streaming = openai_body
@@ -422,6 +425,7 @@ pub(super) async fn dispatch_to_upstream(
                     host_header,
                     origin_header,
                     &config.trusted_hosts,
+                    config.cors_enabled,
                 );
                 return Ok(error_response.body(Body::from(error_body)).unwrap_or_else(|_| Response::new(Body::from("Internal server error"))));
             } else if is_error {
@@ -442,6 +446,7 @@ pub(super) async fn dispatch_to_upstream(
                     host_header,
                     origin_header,
                     &config.trusted_hosts,
+                    config.cors_enabled,
                 );
                 return Ok(error_response.body(Body::from(error_body)).unwrap_or_else(|_| Response::new(Body::from("Internal server error"))));
             }
@@ -460,6 +465,7 @@ pub(super) async fn dispatch_to_upstream(
                 host_header,
                 origin_header,
                 &config.trusted_hosts,
+                config.cors_enabled,
             );
 
             let mut stream = response.bytes_stream();
@@ -496,6 +502,7 @@ pub(super) async fn dispatch_to_upstream(
                 host_header,
                 origin_header,
                 &config.trusted_hosts,
+                config.cors_enabled,
             );
             Ok(error_response.body(Body::from(error_msg)).unwrap_or_else(|_| Response::new(Body::from("Internal server error"))))
         }

@@ -248,7 +248,8 @@ export const useTokensCount = (
         percentage: maxTokens ? 0 : undefined,
         loading: false,
         isNearLimit: false,
-        error: error instanceof Error ? error.message : 'Failed to calculate tokens',
+        error:
+          error instanceof Error ? error.message : 'Failed to calculate tokens',
       })
     }
   }, [getMaxTokens, messages, selectedModel, providers, serviceHub])
@@ -263,7 +264,7 @@ export const useTokensCount = (
     }
 
     debounceTimeoutRef.current = setTimeout(() => {
-      void latestCalculationRef.current?.()
+      latestCalculationRef.current?.()
     }, 250)
 
     return () => {

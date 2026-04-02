@@ -104,8 +104,9 @@ pub async fn execute_python(code: &str, timeout_secs: u64) -> Result<ExecutionRe
         }
     }
 
-    let child = cmd
-        .spawn()
+    let child = tokio::task::spawn_blocking(move || cmd.spawn())
+        .await
+        .map_err(|e| format!("Task join error: {e}"))?
         .map_err(|e| format!("Failed to start Python: {e}"))?;
 
     let pid = child.id();

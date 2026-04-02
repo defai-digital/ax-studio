@@ -1,15 +1,13 @@
 //! CORS and security helpers for the Ax-Studio proxy server.
-use std::sync::atomic::{AtomicBool, Ordering};
-
-pub static SERVER_CORS_ENABLED: AtomicBool = AtomicBool::new(false);
 
 pub fn add_cors_headers_with_host_and_origin(
     builder: hyper::http::response::Builder,
     _host: &str,
     origin: &str,
     _trusted_hosts: &[Vec<String>],
+    cors_enabled: bool,
 ) -> hyper::http::response::Builder {
-    if !SERVER_CORS_ENABLED.load(Ordering::Relaxed) {
+    if !cors_enabled {
         return builder;
     }
 
@@ -39,23 +37,22 @@ mod tests {
 
     #[test]
     fn test_cors_disabled_returns_builder_unchanged() {
-        SERVER_CORS_ENABLED.store(false, Ordering::Relaxed);
         let builder = hyper::http::Response::builder();
         let result =
-            add_cors_headers_with_host_and_origin(builder, "localhost", "http://example.com", &[]);
+            add_cors_headers_with_host_and_origin(builder, "localhost", "http://example.com", &[], false);
         let resp = result.body(hyper::Body::empty()).unwrap();
         assert!(resp.headers().get("Access-Control-Allow-Origin").is_none());
     }
 
     #[test]
     fn test_cors_enabled_with_origin() {
-        SERVER_CORS_ENABLED.store(true, Ordering::Relaxed);
         let builder = hyper::http::Response::builder();
         let result = add_cors_headers_with_host_and_origin(
             builder,
             "localhost",
             "http://example.com",
             &[],
+            true,
         );
         let resp = result.body(hyper::Body::empty()).unwrap();
         assert_eq!(
@@ -86,15 +83,12 @@ mod tests {
             resp.headers().get("Vary").unwrap().to_str().unwrap(),
             "Origin"
         );
-        // Reset global state
-        SERVER_CORS_ENABLED.store(false, Ordering::Relaxed);
     }
 
     #[test]
     fn test_cors_enabled_empty_origin_uses_wildcard() {
-        SERVER_CORS_ENABLED.store(true, Ordering::Relaxed);
         let builder = hyper::http::Response::builder();
-        let result = add_cors_headers_with_host_and_origin(builder, "localhost", "", &[]);
+        let result = add_cors_headers_with_host_and_origin(builder, "localhost", "", &[], true);
         let resp = result.body(hyper::Body::empty()).unwrap();
         assert_eq!(
             resp.headers()
@@ -109,6 +103,5 @@ mod tests {
             .headers()
             .get("Access-Control-Allow-Credentials")
             .is_none());
-        SERVER_CORS_ENABLED.store(false, Ordering::Relaxed);
     }
 }

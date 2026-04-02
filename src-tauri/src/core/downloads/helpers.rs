@@ -3,7 +3,7 @@ use crate::core::app::commands::get_app_data_folder_path;
 use crate::core::updater::hmac_client::SignedRequestHeaders;
 use crate::core::updater::session::get_session_id;
 use ax_studio_utils::normalize_path;
-use futures_util::StreamExt;
+use futures_util::{future::join_all, StreamExt};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use std::collections::HashMap;
 use std::path::Path;
@@ -42,12 +42,16 @@ fn get_mirror_prefix() -> &'static str {
 }
 
 /// Secret key for HMAC request authentication
-/// - In CI: Set AX_STUDIO_SIGNING_KEY environment variable at build time
-/// - In local dev: Falls back to a test key
+/// In release: Must be set via AX_STUDIO_SIGNING_KEY environment variable at build time
+/// In debug: Falls back to a debug key
+/// Must not be the default test key
+#[cfg(debug_assertions)]
 const SECRET_KEY: &str = match option_env!("AX_STUDIO_SIGNING_KEY") {
     Some(key) => key,
-    None => "local-dev-test-key-not-for-production",
+    None => "debug-mode-key",
 };
+#[cfg(not(debug_assertions))]
+const SECRET_KEY: &str = env!("AX_STUDIO_SIGNING_KEY");
 
 // ===== UTILITY FUNCTIONS =====
 
@@ -318,8 +322,21 @@ pub fn _get_client_for_item(
     if let Some(proxy_config) = &item.proxy {
         // Handle SSL verification settings
         if proxy_config.ignore_ssl.unwrap_or(false) {
+            // Security fix: Require SHA256 validation when SSL is disabled
+            if item.sha256.is_none() {
+                return Err(format!(
+                    "SSL certificate verification disabled for download from {}. \
+                    SHA256 hash validation is required for security but not provided. \
+                    Downloads without hash verification can be tampered with.",
+                    item.url
+                ));
+            }
             client_builder = client_builder.danger_accept_invalid_certs(true);
-            log::info!("SSL certificate verification disabled for URL {}", item.url);
+            log::warn!(
+                "⚠️ SSL certificate verification disabled for download from {}. \
+                Proceeding with SHA256 hash validation only.",
+                item.url
+            );
         }
 
         // Note: reqwest doesn't have fine-grained SSL verification controls
@@ -397,14 +414,27 @@ pub async fn _download_files_internal(
 
     let header_map = _convert_headers(headers).map_err(err_to_string)?;
 
-    // Calculate sizes for each file
+    // Calculate sizes for each file concurrently
+    let size_futures = items
+        .iter()
+        .map(|item| {
+            let item_url = item.url.clone();
+            let header_map = header_map.clone();
+            async move {
+                let client = _get_client_for_item(item, &header_map).map_err(err_to_string)?;
+                let size = _get_file_size(&client, &item_url)
+                    .await
+                    .map_err(err_to_string)?;
+                Ok::<_, String>((item_url, size))
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let size_results = join_all(size_futures).await;
     let mut file_sizes = HashMap::new();
-    for item in items.iter() {
-        let client = _get_client_for_item(item, &header_map).map_err(err_to_string)?;
-        let size = _get_file_size(&client, &item.url)
-            .await
-            .map_err(err_to_string)?;
-        file_sizes.insert(item.url.clone(), size);
+    for result in size_results {
+        let (url, size) = result?;
+        file_sizes.insert(url, size);
     }
 
     let total_size: u64 = file_sizes.values().sum();
@@ -785,6 +815,9 @@ async fn _get_maybe_resume_with_hmac(
     url: &str,
     start_bytes: u64,
 ) -> Result<reqwest::Response, String> {
+    // Ensure the signing key is not the default test key
+    assert!(SECRET_KEY != "local-dev-test-key-not-for-production", "AX_STUDIO_SIGNING_KEY must not be the default test key");
+
     // Generate HMAC headers for request authentication
     let nonce_seed = get_download_nonce_seed();
     let app_version = get_app_version();

@@ -381,11 +381,11 @@ pub fn decompress<R: Runtime>(
         let mut zip = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
         for i in 0..zip.len() {
             let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
-            let outpath = output_dir_buf.join(
-                entry
-                    .enclosed_name()
-                    .ok_or_else(|| "Invalid zip entry path".to_string())?,
-            );
+            let entry_path = entry.enclosed_name().ok_or_else(|| "Invalid zip entry path".to_string())?;
+            let outpath = ax_studio_utils::normalize_path(&output_dir_buf.join(entry_path));
+            if !outpath.starts_with(&output_dir_buf) {
+                return Err(format!("Zip entry path traversal blocked: {}", entry.name()));
+            }
 
             if entry.name().ends_with('/') {
                 std::fs::create_dir_all(&outpath).map_err(|e| e.to_string())?;

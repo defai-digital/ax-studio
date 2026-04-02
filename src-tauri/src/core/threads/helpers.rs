@@ -22,6 +22,16 @@ pub fn should_use_sqlite() -> bool {
 pub async fn get_lock_for_thread(thread_id: &str) -> Arc<Mutex<()>> {
     let locks = MESSAGE_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
     let mut locks = locks.lock().await;
+
+    // Clean up entries where the Arc has no external references (strong_count == 1)
+    let keys_to_remove: Vec<String> = locks
+        .iter()
+        .filter_map(|(key, arc)| if Arc::strong_count(arc) == 1 { Some(key.clone()) } else { None })
+        .collect();
+    for key in keys_to_remove {
+        locks.remove(&key);
+    }
+
     let lock = locks
         .entry(thread_id.to_string())
         .or_insert_with(|| Arc::new(Mutex::new(())))

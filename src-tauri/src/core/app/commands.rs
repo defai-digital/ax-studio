@@ -83,9 +83,8 @@ pub fn get_app_data_folder_path<R: Runtime>(app_handle: tauri::AppHandle<R>) -> 
                     .duration_since(std::time::UNIX_EPOCH)
                     .map(|d| d.as_nanos())
                     .unwrap_or(0);
-                let path = std::env::current_dir()
-                    .unwrap_or_else(|_| PathBuf::from("."))
-                    .join(format!("test-data-{unique_id:?}-{timestamp}"));
+                let path = std::env::temp_dir()
+                    .join(format!("ax-studio-test-data-{unique_id:?}-{timestamp}"));
                 let _ = fs::create_dir_all(&path);
                 *dir = Some(path);
             }
