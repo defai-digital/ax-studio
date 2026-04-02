@@ -13,6 +13,7 @@ export function estimateTeamRunCost(
   agents: Array<{
     name: string
     max_steps?: number
+    max_result_tokens?: number
     tool_scope?: { mode: string }
   }>
 ): CostEstimate {
@@ -24,9 +25,15 @@ export function estimateTeamRunCost(
     const toolOverhead =
       !agent.tool_scope || agent.tool_scope.mode === 'all' ? 500 : 200
 
+    const stepBasedEstimate = avgTokensPerStep * steps + toolOverhead
+    const estimatedTokens =
+      agent.max_result_tokens != null
+        ? Math.min(stepBasedEstimate, agent.max_result_tokens)
+        : stepBasedEstimate
+
     return {
       agent: agent.name,
-      estimatedTokens: avgTokensPerStep * steps + toolOverhead,
+      estimatedTokens,
     }
   })
 

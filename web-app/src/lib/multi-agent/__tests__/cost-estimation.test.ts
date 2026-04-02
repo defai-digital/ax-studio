@@ -101,4 +101,56 @@ describe('estimateTeamRunCost', () => {
     const expectedMin = Math.round(agentMaxSum * 0.3 + 3000)
     expect(estimate.range.min).toBe(expectedMin)
   })
+
+  it('caps estimate at max_result_tokens when lower than step-based estimate', () => {
+    const team = makeTeam({ token_budget: 100000 })
+    const agents = [
+      { name: 'Agent A', max_steps: 10, max_result_tokens: 4000 },
+    ]
+
+    const estimate = estimateTeamRunCost(team, agents)
+
+    // Step-based: 1500 * 10 + 500 = 15500, but capped at 4000
+    expect(estimate.agents[0].estimatedTokens).toBe(4000)
+    expect(estimate.range.max).toBe(4000 + 3000)
+    expect(estimate.withinBudget).toBe(true)
+  })
+
+  it('uses step-based estimate when max_result_tokens is higher', () => {
+    const team = makeTeam()
+    const agents = [
+      { name: 'Agent A', max_steps: 5, max_result_tokens: 50000 },
+    ]
+
+    const estimate = estimateTeamRunCost(team, agents)
+
+    // Step-based: 1500 * 5 + 500 = 8000, which is less than 50000
+    expect(estimate.agents[0].estimatedTokens).toBe(8000)
+  })
+
+  it('uses step-based estimate when max_result_tokens is not set', () => {
+    const team = makeTeam()
+    const agents = [{ name: 'Agent A', max_steps: 10 }]
+
+    const estimate = estimateTeamRunCost(team, agents)
+
+    expect(estimate.agents[0].estimatedTokens).toBe(15500)
+  })
+
+  it('caps multiple agents independently with max_result_tokens', () => {
+    const team = makeTeam({ token_budget: 100000 })
+    const agents = [
+      { name: 'Agent A', max_steps: 10, max_result_tokens: 4000 },
+      { name: 'Agent B', max_steps: 10, max_result_tokens: 4000 },
+    ]
+
+    const estimate = estimateTeamRunCost(team, agents)
+
+    expect(estimate.agents[0].estimatedTokens).toBe(4000)
+    expect(estimate.agents[1].estimatedTokens).toBe(4000)
+    // Total max: 4000 + 4000 + 3000 orchestrator = 11000
+    expect(estimate.range.max).toBe(11000)
+    // Total min: (4000 * 0.3 + 4000 * 0.3) + 3000 = 5400
+    expect(estimate.range.min).toBe(5400)
+  })
 })
