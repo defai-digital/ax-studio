@@ -528,9 +528,14 @@ export class DefaultModelsService implements ModelsService {
             enable_thinking: boolean
           }
         }) => Promise<number>
+        getLoadedModels?: () => Promise<string[]>
       }
 
       if (engine && typeof engine.getTokensCount === 'function') {
+        // Only count tokens for models loaded in llamacpp — cloud/remote
+        // models don't have local sessions and would throw.
+        const loadedModels = await engine.getLoadedModels?.() ?? []
+        if (!loadedModels.includes(modelId)) return 0
         const transformedMessages = messages
           .map((message) => {
             let content:

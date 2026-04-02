@@ -144,6 +144,7 @@ fn handle_cors_preflight(req: &Request<Body>, config: &ProxyConfig) -> Option<Re
         "x-stainless-runtime",
         "x-stainless-runtime-version",
         "x-stainless-timeout",
+        "x-ax-provider",
     ];
 
     let headers_valid = if requested_headers.is_empty() {
@@ -369,9 +370,13 @@ pub(super) async fn proxy_request<R: tauri::Runtime>(
         | (hyper::Method::POST, "/completions")
         | (hyper::Method::POST, "/embeddings")
         | (hyper::Method::POST, "/messages/count_tokens") => {
+            let provider_hint = headers
+                .get("x-ax-provider")
+                .and_then(|v| v.to_str().ok());
             let resolution = match model_routes::resolve_model_route(
                 &destination_path, body,
                 &host_header, &origin_header, &config, &app_handle,
+                provider_hint,
             ).await {
                 Ok(r) => r,
                 Err(resp) => return Ok(resp),

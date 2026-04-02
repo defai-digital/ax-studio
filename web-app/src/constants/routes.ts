@@ -23,6 +23,7 @@ export const route = {
     assistant: '/settings/assistant',
     agent_teams: '/settings/agent-teams',
     engine_settings: '/settings/engine-settings',
+    llm_router: '/settings/llm-router',
   },
   hub: {
     index: '/hub/',

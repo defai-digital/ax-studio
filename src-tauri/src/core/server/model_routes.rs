@@ -52,6 +52,56 @@ fn error_response(
     })
 }
 
+/// Strip non-standard fields from the request body that upstream providers may reject.
+///
+/// Currently removes `reasoning_content` and `reasoning` from assistant messages.
+/// These are response-only fields added by the Vercel AI SDK when prior assistant
+/// turns contained thinking/reasoning tokens.  They are not part of the OpenAI API
+/// spec and providers like Groq reject them with a 400 error.
+///
+/// Returns the original bytes unchanged if the body is not JSON, has no `messages`
+/// array, or no assistant messages carry these fields.
+fn normalize_request_body(body_bytes: &Bytes) -> Bytes {
+    let mut json_body: serde_json::Value = match serde_json::from_slice(body_bytes) {
+        Ok(v) => v,
+        Err(_) => return body_bytes.clone(),
+    };
+
+    let messages = match json_body.get_mut("messages").and_then(|m| m.as_array_mut()) {
+        Some(msgs) => msgs,
+        None => return body_bytes.clone(),
+    };
+
+    let mut modified = false;
+    for msg in messages.iter_mut() {
+        let is_assistant = msg
+            .get("role")
+            .and_then(|r| r.as_str())
+            .is_some_and(|r| r == "assistant");
+        if !is_assistant {
+            continue;
+        }
+        if let Some(obj) = msg.as_object_mut() {
+            if obj.remove("reasoning_content").is_some() {
+                modified = true;
+            }
+            if obj.remove("reasoning").is_some() {
+                modified = true;
+            }
+        }
+    }
+
+    if modified {
+        log::debug!("Stripped reasoning_content/reasoning from assistant messages in request body");
+        match serde_json::to_vec(&json_body) {
+            Ok(bytes) => Bytes::from(bytes),
+            Err(_) => body_bytes.clone(),
+        }
+    } else {
+        body_bytes.clone()
+    }
+}
+
 fn extract_model_id(body_bytes: &[u8]) -> Result<String, String> {
     let json_body = serde_json::from_slice::<serde_json::Value>(body_bytes)
         .map_err(|e| format!("Invalid JSON body: {e}"))?;
@@ -141,6 +191,7 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
     origin_header: &str,
     config: &ProxyConfig,
     app_handle: &tauri::AppHandle<R>,
+    provider_hint: Option<&str>,
 ) -> Result<ProviderResolution, Response<Body>> {
     let is_anthropic_messages = destination_path == "/messages";
     if is_anthropic_messages {
@@ -185,13 +236,51 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
             provider_configs.keys().collect::<Vec<_>>()
         );
 
-        resolve_provider_config_from_map(
-            &provider_configs,
-            &model_id,
-            destination_path,
-            is_anthropic_messages,
-        )
+        // If the frontend sent an X-Ax-Provider header, try a direct lookup first.
+        // This avoids ambiguity when the same model ID is registered under multiple providers.
+        if let Some(hint) = provider_hint {
+            if let Some(cfg) = provider_configs.get(hint) {
+                log::debug!("Using provider hint from X-Ax-Provider header: {hint}");
+                if let Some(base_url) = cfg.base_url.as_deref() {
+                    Ok(Some(ResolvedProviderConfig {
+                        target_base_url: build_upstream_url(
+                            base_url,
+                            destination_path,
+                            is_anthropic_messages,
+                        ),
+                        session_api_key: cfg.api_key.clone(),
+                        provider_custom_headers: cfg.custom_headers.clone(),
+                    }))
+                } else {
+                    log::debug!("Provider hint '{hint}' matched but has no base_url, falling back to heuristic");
+                    resolve_provider_config_from_map(
+                        &provider_configs,
+                        &model_id,
+                        destination_path,
+                        is_anthropic_messages,
+                    )
+                }
+            } else {
+                log::debug!("Provider hint '{hint}' not found in registered providers, falling back to heuristic");
+                resolve_provider_config_from_map(
+                    &provider_configs,
+                    &model_id,
+                    destination_path,
+                    is_anthropic_messages,
+                )
+            }
+        } else {
+            resolve_provider_config_from_map(
+                &provider_configs,
+                &model_id,
+                destination_path,
+                is_anthropic_messages,
+            )
+        }
     };
+
+    // Normalize the request body: strip non-standard fields that upstream providers reject.
+    let normalized_body = normalize_request_body(&body_bytes);
 
     match resolved {
         Ok(Some(resolved)) => Ok(ProviderResolution {
@@ -199,7 +288,7 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
             session_api_key: resolved.session_api_key,
             provider_custom_headers: resolved.provider_custom_headers,
             is_anthropic_messages,
-            buffered_body: body_bytes,
+            buffered_body: normalized_body,
         }),
         Ok(None) => {
             log::warn!("No remote provider configured for model_id: {model_id}");
@@ -251,9 +340,14 @@ pub(super) async fn dispatch_to_upstream(
     for (name, value) in headers.iter() {
         // Strip auth headers — the proxy injects the real provider key below.
         // Also strip x-api-key so client dummy keys never reach the upstream API.
+        // Strip x-ax-provider — internal routing header, not for upstream providers.
+        // Strip Content-Length — the body may have been modified by normalize_request_body
+        // (e.g., reasoning fields stripped), so reqwest must recalculate it from the actual body.
         if name != hyper::header::HOST
             && name != hyper::header::AUTHORIZATION
+            && name != hyper::header::CONTENT_LENGTH
             && name.as_str() != "x-api-key"
+            && name.as_str() != "x-ax-provider"
         {
             outbound_req = outbound_req.header(name, value);
         }
@@ -638,5 +732,60 @@ mod tests {
         );
         assert!(extract_model_id(br#"{"messages":[]}"#).is_err());
         assert!(extract_model_id(br#"not-json"#).is_err());
+    }
+
+    #[test]
+    fn normalize_request_body_strips_reasoning_from_assistant_messages() {
+        let body = Bytes::from(
+            r#"{"model":"gpt-4","messages":[
+                {"role":"user","content":"hello"},
+                {"role":"assistant","content":"hi","reasoning_content":"thinking...","reasoning":"also thinking"},
+                {"role":"user","content":"bye"}
+            ]}"#,
+        );
+        let result = normalize_request_body(&body);
+        let parsed: serde_json::Value = serde_json::from_slice(&result).unwrap();
+        let assistant = &parsed["messages"][1];
+        assert_eq!(assistant["content"], "hi");
+        assert!(assistant.get("reasoning_content").is_none());
+        assert!(assistant.get("reasoning").is_none());
+    }
+
+    #[test]
+    fn normalize_request_body_preserves_user_messages_unchanged() {
+        let body = Bytes::from(
+            r#"{"model":"gpt-4","messages":[
+                {"role":"user","content":"hello","reasoning_content":"not stripped"}
+            ]}"#,
+        );
+        let result = normalize_request_body(&body);
+        let parsed: serde_json::Value = serde_json::from_slice(&result).unwrap();
+        assert_eq!(parsed["messages"][0]["reasoning_content"], "not stripped");
+    }
+
+    #[test]
+    fn normalize_request_body_returns_original_when_no_reasoning() {
+        let body = Bytes::from(r#"{"model":"gpt-4","messages":[{"role":"user","content":"hi"}]}"#);
+        let result = normalize_request_body(&body);
+        // No modification needed — should return equivalent JSON
+        let original: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let normalized: serde_json::Value = serde_json::from_slice(&result).unwrap();
+        assert_eq!(original, normalized);
+    }
+
+    #[test]
+    fn normalize_request_body_handles_non_json() {
+        let body = Bytes::from("not json at all");
+        let result = normalize_request_body(&body);
+        assert_eq!(result, body);
+    }
+
+    #[test]
+    fn normalize_request_body_handles_no_messages_field() {
+        let body = Bytes::from(r#"{"model":"gpt-4","input":"embed this"}"#);
+        let result = normalize_request_body(&body);
+        let original: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let normalized: serde_json::Value = serde_json::from_slice(&result).unwrap();
+        assert_eq!(original, normalized);
     }
 }
