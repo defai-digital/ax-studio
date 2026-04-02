@@ -95,7 +95,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
 
   const {
     messages: chatMessages, status, error, sendMessage, regenerate,
-    setMessages: setChatMessages, stop, addToolOutput,
+    setMessages: setChatMessages, stop, addToolOutput, getLastRouterResult,
   } = useChat({
     sessionId: threadId,
     sessionTitle: thread?.title,
@@ -111,6 +111,33 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     experimental_throttle: 50,
     onFinish: ({ message, isAbort }) => {
       if (!isAbort && message.role === 'assistant') {
+        // Attach routing metadata if the router made a decision
+        const routerResult = getLastRouterResult()
+        if (import.meta.env.DEV && routerResult?.routed) console.log('[LLM Router] onFinish routerResult:', JSON.stringify(routerResult))
+        if (routerResult?.routed) {
+          const routingMeta = {
+            modelId: routerResult.modelId,
+            providerId: routerResult.providerId,
+            reason: routerResult.reason,
+            routed: true,
+            latencyMs: routerResult.latencyMs,
+          }
+          // Update the message object for persistence
+          Object.assign(message, {
+            metadata: {
+              ...((message.metadata ?? {}) as Record<string, unknown>),
+              routing: routingMeta,
+            },
+          })
+          // Update chat state so the UI re-renders with the routing badge
+          setChatMessages((prev) =>
+            prev.map((m) =>
+              m.id === message.id
+                ? { ...m, metadata: { ...((m.metadata ?? {}) as Record<string, unknown>), routing: routingMeta } }
+                : m,
+            ),
+          )
+        }
         const contentParts = extractContentPartsFromUIMessage(message)
         processMemoryOnFinish(message, contentParts, setChatMessages)
         persistMessageOnFinishRef.current?.(message, contentParts)

@@ -15,16 +15,46 @@ import { useModelProvider } from '@/hooks/useModelProvider'
 import { useAssistant } from '@/hooks/useAssistant'
 import { useThreads } from '@/hooks/useThreads'
 import { useFileRegistry, threadCollectionId, projectCollectionId } from '@/lib/file-registry'
+import { useRouterSettings } from '@/hooks/useRouterSettings'
+import { routeMessage, getAvailableModelsForRouter } from './llm-router'
 import type { CostEstimate } from './multi-agent/cost-estimation'
 import { executeSingleAgentStream } from './transport/single-agent-transport'
 import { executeMultiAgentStream } from './transport/multi-agent-transport'
 import type { TokenUsageCallback, ServiceHub, SendMessagesOptions } from './transport/transport-types'
 import { prepareProviderForChat } from './chat/model-session'
+import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
+import { isPlatformTauri } from '@/lib/platform'
+import { useLocalApiServer } from '@/hooks/useLocalApiServer'
+
+const httpFetch = isPlatformTauri() ? tauriFetch : globalThis.fetch
+
+// Cache preflight results so each model is only validated once.
+// Failed models are remembered permanently (until page reload).
+// Successful models are cached for 10 minutes.
+const PREFLIGHT_TTL_MS = 10 * 60 * 1000
+const preflightCache = new Map<string, { ok: boolean; ts: number }>()
+
+function isModelPreflightCached(modelId: string, providerId: string): boolean | null {
+  const key = `${providerId}::${modelId}`
+  const entry = preflightCache.get(key)
+  if (!entry) return null
+  if (!entry.ok) return false // failed models stay rejected
+  if (Date.now() - entry.ts > PREFLIGHT_TTL_MS) {
+    preflightCache.delete(key)
+    return null
+  }
+  return true
+}
+
+function cachePreflightResult(modelId: string, providerId: string, ok: boolean) {
+  preflightCache.set(`${providerId}::${modelId}`, { ok, ts: Date.now() })
+}
 
 export type { TokenUsageCallback }
 
 export class CustomChatTransport implements ChatTransport<UIMessage> {
   public model: LanguageModel | null = null
+  public lastRouterResult: RouterResult | null = null
   private tools: Record<string, Tool> = {}
   private onTokenUsage?: TokenUsageCallback
   private modelSupportsTools = false
@@ -71,7 +101,7 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
     await this.refreshTools()
   }
 
-  async refreshTools() {
+  async refreshTools(overrideModelSupportsTools?: boolean) {
     const toolsRecord: Record<string, Tool> = {}
     const getDisabledToolsForThread = useToolAvailable.getState().getDisabledToolsForThread
     const disabledToolKeys = this.threadId
@@ -81,8 +111,9 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
       disabledToolKeys.includes(`${serverName}::${toolName}`)
 
     if (this.serviceHub) {
-      const selectedModel = useModelProvider.getState().selectedModel
-      const modelSupportsTools = selectedModel?.capabilities?.includes('tools') ?? this.modelSupportsTools
+      const modelSupportsTools = overrideModelSupportsTools
+        ?? useModelProvider.getState().selectedModel?.capabilities?.includes('tools')
+        ?? this.modelSupportsTools
 
       if (modelSupportsTools) {
         const localKnowledgeEnabled = this.threadId
@@ -179,40 +210,142 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
       })
     }
 
-    await this.refreshTools()
+    const selectedModelId = useModelProvider.getState().selectedModel?.id
+    const selectedProviderId = useModelProvider.getState().selectedProvider
 
-    const modelId = this.modelOverrideId ?? useModelProvider.getState().selectedModel?.id
-    const providerId = useModelProvider.getState().selectedProvider
-    const provider = useModelProvider.getState().getProviderByName(providerId)
-    if (!this.serviceHub || !modelId || !provider) {
-      throw new Error('ServiceHub not initialized or model/provider missing.')
+    const fallbackModelId = this.modelOverrideId ?? selectedModelId ?? ''
+    const fallbackProviderId = selectedProviderId
+    let finalModelId = fallbackModelId
+    let finalProviderId = fallbackProviderId
+    this.lastRouterResult = null
+
+    // LLM Router: when auto-routing is enabled, the router takes priority.
+    // It decides the best model; on failure it falls back to the override/selected model.
+    const routerSettings = useRouterSettings.getState()
+    if (
+      routerSettings.isAutoRouteEnabled(this.threadId) &&
+      routerSettings.routerModelId &&
+      routerSettings.routerProviderId
+    ) {
+      const availableModels = getAvailableModelsForRouter(
+        useModelProvider.getState().providers,
+        routerSettings.routerModelId,
+      )
+      this.lastRouterResult = await routeMessage(
+        options.messages,
+        routerSettings.routerModelId,
+        routerSettings.routerProviderId,
+        availableModels,
+        fallbackModelId,
+        fallbackProviderId,
+        routerSettings.timeout,
+      )
+      finalModelId = this.lastRouterResult.modelId
+      finalProviderId = this.lastRouterResult.providerId
     }
 
-    const activeProvider = useModelProvider.getState().getProviderByName(providerId) ?? provider
-    await prepareProviderForChat(getServiceHub(), activeProvider, modelId)
+    // Helper: prepare a model and execute the stream
+    const executeWithModel = async (modelId: string, providerId: string) => {
+      const provider = useModelProvider.getState().getProviderByName(providerId)
+      if (!this.serviceHub || !modelId || !provider) {
+        throw new Error('ServiceHub not initialized or model/provider missing.')
+      }
 
-    const currentAssistant = useAssistant.getState().currentAssistant
-    const inferenceParams = { ...(currentAssistant?.parameters ?? {}), ...(this.inferenceParameters ?? {}) }
+      await prepareProviderForChat(getServiceHub(), provider, modelId)
 
-    try {
-      this.model = await ModelFactory.createModel(modelId, activeProvider, inferenceParams)
-    } catch (error) {
-      throw new Error(`Failed to create model: ${error instanceof Error ? error.message : JSON.stringify(error)}`)
+      const currentAssistant = useAssistant.getState().currentAssistant
+      const inferenceParams = { ...(currentAssistant?.parameters ?? {}), ...(this.inferenceParameters ?? {}) }
+
+      this.model = await ModelFactory.createModel(modelId, provider, inferenceParams)
+
+      // Determine tool support for this model
+      const providerModels = provider.models ?? []
+      const modelEntry = providerModels.find((m) => m.id === modelId)
+      const modelSupportsTools = modelEntry?.capabilities?.includes('tools') ?? this.modelSupportsTools
+
+      // Refresh tools AFTER routing so the correct model's capabilities are used
+      await this.refreshTools(modelSupportsTools)
+
+      return executeSingleAgentStream({
+        model: this.model,
+        tools: this.tools,
+        systemMessage: this.systemMessage,
+        messages: options.messages,
+        abortSignal: options.abortSignal,
+        modelSupportsTools,
+        onTokenUsage: this.onTokenUsage,
+        mapUserInlineAttachments: (msgs) => this.mapUserInlineAttachments(msgs),
+      })
     }
 
-    const selectedModel = useModelProvider.getState().selectedModel
-    const modelSupportsTools = selectedModel?.capabilities?.includes('tools') ?? this.modelSupportsTools
+    // If the router picked a different model, validate it before streaming.
+    // AI SDK's toUIMessageStream() encodes errors as stream protocol messages
+    // (not thrown errors), so we can't catch them by reading the stream.
+    // Instead, send a lightweight preflight request (max_tokens: 1, non-streaming)
+    // to verify the model is reachable. Results are cached so the preflight
+    // only runs once per model — subsequent messages skip it entirely.
+    if (this.lastRouterResult?.routed && finalModelId !== fallbackModelId) {
+      const cached = isModelPreflightCached(finalModelId, finalProviderId)
 
-    return executeSingleAgentStream({
-      model: this.model,
-      tools: this.tools,
-      systemMessage: this.systemMessage,
-      messages: options.messages,
-      abortSignal: options.abortSignal,
-      modelSupportsTools,
-      onTokenUsage: this.onTokenUsage,
-      mapUserInlineAttachments: (msgs) => this.mapUserInlineAttachments(msgs),
-    })
+      if (cached === false) {
+        // Previously failed — skip directly to fallback
+        console.warn(`[LLM Router] Routed model "${finalModelId}" previously failed, using fallback`)
+        this.lastRouterResult = {
+          modelId: fallbackModelId,
+          providerId: fallbackProviderId,
+          reason: 'fallback',
+          routed: false,
+          fallbackReason: 'routed model previously failed preflight',
+          latencyMs: this.lastRouterResult.latencyMs,
+        }
+        return executeWithModel(fallbackModelId, fallbackProviderId)
+      }
+
+      if (cached === null) {
+        // Not cached — run preflight
+        const routerResult = this.lastRouterResult
+        try {
+          const { serverHost, serverPort, apiPrefix } = useLocalApiServer.getState()
+          const proxyUrl = `http://${serverHost}:${serverPort}${apiPrefix}`
+          const preflight = await httpFetch(`${proxyUrl}/chat/completions`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Ax-Provider': finalProviderId,
+            },
+            body: JSON.stringify({
+              model: finalModelId,
+              messages: [{ role: 'user', content: '.' }],
+              max_tokens: 1,
+              stream: false,
+            }),
+          })
+          if (!preflight.ok) {
+            const body = await preflight.text().catch(() => '')
+            throw new Error(`${preflight.status}: ${body.slice(0, 200)}`)
+          }
+          cachePreflightResult(finalModelId, finalProviderId, true)
+        } catch (error) {
+          cachePreflightResult(finalModelId, finalProviderId, false)
+          console.warn(
+            `[LLM Router] Routed model "${finalModelId}" preflight failed, falling back to "${fallbackModelId}":`,
+            error instanceof Error ? error.message : error,
+          )
+          this.lastRouterResult = {
+            modelId: fallbackModelId,
+            providerId: fallbackProviderId,
+            reason: 'fallback',
+            routed: false,
+            fallbackReason: `routed model failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+            latencyMs: routerResult.latencyMs,
+          }
+          return executeWithModel(fallbackModelId, fallbackProviderId)
+        }
+      }
+      // cached === true — model verified, proceed directly
+    }
+
+    return executeWithModel(finalModelId, finalProviderId)
   }
 
   async reconnectToStream(_options: { chatId: string } & ChatRequestOptions): Promise<ReadableStream<UIMessageChunk> | null> {
