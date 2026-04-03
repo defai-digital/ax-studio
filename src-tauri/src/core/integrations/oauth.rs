@@ -3,7 +3,6 @@ use hyper::{Body, Request, Response, Server, StatusCode};
 use rand::Rng;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use std::net::IpAddr;
 
 use std::sync::Arc;
 use tokio::sync::oneshot;
@@ -476,13 +475,11 @@ pub fn is_allowed_sandbox_url(url: &str) -> bool {
         return false;
     }
 
-    match parsed.host_str() {
-        Some("localhost") => true,
-        Some(host) => host
-            .parse::<IpAddr>()
-            .map(|ip| ip.is_loopback())
-            .unwrap_or(false),
-        None => false,
+    match parsed.host() {
+        Some(url::Host::Domain("localhost")) => true,
+        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+        _ => false,
     }
 }
 
