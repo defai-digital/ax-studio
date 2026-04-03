@@ -1,5 +1,15 @@
 # Contributing to AX Studio
 
+AX Studio is currently **not accepting unsolicited public code contributions or pull requests**.
+
+The most helpful ways to contribute right now are:
+
+- open bug reports
+- submit feature requests and wishlist items
+- share product feedback and reproducible problem reports
+
+If the contribution policy changes in the future, this document will be updated.
+
 This repository is a Yarn workspace for the AX Studio desktop application. The app combines a React frontend, a Rust Tauri host, shared TypeScript packages, and packaged extensions.
 
 Use this file as the contributor entry point, then follow the package-specific guides for the area you are changing.
@@ -111,13 +121,12 @@ For focused work, package-level guides list more targeted commands.
 - Run `cargo clippy -- -D warnings` for touched crates when practical
 - Validate command inputs and use structured error handling
 
-## Pull Requests
+## Issues and Feedback
 
-- Target the `dev` branch
-- Use conventional commit style such as `feat:`, `fix:`, `docs:`, `chore:`
-- Keep changes focused
-- Include any relevant screenshots, logs, or reproduction notes
-- Follow the checklist in [`.github/pull_request_template.md`](./.github/pull_request_template.md)
+- Use GitHub Issues for bug reports, wishlist items, and product feedback
+- Include reproduction steps, environment details, logs, or screenshots when relevant
+- Search existing issues before opening a new one
+- If you are unsure whether something is a bug or a feature request, open an issue with context
 
 ## Documentation Changes
 
