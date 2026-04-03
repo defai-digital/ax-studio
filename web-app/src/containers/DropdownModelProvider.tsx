@@ -17,9 +17,10 @@ import { localStorageKey } from '@/constants/localStorage'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useFavoriteModel } from '@/hooks/useFavoriteModel'
 import { predefinedProviders } from '@/constants/providers'
-import { ChevronDown, Search, Check, Star, CircleOff, Settings, X } from 'lucide-react'
+import { ChevronDown, Search, Check, Star, CircleOff, Settings, X, Route } from 'lucide-react'
 import { getLastUsedModel } from '@/utils/getModelToStart'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { useRouterSettings } from '@/hooks/useRouterSettings'
 
 type DropdownModelProviderProps = {
   model?: ThreadModel
@@ -285,6 +286,15 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
   const navigate = useNavigate()
   const { t } = useTranslation()
   const { favoriteModels, toggleFavorite } = useFavoriteModel()
+  const routerEnabled = useRouterSettings((s) => s.enabled)
+  const routerModelId = useRouterSettings((s) => s.routerModelId)
+  const routerProviderId = useRouterSettings((s) => s.routerProviderId)
+  const isAutoRouteEnabled = useRouterSettings((s) => s.isAutoRouteEnabled)
+  const setThreadOverride = useRouterSettings((s) => s.setThreadOverride)
+  const currentThreadId = useThreads((s) => s.currentThreadId)
+  const activeThreadId = model?.id ? undefined : currentThreadId
+  const isRouterConfigured = routerEnabled && !!routerModelId && !!routerProviderId
+  const isAutoActive = isRouterConfigured && isAutoRouteEnabled(activeThreadId)
 
   // Search state
   const [open, setOpen] = useState(false)
@@ -354,12 +364,14 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
 
   // Update display model when selection changes
   useEffect(() => {
-    if (selectedProvider && selectedModel) {
+    if (isAutoActive) {
+      setDisplayModel('Auto')
+    } else if (selectedProvider && selectedModel) {
       setDisplayModel(getModelDisplayName(selectedModel))
     } else {
       setDisplayModel(t('common:selectAModel'))
     }
-  }, [selectedProvider, selectedModel, t])
+  }, [selectedProvider, selectedModel, t, isAutoActive])
 
   // Reset search value when dropdown closes
   const onOpenChange = useCallback((open: boolean) => {
@@ -546,10 +558,22 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
     return rows
   }, [groupedItems, favoriteItems, searchValue, providers])
 
+  const handleAutoToggle = useCallback(() => {
+    if (activeThreadId) {
+      setThreadOverride(activeThreadId, !isAutoActive)
+    }
+    setOpen(false)
+  }, [activeThreadId, isAutoActive, setThreadOverride])
+
   const handleSelect = useCallback(
     async (searchableModel: SearchableModel) => {
       // Mark as user-initiated so provider refreshes don't revert the choice
       userSelectedRef.current = true
+
+      // Disable auto-routing for this thread when user manually selects a model
+      if (activeThreadId && isAutoActive) {
+        setThreadOverride(activeThreadId, false)
+      }
 
       // Immediately update display to prevent double-click issues
       setDisplayModel(getModelDisplayName(searchableModel.model))
@@ -574,6 +598,9 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
     [
       selectModelProvider,
       updateCurrentThreadModel,
+      activeThreadId,
+      isAutoActive,
+      setThreadOverride,
     ]
   )
 
@@ -665,11 +692,17 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
             type="button"
             className="relative z-30 flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted/60 transition-all group border border-transparent hover:border-border/50"
           >
-            {/* Provider color indicator */}
-            <div
-              className="size-5 rounded-md shrink-0"
-              style={{ backgroundColor: getProviderColor(selectedProvider) }}
-            />
+            {/* Provider color indicator / Auto icon */}
+            {isAutoActive ? (
+              <div className="size-5 rounded-md shrink-0 bg-amber-500/20 flex items-center justify-center">
+                <Route className="size-3 text-amber-600 dark:text-amber-400" />
+              </div>
+            ) : (
+              <div
+                className="size-5 rounded-md shrink-0"
+                style={{ backgroundColor: getProviderColor(selectedProvider) }}
+              />
+            )}
             <span
               className={cn(
                 'text-foreground/90 truncate max-w-[160px]',
@@ -697,6 +730,30 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
         side="bottom"
       >
         <div className="flex flex-col">
+          {/* Auto (LLM Router) option — only shown when there is an active thread to override */}
+          {isRouterConfigured && activeThreadId && (
+            <button
+              type="button"
+              className={cn(
+                'flex items-center gap-2.5 px-3 py-2.5 border-b border-border/50 transition-colors w-full text-left',
+                isAutoActive
+                  ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+              )}
+              onClick={handleAutoToggle}
+            >
+              <div className={cn(
+                'size-5 rounded-md shrink-0 flex items-center justify-center',
+                isAutoActive ? 'bg-amber-500/20' : 'bg-muted'
+              )}>
+                <Route className="size-3" />
+              </div>
+              <span style={{ fontSize: '13px', fontWeight: 500 }} className="flex-1">
+                Auto (LLM Router)
+              </span>
+              {isAutoActive && <Check className="size-3.5 text-amber-600 dark:text-amber-400 shrink-0" />}
+            </button>
+          )}
           {/* Search input */}
           <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border/50">
             <Search className="size-3.5 text-muted-foreground shrink-0" />

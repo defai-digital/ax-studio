@@ -30,6 +30,7 @@ import { RunLogSummary } from '@/components/RunLogViewer'
 import type { AgentStatusData } from '@/types/agent-data-parts'
 import type { RunLogData } from '@/lib/multi-agent/run-log'
 import { Zap, GitBranch, ThumbsUp, ThumbsDown } from 'lucide-react'
+import { RoutingBadge } from '@/components/RoutingBadge'
 
 const CHAT_STATUS = {
   STREAMING: 'streaming',
@@ -452,6 +453,15 @@ export const MessageItem = memo(
           </div>
 
           <div className="flex flex-col min-w-0 flex-1">
+            {/* Routing badge — shown when the LLM Router selected this model */}
+            {(() => {
+              const meta = message.metadata as Record<string, unknown> | undefined
+              const routing = meta?.routing as { modelId?: string; reason?: string; routed?: boolean } | undefined
+              if (routing?.routed && routing.modelId) {
+                return <RoutingBadge modelId={routing.modelId} reason={routing.reason ?? ''} />
+              }
+              return null
+            })()}
             {/* Render message parts */}
             {message.parts.map((part, i) => {
               switch (part.type) {

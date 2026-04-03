@@ -256,9 +256,14 @@ export function useChat(
     []
   )
 
+  const getLastRouterResult = useCallback(() => {
+    return transportRef.current?.lastRouterResult ?? null
+  }, [])
+
   return {
     ...chatResult,
     updateRagToolsAvailability,
     updateSystemMessageDirect,
+    getLastRouterResult,
   }
 }

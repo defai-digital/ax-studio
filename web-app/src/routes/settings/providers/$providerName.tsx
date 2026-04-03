@@ -21,9 +21,12 @@ import {
 } from '@tabler/icons-react'
 import { RefreshCw, Search, Plug, CheckCircle2, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { predefinedProviders } from '@/constants/providers'
 import { DialogAddModel } from '@/containers/dialogs/AddModel'
+import { SelectModelGroups } from '@/containers/dialogs/SelectModelGroups'
+import { groupModelsByPrefix, type ModelGroup } from '@/lib/model-group-utils'
+import { getModelCapabilities } from '@/lib/models'
 import ProvidersAvatar from '@/containers/ProvidersAvatar'
 
 const URL_REGEX = /^https?:\/\/[^\s]+$/
@@ -70,6 +73,7 @@ function ProviderDetail() {
   const [refreshingModels, setRefreshingModels] = useState(false)
   const [importingModel, setImportingModel] = useState<string | null>(null)
   const [modelSearch, setModelSearch] = useState('')
+  const [pendingGroups, setPendingGroups] = useState<ModelGroup[] | null>(null)
   const { providerName } = useParams({ from: Route.id })
   const { getProviderByName, updateProvider } = useModelProvider()
   const provider = getProviderByName(providerName)
@@ -198,6 +202,50 @@ function ProviderDetail() {
   // Note: settingsChanged event is now handled globally in GlobalEventHandler
   // This ensures all screens receive the event intermediately
 
+  /** Import a list of model IDs into the provider, preserving existing model data. */
+  const importModelIds = useCallback(
+    (modelIds: string[]) => {
+      if (!provider) return
+      const selectedSet = new Set(modelIds)
+      const existingById = new Map(provider.models.map((m) => [m.id, m]))
+
+      const updatedModels: Model[] = []
+      let added = 0
+      for (const id of modelIds) {
+        if (existingById.has(id)) {
+          updatedModels.push(existingById.get(id)!)
+        } else {
+          updatedModels.push({
+            id,
+            model: id,
+            name: id,
+            capabilities: getModelCapabilities(provider.provider, id),
+            version: '1.0',
+          })
+          added++
+        }
+      }
+
+      const removed = provider.models.filter((m) => !selectedSet.has(m.id)).length
+
+      updateProvider(providerName, { ...provider, models: updatedModels })
+
+      const parts: string[] = []
+      if (added > 0) parts.push(`${added} added`)
+      if (removed > 0) parts.push(`${removed} removed`)
+      if (parts.length > 0) {
+        toast.success(t('providers:models'), {
+          description: `Models updated: ${parts.join(', ')}.`,
+        })
+      } else {
+        toast.success(t('providers:models'), {
+          description: t('providers:noNewModels'),
+        })
+      }
+    },
+    [provider, providerName, updateProvider, t],
+  )
+
   const handleRefreshModels = async () => {
     if (!provider || !provider.base_url) {
       toast.error(t('providers:models'), {
@@ -212,32 +260,33 @@ function ProviderDetail() {
         .providers()
         .fetchModelsFromProvider(provider)
 
-      // Create new models from the fetched IDs
-      const newModels: Model[] = modelIds.map((id) => ({
-        id,
-        model: id,
-        name: id,
-        capabilities: ['completion'], // Default capability
-        version: '1.0',
-      }))
+      // Detect multi-upstream gateway: if models have 2+ distinct prefixes,
+      // show a selection dialog so the user can pick which upstreams to import.
+      const groups = groupModelsByPrefix(modelIds)
+      if (groups.length > 1) {
+        setPendingGroups(groups)
+        return
+      }
 
-      // Filter out models that already exist
+      // Single-prefix provider: import directly (existing behavior)
       const existingModelIds = provider.models.map((m) => m.id)
-      const modelsToAdd = newModels.filter(
-        (model) => !existingModelIds.includes(model.id)
-      )
+      const newIds = modelIds.filter((id) => !existingModelIds.includes(id))
 
-      if (modelsToAdd.length > 0) {
-        // Update the provider with new models
-        const updatedModels = [...provider.models, ...modelsToAdd]
+      if (newIds.length > 0) {
+        const newModels: Model[] = newIds.map((id) => ({
+          id,
+          model: id,
+          name: id,
+          capabilities: getModelCapabilities(provider.provider, id),
+          version: '1.0',
+        }))
         updateProvider(providerName, {
           ...provider,
-          models: updatedModels,
+          models: [...provider.models, ...newModels],
         })
-
         toast.success(t('providers:models'), {
           description: t('providers:refreshModelsSuccess', {
-            count: modelsToAdd.length,
+            count: newIds.length,
             provider: provider.provider,
           }),
         })
@@ -621,6 +670,20 @@ function ProviderDetail() {
           </div>
         </div>
       </div>
+
+      {/* Model group selection dialog for multi-upstream gateways */}
+      {provider && pendingGroups && (
+        <SelectModelGroups
+          open={!!pendingGroups}
+          onOpenChange={(open) => { if (!open) setPendingGroups(null) }}
+          groups={pendingGroups}
+          existingModelIds={new Set(provider.models.map((m) => m.id))}
+          onConfirm={(selectedIds) => {
+            importModelIds(selectedIds)
+            setPendingGroups(null)
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -245,8 +245,10 @@ export class ModelFactory {
       name: providerName,
       baseURL: proxyUrl,
       // No Authorization header here — proxy injects the real key from provider_configs.
-      // Passing an empty headers object prevents the SDK from looking up env vars.
-      headers: {},
+      // Passing a headers object prevents the SDK from looking up env vars.
+      // X-Ax-Provider tells the proxy which registered provider to route to,
+      // avoiding ambiguity when the same model ID exists in multiple providers.
+      headers: { 'X-Ax-Provider': provider.provider },
       includeUsage: true,
       fetch: fetchFn,
     })

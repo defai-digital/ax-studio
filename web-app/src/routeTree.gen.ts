@@ -19,6 +19,7 @@ import { Route as SettingsPrivacyRouteImport } from './routes/settings/privacy'
 import { Route as SettingsMemoryRouteImport } from './routes/settings/memory'
 import { Route as SettingsMcpServersRouteImport } from './routes/settings/mcp-servers'
 import { Route as SettingsLocalApiServerRouteImport } from './routes/settings/local-api-server'
+import { Route as SettingsLlmRouterRouteImport } from './routes/settings/llm-router'
 import { Route as SettingsInterfaceRouteImport } from './routes/settings/interface'
 import { Route as SettingsIntegrationsRouteImport } from './routes/settings/integrations'
 import { Route as SettingsHttpsProxyRouteImport } from './routes/settings/https-proxy'
@@ -83,6 +84,11 @@ const SettingsMcpServersRoute = SettingsMcpServersRouteImport.update({
 const SettingsLocalApiServerRoute = SettingsLocalApiServerRouteImport.update({
   id: '/settings/local-api-server',
   path: '/settings/local-api-server',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsLlmRouterRoute = SettingsLlmRouterRouteImport.update({
+  id: '/settings/llm-router',
+  path: '/settings/llm-router',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsInterfaceRoute = SettingsInterfaceRouteImport.update({
@@ -179,6 +185,7 @@ export interface FileRoutesByFullPath {
   '/settings/https-proxy': typeof SettingsHttpsProxyRoute
   '/settings/integrations': typeof SettingsIntegrationsRoute
   '/settings/interface': typeof SettingsInterfaceRoute
+  '/settings/llm-router': typeof SettingsLlmRouterRoute
   '/settings/local-api-server': typeof SettingsLocalApiServerRoute
   '/settings/mcp-servers': typeof SettingsMcpServersRoute
   '/settings/memory': typeof SettingsMemoryRoute
@@ -206,6 +213,7 @@ export interface FileRoutesByTo {
   '/settings/https-proxy': typeof SettingsHttpsProxyRoute
   '/settings/integrations': typeof SettingsIntegrationsRoute
   '/settings/interface': typeof SettingsInterfaceRoute
+  '/settings/llm-router': typeof SettingsLlmRouterRoute
   '/settings/local-api-server': typeof SettingsLocalApiServerRoute
   '/settings/mcp-servers': typeof SettingsMcpServersRoute
   '/settings/memory': typeof SettingsMemoryRoute
@@ -234,6 +242,7 @@ export interface FileRoutesById {
   '/settings/https-proxy': typeof SettingsHttpsProxyRoute
   '/settings/integrations': typeof SettingsIntegrationsRoute
   '/settings/interface': typeof SettingsInterfaceRoute
+  '/settings/llm-router': typeof SettingsLlmRouterRoute
   '/settings/local-api-server': typeof SettingsLocalApiServerRoute
   '/settings/mcp-servers': typeof SettingsMcpServersRoute
   '/settings/memory': typeof SettingsMemoryRoute
@@ -263,6 +272,7 @@ export interface FileRouteTypes {
     | '/settings/https-proxy'
     | '/settings/integrations'
     | '/settings/interface'
+    | '/settings/llm-router'
     | '/settings/local-api-server'
     | '/settings/mcp-servers'
     | '/settings/memory'
@@ -290,6 +300,7 @@ export interface FileRouteTypes {
     | '/settings/https-proxy'
     | '/settings/integrations'
     | '/settings/interface'
+    | '/settings/llm-router'
     | '/settings/local-api-server'
     | '/settings/mcp-servers'
     | '/settings/memory'
@@ -317,6 +328,7 @@ export interface FileRouteTypes {
     | '/settings/https-proxy'
     | '/settings/integrations'
     | '/settings/interface'
+    | '/settings/llm-router'
     | '/settings/local-api-server'
     | '/settings/mcp-servers'
     | '/settings/memory'
@@ -345,6 +357,7 @@ export interface RootRouteChildren {
   SettingsHttpsProxyRoute: typeof SettingsHttpsProxyRoute
   SettingsIntegrationsRoute: typeof SettingsIntegrationsRoute
   SettingsInterfaceRoute: typeof SettingsInterfaceRoute
+  SettingsLlmRouterRoute: typeof SettingsLlmRouterRoute
   SettingsLocalApiServerRoute: typeof SettingsLocalApiServerRoute
   SettingsMcpServersRoute: typeof SettingsMcpServersRoute
   SettingsMemoryRoute: typeof SettingsMemoryRoute
@@ -426,6 +439,13 @@ declare module '@tanstack/react-router' {
       path: '/settings/local-api-server'
       fullPath: '/settings/local-api-server'
       preLoaderRoute: typeof SettingsLocalApiServerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings/llm-router': {
+      id: '/settings/llm-router'
+      path: '/settings/llm-router'
+      fullPath: '/settings/llm-router'
+      preLoaderRoute: typeof SettingsLlmRouterRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings/interface': {
@@ -553,6 +573,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsHttpsProxyRoute: SettingsHttpsProxyRoute,
   SettingsIntegrationsRoute: SettingsIntegrationsRoute,
   SettingsInterfaceRoute: SettingsInterfaceRoute,
+  SettingsLlmRouterRoute: SettingsLlmRouterRoute,
   SettingsLocalApiServerRoute: SettingsLocalApiServerRoute,
   SettingsMcpServersRoute: SettingsMcpServersRoute,
   SettingsMemoryRoute: SettingsMemoryRoute,

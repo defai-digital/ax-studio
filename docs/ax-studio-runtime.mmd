@@ -1,0 +1,65 @@
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background": "#ffffff",
+    "primaryColor": "#f8fafc",
+    "primaryTextColor": "#0f172a",
+    "primaryBorderColor": "#0f172a",
+    "lineColor": "#475569",
+    "secondaryColor": "#e2e8f0",
+    "secondaryTextColor": "#0f172a",
+    "secondaryBorderColor": "#334155",
+    "tertiaryColor": "#dbeafe",
+    "tertiaryTextColor": "#0f172a",
+    "tertiaryBorderColor": "#2563eb",
+    "fontFamily": "ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif",
+    "fontSize": "18px"
+  },
+  "flowchart": {
+    "curve": "linear",
+    "htmlLabels": true,
+    "nodeSpacing": 34,
+    "rankSpacing": 56,
+    "padding": 18
+  }
+}}%%
+
+flowchart TB
+  subgraph A["Surfaces"]
+    direction LR
+    DESK["Native desktop app"]
+    API["Local API<br/>localhost:1337"]
+    EXT["Extensions<br/>agent teams"]
+  end
+
+  R["AX Studio workspace<br/>Interaction · orchestration · rendering"]
+
+  subgraph C["Workspace State"]
+    direction LR
+    TH["Threads · history · prompts"]
+    CFG["Settings · downloads · extensions"]
+  end
+
+  subgraph X["Execution Layer"]
+    direction LR
+    P["Providers<br/>cloud · self-hosted"]
+    L["Local inference<br/>llama.cpp · ax-serving"]
+    T["MCP · research · artifacts"]
+  end
+
+  DESK --> R
+  API --> R
+  EXT --> R
+  R --> TH
+  R --> CFG
+  R --> P
+  R --> L
+  R --> T
+
+  classDef runtime fill:#dbeafe,stroke:#2563eb,stroke-width:3px,color:#0f172a
+  classDef surface fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
+  classDef exec fill:#f6f8fa,stroke:#475569,stroke-width:1.5px,color:#0f172a
+
+  class R runtime
+  class DESK,API,EXT,TH,CFG surface
+  class P,L,T exec
