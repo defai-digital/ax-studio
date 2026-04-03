@@ -3,8 +3,6 @@ import { ThreadMessage } from '@ax-studio/core'
 import { usePrompt } from './usePrompt'
 import { useModelProvider } from './useModelProvider'
 import { useServiceStore } from './useServiceHub'
-import type { ModelProvider } from '@/types/modelProviders'
-
 // Simple token estimation for hosted models when backend token counting is unavailable
 // Rough approximation: ~4 characters per token for English text
 const estimateTokensFromText = (text: string): number => {
@@ -14,12 +12,12 @@ const estimateTokensFromText = (text: string): number => {
 }
 
 // Check if a model provider is hosted (external API) rather than local
-const isHostedModel = (selectedModel: { id?: string }, providers: ModelProvider[]): boolean => {
+const isHostedModel = (selectedModel: { id?: string } | null, providers: ModelProvider[]): boolean => {
   if (!selectedModel?.id) return false
 
   // Find the provider for this model
   const provider = providers.find(p =>
-    p.models?.some((m) => m.id === selectedModel.id)
+    p.models?.some((m: Model) => m.id === selectedModel.id)
   )
 
   if (!provider) {
@@ -32,9 +30,9 @@ const isHostedModel = (selectedModel: { id?: string }, providers: ModelProvider[
     !provider.base_url.includes('127.0.0.1') &&
     !provider.base_url.includes('0.0.0.0')
 
-  const requiresApiKey = provider.settings?.some((s) => s.key === 'api-key')
+  const requiresApiKey = provider.settings?.some((s: ProviderSetting) => s.key === 'api-key')
 
-  return hasExternalUrl && requiresApiKey
+  return !!(hasExternalUrl && requiresApiKey)
 }
 
 export interface TokenCountData {
