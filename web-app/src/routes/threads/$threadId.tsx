@@ -24,6 +24,7 @@ import {
   LOCAL_KNOWLEDGE_INSTRUCTION,
 } from '@/lib/system-prompt'
 import type { UIMessage } from '@ai-sdk/react'
+import type { ThreadMessage } from '@ax-studio/core'
 import { useThreadMemory } from '@/hooks/thread/use-thread-memory'
 import { useLocalKnowledge } from '@/hooks/useLocalKnowledge'
 import { useThreadArtifacts } from '@/hooks/thread/use-thread-artifacts'
@@ -42,23 +43,18 @@ export const Route = createFileRoute('/threads/$threadId')({
 function ThreadDetail() {
   const { threadId } = useParams({ from: Route.id })
   const navigate = useNavigate()
-
-  // Validate threadId format before accessing store
-  if (!isValidThreadId(threadId)) {
-    navigate({ to: '/' })
-    return null
-  }
+  const isValid = isValidThreadId(threadId)
 
   const thread = useThreads(useShallow((state) => state.threads[threadId]))
 
-  // Redirect to home if thread doesn't exist (invalid ID or deleted thread)
+  // Redirect to home if thread ID is invalid or thread doesn't exist
   useEffect(() => {
-    if (!thread) {
+    if (!isValid || !thread) {
       navigate({ to: '/' })
     }
-  }, [thread, navigate])
+  }, [isValid, thread, navigate])
 
-  if (!thread) return null
+  if (!isValid || !thread) return null
 
   return <ThreadDetailInner key={threadId} threadId={threadId} />
 }
@@ -137,7 +133,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   // Ref holds persistMessageOnFinish to break the useChat ↔ useThreadChat circular dep
    
   const persistMessageOnFinishRef = useRef<
-    ((msg: UIMessage, parts: any[]) => void) | null
+    ((msg: UIMessage, parts: ThreadMessage['content']) => void) | null
   >(null)
 
   const {

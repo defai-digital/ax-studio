@@ -368,10 +368,10 @@ export async function executeMultiAgentStream(
     const modelMessages = convertToModelMessages(
       mapUserInlineAttachments(cleanedMessages)
     )
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const orchestratorResult = orchestrator.stream({
       messages: modelMessages,
       abortSignal: options.abortSignal,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any)
 
     return createUIMessageStream({

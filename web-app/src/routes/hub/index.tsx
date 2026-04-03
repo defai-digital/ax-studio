@@ -103,7 +103,7 @@ function HubContent() {
     null
   )
   const [modelSupportStatus, setModelSupportStatus] = useState<
-    Record<string, 'RED' | 'YELLOW' | 'GREEN' | 'LOADING'>
+    Record<string, 'RED' | 'YELLOW' | 'GREEN' | 'GREY' | 'LOADING'>
   >({})
   const [isInitialLoad, setIsInitialLoad] = useState(true)
   const addModelSourceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -317,7 +317,7 @@ function HubContent() {
   )
 
   const checkModelSupport = useCallback(
-    async (variant: any) => {
+    async (variant: { model_id: string; path: string }) => {
       const modelKey = variant.model_id
 
       if (modelSupportStatus[modelKey]) {

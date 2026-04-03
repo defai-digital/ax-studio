@@ -87,7 +87,7 @@ function EngineSettingsContent() {
     return (
       <Card
         key={sectionKey}
-        title={t(`settings:engineSettings.${sectionKey}` as any)}
+        title={t(`settings:engineSettings.${sectionKey}` as never)}
       >
         {sectionSettings.map(({ setting, index }) => {
           const actionComponent = (
@@ -106,7 +106,7 @@ function EngineSettingsContent() {
               title={setting.title}
               column={
                 setting.controller_type === 'input' &&
-                (setting.controller_props as any)?.type !== 'number'
+                (setting.controller_props as Record<string, unknown>)?.type !== 'number'
               }
               description={
                 <RenderMarkdown

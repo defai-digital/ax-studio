@@ -11,6 +11,7 @@ let babelLoadPromise: Promise<void> | null = null
 
 function loadBabel(baseUrl: string): Promise<void> {
   // Already loaded
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if ((window as any).Babel) return (babelLoadPromise = Promise.resolve())
   // Already loading
   if (babelLoadPromise) return babelLoadPromise
@@ -31,6 +32,7 @@ function loadBabel(baseUrl: string): Promise<void> {
  */
 export async function transformJSX(source: string, baseUrl: string): Promise<string> {
   await loadBabel(baseUrl)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const Babel = (window as any).Babel
   const result = Babel.transform(source, {
     presets: [

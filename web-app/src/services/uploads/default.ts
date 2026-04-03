@@ -10,6 +10,7 @@
  */
 
 import type { UploadsService, UploadResult } from './types'
+import type { MCPService } from '../mcp/types'
 import type { Attachment } from '@/types/attachment'
 import { ulid } from 'ulidx'
 import {
@@ -22,12 +23,12 @@ import {
 let mcpAvailabilityChecked = false
 let mcpAvailable = false
 
-async function ensureAkidbAvailable(mcp: any): Promise<void> {
+async function ensureAkidbAvailable(mcp: MCPService): Promise<void> {
   if (mcpAvailabilityChecked && mcpAvailable) return
   try {
     const tools = await mcp.getTools()
     mcpAvailable = tools.some(
-      (t: any) => t.name === 'fabric_ingest_run' || t.name === 'fabric_search'
+      (t) => t.name === 'fabric_ingest_run' || t.name === 'fabric_search'
     )
     mcpAvailabilityChecked = true
   } catch {
@@ -75,14 +76,14 @@ function parsePipelineMetrics(result: {
 }
 
 export class DefaultUploadsService implements UploadsService {
-  private mcpService: any = null
+  private mcpService: MCPService | null = null
 
   /**
    * Called once during ServiceHub initialization to give us a back-reference
    * so we can call `mcp()`.  If the hub has not been set the
    * service falls back to the no-op behaviour (returns a generated id).
    */
-  setMcpService(mcp: any): void {
+  setMcpService(mcp: MCPService): void {
     this.mcpService = mcp
     // Reset the cache when the hub is (re-)set so the next call re-probes.
     mcpAvailabilityChecked = false

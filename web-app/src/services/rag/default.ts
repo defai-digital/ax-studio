@@ -9,6 +9,7 @@
  */
 
 import type { RAGService } from './types'
+import type { MCPService } from '../mcp/types'
 import type { MCPTool, MCPToolCallResult } from '@ax-studio/core'
 import {
   useFileRegistry,
@@ -96,9 +97,9 @@ function fail(message: string): MCPToolCallResult {
 }
 
 export class DefaultRAGService implements RAGService {
-  private mcpService: any = null
+  private mcpService: MCPService | null = null
 
-  setMcpService(mcp: any): void {
+  setMcpService(mcp: MCPService): void {
     this.mcpService = mcp
   }
 

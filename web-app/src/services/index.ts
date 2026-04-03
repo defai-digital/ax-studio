@@ -208,11 +208,11 @@ class PlatformServiceHub implements ServiceHub {
       // Give RAG & Uploads services a back-reference so they can call
       // mcp() for AkiDB operations.
       if ('setMcpService' in this.ragService) {
-        const svc = this.ragService as { setMcpService: (mcp: any) => void }
+        const svc = this.ragService as { setMcpService: (mcp: MCPService) => void }
         svc.setMcpService(this.mcpService)
       }
       if ('setMcpService' in this.uploadsService) {
-        const svc = this.uploadsService as { setMcpService: (mcp: any) => void }
+        const svc = this.uploadsService as { setMcpService: (mcp: MCPService) => void }
         svc.setMcpService(this.mcpService)
       }
 

@@ -447,7 +447,7 @@ ${escaped}
     showErr(String(e && e.message ? e.message : e));
   }
 })();
-  <\/script>
+  ${'<'}/script>
 </body>
 </html>`
 }
