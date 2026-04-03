@@ -3,6 +3,13 @@
   "version": "0.6.6",
   "private": true,
   "description": "Hardware monitoring plugin API for Tauri",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/defai-digital/ax-studio",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/defai-digital/ax-studio.git",
+    "directory": "src-tauri/plugins/tauri-plugin-hardware"
+  },
   "type": "module",
   "types": "./dist-js/index.d.ts",
   "main": "./dist-js/index.cjs",
@@ -14,7 +21,9 @@
   },
   "files": [
     "dist-js",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "build": "rollup -c",
