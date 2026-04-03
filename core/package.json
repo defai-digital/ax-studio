@@ -6,13 +6,21 @@
     "ax-studio",
     "core"
   ],
-  "homepage": "https://axstudio.ai",
-  "license": "UNLICENSED",
+  "homepage": "https://github.com/defai-digital/ax-studio",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/defai-digital/ax-studio.git",
+    "directory": "core"
+  },
+  "license": "Apache-2.0",
   "main": "dist/index.js",
   "typings": "dist/types/index.d.ts",
   "files": [
     "dist",
-    "types"
+    "types",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
   ],
   "author": "Ax-Studio",
   "scripts": {

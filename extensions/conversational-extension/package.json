@@ -5,7 +5,13 @@
   "description": "Enables conversations and state persistence via your file system.",
   "main": "dist/index.js",
   "author": "Ax-Studio",
-  "license": "MIT",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/defai-digital/ax-studio",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/defai-digital/ax-studio.git",
+    "directory": "extensions/conversational-extension"
+  },
   "scripts": {
     "build": "rolldown -c rolldown.config.mjs",
     "build:publish": "rimraf *.tgz --glob || true && yarn build && npm pack && cpx *.tgz ../../pre-install"
@@ -30,7 +36,9 @@
   "files": [
     "dist/*",
     "package.json",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "NOTICE"
   ],
   "bundleDependencies": [],
   "installConfig": {

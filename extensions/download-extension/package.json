@@ -5,7 +5,13 @@
   "description": "Download and manage files and AI models in Ax-Studio.",
   "main": "dist/index.js",
   "author": "Ax-Studio",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/defai-digital/ax-studio",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/defai-digital/ax-studio.git",
+    "directory": "extensions/download-extension"
+  },
   "scripts": {
     "test": "vitest run",
     "build": "rolldown -c rolldown.config.mjs",
@@ -22,7 +28,9 @@
   "files": [
     "dist/*",
     "package.json",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "NOTICE"
   ],
   "dependencies": {
     "@ax-studio/core": "../../core/package.tgz",
