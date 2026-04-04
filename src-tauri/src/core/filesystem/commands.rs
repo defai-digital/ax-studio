@@ -180,7 +180,7 @@ fn legacy_akidb_status_path(home: &Path) -> PathBuf {
 const AKIDB_SYNC_TIMEOUT: Duration = Duration::from_secs(300);
 
 fn migrate_legacy_akidb_file(
-    home: &Path,
+    _home: &Path,
     legacy_path: &Path,
     preferred_path: &Path,
 ) -> Result<(), String> {
@@ -1104,7 +1104,7 @@ pub async fn akidb_sync_now<R: Runtime>(
     state: State<'_, AppState>,
 ) -> Result<AkidbSyncResult, String> {
     {
-        let mut cancellation = state.akidb_sync_cancellation.lock().await;
+        let cancellation = state.akidb_sync_cancellation.lock().await;
         if cancellation.is_some() {
             return Err("A knowledge-base sync is already running".to_string());
         }

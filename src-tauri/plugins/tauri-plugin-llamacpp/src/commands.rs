@@ -101,7 +101,7 @@ pub async fn load_llama_model<R: Runtime>(
     let bin_path = validate_binary_path(backend_path)?;
 
     // Build arguments and env vars depending on engine type
-    let (mut args, mut merged_envs, api_key) = if is_ax_serving {
+    let (mut args, merged_envs, api_key) = if is_ax_serving {
         let ax_builder = AxServingArgumentBuilder::new(config.clone(), is_embedding);
         let ax_args = ax_builder.build(&model_id, &model_path, port, mmproj_path.clone());
 

@@ -1091,7 +1091,7 @@ impl Drop for ShutdownGuard {
 }
 
 pub async fn stop_mcp_servers_with_context<R: Runtime>(
-    app: &AppHandle<R>,
+    _app: &AppHandle<R>,
     state: &State<'_, AppState>,
     context: ShutdownContext,
 ) -> Result<(), String> {

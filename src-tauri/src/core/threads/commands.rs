@@ -9,7 +9,6 @@ use super::db;
 use super::helpers::{
     get_lock_for_thread, prune_unused_message_locks, read_messages_from_file,
     remove_lock_for_thread, rewrite_messages_file, should_use_sqlite, update_thread_metadata,
-    write_messages_to_file,
 };
 use super::models::{MessageRecord, ThreadRecord};
 use super::{
