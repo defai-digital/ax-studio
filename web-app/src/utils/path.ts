@@ -12,18 +12,8 @@ export const isRootDir = (selectedNewPath: string) => {
   if (IS_WINDOWS) {
     return /^[a-zA-Z]:\\?$/.test(selectedNewPath)
   }
-  // Linux/Mac root: /, /mnt, /media, etc.
-  const linuxRoots = [
-    '/',
-    '/mnt',
-    '/media',
-    '/boot',
-    '/home',
-    '/opt',
-    '/var',
-    '/usr',
-  ]
+  // Linux/Mac: only block the actual filesystem root
   const normalized =
     selectedNewPath.replace(/\\/g, '/').replace(/\/+$/, '') || '/'
-  return linuxRoots.some((root) => normalized === root)
+  return normalized === '/'
 }

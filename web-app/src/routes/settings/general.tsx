@@ -81,15 +81,24 @@ function General() {
     fetchDataFolder()
   }, [serviceHub])
 
+  const [isResetting, setIsResetting] = useState(false)
+
   const resetApp = async () => {
     // Prevent resetting if data folder is root directory
     if (isRootDir(appDataFolder ?? '/')) {
       toast.error(t('settings:general.couldNotResetRootDirectory'))
       return
     }
+    setIsResetting(true)
     pausePolling()
-    // TODO: Loading indicator
-    await serviceHub.app().factoryReset()
+    try {
+      await serviceHub.app().factoryReset()
+    } catch (error) {
+      console.error('Factory reset failed:', error)
+      toast.error(t('settings:general.factoryResetFailed', { defaultValue: 'Factory reset failed' }))
+    } finally {
+      setIsResetting(false)
+    }
   }
 
   const handleOpenLogs = async () => {
@@ -452,8 +461,8 @@ function General() {
                   })}
                   actions={
                     <FactoryResetDialog onReset={resetApp}>
-                      <Button variant="destructive" size="sm">
-                        {t('common:reset')}
+                      <Button variant="destructive" size="sm" disabled={isResetting}>
+                        {isResetting ? t('common:resetting', { defaultValue: 'Resetting...' }) : t('common:reset')}
                       </Button>
                     </FactoryResetDialog>
                   }
