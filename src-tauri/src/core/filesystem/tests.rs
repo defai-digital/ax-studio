@@ -1,4 +1,7 @@
 use super::commands::*;
+use super::service::{
+    approve_save_target, consume_approved_save_target, normalize_save_target_path,
+};
 use crate::core::app::commands::get_app_data_folder_path;
 use std::collections::HashSet;
 use std::fs::{self, File};
