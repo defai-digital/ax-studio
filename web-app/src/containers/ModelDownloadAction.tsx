@@ -110,9 +110,7 @@ export const ModelDownloadAction = ({
     variant.path,
     variant.model_id,
     huggingfaceToken,
-    model.model_name,
     model.mmproj_models,
-    navigate,
     addLocalDownloadingModel,
   ])
 

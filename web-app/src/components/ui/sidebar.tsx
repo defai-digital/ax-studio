@@ -176,6 +176,7 @@ const SidebarProvider = React.forwardRef<
 				toggleSidebar,
 				//* add width to dependencies
 				width,
+				setWidth,
 				//* add isDraggingRail to dependencies
 				isDraggingRail,
 			],
