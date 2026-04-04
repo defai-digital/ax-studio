@@ -59,13 +59,12 @@ const setupMobileViewport = () => {
 }
 
 // Prevent browser from opening dropped files
+const handleDragOver = (e: Event) => e.preventDefault()
+const handleDrop = (e: Event) => e.preventDefault()
+
 const preventDefaultFileDrop = () => {
-  document.addEventListener('dragover', (e) => {
-    e.preventDefault()
-  })
-  document.addEventListener('drop', (e) => {
-    e.preventDefault()
-  })
+  document.addEventListener('dragover', handleDragOver)
+  document.addEventListener('drop', handleDrop)
 }
 
 /**
@@ -224,3 +223,11 @@ const bootstrap = async () => {
 }
 
 void bootstrap()
+
+// Clean up global listeners on HMR to prevent accumulation during development
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    document.removeEventListener('dragover', handleDragOver)
+    document.removeEventListener('drop', handleDrop)
+  })
+}
