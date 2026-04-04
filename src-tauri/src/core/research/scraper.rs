@@ -1,4 +1,19 @@
 use scraper::{Html, Selector};
+use std::net::IpAddr;
+
+fn is_forbidden_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ipv4) => {
+            ipv4.is_loopback() || ipv4.is_private() || ipv4.is_link_local() || ipv4.is_unspecified()
+        }
+        IpAddr::V6(ipv6) => {
+            ipv6.is_loopback()
+                || ipv6.is_unspecified()
+                || ((ipv6.octets()[0] & 0xfe) == 0xfe && (ipv6.octets()[1] & 0xc0) == 0x80)
+                || (ipv6.octets()[0] & 0xfe) == 0xfc
+        }
+    }
+}
 
 /// Check if a URL points to forbidden internal/private networks.
 /// Rejects loopback, link-local, and private IP ranges to prevent SSRF.
@@ -14,18 +29,32 @@ fn is_forbidden_url(url: &str) -> bool {
 
     match parsed.host() {
         Some(url::Host::Domain("localhost")) => true,
-        Some(url::Host::Ipv4(ipv4)) => {
-            ipv4.is_loopback() || ipv4.is_private() || ipv4.is_link_local() || ipv4.is_unspecified()
-        }
-        Some(url::Host::Ipv6(ipv6)) => {
-            ipv6.is_loopback() || ipv6.is_unspecified()
-                // IPv6 link-local: fe80::/10
-                || ((ipv6.octets()[0] & 0xfe) == 0xfe && (ipv6.octets()[1] & 0xc0) == 0x80)
-                // IPv6 private: fc00::/7
-                || (ipv6.octets()[0] & 0xfe) == 0xfc
-        }
+        Some(url::Host::Ipv4(ipv4)) => is_forbidden_ip(IpAddr::V4(ipv4)),
+        Some(url::Host::Ipv6(ipv6)) => is_forbidden_ip(IpAddr::V6(ipv6)),
         Some(url::Host::Domain(_)) => false, // Other domains are allowed
-        None => true, // No host is forbidden
+        None => true,                        // No host is forbidden
+    }
+}
+
+async fn resolves_to_forbidden_ip(parsed: &url::Url) -> bool {
+    let domain = match parsed.host() {
+        Some(url::Host::Domain(domain)) => domain,
+        _ => return false,
+    };
+
+    let port = parsed.port_or_known_default().unwrap_or(80);
+    match tokio::net::lookup_host((domain, port)).await {
+        Ok(addrs) => {
+            let mut saw_address = false;
+            for addr in addrs {
+                saw_address = true;
+                if is_forbidden_ip(addr.ip()) {
+                    return true;
+                }
+            }
+            !saw_address
+        }
+        Err(_) => true,
     }
 }
 
@@ -35,7 +64,9 @@ fn is_forbidden_url(url: &str) -> bool {
 /// On any error (network, timeout, parse) an Err is returned so the caller
 /// can fall back to the Exa-supplied snippet.
 pub async fn scrape_url(url: &str) -> Result<String, String> {
-    if is_forbidden_url(url) {
+    let parsed = url::Url::parse(url).map_err(|_| "URL points to forbidden internal network")?;
+
+    if is_forbidden_url(url) || resolves_to_forbidden_ip(&parsed).await {
         return Err("URL points to forbidden internal network".to_string());
     }
 
@@ -74,12 +105,14 @@ pub async fn scrape_url(url: &str) -> Result<String, String> {
 fn extract_text(html: &str) -> String {
     let document = Html::parse_document(html);
 
-    // Remove noise elements
-    let _noise_selector = Selector::parse("script, style, nav, footer, aside, .ad, noscript")
-        .expect("static selector");
-
     // Collect text from body, skipping noise nodes
-    let body_selector = Selector::parse("body").expect("static selector");
+    let body_selector = match Selector::parse("body") {
+        Ok(selector) => selector,
+        Err(error) => {
+            log::error!("Failed to parse static body selector: {error}");
+            return String::new();
+        }
+    };
 
     let mut text = String::with_capacity(16_384);
 
@@ -282,5 +315,24 @@ mod tests {
         assert!(is_forbidden_url("ftp://example.com"));
         assert!(is_forbidden_url("file:///etc/passwd"));
         assert!(is_forbidden_url(""));
+    }
+
+    #[test]
+    fn test_is_forbidden_ip_rejects_private_ranges() {
+        assert!(is_forbidden_ip(IpAddr::V4(std::net::Ipv4Addr::new(
+            127, 0, 0, 1
+        ))));
+        assert!(is_forbidden_ip(IpAddr::V4(std::net::Ipv4Addr::new(
+            10, 0, 0, 1
+        ))));
+        assert!(!is_forbidden_ip(IpAddr::V4(std::net::Ipv4Addr::new(
+            8, 8, 8, 8
+        ))));
+    }
+
+    #[tokio::test]
+    async fn test_resolves_to_forbidden_ip_blocks_localhost() {
+        let parsed = url::Url::parse("http://localhost").unwrap();
+        assert!(resolves_to_forbidden_ip(&parsed).await);
     }
 }

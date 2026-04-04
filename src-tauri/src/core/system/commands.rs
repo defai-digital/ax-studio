@@ -45,17 +45,26 @@ fn is_valid_env_key(key: &str) -> bool {
     true
 }
 
+fn is_safe_shell_env_value(value: &str) -> bool {
+    !value.chars().any(|ch| matches!(ch, '\0' | '\n' | '\r'))
+}
+
 // Helper function to write env vars to a shell config file
 fn write_env_to_shell(env_file_path: &str, env_vars: &[(String, String)]) -> Result<(), String> {
     let marker = "# Ax-Studio Local API Server - Claude Code Config";
     let new_entries: String = env_vars
         .iter()
         .map(|(k, v)| {
+            if !is_safe_shell_env_value(v) {
+                return Err(format!(
+                    "Refusing to write shell env var {k}: value contains unsupported control characters"
+                ));
+            }
             // Escape single quotes to prevent shell injection
             let escaped_v = v.replace('\'', "'\\''");
-            format!("export {}='{}'\n", k, escaped_v)
+            Ok(format!("export {}='{}'\n", k, escaped_v))
         })
-        .collect();
+        .collect::<Result<String, String>>()?;
 
     let existing_content = std::fs::read_to_string(env_file_path).unwrap_or_default();
     let cleaned: Vec<&str> = existing_content
@@ -75,8 +84,42 @@ fn write_env_to_shell(env_file_path: &str, env_vars: &[(String, String)]) -> Res
     Ok(())
 }
 
+fn validate_open_path(path: &PathBuf) -> Result<PathBuf, String> {
+    if path.as_os_str().is_empty() {
+        return Err("Path must not be empty".to_string());
+    }
+
+    let canonical_path = fs::canonicalize(path).map_err(|e| format!("Invalid path: {e}"))?;
+    let home_dir = dirs::home_dir().ok_or("Cannot determine home directory")?;
+    let temp_dir = std::env::temp_dir();
+
+    if canonical_path.starts_with(&home_dir) || canonical_path.starts_with(&temp_dir) {
+        Ok(canonical_path)
+    } else {
+        Err(format!(
+            "Refusing to open path outside allowed user directories: {}",
+            canonical_path.display()
+        ))
+    }
+}
+
 #[tauri::command]
-pub fn factory_reset<R: Runtime>(app_handle: tauri::AppHandle<R>, state: State<'_, AppState>) {
+pub fn canonicalize_path(path: String) -> Result<String, String> {
+    let path = PathBuf::from(path);
+    if path.as_os_str().is_empty() {
+        return Err("Path must not be empty".to_string());
+    }
+
+    fs::canonicalize(&path)
+        .map(|canonical| canonical.to_string_lossy().to_string())
+        .map_err(|e| format!("Invalid path: {e}"))
+}
+
+#[tauri::command]
+pub fn factory_reset<R: Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     // close window (not available on mobile platforms)
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
     {
@@ -105,21 +148,25 @@ pub fn factory_reset<R: Runtime>(app_handle: tauri::AppHandle<R>, state: State<'
         }
         if data_folder.exists() {
             if let Err(e) = fs::remove_dir_all(&data_folder) {
-                log::error!("Failed to remove data folder: {e}");
-                return;
+                let message = format!("Failed to remove data folder: {e}");
+                log::error!("{message}");
+                return Err(message);
             }
         }
 
         // Recreate the data folder
-        let _ = fs::create_dir_all(&data_folder).map_err(|e| e.to_string());
+        fs::create_dir_all(&data_folder)
+            .map_err(|e| format!("Failed to recreate data folder: {e}"))?;
 
         // Reset the configuration
         let mut default_config = AppConfiguration::default();
         default_config.data_folder = default_data_folder_path(app_handle.clone());
-        let _ = update_app_configuration(app_handle.clone(), default_config);
+        update_app_configuration(app_handle.clone(), default_config)?;
 
         app_handle.restart();
-    });
+        #[allow(unreachable_code)]
+        Ok(())
+    })
 }
 
 #[tauri::command]
@@ -151,7 +198,7 @@ pub fn open_app_directory<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
 
 #[tauri::command]
 pub fn open_file_explorer(path: String) -> Result<(), String> {
-    let path = PathBuf::from(path);
+    let path = validate_open_path(&PathBuf::from(path))?;
     if cfg!(target_os = "windows") {
         std::process::Command::new("explorer")
             .arg(path)
@@ -159,11 +206,13 @@ pub fn open_file_explorer(path: String) -> Result<(), String> {
             .map_err(|e| format!("Failed to open file explorer: {e}"))?;
     } else if cfg!(target_os = "macos") {
         std::process::Command::new("open")
+            .arg("--")
             .arg(path)
             .status()
             .map_err(|e| format!("Failed to open file explorer: {e}"))?;
     } else {
         std::process::Command::new("xdg-open")
+            .arg("--")
             .arg(path)
             .status()
             .map_err(|e| format!("Failed to open file explorer: {e}"))?;
@@ -185,32 +234,47 @@ pub async fn read_logs<R: Runtime>(app: AppHandle<R>) -> Result<String, String> 
 // check if a system library is available
 #[tauri::command]
 pub fn is_library_available(library: &str) -> bool {
-    // Security: Only allow known system libraries to prevent arbitrary library loading
-    const ALLOWED_LIBRARIES: &[&str] = &[
-        // Vulkan
-        "libvulkan.so.1",
-        "vulkan-1.dll",
-        // CUDA
-        "libcuda.so.1",
-        "nvcuda.dll",
-        // Metal
-        "Metal.framework/Metal",
-        // OpenGL (if needed)
-        "libGL.so.1",
-        "opengl32.dll",
-    ];
-
-    if !ALLOWED_LIBRARIES.contains(&library) {
-        log::warn!("Library {library} is not in the allow-list");
-        return false;
+    #[cfg(target_os = "linux")]
+    {
+        if library == "libvulkan.so.1" {
+            return std::path::Path::new("/usr/lib/libvulkan.so.1").exists()
+                || std::path::Path::new("/usr/lib64/libvulkan.so.1").exists()
+                || std::path::Path::new("/lib/x86_64-linux-gnu/libvulkan.so.1").exists();
+        }
+        if library == "libcuda.so.1" {
+            return std::path::Path::new("/usr/lib/libcuda.so.1").exists()
+                || std::path::Path::new("/usr/lib64/libcuda.so.1").exists()
+                || std::path::Path::new("/usr/lib/x86_64-linux-gnu/libcuda.so.1").exists();
+        }
+        if library == "libGL.so.1" {
+            return std::path::Path::new("/usr/lib/libGL.so.1").exists()
+                || std::path::Path::new("/usr/lib64/libGL.so.1").exists()
+                || std::path::Path::new("/usr/lib/x86_64-linux-gnu/libGL.so.1").exists();
+        }
     }
 
-    match unsafe { libloading::Library::new(library) } {
-        Ok(_) => true,
-        Err(e) => {
-            log::info!("Library {library} is not available: {e}");
-            false
+    #[cfg(target_os = "macos")]
+    {
+        if library == "Metal.framework/Metal" {
+            return std::path::Path::new("/System/Library/Frameworks/Metal.framework/Metal")
+                .exists();
         }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let windir = std::env::var("WINDIR").unwrap_or_else(|_| "C:\\Windows".to_string());
+        let system32 = std::path::Path::new(&windir).join("System32");
+        return match library {
+            "vulkan-1.dll" | "nvcuda.dll" | "opengl32.dll" => system32.join(library).exists(),
+            _ => false,
+        };
+    }
+
+    #[allow(unreachable_code)]
+    {
+        log::warn!("Library {library} is not in the known system-library allow-list");
+        false
     }
 }
 
@@ -368,5 +432,14 @@ mod tests {
         assert!(!is_valid_env_key("VAR\n"));
         assert!(!is_valid_env_key("1VAR"));
         assert!(!is_valid_env_key("VAR="));
+    }
+
+    #[test]
+    fn test_is_safe_shell_env_value_rejects_control_characters() {
+        assert!(is_safe_shell_env_value("normal-value"));
+        assert!(is_safe_shell_env_value("value with spaces and 'quotes'"));
+        assert!(!is_safe_shell_env_value("line1\nline2"));
+        assert!(!is_safe_shell_env_value("line1\rline2"));
+        assert!(!is_safe_shell_env_value("nul\0byte"));
     }
 }

@@ -118,7 +118,8 @@ export interface ModelsService {
     modelSize?: number,
     mmprojPath?: string,
     mmprojSha256?: string,
-    mmprojSize?: number
+    mmprojSize?: number,
+    downloadHeaders?: Record<string, string>
   ): Promise<void>
   pullModelWithMetadata(
     id: string,

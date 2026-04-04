@@ -31,6 +31,41 @@ use crate::process::force_terminate_process;
 
 type HmacSha256 = Hmac<Sha256>;
 
+fn spawn_session_reaper<R: Runtime>(app_handle: tauri::AppHandle<R>, pid: i32) {
+    tauri::async_runtime::spawn(async move {
+        let state: State<LlamacppState> = app_handle.state();
+        let sessions = state.llama_server_process.clone();
+
+        loop {
+            tokio::time::sleep(Duration::from_secs(5)).await;
+
+            let should_remove = {
+                let mut process_map = sessions.lock().await;
+                match process_map.get_mut(&pid) {
+                    Some(session) => match session.child.try_wait() {
+                        Ok(Some(status)) => {
+                            log::info!("Reaping exited llama session {} with status {}", pid, status);
+                            true
+                        }
+                        Ok(None) => false,
+                        Err(err) => {
+                            log::warn!("Failed to poll llama session {}: {}", pid, err);
+                            false
+                        }
+                    },
+                    None => return,
+                }
+            };
+
+            if should_remove {
+                let mut process_map = sessions.lock().await;
+                process_map.remove(&pid);
+                return;
+            }
+        }
+    });
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct UnloadResult {
     success: bool,
@@ -327,6 +362,8 @@ pub async fn load_llama_model<R: Runtime>(
             info: session_info.clone(),
         },
     );
+    drop(process_map);
+    spawn_session_reaper(app_handle, pid);
 
     Ok(session_info)
 }
@@ -656,6 +693,8 @@ pub async fn start_ax_serving<R: Runtime>(
             info: session_info.clone(),
         },
     );
+    drop(process_map);
+    spawn_session_reaper(app_handle, session_info.pid);
 
     Ok(session_info)
 }

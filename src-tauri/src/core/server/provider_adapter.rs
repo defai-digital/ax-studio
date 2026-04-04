@@ -378,7 +378,10 @@ fn transform_openai_response_to_anthropic(response: &serde_json::Value) -> serde
             let input: serde_json::Value = match serde_json::from_str(arguments) {
                 Ok(v) => v,
                 Err(e) => {
-                    log::warn!("Failed to parse tool arguments for '{}': {e}, falling back to {{}}", name);
+                    log::warn!(
+                        "Failed to parse tool arguments for '{}': {e}, falling back to {{}}",
+                        name
+                    );
                     serde_json::json!({})
                 }
             };
@@ -1045,10 +1048,7 @@ mod tests {
         convert_media_block(&block, &mut parts);
         assert_eq!(parts.len(), 1);
         assert_eq!(parts[0]["type"], "image_url");
-        assert_eq!(
-            parts[0]["image_url"]["url"],
-            "data:image/png;base64,abc123"
-        );
+        assert_eq!(parts[0]["image_url"]["url"], "data:image/png;base64,abc123");
     }
 
     #[test]

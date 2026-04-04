@@ -3,9 +3,24 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
-#[derive(Default)]
+#[derive(Clone)]
+pub struct DownloadTaskState {
+    pub token: CancellationToken,
+    pub generation: u64,
+}
+
 pub struct DownloadManagerState {
-    pub cancel_tokens: HashMap<String, CancellationToken>,
+    pub cancel_tokens: HashMap<String, DownloadTaskState>,
+    pub next_generation: u64,
+}
+
+impl Default for DownloadManagerState {
+    fn default() -> Self {
+        Self {
+            cancel_tokens: HashMap::new(),
+            next_generation: 0,
+        }
+    }
 }
 
 #[derive(serde::Deserialize, Clone, Debug)]

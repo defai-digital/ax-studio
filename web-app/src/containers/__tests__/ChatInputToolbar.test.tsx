@@ -82,6 +82,7 @@ const createProps = (overrides: Partial<Parameters<typeof ChatInputToolbar>[0]> 
   threadMessages: [],
   stopStreaming: vi.fn(),
   handleSendMessage: vi.fn(),
+  onAttachImages: undefined,
   ...overrides,
 })
 
@@ -199,5 +200,10 @@ describe('ChatInputToolbar — Phase 3 Manual Test Protocol', () => {
     expect(screen.getByText('Generate Artifact')).toBeInTheDocument()
     expect(screen.getByText('Generate Diagram')).toBeInTheDocument()
     expect(screen.getByText('Deep Research')).toBeInTheDocument()
+  })
+
+  it('renders attach image action when handler is provided', () => {
+    render(<ChatInputToolbar {...createProps({ onAttachImages: vi.fn() })} />)
+    expect(screen.getByText('Attach Image')).toBeInTheDocument()
   })
 })

@@ -69,7 +69,10 @@ mod tests {
         assert!(dst.join("file1.txt").exists());
         assert!(dst.join("sub").join("file2.txt").exists());
         assert!(dst.join("excluded").join("secret.txt").exists());
-        assert_eq!(fs::read_to_string(dst.join("file1.txt")).unwrap(), "content1");
+        assert_eq!(
+            fs::read_to_string(dst.join("file1.txt")).unwrap(),
+            "content1"
+        );
         assert_eq!(
             fs::read_to_string(dst.join("sub").join("file2.txt")).unwrap(),
             "content2"

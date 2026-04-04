@@ -6,7 +6,7 @@ use reqwest::Client;
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{watch, Mutex};
 
 use super::proxy::{proxy_request, ProxyConfig};
 
@@ -70,8 +70,6 @@ async fn start_server_internal<R: tauri::Runtime>(
         port,
     };
 
-
-
     // Use user-configured timeout for overall request, cap connect timeout at 30s
     let connect_timeout_secs = proxy_timeout.min(30);
     let client = Client::builder()
@@ -102,15 +100,23 @@ async fn start_server_internal<R: tauri::Runtime>(
     };
     log::info!("Ax-Studio API server started on http://{addr}");
 
+    let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
+    let graceful = server.with_graceful_shutdown(async move {
+        let _ = shutdown_rx.changed().await;
+    });
+
     let server_task = tauri::async_runtime::spawn(async move {
-        if let Err(e) = server.await {
+        if let Err(e) = graceful.await {
             log::error!("Server error: {e}");
             return Err(Box::new(e) as Box<dyn std::error::Error + Send + Sync>);
         }
         Ok(())
     });
 
-    *handle_guard = Some(server_task);
+    *handle_guard = Some(ServerHandle {
+        task: server_task,
+        shutdown_tx,
+    });
     let actual_port = addr.port();
     log::info!("Ax-Studio API server started successfully on port {actual_port}");
     Ok(actual_port)
@@ -122,8 +128,17 @@ pub async fn stop_server(
     let mut handle_guard = server_handle.lock().await;
 
     if let Some(handle) = handle_guard.take() {
-        handle.abort();
-        *handle_guard = None;
+        let _ = handle.shutdown_tx.send(true);
+        match tokio::time::timeout(std::time::Duration::from_secs(2), handle.task).await {
+            Ok(join_result) => {
+                if let Err(e) = join_result {
+                    log::warn!("Ax-Studio API server join failed during shutdown: {e}");
+                }
+            }
+            Err(_) => {
+                log::warn!("Graceful server shutdown timed out, aborting task");
+            }
+        }
         log::info!("Ax-Studio API server stopped");
     } else {
         log::debug!("Server was not running");

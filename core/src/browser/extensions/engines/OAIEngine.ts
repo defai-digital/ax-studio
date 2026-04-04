@@ -28,21 +28,30 @@ export abstract class OAIEngine extends AIEngine {
   // Transform the response
   transformResponse?: Function
 
+  private readonly handleMessageSent = (data: MessageRequest) => {
+    this.inference(data)
+  }
+
+  private readonly handleInferenceStopped = () => {
+    this.stopInference()
+  }
+
   /**
    * On extension load, subscribe to events.
    */
   override onLoad() {
     super.onLoad()
-    events.on(MessageEvent.OnMessageSent, (data: MessageRequest) =>
-      this.inference(data)
-    )
-    events.on(InferenceEvent.OnInferenceStopped, () => this.stopInference())
+    events.on(MessageEvent.OnMessageSent, this.handleMessageSent)
+    events.on(InferenceEvent.OnInferenceStopped, this.handleInferenceStopped)
   }
 
   /**
    * On extension unload
    */
-  override onUnload(): void {}
+  override onUnload(): void {
+    events.off(MessageEvent.OnMessageSent, this.handleMessageSent)
+    events.off(InferenceEvent.OnInferenceStopped, this.handleInferenceStopped)
+  }
 
   inference(data: MessageRequest) {}
 

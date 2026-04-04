@@ -212,6 +212,47 @@ describe('DefaultModelsService', () => {
 
       expect(mockEngine.import).toHaveBeenCalledWith(id, { modelPath })
     })
+
+    it('should pass transient download headers for authenticated Hugging Face imports', async () => {
+      const repoResponse: HuggingFaceRepo = {
+        id: 'repo-id',
+        modelId: 'org/model',
+        sha: 'sha',
+        downloads: 0,
+        likes: 0,
+        tags: [],
+        createdAt: '2026-01-01T00:00:00.000Z',
+        private: false,
+        disabled: false,
+        gated: false,
+        author: 'org',
+        siblings: [],
+      }
+
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue(repoResponse),
+      } as unknown as Response)
+
+      await modelsService.pullModelWithMetadata(
+        'org/model-q4',
+        'https://huggingface.co/org/model/resolve/main/model-q4.gguf',
+        undefined,
+        'hf_secret'
+      )
+
+      expect(mockEngine.import).toHaveBeenCalledWith('org/model-q4', {
+        modelPath: 'https://huggingface.co/org/model/resolve/main/model-q4.gguf',
+        modelSha256: undefined,
+        modelSize: undefined,
+        mmprojPath: undefined,
+        mmprojSha256: undefined,
+        mmprojSize: undefined,
+        downloadHeaders: {
+          Authorization: 'Bearer hf_secret',
+        },
+      })
+    })
   })
 
   describe('abortDownload', () => {

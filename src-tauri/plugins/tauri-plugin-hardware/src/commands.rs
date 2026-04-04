@@ -54,13 +54,13 @@ pub fn get_system_info() -> SystemInfo {
 }
 
 #[tauri::command]
-pub fn get_system_usage() -> SystemUsage {
+pub async fn get_system_usage() -> SystemUsage {
     let mut system = System::new();
     system.refresh_memory();
 
     // need to refresh 2 times to get CPU usage
     system.refresh_cpu_all();
-    std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
+    tokio::time::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL).await;
     system.refresh_cpu_all();
 
     let cpus = system.cpus();

@@ -1,7 +1,22 @@
 use std::process::{Command, Output, Stdio};
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use super::commands::ExecutionResult;
+
+const ENABLE_UNSANDBOXED_PYTHON_ENV: &str = "AX_STUDIO_ENABLE_UNSANDBOXED_PYTHON";
+
+fn env_lock() -> &'static Mutex<()> {
+    static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    ENV_LOCK.get_or_init(|| Mutex::new(()))
+}
+
+fn host_python_execution_enabled() -> bool {
+    matches!(
+        std::env::var(ENABLE_UNSANDBOXED_PYTHON_ENV).ok().as_deref(),
+        Some("1" | "true" | "TRUE" | "yes" | "YES")
+    )
+}
 
 /// Find a working Python binary on the system.
 fn find_python_binary() -> Option<String> {
@@ -24,7 +39,7 @@ fn find_python_binary() -> Option<String> {
 
 /// Check whether Python is available on the host.
 pub fn is_python_available() -> bool {
-    find_python_binary().is_some()
+    host_python_execution_enabled() && find_python_binary().is_some()
 }
 
 /// Kill a process and all its descendants. Best-effort — errors are silently ignored.
@@ -81,8 +96,15 @@ fn build_result(output: Output) -> ExecutionResult {
 /// Spawns `python3 -u -c <code>`, waits up to `timeout_secs` for completion,
 /// then kills the process if it hasn't finished.
 pub async fn execute_python(code: &str, timeout_secs: u64) -> Result<ExecutionResult, String> {
-    let python =
-        find_python_binary().ok_or("Python not found. Please install Python and add it to PATH.")?;
+    if !host_python_execution_enabled() {
+        return Err(format!(
+            "Python execution is disabled. Host execution is unsafe without sandboxing. \
+Set {ENABLE_UNSANDBOXED_PYTHON_ENV}=1 to opt in explicitly."
+        ));
+    }
+
+    let python = find_python_binary()
+        .ok_or("Python not found. Please install Python and add it to PATH.")?;
 
     let mut cmd = Command::new(&python);
     cmd.args(["-u", "-c", code])
@@ -195,9 +217,9 @@ mod tests {
 
     #[test]
     fn test_is_python_available() {
-        // This is a system-dependent test. We just verify it returns a bool
-        // without panicking.
-        let _available = is_python_available();
+        let _guard = env_lock().lock().unwrap();
+        std::env::remove_var(ENABLE_UNSANDBOXED_PYTHON_ENV);
+        assert!(!is_python_available());
     }
 
     #[test]
@@ -207,5 +229,28 @@ mod tests {
         if let Some(binary) = result {
             assert!(!binary.is_empty());
         }
+    }
+
+    #[tokio::test]
+    async fn test_execute_python_rejects_when_unsandboxed_execution_disabled() {
+        let _guard = env_lock().lock().unwrap();
+        std::env::remove_var(ENABLE_UNSANDBOXED_PYTHON_ENV);
+
+        let result = execute_python("print('hello')", 1).await;
+
+        let error = result.expect_err("execution should be disabled by default");
+        assert!(error.contains("Python execution is disabled"));
+        assert!(error.contains(ENABLE_UNSANDBOXED_PYTHON_ENV));
+    }
+
+    #[test]
+    fn test_is_python_available_respects_explicit_opt_in() {
+        let _guard = env_lock().lock().unwrap();
+        std::env::set_var(ENABLE_UNSANDBOXED_PYTHON_ENV, "1");
+
+        let available = is_python_available();
+        let python_present = find_python_binary().is_some();
+
+        assert_eq!(available, python_present);
     }
 }

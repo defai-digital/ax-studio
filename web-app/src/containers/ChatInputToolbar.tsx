@@ -21,7 +21,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu'
-import { ArrowUp, PlusIcon, AppWindowIcon, SearchIcon, Paperclip, Loader2 } from 'lucide-react'
+import { ArrowUp, PlusIcon, AppWindowIcon, SearchIcon, Paperclip, Loader2, ImagePlus } from 'lucide-react'
 import {
   IconAtom,
   IconTool,
@@ -104,6 +104,7 @@ type Props = {
   stopStreaming: (threadId: string) => void
   handleSendMessage: (prompt: string) => Promise<void>
   onAttachDocuments?: () => void
+  onAttachImages?: () => void
   ingestingDocs?: boolean
 }
 
@@ -138,6 +139,7 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
   stopStreaming,
   handleSendMessage,
   onAttachDocuments,
+  onAttachImages,
   ingestingDocs,
 }: Props) {
   const { t } = useTranslation()
@@ -180,6 +182,12 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                       <Paperclip size={18} className="text-muted-foreground" />
                     )}
                     <span>{ingestingDocs ? 'Indexing documents...' : 'Attach Document'}</span>
+                  </DropdownMenuItem>
+                )}
+                {onAttachImages && (
+                  <DropdownMenuItem onClick={onAttachImages}>
+                    <ImagePlus size={18} className="text-muted-foreground" />
+                    <span>Attach Image</span>
                   </DropdownMenuItem>
                 )}
                 {!projectId && (

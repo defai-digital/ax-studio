@@ -12,9 +12,10 @@
 
 pub mod commands;
 mod constants;
-#[cfg(any(target_os = "android", target_os = "ios"))]
+#[cfg(any(test, target_os = "android", target_os = "ios"))]
 pub mod db;
 pub mod helpers;
+pub mod models;
 pub mod utils;
 
 #[cfg(test)]

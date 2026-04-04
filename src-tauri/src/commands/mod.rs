@@ -24,6 +24,7 @@ macro_rules! desktop_handlers {
             crate::core::filesystem::commands::write_akidb_config,
             crate::core::filesystem::commands::read_akidb_status,
             crate::core::filesystem::commands::akidb_sync_now,
+            crate::core::filesystem::commands::cancel_akidb_sync,
             // App configuration commands
             crate::core::app::commands::get_app_configurations,
             crate::core::app::commands::get_user_home_path,
@@ -39,6 +40,7 @@ macro_rules! desktop_handlers {
             crate::core::extensions::commands::get_active_extensions,
             // System commands
             crate::core::system::commands::relaunch,
+            crate::core::system::commands::canonicalize_path,
             crate::core::system::commands::open_app_directory,
             crate::core::system::commands::open_file_explorer,
             crate::core::system::commands::factory_reset,
@@ -136,6 +138,7 @@ macro_rules! mobile_handlers {
             crate::core::filesystem::commands::write_akidb_config,
             crate::core::filesystem::commands::read_akidb_status,
             crate::core::filesystem::commands::akidb_sync_now,
+            crate::core::filesystem::commands::cancel_akidb_sync,
             // App configuration commands
             crate::core::app::commands::get_app_configurations,
             crate::core::app::commands::get_user_home_path,
@@ -151,6 +154,7 @@ macro_rules! mobile_handlers {
             crate::core::extensions::commands::get_active_extensions,
             // System commands
             crate::core::system::commands::relaunch,
+            crate::core::system::commands::canonicalize_path,
             crate::core::system::commands::open_app_directory,
             crate::core::system::commands::open_file_explorer,
             crate::core::system::commands::factory_reset,

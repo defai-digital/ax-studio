@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach, vi } from 'vitest'
 import { RemoteOAIEngine } from './'
+import { SecretString } from '../../../types'
 
 class TestRemoteOAIEngine extends RemoteOAIEngine {
   inferenceUrl: string = ''
@@ -23,7 +24,7 @@ describe('RemoteOAIEngine', () => {
   })
 
   test('should return headers with apiKey', async () => {
-    engine.apiKey = 'test-api-key'
+    engine.apiKey = SecretString.from('test-api-key')
     const headers = await engine.headers()
 
     expect(headers).toEqual({

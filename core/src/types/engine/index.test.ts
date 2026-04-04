@@ -17,10 +17,11 @@ describe('SecretString', () => {
 
   it('should mask value in toString', () => {
     expect(new SecretString('').toString()).toBe('')
+    expect(new SecretString('a').toString()).toBe('*')
     expect(new SecretString('ab').toString()).toBe('**')
-    expect(new SecretString('abcd').toString()).toBe('****')
-    expect(new SecretString('abcdef').toString()).toBe('ab**ef')
-    expect(new SecretString('abcdefgh').toString()).toBe('ab****gh')
+    expect(new SecretString('abcd').toString()).toBe('a**d')
+    expect(new SecretString('abcdef').toString()).toBe('a****f')
+    expect(new SecretString('abcdefgh').toString()).toBe('a******h')
   })
 
   it('should create from static method', () => {
@@ -67,6 +68,12 @@ describe('validateTemplate', () => {
   it('should allow templates with safe patterns mixed with text', () => {
     expect(validateTemplate('Hello {{name}}, welcome!')).toBe(true)
     expect(validateTemplate('Data: ${value} and %other%')).toBe(true)
+    expect(validateTemplate('Select from {table};')).toBe(true)
+  })
+
+  it('should reject malformed placeholder syntax', () => {
+    expect(validateTemplate('{{ user.name + 1 }}')).toBe(false)
+    expect(validateTemplate('${user.name ?? fallback}')).toBe(false)
   })
 })
 

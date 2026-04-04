@@ -14,7 +14,7 @@ use super::provider_adapter::{
 };
 use super::proxy::ProxyConfig;
 use super::security::add_cors_headers_with_host_and_origin;
-use crate::core::state::{AppState, ProviderConfig, ProviderCustomHeader};
+use crate::core::state::{AppState, ProviderConfig, ProviderCustomHeader, ProviderModelIndex};
 
 /// Result of resolving a model route — all data needed to send the upstream request.
 pub(super) struct ProviderResolution {
@@ -47,10 +47,12 @@ fn error_response(
         &config.trusted_hosts,
         config.cors_enabled,
     );
-    builder.body(Body::from(message.into())).unwrap_or_else(|e| {
-        log::error!("Failed to build error response: {e}");
-        Response::new(Body::from("Internal server error"))
-    })
+    builder
+        .body(Body::from(message.into()))
+        .unwrap_or_else(|e| {
+            log::error!("Failed to build error response: {e}");
+            Response::new(Body::from("Internal server error"))
+        })
 }
 
 /// Strip non-standard fields from the request body that upstream providers may reject.
@@ -116,6 +118,7 @@ fn extract_model_id(body_bytes: &[u8]) -> Result<String, String> {
 
 fn find_provider_name(
     provider_configs: &HashMap<String, ProviderConfig>,
+    provider_model_index: &ProviderModelIndex,
     model_id: &str,
 ) -> Result<Option<String>, String> {
     if let Some(sep_pos) = model_id.find('/') {
@@ -125,16 +128,10 @@ fn find_provider_name(
         }
     }
 
-    let matching_providers: Vec<String> = provider_configs
-        .values()
-        .filter(|config| config.models.iter().any(|m| m == model_id))
-        .map(|config| config.provider.clone())
-        .collect();
-
-    match matching_providers.as_slice() {
-        [] => Ok(provider_configs.get(model_id).map(|config| config.provider.clone())),
-        [provider] => Ok(Some(provider.clone())),
-        _ => Err(format!(
+    match provider_model_index.get(model_id).map(Vec::as_slice) {
+        None | Some([]) => Ok(provider_configs.get(model_id).map(|config| config.provider.clone())),
+        Some([provider]) => Ok(Some(provider.clone())),
+        Some(_) => Err(format!(
             "Model '{model_id}' is configured for multiple providers. Use 'provider/model' to disambiguate."
         )),
     }
@@ -161,11 +158,13 @@ fn build_upstream_url(
 
 fn resolve_provider_config_from_map(
     provider_configs: &HashMap<String, ProviderConfig>,
+    provider_model_index: &ProviderModelIndex,
     model_id: &str,
     destination_path: &str,
     is_anthropic_messages: bool,
 ) -> Result<Option<ResolvedProviderConfig>, String> {
-    let provider_name = match find_provider_name(provider_configs, model_id)? {
+    let provider_name = match find_provider_name(provider_configs, provider_model_index, model_id)?
+    {
         Some(provider_name) => provider_name,
         None => return Ok(None),
     };
@@ -230,7 +229,9 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
 
     let state = app_handle.state::<AppState>();
     let resolved = {
-        let provider_configs = state.provider_configs.lock().await;
+        let provider_state = state.provider_state.lock().await;
+        let provider_configs = &provider_state.configs;
+        let provider_model_index = &provider_state.model_index;
 
         log::debug!(
             "Registered providers: {:?}",
@@ -256,6 +257,7 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
                     log::debug!("Provider hint '{hint}' matched but has no base_url, falling back to heuristic");
                     resolve_provider_config_from_map(
                         &provider_configs,
+                        &provider_model_index,
                         &model_id,
                         destination_path,
                         is_anthropic_messages,
@@ -265,6 +267,7 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
                 log::debug!("Provider hint '{hint}' not found in registered providers, falling back to heuristic");
                 resolve_provider_config_from_map(
                     &provider_configs,
+                    &provider_model_index,
                     &model_id,
                     destination_path,
                     is_anthropic_messages,
@@ -273,6 +276,7 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
         } else {
             resolve_provider_config_from_map(
                 &provider_configs,
+                &provider_model_index,
                 &model_id,
                 destination_path,
                 is_anthropic_messages,
@@ -349,6 +353,7 @@ pub(super) async fn dispatch_to_upstream(
             && name != hyper::header::CONTENT_LENGTH
             && name.as_str() != "x-api-key"
             && name.as_str() != "x-ax-provider"
+            && !super::proxy::is_hop_by_hop_header(name)
         {
             outbound_req = outbound_req.header(name, value);
         }
@@ -436,6 +441,7 @@ pub(super) async fn dispatch_to_upstream(
                             && name != "content-type"
                             && name != hyper::header::CONTENT_LENGTH
                             && name != hyper::header::ACCEPT_ENCODING
+                            && !super::proxy::is_hop_by_hop_header(name)
                         {
                             fallback_req = fallback_req.header(name, value);
                         }
@@ -521,7 +527,9 @@ pub(super) async fn dispatch_to_upstream(
                     &config.trusted_hosts,
                     config.cors_enabled,
                 );
-                return Ok(error_response.body(Body::from(error_body)).unwrap_or_else(|_| Response::new(Body::from("Internal server error"))));
+                return Ok(error_response
+                    .body(Body::from(error_body))
+                    .unwrap_or_else(|_| Response::new(Body::from("Internal server error"))));
             } else if is_error {
                 // Non-/messages error - return error response with body
                 let error_body = response
@@ -542,7 +550,9 @@ pub(super) async fn dispatch_to_upstream(
                     &config.trusted_hosts,
                     config.cors_enabled,
                 );
-                return Ok(error_response.body(Body::from(error_body)).unwrap_or_else(|_| Response::new(Body::from("Internal server error"))));
+                return Ok(error_response
+                    .body(Body::from(error_body))
+                    .unwrap_or_else(|_| Response::new(Body::from("Internal server error"))));
             }
 
             // Success case - stream the response
@@ -585,7 +595,9 @@ pub(super) async fn dispatch_to_upstream(
                 log::debug!("Streaming complete to client");
             });
 
-            Ok(builder.body(body).unwrap_or_else(|_| Response::new(Body::from("Internal server error"))))
+            Ok(builder
+                .body(body)
+                .unwrap_or_else(|_| Response::new(Body::from("Internal server error"))))
         }
         Err(e) => {
             let error_msg = format!("Proxy request to model failed: {e}");
@@ -598,7 +610,9 @@ pub(super) async fn dispatch_to_upstream(
                 &config.trusted_hosts,
                 config.cors_enabled,
             );
-            Ok(error_response.body(Body::from(error_msg)).unwrap_or_else(|_| Response::new(Body::from("Internal server error"))))
+            Ok(error_response
+                .body(Body::from(error_msg))
+                .unwrap_or_else(|_| Response::new(Body::from("Internal server error"))))
         }
     }
 }
@@ -629,7 +643,12 @@ mod tests {
         );
 
         assert_eq!(
-            find_provider_name(&providers, "gpt-4.1").expect("provider should resolve"),
+            find_provider_name(
+                &providers,
+                &crate::core::state::build_provider_model_index(&providers),
+                "gpt-4.1",
+            )
+            .expect("provider should resolve"),
             Some("openai".to_string())
         );
     }
@@ -643,8 +662,12 @@ mod tests {
         );
 
         assert_eq!(
-            find_provider_name(&providers, "anthropic/claude-3-7-sonnet")
-                .expect("provider prefix should resolve"),
+            find_provider_name(
+                &providers,
+                &crate::core::state::build_provider_model_index(&providers),
+                "anthropic/claude-3-7-sonnet",
+            )
+            .expect("provider prefix should resolve"),
             Some("anthropic".to_string())
         );
     }
@@ -658,11 +681,19 @@ mod tests {
         );
         providers.insert(
             "openrouter".to_string(),
-            make_provider("openrouter", Some("https://openrouter.ai/api/v1"), &["gpt-4.1"]),
+            make_provider(
+                "openrouter",
+                Some("https://openrouter.ai/api/v1"),
+                &["gpt-4.1"],
+            ),
         );
 
         assert_eq!(
-            find_provider_name(&providers, "gpt-4.1"),
+            find_provider_name(
+                &providers,
+                &crate::core::state::build_provider_model_index(&providers),
+                "gpt-4.1",
+            ),
             Err(
                 "Model 'gpt-4.1' is configured for multiple providers. Use 'provider/model' to disambiguate."
                     .to_string()
@@ -698,10 +729,15 @@ mod tests {
             ),
         );
 
-        let resolved =
-            resolve_provider_config_from_map(&providers, "gpt-4.1", "/chat/completions", false)
-                .expect("provider lookup should succeed")
-                .expect("provider should resolve");
+        let resolved = resolve_provider_config_from_map(
+            &providers,
+            &crate::core::state::build_provider_model_index(&providers),
+            "gpt-4.1",
+            "/chat/completions",
+            false,
+        )
+        .expect("provider lookup should succeed")
+        .expect("provider should resolve");
 
         assert_eq!(
             resolved.target_base_url,
@@ -720,11 +756,21 @@ mod tests {
         );
         providers.insert(
             "openrouter".to_string(),
-            make_provider("openrouter", Some("https://openrouter.ai/api/v1"), &["gpt-4.1"]),
+            make_provider(
+                "openrouter",
+                Some("https://openrouter.ai/api/v1"),
+                &["gpt-4.1"],
+            ),
         );
 
         assert!(matches!(
-            resolve_provider_config_from_map(&providers, "gpt-4.1", "/chat/completions", false),
+            resolve_provider_config_from_map(
+                &providers,
+                &crate::core::state::build_provider_model_index(&providers),
+                "gpt-4.1",
+                "/chat/completions",
+                false,
+            ),
             Err(message)
                 if message
                     == "Model 'gpt-4.1' is configured for multiple providers. Use 'provider/model' to disambiguate."

@@ -216,7 +216,8 @@ export class DefaultModelsService implements ModelsService {
     modelSize?: number,
     mmprojPath?: string,
     mmprojSha256?: string,
-    mmprojSize?: number
+    mmprojSize?: number,
+    downloadHeaders?: Record<string, string>
   ): Promise<void> {
     const engine = this.getEngine()
     if (!engine) {
@@ -231,6 +232,7 @@ export class DefaultModelsService implements ModelsService {
       modelSize,
       mmprojSha256,
       mmprojSize,
+      downloadHeaders,
     })
   }
 
@@ -302,7 +304,8 @@ export class DefaultModelsService implements ModelsService {
       modelSize,
       mmprojPath,
       mmprojSha256,
-      mmprojSize
+      mmprojSize,
+      hfToken ? { Authorization: `Bearer ${hfToken}` } : undefined
     )
   }
 

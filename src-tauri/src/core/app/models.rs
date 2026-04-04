@@ -9,8 +9,10 @@ pub struct AppConfiguration {
 impl AppConfiguration {
     pub fn default() -> Self {
         Self {
-            data_folder: String::from("./data"), // Set a default value for the data_folder
-                                                 // Add other fields with default values as needed
+            data_folder: std::env::current_dir()
+                .map(|dir| dir.join("data").to_string_lossy().to_string())
+                .unwrap_or_else(|_| "./data".to_string()),
+            // Add other fields with default values as needed
         }
     }
 }
@@ -22,7 +24,11 @@ mod tests {
     #[test]
     fn test_app_configuration_default() {
         let config = AppConfiguration::default();
-        assert_eq!(config.data_folder, "./data");
+        assert!(!config.data_folder.is_empty());
+        assert!(
+            std::path::Path::new(&config.data_folder).is_absolute()
+                || config.data_folder == "./data"
+        );
     }
 
     #[test]

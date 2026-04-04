@@ -35,6 +35,11 @@ export function DownloadManagement() {
     totalBytes: 0,
   })
 
+  const getDownloadId = useCallback(
+    (state: DownloadState) => state.downloadId ?? state.modelId ?? '',
+    []
+  )
+
   useEffect(() => {
     setAppUpdateState({
       isDownloading: updateState.isDownloading,
@@ -143,6 +148,7 @@ export function DownloadManagement() {
   const onFileDownloadError = useCallback(
     (state: DownloadState) => {
       console.debug('onFileDownloadError', state)
+      const downloadId = getDownloadId(state)
 
       const anyState = state as unknown as { error?: string }
       const err = anyState?.error || ''
@@ -185,11 +191,11 @@ export function DownloadManagement() {
       toast.error(t('common:toast.downloadFailed.title'), {
         id: 'download-failed',
         description: t('common:toast.downloadFailed.description', {
-          item: state.modelId,
+          item: downloadId,
         }),
       })
     },
-    [t, navigate]
+    [t, navigate, getDownloadId]
   )
 
   const onModelValidationStarted = useCallback(
@@ -229,38 +235,40 @@ export function DownloadManagement() {
   const onFileDownloadSuccess = useCallback(
     async (state: DownloadState) => {
       console.debug('onFileDownloadSuccess', state)
+      const downloadId = getDownloadId(state)
 
       // Dismiss any validation started toast when download completes successfully
-      toast.dismiss(`model-validation-started-${state.modelId}`)
+      toast.dismiss(`model-validation-started-${downloadId}`)
 
       toast.success(t('common:toast.downloadComplete.title'), {
         id: 'download-complete',
         description: t('common:toast.downloadComplete.description', {
-          item: state.modelId,
+          item: downloadId,
         }),
       })
     },
-    [t]
+    [t, getDownloadId]
   )
 
   const onFileDownloadAndVerificationSuccess = useCallback(
     async (state: DownloadState) => {
       console.debug('onFileDownloadAndVerificationSuccess', state)
+      const downloadId = getDownloadId(state)
 
       // Dismiss any validation started toast when download and verification complete successfully
-      toast.dismiss(`model-validation-started-${state.modelId}`)
+      toast.dismiss(`model-validation-started-${downloadId}`)
 
       toast.success(t('common:toast.downloadAndVerificationComplete.title'), {
         id: 'download-complete',
         description: t(
           'common:toast.downloadAndVerificationComplete.description',
           {
-            item: state.modelId,
+            item: downloadId,
           }
         ),
       })
     },
-    [t]
+    [t, getDownloadId]
   )
 
   useEffect(() => {

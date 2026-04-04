@@ -188,6 +188,7 @@ export function GlobalEventHandler() {
   const { updateProgress, removeDownload, removeLocalDownloadingModel } = useDownloadStore()
 
   type DownloadState = {
+    downloadId?: string
     modelId: string
     percent?: number
     transferred?: number
@@ -196,28 +197,34 @@ export function GlobalEventHandler() {
   }
 
   useEffect(() => {
+    const getDownloadId = (state: DownloadState) =>
+      state.downloadId ?? state.modelId
+
     const onFileDownloadUpdate = (state: DownloadState) => {
-      const modelId = state.modelId
+      const downloadId = getDownloadId(state)
       const percent = state.percent ?? (state.total ? (state.transferred ?? 0) / state.total : 0)
       const transferred = state.size?.transferred ?? state.transferred ?? 0
       const total = state.size?.total ?? state.total ?? 0
 
-      updateProgress(modelId, percent, modelId, transferred, total)
+      updateProgress(downloadId, percent, downloadId, transferred, total)
     }
 
     const onFileDownloadSuccess = (state: DownloadState) => {
-      removeDownload(state.modelId)
-      removeLocalDownloadingModel(state.modelId)
+      const downloadId = getDownloadId(state)
+      removeDownload(downloadId)
+      removeLocalDownloadingModel(downloadId)
     }
 
     const onFileDownloadError = (state: DownloadState) => {
-      removeDownload(state.modelId)
-      removeLocalDownloadingModel(state.modelId)
+      const downloadId = getDownloadId(state)
+      removeDownload(downloadId)
+      removeLocalDownloadingModel(downloadId)
     }
 
     const onFileDownloadStopped = (state: DownloadState) => {
-      removeDownload(state.modelId)
-      removeLocalDownloadingModel(state.modelId)
+      const downloadId = getDownloadId(state)
+      removeDownload(downloadId)
+      removeLocalDownloadingModel(downloadId)
     }
 
     events.on(DownloadEvent.onFileDownloadUpdate, onFileDownloadUpdate)

@@ -1,6 +1,9 @@
 import { useCallback } from 'react'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useLocalKnowledge } from '@/hooks/useLocalKnowledge'
+import { threadCollectionId } from '@/lib/file-registry'
+
+const LOCAL_KNOWLEDGE_TOP_K = 3
 
 function formatChunks(result: unknown): string {
   // MCP tool result is typically { content: Array<{ type: string; text: string }> }
@@ -32,7 +35,12 @@ export function useThreadLocalKnowledge(threadId: string) {
       try {
         const result = await serviceHub.mcp().callTool({
           toolName: 'fabric_search',
-          arguments: { query },
+          arguments: {
+            query,
+            collection_id: threadCollectionId(threadId),
+            top_k: LOCAL_KNOWLEDGE_TOP_K,
+            mode: 'hybrid',
+          },
         })
 
         if (result?.error) return ''

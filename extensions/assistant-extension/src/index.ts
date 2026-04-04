@@ -33,8 +33,7 @@ export default class AxStudioAssistantExtension extends AssistantExtension {
   onUnload(): void {}
 
   async getAssistants(): Promise<Assistant[]> {
-    if (!(await fs.existsSync('file://assistants')))
-      return [this.defaultAssistant]
+    if (!(await fs.existsSync('file://assistants'))) return []
     const assistants = await fs.readdirSync('file://assistants')
     const assistantsData: Assistant[] = []
     for (const assistant of assistants) {
@@ -86,8 +85,12 @@ export default class AxStudioAssistantExtension extends AssistantExtension {
       assistant.id,
       'assistant.json',
     ])
+    const assistantFolder = await joinPath(['file://assistants', assistant.id])
     if (await fs.existsSync(assistantPath)) {
       await fs.rm(assistantPath)
+    }
+    if (await fs.existsSync(assistantFolder)) {
+      await fs.rm(assistantFolder)
     }
   }
 

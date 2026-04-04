@@ -1,14 +1,17 @@
 use std::fs::{self, File};
 use std::io::Write;
 use tauri::Runtime;
+use tokio::task;
 use uuid::Uuid;
 
 #[cfg(any(target_os = "android", target_os = "ios"))]
 use super::db;
 use super::helpers::{
-    get_lock_for_thread, read_messages_from_file, remove_lock_for_thread, should_use_sqlite,
-    update_thread_metadata, write_messages_to_file,
+    get_lock_for_thread, prune_unused_message_locks, read_messages_from_file,
+    remove_lock_for_thread, rewrite_messages_file, should_use_sqlite, update_thread_metadata,
+    write_messages_to_file,
 };
+use super::models::{MessageRecord, ThreadRecord};
 use super::{
     constants::THREADS_FILE,
     utils::{
@@ -22,7 +25,7 @@ use super::{
 #[tauri::command]
 pub async fn list_threads<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
-) -> Result<Vec<serde_json::Value>, String> {
+) -> Result<Vec<ThreadRecord>, String> {
     if should_use_sqlite() {
         // Use SQLite on mobile platforms
         #[cfg(any(target_os = "android", target_os = "ios"))]
@@ -32,31 +35,38 @@ pub async fn list_threads<R: Runtime>(
     // Use file-based storage on desktop
     ensure_data_dirs(app_handle.clone())?;
     let data_dir = get_data_dir(app_handle.clone());
-    let mut threads = Vec::new();
 
-    if !data_dir.exists() {
-        return Ok(threads);
-    }
+    task::spawn_blocking(move || -> Result<Vec<ThreadRecord>, String> {
+        let mut threads = Vec::new();
+        if !data_dir.exists() {
+            return Ok(threads);
+        }
 
-    for entry in fs::read_dir(&data_dir).map_err(|e| e.to_string())? {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let path = entry.path();
-        if path.is_dir() {
-            let thread_metadata_path = path.join(THREADS_FILE);
-            if thread_metadata_path.exists() {
-                let data = fs::read_to_string(&thread_metadata_path).map_err(|e| e.to_string())?;
-                match serde_json::from_str(&data) {
-                    Ok(thread) => threads.push(thread),
-                    Err(e) => {
-                        println!("Failed to parse thread file: {e}");
-                        continue; // skip invalid thread files
+        for entry in fs::read_dir(&data_dir).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let path = entry.path();
+            if path.is_dir() {
+                let thread_metadata_path = path.join(THREADS_FILE);
+                if thread_metadata_path.exists() {
+                    let data =
+                        fs::read_to_string(&thread_metadata_path).map_err(|e| e.to_string())?;
+                    match serde_json::from_str(&data) {
+                        Ok(thread) => threads.push(thread),
+                        Err(e) => {
+                            log::warn!(
+                                "Failed to parse thread metadata {}: {e}",
+                                thread_metadata_path.display()
+                            );
+                        }
                     }
                 }
             }
         }
-    }
 
-    Ok(threads)
+        Ok(threads)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Creates a new thread, assigns it a unique ID, and persists its metadata.
@@ -64,8 +74,12 @@ pub async fn list_threads<R: Runtime>(
 #[tauri::command]
 pub async fn create_thread<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
-    mut thread: serde_json::Value,
-) -> Result<serde_json::Value, String> {
+    mut thread: ThreadRecord,
+) -> Result<ThreadRecord, String> {
+    if thread.id.is_empty() {
+        thread.id = Uuid::new_v4().to_string();
+    }
+
     if should_use_sqlite() {
         #[cfg(any(target_os = "android", target_os = "ios"))]
         return db::db_create_thread(app_handle, thread).await;
@@ -73,8 +87,7 @@ pub async fn create_thread<R: Runtime>(
 
     // Use file-based storage on desktop
     ensure_data_dirs(app_handle.clone())?;
-    let uuid = Uuid::new_v4().to_string();
-    thread["id"] = serde_json::Value::String(uuid.clone());
+    let uuid = thread.id.clone();
     let thread_dir = get_thread_dir(app_handle.clone(), &uuid);
     if !thread_dir.exists() {
         fs::create_dir_all(&thread_dir).map_err(|e| e.to_string())?;
@@ -90,7 +103,7 @@ pub async fn create_thread<R: Runtime>(
 #[tauri::command]
 pub async fn modify_thread<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
-    thread: serde_json::Value,
+    thread: ThreadRecord,
 ) -> Result<(), String> {
     if should_use_sqlite() {
         #[cfg(any(target_os = "android", target_os = "ios"))]
@@ -98,10 +111,10 @@ pub async fn modify_thread<R: Runtime>(
     }
 
     // Use file-based storage on desktop
-    let thread_id = thread
-        .get("id")
-        .and_then(|id| id.as_str())
-        .ok_or("Missing thread id")?;
+    let thread_id = thread.id.as_str();
+    if thread_id.is_empty() {
+        return Err("Missing thread id".to_string());
+    }
     let thread_dir = get_thread_dir(app_handle.clone(), thread_id);
     if !thread_dir.exists() {
         return Err("Thread directory does not exist".to_string());
@@ -157,7 +170,7 @@ pub async fn delete_thread<R: Runtime>(
 pub async fn list_messages<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     thread_id: String,
-) -> Result<Vec<serde_json::Value>, String> {
+) -> Result<Vec<MessageRecord>, String> {
     if should_use_sqlite() {
         #[cfg(any(target_os = "android", target_os = "ios"))]
         return db::db_list_messages(app_handle, &thread_id).await;
@@ -167,7 +180,11 @@ pub async fn list_messages<R: Runtime>(
     // Acquire per-thread lock to prevent reading during writes
     let lock = get_lock_for_thread(&thread_id).await;
     let _guard = lock.lock().await;
-    read_messages_from_file(app_handle, &thread_id)
+    let messages = read_messages_from_file(app_handle, &thread_id);
+    drop(_guard);
+    drop(lock);
+    prune_unused_message_locks().await;
+    messages
 }
 
 /// Appends a new message to a thread's messages.jsonl file.
@@ -175,27 +192,23 @@ pub async fn list_messages<R: Runtime>(
 #[tauri::command]
 pub async fn create_message<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
-    mut message: serde_json::Value,
-) -> Result<serde_json::Value, String> {
+    mut message: MessageRecord,
+) -> Result<MessageRecord, String> {
+    if message.id.is_empty() {
+        message.id = Uuid::new_v4().to_string();
+    }
+
     if should_use_sqlite() {
         #[cfg(any(target_os = "android", target_os = "ios"))]
         return db::db_create_message(app_handle, message).await;
     }
 
     // Use file-based storage on desktop
-    let thread_id = {
-        let id = message
-            .get("thread_id")
-            .and_then(|v| v.as_str())
-            .ok_or("Missing thread_id")?;
-        id.to_string()
-    };
-    let path = get_messages_path(app_handle.clone(), &thread_id);
-
-    if message.get("id").is_none() {
-        let uuid = Uuid::new_v4().to_string();
-        message["id"] = serde_json::Value::String(uuid);
+    let thread_id = message.thread_id.clone();
+    if thread_id.is_empty() {
+        return Err("Missing thread_id".to_string());
     }
+    let path = get_messages_path(app_handle.clone(), &thread_id);
 
     // Acquire per-thread lock before writing
     {
@@ -218,6 +231,8 @@ pub async fn create_message<R: Runtime>(
         file.flush().map_err(|e| e.to_string())?;
     }
 
+    prune_unused_message_locks().await;
+
     Ok(message)
 }
 
@@ -227,40 +242,37 @@ pub async fn create_message<R: Runtime>(
 #[tauri::command]
 pub async fn modify_message<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
-    message: serde_json::Value,
-) -> Result<serde_json::Value, String> {
+    message: MessageRecord,
+) -> Result<MessageRecord, String> {
     if should_use_sqlite() {
         #[cfg(any(target_os = "android", target_os = "ios"))]
         return db::db_modify_message(app_handle, message).await;
     }
 
     // Use file-based storage on desktop
-    let thread_id = message
-        .get("thread_id")
-        .and_then(|v| v.as_str())
-        .ok_or("Missing thread_id")?;
-    let message_id = message
-        .get("id")
-        .and_then(|v| v.as_str())
-        .ok_or("Missing message id")?;
+    let thread_id = message.thread_id.as_str();
+    if thread_id.is_empty() {
+        return Err("Missing thread_id".to_string());
+    }
+    let message_id = message.id.as_str();
+    if message_id.is_empty() {
+        return Err("Missing message id".to_string());
+    }
 
     // Acquire per-thread lock before modifying
     {
         let lock = get_lock_for_thread(thread_id).await;
         let _guard = lock.lock().await;
 
-        let mut messages = read_messages_from_file(app_handle.clone(), thread_id)?;
-        if let Some(index) = messages
-            .iter()
-            .position(|m| m.get("id").and_then(|v| v.as_str()) == Some(message_id))
-        {
-            messages[index] = message.clone();
-
-            // Rewrite all messages
-            let path = get_messages_path(app_handle.clone(), thread_id);
-            write_messages_to_file(&messages, &path)?;
-        }
+        rewrite_messages_file(app_handle.clone(), thread_id, |existing| {
+            if existing.id == message_id {
+                Some(message.clone())
+            } else {
+                Some(existing)
+            }
+        })?;
     }
+    prune_unused_message_locks().await;
     Ok(message)
 }
 
@@ -284,13 +296,16 @@ pub async fn delete_message<R: Runtime>(
         let lock = get_lock_for_thread(&thread_id).await;
         let _guard = lock.lock().await;
 
-        let mut messages = read_messages_from_file(app_handle.clone(), &thread_id)?;
-        messages.retain(|m| m.get("id").and_then(|v| v.as_str()) != Some(message_id.as_str()));
-
-        // Rewrite remaining messages
-        let path = get_messages_path(app_handle.clone(), &thread_id);
-        write_messages_to_file(&messages, &path)?;
+        rewrite_messages_file(app_handle.clone(), &thread_id, |existing| {
+            if existing.id == message_id {
+                None
+            } else {
+                Some(existing)
+            }
+        })?;
     }
+
+    prune_unused_message_locks().await;
 
     Ok(())
 }
@@ -313,13 +328,9 @@ pub async fn get_thread_assistant<R: Runtime>(
         return Err("Thread not found".to_string());
     }
     let data = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    let thread: serde_json::Value = serde_json::from_str(&data).map_err(|e| e.to_string())?;
-    if let Some(assistants) = thread.get("assistants").and_then(|a| a.as_array()) {
-        if let Some(first) = assistants.first() {
-            Ok(first.clone())
-        } else {
-            Err("Assistant not found".to_string())
-        }
+    let thread: ThreadRecord = serde_json::from_str(&data).map_err(|e| e.to_string())?;
+    if let Some(first) = thread.assistants.first() {
+        Ok(first.clone())
     } else {
         Err("Assistant not found".to_string())
     }
@@ -348,16 +359,15 @@ pub async fn create_thread_assistant<R: Runtime>(
     let lock = get_lock_for_thread(&thread_id).await;
     let _guard = lock.lock().await;
 
-    let mut thread: serde_json::Value = {
+    let mut thread: ThreadRecord = {
         let data = fs::read_to_string(&path).map_err(|e| e.to_string())?;
         serde_json::from_str(&data).map_err(|e| e.to_string())?
     };
-    if let Some(assistants) = thread.get_mut("assistants").and_then(|a| a.as_array_mut()) {
-        assistants.push(assistant.clone());
-    } else {
-        thread["assistants"] = serde_json::Value::Array(vec![assistant.clone()]);
-    }
+    thread.assistants.push(assistant.clone());
     update_thread_metadata(app_handle, &thread_id, &thread)?;
+    drop(_guard);
+    drop(lock);
+    prune_unused_message_locks().await;
     Ok(assistant)
 }
 
@@ -384,7 +394,7 @@ pub async fn modify_thread_assistant<R: Runtime>(
     let lock = get_lock_for_thread(&thread_id).await;
     let _guard = lock.lock().await;
 
-    let mut thread: serde_json::Value = {
+    let mut thread: ThreadRecord = {
         let data = fs::read_to_string(&path).map_err(|e| e.to_string())?;
         serde_json::from_str(&data).map_err(|e| e.to_string())?
     };
@@ -392,17 +402,16 @@ pub async fn modify_thread_assistant<R: Runtime>(
         .get("id")
         .and_then(|v| v.as_str())
         .ok_or("Missing id")?;
-    if let Some(assistants) = thread
-        .get_mut("assistants")
-        .and_then(|a: &mut serde_json::Value| a.as_array_mut())
+    if let Some(index) = thread
+        .assistants
+        .iter()
+        .position(|a| a.get("id").and_then(|v| v.as_str()) == Some(assistant_id))
     {
-        if let Some(index) = assistants
-            .iter()
-            .position(|a| a.get("id").and_then(|v| v.as_str()) == Some(assistant_id))
-        {
-            assistants[index] = assistant.clone();
-            update_thread_metadata(app_handle, &thread_id, &thread)?;
-        }
+        thread.assistants[index] = assistant.clone();
+        update_thread_metadata(app_handle, &thread_id, &thread)?;
     }
+    drop(_guard);
+    drop(lock);
+    prune_unused_message_locks().await;
     Ok(assistant)
 }

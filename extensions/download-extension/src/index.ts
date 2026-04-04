@@ -2,10 +2,6 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { BaseExtension, events } from '@ax-studio/core'
 
-export enum Settings {
-  hfToken = 'hf-token',
-}
-
 interface DownloadItem {
   url: string
   save_path: string
@@ -21,11 +17,8 @@ type DownloadEvent = {
 }
 
 export default class AxStudioDownloadManager extends BaseExtension {
-  hfToken?: string
-
   async onLoad() {
     this.registerSettings(SETTINGS)
-    this.hfToken = await this.getSetting<string>(Settings.hfToken, undefined)
   }
 
   async onUnload() {}
@@ -45,6 +38,7 @@ export default class AxStudioDownloadManager extends BaseExtension {
     savePath: string,
     taskId: string,
     proxyConfig: Record<string, string | string[] | boolean> | null = null,
+    requestHeaders?: Record<string, string>,
     onProgress?: (transferred: number, total: number) => void
   ) {
     // Only include the proxy field when there is actually a proxy configured.
@@ -54,20 +48,19 @@ export default class AxStudioDownloadManager extends BaseExtension {
     if (proxyConfig && Object.keys(proxyConfig).length > 0) {
       item.proxy = proxyConfig
     }
-    return await this.downloadFiles([item], taskId, onProgress)
-  }
-
-  onSettingUpdate<T>(key: string, value: T): void {
-    if (key === Settings.hfToken) {
-      this.hfToken = value as string
-    }
+    return await this.downloadFiles([item], taskId, requestHeaders, onProgress)
   }
 
   async downloadFiles(
     items: DownloadItem[],
     taskId: string,
+    requestHeaders?: Record<string, string>,
     onProgress?: (transferred: number, total: number) => void
   ) {
+    if (items.length === 0) {
+      throw new Error('downloadFiles requires at least one item')
+    }
+
     // Sanitize taskId for Tauri event name compatibility
     const safeTaskId = this._sanitizeTaskId(taskId)
 
@@ -86,12 +79,14 @@ export default class AxStudioDownloadManager extends BaseExtension {
       await invoke<void>('download_files', {
         items,
         taskId: safeTaskId,
-        headers: this._getHeaders(),
+        headers: requestHeaders ?? {},
       })
     } catch (error) {
       console.error('Error downloading task', taskId, error)
       throw error
     } finally {
+      // Give already-queued progress callbacks one turn to run before removing the listener.
+      await Promise.resolve()
       unlisten()
     }
   }
@@ -103,12 +98,6 @@ export default class AxStudioDownloadManager extends BaseExtension {
     } catch (error) {
       console.error('Error cancelling download:', error)
       throw error
-    }
-  }
-
-  _getHeaders() {
-    return {
-      ...(this.hfToken && { Authorization: `Bearer ${this.hfToken}` }),
     }
   }
 }

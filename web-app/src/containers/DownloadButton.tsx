@@ -79,7 +79,8 @@ export function DownloadButtonPlaceholder({
 
   useEffect(() => {
     const handleVerified = (state: DownloadState) => {
-      if (state.modelId === modelId) setDownloaded(true)
+      const downloadId = state.downloadId ?? state.modelId
+      if (downloadId === modelId) setDownloaded(true)
     }
     // Also listen for onModelImported — onFileDownloadAndVerificationSuccess
     // only fires when SHA256 verification is enabled (skipVerification=false).

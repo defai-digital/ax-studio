@@ -54,7 +54,7 @@ export type MessageRequest = {
    * @deprecated Use thread object instead
    * The thread id of the message request.
    */
-  threadId: string
+  threadId?: string
 
   /**
    * The assistant id of the message request.
@@ -73,7 +73,7 @@ export type MessageRequest = {
   model?: ModelInfo
 
   /** The thread of this message is belong to. **/
-  // TODO: deprecate threadId field
+  // TODO: remove threadId once all consumers use thread
   thread?: Thread
 
   /**

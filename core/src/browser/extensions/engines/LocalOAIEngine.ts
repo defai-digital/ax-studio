@@ -12,6 +12,14 @@ export abstract class LocalOAIEngine extends OAIEngine {
   loadModelFunctionName: string = 'loadModel'
   unloadModelFunctionName: string = 'unloadModel'
 
+  private readonly handleModelInit = (model: Model) => {
+    void this.loadModel(model)
+  }
+
+  private readonly handleModelStop = (model: Model) => {
+    void this.unloadModel(model)
+  }
+
   /**
    * This class represents a base for local inference providers in the OpenAI architecture.
    * It extends the OAIEngine class and provides the implementation of loading and unloading models locally.
@@ -21,8 +29,14 @@ export abstract class LocalOAIEngine extends OAIEngine {
   override onLoad() {
     super.onLoad()
     // These events are applicable to local inference providers
-    events.on(ModelEvent.OnModelInit, (model: Model) => this.loadModel(model))
-    events.on(ModelEvent.OnModelStop, (model: Model) => this.unloadModel(model))
+    events.on(ModelEvent.OnModelInit, this.handleModelInit)
+    events.on(ModelEvent.OnModelStop, this.handleModelStop)
+  }
+
+  override onUnload() {
+    events.off(ModelEvent.OnModelInit, this.handleModelInit)
+    events.off(ModelEvent.OnModelStop, this.handleModelStop)
+    super.onUnload()
   }
 
   /**

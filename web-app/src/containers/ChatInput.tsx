@@ -19,6 +19,7 @@ import { ExtensionManager } from '@/lib/extension'
 import { useChatSendHandler } from '@/hooks/use-chat-send-handler'
 import { useChatAttachments, NEW_THREAD_ATTACHMENT_KEY } from '@/hooks/useChatAttachments'
 import { useDocumentAttachmentHandler } from '@/hooks/use-document-attachment-handler'
+import { useImageAttachmentHandler } from '@/hooks/use-image-attachment-handler'
 import { ChatInputToolbar } from '@/containers/ChatInputToolbar'
 import { ChatInputAttachments } from '@/components/ChatInputAttachments'
 import { TokenCounter } from '@/components/TokenCounter'
@@ -47,6 +48,7 @@ const ChatInput = memo(function ChatInput({
   chatStatus,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [isFocused, setIsFocused] = useState(false)
   const [rows, setRows] = useState(1)
   const [message, setMessage] = useState('')
@@ -136,6 +138,24 @@ const ChatInput = memo(function ChatInput({
   })
 
   const selectedModel = useModelProvider((state) => state.selectedModel) ?? undefined
+  const hasVisionSupport = selectedModel?.capabilities?.includes('vision') ?? false
+  const {
+    isDragOver,
+    handleFileChange,
+    handleImagePickerClick,
+    handleDragEnter,
+    handleDragLeave,
+    handleDragOver,
+    handleDrop,
+    handlePaste,
+  } = useImageAttachmentHandler({
+    attachmentsKey,
+    effectiveThreadId,
+    fileInputRef,
+    textareaRef,
+    hasMmproj: hasVisionSupport,
+    setMessage,
+  })
   const assistants = useAssistant((state) => state.assistants)
 
   const threadMessages = useMessages(
@@ -211,8 +231,25 @@ const ChatInput = memo(function ChatInput({
   const isStreaming = chatStatus === 'submitted' || chatStatus === 'streaming'
 
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+        multiple
+        className="hidden"
+        onChange={handleFileChange}
+      />
       <div className="relative">
+        {isDragOver && (
+          <div className="absolute inset-0 z-30 rounded-2xl border-2 border-dashed border-primary/60 bg-primary/5 pointer-events-none" />
+        )}
         <div className="relative rounded-2xl">
           {/* Streaming glow border — spinning conic gradient */}
           {isStreaming && (
@@ -255,6 +292,9 @@ const ChatInput = memo(function ChatInput({
                     handleSendMessage(prompt)
                   }
                 }
+              }}
+              onPaste={(e) => {
+                void handlePaste(e)
               }}
               placeholder={t('common:placeholder.chatInput')}
               aria-label={t('common:placeholder.chatInput')}
@@ -311,6 +351,7 @@ const ChatInput = memo(function ChatInput({
           stopStreaming={stopStreaming}
           handleSendMessage={handleSendMessage}
           onAttachDocuments={handleAttachDocsIngest}
+          onAttachImages={handleImagePickerClick}
           ingestingDocs={ingestingDocs}
         />
       </div>

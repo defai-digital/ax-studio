@@ -47,6 +47,52 @@ export abstract class BaseExtension implements ExtensionType {
   /** @type {string} Extension's version. */
   version
 
+  private readStorageItem(key: string): string | null {
+    try {
+      return localStorage.getItem(key)
+    } catch (error) {
+      console.warn(`Failed to read settings for "${key}"`, error)
+      return null
+    }
+  }
+
+  private writeStorageItem(key: string, value: string): boolean {
+    try {
+      localStorage.setItem(key, value)
+      return true
+    } catch (error) {
+      console.error(`Failed to persist settings for "${key}"`, error)
+      return false
+    }
+  }
+
+  private isSettingsArray(value: unknown): value is SettingComponentProps[] {
+    return Array.isArray(value) && value.every((item) => {
+      if (!item || typeof item !== 'object') return false
+      const candidate = item as Partial<SettingComponentProps>
+      return typeof candidate.key === 'string' && !!candidate.controllerProps
+    })
+  }
+
+  private parseStoredSettings(raw: string | null, key: string): SettingComponentProps[] {
+    if (!raw) return []
+
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(raw)
+    } catch (error) {
+      console.warn(`Ignoring invalid stored settings for "${key}"`, error)
+      return []
+    }
+
+    if (!this.isSettingsArray(parsed)) {
+      console.warn(`Ignoring malformed stored settings for "${key}"`)
+      return []
+    }
+
+    return parsed
+  }
+
   constructor(
     url: string,
     name: string,
@@ -114,40 +160,49 @@ export abstract class BaseExtension implements ExtensionType {
       return
     }
 
-    settings.forEach((setting) => {
-      setting.extensionName = this.name
-    })
-    try {
-      const oldSettingsJson = localStorage.getItem(this.name)
-      // Persists new settings
-      if (oldSettingsJson) {
-        const oldSettings = JSON.parse(oldSettingsJson)
-        settings.forEach((setting) => {
-          // Keep setting value
-          if (setting.controllerProps && Array.isArray(oldSettings))
-            setting.controllerProps.value =
-              oldSettings.find((e: any) => e.key === setting.key)?.controllerProps?.value ??
-              setting.controllerProps.value
-          if ('options' in setting.controllerProps) {
-            setting.controllerProps.options = setting.controllerProps.options?.length
-              ? setting.controllerProps.options
-              : oldSettings.find((e: any) => e.key === setting.key)?.controllerProps?.options
-            if(!setting.controllerProps.options?.some(e => e.value === setting.controllerProps.value)) {
-              setting.controllerProps.value = setting.controllerProps.options?.[0]?.value ?? setting.controllerProps.value
-            }
-          }
-          if ('recommended' in setting.controllerProps) {
-            const oldRecommended = oldSettings.find((e: any) => e.key === setting.key)
-              ?.controllerProps?.recommended
-            if (oldRecommended !== undefined && oldRecommended !== '') {
-              setting.controllerProps.recommended = oldRecommended
-            }
-          }
-        })
+    if (!this.isSettingsArray(settings)) {
+      throw new Error(`Invalid settings payload for "${this.name}"`)
+    }
+
+    const normalizedSettings = settings.map((setting) => ({
+      ...setting,
+      extensionName: this.name,
+      controllerProps: { ...setting.controllerProps },
+    }))
+
+    const oldSettings = this.parseStoredSettings(
+      this.readStorageItem(this.name),
+      this.name
+    )
+
+    normalizedSettings.forEach((setting) => {
+      const oldSetting = oldSettings.find((entry) => entry.key === setting.key)
+      if (!oldSetting) return
+
+      setting.controllerProps.value =
+        oldSetting.controllerProps?.value ?? setting.controllerProps.value
+
+      if ('options' in setting.controllerProps) {
+        setting.controllerProps.options = setting.controllerProps.options?.length
+          ? setting.controllerProps.options
+          : oldSetting.controllerProps?.options
+
+        if (!setting.controllerProps.options?.some((entry) => entry.value === setting.controllerProps.value)) {
+          setting.controllerProps.value =
+            setting.controllerProps.options?.[0]?.value ?? setting.controllerProps.value
+        }
       }
-      localStorage.setItem(this.name, JSON.stringify(settings))
-    } catch (err) {
-      console.error(err)
+
+      if ('recommended' in setting.controllerProps) {
+        const oldRecommended = oldSetting.controllerProps?.recommended
+        if (oldRecommended !== undefined && oldRecommended !== '') {
+          setting.controllerProps.recommended = oldRecommended
+        }
+      }
+    })
+
+    if (!this.writeStorageItem(this.name, JSON.stringify(normalizedSettings))) {
+      throw new Error(`Failed to register settings for "${this.name}"`)
     }
   }
 
@@ -183,16 +238,7 @@ export abstract class BaseExtension implements ExtensionType {
    */
   async getSettings(): Promise<SettingComponentProps[]> {
     if (!this.name) return []
-
-    try {
-      const settingsString = localStorage.getItem(this.name)
-      if (!settingsString) return []
-      const settings: SettingComponentProps[] = JSON.parse(settingsString)
-      return settings
-    } catch (err) {
-      console.warn(err)
-      return []
-    }
+    return this.parseStoredSettings(this.readStorageItem(this.name), this.name)
   }
 
   /**
@@ -209,15 +255,21 @@ export abstract class BaseExtension implements ExtensionType {
       const updatedSetting = componentProps.find(
         (componentProp) => componentProp.key === setting.key
       )
-      if (updatedSetting && updatedSetting.controllerProps) {
-        setting.controllerProps.value = updatedSetting.controllerProps.value
+      const nextSetting = {
+        ...setting,
+        controllerProps: { ...setting.controllerProps },
       }
-      return setting
+      if (updatedSetting && updatedSetting.controllerProps) {
+        nextSetting.controllerProps.value = updatedSetting.controllerProps.value
+      }
+      return nextSetting
     })
 
     if (!updatedSettings.length) updatedSettings = componentProps as SettingComponentProps[]
 
-    localStorage.setItem(this.name, JSON.stringify(updatedSettings))
+    if (!this.writeStorageItem(this.name, JSON.stringify(updatedSettings))) {
+      throw new Error(`Failed to update settings for "${this.name}"`)
+    }
 
     updatedSettings.forEach((setting) => {
       this.onSettingUpdate<typeof setting.controllerProps.value>(

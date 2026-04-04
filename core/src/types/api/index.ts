@@ -7,7 +7,7 @@ import { ChatCompletionMessage } from '../inference'
 export enum NativeRoute {
   openExternalUrl = 'openExternalUrl',
   openAppDirectory = 'openAppDirectory',
-  openFileExplore = 'openFileExplorer',
+  openFileExplorer = 'openFileExplorer',
   selectDirectory = 'selectDirectory',
   selectFiles = 'selectFiles',
   relaunch = 'relaunch',
@@ -106,6 +106,11 @@ export enum FileManagerRoute {
   getGgufFiles = 'getGgufFiles',
 }
 
+export enum ConfigRoute {
+  launchClaudeCodeWithConfig = 'launchClaudeCodeWithConfig',
+  writeEnvFileToConfig = 'writeEnvFileToConfig',
+}
+
 export type ApiFunction = (...args: readonly unknown[]) => Promise<unknown>
 
 export type NativeRouteFunctions = {
@@ -149,8 +154,7 @@ export const CoreRoutes = [
   ...Object.values(ExtensionRoute),
   ...Object.values(FileSystemRoute),
   ...Object.values(FileManagerRoute),
-  'launchClaudeCodeWithConfig',
-  'writeEnvFileToConfig',
+  ...Object.values(ConfigRoute),
 ]
 
 export const APIRoutes = [...CoreRoutes, ...Object.values(NativeRoute)]

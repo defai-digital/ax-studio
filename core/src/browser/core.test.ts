@@ -1,33 +1,34 @@
 import { describe, it, expect, vi } from 'vitest'
-import { openExternalUrl } from './core'
-import { joinPath } from './core'
-import { openFileExplorer } from './core'
-import { getAppDataFolderPath } from './core'
-import { executeOnMain } from './core'
+import {
+  baseName,
+  dirName,
+  getAppDataFolderPath,
+  joinPath,
+  openExternalUrl,
+  openFileExplorer,
+} from './core'
 
 describe('test core apis', () => {
   it('should open external url', async () => {
     const url = 'http://example.com'
     globalThis.core = {
       api: {
-        openExternalUrl: vi.fn().mockResolvedValue('opened'),
+        openExternalUrl: vi.fn().mockResolvedValue(undefined),
       },
     }
-    const result = await openExternalUrl(url)
+    await openExternalUrl(url)
     expect(globalThis.core.api.openExternalUrl).toHaveBeenCalledWith(url)
-    expect(result).toBe('opened')
   })
 
   it('should accept https URLs', async () => {
     const url = 'https://example.com'
     globalThis.core = {
       api: {
-        openExternalUrl: vi.fn().mockResolvedValue('opened'),
+        openExternalUrl: vi.fn().mockResolvedValue(undefined),
       },
     }
-    const result = await openExternalUrl(url)
+    await openExternalUrl(url)
     expect(globalThis.core.api.openExternalUrl).toHaveBeenCalledWith(url)
-    expect(result).toBe('opened')
   })
 
   it('should reject unsafe protocols', () => {
@@ -61,12 +62,11 @@ describe('test core apis', () => {
     const path = '/path/to/open'
     globalThis.core = {
       api: {
-        openFileExplorer: vi.fn().mockResolvedValue('opened'),
+        openFileExplorer: vi.fn().mockResolvedValue(undefined),
       },
     }
-    const result = await openFileExplorer(path)
+    await openFileExplorer(path)
     expect(globalThis.core.api.openFileExplorer).toHaveBeenCalledWith({ path })
-    expect(result).toBe('opened')
   })
 
   it('should get app data folder path', async () => {
@@ -87,11 +87,15 @@ describe('dirName - just a pass thru api', () => {
     globalThis.core = {
       api: {
         dirName: mockDirName.mockResolvedValue('/path/to'),
+        baseName: vi.fn().mockResolvedValue('file.txt'),
       },
     }
-    // Normal file path with extension
     const path = '/path/to/file.txt'
-    await globalThis.core.api.dirName(path)
-    expect(mockDirName).toHaveBeenCalledWith(path)
+
+    await dirName(path)
+    await baseName(path)
+
+    expect(mockDirName).toHaveBeenCalledWith({ args: [path] })
+    expect(globalThis.core.api.baseName).toHaveBeenCalledWith({ args: [path] })
   })
 })

@@ -25,7 +25,14 @@ pub fn get_app_configurations<R: Runtime>(app_handle: tauri::AppHandle<R>) -> Ap
 
         if let Err(err) = fs::write(
             &configuration_file,
-            serde_json::to_string(&app_default_configuration).unwrap(),
+            serde_json::to_string(&app_default_configuration)
+                .map_err(|e| e.to_string())
+                .unwrap_or_else(|e| {
+                    log::warn!(
+                        "Failed to serialize default app configuration while creating config: {e}"
+                    );
+                    String::new()
+                }),
         ) {
             log::error!("Failed to create default config: {err}");
         }
@@ -125,18 +132,12 @@ pub fn get_configuration_file_path<R: Runtime>(app_handle: tauri::AppHandle<R>) 
             config_path.join(package_name)
         } else {
             log::debug!("Could not determine config directory");
-            app_path
-                .parent()
-                .unwrap_or(&app_path.join("../"))
-                .join(package_name)
+            app_path.parent().unwrap_or(&app_path).join(package_name)
         }
     };
 
     #[cfg(not(target_os = "linux"))]
-    let old_data_dir = app_path
-        .parent()
-        .unwrap_or(&app_path.join("../"))
-        .join(package_name);
+    let old_data_dir = app_path.parent().unwrap_or(&app_path).join(package_name);
 
     if old_data_dir.exists() {
         old_data_dir.join(CONFIGURATION_FILE_NAME)

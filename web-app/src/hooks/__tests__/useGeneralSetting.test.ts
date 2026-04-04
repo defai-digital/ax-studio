@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { useGeneralSetting } from '../useGeneralSetting'
+import {
+  sanitizePersistedGeneralSettings,
+  useGeneralSetting,
+} from '../useGeneralSetting'
 
 // Mock constants
 vi.mock('@/constants/localStorage', () => ({
@@ -19,22 +22,9 @@ vi.mock('zustand/middleware', () => ({
   }),
 }))
 
-// Mock ExtensionManager
-vi.mock('@/lib/extension', () => ({
-  ExtensionManager: {
-    getInstance: vi.fn(),
-  },
-}))
-
 describe('useGeneralSetting', () => {
-  let mockExtensionManager: any
-
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.clearAllMocks()
-
-    // Get the mocked ExtensionManager
-    const { ExtensionManager } = await import('@/lib/extension')
-    mockExtensionManager = ExtensionManager
 
     // Reset store state to defaults
     useGeneralSetting.setState({
@@ -42,16 +32,6 @@ describe('useGeneralSetting', () => {
       spellCheckChatInput: true,
       tokenCounterCompact: true,
       huggingfaceToken: undefined,
-    })
-
-    // Setup default mock behavior to prevent errors
-    const mockGetByName = vi.fn().mockReturnValue({
-      getSettings: vi.fn().mockResolvedValue(null),
-      updateSettings: vi.fn(),
-    })
-
-    mockExtensionManager.getInstance.mockReturnValue({
-      getByName: mockGetByName,
     })
   })
 
@@ -233,41 +213,31 @@ describe('useGeneralSetting', () => {
       expect(result.current.huggingfaceToken).toBe('')
     })
 
-    it('should call ExtensionManager when setting token', async () => {
-      const mockSettings = [
-        { key: 'hf-token', controllerProps: { value: 'old-value' } },
-        { key: 'other-setting', controllerProps: { value: 'other-value' } },
-      ]
-
-      const mockGetByName = vi.fn()
-      const mockGetSettings = vi.fn().mockResolvedValue(mockSettings)
-      const mockUpdateSettings = vi.fn()
-
-      mockExtensionManager.getInstance.mockReturnValue({
-        getByName: mockGetByName,
-      })
-      mockGetByName.mockReturnValue({
-        getSettings: mockGetSettings,
-        updateSettings: mockUpdateSettings,
-      })
-
+    it('should remove the token from persisted storage payloads', () => {
       const { result } = renderHook(() => useGeneralSetting())
 
       act(() => {
         result.current.setHuggingfaceToken('new-token')
       })
 
-      expect(mockExtensionManager.getInstance).toHaveBeenCalled()
-      expect(mockGetByName).toHaveBeenCalledWith('@ax-studio/download-extension')
-
-      // Wait for async operations
-      await new Promise((resolve) => setTimeout(resolve, 0))
-
-      expect(mockGetSettings).toHaveBeenCalled()
-      expect(mockUpdateSettings).toHaveBeenCalledWith([
-        { key: 'hf-token', controllerProps: { value: 'new-token' } },
-        { key: 'other-setting', controllerProps: { value: 'other-value' } },
-      ])
+      expect(
+        sanitizePersistedGeneralSettings({
+          state: {
+            currentLanguage: result.current.currentLanguage,
+            spellCheckChatInput: result.current.spellCheckChatInput,
+            tokenCounterCompact: result.current.tokenCounterCompact,
+            huggingfaceToken: result.current.huggingfaceToken,
+          },
+          version: 0,
+        })
+      ).toEqual({
+        state: {
+          currentLanguage: 'en',
+          spellCheckChatInput: true,
+          tokenCounterCompact: true,
+        },
+        version: 0,
+      })
     })
   })
 

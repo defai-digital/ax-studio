@@ -30,7 +30,7 @@ export type AssistantTool = {
   type: string
   enabled: boolean
   useTimeWeightedRetriever?: boolean
-  settings: any
+  settings: Record<string, unknown>
 }
 
 export type ToolScope = {

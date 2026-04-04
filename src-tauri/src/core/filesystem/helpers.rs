@@ -3,7 +3,10 @@ use ax_studio_utils::{normalize_file_path, normalize_path};
 use std::path::PathBuf;
 use tauri::Runtime;
 
-pub fn resolve_path<R: Runtime>(app_handle: tauri::AppHandle<R>, path: &str) -> PathBuf {
+pub fn resolve_path<R: Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    path: &str,
+) -> Result<PathBuf, String> {
     let app_data_folder = get_app_data_folder_path(app_handle.clone());
     let canonical_app_data = normalize_path(&app_data_folder);
     let path = if path.starts_with("file:/") || path.starts_with("file:\\") {
@@ -26,12 +29,14 @@ pub fn resolve_path<R: Runtime>(app_handle: tauri::AppHandle<R>, path: &str) -> 
     // Security: ensure resolved path is within the app data folder
     // This check must be done after canonicalize to close symlink TOCTOU
     if !resolved.starts_with(&canonical_app_data) {
-        log::warn!(
+        let message = format!(
             "Path traversal blocked: {} is outside app data folder {}",
             resolved.display(),
             canonical_app_data.display()
         );
-        return app_data_folder;
+        log::warn!("{message}");
+        return Err(message);
     }
-    resolved
+
+    Ok(resolved)
 }

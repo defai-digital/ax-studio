@@ -17,14 +17,57 @@ import {
   findLatestVersionForBackend,
   BackendVersion,
   BestBackendResult,
+  GpuInfo,
   UpdateCheckResult,
 } from '@ax-studio/tauri-plugin-llamacpp-api'
 import { getProxyConfig, buildProxyArg } from './util'
 
 // Build-time constants — see env.d.ts for declarations
 
+// Keep the release page small because we only need recent backend artifacts.
+const GITHUB_RELEASES_PAGE_SIZE = 10
+const GITHUB_API_TIMEOUT_MS = 5_000
+const REMOTE_BACKEND_CACHE_TTL_MS = 5 * 60 * 1000
+const BACKEND_DOWNLOAD_MAX_ATTEMPTS = 3
+const BACKEND_DOWNLOAD_RETRY_BASE_MS = 500
 const GITHUB_RELEASES_URL =
-  'https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=10'
+  `https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=${GITHUB_RELEASES_PAGE_SIZE}`
+
+let remoteBackendsCache:
+  | {
+      fetchedAt: number
+      backends: BackendVersion[]
+    }
+  | null = null
+
+interface GithubReleaseAsset {
+  name: string
+}
+
+interface GithubRelease {
+  tag_name: string
+  assets: GithubReleaseAsset[]
+}
+
+type HardwareGpuInfo = GpuInfo
+
+const formatError = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error)
+
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms))
+
+async function removePathIfPresent(path: string, label: string): Promise<void> {
+  try {
+    await fs.rm(path)
+  } catch (error) {
+    console.warn(`[llamacpp] Failed to remove ${label}:`, error)
+  }
+}
+
+export function clearRemoteBackendsCacheForTests(): void {
+  remoteBackendsCache = null
+}
 
 // ─── Path helpers ───────────────────────────────────────────────────────────
 
@@ -79,7 +122,8 @@ export async function isBackendInstalled(version: string, backend: string): Prom
   try {
     const exePath = await getBackendExePath(version, backend)
     return Boolean(await fs.existsSync(exePath))
-  } catch {
+  } catch (error) {
+    console.debug('[llamacpp] Failed to check backend installation state:', error)
     return false
   }
 }
@@ -122,7 +166,8 @@ export async function getLocalInstalledBackends(): Promise<BackendVersion[]> {
     const exists = await fs.existsSync(backendsDir)
     if (!exists) return []
     return await getLocalInstalledBackendsInternal(backendsDir)
-  } catch {
+  } catch (error) {
+    console.debug('[llamacpp] Failed to list local backends:', error)
     return []
   }
 }
@@ -134,17 +179,21 @@ export async function getLocalInstalledBackends(): Promise<BackendVersion[]> {
  * Falls back to empty list if GitHub is unavailable.
  */
 export async function fetchRemoteBackends(): Promise<BackendVersion[]> {
+  if (
+    remoteBackendsCache &&
+    Date.now() - remoteBackendsCache.fetchedAt < REMOTE_BACKEND_CACHE_TTL_MS
+  ) {
+    return remoteBackendsCache.backends
+  }
+
   try {
     const response = await fetch(GITHUB_RELEASES_URL, {
       headers: { Accept: 'application/vnd.github.v3+json' },
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(GITHUB_API_TIMEOUT_MS),
     })
     if (!response.ok) throw new Error(`GitHub API ${response.status}`)
 
-    const releases = (await response.json()) as Array<{
-      tag_name: string
-      assets: Array<{ name: string }>
-    }>
+    const releases = (await response.json()) as GithubRelease[]
 
     const backends: BackendVersion[] = []
     for (const release of releases) {
@@ -157,6 +206,7 @@ export async function fetchRemoteBackends(): Promise<BackendVersion[]> {
         }
       }
     }
+    remoteBackendsCache = { fetchedAt: Date.now(), backends }
     return backends
   } catch (e) {
     console.warn('[llamacpp] Failed to fetch remote backends from GitHub:', e)
@@ -170,7 +220,7 @@ interface HardwareInfo {
   osType: string
   arch: string
   cpuExtensions: string[]
-  gpus: Array<{ driver_version: string; nvidia_info?: any; vulkan_info?: any }>
+  gpus: HardwareGpuInfo[]
 }
 
 /**
@@ -193,7 +243,9 @@ async function getHardwareInfo(): Promise<HardwareInfo> {
         gpus: hw.gpus ?? [],
       }
     }
-  } catch {}
+  } catch (error) {
+    console.debug('[llamacpp] Hardware extension unavailable, using fallback info:', error)
+  }
   // Fallback: minimal info
   return {
     osType: isWindows ? 'windows' : isMac ? 'macOS' : 'linux',
@@ -243,36 +295,60 @@ export async function downloadBackend(
   const taskId = `llamacpp-backend-${version}-${backend}-${Date.now()}`
 
   try {
-    await downloadExt.downloadFile(
-      downloadUrl,
-      tempFile,
-      taskId,
-      proxyArg,
-      (transferred: number, total: number) => {
-        if (onProgress && total > 0) {
-          onProgress(Math.round((transferred / total) * 100))
-        }
+    let lastError: unknown = null
+
+    for (let attempt = 1; attempt <= BACKEND_DOWNLOAD_MAX_ATTEMPTS; attempt++) {
+      try {
+        await downloadExt.downloadFile(
+          downloadUrl,
+          tempFile,
+          `${taskId}-attempt-${attempt}`,
+          proxyArg,
+          undefined,
+          (transferred: number, total: number) => {
+            if (onProgress && total > 0) {
+              onProgress(Math.round((transferred / total) * 100))
+            }
+          }
+        )
+        lastError = null
+        break
+      } catch (error) {
+        lastError = error
+        if (attempt === BACKEND_DOWNLOAD_MAX_ATTEMPTS) break
+        const delayMs = BACKEND_DOWNLOAD_RETRY_BASE_MS * 2 ** (attempt - 1)
+        console.warn(
+          `[llamacpp] Backend download attempt ${attempt}/${BACKEND_DOWNLOAD_MAX_ATTEMPTS} failed for ${backend}; retrying in ${delayMs}ms:`,
+          error
+        )
+        await sleep(delayMs)
       }
-    )
+    }
+
+    if (lastError) {
+      throw lastError
+    }
   } catch (e) {
-    try { await fs.rm(tempFile) } catch {}
-    throw new Error(`Failed to download backend "${backend}" from ${downloadUrl}: ${e}`)
+    await removePathIfPresent(tempFile, 'backend temp archive')
+    throw new Error(
+      `Failed to download backend "${backend}" from ${downloadUrl}: ${formatError(e)}`
+    )
   }
 
   // Decompress using Tauri's decompress command
   try {
     await invoke('decompress', { path: tempFile, outputDir: destDir })
   } catch (e) {
-    try { await fs.rm(tempFile) } catch {}
-    try { await fs.rm(destDir) } catch {}
-    throw new Error(`Failed to decompress backend: ${e}`)
+    await removePathIfPresent(tempFile, 'backend temp archive')
+    await removePathIfPresent(destDir, 'backend destination directory')
+    throw new Error(`Failed to decompress backend: ${formatError(e)}`)
   }
-  try { await fs.rm(tempFile) } catch {}
+  await removePathIfPresent(tempFile, 'backend temp archive')
 
   // Verify binary
   const exePath = await getBackendExePath(version, backend)
   if (!(await fs.existsSync(exePath))) {
-    try { await fs.rm(destDir) } catch {}
+    await removePathIfPresent(destDir, 'backend destination directory')
     throw new Error(`Backend binary missing after extraction: ${exePath}`)
   }
 }
@@ -314,9 +390,8 @@ export async function checkForBackendUpdate(
 
 // ─── configureBackends ────────────────────────────────────────────────────────
 
-// Guard to prevent concurrent configureBackends executions
-// (React strict mode in dev can trigger onLoad twice)
-let _configureBackendsRunning = false
+// Share in-flight backend discovery so duplicate callers observe the same work.
+let configureBackendsPromise: Promise<void> | null = null
 
 /**
  * Main entry point called on extension load.
@@ -328,61 +403,66 @@ export async function configureBackends(
   autoUpdate: boolean,
   onSettingUpdate: (key: string, value: string) => void
 ): Promise<void> {
-  if (_configureBackendsRunning) {
-    console.log('[llamacpp] configureBackends already running, skipping duplicate call')
-    return
+  if (configureBackendsPromise) {
+    console.log('[llamacpp] configureBackends already running, reusing in-flight call')
+    return configureBackendsPromise
   }
-  _configureBackendsRunning = true
-  try {
-    const [localBackends, remoteBackends, hw] = await Promise.all([
-      getLocalInstalledBackends(),
-      fetchRemoteBackends(),
-      getHardwareInfo(),
-    ])
 
-    // Report hardware to Rust so it can rank backends correctly
-    await getSupportedFeaturesFromRust(hw.osType, hw.cpuExtensions, hw.gpus)
+  configureBackendsPromise = (async () => {
+    try {
+      const [localBackends, remoteBackends, hw] = await Promise.all([
+        getLocalInstalledBackends(),
+        fetchRemoteBackends(),
+        getHardwareInfo(),
+      ])
 
-    // Merge local + remote into a ranked list
-    const allBackends = await listSupportedBackendsFromRust(remoteBackends, localBackends)
+      // Report hardware to Rust so it can rank backends correctly
+      await getSupportedFeaturesFromRust(hw.osType, hw.cpuExtensions, hw.gpus)
 
-    let targetVersionBackend = currentVersionBackend
+      // Merge local + remote into a ranked list
+      const allBackends = await listSupportedBackendsFromRust(remoteBackends, localBackends)
 
-    // If no backend set (first run), pick the best for this hardware
-    if (!targetVersionBackend) {
-      const hasGpu = hw.gpus.length > 0
-      const best: BestBackendResult = await prioritizeBackends(allBackends, hasGpu)
-      if (best?.backend_string) {
-        targetVersionBackend = best.backend_string
-        onSettingUpdate('version_backend', best.backend_string)
-      }
-    }
+      let targetVersionBackend = currentVersionBackend
 
-    // Emit update notification if auto-update is on
-    if (autoUpdate && targetVersionBackend && remoteBackends.length > 0) {
-      const updateInfo = await checkForBackendUpdate(targetVersionBackend, remoteBackends)
-      if (updateInfo.updateNeeded) {
-        events.emit('onBackendUpdateAvailable', updateInfo)
-      }
-    }
-
-    // Ensure selected backend binary is on disk
-    if (targetVersionBackend) {
-      const [version, ...rest] = targetVersionBackend.split('/')
-      const backend = rest.join('/')
-      if (version && backend) {
-        const installed = await isBackendInstalled(version, backend)
-        if (!installed) {
-          console.log(`[llamacpp] Downloading backend: ${targetVersionBackend}`)
-          await downloadBackend(version, backend)
+      // If no backend set (first run), pick the best for this hardware
+      if (!targetVersionBackend) {
+        const hasGpu = hw.gpus.length > 0
+        const best: BestBackendResult = await prioritizeBackends(allBackends, hasGpu)
+        if (best?.backend_string) {
+          targetVersionBackend = best.backend_string
+          onSettingUpdate('version_backend', best.backend_string)
         }
       }
+
+      // Emit update notification if auto-update is on
+      if (autoUpdate && targetVersionBackend && remoteBackends.length > 0) {
+        const updateInfo = await checkForBackendUpdate(targetVersionBackend, remoteBackends)
+        if (updateInfo.updateNeeded) {
+          events.emit('onBackendUpdateAvailable', updateInfo)
+        }
+      }
+
+      // Ensure selected backend binary is on disk
+      if (targetVersionBackend) {
+        const [version, ...rest] = targetVersionBackend.split('/')
+        const backend = rest.join('/')
+        if (version && backend) {
+          const installed = await isBackendInstalled(version, backend)
+          if (!installed) {
+            console.log(`[llamacpp] Downloading backend: ${targetVersionBackend}`)
+            await downloadBackend(version, backend)
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[llamacpp] configureBackends failed:', e)
+      throw e
+    } finally {
+      configureBackendsPromise = null
     }
-  } catch (e) {
-    console.error('[llamacpp] configureBackends failed:', e)
-  } finally {
-    _configureBackendsRunning = false
-  }
+  })()
+
+  return configureBackendsPromise
 }
 
 // ─── Update / install ─────────────────────────────────────────────────────────
@@ -440,13 +520,13 @@ export async function installBackendFromFile(filePath: string): Promise<void> {
   try {
     await invoke('decompress', { path: filePath, outputDir: destDir })
   } catch (e) {
-    try { await fs.rm(destDir) } catch {}
-    throw new Error(`Failed to decompress backend file: ${e}`)
+    await removePathIfPresent(destDir, 'backend destination directory')
+    throw new Error(`Failed to decompress backend file: ${formatError(e)}`)
   }
 
   const exePath = await getBackendExePath(version, backend)
   if (!(await fs.existsSync(exePath))) {
-    try { await fs.rm(destDir) } catch {}
+    await removePathIfPresent(destDir, 'backend destination directory')
     throw new Error(`Backend binary missing after installation: ${exePath}`)
   }
 }

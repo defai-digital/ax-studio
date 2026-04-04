@@ -5,4 +5,3 @@ use super::scraper as page_scraper;
 pub async fn scrape_url(url: String) -> Result<String, String> {
     page_scraper::scrape_url(&url).await
 }
-

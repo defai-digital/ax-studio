@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/naming-convention */
 import { ModelParams, ModelRuntimeParams, ModelSettingParams } from '../../types'
 
 /**
@@ -48,7 +46,7 @@ export const normalizeValue = (key: string, value: any) => {
     key === 'cpu_threads'
   ) {
     // Convert to integer
-    return Math.floor(Number(value))
+    return Math.trunc(Number(value))
   }
   if (
     key === 'temperature' ||
@@ -62,9 +60,10 @@ export const normalizeValue = (key: string, value: any) => {
   ) {
     // Convert to float
     const newValue = parseFloat(value)
-    if (newValue !== null && !isNaN(newValue)) {
+    if (!isNaN(newValue)) {
       return newValue
     }
+    return NaN
   }
   return value
 }
@@ -100,16 +99,14 @@ export const extractInferenceParams = (
       if (validate && !validate(normalizeValue(key, value))) {
         // Invalid value - fall back to origin value
         if (originParams && key in originParams) {
-          Object.assign(runtimeParams, {
-            ...runtimeParams,
-            [key]: originParams[key as keyof typeof originParams],
-          })
+          runtimeParams[key as keyof ModelRuntimeParams] =
+            originParams[key as keyof typeof originParams] as never
         }
       } else {
-        Object.assign(runtimeParams, {
-          ...runtimeParams,
-          [key]: normalizeValue(key, value),
-        })
+        runtimeParams[key as keyof ModelRuntimeParams] = normalizeValue(
+          key,
+          value
+        ) as never
       }
     }
   }
@@ -162,16 +159,14 @@ export const extractModelLoadParams = (
       if (validate && !validate(normalizeValue(key, value))) {
         // Invalid value - fall back to origin value
         if (originParams && key in originParams) {
-          Object.assign(modelParams, {
-            ...modelParams,
-            [key]: originParams[key as keyof typeof originParams],
-          })
+          settingParams[key as keyof ModelSettingParams] =
+            originParams[key as keyof typeof originParams] as never
         }
       } else {
-        Object.assign(settingParams, {
-          ...settingParams,
-          [key]: normalizeValue(key, value),
-        })
+        settingParams[key as keyof ModelSettingParams] = normalizeValue(
+          key,
+          value
+        ) as never
       }
     }
   }

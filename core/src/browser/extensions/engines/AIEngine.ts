@@ -9,7 +9,7 @@ export interface chatCompletionRequestMessage {
   reasoning?: string | null // Some models return reasoning in completed responses
   reasoning_content?: string | null // Some models return reasoning in completed responses
   name?: string
-  tool_calls?: any[] // Simplified tool_call_id?: string
+  tool_calls?: ToolCall[]
 }
 
 export interface Content {
@@ -45,6 +45,15 @@ export interface ToolCallSpec {
   type: 'function'
   function: {
     name: string
+  }
+}
+
+export interface ToolCall {
+  id?: string
+  type: 'function'
+  function: {
+    name: string
+    arguments?: string
   }
 }
 
@@ -106,7 +115,7 @@ export interface chatCompletionRequest {
 }
 
 export interface chat_template_kdict {
-  enable_thinking: false
+  enable_thinking: boolean
 }
 
 export interface chatCompletionChunkChoiceDelta {
@@ -142,7 +151,7 @@ export interface chatCompletionChoice {
   index: number
   message: chatCompletionRequestMessage // Response message
   finish_reason: 'stop' | 'length' | 'tool_calls' | 'content_filter' | 'function_call'
-  logprobs?: any // Simplified
+  logprobs?: Record<string, unknown> | null
 }
 
 export interface chatCompletion {
@@ -170,10 +179,11 @@ export interface modelInfo {
   sizeBytes: number
   tags?: string[]
   path?: string // Absolute path to the model file, if applicable
-  // Additional provider-specific metadata can be added here
   embedding?: boolean
-  [key: string]: any
+  engine?: string
 }
+
+export type ModelLoadSettings = Record<string, unknown>
 
 // 1. /list
 export type listResult = modelInfo[]
@@ -211,6 +221,7 @@ export interface ImportOptions {
   modelSize?: number
   mmprojSha256?: string
   mmprojSize?: number
+  downloadHeaders?: Record<string, string>
   // Additional files to download for MLX models
   files?: Array<{
     url: string
@@ -246,7 +257,14 @@ export abstract class AIEngine extends BaseExtension {
    * Registers AI Engines
    */
   registerEngine() {
-    EngineManager.instance().register(this)
+    const manager = EngineManager.instance()
+    const existingEngine = manager.get(this.provider)
+
+    if (existingEngine && existingEngine !== this) {
+      console.warn(`Overwriting registered engine for provider "${this.provider}"`)
+    }
+
+    manager.register(this)
   }
 
   /**
@@ -269,7 +287,7 @@ export abstract class AIEngine extends BaseExtension {
    */
   abstract load(
     modelId: string,
-    settings?: any,
+    settings?: ModelLoadSettings,
     isEmbedding?: boolean,
     bypassAutoUnload?: boolean
   ): Promise<SessionInfo>

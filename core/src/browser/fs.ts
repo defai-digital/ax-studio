@@ -1,5 +1,21 @@
 import { FileStat } from '../types'
 
+const decodePathRecursively = (path: string): string => {
+  let decoded = path
+
+  for (let i = 0; i < 3; i++) {
+    try {
+      const next = decodeURIComponent(decoded)
+      if (next === decoded) break
+      decoded = next
+    } catch {
+      break
+    }
+  }
+
+  return decoded.normalize('NFKC')
+}
+
 /**
  * Validates a file path to prevent path traversal attacks.
  * @param path - The path to validate
@@ -10,13 +26,19 @@ const validatePath = (path: string): void => {
     throw new Error(`Path must be a string, got ${typeof path}`)
   }
 
-  // Check for path traversal attempts
-  if (path.includes('..') || path.includes('../') || path.includes('..\\')) {
+  const normalizedPath = decodePathRecursively(path)
+
+  // Check for path traversal attempts, including encoded and normalized variants.
+  if (
+    normalizedPath.includes('..') ||
+    normalizedPath.includes('../') ||
+    normalizedPath.includes('..\\')
+  ) {
     throw new Error(`Path traversal not allowed: ${path}`)
   }
 
   // Additional validation: no null bytes, control characters
-  if (path.includes('\0') || /[\x00-\x1F\x7F-\x9F]/.test(path)) {
+  if (normalizedPath.includes('\0') || /[\x00-\x1F\x7F-\x9F]/.test(normalizedPath)) {
     throw new Error(`Invalid characters in path: ${path}`)
   }
 
@@ -26,13 +48,13 @@ const validatePath = (path: string): void => {
 
 /**
  * Writes data to a file at the specified path.
+ * Historical note: these methods keep a Sync suffix for API compatibility,
+ * but they still return Promises because the desktop bridge is asynchronous.
  * @returns {Promise<void>} A Promise that resolves when the file is written successfully.
  */
-const writeFileSync = (...args: any[]): Promise<void> => {
-  if (args.length > 0 && typeof args[0] === 'string') {
-    validatePath(args[0])
-  }
-  return globalThis.core.api?.writeFileSync({ args })
+const writeFileSync = (path: string, data: string): Promise<void> => {
+  validatePath(path)
+  return globalThis.core.api?.writeFileSync({ args: [path, data] })
 }
 
 /**
@@ -48,69 +70,61 @@ const writeBlob: (path: string, data: string) => Promise<void> = (path, data) =>
 
 /**
  * Reads the contents of a file at the specified path.
+ * Historical note: this method keeps a Sync suffix for API compatibility,
+ * but it still returns a Promise because the desktop bridge is asynchronous.
  * @returns {Promise<string>} A Promise that resolves with the contents of the file.
  */
-const readFileSync = (...args: any[]): Promise<string> => {
-  if (args.length > 0 && typeof args[0] === 'string') {
-    validatePath(args[0])
-  }
-  return globalThis.core.api?.readFileSync({ args })
+const readFileSync = (path: string): Promise<string> => {
+  validatePath(path)
+  return globalThis.core.api?.readFileSync({ args: [path] })
 }
 /**
  * Check whether the file exists
+ * Historical note: this method keeps a Sync suffix for API compatibility,
+ * but it still returns a Promise because the desktop bridge is asynchronous.
  * @param {string} path
  * @returns {Promise<boolean>} A Promise that resolves with a boolean indicating whether the path exists.
  */
-const existsSync = (...args: any[]): Promise<boolean> => {
-  if (args.length > 0 && typeof args[0] === 'string') {
-    validatePath(args[0])
-  }
-  return globalThis.core.api?.existsSync({ args })
+const existsSync = (path: string): Promise<boolean> => {
+  validatePath(path)
+  return globalThis.core.api?.existsSync({ args: [path] })
 }
 /**
  * List the directory files
+ * Historical note: this method keeps a Sync suffix for API compatibility,
+ * but it still returns a Promise because the desktop bridge is asynchronous.
  * @returns {Promise<string[]>} A Promise that resolves with an array of filenames in the directory.
  */
-const readdirSync = (...args: any[]): Promise<string[]> => {
-  if (args.length > 0 && typeof args[0] === 'string') {
-    validatePath(args[0])
-  }
-  return globalThis.core.api?.readdirSync({ args })
+const readdirSync = (path: string): Promise<string[]> => {
+  validatePath(path)
+  return globalThis.core.api?.readdirSync({ args: [path] })
 }
 /**
  * Creates a directory at the specified path.
  * @returns {Promise<void>} A Promise that resolves when the directory is created successfully.
  */
-const mkdir = (...args: any[]): Promise<void> => {
-  if (args.length > 0 && typeof args[0] === 'string') {
-    validatePath(args[0])
-  }
-  return globalThis.core.api?.mkdir({ args })
+const mkdir = (path: string): Promise<void> => {
+  validatePath(path)
+  return globalThis.core.api?.mkdir({ args: [path] })
 }
 
 /**
  * Removes a directory at the specified path.
  * @returns {Promise<void>} A Promise that resolves when the directory is removed successfully.
  */
-const rm = (...args: any[]): Promise<void> => {
-  if (args.length > 0 && typeof args[0] === 'string') {
-    validatePath(args[0])
-  }
-  return globalThis.core.api?.rm({ args })
+const rm = (path: string): Promise<void> => {
+  validatePath(path)
+  return globalThis.core.api?.rm({ args: [path] })
 }
 
 /**
  * Moves a file from the source path to the destination path.
  * @returns {Promise<void>} A Promise that resolves when the file is moved successfully.
  */
-const mv = (...args: any[]): Promise<void> => {
-  if (args.length > 0 && typeof args[0] === 'string') {
-    validatePath(args[0])
-  }
-  if (args.length > 1 && typeof args[1] === 'string') {
-    validatePath(args[1])
-  }
-  return globalThis.core.api?.mv({ args })
+const mv = (from: string, to: string): Promise<void> => {
+  validatePath(from)
+  validatePath(to)
+  return globalThis.core.api?.mv({ args: [from, to] })
 }
 
 /**
@@ -118,22 +132,18 @@ const mv = (...args: any[]): Promise<void> => {
  * @param {string} path - The path of the file to delete.
  * @returns {Promise<void>} A Promise that resolves when the file is deleted.
  */
-const unlinkSync = (...args: any[]): Promise<void> => {
-  if (args.length > 0 && typeof args[0] === 'string') {
-    validatePath(args[0])
-  }
-  return globalThis.core.api?.unlinkSync(...args)
+const unlinkSync = (path: string): Promise<void> => {
+  validatePath(path)
+  return globalThis.core.api?.unlinkSync({ args: [path] })
 }
 
 /**
  * Appends data to a file at the specified path.
  * @returns {Promise<void>} A Promise that resolves when the data is appended successfully.
  */
-const appendFileSync = (...args: any[]): Promise<void> => {
-  if (args.length > 0 && typeof args[0] === 'string') {
-    validatePath(args[0])
-  }
-  return globalThis.core.api?.appendFileSync(...args)
+const appendFileSync = (path: string, data: string): Promise<void> => {
+  validatePath(path)
+  return globalThis.core.api?.appendFileSync({ args: [path, data] })
 }
 
 /**

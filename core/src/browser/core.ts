@@ -31,7 +31,7 @@ const getAppDataFolderPath = (): Promise<string> => globalThis.core.api?.getAppD
  * @param {string} path - The path to open in the file explorer.
  * @returns {Promise<any>} A promise that resolves when the file explorer is opened.
  */
-const openFileExplorer: (path: string) => Promise<any> = (path) =>
+const openFileExplorer: (path: string) => Promise<void> = (path) =>
   globalThis.core.api?.openFileExplorer({ path })
 
 /**
@@ -47,14 +47,16 @@ const joinPath: (args: string[]) => Promise<string> = (args) =>
  * @param path - The file path to retrieve dirname.
  * @returns {Promise<string>} A promise that resolves the dirname.
  */
-const dirName: (path: string) => Promise<string> = (path) => globalThis.core.api?.dirName(path)
+const dirName: (path: string) => Promise<string> = (path) =>
+  globalThis.core.api?.dirName({ args: [path] })
 
 /**
  * Retrieve the basename from an url.
  * @param path - The path to retrieve.
  * @returns {Promise<string>} A promise that resolves with the basename.
  */
-const baseName: (paths: string) => Promise<string> = (path) => globalThis.core.api?.baseName(path)
+const baseName: (path: string) => Promise<string> = (path) =>
+  globalThis.core.api?.baseName({ args: [path] })
 
 /**
  * Opens an external URL in the default web browser.
@@ -62,7 +64,7 @@ const baseName: (paths: string) => Promise<string> = (path) => globalThis.core.a
  * @param {string} url - The URL to open.
  * @returns {Promise<any>} - A promise that resolves when the URL has been successfully opened.
  */
-const openExternalUrl: (url: string) => Promise<any> = (url) => {
+const openExternalUrl: (url: string) => Promise<void> = (url) => {
   validateUrlProtocol(url)
   return globalThis.core.api?.openExternalUrl(url)
 }
@@ -114,7 +116,7 @@ const showToast: (title: string, message: string) => void = (title, message) =>
 export type RegisterExtensionPoint = (
   extensionName: string,
   extensionId: string,
-  method: Function,
+  method: (...args: unknown[]) => unknown,
   priority?: number
 ) => void
 

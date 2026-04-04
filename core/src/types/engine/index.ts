@@ -27,8 +27,8 @@ export class SecretString {
    */
   toString(): string {
     if (this.value.length === 0) return ''
-    if (this.value.length <= 4) return '*'.repeat(this.value.length)
-    return this.value.substring(0, 2) + '*'.repeat(this.value.length - 4) + this.value.substring(this.value.length - 2)
+    if (this.value.length <= 2) return '*'.repeat(this.value.length)
+    return this.value[0] + '*'.repeat(this.value.length - 2) + this.value[this.value.length - 1]
   }
 
   /**
@@ -48,19 +48,30 @@ export function validateTemplate(template: string): boolean {
     return true // Empty templates are safe
   }
 
-  // Define allowed patterns for template variables
   // Only allow common placeholders like {{variable}}, ${variable}, %variable%, etc.
-  const allowedPatterns = [
-    /\{\{[\w.]+\}\}/g,  // {{variable}} or {{object.property}}
-    /\$\{[\w.]+\}/g,    // ${variable} or ${object.property}
-    /%[\w.]+%/g,        // %variable% or %object.property%
-    /\{\w+\}/g,         // {variable}
+  const allowedPatternSources = [
+    String.raw`\{\{[\w.]+\}\}`, // {{variable}} or {{object.property}}
+    String.raw`\$\{[\w.]+\}`,   // ${variable} or ${object.property}
+    String.raw`%[\w.]+%`,       // %variable% or %object.property%
+    String.raw`\{\w+\}`,        // {variable}
   ]
+
+  if (/\{\{\{|\}\}\}/.test(template)) {
+    return false
+  }
+
+  const cleanedDoubleBraceTemplate = template.replace(/\{\{[\w.]+\}\}/g, '')
+  if (/\{\{|\}\}/.test(cleanedDoubleBraceTemplate)) {
+    return false
+  }
+
+  const cleanedDollarBraceTemplate = template.replace(/\$\{[\w.]+\}/g, '')
+  if (/\$\{/.test(cleanedDollarBraceTemplate)) {
+    return false
+  }
 
   // Check for potentially dangerous patterns
   const dangerousPatterns = [
-    /\{\{.*?\}\}/g,     // Any double braces (already covered above, but check for complex expressions)
-    /\$\{.*?\}/g,       // Any dollar braces (already covered)
     /<script/i,         // Script tags
     /javascript:/i,     // JavaScript URLs
     /on\w+\s*=/i,       // Event handlers
@@ -74,8 +85,8 @@ export function validateTemplate(template: string): boolean {
   let cleanedTemplate = template
 
   // Remove allowed patterns
-  allowedPatterns.forEach(pattern => {
-    cleanedTemplate = cleanedTemplate.replace(pattern, '')
+  allowedPatternSources.forEach(source => {
+    cleanedTemplate = cleanedTemplate.replace(new RegExp(source, 'g'), '')
   })
 
   // Check for dangerous patterns in the cleaned template
@@ -88,12 +99,12 @@ export function validateTemplate(template: string): boolean {
   // Additional check: ensure template doesn't contain code-like structures
   const codePatterns = [
     /\b(function|class|const|let|var)\b/i,
-    /[{}();]/g,  // Check for excessive braces/semicolons
+    /\b\w+\s*=\s*[^=]/,
+    /;\s*\S+\s*;/,
   ]
 
   for (const pattern of codePatterns) {
-    const matches = cleanedTemplate.match(pattern)
-    if (matches && matches.length > 0) { // Reject any code keywords
+    if (pattern.test(cleanedTemplate)) {
       return false
     }
   }

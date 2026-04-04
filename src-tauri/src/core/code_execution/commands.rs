@@ -36,7 +36,8 @@ mod tests {
         let item = OutputItem::Image {
             data: "base64data".to_string(),
         };
-        let json = serde_json::to_value(&item).unwrap();
+        let json = serde_json::to_value(&item)
+            .unwrap_or_else(|e| panic!("Failed to serialize OutputItem::Image in test: {e}"));
         assert_eq!(json["type"], "image");
         assert_eq!(json["data"], "base64data");
     }
@@ -46,7 +47,8 @@ mod tests {
         let item = OutputItem::Html {
             data: "<table></table>".to_string(),
         };
-        let json = serde_json::to_value(&item).unwrap();
+        let json = serde_json::to_value(&item)
+            .unwrap_or_else(|e| panic!("Failed to serialize OutputItem::Html in test: {e}"));
         assert_eq!(json["type"], "html");
         assert_eq!(json["data"], "<table></table>");
     }
@@ -56,7 +58,8 @@ mod tests {
         let item = OutputItem::Text {
             data: "hello".to_string(),
         };
-        let json = serde_json::to_value(&item).unwrap();
+        let json = serde_json::to_value(&item)
+            .unwrap_or_else(|e| panic!("Failed to serialize OutputItem::Text in test: {e}"));
         assert_eq!(json["type"], "text");
         assert_eq!(json["data"], "hello");
     }
@@ -79,7 +82,8 @@ mod tests {
             outputs: vec![],
             error: None,
         };
-        let json = serde_json::to_value(&result).unwrap();
+        let json = serde_json::to_value(&result)
+            .unwrap_or_else(|e| panic!("Failed to serialize ExecutionResult in test: {e}"));
         assert_eq!(json["stdout"], "output");
         assert_eq!(json["stderr"], "");
         assert!(json["outputs"].as_array().unwrap().is_empty());
@@ -94,7 +98,8 @@ mod tests {
             outputs: vec![],
             error: Some("Process exited with code 1".to_string()),
         };
-        let json = serde_json::to_value(&result).unwrap();
+        let json = serde_json::to_value(&result)
+            .unwrap_or_else(|e| panic!("Failed to serialize ExecutionResult in test: {e}"));
         assert_eq!(json["error"], "Process exited with code 1");
         assert_eq!(json["stderr"], "traceback");
     }
@@ -114,7 +119,8 @@ mod tests {
             ],
             error: None,
         };
-        let json = serde_json::to_value(&result).unwrap();
+        let json = serde_json::to_value(&result)
+            .unwrap_or_else(|e| panic!("Failed to serialize ExecutionResult in test: {e}"));
         let outputs = json["outputs"].as_array().unwrap();
         assert_eq!(outputs.len(), 2);
         assert_eq!(outputs[0]["type"], "text");
@@ -126,19 +132,20 @@ mod tests {
         let status = SandboxStatus {
             python_available: true,
         };
-        let json = serde_json::to_value(&status).unwrap();
+        let json = serde_json::to_value(&status)
+            .unwrap_or_else(|e| panic!("Failed to serialize SandboxStatus in test: {e}"));
         assert_eq!(json["pythonAvailable"], true);
     }
 }
 
 // ---------------------------------------------------------------------------
-// execute_python_code — runs Python directly on the host
+// execute_python_code — currently disabled by default unless explicitly opted in
 // ---------------------------------------------------------------------------
 
 /// Execute Python code using the system Python interpreter.
 ///
-/// No Docker or sandbox required — code runs as a subprocess.
-/// Hard timeout of 60 seconds — process is killed if it exceeds this.
+/// Host execution is disabled by default because it is not sandboxed.
+/// Callers must explicitly opt in via runtime configuration on trusted systems.
 #[tauri::command]
 pub async fn execute_python_code(
     code: String,
@@ -150,7 +157,7 @@ pub async fn execute_python_code(
 }
 
 // ---------------------------------------------------------------------------
-// check_sandbox_status — now just checks if Python is available
+// check_sandbox_status — reports whether Python execution is both enabled and available
 // ---------------------------------------------------------------------------
 
 #[derive(Serialize)]
@@ -173,9 +180,10 @@ pub async fn check_sandbox_status() -> Result<SandboxStatus, String> {
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-pub async fn reset_sandbox_session(
-    thread_id: Option<String>,
-) -> Result<(), String> {
-    let _ = thread_id;
+pub async fn reset_sandbox_session(thread_id: Option<String>) -> Result<(), String> {
+    log::warn!(
+        "reset_sandbox_session is currently a no-op; thread_id={:?}",
+        thread_id
+    );
     Ok(())
 }

@@ -42,6 +42,20 @@ describe('OAIEngine', () => {
     )
   })
 
+  it('should remove event listeners on unload', () => {
+    engine.onLoad()
+    engine.onUnload()
+
+    expect(events.off).toHaveBeenCalledWith(
+      MessageEvent.OnMessageSent,
+      expect.any(Function)
+    )
+    expect(events.off).toHaveBeenCalledWith(
+      InferenceEvent.OnInferenceStopped,
+      expect.any(Function)
+    )
+  })
+
   it('should stop inference', () => {
     engine.stopInference()
     expect(engine.isCancelled).toBe(true)

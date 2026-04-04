@@ -1,10 +1,43 @@
 //! CORS and security helpers for the Ax-Studio proxy server.
 
+use ax_studio_utils::is_valid_host;
+
+pub(crate) fn trusted_cors_origin(
+    origin: &str,
+    host: &str,
+    trusted_hosts: &[Vec<String>],
+) -> Option<String> {
+    if origin.is_empty() {
+        return None;
+    }
+
+    let parsed_origin = url::Url::parse(origin).ok()?;
+    if !matches!(parsed_origin.scheme(), "http" | "https") {
+        return None;
+    }
+
+    let origin_host = parsed_origin.host_str()?;
+    let origin_host_with_port = match parsed_origin.port() {
+        Some(port) => format!("{origin_host}:{port}"),
+        None => origin_host.to_string(),
+    };
+
+    if !host.is_empty() && !is_valid_host(host, trusted_hosts) {
+        return None;
+    }
+
+    if !is_valid_host(&origin_host_with_port, trusted_hosts) {
+        return None;
+    }
+
+    Some(origin.to_string())
+}
+
 pub fn add_cors_headers_with_host_and_origin(
     builder: hyper::http::response::Builder,
-    _host: &str,
+    host: &str,
     origin: &str,
-    _trusted_hosts: &[Vec<String>],
+    trusted_hosts: &[Vec<String>],
     cors_enabled: bool,
 ) -> hyper::http::response::Builder {
     if !cors_enabled {
@@ -12,11 +45,8 @@ pub fn add_cors_headers_with_host_and_origin(
     }
 
     let mut builder = builder;
-    let allow_origin_header = if !origin.is_empty() {
-        origin.to_string()
-    } else {
-        "*".to_string()
-    };
+    let allow_origin_header =
+        trusted_cors_origin(origin, host, trusted_hosts).unwrap_or_else(|| "*".to_string());
 
     builder = builder
         .header("Access-Control-Allow-Origin", allow_origin_header.clone())
@@ -38,8 +68,13 @@ mod tests {
     #[test]
     fn test_cors_disabled_returns_builder_unchanged() {
         let builder = hyper::http::Response::builder();
-        let result =
-            add_cors_headers_with_host_and_origin(builder, "localhost", "http://example.com", &[], false);
+        let result = add_cors_headers_with_host_and_origin(
+            builder,
+            "localhost",
+            "http://example.com",
+            &[],
+            false,
+        );
         let resp = result.body(hyper::Body::empty()).unwrap();
         assert!(resp.headers().get("Access-Control-Allow-Origin").is_none());
     }
@@ -49,8 +84,8 @@ mod tests {
         let builder = hyper::http::Response::builder();
         let result = add_cors_headers_with_host_and_origin(
             builder,
-            "localhost",
-            "http://example.com",
+            "localhost:8080",
+            "http://localhost:3000",
             &[],
             true,
         );
@@ -61,7 +96,7 @@ mod tests {
                 .unwrap()
                 .to_str()
                 .unwrap(),
-            "http://example.com"
+            "http://localhost:3000"
         );
         assert_eq!(
             resp.headers()
@@ -71,14 +106,8 @@ mod tests {
                 .unwrap(),
             "true"
         );
-        assert!(resp
-            .headers()
-            .get("Access-Control-Allow-Methods")
-            .is_some());
-        assert!(resp
-            .headers()
-            .get("Access-Control-Allow-Headers")
-            .is_some());
+        assert!(resp.headers().get("Access-Control-Allow-Methods").is_some());
+        assert!(resp.headers().get("Access-Control-Allow-Headers").is_some());
         assert_eq!(
             resp.headers().get("Vary").unwrap().to_str().unwrap(),
             "Origin"
@@ -99,6 +128,31 @@ mod tests {
             "*"
         );
         // Wildcard origin should NOT have credentials header
+        assert!(resp
+            .headers()
+            .get("Access-Control-Allow-Credentials")
+            .is_none());
+    }
+
+    #[test]
+    fn test_cors_rejects_untrusted_origin_reflection() {
+        let builder = hyper::http::Response::builder();
+        let result = add_cors_headers_with_host_and_origin(
+            builder,
+            "localhost:8080",
+            "https://evil.example",
+            &[vec!["localhost".to_string()]],
+            true,
+        );
+        let resp = result.body(hyper::Body::empty()).unwrap();
+        assert_eq!(
+            resp.headers()
+                .get("Access-Control-Allow-Origin")
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "*"
+        );
         assert!(resp
             .headers()
             .get("Access-Control-Allow-Credentials")

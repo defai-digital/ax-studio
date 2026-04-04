@@ -55,7 +55,8 @@ export const ModelDownloadAction = ({
 
   useEffect(() => {
     const handleVerified = (state: DownloadState) => {
-      if (state.modelId === variant.model_id) setDownloaded(true)
+      const downloadId = state.downloadId ?? state.modelId
+      if (downloadId === variant.model_id) setDownloaded(true)
     }
     // Also listen for onModelImported — onFileDownloadAndVerificationSuccess
     // only fires when SHA256 verification is enabled (skipVerification=false).

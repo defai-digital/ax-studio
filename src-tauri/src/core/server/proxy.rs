@@ -5,9 +5,24 @@
 use ax_studio_utils::{is_valid_host, remove_prefix};
 use hyper::{Body, Request, Response, StatusCode};
 use reqwest::Client;
+use subtle::ConstantTimeEq;
 
-use super::security::add_cors_headers_with_host_and_origin;
+use super::security::{add_cors_headers_with_host_and_origin, trusted_cors_origin};
 use super::{gateway_routes, model_routes};
+
+pub(crate) fn is_hop_by_hop_header(name: &hyper::header::HeaderName) -> bool {
+    matches!(
+        name.as_str().to_ascii_lowercase().as_str(),
+        "connection"
+            | "keep-alive"
+            | "proxy-authenticate"
+            | "proxy-authorization"
+            | "te"
+            | "trailer"
+            | "transfer-encoding"
+            | "upgrade"
+    )
+}
 
 /// Configuration for the proxy server
 #[derive(Clone)]
@@ -44,7 +59,8 @@ fn handle_cors_preflight(req: &Request<Body>, config: &ProxyConfig) -> Option<Re
     log::debug!(
         "Handling CORS preflight request from {:?} {:?}",
         req.headers().get(hyper::header::HOST),
-        req.headers().get(hyper::header::ACCESS_CONTROL_REQUEST_METHOD)
+        req.headers()
+            .get(hyper::header::ACCESS_CONTROL_REQUEST_METHOD)
     );
 
     let host = req
@@ -86,9 +102,7 @@ fn handle_cors_preflight(req: &Request<Body>, config: &ProxyConfig) -> Option<Re
     let is_whitelisted_path = whitelisted_paths.contains(&request_path);
 
     let is_trusted = if is_whitelisted_path {
-        log::debug!(
-            "CORS preflight: Bypassing host check for whitelisted path: {request_path}"
-        );
+        log::debug!("CORS preflight: Bypassing host check for whitelisted path: {request_path}");
         true
     } else if !host.is_empty() {
         log::debug!(
@@ -180,9 +194,9 @@ fn handle_cors_preflight(req: &Request<Body>, config: &ProxyConfig) -> Option<Re
             "Origin, Access-Control-Request-Method, Access-Control-Request-Headers",
         );
 
-    if !origin.is_empty() {
+    if let Some(allow_origin) = trusted_cors_origin(origin, host, &config.trusted_hosts) {
         response = response
-            .header("Access-Control-Allow-Origin", origin)
+            .header("Access-Control-Allow-Origin", allow_origin)
             .header("Access-Control-Allow-Credentials", "true");
     } else {
         response = response.header("Access-Control-Allow-Origin", "*");
@@ -215,13 +229,13 @@ fn validate_request(
         if !host_header.is_empty() {
             if !is_valid_host(host_header, &config.trusted_hosts) {
                 let mut error_response = Response::builder().status(StatusCode::FORBIDDEN);
-            error_response = add_cors_headers_with_host_and_origin(
-                error_response,
-                host_header,
-                origin_header,
-                &config.trusted_hosts,
-                config.cors_enabled,
-            );
+                error_response = add_cors_headers_with_host_and_origin(
+                    error_response,
+                    host_header,
+                    origin_header,
+                    &config.trusted_hosts,
+                    config.cors_enabled,
+                );
                 return Some(
                     error_response
                         .body(Body::from("Invalid host header"))
@@ -249,27 +263,22 @@ fn validate_request(
 
     if !is_whitelisted_path && !config.proxy_api_key.is_empty() {
         // Use constant-time comparison for token validation to prevent timing attacks
-        let constant_time_eq = |a: &str, b: &str| -> bool {
-            if a.len() != b.len() {
-                return false;
-            }
-            a.bytes()
-                .zip(b.bytes())
-                .fold(0u8, |acc, (x, y)| acc | (x ^ y))
-                == 0
-        };
-
         let auth_valid = headers
             .get(hyper::header::AUTHORIZATION)
             .and_then(|v| v.to_str().ok())
             .and_then(|auth_str| auth_str.strip_prefix("Bearer "))
-            .map(|token| constant_time_eq(token, &config.proxy_api_key))
+            .map(|token| {
+                token
+                    .as_bytes()
+                    .ct_eq(config.proxy_api_key.as_bytes())
+                    .into()
+            })
             .unwrap_or(false);
 
         let api_key_valid = headers
             .get("X-Api-Key")
             .and_then(|v| v.to_str().ok())
-            .map(|key| constant_time_eq(key, &config.proxy_api_key))
+            .map(|key| key.as_bytes().ct_eq(config.proxy_api_key.as_bytes()).into())
             .unwrap_or(false);
 
         if !auth_valid && !api_key_valid {
@@ -289,17 +298,31 @@ fn validate_request(
         }
     } else if is_whitelisted_path {
         log::debug!("Bypassing authorization check for whitelisted path: {path}");
+    } else {
+        let mut error_response = Response::builder().status(StatusCode::SERVICE_UNAVAILABLE);
+        error_response = add_cors_headers_with_host_and_origin(
+            error_response,
+            host_header,
+            origin_header,
+            &config.trusted_hosts,
+            config.cors_enabled,
+        );
+        return Some(
+            error_response
+                .body(Body::from("Proxy API key is not configured"))
+                .unwrap(),
+        );
     }
 
     if path == "/configs" || path.starts_with("/configs/") || path.starts_with("/configs?") {
         let mut error_response = Response::builder().status(StatusCode::NOT_FOUND);
-            error_response = add_cors_headers_with_host_and_origin(
-                error_response,
-                host_header,
-                origin_header,
-                &config.trusted_hosts,
-                config.cors_enabled,
-            );
+        error_response = add_cors_headers_with_host_and_origin(
+            error_response,
+            host_header,
+            origin_header,
+            &config.trusted_hosts,
+            config.cors_enabled,
+        );
         return Some(error_response.body(Body::from("Not Found")).unwrap());
     }
 
@@ -348,15 +371,21 @@ pub(super) async fn proxy_request<R: tauri::Runtime>(
     match (method.clone(), destination_path.as_str()) {
         (hyper::Method::GET, "/models") => {
             return Ok(gateway_routes::handle_models_route(
-                &host_header, &origin_header, &config, &app_handle,
-            ).await);
+                &host_header,
+                &origin_header,
+                &config,
+                &app_handle,
+            )
+            .await);
         }
         (hyper::Method::GET, "/openapi.json") => {
             return Ok(gateway_routes::handle_openapi_route(&config));
         }
         (hyper::Method::GET, "/") => {
             return Ok(gateway_routes::handle_docs_root_route(
-                &host_header, &origin_header, &config,
+                &host_header,
+                &origin_header,
+                &config,
             ));
         }
         (hyper::Method::GET, path) => {
@@ -374,28 +403,42 @@ pub(super) async fn proxy_request<R: tauri::Runtime>(
         | (hyper::Method::POST, "/completions")
         | (hyper::Method::POST, "/embeddings")
         | (hyper::Method::POST, "/messages/count_tokens") => {
-            let provider_hint = headers
-                .get("x-ax-provider")
-                .and_then(|v| v.to_str().ok());
+            let provider_hint = headers.get("x-ax-provider").and_then(|v| v.to_str().ok());
             let resolution = match model_routes::resolve_model_route(
-                &destination_path, body,
-                &host_header, &origin_header, &config, &app_handle,
+                &destination_path,
+                body,
+                &host_header,
+                &origin_header,
+                &config,
+                &app_handle,
                 provider_hint,
-            ).await {
+            )
+            .await
+            {
                 Ok(r) => r,
                 Err(resp) => return Ok(resp),
             };
             return model_routes::dispatch_to_upstream(
-                resolution, &destination_path, &headers,
-                &host_header, &origin_header, &config, &client,
-            ).await;
+                resolution,
+                &destination_path,
+                &headers,
+                &host_header,
+                &origin_header,
+                &config,
+                &client,
+            )
+            .await;
         }
         _ => {}
     }
 
     // Catch-all
     Ok(gateway_routes::handle_unknown_route(
-        &destination_path, &method, &host_header, &origin_header, &config,
+        &destination_path,
+        &method,
+        &host_header,
+        &origin_header,
+        &config,
     ))
 }
 
@@ -499,7 +542,10 @@ mod tests {
             .method(hyper::Method::OPTIONS)
             .uri("/")
             .header(hyper::header::HOST, "localhost:1337")
-            .header("Access-Control-Request-Headers", "content-type, authorization")
+            .header(
+                "Access-Control-Request-Headers",
+                "content-type, authorization",
+            )
             .body(Body::empty())
             .unwrap();
         let config = test_config(true, "");
@@ -535,6 +581,32 @@ mod tests {
                 .unwrap(),
             "true"
         );
+    }
+
+    #[test]
+    fn test_cors_preflight_does_not_reflect_untrusted_origin() {
+        let req = Request::builder()
+            .method(hyper::Method::OPTIONS)
+            .uri("/")
+            .header(hyper::header::HOST, "localhost:1337")
+            .header(hyper::header::ORIGIN, "https://evil.example")
+            .body(Body::empty())
+            .unwrap();
+        let config = test_config(true, "");
+        let resp = handle_cors_preflight(&req, &config).unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers()
+                .get("Access-Control-Allow-Origin")
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "*"
+        );
+        assert!(resp
+            .headers()
+            .get("Access-Control-Allow-Credentials")
+            .is_none());
     }
 
     #[test]
@@ -574,7 +646,9 @@ mod tests {
         let headers = hyper::HeaderMap::new();
         let result = validate_request("/chat/completions", "", "", &headers, &config);
         assert!(result.is_some());
-        assert_eq!(result.unwrap().status(), StatusCode::BAD_REQUEST);
+        if let Some(resp) = result {
+            assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        }
     }
 
     #[test]
@@ -583,7 +657,9 @@ mod tests {
         let headers = hyper::HeaderMap::new();
         let result = validate_request("/chat/completions", "evil.com", "", &headers, &config);
         assert!(result.is_some());
-        assert_eq!(result.unwrap().status(), StatusCode::FORBIDDEN);
+        if let Some(resp) = result {
+            assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+        }
     }
 
     #[test]
@@ -593,16 +669,25 @@ mod tests {
         headers.insert(hyper::header::HOST, "localhost:1337".parse().unwrap());
         let result = validate_request("/configs", "localhost:1337", "", &headers, &config);
         assert!(result.is_some());
-        assert_eq!(result.unwrap().status(), StatusCode::NOT_FOUND);
+        if let Some(resp) = result {
+            assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+        }
     }
 
     #[test]
     fn test_validate_request_configs_subpath_returns_404() {
         let config = test_config(false, "");
-        let result =
-            validate_request("/configs/something", "localhost:1337", "", &hyper::HeaderMap::new(), &config);
+        let result = validate_request(
+            "/configs/something",
+            "localhost:1337",
+            "",
+            &hyper::HeaderMap::new(),
+            &config,
+        );
         assert!(result.is_some());
-        assert_eq!(result.unwrap().status(), StatusCode::NOT_FOUND);
+        if let Some(resp) = result {
+            assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+        }
     }
 
     #[test]
@@ -613,8 +698,7 @@ mod tests {
             hyper::header::AUTHORIZATION,
             "Bearer my-secret".parse().unwrap(),
         );
-        let result =
-            validate_request("/chat/completions", "localhost:1337", "", &headers, &config);
+        let result = validate_request("/chat/completions", "localhost:1337", "", &headers, &config);
         assert!(result.is_none());
     }
 
@@ -623,8 +707,7 @@ mod tests {
         let config = test_config(false, "my-secret");
         let mut headers = hyper::HeaderMap::new();
         headers.insert("X-Api-Key", "my-secret".parse().unwrap());
-        let result =
-            validate_request("/chat/completions", "localhost:1337", "", &headers, &config);
+        let result = validate_request("/chat/completions", "localhost:1337", "", &headers, &config);
         assert!(result.is_none());
     }
 
@@ -636,19 +719,22 @@ mod tests {
             hyper::header::AUTHORIZATION,
             "Bearer wrong-key".parse().unwrap(),
         );
-        let result =
-            validate_request("/chat/completions", "localhost:1337", "", &headers, &config);
+        let result = validate_request("/chat/completions", "localhost:1337", "", &headers, &config);
         assert!(result.is_some());
-        assert_eq!(result.unwrap().status(), StatusCode::UNAUTHORIZED);
+        if let Some(resp) = result {
+            assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+        }
     }
 
     #[test]
     fn test_validate_request_empty_api_key_skips_auth() {
         let config = test_config(false, "");
         let headers = hyper::HeaderMap::new();
-        let result =
-            validate_request("/chat/completions", "localhost:1337", "", &headers, &config);
-        assert!(result.is_none());
+        let result = validate_request("/chat/completions", "localhost:1337", "", &headers, &config);
+        assert!(result.is_some());
+        if let Some(resp) = result {
+            assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+        }
     }
 
     // --- get_destination_path tests (additional coverage beyond tests.rs) ---
