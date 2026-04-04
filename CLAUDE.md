@@ -55,15 +55,31 @@ AX Studio is a cross-platform AI workspace built with a React 19 frontend (Vite 
 
 ### Frontend Structure (`web-app/src/`)
 
-- `components/` — Reusable UI primitives (Radix UI based)
-- `containers/` — Feature-level composed components
-- `routes/` — TanStack Router route definitions
-- `stores/` — Zustand state stores
-- `lib/` — Shared logic: `chat/`, `providers/`, `transport/`, `markdown/`, `research/`, `multi-agent/`
-- `hooks/` — Custom React hooks
+The frontend uses a **feature-first** organization. Domain-specific code lives in `features/`, while shared/cross-cutting code stays in top-level directories.
+
+- `features/` — Feature modules, each with its own `components/`, `hooks/`, `lib/`, `stores/`
+  - `chat/` — Chat hooks, transport layer, session store, input components
+  - `multi-agent/` — Agent editor, team builder, orchestration lib, cost estimation
+  - `threads/` — Thread management hooks, thread view components
+  - `research/` — Research panel, parsers, scrapers
+  - `models/` — Model CRUD dialogs, provider/download hooks
+  - `assistants/` — Assistant CRUD, useAssistant hook
+  - `mcp/` — MCP server dialogs, useMCPServers hook
+  - `providers/` — Provider CRUD dialogs
+- `components/` — Shared UI primitives (Radix UI based), animated icons, left sidebar
+- `containers/` — Cross-cutting composed components and remaining dialogs
+- `hooks/` — Shared cross-cutting hooks (theme, hotkeys, media query, sidebar, app state)
+- `lib/` — Shared utilities: `providers/`, `bootstrap/`, `platform/`, `markdown/`, `shortcuts/`
+- `services/` — Platform-abstracted API/IPC service adapters (each with `default.ts`/`tauri.ts`/`types.ts`)
+- `routes/` — TanStack Router route definitions (thin wrappers that delegate to feature components)
+- `schemas/` — Zod validation schemas
 - `locales/` — i18n translations (15+ languages)
-- `services/` — API/IPC service adapters
 - Path alias: `@` maps to `web-app/src/`
+
+**Conventions:**
+- Tests are co-located next to source files (`Foo.tsx` + `Foo.test.tsx`)
+- Hooks use camelCase naming (`useChat.ts`, not `use-chat.ts`)
+- Feature modules should not import from other feature modules directly
 
 ### Rust Backend Structure (`src-tauri/src/`)
 
