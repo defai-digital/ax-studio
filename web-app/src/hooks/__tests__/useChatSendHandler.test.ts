@@ -74,7 +74,7 @@ vi.mock('@/hooks/useServiceHub', () => ({
 
 // ─── Import under test ───────────────────────────────────────────────────────
 
-import { useChatSendHandler } from '../use-chat-send-handler'
+import { useChatSendHandler } from '../useChatSendHandler'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

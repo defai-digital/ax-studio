@@ -110,7 +110,7 @@ vi.mock('@/hooks/useServiceHub', () => ({
 
 // ─── Import ───────────────────────────────────────────────────────────────────
 
-import { useDocumentAttachmentHandler } from '../use-document-attachment-handler'
+import { useDocumentAttachmentHandler } from '../useDocumentAttachmentHandler'
 import { useFileRegistry } from '@/lib/file-registry'
 import { toast } from 'sonner'
 

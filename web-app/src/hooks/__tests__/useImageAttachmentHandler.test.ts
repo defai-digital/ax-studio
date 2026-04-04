@@ -37,7 +37,7 @@ vi.mock('@/types/attachment', () => ({
 
 // ─── Import ───────────────────────────────────────────────────────────────────
 
-import { useImageAttachmentHandler } from '../use-image-attachment-handler'
+import { useImageAttachmentHandler } from '../useImageAttachmentHandler'
 import { toast } from 'sonner'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

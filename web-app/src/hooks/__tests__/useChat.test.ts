@@ -86,7 +86,7 @@ vi.mock('zod/v4', () => ({
 
 // ─── Import ───────────────────────────────────────────────────────────────────
 
-import { useChat } from '../use-chat'
+import { useChat } from '../useChat'
 import { createChatTransport } from '@/lib/chat/chat-transport-factory'
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
