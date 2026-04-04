@@ -1,4 +1,4 @@
-import { DownloadManagement } from '@/containers/DownloadManegement'
+import { DownloadManagement } from '@/containers/DownloadManagement'
 import { NavChats } from './NavChats'
 import { NavMain } from './NavMain'
 import { NavProjects } from './NavProjects'
