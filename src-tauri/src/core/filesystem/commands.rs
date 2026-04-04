@@ -1171,11 +1171,23 @@ pub async fn akidb_sync_now<R: Runtime>(
         };
 
         let stdout = match stdout_task {
-            Some(task) => String::from_utf8_lossy(&task.await.unwrap_or_default()).to_string(),
+            Some(task) => match task.await {
+                Ok(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+                Err(e) => {
+                    log::warn!("akidb_sync_now: stdout collection task failed: {e}");
+                    String::new()
+                }
+            },
             None => String::new(),
         };
         let stderr = match stderr_task {
-            Some(task) => String::from_utf8_lossy(&task.await.unwrap_or_default()).to_string(),
+            Some(task) => match task.await {
+                Ok(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+                Err(e) => {
+                    log::warn!("akidb_sync_now: stderr collection task failed: {e}");
+                    String::new()
+                }
+            },
             None => String::new(),
         };
         let success = status.success();
