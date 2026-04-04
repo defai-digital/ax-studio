@@ -3,7 +3,7 @@ import { parseRouterResponse, getAvailableModelsForRouter } from './llm-router'
 import { buildRouterPrompt } from './llm-router-prompt'
 
 // Mock useFavoriteModel
-vi.mock('@/hooks/useFavoriteModel', () => ({
+vi.mock('@/features/models/hooks/useFavoriteModel', () => ({
   useFavoriteModel: {
     getState: () => ({
       favoriteModels: [{ id: 'gpt-4o', name: 'GPT-4o' }],
@@ -22,7 +22,7 @@ vi.mock('@/constants/providers', () => ({
 }))
 
 // Mock useModelProvider
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/features/models/hooks/useModelProvider', () => ({
   useModelProvider: {
     getState: () => ({
       getProviderByName: () => undefined,

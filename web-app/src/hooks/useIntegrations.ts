@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { TauriIntegrationService } from '@/services/integrations/tauri'
 import { INTEGRATIONS, getIntegration } from '@/lib/integrations-registry'
 import { getServiceHub } from '@/hooks/useServiceHub'
-import type { MCPServerConfig } from '@/hooks/useMCPServers'
+import type { MCPServerConfig } from '@/features/mcp/hooks/useMCPServers'
 
 export type IntegrationStatus = 'idle' | 'connecting' | 'connected' | 'error'
 

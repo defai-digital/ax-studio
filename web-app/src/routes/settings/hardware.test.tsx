@@ -59,7 +59,7 @@ vi.mock('@/hooks/useHardware', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useLlamacppDevices', () => ({
+vi.mock('@/features/models/hooks/useLlamacppDevices', () => ({
   useLlamacppDevices: () => ({
     devices: [{ id: 'gpu-0', name: 'RTX 3080', activated: true }],
     loading: false,
@@ -69,7 +69,7 @@ vi.mock('@/hooks/useLlamacppDevices', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/features/models/hooks/useModelProvider', () => ({
   useModelProvider: () => ({
     providers: [{ provider: 'llamacpp', active: true, models: [] }],
     getProviderByName: vi.fn(() => undefined),

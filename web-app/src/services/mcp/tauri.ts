@@ -4,8 +4,8 @@
 
 import { invoke } from '@tauri-apps/api/core'
 import { MCPTool } from '@/types/completion'
-import { DEFAULT_MCP_SETTINGS } from '@/hooks/useMCPServers'
-import type { MCPServerConfig, MCPServers, MCPSettings } from '@/hooks/useMCPServers'
+import { DEFAULT_MCP_SETTINGS } from '@/features/mcp/hooks/useMCPServers'
+import type { MCPServerConfig, MCPServers, MCPSettings } from '@/features/mcp/hooks/useMCPServers'
 import type { MCPConfig } from './types'
 import { DefaultMCPService } from './default'
 import { mcpServersSchema, mcpSettingsSchema } from '@/schemas/mcp.schema'

@@ -17,7 +17,7 @@ vi.mock('./CopyButton', () => ({
   ),
 }))
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/features/models/hooks/useModelProvider', () => ({
   useModelProvider: vi.fn((selector) =>
     selector({ selectedModel: { id: 'test-model', name: 'Test Model' } })
   ),
@@ -77,11 +77,11 @@ vi.mock('@/components/ai-elements/tool', () => ({
   ),
 }))
 
-vi.mock('@/components/AgentOutputCard', () => ({
+vi.mock('@/features/multi-agent/components/AgentOutputCard', () => ({
   AgentOutputCard: () => <div data-testid="agent-output-card" />,
 }))
 
-vi.mock('@/components/RunLogViewer', () => ({
+vi.mock('@/features/multi-agent/components/RunLogViewer', () => ({
   RunLogSummary: () => <div data-testid="run-log-summary" />,
 }))
 

@@ -4,7 +4,7 @@ import SettingsMenu from '@/containers/SettingsMenu'
 import HeaderPage from '@/containers/HeaderPage'
 import { Button } from '@/components/ui/button'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useModelProvider } from '@/features/models/hooks/useModelProvider'
 import { useNavigate } from '@tanstack/react-router'
 import {
   cn,
@@ -13,7 +13,7 @@ import {
   getProviderDescription,
 } from '@/lib/utils'
 import ProvidersAvatar from '@/containers/ProvidersAvatar'
-import { AddProviderDialog } from '@/containers/dialogs'
+import { AddProviderDialog } from '@/features/providers/components/AddProviderDialog'
 import { Switch } from '@/components/ui/switch'
 import { useCallback } from 'react'
 import { openAIProviderSettings } from '@/constants/providers'

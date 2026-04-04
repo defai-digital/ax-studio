@@ -8,7 +8,7 @@ const mockStopModel = vi.fn().mockResolvedValue(undefined)
 const mockGetActiveModels = vi.fn().mockResolvedValue([])
 const mockSetActiveModels = vi.fn()
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/features/models/hooks/useModelProvider', () => ({
   useModelProvider: vi.fn(() => ({
     updateProvider: mockUpdateProvider,
   })),

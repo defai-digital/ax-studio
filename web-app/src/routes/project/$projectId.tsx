@@ -1,12 +1,12 @@
 import { createFileRoute, useParams } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 
-import { useThreadManagement } from '@/hooks/useThreadManagement'
-import { useThreads } from '@/hooks/useThreads'
-import { useAssistant } from '@/hooks/useAssistant'
+import { useThreadManagement } from '@/features/threads/hooks/useThreadManagement'
+import { useThreads } from '@/features/threads/hooks/useThreads'
+import { useAssistant } from '@/features/assistants/hooks/useAssistant'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 
-import ChatInput from '@/containers/ChatInput'
+import ChatInput from '@/features/chat/components/ChatInput'
 import HeaderPage from '@/containers/HeaderPage'
 import ThreadList from '@/containers/ThreadList'
 import ProjectFiles from '@/containers/ProjectFiles'

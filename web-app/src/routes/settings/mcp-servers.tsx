@@ -15,11 +15,11 @@ import {
   MCPServerConfig,
   MCPSettings,
   DEFAULT_MCP_SETTINGS,
-} from '@/hooks/useMCPServers'
+} from '@/features/mcp/hooks/useMCPServers'
 import { Fragment, useEffect, useState } from 'react'
-import AddEditMCPServer from '@/containers/dialogs/AddEditMCPServer'
-import DeleteMCPServerConfirm from '@/containers/dialogs/DeleteMCPServerConfirm'
-import EditJsonMCPserver from '@/containers/dialogs/EditJsonMCPserver'
+import AddEditMCPServer from '@/features/mcp/components/AddEditMCPServer'
+import DeleteMCPServerConfirm from '@/features/mcp/components/DeleteMCPServerConfirm'
+import EditJsonMCPserver from '@/features/mcp/components/EditJsonMCPserver'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { twMerge } from 'tailwind-merge'

@@ -1,5 +1,5 @@
 import { IconStar, IconStarFilled } from '@tabler/icons-react'
-import { useFavoriteModel } from '@/hooks/useFavoriteModel'
+import { useFavoriteModel } from '@/features/models/hooks/useFavoriteModel'
 import { Button } from '@/components/ui/button'
 
 interface FavoriteModelActionProps {

@@ -13,13 +13,13 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }))
 
-vi.mock('@/hooks/useThreadManagement', () => ({
+vi.mock('@/features/threads/hooks/useThreadManagement', () => ({
   useThreadManagement: () => ({
     folders: [],
   }),
 }))
 
-vi.mock('@/hooks/useAssistant', () => ({
+vi.mock('@/features/assistants/hooks/useAssistant', () => ({
   useAssistant: () => ({
     assistants: [],
     addAssistant: vi.fn(),

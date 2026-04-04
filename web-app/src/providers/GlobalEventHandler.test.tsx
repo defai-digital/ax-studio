@@ -56,7 +56,7 @@ vi.mock('@ax-studio/core', () => ({
   },
 }))
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/features/models/hooks/useModelProvider', () => ({
   useModelProvider: () => ({
     setProviders: mockSetProviders,
   }),
@@ -67,7 +67,7 @@ vi.mock('@/hooks/useAppState', () => ({
     selector({ setActiveModels: mockSetActiveModels }),
 }))
 
-vi.mock('@/hooks/useDownloadStore', () => ({
+vi.mock('@/features/models/hooks/useDownloadStore', () => ({
   useDownloadStore: () => ({
     updateProgress: vi.fn(),
     removeDownload: vi.fn(),

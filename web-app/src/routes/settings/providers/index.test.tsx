@@ -25,7 +25,7 @@ vi.mock('@/containers/ProvidersAvatar', () => ({
   ),
 }))
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/features/models/hooks/useModelProvider', () => ({
   useModelProvider: () => ({
     providers: mockProviders,
     addProvider: mockAddProvider,

@@ -1,10 +1,10 @@
 import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router'
-import ChatInput from '@/containers/ChatInput'
+import ChatInput from '@/features/chat/components/ChatInput'
 import HeaderPage from '@/containers/HeaderPage'
 import { useTools } from '@/hooks/useTools'
 import { cn } from '@/lib/utils'
 
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useModelProvider } from '@/features/models/hooks/useModelProvider'
 import SetupScreen from '@/containers/SetupScreen'
 import { route } from '@/constants/routes'
 import { localStorageKey } from '@/constants/localStorage'
@@ -17,7 +17,7 @@ type SearchParams = {
   }
 }
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useThreads } from '@/hooks/useThreads'
+import { useThreads } from '@/features/threads/hooks/useThreads'
 import DropdownModelProvider from '@/containers/DropdownModelProvider'
 import { useGeneralSetting } from '@/hooks/useGeneralSetting'
 import { resolveSystemPrompt } from '@/lib/system-prompt'
@@ -46,7 +46,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { useAgentTeamStore } from '@/stores/agent-team-store'
+import { useAgentTeamStore } from '@/features/multi-agent/stores/agent-team-store'
 import { motion } from 'motion/react'
 
 export const Route = createFileRoute(route.home)({

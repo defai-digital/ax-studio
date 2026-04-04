@@ -16,13 +16,13 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { useThreadManagement } from '@/hooks/useThreadManagement'
-import { useAssistant } from '@/hooks/useAssistant'
+import { useThreadManagement } from '@/features/threads/hooks/useThreadManagement'
+import { useAssistant } from '@/features/assistants/hooks/useAssistant'
 import { AvatarEmoji } from '@/containers/AvatarEmoji'
 import { toast } from 'sonner'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { ChevronDown, Plus } from 'lucide-react'
-import AddEditAssistant from './AddEditAssistant'
+import AddEditAssistant from '@/features/assistants/components/AddEditAssistant'
 
 interface AddProjectDialogProps {
   open: boolean

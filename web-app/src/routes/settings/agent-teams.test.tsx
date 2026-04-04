@@ -94,11 +94,11 @@ vi.mock('lucide-react', () => ({
   Users: () => <span data-testid="icon-users" />,
 }))
 
-vi.mock('@/components/AgentTeamBuilder', () => ({
+vi.mock('@/features/multi-agent/components/AgentTeamBuilder', () => ({
   AgentTeamBuilder: () => <div data-testid="agent-team-builder" />,
 }))
 
-vi.mock('@/lib/multi-agent/templates', () => ({
+vi.mock('@/features/multi-agent/lib/templates', () => ({
   TEMPLATES: [
     {
       name: 'Research Team',
@@ -117,7 +117,7 @@ vi.mock('@/lib/multi-agent/templates', () => ({
   ],
 }))
 
-vi.mock('@/lib/multi-agent/cost-estimation', () => ({
+vi.mock('@/features/multi-agent/lib/cost-estimation', () => ({
   estimateTeamRunCost: vi.fn(() => ({
     range: { min: 1000, max: 5000 },
   })),
@@ -148,7 +148,7 @@ const mockExportTeam = vi.fn()
 const mockImportTeam = vi.fn()
 const mockLoadTeams = vi.fn()
 
-vi.mock('@/stores/agent-team-store', () => ({
+vi.mock('@/features/multi-agent/stores/agent-team-store', () => ({
   useAgentTeamStore: (selector: (state: unknown) => unknown) => {
     const state = {
       teams: mockTeams,
@@ -172,7 +172,7 @@ const mockAssistants = [
 
 const mockAddAssistant = vi.fn()
 
-vi.mock('@/hooks/useAssistant', () => ({
+vi.mock('@/features/assistants/hooks/useAssistant', () => ({
   useAssistant: () => ({
     assistants: mockAssistants,
     addAssistant: mockAddAssistant,

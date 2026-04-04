@@ -17,7 +17,7 @@ vi.mock('@/hooks/useAppState', () => ({
   ),
 }))
 
-vi.mock('@/hooks/useThreads', () => ({
+vi.mock('@/features/threads/hooks/useThreads', () => ({
   useThreads: vi.fn((selector) =>
     selector({ getCurrentThread: () => ({ id: 'thread-1' }) })
   ),

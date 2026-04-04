@@ -5,7 +5,7 @@ import { FavoriteModelAction } from './FavoriteModelAction'
 const mockToggleFavorite = vi.fn()
 let mockIsFavoriteResult = false
 
-vi.mock('@/hooks/useFavoriteModel', () => ({
+vi.mock('@/features/models/hooks/useFavoriteModel', () => ({
   useFavoriteModel: () => ({
     isFavorite: () => mockIsFavoriteResult,
     toggleFavorite: mockToggleFavorite,

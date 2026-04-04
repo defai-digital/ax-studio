@@ -14,7 +14,7 @@ import { TrustedHostsInput } from '@/containers/TrustedHostsInput'
 import { useLocalApiServer } from '@/hooks/useLocalApiServer'
 import { useAppState } from '@/hooks/useAppState'
 
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useModelProvider } from '@/features/models/hooks/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { IconSettings2 } from '@tabler/icons-react'
 import { Server } from 'lucide-react'
@@ -23,7 +23,7 @@ import { ApiKeyInput } from '@/containers/ApiKeyInput'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { getModelToStart } from '@/utils/getModelToStart'
-import { LogViewer } from '@/components/LogViewer'
+import { LogViewer } from '@/features/multi-agent/components/LogViewer'
 
 import AkidbConfigPanel from '@/containers/AkidbConfigPanel'
 import {

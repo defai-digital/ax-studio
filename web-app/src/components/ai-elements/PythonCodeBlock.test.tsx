@@ -7,7 +7,7 @@ const mockExecute = vi.fn()
 const mockReset = vi.fn()
 let mockState: Record<string, unknown> = { status: 'idle' }
 
-vi.mock('@/hooks/useCodeExecution', () => ({
+vi.mock('@/features/chat/hooks/useCodeExecution', () => ({
   useCodeExecution: () => ({
     state: mockState,
     execute: mockExecute,

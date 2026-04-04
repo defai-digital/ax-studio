@@ -9,7 +9,7 @@ vi.mock('@/containers/HeaderPage', () => ({
   ),
 }))
 
-vi.mock('@/hooks/useModelSources', () => ({
+vi.mock('@/features/models/hooks/useModelSources', () => ({
   useModelSources: () => ({
     sources: [],
     fetchSources: vi.fn(),
@@ -33,7 +33,7 @@ vi.mock('@/hooks/useServiceHub', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useDownloadStore', () => ({
+vi.mock('@/features/models/hooks/useDownloadStore', () => ({
   useDownloadStore: () => ({
     downloads: {},
     localDownloadingModels: new Set(),
@@ -41,7 +41,7 @@ vi.mock('@/hooks/useDownloadStore', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/features/models/hooks/useModelProvider', () => ({
   useModelProvider: vi.fn().mockImplementation((selector) =>
     selector({
       getProviderByName: vi.fn().mockReturnValue({

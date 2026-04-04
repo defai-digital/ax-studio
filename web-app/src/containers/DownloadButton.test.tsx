@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const mockAddLocalDownloadingModel = vi.fn()
 const mockPullModelWithMetadata = vi.fn()
 
-vi.mock('@/hooks/useDownloadStore', () => ({
+vi.mock('@/features/models/hooks/useDownloadStore', () => ({
   useDownloadStore: vi.fn((selector) => {
     const state = {
       downloads: {},
@@ -24,7 +24,7 @@ vi.mock('@/hooks/useGeneralSetting', () => ({
 }))
 
 const mockGetProviderByName = vi.fn()
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/features/models/hooks/useModelProvider', () => ({
   useModelProvider: vi.fn((selector) =>
     selector({ getProviderByName: mockGetProviderByName })
   ),
@@ -92,7 +92,7 @@ vi.mock('lucide-react', () => ({
 }))
 
 import { DownloadButtonPlaceholder } from './DownloadButton'
-import { useDownloadStore } from '@/hooks/useDownloadStore'
+import { useDownloadStore } from '@/features/models/hooks/useDownloadStore'
 
 describe('DownloadButtonPlaceholder', () => {
   const baseModel = {

@@ -2,8 +2,8 @@ import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import { useState, useEffect } from 'react'
 
-import { useAgentTeamStore } from '@/stores/agent-team-store'
-import { useAssistant } from '@/hooks/useAssistant'
+import { useAgentTeamStore } from '@/features/multi-agent/stores/agent-team-store'
+import { useAssistant } from '@/features/assistants/hooks/useAssistant'
 
 import HeaderPage from '@/containers/HeaderPage'
 import SettingsMenu from '@/containers/SettingsMenu'
@@ -28,11 +28,11 @@ import {
 } from '@tabler/icons-react'
 import { Users } from 'lucide-react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { AgentTeamBuilder } from '@/components/AgentTeamBuilder'
-import { TEMPLATES } from '@/lib/multi-agent/templates'
+import { AgentTeamBuilder } from '@/features/multi-agent/components/AgentTeamBuilder'
+import { TEMPLATES } from '@/features/multi-agent/lib/templates'
 import type { AgentTeam } from '@/types/agent-team'
-import type { TeamTemplate } from '@/lib/multi-agent/templates'
-import { estimateTeamRunCost } from '@/lib/multi-agent/cost-estimation'
+import type { TeamTemplate } from '@/features/multi-agent/lib/templates'
+import { estimateTeamRunCost } from '@/features/multi-agent/lib/cost-estimation'
 
 export const Route = createFileRoute(route.settings.agent_teams)({
   component: AgentTeamsContent,

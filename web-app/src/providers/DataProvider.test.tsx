@@ -12,25 +12,25 @@ vi.mock('@tauri-apps/plugin-deep-link', () => ({
 // The services are handled by the global ServiceHub mock in test setup
 
 // Mock hooks
-vi.mock('@/hooks/useThreads', () => ({
+vi.mock('@/features/threads/hooks/useThreads', () => ({
   useThreads: vi.fn(() => ({
     setThreads: vi.fn(),
   })),
 }))
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/features/models/hooks/useModelProvider', () => ({
   useModelProvider: vi.fn(() => ({
     setProviders: vi.fn(),
   })),
 }))
 
-vi.mock('@/hooks/useAssistant', () => ({
+vi.mock('@/features/assistants/hooks/useAssistant', () => ({
   useAssistant: vi.fn(() => ({
     setAssistants: vi.fn(),
   })),
 }))
 
-vi.mock('@/hooks/useMessages', () => ({
+vi.mock('@/features/chat/hooks/useMessages', () => ({
   useMessages: vi.fn(() => ({
     setMessages: vi.fn(),
   })),
@@ -42,7 +42,7 @@ vi.mock('@/hooks/useAppUpdater', () => ({
   })),
 }))
 
-vi.mock('@/hooks/useMCPServers', () => ({
+vi.mock('@/features/mcp/hooks/useMCPServers', () => ({
   useMCPServers: vi.fn(() => ({
     setServers: vi.fn(),
     setSettings: vi.fn(),

@@ -3,7 +3,7 @@
  */
 
 import { MCPTool, MCPToolCallResult } from '@ax-studio/core'
-import type { MCPServerConfig } from '@/hooks/useMCPServers'
+import type { MCPServerConfig } from '@/features/mcp/hooks/useMCPServers'
 import type { MCPService, MCPConfig, ToolCallWithCancellationResult } from './types'
 
 export class DefaultMCPService implements MCPService {

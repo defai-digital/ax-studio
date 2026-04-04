@@ -21,7 +21,7 @@ import {
   Blocks,
 } from 'lucide-react'
 import Fuse from 'fuse.js'
-import { useThreads } from '@/hooks/useThreads'
+import { useThreads } from '@/features/threads/hooks/useThreads'
 import { useProjectDialog } from '@/hooks/useProjectDialog'
 import { localStorageKey } from '@/constants/localStorage'
 import { useTranslation } from '@/i18n/react-i18next-compat'

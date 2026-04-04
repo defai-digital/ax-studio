@@ -11,7 +11,7 @@ import HeaderPage from './HeaderPage'
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { useTheme } from '@/hooks/useTheme'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useModelProvider } from '@/features/models/hooks/useModelProvider'
 import {
   Zap,
   Cpu,

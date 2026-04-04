@@ -17,7 +17,7 @@ import {
   ToolOutput,
 } from '@/components/ai-elements/tool'
 import { CopyButton } from './CopyButton'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useModelProvider } from '@/features/models/hooks/useModelProvider'
 import { IconRefresh, IconPaperclip } from '@tabler/icons-react'
 import { EditMessageDialog } from '@/containers/dialogs/EditMessageDialog'
 import { DeleteMessageDialog } from '@/containers/dialogs/DeleteMessageDialog'
@@ -25,12 +25,12 @@ import TokenSpeedIndicator from '@/containers/TokenSpeedIndicator'
 import { extractFilesFromPrompt, FileMetadata } from '@/lib/fileMetadata'
 import { useMemo } from 'react'
 import { Button } from '@/components/ui/button'
-import { AgentOutputCard } from '@/components/AgentOutputCard'
-import { RunLogSummary } from '@/components/RunLogViewer'
+import { AgentOutputCard } from '@/features/multi-agent/components/AgentOutputCard'
+import { RunLogSummary } from '@/features/multi-agent/components/RunLogViewer'
 import type { AgentStatusData } from '@/types/agent-data-parts'
-import type { RunLogData } from '@/lib/multi-agent/run-log'
+import type { RunLogData } from '@/features/multi-agent/lib/run-log'
 import { Zap, GitBranch, ThumbsUp, ThumbsDown } from 'lucide-react'
-import { RoutingBadge } from '@/components/RoutingBadge'
+import { RoutingBadge } from '@/features/multi-agent/components/RoutingBadge'
 
 const CHAT_STATUS = {
   STREAMING: 'streaming',

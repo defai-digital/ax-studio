@@ -62,7 +62,7 @@ vi.mock('@/containers/RenderMarkdown', () => ({
   RenderMarkdown: () => <div />,
 }))
 
-vi.mock('@/containers/dialogs/EditModel', () => ({
+vi.mock('@/features/models/components/EditModel', () => ({
   DialogEditModel: () => <div />,
 }))
 
@@ -70,7 +70,7 @@ vi.mock('@/containers/ModelSetting', () => ({
   ModelSetting: () => <div />,
 }))
 
-vi.mock('@/containers/dialogs/DeleteModel', () => ({
+vi.mock('@/features/models/components/DeleteModel', () => ({
   DialogDeleteModel: () => <div />,
 }))
 
@@ -78,11 +78,11 @@ vi.mock('@/containers/FavoriteModelAction', () => ({
   FavoriteModelAction: () => <div />,
 }))
 
-vi.mock('@/containers/dialogs/DeleteProvider', () => ({
+vi.mock('@/features/providers/components/DeleteProvider', () => ({
   default: () => <div data-testid="delete-provider" />,
 }))
 
-vi.mock('@/containers/dialogs/AddModel', () => ({
+vi.mock('@/features/models/components/AddModel', () => ({
   DialogAddModel: () => <div />,
 }))
 
@@ -90,7 +90,7 @@ vi.mock('@/containers/ProvidersAvatar', () => ({
   default: () => <div data-testid="providers-avatar" />,
 }))
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/features/models/hooks/useModelProvider', () => ({
   useModelProvider: () => ({
     getProviderByName: mockGetProviderByName,
     updateProvider: mockUpdateProvider,

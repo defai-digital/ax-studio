@@ -16,7 +16,7 @@ vi.mock('@/hooks/useTheme', () => ({
   })),
 }))
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/features/models/hooks/useModelProvider', () => ({
   useModelProvider: vi.fn(() => ({
     providers: [
       { provider: 'llamacpp', active: true },

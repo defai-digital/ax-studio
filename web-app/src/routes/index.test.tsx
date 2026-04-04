@@ -16,7 +16,7 @@ vi.mock('@tanstack/react-router', () => ({
   useSearch: () => ({}),
 }))
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/features/models/hooks/useModelProvider', () => ({
   useModelProvider: () => ({
     providers: [{ provider: 'openai', api_key: 'test-key', active: true }],
     selectedModel: { id: 'gpt-4', provider: 'openai' },
@@ -24,7 +24,7 @@ vi.mock('@/hooks/useModelProvider', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useThreads', () => ({
+vi.mock('@/features/threads/hooks/useThreads', () => ({
   useThreads: (selector?: any) => {
     const state = {
       setCurrentThreadId: mockSetCurrentThreadId,
@@ -46,7 +46,7 @@ vi.mock('@/hooks/useTools', () => ({
   useTools: vi.fn(),
 }))
 
-vi.mock('@/stores/agent-team-store', () => ({
+vi.mock('@/features/multi-agent/stores/agent-team-store', () => ({
   useAgentTeamStore: (selector?: any) => {
     const state = {
       teams: [],
@@ -64,7 +64,7 @@ vi.mock('@/lib/system-prompt', () => ({
   }),
 }))
 
-vi.mock('@/containers/ChatInput', () => ({
+vi.mock('@/features/chat/components/ChatInput', () => ({
   default: () => <div data-testid="chat-input-container">ChatInput</div>,
 }))
 
