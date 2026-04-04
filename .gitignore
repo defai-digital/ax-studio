@@ -87,6 +87,12 @@ agent-teams/
 # Generated reports
 report/
 
+# Local planning docs
+/ADRS/
+/BUGS/
+/PRDS/
+/TODOS/
+
 # Merge conflict artifacts
 *.orig
 *.rej
