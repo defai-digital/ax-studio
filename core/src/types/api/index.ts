@@ -106,7 +106,7 @@ export enum FileManagerRoute {
   getGgufFiles = 'getGgufFiles',
 }
 
-export type ApiFunction = (...args: any[]) => any
+export type ApiFunction = (...args: readonly unknown[]) => Promise<unknown>
 
 export type NativeRouteFunctions = {
   [K in NativeRoute]: ApiFunction
@@ -142,7 +142,7 @@ export type APIFunctions = NativeRouteFunctions &
   DownloadEventFunctions &
   ExtensionRouteFunctions &
   FileSystemRouteFunctions &
-  FileManagerRoute
+  FileManagerRouteFunctions
 
 export const CoreRoutes = [
   ...Object.values(AppRoute),

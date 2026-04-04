@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import { useThreadEffects, type ThreadEffectsInput } from '../use-thread-effects'
+import { defaultAssistant } from '@/hooks/useAssistant'
 
 // Mock Tauri invoke (used for team token loading)
 vi.mock('@tauri-apps/api/core', () => ({
@@ -194,7 +195,7 @@ describe('useThreadEffects', () => {
     expect(defaultInput.setCurrentAssistant).toHaveBeenCalledWith(assistant)
   })
 
-  it('does not set current assistant when no matching assistant', () => {
+  it('resets to defaultAssistant when no matching assistant', () => {
     defaultInput.assistants = [
       { id: 'a2', name: 'Other' } as unknown as Assistant,
     ]
@@ -205,7 +206,32 @@ describe('useThreadEffects', () => {
 
     renderHook(() => useThreadEffects(defaultInput))
 
-    expect(defaultInput.setCurrentAssistant).not.toHaveBeenCalled()
+    expect(defaultInput.setCurrentAssistant).toHaveBeenCalledWith(defaultAssistant)
+  })
+
+  it('resets to defaultAssistant when thread has no assistants (user selected None)', () => {
+    const customAssistant = { id: 'a1', name: 'Custom' } as unknown as Assistant
+    defaultInput.assistants = [customAssistant]
+    defaultInput.thread = {
+      ...defaultInput.thread!,
+      assistants: [],
+    } as unknown as Thread
+
+    renderHook(() => useThreadEffects(defaultInput))
+
+    expect(defaultInput.setCurrentAssistant).toHaveBeenCalledWith(defaultAssistant)
+  })
+
+  it('resets to defaultAssistant when thread assistants is undefined', () => {
+    const customAssistant = { id: 'a1', name: 'Custom' } as unknown as Assistant
+    defaultInput.assistants = [customAssistant]
+    defaultInput.thread = {
+      ...defaultInput.thread!,
+    } as unknown as Thread
+
+    renderHook(() => useThreadEffects(defaultInput))
+
+    expect(defaultInput.setCurrentAssistant).toHaveBeenCalledWith(defaultAssistant)
   })
 
   // NOTE: The reasoning scroll effect and team token loading via Tauri invoke

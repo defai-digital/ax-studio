@@ -11,7 +11,7 @@ import { AppEvent, DownloadEvent, DownloadState, events } from '@ax-studio/core'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { DEFAULT_MODEL_QUANTIZATIONS } from '@/constants/models'
-import { ExternalLink, Download } from 'lucide-react'
+import { ExternalLink, Download, Pause, Play } from 'lucide-react'
 
 type ModelProps = {
   model: CatalogModel
@@ -37,6 +37,7 @@ export function DownloadButtonPlaceholder({
   const serviceHub = useServiceHub()
   const huggingfaceToken = useGeneralSetting((state) => state.huggingfaceToken)
   const [isDownloaded, setDownloaded] = useState<boolean>(false)
+  const [isPaused, setIsPaused] = useState<boolean>(false)
 
   const quant =
     model.quants?.find((e) =>
@@ -92,7 +93,10 @@ export function DownloadButtonPlaceholder({
     )
     events.on(AppEvent.onModelImported, handleImported)
     return () => {
-      events.off(DownloadEvent.onFileDownloadAndVerificationSuccess, handleVerified)
+      events.off(
+        DownloadEvent.onFileDownloadAndVerificationSuccess,
+        handleVerified
+      )
       events.off(AppEvent.onModelImported, handleImported)
     }
   }, [modelId])
@@ -128,6 +132,7 @@ export function DownloadButtonPlaceholder({
   const handleDownload = async () => {
     // Immediately set local downloading state and start download
     addLocalDownloadingModel(modelId)
+    setIsPaused(false)
     const mmprojPath = (
       model.mmproj_models?.find(
         (e) => e.model_id.toLowerCase() === 'mmproj-f16'
@@ -138,6 +143,19 @@ export function DownloadButtonPlaceholder({
       .pullModelWithMetadata(modelId, modelUrl, mmprojPath, huggingfaceToken)
   }
 
+  const handlePause = async () => {
+    try {
+      await serviceHub.models().abortDownload(modelId)
+      setIsPaused(true)
+    } catch (error) {
+      console.error('Failed to pause download:', error)
+    }
+  }
+
+  const handleResume = () => {
+    handleDownload()
+  }
+
   return (
     <div
       className={cn(
@@ -146,11 +164,29 @@ export function DownloadButtonPlaceholder({
       )}
     >
       {isDownloading && !isDownloaded && (
-        <div className={cn('flex items-center gap-2 w-20')}>
-          <Progress className='border' value={downloadProgress * 100} />
-          <span className="text-xs text-center text-muted-foreground">
+        <div className={cn('flex items-center gap-2')}>
+          <Progress className="border w-20" value={downloadProgress * 100} />
+          <span className="text-xs text-center text-muted-foreground min-w-[2rem]">
             {Math.round(downloadProgress * 100)}%
           </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={isPaused ? handleResume : handlePause}
+            className="h-6 px-2"
+          >
+            {isPaused ? (
+              <>
+                <Play className="size-3 mr-1" />
+                Resume
+              </>
+            ) : (
+              <>
+                <Pause className="size-3 mr-1" />
+                Pause
+              </>
+            )}
+          </Button>
         </div>
       )}
       {isDownloaded ? (

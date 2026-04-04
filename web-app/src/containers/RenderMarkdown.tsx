@@ -8,6 +8,7 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import mermaidLib from 'mermaid'
+import DOMPurify from 'dompurify'
 import { useTheme } from '@/hooks/useTheme'
 import { PythonCodeBlock } from '@/components/ai-elements/PythonCodeBlock'
 import { ArtifactBlock } from '@/components/ai-elements/ArtifactBlock'
@@ -330,7 +331,7 @@ function MermaidDiagram({ source, theme }: { source: string; theme: string }) {
   useEffect(() => {
     let cancelled = false
 
-    mermaidLib.initialize({ startOnLoad: false, securityLevel: 'loose', theme: theme as never })
+    mermaidLib.initialize({ startOnLoad: false, securityLevel: 'strict', theme: theme as never })
     const renderWithRetry = async () => {
       const id = `mermaid-${Math.random().toString(36).slice(2)}`
 
@@ -391,6 +392,10 @@ function MermaidDiagram({ source, theme }: { source: string; theme: string }) {
 
     return () => { cancelled = true }
   }, [source, theme, retryCount])
+  const clean = useMemo(
+    () => svgContent ? DOMPurify.sanitize(svgContent, { USE_PROFILES: { svg: true, svgFilters: true } }) : null,
+    [svgContent]
+  )
 
   if (error) {
     return (
@@ -405,12 +410,11 @@ function MermaidDiagram({ source, theme }: { source: string; theme: string }) {
       />
     )
   }
-  if (!svgContent) return null
+  if (!clean) return null
   return (
     <div
       className="my-2 overflow-x-auto"
-      // biome-ignore lint/security/noDangerouslySetInnerHtml: trusted mermaid SVG output
-      dangerouslySetInnerHTML={{ __html: svgContent }}
+      dangerouslySetInnerHTML={{ __html: clean }}
     />
   )
 }

@@ -1,8 +1,10 @@
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
+import { persist } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
 import { ExtensionManager } from '@/lib/extension'
+import { encrypt, decrypt } from '@/lib/crypto'
 import type { ApplyMode } from '@/lib/system-prompt'
+
 type GeneralSettingState = {
   currentLanguage: Language
   spellCheckChatInput: boolean
@@ -18,6 +20,45 @@ type GeneralSettingState = {
   setGlobalDefaultPrompt: (value: string) => void
   setAutoTuningEnabled: (value: boolean) => void
   setApplyMode: (value: ApplyMode) => void
+}
+
+// Custom storage that encrypts/decrypts sensitive fields
+const encryptedStorage = {
+  getItem: (name: string) => {
+    const item = localStorage.getItem(name)
+    if (!item) return null
+
+    try {
+      const parsed = JSON.parse(item)
+      // Decrypt huggingfaceToken if it exists
+      if (parsed.state?.huggingfaceToken) {
+        parsed.state.huggingfaceToken = decrypt(parsed.state.huggingfaceToken)
+      }
+      return parsed
+    } catch {
+      return null
+    }
+  },
+  setItem: (name: string, value: unknown) => {
+    try {
+      const valueToStore =
+        value && typeof value === 'object' ? { ...value } : value
+      // Encrypt huggingfaceToken if it exists
+      const state = (valueToStore as Record<string, unknown>)?.state as Record<
+        string,
+        unknown
+      >
+      if (state?.huggingfaceToken) {
+        state.huggingfaceToken = encrypt(state.huggingfaceToken as string)
+      }
+      localStorage.setItem(name, JSON.stringify(valueToStore))
+    } catch {
+      // Fallback
+    }
+  },
+  removeItem: (name: string) => {
+    localStorage.removeItem(name)
+  },
 }
 
 export const useGeneralSetting = create<GeneralSettingState>()(
@@ -45,7 +86,10 @@ export const useGeneralSetting = create<GeneralSettingState>()(
             if (settings) {
               const newSettings = settings.map((e) =>
                 e.key === 'hf-token'
-                  ? { ...e, controllerProps: { ...e.controllerProps, value: token } }
+                  ? {
+                      ...e,
+                      controllerProps: { ...e.controllerProps, value: token },
+                    }
                   : e
               )
               ExtensionManager.getInstance()
@@ -57,9 +101,7 @@ export const useGeneralSetting = create<GeneralSettingState>()(
     }),
     {
       name: localStorageKey.settingGeneral,
-      storage: createJSONStorage(() => localStorage),
+      storage: encryptedStorage,
     }
   )
 )
-
-

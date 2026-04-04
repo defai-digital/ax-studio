@@ -6,7 +6,12 @@ import { Button } from '@/components/ui/button'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useModelProvider } from '@/hooks/useModelProvider'
 import { useNavigate } from '@tanstack/react-router'
-import { cn, getProviderTitle, getProviderColor, getProviderDescription } from '@/lib/utils'
+import {
+  cn,
+  getProviderTitle,
+  getProviderColor,
+  getProviderDescription,
+} from '@/lib/utils'
 import ProvidersAvatar from '@/containers/ProvidersAvatar'
 import { AddProviderDialog } from '@/containers/dialogs'
 import { Switch } from '@/components/ui/switch'
@@ -16,8 +21,7 @@ import cloneDeep from 'lodash/cloneDeep'
 import { toast } from 'sonner'
 import { Plug, Plus, ChevronRight } from 'lucide-react'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const Route = createFileRoute(route.settings.model_providers as any)({
+export const Route = createFileRoute(route.settings.model_providers)({
   component: ModelProviders,
 })
 
@@ -58,18 +62,36 @@ function ModelProviders() {
   return (
     <div className="flex flex-col h-svh w-full">
       <HeaderPage>
-        <div className={cn("flex items-center justify-between w-full mr-2 pr-3", !IS_MACOS && "pr-30")}>
-          <span className='font-medium text-base font-studio'>{t('common:settings')}</span>
+        <div
+          className={cn(
+            'flex items-center justify-between w-full mr-2 pr-3',
+            !IS_MACOS && 'pr-30'
+          )}
+        >
+          <span className="font-medium text-base font-studio">
+            {t('common:settings')}
+          </span>
         </div>
       </HeaderPage>
       <div className="flex flex-1 min-h-0">
         <SettingsMenu />
-        <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+        <div
+          className="flex-1 overflow-y-auto"
+          style={{ scrollbarWidth: 'none' }}
+        >
           <div className="flex items-center gap-3 px-8 py-5 border-b border-border/40 bg-background sticky top-0 z-10">
-            <div className="size-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+            <div
+              className="size-7 rounded-lg flex items-center justify-center"
+              style={{
+                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+              }}
+            >
               <Plug className="size-3.5 text-white" strokeWidth={2.5} />
             </div>
-            <h1 className="text-foreground tracking-tight" style={{ fontSize: '16px', fontWeight: 600 }}>
+            <h1
+              className="text-foreground tracking-tight"
+              style={{ fontSize: '16px', fontWeight: 600 }}
+            >
               {t('common:modelProviders')}
             </h1>
           </div>
@@ -78,15 +100,27 @@ function ModelProviders() {
               {/* Section header */}
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h2 className="text-foreground tracking-tight mb-1" style={{ fontSize: '16px', fontWeight: 600 }}>
+                  <h2
+                    className="text-foreground tracking-tight mb-1"
+                    style={{ fontSize: '16px', fontWeight: 600 }}
+                  >
                     {t('common:modelProviders')}
                   </h2>
-                  <p className="text-muted-foreground" style={{ fontSize: '13px' }}>
-                    {t('provider:connectDescription', { defaultValue: 'Connect external APIs and local model engines.' })}
+                  <p
+                    className="text-muted-foreground"
+                    style={{ fontSize: '13px' }}
+                  >
+                    {t('provider:connectDescription', {
+                      defaultValue:
+                        'Connect external APIs and local model engines.',
+                    })}
                   </p>
                 </div>
                 <div className="shrink-0 ml-4">
-                  <AddProviderDialog onCreateProvider={createProvider}>
+                  <AddProviderDialog
+                    onCreateProvider={createProvider}
+                    existingProviderNames={providers.map((p) => p.provider)}
+                  >
                     <Button className="rounded-lg h-8 text-[12px]">
                       <Plus className="size-3 mr-1.5" />
                       {t('provider:addProvider')}
@@ -121,7 +155,10 @@ function ModelProviders() {
                         {/* Provider info */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-0.5">
-                            <span className="font-medium text-foreground" style={{ fontSize: '13px' }}>
+                            <span
+                              className="font-medium text-foreground"
+                              style={{ fontSize: '13px' }}
+                            >
                               {getProviderTitle(provider.provider)}
                             </span>
                             {provider.active && (
@@ -130,8 +167,12 @@ function ModelProviders() {
                               </span>
                             )}
                           </div>
-                          <span className="text-muted-foreground" style={{ fontSize: '12px' }}>
-                            {desc} · {provider.models.length} {provider.models.length === 1 ? 'model' : 'models'}
+                          <span
+                            className="text-muted-foreground"
+                            style={{ fontSize: '12px' }}
+                          >
+                            {desc} · {provider.models.length}{' '}
+                            {provider.models.length === 1 ? 'model' : 'models'}
                           </span>
                         </div>
 

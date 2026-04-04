@@ -3,7 +3,6 @@ use hyper::{Body, Request, Response, Server, StatusCode};
 use rand::Rng;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use std::net::IpAddr;
 
 use std::sync::Arc;
 use tokio::sync::oneshot;
@@ -322,6 +321,16 @@ pub fn write_google_workspace_config(
     client_secret: &str,
     tokens: &OAuthTokens,
 ) -> Result<(), String> {
+    // Security warning: OAuth tokens written as plaintext to filesystem
+    log::warn!(
+        "⚠️ SECURITY: OAuth tokens for Google Workspace written as plaintext JSON to ~/.google-mcp/. \
+        Consider using OS keychain or encrypted storage for production deployments."
+    );
+    // Security warning: OAuth tokens written as plaintext to filesystem
+    log::warn!(
+        "⚠️ SECURITY: OAuth tokens for Google Workspace written as plaintext JSON to ~/.google-mcp/. \
+        Consider using OS keychain or encrypted storage for production deployments."
+    );
     let config_dir = dirs::home_dir()
         .ok_or("Cannot determine home directory")?
         .join(".google-mcp");
@@ -401,15 +410,12 @@ pub fn write_google_workspace_config(
     Ok(())
 }
 
-/// Find an available TCP port in the range 12300-12400 and return the listener.
-/// Returns the listener (still bound) and the port to avoid TOCTOU race.
-async fn find_available_port() -> Result<(std::net::TcpListener, u16), String> {
-    for port in 12300..12400 {
-        if let Ok(listener) = std::net::TcpListener::bind(("127.0.0.1", port)) {
-            return Ok((listener, port));
-        }
-    }
-    Err("No available port found in range 12300-12400".to_string())
+/// Bind to an ephemeral port (port 0) assigned by the OS and return the listener.
+/// Returns the listener (still bound) and the assigned port.
+pub(crate) async fn find_available_port() -> Result<(std::net::TcpListener, u16), String> {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").map_err(|e| e.to_string())?;
+    let port = listener.local_addr().map_err(|e| e.to_string())?.port();
+    Ok((listener, port))
 }
 
 /// Check if Google Workspace config files exist with a valid refresh token.
@@ -469,13 +475,11 @@ pub fn is_allowed_sandbox_url(url: &str) -> bool {
         return false;
     }
 
-    match parsed.host_str() {
-        Some("localhost") => true,
-        Some(host) => host
-            .parse::<IpAddr>()
-            .map(|ip| ip.is_loopback())
-            .unwrap_or(false),
-        None => false,
+    match parsed.host() {
+        Some(url::Host::Domain("localhost")) => true,
+        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+        _ => false,
     }
 }
 
@@ -521,5 +525,17 @@ mod tests {
         assert!(is_allowed_sandbox_url("http://[::1]:8080"));
         assert!(!is_allowed_sandbox_url("http://example.com:8080"));
         assert!(!is_allowed_sandbox_url("file:///tmp/test"));
+    }
+
+    #[tokio::test]
+    async fn test_find_available_port_returns_bound_listener() {
+        let (listener, port) = super::find_available_port().await.unwrap();
+        // The port should be ephemeral (high number, not in 12300-12400 range)
+        assert!(port >= 1024 && port <= 65535);
+        assert_ne!(port, 0);
+        // Listener should be bound to 127.0.0.1:port
+        let addr = listener.local_addr().unwrap();
+        assert_eq!(addr.ip(), std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST));
+        assert_eq!(addr.port(), port);
     }
 }

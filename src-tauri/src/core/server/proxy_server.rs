@@ -6,11 +6,9 @@ use reqwest::Client;
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 use tokio::sync::Mutex;
 
 use super::proxy::{proxy_request, ProxyConfig};
-use super::security::SERVER_CORS_ENABLED;
 
 pub async fn is_server_running(server_handle: Arc<Mutex<Option<ServerHandle>>>) -> bool {
     let handle_guard = server_handle.lock().await;
@@ -72,7 +70,7 @@ async fn start_server_internal<R: tauri::Runtime>(
         port,
     };
 
-    SERVER_CORS_ENABLED.store(cors_enabled, Ordering::Relaxed);
+
 
     // Use user-configured timeout for overall request, cap connect timeout at 30s
     let connect_timeout_secs = proxy_timeout.min(30);

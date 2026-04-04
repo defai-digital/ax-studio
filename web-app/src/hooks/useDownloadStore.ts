@@ -32,7 +32,7 @@ export const useDownloadStore = create<DownloadState>((set) => ({
   localDownloadingModels: new Set(),
   removeDownload: (id: string) =>
     set((state) => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+       
       const { [id]: _, ...rest } = state.downloads
       return { downloads: rest }
     }),

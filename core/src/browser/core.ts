@@ -1,6 +1,25 @@
 import { SystemInformation } from '../types'
 
 /**
+ * Validates that a URL has a safe protocol (http or https).
+ * @param url - The URL to validate
+ * @throws Error if the URL has an unsafe protocol
+ */
+const validateUrlProtocol = (url: string): void => {
+  try {
+    const parsedUrl = new URL(url)
+    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+      throw new Error(`Unsafe URL protocol: ${parsedUrl.protocol}. Only http and https are allowed.`)
+    }
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(`Invalid URL format: ${url}`)
+    }
+    throw error
+  }
+}
+
+/**
  * Gets the application data folder path.
  *
  * @returns {Promise<string>} A Promise that resolves with the application data folder path.
@@ -43,8 +62,10 @@ const baseName: (paths: string) => Promise<string> = (path) => globalThis.core.a
  * @param {string} url - The URL to open.
  * @returns {Promise<any>} - A promise that resolves when the URL has been successfully opened.
  */
-const openExternalUrl: (url: string) => Promise<any> = (url) =>
-  globalThis.core.api?.openExternalUrl(url)
+const openExternalUrl: (url: string) => Promise<any> = (url) => {
+  validateUrlProtocol(url)
+  return globalThis.core.api?.openExternalUrl(url)
+}
 
 /**
  * Gets the resource path of the application.

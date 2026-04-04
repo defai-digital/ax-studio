@@ -15,6 +15,14 @@ import { estimateTeamRunCost } from '@/lib/multi-agent/cost-estimation'
 import { AgentEditor } from '@/components/AgentEditor'
 import type { AgentTeam, OrchestrationType, TeamVariable } from '@/types/agent-team'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   IconCirclePlus,
   IconPencil,
   IconTrash,
@@ -141,6 +149,16 @@ export function AgentTeamBuilder({ open, onOpenChange, team, onSave }: Props) {
     setAgentEditorOpen(true)
   }
 
+  const handleSelectExistingAgent = (agentId: string) => {
+    if (!agentIds.includes(agentId)) {
+      setAgentIds((ids) => [...ids, agentId])
+    }
+  }
+
+  const availableAgents = assistants.filter(
+    (a) => a.type === 'agent' && !agentIds.includes(a.id)
+  )
+
   const handleEditAgent = (agentId: string) => {
     const agent = assistants.find((a) => a.id === agentId)
     if (agent) {
@@ -213,7 +231,7 @@ export function AgentTeamBuilder({ open, onOpenChange, team, onSave }: Props) {
     teamAgents.length > 0
       ? estimateTeamRunCost(
           {
-            orchestration: { mode },
+            orchestration: buildOrchestration(),
             token_budget: tokenBudget,
           } as AgentTeam,
           teamAgents
@@ -379,20 +397,48 @@ export function AgentTeamBuilder({ open, onOpenChange, team, onSave }: Props) {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-sm font-medium">Agents</label>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleAddAgent}
-                >
-                  <IconCirclePlus size={14} />
-                  Add Agent
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="sm" variant="outline">
+                      <IconCirclePlus size={14} />
+                      Add Agent
+                      <IconChevronDown size={14} />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-64">
+                    <DropdownMenuItem onSelect={handleAddAgent}>
+                      <IconCirclePlus size={14} />
+                      Create New Agent
+                    </DropdownMenuItem>
+                    {availableAgents.length > 0 && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuLabel>Select Existing</DropdownMenuLabel>
+                        {availableAgents.map((agent) => (
+                          <DropdownMenuItem
+                            key={agent.id}
+                            onSelect={() => handleSelectExistingAgent(agent.id)}
+                          >
+                            <div className="flex flex-col">
+                              <span className="text-sm">{agent.name}</span>
+                              {agent.role && (
+                                <span className="text-xs text-muted-foreground">
+                                  {agent.role}
+                                </span>
+                              )}
+                            </div>
+                          </DropdownMenuItem>
+                        ))}
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
 
               {agentIds.length === 0 ? (
                 <p className="text-xs text-muted-foreground py-4 text-center">
                   No agents added yet. Click &quot;Add Agent&quot; to create
-                  one.
+                  or select one.
                 </p>
               ) : (
                 <div className="space-y-1">

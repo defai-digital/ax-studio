@@ -102,4 +102,88 @@ describe('TrustedHostsInput', () => {
     const input = screen.getByTestId('hosts-input')
     expect(input).toHaveAttribute('placeholder', 'common:enterTrustedHosts')
   })
+
+  it('accepts valid hostnames', () => {
+    render(<TrustedHostsInput />)
+    const input = screen.getByTestId('hosts-input')
+    fireEvent.change(input, {
+      target: { value: 'example.com, api.example.com' },
+    })
+    fireEvent.blur(input)
+    expect(mockSetTrustedHosts).toHaveBeenCalledWith([
+      'example.com',
+      'api.example.com',
+    ])
+  })
+
+  it('accepts valid IPv4 addresses', () => {
+    render(<TrustedHostsInput />)
+    const input = screen.getByTestId('hosts-input')
+    fireEvent.change(input, {
+      target: { value: '192.168.1.1, 127.0.0.1, 0.0.0.0' },
+    })
+    fireEvent.blur(input)
+    expect(mockSetTrustedHosts).toHaveBeenCalledWith([
+      '192.168.1.1',
+      '127.0.0.1',
+      '0.0.0.0',
+    ])
+  })
+
+  it('accepts localhost', () => {
+    render(<TrustedHostsInput />)
+    const input = screen.getByTestId('hosts-input')
+    fireEvent.change(input, {
+      target: { value: 'localhost' },
+    })
+    fireEvent.blur(input)
+    expect(mockSetTrustedHosts).toHaveBeenCalledWith(['localhost'])
+  })
+
+  it('accepts hostnames with port numbers', () => {
+    render(<TrustedHostsInput />)
+    const input = screen.getByTestId('hosts-input')
+    fireEvent.change(input, {
+      target: { value: 'localhost:3000, example.com:8080, 192.168.1.1:443' },
+    })
+    fireEvent.blur(input)
+    expect(mockSetTrustedHosts).toHaveBeenCalledWith([
+      'localhost:3000',
+      'example.com:8080',
+      '192.168.1.1:443',
+    ])
+  })
+
+  it('filters out invalid host entries', () => {
+    render(<TrustedHostsInput />)
+    const input = screen.getByTestId('hosts-input')
+    fireEvent.change(input, {
+      target: { value: 'example.com, !!!invalid, 192.168.1.1' },
+    })
+    fireEvent.blur(input)
+    expect(mockSetTrustedHosts).toHaveBeenCalledWith([
+      'example.com',
+      '192.168.1.1',
+    ])
+  })
+
+  it('filters out hostnames with invalid characters', () => {
+    render(<TrustedHostsInput />)
+    const input = screen.getByTestId('hosts-input')
+    fireEvent.change(input, {
+      target: { value: 'example.com, http://bad.com, <script>' },
+    })
+    fireEvent.blur(input)
+    expect(mockSetTrustedHosts).toHaveBeenCalledWith(['example.com'])
+  })
+
+  it('filters out entries with schemes', () => {
+    render(<TrustedHostsInput />)
+    const input = screen.getByTestId('hosts-input')
+    fireEvent.change(input, {
+      target: { value: 'https://example.com, example.com' },
+    })
+    fireEvent.blur(input)
+    expect(mockSetTrustedHosts).toHaveBeenCalledWith(['example.com'])
+  })
 })

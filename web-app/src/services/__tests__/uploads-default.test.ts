@@ -57,7 +57,7 @@ describe('DefaultUploadsService', () => {
 
     it('throws if attachment is not image type', async () => {
       await expect(
-        service.ingestImage('t1', makeDocAttachment()),
+        service.ingestImage('t1', makeDocAttachment())
       ).rejects.toThrow('not image')
     })
   })
@@ -68,18 +68,24 @@ describe('DefaultUploadsService', () => {
         service.ingestFileAttachment('t1', {
           name: 'photo.png',
           type: 'image',
-        }),
+        })
       ).rejects.toThrow('not document')
     })
 
     it('throws if attachment has no path', async () => {
       await expect(
-        service.ingestFileAttachment('t1', makeDocAttachment({ path: undefined })),
+        service.ingestFileAttachment(
+          't1',
+          makeDocAttachment({ path: undefined })
+        )
       ).rejects.toThrow('no file path')
     })
 
     it('returns generated id when serviceHub is not set (fallback)', async () => {
-      const result = await service.ingestFileAttachment('t1', makeDocAttachment())
+      const result = await service.ingestFileAttachment(
+        't1',
+        makeDocAttachment()
+      )
       expect(result.id).toMatch(/^ULID_/)
     })
 
@@ -93,9 +99,12 @@ describe('DefaultUploadsService', () => {
         error: '',
         content: [{ text: JSON.stringify(metrics) }],
       })
-      service.setServiceHub(hub)
+      service.setMcpService(hub.mcp())
 
-      const result = await service.ingestFileAttachment('t1', makeDocAttachment())
+      const result = await service.ingestFileAttachment(
+        't1',
+        makeDocAttachment()
+      )
 
       expect(result.id).toMatch(/^ULID_/)
       expect(result.chunkCount).toBe(12)
@@ -111,7 +120,7 @@ describe('DefaultUploadsService', () => {
         error: '',
         content: [{ text: JSON.stringify(metrics) }],
       })
-      service.setServiceHub(hub)
+      service.setMcpService(hub.mcp())
 
       await service.ingestFileAttachment('thread-abc', makeDocAttachment())
 
@@ -126,10 +135,10 @@ describe('DefaultUploadsService', () => {
         error: 'pipeline crashed',
         content: [],
       })
-      service.setServiceHub(hub)
+      service.setMcpService(hub.mcp())
 
       await expect(
-        service.ingestFileAttachment('t1', makeDocAttachment()),
+        service.ingestFileAttachment('t1', makeDocAttachment())
       ).rejects.toThrow('pipeline crashed')
     })
 
@@ -143,10 +152,10 @@ describe('DefaultUploadsService', () => {
         error: '',
         content: [{ text: JSON.stringify(metrics) }],
       })
-      service.setServiceHub(hub)
+      service.setMcpService(hub.mcp())
 
       await expect(
-        service.ingestFileAttachment('t1', makeDocAttachment()),
+        service.ingestFileAttachment('t1', makeDocAttachment())
       ).rejects.toThrow('unsupported format')
     })
 
@@ -157,10 +166,10 @@ describe('DefaultUploadsService', () => {
           callTool: vi.fn(),
         }),
       } as unknown as ServiceHub
-      service.setServiceHub(hub)
+      service.setMcpService(hub.mcp())
 
       await expect(
-        service.ingestFileAttachment('t1', makeDocAttachment()),
+        service.ingestFileAttachment('t1', makeDocAttachment())
       ).rejects.toThrow('AkiDB is not configured')
     })
   })
@@ -176,9 +185,12 @@ describe('DefaultUploadsService', () => {
         error: '',
         content: [{ text: JSON.stringify(metrics) }],
       })
-      service.setServiceHub(hub)
+      service.setMcpService(hub.mcp())
 
-      await service.ingestFileAttachmentForProject('proj-1', makeDocAttachment())
+      await service.ingestFileAttachmentForProject(
+        'proj-1',
+        makeDocAttachment()
+      )
 
       const files = useFileRegistry.getState().listFiles('project_proj-1')
       expect(files).toHaveLength(1)

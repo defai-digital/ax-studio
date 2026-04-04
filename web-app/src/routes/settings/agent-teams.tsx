@@ -34,15 +34,14 @@ import type { AgentTeam } from '@/types/agent-team'
 import type { TeamTemplate } from '@/lib/multi-agent/templates'
 import { estimateTeamRunCost } from '@/lib/multi-agent/cost-estimation'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const Route = createFileRoute(route.settings.agent_teams as any)({
+export const Route = createFileRoute(route.settings.agent_teams)({
   component: AgentTeamsContent,
 })
 
 const ORCHESTRATION_LABELS: Record<string, string> = {
-  router: 'Router',
-  sequential: 'Sequential',
-  parallel: 'Parallel',
+  'router': 'Router',
+  'sequential': 'Sequential',
+  'parallel': 'Parallel',
   'evaluator-optimizer': 'Evaluator-Optimizer',
 }
 
@@ -219,11 +218,7 @@ function AgentTeamsContent() {
         >
           <span className="font-medium text-base font-studio">Settings</span>
           <div className="flex items-center gap-2 relative z-50">
-            <Button
-              onClick={handleImportFile}
-              size="sm"
-              variant="outline"
-            >
+            <Button onClick={handleImportFile} size="sm" variant="outline">
               <IconUpload size={16} />
               Import
             </Button>
@@ -245,110 +240,125 @@ function AgentTeamsContent() {
       <div className="flex flex-1 min-h-0">
         <div className="flex h-svh w-full">
           <SettingsMenu />
-          <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+          <div
+            className="flex-1 overflow-y-auto"
+            style={{ scrollbarWidth: 'none' }}
+          >
             <div className="flex items-center gap-3 px-8 py-5 border-b border-border/40 bg-background sticky top-0 z-10">
-              <div className="size-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+              <div
+                className="size-7 rounded-lg flex items-center justify-center"
+                style={{
+                  background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                }}
+              >
                 <Users className="size-3.5 text-white" strokeWidth={2.5} />
               </div>
-              <h1 className="text-foreground tracking-tight" style={{ fontSize: '16px', fontWeight: 600 }}>
+              <h1
+                className="text-foreground tracking-tight"
+                style={{ fontSize: '16px', fontWeight: 600 }}
+              >
                 {t('common:agentTeams')}
               </h1>
             </div>
             <div className="px-8 py-7">
               <div className="max-w-2xl space-y-6">
-            {!isLoaded ? (
-              <div className="text-muted-foreground text-sm p-4">
-                Loading teams...
-              </div>
-            ) : teams.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <p className="text-base font-medium mb-2">No agent teams yet</p>
-                <p className="text-sm">
-                  Create a team or import a template to get started.
-                </p>
-              </div>
-            ) : (
-              teams.map((team) => {
-                const estimate = getEstimate(team)
-                return (
-                  <div
-                    className="bg-secondary dark:bg-secondary/20 p-4 rounded-lg"
-                    key={team.id}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="text-base font-studio font-medium line-clamp-1">
-                            {team.name}
-                          </h3>
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                            {ORCHESTRATION_LABELS[team.orchestration.mode] ??
-                              team.orchestration.mode}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {team.agent_ids.length} agent
-                            {team.agent_ids.length !== 1 ? 's' : ''}
-                          </span>
-                        </div>
-                        <p className="text-muted-foreground text-xs line-clamp-2 mb-1">
-                          {team.description}
-                        </p>
-                        <p className="text-muted-foreground text-xs">
-                          Agents: {getAgentNames(team)}
-                        </p>
-                        {estimate && (
-                          <p className="text-muted-foreground text-xs mt-1">
-                            Est. tokens:{' '}
-                            {estimate.range.min.toLocaleString()}&ndash;
-                            {estimate.range.max.toLocaleString()}
-                            {team.token_budget && (
-                              <span>
-                                {' '}
-                                / {team.token_budget.toLocaleString()} budget
-                              </span>
-                            )}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          title="Export team"
-                          onClick={() => handleExport(team.id)}
-                        >
-                          <IconDownload className="text-muted-foreground size-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          title="Duplicate team"
-                          onClick={() => handleDuplicate(team)}
-                        >
-                          <IconCopy className="text-muted-foreground size-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          title="Edit team"
-                          onClick={() => handleEdit(team)}
-                        >
-                          <IconPencil className="text-muted-foreground size-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          title="Delete team"
-                          onClick={() => handleDeleteClick(team.id)}
-                        >
-                          <IconTrash className="text-destructive size-4" />
-                        </Button>
-                      </div>
-                    </div>
+                {!isLoaded ? (
+                  <div className="text-muted-foreground text-sm p-4">
+                    Loading teams...
                   </div>
-                )
-              })
-            )}
+                ) : teams.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <p className="text-base font-medium mb-2">
+                      No agent teams yet
+                    </p>
+                    <p className="text-sm">
+                      Create a team or import a template to get started.
+                    </p>
+                  </div>
+                ) : (
+                  teams.map((team) => {
+                    const estimate = getEstimate(team)
+                    return (
+                      <div
+                        className="bg-secondary dark:bg-secondary/20 p-4 rounded-lg"
+                        key={team.id}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="text-base font-studio font-medium line-clamp-1">
+                                {team.name}
+                              </h3>
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                                {ORCHESTRATION_LABELS[
+                                  team.orchestration.mode
+                                ] ?? team.orchestration.mode}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {team.agent_ids.length} agent
+                                {team.agent_ids.length !== 1 ? 's' : ''}
+                              </span>
+                            </div>
+                            <p className="text-muted-foreground text-xs line-clamp-2 mb-1">
+                              {team.description}
+                            </p>
+                            <p className="text-muted-foreground text-xs">
+                              Agents: {getAgentNames(team)}
+                            </p>
+                            {estimate && (
+                              <p className="text-muted-foreground text-xs mt-1">
+                                Est. tokens:{' '}
+                                {estimate.range.min.toLocaleString()}&ndash;
+                                {estimate.range.max.toLocaleString()}
+                                {team.token_budget && (
+                                  <span>
+                                    {' '}
+                                    / {team.token_budget.toLocaleString()}{' '}
+                                    budget
+                                  </span>
+                                )}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              title="Export team"
+                              onClick={() => handleExport(team.id)}
+                            >
+                              <IconDownload className="text-muted-foreground size-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              title="Duplicate team"
+                              onClick={() => handleDuplicate(team)}
+                            >
+                              <IconCopy className="text-muted-foreground size-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              title="Edit team"
+                              onClick={() => handleEdit(team)}
+                            >
+                              <IconPencil className="text-muted-foreground size-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              title="Delete team"
+                              onClick={() => handleDeleteClick(team.id)}
+                            >
+                              <IconTrash className="text-destructive size-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
               </div>
             </div>
           </div>

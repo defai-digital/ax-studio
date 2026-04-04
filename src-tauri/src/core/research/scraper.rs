@@ -1,11 +1,44 @@
 use scraper::{Html, Selector};
 
+/// Check if a URL points to forbidden internal/private networks.
+/// Rejects loopback, link-local, and private IP ranges to prevent SSRF.
+fn is_forbidden_url(url: &str) -> bool {
+    let parsed = match url::Url::parse(url) {
+        Ok(parsed) => parsed,
+        Err(_) => return true, // Invalid URLs are forbidden
+    };
+
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return true; // Only allow HTTP/HTTPS
+    }
+
+    match parsed.host() {
+        Some(url::Host::Domain("localhost")) => true,
+        Some(url::Host::Ipv4(ipv4)) => {
+            ipv4.is_loopback() || ipv4.is_private() || ipv4.is_link_local() || ipv4.is_unspecified()
+        }
+        Some(url::Host::Ipv6(ipv6)) => {
+            ipv6.is_loopback() || ipv6.is_unspecified()
+                // IPv6 link-local: fe80::/10
+                || ((ipv6.octets()[0] & 0xfe) == 0xfe && (ipv6.octets()[1] & 0xc0) == 0x80)
+                // IPv6 private: fc00::/7
+                || (ipv6.octets()[0] & 0xfe) == 0xfc
+        }
+        Some(url::Host::Domain(_)) => false, // Other domains are allowed
+        None => true, // No host is forbidden
+    }
+}
+
 /// Fetch a URL and extract its main text content.
 ///
 /// Returns up to 8 000 characters of cleaned body text.
 /// On any error (network, timeout, parse) an Err is returned so the caller
 /// can fall back to the Exa-supplied snippet.
 pub async fn scrape_url(url: &str) -> Result<String, String> {
+    if is_forbidden_url(url) {
+        return Err("URL points to forbidden internal network".to_string());
+    }
+
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .user_agent(
@@ -201,5 +234,53 @@ mod tests {
         let result = extract_text(html);
         assert!(result.contains("First paragraph"));
         assert!(result.contains("Second paragraph"));
+    }
+
+    #[test]
+    fn test_is_forbidden_url_rejects_internal_addresses() {
+        // Reject localhost hostname
+        assert!(is_forbidden_url("http://localhost"));
+        assert!(is_forbidden_url("https://localhost:8080"));
+
+        // Reject loopback IPs
+        assert!(is_forbidden_url("http://127.0.0.1"));
+        assert!(is_forbidden_url("https://127.0.0.1:443"));
+        assert!(is_forbidden_url("http://[::1]"));
+        assert!(is_forbidden_url("https://[::1]:8443"));
+
+        // Reject link-local
+        assert!(is_forbidden_url("http://169.254.1.1"));
+        assert!(is_forbidden_url("http://[fe80::1]"));
+
+        // Reject private IPs
+        assert!(is_forbidden_url("http://10.0.0.1"));
+        assert!(is_forbidden_url("http://172.16.0.1"));
+        assert!(is_forbidden_url("http://192.168.1.1"));
+        assert!(is_forbidden_url("http://[fc00::1]"));
+
+        // Reject unspecified
+        assert!(is_forbidden_url("http://0.0.0.0"));
+        assert!(is_forbidden_url("http://[::]"));
+    }
+
+    #[test]
+    fn test_is_forbidden_url_allows_external_addresses() {
+        // Allow external hostnames
+        assert!(!is_forbidden_url("http://example.com"));
+        assert!(!is_forbidden_url("https://api.github.com"));
+        assert!(!is_forbidden_url("http://google.com:8080"));
+
+        // Allow external IPs (not in forbidden ranges)
+        assert!(!is_forbidden_url("http://8.8.8.8"));
+        assert!(!is_forbidden_url("https://1.1.1.1"));
+    }
+
+    #[test]
+    fn test_is_forbidden_url_rejects_invalid_and_unsupported() {
+        // Reject invalid URLs
+        assert!(is_forbidden_url("not-a-url"));
+        assert!(is_forbidden_url("ftp://example.com"));
+        assert!(is_forbidden_url("file:///etc/passwd"));
+        assert!(is_forbidden_url(""));
     }
 }

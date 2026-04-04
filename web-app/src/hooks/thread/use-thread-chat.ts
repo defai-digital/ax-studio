@@ -7,15 +7,22 @@
  */
 
 import { useCallback, useEffect, useRef } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 import { generateId } from 'ai'
 import type { UIMessage } from '@ai-sdk/react'
+
+// Message parts for chat messages (Vercel AI SDK format)
+type MessagePart =
+  | { type: 'text'; text: string }
+  | { type: 'file'; mediaType: string; url: string }
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useThreads } from '@/hooks/useThreads'
 import { useMessages } from '@/hooks/useMessages'
 import { useModelProvider } from '@/hooks/useModelProvider'
 import { useChatSessions } from '@/stores/chat-session-store'
-import { useChatAttachments, NEW_THREAD_ATTACHMENT_KEY } from '@/hooks/useChatAttachments'
+import {
+  useChatAttachments,
+  NEW_THREAD_ATTACHMENT_KEY,
+} from '@/hooks/useChatAttachments'
 import { newUserThreadContent } from '@/lib/completion'
 import { convertThreadMessagesToUIMessages } from '@/lib/messages'
 import {
@@ -25,7 +32,11 @@ import {
   ContentType,
 } from '@ax-studio/core'
 
-type SendMessageFn = (args: { parts: any[]; id: string; metadata: unknown }) => void // eslint-disable-line @typescript-eslint/no-explicit-any
+type SendMessageFn = (args: {
+  parts: MessagePart[]
+  id: string
+  metadata: unknown
+}) => void  
 type RegenerateFn = (args?: { messageId?: string }) => void
 
 export type ThreadChatParams = {
@@ -45,7 +56,10 @@ export type ThreadChatParams = {
 
 export type ThreadChatResult = {
   processAndSendMessage: (text: string) => Promise<void>
-  persistMessageOnFinish: (message: UIMessage, contentParts: ThreadMessage['content']) => void
+  persistMessageOnFinish: (
+    message: UIMessage,
+    contentParts: ThreadMessage['content']
+  ) => void
   handleRegenerate: (messageId?: string) => void
   handleEditMessage: (messageId: string, newText: string) => void
   handleDeleteMessage: (messageId: string) => void
@@ -63,7 +77,6 @@ export function useThreadChat({
   lastUserInputRef,
 }: ThreadChatParams): ThreadChatResult {
   const serviceHub = useServiceHub()
-  const thread = useThreads(useShallow((state) => state.threads[threadId]))
   const addMessage = useMessages((state) => state.addMessage)
   const updateMessage = useMessages((state) => state.updateMessage)
   const deleteMessage = useMessages((state) => state.deleteMessage)
@@ -123,11 +136,16 @@ export function useThreadChat({
       })
       .catch((error) => {
         if (!ignore) {
-          console.error(`Failed to fetch messages for thread ${threadId}:`, error)
+          console.error(
+            `Failed to fetch messages for thread ${threadId}:`,
+            error
+          )
         }
       })
 
-    return () => { ignore = true }
+    return () => {
+      ignore = true
+    }
   }, [threadId, serviceHub, setMessages, setChatMessages])
 
   // ─── Send message ───────────────────────────────────────────────────────────
@@ -165,7 +183,13 @@ export function useThreadChat({
       let pendingAttachments = getAttachments()
 
       // Wait up to 30 seconds for in-flight document processing to complete
-      if (pendingAttachments.some((a) => a.type === 'document' && (a.processing || (!a.processed && !a.error)))) {
+      if (
+        pendingAttachments.some(
+          (a) =>
+            a.type === 'document' &&
+            (a.processing || (!a.processed && !a.error))
+        )
+      ) {
         const maxWaitMs = 30_000
         const pollMs = 300
         const start = Date.now()
@@ -173,7 +197,9 @@ export function useThreadChat({
           await new Promise((r) => setTimeout(r, pollMs))
           pendingAttachments = getAttachments()
           const stillProcessing = pendingAttachments.some(
-            (a) => a.type === 'document' && (a.processing || (!a.processed && !a.error))
+            (a) =>
+              a.type === 'document' &&
+              (a.processing || (!a.processed && !a.error))
           )
           if (!stillProcessing) break
         }
@@ -189,7 +215,8 @@ export function useThreadChat({
         }
         return false
       })
-      const attachments = readyAttachments.length > 0 ? readyAttachments : undefined
+      const attachments =
+        readyAttachments.length > 0 ? readyAttachments : undefined
 
       const userMessage = newUserThreadContent(
         threadId,
@@ -200,7 +227,7 @@ export function useThreadChat({
       addMessage(userMessage)
 
       // Build parts: text + any image file parts
-      const parts: Array<{ type: string; text?: string; mediaType?: string; url?: string }> = [
+      const parts: MessagePart[] = [
         {
           type: 'text',
           text: userMessage.content[0].text?.value ?? text,
@@ -233,7 +260,6 @@ export function useThreadChat({
     },
     [
       threadId,
-      thread,
       addMessage,
       renameThread,
       sendMessage,
@@ -300,7 +326,9 @@ export function useThreadChat({
             }
           }
 
-          const messagesToDelete = currentLocalMessages.slice(deleteFromIndex + 1)
+          const messagesToDelete = currentLocalMessages.slice(
+            deleteFromIndex + 1
+          )
           if (messagesToDelete.length > 0) {
             messagesToDelete.forEach((msg) => {
               deleteMessage(threadId, msg.id)
@@ -369,7 +397,8 @@ export function useThreadChat({
     (messageId: string) => {
       deleteMessage(threadId, messageId)
       // Read fresh chat messages from the session store to avoid stale closure
-      const currentMessages = useChatSessions.getState().sessions[threadId]?.chat.messages ?? []
+      const currentMessages =
+        useChatSessions.getState().sessions[threadId]?.chat.messages ?? []
       setChatMessages(currentMessages.filter((msg) => msg.id !== messageId))
     },
     [threadId, deleteMessage, setChatMessages]
@@ -416,7 +445,13 @@ export function useThreadChat({
     setTimeout(() => {
       handleRegenerate()
     }, 1000)
-  }, [selectedModel, selectedProvider, getProviderByName, serviceHub, handleRegenerate])
+  }, [
+    selectedModel,
+    selectedProvider,
+    getProviderByName,
+    serviceHub,
+    handleRegenerate,
+  ])
 
   return {
     processAndSendMessage,

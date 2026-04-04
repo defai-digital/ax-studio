@@ -97,6 +97,36 @@ describe('useGeneralSetting', () => {
       expect(result.current.currentLanguage).toBe('vn')
     })
 
+    it('should set language to Japanese', () => {
+      const { result } = renderHook(() => useGeneralSetting())
+
+      act(() => {
+        result.current.setCurrentLanguage('ja')
+      })
+
+      expect(result.current.currentLanguage).toBe('ja')
+    })
+
+    it('should set language to Brazilian Portuguese', () => {
+      const { result } = renderHook(() => useGeneralSetting())
+
+      act(() => {
+        result.current.setCurrentLanguage('pt-BR')
+      })
+
+      expect(result.current.currentLanguage).toBe('pt-BR')
+    })
+
+    it('should set language to Russian', () => {
+      const { result } = renderHook(() => useGeneralSetting())
+
+      act(() => {
+        result.current.setCurrentLanguage('ru')
+      })
+
+      expect(result.current.currentLanguage).toBe('ru')
+    })
+
     it('should change language multiple times', () => {
       const { result } = renderHook(() => useGeneralSetting())
 
@@ -109,6 +139,21 @@ describe('useGeneralSetting', () => {
         result.current.setCurrentLanguage('vn')
       })
       expect(result.current.currentLanguage).toBe('vn')
+
+      act(() => {
+        result.current.setCurrentLanguage('ja')
+      })
+      expect(result.current.currentLanguage).toBe('ja')
+
+      act(() => {
+        result.current.setCurrentLanguage('pt-BR')
+      })
+      expect(result.current.currentLanguage).toBe('pt-BR')
+
+      act(() => {
+        result.current.setCurrentLanguage('ru')
+      })
+      expect(result.current.currentLanguage).toBe('ru')
 
       act(() => {
         result.current.setCurrentLanguage('en')

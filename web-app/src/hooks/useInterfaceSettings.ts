@@ -88,13 +88,16 @@ export const ACCENT_COLORS = [
 export type AccentColorValue = (typeof ACCENT_COLORS)[number]['value']
 const DEFAULT_ACCENT_COLOR: AccentColorValue = 'gray'
 
-export const applyAccentColorToDOM = (colorValue: string, _isDark: boolean) => {
+export const applyAccentColorToDOM = (colorValue: string, isDark: boolean) => {
   const color = ACCENT_COLORS.find((c) => c.value === colorValue)
   if (!color) return
 
   const root = document.documentElement
-  // Sidebar always stays dark regardless of theme
-  root.style.setProperty('--sidebar', color.sidebar.dark)
+  // Sidebar color changes with theme
+  root.style.setProperty(
+    '--sidebar',
+    isDark ? color.sidebar.dark : color.sidebar.light
+  )
   root.style.setProperty('--primary', color.primary)
 }
 
@@ -128,8 +131,8 @@ const createDefaultInterfaceValues = (): InterfaceSettingsPersistedSlice => {
   }
 }
 
-const interfaceStorage = createJSONStorage<InterfaceSettingsState>(() =>
-  localStorage
+const interfaceStorage = createJSONStorage<InterfaceSettingsState>(
+  () => localStorage
 )
 
 export const useInterfaceSettings = create<InterfaceSettingsState>()(

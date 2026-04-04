@@ -267,7 +267,12 @@ export abstract class AIEngine extends BaseExtension {
    * @param isEmbedding - Whether this is an embedding model (skips auto-unload)
    * @param bypassAutoUnload - When true, prevents unloading other models (useful for API server)
    */
-  abstract load(modelId: string, settings?: any, isEmbedding?: boolean, bypassAutoUnload?: boolean): Promise<SessionInfo>
+  abstract load(
+    modelId: string,
+    settings?: any,
+    isEmbedding?: boolean,
+    bypassAutoUnload?: boolean
+  ): Promise<SessionInfo>
 
   /**
    * Unloads a model from memory
@@ -280,7 +285,9 @@ export abstract class AIEngine extends BaseExtension {
    *
    * Engines that do not manage proxy-backed local routes can ignore this.
    */
-  async syncModelRoute(_modelId: string): Promise<void> {}
+  syncModelRoute(_modelId: string): Promise<void> {
+    return Promise.resolve()
+  }
 
   /**
    * Sends a chat request to the model

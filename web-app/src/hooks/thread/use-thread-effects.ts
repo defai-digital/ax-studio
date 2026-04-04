@@ -8,6 +8,7 @@
 import { useEffect, useRef } from 'react'
 import type { UIMessage } from '@ai-sdk/react'
 import { SESSION_STORAGE_PREFIX, SESSION_STORAGE_KEY } from '@/constants/chat'
+import { defaultAssistant } from '@/hooks/useAssistant'
 
 export type ThreadEffectsInput = {
   threadId: string
@@ -98,11 +99,12 @@ export function useThreadEffects({
 
   useEffect(() => {
     setCurrentThreadId(threadId)
-    const assistant = assistants.find(
-      (a) => a.id === threadRef.current?.assistants?.[0]?.id
-    )
-    if (assistant) setCurrentAssistant(assistant)
-  }, [threadId, assistants, setCurrentThreadId, setCurrentAssistant])
+    const threadAssistantId = threadRef.current?.assistants?.[0]?.id
+    const assistant = threadAssistantId
+      ? assistants.find((a) => a.id === threadAssistantId)
+      : undefined
+    setCurrentAssistant(assistant ?? defaultAssistant)
+  }, [threadId, assistants, thread?.assistants, setCurrentThreadId, setCurrentAssistant])
 
   // Ref stabilizes setCurrentThreadId for the unmount cleanup.
   const setCurrentThreadIdRef = useRef(setCurrentThreadId)

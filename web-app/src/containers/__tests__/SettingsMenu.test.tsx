@@ -77,7 +77,7 @@ describe('SettingsMenu', () => {
     expect(hrefs).toContain('/settings/general')
     expect(hrefs).toContain('/settings/interface')
     expect(hrefs).toContain('/settings/privacy')
-    expect(hrefs).toContain('/settings/providers')
+    expect(hrefs).toContain('/settings/providers/')
   })
 
   it('renders group headers', () => {
@@ -92,9 +92,7 @@ describe('SettingsMenu', () => {
   it('highlights active menu item', () => {
     render(<SettingsMenu />)
 
-    const generalLink = screen
-      .getByText('common:general')
-      .closest('a')
+    const generalLink = screen.getByText('common:general').closest('a')
     expect(generalLink?.className).toContain('bg-primary/10')
     expect(generalLink?.className).toContain('text-primary')
   })
@@ -102,9 +100,7 @@ describe('SettingsMenu', () => {
   it('does not highlight inactive menu items', () => {
     render(<SettingsMenu />)
 
-    const interfaceLink = screen
-      .getByText('common:interface')
-      .closest('a')
+    const interfaceLink = screen.getByText('common:interface').closest('a')
     expect(interfaceLink?.className).toContain('text-muted-foreground')
     expect(interfaceLink?.className).not.toContain('bg-primary/10')
   })
@@ -120,9 +116,7 @@ describe('SettingsMenu', () => {
 
     render(<SettingsMenu />)
 
-    const providersLink = screen
-      .getByText('common:modelProviders')
-      .closest('a')
+    const providersLink = screen.getByText('common:modelProviders').closest('a')
     expect(providersLink?.className).toContain('bg-primary/10')
     expect(providersLink?.className).toContain('text-primary')
   })

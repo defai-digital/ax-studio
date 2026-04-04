@@ -42,8 +42,7 @@ import {
   IconExternalLink,
 } from '@tabler/icons-react'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const Route = createFileRoute(route.settings.local_api_server as any)({
+export const Route = createFileRoute(route.settings.local_api_server)({
   component: LocalAPIServerContent,
 })
 
@@ -71,7 +70,6 @@ function LocalAPIServerContent() {
     useModelProvider()
   const [showApiKeyError, setShowApiKeyError] = useState(false)
   const setActiveModels = useAppState((state) => state.setActiveModels)
-
 
   useEffect(() => {
     const checkServerStatus = async () => {
@@ -104,7 +102,10 @@ function LocalAPIServerContent() {
         description: `Attempting to start server on port ${serverPort}`,
       })
 
-      if (requiresApiKey && (!apiKey || apiKey.toString().trim().length === 0)) {
+      if (
+        requiresApiKey &&
+        (!apiKey || apiKey.toString().trim().length === 0)
+      ) {
         setShowApiKeyError(true)
         setServerStatus('stopped')
         toast.error('API key required', {
@@ -251,13 +252,17 @@ function LocalAPIServerContent() {
     }
   }
 
-
   const isServerRunning = serverStatus !== 'stopped'
 
   return (
     <div className="flex flex-col h-svh w-full">
       <HeaderPage>
-        <div className={cn("flex items-center justify-between w-full mr-2 pr-3", !IS_MACOS && "pr-30")}>
+        <div
+          className={cn(
+            'flex items-center justify-between w-full mr-2 pr-3',
+            !IS_MACOS && 'pr-30'
+          )}
+        >
           <span className="font-medium text-base font-studio">
             {t('common:settings')}
           </span>
@@ -397,103 +402,114 @@ function LocalAPIServerContent() {
       <div className="flex flex-1 min-h-0">
         <SettingsMenu />
         <div className="flex-1 flex flex-col min-h-0">
-          <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+          <div
+            className="flex-1 overflow-y-auto"
+            style={{ scrollbarWidth: 'none' }}
+          >
             <div className="flex items-center gap-3 px-8 py-5 border-b border-border/40 bg-background sticky top-0 z-10">
-              <div className="size-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+              <div
+                className="size-7 rounded-lg flex items-center justify-center"
+                style={{
+                  background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                }}
+              >
                 <Server className="size-3.5 text-white" strokeWidth={2.5} />
               </div>
-              <h1 className="text-foreground tracking-tight" style={{ fontSize: '16px', fontWeight: 600 }}>
+              <h1
+                className="text-foreground tracking-tight"
+                style={{ fontSize: '16px', fontWeight: 600 }}
+              >
                 {t('common:local_api_server')}
               </h1>
             </div>
             <div className="px-8 py-7">
               <div className="max-w-2xl space-y-6">
-              {/* General Settings */}
-              <Card
-                header={
-                  <div className="mb-3 flex w-full items-center border-b pb-2">
-                    <div className="w-full space-y-2">
-                      <h1 className="text-base font-medium text-foreground font-studio">
-                        {t('settings:localApiServer.title')}
-                      </h1>
-                      <p className="text-muted-foreground mb-2">
-                        {t('settings:localApiServer.description')}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        onClick={toggleAPIServer}
-                        variant={isServerRunning ? 'destructive' : 'default'}
-                        size="sm"
-                        disabled={serverStatus === 'pending'} // Disable during any loading state
-                      >
-                        {getButtonText()}
-                      </Button>
-                    </div>
-                  </div>
-                }
-              >
-                <CardItem
-                  title={t('settings:localApiServer.runOnStartup')}
-                  description={t('settings:localApiServer.runOnStartupDesc')}
-                  actions={
-                    <Switch
-                      checked={enableOnStartup}
-                      onCheckedChange={(checked) => {
-                        setEnableOnStartup(checked)
-                      }}
-                    />
-                  }
-                />
-              </Card>
-
-              <Card>
-                <CardItem
-                  title="Server Status"
-                  description={
-                    isServerRunning ? (
-                      <div className="space-y-1">
-                        <div>The server is currently running.</div>
-                        <div className="text-xs font-mono">
-                          http://{serverHost}:{serverPort}
-                          {apiPrefix}
-                        </div>
+                {/* General Settings */}
+                <Card
+                  header={
+                    <div className="mb-3 flex w-full items-center border-b pb-2">
+                      <div className="w-full space-y-2">
+                        <h1 className="text-base font-medium text-foreground font-studio">
+                          {t('settings:localApiServer.title')}
+                        </h1>
+                        <p className="text-muted-foreground mb-2">
+                          {t('settings:localApiServer.description')}
+                        </p>
                       </div>
-                    ) : (
-                      'The server is stopped.'
-                    )
+                      <div className="flex items-center gap-2">
+                        <Button
+                          onClick={toggleAPIServer}
+                          variant={isServerRunning ? 'destructive' : 'default'}
+                          size="sm"
+                          disabled={serverStatus === 'pending'} // Disable during any loading state
+                        >
+                          {getButtonText()}
+                        </Button>
+                      </div>
+                    </div>
                   }
-                />
+                >
+                  <CardItem
+                    title={t('settings:localApiServer.runOnStartup')}
+                    description={t('settings:localApiServer.runOnStartupDesc')}
+                    actions={
+                      <Switch
+                        checked={enableOnStartup}
+                        onCheckedChange={(checked) => {
+                          setEnableOnStartup(checked)
+                        }}
+                      />
+                    }
+                  />
+                </Card>
 
-                <CardItem
-                  title={t('settings:localApiServer.swaggerDocs')}
-                  description={t('settings:localApiServer.swaggerDocsDesc')}
-                  actions={
-                    <a
-                      href={`http://${serverHost}:${serverPort}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={cn(
-                        isServerRunning ? '' : 'pointer-events-none'
-                      )}
-                    >
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={!isServerRunning}
-                        title={t('settings:localApiServer.swaggerDocs')}
+                <Card>
+                  <CardItem
+                    title="Server Status"
+                    description={
+                      isServerRunning ? (
+                        <div className="space-y-1">
+                          <div>The server is currently running.</div>
+                          <div className="text-xs font-mono">
+                            http://{serverHost}:{serverPort}
+                            {apiPrefix}
+                          </div>
+                        </div>
+                      ) : (
+                        'The server is stopped.'
+                      )
+                    }
+                  />
+
+                  <CardItem
+                    title={t('settings:localApiServer.swaggerDocs')}
+                    description={t('settings:localApiServer.swaggerDocsDesc')}
+                    actions={
+                      <a
+                        href={`http://${serverHost}:${serverPort}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={cn(
+                          isServerRunning ? '' : 'pointer-events-none'
+                        )}
                       >
-                        <span>{t('settings:localApiServer.openDocs')}</span>
-                      </Button>
-                    </a>
-                  }
-                />
-              </Card>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={!isServerRunning}
+                          title={t('settings:localApiServer.swaggerDocs')}
+                        >
+                          <span>{t('settings:localApiServer.openDocs')}</span>
+                        </Button>
+                      </a>
+                    }
+                  />
+                </Card>
 
-              {/* AkiDB folder sync configuration */}
-              <AkidbConfigPanel />
+                {/* AkiDB folder sync configuration */}
+                <AkidbConfigPanel />
+              </div>
             </div>
-          </div>
           </div>
           <div className="p-4 shrink-0">
             <Card>

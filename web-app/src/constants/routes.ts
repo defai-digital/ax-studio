@@ -6,7 +6,7 @@ export const route = {
   projectDetail: '/project/$projectId',
   settings: {
     index: '/settings',
-    model_providers: '/settings/providers',
+    model_providers: '/settings/providers/',
     providers: '/settings/providers/$providerName',
     general: '/settings/general',
     attachments: '/settings/attachments',
@@ -32,4 +32,4 @@ export const route = {
   localApiServerlogs: '/local-api-server/logs',
   systemMonitor: '/system-monitor',
   threadsDetail: '/threads/$threadId',
-}
+} as const

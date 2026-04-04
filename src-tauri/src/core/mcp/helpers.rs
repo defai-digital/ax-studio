@@ -26,6 +26,12 @@ use crate::core::{
 };
 use ax_studio_utils::{can_override_npx, can_override_uvx};
 
+/// Allowed executables for MCP server commands
+const ALLOWED_COMMANDS: &[&str] = &["node", "python", "python3", "bun", "npx"];
+
+/// Environment variables that should be rejected for security reasons
+const DANGEROUS_ENV_KEYS: &[&str] = &["LD_PRELOAD", "DYLD_INSERT_LIBRARIES", "LD_LIBRARY_PATH", "PATH"];
+
 #[derive(Debug, Clone, Copy)]
 pub enum ShutdownContext {
     AppExit,       // User closing app - be fast
@@ -609,10 +615,31 @@ fn emit_mcp_update_event<R: Runtime>(app: &AppHandle<R>, name: &str) {
 
 pub fn extract_command_args(config: &Value) -> Option<McpServerConfig> {
     let obj = config.as_object()?;
-    let command = obj.get("command")?.as_str()?.to_string();
-    let args = obj.get("args")?.as_array()?.clone();
-    let url = obj.get("url").and_then(|u| u.as_str()).map(String::from);
     let transport_type = obj.get("type").and_then(|t| t.as_str()).map(String::from);
+    let url = obj.get("url").and_then(|u| u.as_str()).map(String::from);
+
+    let is_http = transport_type.as_deref() == Some("http") && url.is_some();
+
+    let command = match obj.get("command").and_then(|c| c.as_str()) {
+        Some(cmd) if !cmd.is_empty() => cmd.to_string(),
+        _ => {
+            if is_http {
+                String::new()
+            } else {
+                return None;
+            }
+        }
+    };
+
+    if !is_http && !ALLOWED_COMMANDS.contains(&command.as_str()) {
+        return None;
+    }
+
+    let args = obj
+        .get("args")
+        .and_then(|a| a.as_array())
+        .cloned()
+        .unwrap_or_default();
     let timeout = obj
         .get("timeout")
         .and_then(|t| t.as_u64())
@@ -622,11 +649,15 @@ pub fn extract_command_args(config: &Value) -> Option<McpServerConfig> {
         .unwrap_or(&Value::Object(serde_json::Map::new()))
         .as_object()?
         .clone();
-    let envs = obj
+    let mut envs = obj
         .get("env")
         .unwrap_or(&Value::Object(serde_json::Map::new()))
         .as_object()?
         .clone();
+
+    // Filter out dangerous environment variables
+    envs.retain(|k, _| !DANGEROUS_ENV_KEYS.contains(&k.as_str()));
+
     Some(McpServerConfig {
         timeout,
         transport_type,
@@ -692,7 +723,7 @@ mod tests {
     #[test]
     fn test_extract_command_args_with_url_and_type() {
         let config = serde_json::json!({
-            "command": "unused",
+            "command": "node",
             "args": [],
             "url": "http://localhost:8080/mcp",
             "type": "http",
@@ -717,7 +748,8 @@ mod tests {
         let config = serde_json::json!({
             "command": "node"
         });
-        assert!(extract_command_args(&config).is_none());
+        let result = extract_command_args(&config).unwrap();
+        assert!(result.args.is_empty());
     }
 
     #[test]
@@ -738,6 +770,59 @@ mod tests {
             result.headers.get("Authorization").unwrap().as_str().unwrap(),
             "Bearer token123"
         );
+    }
+
+    #[test]
+    fn test_extract_command_args_invalid_command() {
+        let config = serde_json::json!({
+            "command": "bash",
+            "args": ["-c", "echo hello"]
+        });
+        assert!(extract_command_args(&config).is_none());
+    }
+
+    #[test]
+    fn test_extract_command_args_filters_dangerous_env() {
+        let config = serde_json::json!({
+            "command": "node",
+            "args": ["server.js"],
+            "env": {
+                "NODE_ENV": "production",
+                "LD_PRELOAD": "/evil/lib.so",
+                "PATH": "/evil/path",
+                "SAFE_VAR": "safe"
+            }
+        });
+        let result = extract_command_args(&config).unwrap();
+        assert_eq!(result.envs.get("NODE_ENV").unwrap().as_str().unwrap(), "production");
+        assert_eq!(result.envs.get("SAFE_VAR").unwrap().as_str().unwrap(), "safe");
+        assert!(result.envs.get("LD_PRELOAD").is_none());
+        assert!(result.envs.get("PATH").is_none());
+    }
+
+    #[test]
+    fn test_extract_command_args_http_empty_command() {
+        let config = serde_json::json!({
+            "command": "",
+            "args": [],
+            "env": {},
+            "type": "http",
+            "url": "https://mcp.example.com/mcp"
+        });
+        let result = extract_command_args(&config).unwrap();
+        assert_eq!(result.transport_type.as_deref(), Some("http"));
+        assert_eq!(result.url.as_deref(), Some("https://mcp.example.com/mcp"));
+        assert!(result.command.is_empty());
+    }
+
+    #[test]
+    fn test_extract_command_args_allowed_command_python() {
+        let config = serde_json::json!({
+            "command": "python",
+            "args": ["script.py"]
+        });
+        let result = extract_command_args(&config).unwrap();
+        assert_eq!(result.command, "python");
     }
 
     // --- extract_active_status ---

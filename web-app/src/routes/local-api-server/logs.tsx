@@ -6,8 +6,7 @@ import { useServiceHub } from '@/hooks/useServiceHub'
 import type { LogEntry } from '@/services/app/types'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const Route = createFileRoute(route.localApiServerlogs as any)({
+export const Route = createFileRoute(route.localApiServerlogs)({
   component: LogsViewer,
 })
 
@@ -21,34 +20,40 @@ function LogsViewer() {
   const serviceHub = useServiceHub()
 
   useEffect(() => {
-    serviceHub.app().readLogs().then((logData) => {
-      const logs = logData
-        .filter((log) => log?.target === SERVER_LOG_TARGET)
-        .filter(Boolean) as LogEntry[]
-      setLogs(logs)
+    serviceHub
+      .app()
+      .readLogs()
+      .then((logData) => {
+        const logs = logData
+          .filter((log) => log?.target === SERVER_LOG_TARGET)
+          .filter(Boolean) as LogEntry[]
+        setLogs(logs)
 
-      // Scroll to bottom after initial logs are loaded
-      setTimeout(() => {
-        scrollToBottom()
-      }, 100)
-    })
+        // Scroll to bottom after initial logs are loaded
+        setTimeout(() => {
+          scrollToBottom()
+        }, 100)
+      })
     let unsubscribe = () => {}
-    serviceHub.events().listen(LOG_EVENT_NAME, (event) => {
-      const { message } = event.payload as { message: string }
-      const log: LogEntry | undefined = serviceHub.app().parseLogLine(message)
-      if (log?.target === SERVER_LOG_TARGET) {
-        setLogs((prevLogs) => {
-          const newLogs = [...prevLogs, log]
-          // Schedule scroll to bottom after state update
-          setTimeout(() => {
-            scrollToBottom()
-          }, 0)
-          return newLogs
-        })
-      }
-    }).then((unsub) => {
-      unsubscribe = unsub
-    })
+    serviceHub
+      .events()
+      .listen(LOG_EVENT_NAME, (event) => {
+        const { message } = event.payload as { message: string }
+        const log: LogEntry | undefined = serviceHub.app().parseLogLine(message)
+        if (log?.target === SERVER_LOG_TARGET) {
+          setLogs((prevLogs) => {
+            const newLogs = [...prevLogs, log]
+            // Schedule scroll to bottom after state update
+            setTimeout(() => {
+              scrollToBottom()
+            }, 0)
+            return newLogs
+          })
+        }
+      })
+      .then((unsub) => {
+        unsubscribe = unsub
+      })
     return () => {
       unsubscribe()
     }
@@ -86,7 +91,7 @@ function LogsViewer() {
       timeZone: 'UTC',
       hour: '2-digit',
       minute: '2-digit',
-      second: '2-digit'
+      second: '2-digit',
     })
   }
 

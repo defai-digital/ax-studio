@@ -10,8 +10,8 @@
  */
 
 import type { UploadsService, UploadResult } from './types'
+import type { MCPService } from '../mcp/types'
 import type { Attachment } from '@/types/attachment'
-import type { ServiceHub } from '@/services'
 import { ulid } from 'ulidx'
 import {
   useFileRegistry,
@@ -23,12 +23,12 @@ import {
 let mcpAvailabilityChecked = false
 let mcpAvailable = false
 
-async function ensureAkidbAvailable(serviceHub: ServiceHub): Promise<void> {
+async function ensureAkidbAvailable(mcp: MCPService): Promise<void> {
   if (mcpAvailabilityChecked && mcpAvailable) return
   try {
-    const tools = await serviceHub.mcp().getTools()
+    const tools = await mcp.getTools()
     mcpAvailable = tools.some(
-      (t) => t.name === 'fabric_ingest_run' || t.name === 'fabric_search',
+      (t) => t.name === 'fabric_ingest_run' || t.name === 'fabric_search'
     )
     mcpAvailabilityChecked = true
   } catch {
@@ -37,7 +37,7 @@ async function ensureAkidbAvailable(serviceHub: ServiceHub): Promise<void> {
   }
   if (!mcpAvailable) {
     throw new Error(
-      'AkiDB is not configured. Enable the ax-studio MCP server in Settings → MCP Servers to use document indexing.',
+      'AkiDB is not configured. Enable the ax-studio MCP server in Settings → MCP Servers to use document indexing.'
     )
   }
 }
@@ -76,15 +76,15 @@ function parsePipelineMetrics(result: {
 }
 
 export class DefaultUploadsService implements UploadsService {
-  private serviceHub: ServiceHub | null = null
+  private mcpService: MCPService | null = null
 
   /**
    * Called once during ServiceHub initialization to give us a back-reference
-   * so we can call `serviceHub.mcp()`.  If the hub has not been set the
+   * so we can call `mcp()`.  If the hub has not been set the
    * service falls back to the no-op behaviour (returns a generated id).
    */
-  setServiceHub(hub: ServiceHub): void {
-    this.serviceHub = hub
+  setMcpService(mcp: MCPService): void {
+    this.mcpService = mcp
     // Reset the cache when the hub is (re-)set so the next call re-probes.
     mcpAvailabilityChecked = false
   }
@@ -93,7 +93,7 @@ export class DefaultUploadsService implements UploadsService {
 
   async ingestImage(
     _threadId: string,
-    attachment: Attachment,
+    attachment: Attachment
   ): Promise<UploadResult> {
     if (attachment.type !== 'image')
       throw new Error('ingestImage: attachment is not image')
@@ -104,49 +104,43 @@ export class DefaultUploadsService implements UploadsService {
 
   async ingestFileAttachment(
     threadId: string,
-    attachment: Attachment,
+    attachment: Attachment
   ): Promise<UploadResult> {
     if (attachment.type !== 'document')
       throw new Error('ingestFileAttachment: attachment is not document')
     if (!attachment.path)
       throw new Error('ingestFileAttachment: attachment has no file path')
 
-    return this.ingestDocument(
-      threadCollectionId(threadId),
-      attachment,
-    )
+    return this.ingestDocument(threadCollectionId(threadId), attachment)
   }
 
   async ingestFileAttachmentForProject(
     projectId: string,
-    attachment: Attachment,
+    attachment: Attachment
   ): Promise<UploadResult> {
     if (attachment.type !== 'document')
       throw new Error(
-        'ingestFileAttachmentForProject: attachment is not document',
+        'ingestFileAttachmentForProject: attachment is not document'
       )
     if (!attachment.path)
       throw new Error(
-        'ingestFileAttachmentForProject: attachment has no file path',
+        'ingestFileAttachmentForProject: attachment has no file path'
       )
 
-    return this.ingestDocument(
-      projectCollectionId(projectId),
-      attachment,
-    )
+    return this.ingestDocument(projectCollectionId(projectId), attachment)
   }
 
   // ── Private ───────────────────────────────────────────────────────────
 
   private async ingestDocument(
     collectionId: string,
-    attachment: Attachment,
+    attachment: Attachment
   ): Promise<UploadResult> {
-    const hub = this.serviceHub
+    const hub = this.mcpService
     if (!hub) {
       // Fallback when service hub is not yet initialized (web-only dev mode)
       console.warn(
-        'UploadsService: ServiceHub not set — returning generated id',
+        'UploadsService: ServiceHub not set — returning generated id'
       )
       return { id: ulid() }
     }
@@ -157,7 +151,7 @@ export class DefaultUploadsService implements UploadsService {
       path: attachment.path,
       collectionId,
     })
-    const result = await hub.mcp().callTool({
+    const result = await hub.callTool({
       toolName: 'fabric_ingest_run',
       arguments: {
         source_paths: [attachment.path],

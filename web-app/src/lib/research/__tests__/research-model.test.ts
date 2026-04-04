@@ -13,7 +13,9 @@ vi.mock('@/lib/model-factory', () => ({
   },
 }))
 
+// @ts-ignore
 import { useModelProvider } from '@/hooks/useModelProvider'
+// @ts-ignore
 import { ModelFactory } from '@/lib/model-factory'
 import { buildResearchModel } from '../research-model'
 
@@ -47,7 +49,7 @@ describe('buildResearchModel', () => {
   })
 
   it('should call ModelFactory.createModel with correct args', async () => {
-    const mockProvider = { provider: 'openai', apiKey: 'key' }
+    const mockProvider = { provider: 'openai', apiKey: 'key', base_url: 'https://api.openai.com' }
     vi.mocked(useModelProvider.getState).mockReturnValue({
       selectedModel: { id: 'gpt-4' },
       selectedProvider: 'openai',

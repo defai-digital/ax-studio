@@ -62,7 +62,7 @@ export const useIntegrations = create<IntegrationStoreState>()((set) => ({
     }))
 
     try {
-      // Save credentials to stronghold
+      // Save credentials (currently stored as plaintext JSON via tauri-plugin-store)
       await service.saveToken(id, credentials)
 
       // Build the MCP server config for this integration
@@ -82,7 +82,7 @@ export const useIntegrations = create<IntegrationStoreState>()((set) => ({
         integration: id,
       }
 
-      // Activate the MCP server (credentials injected from stronghold at spawn time)
+      // Activate the MCP server (credentials injected from storage at spawn time)
       await getServiceHub().mcp().activateMCPServer(serverName, config)
 
       // Persist to mcp_config.json so it survives restart
@@ -168,7 +168,7 @@ export const useIntegrations = create<IntegrationStoreState>()((set) => ({
         JSON.stringify({ mcpServers: servers, mcpSettings: mcpConfig.mcpSettings })
       )
 
-      // Delete credentials from stronghold
+      // Delete credentials from storage
       await service.deleteToken(id)
 
       set((state) => ({

@@ -4,11 +4,18 @@ export type SystemResourceInfo = {
   memAvailable: number
 }
 
+export type CpuSettings = {
+  threads?: number
+  affinity?: number[]
+  priority?: 'low' | 'normal' | 'high'
+  numaNode?: number
+}
+
 export type GpuSetting = {
   gpus: GpuSettingInfo[]
   // TODO: This needs to be set based on user toggle in settings
   vulkan: boolean
-  cpu?: any
+  cpu?: CpuSettings
 }
 
 export type GpuSettingInfo = {
