@@ -392,12 +392,9 @@ function buildReactHarnessInline(
   <meta name="viewport" content="width=device-width, initial-scale=1">
   ${ERROR_REPORTER}
   <style>${BASE_STYLES} html,body{height:100%;background:#fff;color-scheme:light;} #root{min-height:100%;}</style>
-  {/* eslint-disable-next-line no-useless-escape */}
-  <script>${tailwindJs}</script>
-  {/* eslint-disable-next-line no-useless-escape */}
-  <script>${reactJs}</script>
-  {/* eslint-disable-next-line no-useless-escape */}
-  <script>${reactDomJs}</script>
+  <script>${tailwindJs}${"<"}/script>
+  <script>${reactJs}${"<"}/script>
+  <script>${reactDomJs}${"<"}/script>
 </head>
 <body>
   <div id="root"></div>
@@ -447,7 +444,7 @@ ${escaped}
     showErr(String(e && e.message ? e.message : e));
   }
 })();
-  ${'<'}/script>
+  ${"<"}/script>
 </body>
 </html>`
 }
@@ -471,7 +468,7 @@ function buildChartJsHarnessInline(source: string, chartJs: string): string {
     body { display: flex; align-items: center; justify-content: center; padding: 16px; }
     canvas { max-width: 100%; max-height: 90vh; }
   </style>
-  <script>${chartJs}</script>
+  <script>${chartJs}${"<"}/script>
 </head>
 <body>
   <canvas id="chart"></canvas>
@@ -530,11 +527,11 @@ function buildChartJsHarnessInline(source: string, chartJs: string): string {
     showErr(String(e.message));
   }
 })();
-  </script>
+  ${"<"}/script>
 </body>
 </html>`
 }
- 
+
 // ---------------------------------------------------------------------------
 // Vega harness
 // ---------------------------------------------------------------------------
@@ -554,9 +551,9 @@ function buildVegaHarnessInline(source: string, vegaJs: string, vegaLiteJs: stri
     body { background: #fff; min-height: 100%; padding: 16px; overflow: auto; }
     #vis { width: 100%; }
   </style>
-  <script>${vegaJs}</script>
-  <script>${vegaLiteJs}</script>
-  <script>${vegaEmbedJs}</script>
+  <script>${vegaJs}${"<"}/script>
+  <script>${vegaLiteJs}${"<"}/script>
+  <script>${vegaEmbedJs}${"<"}/script>
 </head>
 <body>
   <div id="vis"></div>
@@ -675,7 +672,7 @@ function buildVegaHarnessInline(source: string, vegaJs: string, vegaLiteJs: stri
       }
     });
 })();
-  </script>
+  ${"<"}/script>
 </body>
 </html>`
 }

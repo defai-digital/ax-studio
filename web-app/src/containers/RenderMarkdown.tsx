@@ -124,7 +124,7 @@ function sanitizeMermaidFences(input: string): string {
             const trimmed = line.trimStart()
             // Leave empty lines, comments, and lines that intentionally start
             // with a shape specifier (e.g. `((root))`, `[rect]`, `{{cloud}}`)
-            if (!trimmed || trimmed.startsWith('%%') || /^[([{}]/.test(trimmed)) return line
+            if (!trimmed || trimmed.startsWith('%%') || /^[[({]/.test(trimmed)) return line
             // Remove " (inner text)" patterns — keep the inner text, drop parens
             return line.replace(/\s+\(([^)\n]*)\)/g, (_, inner) => inner ? ` ${inner}` : '')
           })
