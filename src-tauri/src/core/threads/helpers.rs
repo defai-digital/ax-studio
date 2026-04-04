@@ -26,7 +26,13 @@ pub async fn get_lock_for_thread(thread_id: &str) -> Arc<Mutex<()>> {
     // Clean up entries where the Arc has no external references (strong_count == 1)
     let keys_to_remove: Vec<String> = locks
         .iter()
-        .filter_map(|(key, arc)| if Arc::strong_count(arc) == 1 { Some(key.clone()) } else { None })
+        .filter_map(|(key, arc)| {
+            if Arc::strong_count(arc) == 1 {
+                Some(key.clone())
+            } else {
+                None
+            }
+        })
         .collect();
     for key in keys_to_remove {
         locks.remove(&key);

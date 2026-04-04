@@ -7,7 +7,7 @@ use crate::core::app::commands::{
 };
 use crate::core::app::models::AppConfiguration;
 use crate::core::mcp::helpers::{stop_mcp_servers_with_context, ShutdownContext};
-use crate::core::state::AppState;
+use crate::core::state::McpState;
 
 /// Detect the user's default shell and return the appropriate env file path.
 /// Returns (shell_name, env_file_path).
@@ -76,7 +76,7 @@ fn write_env_to_shell(env_file_path: &str, env_vars: &[(String, String)]) -> Res
 }
 
 #[tauri::command]
-pub fn factory_reset<R: Runtime>(app_handle: tauri::AppHandle<R>, state: State<'_, AppState>) {
+pub fn factory_reset<R: Runtime>(app_handle: tauri::AppHandle<R>, state: State<'_, McpState>) {
     // close window (not available on mobile platforms)
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
     {
@@ -95,7 +95,7 @@ pub fn factory_reset<R: Runtime>(app_handle: tauri::AppHandle<R>, state: State<'
             stop_mcp_servers_with_context(&app_handle, &state, ShutdownContext::FactoryReset).await;
 
         {
-            let mut active_servers = state.mcp_active_servers.lock().await;
+            let mut active_servers = state.active_servers.lock().await;
             active_servers.clear();
         }
 

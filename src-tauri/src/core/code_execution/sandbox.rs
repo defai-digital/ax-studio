@@ -81,8 +81,8 @@ fn build_result(output: Output) -> ExecutionResult {
 /// Spawns `python3 -u -c <code>`, waits up to `timeout_secs` for completion,
 /// then kills the process if it hasn't finished.
 pub async fn execute_python(code: &str, timeout_secs: u64) -> Result<ExecutionResult, String> {
-    let python =
-        find_python_binary().ok_or("Python not found. Please install Python and add it to PATH.")?;
+    let python = find_python_binary()
+        .ok_or("Python not found. Please install Python and add it to PATH.")?;
 
     let mut cmd = Command::new(&python);
     cmd.args(["-u", "-c", code])

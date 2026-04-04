@@ -6,7 +6,7 @@ use core::{
     downloads::models::DownloadManagerState,
     mcp::models::McpSettings,
     setup,
-    state::AppState,
+    state::{AppState, DownloadState, McpState, ServerState},
 };
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
@@ -32,36 +32,49 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init());
 
     #[cfg(feature = "deep-link")]
-    { app_builder = app_builder.plugin(tauri_plugin_deep_link::init()); }
+    {
+        app_builder = app_builder.plugin(tauri_plugin_deep_link::init());
+    }
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    { app_builder = app_builder.plugin(tauri_plugin_hardware::init()); }
+    {
+        app_builder = app_builder.plugin(tauri_plugin_hardware::init());
+    }
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    { app_builder = app_builder.plugin(tauri_plugin_llamacpp::init()); }
+    {
+        app_builder = app_builder.plugin(tauri_plugin_llamacpp::init());
+    }
 
     // Desktop: include updater commands
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    let app_builder =
-        app_builder.invoke_handler(commands::desktop_handlers!());
+    let app_builder = app_builder.invoke_handler(commands::handlers!(
+        crate::core::updater::commands::check_for_app_updates,
+        crate::core::updater::commands::is_update_available,
+    ));
 
-    // Mobile: no updater commands
+    // Mobile: shared commands only
     #[cfg(any(target_os = "android", target_os = "ios"))]
-    let app_builder =
-        app_builder.invoke_handler(commands::mobile_handlers!());
+    let app_builder = app_builder.invoke_handler(commands::handlers!());
 
     let app = app_builder
+        .manage(McpState {
+            servers: Arc::new(Mutex::new(HashMap::new())),
+            active_servers: Arc::new(Mutex::new(HashMap::new())),
+            settings: Arc::new(Mutex::new(McpSettings::default())),
+            shutdown_in_progress: Arc::new(Mutex::new(false)),
+            monitoring_tasks: Arc::new(Mutex::new(HashMap::new())),
+            server_pids: Arc::new(Mutex::new(HashMap::new())),
+        })
+        .manage(DownloadState {
+            manager: Arc::new(Mutex::new(DownloadManagerState::default())),
+        })
+        .manage(ServerState {
+            handle: Arc::new(Mutex::new(None)),
+            provider_configs: Arc::new(Mutex::new(HashMap::new())),
+        })
         .manage(AppState {
             app_token: Some(generate_app_token()),
-            mcp_servers: Arc::new(Mutex::new(HashMap::new())),
-            download_manager: Arc::new(Mutex::new(DownloadManagerState::default())),
-            mcp_active_servers: Arc::new(Mutex::new(HashMap::new())),
-            server_handle: Arc::new(Mutex::new(None)),
             tool_call_cancellations: Arc::new(Mutex::new(HashMap::new())),
-            mcp_settings: Arc::new(Mutex::new(McpSettings::default())),
-            mcp_shutdown_in_progress: Arc::new(Mutex::new(false)),
-            mcp_monitoring_tasks: Arc::new(Mutex::new(HashMap::new())),
             background_cleanup_handle: Arc::new(Mutex::new(None)),
-            mcp_server_pids: Arc::new(Mutex::new(HashMap::new())),
-            provider_configs: Arc::new(Mutex::new(HashMap::new())),
             approved_save_paths: Arc::new(Mutex::new(std::collections::HashSet::new())),
         })
         .setup(|app| Ok(setup::app_setup(app)?))

@@ -14,7 +14,7 @@ use super::provider_adapter::{
 };
 use super::proxy::ProxyConfig;
 use super::security::add_cors_headers_with_host_and_origin;
-use crate::core::state::{AppState, ProviderConfig, ProviderCustomHeader};
+use crate::core::state::{ProviderConfig, ProviderCustomHeader, ServerState};
 
 /// Result of resolving a model route — all data needed to send the upstream request.
 pub(super) struct ProviderResolution {
@@ -47,10 +47,12 @@ fn error_response(
         &config.trusted_hosts,
         config.cors_enabled,
     );
-    builder.body(Body::from(message.into())).unwrap_or_else(|e| {
-        log::error!("Failed to build error response: {e}");
-        Response::new(Body::from("Internal server error"))
-    })
+    builder
+        .body(Body::from(message.into()))
+        .unwrap_or_else(|e| {
+            log::error!("Failed to build error response: {e}");
+            Response::new(Body::from("Internal server error"))
+        })
 }
 
 /// Strip non-standard fields from the request body that upstream providers may reject.
@@ -228,7 +230,7 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
 
     log::debug!("Extracted model_id: {model_id}");
 
-    let state = app_handle.state::<AppState>();
+    let state = app_handle.state::<ServerState>();
     let resolved = {
         let provider_configs = state.provider_configs.lock().await;
 
@@ -521,7 +523,9 @@ pub(super) async fn dispatch_to_upstream(
                     &config.trusted_hosts,
                     config.cors_enabled,
                 );
-                return Ok(error_response.body(Body::from(error_body)).unwrap_or_else(|_| Response::new(Body::from("Internal server error"))));
+                return Ok(error_response
+                    .body(Body::from(error_body))
+                    .unwrap_or_else(|_| Response::new(Body::from("Internal server error"))));
             } else if is_error {
                 // Non-/messages error - return error response with body
                 let error_body = response
@@ -542,7 +546,9 @@ pub(super) async fn dispatch_to_upstream(
                     &config.trusted_hosts,
                     config.cors_enabled,
                 );
-                return Ok(error_response.body(Body::from(error_body)).unwrap_or_else(|_| Response::new(Body::from("Internal server error"))));
+                return Ok(error_response
+                    .body(Body::from(error_body))
+                    .unwrap_or_else(|_| Response::new(Body::from("Internal server error"))));
             }
 
             // Success case - stream the response
@@ -585,7 +591,9 @@ pub(super) async fn dispatch_to_upstream(
                 log::debug!("Streaming complete to client");
             });
 
-            Ok(builder.body(body).unwrap_or_else(|_| Response::new(Body::from("Internal server error"))))
+            Ok(builder
+                .body(body)
+                .unwrap_or_else(|_| Response::new(Body::from("Internal server error"))))
         }
         Err(e) => {
             let error_msg = format!("Proxy request to model failed: {e}");
@@ -598,7 +606,9 @@ pub(super) async fn dispatch_to_upstream(
                 &config.trusted_hosts,
                 config.cors_enabled,
             );
-            Ok(error_response.body(Body::from(error_msg)).unwrap_or_else(|_| Response::new(Body::from("Internal server error"))))
+            Ok(error_response
+                .body(Body::from(error_msg))
+                .unwrap_or_else(|_| Response::new(Body::from("Internal server error"))))
         }
     }
 }
@@ -658,7 +668,11 @@ mod tests {
         );
         providers.insert(
             "openrouter".to_string(),
-            make_provider("openrouter", Some("https://openrouter.ai/api/v1"), &["gpt-4.1"]),
+            make_provider(
+                "openrouter",
+                Some("https://openrouter.ai/api/v1"),
+                &["gpt-4.1"],
+            ),
         );
 
         assert_eq!(
@@ -720,7 +734,11 @@ mod tests {
         );
         providers.insert(
             "openrouter".to_string(),
-            make_provider("openrouter", Some("https://openrouter.ai/api/v1"), &["gpt-4.1"]),
+            make_provider(
+                "openrouter",
+                Some("https://openrouter.ai/api/v1"),
+                &["gpt-4.1"],
+            ),
         );
 
         assert!(matches!(

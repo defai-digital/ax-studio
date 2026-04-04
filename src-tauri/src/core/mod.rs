@@ -3,6 +3,7 @@ pub mod agent_teams;
 pub mod app;
 pub mod code_execution;
 pub mod downloads;
+pub mod error;
 pub mod extensions;
 pub mod filesystem;
 pub mod integrations;

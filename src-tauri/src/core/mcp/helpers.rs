@@ -22,7 +22,7 @@ use crate::core::mcp::constants::CREATE_NO_WINDOW;
 use crate::core::{
     app::commands::get_app_data_folder_path,
     mcp::models::{McpServerConfig, McpSettings},
-    state::{AppState, RunningServiceEnum, SharedMcpServers},
+    state::{McpState, RunningServiceEnum, SharedMcpServers},
 };
 use ax_studio_utils::{can_override_npx, can_override_uvx};
 
@@ -30,7 +30,12 @@ use ax_studio_utils::{can_override_npx, can_override_uvx};
 const ALLOWED_COMMANDS: &[&str] = &["node", "python", "python3", "bun", "npx"];
 
 /// Environment variables that should be rejected for security reasons
-const DANGEROUS_ENV_KEYS: &[&str] = &["LD_PRELOAD", "DYLD_INSERT_LIBRARIES", "LD_LIBRARY_PATH", "PATH"];
+const DANGEROUS_ENV_KEYS: &[&str] = &[
+    "LD_PRELOAD",
+    "DYLD_INSERT_LIBRARIES",
+    "LD_LIBRARY_PATH",
+    "PATH",
+];
 
 #[derive(Debug, Clone, Copy)]
 pub enum ShutdownContext {
@@ -89,8 +94,8 @@ pub async fn run_mcp_commands<R: Runtime>(
             .and_then(|value| serde_json::from_value::<McpSettings>(value.clone()).ok())
             .unwrap_or_default();
 
-        let app_state = app.state::<AppState>();
-        let mut guard = app_state.mcp_settings.lock().await;
+        let mcp_state = app.state::<McpState>();
+        let mut guard = mcp_state.settings.lock().await;
         *guard = settings;
     }
 
@@ -223,7 +228,9 @@ pub async fn monitor_mcp_server_handle(
                     if Arc::ptr_eq(current, &service_snapshot) {
                         servers.remove(&name)
                     } else {
-                        log::info!("MCP server {name} was replaced since health check, skipping removal");
+                        log::info!(
+                            "MCP server {name} was replaced since health check, skipping removal"
+                        );
                         None
                     }
                 } else {
@@ -260,8 +267,8 @@ pub async fn start_mcp_server<R: Runtime>(
     name: String,
     config: Value,
 ) -> Result<(), String> {
-    let app_state = app.state::<AppState>();
-    let active_servers_state = app_state.mcp_active_servers.clone();
+    let mcp_state = app.state::<McpState>();
+    let active_servers_state = mcp_state.active_servers.clone();
 
     // Store active server config for restart purposes
     store_active_server_config(&active_servers_state, &name, &config).await;
@@ -295,8 +302,8 @@ async fn schedule_mcp_start_task<R: Runtime>(
     config: Value,
 ) -> Result<(), String> {
     let app_path = get_app_data_folder_path(app.clone());
-    let exe_path = env::current_exe()
-        .map_err(|e| format!("Failed to get current exe path: {e}"))?;
+    let exe_path =
+        env::current_exe().map_err(|e| format!("Failed to get current exe path: {e}"))?;
     let exe_parent_path = exe_path
         .parent()
         .ok_or("Executable must have a parent directory")?;
@@ -541,8 +548,8 @@ async fn schedule_mcp_start_task<R: Runtime>(
         let process_pid = process.id();
         if let Some(pid) = process_pid {
             log::info!("MCP server {name} spawned with PID {pid}");
-            let app_state = app.state::<AppState>();
-            let mut pids = app_state.mcp_server_pids.lock().await;
+            let mcp_state = app.state::<McpState>();
+            let mut pids = mcp_state.server_pids.lock().await;
             pids.insert(name.clone(), pid);
         }
 
@@ -591,7 +598,9 @@ async fn schedule_mcp_start_task<R: Runtime>(
             }
             Some(svc) => {
                 if let Err(_) = timeout(Duration::from_secs(3), svc.list_all_tools()).await {
-                    log::warn!("MCP server {name} started but failed initial health check (timed out)");
+                    log::warn!(
+                        "MCP server {name} started but failed initial health check (timed out)"
+                    );
                     // Don't fail — the background health monitor will handle it
                 }
             }
@@ -714,7 +723,10 @@ mod tests {
         let result = extract_command_args(&config).unwrap();
         assert_eq!(result.command, "node");
         assert_eq!(result.args.len(), 3);
-        assert_eq!(result.envs.get("NODE_ENV").unwrap().as_str().unwrap(), "production");
+        assert_eq!(
+            result.envs.get("NODE_ENV").unwrap().as_str().unwrap(),
+            "production"
+        );
         assert!(result.url.is_none());
         assert!(result.transport_type.is_none());
         assert!(result.timeout.is_none());
@@ -767,7 +779,12 @@ mod tests {
         });
         let result = extract_command_args(&config).unwrap();
         assert_eq!(
-            result.headers.get("Authorization").unwrap().as_str().unwrap(),
+            result
+                .headers
+                .get("Authorization")
+                .unwrap()
+                .as_str()
+                .unwrap(),
             "Bearer token123"
         );
     }
@@ -794,8 +811,14 @@ mod tests {
             }
         });
         let result = extract_command_args(&config).unwrap();
-        assert_eq!(result.envs.get("NODE_ENV").unwrap().as_str().unwrap(), "production");
-        assert_eq!(result.envs.get("SAFE_VAR").unwrap().as_str().unwrap(), "safe");
+        assert_eq!(
+            result.envs.get("NODE_ENV").unwrap().as_str().unwrap(),
+            "production"
+        );
+        assert_eq!(
+            result.envs.get("SAFE_VAR").unwrap().as_str().unwrap(),
+            "safe"
+        );
         assert!(result.envs.get("LD_PRELOAD").is_none());
         assert!(result.envs.get("PATH").is_none());
     }
@@ -863,8 +886,8 @@ pub async fn restart_active_mcp_servers<R: Runtime>(
     app: &AppHandle<R>,
     servers_state: SharedMcpServers,
 ) -> Result<(), String> {
-    let app_state = app.state::<AppState>();
-    let active_servers = app_state.mcp_active_servers.lock().await;
+    let mcp_state = app.state::<McpState>();
+    let active_servers = mcp_state.active_servers.lock().await;
 
     log::info!(
         "Restarting {} previously active MCP servers",
@@ -1034,13 +1057,13 @@ async fn kill_process_by_pid(pid: u32) -> Result<(), String> {
 
 pub async fn background_cleanup_mcp_servers<R: Runtime>(
     app: &AppHandle<R>,
-    state: &State<'_, AppState>,
+    state: &State<'_, McpState>,
 ) {
     let _ = stop_mcp_servers_with_context(app, state, ShutdownContext::AppExit).await;
 
     // Clear active servers and restart counts
     {
-        let mut active_servers = state.mcp_active_servers.lock().await;
+        let mut active_servers = state.active_servers.lock().await;
         active_servers.clear();
     }
 
@@ -1069,11 +1092,11 @@ impl Drop for ShutdownGuard {
 
 pub async fn stop_mcp_servers_with_context<R: Runtime>(
     app: &AppHandle<R>,
-    state: &State<'_, AppState>,
+    state: &State<'_, McpState>,
     context: ShutdownContext,
 ) -> Result<(), String> {
     {
-        let mut shutdown_in_progress = state.mcp_shutdown_in_progress.lock().await;
+        let mut shutdown_in_progress = state.shutdown_in_progress.lock().await;
         if *shutdown_in_progress {
             return Ok(());
         }
@@ -1081,11 +1104,11 @@ pub async fn stop_mcp_servers_with_context<R: Runtime>(
     }
 
     let _guard = ShutdownGuard {
-        flag: state.mcp_shutdown_in_progress.clone(),
+        flag: state.shutdown_in_progress.clone(),
     };
 
     {
-        let mut monitoring_tasks = state.mcp_monitoring_tasks.lock().await;
+        let mut monitoring_tasks = state.monitoring_tasks.lock().await;
         for (_name, handle) in monitoring_tasks.drain() {
             handle.abort();
         }
@@ -1094,11 +1117,11 @@ pub async fn stop_mcp_servers_with_context<R: Runtime>(
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     let pids_snapshot: std::collections::HashMap<String, u32> = {
-        let pids = state.mcp_server_pids.lock().await;
+        let pids = state.server_pids.lock().await;
         pids.clone()
     };
     let servers_to_stop: Vec<(String, Arc<RunningServiceEnum>)> = {
-        let mut servers_map = state.mcp_servers.lock().await;
+        let mut servers_map = state.servers.lock().await;
         let keys: Vec<String> = servers_map.keys().cloned().collect();
 
         let mut result = Vec::new();
@@ -1122,7 +1145,6 @@ pub async fn stop_mcp_servers_with_context<R: Runtime>(
     let stop_handles: Vec<_> = servers_to_stop
         .into_iter()
         .map(|(name, service)| {
-
             tauri::async_runtime::spawn(async move {
                 let cancel_future = async {
                     match Arc::try_unwrap(service) {
@@ -1182,7 +1204,7 @@ pub async fn stop_mcp_servers_with_context<R: Runtime>(
 
     // Clean up PIDs from tracking
     {
-        let mut pids = state.mcp_server_pids.lock().await;
+        let mut pids = state.server_pids.lock().await;
         for name in &server_names {
             pids.remove(name);
         }

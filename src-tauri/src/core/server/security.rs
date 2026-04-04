@@ -38,8 +38,13 @@ mod tests {
     #[test]
     fn test_cors_disabled_returns_builder_unchanged() {
         let builder = hyper::http::Response::builder();
-        let result =
-            add_cors_headers_with_host_and_origin(builder, "localhost", "http://example.com", &[], false);
+        let result = add_cors_headers_with_host_and_origin(
+            builder,
+            "localhost",
+            "http://example.com",
+            &[],
+            false,
+        );
         let resp = result.body(hyper::Body::empty()).unwrap();
         assert!(resp.headers().get("Access-Control-Allow-Origin").is_none());
     }
@@ -71,14 +76,8 @@ mod tests {
                 .unwrap(),
             "true"
         );
-        assert!(resp
-            .headers()
-            .get("Access-Control-Allow-Methods")
-            .is_some());
-        assert!(resp
-            .headers()
-            .get("Access-Control-Allow-Headers")
-            .is_some());
+        assert!(resp.headers().get("Access-Control-Allow-Methods").is_some());
+        assert!(resp.headers().get("Access-Control-Allow-Headers").is_some());
         assert_eq!(
             resp.headers().get("Vary").unwrap().to_str().unwrap(),
             "Origin"

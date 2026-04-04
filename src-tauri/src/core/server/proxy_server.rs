@@ -70,8 +70,6 @@ async fn start_server_internal<R: tauri::Runtime>(
         port,
     };
 
-
-
     // Use user-configured timeout for overall request, cap connect timeout at 30s
     let connect_timeout_secs = proxy_timeout.min(30);
     let client = Client::builder()

@@ -816,7 +816,10 @@ async fn _get_maybe_resume_with_hmac(
     start_bytes: u64,
 ) -> Result<reqwest::Response, String> {
     // Ensure the signing key is not the default test key
-    assert!(SECRET_KEY != "local-dev-test-key-not-for-production", "AX_STUDIO_SIGNING_KEY must not be the default test key");
+    assert!(
+        SECRET_KEY != "local-dev-test-key-not-for-production",
+        "AX_STUDIO_SIGNING_KEY must not be the default test key"
+    );
 
     // Generate HMAC headers for request authentication
     let nonce_seed = get_download_nonce_seed();
@@ -1032,10 +1035,7 @@ mod tests {
 
     #[test]
     fn test_should_bypass_proxy_empty_list() {
-        assert!(!should_bypass_proxy(
-            "https://example.com",
-            &[]
-        ));
+        assert!(!should_bypass_proxy("https://example.com", &[]));
     }
 
     #[test]
@@ -1072,10 +1072,7 @@ mod tests {
 
     #[test]
     fn test_should_bypass_proxy_invalid_url() {
-        assert!(!should_bypass_proxy(
-            "not a url",
-            &["*".to_string()]
-        ));
+        assert!(!should_bypass_proxy("not a url", &["*".to_string()]));
     }
 
     // --- _convert_headers ---

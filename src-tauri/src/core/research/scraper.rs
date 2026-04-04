@@ -25,7 +25,7 @@ fn is_forbidden_url(url: &str) -> bool {
                 || (ipv6.octets()[0] & 0xfe) == 0xfc
         }
         Some(url::Host::Domain(_)) => false, // Other domains are allowed
-        None => true, // No host is forbidden
+        None => true,                        // No host is forbidden
     }
 }
 

@@ -3,9 +3,9 @@ use hyper::{Body, Response, StatusCode};
 use serde_json;
 use tauri::Manager;
 
-use crate::core::state::AppState;
 use super::proxy::ProxyConfig;
 use super::security::add_cors_headers_with_host_and_origin;
+use crate::core::state::ServerState;
 
 /// Handle GET /models — aggregates all configured provider models.
 pub(super) async fn handle_models_route<R: tauri::Runtime>(
@@ -17,7 +17,7 @@ pub(super) async fn handle_models_route<R: tauri::Runtime>(
     log::debug!("Handling GET /v1/models request");
 
     // Get remote provider models
-    let state = app_handle.state::<AppState>();
+    let state = app_handle.state::<ServerState>();
     let provider_configs = state.provider_configs.lock().await;
     let remote_models: Vec<_> = provider_configs
         .values()
@@ -37,8 +37,7 @@ pub(super) async fn handle_models_route<R: tauri::Runtime>(
         "data": remote_models
     });
 
-    let body_str =
-        serde_json::to_string(&response_json).unwrap_or_else(|_| "{}".to_string());
+    let body_str = serde_json::to_string(&response_json).unwrap_or_else(|_| "{}".to_string());
 
     let mut response_builder = Response::builder()
         .status(StatusCode::OK)
@@ -71,17 +70,15 @@ pub(super) fn handle_openapi_route(config: &ProxyConfig) -> Response<Body> {
                 for server in servers {
                     if let Some(server_obj) = server.as_object_mut() {
                         if let Some(url) = server_obj.get_mut("url") {
-                            let base_url = format!(
-                                "http://{}:{}{}",
-                                config.host, config.port, config.prefix
-                            );
+                            let base_url =
+                                format!("http://{}:{}{}", config.host, config.port, config.prefix);
                             *url = serde_json::Value::String(base_url);
                         }
                     }
                 }
             }
-            let body = serde_json::to_string(&openapi_spec)
-                .unwrap_or_else(|_| static_body.to_string());
+            let body =
+                serde_json::to_string(&openapi_spec).unwrap_or_else(|_| static_body.to_string());
             Response::builder()
                 .status(StatusCode::OK)
                 .header(hyper::header::CONTENT_TYPE, "application/json")
@@ -292,8 +289,8 @@ pub(super) fn handle_unknown_route(
         "/docs/swagger-ui-bundle.js",
         "/docs/swagger-ui-standalone-preset.js",
     ];
-    let is_explicitly_whitelisted_get = *method == hyper::Method::GET
-        && whitelisted_paths.contains(&destination_path);
+    let is_explicitly_whitelisted_get =
+        *method == hyper::Method::GET && whitelisted_paths.contains(&destination_path);
     if is_explicitly_whitelisted_get {
         log::debug!("Handled whitelisted GET path: {destination_path}");
         let mut error_response = Response::builder().status(StatusCode::NOT_FOUND);
@@ -306,9 +303,7 @@ pub(super) fn handle_unknown_route(
         );
         error_response.body(Body::from("Not Found")).unwrap()
     } else {
-        log::warn!(
-            "Unhandled method/path for dynamic routing: {method} {destination_path}"
-        );
+        log::warn!("Unhandled method/path for dynamic routing: {method} {destination_path}");
         let mut error_response = Response::builder().status(StatusCode::NOT_FOUND);
         error_response = add_cors_headers_with_host_and_origin(
             error_response,

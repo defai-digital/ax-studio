@@ -173,9 +173,7 @@ pub async fn check_sandbox_status() -> Result<SandboxStatus, String> {
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-pub async fn reset_sandbox_session(
-    thread_id: Option<String>,
-) -> Result<(), String> {
+pub async fn reset_sandbox_session(thread_id: Option<String>) -> Result<(), String> {
     let _ = thread_id;
     Ok(())
 }

@@ -7,8 +7,8 @@ use rfd::AsyncFileDialog;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use tauri::{Manager, Runtime};
 use tauri::State;
+use tauri::{Manager, Runtime};
 
 fn ax_studio_config_dir(home: &Path) -> PathBuf {
     home.join(".ax-studio")
@@ -350,9 +350,8 @@ pub fn decompress<R: Runtime>(
                 .map_err(|e| e.to_string())?
                 .to_string_lossy()
                 .to_string();
-            let full_path = ax_studio_utils::normalize_path(
-                &output_dir_buf.join(&entry_path_string),
-            );
+            let full_path =
+                ax_studio_utils::normalize_path(&output_dir_buf.join(&entry_path_string));
             if !full_path.starts_with(&output_dir_buf) {
                 return Err(format!(
                     "Tar entry path traversal blocked: {}",
@@ -381,10 +380,15 @@ pub fn decompress<R: Runtime>(
         let mut zip = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
         for i in 0..zip.len() {
             let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
-            let entry_path = entry.enclosed_name().ok_or_else(|| "Invalid zip entry path".to_string())?;
+            let entry_path = entry
+                .enclosed_name()
+                .ok_or_else(|| "Invalid zip entry path".to_string())?;
             let outpath = ax_studio_utils::normalize_path(&output_dir_buf.join(entry_path));
             if !outpath.starts_with(&output_dir_buf) {
-                return Err(format!("Zip entry path traversal blocked: {}", entry.name()));
+                return Err(format!(
+                    "Zip entry path traversal blocked: {}",
+                    entry.name()
+                ));
             }
 
             if entry.name().ends_with('/') {
@@ -893,12 +897,11 @@ fn resolve_fabric_cli_command<R: Runtime>(
         let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
         if let Ok(configs) = serde_json::from_str::<serde_json::Value>(&content) {
             // MCP config nests servers under "mcpServers"
-            let servers = configs
-                .get("mcpServers")
-                .or(Some(&configs));
+            let servers = configs.get("mcpServers").or(Some(&configs));
             if let Some(servers) = servers {
-                if let Some(server) =
-                    servers.get("ax-studio").or_else(|| servers.get("ax-fabric"))
+                if let Some(server) = servers
+                    .get("ax-studio")
+                    .or_else(|| servers.get("ax-fabric"))
                 {
                     let command = server
                         .get("command")
@@ -929,8 +932,7 @@ fn resolve_fabric_cli_command<R: Runtime>(
     // Fallback: resolve the local fabric-ingest CLI from the sibling ax-fabric repo.
     // The package is not published to npm, so npx cannot fetch it.
     let home = dirs::home_dir().ok_or("Cannot determine home directory")?;
-    let local_cli = home
-        .join("Documents/Defai/ax/ax-fabric/packages/fabric-ingest/dist/cli.js");
+    let local_cli = home.join("Documents/Defai/ax/ax-fabric/packages/fabric-ingest/dist/cli.js");
     if local_cli.exists() {
         log::info!(
             "resolve_fabric_cli_command: using local CLI at {}",

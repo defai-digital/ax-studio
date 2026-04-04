@@ -186,10 +186,11 @@ async fn handle_oauth_callback(
     let uri = req.uri().to_string();
 
     if !uri.starts_with("/callback") {
-        return Ok(Response::builder()
+        let resp = Response::builder()
             .status(StatusCode::NOT_FOUND)
             .body(Body::from("Not found"))
-            .unwrap());
+            .unwrap_or_else(|_| Response::new(Body::from("Not found")));
+        return Ok(resp);
     }
 
     // Parse query parameters
@@ -218,7 +219,7 @@ async fn handle_oauth_callback(
         .status(StatusCode::OK)
         .header("Content-Type", "text/html")
         .body(Body::from(html))
-        .unwrap())
+        .unwrap_or_else(|_| Response::new(Body::from(html))))
 }
 
 fn extract_oauth_result(
@@ -535,7 +536,10 @@ mod tests {
         assert_ne!(port, 0);
         // Listener should be bound to 127.0.0.1:port
         let addr = listener.local_addr().unwrap();
-        assert_eq!(addr.ip(), std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST));
+        assert_eq!(
+            addr.ip(),
+            std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST)
+        );
         assert_eq!(addr.port(), port);
     }
 }

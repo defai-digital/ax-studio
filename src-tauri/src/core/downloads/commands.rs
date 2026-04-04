@@ -1,7 +1,7 @@
 use super::helpers::{_download_files_internal, err_to_string};
 use super::models::DownloadItem;
 use crate::core::app::commands::get_app_data_folder_path;
-use crate::core::state::AppState;
+use crate::core::state::DownloadState;
 use ax_studio_utils::normalize_path;
 use std::collections::HashMap;
 use tauri::{Runtime, State};
@@ -10,7 +10,7 @@ use tokio_util::sync::CancellationToken;
 #[tauri::command]
 pub async fn download_files<R: Runtime>(
     app: tauri::AppHandle<R>,
-    state: State<'_, AppState>,
+    state: State<'_, DownloadState>,
     items: Vec<DownloadItem>,
     task_id: &str,
     headers: HashMap<String, String>,
@@ -18,7 +18,7 @@ pub async fn download_files<R: Runtime>(
     // insert cancel tokens
     let cancel_token = CancellationToken::new();
     {
-        let mut download_manager = state.download_manager.lock().await;
+        let mut download_manager = state.manager.lock().await;
         if let Some(existing_token) = download_manager.cancel_tokens.remove(task_id) {
             log::info!("Cancelling existing download task: {task_id}");
             existing_token.cancel();
@@ -40,7 +40,7 @@ pub async fn download_files<R: Runtime>(
 
     // cleanup
     {
-        let mut download_manager = state.download_manager.lock().await;
+        let mut download_manager = state.manager.lock().await;
         download_manager.cancel_tokens.remove(task_id);
     }
 
@@ -64,9 +64,12 @@ pub async fn download_files<R: Runtime>(
 }
 
 #[tauri::command]
-pub async fn cancel_download_task(state: State<'_, AppState>, task_id: &str) -> Result<(), String> {
+pub async fn cancel_download_task(
+    state: State<'_, DownloadState>,
+    task_id: &str,
+) -> Result<(), String> {
     // NOTE: might want to add User-Agent header
-    let mut download_manager = state.download_manager.lock().await;
+    let mut download_manager = state.manager.lock().await;
     if let Some(token) = download_manager.cancel_tokens.remove(task_id) {
         token.cancel();
         log::info!("Cancelled download task: {task_id}");

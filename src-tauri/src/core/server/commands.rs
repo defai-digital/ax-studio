@@ -1,7 +1,7 @@
 use tauri::{AppHandle, Runtime, State};
 
 use crate::core::server::proxy_server;
-use crate::core::state::AppState;
+use crate::core::state::ServerState;
 
 #[derive(serde::Deserialize)]
 pub struct StartServerConfig {
@@ -22,7 +22,7 @@ fn requires_authentication(host: &str, cors_enabled: bool) -> bool {
 #[tauri::command]
 pub async fn start_server<R: Runtime>(
     app_handle: AppHandle<R>,
-    state: State<'_, AppState>,
+    state: State<'_, ServerState>,
     config: StartServerConfig,
 ) -> Result<u16, String> {
     let StartServerConfig {
@@ -42,7 +42,7 @@ pub async fn start_server<R: Runtime>(
         );
     }
 
-    let server_handle = state.server_handle.clone();
+    let server_handle = state.handle.clone();
 
     let actual_port = proxy_server::start_server(
         server_handle,
@@ -74,8 +74,8 @@ mod tests {
 }
 
 #[tauri::command]
-pub async fn stop_server(state: State<'_, AppState>) -> Result<(), String> {
-    let server_handle = state.server_handle.clone();
+pub async fn stop_server(state: State<'_, ServerState>) -> Result<(), String> {
+    let server_handle = state.handle.clone();
 
     proxy_server::stop_server(server_handle)
         .await
@@ -84,8 +84,8 @@ pub async fn stop_server(state: State<'_, AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn get_server_status(state: State<'_, AppState>) -> Result<bool, String> {
-    let server_handle = state.server_handle.clone();
+pub async fn get_server_status(state: State<'_, ServerState>) -> Result<bool, String> {
+    let server_handle = state.handle.clone();
 
     Ok(proxy_server::is_server_running(server_handle).await)
 }

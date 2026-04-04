@@ -77,7 +77,10 @@ impl CustomUpdater {
     /// Create a new custom updater
     pub fn new() -> Result<Self, UpdateError> {
         // Ensure the signing key is not the default test key
-        assert!(SECRET_KEY != "local-dev-test-key-not-for-production", "AX_STUDIO_SIGNING_KEY must not be the default test key");
+        assert!(
+            SECRET_KEY != "local-dev-test-key-not-for-production",
+            "AX_STUDIO_SIGNING_KEY must not be the default test key"
+        );
 
         let client = Client::builder()
             .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
