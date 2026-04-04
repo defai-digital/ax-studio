@@ -8,7 +8,9 @@ pub fn resolve_path<R: Runtime>(
     path: &str,
 ) -> Result<PathBuf, String> {
     let app_data_folder = get_app_data_folder_path(app_handle.clone());
-    let canonical_app_data = normalize_path(&app_data_folder);
+    let canonical_app_data = app_data_folder
+        .canonicalize()
+        .unwrap_or_else(|_| normalize_path(&app_data_folder));
     let path = if path.starts_with("file:/") || path.starts_with("file:\\") {
         let normalized = normalize_file_path(path);
         let relative_normalized = normalized

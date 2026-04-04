@@ -110,8 +110,7 @@ fn test_read_file_sync() {
     let dir_path = get_app_data_folder_path(app.handle().clone());
     fs::create_dir_all(&dir_path).unwrap();
     let file_path = dir_path.join("test_read_file_sync_file");
-    let mut file = File::create(&file_path).unwrap();
-    file.write_all(b"test content").unwrap();
+    fs::write(&file_path, "test content").unwrap();
     let request = SinglePathRequest::Legacy {
         args: vec![path.to_string()],
     };
@@ -144,14 +143,28 @@ fn test_readdir_sync() {
     let app = mock_app();
     let dir_path = get_app_data_folder_path(app.handle().clone()).join("test_readdir_sync_dir");
     fs::create_dir_all(&dir_path).unwrap();
-    File::create(dir_path.join("file1.txt")).unwrap();
-    File::create(dir_path.join("file2.txt")).unwrap();
+    let file1 = dir_path.join("file1.txt");
+    let file2 = dir_path.join("file2.txt");
+    File::create(&file1).unwrap();
+    File::create(&file2).unwrap();
 
     let request = SinglePathRequest::Typed {
         path: dir_path.to_string_lossy().to_string(),
     };
     let result = readdir_sync(app.handle().clone(), request).unwrap();
-    assert_eq!(result.len(), 2);
+    let result_paths: HashSet<_> = result.into_iter().collect();
+    let expected_file1 = file1
+        .canonicalize()
+        .unwrap_or(file1.clone())
+        .to_string_lossy()
+        .to_string();
+    let expected_file2 = file2
+        .canonicalize()
+        .unwrap_or(file2.clone())
+        .to_string_lossy()
+        .to_string();
+    assert!(result_paths.contains(&expected_file1));
+    assert!(result_paths.contains(&expected_file2));
 
     let _ = fs::remove_dir_all(dir_path);
 }
