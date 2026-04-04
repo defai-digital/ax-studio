@@ -3,12 +3,13 @@
  * Used by ExtensionProvider to set window.core.events
  */
 
-/* eslint-disable @typescript-eslint/no-unsafe-function-type */
+type EventHandler = (...args: unknown[]) => void
+
 export class EventEmitter {
-  private handlers: Map<string, Function[]>
+  private handlers: Map<string, EventHandler[]>
 
   constructor() {
-    this.handlers = new Map<string, Function[]>()
+    this.handlers = new Map<string, EventHandler[]>()
   }
 
   /**
@@ -16,7 +17,7 @@ export class EventEmitter {
    * using inline lambdas can still remove their listener without keeping
    * a reference to the original function.
    */
-  public on(eventName: string, handler: Function): () => void {
+  public on(eventName: string, handler: EventHandler): () => void {
     if (!this.handlers.has(eventName)) {
       this.handlers.set(eventName, [])
     }
@@ -27,7 +28,7 @@ export class EventEmitter {
     return () => this.off(eventName, handler)
   }
 
-  public off(eventName: string, handler: Function): void {
+  public off(eventName: string, handler: EventHandler): void {
     if (!this.handlers.has(eventName)) {
       return
     }
@@ -40,8 +41,7 @@ export class EventEmitter {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  public emit(eventName: string, args: any): void {
+  public emit(eventName: string, args: unknown): void {
     if (!this.handlers.has(eventName)) {
       return
     }
