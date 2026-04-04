@@ -5,7 +5,6 @@ use super::models::{DialogOpenOptions, FileStat};
 use super::service;
 use crate::core::state::AppState;
 use rfd::AsyncFileDialog;
-use std::path::Path;
 use tauri::State;
 use tauri::{Manager, Runtime};
 

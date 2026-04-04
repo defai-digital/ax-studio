@@ -26,6 +26,7 @@ fn legacy_akidb_config_path(home: &Path) -> PathBuf {
     legacy_config_dir(home).join("config.yaml")
 }
 
+#[allow(dead_code)]
 fn preferred_akidb_status_path(home: &Path) -> PathBuf {
     ax_studio_config_dir(home).join("status.json")
 }
