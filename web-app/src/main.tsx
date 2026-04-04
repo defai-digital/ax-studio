@@ -73,7 +73,7 @@ const preventDefaultFileDrop = () => {
  * redirect anchor.click() downloads through showSaveFilePicker so the
  * user gets a real OS save dialog for SVG / PNG / MMD exports.
  */
-const patchBlobDownloads = () => {
+const patchBlobDownloads = (): (() => void) => {
   const registry = new Map<string, Blob>()
 
   const origCreate = URL.createObjectURL.bind(URL)
@@ -99,6 +99,13 @@ const patchBlobDownloads = () => {
       }
     }
     origClick.call(this)
+  }
+
+  return () => {
+    URL.createObjectURL = origCreate
+    URL.revokeObjectURL = origRevoke
+    HTMLAnchorElement.prototype.click = origClick
+    registry.clear()
   }
 }
 
@@ -191,7 +198,7 @@ setupMobileViewport()
 preventDefaultFileDrop()
 
 // Fix blob: anchor downloads for Tauri WebView2
-patchBlobDownloads()
+const cleanupBlobPatches = patchBlobDownloads()
 
 // Render the app
 const rootElement = document.getElementById('root')
@@ -229,5 +236,6 @@ if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     document.removeEventListener('dragover', handleDragOver)
     document.removeEventListener('drop', handleDrop)
+    cleanupBlobPatches()
   })
 }
