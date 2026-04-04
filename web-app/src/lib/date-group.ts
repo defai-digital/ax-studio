@@ -22,8 +22,11 @@ function startOfDay(date: Date): Date {
 export function getDateGroup(date: Date | string | number): DateGroup {
   const now = startOfDay(new Date())
   const target = startOfDay(new Date(date))
-  const diffDays = Math.floor(
-    (now.getTime() - target.getTime()) / MS_PER_DAY,
+  // Use UTC to avoid DST-related off-by-one errors in day difference
+  const diffDays = Math.round(
+    (Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) -
+      Date.UTC(target.getFullYear(), target.getMonth(), target.getDate())) /
+      MS_PER_DAY,
   )
 
   if (diffDays === 0) return 'Today'

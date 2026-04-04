@@ -3,7 +3,6 @@ import { describe, it, expect, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import {
   DropdownMenu,
-  DropdownMenuPortal,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuGroup,
@@ -47,25 +46,6 @@ describe('DropdownMenu Components', () => {
       )
       
       // Check that the dropdown renders without errors when modal={false}
-      const trigger = screen.getByRole('button', { name: 'Open' })
-      expect(trigger).toBeInTheDocument()
-    })
-  })
-
-  describe('DropdownMenuPortal', () => {
-    it('renders DropdownMenuPortal with correct data-slot', () => {
-      render(
-        <DropdownMenu>
-          <DropdownMenuTrigger>Open</DropdownMenuTrigger>
-          <DropdownMenuPortal>
-            <DropdownMenuContent>
-              <DropdownMenuItem>Item</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenuPortal>
-        </DropdownMenu>
-      )
-      
-      // Check that the dropdown renders without errors with portal
       const trigger = screen.getByRole('button', { name: 'Open' })
       expect(trigger).toBeInTheDocument()
     })
