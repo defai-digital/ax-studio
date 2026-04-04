@@ -84,6 +84,9 @@ agent-teams/
 # IDE
 .idea/
 
+# Generated reports
+report/
+
 # Merge conflict artifacts
 *.orig
 *.rej

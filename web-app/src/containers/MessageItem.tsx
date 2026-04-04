@@ -30,6 +30,7 @@ import { RunLogSummary } from '@/components/RunLogViewer'
 import type { AgentStatusData } from '@/types/agent-data-parts'
 import type { RunLogData } from '@/lib/multi-agent/run-log'
 import { Zap, GitBranch, ThumbsUp, ThumbsDown } from 'lucide-react'
+import { useMessages } from '@/hooks/useMessages'
 import { RoutingBadge } from '@/components/RoutingBadge'
 
 const CHAT_STATUS = {
@@ -69,11 +70,31 @@ export const MessageItem = memo(
     onDelete,
   }: MessageItemProps) => {
     const selectedModel = useModelProvider((state) => state.selectedModel)
+    const updateMessage = useMessages((state) => state.updateMessage)
     const [previewImage, setPreviewImage] = useState<{
       url: string
       filename?: string
     } | null>(null)
 
+    const meta = message.metadata as Record<string, unknown> | undefined
+    const currentRating = meta?.rating as 'up' | 'down' | undefined
+
+    const handleRating = useCallback(
+      (rating: 'up' | 'down') => {
+        if (!threadId) return
+        const existingMeta = (message.metadata ?? {}) as Record<string, unknown>
+        const newRating = existingMeta.rating === rating ? undefined : rating
+        updateMessage({
+          id: message.id,
+          thread_id: threadId,
+          metadata: {
+            ...existingMeta,
+            rating: newRating,
+          },
+        } as any)
+      },
+      [message.id, message.metadata, threadId, updateMessage]
+    )
 
     const handleRegenerate = useCallback(() => {
       onRegenerate?.(message.id)
@@ -546,10 +567,11 @@ export const MessageItem = memo(
                   size="icon-xs"
                   title="Good response"
                   aria-label="Good response"
-                  className="text-muted-foreground/50 hover:text-emerald-500"
-                  onClick={() => {
-                    // TODO: Store rating in message metadata when rating infrastructure exists
-                  }}
+                  className={cn(
+                    'text-muted-foreground/50 hover:text-emerald-500',
+                    currentRating === 'up' && 'text-emerald-500'
+                  )}
+                  onClick={() => handleRating('up')}
                 >
                   <ThumbsUp className="size-3.5" />
                 </Button>
@@ -558,10 +580,11 @@ export const MessageItem = memo(
                   size="icon-xs"
                   title="Poor response"
                   aria-label="Poor response"
-                  className="text-muted-foreground/50 hover:text-rose-500"
-                  onClick={() => {
-                    // TODO: Store rating in message metadata when rating infrastructure exists
-                  }}
+                  className={cn(
+                    'text-muted-foreground/50 hover:text-rose-500',
+                    currentRating === 'down' && 'text-rose-500'
+                  )}
+                  onClick={() => handleRating('down')}
                 >
                   <ThumbsDown className="size-3.5" />
                 </Button>
