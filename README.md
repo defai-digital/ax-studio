@@ -12,7 +12,6 @@ AX Studio is a native desktop execution environment for general-purpose AI work.
 
 Built by [DEFAI Digital](https://github.com/defai-digital).
 
-[![Linter & Test](https://github.com/defai-digital/ax-studio/actions/workflows/ax-studio-linter-and-test.yml/badge.svg)](https://github.com/defai-digital/ax-studio/actions/workflows/ax-studio-linter-and-test.yml)
 [![Release](https://img.shields.io/github/v/release/defai-digital/ax-studio?display_name=tag)](https://github.com/defai-digital/ax-studio/releases)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/cTavsMgu)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
