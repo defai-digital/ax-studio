@@ -301,7 +301,7 @@ jobs:
         run: |
           mkdir -p report/testing
           node scripts/testing/module-coverage-audit.mjs --out-dir report/testing
-          node scripts/testing/module-coverage-gate.mjs --audit report/testing/module-coverage-audit.json --thresholds testing/module-thresholds.json --mode advisory
+          node scripts/testing/module-coverage-gate.mjs --audit report/testing/module-coverage-audit.json --thresholds scripts/testing/module-thresholds.json --mode advisory
 
       - name: Download code coverage report from base branch
         uses: actions/download-artifact@v4

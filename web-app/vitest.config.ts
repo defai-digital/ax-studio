@@ -22,7 +22,7 @@ export default defineConfig({
         'public/vendor/**',
       ],
       thresholds: {
-        // Global safety-net thresholds — per-module gates are in testing/module-thresholds.json
+        // Global safety-net thresholds — per-module gates are in scripts/testing/module-thresholds.json
         lines: 30,
         functions: 30,
         branches: 20,

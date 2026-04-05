@@ -8,7 +8,7 @@
  * Usage:
  *   node scripts/testing/module-coverage-gate.mjs \
  *     --audit report/testing/module-coverage-audit.json \
- *     --thresholds testing/module-thresholds.json \
+ *     --thresholds scripts/testing/module-thresholds.json \
  *     --mode advisory
  */
 
@@ -19,7 +19,7 @@ const { values } = parseArgs({
   args: process.argv.slice(2),
   options: {
     audit:      { type: 'string', default: 'report/testing/module-coverage-audit.json' },
-    thresholds: { type: 'string', default: 'testing/module-thresholds.json' },
+    thresholds: { type: 'string', default: 'scripts/testing/module-thresholds.json' },
     mode:       { type: 'string', default: 'advisory' }, // advisory | strict
   },
 })
