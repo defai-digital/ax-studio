@@ -11,6 +11,7 @@ export class ModelManager {
 
   constructor() {
     if (typeof window !== 'undefined') {
+      window.core ??= {}
       window.core.modelManager = this
     }
   }

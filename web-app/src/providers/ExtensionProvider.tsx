@@ -8,14 +8,15 @@ export function ExtensionProvider({ children }: PropsWithChildren) {
   const [finishedSetup, setFinishedSetup] = useState(false)
   const setupExtensions = useCallback(async () => {
     // Setup core window object for both platforms
-    window.core = {
-      api: APIs,
-    }
+    const core =
+      window.core ?? ({ api: APIs } as NonNullable<Window['core']>)
+    window.core = core
+    core.api = APIs
 
-    window.core.events = new EventEmitter()
-    window.core.extensionManager = new ExtensionManager()
-    window.core.engineManager = new EngineManager()
-    window.core.modelManager = new ModelManager()
+    core.events = new EventEmitter()
+    core.extensionManager = new ExtensionManager()
+    core.engineManager = new EngineManager()
+    core.modelManager = new ModelManager()
 
     // Register extensions - same pattern for both platforms
     await ExtensionManager.getInstance()

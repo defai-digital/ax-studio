@@ -124,6 +124,9 @@ vi.mock('@/components/ui/sidebar', () => ({
   SidebarMenuAction: ({ children }: { children: React.ReactNode }) => (
     <button>{children}</button>
   ),
+}))
+
+vi.mock('@/components/ui/sidebar-context', () => ({
   useSidebar: vi.fn().mockReturnValue({ isMobile: false }),
 }))
 

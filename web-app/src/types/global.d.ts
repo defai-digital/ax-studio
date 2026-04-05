@@ -1,10 +1,23 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import type { EngineManager, ModelManager } from '@ax-studio/core'
+import type { ExtensionManager } from '@/lib/extension'
+
 export {}
 
 declare module 'react-syntax-highlighter-virtualized-renderer'
 
 type AppCore = {
-  api: APIs
-  extensionManager: ExtensionManager | undefined
+  api: Record<string, (...args: any[]) => any> & {
+    openExternalUrl: (url: string) => void
+  }
+  events?: {
+    on: (eventName: string, handler: (...args: any[]) => void) => (() => void) | void
+    off: (eventName: string, handler: (...args: any[]) => void) => void
+    emit: (eventName: string, args: any) => void
+  }
+  extensionManager?: ExtensionManager
+  engineManager?: EngineManager
+  modelManager?: ModelManager
 }
 
 declare global {

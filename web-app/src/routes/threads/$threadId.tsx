@@ -34,7 +34,7 @@ import { useThreadTools } from '@/hooks/thread/use-thread-tools'
 import { useThreadSplit } from '@/hooks/thread/use-thread-split'
 import { useThreadConfig } from '@/hooks/thread/use-thread-config'
 import { useThreadEffects } from '@/hooks/thread/use-thread-effects'
-import { ThreadView } from '@/routes/threads/ThreadView'
+import { ThreadView } from '@/containers/threads/ThreadView'
 
 export const Route = createFileRoute('/threads/$threadId')({
   component: ThreadDetail,

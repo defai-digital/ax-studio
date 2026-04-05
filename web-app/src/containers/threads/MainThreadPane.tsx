@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { MessageSquareText, Users } from 'lucide-react'
 import ChatInput from '@/containers/ChatInput'
-import { MessagesArea } from './MessagesArea'
+import { MessagesArea } from '@/containers/threads/MessagesArea'
 
 export type MainThreadPaneProps = {
   threadId: string

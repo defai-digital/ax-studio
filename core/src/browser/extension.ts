@@ -21,6 +21,14 @@ export interface Compatibility {
   version: string
 }
 
+type ControllerProps = SettingComponentProps['controllerProps']
+
+function isDropdownControllerProps(
+  controllerProps: ControllerProps
+): controllerProps is Extract<ControllerProps, { options?: unknown; recommended?: unknown }> {
+  return 'options' in controllerProps || 'recommended' in controllerProps
+}
+
 /**
  * Represents a base extension.
  * This class should be extended by any class that represents an extension.
@@ -182,10 +190,12 @@ export abstract class BaseExtension implements ExtensionType {
       setting.controllerProps.value =
         oldSetting.controllerProps?.value ?? setting.controllerProps.value
 
-      if ('options' in setting.controllerProps) {
+      if (isDropdownControllerProps(setting.controllerProps)) {
         setting.controllerProps.options = setting.controllerProps.options?.length
           ? setting.controllerProps.options
-          : oldSetting.controllerProps?.options
+          : isDropdownControllerProps(oldSetting.controllerProps)
+            ? oldSetting.controllerProps.options
+            : setting.controllerProps.options
 
         if (!setting.controllerProps.options?.some((entry) => entry.value === setting.controllerProps.value)) {
           setting.controllerProps.value =
@@ -193,8 +203,10 @@ export abstract class BaseExtension implements ExtensionType {
         }
       }
 
-      if ('recommended' in setting.controllerProps) {
-        const oldRecommended = oldSetting.controllerProps?.recommended
+      if (isDropdownControllerProps(setting.controllerProps)) {
+        const oldRecommended = isDropdownControllerProps(oldSetting.controllerProps)
+          ? oldSetting.controllerProps.recommended
+          : undefined
         if (oldRecommended !== undefined && oldRecommended !== '') {
           setting.controllerProps.recommended = oldRecommended
         }
@@ -219,7 +231,7 @@ export abstract class BaseExtension implements ExtensionType {
     return (value as T) ?? defaultValue
   }
 
-  onSettingUpdate<T>(key: string, value: T) {
+  onSettingUpdate<T>(_key: string, _value: T) {
     return
   }
 

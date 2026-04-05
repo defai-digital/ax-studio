@@ -173,6 +173,7 @@ export interface chatCompletion {
 export interface modelInfo {
   id: string // e.g. "qwen3-4B" or "org/model/quant"
   name: string // human‑readable, e.g., "Qwen3 4B Q4_0"
+  description?: string
   quant_type?: string // q4_0 (optional as it might be part of ID or name)
   providerId: string // e.g. "llama.cpp"
   port: number

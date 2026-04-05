@@ -31,7 +31,7 @@ import {
   LOCAL_KNOWLEDGE_INSTRUCTION,
 } from '@/lib/system-prompt'
 import { ResearchPanel } from '@/components/research/ResearchPanel'
-import { MainThreadPane } from './MainThreadPane'
+import { MainThreadPane } from '@/containers/threads/MainThreadPane'
 
 export function SplitThreadContainer({
   threadId,

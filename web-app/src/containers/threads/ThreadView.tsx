@@ -23,8 +23,8 @@ import { ArtifactPanel } from '@/components/ai-elements/ArtifactPanel'
 import { ResearchPanel } from '@/components/research/ResearchPanel'
 import { TeamVariablePrompt } from '@/components/TeamVariablePrompt'
 import { CostApprovalModal } from '@/components/CostApprovalModal'
-import { SplitThreadContainer } from './SplitThreadContainer'
-import { MainThreadPane } from './MainThreadPane'
+import { SplitThreadContainer } from '@/containers/threads/SplitThreadContainer'
+import { MainThreadPane } from '@/containers/threads/MainThreadPane'
 import { Columns2, MessageSquareText, Users } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -365,4 +365,3 @@ export function ThreadView({
     </div>
   )
 }
-

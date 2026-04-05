@@ -1,4 +1,6 @@
 import { APIFunctions } from '../types/api'
+import type { EngineManager } from '../browser/extensions/engines/EngineManager'
+import type { ModelManager } from '../browser/models/manager'
 
 type EventHandler<T = unknown> = (payload: T) => void
 
@@ -13,18 +15,25 @@ interface ExtensionManager {
 }
 
 interface Core {
-  api: APIFunctions
-  events: EventEmitter
+  api?: APIFunctions
+  events?: EventEmitter
   extensionManager?: ExtensionManager
+  engineManager?: EngineManager
+  modelManager?: ModelManager
 }
 
 export {}
 
 declare global {
+  interface Window {
+    core?: Core
+  }
+
   namespace NodeJS {
     interface Global {
-      core: Core
+      core: Core | undefined
     }
   }
+
   var core: Core | undefined
 }

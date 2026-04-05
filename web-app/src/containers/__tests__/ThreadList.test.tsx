@@ -26,15 +26,23 @@ vi.mock('@/hooks/useThreadManagement', () => ({
 }))
 
 vi.mock('@/components/ui/sidebar', () => ({
-  SidebarMenuAction: ({ children, ...props }: { children: React.ReactNode }) => (
-    <button {...props}>{children}</button>
-  ),
+  SidebarMenuAction: ({
+    children,
+    showOnHover,
+    ...props
+  }: {
+    children: React.ReactNode
+    showOnHover?: boolean
+  }) => <button {...props}>{children}</button>,
   SidebarMenuButton: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
   SidebarMenuItem: ({ children }: { children: React.ReactNode }) => (
     <li>{children}</li>
   ),
+}))
+
+vi.mock('@/components/ui/sidebar-context', () => ({
   useSidebar: vi.fn().mockReturnValue({ isMobile: false }),
 }))
 

@@ -10,31 +10,14 @@ import type { ToolUIPart } from 'ai'
 import { ChevronDownIcon, WrenchIcon } from 'lucide-react'
 import type { ComponentProps, ReactNode } from 'react'
 import {
-  createContext,
-  isValidElement,
   memo,
-  useContext,
   useEffect,
+  isValidElement,
   useMemo,
   useState,
 } from 'react'
 import { CodeBlock } from './code-block'
-
-type ToolContextValue = {
-  isOpen: boolean
-  setIsOpen: (open: boolean) => void
-  state: ToolUIPart['state']
-}
-
-const ToolContext = createContext<ToolContextValue | null>(null)
-
-export const useTool = () => {
-  const context = useContext(ToolContext)
-  if (!context) {
-    throw new Error('Tool components must be used within Tool')
-  }
-  return context
-}
+import { ToolContext, useTool } from './tool-context'
 
 export type ToolProps = ComponentProps<typeof Collapsible> & {
   className?: string

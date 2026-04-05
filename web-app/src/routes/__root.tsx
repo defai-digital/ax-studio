@@ -24,6 +24,7 @@ import { LeftSidebar } from '@/components/left-sidebar'
 import { WindowControls } from '@/components/WindowControls'
 import { motion } from 'motion/react'
 import { pageVariants, pageTransition } from '@/lib/animations'
+import { hideInitialLoader } from '@/lib/bootstrap/app-startup'
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -103,39 +104,24 @@ const LogsLayout = () => {
 }
 
 function RootLayout() {
-  const getInitialLayoutType = () => {
-    const pathname = window.location.pathname
-    return (
-      pathname === route.localApiServerlogs ||
-      pathname === route.systemMonitor ||
-      pathname === route.appLogs
-    )
-  }
+  const location = useLocation()
 
   useEffect(() => {
-    // Wait for the UI to be fully rendered before hiding the loader
     const hideLoader = () => {
       requestAnimationFrame(() => {
-        // Hide the HTML loader
-        document.body.classList.add('loaded')
-
-        // Remove the HTML loader element after transition
-        const loader = document.getElementById('initial-loader')
-        if (loader) {
-          setTimeout(() => {
-            loader.remove()
-          }, 300)
-        }
+        hideInitialLoader()
       })
     }
 
-    // Give providers time to initialize and paint
     const timer = setTimeout(hideLoader, 200)
 
     return () => clearTimeout(timer)
   }, [])
 
-  const IS_LOGS_ROUTE = getInitialLayoutType()
+  const isLogsRoute =
+    location.pathname === route.localApiServerlogs ||
+    location.pathname === route.systemMonitor ||
+    location.pathname === route.appLogs
 
   return (
     <Fragment>
@@ -147,7 +133,7 @@ function RootLayout() {
           <ExtensionProvider>
             <DataProvider />
             <GlobalEventHandler />
-            {IS_LOGS_ROUTE ? <LogsLayout /> : <AppLayout />}
+            {isLogsRoute ? <LogsLayout /> : <AppLayout />}
           </ExtensionProvider>
           {/* <TanStackRouterDevtools position="bottom-right" /> */}
           <ToolApproval />

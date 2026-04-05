@@ -252,8 +252,13 @@ export class ExtensionManager {
    * Shared instance of ExtensionManager.
    */
   static getInstance() {
-    if (!window.core.extensionManager)
-      window.core.extensionManager = new ExtensionManager()
-    return window.core.extensionManager as ExtensionManager
+    const core = window.core
+    if (!core) {
+      throw new Error('window.core is not initialized')
+    }
+    if (!core.extensionManager) {
+      core.extensionManager = new ExtensionManager()
+    }
+    return core.extensionManager
   }
 }

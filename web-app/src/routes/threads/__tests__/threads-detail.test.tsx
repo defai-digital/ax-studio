@@ -141,7 +141,7 @@ vi.mock('@/hooks/thread/use-thread-chat', () => ({
   }),
 }))
 
-vi.mock('@/routes/threads/ThreadView', () => ({
+vi.mock('@/containers/threads/ThreadView', () => ({
   ThreadView: () => <div data-testid="thread-view" />,
 }))
 

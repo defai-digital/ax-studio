@@ -1,5 +1,13 @@
 import { FileStat } from '../types'
 
+const getCoreApi = () => {
+  const api = globalThis.core?.api
+  if (!api) {
+    throw new Error('Core API bridge is not available')
+  }
+  return api
+}
+
 const decodePathRecursively = (path: string): string => {
   let decoded = path
 
@@ -60,7 +68,7 @@ export const fs = {
    */
   writeFileSync(path: string, data: string): Promise<void> {
     validatePath(path)
-    return globalThis.core.api?.writeFileSync({ args: [path, data] })
+    return getCoreApi().writeFileSync({ args: [path, data] }) as Promise<void>
   },
 
   /**
@@ -70,7 +78,7 @@ export const fs = {
    */
   writeBlob(path: string, data: string): Promise<void> {
     validatePath(path)
-    return globalThis.core.api?.writeBlob(path, data)
+    return getCoreApi().writeBlob(path, data) as Promise<void>
   },
 
   /**
@@ -80,7 +88,7 @@ export const fs = {
    */
   readFileSync(path: string): Promise<string> {
     validatePath(path)
-    return globalThis.core.api?.readFileSync({ args: [path] })
+    return getCoreApi().readFileSync({ args: [path] }) as Promise<string>
   },
 
   /**
@@ -90,7 +98,7 @@ export const fs = {
    */
   existsSync(path: string): Promise<boolean> {
     validatePath(path)
-    return globalThis.core.api?.existsSync({ args: [path] })
+    return getCoreApi().existsSync({ args: [path] }) as Promise<boolean>
   },
 
   /**
@@ -100,7 +108,7 @@ export const fs = {
    */
   readdirSync(path: string): Promise<string[]> {
     validatePath(path)
-    return globalThis.core.api?.readdirSync({ args: [path] })
+    return getCoreApi().readdirSync({ args: [path] }) as Promise<string[]>
   },
 
   /**
@@ -108,7 +116,7 @@ export const fs = {
    */
   mkdir(path: string): Promise<void> {
     validatePath(path)
-    return globalThis.core.api?.mkdir({ args: [path] })
+    return getCoreApi().mkdir({ args: [path] }) as Promise<void>
   },
 
   /**
@@ -116,7 +124,7 @@ export const fs = {
    */
   rm(path: string): Promise<void> {
     validatePath(path)
-    return globalThis.core.api?.rm({ args: [path] })
+    return getCoreApi().rm({ args: [path] }) as Promise<void>
   },
 
   /**
@@ -125,7 +133,7 @@ export const fs = {
   mv(from: string, to: string): Promise<void> {
     validatePath(from)
     validatePath(to)
-    return globalThis.core.api?.mv({ args: [from, to] })
+    return getCoreApi().mv({ args: [from, to] }) as Promise<void>
   },
 
   /**
@@ -134,7 +142,7 @@ export const fs = {
    */
   unlinkSync(path: string): Promise<void> {
     validatePath(path)
-    return globalThis.core.api?.unlinkSync({ args: [path] })
+    return getCoreApi().unlinkSync({ args: [path] }) as Promise<void>
   },
 
   /**
@@ -142,7 +150,7 @@ export const fs = {
    */
   appendFileSync(path: string, data: string): Promise<void> {
     validatePath(path)
-    return globalThis.core.api?.appendFileSync({ args: [path, data] })
+    return getCoreApi().appendFileSync({ args: [path, data] }) as Promise<void>
   },
 
   /**
@@ -151,7 +159,7 @@ export const fs = {
   copyFile(src: string, dest: string): Promise<void> {
     validatePath(src)
     validatePath(dest)
-    return globalThis.core.api?.copyFile(src, dest)
+    return getCoreApi().copyFile(src, dest) as Promise<void>
   },
 
   /**
@@ -159,9 +167,12 @@ export const fs = {
    *
    * @param paths - The paths to search for gguf files.
    */
-  getGgufFiles(paths: string[]): Promise<{gguf: string[], nonGguf: string[]}> {
-    paths.forEach(path => validatePath(path))
-    return globalThis.core.api?.getGgufFiles(paths)
+  getGgufFiles(paths: string[]): Promise<{ gguf: string[]; nonGguf: string[] }> {
+    paths.forEach((path) => validatePath(path))
+    return getCoreApi().getGgufFiles(paths) as Promise<{
+      gguf: string[]
+      nonGguf: string[]
+    }>
   },
 
   /**
@@ -171,6 +182,6 @@ export const fs = {
    */
   fileStat(path: string): Promise<FileStat | undefined> {
     validatePath(path)
-    return globalThis.core.api?.fileStat({ args: path })
+    return getCoreApi().fileStat({ args: path }) as Promise<FileStat | undefined>
   },
 }
