@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import { ArtifactPreview } from '../ArtifactPreview'
 
-vi.mock('@/lib/artifact-harness', () => ({
+vi.mock('@/lib/artifacts/harness', () => ({
   buildHarnessAsync: vi.fn().mockResolvedValue('<html><body>test</body></html>'),
 }))
 

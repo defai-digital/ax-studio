@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ArtifactType } from '@/lib/artifact-harness'
+import type { ArtifactType } from '@/lib/artifacts/harness'
 
 export interface ArtifactEntry {
   type: ArtifactType

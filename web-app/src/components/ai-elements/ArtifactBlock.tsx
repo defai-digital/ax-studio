@@ -1,6 +1,6 @@
 import { type ReactNode, Component, memo, useState } from 'react'
 import { CopyIcon, CheckIcon, ExternalLinkIcon, CodeIcon, EyeIcon, AlertCircleIcon } from 'lucide-react'
-import { type ArtifactType } from '@/lib/artifact-harness'
+import { type ArtifactType } from '@/lib/artifacts/harness'
 import { useArtifactPanel } from '@/hooks/ui/useArtifactPanel'
 import { ArtifactPreview } from './ArtifactPreview'
 import { cn } from '@/lib/utils'

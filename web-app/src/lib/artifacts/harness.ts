@@ -1,4 +1,4 @@
-import { transformJSX } from './artifact-transform'
+import { transformJSX } from './transform'
 
 export type ArtifactType = 'html' | 'react' | 'svg' | 'chartjs' | 'vega'
 

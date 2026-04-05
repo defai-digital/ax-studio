@@ -1,6 +1,6 @@
 import { type ReactNode, memo, useState } from 'react'
 import { AppWindowIcon } from 'lucide-react'
-import { type ArtifactType } from '@/lib/artifact-harness'
+import { type ArtifactType } from '@/lib/artifacts/harness'
 import { ArtifactBlock } from './ArtifactBlock'
 import { cn } from '@/lib/utils'
 

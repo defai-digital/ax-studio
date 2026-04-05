@@ -14,7 +14,7 @@ import { PythonCodeBlock } from '@/components/ai-elements/PythonCodeBlock'
 import { ArtifactBlock } from '@/components/ai-elements/ArtifactBlock'
 import { RenderableCodeBlock } from '@/components/ai-elements/RenderableCodeBlock'
 import { MermaidError } from '@/components/MermaidError'
-import type { ArtifactType } from '@/lib/artifact-harness'
+import type { ArtifactType } from '@/lib/artifacts/harness'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Components = any

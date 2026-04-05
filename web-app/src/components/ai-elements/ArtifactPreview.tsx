@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import DOMPurify from 'dompurify'
-import { buildHarnessAsync, type ArtifactType } from '@/lib/artifact-harness'
+import { buildHarnessAsync, type ArtifactType } from '@/lib/artifacts/harness'
 import { AlertCircleIcon, RefreshCw, Copy } from 'lucide-react'
 
 const TYPE_LABELS: Record<ArtifactType, string> = {
