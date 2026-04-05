@@ -1,4 +1,4 @@
-import { useGeneralSetting } from '@/hooks/useGeneralSetting'
+import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { Switch } from '@/components/ui/switch'
 
 export function TokenCounterCompactSwitcher() {

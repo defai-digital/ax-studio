@@ -1,6 +1,6 @@
 import { XIcon, CodeIcon, EyeIcon, CopyIcon, CheckIcon, HistoryIcon, RotateCcwIcon } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import { useArtifactPanel, type ArtifactEntry } from '@/hooks/useArtifactPanel'
+import { useArtifactPanel, type ArtifactEntry } from '@/hooks/ui/useArtifactPanel'
 import { ArtifactPreview } from './ArtifactPreview'
 import { type ArtifactType } from '@/lib/artifact-harness'
 import { cn } from '@/lib/utils'

@@ -1,10 +1,10 @@
 import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router'
 import ChatInput from '@/containers/ChatInput'
 import HeaderPage from '@/containers/HeaderPage'
-import { useTools } from '@/hooks/useTools'
+import { useTools } from '@/hooks/tools/useTools'
 import { cn } from '@/lib/utils'
 
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import SetupScreen from '@/containers/SetupScreen'
 import { route } from '@/constants/routes'
 import { localStorageKey } from '@/constants/localStorage'
@@ -17,9 +17,9 @@ type SearchParams = {
   }
 }
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useThreads } from '@/hooks/useThreads'
+import { useThreads } from '@/hooks/threads/useThreads'
 import DropdownModelProvider from '@/containers/DropdownModelProvider'
-import { useGeneralSetting } from '@/hooks/useGeneralSetting'
+import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { resolveSystemPrompt } from '@/lib/system-prompt'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'

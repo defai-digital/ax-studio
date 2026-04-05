@@ -8,7 +8,7 @@ import { useTranslation } from '@/i18n/react-i18next-compat'
 import { Input } from '@/components/ui/input'
 import { EyeOff, Eye, Globe } from 'lucide-react'
 import { useCallback, useState } from 'react'
-import { useProxyConfig } from '@/hooks/useProxyConfig'
+import { useProxyConfig } from '@/hooks/settings/useProxyConfig'
 
 export const Route = createFileRoute(route.settings.https_proxy)({
   component: HTTPSProxyContent,

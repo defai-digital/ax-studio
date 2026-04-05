@@ -9,8 +9,8 @@ import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardItem } from '@/components/common/Card'
-import { useMemory, MEMORY_LIMIT } from '@/hooks/useMemory'
-import type { MemoryEntry } from '@/hooks/useMemory'
+import { useMemory, MEMORY_LIMIT } from '@/hooks/integrations/useMemory'
+import type { MemoryEntry } from '@/hooks/integrations/useMemory'
 import {
   IconTrash,
   IconCheck,

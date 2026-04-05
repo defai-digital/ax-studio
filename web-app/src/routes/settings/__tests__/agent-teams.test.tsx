@@ -172,7 +172,7 @@ const mockAssistants = [
 
 const mockAddAssistant = vi.fn()
 
-vi.mock('@/hooks/useAssistant', () => ({
+vi.mock('@/hooks/chat/useAssistant', () => ({
   useAssistant: () => ({
     assistants: mockAssistants,
     addAssistant: mockAddAssistant,

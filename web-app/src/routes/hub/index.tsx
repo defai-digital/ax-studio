@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
-import { useModelSources } from '@/hooks/useModelSources'
+import { useModelSources } from '@/hooks/models/useModelSources'
 import { cn } from '@/lib/utils'
 import {
   useState,
@@ -41,8 +41,8 @@ import {
 import { motion, AnimatePresence } from 'motion/react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import Fuse from 'fuse.js'
-import { useGeneralSetting } from '@/hooks/useGeneralSetting'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { DownloadButtonPlaceholder } from '@/containers/DownloadButton'
 import { useShallow } from 'zustand/shallow'
 import { ModelDownloadAction } from '@/containers/ModelDownloadAction'

@@ -5,7 +5,7 @@ import { ProxyTimeoutInput } from '../ProxyTimeoutInput'
 const mockSetProxyTimeout = vi.fn()
 let mockProxyTimeout = 600
 
-vi.mock('@/hooks/useLocalApiServer', () => ({
+vi.mock('@/hooks/settings/useLocalApiServer', () => ({
   useLocalApiServer: () => ({
     proxyTimeout: mockProxyTimeout,
     setProxyTimeout: mockSetProxyTimeout,

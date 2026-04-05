@@ -7,7 +7,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { MCPServerConfig, MCPServers, MCPSettings } from '@/hooks/useMCPServers'
+import { MCPServerConfig, MCPServers, MCPSettings } from '@/hooks/tools/useMCPServers'
 import CodeEditor from '@uiw/react-textarea-code-editor'
 import '@uiw/react-textarea-code-editor/dist.css'
 import { useTranslation } from '@/i18n/react-i18next-compat'

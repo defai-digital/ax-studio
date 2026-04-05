@@ -15,11 +15,11 @@ import {
 
 import { Switch } from '@/components/ui/switch'
 
-import { useThreads } from '@/hooks/useThreads'
-import { useToolAvailable } from '@/hooks/useToolAvailable'
+import { useThreads } from '@/hooks/threads/useThreads'
+import { useToolAvailable } from '@/hooks/tools/useToolAvailable'
 
 import React from 'react'
-import { useAppState } from '@/hooks/useAppState'
+import { useAppState } from '@/hooks/settings/useAppState'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { cn } from '@/lib/utils'
 

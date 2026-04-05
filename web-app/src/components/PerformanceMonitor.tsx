@@ -8,8 +8,8 @@ import {
   Activity,
   MemoryStick,
 } from 'lucide-react'
-import { useHardware } from '@/hooks/useHardware'
-import { useAppState } from '@/hooks/useAppState'
+import { useHardware } from '@/hooks/settings/useHardware'
+import { useAppState } from '@/hooks/settings/useAppState'
 
 function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v))

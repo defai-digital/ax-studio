@@ -4,7 +4,7 @@ import SettingsMenu from '@/containers/SettingsMenu'
 import HeaderPage from '@/containers/HeaderPage'
 import { Button } from '@/components/ui/button'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useNavigate } from '@tanstack/react-router'
 import {
   cn,

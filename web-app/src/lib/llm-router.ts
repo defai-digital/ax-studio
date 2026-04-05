@@ -13,8 +13,8 @@ import { type UIMessage } from '@ai-sdk/react'
 import { streamText } from 'ai'
 import { ModelFactory } from './model-factory'
 import { buildRouterPrompt } from './llm-router-prompt'
-import { useModelProvider } from '@/hooks/useModelProvider'
-import { useFavoriteModel } from '@/hooks/useFavoriteModel'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
+import { useFavoriteModel } from '@/hooks/models/useFavoriteModel'
 import { predefinedProviders } from '@/constants/providers'
 
 const MAX_MODELS_IN_PROMPT = 30

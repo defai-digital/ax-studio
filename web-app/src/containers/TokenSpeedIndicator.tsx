@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { useAppState } from '@/hooks/useAppState'
+import { useAppState } from '@/hooks/settings/useAppState'
 import { toNumber } from '@/utils/number'
 import { Gauge } from 'lucide-react'
 

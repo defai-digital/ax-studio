@@ -13,13 +13,13 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }))
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: () => ({
     updateProvider: vi.fn(),
   }),
 }))
 
-vi.mock('@/hooks/useProviderModels', () => ({
+vi.mock('@/hooks/models/useProviderModels', () => ({
   useProviderModels: () => ({
     models: [],
     loading: false,

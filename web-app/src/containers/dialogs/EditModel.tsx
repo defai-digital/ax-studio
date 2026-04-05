@@ -9,7 +9,7 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import {
   IconPencil,
   IconEye,

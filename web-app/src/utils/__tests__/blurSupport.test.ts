@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { supportsBlurEffects } from '../blurSupport'
-import type { HardwareData } from '@/hooks/useHardware'
+import type { HardwareData } from '@/hooks/settings/useHardware'
 
 /**
  * Helper to create minimal HardwareData for testing.

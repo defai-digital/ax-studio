@@ -12,7 +12,7 @@ import { Link } from '@tanstack/react-router'
 import { useRef } from 'react'
 import { BlocksIcon, type BlocksIconHandle } from '../animated-icon/blocks'
 import { SearchDialog } from '@/containers/dialogs/SearchDialog'
-import { useSearchDialog } from '@/hooks/useSearchDialog'
+import { useSearchDialog } from '@/hooks/ui/useSearchDialog'
 import {
   SidebarMenu,
   SidebarMenuButton,

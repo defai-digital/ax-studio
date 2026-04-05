@@ -1,4 +1,4 @@
-import type { ResearchSource } from '@/hooks/useResearchPanel'
+import type { ResearchSource } from '@/hooks/research/useResearchPanel'
 import type { ExaResult, MCPToolCallResult } from './research-types'
 
 /**

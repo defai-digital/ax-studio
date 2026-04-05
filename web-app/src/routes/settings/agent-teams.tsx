@@ -3,7 +3,7 @@ import { route } from '@/constants/routes'
 import { useState, useEffect } from 'react'
 
 import { useAgentTeamStore } from '@/stores/agent-team-store'
-import { useAssistant } from '@/hooks/useAssistant'
+import { useAssistant } from '@/hooks/chat/useAssistant'
 
 import HeaderPage from '@/containers/HeaderPage'
 import SettingsMenu from '@/containers/SettingsMenu'

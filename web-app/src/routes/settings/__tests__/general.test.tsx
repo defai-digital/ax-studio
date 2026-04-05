@@ -57,7 +57,7 @@ vi.mock('@/containers/dialogs/ChangeDataFolderLocation', () => ({
   ),
 }))
 
-vi.mock('@/hooks/useGeneralSetting', () => ({
+vi.mock('@/hooks/settings/useGeneralSetting', () => ({
   useGeneralSetting: () => ({
     spellCheckChatInput: true,
     setSpellCheckChatInput: vi.fn(),
@@ -73,7 +73,7 @@ vi.mock('@/hooks/useGeneralSetting', () => ({
 // Create a controllable mock
 const mockCheckForUpdate = vi.fn()
 
-vi.mock('@/hooks/useAppUpdater', () => ({
+vi.mock('@/hooks/updater/useAppUpdater', () => ({
   useAppUpdater: () => ({
     checkForUpdate: mockCheckForUpdate,
   }),

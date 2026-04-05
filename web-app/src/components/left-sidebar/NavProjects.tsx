@@ -24,7 +24,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { useSidebar } from '@/components/ui/sidebar-context'
-import { useThreadManagement } from "@/hooks/useThreadManagement"
+import { useThreadManagement } from "@/hooks/threads/useThreadManagement"
 import { Link, useNavigate } from "@tanstack/react-router"
 import { useTranslation } from "@/i18n/react-i18next-compat"
 
@@ -32,7 +32,7 @@ import { useState } from "react"
 import type { ThreadFolder } from "@/services/projects/types"
 import AddProjectDialog from "@/containers/dialogs/AddProjectDialog"
 import { DeleteProjectDialog } from "@/containers/dialogs/DeleteProjectDialog"
-import { useProjectDialog } from "@/hooks/useProjectDialog"
+import { useProjectDialog } from "@/hooks/ui/useProjectDialog"
 
 function ProjectItem({
   item,

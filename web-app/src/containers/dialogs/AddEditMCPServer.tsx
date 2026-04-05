@@ -15,7 +15,7 @@ import {
   IconGripVertical,
   IconCodeDots,
 } from '@tabler/icons-react'
-import { MCPServerConfig } from '@/hooks/useMCPServers'
+import { MCPServerConfig } from '@/hooks/tools/useMCPServers'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import {
   DndContext,

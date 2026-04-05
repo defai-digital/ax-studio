@@ -7,24 +7,24 @@ const mockSetSearchOpen = vi.fn()
 const mockSetProjectDialogOpen = vi.fn()
 const mockNavigate = vi.fn()
 
-vi.mock('@/hooks/useHotkeys', () => ({
+vi.mock('@/hooks/ui/useHotkeys', () => ({
   useKeyboardShortcut: vi.fn(),
 }))
 
-vi.mock('@/hooks/useLeftPanel', () => ({
+vi.mock('@/hooks/ui/useLeftPanel', () => ({
   useLeftPanel: vi.fn(() => ({
     open: false,
     setLeftPanel: mockSetLeftPanel,
   })),
 }))
 
-vi.mock('@/hooks/useSearchDialog', () => ({
+vi.mock('@/hooks/ui/useSearchDialog', () => ({
   useSearchDialog: vi.fn(() => ({
     setOpen: mockSetSearchOpen,
   })),
 }))
 
-vi.mock('@/hooks/useProjectDialog', () => ({
+vi.mock('@/hooks/ui/useProjectDialog', () => ({
   useProjectDialog: vi.fn(() => ({
     setOpen: mockSetProjectDialogOpen,
   })),
@@ -71,7 +71,7 @@ describe('KeyboardShortcutsProvider', () => {
   })
 
   it('registers five keyboard shortcuts via useKeyboardShortcut', async () => {
-    const { useKeyboardShortcut } = await import('@/hooks/useHotkeys')
+    const { useKeyboardShortcut } = await import('@/hooks/ui/useHotkeys')
 
     render(<KeyboardShortcutsProvider />)
 
@@ -80,7 +80,7 @@ describe('KeyboardShortcutsProvider', () => {
   })
 
   it('passes shortcut specs with callback functions', async () => {
-    const { useKeyboardShortcut } = await import('@/hooks/useHotkeys')
+    const { useKeyboardShortcut } = await import('@/hooks/ui/useHotkeys')
 
     render(<KeyboardShortcutsProvider />)
 
@@ -92,7 +92,7 @@ describe('KeyboardShortcutsProvider', () => {
   })
 
   it('sidebar shortcut callback toggles left panel', async () => {
-    const { useKeyboardShortcut } = await import('@/hooks/useHotkeys')
+    const { useKeyboardShortcut } = await import('@/hooks/ui/useHotkeys')
 
     render(<KeyboardShortcutsProvider />)
 
@@ -105,7 +105,7 @@ describe('KeyboardShortcutsProvider', () => {
   })
 
   it('new chat shortcut callback navigates to home', async () => {
-    const { useKeyboardShortcut } = await import('@/hooks/useHotkeys')
+    const { useKeyboardShortcut } = await import('@/hooks/ui/useHotkeys')
 
     render(<KeyboardShortcutsProvider />)
 
@@ -116,7 +116,7 @@ describe('KeyboardShortcutsProvider', () => {
   })
 
   it('new project shortcut callback opens project dialog', async () => {
-    const { useKeyboardShortcut } = await import('@/hooks/useHotkeys')
+    const { useKeyboardShortcut } = await import('@/hooks/ui/useHotkeys')
 
     render(<KeyboardShortcutsProvider />)
 
@@ -127,7 +127,7 @@ describe('KeyboardShortcutsProvider', () => {
   })
 
   it('settings shortcut callback navigates to settings page', async () => {
-    const { useKeyboardShortcut } = await import('@/hooks/useHotkeys')
+    const { useKeyboardShortcut } = await import('@/hooks/ui/useHotkeys')
 
     render(<KeyboardShortcutsProvider />)
 
@@ -138,7 +138,7 @@ describe('KeyboardShortcutsProvider', () => {
   })
 
   it('search shortcut callback opens search dialog', async () => {
-    const { useKeyboardShortcut } = await import('@/hooks/useHotkeys')
+    const { useKeyboardShortcut } = await import('@/hooks/ui/useHotkeys')
 
     render(<KeyboardShortcutsProvider />)
 

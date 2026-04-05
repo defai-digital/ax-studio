@@ -9,10 +9,10 @@ import {
 } from 'ai'
 import type { UIMessageChunk, UIMessageStreamWriter } from 'ai'
 import { ModelFactory } from '@/lib/model-factory'
-import { useAssistant } from '@/hooks/useAssistant'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useAssistant } from '@/hooks/chat/useAssistant'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useAgentTeamStore } from '@/stores/agent-team-store'
-import { useThreads } from '@/hooks/useThreads'
+import { useThreads } from '@/hooks/threads/useThreads'
 import type { AgentStatusData } from '@/types/agent-data-parts'
 import type { RunLogData } from '@/lib/multi-agent/run-log'
 import {

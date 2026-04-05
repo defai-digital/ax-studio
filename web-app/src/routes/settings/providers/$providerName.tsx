@@ -1,7 +1,7 @@
 import { Card, CardItem } from '@/components/common/Card'
 import HeaderPage from '@/containers/HeaderPage'
 import SettingsMenu from '@/containers/SettingsMenu'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { cn, getProviderTitle, getProviderColor, getModelDisplayName } from '@/lib/utils'
 import { createFileRoute, Link, useParams } from '@tanstack/react-router'
 import { useTranslation } from '@/i18n/react-i18next-compat'

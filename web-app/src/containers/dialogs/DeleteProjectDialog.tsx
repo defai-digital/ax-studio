@@ -10,8 +10,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { useThreads } from '@/hooks/useThreads'
-import { useThreadManagement } from '@/hooks/useThreadManagement'
+import { useThreads } from '@/hooks/threads/useThreads'
+import { useThreadManagement } from '@/hooks/threads/useThreadManagement'
 import { AlertTriangle } from 'lucide-react'
 
 interface DeleteProjectDialogProps {

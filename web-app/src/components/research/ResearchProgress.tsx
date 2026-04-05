@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import type { ResearchStep } from '@/hooks/useResearchPanel'
+import type { ResearchStep } from '@/hooks/research/useResearchPanel'
 
 interface ResearchProgressProps {
   steps: ResearchStep[]

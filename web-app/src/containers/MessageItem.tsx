@@ -17,7 +17,7 @@ import {
   ToolOutput,
 } from '@/components/ai-elements/tool'
 import { CopyButton } from '@/components/common/CopyButton'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { IconRefresh, IconPaperclip } from '@tabler/icons-react'
 import { EditMessageDialog } from '@/containers/dialogs/EditMessageDialog'
 import { DeleteMessageDialog } from '@/containers/dialogs/DeleteMessageDialog'
@@ -30,7 +30,7 @@ import { RunLogSummary } from '@/components/RunLogViewer'
 import type { AgentStatusData } from '@/types/agent-data-parts'
 import type { RunLogData } from '@/lib/multi-agent/run-log'
 import { Zap, GitBranch, ThumbsUp, ThumbsDown } from 'lucide-react'
-import { useMessages } from '@/hooks/useMessages'
+import { useMessages } from '@/hooks/chat/useMessages'
 import { RoutingBadge } from '@/components/RoutingBadge'
 
 const CHAT_STATUS = {

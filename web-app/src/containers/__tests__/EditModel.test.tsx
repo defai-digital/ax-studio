@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render } from '@testing-library/react'
 import { DialogEditModel } from '../dialogs/EditModel'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import '@testing-library/jest-dom'
 
 // Mock the dependencies
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: vi.fn(() => ({
     updateProvider: vi.fn(),
     setProviders: vi.fn(),

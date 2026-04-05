@@ -1,9 +1,9 @@
 import { useEffect } from 'react'
 import { events, ModelEvent, AppEvent, DownloadEvent } from '@ax-studio/core'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
-import { useDownloadStore } from '@/hooks/useDownloadStore'
-import { useAppState } from '@/hooks/useAppState'
+import { useDownloadStore } from '@/hooks/models/useDownloadStore'
+import { useAppState } from '@/hooks/settings/useAppState'
 import { toast } from 'sonner'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 

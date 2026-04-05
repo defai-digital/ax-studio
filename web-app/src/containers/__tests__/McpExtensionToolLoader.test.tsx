@@ -8,7 +8,7 @@ const mockSetToolDisabledForThread = vi.fn()
 const mockSetDefaultDisabledTools = vi.fn()
 const mockGetDefaultDisabledTools = vi.fn().mockReturnValue([])
 
-vi.mock('@/hooks/useToolAvailable', () => ({
+vi.mock('@/hooks/tools/useToolAvailable', () => ({
   useToolAvailable: () => ({
     isToolDisabled: mockIsToolDisabled,
     setToolDisabledForThread: mockSetToolDisabledForThread,
@@ -17,7 +17,7 @@ vi.mock('@/hooks/useToolAvailable', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useThreads', () => ({
+vi.mock('@/hooks/threads/useThreads', () => ({
   useThreads: vi.fn((selector) =>
     selector({ getCurrentThread: () => ({ id: 'thread-42' }) })
   ),

@@ -10,8 +10,8 @@ import { Button } from '@/components/ui/button'
 import HeaderPage from './HeaderPage'
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { useTheme } from '@/hooks/useTheme'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useTheme } from '@/hooks/ui/useTheme'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import {
   Zap,
   Cpu,

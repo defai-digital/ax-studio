@@ -17,7 +17,7 @@ import {
   injectFilesIntoPrompt,
   FileMetadata,
 } from '@/lib/fileMetadata'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 
 interface EditMessageDialogProps {
   message: string

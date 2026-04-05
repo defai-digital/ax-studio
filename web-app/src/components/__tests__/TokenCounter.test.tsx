@@ -15,7 +15,7 @@ const mockUseTokensCount = vi.fn(() => ({
   calculateTokens: mockCalculateTokens,
 }))
 
-vi.mock('@/hooks/useTokensCount', () => ({
+vi.mock('@/hooks/chat/useTokensCount', () => ({
   useTokensCount: (...args: unknown[]) => mockUseTokensCount(...args),
 }))
 

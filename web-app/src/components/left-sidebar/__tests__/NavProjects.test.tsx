@@ -23,7 +23,7 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useThreadManagement', () => ({
+vi.mock('@/hooks/threads/useThreadManagement', () => ({
   useThreadManagement: () => ({
     folders: [
       { id: 'p1', name: 'My Project', logo: '' },
@@ -34,7 +34,7 @@ vi.mock('@/hooks/useThreadManagement', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useProjectDialog', () => ({
+vi.mock('@/hooks/ui/useProjectDialog', () => ({
   useProjectDialog: () => ({
     open: false,
     setOpen: mockSetCreateDialogOpen,

@@ -1,10 +1,10 @@
-import { useAppUpdater } from '@/hooks/useAppUpdater'
+import { useAppUpdater } from '@/hooks/updater/useAppUpdater'
 
 import { IconDownload } from '@tabler/icons-react'
 import { Button } from '@/components/ui/button'
 
 import { useState, useEffect } from 'react'
-import { useReleaseNotes } from '@/hooks/useReleaseNotes'
+import { useReleaseNotes } from '@/hooks/updater/useReleaseNotes'
 import { RenderMarkdown } from '../RenderMarkdown'
 import { cn, isDev } from '@/lib/utils'
 import { isNightly, isBeta } from '@/lib/version'

@@ -41,7 +41,7 @@ vi.mock('@/containers/AccentColorPicker', () => ({
   AccentColorPicker: () => <div data-testid="accent-color-picker">Accent Color Picker</div>,
 }))
 
-vi.mock('@/hooks/useInterfaceSettings', () => ({
+vi.mock('@/hooks/settings/useInterfaceSettings', () => ({
   useInterfaceSettings: () => ({
     resetInterface: vi.fn(),
   }),

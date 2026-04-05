@@ -3,7 +3,7 @@ import { render, screen, cleanup } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import DropdownModelProvider from '../DropdownModelProvider'
 import { getModelDisplayName } from '@/lib/utils'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 
 // Define basic types to avoid missing declarations
 type ModelProvider = {
@@ -34,11 +34,11 @@ type MockHookReturn = {
 }
 
 // Mock the dependencies
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: vi.fn(),
 }))
 
-vi.mock('@/hooks/useThreads', () => ({
+vi.mock('@/hooks/threads/useThreads', () => ({
   useThreads: vi.fn(() => ({
     updateCurrentThreadModel: vi.fn(),
   })),
@@ -63,7 +63,7 @@ vi.mock('@tanstack/react-router', () => ({
   useNavigate: vi.fn(() => vi.fn()),
 }))
 
-vi.mock('@/hooks/useFavoriteModel', () => ({
+vi.mock('@/hooks/models/useFavoriteModel', () => ({
   useFavoriteModel: vi.fn(() => ({
     favoriteModels: [],
   })),

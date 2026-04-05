@@ -2,7 +2,7 @@ import { cn } from '@/lib/utils'
 import {
   useInterfaceSettings,
   ACCENT_COLORS,
-} from '@/hooks/useInterfaceSettings'
+} from '@/hooks/settings/useInterfaceSettings'
 import { Check } from 'lucide-react'
 
 export function AccentColorPicker() {

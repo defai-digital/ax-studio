@@ -9,8 +9,8 @@ import {
   XCircleIcon,
   DownloadIcon,
 } from 'lucide-react'
-import { useResearchPanel } from '@/hooks/useResearchPanel'
-import { useResearch } from '@/hooks/useResearch'
+import { useResearchPanel } from '@/hooks/research/useResearchPanel'
+import { useResearch } from '@/hooks/research/useResearch'
 import { ResearchProgress } from './ResearchProgress'
 import { ResearchReport } from './ResearchReport'
 import { SourcesList } from './SourcesList'

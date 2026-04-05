@@ -19,14 +19,14 @@ vi.mock('react-textarea-autosize', () => ({
   default: (props: any) => <textarea {...props} />,
 }))
 
-vi.mock('@/hooks/usePrompt', () => ({
+vi.mock('@/hooks/ui/usePrompt', () => ({
   usePrompt: (selector?: any) => {
     const state = { prompt: '', setPrompt: mockSetGlobalPrompt, resetPrompt: vi.fn() }
     return selector ? selector(state) : state
   },
 }))
 
-vi.mock('@/hooks/useThreads', () => ({
+vi.mock('@/hooks/threads/useThreads', () => ({
   useThreads: (selector?: any) => {
     const state = {
       currentThreadId: 'thread-1',
@@ -38,7 +38,7 @@ vi.mock('@/hooks/useThreads', () => ({
   },
 }))
 
-vi.mock('@/hooks/useGeneralSetting', () => ({
+vi.mock('@/hooks/settings/useGeneralSetting', () => ({
   useGeneralSetting: (selector?: any) => {
     const state = {
       spellCheckChatInput: true,
@@ -48,14 +48,14 @@ vi.mock('@/hooks/useGeneralSetting', () => ({
   },
 }))
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: (selector?: any) => {
     const state = { selectedModel: { id: 'gpt-4', capabilities: ['tools'] } }
     return selector ? selector(state) : state
   },
 }))
 
-vi.mock('@/hooks/useAppState', () => ({
+vi.mock('@/hooks/settings/useAppState', () => ({
   useAppState: (selector?: any) => {
     const state = {
       abortControllers: { 'thread-1': { abort: mockAbort } },
@@ -66,14 +66,14 @@ vi.mock('@/hooks/useAppState', () => ({
   },
 }))
 
-vi.mock('@/hooks/useAssistant', () => ({
+vi.mock('@/hooks/chat/useAssistant', () => ({
   useAssistant: (selector?: any) => {
     const state = { assistants: [] }
     return selector ? selector(state) : state
   },
 }))
 
-vi.mock('@/hooks/useMemory', () => ({
+vi.mock('@/hooks/integrations/useMemory', () => ({
   useMemory: (selector?: any) => {
     const state = {
       memoryEnabled: false,
@@ -87,11 +87,11 @@ vi.mock('@/hooks/useMemory', () => ({
   },
 }))
 
-vi.mock('@/hooks/useTools', () => ({
+vi.mock('@/hooks/tools/useTools', () => ({
   useTools: vi.fn(),
 }))
 
-vi.mock('@/hooks/useMessages', () => ({
+vi.mock('@/hooks/chat/useMessages', () => ({
   useMessages: () => [],
 }))
 
@@ -112,7 +112,7 @@ vi.mock('@/lib/extension', () => ({
   },
 }))
 
-vi.mock('@/hooks/use-chat-send-handler', () => ({
+vi.mock('@/hooks/chat/use-chat-send-handler', () => ({
   useChatSendHandler: () => ({
     handleSendMessage: mockHandleSendMessage,
   }),

@@ -8,7 +8,7 @@ const mockStopModel = vi.fn().mockResolvedValue(undefined)
 const mockGetActiveModels = vi.fn().mockResolvedValue([])
 const mockSetActiveModels = vi.fn()
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: vi.fn(() => ({
     updateProvider: mockUpdateProvider,
   })),
@@ -23,7 +23,7 @@ vi.mock('@/hooks/useServiceHub', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useAppState', () => ({
+vi.mock('@/hooks/settings/useAppState', () => ({
   useAppState: vi.fn((selector) =>
     selector({ setActiveModels: mockSetActiveModels })
   ),

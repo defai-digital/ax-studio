@@ -37,7 +37,7 @@ const mockAssistants = [
 
 const mockEstimateTeamRunCost = vi.fn().mockReturnValue(null)
 
-vi.mock('@/hooks/useAssistant', () => ({
+vi.mock('@/hooks/chat/useAssistant', () => ({
   useAssistant: () => ({
     assistants: mockAssistants,
     addAssistant: vi.fn(),
@@ -45,7 +45,7 @@ vi.mock('@/hooks/useAssistant', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: () => ({
     providers: [],
   }),

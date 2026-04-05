@@ -6,7 +6,7 @@ const mockOnApprove = vi.fn()
 const mockOnDeny = vi.fn()
 const mockSetModalOpen = vi.fn()
 
-vi.mock('@/hooks/useToolApproval', () => ({
+vi.mock('@/hooks/tools/useToolApproval', () => ({
   useToolApproval: () => ({
     isModalOpen: true,
     modalProps: {

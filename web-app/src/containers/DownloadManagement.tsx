@@ -4,9 +4,9 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { Progress } from '@/components/ui/progress'
-import { useDownloadStore } from '@/hooks/useDownloadStore'
-import { useLeftPanel } from '@/hooks/useLeftPanel'
-import { useAppUpdater } from '@/hooks/useAppUpdater'
+import { useDownloadStore } from '@/hooks/models/useDownloadStore'
+import { useLeftPanel } from '@/hooks/ui/useLeftPanel'
+import { useAppUpdater } from '@/hooks/updater/useAppUpdater'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { DownloadEvent, DownloadState, events, AppEvent } from '@ax-studio/core'
 import { IconDownload, IconX } from '@tabler/icons-react'

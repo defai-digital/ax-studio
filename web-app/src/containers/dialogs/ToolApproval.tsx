@@ -6,7 +6,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { useToolApproval } from '@/hooks/useToolApproval'
+import { useToolApproval } from '@/hooks/tools/useToolApproval'
 import { Shield, Wrench } from 'lucide-react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 

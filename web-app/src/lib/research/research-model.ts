@@ -1,4 +1,4 @@
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { ModelFactory } from '@/lib/model-factory'
 
 export async function buildResearchModel() {

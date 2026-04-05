@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import { useState } from 'react'
 
-import { useAssistant } from '@/hooks/useAssistant'
+import { useAssistant } from '@/hooks/chat/useAssistant'
 
 import HeaderPage from '@/containers/HeaderPage'
 import { IconCirclePlus, IconPencil, IconTrash } from '@tabler/icons-react'

@@ -1,10 +1,10 @@
 import { render } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ThemeProvider } from '../ThemeProvider'
-import { useTheme } from '@/hooks/useTheme'
+import { useTheme } from '@/hooks/ui/useTheme'
 
 // Mock hooks
-vi.mock('@/hooks/useTheme', () => ({
+vi.mock('@/hooks/ui/useTheme', () => ({
   useTheme: vi.fn(() => ({
     activeTheme: 'light',
     setIsDark: vi.fn(),

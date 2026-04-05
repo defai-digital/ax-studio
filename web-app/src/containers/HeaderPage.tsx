@@ -1,4 +1,4 @@
-import { useLeftPanel } from '@/hooks/useLeftPanel'
+import { useLeftPanel } from '@/hooks/ui/useLeftPanel'
 import { cn } from '@/lib/utils'
 import {
   IconLayoutSidebar,

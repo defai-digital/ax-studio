@@ -1,4 +1,4 @@
-import { useAppState } from '@/hooks/useAppState'
+import { useAppState } from '@/hooks/settings/useAppState'
 import { motion } from 'motion/react'
 import { Zap } from 'lucide-react'
 

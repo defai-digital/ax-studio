@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, it, expect, beforeAll } from 'vitest'
 import { ResearchProgress } from '../ResearchProgress'
-import type { ResearchStep } from '@/hooks/useResearchPanel'
+import type { ResearchStep } from '@/hooks/research/useResearchPanel'
 
 beforeAll(() => {
   Element.prototype.scrollIntoView = () => {}

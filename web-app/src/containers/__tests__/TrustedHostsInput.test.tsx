@@ -5,7 +5,7 @@ import { TrustedHostsInput } from '../TrustedHostsInput'
 const mockSetTrustedHosts = vi.fn()
 let mockTrustedHosts: string[] = []
 
-vi.mock('@/hooks/useLocalApiServer', () => ({
+vi.mock('@/hooks/settings/useLocalApiServer', () => ({
   useLocalApiServer: () => ({
     trustedHosts: mockTrustedHosts,
     setTrustedHosts: mockSetTrustedHosts,

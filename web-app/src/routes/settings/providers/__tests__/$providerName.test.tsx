@@ -90,7 +90,7 @@ vi.mock('@/components/common/ProvidersAvatar', () => ({
   default: () => <div data-testid="providers-avatar" />,
 }))
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: () => ({
     getProviderByName: mockGetProviderByName,
     updateProvider: mockUpdateProvider,

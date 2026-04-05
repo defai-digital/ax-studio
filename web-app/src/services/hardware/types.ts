@@ -2,7 +2,7 @@
  * Hardware Service Types
  */
 
-import type { HardwareData, SystemUsage } from '@/hooks/useHardware'
+import type { HardwareData, SystemUsage } from '@/hooks/settings/useHardware'
 
 // Device list interface for llamacpp extension
 export interface DeviceList {

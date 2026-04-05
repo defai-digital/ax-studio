@@ -35,7 +35,7 @@ import { type LanguageModel } from 'ai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
 import { isPlatformTauri } from '@/lib/platform'
-import { useLocalApiServer } from '@/hooks/useLocalApiServer'
+import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
 
 // Use Tauri's HTTP plugin on native; fall back to native fetch for web/browser.
 const httpFetch = isPlatformTauri() ? tauriFetch : globalThis.fetch

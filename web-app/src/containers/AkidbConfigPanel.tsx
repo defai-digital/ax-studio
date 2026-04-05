@@ -9,7 +9,7 @@ import {
   useAkidbConfig,
   createDefaultConfig,
   type AkidbConfig,
-} from '@/hooks/useAkidbConfig'
+} from '@/hooks/research/useAkidbConfig'
 
 const FREQUENCY_OPTIONS = [
   { label: 'Every 10 minutes', value: 10 },

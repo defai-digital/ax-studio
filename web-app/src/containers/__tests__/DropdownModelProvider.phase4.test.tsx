@@ -56,7 +56,7 @@ const mockSelectedModel = {
 
 // ── Mocks (before imports) ──────────────────────────
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: () => ({
     providers: mockProviders,
     selectedProvider: 'openai',
@@ -74,7 +74,7 @@ vi.mock('@/hooks/useModelProvider', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useThreads', () => ({
+vi.mock('@/hooks/threads/useThreads', () => ({
   useThreads: () => ({
     updateCurrentThreadModel: mockUpdateCurrentThreadModel,
   }),
@@ -100,7 +100,7 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useFavoriteModel', () => ({
+vi.mock('@/hooks/models/useFavoriteModel', () => ({
   useFavoriteModel: () => ({
     favoriteModels: [{ id: 'gpt-4o' }],
     toggleFavorite: mockToggleFavorite,
@@ -558,8 +558,8 @@ describe('DropdownModelProvider — Phase 4 Manual Test Protocol', () => {
   // Edge: returns null when no providers
   it('returns null when providers array is empty', () => {
     // Need to override the mock for this test
-    const originalModule = vi.importActual('@/hooks/useModelProvider')
-    vi.doMock('@/hooks/useModelProvider', () => ({
+    const originalModule = vi.importActual('@/hooks/models/useModelProvider')
+    vi.doMock('@/hooks/models/useModelProvider', () => ({
       useModelProvider: () => ({
         providers: [],
         selectedProvider: '',

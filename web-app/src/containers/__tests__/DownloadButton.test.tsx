@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const mockAddLocalDownloadingModel = vi.fn()
 const mockPullModelWithMetadata = vi.fn()
 
-vi.mock('@/hooks/useDownloadStore', () => ({
+vi.mock('@/hooks/models/useDownloadStore', () => ({
   useDownloadStore: vi.fn((selector) => {
     const state = {
       downloads: {},
@@ -17,14 +17,14 @@ vi.mock('@/hooks/useDownloadStore', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useGeneralSetting', () => ({
+vi.mock('@/hooks/settings/useGeneralSetting', () => ({
   useGeneralSetting: vi.fn((selector) =>
     selector({ huggingfaceToken: 'hf-test-token' })
   ),
 }))
 
 const mockGetProviderByName = vi.fn()
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: vi.fn((selector) =>
     selector({ getProviderByName: mockGetProviderByName })
   ),
@@ -92,7 +92,7 @@ vi.mock('lucide-react', () => ({
 }))
 
 import { DownloadButtonPlaceholder } from '../DownloadButton'
-import { useDownloadStore } from '@/hooks/useDownloadStore'
+import { useDownloadStore } from '@/hooks/models/useDownloadStore'
 
 describe('DownloadButtonPlaceholder', () => {
   const baseModel = {

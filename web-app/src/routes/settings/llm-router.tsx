@@ -16,8 +16,8 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command'
-import { useRouterSettings } from '@/hooks/useRouterSettings'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useRouterSettings } from '@/hooks/settings/useRouterSettings'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const Route = createFileRoute(route.settings.llm_router as any)({

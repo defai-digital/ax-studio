@@ -3,7 +3,7 @@
  * based on OS information from hardware data
  */
 
-import type { HardwareData } from '@/hooks/useHardware'
+import type { HardwareData } from '@/hooks/settings/useHardware'
 
 /**
  * Check if Windows supports blur effects based on build number

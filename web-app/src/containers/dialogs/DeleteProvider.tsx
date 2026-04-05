@@ -13,12 +13,12 @@ import {
 import { toast } from 'sonner'
 import { CardItem } from '../Card'
 import { EngineManager } from '@ax-studio/core'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useRouter } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { predefinedProviders } from '@/constants/providers'
-import { useFavoriteModel } from '@/hooks/useFavoriteModel'
+import { useFavoriteModel } from '@/hooks/models/useFavoriteModel'
 
 type Props = {
   provider?: ProviderObject

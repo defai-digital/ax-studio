@@ -18,7 +18,7 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useSearchDialog', () => ({
+vi.mock('@/hooks/ui/useSearchDialog', () => ({
   useSearchDialog: () => ({
     open: false,
     setOpen: mockSetSearchOpen,

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useTheme, checkOSDarkMode } from '@/hooks/useTheme'
+import { useTheme, checkOSDarkMode } from '@/hooks/ui/useTheme'
 import { isPlatformTauri } from '@/lib/platform/utils'
 
 /**

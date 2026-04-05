@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Mock dependencies
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: {
     getState: vi.fn(),
   },
@@ -14,7 +14,7 @@ vi.mock('@/lib/model-factory', () => ({
 }))
 
 // @ts-ignore
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 // @ts-ignore
 import { ModelFactory } from '@/lib/model-factory'
 import { buildResearchModel } from '../research-model'

@@ -4,23 +4,23 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { cn, getProviderTitle, getModelDisplayName, getProviderColor } from '@/lib/utils'
 import { highlightFzfMatch } from '@/utils/highlight'
 import Capabilities from '@/components/common/Capabilities'
 import { useNavigate } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
-import { useThreads } from '@/hooks/useThreads'
+import { useThreads } from '@/hooks/threads/useThreads'
 import { ModelSetting } from '@/containers/ModelSetting'
 import { Fzf } from 'fzf'
 import { localStorageKey } from '@/constants/localStorage'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { useFavoriteModel } from '@/hooks/useFavoriteModel'
+import { useFavoriteModel } from '@/hooks/models/useFavoriteModel'
 import { predefinedProviders } from '@/constants/providers'
 import { ChevronDown, Search, Check, Star, CircleOff, Settings, X, Route } from 'lucide-react'
 import { getLastUsedModel } from '@/utils/getModelToStart'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useRouterSettings } from '@/hooks/useRouterSettings'
+import { useRouterSettings } from '@/hooks/settings/useRouterSettings'
 
 type DropdownModelProviderProps = {
   model?: ThreadModel

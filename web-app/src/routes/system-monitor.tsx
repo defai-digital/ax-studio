@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect } from 'react'
-import { useHardware } from '@/hooks/useHardware'
+import { useHardware } from '@/hooks/settings/useHardware'
 import { Progress } from '@/components/ui/progress'
 import { route } from '@/constants/routes'
 import { formatMegaBytes } from '@/lib/utils'

@@ -1,5 +1,5 @@
 import { Input } from '@/components/ui/input'
-import { useLocalApiServer } from '@/hooks/useLocalApiServer'
+import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
 import { cn } from '@/lib/utils'
 import { useState } from 'react'
 

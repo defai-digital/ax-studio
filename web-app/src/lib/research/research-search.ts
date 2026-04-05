@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
-import type { ResearchSource } from '@/hooks/useResearchPanel'
+import type { ResearchSource } from '@/hooks/research/useResearchPanel'
 import type { MCPToolCallResult, WikiSearchResult } from './research-types'
 
 /** Thrown when Exa is rate-limited and all retries are exhausted. */

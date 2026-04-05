@@ -8,8 +8,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { useModelProvider } from '@/hooks/useModelProvider'
-import { useProviderModels } from '@/hooks/useProviderModels'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
+import { useProviderModels } from '@/hooks/models/useProviderModels'
 import { ModelCombobox } from '@/containers/ModelCombobox'
 import { IconPlus } from '@tabler/icons-react'
 import { useState } from 'react'

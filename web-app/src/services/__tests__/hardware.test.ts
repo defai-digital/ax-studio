@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { TauriHardwareService } from '../hardware/tauri'
-import { HardwareData, SystemUsage } from '@/hooks/useHardware'
+import { HardwareData, SystemUsage } from '@/hooks/settings/useHardware'
 import { invoke } from '@tauri-apps/api/core'
 
 // Mock @tauri-apps/api/core

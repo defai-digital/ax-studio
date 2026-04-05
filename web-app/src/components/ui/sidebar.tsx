@@ -21,8 +21,8 @@ import {
 	type SidebarContextValue,
 	useSidebar,
 } from "@/components/ui/sidebar-context";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { useSidebarResize } from "@/hooks/use-sidebar-resize";
+import { useIsMobile } from "@/hooks/ui/use-mobile";
+import { useSidebarResize } from "@/hooks/ui/use-sidebar-resize";
 import { mergeButtonRefs } from "@/lib/merge-button-refs";
 import { cn } from "@/lib/utils";
 

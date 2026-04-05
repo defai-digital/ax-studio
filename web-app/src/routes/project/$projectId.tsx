@@ -1,9 +1,9 @@
 import { createFileRoute, useParams } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 
-import { useThreadManagement } from '@/hooks/useThreadManagement'
-import { useThreads } from '@/hooks/useThreads'
-import { useAssistant } from '@/hooks/useAssistant'
+import { useThreadManagement } from '@/hooks/threads/useThreadManagement'
+import { useThreads } from '@/hooks/threads/useThreads'
+import { useAssistant } from '@/hooks/chat/useAssistant'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 
 import ChatInput from '@/containers/ChatInput'

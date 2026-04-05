@@ -1,5 +1,5 @@
 import { Input } from '@/components/ui/input'
-import { useLocalApiServer } from '@/hooks/useLocalApiServer'
+import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
 import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { cn } from '@/lib/utils'

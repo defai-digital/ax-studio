@@ -9,7 +9,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 
 import { IconTrash } from '@tabler/icons-react'
@@ -17,7 +17,7 @@ import { IconTrash } from '@tabler/icons-react'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { useFavoriteModel } from '@/hooks/useFavoriteModel'
+import { useFavoriteModel } from '@/hooks/models/useFavoriteModel'
 
 type DialogDeleteModelProps = {
   provider: ModelProvider

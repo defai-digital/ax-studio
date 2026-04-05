@@ -8,7 +8,7 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useTheme', () => ({
+vi.mock('@/hooks/ui/useTheme', () => ({
   useTheme: () => ({ isDark: false }),
 }))
 

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi } from 'vitest'
 import { TextareaControl } from '../TextareaControl'
 
-vi.mock('@/hooks/useGeneralSetting', () => ({
+vi.mock('@/hooks/settings/useGeneralSetting', () => ({
   useGeneralSetting: () => ({
     spellCheckChatInput: true,
   }),

@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { PromptProgress } from '../PromptProgress'
-import { useAppState } from '@/hooks/useAppState'
+import { useAppState } from '@/hooks/settings/useAppState'
 
 // Mock the useAppState hook
-vi.mock('@/hooks/useAppState', () => ({
+vi.mock('@/hooks/settings/useAppState', () => ({
   useAppState: vi.fn(),
 }))
 

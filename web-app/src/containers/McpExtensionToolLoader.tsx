@@ -1,7 +1,7 @@
 import { ComponentType } from 'react'
 import { MCPTool, MCPToolComponentProps } from '@ax-studio/core'
-import { useToolAvailable } from '@/hooks/useToolAvailable'
-import { useThreads } from '@/hooks/useThreads'
+import { useToolAvailable } from '@/hooks/tools/useToolAvailable'
+import { useThreads } from '@/hooks/threads/useThreads'
 
 interface McpExtensionToolLoaderProps {
   tools: MCPTool[]

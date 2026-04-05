@@ -1,6 +1,6 @@
 import React, { ReactNode, useEffect, useCallback } from "react"
 import i18next, { loadTranslations } from "./setup"
-import { useGeneralSetting } from "@/hooks/useGeneralSetting"
+import { useGeneralSetting } from "@/hooks/settings/useGeneralSetting"
 import { TranslationContext } from "./context"
 
 // Translation provider component

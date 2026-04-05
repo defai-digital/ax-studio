@@ -1,6 +1,6 @@
 import { memo, useMemo } from 'react'
 import { RenderMarkdown } from '@/containers/RenderMarkdown'
-import type { ResearchSource } from '@/hooks/useResearchPanel'
+import type { ResearchSource } from '@/hooks/research/useResearchPanel'
 
 interface ResearchReportProps {
   markdown: string

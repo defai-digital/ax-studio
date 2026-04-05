@@ -1,8 +1,8 @@
 import { Download, Folder, ImagePlus, MessageCircle, MoreHorizontal, Pencil, Pin, PinOff, Trash2, X } from 'lucide-react'
 import { exportThread } from '@/lib/thread-export'
-import { useThreads } from '@/hooks/useThreads'
-import { useMessages } from '@/hooks/useMessages'
-import { useThreadManagement } from '@/hooks/useThreadManagement'
+import { useThreads } from '@/hooks/threads/useThreads'
+import { useMessages } from '@/hooks/chat/useMessages'
+import { useThreadManagement } from '@/hooks/threads/useThreadManagement'
 import { useCallback } from 'react'
 
 import {

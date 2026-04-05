@@ -4,7 +4,7 @@ import { ApiPrefixInput } from '../ApiPrefixInput'
 
 const mockSetApiPrefix = vi.fn()
 
-vi.mock('@/hooks/useLocalApiServer', () => ({
+vi.mock('@/hooks/settings/useLocalApiServer', () => ({
   useLocalApiServer: () => ({
     apiPrefix: '/v1',
     setApiPrefix: mockSetApiPrefix,

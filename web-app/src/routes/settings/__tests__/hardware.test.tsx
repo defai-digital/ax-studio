@@ -44,7 +44,7 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }))
 
-vi.mock('@/hooks/useHardware', () => ({
+vi.mock('@/hooks/settings/useHardware', () => ({
   useHardware: () => ({
     hardwareData: {
       os_type: 'windows',
@@ -59,7 +59,7 @@ vi.mock('@/hooks/useHardware', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useLlamacppDevices', () => ({
+vi.mock('@/hooks/models/useLlamacppDevices', () => ({
   useLlamacppDevices: () => ({
     devices: [{ id: 'gpu-0', name: 'RTX 3080', activated: true }],
     loading: false,
@@ -69,7 +69,7 @@ vi.mock('@/hooks/useLlamacppDevices', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: () => ({
     providers: [{ provider: 'llamacpp', active: true, models: [] }],
     getProviderByName: vi.fn(() => undefined),

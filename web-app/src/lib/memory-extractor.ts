@@ -1,4 +1,4 @@
-import type { MemoryEntry } from '@/hooks/useMemory'
+import type { MemoryEntry } from '@/hooks/integrations/useMemory'
 
 /**
  * System prompt suffix that instructs the LLM to extract facts inline.

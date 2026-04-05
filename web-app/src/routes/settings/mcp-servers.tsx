@@ -15,7 +15,7 @@ import {
   MCPServerConfig,
   MCPSettings,
   DEFAULT_MCP_SETTINGS,
-} from '@/hooks/useMCPServers'
+} from '@/hooks/tools/useMCPServers'
 import { Fragment, useEffect, useState } from 'react'
 import AddEditMCPServer from '@/containers/dialogs/AddEditMCPServer'
 import DeleteMCPServerConfirm from '@/containers/dialogs/DeleteMCPServerConfirm'
@@ -24,10 +24,10 @@ import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { twMerge } from 'tailwind-merge'
 import { useServiceHub } from '@/hooks/useServiceHub'
-import { useToolApproval } from '@/hooks/useToolApproval'
+import { useToolApproval } from '@/hooks/tools/useToolApproval'
 import { toast } from 'sonner'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { useAppState } from '@/hooks/useAppState'
+import { useAppState } from '@/hooks/settings/useAppState'
 import { listen } from '@tauri-apps/api/event'
 import { SystemEvent } from '@/types/events'
 import { Button } from '@/components/ui/button'

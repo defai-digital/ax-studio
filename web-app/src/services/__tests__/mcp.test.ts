@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { TauriMCPService } from '../mcp/tauri'
 import { MCPTool } from '@/types/completion'
-import { DEFAULT_MCP_SETTINGS } from '@/hooks/useMCPServers'
+import { DEFAULT_MCP_SETTINGS } from '@/hooks/tools/useMCPServers'
 
 // Mock the global window.core.api
 const mockCore = {

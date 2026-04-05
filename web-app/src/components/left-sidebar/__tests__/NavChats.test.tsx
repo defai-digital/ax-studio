@@ -28,7 +28,7 @@ const mockThreadsWithProject: Thread[] = [
   } as Thread,
 ]
 
-vi.mock('@/hooks/useThreads', () => ({
+vi.mock('@/hooks/threads/useThreads', () => ({
   useThreads: vi.fn((selector) =>
     selector({
       getFilteredThreads: (query: string) => [...mockThreads, ...mockThreadsWithProject],
@@ -40,7 +40,7 @@ vi.mock('@/hooks/useThreads', () => ({
   ),
 }))
 
-vi.mock('@/hooks/usePinnedThreads', () => ({
+vi.mock('@/hooks/threads/usePinnedThreads', () => ({
   usePinnedThreads: vi.fn().mockReturnValue({
     pinnedIds: [],
     pinnedSet: new Set(),
@@ -176,7 +176,7 @@ describe('NavChats', () => {
   })
 
   it('returns null when there are no threads without projects', async () => {
-    const { useThreads } = await import('@/hooks/useThreads') as { useThreads: ReturnType<typeof vi.fn> }
+    const { useThreads } = await import('@/hooks/threads/useThreads') as { useThreads: ReturnType<typeof vi.fn> }
     vi.mocked(useThreads).mockImplementation((selector: (state: Record<string, unknown>) => unknown) =>
       selector({
         getFilteredThreads: () => [],
@@ -192,7 +192,7 @@ describe('NavChats', () => {
 
   it('renders pinned section when there are pinned threads', async () => {
     // Restore threads mock first (previous test cleared it)
-    const { useThreads } = await import('@/hooks/useThreads') as { useThreads: ReturnType<typeof vi.fn> }
+    const { useThreads } = await import('@/hooks/threads/useThreads') as { useThreads: ReturnType<typeof vi.fn> }
     vi.mocked(useThreads).mockImplementation((selector: (state: Record<string, unknown>) => unknown) =>
       selector({
         getFilteredThreads: () => [...mockThreads, ...mockThreadsWithProject],
@@ -203,7 +203,7 @@ describe('NavChats', () => {
       })
     )
 
-    const { usePinnedThreads } = await import('@/hooks/usePinnedThreads') as { usePinnedThreads: ReturnType<typeof vi.fn> }
+    const { usePinnedThreads } = await import('@/hooks/threads/usePinnedThreads') as { usePinnedThreads: ReturnType<typeof vi.fn> }
     vi.mocked(usePinnedThreads).mockReturnValue({
       pinnedIds: ['t1'],
       pinnedSet: new Set(['t1']),

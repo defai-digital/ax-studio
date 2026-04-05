@@ -17,7 +17,7 @@ vi.mock('@/components/common/CopyButton', () => ({
   ),
 }))
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: vi.fn((selector) =>
     selector({ selectedModel: { id: 'test-model', name: 'Test Model' } })
   ),

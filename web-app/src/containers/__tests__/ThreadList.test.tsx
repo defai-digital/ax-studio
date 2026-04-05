@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Mock all external dependencies
-vi.mock('@/hooks/useThreads', () => ({
+vi.mock('@/hooks/threads/useThreads', () => ({
   useThreads: vi.fn((selector) =>
     selector({
       deleteThread: vi.fn(),
@@ -12,13 +12,13 @@ vi.mock('@/hooks/useThreads', () => ({
   ),
 }))
 
-vi.mock('@/hooks/useMessages', () => ({
+vi.mock('@/hooks/chat/useMessages', () => ({
   useMessages: vi.fn((selector) =>
     selector({ messages: {} })
   ),
 }))
 
-vi.mock('@/hooks/useThreadManagement', () => ({
+vi.mock('@/hooks/threads/useThreadManagement', () => ({
   useThreadManagement: vi.fn().mockReturnValue({
     getFolderById: vi.fn(),
     folders: [],
