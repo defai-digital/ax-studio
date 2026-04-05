@@ -14,7 +14,7 @@ use tokio::{
     io::AsyncReadExt,
     process::Command,
     sync::Mutex,
-    time::{sleep, timeout},
+    time::timeout,
 };
 
 #[cfg(windows)]
@@ -38,30 +38,9 @@ const DANGEROUS_ENV_KEYS: &[&str] = &[
     "PATH",
 ];
 
-#[derive(Debug, Clone, Copy)]
-pub enum ShutdownContext {
-    AppExit,       // User closing app - be fast
-    ManualRestart, // User restarting servers - be thorough
-    FactoryReset,  // Deleting data - be very thorough
-}
-
-impl ShutdownContext {
-    pub fn per_server_timeout(&self) -> Duration {
-        match self {
-            Self::AppExit => Duration::from_millis(500),
-            Self::ManualRestart => Duration::from_secs(2),
-            Self::FactoryReset => Duration::from_secs(5),
-        }
-    }
-
-    pub fn overall_timeout(&self) -> Duration {
-        match self {
-            Self::AppExit => Duration::from_millis(1500),
-            Self::ManualRestart => Duration::from_secs(5),
-            Self::FactoryReset => Duration::from_secs(10),
-        }
-    }
-}
+// Re-export ShutdownContext so existing `use super::helpers::ShutdownContext`
+// imports keep working after the enum moved to its own module.
+pub use super::shutdown::ShutdownContext;
 
 /// Runs MCP commands by reading configuration from a JSON file and initializing servers
 ///
@@ -600,29 +579,6 @@ pub fn extract_active_status(config: &Value) -> Option<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // --- ShutdownContext ---
-
-    #[test]
-    fn test_shutdown_context_app_exit_timeouts() {
-        let ctx = ShutdownContext::AppExit;
-        assert_eq!(ctx.per_server_timeout(), Duration::from_millis(500));
-        assert_eq!(ctx.overall_timeout(), Duration::from_millis(1500));
-    }
-
-    #[test]
-    fn test_shutdown_context_manual_restart_timeouts() {
-        let ctx = ShutdownContext::ManualRestart;
-        assert_eq!(ctx.per_server_timeout(), Duration::from_secs(2));
-        assert_eq!(ctx.overall_timeout(), Duration::from_secs(5));
-    }
-
-    #[test]
-    fn test_shutdown_context_factory_reset_timeouts() {
-        let ctx = ShutdownContext::FactoryReset;
-        assert_eq!(ctx.per_server_timeout(), Duration::from_secs(5));
-        assert_eq!(ctx.overall_timeout(), Duration::from_secs(10));
-    }
 
     // --- extract_command_args ---
 
