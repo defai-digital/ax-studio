@@ -111,11 +111,11 @@ vi.mock('@/constants/providers', () => ({
   predefinedProviders: [{ provider: 'openai' }, { provider: 'anthropic' }],
 }))
 
-vi.mock('@/utils/getModelToStart', () => ({
+vi.mock('@/lib/utils/getModelToStart', () => ({
   getLastUsedModel: () => null,
 }))
 
-vi.mock('@/utils/highlight', () => ({
+vi.mock('@/lib/utils/highlight', () => ({
   highlightFzfMatch: (text: string) => text,
 }))
 

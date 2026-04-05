@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { useAppState } from '@/hooks/settings/useAppState'
-import { toNumber } from '@/utils/number'
+import { toNumber } from '@/lib/utils/number'
 import { Gauge } from 'lucide-react'
 
 interface TokenUsage {

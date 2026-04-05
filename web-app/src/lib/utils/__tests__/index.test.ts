@@ -7,7 +7,7 @@ import {
   formatMegaBytes,
   formatDuration,
   getModelDisplayName,
-} from '../utils'
+} from '..'
 
 describe('getProviderLogo', () => {
   it('returns correct logo paths for known providers', () => {

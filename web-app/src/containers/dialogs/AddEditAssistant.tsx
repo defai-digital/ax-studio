@@ -26,7 +26,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useTheme } from '@/hooks/ui/useTheme'
-import { teamEmoji } from '@/utils/teamEmoji'
+import { teamEmoji } from '@/lib/utils/teamEmoji'
 import { AvatarEmoji } from '@/components/common/AvatarEmoji'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { cn, isDev } from '@/lib/utils'

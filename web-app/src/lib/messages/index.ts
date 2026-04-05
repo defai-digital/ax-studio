@@ -2,7 +2,7 @@
 import { ChatCompletionMessageParam } from 'token.js'
 import { ChatCompletionMessageToolCall } from 'openai/resources'
 import { ThreadMessage, ContentType, MessageStatus } from '@ax-studio/core'
-import { removeReasoningContent } from '@/utils/reasoning'
+import { removeReasoningContent } from '@/lib/utils/reasoning'
 import type { UIMessage } from '@ai-sdk/react'
 // Attachments are now handled upstream in newUserThreadContent
 

@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils'
 import { ApiKeyInput } from '@/containers/ApiKeyInput'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { getModelToStart } from '@/utils/getModelToStart'
+import { getModelToStart } from '@/lib/utils/getModelToStart'
 import { LogViewer } from '@/components/LogViewer'
 
 import AkidbConfigPanel from '@/containers/AkidbConfigPanel'

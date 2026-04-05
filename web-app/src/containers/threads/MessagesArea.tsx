@@ -11,7 +11,7 @@ import {
 import { PromptProgress } from '@/components/PromptProgress'
 import { Button } from '@/components/ui/button'
 import { IconAlertCircle } from '@tabler/icons-react'
-import { OUT_OF_CONTEXT_SIZE } from '@/utils/error'
+import { OUT_OF_CONTEXT_SIZE } from '@/lib/utils/error'
 import { motion, AnimatePresence } from 'motion/react'
 import { GitBranch, X } from 'lucide-react'
 

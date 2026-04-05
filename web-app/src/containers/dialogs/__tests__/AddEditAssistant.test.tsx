@@ -17,7 +17,7 @@ vi.mock('@/lib/utils', () => ({
   isDev: () => false,
 }))
 
-vi.mock('@/utils/teamEmoji', () => ({
+vi.mock('@/lib/utils/teamEmoji', () => ({
   teamEmoji: [],
 }))
 

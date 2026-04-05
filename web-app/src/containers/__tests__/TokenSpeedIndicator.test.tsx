@@ -13,7 +13,7 @@ vi.mock('@/hooks/settings/useAppState', () => ({
     }),
 }))
 
-vi.mock('@/utils/number', () => ({
+vi.mock('@/lib/utils/number', () => ({
   toNumber: (val: unknown) => {
     const num = Number(val)
     return isNaN(num) ? 0 : num

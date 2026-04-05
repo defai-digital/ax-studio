@@ -29,7 +29,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useHardware } from '@/hooks/settings/useHardware'
 import LanguageSwitcher from '@/containers/LanguageSwitcher'
-import { isRootDir } from '@/utils/path'
+import { isRootDir } from '@/lib/utils/path'
 import { fallbackDefaultPrompt } from '@/lib/system-prompt'
 const TOKEN_VALIDATION_TIMEOUT_MS = 10_000
 
