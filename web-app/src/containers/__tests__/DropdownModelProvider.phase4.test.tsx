@@ -140,7 +140,7 @@ vi.mock('@/containers/ModelSetting', () => ({
   ModelSetting: () => <div data-testid="model-setting" />,
 }))
 
-vi.mock('../Capabilities', () => ({
+vi.mock('@/components/common/Capabilities', () => ({
   default: ({ capabilities }: any) => (
     <div data-testid="capabilities">{capabilities.join(',')}</div>
   ),

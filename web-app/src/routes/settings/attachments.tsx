@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import SettingsMenu from '@/containers/SettingsMenu'
 import HeaderPage from '@/containers/HeaderPage'
-import { Card, CardItem } from '@/containers/Card'
+import { Card, CardItem } from '@/components/common/Card'
 import { useAttachments } from '@/hooks/useAttachments'
 import type { SettingComponentProps } from '@ax-studio/core'
 import { useTranslation } from '@/i18n/react-i18next-compat'

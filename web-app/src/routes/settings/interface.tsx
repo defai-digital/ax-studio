@@ -2,7 +2,7 @@
 import { route } from '@/constants/routes'
 import SettingsMenu from '@/containers/SettingsMenu'
 import HeaderPage from '@/containers/HeaderPage'
-import { Card, CardItem } from '@/containers/Card'
+import { Card, CardItem } from '@/components/common/Card'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { ThemeSwitcher } from '@/containers/ThemeSwitcher'
 import { FontSizeSwitcher } from '@/containers/FontSizeSwitcher'

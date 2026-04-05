@@ -8,7 +8,7 @@ import { Brain } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card, CardItem } from '@/containers/Card'
+import { Card, CardItem } from '@/components/common/Card'
 import { useMemory, MEMORY_LIMIT } from '@/hooks/useMemory'
 import type { MemoryEntry } from '@/hooks/useMemory'
 import {

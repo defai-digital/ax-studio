@@ -6,7 +6,7 @@ import HeaderPage from '@/containers/HeaderPage'
 import { Route as RouteIcon, Info, Check, ChevronsUpDown } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
-import { Card, CardItem } from '@/containers/Card'
+import { Card, CardItem } from '@/components/common/Card'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   Command,

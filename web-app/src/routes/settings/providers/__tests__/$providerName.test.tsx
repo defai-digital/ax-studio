@@ -17,7 +17,7 @@ vi.mock('@/containers/HeaderPage', () => ({
   ),
 }))
 
-vi.mock('@/containers/Card', () => ({
+vi.mock('@/components/common/Card', () => ({
   Card: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="card">{children}</div>
   ),
@@ -38,7 +38,7 @@ vi.mock('@/containers/Card', () => ({
   ),
 }))
 
-vi.mock('@/containers/Capabilities', () => ({
+vi.mock('@/components/common/Capabilities', () => ({
   default: () => <div />,
 }))
 
@@ -86,7 +86,7 @@ vi.mock('@/containers/dialogs/AddModel', () => ({
   DialogAddModel: () => <div />,
 }))
 
-vi.mock('@/containers/ProvidersAvatar', () => ({
+vi.mock('@/components/common/ProvidersAvatar', () => ({
   default: () => <div data-testid="providers-avatar" />,
 }))
 

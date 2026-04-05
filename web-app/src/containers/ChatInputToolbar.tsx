@@ -34,7 +34,7 @@ import {
 } from '@tabler/icons-react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { TokenCounter } from '@/components/TokenCounter'
-import { AvatarEmoji } from '@/containers/AvatarEmoji'
+import { AvatarEmoji } from '@/components/common/AvatarEmoji'
 import DropdownToolsAvailable from '@/containers/DropdownToolsAvailable'
 import { McpExtensionToolLoader } from './McpExtensionToolLoader'
 import type { ThreadMessage } from '@ax-studio/core'

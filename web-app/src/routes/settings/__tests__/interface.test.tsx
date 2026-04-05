@@ -13,7 +13,7 @@ vi.mock('@/containers/HeaderPage', () => ({
   ),
 }))
 
-vi.mock('@/containers/Card', () => ({
+vi.mock('@/components/common/Card', () => ({
   Card: ({ title, children }: { title?: string; children: React.ReactNode }) => (
     <div data-testid="card" data-title={title}>
       {title && <div data-testid="card-title">{title}</div>}

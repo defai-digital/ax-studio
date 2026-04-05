@@ -1,14 +1,14 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import SettingsMenu from '@/containers/SettingsMenu'
-import { Card, CardItem } from '@/containers/Card'
+import { Card, CardItem } from '@/components/common/Card'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import {
   ShortcutAction,
   PlatformShortcuts,
   type ShortcutSpec,
 } from '@/lib/shortcuts'
-import { PlatformMetaKey } from '@/containers/PlatformMetaKey'
+import { PlatformMetaKey } from '@/components/common/PlatformMetaKey'
 import { Kbd, KbdGroup } from '@/components/ui/kbd'
 import HeaderPage from '@/containers/HeaderPage'
 import { Keyboard as KeyboardIcon } from 'lucide-react'

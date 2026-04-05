@@ -16,7 +16,7 @@ import AttachmentIngestionDialog from '@/containers/dialogs/AttachmentIngestionD
 import { TranslationProvider } from '@/i18n/TranslationContext'
 import OutOfContextPromiseModal from '@/containers/dialogs/OutOfContextDialog'
 import { useEffect } from 'react'
-import GlobalError from '@/containers/GlobalError'
+import GlobalError from '@/components/common/GlobalError'
 import { GlobalEventHandler } from '@/providers/GlobalEventHandler'
 import { ServiceHubProvider } from '@/providers/ServiceHubProvider'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'

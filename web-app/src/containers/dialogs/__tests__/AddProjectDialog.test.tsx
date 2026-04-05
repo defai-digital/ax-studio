@@ -31,7 +31,7 @@ vi.mock('lucide-react', () => ({
   Plus: () => <span />,
 }))
 
-vi.mock('@/containers/AvatarEmoji', () => ({
+vi.mock('@/components/common/AvatarEmoji', () => ({
   AvatarEmoji: () => <span />,
 }))
 

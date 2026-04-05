@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import HeaderPage from '@/containers/HeaderPage'
 import SettingsMenu from '@/containers/SettingsMenu'
-import { Card, CardItem } from '@/containers/Card'
+import { Card, CardItem } from '@/components/common/Card'
 import {
   IconPencil,
   IconPlus,

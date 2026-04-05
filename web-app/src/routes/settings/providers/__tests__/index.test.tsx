@@ -17,7 +17,7 @@ vi.mock('@/containers/HeaderPage', () => ({
   ),
 }))
 
-vi.mock('@/containers/ProvidersAvatar', () => ({
+vi.mock('@/components/common/ProvidersAvatar', () => ({
   default: ({ provider }: { provider: { provider: string } }) => (
     <div data-testid="providers-avatar" data-provider={provider.provider}>
       Provider Avatar: {provider.provider}

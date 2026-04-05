@@ -16,7 +16,7 @@ import {
   ToolInput,
   ToolOutput,
 } from '@/components/ai-elements/tool'
-import { CopyButton } from './CopyButton'
+import { CopyButton } from '@/components/common/CopyButton'
 import { useModelProvider } from '@/hooks/useModelProvider'
 import { IconRefresh, IconPaperclip } from '@tabler/icons-react'
 import { EditMessageDialog } from '@/containers/dialogs/EditMessageDialog'

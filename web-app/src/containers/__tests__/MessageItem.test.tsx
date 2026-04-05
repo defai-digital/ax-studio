@@ -9,7 +9,7 @@ vi.mock('../RenderMarkdown', () => ({
   ),
 }))
 
-vi.mock('../CopyButton', () => ({
+vi.mock('@/components/common/CopyButton', () => ({
   CopyButton: ({ text }: { text: string }) => (
     <button data-testid="copy-button" data-text={text}>
       Copy

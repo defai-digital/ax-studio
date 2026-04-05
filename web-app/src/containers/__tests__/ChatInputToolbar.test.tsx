@@ -40,7 +40,7 @@ vi.mock('@/components/TokenCounter', () => ({
   TokenCounter: () => <div data-testid="token-counter">tokens</div>,
 }))
 
-vi.mock('@/containers/AvatarEmoji', () => ({
+vi.mock('@/components/common/AvatarEmoji', () => ({
   AvatarEmoji: () => <span>avatar</span>,
 }))
 

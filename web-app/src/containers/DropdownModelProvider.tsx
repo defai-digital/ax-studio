@@ -7,7 +7,7 @@ import {
 import { useModelProvider } from '@/hooks/useModelProvider'
 import { cn, getProviderTitle, getModelDisplayName, getProviderColor } from '@/lib/utils'
 import { highlightFzfMatch } from '@/utils/highlight'
-import Capabilities from './Capabilities'
+import Capabilities from '@/components/common/Capabilities'
 import { useNavigate } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import { useThreads } from '@/hooks/useThreads'

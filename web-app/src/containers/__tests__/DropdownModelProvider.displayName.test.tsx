@@ -94,7 +94,7 @@ vi.mock('../ProvidersAvatar', () => ({
   ),
 }))
 
-vi.mock('../Capabilities', () => ({
+vi.mock('@/components/common/Capabilities', () => ({
   default: ({ capabilities }: { capabilities: string[] }) => (
     <div data-testid="capabilities">{capabilities.join(',')}</div>
   ),

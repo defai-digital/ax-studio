@@ -11,7 +11,7 @@ import {
   useRef,
   useTransition,
 } from 'react'
-import { CardItem } from '@/containers/Card'
+import { CardItem } from '@/components/common/Card'
 import { extractModelName, extractDescription } from '@/lib/models'
 import { IconDownload, IconFileCode } from '@tabler/icons-react'
 import { Switch } from '@/components/ui/switch'

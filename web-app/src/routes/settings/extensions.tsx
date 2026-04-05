@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
-import { Card, CardItem } from '@/containers/Card'
+import { Card, CardItem } from '@/components/common/Card'
 
 import SettingsMenu from '@/containers/SettingsMenu'
 import { RenderMarkdown } from '@/containers/RenderMarkdown'

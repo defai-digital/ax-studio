@@ -12,7 +12,7 @@ import {
   getProviderColor,
   getProviderDescription,
 } from '@/lib/utils'
-import ProvidersAvatar from '@/containers/ProvidersAvatar'
+import ProvidersAvatar from '@/components/common/ProvidersAvatar'
 import { AddProviderDialog } from '@/containers/dialogs'
 import { Switch } from '@/components/ui/switch'
 import { useCallback } from 'react'

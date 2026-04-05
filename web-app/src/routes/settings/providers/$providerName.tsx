@@ -1,11 +1,11 @@
-import { Card, CardItem } from '@/containers/Card'
+import { Card, CardItem } from '@/components/common/Card'
 import HeaderPage from '@/containers/HeaderPage'
 import SettingsMenu from '@/containers/SettingsMenu'
 import { useModelProvider } from '@/hooks/useModelProvider'
 import { cn, getProviderTitle, getProviderColor, getModelDisplayName } from '@/lib/utils'
 import { createFileRoute, Link, useParams } from '@tanstack/react-router'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import Capabilities from '@/containers/Capabilities'
+import Capabilities from '@/components/common/Capabilities'
 import { DynamicControllerSetting } from '@/containers/dynamicControllerSetting'
 import { RenderMarkdown } from '@/containers/RenderMarkdown'
 import { DialogEditModel } from '@/containers/dialogs/EditModel'
@@ -27,7 +27,7 @@ import { DialogAddModel } from '@/containers/dialogs/AddModel'
 import { SelectModelGroups } from '@/containers/dialogs/SelectModelGroups'
 import { groupModelsByPrefix, type ModelGroup } from '@/lib/model-group-utils'
 import { getModelCapabilities } from '@/lib/models'
-import ProvidersAvatar from '@/containers/ProvidersAvatar'
+import ProvidersAvatar from '@/components/common/ProvidersAvatar'
 
 const URL_REGEX = /^https?:\/\/[^\s]+$/
 const XSS_PATTERN = /<[^>]*>|javascript:/i
