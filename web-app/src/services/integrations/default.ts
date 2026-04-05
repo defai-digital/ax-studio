@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import type { IntegrationService } from './types'
 
-export class TauriIntegrationService implements IntegrationService {
+export class DefaultIntegrationsService implements IntegrationService {
   async saveToken(integration: string, credentials: Record<string, string>): Promise<void> {
     await invoke('save_integration_token', { integration, credentials })
   }

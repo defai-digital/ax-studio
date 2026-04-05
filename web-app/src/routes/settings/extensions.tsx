@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import { Card, CardItem } from '@/components/common/Card'
 
-import SettingsMenu from '@/containers/SettingsMenu'
+import SettingsMenu from '@/components/common/SettingsMenu'
 import { RenderMarkdown } from '@/containers/RenderMarkdown'
 import { ExtensionManager } from '@/lib/extension'
 import { useTranslation } from '@/i18n/react-i18next-compat'

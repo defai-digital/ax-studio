@@ -6,7 +6,7 @@ import { useAgentTeamStore } from '@/stores/agent-team-store'
 import { useAssistant } from '@/hooks/chat/useAssistant'
 
 import HeaderPage from '@/containers/HeaderPage'
-import SettingsMenu from '@/containers/SettingsMenu'
+import SettingsMenu from '@/components/common/SettingsMenu'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,

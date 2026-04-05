@@ -22,6 +22,10 @@ fn get_lock_file_path<R: Runtime>(app: &AppHandle<R>, port: u16) -> Result<PathB
     Ok(app_data_dir.join(format!("mcp_lock_{}.json", port)))
 }
 
+// Public API kept for symmetry with read/delete/cleanup operations.
+// Called by future MCP lifecycle management once per-server PID tracking
+// is fully wired up; keep the implementation stable to avoid API churn.
+#[allow(dead_code)]
 pub fn create_lock_file<R: Runtime>(
     app: &AppHandle<R>,
     port: u16,

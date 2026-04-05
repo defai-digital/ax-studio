@@ -118,7 +118,7 @@ vi.mock('@/hooks/chat/use-chat-send-handler', () => ({
   }),
 }))
 
-vi.mock('@/containers/ChatInputToolbar', () => ({
+vi.mock('@/components/chat/ChatInputToolbar', () => ({
   ChatInputToolbar: ({ isStreaming, stopStreaming, handleSendMessage, prompt }: any) => (
     <div data-testid="toolbar" data-streaming={isStreaming}>
       {isStreaming ? (

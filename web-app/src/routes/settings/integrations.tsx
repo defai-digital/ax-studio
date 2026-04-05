@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import HeaderPage from '@/containers/HeaderPage'
-import SettingsMenu from '@/containers/SettingsMenu'
+import SettingsMenu from '@/components/common/SettingsMenu'
 import { Fragment, useEffect, useState } from 'react'
 import { Link as LinkIcon } from 'lucide-react'
 import { useTranslation } from '@/i18n/react-i18next-compat'

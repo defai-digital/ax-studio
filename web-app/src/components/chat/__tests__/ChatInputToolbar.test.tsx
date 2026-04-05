@@ -48,7 +48,7 @@ vi.mock('@/containers/DropdownToolsAvailable', () => ({
   default: ({ children }: any) => <div>{children?.(() => null)}</div>,
 }))
 
-vi.mock('./McpExtensionToolLoader', () => ({
+vi.mock('@/containers/McpExtensionToolLoader', () => ({
   McpExtensionToolLoader: () => <div data-testid="mcp-tool-loader" />,
 }))
 

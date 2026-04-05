@@ -1,4 +1,5 @@
 use std::process::{Command, Output, Stdio};
+#[cfg(test)]
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
@@ -6,6 +7,7 @@ use super::commands::ExecutionResult;
 
 const ENABLE_UNSANDBOXED_PYTHON_ENV: &str = "AX_STUDIO_ENABLE_UNSANDBOXED_PYTHON";
 
+#[cfg(test)]
 fn env_lock() -> &'static Mutex<()> {
     static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     ENV_LOCK.get_or_init(|| Mutex::new(()))

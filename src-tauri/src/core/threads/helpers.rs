@@ -57,6 +57,11 @@ pub async fn prune_unused_message_locks() {
 }
 
 /// Write messages to a thread's messages.jsonl file (atomic: write to .tmp then rename)
+///
+/// Currently used only via rewrite_messages_file and tests; kept as a
+/// standalone primitive for direct callers added by future thread-storage
+/// features.
+#[allow(dead_code)]
 pub fn write_messages_to_file(
     messages: &[MessageRecord],
     path: &std::path::Path,

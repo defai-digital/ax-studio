@@ -26,8 +26,8 @@ const {
   mockGetConnectedServers: vi.fn().mockResolvedValue([]),
 }))
 
-vi.mock('@/services/integrations/tauri', () => ({
-  TauriIntegrationService: vi.fn().mockImplementation(() => ({
+vi.mock('@/services/integrations/default', () => ({
+  DefaultIntegrationsService: vi.fn().mockImplementation(() => ({
     saveToken: mockSaveToken,
     deleteToken: mockDeleteToken,
     getAllStatuses: mockGetAllStatuses,

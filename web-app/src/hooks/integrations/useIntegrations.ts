@@ -1,12 +1,12 @@
 import { create } from 'zustand'
-import { TauriIntegrationService } from '@/services/integrations/tauri'
+import { DefaultIntegrationsService } from '@/services/integrations/default'
 import { INTEGRATIONS, getIntegration } from '@/lib/integrations-registry'
 import { getServiceHub } from '@/hooks/useServiceHub'
 import type { MCPServerConfig } from '@/hooks/tools/useMCPServers'
 
 export type IntegrationStatus = 'idle' | 'connecting' | 'connected' | 'error'
 
-const service = new TauriIntegrationService()
+const service = new DefaultIntegrationsService()
 
 type IntegrationStoreState = {
   statuses: Record<string, IntegrationStatus>

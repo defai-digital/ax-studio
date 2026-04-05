@@ -553,6 +553,10 @@ pub fn cleanup_google_workspace_config() -> Result<(), String> {
     Ok(())
 }
 
+// Loopback-only URL validator for OAuth sandbox redirects. Kept as a
+// public helper with dedicated tests for use by future sandbox features
+// even though no production caller exists today.
+#[allow(dead_code)]
 pub fn is_allowed_sandbox_url(url: &str) -> bool {
     let parsed = match url::Url::parse(url) {
         Ok(parsed) => parsed,

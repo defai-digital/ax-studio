@@ -11,7 +11,7 @@ import { DeleteAssistantDialog } from '@/containers/dialogs'
 import { AvatarEmoji } from '@/components/common/AvatarEmoji'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { Button } from '@/components/ui/button'
-import SettingsMenu from '@/containers/SettingsMenu'
+import SettingsMenu from '@/components/common/SettingsMenu'
 import { cn } from '@/lib/utils'
 import { Bot } from 'lucide-react'
 

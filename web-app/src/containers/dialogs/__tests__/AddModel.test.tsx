@@ -40,7 +40,7 @@ vi.mock('@tabler/icons-react', () => ({
   IconPlus: () => <span data-testid="icon-plus" />,
 }))
 
-vi.mock('@/containers/ModelCombobox', () => ({
+vi.mock('@/components/common/ModelCombobox', () => ({
   ModelCombobox: ({ value, onChange, placeholder }: Record<string, unknown>) => (
     <input
       data-testid="model-combobox"

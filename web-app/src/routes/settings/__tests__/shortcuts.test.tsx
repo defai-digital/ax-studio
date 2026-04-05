@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import { Route as ShortcutsRoute } from '../shortcuts'
 
 // Mock dependencies
-vi.mock('@/containers/SettingsMenu', () => ({
+vi.mock('@/components/common/SettingsMenu', () => ({
   default: () => <div data-testid="settings-menu">Settings Menu</div>,
 }))
 
