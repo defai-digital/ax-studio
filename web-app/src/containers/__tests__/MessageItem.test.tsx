@@ -23,11 +23,11 @@ vi.mock('@/hooks/models/useModelProvider', () => ({
   ),
 }))
 
-vi.mock('@/containers/dialogs/EditMessageDialog', () => ({
+vi.mock('@/containers/dialogs/message/EditMessageDialog', () => ({
   EditMessageDialog: () => <button data-testid="edit-dialog">Edit</button>,
 }))
 
-vi.mock('@/containers/dialogs/DeleteMessageDialog', () => ({
+vi.mock('@/containers/dialogs/message/DeleteMessageDialog', () => ({
   DeleteMessageDialog: ({ onDelete }: { onDelete: () => void }) => (
     <button data-testid="delete-dialog" onClick={onDelete}>
       Delete

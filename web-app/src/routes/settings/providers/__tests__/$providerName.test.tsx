@@ -62,7 +62,7 @@ vi.mock('@/containers/RenderMarkdown', () => ({
   RenderMarkdown: () => <div />,
 }))
 
-vi.mock('@/containers/dialogs/EditModel', () => ({
+vi.mock('@/containers/dialogs/model/EditModel', () => ({
   DialogEditModel: () => <div />,
 }))
 
@@ -70,7 +70,7 @@ vi.mock('@/containers/ModelSetting', () => ({
   ModelSetting: () => <div />,
 }))
 
-vi.mock('@/containers/dialogs/DeleteModel', () => ({
+vi.mock('@/containers/dialogs/model/DeleteModel', () => ({
   DialogDeleteModel: () => <div />,
 }))
 
@@ -82,7 +82,7 @@ vi.mock('@/containers/dialogs/DeleteProvider', () => ({
   default: () => <div data-testid="delete-provider" />,
 }))
 
-vi.mock('@/containers/dialogs/AddModel', () => ({
+vi.mock('@/containers/dialogs/model/AddModel', () => ({
   DialogAddModel: () => <div />,
 }))
 

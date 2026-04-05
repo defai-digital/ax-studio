@@ -1,9 +1,14 @@
-export { RenameThreadDialog } from './RenameThreadDialog'
-export { DeleteThreadDialog } from './DeleteThreadDialog'
-export { DeleteAllThreadsDialog } from './DeleteAllThreadsDialog'
-export { EditMessageDialog } from './EditMessageDialog'
-export { MessageMetadataDialog } from './MessageMetadataDialog'
-export { DeleteMessageDialog } from './DeleteMessageDialog'
+// Thread dialogs
+export { RenameThreadDialog } from './thread/RenameThreadDialog'
+export { DeleteThreadDialog } from './thread/DeleteThreadDialog'
+export { DeleteAllThreadsDialog } from './thread/DeleteAllThreadsDialog'
+
+// Message dialogs
+export { EditMessageDialog } from './message/EditMessageDialog'
+export { MessageMetadataDialog } from './message/MessageMetadataDialog'
+export { DeleteMessageDialog } from './message/DeleteMessageDialog'
+
+// System / app-level dialogs (still top-level)
 export { FactoryResetDialog } from './FactoryResetDialog'
 export { DeleteAssistantDialog } from './DeleteAssistantDialog'
 export { DeleteProjectDialog } from './DeleteProjectDialog'

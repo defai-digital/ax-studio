@@ -9,7 +9,7 @@ import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { useAppUpdater } from '@/hooks/updater/useAppUpdater'
 import { useEffect, useState, useCallback } from 'react'
-import ChangeDataFolderLocation from '@/containers/dialogs/ChangeDataFolderLocation'
+import ChangeDataFolderLocation from '@/containers/dialogs/thread/ChangeDataFolderLocation'
 import { FactoryResetDialog } from '@/containers/dialogs'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import {

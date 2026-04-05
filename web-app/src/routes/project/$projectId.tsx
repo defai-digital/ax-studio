@@ -31,7 +31,7 @@ import {
 import { Button } from '@/components/ui/button'
 import AddProjectDialog from '@/containers/dialogs/AddProjectDialog'
 import { DeleteProjectDialog } from '@/containers/dialogs/DeleteProjectDialog'
-import { DeleteAllThreadsInProjectDialog } from '@/containers/dialogs/DeleteAllThreadsInProjectDialog'
+import { DeleteAllThreadsInProjectDialog } from '@/containers/dialogs/thread/DeleteAllThreadsInProjectDialog'
 import { SidebarMenu } from '@/components/ui/sidebar'
 
 export const Route = createFileRoute('/project/$projectId')({

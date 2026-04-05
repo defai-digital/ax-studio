@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render } from '@testing-library/react'
-import { DialogEditModel } from '../dialogs/EditModel'
+import { DialogEditModel } from '../EditModel'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import '@testing-library/jest-dom'
 

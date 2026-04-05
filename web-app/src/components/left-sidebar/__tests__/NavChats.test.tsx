@@ -84,7 +84,7 @@ vi.mock('@/containers/ThreadList', () => ({
   ),
 }))
 
-vi.mock('@/containers/dialogs/DeleteAllThreadsDialog', () => ({
+vi.mock('@/containers/dialogs/thread/DeleteAllThreadsDialog', () => ({
   DeleteAllThreadsDialog: () => <button data-testid="delete-all">Delete All</button>,
 }))
 
