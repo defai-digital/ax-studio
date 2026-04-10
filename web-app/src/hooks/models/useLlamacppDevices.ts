@@ -106,6 +106,18 @@ export const useLlamacppDevices = create<LlamacppDevicesStore>((set, get) => ({
       updateProvider('llamacpp', { settings: updatedSettings })
     } catch (error) {
       console.error('[useLlamacppDevices] Failed to persist device setting:', error)
+      // Roll back the optimistic toggle so UI and backend stay in sync.
+      set((state) => ({
+        devices: state.devices.map((device) =>
+          device.id === deviceId
+            ? { ...device, activated: !device.activated }
+            : device
+        ),
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to update device setting',
+      }))
     }
   },
 }))

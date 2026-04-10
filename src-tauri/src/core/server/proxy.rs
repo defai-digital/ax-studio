@@ -10,6 +10,29 @@ use subtle::ConstantTimeEq;
 use super::security::{add_cors_headers_with_host_and_origin, trusted_cors_origin};
 use super::{gateway_routes, model_routes};
 
+/// Finalize a response builder into a `Response<Body>`, never panicking.
+///
+/// `Response::builder().body(...)` can only fail if a previously chained
+/// header call left the builder in an invalid state (e.g. a bad header
+/// value). The previous code used `.unwrap()` everywhere, which would
+/// crash the entire Tauri app on the hot path. This helper degrades
+/// gracefully to a 500 fallback response so the server stays alive.
+fn finalize_response(
+    builder: hyper::http::response::Builder,
+    body: Body,
+) -> Response<Body> {
+    match builder.body(body) {
+        Ok(resp) => resp,
+        Err(err) => {
+            log::error!("Failed to build HTTP response: {err}");
+            Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Body::from("Internal proxy error"))
+                .unwrap_or_else(|_| Response::new(Body::from("Internal proxy error")))
+        }
+    }
+}
+
 pub(crate) fn is_hop_by_hop_header(name: &hyper::header::HeaderName) -> bool {
     matches!(
         name.as_str().to_ascii_lowercase().as_str(),
@@ -48,12 +71,10 @@ fn handle_cors_preflight(req: &Request<Body>, config: &ProxyConfig) -> Option<Re
     }
 
     if !config.cors_enabled {
-        return Some(
-            Response::builder()
-                .status(StatusCode::FORBIDDEN)
-                .body(Body::from("CORS is disabled"))
-                .unwrap(),
-        );
+        return Some(finalize_response(
+            Response::builder().status(StatusCode::FORBIDDEN),
+            Body::from("CORS is disabled"),
+        ));
     }
 
     log::debug!(
@@ -89,12 +110,10 @@ fn handle_cors_preflight(req: &Request<Body>, config: &ProxyConfig) -> Option<Re
 
     if !method_allowed {
         log::warn!("CORS preflight: Method '{requested_method}' not allowed");
-        return Some(
-            Response::builder()
-                .status(StatusCode::METHOD_NOT_ALLOWED)
-                .body(Body::from("Method not allowed"))
-                .unwrap(),
-        );
+        return Some(finalize_response(
+            Response::builder().status(StatusCode::METHOD_NOT_ALLOWED),
+            Body::from("Method not allowed"),
+        ));
     }
 
     let request_path = req.uri().path();
@@ -117,12 +136,10 @@ fn handle_cors_preflight(req: &Request<Body>, config: &ProxyConfig) -> Option<Re
 
     if !is_trusted {
         log::warn!("CORS preflight: Host '{host}' not trusted for path '{request_path}'");
-        return Some(
-            Response::builder()
-                .status(StatusCode::FORBIDDEN)
-                .body(Body::from("Host not allowed"))
-                .unwrap(),
-        );
+        return Some(finalize_response(
+            Response::builder().status(StatusCode::FORBIDDEN),
+            Body::from("Host not allowed"),
+        ));
     }
 
     let requested_headers = req
@@ -176,12 +193,10 @@ fn handle_cors_preflight(req: &Request<Body>, config: &ProxyConfig) -> Option<Re
 
     if !headers_valid {
         log::warn!("CORS preflight: Some requested headers not allowed: {requested_headers}");
-        return Some(
-            Response::builder()
-                .status(StatusCode::FORBIDDEN)
-                .body(Body::from("Headers not allowed"))
-                .unwrap(),
-        );
+        return Some(finalize_response(
+            Response::builder().status(StatusCode::FORBIDDEN),
+            Body::from("Headers not allowed"),
+        ));
     }
 
     let mut response = Response::builder()
@@ -198,12 +213,16 @@ fn handle_cors_preflight(req: &Request<Body>, config: &ProxyConfig) -> Option<Re
         response = response
             .header("Access-Control-Allow-Origin", allow_origin)
             .header("Access-Control-Allow-Credentials", "true");
-    } else {
-        response = response.header("Access-Control-Allow-Origin", "*");
+    } else if !origin.is_empty() {
+        log::warn!("CORS preflight: Origin '{origin}' not allowed");
+        return Some(finalize_response(
+            Response::builder().status(StatusCode::FORBIDDEN),
+            Body::from("Origin not allowed"),
+        ));
     }
 
     log::debug!("CORS preflight response: host_trusted={is_trusted}, origin='{origin}'");
-    Some(response.body(Body::empty()).unwrap())
+    Some(finalize_response(response, Body::empty()))
 }
 
 /// Validate host header, API key, and blocked paths.
@@ -236,11 +255,10 @@ fn validate_request(
                     &config.trusted_hosts,
                     config.cors_enabled,
                 );
-                return Some(
-                    error_response
-                        .body(Body::from("Invalid host header"))
-                        .unwrap(),
-                );
+                return Some(finalize_response(
+                    error_response,
+                    Body::from("Invalid host header"),
+                ));
             }
         } else {
             let mut error_response = Response::builder().status(StatusCode::BAD_REQUEST);
@@ -251,11 +269,10 @@ fn validate_request(
                 &config.trusted_hosts,
                 config.cors_enabled,
             );
-            return Some(
-                error_response
-                    .body(Body::from("Missing host header"))
-                    .unwrap(),
-            );
+            return Some(finalize_response(
+                error_response,
+                Body::from("Missing host header"),
+            ));
         }
     } else {
         log::debug!("Bypassing host validation for whitelisted path: {path}");
@@ -290,11 +307,10 @@ fn validate_request(
                 &config.trusted_hosts,
                 config.cors_enabled,
             );
-            return Some(
-                error_response
-                    .body(Body::from("Invalid or missing authorization token"))
-                    .unwrap(),
-            );
+            return Some(finalize_response(
+                error_response,
+                Body::from("Invalid or missing authorization token"),
+            ));
         }
     } else if is_whitelisted_path {
         log::debug!("Bypassing authorization check for whitelisted path: {path}");
@@ -307,11 +323,10 @@ fn validate_request(
             &config.trusted_hosts,
             config.cors_enabled,
         );
-        return Some(
-            error_response
-                .body(Body::from("Proxy API key is not configured"))
-                .unwrap(),
-        );
+        return Some(finalize_response(
+            error_response,
+            Body::from("Proxy API key is not configured"),
+        ));
     }
 
     if path == "/configs" || path.starts_with("/configs/") || path.starts_with("/configs?") {
@@ -323,7 +338,7 @@ fn validate_request(
             &config.trusted_hosts,
             config.cors_enabled,
         );
-        return Some(error_response.body(Body::from("Not Found")).unwrap());
+        return Some(finalize_response(error_response, Body::from("Not Found")));
     }
 
     None
@@ -594,23 +609,15 @@ mod tests {
             .unwrap();
         let config = test_config(true, "");
         let resp = handle_cors_preflight(&req, &config).unwrap();
-        assert_eq!(resp.status(), StatusCode::OK);
-        assert_eq!(
-            resp.headers()
-                .get("Access-Control-Allow-Origin")
-                .unwrap()
-                .to_str()
-                .unwrap(),
-            "*"
-        );
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
         assert!(resp
             .headers()
-            .get("Access-Control-Allow-Credentials")
+            .get("Access-Control-Allow-Origin")
             .is_none());
     }
 
     #[test]
-    fn test_cors_preflight_without_origin_uses_wildcard() {
+    fn test_cors_preflight_without_origin_sets_minimal_headers() {
         let req = Request::builder()
             .method(hyper::Method::OPTIONS)
             .uri("/")
@@ -620,14 +627,14 @@ mod tests {
         let config = test_config(true, "");
         let resp = handle_cors_preflight(&req, &config).unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        assert_eq!(
-            resp.headers()
-                .get("Access-Control-Allow-Origin")
-                .unwrap()
-                .to_str()
-                .unwrap(),
-            "*"
-        );
+        assert!(resp
+            .headers()
+            .get("Access-Control-Allow-Origin")
+            .is_none());
+        assert!(resp
+            .headers()
+            .get("Access-Control-Allow-Credentials")
+            .is_none());
     }
 
     // --- validate_request tests ---
@@ -664,9 +671,13 @@ mod tests {
 
     #[test]
     fn test_validate_request_configs_path_returns_404() {
-        let config = test_config(false, "");
+        let config = test_config(false, "my-secret");
         let mut headers = hyper::HeaderMap::new();
         headers.insert(hyper::header::HOST, "localhost:1337".parse().unwrap());
+        headers.insert(
+            hyper::header::AUTHORIZATION,
+            "Bearer my-secret".parse().unwrap(),
+        );
         let result = validate_request("/configs", "localhost:1337", "", &headers, &config);
         assert!(result.is_some());
         if let Some(resp) = result {
@@ -676,14 +687,14 @@ mod tests {
 
     #[test]
     fn test_validate_request_configs_subpath_returns_404() {
-        let config = test_config(false, "");
-        let result = validate_request(
-            "/configs/something",
-            "localhost:1337",
-            "",
-            &hyper::HeaderMap::new(),
-            &config,
+        let config = test_config(false, "my-secret");
+        let mut headers = hyper::HeaderMap::new();
+        headers.insert(
+            hyper::header::AUTHORIZATION,
+            "Bearer my-secret".parse().unwrap(),
         );
+        headers.insert(hyper::header::HOST, "localhost:1337".parse().unwrap());
+        let result = validate_request("/configs/something", "localhost:1337", "", &headers, &config);
         assert!(result.is_some());
         if let Some(resp) = result {
             assert_eq!(resp.status(), StatusCode::NOT_FOUND);

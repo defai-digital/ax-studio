@@ -52,12 +52,15 @@ const DeleteProvider = ({ provider }: Props) => {
       }),
     })
     setTimeout(() => {
-      router.navigate({
-        to: route.settings.providers,
-        params: {
-          providerName: providers[0].provider,
-        },
-      })
+      const currentProviders = useModelProvider.getState().providers
+      if (currentProviders.length > 0) {
+        router.navigate({
+          to: route.settings.providers,
+          params: { providerName: currentProviders[0].provider },
+        })
+      } else {
+        router.navigate({ to: route.settings.providers })
+      }
     }, 0)
   }
 

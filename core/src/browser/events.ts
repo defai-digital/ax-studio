@@ -7,7 +7,10 @@ export type EventHandler<T = unknown> = (payload: T) => void
  * @param handler The handler function to call when the event is observed.
  */
 const on = <T = unknown>(eventName: string, handler: EventHandler<T>): void => {
-  globalThis.core?.events?.on(eventName, handler)
+  if (!globalThis.core?.events) {
+    throw new Error('Core events bridge is not available')
+  }
+  globalThis.core.events.on(eventName, handler)
 }
 
 /**
@@ -17,7 +20,10 @@ const on = <T = unknown>(eventName: string, handler: EventHandler<T>): void => {
  * @param handler The handler function to call when the event is observed.
  */
 const off = <T = unknown>(eventName: string, handler: EventHandler<T>): void => {
-  globalThis.core?.events?.off(eventName, handler)
+  if (!globalThis.core?.events) {
+    throw new Error('Core events bridge is not available')
+  }
+  globalThis.core.events.off(eventName, handler)
 }
 
 /**
@@ -27,7 +33,10 @@ const off = <T = unknown>(eventName: string, handler: EventHandler<T>): void => 
  * @param object The object to pass to the event callback.
  */
 const emit = <T = unknown>(eventName: string, object: T): void => {
-  globalThis.core?.events?.emit(eventName, object)
+  if (!globalThis.core?.events) {
+    throw new Error('Core events bridge is not available')
+  }
+  globalThis.core.events.emit(eventName, object)
 }
 
 export const events = {

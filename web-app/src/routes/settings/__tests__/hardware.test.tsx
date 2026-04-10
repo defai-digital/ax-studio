@@ -55,7 +55,7 @@ vi.mock('@/hooks/settings/useHardware', () => ({
     systemUsage: { cpu: 50, used_memory: 8192 },
     setHardwareData: vi.fn(),
     updateSystemUsage: vi.fn(),
-    pollingPaused: false,
+    pollingPaused: true,
   }),
 }))
 
@@ -122,23 +122,29 @@ global.IS_MACOS = false
 // Import the actual component after all mocks are set up
 import { Route } from '../hardware'
 
+const renderHardwareContent = () => {
+  const Component = Route.component as React.ComponentType
+  return render(<Component />)
+}
+
 describe('Hardware Settings', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     global.IS_MACOS = false
   })
 
-  it('renders hardware settings page', () => {
-    const Component = Route.component as React.ComponentType
-    render(<Component />)
-    
-    expect(screen.getByTestId('header-page')).toBeInTheDocument()
-    expect(screen.getByTestId('settings-menu')).toBeInTheDocument()
+  it('renders hardware settings page', async () => {
+    renderHardwareContent()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('header-page')).toBeInTheDocument()
+      expect(screen.getByTestId('settings-menu')).toBeInTheDocument()
+      expect(screen.getByText('windows')).toBeInTheDocument()
+    })
   })
 
   it('displays OS information', async () => {
-    const Component = Route.component as React.ComponentType
-    render(<Component />)
+    renderHardwareContent()
     
     await waitFor(() => {
       expect(screen.getByText('settings:hardware.os')).toBeInTheDocument()
@@ -147,8 +153,7 @@ describe('Hardware Settings', () => {
   })
 
   it('displays CPU information', async () => {
-    const Component = Route.component as React.ComponentType
-    render(<Component />)
+    renderHardwareContent()
     
     await waitFor(() => {
       expect(screen.getByText('settings:hardware.cpu')).toBeInTheDocument()
@@ -157,8 +162,7 @@ describe('Hardware Settings', () => {
   })
 
   it('displays memory information', async () => {
-    const Component = Route.component as React.ComponentType
-    render(<Component />)
+    renderHardwareContent()
     
     await waitFor(() => {
       expect(screen.getByText('settings:hardware.memory')).toBeInTheDocument()
@@ -167,8 +171,7 @@ describe('Hardware Settings', () => {
 
   it('displays GPU devices on non-macOS', async () => {
     global.IS_MACOS = false
-    const Component = Route.component as React.ComponentType
-    render(<Component />)
+    renderHardwareContent()
     
     await waitFor(() => {
       expect(screen.getByText('settings:hardware.gpus')).toBeInTheDocument()
@@ -178,8 +181,7 @@ describe('Hardware Settings', () => {
 
   it('hides GPU devices on macOS', async () => {
     global.IS_MACOS = true
-    const Component = Route.component as React.ComponentType
-    render(<Component />)
+    renderHardwareContent()
     
     await waitFor(() => {
       expect(screen.queryByText('GPUs')).not.toBeInTheDocument()

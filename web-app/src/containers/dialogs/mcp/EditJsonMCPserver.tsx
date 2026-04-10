@@ -59,6 +59,10 @@ export default function EditJsonMCPserver({
   const handleSave = () => {
     try {
       const parsedData = JSON.parse(jsonContent) as MCPConfigJson
+      if (!parsedData || typeof parsedData !== 'object') {
+        setError(t('mcp-servers:editJson.errorFormat'))
+        return
+      }
       onSave(parsedData)
       onOpenChange(false)
       setError(null)

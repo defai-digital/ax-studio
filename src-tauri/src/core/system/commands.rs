@@ -106,13 +106,13 @@ fn validate_open_path(path: &PathBuf) -> Result<PathBuf, String> {
 #[tauri::command]
 pub fn canonicalize_path(path: String) -> Result<String, String> {
     let path = PathBuf::from(path);
-    if path.as_os_str().is_empty() {
-        return Err("Path must not be empty".to_string());
-    }
-
-    fs::canonicalize(&path)
-        .map(|canonical| canonical.to_string_lossy().to_string())
-        .map_err(|e| format!("Invalid path: {e}"))
+    // Apply the same allow-list used by the file-explorer opener: only paths
+    // under the user's home directory or the system temp directory can be
+    // probed. Without this, the command doubled as a filesystem enumeration
+    // oracle (e.g. `/etc/passwd` canonicalizes → discloses absolute paths and
+    // home-dir usernames).
+    let canonical = validate_open_path(&path)?;
+    Ok(canonical.to_string_lossy().to_string())
 }
 
 #[tauri::command]
@@ -278,6 +278,17 @@ pub fn is_library_available(library: &str) -> bool {
     }
 }
 
+/// Validate that a URL is usable as an Anthropic API base URL: must be
+/// parsable and use http or https (rejects `file://`, `javascript:`,
+/// `data:`, etc.).
+fn validate_api_url(url: &str) -> Result<(), String> {
+    let parsed = url::Url::parse(url).map_err(|e| format!("Invalid API URL: {e}"))?;
+    match parsed.scheme() {
+        "http" | "https" => Ok(()),
+        other => Err(format!("Unsupported API URL scheme: {other}")),
+    }
+}
+
 #[tauri::command]
 pub fn launch_claude_code_with_config(
     api_url: String,
@@ -287,6 +298,17 @@ pub fn launch_claude_code_with_config(
     small_model: Option<String>,
     custom_env_vars: Vec<serde_json::Value>,
 ) -> Result<(), String> {
+    // Validate the URL before writing it to shell config — previously any
+    // string (including `file:///etc/passwd`) was accepted.
+    validate_api_url(&api_url)?;
+
+    // Hardcoded env vars (ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN) still
+    // need to pass the shell-safety check — the control-character guard
+    // that custom env vars go through was previously skipped here.
+    if !is_safe_shell_env_value(&api_url) {
+        return Err("ANTHROPIC_BASE_URL contains unsupported control characters".to_string());
+    }
+
     // Clone values for logging before moving
     let api_url_log = api_url.clone();
     let big_model_log = big_model.clone();
@@ -296,10 +318,11 @@ pub fn launch_claude_code_with_config(
     let mut env_vars: Vec<(String, String)> = Vec::with_capacity(8);
     env_vars.push(("ANTHROPIC_BASE_URL".to_string(), api_url));
 
-    env_vars.push((
-        "ANTHROPIC_AUTH_TOKEN".to_string(),
-        api_key.unwrap_or_else(|| "ax-studio".to_string()),
-    ));
+    let auth_token = api_key.unwrap_or_else(|| "ax-studio".to_string());
+    if !is_safe_shell_env_value(&auth_token) {
+        return Err("ANTHROPIC_AUTH_TOKEN contains unsupported control characters".to_string());
+    }
+    env_vars.push(("ANTHROPIC_AUTH_TOKEN".to_string(), auth_token));
 
     if let Some(model) = big_model {
         env_vars.push(("ANTHROPIC_DEFAULT_OPUS_MODEL".to_string(), model));

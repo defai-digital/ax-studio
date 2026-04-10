@@ -174,13 +174,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
             routed: true,
             latencyMs: routerResult.latencyMs,
           }
-          // Update the message object for persistence
-          Object.assign(message, {
-            metadata: {
-              ...((message.metadata ?? {}) as Record<string, unknown>),
-              routing: routingMeta,
-            },
-          })
           // Update chat state so the UI re-renders with the routing badge
           setChatMessages((prev) =>
             prev.map((m) =>

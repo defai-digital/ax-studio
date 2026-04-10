@@ -177,10 +177,17 @@ export class TauriWindowService extends DefaultWindowService {
   }
 
   private setupThemeListenerForWindow(window: WebviewWindow): void {
-    // Listen to theme change events from Tauri backend
+    // Listen to theme change events from Tauri backend. `listen()` returns
+    // an UnlistenFn that MUST be called when the window closes — otherwise
+    // every new window registers a new global `theme-changed` listener
+    // that's never torn down, and stale listeners fire callbacks on
+    // destroyed WebviewWindow handles.
+    let unlisten: (() => void) | null = null
+    let closed = false
+
     import('@tauri-apps/api/event')
-      .then(({ listen }) => {
-        return listen<string>('theme-changed', async (event) => {
+      .then(({ listen }) =>
+        listen<string>('theme-changed', async (event) => {
           const theme = event.payload
           try {
             if (theme === 'dark') {
@@ -194,9 +201,31 @@ export class TauriWindowService extends DefaultWindowService {
             console.error('Failed to update window theme:', err)
           }
         })
+      )
+      .then((unlistenFn) => {
+        if (closed) {
+          // Window already closed before listen() resolved — clean up
+          // immediately so the listener doesn't leak.
+          unlistenFn()
+          return
+        }
+        unlisten = unlistenFn
       })
       .catch((err) => {
         console.error('Failed to setup theme listener for window:', err)
+      })
+
+    // Subscribe to the window's close event and drop the listener.
+    window
+      .onCloseRequested(() => {
+        closed = true
+        if (unlisten) {
+          unlisten()
+          unlisten = null
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to register onCloseRequested for theme listener cleanup:', err)
       })
   }
 }

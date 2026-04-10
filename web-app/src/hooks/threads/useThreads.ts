@@ -1,10 +1,27 @@
 import { create } from 'zustand'
 import { ulid } from 'ulidx'
+import { toast } from 'sonner'
 import { getServiceHub } from '@/hooks/useServiceHub'
 import { Fzf } from 'fzf'
 import { TEMPORARY_CHAT_ID } from '@/constants/chat'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { useFileRegistry, threadCollectionId } from '@/lib/file-registry'
+
+// Shared persistence-error reporter for thread CRUD. The store is
+// optimistic by design, so we don't roll back the UI — but we do surface
+// the failure as a toast so the user knows their change may not survive
+// reload. (Previously all these paths used `.catch(console.error)` which
+// silently ate the error.)
+const reportPersistenceError = (operation: string) => (error: unknown) => {
+  console.error(`[threads] ${operation} persistence failed:`, error)
+  toast.error(`Failed to save: ${operation}`, {
+    id: `threads-persist-${operation}`,
+    description:
+      error instanceof Error
+        ? error.message
+        : 'Your change is visible now but may not survive reload.',
+  })
+}
 type ThreadState = {
   threads: Record<string, Thread>
   currentThreadId?: string
@@ -116,7 +133,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
           ...state.threads[threadId],
           isFavorite: !state.threads[threadId].isFavorite,
         })
-        .catch(console.error)
+        .catch(reportPersistenceError('toggle favorite'))
       return {
         threads: {
           ...state.threads,
@@ -131,10 +148,13 @@ export const useThreads = create<ThreadState>()((set, get) => ({
   },
   deleteThread: (threadId) => {
     set((state) => {
-       
+
       const { [threadId]: _, ...remainingThreads } = state.threads
 
-      getServiceHub().threads().deleteThread(threadId).catch(console.error)
+      getServiceHub()
+        .threads()
+        .deleteThread(threadId)
+        .catch(reportPersistenceError('delete thread'))
 
       // Clean up AkiDB collection and file registry for this thread
       const colId = threadCollectionId(threadId)
@@ -148,6 +168,11 @@ export const useThreads = create<ThreadState>()((set, get) => ({
 
       return {
         threads: remainingThreads,
+        // Clear the pointer when the active thread is the one being
+        // deleted, so the sidebar doesn't highlight a ghost and chat views
+        // don't crash reading `threads[currentThreadId]`.
+        currentThreadId:
+          state.currentThreadId === threadId ? undefined : state.currentThreadId,
         searchIndex: new Fzf<Thread[]>(
           Object.values(remainingThreads).filter(
             (t) => t.id !== TEMPORARY_CHAT_ID
@@ -185,7 +210,9 @@ export const useThreads = create<ThreadState>()((set, get) => ({
         getServiceHub().mcp().callTool({
           toolName: 'akidb_delete_collection',
           arguments: { collection_id: colId },
-        }).catch(() => {})
+        }).catch((error) => {
+          console.warn('[threads] Failed to delete AkiDB collection:', colId, error)
+        })
       })
 
       // Keep favorite threads and threads with project metadata
@@ -199,6 +226,12 @@ export const useThreads = create<ThreadState>()((set, get) => ({
 
       return {
         threads: remainingThreads,
+        // Drop the active-thread pointer if it's among the ones being
+        // deleted so the UI doesn't sit on a ghost thread.
+        currentThreadId:
+          state.currentThreadId && threadsToDeleteIds.includes(state.currentThreadId)
+            ? undefined
+            : state.currentThreadId,
         searchIndex: new Fzf<Thread[]>(
           Object.values(remainingThreads).filter(
             (t) => t.id !== TEMPORARY_CHAT_ID
@@ -222,7 +255,9 @@ export const useThreads = create<ThreadState>()((set, get) => ({
         getServiceHub().mcp().callTool({
           toolName: 'akidb_delete_collection',
           arguments: { collection_id: colId },
-        }).catch(() => {})
+        }).catch((error) => {
+          console.warn('[threads] Failed to delete AkiDB collection:', colId, error)
+        })
       })
 
       return {
@@ -252,7 +287,9 @@ export const useThreads = create<ThreadState>()((set, get) => ({
         getServiceHub().mcp().callTool({
           toolName: 'akidb_delete_collection',
           arguments: { collection_id: colId },
-        }).catch(() => {})
+        }).catch((error) => {
+          console.warn('[threads] Failed to delete AkiDB collection:', colId, error)
+        })
       })
 
       // Keep threads that don't belong to this project
@@ -268,6 +305,12 @@ export const useThreads = create<ThreadState>()((set, get) => ({
 
       return {
         threads: remainingThreads,
+        // Drop the active-thread pointer if the user was viewing a thread
+        // that belonged to the project we just cleared.
+        currentThreadId:
+          state.currentThreadId && threadsToDeleteIds.includes(state.currentThreadId)
+            ? undefined
+            : state.currentThreadId,
         searchIndex: new Fzf<Thread[]>(Object.values(remainingThreads).filter(t => t.id !== TEMPORARY_CHAT_ID), {
           selector: (item: Thread) => item.title,
         }),
@@ -349,16 +392,30 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       .createThread(newThread)
       .then((createdThread) => {
         set((state) => {
-          // Get all existing threads as an array
           const existingThreads = Object.values(state.threads)
-
-          // Create new array with the new thread at the beginning
           const reorderedThreads = [createdThread, ...existingThreads]
 
-          // Use setThreads to handle proper ordering (this will assign order 1, 2, 3...)
-          get().setThreads(reorderedThreads)
+          const threadMap = reorderedThreads.reduce(
+            (acc: Record<string, Thread>, thread) => {
+              acc[thread.id] = {
+                ...thread,
+                model: thread.model
+                  ? { provider: thread.model?.provider, id: thread.model?.id }
+                  : undefined,
+              }
+              return acc
+            },
+            {} as Record<string, Thread>
+          )
+          const filteredForSearch = Object.values(threadMap).filter(
+            (t) => t.id !== TEMPORARY_CHAT_ID
+          )
 
           return {
+            threads: threadMap,
+            searchIndex: new Fzf<Thread[]>(filteredForSearch, {
+              selector: (item: Thread) => item.title,
+            }),
             currentThreadId: createdThread.id,
           }
         })
@@ -418,7 +475,10 @@ export const useThreads = create<ThreadState>()((set, get) => ({
         title: newTitle,
         updated: Date.now() / 1000,
       }
-      getServiceHub().threads().updateThread(updatedThread).catch(console.error)
+      getServiceHub()
+        .threads()
+        .updateThread(updatedThread)
+        .catch(reportPersistenceError('rename thread'))
       const newThreads = { ...state.threads, [threadId]: updatedThread }
       return {
         threads: newThreads,
@@ -450,19 +510,21 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       const updatedThreads = { ...state.threads }
       updatedThreads[threadId] = updatedThread
 
-      // Update the backend for the main thread
-      getServiceHub().threads().updateThread(updatedThread).catch(console.error)
+      // Background timestamp refresh — log but don't toast; the user
+      // didn't explicitly initiate this, so a failed background save
+      // shouldn't nag them.
+      getServiceHub()
+        .threads()
+        .updateThread(updatedThread)
+        .catch((error) => {
+          console.error('[threads] timestamp persist failed:', error)
+        })
 
+      // The Fzf index is keyed on `title`, not `updated`, so a bare
+      // timestamp refresh doesn't need the O(n) rebuild — reuse the
+      // existing index.
       return {
         threads: updatedThreads,
-        searchIndex: new Fzf<Thread[]>(
-          Object.values(updatedThreads).filter(
-            (t) => t.id !== TEMPORARY_CHAT_ID
-          ),
-          {
-            selector: (item: Thread) => item.title,
-          }
-        ),
       }
     })
   },
@@ -477,7 +539,10 @@ export const useThreads = create<ThreadState>()((set, get) => ({
         updated: Date.now() / 1000,
       }
 
-      getServiceHub().threads().updateThread(updatedThread).catch(console.error)
+      getServiceHub()
+        .threads()
+        .updateThread(updatedThread)
+        .catch(reportPersistenceError('update thread'))
 
       const newThreads = { ...state.threads, [threadId]: updatedThread }
       return {

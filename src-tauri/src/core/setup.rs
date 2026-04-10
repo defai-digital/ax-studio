@@ -97,6 +97,20 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
             let mut archive = Archive::new(gz_decoder);
             for entry in archive.entries().map_err(|e| e.to_string())? {
                 let mut entry = entry.map_err(|e| e.to_string())?;
+
+                // Reject symlink / hardlink entries — a symlink followed by a
+                // file entry through that link is a classic archive extraction
+                // escape (lexical path checks still pass, but the actual write
+                // lands outside `extension_dir`).
+                let entry_type = entry.header().entry_type();
+                if entry_type.is_symlink() || entry_type.is_hard_link() {
+                    log::warn!(
+                        "Rejecting symlink/hardlink entry in extension archive: {}",
+                        entry.path().map(|p| p.display().to_string()).unwrap_or_default()
+                    );
+                    continue;
+                }
+
                 let file_path = entry.path().map_err(|e| e.to_string())?;
                 let components: Vec<_> = file_path.components().collect();
                 if components.len() > 1 {
@@ -222,7 +236,9 @@ pub fn migrate_mcp_servers(
         }
     }
     store.set("mcp_version", 7);
-    store.save().expect("Failed to save store");
+    store
+        .save()
+        .map_err(|e| format!("Failed to save store during MCP migration: {e}"))?;
     Ok(())
 }
 
@@ -609,10 +625,10 @@ pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
 
     let mut store_path = get_app_data_folder_path(app.handle().clone());
     store_path.push("store.json");
-    let store = app
-        .handle()
-        .store(store_path)
-        .expect("Store not initialized");
+    // Use `?` propagation instead of `.expect(...)` so a bad `store.json`
+    // (corrupted file, bad permissions, disk full) surfaces as a recoverable
+    // setup error rather than a hard panic with no actionable message.
+    let store = app.handle().store(store_path)?;
     let stored_version = store
         .get("version")
         .and_then(|v| v.as_str().map(String::from))
@@ -625,7 +641,12 @@ pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         log::error!("Failed to migrate MCP servers: {e}");
     }
     store.set("version", serde_json::json!(app_version));
-    store.save().expect("Failed to save store");
+    // Best-effort save: log the failure but don't crash. All migrations
+    // have already run successfully; losing only the version stamp is
+    // much less bad than panicking here.
+    if let Err(e) = store.save() {
+        log::error!("Failed to persist version to store after setup: {e}");
+    }
 
     #[cfg(desktop)]
     if option_env!("ENABLE_SYSTEM_TRAY_ICON").unwrap_or("false") == "true" {

@@ -27,7 +27,8 @@ interface ChatSessionState {
     createChat: () => Chat<UIMessage>,
     title?: string,
   ) => Chat<UIMessage>
-  getSessionData: (sessionId: string) => SessionData
+  getSessionData: (sessionId: string) => SessionData | null
+  ensureSessionData: (sessionId: string) => SessionData
   updateStatus: (sessionId: string, status: ChatStatus) => void
   setSessionTitle: (sessionId: string, title?: string) => void
   removeSession: (sessionId: string) => void
@@ -87,6 +88,13 @@ export const useChatSessions = create<ChatSessionState>((set, get) => ({
   },
 
   getSessionData: (sessionId) => {
+    const existing = get().sessions[sessionId]
+    if (existing) return existing.data
+
+    return get().standaloneData[sessionId] ?? null
+  },
+
+  ensureSessionData: (sessionId) => {
     const existing = get().sessions[sessionId]
     if (existing) return existing.data
 

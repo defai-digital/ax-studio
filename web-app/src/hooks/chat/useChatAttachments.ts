@@ -46,16 +46,22 @@ export const useChatAttachments = create<AttachmentStore>()((set, get) => ({
       const fromAttachments = state.attachmentsByThread[fromKey]
       if (!fromAttachments?.length) return state
 
-      const existingDestination = state.attachmentsByThread[toKey]
+      const existingDestination = state.attachmentsByThread[toKey] ?? []
       const attachmentsByThread = { ...state.attachmentsByThread }
       delete attachmentsByThread[fromKey]
+
+      // Merge rather than pick one side — picking discarded the source
+      // whenever the destination already had files. Dedupe by name so the
+      // same file isn't listed twice when both sides happen to have it.
+      const merged = [...existingDestination, ...fromAttachments].filter(
+        (attachment, index, arr) =>
+          arr.findIndex((other) => other.name === attachment.name) === index
+      )
 
       return {
         attachmentsByThread: {
           ...attachmentsByThread,
-          [toKey]: existingDestination?.length
-            ? existingDestination
-            : fromAttachments,
+          [toKey]: merged,
         },
       }
     })

@@ -28,7 +28,21 @@ export abstract class OAIEngine extends AIEngine {
   // Transform the response
   transformResponse?: Function
 
+  // Idempotency guard — see `onLoad`/`onUnload` below. Without this,
+  // re-entering `onLoad()` (extension manager re-initialization, HMR)
+  // registers another set of `OnMessageSent` / `OnInferenceStopped`
+  // listeners, so each chat message triggers N concurrent `inference()`
+  // calls.
+  private loaded = false
+
   private readonly handleMessageSent = (data: MessageRequest) => {
+    // Reset the abort controller for every new inference cycle. Without
+    // this, the first `stopInference()` permanently poisons
+    // `this.controller` — `signal.aborted` stays `true` forever, and
+    // every subsequent fetch started by subclass `inference()` aborts
+    // immediately. User-visible symptom: one Cancel click breaks all
+    // future model responses until the app restarts.
+    this.resetInferenceController()
     this.inference(data)
   }
 
@@ -37,9 +51,21 @@ export abstract class OAIEngine extends AIEngine {
   }
 
   /**
+   * Create a fresh AbortController and clear the cancelled flag.
+   * Subclass `inference()` implementations can also call this defensively
+   * if they enter inference through another code path (retries, fallbacks).
+   */
+  protected resetInferenceController() {
+    this.controller = new AbortController()
+    this.isCancelled = false
+  }
+
+  /**
    * On extension load, subscribe to events.
    */
   override onLoad() {
+    if (this.loaded) return
+    this.loaded = true
     super.onLoad()
     events.on(MessageEvent.OnMessageSent, this.handleMessageSent)
     events.on(InferenceEvent.OnInferenceStopped, this.handleInferenceStopped)
@@ -49,6 +75,7 @@ export abstract class OAIEngine extends AIEngine {
    * On extension unload
    */
   override onUnload(): void {
+    this.loaded = false
     events.off(MessageEvent.OnMessageSent, this.handleMessageSent)
     events.off(InferenceEvent.OnInferenceStopped, this.handleInferenceStopped)
   }

@@ -194,7 +194,13 @@ export const useModelProvider = create<ModelProviderState>()(
       name: localStorageKey.modelProvider,
       storage: createJSONStorage(() => localStorage),
       migrate: (persistedState: unknown, version: number) => {
-        const state = persistedState as ModelProviderState & {
+        // Deep-clone the persisted state before mutating it. The previous
+        // implementation mutated the input object in place, which can
+        // break Zustand devtools, re-hydration retries, and any storage
+        // adapters that hand back cached references.
+        const state = JSON.parse(
+          JSON.stringify(persistedState)
+        ) as ModelProviderState & {
           providers: Array<
             ModelProvider & {
               models: Array<

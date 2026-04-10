@@ -1328,7 +1328,10 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   ): Promise<void> {
     try {
       // Collect all loaded model IDs from both engines
-      const llamacppIds = await getLoadedModels().catch(() => [] as string[])
+      const llamacppIds = await getLoadedModels().catch((error) => {
+        console.warn('[llamacpp] Failed to read loaded models:', error)
+        return [] as string[]
+      })
       const axServingIds = Array.from(this.axServingSessions.keys())
       const allIds = [...new Set([...llamacppIds, ...axServingIds])]
 
@@ -1728,7 +1731,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
               downloadId: modelId,
               modelId,
               fileName: 'model.gguf',
-              percent: transferred / total,
+              percent: total > 0 ? transferred / total : 0,
               size: { transferred, total },
               downloadState: 'downloading',
             })

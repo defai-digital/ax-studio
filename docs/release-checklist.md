@@ -1,4 +1,8 @@
-# I. Before release 
+# Release Checklist (Historical)
+
+**Note:** This document contains version-specific checks from v0.6.x–v0.7.x (current version ~1.2.9). Much of the content is deprecated. Use for reference only or update with current test scenarios.
+
+## I. Before release 
 
 ## A. Initial update / migration Data check
 

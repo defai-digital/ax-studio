@@ -97,8 +97,17 @@ export function parsePlan(json: string): string[] {
   try {
     const trimmed = json.trim()
     const match = trimmed.match(/\[[\s\S]*\]/)
-    if (match) return JSON.parse(match[0]) as string[]
-    return JSON.parse(trimmed) as string[]
+    if (match) {
+      const parsedMatch = JSON.parse(match[0])
+      return Array.isArray(parsedMatch) && parsedMatch.every((item) => typeof item === 'string')
+        ? parsedMatch
+        : []
+    }
+
+    const parsed = JSON.parse(trimmed)
+    return Array.isArray(parsed) && parsed.every((item) => typeof item === 'string')
+      ? parsed
+      : []
   } catch {
     return json
       .split('\n')

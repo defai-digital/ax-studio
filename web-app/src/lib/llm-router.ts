@@ -16,6 +16,7 @@ import { buildRouterPrompt } from './llm-router-prompt'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useFavoriteModel } from '@/hooks/models/useFavoriteModel'
 import { predefinedProviders } from '@/constants/providers'
+import { z } from 'zod'
 
 const MAX_MODELS_IN_PROMPT = 30
 const MAX_USER_MESSAGE_LENGTH = 1000
@@ -113,6 +114,12 @@ export function parseRouterResponse(
   rawText: string,
   availableModels: AvailableModelForRouter[],
 ): { modelId: string; providerId: string; reason: string } | null {
+  const RouterDecisionSchema = z.object({
+    model: z.string().min(1),
+    provider: z.string().min(1),
+    reason: z.string().optional(),
+  })
+
   try {
     // Strip thinking tags (e.g., Qwen 3 models wrap responses in <think>...</think>)
     let cleaned = rawText.trim()
@@ -124,9 +131,13 @@ export function parseRouterResponse(
     }
 
     const parsed = JSON.parse(cleaned)
-    const model = parsed.model as string
-    const provider = parsed.provider as string
-    const reason = (parsed.reason as string) || 'routed'
+    const parseResult = RouterDecisionSchema.safeParse(parsed)
+    if (!parseResult.success) {
+      return null
+    }
+
+    const { model, provider, reason: parsedReason } = parseResult.data
+    const reason = parsedReason || 'routed'
 
     if (!model || !provider) return null
     if (model === 'default' || provider === 'default') return null

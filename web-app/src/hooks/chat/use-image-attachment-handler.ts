@@ -5,7 +5,7 @@
  * Manages `isDragOver` state internally; delegates all store mutations through
  * `setAttachmentsForThread` and calls `setMessage` to surface validation errors.
  */
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useChatAttachments } from '@/hooks/chat/useChatAttachments'
@@ -48,6 +48,17 @@ export function useImageAttachmentHandler({
   )
 
   const [isDragOver, setIsDragOver] = useState(false)
+
+  // Track mount state so the background image-ingest IIFE can bail out
+  // after navigation / unmount instead of updating attachments on a
+  // thread the user is no longer viewing.
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   // ─── Image file processing ──────────────────────────────────────────────────
 
@@ -96,6 +107,19 @@ export function useImageAttachmentHandler({
               }
               resolve()
             }
+            // Without an onerror handler the outer await never resolved on
+            // any FileReader failure (permissions error, corrupted file,
+            // quota exceeded) — the entire attachment pipeline would freeze
+            // until a page refresh. Resolve here so the loop can continue
+            // with remaining files; we also surface a toast below via the
+            // empty `result` detection.
+            reader.onerror = () => {
+              console.error(
+                `[useImageAttachmentHandler] Failed to read file ${file.name}:`,
+                reader.error
+              )
+              resolve()
+            }
             reader.readAsDataURL(file)
           })
         }
@@ -126,6 +150,10 @@ export function useImageAttachmentHandler({
       if (effectiveThreadId && newFiles.length > 0) {
         void (async () => {
           for (const img of newFiles) {
+            // Skip if the hook has unmounted (thread switch, component
+            // teardown) — otherwise ingest callbacks would keep writing
+            // attachments onto a stale thread key after navigation.
+            if (!mountedRef.current) return
             try {
               setAttachmentsForThread(attachmentsKey, (prev) =>
                 prev.map((a) =>
@@ -137,6 +165,7 @@ export function useImageAttachmentHandler({
               const result = await serviceHub
                 .uploads()
                 .ingestImage(effectiveThreadId, img)
+              if (!mountedRef.current) return
               if (result?.id) {
                 setAttachmentsForThread(attachmentsKey, (prev) =>
                   prev.map((a) =>
@@ -150,6 +179,7 @@ export function useImageAttachmentHandler({
               }
             } catch (error) {
               console.error('Failed to ingest image:', error)
+              if (!mountedRef.current) return
               setAttachmentsForThread(attachmentsKey, (prev) =>
                 prev.filter((a) => !(a.name === img.name && a.type === 'image'))
               )

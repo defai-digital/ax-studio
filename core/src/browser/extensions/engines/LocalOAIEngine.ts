@@ -12,6 +12,12 @@ export abstract class LocalOAIEngine extends OAIEngine {
   loadModelFunctionName: string = 'loadModel'
   unloadModelFunctionName: string = 'unloadModel'
 
+  // Idempotency guard for this subclass's own events. The base class has
+  // its own `loaded` flag for the OAIEngine events — this one exists so
+  // the ModelInit/ModelStop handlers also register exactly once across
+  // repeated `onLoad()` invocations (HMR, manager re-init).
+  private localLoaded = false
+
   private readonly handleModelInit = (model: Model) => {
     void this.loadModel(model)
   }
@@ -27,13 +33,17 @@ export abstract class LocalOAIEngine extends OAIEngine {
    * The unloadModel function subscribes to the ModelEvent.OnModelStop event, unloading models when stopped.
    */
   override onLoad() {
+    // Always call super — OAIEngine has its own idempotency guard.
     super.onLoad()
+    if (this.localLoaded) return
+    this.localLoaded = true
     // These events are applicable to local inference providers
     events.on(ModelEvent.OnModelInit, this.handleModelInit)
     events.on(ModelEvent.OnModelStop, this.handleModelStop)
   }
 
   override onUnload() {
+    this.localLoaded = false
     events.off(ModelEvent.OnModelInit, this.handleModelInit)
     events.off(ModelEvent.OnModelStop, this.handleModelStop)
     super.onUnload()

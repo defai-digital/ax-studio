@@ -220,15 +220,34 @@ export abstract class BaseExtension implements ExtensionType {
 
   /**
    * Get the setting value for the key.
+   * Runtime-coerces the stored value to match the default's type so callers
+   * don't receive, e.g., string `"8080"` when they expected `number`.
    * @param key
    * @param defaultValue
    * @returns
    */
-  async getSetting<T>(key: string, defaultValue: T) {
+  async getSetting<T extends string | number | boolean | string[]>(
+    key: string,
+    defaultValue: T
+  ): Promise<T> {
     const keySetting = (await this.getSettings()).find((setting) => setting.key === key)
-
     const value = keySetting?.controllerProps.value
-    return (value as T) ?? defaultValue
+    if (value === undefined || value === null) return defaultValue
+
+    if (typeof defaultValue === 'number') {
+      const coerced = typeof value === 'number' ? value : Number(value)
+      return (Number.isFinite(coerced) ? coerced : defaultValue) as T
+    }
+    if (typeof defaultValue === 'boolean') {
+      if (typeof value === 'boolean') return value as T
+      if (typeof value === 'string') return (value === 'true') as T
+      return defaultValue
+    }
+    if (Array.isArray(defaultValue)) {
+      return (Array.isArray(value) ? value : defaultValue) as T
+    }
+    // String default
+    return (typeof value === 'string' ? value : String(value)) as T
   }
 
   onSettingUpdate<T>(_key: string, _value: T) {
@@ -277,7 +296,21 @@ export abstract class BaseExtension implements ExtensionType {
       return nextSetting
     })
 
-    if (!updatedSettings.length) updatedSettings = componentProps as SettingComponentProps[]
+    if (!updatedSettings.length) {
+      // First-time registration path: backfill required fields from sensible
+      // defaults so we never persist malformed settings that would crash the
+      // UI on the next load.
+      updatedSettings = componentProps.map((cp) => ({
+        ...cp,
+        key: cp.key ?? '',
+        title: cp.title ?? '',
+        description: cp.description ?? '',
+        controllerType: cp.controllerType ?? 'input',
+        controllerProps:
+          cp.controllerProps ??
+          ({ value: '' } as SettingComponentProps['controllerProps']),
+      })) as SettingComponentProps[]
+    }
 
     if (!this.writeStorageItem(this.name, JSON.stringify(updatedSettings))) {
       throw new Error(`Failed to update settings for "${this.name}"`)

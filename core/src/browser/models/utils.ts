@@ -13,9 +13,13 @@ export const validationRules: { [key: string]: (value: any) => boolean } = {
   stop: (value: any) => Array.isArray(value) && value.every((v) => typeof v === 'string'),
   frequency_penalty: (value: any) => typeof value === 'number' && value >= -2 && value <= 2,
   presence_penalty: (value: any) => typeof value === 'number' && value >= -2 && value <= 2,
-  repeat_last_n: (value: any) => typeof value === 'number',
-  repeat_penalty: (value: any) => typeof value === 'number',
-  min_p: (value: any) => typeof value === 'number',
+  // Use `Number.isFinite` so users can't set `Infinity` / `-Infinity`
+  // — they satisfy `typeof === 'number'` and `!isNaN` but pass straight
+  // through to llama.cpp and can destabilize the sampler. Also enforce
+  // the documented numeric ranges.
+  repeat_last_n: (value: any) => Number.isFinite(value) && value >= 0,
+  repeat_penalty: (value: any) => Number.isFinite(value) && value >= 0,
+  min_p: (value: any) => Number.isFinite(value) && value >= 0 && value <= 1,
 
   ctx_len: (value: any) => Number.isInteger(value) && value >= 0,
   ngl: (value: any) => Number.isInteger(value) && value >= 0,

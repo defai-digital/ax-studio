@@ -127,7 +127,7 @@ export function PerformanceMonitor() {
             className="truncate text-sidebar-foreground/70"
             style={{ fontSize: '11px' }}
           >
-            {hardwareData.cpu.name
+            {hardwareData.cpu?.name
               ? hardwareData.cpu.name.split(' ').slice(0, 3).join(' ')
               : 'System'}
           </span>

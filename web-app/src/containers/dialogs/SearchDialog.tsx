@@ -218,7 +218,10 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
     if (!stored) return []
 
     try {
-      const threadIds = JSON.parse(stored) as string[]
+      const parsed = JSON.parse(stored)
+      const threadIds = Array.isArray(parsed)
+        ? parsed.filter((id): id is string => typeof id === 'string')
+        : []
       return threadIds
         .map((id) => threads[id])
         .filter((thread): thread is Thread => thread !== undefined)
@@ -242,7 +245,10 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
 
     if (stored) {
       try {
-        threadIds = JSON.parse(stored) as string[]
+        const parsed = JSON.parse(stored)
+        threadIds = Array.isArray(parsed)
+          ? parsed.filter((id): id is string => typeof id === 'string')
+          : []
       } catch {
         threadIds = []
       }

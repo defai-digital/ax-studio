@@ -39,6 +39,7 @@ type AppState = {
   updateTools: (tools: MCPTool[]) => void
   updateMcpToolNames: (names: string[]) => void
   setAbortController: (threadId: string, controller: AbortController) => void
+  clearAbortController: (threadId: string) => void
   updateTokenSpeed: (message: ThreadMessage, increment?: number) => void
   setTokenSpeed: (
     message: ThreadMessage,
@@ -92,12 +93,26 @@ export const useAppState = create<AppState>()((set) => ({
   },
   setServerStatus: (value) => set({ serverStatus: value }),
   setAbortController: (threadId, controller) => {
-    set((state) => ({
-      abortControllers: {
-        ...state.abortControllers,
-        [threadId]: controller,
-      },
-    }))
+    set((state) => {
+      // Abort any previous controller for this thread so we don't keep
+      // signal listeners alive and so a second send cancels an in-flight one.
+      state.abortControllers[threadId]?.abort()
+      return {
+        abortControllers: {
+          ...state.abortControllers,
+          [threadId]: controller,
+        },
+      }
+    })
+  },
+  clearAbortController: (threadId) => {
+    set((state) => {
+      if (!(threadId in state.abortControllers)) return state
+      state.abortControllers[threadId]?.abort()
+
+      const { [threadId]: _removed, ...rest } = state.abortControllers
+      return { abortControllers: rest }
+    })
   },
   setTokenSpeed: (message, speed, completionTokens) => {
     set((state) => ({
@@ -144,14 +159,27 @@ export const useAppState = create<AppState>()((set) => ({
       tokenSpeed: undefined,
     }),
   clearAppState: () =>
-    set({
-      streamingContent: undefined,
-      abortControllers: {},
-      tokenSpeed: undefined,
-      currentToolCall: undefined,
-      cancelToolCall: undefined,
-      errorMessage: undefined,
-      showOutOfContextDialog: false,
+    set((state) => {
+      // Abort every in-flight stream before clearing — dropping the map
+      // without calling `.abort()` leaves the underlying fetch/reader
+      // alive, wasting bandwidth and risking stale setState calls after
+      // the user clears their session.
+      Object.values(state.abortControllers).forEach((controller) => {
+        try {
+          controller?.abort()
+        } catch {
+          /* ignore — controller may already be aborted */
+        }
+      })
+      return {
+        streamingContent: undefined,
+        abortControllers: {},
+        tokenSpeed: undefined,
+        currentToolCall: undefined,
+        cancelToolCall: undefined,
+        errorMessage: undefined,
+        showOutOfContextDialog: false,
+      }
     }),
   setOutOfContextDialog: (show) => {
     set(() => ({

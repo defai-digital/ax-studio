@@ -305,6 +305,10 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
     e.stopPropagation()
     setIsDragging(false)
 
+    // Mirror the Upload button's guard — drag-and-drop must not bypass it
+    // and race concurrent uploads against loadProjectFiles().
+    if (uploading) return
+
     if (!attachmentsEnabled) {
       toast.info(
         t('common:toast.attachmentsDisabledInfo.title') ??

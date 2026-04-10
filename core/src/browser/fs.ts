@@ -11,7 +11,13 @@ const getCoreApi = () => {
 const decodePathRecursively = (path: string): string => {
   let decoded = path
 
-  for (let i = 0; i < 3; i++) {
+  // Loop until `decodeURIComponent` reaches a fixed point (or 16 hops —
+  // a generous upper bound to guarantee termination on pathological
+  // inputs). The previous 3-iteration cap could theoretically allow a
+  // deep URL-encoding chain to slip past the `..` segment detection
+  // below; the Tauri backend still sandboxes, but this keeps the
+  // defense-in-depth intact.
+  for (let i = 0; i < 16; i++) {
     try {
       const next = decodeURIComponent(decoded)
       if (next === decoded) break
@@ -36,12 +42,13 @@ const validatePath = (path: string): void => {
 
   const normalizedPath = decodePathRecursively(path)
 
-  // Check for path traversal attempts, including encoded and normalized variants.
-  if (
-    normalizedPath.includes('..') ||
-    normalizedPath.includes('../') ||
-    normalizedPath.includes('..\\')
-  ) {
+  const normalizedSegments = normalizedPath
+    .split(/[/\\]/)
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0 && segment !== '.')
+
+  // Check for path traversal attempts via directory navigation segments.
+  if (normalizedSegments.includes('..')) {
     throw new Error(`Path traversal not allowed: ${path}`)
   }
 

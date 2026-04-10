@@ -34,12 +34,19 @@ const DialogAppUpdater = () => {
     isUpdateAvailable: false,
   })
 
+  // Field-level dep array instead of whole-object — this component only
+  // cares about two fields, and listing `updateState` as a dep fires on
+  // every download-progress tick (which belongs to DownloadManagement).
+  const {
+    remindMeLater: updateStateRemindMeLater,
+    isUpdateAvailable: updateStateIsUpdateAvailable,
+  } = updateState
   useEffect(() => {
     setAppUpdateState({
-      remindMeLater: updateState.remindMeLater,
-      isUpdateAvailable: updateState.isUpdateAvailable,
+      remindMeLater: updateStateRemindMeLater,
+      isUpdateAvailable: updateStateIsUpdateAvailable,
     })
-  }, [updateState])
+  }, [updateStateRemindMeLater, updateStateIsUpdateAvailable])
 
   if (appUpdateState.remindMeLater) return null
 

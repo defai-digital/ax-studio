@@ -28,8 +28,15 @@ export function useThreadSplit({ thread, selectedModel, selectedProvider }: Inpu
     const stored = sessionStorage.getItem(SESSION_STORAGE_KEY.SPLIT_VIEW_INFO)
     if (stored) {
       try {
-        const info = JSON.parse(stored) as { splitThreadId: string; direction: 'left' | 'right' }
-        return info.direction
+        const parsed = JSON.parse(stored)
+        if (
+          parsed &&
+          typeof parsed === 'object' &&
+          (parsed.direction === 'left' || parsed.direction === 'right') &&
+          typeof parsed.splitThreadId === 'string'
+        ) {
+          return parsed.direction as 'left' | 'right'
+        }
       } catch { /* ignore */ }
     }
     return null
@@ -40,8 +47,8 @@ export function useThreadSplit({ thread, selectedModel, selectedProvider }: Inpu
     if (stored) {
       try {
         sessionStorage.removeItem(SESSION_STORAGE_KEY.SPLIT_VIEW_INFO)
-        const info = JSON.parse(stored) as { splitThreadId: string; direction: 'left' | 'right' }
-        return info.splitThreadId
+        const parsed = JSON.parse(stored)
+        return typeof parsed?.splitThreadId === 'string' ? parsed.splitThreadId : null
       } catch { /* ignore */ }
     }
     return null

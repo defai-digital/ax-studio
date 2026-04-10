@@ -283,7 +283,6 @@ ax-studio/
 ├── src-tauri/             # Rust backend, IPC, storage, MCP, downloads, updater
 ├── core/                  # @ax-studio/core extension interfaces and shared types
 ├── extensions/            # Bundled extensions including assistant, conversation, llama.cpp
-├── packages/              # Supporting packages
 ├── scripts/               # Build, release, and testing scripts
 └── docs/                  # Product, implementation, and architecture documents
 ```

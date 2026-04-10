@@ -22,14 +22,12 @@ function getReasoning(
  * @returns
  */
 export function removeReasoningContent(content: string): string {
-  // Reasoning content should not be sent to the model
-  if (content.includes('<think>')) {
-    const match = content.match(/<think>([\s\S]*?)<\/think>/)
-    if (match?.index !== undefined) {
-      const splitIndex = match.index + match[0].length
-      content = content.slice(splitIndex).trim()
-    }
-  }
+  // Reasoning content should not be sent to the model.
+  // Strip every think block, case-insensitive, so <Think>, <THINK>,
+  // and mixed-case variants are all removed — and `/g` so a message
+  // containing multiple think blocks doesn't leak the later ones.
+  content = content.replace(/<think>[\s\S]*?<\/think>/gi, '')
+
   if (content.includes('<|channel|>analysis<|message|>')) {
     const match = content.match(
       /<\|channel\|>analysis<\|message\|>([\s\S]*?)<\|start\|>assistant<\|channel\|>final<\|message\|>/
@@ -39,7 +37,7 @@ export function removeReasoningContent(content: string): string {
       content = content.slice(splitIndex).trim()
     }
   }
-  return content
+  return content.trim()
 }
 
 // Extract reasoning from a message (for completed responses)

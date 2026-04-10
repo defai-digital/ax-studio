@@ -433,6 +433,20 @@ pub fn decompress<R: Runtime>(
                 .map_err(|e| e.to_string())?
                 .to_string_lossy()
                 .to_string();
+
+            // Reject symlink / hardlink entries outright — a symlink followed
+            // by a file entry through that link is a classic archive
+            // extraction escape (the lexical path check below would still
+            // pass, but the actual write would land outside output_dir_buf).
+            let entry_type = entry.header().entry_type();
+            if entry_type.is_symlink() || entry_type.is_hard_link() {
+                log::warn!(
+                    "Rejecting symlink/hardlink entry in tar: {}",
+                    entry_path_string
+                );
+                continue;
+            }
+
             let full_path =
                 ax_studio_utils::normalize_path(&output_dir_buf.join(&entry_path_string));
             if !full_path.starts_with(&output_dir_buf) {
@@ -486,9 +500,13 @@ pub fn decompress<R: Runtime>(
                 {
                     use std::os::unix::fs::PermissionsExt;
                     if let Some(mode) = entry.unix_mode() {
+                        // Strip setuid/setgid/sticky bits from archive-provided
+                        // permissions — only keep the standard rwx triad so a
+                        // malicious archive can't plant a setuid binary.
+                        let safe_mode = mode & 0o777;
                         let _ = std::fs::set_permissions(
                             &outpath,
-                            std::fs::Permissions::from_mode(mode),
+                            std::fs::Permissions::from_mode(safe_mode),
                         );
                     }
                 }

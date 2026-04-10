@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { AgentTeamBuilder } from '../AgentTeamBuilder'
@@ -216,8 +216,11 @@ describe('AgentTeamBuilder', () => {
     expect(screen.getByText('Researcher')).toBeInTheDocument()
   })
 
-  it('adds an existing agent when selected from dropdown', () => {
-    render(<AgentTeamBuilder {...defaultProps} />)
+  it('adds an existing agent when selected from dropdown', async () => {
+    await act(async () => {
+      render(<AgentTeamBuilder {...defaultProps} />)
+      await Promise.resolve()
+    })
 
     // Verify agent is initially in the dropdown
     const items = screen.getAllByTestId('dropdown-item')
@@ -227,7 +230,10 @@ describe('AgentTeamBuilder', () => {
     expect(researchAgentItem).toBeTruthy()
 
     // Click to add the agent
-    researchAgentItem!.click()
+    await act(async () => {
+      researchAgentItem!.click()
+      await Promise.resolve()
+    })
 
     // Agent should appear in the agent list with its role badge
     expect(screen.getByText('Researcher')).toBeInTheDocument()

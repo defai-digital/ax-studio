@@ -34,6 +34,15 @@ import { sanitize } from '@/lib/multi-agent/sanitize'
 import type { TokenUsageCallback, SendMessagesOptions } from './transport-types'
 import { stripUnavailableToolParts } from './transport-types'
 
+// Context-window management for long multi-agent runs. Once `steps`
+// exceeds `STEPS_TRIM_THRESHOLD`, we drop the middle section and keep
+// only the system step, the last `RECENT_STEPS_TO_KEEP` steps, and any
+// tool-related messages in between. Named constants so the trimming
+// behaviour is tweakable without hunting down raw numbers.
+const STEPS_TRIM_THRESHOLD = 12
+const SYSTEM_PROMPT_STEP_COUNT = 1
+const RECENT_STEPS_TO_KEEP = 8
+
 export interface MultiAgentConfig {
   teamId: string
   model: LanguageModel
@@ -324,8 +333,11 @@ export async function executeMultiAgentStream(
         if (stepNumber === 0 && routingModel && mode === 'router')
           result.model = routingModel
 
-        if (steps && steps.length > 12) {
-          const trimmedSteps = steps.slice(1, -8)
+        if (steps && steps.length > STEPS_TRIM_THRESHOLD) {
+          const trimmedSteps = steps.slice(
+            SYSTEM_PROMPT_STEP_COUNT,
+            -RECENT_STEPS_TO_KEEP
+          )
           const toolRelatedMessages = trimmedSteps.flatMap((s) =>
             (s.response?.messages ?? []).filter(
               (m: { role: string }) =>
@@ -381,10 +393,19 @@ export async function executeMultiAgentStream(
           writer.merge(
             orchestratorResult.toUIMessageStream({
               onFinish: async () => {
+                // `runLog` is typed nullable — use an explicit guard rather
+                // than `!` so a future refactor that moves the assignment
+                // can't silently turn this into a TypeError.
+                if (!runLog) {
+                  console.warn(
+                    '[MultiAgent] onFinish fired with no runLog — skipping persistence'
+                  )
+                  return
+                }
                 const totalUsage = await orchestratorResult.totalUsage
-                runLog!.setOrchestratorTokens(totalUsage?.totalTokens ?? 0)
+                runLog.setOrchestratorTokens(totalUsage?.totalTokens ?? 0)
 
-                const logData = runLog!.getData()
+                const logData = runLog.getData()
                 if (logData.steps.length === 0) {
                   console.warn(
                     `[MultiAgent] Orchestrator finished without delegating to any agent. Model: ${activeModelId}, Mode: ${team.orchestration.mode}`
@@ -398,11 +419,11 @@ export async function executeMultiAgentStream(
                   )
                 }
 
-                runLog!.complete()
-                await persistRunLog(runLog!)
-                emitDataPart('runLog', runLog!.getData())
+                runLog.complete()
+                await persistRunLog(runLog)
+                emitDataPart('runLog', runLog.getData())
 
-                const usage = runLog!.getUsage()
+                const usage = runLog.getUsage()
                 if (onTokenUsage) {
                   onTokenUsage(
                     {
@@ -455,9 +476,16 @@ export async function executeMultiAgentStream(
             'agent-error',
             `\n\n> **Agent Team Error:** ${displayMsg}${hint}`
           )
-          runLog!.fail(errMsg)
-          persistRunLog(runLog!).catch(() => {})
-          emitDataPart('runLog', runLog!.getData())
+          if (runLog) {
+            runLog.fail(errMsg)
+            persistRunLog(runLog).catch((persistError) => {
+              console.warn(
+                'Failed to persist multi-agent run log after failure:',
+                persistError
+              )
+            })
+            emitDataPart('runLog', runLog.getData())
+          }
         } finally {
           streamWriter = null
         }
@@ -473,7 +501,12 @@ export async function executeMultiAgentStream(
 
     if (runLog) {
       runLog.fail(error instanceof Error ? error.message : String(error))
-      persistRunLog(runLog).catch(() => {})
+      persistRunLog(runLog).catch((persistError) => {
+        console.warn(
+          'Failed to persist multi-agent run log for fallback flow:',
+          persistError
+        )
+      })
     }
 
     const errMsg = error instanceof Error ? error.message : String(error)

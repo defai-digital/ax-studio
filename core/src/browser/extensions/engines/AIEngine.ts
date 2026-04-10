@@ -118,10 +118,26 @@ export interface chat_template_kdict {
   enable_thinking: boolean
 }
 
+/**
+ * Streaming delta variant of `ToolCall`. Chunks deliver tool calls
+ * incrementally (`function.arguments` is streamed token-by-token), so
+ * every field is optional and `index` marks which tool-call slot the
+ * delta applies to.
+ */
+export interface ToolCallDelta {
+  index?: number
+  id?: string
+  type?: 'function'
+  function?: {
+    name?: string
+    arguments?: string
+  }
+}
+
 export interface chatCompletionChunkChoiceDelta {
   content?: string | null
   role?: 'system' | 'user' | 'assistant' | 'tool'
-  tool_calls?: any[] // Simplified
+  tool_calls?: ToolCallDelta[]
 }
 
 export interface chatCompletionChunkChoice {

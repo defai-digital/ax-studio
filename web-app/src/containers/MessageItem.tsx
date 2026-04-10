@@ -548,8 +548,7 @@ export const MessageItem = memo(
                   </Button>
                 )}
 
-                {/* Fork conversation — disabled until fork logic is implemented */}
-                {/* TODO: Wire to fork/branch logic when available */}
+                {/* Fork conversation — disabled until fork flow is implemented */}
                 <Button
                   variant="ghost"
                   size="icon-xs"

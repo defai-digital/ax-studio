@@ -5,7 +5,7 @@
  * current-thread lifecycle, initial message dispatch, session-storage
  * thread-prompt and team-id application.
  */
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { UIMessage } from '@ai-sdk/react'
 import { SESSION_STORAGE_PREFIX, SESSION_STORAGE_KEY } from '@/constants/chat'
 import { defaultAssistant } from '@/hooks/chat/useAssistant'
@@ -55,6 +55,24 @@ export function useThreadEffects({
   }, [thread?.metadata?.threadPrompt, setThreadPromptDraft])
 
   // ─── Team token usage ─────────────────────────────────────────────────────
+  // Token totals only change when a run completes, so we refetch on:
+  //   1. thread / team change
+  //   2. a `streaming → ready` transition (run just finished)
+  //
+  // We detect the transition via a ref mutated INSIDE `useEffect` rather
+  // than during render — mutating a ref during render makes React Strict
+  // Mode (which runs function bodies twice) miss the transition on the
+  // second pass, breaking the refetch.
+  const prevStatusRef = useRef(status)
+  const [teamTokensRefreshKey, setTeamTokensRefreshKey] = useState(0)
+  useEffect(() => {
+    const prev = prevStatusRef.current
+    prevStatusRef.current = status
+    if (prev === 'streaming' && status === 'ready') {
+      setTeamTokensRefreshKey((k) => k + 1)
+    }
+  }, [status])
+
   useEffect(() => {
     if (!activeTeamId || !threadId) {
       setTeamTokensUsed(0)
@@ -80,7 +98,7 @@ export function useThreadEffects({
     return () => {
       cancelled = true
     }
-  }, [activeTeamId, threadId, status, setTeamTokensUsed])
+  }, [activeTeamId, threadId, teamTokensRefreshKey, setTeamTokensUsed])
 
   // ─── Reasoning container auto-scroll ─────────────────────────────────────
   useEffect(() => {
@@ -117,19 +135,31 @@ export function useThreadEffects({
   }, [])
 
   // ─── Initial message from sessionStorage ─────────────────────────────────
-  const initialMessageSentRef = useRef(false)
+  // Track which thread's initial message has already been consumed so the
+  // dispatch re-arms for every new thread. The previous boolean ref was
+  // flipped to `true` for the first thread and never reset — every
+  // subsequent thread in the same session silently dropped its initial
+  // message.
+  const initialMessageSentForThreadRef = useRef<string | null>(null)
   useEffect(() => {
-    if (initialMessageSentRef.current) return
+    if (initialMessageSentForThreadRef.current === threadId) return
 
     const initialMessageKey = `${SESSION_STORAGE_PREFIX.INITIAL_MESSAGE}${threadId}`
     const storedMessage = sessionStorage.getItem(initialMessageKey)
 
     if (storedMessage) {
       sessionStorage.removeItem(initialMessageKey)
-      initialMessageSentRef.current = true
+      initialMessageSentForThreadRef.current = threadId
       ;(async () => {
         try {
-          const message = JSON.parse(storedMessage) as { text: string }
+          const parsed = JSON.parse(storedMessage)
+          const message = parsed && typeof parsed === 'object' && typeof parsed.text === 'string'
+            ? (parsed as { text: string })
+            : null
+          if (!message) {
+            console.error('Invalid initial message payload in sessionStorage')
+            return
+          }
           if (handleResearchCommand(message.text)) return
           await processAndSendMessage(message.text)
         } catch (error) {
@@ -139,38 +169,35 @@ export function useThreadEffects({
     }
   }, [threadId, processAndSendMessage, handleResearchCommand])
 
-  // ─── Apply thread prompt from sessionStorage ──────────────────────────────
-  const threadPromptAppliedRef = useRef(false)
+  // ─── Apply thread prompt + agent team from sessionStorage ────────────────
+  // Merge both sessionStorage carries in a SINGLE updateThread call. The
+  // previous split-into-two-effects implementation raced: each effect
+  // spread `thread?.metadata` from the same render snapshot, so whichever
+  // ran second overwrote the other's metadata patch.
+  //
+  // Track the thread id rather than a boolean so the carry re-arms for
+  // every new thread (the removeItem below makes it a no-op on repeat
+  // effects within the same thread anyway, but keying by id is the
+  // honest signal).
+  const sessionCarryAppliedForThreadRef = useRef<string | null>(null)
   useEffect(() => {
-    if (threadPromptAppliedRef.current) return
+    if (sessionCarryAppliedForThreadRef.current === threadId) return
     const storedPrompt = sessionStorage.getItem(SESSION_STORAGE_KEY.NEW_THREAD_PROMPT)
-    if (storedPrompt) {
-      sessionStorage.removeItem(SESSION_STORAGE_KEY.NEW_THREAD_PROMPT)
-      threadPromptAppliedRef.current = true
-      updateThread(threadId, {
-        metadata: {
-          ...thread?.metadata,
-          threadPrompt: storedPrompt,
-        },
-      })
-      setThreadPromptDraft(storedPrompt)
-    }
-  }, [threadId, thread?.metadata, updateThread, setThreadPromptDraft])
-
-  // ─── Apply agent team from sessionStorage ────────────────────────────────
-  const teamAppliedRef = useRef(false)
-  useEffect(() => {
-    if (teamAppliedRef.current) return
     const storedTeamId = sessionStorage.getItem(SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID)
-    if (storedTeamId) {
-      sessionStorage.removeItem(SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID)
-      teamAppliedRef.current = true
-      updateThread(threadId, {
-        metadata: {
-          ...(thread?.metadata ?? {}),
-          agent_team_id: storedTeamId,
-        },
-      })
-    }
-  }, [threadId, thread?.metadata, updateThread])
+    if (!storedPrompt && !storedTeamId) return
+    sessionCarryAppliedForThreadRef.current = threadId
+
+    if (storedPrompt) sessionStorage.removeItem(SESSION_STORAGE_KEY.NEW_THREAD_PROMPT)
+    if (storedTeamId) sessionStorage.removeItem(SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID)
+
+    updateThread(threadId, {
+      metadata: {
+        ...(thread?.metadata ?? {}),
+        ...(storedPrompt ? { threadPrompt: storedPrompt } : {}),
+        ...(storedTeamId ? { agent_team_id: storedTeamId } : {}),
+      },
+    })
+
+    if (storedPrompt) setThreadPromptDraft(storedPrompt)
+  }, [threadId, thread?.metadata, updateThread, setThreadPromptDraft])
 }

@@ -31,28 +31,51 @@ export function LogViewer() {
 
   // Initial load + live subscription
   useEffect(() => {
-    serviceHub.app().readLogs().then((logData) => {
-      const filtered = logData
-        .filter((log) => log?.target === SERVER_LOG_TARGET)
-        .filter(Boolean) as LogEntry[]
-      setLogs(filtered.slice(-MAX_LOGS))
-    })
-
+    let isMounted = true
     let unsubscribe = () => {}
-    serviceHub.events().listen(LOG_EVENT_NAME, (event) => {
-      const { message } = event.payload as { message: string }
-      const log: LogEntry | undefined = serviceHub.app().parseLogLine(message)
-      if (log?.target === SERVER_LOG_TARGET) {
-        setLogs((prev) => {
-          const next = [...prev, log]
-          return next.length > MAX_LOGS ? next.slice(-MAX_LOGS) : next
-        })
-      }
-    }).then((unsub) => {
-      unsubscribe = unsub
-    })
 
-    return () => { unsubscribe() }
+    serviceHub
+      .app()
+      .readLogs()
+      .then((logData) => {
+        const filtered = logData
+          .filter((log) => log?.target === SERVER_LOG_TARGET)
+          .filter(Boolean) as LogEntry[]
+        if (isMounted) {
+          setLogs(filtered.slice(-MAX_LOGS))
+        }
+      })
+      .catch((error) => {
+        console.error('[LogViewer] Failed to read initial logs:', error)
+      })
+
+    serviceHub
+      .events()
+      .listen(LOG_EVENT_NAME, (event) => {
+        const { message } = event.payload as { message: string }
+        const log: LogEntry | undefined = serviceHub.app().parseLogLine(message)
+        if (log?.target === SERVER_LOG_TARGET) {
+          setLogs((prev) => {
+            const next = [...prev, log]
+            return next.length > MAX_LOGS ? next.slice(-MAX_LOGS) : next
+          })
+        }
+      })
+      .then((unsub) => {
+        if (isMounted) {
+          unsubscribe = unsub
+        } else {
+          unsub()
+        }
+      })
+      .catch((error) => {
+        console.error('[LogViewer] Failed to subscribe to log events:', error)
+      })
+
+    return () => {
+      isMounted = false
+      unsubscribe()
+    }
   }, [serviceHub])
 
   const getLogLevelColor = (level: string) => {

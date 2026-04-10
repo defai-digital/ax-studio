@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import DOMPurify from 'dompurify';
 import { CheckIcon, CopyIcon } from "lucide-react";
 import {
   type ComponentProps,
@@ -33,6 +34,7 @@ function getHighlighter(): Promise<Highlighter> {
 // --- LRU-style cache bounded to 200 entries ---
 const MAX_CACHE_SIZE = 200;
 const _htmlCache = new Map<string, [string, string]>();
+const _pendingHighlights = new Map<string, Promise<[string, string]>>();
 
 type CodeBlockProps = HTMLAttributes<HTMLDivElement> & {
   code: string;
@@ -77,27 +79,40 @@ export async function highlightCode(
   const cached = _htmlCache.get(cacheKey);
   if (cached) return cached;
 
-  const transformers: ShikiTransformer[] = showLineNumbers
-    ? [lineNumberTransformer]
-    : [];
+  // Deduplicate concurrent calls for the same cache key
+  const pending = _pendingHighlights.get(cacheKey);
+  if (pending) return pending;
 
-  const hl = await getHighlighter();
-  if (!_loadedLangs.has(language)) {
-    await hl.loadLanguage(language);
-    _loadedLangs.add(language);
+  const promise = (async (): Promise<[string, string]> => {
+    const transformers: ShikiTransformer[] = showLineNumbers
+      ? [lineNumberTransformer]
+      : [];
+
+    const hl = await getHighlighter();
+    if (!_loadedLangs.has(language)) {
+      await hl.loadLanguage(language);
+      _loadedLangs.add(language);
+    }
+
+    const result: [string, string] = [
+      hl.codeToHtml(code, { lang: language, theme: "ax-studio-light", transformers }),
+      hl.codeToHtml(code, { lang: language, theme: "ax-studio-dark", transformers }),
+    ];
+
+    if (_htmlCache.size >= MAX_CACHE_SIZE) {
+      const firstKey = _htmlCache.keys().next().value;
+      if (firstKey !== undefined) _htmlCache.delete(firstKey);
+    }
+    _htmlCache.set(cacheKey, result);
+    return result;
+  })();
+
+  _pendingHighlights.set(cacheKey, promise);
+  try {
+    return await promise;
+  } finally {
+    _pendingHighlights.delete(cacheKey);
   }
-
-  const result: [string, string] = [
-    hl.codeToHtml(code, { lang: language, theme: "ax-studio-light", transformers }),
-    hl.codeToHtml(code, { lang: language, theme: "ax-studio-dark", transformers }),
-  ];
-
-  if (_htmlCache.size >= MAX_CACHE_SIZE) {
-    const firstKey = _htmlCache.keys().next().value;
-    if (firstKey !== undefined) _htmlCache.delete(firstKey);
-  }
-  _htmlCache.set(cacheKey, result);
-  return result;
 }
 
 export const CodeBlock = ({
@@ -114,12 +129,16 @@ export const CodeBlock = ({
 
   useEffect(() => {
     cancelledRef.current = false;
-    highlightCode(code, language, showLineNumbers).then(([light, dark]) => {
-      if (!cancelledRef.current) {
-        setHtml(light);
-        setDarkHtml(dark);
-      }
-    });
+    highlightCode(code, language, showLineNumbers)
+      .then(([light, dark]) => {
+        if (!cancelledRef.current) {
+          setHtml(light);
+          setDarkHtml(dark);
+        }
+      })
+      .catch((error) => {
+        console.error("[CodeBlock] Failed to highlight code:", error);
+      });
 
     return () => {
       cancelledRef.current = true;
@@ -138,13 +157,13 @@ export const CodeBlock = ({
         <div className="relative">
           <div
             className="overflow-auto dark:hidden [&>pre]:m-0 [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
-            // biome-ignore lint/security/noDangerouslySetInnerHtml: "this is needed."
-            dangerouslySetInnerHTML={{ __html: html }}
+            // biome-ignore lint/security/noDangerouslySetInnerHtml: "sanitized via DOMPurify"
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }}
           />
           <div
             className="hidden overflow-auto dark:block [&>pre]:m-0 [&>pre]:bg-transparent! [&>pre]:p-4 [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
-            // biome-ignore lint/security/noDangerouslySetInnerHtml: "this is needed."
-            dangerouslySetInnerHTML={{ __html: darkHtml }}
+            // biome-ignore lint/security/noDangerouslySetInnerHtml: "sanitized via DOMPurify"
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(darkHtml) }}
           />
           {children && (
             <div className="absolute top-2 right-2 flex items-center gap-2">

@@ -46,13 +46,22 @@ export const useTools = () => {
     setTools()
 
     let unsubscribe = () => {}
+    let unmounted = false
     serviceHub.events().listen(SystemEvent.MCP_UPDATE, setTools).then((unsub) => {
-      // Unsubscribe from the event when the component unmounts
+      if (unmounted) {
+        // Component already unmounted while we were waiting on the async
+        // listen() — clean up immediately so the listener doesn't leak.
+        unsub()
+        return
+      }
       unsubscribe = unsub
     }).catch((error) => {
       console.error('Failed to set up MCP update listener:', error)
     })
-    return () => unsubscribe()
+    return () => {
+      unmounted = true
+      unsubscribe()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 }

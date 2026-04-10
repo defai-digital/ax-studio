@@ -30,15 +30,12 @@ export function ExtensionProvider({ children }: PropsWithChildren) {
   }, [])
 
   useEffect(() => {
-    let cancelled = false
-    setupExtensions().then(() => {
-      if (cancelled) {
-        ExtensionManager.getInstance().unload()
-      }
-    })
+    setupExtensions()
 
     return () => {
-      cancelled = true
+      // Cleanup unloads extensions exactly once. We don't need a cancelled
+      // flag here — any in-flight setup will race with unload, but unloading
+      // after setup completes in a cleanup is the expected behaviour.
       ExtensionManager.getInstance().unload()
     }
   }, [setupExtensions])

@@ -67,7 +67,8 @@ export class DefaultModelsService implements ModelsService {
 
   async fetchHuggingFaceRepo(
     repoId: string,
-    hfToken?: string
+    hfToken?: string,
+    signal?: AbortSignal
   ): Promise<HuggingFaceRepo | null> {
     try {
       // Clean the repo ID to handle various input formats
@@ -84,6 +85,7 @@ export class DefaultModelsService implements ModelsService {
       const response = await fetch(
         `https://huggingface.co/api/models/${cleanRepoId}?blobs=true&files_metadata=true`,
         {
+          signal,
           headers: hfToken
             ? {
                 Authorization: `Bearer ${hfToken}`,
@@ -343,14 +345,29 @@ export class DefaultModelsService implements ModelsService {
   }
 
   async stopAllModels(): Promise<void> {
-    const llamaCppModels = await this.getActiveModels('llamacpp')
-    if (llamaCppModels)
-      await Promise.all(
-        llamaCppModels.map((model) => this.stopModel(model, 'llamacpp'))
-      )
-    const mlxModels = await this.getActiveModels('mlx')
-    if (mlxModels)
-      await Promise.all(mlxModels.map((model) => this.stopModel(model, 'mlx')))
+    // Fetch active model lists from both engines in parallel, then stop
+    // every model with `allSettled` so a single failing unload doesn't
+    // skip the rest. Previously, if one llamacpp unload failed, the
+    // subsequent `await Promise.all(...)` rejected and the mlx loop below
+    // never ran — leaving mlx models loaded on logout / factory reset.
+    const [llamaCppModels, mlxModels] = await Promise.all([
+      this.getActiveModels('llamacpp').catch(() => [] as string[]),
+      this.getActiveModels('mlx').catch(() => [] as string[]),
+    ])
+    const results = await Promise.allSettled([
+      ...(llamaCppModels ?? []).map((model) =>
+        this.stopModel(model, 'llamacpp')
+      ),
+      ...(mlxModels ?? []).map((model) => this.stopModel(model, 'mlx')),
+    ])
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        console.warn(
+          '[ModelsService] stopAllModels unload failed:',
+          result.reason
+        )
+      }
+    }
   }
 
   async startModel(

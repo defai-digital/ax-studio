@@ -227,7 +227,10 @@ pub fn validate_proxy_config(config: &ProxyConfig) -> Result<(), String> {
     }
 
     // Check if proxy URL has valid scheme
-    let url = Url::parse(&config.url).unwrap(); // Safe to unwrap as we just validated it
+    let url = match Url::parse(&config.url) {
+        Ok(url) => url,
+        Err(err) => return Err(format!("Invalid proxy URL '{}': {err}", config.url)),
+    };
     match url.scheme() {
         "http" | "https" | "socks4" | "socks5" => {}
         scheme => return Err(format!("Unsupported proxy scheme: {scheme}")),

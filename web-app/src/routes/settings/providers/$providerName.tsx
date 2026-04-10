@@ -570,7 +570,7 @@ function ProviderDetail() {
                 </div>
 
                 <Card>
-                  {provider?.models.length ? (
+                  {provider?.models?.length ? (
                     provider?.models
                     .filter((model) => {
                       if (!modelSearch) return true

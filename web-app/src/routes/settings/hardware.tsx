@@ -358,8 +358,8 @@ function HardwareContent() {
                             }
                           />
                         ) : (
-                          llamacppDevices.map((device, index) => (
-                            <Card key={index}>
+                          llamacppDevices.map((device) => (
+                            <Card key={device.id || device.name}>
                               <CardItem
                                 title={device.name}
                                 actions={

@@ -209,10 +209,11 @@ export const useInterfaceSettings = create<InterfaceSettingsState>()(
   )
 )
 
-// Subscribe to theme changes to update accent color sidebar variant
+// Global subscription: applies accent color to DOM whenever theme changes.
+// Intentionally module-scoped to survive for the app's lifetime.
 let prevIsDark = useTheme.getState().isDark
 useTheme.subscribe((state) => {
-  if (state.isDark !== prevIsDark) {
+  if (state.isDark !== prevIsDark && typeof document !== 'undefined') {
     prevIsDark = state.isDark
     const { accentColor } = useInterfaceSettings.getState()
     applyAccentColorToDOM(accentColor, state.isDark)

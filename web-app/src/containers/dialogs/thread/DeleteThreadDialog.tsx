@@ -39,7 +39,9 @@ export function DeleteThreadDialog({
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [internalOpen, setInternalOpen] = useState(false)
-  const deleteButtonRef = useRef<HTMLButtonElement>(null)
+  // Focus Cancel rather than the destructive button so Enter-to-dismiss
+  // doesn't accidentally confirm the delete.
+  const cancelButtonRef = useRef<HTMLButtonElement>(null)
 
   const isControlled = open !== undefined
   const isOpen = isControlled ? !!open : internalOpen
@@ -73,11 +75,6 @@ export function DeleteThreadDialog({
     }
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleDelete()
-    }
-  }
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
@@ -93,7 +90,7 @@ export function DeleteThreadDialog({
         className="max-w-[380px]"
         onOpenAutoFocus={(e) => {
           e.preventDefault()
-          deleteButtonRef.current?.focus()
+          cancelButtonRef.current?.focus()
         }}
       >
         <DialogHeader>
@@ -104,15 +101,13 @@ export function DeleteThreadDialog({
         </DialogHeader>
         <DialogFooter>
           <DialogClose asChild>
-            <Button variant="outline" size="sm">
+            <Button ref={cancelButtonRef} variant="outline" size="sm">
               {t('common:cancel')}
             </Button>
           </DialogClose>
           <Button
-            ref={deleteButtonRef}
             variant="destructive"
             onClick={handleDelete}
-            onKeyDown={handleKeyDown}
             size="sm"
             aria-label={`${t('common:delete')} ${thread.title || t('common:newThread')}`}
           >

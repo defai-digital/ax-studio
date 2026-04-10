@@ -127,12 +127,19 @@ export const useHardware = create<HardwareStore>()(
       gpuLoading: {},
       pollingPaused: false,
       setGpuLoading: (index, loading) =>
-        set((state) => ({
-          gpuLoading: {
-            ...state.gpuLoading,
-            [state.hardwareData.gpus[index].uuid]: loading,
-          },
-        })),
+        set((state) => {
+          // Guard against out-of-bounds / empty gpu list — otherwise
+          // accessing `.uuid` on `undefined` throws a TypeError inside a
+          // Zustand setter and breaks subsequent renders.
+          const gpu = state.hardwareData.gpus[index]
+          if (!gpu) return state
+          return {
+            gpuLoading: {
+              ...state.gpuLoading,
+              [gpu.uuid]: loading,
+            },
+          }
+        }),
       pausePolling: () => set({ pollingPaused: true }),
       resumePolling: () => set({ pollingPaused: false }),
 

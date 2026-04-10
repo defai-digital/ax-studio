@@ -90,11 +90,22 @@ export function useThreadChat({
 
   const loadedThreadRef = useRef<string | undefined>(undefined)
 
+  // Tracks unmount / thread-change so long-running tasks (e.g. the 30s
+  // attachment-processing poll) can bail out instead of blindly sending a
+  // message to a thread the user has navigated away from.
+  const unmountedRef = useRef(false)
+  useEffect(() => {
+    unmountedRef.current = false
+    return () => {
+      unmountedRef.current = true
+    }
+  }, [threadId])
+
   useEffect(() => {
     // Skip if chat already has messages (e.g., returning to a streaming conversation)
     const existingSession = useChatSessions.getState().sessions[threadId]
     if (
-      existingSession?.chat.messages.length > 0 ||
+      (existingSession?.chat?.messages?.length ?? 0) > 0 ||
       existingSession?.isStreaming ||
       loadedThreadRef.current === threadId
     ) {
@@ -194,7 +205,11 @@ export function useThreadChat({
         const pollMs = 300
         const start = Date.now()
         while (Date.now() - start < maxWaitMs) {
+          // Bail out if the user navigated away mid-poll, otherwise we'd
+          // send this message to a thread they can no longer see.
+          if (unmountedRef.current) return
           await new Promise((r) => setTimeout(r, pollMs))
+          if (unmountedRef.current) return
           pendingAttachments = getAttachments()
           const stillProcessing = pendingAttachments.some(
             (a) =>
@@ -364,7 +379,14 @@ export function useThreadChat({
       }
       updateMessage(updatedMessage)
 
-      const updatedChatMessages = chatMessages.map((msg) => {
+      // Read the current chat messages from the session store rather
+      // than closing over the `chatMessages` prop. The prop changes on
+      // every streaming token, which previously recreated
+      // `handleEditMessage` on every token and cascaded re-renders
+      // through every MessageItem in the thread.
+      const currentChatMessages =
+        useChatSessions.getState().sessions[threadId]?.chat?.messages ?? []
+      const updatedChatMessages = currentChatMessages.map((msg) => {
         if (msg.id === messageId) {
           return { ...msg, parts: [{ type: 'text' as const, text: newText }] }
         }
@@ -385,7 +407,6 @@ export function useThreadChat({
       threadId,
       updateMessage,
       deleteMessage,
-      chatMessages,
       setChatMessages,
       regenerate,
     ]
@@ -398,13 +419,25 @@ export function useThreadChat({
       deleteMessage(threadId, messageId)
       // Read fresh chat messages from the session store to avoid stale closure
       const currentMessages =
-        useChatSessions.getState().sessions[threadId]?.chat.messages ?? []
+        useChatSessions.getState().sessions[threadId]?.chat?.messages ?? []
       setChatMessages(currentMessages.filter((msg) => msg.id !== messageId))
     },
     [threadId, deleteMessage, setChatMessages]
   )
 
   // ─── Context size increase ──────────────────────────────────────────────────
+
+  // Keep a handle on the pending regenerate timer so navigation / unmount
+  // cancels it instead of firing handleRegenerate() on an unmounted component.
+  const contextIncreaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    return () => {
+      if (contextIncreaseTimerRef.current) {
+        clearTimeout(contextIncreaseTimerRef.current)
+        contextIncreaseTimerRef.current = null
+      }
+    }
+  }, [])
 
   const handleContextSizeIncrease = useCallback(async () => {
     if (!selectedModel) return
@@ -442,7 +475,12 @@ export function useThreadChat({
     updateProvider(provider.provider, { models: updatedModels })
 
     await serviceHub.models().stopModel(selectedModel.id)
-    setTimeout(() => {
+    if (contextIncreaseTimerRef.current) {
+      clearTimeout(contextIncreaseTimerRef.current)
+    }
+    contextIncreaseTimerRef.current = setTimeout(() => {
+      contextIncreaseTimerRef.current = null
+      if (unmountedRef.current) return
       handleRegenerate()
     }, 1000)
   }, [

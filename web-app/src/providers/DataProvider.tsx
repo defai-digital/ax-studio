@@ -56,7 +56,13 @@ export function DataProvider() {
       const params = url.pathname.split('/').filter((s) => s.length > 0)
       if (params.length < 3) return
       const resource = params.slice(1).join('/')
-      navigate({ to: route.hub.model, search: { repo: resource } })
+      // `route.hub.model` is `/hub/$modelId` — the `modelId` param is
+      // required, otherwise TanStack Router throws at runtime.
+      navigate({
+        to: route.hub.model,
+        params: { modelId: resource },
+        search: { repo: resource },
+      })
     },
     [navigate]
   )
@@ -78,16 +84,22 @@ export function DataProvider() {
       setAssistants,
       initializeWithLastUsed,
       onDeepLink: handleDeepLink,
-    }).then(({ unsubscribeDeepLink }) => {
-      if (unmounted) {
-        // Component unmounted before bootstrap resolved — clean up immediately
-        unsubscribeDeepLink()
-      } else {
-        cleanupDeepLink = unsubscribeDeepLink
-      }
     })
+      .then(({ unsubscribeDeepLink }) => {
+        if (unmounted) {
+          // Component unmounted before bootstrap resolved — clean up immediately
+          unsubscribeDeepLink()
+        } else {
+          cleanupDeepLink = unsubscribeDeepLink
+        }
+      })
+      .catch((error) => {
+        console.error('[DataProvider] bootstrapProviders failed:', error)
+      })
 
-    bootstrapThreads({ serviceHub, setThreads })
+    bootstrapThreads({ serviceHub, setThreads }).catch((error) => {
+      console.error('[DataProvider] bootstrapThreads failed:', error)
+    })
 
     cleanupUpdater = bootstrapUpdater({ checkForUpdate, isDev: isDev() })
 

@@ -56,7 +56,10 @@ const ChatInput = memo(function ChatInput({
   const [tooltipToolsAvailable, setTooltipToolsAvailable] = useState(false)
   const [selectedAssistant, setSelectedAssistant] = useState<Assistant | undefined>(undefined)
 
-  const abortControllers = useAppState((state) => state.abortControllers)
+  // Don't subscribe to the whole `abortControllers` record — every
+  // streaming token on any thread would re-render ChatInput. We only
+  // need the current thread's controller at stop-time, so read from the
+  // store snapshot inside `stopStreaming` below.
   const cancelToolCall = useAppState((state) => state.cancelToolCall)
   const tools = useAppState((state) => state.tools)
   const globalPrompt = usePrompt((state) => state.prompt)
@@ -218,10 +221,10 @@ const ChatInput = memo(function ChatInput({
   const stopStreaming = useCallback(
     (tid: string) => {
       if (onStop) onStop()
-      else abortControllers[tid]?.abort()
+      else useAppState.getState().abortControllers[tid]?.abort()
       cancelToolCall?.()
     },
-    [abortControllers, cancelToolCall, onStop]
+    [cancelToolCall, onStop]
   )
 
   const hasActiveMCPServers = tools.length > 0

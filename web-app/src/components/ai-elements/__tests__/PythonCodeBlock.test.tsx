@@ -217,4 +217,30 @@ describe('PythonCodeBlock', () => {
     const img = screen.getByAltText('Figure 1')
     expect(img).toHaveAttribute('src', 'data:image/png;base64,abc123')
   })
+
+  it('sanitizes potentially dangerous HTML from python output', () => {
+    mockState = {
+      status: 'done',
+      result: {
+        stdout: '',
+        stderr: '',
+        outputs: [
+          {
+            type: 'html',
+            data: '<p>safe</p><img src="x" onerror="window.__badExecuted = true">',
+          },
+        ],
+        error: null,
+      },
+    }
+
+    render(
+      <PythonCodeBlock code="x = 1">
+        <pre>x</pre>
+      </PythonCodeBlock>
+    )
+
+    const container = screen.getByText('safe').closest('div')
+    expect(container?.querySelector('img')).not.toHaveAttribute('onerror')
+  })
 })

@@ -1,12 +1,16 @@
 // web-app/src/utils/highlight.ts
+function escapeHtml(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
 export function highlightFzfMatch(text: string, positions: number[], highlightClassName: string = "search-highlight") {
-    if (!text || !positions || !positions.length) return text;
+    if (!text || !positions || !positions.length) return escapeHtml(text);
 
     const parts: { text: string; highlight: boolean }[] = [];
     let lastIndex = 0;
 
-    // Sort positions to ensure we process them in order
-    const sortedPositions = [...positions].sort((a, b) => a - b);
+    // Sort and deduplicate positions to ensure we process them in order
+    const sortedPositions = [...new Set(positions)].sort((a, b) => a - b);
 
     sortedPositions.forEach((pos) => {
         if (pos > lastIndex) {
@@ -32,10 +36,11 @@ export function highlightFzfMatch(text: string, positions: number[], highlightCl
     }
 
     return parts
-        .map(part =>
-            part.highlight
-                ? `<span class="${highlightClassName}">${part.text}</span>`
-                : part.text
-        )
+        .map(part => {
+            const escaped = escapeHtml(part.text)
+            return part.highlight
+                ? `<span class="${highlightClassName}">${escaped}</span>`
+                : escaped
+        })
         .join('');
 }

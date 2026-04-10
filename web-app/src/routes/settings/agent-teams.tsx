@@ -54,10 +54,11 @@ function AgentTeamsContent() {
     createTeam,
     updateTeam,
     deleteTeam,
+    duplicateTeam,
     exportTeam,
     importTeam,
   } = useAgentTeamStore()
-  const { assistants, addAssistant } = useAssistant()
+  const { assistants, addAssistant, deleteAssistant } = useAssistant()
 
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingTeam, setEditingTeam] = useState<AgentTeam | null>(null)
@@ -95,18 +96,17 @@ function AgentTeamsContent() {
   }
 
   const handleDuplicate = async (team: AgentTeam) => {
-    await createTeam({
-      name: `${team.name} (Copy)`,
-      description: team.description,
-      orchestration: team.orchestration,
-      orchestrator_instructions: team.orchestrator_instructions,
-      orchestrator_model_id: team.orchestrator_model_id,
-      agent_ids: [...team.agent_ids],
-      variables: team.variables,
-      token_budget: team.token_budget,
-      cost_approval_threshold: team.cost_approval_threshold,
-      parallel_stagger_ms: team.parallel_stagger_ms,
-    })
+    // Use the store's `duplicateTeam` which creates independent copies of
+    // the agents (and rolls them back if `createTeam` fails). The previous
+    // `createTeam` path reused the original team's `agent_ids`, meaning
+    // the "copy" actually shared agents — editing or deleting an agent on
+    // one team affected the other.
+    await duplicateTeam(
+      team.id,
+      () => assistants,
+      addAssistant,
+      deleteAssistant
+    )
   }
 
   const handleSave = async (team: AgentTeam) => {
@@ -185,7 +185,7 @@ function AgentTeamsContent() {
         if (!data.team || !data.agents) {
           throw new Error('Invalid team export format')
         }
-        await importTeam(data, addAssistant)
+        await importTeam(data, addAssistant, deleteAssistant)
       } catch {
         console.error('Failed to import team file')
       }

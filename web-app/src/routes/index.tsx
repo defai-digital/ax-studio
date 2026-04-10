@@ -47,6 +47,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useAgentTeamStore } from '@/stores/agent-team-store'
+import { usePrompt } from '@/hooks/ui/usePrompt'
 import { motion } from 'motion/react'
 
 export const Route = createFileRoute(route.home)({
@@ -140,6 +141,7 @@ function Index() {
   const selectedModel = search.model
   const { setCurrentThreadId, createThread } = useThreads()
   const { globalDefaultPrompt } = useGeneralSetting()
+  const setGlobalPrompt = usePrompt((state) => state.setPrompt)
   useTools()
 
   const [showThreadPromptEditor, setShowThreadPromptEditor] = useState(false)
@@ -407,22 +409,18 @@ function Index() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 + i * 0.04, duration: 0.35 }}
                     onClick={() => {
+                      // Write through the shared Zustand prompt store so
+                      // ChatInput re-renders normally. The previous
+                      // implementation bypassed React by calling the
+                      // native textarea setter + synthetic input event,
+                      // which left the store state stale and let any
+                      // subsequent re-render wipe the prompt.
+                      setGlobalPrompt(item.prompt)
                       const input =
                         document.querySelector<HTMLTextAreaElement>(
                           '[data-chat-input]'
                         )
-                      if (input) {
-                        const nativeInputValueSetter =
-                          Object.getOwnPropertyDescriptor(
-                            window.HTMLTextAreaElement.prototype,
-                            'value'
-                          )?.set
-                        nativeInputValueSetter?.call(input, item.prompt)
-                        input.dispatchEvent(
-                          new Event('input', { bubbles: true })
-                        )
-                        input.focus()
-                      }
+                      input?.focus()
                     }}
                     className="group text-left rounded-xl border bg-card/50 p-3.5 hover:bg-card hover:border-border/80 hover:shadow-sm transition-all cursor-pointer"
                   >

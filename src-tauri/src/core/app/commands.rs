@@ -45,7 +45,29 @@ pub fn get_app_configurations<R: Runtime>(app_handle: tauri::AppHandle<R>) -> Ap
             match serde_json::from_str::<AppConfiguration>(&content) {
                 Ok(app_configurations) => app_configurations,
                 Err(err) => {
-                    log::error!("Failed to parse app config, returning default config instead. Error: {err}");
+                    // Quarantine the corrupt config so the next run has a
+                    // chance to recreate a fresh default, and so the user
+                    // can inspect / recover data by hand. Previously we
+                    // silently returned the default config and left the
+                    // corrupt file in place — the user's custom data
+                    // folder path reverted to default with no UI signal.
+                    let quarantine_path = configuration_file.with_extension(
+                        format!(
+                            "corrupt-{}.json",
+                            std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .map(|d| d.as_secs())
+                                .unwrap_or(0)
+                        ),
+                    );
+                    match fs::rename(&configuration_file, &quarantine_path) {
+                        Ok(()) => log::error!(
+                            "Failed to parse app config; quarantined to {quarantine_path:?} and returning defaults. Parse error: {err}"
+                        ),
+                        Err(rename_err) => log::error!(
+                            "Failed to parse app config and could not quarantine the file ({rename_err}). Returning defaults. Parse error: {err}"
+                        ),
+                    }
                     app_default_configuration
                 }
             }

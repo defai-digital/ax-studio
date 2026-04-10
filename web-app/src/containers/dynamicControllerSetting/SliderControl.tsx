@@ -4,7 +4,10 @@ import { Slider } from '@/components/ui/slider'
 import { Input } from '@/components/ui/input'
 
 interface SliderControlProps {
-  key?: string
+  // Renamed from `key` — React reserves `key` and strips it before passing
+  // props, so the component always received `undefined` and the slider's
+  // `id` attribute was broken (no label association, no a11y).
+  sliderKey?: string
   title?: string
   description?: string
   value?: SliderProps['defaultValue']
@@ -17,7 +20,7 @@ interface SliderControlProps {
 
 export function SliderControl({
   value,
-  key,
+  sliderKey,
   title,
   min = 0,
   max = 100,
@@ -69,7 +72,7 @@ export function SliderControl({
         <div className="flex items-center justify-between gap-4">
           <div className="w-full space-y-2">
             <Slider
-              id={key}
+              id={sliderKey}
               min={min}
               max={max}
               step={step}

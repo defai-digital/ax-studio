@@ -273,14 +273,16 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
   model,
   useLastUsedModel = false,
 }: DropdownModelProviderProps) {
-  const {
-    providers,
-    getProviderByName,
-    selectModelProvider,
-    getModelBy,
-    selectedProvider,
-    selectedModel,
-  } = useModelProvider()
+  // Subscribe to the individual fields this component reads rather than
+  // the whole `useModelProvider` state. The full-state subscription
+  // forced a re-render on every unrelated mutation (e.g. `deletedModels`
+  // updates), which was expensive given the virtualized model list.
+  const providers = useModelProvider((s) => s.providers)
+  const selectedProvider = useModelProvider((s) => s.selectedProvider)
+  const selectedModel = useModelProvider((s) => s.selectedModel)
+  const getProviderByName = useModelProvider((s) => s.getProviderByName)
+  const selectModelProvider = useModelProvider((s) => s.selectModelProvider)
+  const getModelBy = useModelProvider((s) => s.getModelBy)
   const [displayModel, setDisplayModel] = useState<string>('')
   const { updateCurrentThreadModel } = useThreads()
   const navigate = useNavigate()

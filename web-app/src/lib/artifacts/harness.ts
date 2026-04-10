@@ -34,15 +34,31 @@ const BASE_STYLES = `
 // fail in Tauri's WKWebView when the iframe has a null / opaque origin).
 // ---------------------------------------------------------------------------
 const vendorCache = new Map<string, string>()
+const pendingVendorFetches = new Map<string, Promise<string>>()
 
 async function fetchVendor(baseUrl: string, file: string): Promise<string> {
   const url = `${baseUrl}vendor/${file}`
-  if (vendorCache.has(url)) return vendorCache.get(url)!
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(`Failed to load vendor script ${file} (HTTP ${res.status})`)
-  const text = await res.text()
-  vendorCache.set(url, text)
-  return text
+  const cached = vendorCache.get(url)
+  if (cached) return cached
+
+  // Deduplicate concurrent fetches for the same URL
+  const pending = pendingVendorFetches.get(url)
+  if (pending) return pending
+
+  const promise = (async () => {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`Failed to load vendor script ${file} (HTTP ${res.status})`)
+    const text = await res.text()
+    vendorCache.set(url, text)
+    return text
+  })()
+
+  pendingVendorFetches.set(url, promise)
+  try {
+    return await promise
+  } finally {
+    pendingVendorFetches.delete(url)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -489,13 +505,23 @@ function buildChartJsHarnessInline(source: string, chartJs: string): string {
   }
 
   function extractConfig(source) {
-    // Strategy 1: Direct eval — works for raw object literals and configs with callbacks
+    // Strategy 1: JSON.parse — safe for the overwhelming majority of
+    // Chart.js configs which are pure JSON objects.
     try {
-      var c1 = eval('(' + source + ')');
+      var c0 = JSON.parse(source);
+      if (isValidConfig(c0)) return c0;
+    } catch(e) {}
+
+    // Strategy 2: Fall back to a scoped Function evaluation for configs
+    // that contain JS-only features (comments, function callbacks, trailing
+    // commas). This runs inside the sandboxed iframe and the runtime has no
+    // access to the outer app.
+    try {
+      var c1 = (new Function('return (' + source + ')'))();
       if (isValidConfig(c1)) return c1;
     } catch(e) {}
 
-    // Strategy 2: Strip imports/exports/assignments, then eval
+    // Strategy 3: Strip imports/exports/assignments, then try Function again
     var cleaned = source
       .replace(/^\\/\\/.*$/gm, '')
       .replace(/^\\/\\*[\\s\\S]*?\\*\\//gm, '')
@@ -507,7 +533,7 @@ function buildChartJsHarnessInline(source: string, chartJs: string): string {
       .trim();
     if (cleaned) {
       try {
-        var c2 = eval('(' + cleaned + ')');
+        var c2 = (new Function('return (' + cleaned + ')'))();
         if (isValidConfig(c2)) return c2;
       } catch(e) {}
     }

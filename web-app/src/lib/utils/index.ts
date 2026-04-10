@@ -22,8 +22,13 @@ export function basenameNoExt(filePath: string): string {
     }
   }
 
-  // fallback: remove only the last extension
-  return base.slice(0, -path.extname(base).length);
+  // fallback: remove only the last extension, but only when there is one.
+  // `base.slice(0, -extname.length)` is a trap when the file has no
+  // extension — `-0` behaves like `0`, so `slice(0, 0)` returns `''`.
+  // Files like `Makefile`, `README`, or `LICENSE` then show as blank in
+  // the UI.
+  const ext = path.extname(base);
+  return ext ? base.slice(0, -ext.length) : base;
 }
 
 /**

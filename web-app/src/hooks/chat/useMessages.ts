@@ -79,7 +79,9 @@ export const useMessages = create<MessageState>()((set, get) => ({
     })
   },
   deleteMessage: (threadId, messageId) => {
-    const previousMessages = get().messages[threadId]
+    const previousMessage = get().messages[threadId]?.find(
+      (m) => m.id === messageId
+    )
     // Optimistic update
     set((state) => ({
       messages: {
@@ -92,12 +94,21 @@ export const useMessages = create<MessageState>()((set, get) => ({
     }))
     getServiceHub().messages().deleteMessage(threadId, messageId).catch((error) => {
       console.error('Failed to delete message, rolling back:', error)
-      // Rollback on failure
-      if (previousMessages) {
-        set((state) => ({
-          messages: { ...state.messages, [threadId]: previousMessages },
-        }))
-      }
+      // Re-insert only the single deleted message using the CURRENT state.
+      // Don't replay a full pre-delete snapshot — that would overwrite any
+      // messages (assistant replies, follow-ups) that arrived during the
+      // failed API-call window.
+      if (!previousMessage) return
+      set((state) => {
+        const currentList = state.messages[threadId] ?? []
+        if (currentList.some((m) => m.id === messageId)) return state
+        const restored = [...currentList, previousMessage].sort(
+          (a, b) => (a.created_at || 0) - (b.created_at || 0)
+        )
+        return {
+          messages: { ...state.messages, [threadId]: restored },
+        }
+      })
     })
   },
   clearAllMessages: () => {

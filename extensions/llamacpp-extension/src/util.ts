@@ -196,11 +196,12 @@ const parseScalar = (rawValue: string): YamlValue => {
   if (value === 'null' || value === '~') return null
   if (value === 'true') return true
   if (value === 'false') return false
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
+  if (value.startsWith('"') && value.endsWith('"')) {
     return value.slice(1, -1).replace(/\\"/g, '"').replace(/\\n/g, '\n')
+  }
+  if (value.startsWith("'") && value.endsWith("'")) {
+    // YAML single-quoted strings only escape '' (two single quotes → one)
+    return value.slice(1, -1).replace(/''/g, "'")
   }
   if (!Number.isNaN(Number(value))) return Number(value)
   if (value === '[]') return []

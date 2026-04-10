@@ -15,7 +15,7 @@ import { useThreads } from '@/hooks/threads/useThreads'
 import { useAgentTeamStore } from '@/stores/agent-team-store'
 import { useToolApproval } from '@/hooks/tools/useToolApproval'
 import { useAppState } from '@/hooks/settings/useAppState'
-import { useChatSessions, type SessionData } from '@/stores/chat-session-store'
+import { useChatSessions } from '@/stores/chat-session-store'
 import type { AgentTeam } from '@/types/agent-team'
 import type { CostEstimate } from '@/lib/multi-agent/cost-estimation'
 
@@ -61,7 +61,45 @@ export function useThreadTools({
   const updateThread = useThreads((state) => state.updateThread)
 
   const getSessionData = useChatSessions((state) => state.getSessionData)
-  const sessionData = getSessionData(threadId) as SessionData & { tools: { toolName: string; toolCallId: string; input: unknown }[] }
+  type QueuedTool = {
+    toolName: string
+    toolCallId: string
+    input: unknown
+  }
+  const setSessionTools = (tools: QueuedTool[]) => {
+    useChatSessions.setState((state) => {
+      const session = state.sessions[threadId]
+      if (session) {
+        return {
+          sessions: {
+            ...state.sessions,
+            [threadId]: {
+              ...session,
+              data: {
+                ...session.data,
+                tools,
+              },
+            },
+          },
+        }
+      }
+
+      const standaloneData = state.standaloneData[threadId]
+      if (!standaloneData) {
+        return state
+      }
+
+      return {
+        standaloneData: {
+          ...state.standaloneData,
+          [threadId]: {
+            ...standaloneData,
+            tools,
+          },
+        },
+      }
+    })
+  }
 
   const toolCallAbortController = useRef<AbortController | null>(null)
 
@@ -112,9 +150,12 @@ export function useThreadTools({
       ) {
         return
       }
-      sessionData.tools.push(toolCall)
+      const state = useChatSessions.getState()
+      const currentTools = state.ensureSessionData(threadId)
+      const updatedTools = [...(currentTools.tools as QueuedTool[]), toolCall as QueuedTool]
+      setSessionTools(updatedTools)
     },
-    [sessionData]
+    [threadId]
   )
 
   // ─── Tool execution (called from onFinish in ThreadDetail) ────────────────
@@ -125,6 +166,8 @@ export function useThreadTools({
       const signal = toolCallAbortController.current.signal
 
       const mcpToolNames = useAppState.getState().mcpToolNames
+      const state = useChatSessions.getState()
+      const queuedTools = state.ensureSessionData(threadId).tools as QueuedTool[]
 
       ;(async () => {
         // Cache RAG tool names once per execution batch
@@ -136,7 +179,7 @@ export function useThreadTools({
           ragToolNames = new Set()
         }
 
-        for (const toolCall of sessionData.tools) {
+        for (const toolCall of queuedTools) {
           if (signal.aborted) break
 
           try {
@@ -191,7 +234,14 @@ export function useThreadTools({
               })
             }
           } catch (error) {
-            if ((error as Error).name !== 'AbortError') {
+            // Use `instanceof Error` + property access rather than
+            // `(error as Error).name` — if a non-Error value is thrown
+            // (a string, a plain object), the cast silently produces
+            // `undefined`, which always passes the `!== 'AbortError'`
+            // check and causes genuinely-aborted tool calls to be
+            // logged and surfaced as errors.
+            const isAbort = error instanceof Error && error.name === 'AbortError'
+            if (!isAbort) {
               console.error('Tool call error:', error)
               addToolOutput({
                 state: 'output-error',
@@ -203,17 +253,18 @@ export function useThreadTools({
           }
         }
 
-        sessionData.tools = []
+        setSessionTools([])
         toolCallAbortController.current = null
       })().catch((error) => {
-        if (error.name !== 'AbortError') {
+        const isAbort = error instanceof Error && error.name === 'AbortError'
+        if (!isAbort) {
           console.error('Tool call error:', error)
         }
-        sessionData.tools = []
+        setSessionTools([])
         toolCallAbortController.current = null
       })
     },
-    [serviceHub, sessionData, threadId, projectId]
+    [serviceHub, threadId, projectId]
   )
 
   // ─── Cost approval ────────────────────────────────────────────────────────

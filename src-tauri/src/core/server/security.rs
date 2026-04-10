@@ -45,18 +45,18 @@ pub fn add_cors_headers_with_host_and_origin(
     }
 
     let mut builder = builder;
-    let allow_origin_header =
-        trusted_cors_origin(origin, host, trusted_hosts).unwrap_or_else(|| "*".to_string());
+    let allow_origin_header = trusted_cors_origin(origin, host, trusted_hosts);
+
+    if let Some(allow_origin_header) = allow_origin_header {
+        builder = builder
+            .header("Access-Control-Allow-Origin", allow_origin_header.clone())
+            .header("Access-Control-Allow-Credentials", "true")
+    }
 
     builder = builder
-        .header("Access-Control-Allow-Origin", allow_origin_header.clone())
         .header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
         .header("Access-Control-Allow-Headers", "Authorization, Content-Type, Host, Accept, Accept-Language, Cache-Control, Connection, DNT, If-Modified-Since, Keep-Alive, Origin, User-Agent, X-Requested-With, X-CSRF-Token, X-Forwarded-For, X-Forwarded-Proto, X-Forwarded-Host, authorization, content-type, x-api-key")
         .header("Vary", "Origin");
-
-    if allow_origin_header != "*" {
-        builder = builder.header("Access-Control-Allow-Credentials", "true");
-    }
 
     builder
 }
@@ -115,18 +115,11 @@ mod tests {
     }
 
     #[test]
-    fn test_cors_enabled_empty_origin_uses_wildcard() {
+    fn test_cors_enabled_empty_origin_adds_no_access_control_origin_header() {
         let builder = hyper::http::Response::builder();
         let result = add_cors_headers_with_host_and_origin(builder, "localhost", "", &[], true);
         let resp = result.body(hyper::Body::empty()).unwrap();
-        assert_eq!(
-            resp.headers()
-                .get("Access-Control-Allow-Origin")
-                .unwrap()
-                .to_str()
-                .unwrap(),
-            "*"
-        );
+        assert!(resp.headers().get("Access-Control-Allow-Origin").is_none());
         // Wildcard origin should NOT have credentials header
         assert!(resp
             .headers()
@@ -145,14 +138,7 @@ mod tests {
             true,
         );
         let resp = result.body(hyper::Body::empty()).unwrap();
-        assert_eq!(
-            resp.headers()
-                .get("Access-Control-Allow-Origin")
-                .unwrap()
-                .to_str()
-                .unwrap(),
-            "*"
-        );
+        assert!(resp.headers().get("Access-Control-Allow-Origin").is_none());
         assert!(resp
             .headers()
             .get("Access-Control-Allow-Credentials")

@@ -1,4 +1,4 @@
-import { useSyncExternalStore, useCallback } from 'react'
+import { useSyncExternalStore, useCallback, useMemo } from 'react'
 
 const STORAGE_KEY = 'ax-pinned-threads'
 
@@ -6,7 +6,11 @@ const STORAGE_KEY = 'ax-pinned-threads'
 let listeners: Array<() => void> = []
 let pinnedSnapshot: string[] = (() => {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
+    const stored = localStorage.getItem(STORAGE_KEY)
+    const parsed = stored ? JSON.parse(stored) : []
+    return Array.isArray(parsed) && parsed.every((entry) => typeof entry === 'string')
+      ? parsed
+      : []
   } catch {
     return []
   }
@@ -55,7 +59,10 @@ export function usePinnedThreads() {
     persist(newOrder)
   }, [])
 
-  const pinnedSet = new Set(pinnedIds)
+  // Memoize the Set so consumers that depend on its identity (e.g.
+  // `useMemo(() => expensive, [pinnedSet])`) don't re-run on every
+  // unrelated render.
+  const pinnedSet = useMemo(() => new Set(pinnedIds), [pinnedIds])
 
   return { pinnedIds, pinnedSet, togglePin, isPinned, reorder }
 }

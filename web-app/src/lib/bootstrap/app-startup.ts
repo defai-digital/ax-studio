@@ -211,7 +211,7 @@ async function saveBlobNative(blob: Blob, filename: string): Promise<void> {
       reader.readAsDataURL(blob)
     })
   } catch (error) {
-    if ((error as Error)?.name !== 'AbortError') {
+    if (!(error instanceof Error && error.name === 'AbortError')) {
       console.error('[ax-studio] diagram save failed:', error)
     }
   }

@@ -8,6 +8,21 @@ export type IntegrationStatus = 'idle' | 'connecting' | 'connected' | 'error'
 
 const service = new DefaultIntegrationsService()
 
+// Module-level promise queue — serializes read→modify→write cycles against
+// the MCP config so two integrations being connected/disconnected in quick
+// succession can't drop one another's changes. (Classic TOCTOU: both calls
+// would otherwise read the same stale servers map and stomp the last
+// writer's entry.)
+let mcpConfigQueue: Promise<void> = Promise.resolve()
+const withMcpConfigLock = <T>(fn: () => Promise<T>): Promise<T> => {
+  const run = mcpConfigQueue.catch(() => undefined).then(() => fn())
+  mcpConfigQueue = run.then(
+    () => undefined,
+    () => undefined
+  )
+  return run
+}
+
 type IntegrationStoreState = {
   statuses: Record<string, IntegrationStatus>
   errors: Record<string, string>
@@ -85,13 +100,16 @@ export const useIntegrations = create<IntegrationStoreState>()((set) => ({
       // Activate the MCP server (credentials injected from storage at spawn time)
       await getServiceHub().mcp().activateMCPServer(serverName, config)
 
-      // Persist to mcp_config.json so it survives restart
-      const mcpConfig = await getServiceHub().mcp().getMCPConfig()
-      const servers = mcpConfig.mcpServers ?? {}
-      servers[serverName] = config
-      await getServiceHub().mcp().updateMCPConfig(
-        JSON.stringify({ mcpServers: servers, mcpSettings: mcpConfig.mcpSettings })
-      )
+      // Persist to mcp_config.json so it survives restart. Serialized via
+      // withMcpConfigLock so concurrent connects can't drop each other.
+      await withMcpConfigLock(async () => {
+        const mcpConfig = await getServiceHub().mcp().getMCPConfig()
+        const servers = mcpConfig.mcpServers ?? {}
+        servers[serverName] = config
+        await getServiceHub().mcp().updateMCPConfig(
+          JSON.stringify({ mcpServers: servers, mcpSettings: mcpConfig.mcpSettings })
+        )
+      })
 
       set((state) => ({
         statuses: { ...state.statuses, [id]: 'connected' },
@@ -133,13 +151,16 @@ export const useIntegrations = create<IntegrationStoreState>()((set) => ({
       // Activate the MCP server
       await getServiceHub().mcp().activateMCPServer(serverName, config)
 
-      // Persist to mcp_config.json so it survives restart
-      const mcpConfig = await getServiceHub().mcp().getMCPConfig()
-      const servers = mcpConfig.mcpServers ?? {}
-      servers[serverName] = config
-      await getServiceHub().mcp().updateMCPConfig(
-        JSON.stringify({ mcpServers: servers, mcpSettings: mcpConfig.mcpSettings })
-      )
+      // Persist to mcp_config.json so it survives restart. Serialized via
+      // withMcpConfigLock so concurrent connects can't drop each other.
+      await withMcpConfigLock(async () => {
+        const mcpConfig = await getServiceHub().mcp().getMCPConfig()
+        const servers = mcpConfig.mcpServers ?? {}
+        servers[serverName] = config
+        await getServiceHub().mcp().updateMCPConfig(
+          JSON.stringify({ mcpServers: servers, mcpSettings: mcpConfig.mcpSettings })
+        )
+      })
 
       set((state) => ({
         statuses: { ...state.statuses, [id]: 'connected' },
@@ -160,13 +181,17 @@ export const useIntegrations = create<IntegrationStoreState>()((set) => ({
       // Deactivate the MCP server
       await getServiceHub().mcp().deactivateMCPServer(serverName)
 
-      // Remove from mcp_config.json
-      const mcpConfig = await getServiceHub().mcp().getMCPConfig()
-      const servers = { ...mcpConfig.mcpServers }
-      delete servers[serverName]
-      await getServiceHub().mcp().updateMCPConfig(
-        JSON.stringify({ mcpServers: servers, mcpSettings: mcpConfig.mcpSettings })
-      )
+      // Remove from mcp_config.json. Serialized via withMcpConfigLock so a
+      // concurrent connect for a different integration can't resurrect this
+      // entry (or, worse, drop a concurrent connect's new entry).
+      await withMcpConfigLock(async () => {
+        const mcpConfig = await getServiceHub().mcp().getMCPConfig()
+        const servers = { ...mcpConfig.mcpServers }
+        delete servers[serverName]
+        await getServiceHub().mcp().updateMCPConfig(
+          JSON.stringify({ mcpServers: servers, mcpSettings: mcpConfig.mcpSettings })
+        )
+      })
 
       // Delete credentials from storage
       await service.deleteToken(id)

@@ -21,14 +21,39 @@ export class DefaultAssistantsService implements AssistantsService {
   }
 
   async createAssistant(assistant: Assistant): Promise<void> {
-    await ExtensionManager.getInstance()
-      .get<AssistantExtension>(ExtensionTypeEnum.Assistant)
-      ?.createAssistant(assistant)
+    const extension = ExtensionManager.getInstance().get<AssistantExtension>(
+      ExtensionTypeEnum.Assistant
+    )
+    if (!extension) {
+      // Previously optional-chained, so the assistant existed only in
+      // in-memory state — the next reload would lose it silently. Throw
+      // so the caller can show a real error.
+      throw new Error('Assistant extension not available')
+    }
+    try {
+      await extension.createAssistant(assistant)
+    } catch (error) {
+      console.error(`Failed to create assistant ${assistant.id}:`, error)
+      throw error instanceof Error
+        ? error
+        : new Error(`Failed to create assistant ${assistant.id}`)
+    }
   }
 
   async deleteAssistant(assistant: Assistant): Promise<void> {
-    await ExtensionManager.getInstance()
-      .get<AssistantExtension>(ExtensionTypeEnum.Assistant)
-      ?.deleteAssistant(assistant)
+    const extension = ExtensionManager.getInstance().get<AssistantExtension>(
+      ExtensionTypeEnum.Assistant
+    )
+    if (!extension) {
+      throw new Error('Assistant extension not available')
+    }
+    try {
+      await extension.deleteAssistant(assistant)
+    } catch (error) {
+      console.error(`Failed to delete assistant ${assistant.id}:`, error)
+      throw error instanceof Error
+        ? error
+        : new Error(`Failed to delete assistant ${assistant.id}`)
+    }
   }
 }

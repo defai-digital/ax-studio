@@ -206,6 +206,12 @@ async fn schedule_mcp_start_task<R: Runtime>(
         .ok_or_else(|| format!("Failed to extract command args from config for {name}"))?;
 
     if config_params.transport_type.as_deref() == Some("http") && config_params.url.is_some() {
+        let transport_url = config_params.url.as_deref().unwrap_or("");
+        if transport_url.is_empty() {
+            return Err(format!(
+                "Missing MCP HTTP URL for server {name}"
+            ));
+        }
         let transport = StreamableHttpClientTransport::with_client(
             reqwest::Client::builder()
                 .default_headers({
@@ -232,7 +238,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
                 .build()
                 .map_err(|e| format!("Failed to build HTTP client for {name}: {e}"))?,
             StreamableHttpClientTransportConfig {
-                uri: config_params.url.unwrap().into(),
+                uri: transport_url.to_string().into(),
                 ..Default::default()
             },
         );
@@ -269,6 +275,10 @@ async fn schedule_mcp_start_task<R: Runtime>(
         }
     } else if config_params.transport_type.as_deref() == Some("sse") && config_params.url.is_some()
     {
+        let transport_url = config_params.url.as_deref().unwrap_or("");
+        if transport_url.is_empty() {
+            return Err(format!("Missing MCP SSE URL for server {name}"));
+        }
         let transport = SseClientTransport::start_with_client(
             reqwest::Client::builder()
                 .default_headers({
@@ -295,7 +305,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
                 .build()
                 .map_err(|e| format!("Failed to build SSE client for {name}: {e}"))?,
             rmcp::transport::sse_client::SseClientConfig {
-                sse_endpoint: config_params.url.unwrap().into(),
+                sse_endpoint: transport_url.to_string().into(),
                 ..Default::default()
             },
         )

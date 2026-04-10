@@ -158,6 +158,12 @@ function LocalAPIServerContent() {
                   .models()
                   .getActiveModels()
                   .then((models) => setActiveModels(models || []))
+                  .catch((error) => {
+                    console.error(
+                      '[local-api-server] Failed to refresh active models after start:',
+                      error
+                    )
+                  })
                 // Add a small delay for the backend to update state
                 return new Promise((resolve) => setTimeout(resolve, 500))
               })

@@ -40,14 +40,29 @@ export function DownloadManagement() {
     []
   )
 
+  // Destructure the specific fields we use so the dep array is field-level
+  // rather than whole-object. The previous `[updateState]` dep fired on
+  // every backend update-state change, including fields this component
+  // doesn't care about (e.g. `isUpdateAvailable`).
+  const {
+    isDownloading: updateStateIsDownloading,
+    downloadProgress: updateStateDownloadProgress,
+    downloadedBytes: updateStateDownloadedBytes,
+    totalBytes: updateStateTotalBytes,
+  } = updateState
   useEffect(() => {
     setAppUpdateState({
-      isDownloading: updateState.isDownloading,
-      downloadProgress: updateState.downloadProgress,
-      downloadedBytes: updateState.downloadedBytes,
-      totalBytes: updateState.totalBytes,
+      isDownloading: updateStateIsDownloading,
+      downloadProgress: updateStateDownloadProgress,
+      downloadedBytes: updateStateDownloadedBytes,
+      totalBytes: updateStateTotalBytes,
     })
-  }, [updateState])
+  }, [
+    updateStateIsDownloading,
+    updateStateDownloadProgress,
+    updateStateDownloadedBytes,
+    updateStateTotalBytes,
+  ])
 
   const onAppUpdateDownloadUpdate = useCallback(
     (data: {
@@ -365,7 +380,7 @@ export function DownloadManagement() {
             align="end"
             className="p-0 overflow-hidden text-sm select-none"
             sideOffset={6}
-            onFocusOutside={(e) => e.preventDefault}
+            onFocusOutside={(e) => e.preventDefault()}
           >
             <div className="flex flex-col">
               <div className="px-3 py-2 border-b">
@@ -423,6 +438,19 @@ export function DownloadManagement() {
                                 if (downloadProcesses.length === 0) {
                                   setIsPopoverOpen(false)
                                 }
+                              })
+                              .catch((error) => {
+                                console.error(
+                                  '[DownloadManagement] Failed to abort download:',
+                                  error
+                                )
+                                toast.error('Failed to cancel download', {
+                                  id: 'cancel-download',
+                                  description:
+                                    error instanceof Error
+                                      ? error.message
+                                      : 'Unknown error',
+                                })
                               })
                           }}
                         />

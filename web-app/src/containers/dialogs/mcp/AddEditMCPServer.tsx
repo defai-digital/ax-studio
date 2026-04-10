@@ -45,7 +45,7 @@ function SortableArgItem({
   canRemove,
   placeholder,
 }: {
-  id: number
+  id: string
   value: string
   onChange: (value: string) => void
   onRemove: () => void
@@ -119,7 +119,15 @@ export default function AddEditMCPServer({
   const { t } = useTranslation()
   const [serverName, setServerName] = useState('')
   const [command, setCommand] = useState('')
-  const [args, setArgs] = useState<string[]>([''])
+  // Each arg has a stable `id` so React keys / DndContext identities stay
+  // stable across drag-reorders — using the array index as key unmounted
+  // the focused input mid-drag and dropped typed values.
+  type ArgEntry = { id: string; value: string }
+  const makeArg = (value: string = ''): ArgEntry => ({
+    id: crypto.randomUUID(),
+    value,
+  })
+  const [args, setArgs] = useState<ArgEntry[]>(() => [makeArg('')])
   const [envKeys, setEnvKeys] = useState<string[]>([''])
   const [envValues, setEnvValues] = useState<string[]>([''])
   const [transportType, setTransportType] = useState<'stdio' | 'http' | 'sse'>(
@@ -128,7 +136,10 @@ export default function AddEditMCPServer({
   const [url, setUrl] = useState('')
   const [headerKeys, setHeaderKeys] = useState<string[]>([''])
   const [headerValues, setHeaderValues] = useState<string[]>([''])
-  const [timeout, setTimeout] = useState('')
+  // Renamed from `timeout` / `setTimeout` — the previous names shadowed
+  // the global `setTimeout` in this file's scope, so any code here that
+  // needed a real timer would have called the React setter by mistake.
+  const [timeoutValue, setTimeoutValue] = useState('')
   const [isToggled, setIsToggled] = useState(false)
   const [jsonContent, setJsonContent] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -139,8 +150,12 @@ export default function AddEditMCPServer({
       setServerName(editingKey)
       setCommand(initialData.command || '')
       setUrl(initialData.url || '')
-      setTimeout(initialData.timeout ? initialData.timeout.toString() : '')
-      setArgs(initialData.args?.length > 0 ? initialData.args : [''])
+      setTimeoutValue(initialData.timeout ? initialData.timeout.toString() : '')
+      setArgs(
+        initialData.args?.length
+          ? initialData.args.map((v) => makeArg(v))
+          : [makeArg('')]
+      )
       setTransportType(initialData?.type || 'stdio')
 
       // Initialize JSON content for toggle mode
@@ -180,8 +195,8 @@ export default function AddEditMCPServer({
     setServerName('')
     setCommand('')
     setUrl('')
-    setTimeout('')
-    setArgs([''])
+    setTimeoutValue('')
+    setArgs([makeArg('')])
     setEnvKeys([''])
     setEnvValues([''])
     setHeaderKeys([''])
@@ -193,18 +208,18 @@ export default function AddEditMCPServer({
   }
 
   const handleAddArg = () => {
-    setArgs([...args, ''])
+    setArgs([...args, makeArg('')])
   }
 
   const handleRemoveArg = (index: number) => {
-    const newArgs = [...args]
+    const newArgs = args.slice()
     newArgs.splice(index, 1)
-    setArgs(newArgs.length > 0 ? newArgs : [''])
+    setArgs(newArgs.length > 0 ? newArgs : [makeArg('')])
   }
 
   const handleArgChange = (index: number, value: string) => {
-    const newArgs = [...args]
-    newArgs[index] = value
+    const newArgs = args.slice()
+    newArgs[index] = { ...newArgs[index], value }
     setArgs(newArgs)
   }
 
@@ -348,7 +363,7 @@ export default function AddEditMCPServer({
     })
 
     // Filter out empty args
-    const filteredArgs = args.map((arg) => arg.trim()).filter((arg) => arg)
+    const filteredArgs = args.map((arg) => arg.value.trim()).filter((v) => v)
 
     const config: MCPServerConfig = {
       ...(initialData || {}),
@@ -359,7 +374,8 @@ export default function AddEditMCPServer({
       ...(transportType !== 'stdio' && {
         url: url.trim(),
         headers: Object.keys(headersObj).length > 0 ? headersObj : undefined,
-        timeout: timeout.trim() !== '' ? parseInt(timeout) : undefined,
+        timeout:
+          timeoutValue.trim() !== '' ? parseInt(timeoutValue) : undefined,
       }),
     }
 
@@ -529,22 +545,24 @@ export default function AddEditMCPServer({
                   collisionDetection={closestCenter}
                   onDragEnd={(event) => {
                     const { active, over } = event
-                    if (active.id !== over?.id) {
-                      const oldIndex = parseInt(active.id.toString())
-                      const newIndex = parseInt(over?.id.toString() || '0')
-                      handleReorderArgs(oldIndex, newIndex)
+                    if (over && active.id !== over.id) {
+                      const oldIndex = args.findIndex((a) => a.id === active.id)
+                      const newIndex = args.findIndex((a) => a.id === over.id)
+                      if (oldIndex !== -1 && newIndex !== -1) {
+                        handleReorderArgs(oldIndex, newIndex)
+                      }
                     }
                   }}
                 >
                   <SortableContext
-                    items={args.map((_, index) => index)}
+                    items={args.map((a) => a.id)}
                     strategy={verticalListSortingStrategy}
                   >
                     {args.map((arg, index) => (
                       <SortableArgItem
-                        key={index}
-                        id={index}
-                        value={arg}
+                        key={arg.id}
+                        id={arg.id}
+                        value={arg.value}
                         onChange={(value) => handleArgChange(index, value)}
                         onRemove={() => handleRemoveArg(index)}
                         canRemove={args.length > 1}
@@ -652,8 +670,8 @@ export default function AddEditMCPServer({
                     Timeout (seconds)
                   </label>
                   <Input
-                    value={timeout}
-                    onChange={(e) => setTimeout(e.target.value)}
+                    value={timeoutValue}
+                    onChange={(e) => setTimeoutValue(e.target.value)}
                     placeholder="Enter timeout in seconds"
                     type="number"
                   />

@@ -32,6 +32,14 @@ export class SecretString {
   }
 
   /**
+   * Serialization hook used by JSON.stringify — returns the masked string
+   * so secrets are never accidentally persisted to storage or logs.
+   */
+  toJSON(): string {
+    return this.toString()
+  }
+
+  /**
    * Create from plain string
    */
   static from(value: string): SecretString {
@@ -96,11 +104,15 @@ export function validateTemplate(template: string): boolean {
     }
   }
 
-  // Additional check: ensure template doesn't contain code-like structures
+  // Additional check: ensure template doesn't contain executable code structures.
+  // Patterns are narrowed to code-shaped sequences (e.g. `function foo(` or
+  // `const x =`) to avoid false positives on natural-language prompt text like
+  // "define a function that..." or "temperature = 0.7".
   const codePatterns = [
-    /\b(function|class|const|let|var)\b/i,
-    /\b\w+\s*=\s*[^=]/,
-    /;\s*\S+\s*;/,
+    /\b(function|class)\s+\w+\s*[({]/i,     // function foo( / class Foo {
+    /\b(const|let|var)\s+\w+\s*=/i,         // const x = / let y = / var z =
+    /=>\s*[{(]/,                             // arrow function bodies
+    /;\s*[a-zA-Z_$][\w$]*\s*\([^)]*\)\s*;/, // chained statement calls
   ]
 
   for (const pattern of codePatterns) {

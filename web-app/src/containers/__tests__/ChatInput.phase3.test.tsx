@@ -16,7 +16,9 @@ const mockSetGlobalPrompt = vi.fn()
 const mockAbort = vi.fn()
 
 vi.mock('react-textarea-autosize', () => ({
-  default: (props: any) => <textarea {...props} />,
+  default: ({ minRows: _minRows, maxRows: _maxRows, rows, ...props }: any) => (
+    <textarea rows={rows ?? 1} {...props} />
+  ),
 }))
 
 vi.mock('@/hooks/ui/usePrompt', () => ({
@@ -261,12 +263,13 @@ describe('ChatInput — Phase 3 Manual Test Protocol', () => {
     expect(textarea).toHaveAttribute('spellcheck', 'true')
   })
 
-  // Protocol #14: maxRows=8 attribute
-  it('textarea has maxRows=8', () => {
+  // Protocol #14: minRows/maxRows are handled by autosize component
+  it('does not leak minRows/maxRows to DOM textarea props', () => {
     render(<ChatInput />)
     const textarea = screen.getByTestId('chat-input')
-    // react-textarea-autosize is mocked as plain textarea, but maxRows is passed as prop
-    expect(textarea.getAttribute('maxrows')).toBe('8')
+    expect(textarea).not.toHaveAttribute('minrows')
+    expect(textarea).not.toHaveAttribute('maxrows')
+    expect(textarea).toHaveAttribute('rows')
   })
 
   // Protocol #14: Font size 14px

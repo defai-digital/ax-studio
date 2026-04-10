@@ -394,10 +394,21 @@ pub async fn get_mcp_configs<R: Runtime>(app: AppHandle<R>) -> Result<String, St
     let mut config_value: Value = if config_string.trim().is_empty() {
         json!({})
     } else {
-        serde_json::from_str(&config_string).unwrap_or_else(|error| {
-            log::error!("Failed to parse existing MCP config, regenerating defaults: {error}");
-            json!({})
-        })
+        match serde_json::from_str(&config_string) {
+            Ok(v) => v,
+            Err(error) => {
+                // Quarantine corrupt config file instead of silently destroying it
+                let backup_path = path.with_extension("json.corrupt");
+                if let Err(e) = std::fs::rename(&path, &backup_path) {
+                    log::error!("Failed to quarantine corrupt MCP config: {e}");
+                }
+                log::error!(
+                    "MCP config corrupted, quarantined to {:?}: {error}",
+                    backup_path
+                );
+                json!({})
+            }
+        }
     };
 
     if !config_value.is_object() {

@@ -37,13 +37,28 @@ const activeAbortControllers = new Map<string, AbortController>()
 
 function saveMessageToChat(threadId: string, msg: ThreadMessage) {
   useMessages.getState().addMessage(msg)
-  const session = useChatSessions.getState().sessions[threadId]
-  if (session) {
-    const uiMsg = convertThreadMessageToUIMessage(msg)
-    if (uiMsg) {
-      session.chat.messages = [...session.chat.messages, uiMsg]
+  const uiMsg = convertThreadMessageToUIMessage(msg)
+  if (!uiMsg) return
+  // Use `setState` so Zustand subscribers are notified. The previous
+  // implementation mutated `session.chat.messages` directly, bypassing
+  // the store's change tracking — the chat UI would stay stale until
+  // some unrelated state update forced a re-render.
+  useChatSessions.setState((state) => {
+    const session = state.sessions[threadId]
+    if (!session) return state
+    return {
+      sessions: {
+        ...state.sessions,
+        [threadId]: {
+          ...session,
+          chat: {
+            ...session.chat,
+            messages: [...session.chat.messages, uiMsg],
+          },
+        },
+      },
     }
-  }
+  })
 }
 
 export function useResearch(threadId: string) {
@@ -107,7 +122,7 @@ export function useResearch(threadId: string) {
                 addStep({ type: 'searching', query: debugMsg })
               }
             } catch (err) {
-              if ((err as Error).name === 'AbortError') throw err
+              if (err instanceof Error && err.name === 'AbortError') throw err
               if (isExaRateLimitError(err)) exaUnavailableForRun = true
               usedLLMFallback = true
             }
@@ -143,14 +158,14 @@ export function useResearch(threadId: string) {
                     })
                     wikiSummaries.push(`Source: ${r.url}\n${summary}`)
                   } catch (err) {
-                    if ((err as Error).name === 'AbortError') throw err
+                    if (err instanceof Error && err.name === 'AbortError') throw err
                     wikiSummaries.push(`Source: ${r.url}\n${pageText.slice(0, 500)}`)
                   }
                 }
                 return wikiSummaries.filter(Boolean)
               }
             } catch (err) {
-              if ((err as Error).name === 'AbortError') throw err
+              if (err instanceof Error && err.name === 'AbortError') throw err
             }
 
             // Tier 3: Pure LLM knowledge
@@ -163,7 +178,7 @@ export function useResearch(threadId: string) {
               })
               return [`[Model Knowledge]\n${knowledgeSummary}`]
             } catch (err) {
-              if ((err as Error).name === 'AbortError') throw err
+              if (err instanceof Error && err.name === 'AbortError') throw err
             }
             return []
           }
@@ -199,7 +214,7 @@ export function useResearch(threadId: string) {
               })
               validSummaries.push(`Source: ${r.url}\n${summary}`)
             } catch (err) {
-              if ((err as Error).name === 'AbortError') throw err
+              if (err instanceof Error && err.name === 'AbortError') throw err
               validSummaries.push(`Source: ${r.url}\n${text.slice(0, 500)}`)
             }
           }
@@ -218,7 +233,7 @@ export function useResearch(threadId: string) {
                 validSummaries.push(...childSummaries)
               }
             } catch (err) {
-              if ((err as Error).name === 'AbortError') throw err
+              if (err instanceof Error && err.name === 'AbortError') throw err
             }
           }
 

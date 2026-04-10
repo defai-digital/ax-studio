@@ -257,10 +257,13 @@ mod tests {
 }
 
 pub fn cleanup_own_locks<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+    // Consistent with `get_lock_file_path` in this same file — propagate
+    // instead of panicking so a missing/inaccessible app data dir bubbles
+    // up as a cleanup error the caller can log.
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .expect("Failed to get app data dir");
+        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
 
     let pattern = app_data_dir.join("mcp_lock_*.json");
     let pattern_str = pattern.to_string_lossy();

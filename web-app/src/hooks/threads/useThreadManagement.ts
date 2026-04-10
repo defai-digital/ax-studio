@@ -114,19 +114,16 @@ const useThreadManagementStore = create<ThreadManagementState>()(
         (thread) => thread.metadata?.project?.id === id
       )
 
-      // Delete threads from backend first
-      const serviceHub = getServiceHub()
-      for (const thread of projectThreads) {
-        await serviceHub.threads().deleteThread(thread.id)
-      }
-
-      // Delete threads from frontend state
+      // The frontend store's `deleteThread` already invokes the backend
+      // delete — the previous explicit backend loop above it deleted each
+      // thread twice (the second call would typically 404). Delegate to
+      // the store so each thread is deleted exactly once.
       for (const thread of projectThreads) {
         threadsState.deleteThread(thread.id)
       }
 
       // Delete the project from storage
-      const projectsService = serviceHub.projects()
+      const projectsService = getServiceHub().projects()
       await projectsService.deleteProject(id)
 
       const updatedProjects = await projectsService.getProjects()
@@ -148,18 +145,26 @@ export const useThreadManagement = () => {
   const serviceHub = useServiceHub()
   const store = useThreadManagementStore()
 
-  // Load projects from service on mount
+  // Load projects from service on mount. Use a cancelled flag so a slow
+  // `getProjects()` that resolves after the hook has unmounted (or
+  // `serviceHub` changed) doesn't overwrite the store with stale data.
   useEffect(() => {
+    let cancelled = false
     const syncProjects = async () => {
       try {
         const projectsService = serviceHub.projects()
         const projects = await projectsService.getProjects()
+        if (cancelled) return
         useThreadManagementStore.setState({ folders: projects })
       } catch (error) {
+        if (cancelled) return
         console.error('Error syncing projects:', error)
       }
     }
     syncProjects()
+    return () => {
+      cancelled = true
+    }
   }, [serviceHub])
 
   return store

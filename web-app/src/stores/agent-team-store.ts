@@ -30,6 +30,7 @@ export interface TeamExportData {
 interface AgentTeamState {
   teams: AgentTeam[]
   isLoaded: boolean
+  loadError: string | null
   loadTeams: () => Promise<void>
   createTeam: (
     team: Omit<AgentTeam, 'id' | 'created_at' | 'updated_at'>
@@ -40,7 +41,8 @@ interface AgentTeamState {
   duplicateTeam: (
     teamId: string,
     getAssistants: () => Assistant[],
-    addAssistant: (agent: Assistant) => void
+    addAssistant: (agent: Assistant) => void,
+    removeAssistant?: (agentId: string) => void
   ) => Promise<AgentTeam | null>
   exportTeam: (
     teamId: string,
@@ -48,22 +50,51 @@ interface AgentTeamState {
   ) => TeamExportData | null
   importTeam: (
     data: TeamExportData,
-    addAssistant: (agent: Assistant) => void
+    addAssistant: (agent: Assistant) => void,
+    removeAssistant?: (agentId: string) => void
   ) => Promise<AgentTeam>
 }
+
+// Module-level dedupe handle for concurrent `loadTeams()` calls — see
+// the `loadTeams` implementation below for why.
+let loadTeamsPromise: Promise<void> | null = null
 
 export const useAgentTeamStore = create<AgentTeamState>((set, get) => ({
   teams: [],
   isLoaded: false,
+  loadError: null,
 
   loadTeams: async () => {
-    const raw = await invoke<AgentTeam[]>('list_agent_teams')
-    // Normalize: ensure every team has orchestration (older saved teams may lack it)
-    const teams = raw.map((t) => ({
-      ...t,
-      orchestration: t.orchestration ?? { mode: 'router' as const },
-    }))
-    set({ teams, isLoaded: true })
+    // Deduplicate concurrent loads. Three components independently call
+    // `loadTeams()` on mount when `isLoaded` is false — without this guard
+    // we fire three parallel `list_agent_teams` Tauri invokes on startup
+    // and thrash the teams state with three sequential setters.
+    if (loadTeamsPromise) return loadTeamsPromise
+    loadTeamsPromise = (async () => {
+      try {
+        const raw = await invoke<AgentTeam[]>('list_agent_teams')
+        // Normalize: ensure every team has orchestration (older saved
+        // teams may lack it).
+        const teams = raw.map((t) => ({
+          ...t,
+          orchestration: t.orchestration ?? { mode: 'router' as const },
+        }))
+        set({ teams, isLoaded: true, loadError: null })
+      } catch (error) {
+        // Surface the error into store state so the settings UI can show
+        // a "failed to load teams" message. Previously this `catch` was
+        // absent and the `finally` below reset the dedup handle so any
+        // component that retried just hit the same silent failure.
+        console.error('Failed to load agent teams:', error)
+        set({
+          isLoaded: true,
+          loadError: error instanceof Error ? error.message : String(error),
+        })
+      } finally {
+        loadTeamsPromise = null
+      }
+    })()
+    return loadTeamsPromise
   },
 
   createTeam: async (partial) => {
@@ -94,7 +125,7 @@ export const useAgentTeamStore = create<AgentTeamState>((set, get) => ({
 
   getTeam: (teamId) => get().teams.find((t) => t.id === teamId),
 
-  duplicateTeam: async (teamId, getAssistants, addAssistant) => {
+  duplicateTeam: async (teamId, getAssistants, addAssistant, removeAssistant) => {
     const team = get().teams.find((t) => t.id === teamId)
     if (!team) return null
 
@@ -114,18 +145,26 @@ export const useAgentTeamStore = create<AgentTeamState>((set, get) => ({
       newAgentIds.push(copy.id)
     }
 
-    return get().createTeam({
-      name: `${team.name} (copy)`,
-      description: team.description,
-      orchestration: team.orchestration,
-      orchestrator_instructions: team.orchestrator_instructions,
-      orchestrator_model_id: team.orchestrator_model_id,
-      agent_ids: newAgentIds,
-      variables: team.variables,
-      token_budget: team.token_budget,
-      cost_approval_threshold: team.cost_approval_threshold,
-      parallel_stagger_ms: team.parallel_stagger_ms,
-    })
+    try {
+      return await get().createTeam({
+        name: `${team.name} (copy)`,
+        description: team.description,
+        orchestration: team.orchestration,
+        orchestrator_instructions: team.orchestrator_instructions,
+        orchestrator_model_id: team.orchestrator_model_id,
+        agent_ids: newAgentIds,
+        variables: team.variables,
+        token_budget: team.token_budget,
+        cost_approval_threshold: team.cost_approval_threshold,
+        parallel_stagger_ms: team.parallel_stagger_ms,
+      })
+    } catch (error) {
+      // Roll back the assistant copies so we don't leave orphans behind.
+      if (removeAssistant) {
+        for (const id of newAgentIds) removeAssistant(id)
+      }
+      throw error
+    }
   },
 
   exportTeam: (teamId, getAssistants) => {
@@ -167,7 +206,7 @@ export const useAgentTeamStore = create<AgentTeamState>((set, get) => ({
     }
   },
 
-  importTeam: async (data, addAssistant) => {
+  importTeam: async (data, addAssistant, removeAssistant) => {
     if (!data?.team || !Array.isArray(data?.agents)) {
       throw new Error('Invalid team import data: missing team or agents')
     }
@@ -199,9 +238,18 @@ export const useAgentTeamStore = create<AgentTeamState>((set, get) => ({
       agentIds.push(agent.id)
     }
 
-    return get().createTeam({
-      ...data.team,
-      agent_ids: agentIds,
-    })
+    try {
+      return await get().createTeam({
+        ...data.team,
+        agent_ids: agentIds,
+      })
+    } catch (error) {
+      // Roll back the imported assistants so they don't linger as orphans
+      // when the backend rejects the team save.
+      if (removeAssistant) {
+        for (const id of agentIds) removeAssistant(id)
+      }
+      throw error
+    }
   },
 }))

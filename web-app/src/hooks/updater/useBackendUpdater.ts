@@ -80,14 +80,19 @@ export function useBackendUpdater() {
     }
   }, [])
 
-  // Read auto_update_engine setting from extension on mount
+  // Read auto_update_engine setting from extension on mount. Cancelled
+  // flag guards against the hook unmounting before `getSettings()`
+  // resolves — otherwise the `setUpdateState` call would land on an
+  // unmounted component.
   useEffect(() => {
+    let cancelled = false
     const checkAutoUpdateSetting = async () => {
       try {
         const ext = getLlamacppExtension()
         if (!ext || !('getSettings' in (ext as object))) return
 
         const settings = await ext.getSettings?.()
+        if (cancelled) return
         const autoUpdateSetting = settings?.find(
           (s) => s.key === 'auto_update_engine'
         )
@@ -97,11 +102,15 @@ export function useBackendUpdater() {
           autoUpdateEnabled: autoUpdateSetting?.controller_props?.value === true,
         }))
       } catch (error) {
+        if (cancelled) return
         console.error('[useBackendUpdater] Failed to read auto_update_engine:', error)
       }
     }
 
     checkAutoUpdateSetting()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const syncState = useCallback((partial: Partial<BackendUpdateState>) => {

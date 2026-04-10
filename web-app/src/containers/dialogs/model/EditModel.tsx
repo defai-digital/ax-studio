@@ -46,9 +46,13 @@ export const DialogEditModel = ({
     tools: false,
   })
 
-  // Initialize with the provided model ID or the first model if available
+  // Initialize with the provided model ID only when the dialog opens without
+  // an existing selection. The previous condition had an operator-precedence
+  // bug — `isOpen && !selectedModelId || !isOpen` simplifies to
+  // `!isOpen || !selectedModelId`, which was always true and reset selections
+  // on close.
   useEffect(() => {
-    if (isOpen && !selectedModelId || !isOpen) {
+    if (isOpen && !selectedModelId) {
       if (modelId) {
         setSelectedModelId(modelId)
       } else if (provider.models && provider.models.length > 0) {

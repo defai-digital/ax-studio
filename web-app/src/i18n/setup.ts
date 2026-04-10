@@ -133,8 +133,22 @@ const changeLanguage = (lng: string): void => {
     try {
       const stored = localStorage.getItem(localStorageKey.settingGeneral)
       const parsed = stored ? JSON.parse(stored) : { state: {} }
-      parsed.state.currentLanguage = lng
-      localStorage.setItem(localStorageKey.settingGeneral, JSON.stringify(parsed))
+      const parsedState =
+        parsed &&
+        typeof parsed === 'object' &&
+        parsed !== null &&
+        typeof parsed.state === 'object' &&
+        parsed.state !== null
+          ? (parsed.state as { currentLanguage?: string } )
+          : {}
+      const nextState = {
+        ...parsedState,
+        currentLanguage: lng,
+      }
+      localStorage.setItem(
+        localStorageKey.settingGeneral,
+        JSON.stringify({ ...parsed, state: nextState })
+      )
     } catch (error) {
       console.error('Failed to save language preference:', error)
     }

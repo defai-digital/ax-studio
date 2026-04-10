@@ -62,10 +62,10 @@ function ExtensionsContent() {
                   </div>
                 }
               >
-                {extensions.map((item, i) => {
+                {extensions.map((item) => {
                   return (
                     <CardItem
-                      key={i}
+                      key={item.name}
                       title={
                         <div className="flex items-center gap-x-2">
                           <h1 className="text-foreground font-studio font-medium text-base">

@@ -7,7 +7,22 @@ export const getLastUsedModel = (): {
 } | null => {
   try {
     const stored = localStorage.getItem(localStorageKey.lastUsedModel)
-    return stored ? JSON.parse(stored) : null
+    if (!stored) return null
+
+    const parsed = JSON.parse(stored)
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      typeof (parsed as { provider?: unknown }).provider === 'string' &&
+      typeof (parsed as { model?: unknown }).model === 'string'
+    ) {
+      return {
+        provider: (parsed as { provider: string }).provider,
+        model: (parsed as { model: string }).model,
+      }
+    }
+
+    return null
   } catch (error) {
     console.debug('Failed to get last used model from localStorage:', error)
     return null

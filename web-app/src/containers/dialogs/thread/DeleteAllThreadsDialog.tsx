@@ -29,7 +29,9 @@ export function DeleteAllThreadsDialog({
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [isOpen, setIsOpen] = useState(false)
-  const deleteButtonRef = useRef<HTMLButtonElement>(null)
+  // Focus Cancel instead of the destructive button so Enter-to-dismiss
+  // doesn't accidentally wipe every thread.
+  const cancelButtonRef = useRef<HTMLButtonElement>(null)
 
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open)
@@ -51,12 +53,6 @@ export function DeleteAllThreadsDialog({
     }, 0)
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleDeleteAll()
-    }
-  }
-
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
@@ -68,7 +64,7 @@ export function DeleteAllThreadsDialog({
       <DialogContent
         onOpenAutoFocus={(e) => {
           e.preventDefault()
-          deleteButtonRef.current?.focus()
+          cancelButtonRef.current?.focus()
         }}
       >
         <DialogHeader>
@@ -81,15 +77,18 @@ export function DeleteAllThreadsDialog({
         </DialogHeader>
         <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
           <DialogClose asChild>
-            <Button variant="outline" size="sm" className="w-full sm:w-auto">
+            <Button
+              ref={cancelButtonRef}
+              variant="outline"
+              size="sm"
+              className="w-full sm:w-auto"
+            >
               {t('common:cancel')}
             </Button>
           </DialogClose>
           <Button
-            ref={deleteButtonRef}
             variant="destructive"
             onClick={handleDeleteAll}
-            onKeyDown={handleKeyDown}
             size="sm"
             className="w-full sm:w-auto"
             aria-label={t('common:deleteAll')}

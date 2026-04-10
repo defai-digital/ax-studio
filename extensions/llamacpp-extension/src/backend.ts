@@ -502,7 +502,7 @@ export async function updateBackend(
  * Filename must follow: llama-{version}-bin-{backend}.{ext}
  */
 export async function installBackendFromFile(filePath: string): Promise<void> {
-  const filename = filePath.split('/').pop() ?? filePath
+  const filename = filePath.split(/[\\/]/).pop() ?? filePath
   const match = filename.match(/^llama-([^_]+(?:_[^.]+)*)-bin-(.+?)\.(tar\.gz|zip)$/)
   if (!match) {
     throw new Error(
