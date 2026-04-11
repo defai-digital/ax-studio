@@ -9,6 +9,10 @@ import { useEffect, useRef, useState } from 'react'
 import type { UIMessage } from '@ai-sdk/react'
 import { SESSION_STORAGE_PREFIX, SESSION_STORAGE_KEY } from '@/constants/chat'
 import { defaultAssistant } from '@/hooks/chat/useAssistant'
+import {
+  safeStorageGetItem,
+  safeStorageRemoveItem,
+} from '@/lib/storage'
 
 export type ThreadEffectsInput = {
   threadId: string
@@ -147,13 +151,17 @@ export function useThreadEffects({
     if (initialMessageSentForThreadRef.current === threadId) return
 
     const initialMessageKey = `${SESSION_STORAGE_PREFIX.INITIAL_MESSAGE}${threadId}`
-    const storedMessage = sessionStorage.getItem(initialMessageKey)
+    const storedMessage = safeStorageGetItem(
+      sessionStorage,
+      initialMessageKey,
+      'useThreadEffects'
+    )
     if (!storedMessage) return
 
     let cancelled = false
     let startedResearch = false
 
-    sessionStorage.removeItem(initialMessageKey)
+    safeStorageRemoveItem(sessionStorage, initialMessageKey, 'useThreadEffects')
     initialMessageSentForThreadRef.current = threadId
 
     ;(async () => {
@@ -200,13 +208,33 @@ export function useThreadEffects({
   const sessionCarryAppliedForThreadRef = useRef<string | null>(null)
   useEffect(() => {
     if (sessionCarryAppliedForThreadRef.current === threadId) return
-    const storedPrompt = sessionStorage.getItem(SESSION_STORAGE_KEY.NEW_THREAD_PROMPT)
-    const storedTeamId = sessionStorage.getItem(SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID)
+    const storedPrompt = safeStorageGetItem(
+      sessionStorage,
+      SESSION_STORAGE_KEY.NEW_THREAD_PROMPT,
+      'useThreadEffects'
+    )
+    const storedTeamId = safeStorageGetItem(
+      sessionStorage,
+      SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID,
+      'useThreadEffects'
+    )
     if (!storedPrompt && !storedTeamId) return
     sessionCarryAppliedForThreadRef.current = threadId
 
-    if (storedPrompt) sessionStorage.removeItem(SESSION_STORAGE_KEY.NEW_THREAD_PROMPT)
-    if (storedTeamId) sessionStorage.removeItem(SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID)
+    if (storedPrompt) {
+      safeStorageRemoveItem(
+        sessionStorage,
+        SESSION_STORAGE_KEY.NEW_THREAD_PROMPT,
+        'useThreadEffects'
+      )
+    }
+    if (storedTeamId) {
+      safeStorageRemoveItem(
+        sessionStorage,
+        SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID,
+        'useThreadEffects'
+      )
+    }
 
     updateThread(threadId, {
       metadata: {

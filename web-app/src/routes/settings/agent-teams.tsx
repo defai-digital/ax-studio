@@ -90,9 +90,16 @@ function AgentTeamsContent() {
 
   const handleConfirmDelete = async () => {
     if (teamToDelete) {
-      await deleteTeam(teamToDelete)
-      setDeleteDialogOpen(false)
-      setTeamToDelete(null)
+      try {
+        await deleteTeam(teamToDelete)
+        setDeleteDialogOpen(false)
+        setTeamToDelete(null)
+      } catch (error) {
+        console.error('Failed to delete team:', error)
+        toast.error(
+          error instanceof Error ? error.message : 'Failed to delete team'
+        )
+      }
     }
   }
 
@@ -102,22 +109,36 @@ function AgentTeamsContent() {
     // `createTeam` path reused the original team's `agent_ids`, meaning
     // the "copy" actually shared agents — editing or deleting an agent on
     // one team affected the other.
-    await duplicateTeam(
-      team.id,
-      () => assistants,
-      addAssistant,
-      deleteAssistant
-    )
+    try {
+      await duplicateTeam(
+        team.id,
+        () => assistants,
+        addAssistant,
+        deleteAssistant
+      )
+    } catch (error) {
+      console.error('Failed to duplicate team:', error)
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to duplicate team'
+      )
+    }
   }
 
   const handleSave = async (team: AgentTeam) => {
-    if (editingTeam) {
-      await updateTeam(team)
-    } else {
-      await createTeam(team)
+    try {
+      if (editingTeam) {
+        await updateTeam(team)
+      } else {
+        await createTeam(team)
+      }
+      setEditorOpen(false)
+      setEditingTeam(null)
+    } catch (error) {
+      console.error('Failed to save team:', error)
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to save team'
+      )
     }
-    setEditorOpen(false)
-    setEditingTeam(null)
   }
 
   const handleImportTemplate = async (template: TeamTemplate) => {
@@ -147,17 +168,26 @@ function AgentTeamsContent() {
     }
 
     // Create team with agent IDs
-    await createTeam({
-      name: template.name,
-      description: template.description,
-      orchestration: template.orchestration,
-      orchestrator_instructions: template.orchestrator_instructions,
-      agent_ids: agentIds,
-      token_budget: template.token_budget,
-      parallel_stagger_ms: template.parallel_stagger_ms,
-    })
+    try {
+      await createTeam({
+        name: template.name,
+        description: template.description,
+        orchestration: template.orchestration,
+        orchestrator_instructions: template.orchestrator_instructions,
+        agent_ids: agentIds,
+        token_budget: template.token_budget,
+        parallel_stagger_ms: template.parallel_stagger_ms,
+      })
 
-    setTemplateMenuOpen(false)
+      setTemplateMenuOpen(false)
+    } catch (error) {
+      console.error('Failed to import team template:', error)
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : 'Failed to import team template'
+      )
+    }
   }
 
   const handleExport = (teamId: string) => {

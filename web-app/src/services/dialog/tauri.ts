@@ -26,7 +26,9 @@ export class TauriDialogService extends DefaultDialogService {
       return result
     } catch (error) {
       console.error('Error opening dialog in Tauri:', error)
-      return null
+      throw error instanceof Error
+        ? error
+        : new Error('Failed to open native dialog')
     }
   }
 
@@ -35,7 +37,9 @@ export class TauriDialogService extends DefaultDialogService {
       return await invoke<string | null>('save_dialog', { options })
     } catch (error) {
       console.error('Error opening save dialog in Tauri:', error)
-      return null
+      throw error instanceof Error
+        ? error
+        : new Error('Failed to open save dialog')
     }
   }
 }

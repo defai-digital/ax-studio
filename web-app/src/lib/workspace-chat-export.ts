@@ -143,7 +143,7 @@ export const workspaceChatsToCsv = (data: WorkspaceChatsExportData): string => {
   ]
 
   data.threads.forEach((thread) => {
-    const threadUpdated = toIsoDate(thread.updated || 0)
+    const threadUpdated = toIsoDateOrEmpty(thread.updated || 0)
     thread.messages.forEach((message) => {
       rows.push(
         [
@@ -154,7 +154,7 @@ export const workspaceChatsToCsv = (data: WorkspaceChatsExportData): string => {
           threadUpdated,
           message.id,
           message.role,
-          toIsoDate(message.created_at || 0),
+          toIsoDateOrEmpty(message.created_at || 0),
           toIsoDateOrEmpty(message.completed_at || 0),
           message.status,
           message.content,

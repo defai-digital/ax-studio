@@ -19,6 +19,11 @@ import { useServiceHub } from '@/hooks/useServiceHub'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useThreads } from '@/hooks/threads/useThreads'
 import { useChatAttachments, NEW_THREAD_ATTACHMENT_KEY } from '@/hooks/chat/useChatAttachments'
+import {
+  safeStorageGetItem,
+  safeStorageRemoveItem,
+  safeStorageSetItem,
+} from '@/lib/storage'
 
 type Input = {
   onSubmit?: (text: string) => void
@@ -71,11 +76,10 @@ export function useChatSendHandler({
           return
         }
 
-        setMessage('')
-
         if (onSubmit) {
           // AI SDK path — caller owns thread management
           onSubmit(prompt)
+          setMessage('')
           setPrompt('')
           return
         }
@@ -88,11 +92,21 @@ export function useChatSendHandler({
         const messagePayload = { text: prompt }
 
         if (isTemporaryChat) {
-          sessionStorage.setItem(
+          const storedTemporaryMessage = safeStorageSetItem(
+            sessionStorage,
             SESSION_STORAGE_KEY.INITIAL_MESSAGE_TEMPORARY,
-            JSON.stringify(messagePayload)
+            JSON.stringify(messagePayload),
+            'useChatSendHandler'
           )
-          sessionStorage.setItem('temp-chat-nav', 'true')
+          const storedTempNavigation = safeStorageSetItem(
+            sessionStorage,
+            'temp-chat-nav',
+            'true',
+            'useChatSendHandler'
+          )
+          if (!storedTemporaryMessage || !storedTempNavigation) {
+            throw new Error('Unable to persist the temporary chat message')
+          }
           // Transfer pending attachments to the temporary chat ID
           useChatAttachments.getState().transferAttachments(
             NEW_THREAD_ATTACHMENT_KEY,
@@ -152,9 +166,17 @@ export function useChatSendHandler({
             newThread.id
           )
 
-          const storedTeamId = sessionStorage.getItem(SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID)
+          const storedTeamId = safeStorageGetItem(
+            sessionStorage,
+            SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID,
+            'useChatSendHandler'
+          )
           if (storedTeamId) {
-            sessionStorage.removeItem(SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID)
+            safeStorageRemoveItem(
+              sessionStorage,
+              SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID,
+              'useChatSendHandler'
+            )
             useThreads.getState().updateThread(newThread.id, {
               metadata: { ...(newThread.metadata ?? {}), agent_team_id: storedTeamId },
             })
@@ -162,10 +184,15 @@ export function useChatSendHandler({
 
           setSelectedAssistant(undefined)
 
-          sessionStorage.setItem(
+          const storedInitialMessage = safeStorageSetItem(
+            sessionStorage,
             `${SESSION_STORAGE_PREFIX.INITIAL_MESSAGE}${newThread.id}`,
-            JSON.stringify(messagePayload)
+            JSON.stringify(messagePayload),
+            'useChatSendHandler'
           )
+          if (!storedInitialMessage) {
+            throw new Error('Unable to persist the new thread message')
+          }
 
           router.navigate({
             to: route.threadsDetail,
@@ -173,7 +200,17 @@ export function useChatSendHandler({
           })
         }
 
+        setMessage('')
         setPrompt('')
+      } catch (error) {
+        console.error('Failed to send message:', error)
+        setMessage(prompt)
+        toast.error('Failed to send message', {
+          description:
+            error instanceof Error
+              ? error.message
+              : 'The message could not be queued for delivery.',
+        })
       } finally {
         sendingRef.current = false
       }

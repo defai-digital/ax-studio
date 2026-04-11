@@ -40,17 +40,23 @@ describe('CopyButton', () => {
     expect(screen.queryByTestId('icon-copy-check')).not.toBeInTheDocument()
   })
 
-  it('copies text to clipboard and shows check icon', () => {
+  it('copies text to clipboard and shows check icon', async () => {
     render(<CopyButton text="hello world" />)
-    fireEvent.click(screen.getByRole('button'))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button'))
+      await Promise.resolve()
+    })
     expect(writeTextMock).toHaveBeenCalledWith('hello world')
     expect(screen.getByTestId('icon-copy-check')).toBeInTheDocument()
     expect(screen.queryByTestId('icon-copy')).not.toBeInTheDocument()
   })
 
-  it('reverts to copy icon after 2 seconds', () => {
+  it('reverts to copy icon after 2 seconds', async () => {
     render(<CopyButton text="test" />)
-    fireEvent.click(screen.getByRole('button'))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button'))
+      await Promise.resolve()
+    })
     expect(screen.getByTestId('icon-copy-check')).toBeInTheDocument()
 
     act(() => {
@@ -61,17 +67,24 @@ describe('CopyButton', () => {
     expect(screen.queryByTestId('icon-copy-check')).not.toBeInTheDocument()
   })
 
-  it('copies different text values correctly', () => {
+  it('copies different text values correctly', async () => {
     const { rerender } = render(<CopyButton text="first" />)
-    fireEvent.click(screen.getByRole('button'))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button'))
+      await Promise.resolve()
+    })
     expect(writeTextMock).toHaveBeenCalledWith('first')
+    expect(screen.getByTestId('icon-copy-check')).toBeInTheDocument()
 
     act(() => {
       vi.advanceTimersByTime(2000)
     })
 
     rerender(<CopyButton text="second" />)
-    fireEvent.click(screen.getByRole('button'))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button'))
+      await Promise.resolve()
+    })
     expect(writeTextMock).toHaveBeenCalledWith('second')
   })
 })

@@ -2,6 +2,11 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
 import type { ApplyMode } from '@/lib/system-prompt'
+import {
+  safeStorageGetItem,
+  safeStorageRemoveItem,
+  safeStorageSetItem,
+} from '@/lib/storage'
 
 type GeneralSettingState = {
   currentLanguage: Language
@@ -45,7 +50,7 @@ export function sanitizePersistedGeneralSettings(value: unknown): unknown {
 // persisted localStorage state until the app has a real secure storage backend.
 const encryptedStorage = {
   getItem: (name: string) => {
-    const item = localStorage.getItem(name)
+    const item = safeStorageGetItem(localStorage, name, 'useGeneralSetting')
     if (!item) return null
 
     try {
@@ -57,16 +62,18 @@ const encryptedStorage = {
   },
   setItem: (name: string, value: unknown) => {
     try {
-      localStorage.setItem(
+      safeStorageSetItem(
+        localStorage,
         name,
-        JSON.stringify(sanitizePersistedGeneralSettings(value))
+        JSON.stringify(sanitizePersistedGeneralSettings(value)),
+        'useGeneralSetting'
       )
     } catch {
       // Fallback
     }
   },
   removeItem: (name: string) => {
-    localStorage.removeItem(name)
+    safeStorageRemoveItem(localStorage, name, 'useGeneralSetting')
   },
 }
 

@@ -184,19 +184,13 @@ describe('fileMetadata adversarial inputs', () => {
     expect(files[0].id).toBe('urn:uuid:123')
   })
 
-  it('DISCOVERED BUG: file name containing commas is truncated', () => {
-    // This is a known limitation of the comma-based parser
+  it('preserves file names containing commas', () => {
     const injected = injectFilesIntoPrompt('p', [
       { id: '1', name: 'report,final,v2.csv' },
     ])
     const { files } = extractFilesFromPrompt(injected)
-    // The name gets truncated at the first comma because the parser
-    // splits on commas without any escaping
     expect(files).toHaveLength(1)
-    // The name will be truncated to just "report" since " final" becomes
-    // a separate part that doesn't match any key, and "v2.csv" likewise
-    expect(files[0].name).not.toBe('report,final,v2.csv')
-    expect(files[0].name).toBe('report')
+    expect(files[0].name).toBe('report,final,v2.csv')
   })
 
   it('handles unicode in file names', () => {

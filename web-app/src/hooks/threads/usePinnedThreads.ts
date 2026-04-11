@@ -1,4 +1,5 @@
 import { useSyncExternalStore, useCallback, useMemo } from 'react'
+import { safeStorageGetItem, safeStorageSetItem } from '@/lib/storage'
 
 const STORAGE_KEY = 'ax-pinned-threads'
 
@@ -6,7 +7,11 @@ const STORAGE_KEY = 'ax-pinned-threads'
 let listeners: Array<() => void> = []
 let pinnedSnapshot: string[] = (() => {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY)
+    const stored = safeStorageGetItem(
+      localStorage,
+      STORAGE_KEY,
+      'usePinnedThreads'
+    )
     const parsed = stored ? JSON.parse(stored) : []
     return Array.isArray(parsed) && parsed.every((entry) => typeof entry === 'string')
       ? parsed
@@ -35,7 +40,12 @@ function getSnapshot() {
 
 function persist(ids: string[]) {
   pinnedSnapshot = ids
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(ids))
+  safeStorageSetItem(
+    localStorage,
+    STORAGE_KEY,
+    JSON.stringify(ids),
+    'usePinnedThreads'
+  )
   emitChange()
 }
 

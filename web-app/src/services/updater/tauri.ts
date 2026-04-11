@@ -67,6 +67,22 @@ async function getNonceSeed(): Promise<string> {
 }
 
 export class TauriUpdaterService extends DefaultUpdaterService {
+  private cachedInstallableUpdate: Update | null = null
+
+  private async getInstallableUpdate(): Promise<Update> {
+    if (this.cachedInstallableUpdate) {
+      return this.cachedInstallableUpdate
+    }
+
+    const update = await check()
+    if (!update) {
+      throw new Error('No update available')
+    }
+
+    this.cachedInstallableUpdate = update
+    return update
+  }
+
   /**
    * Check for updates using custom signed request for primary endpoint
    * Falls back to standard Tauri updater if custom check fails
@@ -74,6 +90,7 @@ export class TauriUpdaterService extends DefaultUpdaterService {
   async check(): Promise<UpdateInfo | null> {
     try {
       const nonceSeed = await getNonceSeed()
+      let customUpdateInfo: UpdateInfo | null = null
 
       // Try custom updater with request signing first
       try {
@@ -89,7 +106,7 @@ export class TauriUpdaterService extends DefaultUpdaterService {
 
         if (customUpdate) {
           console.log('Update found via custom updater:', customUpdate.version)
-          return {
+          customUpdateInfo = {
             version: customUpdate.version,
             date: customUpdate.pub_date,
             body: customUpdate.notes,
@@ -105,13 +122,39 @@ export class TauriUpdaterService extends DefaultUpdaterService {
 
       // Fallback to standard Tauri updater (uses tauri.conf.json endpoints)
       const update: Update | null = await check()
+      this.cachedInstallableUpdate = update
 
-      if (!update) return null
+      if (!update) return customUpdateInfo
+
+      if (
+        customUpdateInfo &&
+        customUpdateInfo.version !== update.version
+      ) {
+        console.warn(
+          'Custom updater version did not match installable Tauri updater version:',
+          {
+            custom: customUpdateInfo.version,
+            installable: update.version,
+          }
+        )
+      }
+
+      const customMatchesInstallable =
+        customUpdateInfo?.version === update.version
 
       return {
         version: update.version,
-        date: update.date,
-        body: update.body,
+        date:
+          customMatchesInstallable && customUpdateInfo?.date
+            ? customUpdateInfo.date
+            : update.date,
+        body:
+          customMatchesInstallable && customUpdateInfo?.body
+            ? customUpdateInfo.body
+            : update.body,
+        ...(customMatchesInstallable && customUpdateInfo?.signature
+          ? { signature: customUpdateInfo.signature }
+          : {}),
       }
     } catch (error) {
       console.error('Error checking for updates in Tauri:', error)
@@ -121,11 +164,10 @@ export class TauriUpdaterService extends DefaultUpdaterService {
 
   async installAndRestart(): Promise<void> {
     try {
-      const update = await check()
-      if (update) {
-        await update.downloadAndInstall()
-        // Note: Auto-restart happens after installation
-      }
+      const update = await this.getInstallableUpdate()
+      await update.downloadAndInstall()
+      this.cachedInstallableUpdate = null
+      // Note: Auto-restart happens after installation
     } catch (error) {
       console.error('Error installing update in Tauri:', error)
       throw error
@@ -136,10 +178,7 @@ export class TauriUpdaterService extends DefaultUpdaterService {
     progressCallback: (event: UpdateProgressEvent) => void
   ): Promise<void> {
     try {
-      const update = await check()
-      if (!update) {
-        throw new Error('No update available')
-      }
+      const update = await this.getInstallableUpdate()
 
       // Use Tauri's downloadAndInstall with progress callback
       await update.downloadAndInstall((event) => {
@@ -150,6 +189,7 @@ export class TauriUpdaterService extends DefaultUpdaterService {
           console.warn('Error in download progress callback:', callbackError)
         }
       })
+      this.cachedInstallableUpdate = null
     } catch (error) {
       console.error('Error downloading update with progress in Tauri:', error)
       throw error

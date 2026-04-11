@@ -132,11 +132,13 @@ mod windows_impl {
     type AdlAdapterNumberofadaptersGet = unsafe extern "C" fn(*mut c_int) -> c_int;
     type AdlAdapterAdapterinfoGet = unsafe extern "C" fn(*mut AdapterInfo, c_int) -> c_int;
     type AdlAdapterActiveGet = unsafe extern "C" fn(c_int, *mut c_int) -> c_int;
-    type AdlGetDedicatedVramUsage =
-        unsafe extern "C" fn(*mut c_void, c_int, *mut c_int) -> c_int;
+    type AdlGetDedicatedVramUsage = unsafe extern "C" fn(*mut c_void, c_int, *mut c_int) -> c_int;
 
     // === ADL Memory Allocator ===
     unsafe extern "C" fn adl_malloc(i_size: i32) -> *mut c_void {
+        if i_size <= 0 {
+            return ptr::null_mut();
+        }
         libc::malloc(i_size as usize)
     }
 
@@ -184,22 +186,36 @@ mod windows_impl {
                     return Err("Cannot get adapter info".into());
                 }
                 // SAFETY: adl_adapter_adapter_info_get filled the buffer on success
-                let adapter_info: Vec<AdapterInfo> = adapter_info
-                    .into_iter()
-                    .map(|a| a.assume_init())
-                    .collect();
+                let adapter_info: Vec<AdapterInfo> =
+                    adapter_info.into_iter().map(|a| a.assume_init()).collect();
 
                 for adapter in adapter_info.iter() {
                     let mut is_active = 0;
-                    AdlAdapterActiveGet(adapter.iAdapterIndex, &mut is_active);
+                    let active_status = AdlAdapterActiveGet(adapter.iAdapterIndex, &mut is_active);
+                    if active_status != 0 {
+                        log::warn!(
+                            "ADL active-state query failed for adapter {} with code {}",
+                            adapter.iAdapterIndex,
+                            active_status
+                        );
+                        continue;
+                    }
 
                     if is_active != 0 {
                         let mut vram_mb = 0;
-                        let _ = AdlGetDedicatedVramUsage(
+                        let usage_status = AdlGetDedicatedVramUsage(
                             ptr::null_mut(),
                             adapter.iAdapterIndex,
                             &mut vram_mb,
                         );
+                        if usage_status != 0 {
+                            log::warn!(
+                                "ADL VRAM usage query failed for adapter {} with code {}",
+                                adapter.iAdapterIndex,
+                                usage_status
+                            );
+                            continue;
+                        }
                         // NOTE: adapter name might not be unique?
                         let name = CStr::from_ptr(adapter.strAdapterName.as_ptr())
                             .to_string_lossy()

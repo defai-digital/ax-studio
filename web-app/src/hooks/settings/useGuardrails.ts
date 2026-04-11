@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
+import { persist } from 'zustand/middleware'
+import { createSafeJSONStorage } from '@/lib/storage'
 
 export type DataMode = 'local-only' | 'hybrid' | 'cloud'
 
@@ -40,7 +41,7 @@ export const useGuardrails = create<GuardrailsState>()(
     }),
     {
       name: 'ax-guardrails',
-      storage: createJSONStorage(() => localStorage),
+      storage: createSafeJSONStorage(() => localStorage, 'useGuardrails'),
     }
   )
 )

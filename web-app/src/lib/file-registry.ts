@@ -6,8 +6,9 @@
  */
 
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
+import { persist } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
+import { createSafeJSONStorage } from '@/lib/storage'
 
 export type FileRegistryEntry = {
   file_id: string
@@ -85,7 +86,7 @@ export const useFileRegistry = create<FileRegistryState>()(
     }),
     {
       name: localStorageKey.fileRegistryStore,
-      storage: createJSONStorage(() => localStorage),
+      storage: createSafeJSONStorage(() => localStorage, 'useFileRegistry'),
     },
   ),
 )

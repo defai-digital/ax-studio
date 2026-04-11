@@ -9,6 +9,16 @@ import { projectsStorageSchema } from '@/schemas/projects.schema'
 
 export class DefaultProjectsService implements ProjectsService {
   private storageKey = localStorageKey.threadManagement
+  private storageQueue: Promise<unknown> = Promise.resolve()
+
+  private enqueueStorageTask<T>(task: () => T | Promise<T>): Promise<T> {
+    const run = this.storageQueue.then(task, task)
+    this.storageQueue = run.then(
+      () => undefined,
+      () => undefined
+    )
+    return run
+  }
 
   private loadFromStorage(): ThreadFolder[] {
     try {
@@ -39,7 +49,7 @@ export class DefaultProjectsService implements ProjectsService {
   }
 
   async getProjects(): Promise<ThreadFolder[]> {
-    return this.loadFromStorage()
+    return this.enqueueStorageTask(() => this.loadFromStorage())
   }
 
   async addProject(
@@ -48,20 +58,22 @@ export class DefaultProjectsService implements ProjectsService {
     logo?: string,
     projectPrompt?: string | null
   ): Promise<ThreadFolder> {
-    const newProject: ThreadFolder = {
-      id: ulid(),
-      name,
-      updated_at: Date.now(),
-      assistantId,
-      logo,
-      projectPrompt: projectPrompt ?? null,
-    }
+    return this.enqueueStorageTask(() => {
+      const newProject: ThreadFolder = {
+        id: ulid(),
+        name,
+        updated_at: Date.now(),
+        assistantId,
+        logo,
+        projectPrompt: projectPrompt ?? null,
+      }
 
-    const projects = this.loadFromStorage()
-    const updatedProjects = [...projects, newProject]
-    this.saveToStorage(updatedProjects)
+      const projects = this.loadFromStorage()
+      const updatedProjects = [...projects, newProject]
+      this.saveToStorage(updatedProjects)
 
-    return newProject
+      return newProject
+    })
   }
 
   async updateProject(
@@ -71,34 +83,42 @@ export class DefaultProjectsService implements ProjectsService {
     logo?: string,
     projectPrompt?: string | null
   ): Promise<void> {
-    const projects = this.loadFromStorage()
-    const updatedProjects = projects.map((project) =>
-      project.id === id
-        ? {
-            ...project,
-            name,
-            updated_at: Date.now(),
-            assistantId,
-            logo,
-            projectPrompt: projectPrompt ?? null,
-          }
-        : project
-    )
-    this.saveToStorage(updatedProjects)
+    await this.enqueueStorageTask(() => {
+      const projects = this.loadFromStorage()
+      const updatedProjects = projects.map((project) =>
+        project.id === id
+          ? {
+              ...project,
+              name,
+              updated_at: Date.now(),
+              assistantId,
+              logo,
+              projectPrompt: projectPrompt ?? null,
+            }
+          : project
+      )
+      this.saveToStorage(updatedProjects)
+    })
   }
 
   async deleteProject(id: string): Promise<void> {
-    const projects = this.loadFromStorage()
-    const updatedProjects = projects.filter((project) => project.id !== id)
-    this.saveToStorage(updatedProjects)
+    await this.enqueueStorageTask(() => {
+      const projects = this.loadFromStorage()
+      const updatedProjects = projects.filter((project) => project.id !== id)
+      this.saveToStorage(updatedProjects)
+    })
   }
 
   async getProjectById(id: string): Promise<ThreadFolder | undefined> {
-    const projects = this.loadFromStorage()
-    return projects.find((project) => project.id === id)
+    return this.enqueueStorageTask(() => {
+      const projects = this.loadFromStorage()
+      return projects.find((project) => project.id === id)
+    })
   }
 
   async setProjects(projects: ThreadFolder[]): Promise<void> {
-    this.saveToStorage(projects)
+    await this.enqueueStorageTask(() => {
+      this.saveToStorage(projects)
+    })
   }
 }

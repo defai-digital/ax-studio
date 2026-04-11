@@ -3,12 +3,19 @@ import ChatInput from '@/containers/ChatInput'
 import HeaderPage from '@/containers/HeaderPage'
 import { useTools } from '@/hooks/tools/useTools'
 import { cn } from '@/lib/utils'
+import {
+  safeStorageGetItem,
+  safeStorageRemoveItem,
+  safeStorageSetItem,
+} from '@/lib/storage'
 
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import SetupScreen from '@/containers/SetupScreen'
 import { route } from '@/constants/routes'
 import { localStorageKey } from '@/constants/localStorage'
 import { SESSION_STORAGE_KEY } from '@/constants/chat'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { z } from 'zod/v4'
 
 type SearchParams = {
   model?: {
@@ -16,7 +23,15 @@ type SearchParams = {
     provider: string
   }
 }
-import { useCallback, useEffect, useMemo, useState } from 'react'
+
+const homeSearchSchema = z.object({
+  model: z
+    .object({
+      id: z.string(),
+      provider: z.string(),
+    })
+    .optional(),
+})
 import { useThreads } from '@/hooks/threads/useThreads'
 import DropdownModelProvider from '@/containers/DropdownModelProvider'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
@@ -43,16 +58,12 @@ import { useAgentTeamStore } from '@/stores/agent-team-store'
 import { usePrompt } from '@/hooks/ui/usePrompt'
 import { motion } from 'motion/react'
 import { WorkflowSelector } from '@/components/smart-start/WorkflowSelector'
+import { toast } from 'sonner'
 
 export const Route = createFileRoute(route.home)({
   component: Index,
-  validateSearch: (search: Record<string, unknown>): SearchParams => {
-    const result: SearchParams = {
-      model: search.model as SearchParams['model'],
-    }
-
-    return result
-  },
+  validateSearch: (search: Record<string, unknown>): SearchParams =>
+    homeSearchSchema.parse(search),
 })
 
 const capabilityBadges = [
@@ -78,7 +89,12 @@ function Index() {
 
   const [showThreadPromptEditor, setShowThreadPromptEditor] = useState(false)
   const [threadPromptDraft, setThreadPromptDraft] = useState(
-    () => sessionStorage.getItem(SESSION_STORAGE_KEY.NEW_THREAD_PROMPT) || ''
+    () =>
+      safeStorageGetItem(
+        sessionStorage,
+        SESSION_STORAGE_KEY.NEW_THREAD_PROMPT,
+        'routes/index'
+      ) || ''
   )
 
   // Agent Team selection for new threads
@@ -87,7 +103,11 @@ function Index() {
   const loadTeams = useAgentTeamStore((state) => state.loadTeams)
   const [selectedTeamId, setSelectedTeamId] = useState<string | undefined>(
     () =>
-      sessionStorage.getItem(SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID) ||
+      safeStorageGetItem(
+        sessionStorage,
+        SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID,
+        'routes/index'
+      ) ||
       undefined
   )
   const selectedTeam = agentTeams.find((t) => t.id === selectedTeamId)
@@ -108,24 +128,37 @@ function Index() {
 
   const handleSplit = useCallback(
     async (direction: 'left' | 'right') => {
-      const modelConfig = {
-        id: selectedModel?.id ?? activeModel?.id ?? '*',
-        provider: selectedModel?.provider ?? selectedProvider,
+      try {
+        const modelConfig = {
+          id: selectedModel?.id ?? activeModel?.id ?? '*',
+          provider: selectedModel?.provider ?? selectedProvider,
+        }
+        // Create both a main thread and a split thread
+        const [mainThread, splitThread] = await Promise.all([
+          createThread(modelConfig, 'New Thread'),
+          createThread(modelConfig, 'New Thread'),
+        ])
+        // Store split info so $threadId picks it up on mount
+        const stored = safeStorageSetItem(
+          sessionStorage,
+          SESSION_STORAGE_KEY.SPLIT_VIEW_INFO,
+          JSON.stringify({ splitThreadId: splitThread.id, direction }),
+          'routes/index'
+        )
+        if (!stored) {
+          throw new Error('Unable to persist split view state')
+        }
+        navigate({
+          to: '/threads/$threadId',
+          params: { threadId: mainThread.id },
+        })
+      } catch (error) {
+        console.error('Failed to create split view:', error)
+        toast.error('Failed to create split view', {
+          description:
+            error instanceof Error ? error.message : 'Please try again.',
+        })
       }
-      // Create both a main thread and a split thread
-      const [mainThread, splitThread] = await Promise.all([
-        createThread(modelConfig, 'New Thread'),
-        createThread(modelConfig, 'New Thread'),
-      ])
-      // Store split info so $threadId picks it up on mount
-      sessionStorage.setItem(
-        SESSION_STORAGE_KEY.SPLIT_VIEW_INFO,
-        JSON.stringify({ splitThreadId: splitThread.id, direction })
-      )
-      navigate({
-        to: '/threads/$threadId',
-        params: { threadId: mainThread.id },
-      })
     },
     [createThread, selectedModel, activeModel?.id, selectedProvider, navigate]
   )
@@ -133,7 +166,12 @@ function Index() {
   // Track setup completion in React state so the component re-renders when the
   // user completes setup (navigating to the same route would not trigger a re-render).
   const [setupCompleted, setSetupCompleted] = useState(
-    () => localStorage.getItem(localStorageKey.setupCompleted) === 'true'
+    () =>
+      safeStorageGetItem(
+        localStorage,
+        localStorageKey.setupCompleted,
+        'routes/index'
+      ) === 'true'
   )
 
   const hasValidProviders =
@@ -148,21 +186,36 @@ function Index() {
   useEffect(() => {
     const trimmed = threadPromptDraft.trim()
     if (trimmed) {
-      sessionStorage.setItem(SESSION_STORAGE_KEY.NEW_THREAD_PROMPT, trimmed)
+      safeStorageSetItem(
+        sessionStorage,
+        SESSION_STORAGE_KEY.NEW_THREAD_PROMPT,
+        trimmed,
+        'routes/index'
+      )
     } else {
-      sessionStorage.removeItem(SESSION_STORAGE_KEY.NEW_THREAD_PROMPT)
+      safeStorageRemoveItem(
+        sessionStorage,
+        SESSION_STORAGE_KEY.NEW_THREAD_PROMPT,
+        'routes/index'
+      )
     }
   }, [threadPromptDraft])
 
   // Persist selected team ID to sessionStorage so the new thread picks it up
   useEffect(() => {
     if (selectedTeamId) {
-      sessionStorage.setItem(
+      safeStorageSetItem(
+        sessionStorage,
         SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID,
-        selectedTeamId
+        selectedTeamId,
+        'routes/index'
       )
     } else {
-      sessionStorage.removeItem(SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID)
+      safeStorageRemoveItem(
+        sessionStorage,
+        SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID,
+        'routes/index'
+      )
     }
   }, [selectedTeamId])
 

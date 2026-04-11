@@ -8,6 +8,31 @@ import type { UIMessage } from '@ai-sdk/react'
 
 type ThreadContent = NonNullable<ThreadMessage['content']>[number]
 
+const getImageMediaType = (url?: string): string => {
+  if (!url) return 'image/jpeg'
+
+  const dataUrlMatch = url.match(/^data:(image\/[^;]+);/i)
+  if (dataUrlMatch?.[1]) {
+    return dataUrlMatch[1]
+  }
+
+  try {
+    const normalized = url.toLowerCase()
+    if (normalized.endsWith('.png')) return 'image/png'
+    if (normalized.endsWith('.webp')) return 'image/webp'
+    if (normalized.endsWith('.gif')) return 'image/gif'
+    if (normalized.endsWith('.svg')) return 'image/svg+xml'
+    if (normalized.endsWith('.avif')) return 'image/avif'
+    if (normalized.endsWith('.jpg') || normalized.endsWith('.jpeg')) {
+      return 'image/jpeg'
+    }
+  } catch {
+    return 'image/jpeg'
+  }
+
+  return 'image/jpeg'
+}
+
 /**
  * Convert AI SDK UIMessage to Ax-Studio's ThreadMessage format.
  * This allows using chatMessages from useChat with ThreadContent component.
@@ -337,7 +362,8 @@ export class CompletionMessagesBuilder {
     this.messages.push({
       role: 'tool',
       // for role 'tool',  need to use 'as ChatCompletionMessageParam'
-      content: content as any,
+      content:
+        typeof content === 'string' ? content : JSON.stringify(content ?? []),
       tool_call_id: toolCallId,
     })
   }
@@ -498,7 +524,7 @@ export function convertThreadMessageToUIMessage(
     } else if (content.type === 'image_url' && content.image_url?.url) {
       parts.push({
         type: 'file',
-        mediaType: 'image/jpeg',
+        mediaType: getImageMediaType(content.image_url.url),
         url: content.image_url.url,
       })
     } else if (content.type === 'tool_call') {

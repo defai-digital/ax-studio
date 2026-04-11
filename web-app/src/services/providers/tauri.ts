@@ -148,6 +148,11 @@ export class TauriProvidersService extends DefaultProvidersService {
       throw new Error('Provider must have base_url configured')
     }
 
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => {
+      controller.abort()
+    }, 10000)
+
     try {
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -178,6 +183,7 @@ export class TauriProvidersService extends DefaultProvidersService {
       const response = await fetchTauri(`${provider.base_url}/models`, {
         method: 'GET',
         headers,
+        signal: controller.signal,
       })
 
       if (!response.ok) {
@@ -226,6 +232,12 @@ export class TauriProvidersService extends DefaultProvidersService {
     } catch (error) {
       console.error('Error fetching models from provider:', error)
 
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(
+          `Timed out while fetching models from ${provider.provider}.`
+        )
+      }
+
       // Preserve structured error messages thrown above
       const structuredErrorPrefixes = [
         'Authentication failed',
@@ -254,6 +266,8 @@ export class TauriProvidersService extends DefaultProvidersService {
       throw new Error(
         `Unexpected error while fetching models from ${provider.provider}: ${error instanceof Error ? error.message : 'Unknown error'}`
       )
+    } finally {
+      clearTimeout(timeoutId)
     }
   }
 

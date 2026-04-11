@@ -1,8 +1,9 @@
 import { create } from 'zustand'
-import { createJSONStorage, persist } from 'zustand/middleware'
+import { persist } from 'zustand/middleware'
 import { getServiceHub } from '@/hooks/useServiceHub'
 import type { ThemeMode } from '@/services/theme/types'
 import { localStorageKey } from '@/constants/localStorage'
+import { createSafeJSONStorage } from '@/lib/storage'
 
 // Function to check if OS prefers dark mode
 export const checkOSDarkMode = (): boolean => {
@@ -74,7 +75,7 @@ export const useTheme = create<ThemeState>()(
     },
     {
       name: localStorageKey.theme,
-      storage: createJSONStorage(() => localStorage),
+      storage: createSafeJSONStorage(() => localStorage, 'useTheme'),
     }
   )
 )

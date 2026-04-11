@@ -49,7 +49,11 @@ export class EventEmitter {
     const handlers = this.handlers.get(eventName)
 
     handlers?.forEach((handler) => {
-      handler(args)
+      try {
+        handler(args)
+      } catch (error) {
+        console.error(`Event handler for "${eventName}" failed:`, error)
+      }
     })
   }
 }

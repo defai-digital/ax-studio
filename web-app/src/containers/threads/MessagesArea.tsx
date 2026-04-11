@@ -12,6 +12,7 @@ import { PromptProgress } from '@/components/PromptProgress'
 import { Button } from '@/components/ui/button'
 import { IconAlertCircle } from '@tabler/icons-react'
 import { OUT_OF_CONTEXT_SIZE } from '@/lib/utils/error'
+import { safeStorageGetItem, safeStorageSetItem } from '@/lib/storage'
 import { motion, AnimatePresence } from 'motion/react'
 import { GitBranch, X } from 'lucide-react'
 
@@ -49,16 +50,18 @@ export function MessagesArea({
   const forkedFrom = metadata?.forkedFrom || metadata?.parentThreadId
   const bannerKey = `branch-banner-dismissed-${threadId}`
   const [bannerDismissed, setBannerDismissed] = useState(() =>
-    sessionStorage.getItem(bannerKey) === 'true'
+    safeStorageGetItem(sessionStorage, bannerKey, 'MessagesArea') === 'true'
   )
 
   // Reset dismissal when thread changes
   useEffect(() => {
-    setBannerDismissed(sessionStorage.getItem(bannerKey) === 'true')
+    setBannerDismissed(
+      safeStorageGetItem(sessionStorage, bannerKey, 'MessagesArea') === 'true'
+    )
   }, [bannerKey])
 
   const dismissBanner = () => {
-    sessionStorage.setItem(bannerKey, 'true')
+    safeStorageSetItem(sessionStorage, bannerKey, 'true', 'MessagesArea')
     setBannerDismissed(true)
   }
 

@@ -10,12 +10,9 @@ describe('deepLinkPayloadSchema', () => {
     }
   })
 
-  it('should validate an empty string', () => {
+  it('should reject an empty string', () => {
     const result = deepLinkPayloadSchema.safeParse('')
-    expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data).toBe('')
-    }
+    expect(result.success).toBe(false)
   })
 
   it('should fail when given a number', () => {
@@ -43,12 +40,12 @@ describe('deepLinkPayloadSchema', () => {
     expect(result.success).toBe(false)
   })
 
-  it('should validate a long string', () => {
-    const longStr = 'a'.repeat(10000)
+  it('should validate a long URL string', () => {
+    const longStr = `ax-studio://open/${'a'.repeat(10000)}`
     const result = deepLinkPayloadSchema.safeParse(longStr)
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data).toHaveLength(10000)
+      expect(result.data).toHaveLength(longStr.length)
     }
   })
 })

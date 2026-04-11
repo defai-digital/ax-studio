@@ -171,7 +171,12 @@ function LocalAPIServerContent() {
         })
         .then(() => {
           // Then start the server
-          return window.core?.api?.startServer({
+          const api = window.core?.api
+          if (!api) {
+            throw new Error('Core API not available')
+          }
+
+          return api.startServer({
             host: serverHost,
             port: serverPort,
             prefix: apiPrefix,
@@ -226,8 +231,17 @@ function LocalAPIServerContent() {
         })
     } else {
       setServerStatus('pending')
-      window.core?.api
-        ?.stopServer()
+      const api = window.core?.api
+      if (!api) {
+        setServerStatus('stopped')
+        toast.error('Failed to stop server', {
+          description: 'Core API not available',
+        })
+        return
+      }
+
+      api
+        .stopServer()
         .then(() => {
           setServerStatus('stopped')
         })
