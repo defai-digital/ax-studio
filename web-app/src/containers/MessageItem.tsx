@@ -1,8 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { memo, useState, useCallback } from 'react'
+import { memo, useState, useCallback, useEffect } from 'react'
 import type { UIMessage, ChatStatus } from 'ai'
 import { RenderMarkdown } from './RenderMarkdown'
 import { cn } from '@/lib/utils'
+import { SourcesFooter } from '@/components/citations/SourcesFooter'
+import { useCitations } from '@/hooks/citations/use-citations'
+import type { CitationData } from '@/types/citation-types'
 import { twMerge } from 'tailwind-merge'
 import {
   Reasoning,
@@ -78,6 +81,15 @@ export const MessageItem = memo(
 
     const meta = message.metadata as Record<string, unknown> | undefined
     const currentRating = meta?.rating as 'up' | 'down' | undefined
+
+    // Hydrate citation data from message metadata into the citation store
+    const hydrateCitations = useCitations((s) => s.hydrate)
+    useEffect(() => {
+      if (message.role === 'assistant') {
+        hydrateCitations(message.id, meta)
+      }
+    }, [message.id, message.role, meta, hydrateCitations])
+    const citationData = useCitations((s) => s.getCitations(message.id))
 
     const handleRating = useCallback(
       (rating: 'up' | 'down') => {
@@ -520,6 +532,11 @@ export const MessageItem = memo(
                   return renderToolPart(part, i)
               }
             })}
+
+            {/* Sources footer — shown when citation data exists */}
+            {message.role === 'assistant' && citationData && (
+              <SourcesFooter citationData={citationData} />
+            )}
 
             {/* Action Bar */}
             <div className="flex items-center justify-between mt-2 opacity-0 group-hover/message:opacity-100 transition-opacity">

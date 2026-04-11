@@ -3,6 +3,8 @@ import { generateText, streamText } from 'ai'
 import { useResearchPanel, type ResearchSource, type ResearchStep } from '@/hooks/research/useResearchPanel'
 import { useMessages } from '@/hooks/chat/useMessages'
 import { useChatSessions } from '@/stores/chat-session-store'
+import { type CitationSource, type CitationData, computeConfidence } from '@/types/citation-types'
+import { useActivityFeed } from '@/hooks/activity/use-activity-feed'
 import { convertThreadMessageToUIMessage } from '@/lib/messages'
 import type { ThreadMessage } from '@ax-studio/core'
 import {
@@ -64,6 +66,7 @@ function saveMessageToChat(threadId: string, msg: ThreadMessage) {
 export function useResearch(threadId: string) {
   const updateResearch = useResearchPanel((s) => s.updateResearch)
   const openResearch = useResearchPanel((s) => s.openResearch)
+  const addActivityEvent = useActivityFeed((s) => s.addEvent)
 
   const addStep = useCallback(
     (step: Omit<ResearchStep, 'timestamp'>) => {
@@ -348,8 +351,27 @@ export function useResearch(threadId: string) {
         const sourceFooter = allSources.length > 0
           ? '\n\n---\n**Sources:** ' + allSources.map((s, i) => `[[${i + 1}]](${s.url})`).join(' ')
           : ''
+
+        // Build citation data for the "Show Your Sources" feature
+        const citationSources: CitationSource[] = allSources.map((s, i) => ({
+          id: `src-${i + 1}`,
+          type: 'web' as const,
+          url: s.url,
+          title: s.title,
+          snippet: s.snippet,
+          score: s.score,
+          retrievedAt: Date.now(),
+        }))
+        const citationData: CitationData = {
+          sources: citationSources,
+          confidence: computeConfidence(citationSources),
+        }
+
         saveMessageToChat(threadId, {
-          ...newAssistantThreadContent(threadId, report + sourceFooter, { researchReport: true }),
+          ...newAssistantThreadContent(threadId, report + sourceFooter, {
+            researchReport: true,
+            citationData,
+          }),
           created_at: Date.now(),
           completed_at: Date.now(),
         })
@@ -360,6 +382,14 @@ export function useResearch(threadId: string) {
           sources: allSources,
           steps: [...prev.steps, { type: 'done', timestamp: Date.now() }],
         }))
+
+        // Log to Activity Feed
+        addActivityEvent({
+          type: 'research',
+          title: `Research completed: "${query}"`,
+          detail: `Found ${allSources.length} sources`,
+          threadId,
+        })
       } catch (err) {
         const isAbort = signal.aborted || (err instanceof Error && err.name === 'AbortError')
         const msg = getErrorMessage(err)
@@ -373,7 +403,7 @@ export function useResearch(threadId: string) {
         activeAbortControllers.delete(threadId)
       }
     },
-    [threadId, openResearch, updateResearch, addStep]
+    [threadId, openResearch, updateResearch, addStep, addActivityEvent]
   )
 
   const cancelResearch = useCallback(() => {

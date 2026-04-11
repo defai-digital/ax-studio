@@ -1,4 +1,4 @@
-import { Plus, Search } from 'lucide-react'
+import { Plus, Search, Activity } from 'lucide-react'
 import { route } from '@/constants/routes'
 
 import {
@@ -103,6 +103,20 @@ export function NavMain() {
               <Link to={route.hub.index}>
                 <BlocksIcon ref={hubIconRef} className="text-foreground/70" size={16} />
                 <span className="group-data-[collapsible=icon]:hidden">{t('common:hub')}</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </div>
+
+      {/* Activity Feed link */}
+      <div className="pb-2 group-data-[collapsible=icon]:pb-0 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Activity">
+              <Link to={route.activity}>
+                <Activity className="size-4 text-foreground/70" />
+                <span className="group-data-[collapsible=icon]:hidden">Activity</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

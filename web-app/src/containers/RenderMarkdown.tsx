@@ -1,4 +1,4 @@
-import { type ReactNode, memo, useMemo, useState, useEffect, useRef } from 'react'
+import { type ReactNode, type ReactElement, memo, useMemo, useState, useEffect, useRef, useCallback } from 'react'
 import { AXMarkdown, axDefaultRehypePlugins } from '@/lib/markdown/renderer'
 import { cn, disableIndentedCodeBlockPlugin } from '@/lib/utils'
 import { cjk } from '@streamdown/cjk'
@@ -6,6 +6,8 @@ import { code } from '@streamdown/code'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
+import { CitationChip } from '@/components/citations/CitationChip'
+import { useCitations } from '@/hooks/citations/use-citations'
 import 'katex/dist/katex.min.css'
 import mermaidLib from 'mermaid'
 import DOMPurify from 'dompurify'
@@ -615,11 +617,34 @@ function RenderMarkdownComponent({
     [isUser, isStreaming, threadId, messageId]
   )
 
+  // Citation-aware anchor override: renders [N] links as CitationChip when sources exist
+  const citationData = useCitations((s) => messageId ? s.getCitations(messageId) : undefined)
+
+  const anchorOverride = useCallback(
+    ({ children, href, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { children?: ReactNode }) => {
+      // Detect citation pattern: text content is "[N]" where N is a number
+      const text = typeof children === 'string' ? children : ''
+      const match = text.match(/^\[(\d+)\]$/)
+
+      if (match && citationData?.sources) {
+        const index = parseInt(match[1], 10) - 1
+        const source = citationData.sources[index]
+        if (source) {
+          return <CitationChip number={index + 1} source={source} />
+        }
+      }
+
+      // Default anchor rendering for non-citation links
+      return <a href={href} target="_blank" rel="noopener noreferrer" {...props}>{children}</a>
+    },
+    [citationData]
+  )
+
   // Merge our pre override with any caller-supplied components.
   // Caller components take precedence (spread after).
   const mergedComponents = useMemo(
-    () => ({ pre: preOverride, ...components }),
-    [preOverride, components]
+    () => ({ pre: preOverride, a: anchorOverride, ...components }),
+    [preOverride, anchorOverride, components]
   )
 
   // Render the markdown content

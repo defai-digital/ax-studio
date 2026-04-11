@@ -22,6 +22,7 @@ import {
   CODE_EXECUTION_INSTRUCTION,
   ARTIFACT_FORMAT_INSTRUCTION,
   LOCAL_KNOWLEDGE_INSTRUCTION,
+  CITATION_FORMAT_INSTRUCTION,
 } from '@/lib/system-prompt'
 import type { UIMessage } from '@ai-sdk/react'
 import type { ThreadMessage } from '@ax-studio/core'
@@ -151,7 +152,8 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
       DIAGRAM_FORMAT_INSTRUCTION +
       CODE_EXECUTION_INSTRUCTION +
       ARTIFACT_FORMAT_INSTRUCTION +
-      (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : ''),
+      (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : '') +
+      (localKnowledgeActive ? CITATION_FORMAT_INSTRUCTION : ''),
     modelOverrideId: optimizedModelConfig.modelId,
     activeTeamId,
     onCostApproval,

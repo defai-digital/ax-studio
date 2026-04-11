@@ -22,6 +22,7 @@ import {
   Users,
   Link as LinkIcon,
   Route,
+  ShieldCheck,
 } from 'lucide-react'
 
 type SettingsMenuItem = {
@@ -57,6 +58,13 @@ const SettingsMenu = () => {
       route: route.settings.privacy,
       isEnabled: true,
       icon: <Shield className="size-3.5" />,
+      group: 'App',
+    },
+    {
+      title: 'Guardrails',
+      route: route.settings.guardrails,
+      isEnabled: true,
+      icon: <ShieldCheck className="size-3.5" />,
       group: 'App',
     },
     {

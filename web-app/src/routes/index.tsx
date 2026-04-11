@@ -49,6 +49,7 @@ import {
 import { useAgentTeamStore } from '@/stores/agent-team-store'
 import { usePrompt } from '@/hooks/ui/usePrompt'
 import { motion } from 'motion/react'
+import { WorkflowSelector } from '@/components/smart-start/WorkflowSelector'
 
 export const Route = createFileRoute(route.home)({
   component: Index,
@@ -398,58 +399,23 @@ function Index() {
               })}
             </motion.div>
 
-            {/* Suggested prompts grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {suggestedPrompts.map((item, i) => {
-                const Icon = item.icon
-                return (
-                  <motion.button
-                    key={item.label}
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 + i * 0.04, duration: 0.35 }}
-                    onClick={() => {
-                      // Write through the shared Zustand prompt store so
-                      // ChatInput re-renders normally. The previous
-                      // implementation bypassed React by calling the
-                      // native textarea setter + synthetic input event,
-                      // which left the store state stale and let any
-                      // subsequent re-render wipe the prompt.
-                      setGlobalPrompt(item.prompt)
-                      const input =
-                        document.querySelector<HTMLTextAreaElement>(
-                          '[data-chat-input]'
-                        )
-                      input?.focus()
-                    }}
-                    className="group text-left rounded-xl border bg-card/50 p-3.5 hover:bg-card hover:border-border/80 hover:shadow-sm transition-all cursor-pointer"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="shrink-0 mt-0.5">
-                        <Icon className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium mb-1 group-hover:text-foreground transition-colors">
-                          {item.label}
-                        </div>
-                        <div className="text-xs text-muted-foreground/70 line-clamp-2 mb-2">
-                          {item.prompt}
-                        </div>
-                        <span
-                          className={cn(
-                            'inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border font-medium',
-                            tagColorMap[item.color] ??
-                              'bg-muted text-muted-foreground'
-                          )}
-                        >
-                          {item.tag}
-                        </span>
-                      </div>
-                    </div>
-                  </motion.button>
-                )
-              })}
-            </div>
+            {/* Smart Start workflow selector */}
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.35 }}
+            >
+              <WorkflowSelector
+                onPromptReady={(prompt) => {
+                  setGlobalPrompt(prompt)
+                  const input =
+                    document.querySelector<HTMLTextAreaElement>(
+                      '[data-chat-input]'
+                    )
+                  input?.focus()
+                }}
+              />
+            </motion.div>
           </div>
         </div>
         {/* ChatInput pinned at bottom */}
