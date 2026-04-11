@@ -187,27 +187,28 @@ export class ExtensionManager {
     
     // Import class for Tauri extensions
     const extensionUrl = extension.url
-    await import(/* @vite-ignore */ getServiceHub().core().convertFileSrc(extensionUrl)).then(
-      (extensionClass) => {
-        // Register class if it has a default export
-        if (
-          typeof extensionClass.default === 'function' &&
-          extensionClass.default.prototype
-        ) {
-          this.register(
+    try {
+      const extensionClass = await import(/* @vite-ignore */ getServiceHub().core().convertFileSrc(extensionUrl))
+      // Register class if it has a default export
+      if (
+        typeof extensionClass.default === 'function' &&
+        extensionClass.default.prototype
+      ) {
+        this.register(
+          extension.name,
+          new extensionClass.default(
+            extension.url,
             extension.name,
-            new extensionClass.default(
-              extension.url,
-              extension.name,
-              extension.productName,
-              extension.active,
-              extension.description,
-              extension.version
-            )
+            extension.productName,
+            extension.active,
+            extension.description,
+            extension.version
           )
-        }
+        )
       }
-    )
+    } catch (error) {
+      console.error(`Failed to import extension "${extension.name}":`, error)
+    }
   }
 
   /**

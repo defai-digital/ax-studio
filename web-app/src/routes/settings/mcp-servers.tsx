@@ -327,7 +327,7 @@ function MCPServersDesktop() {
                 ? t('mcp-servers:serverStatusActive', { serverKey })
                 : t('mcp-servers:serverStatusInactive', { serverKey })
             )
-            serviceHub.mcp().getConnectedServers().then(setConnectedServers)
+            serviceHub.mcp().getConnectedServers().then(setConnectedServers).catch(console.error).catch(console.error)
           })
           .catch((error) => {
             editServer(serverKey, {
@@ -363,7 +363,7 @@ function MCPServersDesktop() {
           .mcp()
           .deactivateMCPServer(serverKey)
           .finally(() => {
-            serviceHub.mcp().getConnectedServers().then(setConnectedServers)
+            serviceHub.mcp().getConnectedServers().then(setConnectedServers).catch(console.error)
             setLoadingServers((prev) => ({ ...prev, [serverKey]: false }))
           })
       }
@@ -371,12 +371,12 @@ function MCPServersDesktop() {
   }
 
   useEffect(() => {
-    serviceHub.mcp().getConnectedServers().then(setConnectedServers)
+    serviceHub.mcp().getConnectedServers().then(setConnectedServers).catch(console.error)
 
     let unlisten: (() => void) | undefined
     const setupListener = async () => {
       unlisten = await listen(SystemEvent.MCP_UPDATE, () => {
-        serviceHub.mcp().getConnectedServers().then(setConnectedServers)
+        serviceHub.mcp().getConnectedServers().then(setConnectedServers).catch(console.error)
       })
     }
     setupListener()

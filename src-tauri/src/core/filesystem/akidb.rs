@@ -513,6 +513,7 @@ pub async fn akidb_sync_now<R: Runtime>(
         .arg("--once")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        .kill_on_drop(true)
         .spawn()
         .map_err(|e| format!("Failed to spawn daemon: {e}"))?;
 

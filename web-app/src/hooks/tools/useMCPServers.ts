@@ -155,11 +155,16 @@ export const useMCPServers = create<MCPServerStoreState>()((set, get) => ({
   },
   syncServersAndRestart: async () => {
     const { mcpServers, settings } = get()
-    await getServiceHub().mcp().updateMCPConfig(
-      JSON.stringify({
-        mcpServers,
-        mcpSettings: settings,
-      })
-    ).then(() => getServiceHub().mcp().restartMCPServers())
+    try {
+      await getServiceHub().mcp().updateMCPConfig(
+        JSON.stringify({
+          mcpServers,
+          mcpSettings: settings,
+        })
+      )
+      await getServiceHub().mcp().restartMCPServers()
+    } catch (error) {
+      console.error('Failed to sync and restart MCP servers:', error)
+    }
   },
 }))

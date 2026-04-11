@@ -189,8 +189,8 @@ pub async fn load_llama_model<R: Runtime>(
     // Spawn the child process
     let mut child = command.spawn().map_err(ServerError::Io)?;
 
-    let stderr = child.stderr.take().expect("stderr was piped");
-    let stdout = child.stdout.take().expect("stdout was piped");
+    let stderr = child.stderr.take().ok_or_else(|| ServerError::InvalidArgument("stderr pipe not available".into()))?;
+    let stdout = child.stdout.take().ok_or_else(|| ServerError::InvalidArgument("stdout pipe not available".into()))?;
 
     // Create channels for communication between tasks
     let (ready_tx, mut ready_rx) = mpsc::channel::<bool>(1);
@@ -527,8 +527,8 @@ pub async fn start_ax_serving<R: Runtime>(
 
     let mut child = command.spawn().map_err(ServerError::Io)?;
 
-    let stderr = child.stderr.take().expect("stderr was piped");
-    let stdout = child.stdout.take().expect("stdout was piped");
+    let stderr = child.stderr.take().ok_or_else(|| ServerError::InvalidArgument("stderr pipe not available".into()))?;
+    let stdout = child.stdout.take().ok_or_else(|| ServerError::InvalidArgument("stdout pipe not available".into()))?;
 
     let (ready_tx, mut ready_rx) = mpsc::channel::<bool>(1);
 
