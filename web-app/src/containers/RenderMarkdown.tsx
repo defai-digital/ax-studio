@@ -697,5 +697,10 @@ export const RenderMarkdown = memo(
   RenderMarkdownComponent,
   (prevProps, nextProps) =>
     prevProps.content === nextProps.content &&
-    prevProps.isStreaming === nextProps.isStreaming
+    prevProps.isStreaming === nextProps.isStreaming &&
+    prevProps.messageId === nextProps.messageId &&
+    prevProps.threadId === nextProps.threadId &&
+    prevProps.isUser === nextProps.isUser &&
+    prevProps.className === nextProps.className &&
+    prevProps.components === nextProps.components
 )
