@@ -42,7 +42,7 @@ export const useMessages = create<MessageState>()((set, get) => ({
       },
     }))
 
-    // Persist to storage asynchronously
+    // Persist to storage asynchronously — rollback on failure
     getServiceHub().messages().createMessage(newMessage).then((createdMessage) => {
       set((state) => ({
         messages: {
@@ -55,12 +55,24 @@ export const useMessages = create<MessageState>()((set, get) => ({
       }))
     }).catch((error) => {
       console.error('Failed to persist message:', error)
+      // Rollback: remove the optimistically added message
+      set((state) => ({
+        messages: {
+          ...state.messages,
+          [message.thread_id]: (state.messages[message.thread_id] || []).filter(
+            (m) => m.id !== newMessage.id
+          ),
+        },
+      }))
     })
   },
   updateMessage: (message) => {
     const updatedMessage = {
       ...message,
     }
+
+    // Snapshot for rollback
+    const previousMessages = get().messages[message.thread_id]
 
     // Optimistically update state immediately for instant UI feedback
     set((state) => ({
@@ -72,10 +84,14 @@ export const useMessages = create<MessageState>()((set, get) => ({
       },
     }))
 
-    // Persist to storage asynchronously using modifyMessage instead of createMessage
-    // to prevent duplicates when updating existing messages
+    // Persist to storage asynchronously — rollback on failure
     getServiceHub().messages().modifyMessage(updatedMessage).catch((error) => {
       console.error('Failed to persist message update:', error)
+      if (previousMessages) {
+        set((state) => ({
+          messages: { ...state.messages, [message.thread_id]: previousMessages },
+        }))
+      }
     })
   },
   deleteMessage: (threadId, messageId) => {

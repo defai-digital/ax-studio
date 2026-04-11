@@ -54,7 +54,7 @@ export class DefaultThreadsService implements ThreadsService {
         })
         ?.catch((e) => {
           console.error('Error fetching threads:', e)
-          return []
+          return [] // Fallback: empty thread list allows app to load
         }) ?? []
     )
   }

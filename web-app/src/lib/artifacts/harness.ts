@@ -510,7 +510,7 @@ function buildChartJsHarnessInline(source: string, chartJs: string): string {
     try {
       var c0 = JSON.parse(source);
       if (isValidConfig(c0)) return c0;
-    } catch(e) {}
+    } catch(e) { console.warn('[Chart] JSON.parse failed:', e.message); }
 
     // Strategy 2: Fall back to a scoped Function evaluation for configs
     // that contain JS-only features (comments, function callbacks, trailing
@@ -519,7 +519,7 @@ function buildChartJsHarnessInline(source: string, chartJs: string): string {
     try {
       var c1 = (new Function('return (' + source + ')'))();
       if (isValidConfig(c1)) return c1;
-    } catch(e) {}
+    } catch(e) { console.warn('[Chart] Function eval failed:', e.message); }
 
     // Strategy 3: Strip imports/exports/assignments, then try Function again
     var cleaned = source
@@ -535,7 +535,7 @@ function buildChartJsHarnessInline(source: string, chartJs: string): string {
       try {
         var c2 = (new Function('return (' + cleaned + ')'))();
         if (isValidConfig(c2)) return c2;
-      } catch(e) {}
+      } catch(e) { console.warn('[Chart] Cleaned eval failed:', e.message); }
     }
 
     return null;

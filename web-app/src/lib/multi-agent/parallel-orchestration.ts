@@ -66,11 +66,11 @@ export function buildParallelOrchestration(
         agents.map(async (agent, index) => {
           // Staggered start to avoid rate limit bursts
           if (staggerMs > 0 && index > 0) {
-            if (abortSignal?.aborted) throw abortSignal.reason
+            if (abortSignal?.aborted) throw abortSignal.reason ?? new DOMException('Aborted', 'AbortError')
             await new Promise<void>((resolve, reject) => {
               const onAbort = () => {
                 clearTimeout(timer)
-                reject(abortSignal!.reason)
+                reject(abortSignal?.reason ?? new DOMException('Aborted', 'AbortError'))
               }
               const timer = setTimeout(() => {
                 abortSignal?.removeEventListener('abort', onAbort)

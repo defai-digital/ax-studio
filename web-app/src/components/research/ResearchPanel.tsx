@@ -63,7 +63,7 @@ export function ResearchPanel({ threadId, onClose }: ResearchPanelProps) {
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(entry!.reportMarkdown)
+      await navigator.clipboard.writeText(entry?.reportMarkdown ?? '')
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     } catch {

@@ -80,32 +80,37 @@ const getInitialAssistantState = () => {
 export const useAssistant = create<AssistantState>((set, get) => ({
   ...getInitialAssistantState(),
   addAssistant: (assistant) => {
-    set({ assistants: [...get().assistants, assistant] })
+    const previousAssistants = get().assistants
+    set({ assistants: [...previousAssistants, assistant] })
     getServiceHub()
       .assistants()
       .createAssistant(assistant as unknown as CoreAssistant)
       .catch((error) => {
         console.error('Failed to create assistant:', error)
+        // Rollback
+        set({ assistants: previousAssistants })
       })
   },
   updateAssistant: (assistant) => {
     const state = get()
+    const previousAssistants = state.assistants
+    const previousCurrentAssistant = state.currentAssistant
     set({
       assistants: state.assistants.map((a) =>
         a.id === assistant.id ? assistant : a
       ),
-      // Update currentAssistant if it's the same assistant being updated
       currentAssistant:
         state.currentAssistant?.id === assistant.id
           ? assistant
           : state.currentAssistant,
     })
-    // Create assistant already cover update logic
     getServiceHub()
       .assistants()
       .createAssistant(assistant as unknown as CoreAssistant)
       .catch((error) => {
         console.error('Failed to update assistant:', error)
+        // Rollback
+        set({ assistants: previousAssistants, currentAssistant: previousCurrentAssistant })
       })
   },
   deleteAssistant: (id) => {

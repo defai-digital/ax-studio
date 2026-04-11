@@ -95,7 +95,12 @@ export async function bootstrapProviders(input: BootstrapProvidersInput): Promis
     serviceHub.deeplink().getCurrent().then(onDeepLink).catch((error) => {
       console.error('Failed to get current deep link:', error)
     })
-    serviceHub.deeplink().onOpenUrl(onDeepLink)
+    let unsubscribeOnOpenUrl: (() => void) | undefined
+    serviceHub.deeplink().onOpenUrl(onDeepLink).then((unsub) => {
+      unsubscribeOnOpenUrl = unsub
+    }).catch((error) => {
+      console.error('Failed to register deep link listener:', error)
+    })
 
     serviceHub
       .events()
@@ -111,7 +116,11 @@ export async function bootstrapProviders(input: BootstrapProvidersInput): Promis
         unsubscribeDeepLink = unsub
       })
 
-    return { result: ok(), unsubscribeDeepLink }
+    const unsubscribeAll = () => {
+      unsubscribeDeepLink()
+      unsubscribeOnOpenUrl?.()
+    }
+    return { result: ok(), unsubscribeDeepLink: unsubscribeAll }
   } catch (error) {
     console.error('bootstrapProviders failed:', error)
     return { result: fail(error), unsubscribeDeepLink }

@@ -138,6 +138,13 @@ export const CodeBlock = ({
       })
       .catch((error) => {
         console.error("[CodeBlock] Failed to highlight code:", error);
+        // Fallback: show raw code when highlighting fails
+        if (!cancelledRef.current) {
+          const escaped = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          const fallback = `<pre><code>${escaped}</code></pre>`;
+          setHtml(fallback);
+          setDarkHtml(fallback);
+        }
       });
 
     return () => {
