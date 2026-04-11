@@ -1,6 +1,40 @@
 # Release Checklist (Historical)
 
-**Note:** This document contains version-specific checks from v0.6.x–v0.7.x (current version ~1.2.9). Much of the content is deprecated. Use for reference only or update with current test scenarios.
+**Note:** This document contains version-specific checks from v0.6.x–v0.7.x (current version ~1.2.10). Much of the content is deprecated. Use for reference only or update with current test scenarios.
+
+## v2.5 Trusted AI Workspace Features (added in v1.2.10+)
+
+### Show Your Sources
+- [ ] Start a research query and verify inline `[N]` citation chips appear in the response
+- [ ] Hover a citation chip and confirm source title, snippet, and favicon display
+- [ ] Verify the SourcesFooter appears below assistant messages with citation data
+- [ ] Confirm the confidence badge (strong/moderate/uncertain) shows correctly
+- [ ] Verify citations render correctly when local knowledge base is active
+
+### Change Review
+- [ ] Import the `diff` package is available and `computeDiff` produces correct word-level diffs
+- [ ] Verify `ChangeReviewCard` displays additions (green) and removals (red) correctly
+- [ ] Confirm Accept/Reject buttons update the version state
+
+### Smart Start
+- [ ] Home page shows 6 workflow cards (Research, Write, Analyze, Compare, Extract, Translate)
+- [ ] Click a workflow card and verify the guided form appears with correct fields
+- [ ] Fill fields and click Start — verify the composed prompt appears in ChatInput
+- [ ] Verify free-form typing still works (escape hatch)
+- [ ] Verify prompt improvement hint appears after typing >30 chars and pausing 2s
+
+### Activity Feed
+- [ ] Navigate to Activity page from sidebar
+- [ ] Complete a research query and verify it appears in the activity timeline
+- [ ] Verify date grouping (Today, Yesterday, This Week, Earlier)
+- [ ] Click an event and verify navigation to the correct thread
+
+### Workspace Guardrails
+- [ ] Navigate to Settings > Guardrails
+- [ ] Toggle data mode between Local only / Hybrid / Cloud
+- [ ] Toggle content policy switches (cite sources, flag confidence, require approval)
+- [ ] Verify the usage dashboard shows current model and data mode
+- [ ] Verify the citation instruction is appended when "Always cite sources" is enabled
 
 ## I. Before release 
 

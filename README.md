@@ -5,9 +5,12 @@
 AX Studio is a native desktop execution environment for general-purpose AI work. It combines provider abstraction, local inference, MCP integrations, artifacts rendering, agent teams, research workflows, and persistent conversation state into one cross-platform app that runs on macOS, Windows, and Linux.
 
 - **Unified workspace** across cloud providers, self-hosted backends, and OpenAI-compatible endpoints
+- **Trusted AI output** with source citations, confidence indicators, and change review
 - **Local-first desktop app** with direct provider connections and on-device inference options
 - **Rich execution surface** for artifacts, research, diagrams, code execution, and tool-enabled workflows
+- **Guided workflows** that help users get started without prompt engineering
 - **Extensible platform** through MCP, bundled extensions, agent teams, and a local API
+- **Workspace guardrails** for data boundaries, content policies, and usage visibility
 - **Cross-platform native delivery** with Tauri, React, and a Rust backend
 
 Built by [DEFAI Digital](https://github.com/defai-digital).
@@ -51,13 +54,15 @@ Teams adopt `ax-studio` when they need AI work to happen inside one workspace th
 
 ### Primary
 
+- **Knowledge workers** (analysts, content creators, project managers, researchers) who use AI daily and need trusted, verifiable output
 - **AI-native product and operations teams** that need one workspace across providers, research, and artifacts
 - **Advanced users and researchers** who switch frequently between hosted and local models
-- **Developer and infrastructure teams** building local-AI or MCP-enabled workflows into their daily work
 
 ### Secondary
 
-- **General knowledge workers** who want a stronger local and multi-provider alternative to provider-specific chat apps
+- **Regulated-industry professionals** (legal, healthcare, finance) who need data boundaries and source citations
+- **Developer and infrastructure teams** building local-AI or MCP-enabled workflows into their daily work
+- **AI-curious professionals** who want to try local AI without terminal setup
 
 ---
 
@@ -82,16 +87,20 @@ The important distinction is that `ax-studio` is not just a model picker inside 
 ## High-Value Use Cases
 
 1. **Unified AI workspace** for teams that use multiple providers and local models every day
-2. **Research and analysis workflows** with web search, artifacts, and persistent threads
-3. **Local model workstations** that need llama.cpp or ax-serving without leaving the main app
-4. **Internal tool hubs** where MCP servers, databases, APIs, and agent teams live in one desktop surface
+2. **Research and analysis workflows** with web search, source citations, artifacts, and persistent threads
+3. **Trusted AI for regulated industries** where source verification, data boundaries, and audit trails matter (legal, healthcare, finance)
+4. **Local model workstations** that need llama.cpp or ax-serving without leaving the main app
+5. **Non-technical knowledge workers** who want guided workflows instead of blank prompt boxes
+6. **Internal tool hubs** where MCP servers, databases, APIs, and agent teams live in one desktop surface
 
 ## When To Use AX Studio
 
 - You need one app for cloud models, self-hosted backends, and local inference
+- You want to verify AI output with source citations and confidence indicators
 - You want MCP tools, research, rendering, and chat to live in the same workspace
 - You need a desktop surface that can also expose a local API and extension hooks
 - You want AI workflows that remain local-first while still supporting hosted providers when needed
+- You need data boundary controls and guardrails for privacy-sensitive work
 
 ## The AutomatosX Ecosystem
 
@@ -176,6 +185,42 @@ AX Studio gives one desktop surface for:
 - per-thread prompts and workspace settings
 - rich outputs and rendered artifacts
 
+### Trusted Output (New in v2.5)
+
+AX Studio helps users trust and verify AI responses:
+
+- **Source citations** — inline `[N]` markers link claims to their sources (web, knowledge base, documents). Hover for title, snippet, and link.
+- **Confidence indicators** — each response shows a confidence level (strong, moderate, uncertain) based on source corroboration.
+- **Sources footer** — collapsible panel below responses shows all sources used, with one-click access.
+- **Change review** — when AI edits content, a diff view shows exactly what changed (green additions, red removals) with accept/reject controls.
+
+### Smart Start (New in v2.5)
+
+Guided workflows replace the blank chat box on the home page:
+
+- **6 workflow templates** — Research & Summarize, Write & Edit, Analyze, Compare, Extract & Organize, Translate & Adapt
+- **Structured input forms** — fill in topic, depth, format, and tone instead of crafting prompts from scratch
+- **Free-form escape hatch** — always available for users who prefer to type directly
+- **Prompt improvement hints** — after typing, the app suggests refining the prompt for better results
+
+### Activity Feed (New in v2.5)
+
+A unified timeline of what AI has been working on:
+
+- **Date-grouped events** — Today, Yesterday, This Week, Earlier
+- **Plain-language descriptions** — "Research completed: Q1 Analysis — Found 12 sources" instead of technical logs
+- **Quick navigation** — click any event to jump to the relevant thread
+- **Accessible from the sidebar** — one-click access alongside New Chat, Search, and Hub
+
+### Workspace Guardrails (New in v2.5)
+
+Simple controls that let users set boundaries for AI behavior:
+
+- **Data mode selector** — Local only, Hybrid, or Cloud
+- **Content policies** — require citations, flag low confidence, require approval before edits
+- **Usage dashboard** — current model, data mode, and storage at a glance
+- **Settings → Guardrails** — configure once, applies across all conversations
+
 ### Local Inference
 
 AX Studio supports local inference through two main paths:
@@ -206,7 +251,7 @@ AX Studio can render outputs directly inside the workspace, including:
 The workspace also supports:
 
 - multi-agent team workflows
-- deep research with web search
+- deep research with web search and source citations
 - execution logs
 - semantic memory search
 - voice features including STT and TTS
@@ -223,8 +268,10 @@ AX Studio exposes a local OpenAI-compatible API on `localhost:1337` and supports
 - Local inference can run fully on your machine
 - Python code execution runs in a Docker sandbox
 - Desktop delivery uses a native Tauri host instead of a browser-only shell
+- Workspace guardrails let users enforce local-only data mode, require citations, and flag low-confidence output
+- Usage dashboard shows current model, data mode, and cloud request count at a glance
 
-This makes AX Studio suitable for teams that want a stronger local control model than provider-hosted chat products.
+This makes AX Studio suitable for teams and individuals who need a stronger control model, verifiable output, and visible data boundaries compared to provider-hosted chat products.
 
 ---
 
@@ -280,6 +327,10 @@ Download the latest release from [GitHub Releases](https://github.com/defai-digi
 ```text
 ax-studio/
 ├── web-app/               # React frontend and workspace UI
+│   ├── src/components/    #   UI components (citations, change-review, smart-start, activity, ...)
+│   ├── src/hooks/         #   Zustand stores and React hooks (citations, versions, guardrails, ...)
+│   ├── src/lib/           #   Business logic (diff, smart-start workflows, system-prompt, ...)
+│   └── src/routes/        #   TanStack Router pages (threads, settings, hub, activity)
 ├── src-tauri/             # Rust backend, IPC, storage, MCP, downloads, updater
 ├── core/                  # @ax-studio/core extension interfaces and shared types
 ├── extensions/            # Bundled extensions including assistant, conversation, llama.cpp
