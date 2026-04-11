@@ -49,6 +49,7 @@ describe('useThreadEffects', () => {
       setCurrentAssistant: vi.fn(),
       processAndSendMessage: vi.fn(),
       handleResearchCommand: vi.fn().mockReturnValue(false),
+      cancelResearch: vi.fn(),
       updateThread: vi.fn(),
       setThreadPromptDraft: vi.fn(),
     }
@@ -133,6 +134,26 @@ describe('useThreadEffects', () => {
 
     // processAndSendMessage should NOT be called when research command returns true
     expect(defaultInput.processAndSendMessage).not.toHaveBeenCalled()
+  })
+
+  it('cancels research started from the initial message on unmount', async () => {
+    defaultInput.handleResearchCommand = vi.fn().mockReturnValue(true)
+    sessionStorage.setItem(
+      `initial-message-${threadId}`,
+      JSON.stringify({ text: '/research ai agents' })
+    )
+
+    const { unmount } = renderHook(() => useThreadEffects(defaultInput))
+
+    await vi.waitFor(() => {
+      expect(defaultInput.handleResearchCommand).toHaveBeenCalledWith(
+        '/research ai agents'
+      )
+    })
+
+    unmount()
+
+    expect(defaultInput.cancelResearch).toHaveBeenCalled()
   })
 
   it('applies thread prompt from sessionStorage', () => {

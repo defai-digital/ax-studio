@@ -3,10 +3,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // --- Mocks ---
 
+const mockDebounceCancel = vi.fn()
 const mockUpdateProvider = vi.fn()
 const mockStopModel = vi.fn().mockResolvedValue(undefined)
 const mockGetActiveModels = vi.fn().mockResolvedValue([])
 const mockSetActiveModels = vi.fn()
+
+vi.mock('lodash.debounce', () => ({
+  default: vi.fn((fn: (...args: unknown[]) => void) =>
+    Object.assign(fn, { cancel: mockDebounceCancel })
+  ),
+}))
 
 vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: vi.fn(() => ({
@@ -160,5 +167,13 @@ describe('ModelSetting', () => {
     )
 
     expect(screen.getByTestId('sheet')).toBeInTheDocument()
+  })
+
+  it('cancels any pending debounced stop call on unmount', () => {
+    const { unmount } = render(<ModelSetting model={model} provider={provider} />)
+
+    unmount()
+
+    expect(mockDebounceCancel).toHaveBeenCalled()
   })
 })

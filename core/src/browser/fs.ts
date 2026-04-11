@@ -8,6 +8,84 @@ const getCoreApi = () => {
   return api
 }
 
+const invalidBridgeResponse = (
+  methodName: string,
+  expected: string,
+  value: unknown
+): never => {
+  const received = value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value
+  throw new Error(
+    `Invalid response from core api.${methodName}: expected ${expected}, got ${received}`
+  )
+}
+
+const validateBridgeResult = async <T>(
+  bridgeCallResult: unknown,
+  methodName: string,
+  validate: (value: unknown, methodName: string) => T
+): Promise<T> => {
+  const value = await Promise.resolve(bridgeCallResult)
+  return validate(value, methodName)
+}
+
+const expectVoid = (value: unknown, methodName: string): void => {
+  if (value === undefined || value === null) return
+  invalidBridgeResponse(methodName, 'void', value)
+}
+
+const expectString = (value: unknown, methodName: string): string => {
+  if (typeof value === 'string') return value
+  return invalidBridgeResponse(methodName, 'string', value)
+}
+
+const expectBoolean = (value: unknown, methodName: string): boolean => {
+  if (typeof value === 'boolean') return value
+  return invalidBridgeResponse(methodName, 'boolean', value)
+}
+
+const expectStringArray = (value: unknown, methodName: string): string[] => {
+  if (Array.isArray(value) && value.every((entry) => typeof entry === 'string')) {
+    return value
+  }
+  return invalidBridgeResponse(methodName, 'string[]', value)
+}
+
+const expectGgufFilesResult = (
+  value: unknown,
+  methodName: string
+): { gguf: string[]; nonGguf: string[] } => {
+  if (
+    value &&
+    typeof value === 'object' &&
+    'gguf' in value &&
+    'nonGguf' in value
+  ) {
+    const gguf = expectStringArray((value as { gguf: unknown }).gguf, `${methodName}.gguf`)
+    const nonGguf = expectStringArray(
+      (value as { nonGguf: unknown }).nonGguf,
+      `${methodName}.nonGguf`
+    )
+    return { gguf, nonGguf }
+  }
+  return invalidBridgeResponse(methodName, '{ gguf: string[]; nonGguf: string[] }', value)
+}
+
+const expectFileStat = (
+  value: unknown,
+  methodName: string
+): FileStat | undefined => {
+  if (value === undefined || value === null) return undefined
+  if (
+    value &&
+    typeof value === 'object' &&
+    typeof (value as FileStat).isDirectory === 'boolean' &&
+    typeof (value as FileStat).size === 'number'
+  ) {
+    return value as FileStat
+  }
+  return invalidBridgeResponse(methodName, 'FileStat | undefined', value)
+}
+
 const decodePathRecursively = (path: string): string => {
   let decoded = path
 
@@ -75,7 +153,11 @@ export const fs = {
    */
   writeFileSync(path: string, data: string): Promise<void> {
     validatePath(path)
-    return getCoreApi().writeFileSync({ args: [path, data] }) as Promise<void>
+    return validateBridgeResult(
+      getCoreApi().writeFileSync({ args: [path, data] }),
+      'writeFileSync',
+      expectVoid
+    )
   },
 
   /**
@@ -85,7 +167,7 @@ export const fs = {
    */
   writeBlob(path: string, data: string): Promise<void> {
     validatePath(path)
-    return getCoreApi().writeBlob(path, data) as Promise<void>
+    return validateBridgeResult(getCoreApi().writeBlob(path, data), 'writeBlob', expectVoid)
   },
 
   /**
@@ -95,7 +177,11 @@ export const fs = {
    */
   readFileSync(path: string): Promise<string> {
     validatePath(path)
-    return getCoreApi().readFileSync({ args: [path] }) as Promise<string>
+    return validateBridgeResult(
+      getCoreApi().readFileSync({ args: [path] }),
+      'readFileSync',
+      expectString
+    )
   },
 
   /**
@@ -105,7 +191,11 @@ export const fs = {
    */
   existsSync(path: string): Promise<boolean> {
     validatePath(path)
-    return getCoreApi().existsSync({ args: [path] }) as Promise<boolean>
+    return validateBridgeResult(
+      getCoreApi().existsSync({ args: [path] }),
+      'existsSync',
+      expectBoolean
+    )
   },
 
   /**
@@ -115,7 +205,11 @@ export const fs = {
    */
   readdirSync(path: string): Promise<string[]> {
     validatePath(path)
-    return getCoreApi().readdirSync({ args: [path] }) as Promise<string[]>
+    return validateBridgeResult(
+      getCoreApi().readdirSync({ args: [path] }),
+      'readdirSync',
+      expectStringArray
+    )
   },
 
   /**
@@ -123,7 +217,7 @@ export const fs = {
    */
   mkdir(path: string): Promise<void> {
     validatePath(path)
-    return getCoreApi().mkdir({ args: [path] }) as Promise<void>
+    return validateBridgeResult(getCoreApi().mkdir({ args: [path] }), 'mkdir', expectVoid)
   },
 
   /**
@@ -131,7 +225,7 @@ export const fs = {
    */
   rm(path: string): Promise<void> {
     validatePath(path)
-    return getCoreApi().rm({ args: [path] }) as Promise<void>
+    return validateBridgeResult(getCoreApi().rm({ args: [path] }), 'rm', expectVoid)
   },
 
   /**
@@ -140,7 +234,7 @@ export const fs = {
   mv(from: string, to: string): Promise<void> {
     validatePath(from)
     validatePath(to)
-    return getCoreApi().mv({ args: [from, to] }) as Promise<void>
+    return validateBridgeResult(getCoreApi().mv({ args: [from, to] }), 'mv', expectVoid)
   },
 
   /**
@@ -149,7 +243,11 @@ export const fs = {
    */
   unlinkSync(path: string): Promise<void> {
     validatePath(path)
-    return getCoreApi().unlinkSync({ args: [path] }) as Promise<void>
+    return validateBridgeResult(
+      getCoreApi().unlinkSync({ args: [path] }),
+      'unlinkSync',
+      expectVoid
+    )
   },
 
   /**
@@ -157,7 +255,11 @@ export const fs = {
    */
   appendFileSync(path: string, data: string): Promise<void> {
     validatePath(path)
-    return getCoreApi().appendFileSync({ args: [path, data] }) as Promise<void>
+    return validateBridgeResult(
+      getCoreApi().appendFileSync({ args: [path, data] }),
+      'appendFileSync',
+      expectVoid
+    )
   },
 
   /**
@@ -166,7 +268,7 @@ export const fs = {
   copyFile(src: string, dest: string): Promise<void> {
     validatePath(src)
     validatePath(dest)
-    return getCoreApi().copyFile(src, dest) as Promise<void>
+    return validateBridgeResult(getCoreApi().copyFile(src, dest), 'copyFile', expectVoid)
   },
 
   /**
@@ -176,10 +278,11 @@ export const fs = {
    */
   getGgufFiles(paths: string[]): Promise<{ gguf: string[]; nonGguf: string[] }> {
     paths.forEach((path) => validatePath(path))
-    return getCoreApi().getGgufFiles(paths) as Promise<{
-      gguf: string[]
-      nonGguf: string[]
-    }>
+    return validateBridgeResult(
+      getCoreApi().getGgufFiles(paths),
+      'getGgufFiles',
+      expectGgufFilesResult
+    )
   },
 
   /**
@@ -189,6 +292,10 @@ export const fs = {
    */
   fileStat(path: string): Promise<FileStat | undefined> {
     validatePath(path)
-    return getCoreApi().fileStat({ args: path }) as Promise<FileStat | undefined>
+    return validateBridgeResult(
+      getCoreApi().fileStat({ args: path }),
+      'fileStat',
+      expectFileStat
+    )
   },
 }

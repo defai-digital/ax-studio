@@ -205,6 +205,16 @@ describe('BaseExtension', () => {
     setItemSpy.mockRestore()
   })
 
+  it('should throw when registering settings without an extension name', async () => {
+    const unnamedExtension = new TestBaseExtension('https://example.com', '')
+
+    await expect(
+      unnamedExtension.registerSettings([
+        { key: 'setting1', controllerProps: { value: 'value1' } } as any,
+      ])
+    ).rejects.toThrow('Cannot register settings: extension name is not defined')
+  })
+
   it('should throw when settings cannot be persisted during update', async () => {
     const settings: SettingComponentProps[] = [
       { key: 'setting1', controllerProps: { value: 'value1' } } as any,
@@ -272,5 +282,39 @@ describe('BaseExtension', () => {
 
     setItemSpy.mockRestore()
     localStorage.clear()
+  })
+
+  it('should backfill valid default controller props on first-time update', async () => {
+    vi.spyOn(baseExtension, 'getSettings').mockResolvedValue([])
+    const setItemSpy = vi.spyOn(localStorage, 'setItem')
+
+    await baseExtension.updateSettings([
+      {
+        key: 'enabled',
+        title: 'Enabled',
+        description: 'Toggle',
+        controllerType: 'checkbox',
+      },
+      {
+        key: 'endpoint',
+        title: 'Endpoint',
+        description: 'URL',
+        controllerType: 'input',
+      },
+    ] as Partial<SettingComponentProps>[])
+
+    const [, payload] = setItemSpy.mock.calls[setItemSpy.mock.calls.length - 1]
+    const parsed = JSON.parse(payload)
+
+    expect(parsed).toEqual([
+      expect.objectContaining({
+        key: 'enabled',
+        controllerProps: { value: false },
+      }),
+      expect.objectContaining({
+        key: 'endpoint',
+        controllerProps: { placeholder: '', value: '' },
+      }),
+    ])
   })
 })

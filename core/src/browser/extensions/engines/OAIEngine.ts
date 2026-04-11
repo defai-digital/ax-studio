@@ -43,7 +43,11 @@ export abstract class OAIEngine extends AIEngine {
     // immediately. User-visible symptom: one Cancel click breaks all
     // future model responses until the app restarts.
     this.resetInferenceController()
-    this.inference(data)
+    void Promise.resolve()
+      .then(() => this.inference(data))
+      .catch((error) => {
+        console.error('[OAIEngine] Failed to run inference:', error)
+      })
   }
 
   private readonly handleInferenceStopped = () => {
@@ -80,7 +84,7 @@ export abstract class OAIEngine extends AIEngine {
     events.off(InferenceEvent.OnInferenceStopped, this.handleInferenceStopped)
   }
 
-  inference(data: MessageRequest) {}
+  inference(data: MessageRequest): void | Promise<unknown> {}
 
   /**
    * Stops the inference.

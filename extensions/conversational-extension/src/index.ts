@@ -30,7 +30,7 @@ export default class AxStudioConversationalExtension extends ConversationalExten
   /**
    * Called when the extension is loaded.
    */
-  async onLoad() {
+  async onLoad(): Promise<void> {
     // no-opt
   }
 
@@ -51,7 +51,7 @@ export default class AxStudioConversationalExtension extends ConversationalExten
    * Saves a Thread object to a json file.
    * @param thread The Thread object to save.
    */
-  async createThread(thread: Thread): Promise<Thread> {
+  async createThread(thread: Partial<Thread>): Promise<Thread> {
     const api = this.getCoreApi()
     return this.callApi('createThread', () => api.createThread({ thread }))
   }
@@ -79,7 +79,7 @@ export default class AxStudioConversationalExtension extends ConversationalExten
    * @param message The ThreadMessage object to be added.
    * @returns A Promise that resolves when the message has been added.
    */
-  async createMessage(message: ThreadMessage): Promise<ThreadMessage> {
+  async createMessage(message: Partial<ThreadMessage>): Promise<ThreadMessage> {
     const api = this.getCoreApi()
     return this.callApi('createMessage', () => api.createMessage({ message }))
   }

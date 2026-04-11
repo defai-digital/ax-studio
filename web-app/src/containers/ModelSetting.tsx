@@ -16,6 +16,7 @@ import { useServiceHub } from '@/hooks/useServiceHub'
 import { cn, getModelDisplayName } from '@/lib/utils'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useAppState } from '@/hooks/settings/useAppState'
+import { useEffect, useMemo } from 'react'
 
 type ModelSettingProps = {
   provider: ProviderObject
@@ -32,20 +33,30 @@ export function ModelSetting({
   const setActiveModels = useAppState((state) => state.setActiveModels)
 
   // Create a debounced version of stopModel that waits 500ms after the last call
-  const debouncedStopModel = debounce((modelId: string) => {
-    serviceHub
-      .models()
-      .stopModel(modelId)
-      .then(() => {
-        // Refresh active models after stopping
+  const debouncedStopModel = useMemo(
+    () =>
+      debounce((modelId: string) => {
         serviceHub
           .models()
-          .getActiveModels()
-          .then((models) => setActiveModels(models || []))
-          .catch((err) => console.error('Failed to refresh active models:', err))
-      })
-      .catch((err) => console.error('Failed to stop model:', err))
-  }, 500)
+          .stopModel(modelId)
+          .then(() => {
+            // Refresh active models after stopping
+            serviceHub
+              .models()
+              .getActiveModels()
+              .then((models) => setActiveModels(models || []))
+              .catch((err) => console.error('Failed to refresh active models:', err))
+          })
+          .catch((err) => console.error('Failed to stop model:', err))
+      }, 500),
+    [serviceHub, setActiveModels]
+  )
+
+  useEffect(() => {
+    return () => {
+      debouncedStopModel.cancel()
+    }
+  }, [debouncedStopModel])
 
   const handleSettingChange = (
     key: string,

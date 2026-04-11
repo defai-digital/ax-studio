@@ -12,6 +12,7 @@ import { AppEvent, DownloadEvent, DownloadState, events } from '@ax-studio/core'
 import { IconDownload } from '@tabler/icons-react'
 import { useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 
 export const ModelDownloadAction = ({
   variant,
@@ -26,7 +27,12 @@ export const ModelDownloadAction = ({
   const huggingfaceToken = useGeneralSetting((state) => state.huggingfaceToken)
   const getProviderByName = useModelProvider((state) => state.getProviderByName)
   const llamaProvider = getProviderByName('llamacpp')
-  const { downloads, localDownloadingModels, addLocalDownloadingModel } =
+  const {
+    downloads,
+    localDownloadingModels,
+    addLocalDownloadingModel,
+    removeLocalDownloadingModel,
+  } =
     useDownloadStore()
   const [isDownloaded, setDownloaded] = useState<boolean>(false)
 
@@ -105,6 +111,14 @@ export const ModelDownloadAction = ({
         )?.path,
         huggingfaceToken
       )
+      .catch((error) => {
+        console.error('Failed to start model download:', error)
+        removeLocalDownloadingModel(variant.model_id)
+        toast.error('Failed to start model download', {
+          description:
+            error instanceof Error ? error.message : 'Please try again.',
+        })
+      })
   }, [
     serviceHub,
     variant.path,
@@ -112,6 +126,7 @@ export const ModelDownloadAction = ({
     huggingfaceToken,
     model.mmproj_models,
     addLocalDownloadingModel,
+    removeLocalDownloadingModel,
   ])
 
   const isDownloading =

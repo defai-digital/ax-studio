@@ -19,11 +19,19 @@ export abstract class LocalOAIEngine extends OAIEngine {
   private localLoaded = false
 
   private readonly handleModelInit = (model: Model) => {
-    void this.loadModel(model)
+    void Promise.resolve()
+      .then(() => this.loadModel(model))
+      .catch((error) => {
+        console.error('[LocalOAIEngine] Failed to load model:', error)
+      })
   }
 
   private readonly handleModelStop = (model: Model) => {
-    void this.unloadModel(model)
+    void Promise.resolve()
+      .then(() => this.unloadModel(model))
+      .catch((error) => {
+        console.error('[LocalOAIEngine] Failed to unload model:', error)
+      })
   }
 
   /**

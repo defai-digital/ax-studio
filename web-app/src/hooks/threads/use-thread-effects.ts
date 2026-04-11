@@ -24,6 +24,7 @@ export type ThreadEffectsInput = {
   setCurrentAssistant: (assistant: Assistant) => void
   processAndSendMessage: (text: string) => Promise<void>
   handleResearchCommand: (text: string) => boolean
+  cancelResearch: () => void
   updateThread: (id: string, updates: Partial<Thread>) => void
   setThreadPromptDraft: (draft: string) => void
 }
@@ -42,6 +43,7 @@ export function useThreadEffects({
   setCurrentAssistant,
   processAndSendMessage,
   handleResearchCommand,
+  cancelResearch,
   updateThread,
   setThreadPromptDraft,
 }: ThreadEffectsInput): void {
@@ -146,28 +148,44 @@ export function useThreadEffects({
 
     const initialMessageKey = `${SESSION_STORAGE_PREFIX.INITIAL_MESSAGE}${threadId}`
     const storedMessage = sessionStorage.getItem(initialMessageKey)
+    if (!storedMessage) return
 
-    if (storedMessage) {
-      sessionStorage.removeItem(initialMessageKey)
-      initialMessageSentForThreadRef.current = threadId
-      ;(async () => {
-        try {
-          const parsed = JSON.parse(storedMessage)
-          const message = parsed && typeof parsed === 'object' && typeof parsed.text === 'string'
-            ? (parsed as { text: string })
-            : null
-          if (!message) {
-            console.error('Invalid initial message payload in sessionStorage')
-            return
-          }
-          if (handleResearchCommand(message.text)) return
-          await processAndSendMessage(message.text)
-        } catch (error) {
-          console.error('Failed to parse initial message:', error)
+    let cancelled = false
+    let startedResearch = false
+
+    sessionStorage.removeItem(initialMessageKey)
+    initialMessageSentForThreadRef.current = threadId
+
+    ;(async () => {
+      try {
+        const parsed = JSON.parse(storedMessage)
+        const message = parsed && typeof parsed === 'object' && typeof parsed.text === 'string'
+          ? (parsed as { text: string })
+          : null
+        if (!message) {
+          console.error('Invalid initial message payload in sessionStorage')
+          return
         }
-      })()
+        if (cancelled) return
+        if (handleResearchCommand(message.text)) {
+          startedResearch = true
+          if (cancelled) cancelResearch()
+          return
+        }
+        if (cancelled) return
+        await processAndSendMessage(message.text)
+      } catch (error) {
+        console.error('Failed to parse initial message:', error)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      if (startedResearch) {
+        cancelResearch()
+      }
     }
-  }, [threadId, processAndSendMessage, handleResearchCommand])
+  }, [threadId, processAndSendMessage, handleResearchCommand, cancelResearch])
 
   // ─── Apply thread prompt + agent team from sessionStorage ────────────────
   // Merge both sessionStorage carries in a SINGLE updateThread call. The

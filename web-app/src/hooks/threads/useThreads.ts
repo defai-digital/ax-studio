@@ -434,7 +434,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
             ...currentThread,
             assistants: assistant ? [{ ...assistant, model: currentThread.model }] : [],
           })
-          .catch(console.error)
+          .catch(reportPersistenceError('update thread assistant'))
       return {
         threads: {
           ...state.threads,
@@ -455,7 +455,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
         getServiceHub()
           .threads()
           .updateThread({ ...currentThread, model })
-          .catch(console.error)
+          .catch(reportPersistenceError('update thread model'))
       return {
         threads: {
           ...state.threads,

@@ -23,9 +23,13 @@ describe('useMessages', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockCreateMessage.mockImplementation(async (message) => message)
+    mockModifyMessage.mockImplementation(async (message) => message)
     mockDeleteMessage.mockResolvedValue(undefined)
     // Reset store state
-    useMessages.setState({ messages: {} })
+    act(() => {
+      useMessages.getState().clearAllMessages()
+    })
   })
 
   it('should initialize with empty messages', () => {
@@ -352,6 +356,59 @@ describe('useMessages', () => {
 
       expect(mockDeleteMessage).toHaveBeenCalledWith('thread1', 'non-existent-msg')
       expect(result.current.messages['thread1']).toEqual(testMessages)
+    })
+  })
+
+  describe('updateMessage', () => {
+    it('rolls back to the last persisted message when the latest rapid edit fails', async () => {
+      const { result } = renderHook(() => useMessages())
+      const originalMessage: ThreadMessage = {
+        id: 'msg1',
+        thread_id: 'thread1',
+        role: 'user',
+        content: 'Original',
+        created_at: Date.now(),
+      } as ThreadMessage
+
+      let resolveFirstEdit: ((message: ThreadMessage) => void) | undefined
+      mockModifyMessage
+        .mockReturnValueOnce(
+          new Promise<ThreadMessage>((resolve) => {
+            resolveFirstEdit = resolve
+          })
+        )
+        .mockRejectedValueOnce(new Error('second edit failed'))
+
+      act(() => {
+        result.current.setMessages('thread1', [originalMessage])
+      })
+
+      act(() => {
+        result.current.updateMessage({
+          ...originalMessage,
+          content: 'Edit A',
+        } as ThreadMessage)
+      })
+
+      act(() => {
+        result.current.updateMessage({
+          ...originalMessage,
+          content: 'Edit B',
+        } as ThreadMessage)
+      })
+
+      await vi.waitFor(() => {
+        expect(result.current.messages['thread1'][0].content).toBe('Original')
+      })
+
+      resolveFirstEdit?.({
+        ...originalMessage,
+        content: 'Edit A',
+      } as ThreadMessage)
+
+      await vi.waitFor(() => {
+        expect(result.current.messages['thread1'][0].content).toBe('Edit A')
+      })
     })
   })
 

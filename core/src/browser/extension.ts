@@ -1,4 +1,4 @@
-import { Model, SettingComponentProps } from '../types'
+import { ControllerType, Model, SettingComponentProps } from '../types'
 import { ModelManager } from './models'
 
 export enum ExtensionTypeEnum {
@@ -27,6 +27,23 @@ function isDropdownControllerProps(
   controllerProps: ControllerProps
 ): controllerProps is Extract<ControllerProps, { options?: unknown; recommended?: unknown }> {
   return 'options' in controllerProps || 'recommended' in controllerProps
+}
+
+function buildDefaultControllerProps(
+  controllerType: ControllerType | undefined
+): ControllerProps {
+  switch (controllerType) {
+    case 'checkbox':
+      return { value: false }
+    case 'slider':
+      return { min: 0, max: 100, step: 1, value: 0 }
+    case 'dropdown':
+      return { value: '', options: [] }
+    case 'tag':
+    case 'input':
+    default:
+      return { placeholder: '', value: '' }
+  }
 }
 
 /**
@@ -130,7 +147,7 @@ export abstract class BaseExtension implements ExtensionType {
    * Called when the extension is loaded.
    * Any initialization logic for the extension should be put here.
    */
-  abstract onLoad(): void
+  abstract onLoad(): void | Promise<void>
 
   /**
    * Called when the extension is unloaded.
@@ -164,8 +181,7 @@ export abstract class BaseExtension implements ExtensionType {
    */
   async registerSettings(settings: SettingComponentProps[]): Promise<void> {
     if (!this.name) {
-      console.error('Extension name is not defined')
-      return
+      throw new Error('Cannot register settings: extension name is not defined')
     }
 
     if (!this.isSettingsArray(settings)) {
@@ -308,7 +324,7 @@ export abstract class BaseExtension implements ExtensionType {
         controllerType: cp.controllerType ?? 'input',
         controllerProps:
           cp.controllerProps ??
-          ({ value: '' } as SettingComponentProps['controllerProps']),
+          buildDefaultControllerProps(cp.controllerType ?? 'input'),
       })) as SettingComponentProps[]
     }
 

@@ -2,15 +2,24 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
 import { useAssistant, defaultAssistant } from '../useAssistant'
 
-// Mock the services
-vi.mock('@/services/assistants', () => ({
-  createAssistant: vi.fn(() => Promise.resolve()),
-  deleteAssistant: vi.fn(() => Promise.resolve()),
+const mockCreateAssistant = vi.fn()
+const mockDeleteAssistant = vi.fn()
+
+vi.mock('@/hooks/useServiceHub', () => ({
+  getServiceHub: () => ({
+    assistants: () => ({
+      createAssistant: mockCreateAssistant,
+      deleteAssistant: mockDeleteAssistant,
+    }),
+  }),
 }))
 
 describe('useAssistant', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockCreateAssistant.mockResolvedValue(undefined)
+    mockDeleteAssistant.mockResolvedValue(undefined)
+    localStorage.clear()
     // Reset Zustand store to default state
     act(() => {
       useAssistant.setState({
@@ -90,6 +99,35 @@ describe('useAssistant', () => {
 
     expect(result.current.assistants).toHaveLength(1)
     expect(result.current.assistants[0].id).toBe('ax-studio')
+  })
+
+  it('rolls back assistant deletion when persistence fails', async () => {
+    const { result } = renderHook(() => useAssistant())
+    const assistant2 = {
+      id: 'assistant-2',
+      name: 'Assistant 2',
+      avatar: '🤖',
+      description: 'Second assistant',
+      instructions: 'Help the user',
+      created_at: Date.now(),
+      parameters: {},
+    }
+
+    act(() => {
+      result.current.addAssistant(assistant2)
+      result.current.setCurrentAssistant(assistant2)
+    })
+
+    mockDeleteAssistant.mockRejectedValueOnce(new Error('disk full'))
+
+    act(() => {
+      result.current.deleteAssistant('assistant-2')
+    })
+
+    await vi.waitFor(() => {
+      expect(result.current.assistants).toContainEqual(assistant2)
+      expect(result.current.currentAssistant).toEqual(assistant2)
+    })
   })
 
   it('should set current assistant', () => {

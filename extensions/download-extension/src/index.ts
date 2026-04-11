@@ -1,6 +1,10 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
-import { BaseExtension, events } from '@ax-studio/core'
+import {
+  BaseExtension,
+  getAppDataFolderPath,
+  validateUrlProtocol,
+} from '@ax-studio/core'
 
 interface DownloadItem {
   url: string
@@ -17,11 +21,11 @@ type DownloadEvent = {
 }
 
 export default class AxStudioDownloadManager extends BaseExtension {
-  async onLoad() {
-    this.registerSettings(SETTINGS)
+  async onLoad(): Promise<void> {
+    await this.registerSettings(SETTINGS)
   }
 
-  async onUnload() {}
+  async onUnload(): Promise<void> {}
 
   /**
    * Sanitize a task ID so it is safe to use in Tauri event names.
@@ -31,6 +35,85 @@ export default class AxStudioDownloadManager extends BaseExtension {
    */
   private _sanitizeTaskId(taskId: string): string {
     return taskId.replace(/[^a-zA-Z0-9\-/_:]/g, '_')
+  }
+
+  private _isAbsolutePath(path: string): boolean {
+    return /^(?:[a-zA-Z]:[\\/]|\/|\\\\)/.test(path)
+  }
+
+  private _normalizePathForComparison(path: string): string {
+    const unified = path.replace(/\\/g, '/')
+    const drivePrefix = unified.match(/^[a-zA-Z]:/)?.[0]?.toLowerCase()
+    const hasPosixRoot = unified.startsWith('/')
+    const hasUncRoot = unified.startsWith('//') && !drivePrefix
+
+    let remainder = unified
+    if (drivePrefix) {
+      remainder = unified.slice(drivePrefix.length)
+    } else if (hasUncRoot) {
+      remainder = unified.slice(2)
+    } else if (hasPosixRoot) {
+      remainder = unified.slice(1)
+    }
+
+    const segments: string[] = []
+    for (const segment of remainder.split('/')) {
+      if (!segment || segment === '.') continue
+      if (segment === '..') {
+        if (!segments.length) {
+          throw new Error(`Path traversal not allowed: ${path}`)
+        }
+        segments.pop()
+        continue
+      }
+      segments.push(segment)
+    }
+
+    const normalized = segments.join('/')
+    if (drivePrefix) {
+      return normalized ? `${drivePrefix}/${normalized}` : `${drivePrefix}/`
+    }
+    if (hasUncRoot) {
+      return normalized ? `//${normalized}` : '//'
+    }
+    if (hasPosixRoot) {
+      return normalized ? `/${normalized}` : '/'
+    }
+    return normalized
+  }
+
+  private async _validateSavePath(savePath: string): Promise<void> {
+    if (typeof savePath !== 'string' || !savePath.trim()) {
+      throw new Error('Download save path must be a non-empty string')
+    }
+    if (/[\0\x00-\x1F\x7F-\x9F]/.test(savePath)) {
+      throw new Error(`Invalid characters in save path: ${savePath}`)
+    }
+
+    const normalizedSavePath = this._normalizePathForComparison(savePath)
+    if (!normalizedSavePath) {
+      throw new Error('Download save path must not be empty')
+    }
+
+    if (!this._isAbsolutePath(savePath)) {
+      return
+    }
+
+    const appDataPath = await getAppDataFolderPath()
+    const normalizedAppDataPath = this._normalizePathForComparison(appDataPath)
+    const exactMatch = normalizedSavePath === normalizedAppDataPath
+    const childPath = normalizedSavePath.startsWith(`${normalizedAppDataPath}/`)
+
+    if (!exactMatch && !childPath) {
+      throw new Error(
+        `Download save path must stay within the Ax-Studio data folder: ${savePath}`
+      )
+    }
+  }
+
+  private async _validateDownloadItem(item: DownloadItem): Promise<void> {
+    validateUrlProtocol(item.url)
+    await this._validateSavePath(item.save_path)
   }
 
   async downloadFile(
@@ -60,6 +143,7 @@ export default class AxStudioDownloadManager extends BaseExtension {
     if (items.length === 0) {
       throw new Error('downloadFiles requires at least one item')
     }
+    await Promise.all(items.map((item) => this._validateDownloadItem(item)))
 
     // Sanitize taskId for Tauri event name compatibility
     const safeTaskId = this._sanitizeTaskId(taskId)

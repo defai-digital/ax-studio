@@ -8,6 +8,7 @@ import { useTranslation } from '@/i18n'
 import { cn, sanitizeModelId } from '@/lib/utils'
 import { CatalogModel } from '@/services/models/types'
 import { AppEvent, DownloadEvent, DownloadState, events } from '@ax-studio/core'
+import { toast } from 'sonner'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { DEFAULT_MODEL_QUANTIZATIONS } from '@/constants/models'
@@ -22,12 +23,18 @@ export function DownloadButtonPlaceholder({
   model,
   handleUseModel,
 }: ModelProps) {
-  const { downloads, localDownloadingModels, addLocalDownloadingModel } =
+  const {
+    downloads,
+    localDownloadingModels,
+    addLocalDownloadingModel,
+    removeLocalDownloadingModel,
+  } =
     useDownloadStore(
       useShallow((state) => ({
         downloads: state.downloads,
         localDownloadingModels: state.localDownloadingModels,
         addLocalDownloadingModel: state.addLocalDownloadingModel,
+        removeLocalDownloadingModel: state.removeLocalDownloadingModel,
       }))
     )
   const { t } = useTranslation()
@@ -142,6 +149,14 @@ export function DownloadButtonPlaceholder({
     serviceHub
       .models()
       .pullModelWithMetadata(modelId, modelUrl, mmprojPath, huggingfaceToken)
+      .catch((error) => {
+        console.error('Failed to start model download:', error)
+        removeLocalDownloadingModel(modelId)
+        toast.error('Failed to start model download', {
+          description:
+            error instanceof Error ? error.message : 'Please try again.',
+        })
+      })
   }
 
   const handlePause = async () => {

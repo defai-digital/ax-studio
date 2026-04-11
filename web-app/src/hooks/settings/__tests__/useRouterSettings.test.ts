@@ -126,4 +126,22 @@ describe('useRouterSettings', () => {
     expect(state.timeout).toBe(15000)
     expect(state.threadOverrides).toEqual({})
   })
+
+  it('does not mutate persisted state during migration', () => {
+    const persisted = {
+      enabled: true,
+      timeout: 3000,
+      threadOverrides: {},
+    }
+
+    const migrated = useRouterSettings.persist.getOptions().migrate?.(persisted, 2)
+
+    expect(persisted.timeout).toBe(3000)
+    expect(migrated).toEqual(
+      expect.objectContaining({
+        timeout: 15000,
+      })
+    )
+    expect(migrated).not.toBe(persisted)
+  })
 })

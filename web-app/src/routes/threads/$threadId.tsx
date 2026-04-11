@@ -93,7 +93,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   const alwaysCiteSources = useGuardrails((s) => s.alwaysCiteSources)
   const projectId = thread?.metadata?.project?.id
   const { pinnedArtifact, clearArtifact } = useThreadArtifacts(threadId)
-  const { pinnedResearch, clearResearch, handleResearchCommand } =
+  const { pinnedResearch, clearResearch, handleResearchCommand, cancelResearch } =
     useThreadResearch(threadId)
   const { promptResolution, optimizedModelConfig } = useThreadConfig({
     thread,
@@ -234,6 +234,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     setCurrentAssistant,
     processAndSendMessage,
     handleResearchCommand,
+    cancelResearch,
     updateThread,
     setThreadPromptDraft,
   })

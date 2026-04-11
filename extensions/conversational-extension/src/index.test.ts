@@ -114,6 +114,16 @@ describe('AxStudioConversationalExtension', () => {
       expect(mockApi.createThread).toHaveBeenCalledWith({ thread })
       expect(result).toEqual(created)
     })
+
+    it('accepts partial thread payloads', async () => {
+      mockApi.createThread.mockResolvedValue({ id: 'generated-thread' })
+
+      await ext.createThread({ title: 'Draft Thread' })
+
+      expect(mockApi.createThread).toHaveBeenCalledWith({
+        thread: { title: 'Draft Thread' },
+      })
+    })
   })
 
   describe('modifyThread', () => {
@@ -148,6 +158,16 @@ describe('AxStudioConversationalExtension', () => {
       expect(mockApi.createMessage).toHaveBeenCalledWith({ message })
       expect(result.id).toBe('m1')
       expect(result.created_at).toBe(99999)
+    })
+
+    it('accepts partial message payloads', async () => {
+      mockApi.createMessage.mockResolvedValue({ id: 'm1', thread_id: 't1' })
+
+      await ext.createMessage({ thread_id: 't1' })
+
+      expect(mockApi.createMessage).toHaveBeenCalledWith({
+        message: { thread_id: 't1' },
+      })
     })
   })
 

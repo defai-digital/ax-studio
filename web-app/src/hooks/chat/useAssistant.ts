@@ -115,25 +115,40 @@ export const useAssistant = create<AssistantState>((set, get) => ({
   },
   deleteAssistant: (id) => {
     const state = get()
-    getServiceHub()
-      .assistants()
-      .deleteAssistant(
-        state.assistants.find((e) => e.id === id) as unknown as CoreAssistant
-      )
-      .catch((error) => {
-        console.error('Failed to delete assistant:', error)
-      })
+    const assistantToDelete = state.assistants.find((assistant) => assistant.id === id)
+    if (!assistantToDelete) return
 
     // Check if we're deleting the current assistant
     const wasCurrentAssistant = state.currentAssistant?.id === id
+    const previousAssistants = state.assistants
+    const previousCurrentAssistant = state.currentAssistant
+    const nextCurrentAssistant = wasCurrentAssistant
+      ? defaultAssistant
+      : state.currentAssistant
 
-    set({ assistants: state.assistants.filter((a) => a.id !== id) })
+    set({
+      assistants: state.assistants.filter((assistant) => assistant.id !== id),
+      currentAssistant: nextCurrentAssistant,
+    })
 
     // If the deleted assistant was current, fallback to default and update localStorage
     if (wasCurrentAssistant) {
-      set({ currentAssistant: defaultAssistant })
       setLastUsedAssistantId(defaultAssistant.id)
     }
+
+    getServiceHub()
+      .assistants()
+      .deleteAssistant(assistantToDelete as unknown as CoreAssistant)
+      .catch((error) => {
+        console.error('Failed to delete assistant:', error)
+        set({
+          assistants: previousAssistants,
+          currentAssistant: previousCurrentAssistant,
+        })
+        if (previousCurrentAssistant) {
+          setLastUsedAssistantId(previousCurrentAssistant.id)
+        }
+      })
   },
   setCurrentAssistant: (assistant, saveToStorage = true) => {
     if (assistant !== get().currentAssistant) {

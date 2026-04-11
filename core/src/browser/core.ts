@@ -3,7 +3,7 @@
  * @param url - The URL to validate
  * @throws Error if the URL has an unsafe protocol
  */
-const validateUrlProtocol = (url: string): void => {
+export const validateUrlProtocol = (url: string): void => {
   try {
     const parsedUrl = new URL(url)
     if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {

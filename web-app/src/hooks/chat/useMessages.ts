@@ -2,6 +2,47 @@ import { create } from 'zustand'
 import { ThreadMessage } from '@ax-studio/core'
 import { getServiceHub } from '@/hooks/useServiceHub'
 
+const trackedMessageKey = (threadId: string, messageId: string) =>
+  `${threadId}:${messageId}`
+
+const persistedMessages = new Map<string, ThreadMessage>()
+const latestMessageMutationId = new Map<string, number>()
+const latestSuccessfulMutationId = new Map<string, number>()
+const visibleMessageMutationId = new Map<string, number>()
+const pendingMessageMutationIds = new Map<string, Set<number>>()
+
+const trackPersistedMessage = (message: ThreadMessage) => {
+  const key = trackedMessageKey(message.thread_id, message.id)
+  persistedMessages.set(key, message)
+  const successId = latestMessageMutationId.get(key) ?? 0
+  latestSuccessfulMutationId.set(key, successId)
+  if (!pendingMessageMutationIds.has(key)) {
+    visibleMessageMutationId.set(key, successId)
+  }
+}
+
+const clearTrackedThreadMessages = (threadId: string) => {
+  const prefix = `${threadId}:`
+  for (const key of persistedMessages.keys()) {
+    if (key.startsWith(prefix)) {
+      persistedMessages.delete(key)
+      latestMessageMutationId.delete(key)
+      latestSuccessfulMutationId.delete(key)
+      visibleMessageMutationId.delete(key)
+      pendingMessageMutationIds.delete(key)
+    }
+  }
+}
+
+const removeTrackedMessage = (threadId: string, messageId: string) => {
+  const key = trackedMessageKey(threadId, messageId)
+  persistedMessages.delete(key)
+  latestMessageMutationId.delete(key)
+  latestSuccessfulMutationId.delete(key)
+  visibleMessageMutationId.delete(key)
+  pendingMessageMutationIds.delete(key)
+}
+
 type MessageState = {
   messages: Record<string, ThreadMessage[]>
   getMessages: (threadId: string) => ThreadMessage[]
@@ -18,6 +59,8 @@ export const useMessages = create<MessageState>()((set, get) => ({
     return get().messages[threadId] || []
   },
   setMessages: (threadId, messages) => {
+    clearTrackedThreadMessages(threadId)
+    messages.forEach(trackPersistedMessage)
     set((state) => ({
       messages: {
         ...state.messages,
@@ -44,6 +87,10 @@ export const useMessages = create<MessageState>()((set, get) => ({
 
     // Persist to storage asynchronously — rollback on failure
     getServiceHub().messages().createMessage(newMessage).then((createdMessage) => {
+      if (createdMessage.id !== newMessage.id) {
+        removeTrackedMessage(newMessage.thread_id, newMessage.id)
+      }
+      trackPersistedMessage(createdMessage)
       set((state) => ({
         messages: {
           ...state.messages,
@@ -70,11 +117,18 @@ export const useMessages = create<MessageState>()((set, get) => ({
     const updatedMessage = {
       ...message,
     }
+    const messageKey = trackedMessageKey(message.thread_id, message.id)
+    const mutationId = (latestMessageMutationId.get(messageKey) ?? 0) + 1
+    latestMessageMutationId.set(messageKey, mutationId)
+    const pendingMutations = pendingMessageMutationIds.get(messageKey) ?? new Set<number>()
+    pendingMutations.add(mutationId)
+    pendingMessageMutationIds.set(messageKey, pendingMutations)
+    visibleMessageMutationId.set(messageKey, mutationId)
 
-    // Snapshot the specific message for targeted rollback
-    const previousMessage = get().messages[message.thread_id]?.find(
-      (m) => m.id === message.id
-    )
+    // Roll back to the last backend-confirmed version rather than a prior optimistic edit.
+    const previousMessage =
+      persistedMessages.get(messageKey) ??
+      get().messages[message.thread_id]?.find((m) => m.id === message.id)
 
     // Optimistically update state immediately for instant UI feedback
     set((state) => ({
@@ -87,8 +141,49 @@ export const useMessages = create<MessageState>()((set, get) => ({
     }))
 
     // Persist to storage asynchronously — targeted rollback on failure
-    getServiceHub().messages().modifyMessage(updatedMessage).catch((error) => {
+    getServiceHub().messages().modifyMessage(updatedMessage).then((persistedMessage) => {
+      const remainingPendingMutations = pendingMessageMutationIds.get(messageKey)
+      remainingPendingMutations?.delete(mutationId)
+      if (!remainingPendingMutations?.size) {
+        pendingMessageMutationIds.delete(messageKey)
+      }
+
+      const latestSuccess = latestSuccessfulMutationId.get(messageKey) ?? 0
+      if (mutationId >= latestSuccess) {
+        persistedMessages.set(messageKey, persistedMessage)
+        latestSuccessfulMutationId.set(messageKey, mutationId)
+      }
+
+      const higherPendingExists = Array.from(
+        pendingMessageMutationIds.get(messageKey) ?? []
+      ).some((pendingId) => pendingId > mutationId)
+      const currentVisible = visibleMessageMutationId.get(messageKey) ?? 0
+      if (higherPendingExists || currentVisible > mutationId) return
+
+      visibleMessageMutationId.set(messageKey, mutationId)
+
+      set((state) => ({
+        messages: {
+          ...state.messages,
+          [message.thread_id]: (state.messages[message.thread_id] || []).map((m) =>
+            m.id === message.id ? persistedMessage : m
+          ),
+        },
+      }))
+    }).catch((error) => {
       console.error('Failed to persist message update:', error)
+      const remainingPendingMutations = pendingMessageMutationIds.get(messageKey)
+      remainingPendingMutations?.delete(mutationId)
+      if (!remainingPendingMutations?.size) {
+        pendingMessageMutationIds.delete(messageKey)
+      }
+
+      if ((visibleMessageMutationId.get(messageKey) ?? 0) !== mutationId) return
+
+      visibleMessageMutationId.set(
+        messageKey,
+        latestSuccessfulMutationId.get(messageKey) ?? 0
+      )
       if (previousMessage) {
         set((state) => ({
           messages: {
@@ -115,7 +210,9 @@ export const useMessages = create<MessageState>()((set, get) => ({
           ) || [],
       },
     }))
-    getServiceHub().messages().deleteMessage(threadId, messageId).catch((error) => {
+    getServiceHub().messages().deleteMessage(threadId, messageId).then(() => {
+      removeTrackedMessage(threadId, messageId)
+    }).catch((error) => {
       console.error('Failed to delete message, rolling back:', error)
       // Re-insert only the single deleted message using the CURRENT state.
       // Don't replay a full pre-delete snapshot — that would overwrite any
@@ -135,6 +232,11 @@ export const useMessages = create<MessageState>()((set, get) => ({
     })
   },
   clearAllMessages: () => {
+    persistedMessages.clear()
+    latestMessageMutationId.clear()
+    latestSuccessfulMutationId.clear()
+    visibleMessageMutationId.clear()
+    pendingMessageMutationIds.clear()
     set({ messages: {} })
   },
 }))

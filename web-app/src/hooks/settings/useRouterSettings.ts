@@ -107,7 +107,7 @@ export const useRouterSettings = create<RouterSettingsState>()(
       }),
       version: 3,
       migrate: (persisted: unknown, version: number) => {
-        const state = persisted as Record<string, unknown>
+        const state = { ...(persisted as Record<string, unknown>) }
         if (version < 3 && (!state.timeout || state.timeout === 3000 || state.timeout === 8000)) {
           state.timeout = 15000
         }

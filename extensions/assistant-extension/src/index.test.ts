@@ -8,6 +8,7 @@ const {
   mockWriteFileSync,
   mockRm,
   mockJoinPath,
+  mockShowToast,
 } = vi.hoisted(() => ({
   mockExistsSync: vi.fn(),
   mockMkdir: vi.fn(),
@@ -16,6 +17,7 @@ const {
   mockWriteFileSync: vi.fn(),
   mockRm: vi.fn(),
   mockJoinPath: vi.fn(),
+  mockShowToast: vi.fn(),
 }))
 
 vi.mock('@ax-studio/core', () => {
@@ -51,6 +53,7 @@ vi.mock('@ax-studio/core', () => {
       rm: mockRm,
     },
     joinPath: mockJoinPath,
+    showToast: mockShowToast,
   }
 })
 
@@ -221,6 +224,10 @@ describe('AxStudioAssistantExtension', () => {
         'Failed to read assistant bad:',
         expect.any(SyntaxError)
       )
+      expect(mockShowToast).toHaveBeenCalledWith(
+        'Some assistants could not be loaded',
+        'Skipped corrupt assistant data for bad.'
+      )
 
       consoleSpy.mockRestore()
     })
@@ -251,6 +258,36 @@ describe('AxStudioAssistantExtension', () => {
       expect(consoleSpy).toHaveBeenCalledWith(
         'Failed to read assistant bad:',
         expect.any(SyntaxError)
+      )
+      expect(mockShowToast).toHaveBeenCalledWith(
+        'Some assistants could not be loaded',
+        'Skipped corrupt assistant data for bad.'
+      )
+
+      consoleSpy.mockRestore()
+    })
+
+    it('treats structurally invalid assistant JSON as corrupt data', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      mockExistsSync.mockResolvedValueOnce(true)
+      mockReaddirSync.mockResolvedValue(['bad-shape'])
+      mockJoinPath.mockResolvedValueOnce(
+        'file://assistants/bad-shape/assistant.json'
+      )
+      mockExistsSync.mockResolvedValueOnce(true)
+      mockReadFileSync.mockResolvedValueOnce(JSON.stringify({ id: 123 }))
+
+      const result = await ext.getAssistants()
+
+      expect(result).toEqual([])
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Failed to read assistant bad-shape:',
+        expect.any(Error)
+      )
+      expect(mockShowToast).toHaveBeenCalledWith(
+        'Some assistants could not be loaded',
+        'Skipped corrupt assistant data for bad-shape.'
       )
 
       consoleSpy.mockRestore()

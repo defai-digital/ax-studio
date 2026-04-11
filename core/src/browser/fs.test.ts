@@ -5,19 +5,19 @@ describe('fs module', () => {
   beforeEach(() => {
     globalThis.core = {
       api: {
-        writeFileSync: vi.fn(),
-        writeBlob: vi.fn(),
-        readFileSync: vi.fn(),
-        existsSync: vi.fn(),
-        readdirSync: vi.fn(),
-        mkdir: vi.fn(),
-        rm: vi.fn(),
-        mv: vi.fn(),
-        unlinkSync: vi.fn(),
-        appendFileSync: vi.fn(),
-        copyFile: vi.fn(),
-        getGgufFiles: vi.fn(),
-        fileStat: vi.fn(),
+        writeFileSync: vi.fn().mockResolvedValue(undefined),
+        writeBlob: vi.fn().mockResolvedValue(undefined),
+        readFileSync: vi.fn().mockResolvedValue('file contents'),
+        existsSync: vi.fn().mockResolvedValue(true),
+        readdirSync: vi.fn().mockResolvedValue(['file.txt']),
+        mkdir: vi.fn().mockResolvedValue(undefined),
+        rm: vi.fn().mockResolvedValue(undefined),
+        mv: vi.fn().mockResolvedValue(undefined),
+        unlinkSync: vi.fn().mockResolvedValue(undefined),
+        appendFileSync: vi.fn().mockResolvedValue(undefined),
+        copyFile: vi.fn().mockResolvedValue(undefined),
+        getGgufFiles: vi.fn().mockResolvedValue({ gguf: [], nonGguf: [] }),
+        fileStat: vi.fn().mockResolvedValue(undefined),
       },
     }
   })
@@ -145,6 +145,26 @@ describe('fs module', () => {
       // Absolute paths are now allowed - Tauri provides sandboxing
       await fs.writeBlob('/valid/path/file', 'data')
       expect(globalThis.core.api.writeBlob).toHaveBeenCalledWith('/valid/path/file', 'data')
+    })
+  })
+
+  describe('bridge response validation', () => {
+    it('rejects invalid readFileSync payloads from the bridge', async () => {
+      globalThis.core.api.readFileSync = vi.fn().mockResolvedValue(null)
+
+      await expect(fs.readFileSync('path/to/file')).rejects.toThrow(
+        'Invalid response from core api.readFileSync: expected string, got null'
+      )
+    })
+
+    it('rejects invalid getGgufFiles payloads from the bridge', async () => {
+      globalThis.core.api.getGgufFiles = vi
+        .fn()
+        .mockResolvedValue({ gguf: ['a.gguf'], nonGguf: 'oops' })
+
+      await expect(fs.getGgufFiles(['path/to/file'])).rejects.toThrow(
+        'Invalid response from core api.getGgufFiles.nonGguf: expected string[], got string'
+      )
     })
   })
 })

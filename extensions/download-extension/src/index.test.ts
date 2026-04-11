@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+const { mockGetAppDataFolderPath, mockValidateUrlProtocol } = vi.hoisted(() => ({
+  mockGetAppDataFolderPath: vi.fn(),
+  mockValidateUrlProtocol: vi.fn(),
+}))
+
 // Mock Tauri APIs before import
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -24,9 +29,8 @@ vi.mock('@ax-studio/core', () => ({
     async getSettings() { return [] }
     async updateSettings() {}
   },
-  events: {
-    emit: vi.fn(),
-  },
+  getAppDataFolderPath: mockGetAppDataFolderPath,
+  validateUrlProtocol: mockValidateUrlProtocol,
 }))
 
 // Provide SETTINGS global (normally injected by rolldown)
@@ -42,6 +46,8 @@ describe('AxStudioDownloadManager', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     manager = new AxStudioDownloadManager('', '')
+    mockGetAppDataFolderPath.mockResolvedValue('/app/data')
+    mockValidateUrlProtocol.mockImplementation(() => {})
   })
 
   describe('_sanitizeTaskId', () => {
@@ -85,12 +91,12 @@ describe('AxStudioDownloadManager', () => {
 
       await manager.downloadFile(
         'https://example.com/model.gguf',
-        '/save/path/model.gguf',
+        '/app/data/save/path/model.gguf',
         'task-1'
       )
 
       expect(invoke).toHaveBeenCalledWith('download_files', {
-        items: [{ url: 'https://example.com/model.gguf', save_path: '/save/path/model.gguf' }],
+        items: [{ url: 'https://example.com/model.gguf', save_path: '/app/data/save/path/model.gguf' }],
         taskId: 'task-1',
         headers: {},
       })
@@ -103,19 +109,19 @@ describe('AxStudioDownloadManager', () => {
 
       await manager.downloadFile(
         'https://example.com/model.gguf',
-        '/save/path',
+        'models/model.gguf',
         'task-1',
         { url: 'http://proxy:8080' }
       )
 
       expect(invoke).toHaveBeenCalledWith('download_files', {
         items: [
-          {
-            url: 'https://example.com/model.gguf',
-            save_path: '/save/path',
-            proxy: { url: 'http://proxy:8080' },
-          },
-        ],
+            {
+              url: 'https://example.com/model.gguf',
+              save_path: 'models/model.gguf',
+              proxy: { url: 'http://proxy:8080' },
+            },
+          ],
         taskId: 'task-1',
         headers: {},
       })
@@ -128,7 +134,7 @@ describe('AxStudioDownloadManager', () => {
 
       await manager.downloadFile(
         'https://example.com/model.gguf',
-        '/save/path',
+        'models/model.gguf',
         'task-1',
         {}
       )
@@ -146,14 +152,14 @@ describe('AxStudioDownloadManager', () => {
 
       await manager.downloadFile(
         'https://example.com/model.gguf',
-        '/save/path',
+        'models/model.gguf',
         'task-1',
         null,
         { Authorization: 'Bearer hf_abc123' }
       )
 
       expect(invoke).toHaveBeenCalledWith('download_files', {
-        items: [{ url: 'https://example.com/model.gguf', save_path: '/save/path' }],
+        items: [{ url: 'https://example.com/model.gguf', save_path: 'models/model.gguf' }],
         taskId: 'task-1',
         headers: { Authorization: 'Bearer hf_abc123' },
       })
@@ -176,7 +182,7 @@ describe('AxStudioDownloadManager', () => {
       vi.mocked(invoke).mockResolvedValue(undefined)
 
       await manager.downloadFiles(
-        [{ url: 'https://example.com/file', save_path: '/path' }],
+        [{ url: 'https://example.com/file', save_path: 'models/file.gguf' }],
         'model.v1.0'
       )
 
@@ -200,7 +206,7 @@ describe('AxStudioDownloadManager', () => {
 
       const onProgress = vi.fn()
       await manager.downloadFiles(
-        [{ url: 'https://example.com/file', save_path: '/path' }],
+        [{ url: 'https://example.com/file', save_path: 'models/file.gguf' }],
         'task-1',
         undefined,
         onProgress
@@ -216,7 +222,7 @@ describe('AxStudioDownloadManager', () => {
 
       await expect(
         manager.downloadFiles(
-          [{ url: 'https://example.com/file', save_path: '/path' }],
+          [{ url: 'https://example.com/file', save_path: 'models/file.gguf' }],
           'task-1'
         )
       ).rejects.toThrow('download failed')
@@ -249,13 +255,43 @@ describe('AxStudioDownloadManager', () => {
       })
 
       await manager.downloadFiles(
-        [{ url: 'https://example.com/file', save_path: '/path' }],
+        [{ url: 'https://example.com/file', save_path: 'models/file.gguf' }],
         'task-1',
         undefined,
         onProgress
       )
 
       expect(order).toEqual(['progress', 'callback', 'unlisten'])
+    })
+
+    it('rejects invalid URL protocols before invoking Tauri', async () => {
+      mockValidateUrlProtocol.mockImplementation(() => {
+        throw new Error('Unsafe URL protocol: file:')
+      })
+
+      await expect(
+        manager.downloadFiles(
+          [{ url: 'file:///tmp/model.gguf', save_path: 'models/file.gguf' }],
+          'task-1'
+        )
+      ).rejects.toThrow('Unsafe URL protocol: file:')
+
+      expect(listen).not.toHaveBeenCalled()
+      expect(invoke).not.toHaveBeenCalled()
+    })
+
+    it('rejects absolute save paths outside the app data folder', async () => {
+      await expect(
+        manager.downloadFiles(
+          [{ url: 'https://example.com/file', save_path: '/outside/app-data/file.gguf' }],
+          'task-1'
+        )
+      ).rejects.toThrow(
+        'Download save path must stay within the Ax-Studio data folder: /outside/app-data/file.gguf'
+      )
+
+      expect(listen).not.toHaveBeenCalled()
+      expect(invoke).not.toHaveBeenCalled()
     })
   })
 
