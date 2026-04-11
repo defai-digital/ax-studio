@@ -18,9 +18,11 @@ function openUrl(url: string) {
 
 interface SourcesFooterProps {
   citationData: CitationData
+  /** Whether to show the confidence badge (controlled by guardrails setting) */
+  showConfidence?: boolean
 }
 
-export function SourcesFooter({ citationData }: SourcesFooterProps) {
+export function SourcesFooter({ citationData, showConfidence = true }: SourcesFooterProps) {
   const [expanded, setExpanded] = useState(false)
   const { sources, confidence } = citationData
 
@@ -42,8 +44,12 @@ export function SourcesFooter({ citationData }: SourcesFooterProps) {
         <span className="text-[11px] text-muted-foreground">
           {sources.length} {sources.length === 1 ? 'source' : 'sources'} used
         </span>
-        <span className="text-[11px] text-muted-foreground">-</span>
-        <ConfidenceBadge confidence={confidence} />
+        {showConfidence && (
+          <>
+            <span className="text-[11px] text-muted-foreground">-</span>
+            <ConfidenceBadge confidence={confidence} />
+          </>
+        )}
       </button>
 
       {/* Expanded source list */}

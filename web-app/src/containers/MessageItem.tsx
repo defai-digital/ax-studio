@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { SourcesFooter } from '@/components/citations/SourcesFooter'
 import { useCitations } from '@/hooks/citations/use-citations'
 import type { CitationData } from '@/types/citation-types'
+import { useGuardrails } from '@/hooks/settings/useGuardrails'
 import { twMerge } from 'tailwind-merge'
 import {
   Reasoning,
@@ -90,6 +91,7 @@ export const MessageItem = memo(
       }
     }, [message.id, message.role, meta, hydrateCitations])
     const citationData = useCitations((s) => s.getCitations(message.id))
+    const flagLowConfidence = useGuardrails((s) => s.flagLowConfidence)
 
     const handleRating = useCallback(
       (rating: 'up' | 'down') => {
@@ -535,7 +537,10 @@ export const MessageItem = memo(
 
             {/* Sources footer — shown when citation data exists */}
             {message.role === 'assistant' && citationData && (
-              <SourcesFooter citationData={citationData} />
+              <SourcesFooter
+                citationData={citationData}
+                showConfidence={flagLowConfidence}
+              />
             )}
 
             {/* Action Bar */}

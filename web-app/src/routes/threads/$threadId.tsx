@@ -36,6 +36,7 @@ import { useThreadSplit } from '@/hooks/threads/use-thread-split'
 import { useThreadConfig } from '@/hooks/threads/use-thread-config'
 import { useThreadEffects } from '@/hooks/threads/use-thread-effects'
 import { ThreadView } from '@/containers/threads/ThreadView'
+import { useGuardrails } from '@/hooks/settings/useGuardrails'
 
 export const Route = createFileRoute('/threads/$threadId')({
   component: ThreadDetail,
@@ -89,6 +90,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   const localKnowledgeActive = useLocalKnowledge((state) =>
     state.isLocalKnowledgeEnabledForThread(threadId)
   )
+  const alwaysCiteSources = useGuardrails((s) => s.alwaysCiteSources)
   const projectId = thread?.metadata?.project?.id
   const { pinnedArtifact, clearArtifact } = useThreadArtifacts(threadId)
   const { pinnedResearch, clearResearch, handleResearchCommand } =
@@ -153,7 +155,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
       CODE_EXECUTION_INSTRUCTION +
       ARTIFACT_FORMAT_INSTRUCTION +
       (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : '') +
-      (localKnowledgeActive ? CITATION_FORMAT_INSTRUCTION : ''),
+      (localKnowledgeActive || alwaysCiteSources ? CITATION_FORMAT_INSTRUCTION : ''),
     modelOverrideId: optimizedModelConfig.modelId,
     activeTeamId,
     onCostApproval,
