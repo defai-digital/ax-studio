@@ -66,6 +66,10 @@ export const DialogDeleteModel = ({
           }
         )
       })
+      .catch((error) => {
+        console.error('Failed to delete model:', error)
+        toast.error('Failed to delete model. Please try again.')
+      })
   }
 
   // Initialize with the provided model ID or the first model if available

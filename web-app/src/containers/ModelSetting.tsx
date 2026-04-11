@@ -42,7 +42,9 @@ export function ModelSetting({
           .models()
           .getActiveModels()
           .then((models) => setActiveModels(models || []))
+          .catch((err) => console.error('Failed to refresh active models:', err))
       })
+      .catch((err) => console.error('Failed to stop model:', err))
   }, 500)
 
   const handleSettingChange = (
@@ -101,6 +103,7 @@ export function ModelSetting({
               debouncedStopModel(model.id)
             }
           })
+          .catch((err) => console.error('Failed to check active models:', err))
       }
     }
   }

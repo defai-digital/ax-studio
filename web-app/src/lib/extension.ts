@@ -124,7 +124,12 @@ export class ExtensionManager {
    * Loads all registered extension.
    */
   async load() {
-    await Promise.all(this.listExtensions().map((ext) => ext.onLoad()))
+    const results = await Promise.allSettled(this.listExtensions().map((ext) => ext.onLoad()))
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        console.error('Extension load failed:', result.reason)
+      }
+    }
   }
 
   /**
@@ -213,9 +218,14 @@ export class ExtensionManager {
     // Get active extensions
     const activeExtensions = (await this.getActive()) ?? []
     // Activate all
-    await Promise.all(
+    const results = await Promise.allSettled(
       activeExtensions.map((ext: Extension) => this.activateExtension(ext))
     )
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        console.error('Extension activation failed:', result.reason)
+      }
+    }
   }
 
   /**

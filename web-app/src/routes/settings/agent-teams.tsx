@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 
 import { useAgentTeamStore } from '@/stores/agent-team-store'
 import { useAssistant } from '@/hooks/chat/useAssistant'
@@ -189,8 +190,9 @@ function AgentTeamsContent() {
           throw new Error('Invalid team export format: expected { team: {...}, agents: [...] }')
         }
         await importTeam(data, addAssistant, deleteAssistant)
-      } catch {
-        console.error('Failed to import team file')
+      } catch (err) {
+        console.error('Failed to import team file:', err)
+        toast.error(err instanceof Error ? err.message : 'Failed to import team file')
       }
     }
     input.click()

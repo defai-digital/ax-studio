@@ -49,7 +49,8 @@ export function useThreadLocalKnowledge(threadId: string) {
         if (!chunks) return ''
 
         return `\n\n## Local Knowledge Mode (ACTIVE)\nAnswer ONLY using the context below from the user's local knowledge base. Do NOT use general training knowledge. If the context does not contain relevant information, say: "I don't have enough information in the knowledge base to answer this question."\n\n### Retrieved Context:\n${chunks}`
-      } catch {
+      } catch (err) {
+        console.error('[LocalKnowledge] Failed to prepare knowledge context:', err)
         return ''
       }
     },

@@ -193,7 +193,7 @@ export function useResearch(threadId: string) {
           }
 
           addStep({ type: 'scraping', message: `Fetching ${Math.min(results.length, scrapeTop)} pages…` })
-          const pages = await Promise.all(
+          const pageResults = await Promise.allSettled(
             results.slice(0, scrapeTop).map(async (r) => {
               let text = r.snippet || r.title || ''
               if (depth > 1) {
@@ -203,6 +203,9 @@ export function useResearch(threadId: string) {
               return { r, text }
             })
           )
+          const pages = pageResults
+            .filter((result): result is PromiseFulfilledResult<{ r: typeof results[0]; text: string }> => result.status === 'fulfilled')
+            .map((result) => result.value)
           if (signal.aborted) return []
 
           const validSummaries: string[] = []

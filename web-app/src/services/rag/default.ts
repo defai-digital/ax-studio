@@ -245,7 +245,8 @@ export class DefaultRAGService implements RAGService {
       let searchResponse: { results?: Array<Record<string, unknown>> }
       try {
         searchResponse = JSON.parse(text)
-      } catch {
+      } catch (err) {
+        console.warn('[RAG] Failed to parse search response:', err)
         return ok({
           thread_id: args.threadId,
           project_id: args.projectId,
@@ -342,7 +343,8 @@ export class DefaultRAGService implements RAGService {
       let parsed: { results?: Array<Record<string, unknown>> }
       try {
         parsed = JSON.parse(text)
-      } catch {
+      } catch (err) {
+        console.warn('[RAG] Failed to parse chunks response:', err)
         return ok({
           thread_id: args.threadId,
           scope: args.scope,
