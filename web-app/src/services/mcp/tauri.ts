@@ -12,10 +12,18 @@ import { mcpServersSchema, mcpSettingsSchema } from '@/schemas/mcp.schema'
 
 const getCoreApi = () => {
   if (!window.core?.api) {
-    throw new Error('MCP API is unavailable')
+    throw new Error(
+      'MCP API is unavailable — window.core.api not initialized. ' +
+      'This usually means the Tauri backend has not finished starting. ' +
+      'If the problem persists, try restarting the app.'
+    )
   }
 
   return window.core.api
+}
+
+const getCoreApiSafe = () => {
+  return window.core?.api ?? null
 }
 
 export class TauriMCPService extends DefaultMCPService {
@@ -28,7 +36,12 @@ export class TauriMCPService extends DefaultMCPService {
   }
 
   async getMCPConfig(): Promise<MCPConfig> {
-    const rawConfig = await getCoreApi().getMcpConfigs()
+    const api = getCoreApiSafe()
+    if (!api) {
+      console.warn('MCP API not ready, returning default config')
+      return { mcpServers: {}, mcpSettings: { ...DEFAULT_MCP_SETTINGS } }
+    }
+    const rawConfig = await api.getMcpConfigs()
     const configString = typeof rawConfig === 'string' ? rawConfig.trim() : ''
 
     const defaultResponse = (): MCPConfig => ({
@@ -78,11 +91,15 @@ export class TauriMCPService extends DefaultMCPService {
   }
 
   async getTools(): Promise<MCPTool[]> {
-    return (await getCoreApi().getTools()) ?? []
+    const api = getCoreApiSafe()
+    if (!api) return []
+    return (await api.getTools()) ?? []
   }
 
   async getConnectedServers(): Promise<string[]> {
-    return (await getCoreApi().getConnectedServers()) ?? []
+    const api = getCoreApiSafe()
+    if (!api) return []
+    return (await api.getConnectedServers()) ?? []
   }
 
   async callTool(args: {

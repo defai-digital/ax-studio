@@ -28,22 +28,23 @@ import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
 
 const httpFetch = isPlatformTauri() ? tauriFetch : globalThis.fetch
 
-// Cache preflight results so each model is only validated once.
-// Failed models are remembered permanently (until page reload).
-// Successful models are cached for 10 minutes.
-const PREFLIGHT_TTL_MS = 10 * 60 * 1000
+// Cache preflight results so each model is only validated once per TTL window.
+// Successful models are cached for 10 minutes; failed models for 2 minutes
+// (so transient failures don't permanently block a model).
+const PREFLIGHT_SUCCESS_TTL_MS = 10 * 60 * 1000
+const PREFLIGHT_FAILURE_TTL_MS = 2 * 60 * 1000
 const preflightCache = new Map<string, { ok: boolean; ts: number }>()
 
 function isModelPreflightCached(modelId: string, providerId: string): boolean | null {
   const key = `${providerId}::${modelId}`
   const entry = preflightCache.get(key)
   if (!entry) return null
-  if (!entry.ok) return false // failed models stay rejected
-  if (Date.now() - entry.ts > PREFLIGHT_TTL_MS) {
+  const ttl = entry.ok ? PREFLIGHT_SUCCESS_TTL_MS : PREFLIGHT_FAILURE_TTL_MS
+  if (Date.now() - entry.ts > ttl) {
     preflightCache.delete(key)
     return null
   }
-  return true
+  return entry.ok ? true : false
 }
 
 function cachePreflightResult(modelId: string, providerId: string, ok: boolean) {
