@@ -14,6 +14,7 @@ import { useThreads } from '@/hooks/threads/useThreads'
 import { ModelSetting } from '@/containers/ModelSetting'
 import { Fzf } from 'fzf'
 import { localStorageKey } from '@/constants/localStorage'
+import { safeStorageSetItem } from '@/lib/storage'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useFavoriteModel } from '@/hooks/models/useFavoriteModel'
 import { predefinedProviders } from '@/constants/providers'
@@ -84,9 +85,11 @@ function estimateRowHeight(row: FlatRow) {
 // Helper functions for localStorage
 const setLastUsedModel = (provider: string, model: string) => {
   try {
-    localStorage.setItem(
+    safeStorageSetItem(
+      localStorage,
       localStorageKey.lastUsedModel,
-      JSON.stringify({ provider, model })
+      JSON.stringify({ provider, model }),
+      'DropdownModelProvider'
     )
   } catch (error) {
     console.debug('Failed to set last used model in localStorage:', error)

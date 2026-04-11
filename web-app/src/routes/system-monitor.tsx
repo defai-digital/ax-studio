@@ -38,8 +38,15 @@ function SystemMonitorContent() {
   }, [updateSystemUsage, serviceHub])
 
   // Calculate RAM usage percentage
+  const cpu = hardwareData.cpu
+  const totalMemory =
+    hardwareData.total_memory > 0
+      ? hardwareData.total_memory
+      : systemUsage.total_memory
   const ramUsagePercentage =
-    toNumber(systemUsage.used_memory / hardwareData.total_memory) * 100
+    totalMemory > 0
+      ? toNumber(systemUsage.used_memory / totalMemory) * 100
+      : 0
 
   return (
     <div className="flex flex-col h-full bg-background overflow-y-auto p-6">
@@ -61,21 +68,19 @@ function SystemMonitorContent() {
               <span className="text-muted-foreground">
                 {t('system-monitor:model')}
               </span>
-              <span className="text-foreground">{hardwareData.cpu.name}</span>
+              <span className="text-foreground">{cpu?.name || 'Unknown'}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">
                 {t('system-monitor:cores')}
               </span>
-              <span className="text-foreground">
-                {hardwareData.cpu.core_count}
-              </span>
+              <span className="text-foreground">{cpu?.core_count ?? 0}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">
                 {t('system-monitor:architecture')}
               </span>
-              <span className="text-foreground">{hardwareData.cpu.arch}</span>
+              <span className="text-foreground">{cpu?.arch || 'Unknown'}</span>
             </div>
             <div className="mt-4">
               <div className="flex justify-between items-center mb-2">
@@ -102,7 +107,7 @@ function SystemMonitorContent() {
                 {t('system-monitor:totalRam')}
               </span>
               <span className="text-foreground">
-                {formatMegaBytes(hardwareData.total_memory)}
+                {formatMegaBytes(totalMemory)}
               </span>
             </div>
             <div className="flex justify-between items-center">
@@ -111,7 +116,7 @@ function SystemMonitorContent() {
               </span>
               <span className="text-foreground">
                 {formatMegaBytes(
-                  hardwareData.total_memory - systemUsage.used_memory
+                  Math.max(0, totalMemory - systemUsage.used_memory)
                 )}
               </span>
             </div>

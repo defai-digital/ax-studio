@@ -330,7 +330,13 @@ export class DefaultModelsService implements ModelsService {
   }
 
   async deleteModel(id: string, provider?: string): Promise<void> {
-    return this.getEngine(provider)?.delete(id)
+    const engine = this.getEngine(provider)
+    if (!engine) {
+      throw new Error(
+        `[ModelsService] Cannot delete model: engine "${provider ?? defaultProvider}" is not available.`
+      )
+    }
+    return engine.delete(id)
   }
 
   async getActiveModels(provider?: string): Promise<string[]> {

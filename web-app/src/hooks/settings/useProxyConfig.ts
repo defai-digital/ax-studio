@@ -3,6 +3,11 @@ import { persist, type PersistStorage, type StorageValue } from 'zustand/middlew
 import { AES, enc } from 'crypto-js'
 import { localStorageKey } from '@/constants/localStorage'
 import { encrypt as cryptoEncrypt, decrypt as cryptoDecrypt } from '@/lib/crypto'
+import {
+  safeStorageGetItem,
+  safeStorageRemoveItem,
+  safeStorageSetItem,
+} from '@/lib/storage'
 
 // Legacy decrypt — still used to read values written by the previous
 // hardcoded-AES implementation, so existing users don't lose their
@@ -21,7 +26,7 @@ const tryLegacyDecrypt = (value: string): string | null => {
 
 const encryptedStorage = {
   getItem: async (name: string): Promise<StorageValue<ProxyConfigState> | null> => {
-    const item = localStorage.getItem(name)
+    const item = safeStorageGetItem(localStorage, name, 'useProxyConfig')
     if (!item) return null
     let parsed: StorageValue<ProxyConfigState>
     try {
@@ -72,10 +77,15 @@ const encryptedStorage = {
         proxyPassword: encryptedPassword,
       },
     }
-    localStorage.setItem(name, JSON.stringify(payload))
+    safeStorageSetItem(
+      localStorage,
+      name,
+      JSON.stringify(payload),
+      'useProxyConfig'
+    )
   },
   removeItem: (name: string) => {
-    localStorage.removeItem(name)
+    safeStorageRemoveItem(localStorage, name, 'useProxyConfig')
   },
 } satisfies PersistStorage<ProxyConfigState>
 

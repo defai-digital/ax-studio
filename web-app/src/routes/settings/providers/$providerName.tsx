@@ -28,9 +28,13 @@ import { SelectModelGroups } from '@/containers/dialogs/model/SelectModelGroups'
 import { groupModelsByPrefix, type ModelGroup } from '@/lib/model-group-utils'
 import { getModelCapabilities } from '@/lib/models'
 import ProvidersAvatar from '@/components/common/ProvidersAvatar'
+import { z } from 'zod/v4'
 
 const URL_REGEX = /^https?:\/\/[^\s]+$/
 const XSS_PATTERN = /<[^>]*>|javascript:/i
+const providerSearchSchema = z.object({
+  step: z.string().optional(),
+})
 
 function validateSettingValue(
   key: string,
@@ -59,12 +63,8 @@ function validateSettingValue(
 // as route.threadsDetail
 export const Route = createFileRoute('/settings/providers/$providerName')({
   component: ProviderDetail,
-  validateSearch: (search: Record<string, unknown>): { step?: string } => {
-    // validate and parse the search params into a typed state
-    return {
-      step: String(search?.step),
-    }
-  },
+  validateSearch: (search: Record<string, unknown>): { step?: string } =>
+    providerSearchSchema.parse(search),
 })
 
 function ProviderDetail() {

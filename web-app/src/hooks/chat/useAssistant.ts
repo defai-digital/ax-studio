@@ -2,6 +2,7 @@ import { getServiceHub } from '@/hooks/useServiceHub'
 import { Assistant as CoreAssistant } from '@ax-studio/core'
 import { create } from 'zustand'
 import { localStorageKey } from '@/constants/localStorage'
+import { safeStorageGetItem, safeStorageSetItem } from '@/lib/storage'
 
 interface AssistantState {
   assistants: Assistant[]
@@ -19,7 +20,11 @@ interface AssistantState {
 // Helper functions for localStorage
 const getLastUsedAssistantId = (): string | null => {
   try {
-    return localStorage.getItem(localStorageKey.lastUsedAssistant)
+    return safeStorageGetItem(
+      localStorage,
+      localStorageKey.lastUsedAssistant,
+      'useAssistant'
+    )
   } catch (error) {
     console.debug('Failed to get last used assistant from localStorage:', error)
     return null
@@ -28,7 +33,12 @@ const getLastUsedAssistantId = (): string | null => {
 
 const setLastUsedAssistantId = (assistantId: string) => {
   try {
-    localStorage.setItem(localStorageKey.lastUsedAssistant, assistantId)
+    safeStorageSetItem(
+      localStorage,
+      localStorageKey.lastUsedAssistant,
+      assistantId,
+      'useAssistant'
+    )
   } catch (error) {
     console.debug('Failed to set last used assistant in localStorage:', error)
   }

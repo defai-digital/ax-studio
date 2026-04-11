@@ -1,4 +1,8 @@
 import { localStorageKey } from '@/constants/localStorage'
+import {
+  safeStorageGetItem,
+  safeStorageSetItem,
+} from '@/lib/storage'
 
 // Validation helper for stored settings structure
 const isValidStoredSettings = (parsed: unknown): parsed is { state: { currentLanguage: string } } => {
@@ -63,7 +67,11 @@ Object.entries(localeFiles).forEach(([path, module]) => {
 // Get stored language preference
 export const getStoredLanguage = (): string => {
   try {
-    const stored = localStorage.getItem(localStorageKey.settingGeneral)
+    const stored = safeStorageGetItem(
+      localStorage,
+      localStorageKey.settingGeneral,
+      'i18n'
+    )
     const parsed = stored ? JSON.parse(stored) : {}
     if (isValidStoredSettings(parsed)) {
       return parsed.state.currentLanguage
@@ -131,7 +139,11 @@ const changeLanguage = (lng: string): void => {
     
     // Update localStorage
     try {
-      const stored = localStorage.getItem(localStorageKey.settingGeneral)
+      const stored = safeStorageGetItem(
+        localStorage,
+        localStorageKey.settingGeneral,
+        'i18n'
+      )
       const parsed = stored ? JSON.parse(stored) : { state: {} }
       const parsedState =
         parsed &&
@@ -145,9 +157,11 @@ const changeLanguage = (lng: string): void => {
         ...parsedState,
         currentLanguage: lng,
       }
-      localStorage.setItem(
+      safeStorageSetItem(
+        localStorage,
         localStorageKey.settingGeneral,
-        JSON.stringify({ ...parsed, state: nextState })
+        JSON.stringify({ ...parsed, state: nextState }),
+        'i18n'
       )
     } catch (error) {
       console.error('Failed to save language preference:', error)

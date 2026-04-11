@@ -50,18 +50,28 @@ function IntegrationsPage() {
 
   const handleConfirmConnect = async (credentials: Record<string, string>) => {
     if (!selectedIntegration) return
-    await connect(selectedIntegration.id, credentials)
-    toast.success(`${selectedIntegration.name} connected successfully`)
-    refreshStatuses()
+    try {
+      await connect(selectedIntegration.id, credentials)
+      toast.success(`${selectedIntegration.name} connected successfully`)
+      refreshStatuses()
+    } catch (error) {
+      console.error('Failed to connect integration:', error)
+      toast.error(`Failed to connect ${selectedIntegration.name}`)
+    }
   }
 
   const handleConfirmConnectOAuth = async (
     credentials: Record<string, string>
   ) => {
     if (!selectedIntegration) return
-    await connectOAuth(selectedIntegration.id, credentials)
-    toast.success(`${selectedIntegration.name} connected successfully`)
-    refreshStatuses()
+    try {
+      await connectOAuth(selectedIntegration.id, credentials)
+      toast.success(`${selectedIntegration.name} connected successfully`)
+      refreshStatuses()
+    } catch (error) {
+      console.error('Failed to connect integration with OAuth:', error)
+      toast.error(`Failed to connect ${selectedIntegration.name}`)
+    }
   }
 
   const handleConfirmDisconnect = async () => {

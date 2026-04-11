@@ -50,6 +50,7 @@ import { DEFAULT_MODEL_QUANTIZATIONS } from '@/constants/models'
 import { Button } from '@/components/ui/button'
 import { RenderMarkdown } from '@/containers/RenderMarkdown'
 import { sanitizeModelId } from '@/lib/utils'
+import { z } from 'zod/v4'
 
 type FilterTag = 'all' | 'downloaded' | 'tools' | 'vision' | 'reasoning'
 
@@ -57,11 +58,18 @@ type SearchParams = {
   repo: string
 }
 
+const hubSearchSchema = z
+  .object({
+    repo: z.string().optional(),
+  })
+  .transform((value) => ({
+    repo: value.repo ?? '',
+  }))
+
 export const Route = createFileRoute(route.hub.index)({
   component: HubContent,
-  validateSearch: (search: Record<string, unknown>): SearchParams => ({
-    repo: search.repo as SearchParams['repo'],
-  }),
+  validateSearch: (search: Record<string, unknown>): SearchParams =>
+    hubSearchSchema.parse(search),
 })
 
 function HubContent() {

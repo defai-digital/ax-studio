@@ -1,6 +1,7 @@
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
+import { persist } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
+import { createSafeJSONStorage } from '@/lib/storage'
 
 export const MEMORY_LIMIT = 50
 
@@ -156,7 +157,7 @@ export const useMemory = create<MemoryState>()(
     }),
     {
       name: localStorageKey.memoryStore,
-      storage: createJSONStorage(() => localStorage),
+      storage: createSafeJSONStorage(() => localStorage, 'useMemory'),
     }
   )
 )

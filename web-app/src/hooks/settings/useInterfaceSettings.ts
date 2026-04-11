@@ -1,7 +1,8 @@
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
+import { persist } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
 import { useTheme } from '@/hooks/ui/useTheme'
+import { createSafeJSONStorage } from '@/lib/storage'
 
 export type FontSize = '14px' | '15px' | '16px' | '18px' | '20px'
 
@@ -131,8 +132,9 @@ const createDefaultInterfaceValues = (): InterfaceSettingsPersistedSlice => {
   }
 }
 
-const interfaceStorage = createJSONStorage<InterfaceSettingsState>(
-  () => localStorage
+const interfaceStorage = createSafeJSONStorage<InterfaceSettingsState>(
+  () => localStorage,
+  'useInterfaceSettings'
 )
 
 export const useInterfaceSettings = create<InterfaceSettingsState>()(

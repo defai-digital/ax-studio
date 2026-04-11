@@ -1,6 +1,7 @@
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
+import { persist } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
+import { createSafeJSONStorage } from '@/lib/storage'
 
 interface RouterSettingsState {
   /** Global toggle */
@@ -97,7 +98,7 @@ export const useRouterSettings = create<RouterSettingsState>()(
     }),
     {
       name: localStorageKey.routerSettings,
-      storage: createJSONStorage(() => localStorage),
+      storage: createSafeJSONStorage(() => localStorage, 'useRouterSettings'),
       partialize: (state) => ({
         enabled: state.enabled,
         routerModelId: state.routerModelId,

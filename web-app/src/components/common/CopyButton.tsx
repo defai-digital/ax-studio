@@ -2,6 +2,24 @@ import { Button } from '@/components/ui/button'
 import { IconCopy, IconCopyCheck } from '@tabler/icons-react'
 import { useEffect, useRef, useState } from 'react'
 
+const fallbackCopyText = (text: string): boolean => {
+  try {
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.setAttribute('readonly', '')
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    const copied = document.execCommand('copy')
+    document.body.removeChild(textarea)
+    return copied
+  } catch (error) {
+    console.error('Clipboard fallback failed:', error)
+    return false
+  }
+}
+
 export const CopyButton = ({ text }: { text: string }) => {
   const [copied, setCopied] = useState(false)
   // Hold the timer in a ref so rapid re-copies don't stack timers and so
@@ -18,8 +36,23 @@ export const CopyButton = ({ text }: { text: string }) => {
     }
   }, [])
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(text)
+  const handleCopy = async () => {
+    let copiedSuccessfully = false
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+        copiedSuccessfully = true
+      } else {
+        copiedSuccessfully = fallbackCopyText(text)
+      }
+    } catch (error) {
+      console.error('Failed to copy text to clipboard:', error)
+      copiedSuccessfully = fallbackCopyText(text)
+    }
+
+    if (!copiedSuccessfully) return
+
     setCopied(true)
     if (resetTimerRef.current) clearTimeout(resetTimerRef.current)
     resetTimerRef.current = setTimeout(() => {

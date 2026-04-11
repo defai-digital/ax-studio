@@ -37,6 +37,7 @@ import { useThreadConfig } from '@/hooks/threads/use-thread-config'
 import { useThreadEffects } from '@/hooks/threads/use-thread-effects'
 import { ThreadView } from '@/containers/threads/ThreadView'
 import { useGuardrails } from '@/hooks/settings/useGuardrails'
+import { toast } from 'sonner'
 
 export const Route = createFileRoute('/threads/$threadId')({
   component: ThreadDetail,
@@ -243,7 +244,15 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   const handleSubmit = useCallback(
     async (text: string) => {
       if (handleResearchCommand(text)) return
-      await processAndSendMessage(text)
+      try {
+        await processAndSendMessage(text)
+      } catch (error) {
+        console.error('Failed to submit thread message:', error)
+        toast.error('Failed to send message', {
+          description:
+            error instanceof Error ? error.message : 'Please try again.',
+        })
+      }
     },
     [processAndSendMessage, handleResearchCommand]
   )

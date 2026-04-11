@@ -93,14 +93,17 @@ fn get_vulkan_gpus_internal() -> Result<Vec<GpuInfo>, Box<dyn std::error::Error>
             .map(|heap| heap.size / (1024 * 1024))
             .sum();
 
-        let device_uuid = physical_device.properties().device_uuid.unwrap_or([0; 16]);
+        let device_uuid = properties
+            .device_uuid
+            .map(|uuid| parse_uuid(&uuid))
+            .unwrap_or_else(|| format!("vulkan-gpu-{}-{}", i, properties.device_id));
         let driver_version = format!("{}", properties.driver_version);
 
         let device_info = GpuInfo {
             name: properties.device_name.clone(),
             total_memory,
             vendor: Vendor::from_vendor_id(properties.vendor_id),
-            uuid: parse_uuid(&device_uuid),
+            uuid: device_uuid,
             driver_version,
             nvidia_info: None,
             vulkan_info: Some(VulkanInfo {

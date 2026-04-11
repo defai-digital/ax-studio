@@ -75,6 +75,9 @@ export const MessageItem = memo(
   }: MessageItemProps) => {
     const selectedModel = useModelProvider((state) => state.selectedModel)
     const updateMessage = useMessages((state) => state.updateMessage)
+    const storedThreadMessage = useMessages((state) =>
+      threadId ? state.messages[threadId]?.find((m) => m.id === message.id) : undefined
+    )
     const [previewImage, setPreviewImage] = useState<{
       url: string
       filename?: string
@@ -97,19 +100,18 @@ export const MessageItem = memo(
 
     const handleRating = useCallback(
       (rating: 'up' | 'down') => {
-        if (!threadId) return
+        if (!threadId || !storedThreadMessage) return
         const existingMeta = (message.metadata ?? {}) as Record<string, unknown>
         const newRating = existingMeta.rating === rating ? undefined : rating
         updateMessage({
-          id: message.id,
-          thread_id: threadId,
+          ...storedThreadMessage,
           metadata: {
             ...existingMeta,
             rating: newRating,
           },
-        } as any)
+        })
       },
-      [message.id, message.metadata, threadId, updateMessage]
+      [message.metadata, storedThreadMessage, threadId, updateMessage]
     )
 
     const handleRegenerate = useCallback(() => {
@@ -419,7 +421,8 @@ export const MessageItem = memo(
       const lastIndex = new Map<string, number>()
       message.parts.forEach((part, i) => {
         if (part.type === 'data-agentStatus') {
-          const data = (part as any).data as AgentStatusData
+          const data = (part as { data?: AgentStatusData }).data
+          if (!data?.agent_id) return
           lastIndex.set(data.agent_id, i)
         }
       })
@@ -512,7 +515,8 @@ export const MessageItem = memo(
                     i
                   )
                 case 'data-agentStatus': {
-                  const data = (part as any).data as AgentStatusData
+                  const data = (part as { data?: AgentStatusData }).data
+                  if (!data?.agent_id || !data.agent_name) return null
                   // Skip superseded status parts (e.g., 'running' followed by 'complete')
                   if (latestAgentStatusIndex.get(data.agent_id) !== i) return null
                   return (
@@ -529,7 +533,8 @@ export const MessageItem = memo(
                   )
                 }
                 case 'data-runLog': {
-                  const data = (part as any).data as RunLogData
+                  const data = (part as { data?: RunLogData }).data
+                  if (!data?.id) return null
                   return <RunLogSummary key={`runlog-${data.id}`} runLog={data} />
                 }
                 default:

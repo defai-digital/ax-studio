@@ -13,6 +13,27 @@ export interface FileMetadata {
 
 const FILE_METADATA_START = '[ATTACHED_FILES]'
 const FILE_METADATA_END = '[/ATTACHED_FILES]'
+const FILE_METADATA_FIELD_REGEX = /(?:^|,\s*)(file_id|name|type|size|chunks|mode):\s*/g
+
+const parseMetadataLine = (line: string): Record<string, string> => {
+  const map: Record<string, string> = {}
+  const matches = Array.from(line.matchAll(FILE_METADATA_FIELD_REGEX))
+
+  matches.forEach((match, index) => {
+    const key = match[1]
+    if (!key || match.index == null) return
+
+    const valueStart = match.index + match[0].length
+    const valueEnd =
+      index + 1 < matches.length && matches[index + 1].index != null
+        ? matches[index + 1].index
+        : line.length
+
+    map[key] = line.slice(valueStart, valueEnd).trim()
+  })
+
+  return map
+}
 
 /**
  * Inject file metadata into user prompt at the end
@@ -73,34 +94,28 @@ export function extractFilesFromPrompt(prompt: string): {
   const lines = fileBlock.trim().split('\n')
   for (const line of lines) {
     const trimmed = line.replace(/^\s*-\s*/, '').trim()
-    const parts = trimmed.split(',')
-    const map: Record<string, string> = {}
-    for (const part of parts) {
-      const [k, ...rest] = part.split(':')
-      if (!k || rest.length === 0) continue
-      map[k.trim()] = rest.join(':').trim()
-    }
+    const map = parseMetadataLine(trimmed)
     const id = map['file_id']
     const name = map['name']
     if (!id || !name) continue
     const type = map['type']
     const size = map['size'] ? Number(map['size']) : undefined
     const chunkCount = map['chunks'] ? Number(map['chunks']) : undefined
-    const fileObj: FileMetadata = { id, name };
+    const fileObj: FileMetadata = { id, name }
     if (type) {
-      fileObj.type = type;
+      fileObj.type = type
     }
     if (typeof size === 'number' && !Number.isNaN(size)) {
-      fileObj.size = size;
+      fileObj.size = size
     }
     if (typeof chunkCount === 'number' && !Number.isNaN(chunkCount)) {
-      fileObj.chunkCount = chunkCount;
+      fileObj.chunkCount = chunkCount
     }
     const injectionMode = map['mode']
     if (injectionMode === 'inline' || injectionMode === 'embeddings') {
       fileObj.injectionMode = injectionMode
     }
-    files.push(fileObj);
+    files.push(fileObj)
   }
 
   // Extract clean prompt (everything before [ATTACHED_FILES])

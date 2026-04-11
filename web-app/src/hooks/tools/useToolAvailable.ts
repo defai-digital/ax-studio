@@ -1,6 +1,7 @@
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
+import { persist } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
+import { createSafeJSONStorage } from '@/lib/storage'
 import { MCPTool } from '@/types/completion'
 
 // Helper function to create composite key for server+tool
@@ -150,7 +151,7 @@ export const useToolAvailable = create<ToolDisabledState>()(
     }),
     {
       name: localStorageKey.toolAvailability,
-      storage: createJSONStorage(() => localStorage),
+      storage: createSafeJSONStorage(() => localStorage, 'useToolAvailable'),
       // Persist all state
       partialize: (state) => ({
         disabledTools: state.disabledTools,

@@ -31,16 +31,25 @@ import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { ModelInfoHoverCard } from '@/containers/ModelInfoHoverCard'
 import { DEFAULT_MODEL_QUANTIZATIONS } from '@/constants/models'
 import { useTranslation } from '@/i18n'
+import { z } from 'zod/v4'
+import { toast } from 'sonner'
 
 type SearchParams = {
   repo: string
 }
 
+const hubModelSearchSchema = z
+  .object({
+    repo: z.string().optional(),
+  })
+  .transform((value) => ({
+    repo: value.repo ?? '',
+  }))
+
 export const Route = createFileRoute('/hub/$modelId')({
   component: HubModelDetailContent,
-  validateSearch: (search: Record<string, unknown>): SearchParams => ({
-    repo: search.repo as SearchParams['repo'],
-  }),
+  validateSearch: (search: Record<string, unknown>): SearchParams =>
+    hubModelSearchSchema.parse(search),
 })
 
 function HubModelDetailContent() {
@@ -541,22 +550,32 @@ function HubModelDetailContent() {
                             <Button
                               size="sm"
                               className="rounded-lg"
-                              onClick={() => {
-                                addLocalDownloadingModel(variant.model_id)
-                                serviceHub
-                                  .models()
-                                  .pullModelWithMetadata(
-                                    variant.model_id,
-                                    variant.path,
-                                    (
-                                      modelData.mmproj_models?.find(
-                                        (e) =>
-                                          e.model_id.toLowerCase() ===
-                                          'mmproj-f16'
-                                      ) || modelData.mmproj_models?.[0]
-                                    )?.path,
-                                    huggingfaceToken
-                                  )
+                              onClick={async () => {
+                                try {
+                                  addLocalDownloadingModel(variant.model_id)
+                                  await serviceHub
+                                    .models()
+                                    .pullModelWithMetadata(
+                                      variant.model_id,
+                                      variant.path,
+                                      (
+                                        modelData.mmproj_models?.find(
+                                          (e) =>
+                                            e.model_id.toLowerCase() ===
+                                            'mmproj-f16'
+                                        ) || modelData.mmproj_models?.[0]
+                                      )?.path,
+                                      huggingfaceToken
+                                    )
+                                } catch (error) {
+                                  console.error('Failed to start model download:', error)
+                                  toast.error('Failed to download model', {
+                                    description:
+                                      error instanceof Error
+                                        ? error.message
+                                        : 'Please try again.',
+                                  })
+                                }
                               }}
                               variant="outline"
                             >

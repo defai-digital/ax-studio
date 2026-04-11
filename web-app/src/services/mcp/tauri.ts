@@ -129,11 +129,25 @@ export class TauriMCPService extends DefaultMCPService {
   }
 
   async activateMCPServer(name: string, config: MCPServerConfig): Promise<void> {
-    return await invoke('activate_mcp_server', { name, config })
+    try {
+      await invoke('activate_mcp_server', { name, config })
+    } catch (error) {
+      console.error(`Failed to activate MCP server "${name}":`, error)
+      throw error instanceof Error
+        ? error
+        : new Error(`Failed to activate MCP server "${name}"`)
+    }
   }
 
   async deactivateMCPServer(name: string): Promise<void> {
-    return await invoke('deactivate_mcp_server', { name })
+    try {
+      await invoke('deactivate_mcp_server', { name })
+    } catch (error) {
+      console.error(`Failed to deactivate MCP server "${name}":`, error)
+      throw error instanceof Error
+        ? error
+        : new Error(`Failed to deactivate MCP server "${name}"`)
+    }
   }
 
 }

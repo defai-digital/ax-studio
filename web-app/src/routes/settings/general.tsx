@@ -74,12 +74,21 @@ function General() {
 
   useEffect(() => {
     const fetchDataFolder = async () => {
-      const path = await serviceHub.app().getAppDataFolder()
-      setAppDataFolder(path)
+      try {
+        const path = await serviceHub.app().getAppDataFolder()
+        setAppDataFolder(path)
+      } catch (error) {
+        console.error('Failed to read app data folder:', error)
+        toast.error(
+          t('settings:general.failedToLoadDataFolder', {
+            defaultValue: 'Failed to load app data folder',
+          })
+        )
+      }
     }
 
     fetchDataFolder()
-  }, [serviceHub])
+  }, [serviceHub, t])
 
   const [isResetting, setIsResetting] = useState(false)
 
@@ -120,11 +129,18 @@ function General() {
   }
 
   const handleDataFolderChange = async () => {
-    const selectedPath = await serviceHub.dialog().open({
-      multiple: false,
-      directory: true,
-      defaultPath: appDataFolder,
-    })
+    let selectedPath: string | string[] | null = null
+    try {
+      selectedPath = await serviceHub.dialog().open({
+        multiple: false,
+        directory: true,
+        defaultPath: appDataFolder,
+      })
+    } catch (error) {
+      console.error('Failed to open data folder picker:', error)
+      toast.error(t('settings:general.failedToRelocateDataFolderDesc'))
+      return
+    }
 
     if (selectedPath === appDataFolder) return
     if (selectedPath !== null) {

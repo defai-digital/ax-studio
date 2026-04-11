@@ -5,6 +5,7 @@ import { useThreadManagement } from '@/hooks/threads/useThreadManagement'
 import { useThreads } from '@/hooks/threads/useThreads'
 import { useAssistant } from '@/hooks/chat/useAssistant'
 import { useTranslation } from '@/i18n/react-i18next-compat'
+import { toast } from 'sonner'
 
 import ChatInput from '@/containers/ChatInput'
 import HeaderPage from '@/containers/HeaderPage'
@@ -75,8 +76,15 @@ function ProjectPageContent() {
     projectPrompt?: string | null,
   ) => {
     if (project) {
-      await updateFolder(project.id, name, assistantId, logo, projectPrompt)
-      setEditDialogOpen(false)
+      try {
+        await updateFolder(project.id, name, assistantId, logo, projectPrompt)
+        setEditDialogOpen(false)
+      } catch (error) {
+        console.error('Failed to update project:', error)
+        toast.error(
+          error instanceof Error ? error.message : 'Failed to update project'
+        )
+      }
     }
   }
 

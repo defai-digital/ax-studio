@@ -1,8 +1,9 @@
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
+import { persist } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
 import { ANTHROPIC_DEFAULT_HEADERS } from '@/constants/providers'
 import { mergeProviders } from '@/lib/providers/model-provider-merge'
+import { createSafeJSONStorage } from '@/lib/storage'
 
 function syncSelectedModel(
   providers: ModelProvider[],
@@ -192,7 +193,34 @@ export const useModelProvider = create<ModelProviderState>()(
     }),
     {
       name: localStorageKey.modelProvider,
-      storage: createJSONStorage(() => localStorage),
+      storage: createSafeJSONStorage(() => localStorage, 'useModelProvider'),
+      partialize: (state) => ({
+        providers: state.providers.map((provider) => ({
+          ...provider,
+          models: provider.models.map((model) => ({
+            id: model.id,
+            model: model.model,
+            name: model.name,
+            capabilities: model.capabilities,
+            embedding: model.embedding,
+            provider: model.provider,
+            settings: model.settings,
+          })),
+        })),
+        selectedProvider: state.selectedProvider,
+        selectedModel: state.selectedModel
+          ? {
+              id: state.selectedModel.id,
+              model: state.selectedModel.model,
+              name: state.selectedModel.name,
+              capabilities: state.selectedModel.capabilities,
+              embedding: state.selectedModel.embedding,
+              provider: state.selectedModel.provider,
+              settings: state.selectedModel.settings,
+            }
+          : null,
+        deletedModels: state.deletedModels,
+      }),
       migrate: (persistedState: unknown, version: number) => {
         // Deep-clone the persisted state before mutating it. The previous
         // implementation mutated the input object in place, which can

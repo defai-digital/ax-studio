@@ -1,9 +1,10 @@
 import { create } from 'zustand'
 import { localStorageKey } from '@/constants/localStorage'
-import { createJSONStorage, persist } from 'zustand/middleware'
+import { persist } from 'zustand/middleware'
 import { getServiceHub } from '@/hooks/useServiceHub'
 import type { CatalogModel } from '@/services/models/types'
 import { sanitizeModelId } from '@/lib/utils'
+import { createSafeJSONStorage } from '@/lib/storage'
 
 // Zustand store for model sources
 type ModelSourcesState = {
@@ -53,7 +54,7 @@ export const useModelSources = create<ModelSourcesState>()(
     }),
     {
       name: localStorageKey.modelSources,
-      storage: createJSONStorage(() => localStorage),
+      storage: createSafeJSONStorage(() => localStorage, 'useModelSources'),
     }
   )
 )

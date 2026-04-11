@@ -1,3 +1,5 @@
+import { safeStorageGetItem, safeStorageSetItem } from '@/lib/storage'
+
 const KEY_LENGTH_BYTES = 32
 const IV_LENGTH_BYTES = 12
 const KEY_STORAGE_KEY = 'ax-studio-hf-token-key'
@@ -30,7 +32,7 @@ const decodeBase64 = (value: string): Uint8Array => {
 }
 
 const readStoredKey = (): Uint8Array | null => {
-  const stored = localStorage.getItem(KEY_STORAGE_KEY)
+  const stored = safeStorageGetItem(localStorage, KEY_STORAGE_KEY, 'crypto')
   if (!stored) return null
 
   try {
@@ -44,7 +46,12 @@ const readStoredKey = (): Uint8Array | null => {
 }
 
 const writeStoredKey = (key: Uint8Array) => {
-  localStorage.setItem(KEY_STORAGE_KEY, encodeBase64(key))
+  safeStorageSetItem(
+    localStorage,
+    KEY_STORAGE_KEY,
+    encodeBase64(key),
+    'crypto'
+  )
 }
 
 const getEncryptionKey = async (): Promise<CryptoKey> => {
@@ -74,11 +81,9 @@ const getEncryptionKey = async (): Promise<CryptoKey> => {
 
 const legacyEncrypt = (text: string): string => {
   // Keep backwards compatible decode path for previously stored values.
-  const raw = [...utf8Encoder.encode(text)].map((byte, index) => {
-    const fallbackByte = text.charCodeAt(index)
-    return byte ^ fallbackByte
-  })
-  return encodeBase64(new Uint8Array(raw))
+  // The previous XOR write path produced bytes that `decodeLegacy` could not
+  // reverse, so new legacy writes must stay decodable by plain base64 decode.
+  return encodeBase64(utf8Encoder.encode(text))
 }
 
 export async function encrypt(text: string): Promise<string> {

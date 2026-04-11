@@ -5,6 +5,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useThreads } from '@/hooks/threads/useThreads'
 import { SESSION_STORAGE_KEY } from '@/constants/chat'
+import { safeStorageGetItem, safeStorageRemoveItem } from '@/lib/storage'
 
 export type ThreadSplitResult = {
   splitDirection: 'left' | 'right' | null
@@ -25,7 +26,11 @@ export function useThreadSplit({ thread, selectedModel, selectedProvider }: Inpu
   const createThread = useThreads((state) => state.createThread)
 
   const [splitDirection, setSplitDirection] = useState<'left' | 'right' | null>(() => {
-    const stored = sessionStorage.getItem(SESSION_STORAGE_KEY.SPLIT_VIEW_INFO)
+    const stored = safeStorageGetItem(
+      sessionStorage,
+      SESSION_STORAGE_KEY.SPLIT_VIEW_INFO,
+      'useThreadSplit'
+    )
     if (stored) {
       try {
         const parsed = JSON.parse(stored)
@@ -43,10 +48,18 @@ export function useThreadSplit({ thread, selectedModel, selectedProvider }: Inpu
   })
 
   const [splitThreadId, setSplitThreadId] = useState<string | null>(() => {
-    const stored = sessionStorage.getItem(SESSION_STORAGE_KEY.SPLIT_VIEW_INFO)
+    const stored = safeStorageGetItem(
+      sessionStorage,
+      SESSION_STORAGE_KEY.SPLIT_VIEW_INFO,
+      'useThreadSplit'
+    )
     if (stored) {
       try {
-        sessionStorage.removeItem(SESSION_STORAGE_KEY.SPLIT_VIEW_INFO)
+        safeStorageRemoveItem(
+          sessionStorage,
+          SESSION_STORAGE_KEY.SPLIT_VIEW_INFO,
+          'useThreadSplit'
+        )
         const parsed = JSON.parse(stored)
         return typeof parsed?.splitThreadId === 'string' ? parsed.splitThreadId : null
       } catch { /* ignore */ }

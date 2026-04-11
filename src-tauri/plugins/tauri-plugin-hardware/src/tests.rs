@@ -1,6 +1,5 @@
 use crate::commands::*;
 use crate::types::CpuStaticInfo;
-use tauri::test::mock_app;
 
 #[test]
 fn test_system_info() {
@@ -10,7 +9,7 @@ fn test_system_info() {
 
 #[test]
 fn test_system_usage() {
-    let usage = get_system_usage();
+    let usage = tauri::async_runtime::block_on(get_system_usage());
     println!("System Usage Info: {:?}", usage);
 }
 

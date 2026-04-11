@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
+import { persist } from 'zustand/middleware'
+import { createSafeJSONStorage } from '@/lib/storage'
 
 export type ActivityType = 'research' | 'edit' | 'knowledge-base' | 'chat' | 'agent-team'
 
@@ -66,7 +67,7 @@ export const useActivityFeed = create<ActivityFeedState>()(
     }),
     {
       name: 'ax-activity-feed',
-      storage: createJSONStorage(() => localStorage),
+      storage: createSafeJSONStorage(() => localStorage, 'useActivityFeed'),
     }
   )
 )

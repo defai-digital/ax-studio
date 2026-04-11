@@ -113,7 +113,7 @@ describe('DefaultMessagesService', () => {
       expect(result).toEqual(message)
     })
 
-    it('should return original message when extension not found', async () => {
+    it('should throw when extension not found', async () => {
       mockExtensionManager.get.mockReturnValue(null)
       const message = {
         id: 'msg-1',
@@ -122,12 +122,12 @@ describe('DefaultMessagesService', () => {
         role: 'user',
       }
 
-      const result = await messagesService.createMessage(message as never)
-
-      expect(result).toEqual(message)
+      await expect(
+        messagesService.createMessage(message as never)
+      ).rejects.toThrow('Conversational extension not available')
     })
 
-    it('should return original message when createMessage fails', async () => {
+    it('should throw when createMessage fails', async () => {
       const message = {
         id: 'msg-1',
         thread_id: 'thread-123',
@@ -138,9 +138,9 @@ describe('DefaultMessagesService', () => {
         new Error('Failed to create message')
       )
 
-      const result = await messagesService.createMessage(message as never)
-
-      expect(result).toEqual(message)
+      await expect(
+        messagesService.createMessage(message as never)
+      ).rejects.toThrow('Failed to create message')
     })
 
     it('should return message immediately for TEMPORARY_CHAT_ID without calling extension', async () => {
@@ -177,7 +177,7 @@ describe('DefaultMessagesService', () => {
       expect(result).toEqual(message)
     })
 
-    it('should return original message when extension not found', async () => {
+    it('should throw when extension not found', async () => {
       mockExtensionManager.get.mockReturnValue(null)
       const message = {
         id: 'msg-1',
@@ -186,12 +186,12 @@ describe('DefaultMessagesService', () => {
         role: 'user',
       }
 
-      const result = await messagesService.modifyMessage(message as never)
-
-      expect(result).toEqual(message)
+      await expect(
+        messagesService.modifyMessage(message as never)
+      ).rejects.toThrow('Conversational extension not available')
     })
 
-    it('should return original message when modifyMessage fails', async () => {
+    it('should throw when modifyMessage fails', async () => {
       const message = {
         id: 'msg-1',
         thread_id: 'thread-123',
@@ -202,9 +202,9 @@ describe('DefaultMessagesService', () => {
         new Error('Failed to modify')
       )
 
-      const result = await messagesService.modifyMessage(message as never)
-
-      expect(result).toEqual(message)
+      await expect(
+        messagesService.modifyMessage(message as never)
+      ).rejects.toThrow('Failed to modify')
     })
 
     it('should return message immediately for TEMPORARY_CHAT_ID without calling extension', async () => {
@@ -240,12 +240,12 @@ describe('DefaultMessagesService', () => {
       expect(result).toBeUndefined()
     })
 
-    it('should return undefined when extension not found', async () => {
+    it('should throw when extension not found', async () => {
       mockExtensionManager.get.mockReturnValue(null)
 
-      const result = await messagesService.deleteMessage('thread-123', 'msg-1')
-
-      expect(result).toBeUndefined()
+      await expect(
+        messagesService.deleteMessage('thread-123', 'msg-1')
+      ).rejects.toThrow('Conversational extension not available')
     })
 
     it('should handle deleteMessage error', async () => {

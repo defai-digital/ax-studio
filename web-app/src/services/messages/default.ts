@@ -41,7 +41,9 @@ export class DefaultMessagesService implements MessagesService {
     const extension = ExtensionManager.getInstance().get<ConversationalExtension>(
       ExtensionTypeEnum.Conversational
     )
-    if (!extension) return message
+    if (!extension) {
+      throw new Error('Conversational extension not available')
+    }
 
     try {
       return await extension.createMessage(message)
@@ -65,7 +67,9 @@ export class DefaultMessagesService implements MessagesService {
     const extension = ExtensionManager.getInstance().get<ConversationalExtension>(
       ExtensionTypeEnum.Conversational
     )
-    if (!extension) return message
+    if (!extension) {
+      throw new Error('Conversational extension not available')
+    }
 
     try {
       return await extension.modifyMessage(message)
