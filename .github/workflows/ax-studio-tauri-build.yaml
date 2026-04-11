@@ -56,19 +56,8 @@ jobs:
       new_version: ${{ needs.get-update-version.outputs.new_version }}
       upload_url: ${{ needs.create-draft-release.outputs.upload_url }}
 
-  build-linux-x64:
-    uses: ./.github/workflows/template-tauri-build-linux-x64.yml
-    secrets: inherit
-    needs: [get-update-version, create-draft-release]
-    with:
-      ref: ${{ github.ref }}
-      public_provider: github
-      channel: stable
-      new_version: ${{ needs.get-update-version.outputs.new_version }}
-      upload_url: ${{ needs.create-draft-release.outputs.upload_url }}
-
   sync-temp-to-latest:
-    needs: [create-draft-release, get-update-version, build-macos, build-windows-x64, build-linux-x64]
+    needs: [create-draft-release, get-update-version, build-macos, build-windows-x64]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -81,8 +70,6 @@ jobs:
 
           VERSION=${{ needs.get-update-version.outputs.new_version }}
           PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")
-          LINUX_SIGNATURE="${{ needs.build-linux-x64.outputs.APPIMAGE_SIG }}"
-          LINUX_URL="https://github.com/ax-studio/ax-studio/releases/download/v${{ needs.get-update-version.outputs.new_version }}/${{ needs.build-linux-x64.outputs.APPIMAGE_FILE_NAME }}"
           WINDOWS_SIGNATURE="${{ needs.build-windows-x64.outputs.WIN_SIG }}"
           WINDOWS_URL="https://github.com/ax-studio/ax-studio/releases/download/v${{ needs.get-update-version.outputs.new_version }}/${{ needs.build-windows-x64.outputs.FILE_NAME }}"
           DARWIN_SIGNATURE="${{ needs.build-macos.outputs.MAC_UNIVERSAL_SIG }}"
@@ -90,24 +77,16 @@ jobs:
 
           jq --arg version "$VERSION" \
             --arg pub_date "$PUB_DATE" \
-            --arg linux_signature "$LINUX_SIGNATURE" \
-            --arg linux_url "$LINUX_URL" \
             --arg windows_signature "$WINDOWS_SIGNATURE" \
             --arg windows_url "$WINDOWS_URL" \
             --arg darwin_arm_signature "$DARWIN_SIGNATURE" \
             --arg darwin_arm_url "$DARWIN_URL" \
-            --arg darwin_amd_signature "$DARWIN_SIGNATURE" \
-            --arg darwin_amd_url "$DARWIN_URL" \
             '.version = $version
               | .pub_date = $pub_date
-              | .platforms["linux-x86_64"].signature = $linux_signature
-              | .platforms["linux-x86_64"].url = $linux_url
               | .platforms["windows-x86_64"].signature = $windows_signature
               | .platforms["windows-x86_64"].url = $windows_url
               | .platforms["darwin-aarch64"].signature = $darwin_arm_signature
-              | .platforms["darwin-aarch64"].url = $darwin_arm_url
-              | .platforms["darwin-x86_64"].signature = $darwin_amd_signature
-              | .platforms["darwin-x86_64"].url = $darwin_amd_url' \
+              | .platforms["darwin-aarch64"].url = $darwin_arm_url' \
             src-tauri/latest.json.template > latest.json
             cat latest.json
 

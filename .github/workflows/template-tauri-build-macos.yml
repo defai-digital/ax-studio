@@ -202,25 +202,25 @@ jobs:
         if: inputs.public_provider != 'github'
         uses: actions/upload-artifact@v4
         with:
-          name: ax-studio-${{ inputs.channel }}-mac-universal-${{ inputs.new_version }}.dmg
+          name: ax-studio-${{ inputs.channel }}-mac-arm64-${{ inputs.new_version }}.dmg
           path: |
-            ./src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            ./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
 
       ## Set output filename for mac
       - name: Set output filename for mac
         run: |
-          cd ./src-tauri/target/universal-apple-darwin/release/bundle/macos
+          cd ./src-tauri/target/aarch64-apple-darwin/release/bundle/macos
           if [ "${{ inputs.channel }}" != "stable" ]; then
-            zip -r ax-studio-${{ inputs.channel }}-mac-universal-${{ inputs.new_version }}.zip Ax-Studio-${{ inputs.channel }}.app
-            FILE_NAME=ax-studio-${{ inputs.channel }}-mac-universal-${{ inputs.new_version }}.zip
-            DMG_NAME=Ax-Studio-${{ inputs.channel }}_${{ inputs.new_version }}_universal.dmg
+            zip -r ax-studio-${{ inputs.channel }}-mac-arm64-${{ inputs.new_version }}.zip Ax-Studio-${{ inputs.channel }}.app
+            FILE_NAME=ax-studio-${{ inputs.channel }}-mac-arm64-${{ inputs.new_version }}.zip
+            DMG_NAME=Ax-Studio-${{ inputs.channel }}_${{ inputs.new_version }}_aarch64.dmg
             MAC_UNIVERSAL_SIG=$(cat Ax-Studio-${{ inputs.channel }}.app.tar.gz.sig)
             TAR_NAME=Ax-Studio-${{ inputs.channel }}.app.tar.gz
           else
-            zip -r ax-studio-mac-universal-${{ inputs.new_version }}.zip Ax-Studio.app
-            FILE_NAME=ax-studio-mac-universal-${{ inputs.new_version }}.zip
+            zip -r ax-studio-mac-arm64-${{ inputs.new_version }}.zip Ax-Studio.app
+            FILE_NAME=ax-studio-mac-arm64-${{ inputs.new_version }}.zip
             MAC_UNIVERSAL_SIG=$(cat Ax-Studio.app.tar.gz.sig)
-            DMG_NAME=Ax-Studio_${{ inputs.new_version }}_universal.dmg
+            DMG_NAME=Ax-Studio_${{ inputs.new_version }}_aarch64.dmg
             TAR_NAME=Ax-Studio.app.tar.gz
           fi
 
@@ -234,10 +234,10 @@ jobs:
       - name: upload to aws s3 if public provider is aws
         if: inputs.public_provider == 'aws-s3' || inputs.channel == 'beta'
         run: |
-          cd ./src-tauri/target/universal-apple-darwin/release/bundle
+          cd ./src-tauri/target/aarch64-apple-darwin/release/bundle
 
           # Upload for tauri updater
-          aws s3 cp ./dmg/Ax-Studio-${{ inputs.channel }}_${{ inputs.new_version }}_universal.dmg s3://${{ secrets.DELTA_AWS_S3_BUCKET_NAME }}/temp-${{ inputs.channel }}/Ax-Studio-${{ inputs.channel }}_${{ inputs.new_version }}_universal.dmg
+          aws s3 cp ./dmg/Ax-Studio-${{ inputs.channel }}_${{ inputs.new_version }}_aarch64.dmg s3://${{ secrets.DELTA_AWS_S3_BUCKET_NAME }}/temp-${{ inputs.channel }}/Ax-Studio-${{ inputs.channel }}_${{ inputs.new_version }}_aarch64.dmg
           aws s3 cp ./macos/Ax-Studio-${{ inputs.channel }}.app.tar.gz s3://${{ secrets.DELTA_AWS_S3_BUCKET_NAME }}/temp-${{ inputs.channel }}/Ax-Studio-${{ inputs.channel }}_${{ inputs.new_version }}.app.tar.gz
           aws s3 cp ./macos/Ax-Studio-${{ inputs.channel }}.app.tar.gz.sig s3://${{ secrets.DELTA_AWS_S3_BUCKET_NAME }}/temp-${{ inputs.channel }}/Ax-Studio-${{ inputs.channel }}_${{ inputs.new_version }}.app.tar.gz.sig
         env:
@@ -253,7 +253,7 @@ jobs:
         uses: actions/upload-release-asset@v1.0.1
         with:
           upload_url: ${{ inputs.upload_url }}
-          asset_path: ./src-tauri/target/universal-apple-darwin/release/bundle/macos/${{ steps.metadata.outputs.FILE_NAME }}
+          asset_path: ./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/${{ steps.metadata.outputs.FILE_NAME }}
           asset_name: ${{ steps.metadata.outputs.FILE_NAME }}
           asset_content_type: application/gzip
 
@@ -264,7 +264,7 @@ jobs:
         uses: actions/upload-release-asset@v1.0.1
         with:
           upload_url: ${{ inputs.upload_url }}
-          asset_path: ./src-tauri/target/universal-apple-darwin/release/bundle/dmg/${{ steps.metadata.outputs.DMG_NAME }}
+          asset_path: ./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/${{ steps.metadata.outputs.DMG_NAME }}
           asset_name: ${{ steps.metadata.outputs.DMG_NAME }}
           asset_content_type: application/octet-stream
 
@@ -275,6 +275,6 @@ jobs:
         uses: actions/upload-release-asset@v1.0.1
         with:
           upload_url: ${{ inputs.upload_url }}
-          asset_path: ./src-tauri/target/universal-apple-darwin/release/bundle/macos/${{ steps.metadata.outputs.TAR_NAME }}
+          asset_path: ./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/${{ steps.metadata.outputs.TAR_NAME }}
           asset_name: ${{ steps.metadata.outputs.TAR_NAME }}
           asset_content_type: application/gzip
