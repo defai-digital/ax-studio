@@ -163,7 +163,8 @@ function sanitizeMermaidFences(input: string): string {
         let prev = ''
         while (fixed !== prev) {
           prev = fixed
-          fixed = fixed.replace(/^[ \t]*state\s+[^\n{]+\{[ \t]*\n([\s\S]*?)\n[ \t]*\}/gm, '$1')
+          // Only match lines that open a block (end with `{`), not `state X as Y` aliases
+          fixed = fixed.replace(/^[ \t]*state\s+\S+[^\n]*\{[ \t]*\n([\s\S]*?)\n[ \t]*\}/gm, '$1')
         }
       }
 
@@ -342,7 +343,9 @@ function MermaidDiagram({ source, theme }: { source: string; theme: string }) {
   useEffect(() => {
     let cancelled = false
 
-    mermaidLib.initialize({ startOnLoad: false, securityLevel: 'strict', theme: theme as never })
+    // Use 'loose' security: Mermaid v11 renders labels via <foreignObject> HTML,
+    // which 'strict' mode strips. DOMPurify sanitizes the final SVG output.
+    mermaidLib.initialize({ startOnLoad: false, securityLevel: 'loose', theme: theme as never })
     const renderWithRetry = async () => {
       const id = `mermaid-${Math.random().toString(36).slice(2)}`
 
@@ -404,7 +407,12 @@ function MermaidDiagram({ source, theme }: { source: string; theme: string }) {
     return () => { cancelled = true }
   }, [source, theme, retryCount])
   const clean = useMemo(
-    () => svgContent ? DOMPurify.sanitize(svgContent, { USE_PROFILES: { svg: true, svgFilters: true } }) : null,
+    // Allow foreignObject + HTML tags that Mermaid v11 uses for text labels
+    () => svgContent ? DOMPurify.sanitize(svgContent, {
+      USE_PROFILES: { svg: true, svgFilters: true },
+      ADD_TAGS: ['foreignObject', 'div', 'span', 'p', 'br'],
+      ADD_ATTR: ['xmlns', 'requiredExtensions'],
+    }) : null,
     [svgContent]
   )
 
