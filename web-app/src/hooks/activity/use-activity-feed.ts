@@ -77,8 +77,10 @@ export const useActivityFeed = create<ActivityFeedState>()(
 export function groupEventsByDate(events: ActivityEvent[]): Array<{ label: string; events: ActivityEvent[] }> {
   const now = new Date()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const yesterday = new Date(today.getTime() - 86400000)
-  const weekAgo = new Date(today.getTime() - 7 * 86400000)
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+  const weekAgo = new Date(today)
+  weekAgo.setDate(weekAgo.getDate() - 7)
 
   const groups: Record<string, ActivityEvent[]> = {
     Today: [],

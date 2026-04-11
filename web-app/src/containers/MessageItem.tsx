@@ -83,13 +83,15 @@ export const MessageItem = memo(
     const meta = message.metadata as Record<string, unknown> | undefined
     const currentRating = meta?.rating as 'up' | 'down' | undefined
 
-    // Hydrate citation data from message metadata into the citation store
+    // Hydrate citation data from message metadata into the citation store.
+    // Use a stable flag to avoid re-running on every streaming chunk.
     const hydrateCitations = useCitations((s) => s.hydrate)
+    const hasCitationData = !!meta?.citationData
     useEffect(() => {
-      if (message.role === 'assistant') {
+      if (message.role === 'assistant' && hasCitationData) {
         hydrateCitations(message.id, meta)
       }
-    }, [message.id, message.role, meta, hydrateCitations])
+    }, [message.id, message.role, hasCitationData, hydrateCitations, meta])
     const citationData = useCitations((s) => s.getCitations(message.id))
     const flagLowConfidence = useGuardrails((s) => s.flagLowConfidence)
 

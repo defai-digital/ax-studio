@@ -37,6 +37,5 @@ export function computeConfidence(sources: CitationSource[]): CitationData['conf
   if (sources.length === 0) return 'uncertain'
   const strongSources = sources.filter((s) => (s.score ?? 0) > 0.7)
   if (strongSources.length >= 3) return 'strong'
-  if (sources.length >= 1) return 'moderate'
-  return 'uncertain'
+  return 'moderate'
 }

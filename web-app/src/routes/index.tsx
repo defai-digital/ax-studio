@@ -24,12 +24,6 @@ import { resolveSystemPrompt } from '@/lib/system-prompt'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import {
-  Code2,
-  PenTool,
-  BarChart3,
-  Lightbulb,
-  Bug,
-  Search,
   Zap,
   Columns2,
   Cpu,
@@ -38,7 +32,6 @@ import {
   Wrench,
   MessageSquareText,
   Users,
-  type LucideIcon,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -62,74 +55,12 @@ export const Route = createFileRoute(route.home)({
   },
 })
 
-type SuggestedPrompt = {
-  icon: LucideIcon
-  label: string
-  prompt: string
-  tag: string
-  color: string
-}
-
-const suggestedPrompts: SuggestedPrompt[] = [
-  {
-    icon: Code2,
-    label: 'Build REST API',
-    prompt: 'Help me build a REST API with authentication and CRUD endpoints',
-    tag: 'Code',
-    color: 'indigo',
-  },
-  {
-    icon: PenTool,
-    label: 'Write blog post',
-    prompt: 'Write a blog post about the latest trends in AI technology',
-    tag: 'Write',
-    color: 'emerald',
-  },
-  {
-    icon: BarChart3,
-    label: 'Analyze data',
-    prompt: 'Analyze this dataset and provide insights with visualizations',
-    tag: 'Analyze',
-    color: 'cyan',
-  },
-  {
-    icon: Lightbulb,
-    label: 'Brainstorm ideas',
-    prompt: 'Brainstorm creative ideas for a new mobile app',
-    tag: 'Ideate',
-    color: 'amber',
-  },
-  {
-    icon: Bug,
-    label: 'Debug code',
-    prompt: 'Help me debug this code and find the root cause of the issue',
-    tag: 'Debug',
-    color: 'rose',
-  },
-  {
-    icon: Search,
-    label: 'Research topic',
-    prompt: 'Research and summarize the current state of quantum computing',
-    tag: 'Research',
-    color: 'violet',
-  },
-]
-
 const capabilityBadges = [
   { icon: Cpu, label: 'Local models' },
   { icon: Bolt, label: 'Lightning fast' },
   { icon: Shield, label: 'Private & local' },
   { icon: Wrench, label: 'Tool use & MCP' },
 ]
-
-const tagColorMap: Record<string, string> = {
-  indigo: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
-  emerald: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  cyan: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
-  amber: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  rose: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
-  violet: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
-}
 
 function Index() {
   const navigate = useNavigate()

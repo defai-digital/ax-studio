@@ -38,6 +38,7 @@ export function WorkflowSelector({ onPromptReady }: WorkflowSelectorProps) {
   if (activeWorkflow) {
     return (
       <WorkflowForm
+        key={activeWorkflow.id}
         workflow={activeWorkflow}
         onSubmit={handleSubmit}
         onCancel={handleCancel}

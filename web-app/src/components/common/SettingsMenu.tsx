@@ -61,7 +61,7 @@ const SettingsMenu = () => {
       group: 'App',
     },
     {
-      title: 'Guardrails',
+      title: 'common:guardrails',
       route: route.settings.guardrails,
       isEnabled: true,
       icon: <ShieldCheck className="size-3.5" />,

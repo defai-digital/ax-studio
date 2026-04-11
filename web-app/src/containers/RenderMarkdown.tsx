@@ -1,4 +1,4 @@
-import { type ReactNode, type ReactElement, memo, useMemo, useState, useEffect, useRef, useCallback } from 'react'
+import { type ReactNode, isValidElement, memo, useMemo, useState, useEffect, useRef, useCallback } from 'react'
 import { AXMarkdown, axDefaultRehypePlugins } from '@/lib/markdown/renderer'
 import { cn, disableIndentedCodeBlockPlugin } from '@/lib/utils'
 import { cjk } from '@streamdown/cjk'
@@ -8,6 +8,15 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import { CitationChip } from '@/components/citations/CitationChip'
 import { useCitations } from '@/hooks/citations/use-citations'
+
+/** Recursively extract text from React children (handles Streamdown's animated <span> wraps). */
+function extractTextFromNode(node: ReactNode): string {
+  if (typeof node === 'string') return node
+  if (typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(extractTextFromNode).join('')
+  if (isValidElement(node) && node.props?.children) return extractTextFromNode(node.props.children)
+  return ''
+}
 import 'katex/dist/katex.min.css'
 import mermaidLib from 'mermaid'
 import DOMPurify from 'dompurify'
@@ -621,9 +630,10 @@ function RenderMarkdownComponent({
   const citationData = useCitations((s) => messageId ? s.getCitations(messageId) : undefined)
 
   const anchorOverride = useCallback(
-    ({ children, href, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { children?: ReactNode }) => {
-      // Detect citation pattern: text content is "[N]" where N is a number
-      const text = typeof children === 'string' ? children : ''
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ({ children, href, node, ...props }: any) => {
+      // Extract text from children (Streamdown's animated mode wraps text in <span>)
+      const text = extractTextFromNode(children)
       const match = text.match(/^\[(\d+)\]$/)
 
       if (match && citationData?.sources) {
@@ -634,8 +644,8 @@ function RenderMarkdownComponent({
         }
       }
 
-      // Default anchor rendering for non-citation links
-      return <a href={href} target="_blank" rel="noopener noreferrer" {...props}>{children}</a>
+      // Default anchor rendering — spread props first so our explicit attrs win
+      return <a {...props} href={href} target="_blank" rel="noopener noreferrer">{children}</a>
     },
     [citationData]
   )

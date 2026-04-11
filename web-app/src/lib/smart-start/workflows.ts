@@ -8,7 +8,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-export type FieldType = 'text' | 'textarea' | 'radio' | 'checkbox'
+export type FieldType = 'text' | 'textarea' | 'radio'
 
 export interface WorkflowField {
   id: string
@@ -28,7 +28,7 @@ export interface SmartStartWorkflow {
   tag: string
   fields: WorkflowField[]
   /** Build the final prompt from user's form values */
-  buildPrompt: (values: Record<string, string | string[]>) => string
+  buildPrompt: (values: Record<string, string>) => string
 }
 
 export const SMART_START_WORKFLOWS: SmartStartWorkflow[] = [

@@ -67,6 +67,7 @@
     "cmdk": "^1.1.1",
     "crypto-js": "^4.2.0",
     "culori": "4.0.1",
+    "diff": "^8.0.4",
     "dompurify": "^3.3.3",
     "emoji-picker-react": "4.12.2",
     "framer-motion": "12.23.12",

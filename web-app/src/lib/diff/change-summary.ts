@@ -44,7 +44,7 @@ export function generateChangeSummary(segments: DiffSegment[]): string {
 
   // Significant rewrite
   if (addedWords > 20 && removedWords > 20) {
-    return `Rewrote ${removedLines} ${removedLines === 1 ? 'section' : 'sections'} with updated content.`
+    return `Significantly rewrote content (${removedWords} words replaced).`
   }
 
   // Mixed changes
