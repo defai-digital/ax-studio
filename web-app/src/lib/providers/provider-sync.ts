@@ -59,12 +59,18 @@ export async function syncRemoteProviders(providers: ModelProvider[]): Promise<v
     return !activeRemoteProviderIds.has(provider) || !knownRemoteProviderIds.has(provider)
   })
 
+  // Use allSettled so one failed unregister doesn't block the batch register
   if (staleRemoteProviderIds.length > 0) {
-    await Promise.all(
+    const results = await Promise.allSettled(
       staleRemoteProviderIds.map((provider) =>
         invoke('unregister_provider_config', { provider })
       )
     )
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        console.error('Failed to unregister provider:', result.reason)
+      }
+    }
   }
 
   const requests = buildRemoteProviderRequests(providers)

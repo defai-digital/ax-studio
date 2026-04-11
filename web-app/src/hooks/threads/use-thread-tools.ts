@@ -253,7 +253,10 @@ export function useThreadTools({
           }
         }
 
-        setSessionTools([])
+        // Remove only processed tools — preserve any newly queued during execution
+        const processedIds = new Set(queuedTools.map((t: QueuedTool) => t.toolCallId))
+        const currentTools = (useChatSessions.getState().ensureSessionData(threadId).tools ?? []) as QueuedTool[]
+        setSessionTools(currentTools.filter((t) => !processedIds.has(t.toolCallId)))
         toolCallAbortController.current = null
       })().catch((error) => {
         const isAbort = error instanceof Error && error.name === 'AbortError'

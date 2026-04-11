@@ -242,7 +242,7 @@ export default function AddEditAssistant({
     // const parsedToolSteps = Number(toolStepsInput)
     const assistant: Assistant = {
       avatar,
-      id: initialData?.id || Math.random().toString(36).substring(7),
+      id: initialData?.id || crypto.randomUUID(),
       name,
       created_at: initialData?.created_at || Date.now(),
       description,

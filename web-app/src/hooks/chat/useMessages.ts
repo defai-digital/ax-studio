@@ -71,8 +71,10 @@ export const useMessages = create<MessageState>()((set, get) => ({
       ...message,
     }
 
-    // Snapshot for rollback
-    const previousMessages = get().messages[message.thread_id]
+    // Snapshot the specific message for targeted rollback
+    const previousMessage = get().messages[message.thread_id]?.find(
+      (m) => m.id === message.id
+    )
 
     // Optimistically update state immediately for instant UI feedback
     set((state) => ({
@@ -84,12 +86,17 @@ export const useMessages = create<MessageState>()((set, get) => ({
       },
     }))
 
-    // Persist to storage asynchronously — rollback on failure
+    // Persist to storage asynchronously — targeted rollback on failure
     getServiceHub().messages().modifyMessage(updatedMessage).catch((error) => {
       console.error('Failed to persist message update:', error)
-      if (previousMessages) {
+      if (previousMessage) {
         set((state) => ({
-          messages: { ...state.messages, [message.thread_id]: previousMessages },
+          messages: {
+            ...state.messages,
+            [message.thread_id]: (state.messages[message.thread_id] || []).map((m) =>
+              m.id === message.id ? previousMessage : m
+            ),
+          },
         }))
       }
     })

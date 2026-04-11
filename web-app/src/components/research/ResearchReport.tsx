@@ -13,7 +13,8 @@ interface ResearchReportProps {
  * (since sources are shown in a dedicated tab).
  */
 function stripSourcesSection(md: string): string {
-  return md.replace(/\n## (?:Sources|References|Bibliography)[\s\S]*$/i, '').trimEnd()
+  // Only strip a trailing Sources/References section that has no other ## heading after it
+  return md.replace(/\n## (?:Sources|References|Bibliography)\n(?:(?!## ).)*$/is, '').trimEnd()
 }
 
 /**

@@ -70,7 +70,7 @@ export async function scrapeWithTimeout(url: string, signal: AbortSignal, ms = 8
       abort,
     ])
   } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') throw err
+    if (err instanceof Error && err.name === 'AbortError') throw err
     if (err instanceof Error && err.message !== 'scrape timeout') {
       console.warn(`[research] scrape failed for ${url}:`, err.message)
     }

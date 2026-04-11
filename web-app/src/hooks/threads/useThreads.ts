@@ -147,30 +147,26 @@ export const useThreads = create<ThreadState>()((set, get) => ({
     })
   },
   deleteThread: (threadId) => {
+    // Perform side effects OUTSIDE set() to avoid duplicate execution in StrictMode
+    getServiceHub()
+      .threads()
+      .deleteThread(threadId)
+      .catch(reportPersistenceError('delete thread'))
+
+    const colId = threadCollectionId(threadId)
+    useFileRegistry.getState().clearCollection(colId)
+    getServiceHub().mcp().callTool({
+      toolName: 'akidb_delete_collection',
+      arguments: { collection_id: colId },
+    }).catch(() => {
+      // Ignore — collection may not exist if no docs were ever attached
+    })
+
     set((state) => {
-
       const { [threadId]: _, ...remainingThreads } = state.threads
-
-      getServiceHub()
-        .threads()
-        .deleteThread(threadId)
-        .catch(reportPersistenceError('delete thread'))
-
-      // Clean up AkiDB collection and file registry for this thread
-      const colId = threadCollectionId(threadId)
-      useFileRegistry.getState().clearCollection(colId)
-      getServiceHub().mcp().callTool({
-        toolName: 'akidb_delete_collection',
-        arguments: { collection_id: colId },
-      }).catch(() => {
-        // Ignore — collection may not exist if no docs were ever attached
-      })
 
       return {
         threads: remainingThreads,
-        // Clear the pointer when the active thread is the one being
-        // deleted, so the sidebar doesn't highlight a ghost and chat views
-        // don't crash reading `threads[currentThreadId]`.
         currentThreadId:
           state.currentThreadId === threadId ? undefined : state.currentThreadId,
         searchIndex: new Fzf<Thread[]>(
@@ -347,6 +343,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
   setCurrentThreadId: (threadId) => {
     if (threadId !== get().currentThreadId) set({ currentThreadId: threadId })
   },
+  _createThreadInFlight: false,
   createThread: async (
     model,
     title,
@@ -354,6 +351,9 @@ export const useThreads = create<ThreadState>()((set, get) => ({
     projectMetadata,
     isTemporary
   ) => {
+    // Dedup guard: prevent concurrent duplicate thread creation (e.g., double-click)
+    if (get()._createThreadInFlight && !isTemporary) return get().currentThreadId ?? ''
+    set({ _createThreadInFlight: true })
     const generalSettings = useGeneralSetting.getState()
     const shouldSnapshotGlobalPrompt =
       generalSettings.applyMode === 'new_chats_only' &&
@@ -421,6 +421,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
         })
         return createdThread
       })
+      .finally(() => set({ _createThreadInFlight: false }))
   },
   updateCurrentThreadAssistant: (assistant) => {
     set((state) => {

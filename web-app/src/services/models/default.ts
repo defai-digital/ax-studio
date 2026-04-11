@@ -111,6 +111,8 @@ export class DefaultModelsService implements ModelsService {
       }
       return parsed.data
     } catch (error) {
+      // Propagate abort errors so callers can distinguish cancellation from failure
+      if (error instanceof Error && error.name === 'AbortError') throw error
       console.error('Error fetching HuggingFace repository:', error)
       return null
     }

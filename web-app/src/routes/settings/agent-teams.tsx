@@ -182,8 +182,11 @@ function AgentTeamsContent() {
       try {
         const text = await file.text()
         const data = JSON.parse(text)
-        if (!data.team || !data.agents) {
-          throw new Error('Invalid team export format')
+        if (
+          !data.team || typeof data.team !== 'object' ||
+          !Array.isArray(data.agents) || data.agents.length === 0
+        ) {
+          throw new Error('Invalid team export format: expected { team: {...}, agents: [...] }')
         }
         await importTeam(data, addAssistant, deleteAssistant)
       } catch {

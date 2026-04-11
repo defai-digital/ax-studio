@@ -24,6 +24,9 @@ import {
 } from '@/lib/memory-extractor'
 import { type ThreadMessage } from '@ax-studio/core'
 
+// Module-level mutex to serialize concurrent memory write operations
+let memoryWriteLock: Promise<void> = Promise.resolve()
+
 export function useThreadMemory(threadId: string) {
   const globalMemoryEnabled = useMemory((state) => state.memoryEnabled)
   const memoryEnabledPerThread = useMemory((state) => state.memoryEnabledPerThread)
@@ -77,6 +80,8 @@ export function useThreadMemory(threadId: string) {
       }
 
       if (isNewMessage && useMemory.getState().isMemoryEnabledForThread(threadId) && contentParts.length > 0) {
+        // Serialize memory writes to prevent concurrent read-modify-write races
+        memoryWriteLock = memoryWriteLock.then(() => {
         let toasted = false
 
         // Step 1: Apply LLM delta ops (surgical add/update/delete)
@@ -110,6 +115,7 @@ export function useThreadMemory(threadId: string) {
               toast.success(`Remembered ${newlyAdded} new fact${newlyAdded !== 1 ? 's' : ''}`)
           }
         }
+        }).catch(console.error) // end of memoryWriteLock chain
       }
 
       // Strip memory_extract tags from the live UI chat messages

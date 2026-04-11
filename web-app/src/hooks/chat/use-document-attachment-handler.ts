@@ -432,7 +432,8 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
             if (text) {
               try {
                 const parsed = JSON.parse(text)
-                const chunkIds = (parsed.results ?? [])
+                const results = Array.isArray(parsed.results) ? parsed.results : []
+                const chunkIds = results
                   .map((r: Record<string, unknown>) => r.chunkId ?? r.chunk_id)
                   .filter(Boolean) as string[]
 
