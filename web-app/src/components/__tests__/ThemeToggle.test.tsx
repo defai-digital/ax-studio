@@ -8,7 +8,7 @@ const mockSetTheme = vi.fn()
 let mockActiveTheme: 'light' | 'dark' | 'auto' = 'light'
 
 // useTheme is a zustand store — calling it with no args returns full state
-vi.mock('@/hooks/useTheme', () => {
+vi.mock('@/hooks/ui/useTheme', () => {
   const store = () => ({
     activeTheme: mockActiveTheme,
     setTheme: mockSetTheme,

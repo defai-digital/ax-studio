@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createFileRoute, useNavigate, useParams } from '@tanstack/react-router'
-import { useThreads } from '@/hooks/useThreads'
+import { useThreads } from '@/hooks/threads/useThreads'
 import { useShallow } from 'zustand/react/shallow'
-import { useAssistant } from '@/hooks/useAssistant'
-import { useTools } from '@/hooks/useTools'
-import { useChat } from '@/hooks/use-chat'
-import { useModelProvider } from '@/hooks/useModelProvider'
-import { useGeneralSetting } from '@/hooks/useGeneralSetting'
-import { useMessages } from '@/hooks/useMessages'
+import { useAssistant } from '@/hooks/chat/useAssistant'
+import { useTools } from '@/hooks/tools/useTools'
+import { useChat } from '@/hooks/chat/use-chat'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
+import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
+import { useMessages } from '@/hooks/chat/useMessages'
 
 // Validation helper for threadId
 const isValidThreadId = (id: string): boolean => {
@@ -22,19 +22,21 @@ import {
   CODE_EXECUTION_INSTRUCTION,
   ARTIFACT_FORMAT_INSTRUCTION,
   LOCAL_KNOWLEDGE_INSTRUCTION,
+  CITATION_FORMAT_INSTRUCTION,
 } from '@/lib/system-prompt'
 import type { UIMessage } from '@ai-sdk/react'
 import type { ThreadMessage } from '@ax-studio/core'
-import { useThreadMemory } from '@/hooks/thread/use-thread-memory'
-import { useLocalKnowledge } from '@/hooks/useLocalKnowledge'
-import { useThreadArtifacts } from '@/hooks/thread/use-thread-artifacts'
-import { useThreadResearch } from '@/hooks/thread/use-thread-research'
-import { useThreadChat } from '@/hooks/thread/use-thread-chat'
-import { useThreadTools } from '@/hooks/thread/use-thread-tools'
-import { useThreadSplit } from '@/hooks/thread/use-thread-split'
-import { useThreadConfig } from '@/hooks/thread/use-thread-config'
-import { useThreadEffects } from '@/hooks/thread/use-thread-effects'
-import { ThreadView } from '@/routes/threads/ThreadView'
+import { useThreadMemory } from '@/hooks/threads/use-thread-memory'
+import { useLocalKnowledge } from '@/hooks/research/useLocalKnowledge'
+import { useThreadArtifacts } from '@/hooks/threads/use-thread-artifacts'
+import { useThreadResearch } from '@/hooks/threads/use-thread-research'
+import { useThreadChat } from '@/hooks/threads/use-thread-chat'
+import { useThreadTools } from '@/hooks/threads/use-thread-tools'
+import { useThreadSplit } from '@/hooks/threads/use-thread-split'
+import { useThreadConfig } from '@/hooks/threads/use-thread-config'
+import { useThreadEffects } from '@/hooks/threads/use-thread-effects'
+import { ThreadView } from '@/containers/threads/ThreadView'
+import { useGuardrails } from '@/hooks/settings/useGuardrails'
 
 export const Route = createFileRoute('/threads/$threadId')({
   component: ThreadDetail,
@@ -88,9 +90,10 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   const localKnowledgeActive = useLocalKnowledge((state) =>
     state.isLocalKnowledgeEnabledForThread(threadId)
   )
+  const alwaysCiteSources = useGuardrails((s) => s.alwaysCiteSources)
   const projectId = thread?.metadata?.project?.id
   const { pinnedArtifact, clearArtifact } = useThreadArtifacts(threadId)
-  const { pinnedResearch, clearResearch, handleResearchCommand } =
+  const { pinnedResearch, clearResearch, handleResearchCommand, cancelResearch } =
     useThreadResearch(threadId)
   const { promptResolution, optimizedModelConfig } = useThreadConfig({
     thread,
@@ -151,7 +154,8 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
       DIAGRAM_FORMAT_INSTRUCTION +
       CODE_EXECUTION_INSTRUCTION +
       ARTIFACT_FORMAT_INSTRUCTION +
-      (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : ''),
+      (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : '') +
+      (localKnowledgeActive || alwaysCiteSources ? CITATION_FORMAT_INSTRUCTION : ''),
     modelOverrideId: optimizedModelConfig.modelId,
     activeTeamId,
     onCostApproval,
@@ -174,13 +178,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
             routed: true,
             latencyMs: routerResult.latencyMs,
           }
-          // Update the message object for persistence
-          Object.assign(message, {
-            metadata: {
-              ...((message.metadata ?? {}) as Record<string, unknown>),
-              routing: routingMeta,
-            },
-          })
           // Update chat state so the UI re-renders with the routing badge
           setChatMessages((prev) =>
             prev.map((m) =>
@@ -237,6 +234,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     setCurrentAssistant,
     processAndSendMessage,
     handleResearchCommand,
+    cancelResearch,
     updateThread,
     setThreadPromptDraft,
   })

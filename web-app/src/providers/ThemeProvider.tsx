@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
-import { useTheme, checkOSDarkMode } from '@/hooks/useTheme'
+import { useEffect, useRef } from 'react'
+import { useTheme, checkOSDarkMode } from '@/hooks/ui/useTheme'
 import { isPlatformTauri } from '@/lib/platform/utils'
 
 /**
@@ -9,6 +9,13 @@ import { isPlatformTauri } from '@/lib/platform/utils'
  */
 export function ThemeProvider() {
   const { activeTheme, isDark, setIsDark, setTheme } = useTheme()
+  // Mirror `activeTheme` into a ref so the async `listen()` callback
+  // always reads the latest value. The effect's dep array does pick up
+  // theme changes, but the ref covers the edge case where a delayed
+  // `theme-changed` event fires after the user manually switched off
+  // `auto` mode but before the effect teardown completes.
+  const activeThemeRef = useRef(activeTheme)
+  activeThemeRef.current = activeTheme
 
   // Apply dark class to root element
   useEffect(() => {
@@ -41,21 +48,39 @@ export function ThemeProvider() {
     let unlistenTauri: (() => void) | undefined
 
     if (isPlatformTauri()) {
+      let isActive = true
+
       import('@tauri-apps/api/event')
         .then(({ listen }) => {
           return listen<string>('theme-changed', (event) => {
-            if (activeTheme === 'auto') {
+            // Read from the ref, not from the closure snapshot, so a
+            // delayed OS event can't flip to dark mode after the user
+            // explicitly chose a non-auto theme.
+            if (activeThemeRef.current === 'auto') {
               const isDark = event.payload === 'dark'
               setIsDark(isDark)
             }
           })
         })
         .then((unlisten) => {
-          unlistenTauri = unlisten
+          if (isActive) {
+            unlistenTauri = unlisten
+          } else {
+            unlisten()
+          }
         })
         .catch((err) => {
+          if (!isActive) return
           console.error('Failed to setup Tauri theme listener:', err)
         })
+
+      return () => {
+        isActive = false
+        clearTimeout(timeoutId)
+        if (unlistenTauri) {
+          unlistenTauri()
+        }
+      }
     }
 
     // Clean up

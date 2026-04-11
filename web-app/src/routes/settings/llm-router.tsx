@@ -1,12 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 import { route } from '@/constants/routes'
-import SettingsMenu from '@/containers/SettingsMenu'
+import SettingsMenu from '@/components/common/SettingsMenu'
 import HeaderPage from '@/containers/HeaderPage'
 import { Route as RouteIcon, Info, Check, ChevronsUpDown } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
-import { Card, CardItem } from '@/containers/Card'
+import { Card, CardItem } from '@/components/common/Card'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   Command,
@@ -16,8 +16,8 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command'
-import { useRouterSettings } from '@/hooks/useRouterSettings'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useRouterSettings } from '@/hooks/settings/useRouterSettings'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const Route = createFileRoute(route.settings.llm_router as any)({

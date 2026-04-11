@@ -29,6 +29,7 @@ export function getDateGroup(date: Date | string | number): DateGroup {
       MS_PER_DAY,
   )
 
+  if (diffDays < 0 || Number.isNaN(diffDays)) return 'Today'
   if (diffDays === 0) return 'Today'
   if (diffDays === 1) return 'Yesterday'
   if (diffDays <= 7) return 'This Week'

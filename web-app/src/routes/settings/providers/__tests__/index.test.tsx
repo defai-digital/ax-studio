@@ -7,7 +7,7 @@ const mockAddProvider = vi.fn()
 let mockProviders: any[] = []
 
 // Mock dependencies
-vi.mock('@/containers/SettingsMenu', () => ({
+vi.mock('@/components/common/SettingsMenu', () => ({
   default: () => <div data-testid="settings-menu">Settings Menu</div>,
 }))
 
@@ -17,7 +17,7 @@ vi.mock('@/containers/HeaderPage', () => ({
   ),
 }))
 
-vi.mock('@/containers/ProvidersAvatar', () => ({
+vi.mock('@/components/common/ProvidersAvatar', () => ({
   default: ({ provider }: { provider: { provider: string } }) => (
     <div data-testid="providers-avatar" data-provider={provider.provider}>
       Provider Avatar: {provider.provider}
@@ -25,7 +25,7 @@ vi.mock('@/containers/ProvidersAvatar', () => ({
   ),
 }))
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: () => ({
     providers: mockProviders,
     addProvider: mockAddProvider,

@@ -49,14 +49,34 @@ export async function scrapeWithTimeout(url: string, signal: AbortSignal, ms = 8
     throw new Error('Invalid URL: only HTTPS URLs to external hosts are allowed')
   }
   if (signal.aborted) return ''
-  return Promise.race([
-    invoke<string>('scrape_url', { url }),
-    new Promise<string>((_, reject) =>
-      setTimeout(() => reject(new Error('scrape timeout')), ms)
-    ),
-    new Promise<string>((_, reject) => {
-      if (signal.aborted) return reject(new DOMException('Aborted', 'AbortError'))
-      signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true })
-    }),
-  ]).catch(() => '')
+
+  let timer: ReturnType<typeof setTimeout>
+  let onAbort: (() => void) | undefined
+
+  const timeout = new Promise<string>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('scrape timeout')), ms)
+  })
+
+  const abort = new Promise<string>((_, reject) => {
+    if (signal.aborted) return reject(new DOMException('Aborted', 'AbortError'))
+    onAbort = () => reject(new DOMException('Aborted', 'AbortError'))
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
+
+  try {
+    return await Promise.race([
+      invoke<string>('scrape_url', { url }),
+      timeout,
+      abort,
+    ])
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') throw err
+    if (err instanceof Error && err.message !== 'scrape timeout') {
+      console.warn(`[research] scrape failed for ${url}:`, err.message)
+    }
+    return ''
+  } finally {
+    clearTimeout(timer!)
+    if (onAbort) signal.removeEventListener('abort', onAbort)
+  }
 }

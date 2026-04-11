@@ -1,9 +1,9 @@
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { route } from '@/constants/routes'
-import { useDownloadStore } from '@/hooks/useDownloadStore'
-import { useGeneralSetting } from '@/hooks/useGeneralSetting'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useDownloadStore } from '@/hooks/models/useDownloadStore'
+import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useTranslation } from '@/i18n'
 import { CatalogModel } from '@/services/models/types'
@@ -12,6 +12,7 @@ import { AppEvent, DownloadEvent, DownloadState, events } from '@ax-studio/core'
 import { IconDownload } from '@tabler/icons-react'
 import { useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 
 export const ModelDownloadAction = ({
   variant,
@@ -26,7 +27,12 @@ export const ModelDownloadAction = ({
   const huggingfaceToken = useGeneralSetting((state) => state.huggingfaceToken)
   const getProviderByName = useModelProvider((state) => state.getProviderByName)
   const llamaProvider = getProviderByName('llamacpp')
-  const { downloads, localDownloadingModels, addLocalDownloadingModel } =
+  const {
+    downloads,
+    localDownloadingModels,
+    addLocalDownloadingModel,
+    removeLocalDownloadingModel,
+  } =
     useDownloadStore()
   const [isDownloaded, setDownloaded] = useState<boolean>(false)
 
@@ -55,7 +61,8 @@ export const ModelDownloadAction = ({
 
   useEffect(() => {
     const handleVerified = (state: DownloadState) => {
-      if (state.modelId === variant.model_id) setDownloaded(true)
+      const downloadId = state.downloadId ?? state.modelId
+      if (downloadId === variant.model_id) setDownloaded(true)
     }
     // Also listen for onModelImported — onFileDownloadAndVerificationSuccess
     // only fires when SHA256 verification is enabled (skipVerification=false).
@@ -104,15 +111,22 @@ export const ModelDownloadAction = ({
         )?.path,
         huggingfaceToken
       )
+      .catch((error) => {
+        console.error('Failed to start model download:', error)
+        removeLocalDownloadingModel(variant.model_id)
+        toast.error('Failed to start model download', {
+          description:
+            error instanceof Error ? error.message : 'Please try again.',
+        })
+      })
   }, [
     serviceHub,
     variant.path,
     variant.model_id,
     huggingfaceToken,
-    model.model_name,
     model.mmproj_models,
-    navigate,
     addLocalDownloadingModel,
+    removeLocalDownloadingModel,
   ])
 
   const isDownloading =

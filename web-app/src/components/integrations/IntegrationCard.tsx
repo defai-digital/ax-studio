@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button'
 import type { Integration } from '@/lib/integrations-registry'
-import type { IntegrationStatus } from '@/hooks/useIntegrations'
+import type { IntegrationStatus } from '@/hooks/integrations/useIntegrations'
 import { cn } from '@/lib/utils'
 
 type Props = {

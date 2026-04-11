@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
-import type { ResearchSource } from '@/hooks/useResearchPanel'
+import type { ResearchSource } from '@/hooks/research/useResearchPanel'
 
 interface SourcesListProps {
   sources: ResearchSource[]

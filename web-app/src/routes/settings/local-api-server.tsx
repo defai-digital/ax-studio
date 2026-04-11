@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import HeaderPage from '@/containers/HeaderPage'
-import SettingsMenu from '@/containers/SettingsMenu'
-import { Card, CardItem } from '@/containers/Card'
+import SettingsMenu from '@/components/common/SettingsMenu'
+import { Card, CardItem } from '@/components/common/Card'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { useTranslation } from '@/i18n/react-i18next-compat'
@@ -11,10 +11,10 @@ import { PortInput } from '@/containers/PortInput'
 import { ProxyTimeoutInput } from '@/containers/ProxyTimeoutInput'
 import { ApiPrefixInput } from '@/containers/ApiPrefixInput'
 import { TrustedHostsInput } from '@/containers/TrustedHostsInput'
-import { useLocalApiServer } from '@/hooks/useLocalApiServer'
-import { useAppState } from '@/hooks/useAppState'
+import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
+import { useAppState } from '@/hooks/settings/useAppState'
 
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { IconSettings2 } from '@tabler/icons-react'
 import { Server } from 'lucide-react'
@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils'
 import { ApiKeyInput } from '@/containers/ApiKeyInput'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { getModelToStart } from '@/utils/getModelToStart'
+import { getModelToStart } from '@/lib/utils/getModelToStart'
 import { LogViewer } from '@/components/LogViewer'
 
 import AkidbConfigPanel from '@/containers/AkidbConfigPanel'
@@ -158,6 +158,12 @@ function LocalAPIServerContent() {
                   .models()
                   .getActiveModels()
                   .then((models) => setActiveModels(models || []))
+                  .catch((error) => {
+                    console.error(
+                      '[local-api-server] Failed to refresh active models after start:',
+                      error
+                    )
+                  })
                 // Add a small delay for the backend to update state
                 return new Promise((resolve) => setTimeout(resolve, 500))
               })

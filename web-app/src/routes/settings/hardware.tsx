@@ -1,24 +1,24 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
-import SettingsMenu from '@/containers/SettingsMenu'
+import SettingsMenu from '@/components/common/SettingsMenu'
 import HeaderPage from '@/containers/HeaderPage'
-import { Card, CardItem } from '@/containers/Card'
+import { Card, CardItem } from '@/components/common/Card'
 import { Switch } from '@/components/ui/switch'
 import { Progress } from '@/components/ui/progress'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { useHardware } from '@/hooks/useHardware'
-import { useLlamacppDevices } from '@/hooks/useLlamacppDevices'
-import { useBackendUpdater } from '@/hooks/useBackendUpdater'
+import { useHardware } from '@/hooks/settings/useHardware'
+import { useLlamacppDevices } from '@/hooks/models/useLlamacppDevices'
+import { useBackendUpdater } from '@/hooks/updater/useBackendUpdater'
 import { useEffect, useState } from 'react'
 import { IconDeviceDesktopAnalytics } from '@tabler/icons-react'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import type { HardwareData, SystemUsage } from '@/services/hardware/types'
 import { Cpu as CpuIcon } from 'lucide-react'
 import { cn, formatMegaBytes } from '@/lib/utils'
-import { toNumber } from '@/utils/number'
+import { toNumber } from '@/lib/utils/number'
 import { Button } from '@/components/ui/button'
-import { useModelProvider } from '@/hooks/useModelProvider'
-import { useAppState } from '@/hooks/useAppState'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
+import { useAppState } from '@/hooks/settings/useAppState'
 import { PlatformFeatures, PlatformFeature } from '@/lib/platform'
 import { toast } from 'sonner'
 
@@ -358,8 +358,8 @@ function HardwareContent() {
                             }
                           />
                         ) : (
-                          llamacppDevices.map((device, index) => (
-                            <Card key={index}>
+                          llamacppDevices.map((device) => (
+                            <Card key={device.id || device.name}>
                               <CardItem
                                 title={device.name}
                                 actions={

@@ -7,7 +7,7 @@ import SetupScreen from '../SetupScreen'
 const mockSetTheme = vi.fn()
 const mockUpdateProvider = vi.fn()
 
-vi.mock('@/hooks/useTheme', () => ({
+vi.mock('@/hooks/ui/useTheme', () => ({
   useTheme: vi.fn(() => ({
     activeTheme: 'auto',
     setTheme: mockSetTheme,
@@ -16,7 +16,7 @@ vi.mock('@/hooks/useTheme', () => ({
   })),
 }))
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: vi.fn(() => ({
     providers: [
       { provider: 'llamacpp', active: true },

@@ -14,7 +14,7 @@ use tokio::{
     io::AsyncReadExt,
     process::Command,
     sync::Mutex,
-    time::{sleep, timeout},
+    time::timeout,
 };
 
 #[cfg(windows)]
@@ -27,35 +27,20 @@ use crate::core::{
 use ax_studio_utils::{can_override_npx, can_override_uvx};
 
 /// Allowed executables for MCP server commands
-const ALLOWED_COMMANDS: &[&str] = &["node", "python", "python3", "bun", "npx"];
+const ALLOWED_COMMANDS: &[&str] = &["node", "python", "python3", "bun", "npx", "uvx"];
+const DEFAULT_MCP_CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Environment variables that should be rejected for security reasons
-const DANGEROUS_ENV_KEYS: &[&str] = &["LD_PRELOAD", "DYLD_INSERT_LIBRARIES", "LD_LIBRARY_PATH", "PATH"];
+const DANGEROUS_ENV_KEYS: &[&str] = &[
+    "LD_PRELOAD",
+    "DYLD_INSERT_LIBRARIES",
+    "LD_LIBRARY_PATH",
+    "PATH",
+];
 
-#[derive(Debug, Clone, Copy)]
-pub enum ShutdownContext {
-    AppExit,       // User closing app - be fast
-    ManualRestart, // User restarting servers - be thorough
-    FactoryReset,  // Deleting data - be very thorough
-}
-
-impl ShutdownContext {
-    pub fn per_server_timeout(&self) -> Duration {
-        match self {
-            Self::AppExit => Duration::from_millis(500),
-            Self::ManualRestart => Duration::from_secs(2),
-            Self::FactoryReset => Duration::from_secs(5),
-        }
-    }
-
-    pub fn overall_timeout(&self) -> Duration {
-        match self {
-            Self::AppExit => Duration::from_millis(1500),
-            Self::ManualRestart => Duration::from_secs(5),
-            Self::FactoryReset => Duration::from_secs(10),
-        }
-    }
-}
+// Re-export ShutdownContext so existing `use super::helpers::ShutdownContext`
+// imports keep working after the enum moved to its own module.
+pub use super::shutdown::ShutdownContext;
 
 /// Runs MCP commands by reading configuration from a JSON file and initializing servers
 ///
@@ -167,91 +152,6 @@ pub async fn run_mcp_commands<R: Runtime>(
     Ok(())
 }
 
-/// Monitor MCP server health without removing it from the HashMap
-pub async fn monitor_mcp_server_handle(
-    servers_state: SharedMcpServers,
-    name: String,
-    shutdown_flag: Arc<Mutex<bool>>,
-) -> Option<rmcp::service::QuitReason> {
-    log::info!("Monitoring MCP server {name} health");
-
-    // Monitor server health with periodic checks
-    loop {
-        // Small delay between health checks
-        sleep(Duration::from_secs(5)).await;
-
-        {
-            let shutdown = shutdown_flag.lock().await;
-            if *shutdown {
-                return Some(rmcp::service::QuitReason::Closed);
-            }
-        }
-
-        let (health_check_result, service_snapshot) = {
-            let service = {
-                let servers = servers_state.lock().await;
-                match servers.get(&name) {
-                    Some(s) => s.clone(),
-                    None => {
-                        log::info!("MCP server {name} no longer in running services");
-                        return Some(rmcp::service::QuitReason::Closed);
-                    }
-                }
-            };
-            // Lock is dropped here — health check runs without holding the lock
-            let result = match timeout(Duration::from_secs(2), service.list_all_tools()).await {
-                Ok(Ok(_)) => true,
-                Ok(Err(e)) => {
-                    log::warn!("MCP server {name} health check failed: {e}");
-                    false
-                }
-                Err(_) => {
-                    log::warn!("MCP server {name} health check timed out");
-                    false
-                }
-            };
-            (result, service)
-        };
-
-        if !health_check_result {
-            // Server failed health check — only remove if it's the same instance we checked.
-            // A concurrent restart may have replaced it with a fresh server.
-            log::error!("MCP server {name} failed health check, removing from active servers");
-            let service = {
-                let mut servers = servers_state.lock().await;
-                if let Some(current) = servers.get(&name) {
-                    if Arc::ptr_eq(current, &service_snapshot) {
-                        servers.remove(&name)
-                    } else {
-                        log::info!("MCP server {name} was replaced since health check, skipping removal");
-                        None
-                    }
-                } else {
-                    None
-                }
-            };
-            // Lock dropped — cancel without holding it
-            if let Some(service) = service {
-                if let Ok(inner) = Arc::try_unwrap(service) {
-                    match inner {
-                        RunningServiceEnum::NoInit(svc) => {
-                            log::info!("Stopping server {name}...");
-                            let _ = svc.cancel().await;
-                        }
-                        RunningServiceEnum::WithInit(svc) => {
-                            log::info!("Stopping server {name} with initialization...");
-                            let _ = svc.cancel().await;
-                        }
-                    }
-                } else {
-                    log::warn!("Service {name} still has active references, skipping cancel");
-                }
-            }
-            return Some(rmcp::service::QuitReason::Closed);
-        }
-    }
-}
-
 /// Starts an MCP server
 /// Returns the result of the first start attempt
 pub async fn start_mcp_server<R: Runtime>(
@@ -295,8 +195,8 @@ async fn schedule_mcp_start_task<R: Runtime>(
     config: Value,
 ) -> Result<(), String> {
     let app_path = get_app_data_folder_path(app.clone());
-    let exe_path = env::current_exe()
-        .map_err(|e| format!("Failed to get current exe path: {e}"))?;
+    let exe_path =
+        env::current_exe().map_err(|e| format!("Failed to get current exe path: {e}"))?;
     let exe_parent_path = exe_path
         .parent()
         .ok_or("Executable must have a parent directory")?;
@@ -306,6 +206,12 @@ async fn schedule_mcp_start_task<R: Runtime>(
         .ok_or_else(|| format!("Failed to extract command args from config for {name}"))?;
 
     if config_params.transport_type.as_deref() == Some("http") && config_params.url.is_some() {
+        let transport_url = config_params.url.as_deref().unwrap_or("");
+        if transport_url.is_empty() {
+            return Err(format!(
+                "Missing MCP HTTP URL for server {name}"
+            ));
+        }
         let transport = StreamableHttpClientTransport::with_client(
             reqwest::Client::builder()
                 .default_headers({
@@ -328,11 +234,11 @@ async fn schedule_mcp_start_task<R: Runtime>(
                     }
                     headers
                 })
-                .connect_timeout(config_params.timeout.unwrap_or(Duration::MAX))
+                .connect_timeout(config_params.timeout.unwrap_or(DEFAULT_MCP_CONNECT_TIMEOUT))
                 .build()
                 .map_err(|e| format!("Failed to build HTTP client for {name}: {e}"))?,
             StreamableHttpClientTransportConfig {
-                uri: config_params.url.unwrap().into(),
+                uri: transport_url.to_string().into(),
                 ..Default::default()
             },
         );
@@ -369,6 +275,10 @@ async fn schedule_mcp_start_task<R: Runtime>(
         }
     } else if config_params.transport_type.as_deref() == Some("sse") && config_params.url.is_some()
     {
+        let transport_url = config_params.url.as_deref().unwrap_or("");
+        if transport_url.is_empty() {
+            return Err(format!("Missing MCP SSE URL for server {name}"));
+        }
         let transport = SseClientTransport::start_with_client(
             reqwest::Client::builder()
                 .default_headers({
@@ -391,11 +301,11 @@ async fn schedule_mcp_start_task<R: Runtime>(
                     }
                     headers
                 })
-                .connect_timeout(config_params.timeout.unwrap_or(Duration::MAX))
+                .connect_timeout(config_params.timeout.unwrap_or(DEFAULT_MCP_CONNECT_TIMEOUT))
                 .build()
                 .map_err(|e| format!("Failed to build SSE client for {name}: {e}"))?,
             rmcp::transport::sse_client::SseClientConfig {
-                sse_endpoint: config_params.url.unwrap().into(),
+                sse_endpoint: transport_url.to_string().into(),
                 ..Default::default()
             },
         )
@@ -501,22 +411,37 @@ async fn schedule_mcp_start_task<R: Runtime>(
                         integration_id,
                     ) {
                         Ok(creds) => {
-                            let env_keys =
-                                crate::core::integrations::constants::integration_env_keys();
-                            if let Some(expected_keys) = env_keys.get(integration_id) {
-                                for env_key in expected_keys {
-                                    if let Some(value) = creds.get(*env_key) {
-                                        cmd.env(env_key, value);
+                            if integration_id == "google-workspace" {
+                                match crate::core::integrations::oauth::stage_google_workspace_runtime_config(&creds) {
+                                    Ok(runtime_env) => {
+                                        for (env_key, value) in runtime_env {
+                                            cmd.env(env_key, value);
+                                        }
+                                    }
+                                    Err(e) => {
+                                        log::warn!(
+                                            "Failed to stage Google Workspace runtime credentials for integration '{integration_id}': {e}"
+                                        );
+                                    }
+                                }
+                            } else {
+                                let env_keys =
+                                    crate::core::integrations::constants::integration_env_keys();
+                                if let Some(expected_keys) = env_keys.get(integration_id) {
+                                    for env_key in expected_keys {
+                                        if let Some(value) = creds.get(*env_key) {
+                                            cmd.env(env_key, value);
+                                        }
                                     }
                                 }
                             }
                             log::info!(
-                                "Injected stronghold credentials for managed integration '{integration_id}' into MCP server '{name}'"
+                                "Injected secure-store credentials for managed integration '{integration_id}' into MCP server '{name}'"
                             );
                         }
                         Err(e) => {
                             log::warn!(
-                                "Failed to read stronghold credentials for integration '{integration_id}': {e}"
+                                "Failed to read secure-store credentials for integration '{integration_id}': {e}"
                             );
                         }
                     }
@@ -551,14 +476,16 @@ async fn schedule_mcp_start_task<R: Runtime>(
             .await
             .map_err(|e| format!("Failed to start MCP server {name}: {e}"));
 
-        match service {
+        let inserted_service = match service {
             Ok(server) => {
                 log::trace!("Connected to server: {:#?}", server.peer_info());
+                let inserted_service = Arc::new(RunningServiceEnum::NoInit(server));
                 servers
                     .lock()
                     .await
-                    .insert(name.clone(), Arc::new(RunningServiceEnum::NoInit(server)));
+                    .insert(name.clone(), inserted_service.clone());
                 log::info!("Server {name} started successfully.");
+                inserted_service
             }
             Err(_) => {
                 let mut buffer = String::new();
@@ -573,28 +500,12 @@ async fn schedule_mcp_start_task<R: Runtime>(
                 log::error!("{error}");
                 return Err(error);
             }
-        }
-
-        // Wait a short time to verify the server is stable before marking as connected
-        // This prevents race conditions where the server quits immediately
-        let verification_delay = Duration::from_millis(500);
-        sleep(verification_delay).await;
-
-        // Check if server is still in the map AND responsive (quick health ping)
-        let service = {
-            let servers_map = servers.lock().await;
-            servers_map.get(&name).cloned()
         };
-        match service {
-            None => {
-                return Err(format!("MCP server {name} quit immediately after starting"));
-            }
-            Some(svc) => {
-                if let Err(_) = timeout(Duration::from_secs(3), svc.list_all_tools()).await {
-                    log::warn!("MCP server {name} started but failed initial health check (timed out)");
-                    // Don't fail — the background health monitor will handle it
-                }
-            }
+
+        // Verify the exact service instance we just inserted, without a sleep-plus-map recheck race.
+        if let Err(_) = timeout(Duration::from_secs(3), inserted_service.list_all_tools()).await {
+            log::warn!("MCP server {name} started but failed initial health check (timed out)");
+            // Don't fail — startup completed and later requests can still succeed if the server warms up.
         }
 
         emit_mcp_update_event(&app, &name);
@@ -679,29 +590,6 @@ pub fn extract_active_status(config: &Value) -> Option<bool> {
 mod tests {
     use super::*;
 
-    // --- ShutdownContext ---
-
-    #[test]
-    fn test_shutdown_context_app_exit_timeouts() {
-        let ctx = ShutdownContext::AppExit;
-        assert_eq!(ctx.per_server_timeout(), Duration::from_millis(500));
-        assert_eq!(ctx.overall_timeout(), Duration::from_millis(1500));
-    }
-
-    #[test]
-    fn test_shutdown_context_manual_restart_timeouts() {
-        let ctx = ShutdownContext::ManualRestart;
-        assert_eq!(ctx.per_server_timeout(), Duration::from_secs(2));
-        assert_eq!(ctx.overall_timeout(), Duration::from_secs(5));
-    }
-
-    #[test]
-    fn test_shutdown_context_factory_reset_timeouts() {
-        let ctx = ShutdownContext::FactoryReset;
-        assert_eq!(ctx.per_server_timeout(), Duration::from_secs(5));
-        assert_eq!(ctx.overall_timeout(), Duration::from_secs(10));
-    }
-
     // --- extract_command_args ---
 
     #[test]
@@ -714,7 +602,10 @@ mod tests {
         let result = extract_command_args(&config).unwrap();
         assert_eq!(result.command, "node");
         assert_eq!(result.args.len(), 3);
-        assert_eq!(result.envs.get("NODE_ENV").unwrap().as_str().unwrap(), "production");
+        assert_eq!(
+            result.envs.get("NODE_ENV").unwrap().as_str().unwrap(),
+            "production"
+        );
         assert!(result.url.is_none());
         assert!(result.transport_type.is_none());
         assert!(result.timeout.is_none());
@@ -767,7 +658,12 @@ mod tests {
         });
         let result = extract_command_args(&config).unwrap();
         assert_eq!(
-            result.headers.get("Authorization").unwrap().as_str().unwrap(),
+            result
+                .headers
+                .get("Authorization")
+                .unwrap()
+                .as_str()
+                .unwrap(),
             "Bearer token123"
         );
     }
@@ -794,8 +690,14 @@ mod tests {
             }
         });
         let result = extract_command_args(&config).unwrap();
-        assert_eq!(result.envs.get("NODE_ENV").unwrap().as_str().unwrap(), "production");
-        assert_eq!(result.envs.get("SAFE_VAR").unwrap().as_str().unwrap(), "safe");
+        assert_eq!(
+            result.envs.get("NODE_ENV").unwrap().as_str().unwrap(),
+            "production"
+        );
+        assert_eq!(
+            result.envs.get("SAFE_VAR").unwrap().as_str().unwrap(),
+            "safe"
+        );
         assert!(result.envs.get("LD_PRELOAD").is_none());
         assert!(result.envs.get("PATH").is_none());
     }
@@ -888,101 +790,6 @@ pub async fn restart_active_mcp_servers<R: Runtime>(
     Ok(())
 }
 
-pub async fn kill_orphaned_mcp_process_with_app<R: Runtime>(
-    app: &AppHandle<R>,
-    port: u16,
-) -> Result<bool, String> {
-    use crate::core::mcp::lockfile::{
-        check_and_cleanup_stale_lock, is_process_alive, read_lock_file,
-    };
-
-    // Check lock file first (fast path)
-    if let Some(lock) = read_lock_file(app, port) {
-        log::debug!("Found lock file for port {}: PID={}", port, lock.pid);
-
-        if !is_process_alive(lock.pid) {
-            log::info!("Lock file stale, process {} is dead", lock.pid);
-            check_and_cleanup_stale_lock(app, port).await?;
-            return Ok(true);
-        }
-
-        // Process from lock file is alive - verify it's still the MCP process
-        if let Some(process_info) = ax_studio_utils::network::get_process_info_by_pid(lock.pid) {
-            if ax_studio_utils::network::is_orphaned_mcp_process(&process_info) {
-                log::info!(
-                    "Lock file PID {} verified as MCP process, attempting kill",
-                    lock.pid
-                );
-                kill_process_by_pid(lock.pid).await?;
-
-                use crate::core::mcp::lockfile::delete_lock_file;
-                delete_lock_file(app, port)?;
-
-                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-                if ax_studio_utils::network::is_port_available(port) {
-                    log::info!("Cleaned up orphaned process via lock file");
-                    return Ok(true);
-                }
-            } else {
-                log::warn!(
-                    "Lock file PID {} is alive but NOT an MCP process (name: {}, cmd: {:?}). Lock file is stale.",
-                    lock.pid,
-                    process_info.name,
-                    process_info.cmd
-                );
-                // PID reused by another process, clean up stale lock file
-                check_and_cleanup_stale_lock(app, port).await?;
-            }
-        } else {
-            log::debug!(
-                "Could not get process info for PID {}, cleaning up lock file",
-                lock.pid
-            );
-            check_and_cleanup_stale_lock(app, port).await?;
-        }
-    }
-
-    // Fallback: Use lsof/netstat to find process on port
-    let process_info = match ax_studio_utils::network::find_process_using_port(port) {
-        Some(info) => info,
-        None => return Ok(false),
-    };
-
-    log::info!(
-        "Found process on port {}: PID={}, name={}, cmd={:?}",
-        port,
-        process_info.pid,
-        process_info.name,
-        process_info.cmd
-    );
-
-    if !ax_studio_utils::network::is_orphaned_mcp_process(&process_info) {
-        log::warn!(
-            "Port {} occupied by non-Ax-Studio process '{}' (PID {})",
-            port,
-            process_info.name,
-            process_info.pid
-        );
-        return Err(format!(
-            "Port {} is in use by another application '{}' (PID {}). Please close that application or use a different port.",
-            port, process_info.name, process_info.pid
-        ));
-    }
-
-    log::info!("Killing orphaned MCP process: PID {}", process_info.pid);
-    kill_process_by_pid(process_info.pid).await?;
-
-    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-    if ax_studio_utils::network::is_port_available(port) {
-        log::info!("Cleaned up orphaned process on port {}", port);
-        Ok(true)
-    } else {
-        Err(format!("Port {} still in use after killing process", port))
-    }
-}
-
 #[cfg(unix)]
 async fn kill_process_by_pid(pid: u32) -> Result<(), String> {
     use nix::sys::signal::{kill, Signal};
@@ -1068,7 +875,7 @@ impl Drop for ShutdownGuard {
 }
 
 pub async fn stop_mcp_servers_with_context<R: Runtime>(
-    app: &AppHandle<R>,
+    _app: &AppHandle<R>,
     state: &State<'_, AppState>,
     context: ShutdownContext,
 ) -> Result<(), String> {
@@ -1086,8 +893,11 @@ pub async fn stop_mcp_servers_with_context<R: Runtime>(
 
     {
         let mut monitoring_tasks = state.mcp_monitoring_tasks.lock().await;
-        for (_name, handle) in monitoring_tasks.drain() {
+        let handles: Vec<_> = monitoring_tasks.drain().map(|(_, handle)| handle).collect();
+        drop(monitoring_tasks);
+        for handle in handles {
             handle.abort();
+            let _ = handle.await;
         }
     }
 
@@ -1122,7 +932,6 @@ pub async fn stop_mcp_servers_with_context<R: Runtime>(
     let stop_handles: Vec<_> = servers_to_stop
         .into_iter()
         .map(|(name, service)| {
-
             tauri::async_runtime::spawn(async move {
                 let cancel_future = async {
                     match Arc::try_unwrap(service) {

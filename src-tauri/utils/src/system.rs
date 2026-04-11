@@ -98,7 +98,10 @@ pub fn binary_requires_cuda(bin_path: &Path) -> bool {
     return binary_requires_cuda_linux(bin_path);
 
     #[cfg(not(any(target_os = "windows", target_os = "linux")))]
-    false
+    {
+        let _ = bin_path;
+        false
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -156,6 +159,7 @@ pub fn add_cuda_paths(command: &mut tokio::process::Command) -> bool {
 
     #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     {
+        let _ = command;
         #[cfg(feature = "logging")]
         log::debug!("CUDA path detection not implemented for this OS");
         false

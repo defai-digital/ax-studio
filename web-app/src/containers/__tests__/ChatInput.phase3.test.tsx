@@ -16,17 +16,19 @@ const mockSetGlobalPrompt = vi.fn()
 const mockAbort = vi.fn()
 
 vi.mock('react-textarea-autosize', () => ({
-  default: (props: any) => <textarea {...props} />,
+  default: ({ minRows: _minRows, maxRows: _maxRows, rows, ...props }: any) => (
+    <textarea rows={rows ?? 1} {...props} />
+  ),
 }))
 
-vi.mock('@/hooks/usePrompt', () => ({
+vi.mock('@/hooks/ui/usePrompt', () => ({
   usePrompt: (selector?: any) => {
     const state = { prompt: '', setPrompt: mockSetGlobalPrompt, resetPrompt: vi.fn() }
     return selector ? selector(state) : state
   },
 }))
 
-vi.mock('@/hooks/useThreads', () => ({
+vi.mock('@/hooks/threads/useThreads', () => ({
   useThreads: (selector?: any) => {
     const state = {
       currentThreadId: 'thread-1',
@@ -38,7 +40,7 @@ vi.mock('@/hooks/useThreads', () => ({
   },
 }))
 
-vi.mock('@/hooks/useGeneralSetting', () => ({
+vi.mock('@/hooks/settings/useGeneralSetting', () => ({
   useGeneralSetting: (selector?: any) => {
     const state = {
       spellCheckChatInput: true,
@@ -48,14 +50,14 @@ vi.mock('@/hooks/useGeneralSetting', () => ({
   },
 }))
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: (selector?: any) => {
     const state = { selectedModel: { id: 'gpt-4', capabilities: ['tools'] } }
     return selector ? selector(state) : state
   },
 }))
 
-vi.mock('@/hooks/useAppState', () => ({
+vi.mock('@/hooks/settings/useAppState', () => ({
   useAppState: (selector?: any) => {
     const state = {
       abortControllers: { 'thread-1': { abort: mockAbort } },
@@ -66,14 +68,14 @@ vi.mock('@/hooks/useAppState', () => ({
   },
 }))
 
-vi.mock('@/hooks/useAssistant', () => ({
+vi.mock('@/hooks/chat/useAssistant', () => ({
   useAssistant: (selector?: any) => {
     const state = { assistants: [] }
     return selector ? selector(state) : state
   },
 }))
 
-vi.mock('@/hooks/useMemory', () => ({
+vi.mock('@/hooks/integrations/useMemory', () => ({
   useMemory: (selector?: any) => {
     const state = {
       memoryEnabled: false,
@@ -87,11 +89,11 @@ vi.mock('@/hooks/useMemory', () => ({
   },
 }))
 
-vi.mock('@/hooks/useTools', () => ({
+vi.mock('@/hooks/tools/useTools', () => ({
   useTools: vi.fn(),
 }))
 
-vi.mock('@/hooks/useMessages', () => ({
+vi.mock('@/hooks/chat/useMessages', () => ({
   useMessages: () => [],
 }))
 
@@ -112,13 +114,13 @@ vi.mock('@/lib/extension', () => ({
   },
 }))
 
-vi.mock('@/hooks/use-chat-send-handler', () => ({
+vi.mock('@/hooks/chat/use-chat-send-handler', () => ({
   useChatSendHandler: () => ({
     handleSendMessage: mockHandleSendMessage,
   }),
 }))
 
-vi.mock('@/containers/ChatInputToolbar', () => ({
+vi.mock('@/components/chat/ChatInputToolbar', () => ({
   ChatInputToolbar: ({ isStreaming, stopStreaming, handleSendMessage, prompt }: any) => (
     <div data-testid="toolbar" data-streaming={isStreaming}>
       {isStreaming ? (
@@ -261,12 +263,13 @@ describe('ChatInput — Phase 3 Manual Test Protocol', () => {
     expect(textarea).toHaveAttribute('spellcheck', 'true')
   })
 
-  // Protocol #14: maxRows=8 attribute
-  it('textarea has maxRows=8', () => {
+  // Protocol #14: minRows/maxRows are handled by autosize component
+  it('does not leak minRows/maxRows to DOM textarea props', () => {
     render(<ChatInput />)
     const textarea = screen.getByTestId('chat-input')
-    // react-textarea-autosize is mocked as plain textarea, but maxRows is passed as prop
-    expect(textarea.getAttribute('maxrows')).toBe('8')
+    expect(textarea).not.toHaveAttribute('minrows')
+    expect(textarea).not.toHaveAttribute('maxrows')
+    expect(textarea).toHaveAttribute('rows')
   })
 
   // Protocol #14: Font size 14px

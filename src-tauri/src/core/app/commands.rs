@@ -25,7 +25,14 @@ pub fn get_app_configurations<R: Runtime>(app_handle: tauri::AppHandle<R>) -> Ap
 
         if let Err(err) = fs::write(
             &configuration_file,
-            serde_json::to_string(&app_default_configuration).unwrap(),
+            serde_json::to_string(&app_default_configuration)
+                .map_err(|e| e.to_string())
+                .unwrap_or_else(|e| {
+                    log::warn!(
+                        "Failed to serialize default app configuration while creating config: {e}"
+                    );
+                    String::new()
+                }),
         ) {
             log::error!("Failed to create default config: {err}");
         }
@@ -38,7 +45,29 @@ pub fn get_app_configurations<R: Runtime>(app_handle: tauri::AppHandle<R>) -> Ap
             match serde_json::from_str::<AppConfiguration>(&content) {
                 Ok(app_configurations) => app_configurations,
                 Err(err) => {
-                    log::error!("Failed to parse app config, returning default config instead. Error: {err}");
+                    // Quarantine the corrupt config so the next run has a
+                    // chance to recreate a fresh default, and so the user
+                    // can inspect / recover data by hand. Previously we
+                    // silently returned the default config and left the
+                    // corrupt file in place — the user's custom data
+                    // folder path reverted to default with no UI signal.
+                    let quarantine_path = configuration_file.with_extension(
+                        format!(
+                            "corrupt-{}.json",
+                            std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .map(|d| d.as_secs())
+                                .unwrap_or(0)
+                        ),
+                    );
+                    match fs::rename(&configuration_file, &quarantine_path) {
+                        Ok(()) => log::error!(
+                            "Failed to parse app config; quarantined to {quarantine_path:?} and returning defaults. Parse error: {err}"
+                        ),
+                        Err(rename_err) => log::error!(
+                            "Failed to parse app config and could not quarantine the file ({rename_err}). Returning defaults. Parse error: {err}"
+                        ),
+                    }
                     app_default_configuration
                 }
             }
@@ -125,18 +154,12 @@ pub fn get_configuration_file_path<R: Runtime>(app_handle: tauri::AppHandle<R>) 
             config_path.join(package_name)
         } else {
             log::debug!("Could not determine config directory");
-            app_path
-                .parent()
-                .unwrap_or(&app_path.join("../"))
-                .join(package_name)
+            app_path.parent().unwrap_or(&app_path).join(package_name)
         }
     };
 
     #[cfg(not(target_os = "linux"))]
-    let old_data_dir = app_path
-        .parent()
-        .unwrap_or(&app_path.join("../"))
-        .join(package_name);
+    let old_data_dir = app_path.parent().unwrap_or(&app_path).join(package_name);
 
     if old_data_dir.exists() {
         old_data_dir.join(CONFIGURATION_FILE_NAME)

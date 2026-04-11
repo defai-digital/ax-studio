@@ -56,8 +56,7 @@ pub async fn register_provider_config(
     state: State<'_, AppState>,
     request: RegisterProviderRequest,
 ) -> Result<(), String> {
-    let provider_configs = state.provider_configs.clone();
-    let mut configs = provider_configs.lock().await;
+    let mut provider_state = state.provider_state.lock().await;
 
     let config = ProviderConfig {
         provider: request.provider.clone(),
@@ -75,7 +74,8 @@ pub async fn register_provider_config(
     };
 
     let provider_name = request.provider.clone();
-    configs.insert(provider_name.clone(), config);
+    provider_state.configs.insert(provider_name.clone(), config);
+    provider_state.sync_model_index();
     log::info!("Registered provider config: {provider_name}");
     Ok(())
 }
@@ -86,8 +86,7 @@ pub async fn register_provider_configs_batch(
     state: State<'_, AppState>,
     requests: Vec<RegisterProviderRequest>,
 ) -> Result<(), String> {
-    let provider_configs = state.provider_configs.clone();
-    let mut configs = provider_configs.lock().await;
+    let mut provider_state = state.provider_state.lock().await;
 
     for request in requests {
         let provider_name = request.provider.clone();
@@ -105,9 +104,10 @@ pub async fn register_provider_configs_batch(
                 .collect(),
             models: request.models,
         };
-        configs.insert(provider_name.clone(), config);
+        provider_state.configs.insert(provider_name.clone(), config);
         log::info!("Registered provider config (batch): {provider_name}");
     }
+    provider_state.sync_model_index();
     Ok(())
 }
 
@@ -117,10 +117,10 @@ pub async fn unregister_provider_config(
     state: State<'_, AppState>,
     provider: String,
 ) -> Result<(), String> {
-    let provider_configs = state.provider_configs.clone();
-    let mut configs = provider_configs.lock().await;
+    let mut provider_state = state.provider_state.lock().await;
 
-    if configs.remove(&provider).is_some() {
+    if provider_state.configs.remove(&provider).is_some() {
+        provider_state.sync_model_index();
         log::info!("Unregistered provider config: {provider}");
         Ok(())
     } else {
@@ -135,10 +135,12 @@ pub async fn get_provider_config(
     state: State<'_, AppState>,
     provider: String,
 ) -> Result<Option<ProviderConfigView>, String> {
-    let provider_configs = state.provider_configs.clone();
-    let configs = provider_configs.lock().await;
+    let provider_state = state.provider_state.lock().await;
 
-    Ok(configs.get(&provider).map(redact_provider_config))
+    Ok(provider_state
+        .configs
+        .get(&provider)
+        .map(redact_provider_config))
 }
 
 /// List all registered provider configurations (without sensitive keys)
@@ -146,12 +148,14 @@ pub async fn get_provider_config(
 pub async fn list_provider_configs(
     state: State<'_, AppState>,
 ) -> Result<Vec<ProviderConfigView>, String> {
-    let provider_configs = state.provider_configs.clone();
-    let configs = provider_configs.lock().await;
+    let provider_state = state.provider_state.lock().await;
 
-    Ok(configs.values().map(redact_provider_config).collect())
+    Ok(provider_state
+        .configs
+        .values()
+        .map(redact_provider_config)
+        .collect())
 }
-
 
 #[cfg(test)]
 mod tests {

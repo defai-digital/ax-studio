@@ -1,0 +1,6 @@
+{
+  "$schema": "https://ax-code.ai/config.json",
+  "routing": {
+    "llm": true
+  }
+}

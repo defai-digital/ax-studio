@@ -8,7 +8,7 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useTheme', () => ({
+vi.mock('@/hooks/ui/useTheme', () => ({
   useTheme: () => ({ isDark: false }),
 }))
 
@@ -17,7 +17,7 @@ vi.mock('@/lib/utils', () => ({
   isDev: () => false,
 }))
 
-vi.mock('@/utils/teamEmoji', () => ({
+vi.mock('@/lib/utils/teamEmoji', () => ({
   teamEmoji: [],
 }))
 
@@ -37,7 +37,7 @@ vi.mock('@tabler/icons-react', () => ({
   IconMoodSmile: () => <span data-testid="icon-mood" />,
 }))
 
-vi.mock('@/containers/AvatarEmoji', () => ({
+vi.mock('@/components/common/AvatarEmoji', () => ({
   AvatarEmoji: () => <span data-testid="avatar-emoji" />,
 }))
 

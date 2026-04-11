@@ -17,6 +17,22 @@ use crate::core::{
 };
 use std::{fs, sync::Arc, time::Duration};
 
+fn is_valid_mcp_identifier(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.' | ':' | '/' | '@'))
+}
+
+fn validate_mcp_identifier(kind: &str, value: &str) -> Result<(), String> {
+    if is_valid_mcp_identifier(value) {
+        Ok(())
+    } else {
+        Err(format!("Invalid {kind}: {value}"))
+    }
+}
+
 async fn tool_call_timeout(state: &State<'_, AppState>) -> Duration {
     state.mcp_settings.lock().await.tool_call_timeout_duration()
 }
@@ -28,6 +44,7 @@ pub async fn activate_mcp_server<R: Runtime>(
     name: String,
     config: Value,
 ) -> Result<(), String> {
+    validate_mcp_identifier("server name", &name)?;
     let servers: SharedMcpServers = state.mcp_servers.clone();
 
     // Use the modified start_mcp_server that returns first attempt result
@@ -40,6 +57,7 @@ pub async fn deactivate_mcp_server<R: Runtime>(
     state: State<'_, AppState>,
     name: String,
 ) -> Result<(), String> {
+    validate_mcp_identifier("server name", &name)?;
     log::info!("Deactivating MCP server: {name}");
 
     // First, mark server as manually deactivated
@@ -218,14 +236,23 @@ pub async fn call_tool(
     arguments: Option<Map<String, Value>>,
     cancellation_token: Option<String>,
 ) -> Result<CallToolResult, String> {
+    validate_mcp_identifier("tool name", &tool_name)?;
+    if let Some(server_name) = server_name.as_deref() {
+        validate_mcp_identifier("server name", server_name)?;
+    }
+    if let Some(token) = cancellation_token.as_deref() {
+        validate_mcp_identifier("cancellation token", token)?;
+    }
     let timeout_duration = tool_call_timeout(&state).await;
-    // Set up cancellation if token is provided
-    let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
-
-    if let Some(token) = &cancellation_token {
+    // Set up cancellation only when requested so unused senders do not linger.
+    let cancel_rx = if let Some(token) = &cancellation_token {
+        let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
         let mut cancellations = state.tool_call_cancellations.lock().await;
         cancellations.insert(token.clone(), cancel_tx);
-    }
+        Some(cancel_rx)
+    } else {
+        None
+    };
 
     // Phase 1: Collect Arc refs under lock, then search without lock
     let (server_refs, server_not_found) = {
@@ -252,11 +279,7 @@ pub async fn call_tool(
 
     if server_not_found {
         if let Some(ref server) = server_name {
-            // Clean up cancellation token before early return
-            if let Some(token) = &cancellation_token {
-                let mut cancellations = state.tool_call_cancellations.lock().await;
-                cancellations.remove(token);
-            }
+            remove_tool_cancellation_token(&state, cancellation_token.as_ref()).await;
             return Err(format!("Server '{server}' not found"));
         }
     }
@@ -279,11 +302,7 @@ pub async fn call_tool(
     let service = match target_service {
         Some(s) => s,
         None => {
-            // Clean up cancellation token before early return
-            if let Some(token) = &cancellation_token {
-                let mut cancellations = state.tool_call_cancellations.lock().await;
-                cancellations.remove(token);
-            }
+            remove_tool_cancellation_token(&state, cancellation_token.as_ref()).await;
             return Err(format!("Tool {tool_name} not found"));
         }
     };
@@ -294,7 +313,7 @@ pub async fn call_tool(
         arguments,
     });
 
-    let result = if cancellation_token.is_some() {
+    let result = if let Some(cancel_rx) = cancel_rx {
         tokio::select! {
             result = timeout(timeout_duration, tool_call) => {
                 match result {
@@ -319,11 +338,7 @@ pub async fn call_tool(
         }
     };
 
-    // Clean up cancellation token
-    if let Some(token) = &cancellation_token {
-        let mut cancellations = state.tool_call_cancellations.lock().await;
-        cancellations.remove(token);
-    }
+    remove_tool_cancellation_token(&state, cancellation_token.as_ref()).await;
 
     result
 }
@@ -341,6 +356,7 @@ pub async fn cancel_tool_call(
     state: State<'_, AppState>,
     cancellation_token: String,
 ) -> Result<(), String> {
+    validate_mcp_identifier("cancellation token", &cancellation_token)?;
     let mut cancellations = state.tool_call_cancellations.lock().await;
 
     if let Some(cancel_tx) = cancellations.remove(&cancellation_token) {
@@ -353,10 +369,12 @@ pub async fn cancel_tool_call(
     }
 }
 
-fn parse_mcp_settings(value: Option<&Value>) -> McpSettings {
-    value
-        .and_then(|v| serde_json::from_value::<McpSettings>(v.clone()).ok())
-        .unwrap_or_default()
+fn parse_mcp_settings(value: Option<&Value>) -> Result<McpSettings, String> {
+    match value {
+        Some(v) => serde_json::from_value::<McpSettings>(v.clone())
+            .map_err(|e| format!("Invalid MCP settings payload: {e}")),
+        None => Ok(McpSettings::default()),
+    }
 }
 
 #[tauri::command]
@@ -376,10 +394,21 @@ pub async fn get_mcp_configs<R: Runtime>(app: AppHandle<R>) -> Result<String, St
     let mut config_value: Value = if config_string.trim().is_empty() {
         json!({})
     } else {
-        serde_json::from_str(&config_string).unwrap_or_else(|error| {
-            log::error!("Failed to parse existing MCP config, regenerating defaults: {error}");
-            json!({})
-        })
+        match serde_json::from_str(&config_string) {
+            Ok(v) => v,
+            Err(error) => {
+                // Quarantine corrupt config file instead of silently destroying it
+                let backup_path = path.with_extension("json.corrupt");
+                if let Err(e) = std::fs::rename(&path, &backup_path) {
+                    log::error!("Failed to quarantine corrupt MCP config: {e}");
+                }
+                log::error!(
+                    "MCP config corrupted, quarantined to {:?}: {error}",
+                    backup_path
+                );
+                json!({})
+            }
+        }
     };
 
     if !config_value.is_object() {
@@ -391,7 +420,7 @@ pub async fn get_mcp_configs<R: Runtime>(app: AppHandle<R>) -> Result<String, St
         .as_object_mut()
         .ok_or("MCP config must be a JSON object")?;
 
-    let settings = parse_mcp_settings(config_object.get("mcpSettings"));
+    let settings = parse_mcp_settings(config_object.get("mcpSettings"))?;
     if !config_object.contains_key("mcpSettings") {
         config_object.insert(
             "mcpSettings".to_string(),
@@ -412,7 +441,13 @@ pub async fn get_mcp_configs<R: Runtime>(app: AppHandle<R>) -> Result<String, St
         .ok_or("mcpServers is not an object")?;
 
     // Remove deprecated MCP servers if present (features removed)
-    for key in &["Ax-Studio Browser MCP", "browsermcp", "fetch", "serper", "integration-github"] {
+    for key in &[
+        "Ax-Studio Browser MCP",
+        "browsermcp",
+        "fetch",
+        "serper",
+        "integration-github",
+    ] {
         if mcp_servers.remove(*key).is_some() {
             mutated = true;
         }
@@ -458,7 +493,7 @@ pub async fn save_mcp_configs<R: Runtime>(
     let config_object = config_value
         .as_object_mut()
         .ok_or("MCP config must be a JSON object")?;
-    let settings = parse_mcp_settings(config_object.get("mcpSettings"));
+    let settings = parse_mcp_settings(config_object.get("mcpSettings"))?;
 
     if !config_object.contains_key("mcpSettings") {
         config_object.insert(
@@ -486,4 +521,13 @@ pub async fn save_mcp_configs<R: Runtime>(
     }
 
     Ok(())
+}
+async fn remove_tool_cancellation_token(
+    state: &State<'_, AppState>,
+    cancellation_token: Option<&String>,
+) {
+    if let Some(token) = cancellation_token {
+        let mut cancellations = state.tool_call_cancellations.lock().await;
+        cancellations.remove(token);
+    }
 }

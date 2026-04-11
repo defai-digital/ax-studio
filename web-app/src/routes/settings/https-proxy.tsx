@@ -1,14 +1,14 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import HeaderPage from '@/containers/HeaderPage'
-import SettingsMenu from '@/containers/SettingsMenu'
-import { Card, CardItem } from '@/containers/Card'
+import SettingsMenu from '@/components/common/SettingsMenu'
+import { Card, CardItem } from '@/components/common/Card'
 import { Switch } from '@/components/ui/switch'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { Input } from '@/components/ui/input'
 import { EyeOff, Eye, Globe } from 'lucide-react'
 import { useCallback, useState } from 'react'
-import { useProxyConfig } from '@/hooks/useProxyConfig'
+import { useProxyConfig } from '@/hooks/settings/useProxyConfig'
 
 export const Route = createFileRoute(route.settings.https_proxy)({
   component: HTTPSProxyContent,

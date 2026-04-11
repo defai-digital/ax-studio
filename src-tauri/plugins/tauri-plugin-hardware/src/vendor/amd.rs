@@ -166,21 +166,28 @@ mod windows_impl {
 
             let mut num_adapters: c_int = 0;
             if adl_adapter_number_of_adapters_get(&mut num_adapters as *mut _) != 0 {
+                adlmaincontroldestroy();
                 return Err("Cannot get number of adapters".into());
             }
 
             let mut vram_usages = HashMap::new();
 
             if num_adapters > 0 {
-                let mut adapter_info: Vec<AdapterInfo> =
-                    vec![MaybeUninit::zeroed().assume_init(); num_adapters as usize];
+                let mut adapter_info: Vec<MaybeUninit<AdapterInfo>> =
+                    vec![MaybeUninit::zeroed(); num_adapters as usize];
                 let ret = adl_adapter_adapter_info_get(
-                    adapter_info.as_mut_ptr(),
+                    adapter_info.as_mut_ptr() as *mut AdapterInfo,
                     mem::size_of::<AdapterInfo>() as i32 * num_adapters,
                 );
                 if ret != 0 {
+                    adlmaincontroldestroy();
                     return Err("Cannot get adapter info".into());
                 }
+                // SAFETY: adl_adapter_adapter_info_get filled the buffer on success
+                let adapter_info: Vec<AdapterInfo> = adapter_info
+                    .into_iter()
+                    .map(|a| a.assume_init())
+                    .collect();
 
                 for adapter in adapter_info.iter() {
                     let mut is_active = 0;

@@ -25,13 +25,24 @@ vi.mock('@/lib/shiki-theme-dark', () => ({
 
 import { CodeBlock, CodeBlockCopyButton, highlightCode } from '../code-block'
 
+type RenderResult = ReturnType<typeof render>
+
+const renderCodeBlock = async (ui: Parameters<typeof render>[0]): Promise<RenderResult> => {
+  let result: RenderResult
+  await act(async () => {
+    result = render(ui)
+    await Promise.resolve()
+  })
+  return result!
+}
+
 describe('CodeBlock', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('renders a container div with the correct classes', () => {
-    const { container } = render(
+  it('renders a container div with the correct classes', async () => {
+    const { container } = await renderCodeBlock(
       <CodeBlock code="const x = 1" language="javascript" />
     )
     const wrapper = container.firstChild as HTMLElement
@@ -39,8 +50,8 @@ describe('CodeBlock', () => {
     expect(wrapper.className).toContain('border')
   })
 
-  it('renders light and dark theme containers', () => {
-    const { container } = render(
+  it('renders light and dark theme containers', async () => {
+    const { container } = await renderCodeBlock(
       <CodeBlock code="hello" language="typescript" />
     )
     const divs = container.querySelectorAll('[class*="overflow-auto"]')
@@ -50,8 +61,8 @@ describe('CodeBlock', () => {
     expect(divs[1].className).toContain('dark:block')
   })
 
-  it('renders children in the overlay position when provided', () => {
-    const { container } = render(
+  it('renders children in the overlay position when provided', async () => {
+    const { container } = await renderCodeBlock(
       <CodeBlock code="test" language="javascript">
         <button>Copy</button>
       </CodeBlock>
@@ -61,16 +72,16 @@ describe('CodeBlock', () => {
     expect(overlay).toBeInTheDocument()
   })
 
-  it('does not render overlay when no children', () => {
-    const { container } = render(
+  it('does not render overlay when no children', async () => {
+    const { container } = await renderCodeBlock(
       <CodeBlock code="test" language="javascript" />
     )
     const overlay = container.querySelector('.absolute.top-2.right-2')
     expect(overlay).toBeNull()
   })
 
-  it('applies custom className', () => {
-    const { container } = render(
+  it('applies custom className', async () => {
+    const { container } = await renderCodeBlock(
       <CodeBlock code="x" language="javascript" className="my-custom" />
     )
     const wrapper = container.firstChild as HTMLElement
@@ -78,7 +89,7 @@ describe('CodeBlock', () => {
   })
 
   it('populates innerHTML asynchronously after highlight', async () => {
-    const { container } = render(
+    const { container } = await renderCodeBlock(
       <CodeBlock code="const y = 2" language="typescript" />
     )
     await waitFor(() => {
@@ -112,8 +123,8 @@ describe('CodeBlockCopyButton', () => {
     })
   })
 
-  it('renders a copy button', () => {
-    render(
+  it('renders a copy button', async () => {
+    await renderCodeBlock(
       <CodeBlock code="copy me" language="javascript">
         <CodeBlockCopyButton />
       </CodeBlock>
@@ -123,7 +134,7 @@ describe('CodeBlockCopyButton', () => {
   })
 
   it('copies code to clipboard on click', async () => {
-    render(
+    await renderCodeBlock(
       <CodeBlock code="copy me" language="javascript">
         <CodeBlockCopyButton />
       </CodeBlock>
@@ -137,7 +148,7 @@ describe('CodeBlockCopyButton', () => {
 
   it('calls onCopy callback after successful copy', async () => {
     const onCopy = vi.fn()
-    render(
+    await renderCodeBlock(
       <CodeBlock code="test" language="javascript">
         <CodeBlockCopyButton onCopy={onCopy} />
       </CodeBlock>
@@ -153,7 +164,7 @@ describe('CodeBlockCopyButton', () => {
       clipboard: { writeText: undefined },
     })
     const onError = vi.fn()
-    render(
+    await renderCodeBlock(
       <CodeBlock code="test" language="javascript">
         <CodeBlockCopyButton onError={onError} />
       </CodeBlock>
@@ -174,7 +185,7 @@ describe('CodeBlockCopyButton', () => {
       },
     })
     const onError = vi.fn()
-    render(
+    await renderCodeBlock(
       <CodeBlock code="test" language="javascript">
         <CodeBlockCopyButton onError={onError} />
       </CodeBlock>
@@ -185,8 +196,8 @@ describe('CodeBlockCopyButton', () => {
     expect(onError).toHaveBeenCalledWith(clipboardError)
   })
 
-  it('renders custom children instead of default icon', () => {
-    render(
+  it('renders custom children instead of default icon', async () => {
+    await renderCodeBlock(
       <CodeBlock code="test" language="javascript">
         <CodeBlockCopyButton>Custom Copy</CodeBlockCopyButton>
       </CodeBlock>

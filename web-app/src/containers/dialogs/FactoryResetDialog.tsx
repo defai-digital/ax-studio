@@ -23,16 +23,12 @@ export function FactoryResetDialog({
   children,
 }: FactoryResetDialogProps) {
   const { t } = useTranslation()
-  const resetButtonRef = useRef<HTMLButtonElement>(null)
+  // Focus Cancel (not the reset button) so users who habitually press
+  // Enter to dismiss dialogs don't accidentally wipe their data.
+  const cancelButtonRef = useRef<HTMLButtonElement>(null)
 
   const handleReset = () => {
     onReset()
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleReset()
-    }
   }
 
   return (
@@ -42,7 +38,7 @@ export function FactoryResetDialog({
         className="sm:max-w-[425px] max-w-[90vw]"
         onOpenAutoFocus={(e) => {
           e.preventDefault()
-          resetButtonRef.current?.focus()
+          cancelButtonRef.current?.focus()
         }}
       >
         <DialogHeader>
@@ -61,16 +57,14 @@ export function FactoryResetDialog({
         </div>
         <DialogFooter>
           <DialogClose asChild>
-            <Button variant="outline" size="sm">
+            <Button ref={cancelButtonRef} variant="outline" size="sm">
               {t('settings:general.cancel')}
             </Button>
           </DialogClose>
           <DialogClose asChild>
             <Button
-              ref={resetButtonRef}
               variant="destructive"
               onClick={handleReset}
-              onKeyDown={handleKeyDown}
               size="sm"
               className="w-full sm:w-auto"
               aria-label={t('settings:general.reset')}

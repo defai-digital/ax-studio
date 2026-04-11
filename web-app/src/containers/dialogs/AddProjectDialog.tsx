@@ -16,9 +16,9 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { useThreadManagement } from '@/hooks/useThreadManagement'
-import { useAssistant } from '@/hooks/useAssistant'
-import { AvatarEmoji } from '@/containers/AvatarEmoji'
+import { useThreadManagement } from '@/hooks/threads/useThreadManagement'
+import { useAssistant } from '@/hooks/chat/useAssistant'
+import { AvatarEmoji } from '@/components/common/AvatarEmoji'
 import { toast } from 'sonner'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { ChevronDown, Plus } from 'lucide-react'
@@ -61,6 +61,28 @@ export default function AddProjectDialog({
   const [addAssistantDialogOpen, setAddAssistantDialogOpen] = useState(false)
 
   const selectedAssistant = assistants.find((a) => a.id === selectedAssistantId)
+
+  // Accept only HTTP(S) URLs and image data URIs for project logos. Keeps
+  // `javascript:`, arbitrary `data:text/html` payloads, and other exotic
+  // schemes out of the `<img src>` slot (defense in depth — modern browsers
+  // don't execute JS from `img src` but this also blocks tracking pixels
+  // and HTML-bearing data URIs).
+  const isValidLogoUrl = (url: string): boolean => {
+    const trimmed = url.trim()
+    if (!trimmed) return false
+    try {
+      const parsed = new URL(trimmed)
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        return true
+      }
+      if (parsed.protocol === 'data:') {
+        return /^data:image\/(png|jpe?g|gif|webp|svg\+xml);/i.test(trimmed)
+      }
+      return false
+    } catch {
+      return false
+    }
+  }
 
   const handleLogoFileChange = (file?: File) => {
     if (!file) return
@@ -180,7 +202,7 @@ export default function AddProjectDialog({
               className="mt-2"
               onChange={(e) => handleLogoFileChange(e.target.files?.[0])}
             />
-            {logo.trim() && (
+            {isValidLogoUrl(logo) && (
               <img
                 src={logo.trim()}
                 alt={name.trim() || t('projects.projectName')}

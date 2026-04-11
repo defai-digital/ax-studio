@@ -16,8 +16,13 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { useSidebarResize } from "@/hooks/use-sidebar-resize";
+import {
+	SidebarContext,
+	type SidebarContextValue,
+	useSidebar,
+} from "@/components/ui/sidebar-context";
+import { useIsMobile } from "@/hooks/ui/use-mobile";
+import { useSidebarResize } from "@/hooks/ui/use-sidebar-resize";
 import { mergeButtonRefs } from "@/lib/merge-button-refs";
 import { cn } from "@/lib/utils";
 
@@ -31,33 +36,6 @@ const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 //* new constants for sidebar resizing
 const MIN_SIDEBAR_WIDTH = "14rem";
 const MAX_SIDEBAR_WIDTH = "40rem";
-
-type SidebarContext = {
-	state: "expanded" | "collapsed";
-	open: boolean;
-	setOpen: (open: boolean) => void;
-	openMobile: boolean;
-	setOpenMobile: (open: boolean) => void;
-	isMobile: boolean;
-	toggleSidebar: () => void;
-	//* new properties for sidebar resizing
-	width: string;
-	setWidth: (width: string) => void;
-	//* new properties for tracking is dragging rail
-	isDraggingRail: boolean;
-	setIsDraggingRail: (isDraggingRail: boolean) => void;
-};
-
-const SidebarContext = React.createContext<SidebarContext | null>(null);
-
-function useSidebar() {
-	const context = React.useContext(SidebarContext);
-	if (!context) {
-		throw new Error("useSidebar must be used within a SidebarProvider.");
-	}
-
-	return context;
-}
 
 const SidebarProvider = React.forwardRef<
 	HTMLDivElement,
@@ -149,7 +127,7 @@ const SidebarProvider = React.forwardRef<
 		// This makes it easier to style the sidebar with Tailwind classes.
 		const state = open ? "expanded" : "collapsed";
 
-		const contextValue = React.useMemo<SidebarContext>(
+		const contextValue = React.useMemo<SidebarContextValue>(
 			() => ({
 				state,
 				open,
@@ -176,6 +154,7 @@ const SidebarProvider = React.forwardRef<
 				toggleSidebar,
 				//* add width to dependencies
 				width,
+				setWidth,
 				//* add isDraggingRail to dependencies
 				isDraggingRail,
 			],
@@ -855,5 +834,4 @@ export {
 	SidebarRail,
 	SidebarSeparator,
 	SidebarTrigger,
-	useSidebar,
 };

@@ -6,7 +6,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 
-import { useContextSizeApproval } from '@/hooks/useModelContextApproval'
+import { useContextSizeApproval } from '@/hooks/models/useModelContextApproval'
 import { useTranslation } from '@/i18n'
 import { AlertTriangle } from 'lucide-react'
 

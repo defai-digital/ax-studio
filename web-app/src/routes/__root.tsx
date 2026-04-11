@@ -10,13 +10,13 @@ import { DataProvider } from '@/providers/DataProvider'
 import { route } from '@/constants/routes'
 import { ExtensionProvider } from '@/providers/ExtensionProvider'
 import { ToasterProvider } from '@/providers/ToasterProvider'
-import { useLeftPanel } from '@/hooks/useLeftPanel'
-import ToolApproval from '@/containers/dialogs/ToolApproval'
+import { useLeftPanel } from '@/hooks/ui/useLeftPanel'
+import ToolApproval from '@/containers/dialogs/mcp/ToolApproval'
 import AttachmentIngestionDialog from '@/containers/dialogs/AttachmentIngestionDialog'
 import { TranslationProvider } from '@/i18n/TranslationContext'
 import OutOfContextPromiseModal from '@/containers/dialogs/OutOfContextDialog'
 import { useEffect } from 'react'
-import GlobalError from '@/containers/GlobalError'
+import GlobalError from '@/components/common/GlobalError'
 import { GlobalEventHandler } from '@/providers/GlobalEventHandler'
 import { ServiceHubProvider } from '@/providers/ServiceHubProvider'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
@@ -24,6 +24,7 @@ import { LeftSidebar } from '@/components/left-sidebar'
 import { WindowControls } from '@/components/WindowControls'
 import { motion } from 'motion/react'
 import { pageVariants, pageTransition } from '@/lib/animations'
+import { hideInitialLoader } from '@/lib/bootstrap/app-startup'
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -103,39 +104,24 @@ const LogsLayout = () => {
 }
 
 function RootLayout() {
-  const getInitialLayoutType = () => {
-    const pathname = window.location.pathname
-    return (
-      pathname === route.localApiServerlogs ||
-      pathname === route.systemMonitor ||
-      pathname === route.appLogs
-    )
-  }
+  const location = useLocation()
 
   useEffect(() => {
-    // Wait for the UI to be fully rendered before hiding the loader
     const hideLoader = () => {
       requestAnimationFrame(() => {
-        // Hide the HTML loader
-        document.body.classList.add('loaded')
-
-        // Remove the HTML loader element after transition
-        const loader = document.getElementById('initial-loader')
-        if (loader) {
-          setTimeout(() => {
-            loader.remove()
-          }, 300)
-        }
+        hideInitialLoader()
       })
     }
 
-    // Give providers time to initialize and paint
     const timer = setTimeout(hideLoader, 200)
 
     return () => clearTimeout(timer)
   }, [])
 
-  const IS_LOGS_ROUTE = getInitialLayoutType()
+  const isLogsRoute =
+    location.pathname === route.localApiServerlogs ||
+    location.pathname === route.systemMonitor ||
+    location.pathname === route.appLogs
 
   return (
     <Fragment>
@@ -147,7 +133,7 @@ function RootLayout() {
           <ExtensionProvider>
             <DataProvider />
             <GlobalEventHandler />
-            {IS_LOGS_ROUTE ? <LogsLayout /> : <AppLayout />}
+            {isLogsRoute ? <LogsLayout /> : <AppLayout />}
           </ExtensionProvider>
           {/* <TanStackRouterDevtools position="bottom-right" /> */}
           <ToolApproval />

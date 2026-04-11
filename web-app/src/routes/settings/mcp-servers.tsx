@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import HeaderPage from '@/containers/HeaderPage'
-import SettingsMenu from '@/containers/SettingsMenu'
-import { Card, CardItem } from '@/containers/Card'
+import SettingsMenu from '@/components/common/SettingsMenu'
+import { Card, CardItem } from '@/components/common/Card'
 import {
   IconPencil,
   IconPlus,
@@ -15,19 +15,19 @@ import {
   MCPServerConfig,
   MCPSettings,
   DEFAULT_MCP_SETTINGS,
-} from '@/hooks/useMCPServers'
+} from '@/hooks/tools/useMCPServers'
 import { Fragment, useEffect, useState } from 'react'
-import AddEditMCPServer from '@/containers/dialogs/AddEditMCPServer'
-import DeleteMCPServerConfirm from '@/containers/dialogs/DeleteMCPServerConfirm'
-import EditJsonMCPserver from '@/containers/dialogs/EditJsonMCPserver'
+import AddEditMCPServer from '@/containers/dialogs/mcp/AddEditMCPServer'
+import DeleteMCPServerConfirm from '@/containers/dialogs/mcp/DeleteMCPServerConfirm'
+import EditJsonMCPserver from '@/containers/dialogs/mcp/EditJsonMCPserver'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { twMerge } from 'tailwind-merge'
 import { useServiceHub } from '@/hooks/useServiceHub'
-import { useToolApproval } from '@/hooks/useToolApproval'
+import { useToolApproval } from '@/hooks/tools/useToolApproval'
 import { toast } from 'sonner'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { useAppState } from '@/hooks/useAppState'
+import { useAppState } from '@/hooks/settings/useAppState'
 import { listen } from '@tauri-apps/api/event'
 import { SystemEvent } from '@/types/events'
 import { Button } from '@/components/ui/button'
@@ -327,7 +327,7 @@ function MCPServersDesktop() {
                 ? t('mcp-servers:serverStatusActive', { serverKey })
                 : t('mcp-servers:serverStatusInactive', { serverKey })
             )
-            serviceHub.mcp().getConnectedServers().then(setConnectedServers)
+            serviceHub.mcp().getConnectedServers().then(setConnectedServers).catch(console.error).catch(console.error)
           })
           .catch((error) => {
             editServer(serverKey, {
@@ -363,7 +363,7 @@ function MCPServersDesktop() {
           .mcp()
           .deactivateMCPServer(serverKey)
           .finally(() => {
-            serviceHub.mcp().getConnectedServers().then(setConnectedServers)
+            serviceHub.mcp().getConnectedServers().then(setConnectedServers).catch(console.error)
             setLoadingServers((prev) => ({ ...prev, [serverKey]: false }))
           })
       }
@@ -371,12 +371,12 @@ function MCPServersDesktop() {
   }
 
   useEffect(() => {
-    serviceHub.mcp().getConnectedServers().then(setConnectedServers)
+    serviceHub.mcp().getConnectedServers().then(setConnectedServers).catch(console.error)
 
     let unlisten: (() => void) | undefined
     const setupListener = async () => {
       unlisten = await listen(SystemEvent.MCP_UPDATE, () => {
-        serviceHub.mcp().getConnectedServers().then(setConnectedServers)
+        serviceHub.mcp().getConnectedServers().then(setConnectedServers).catch(console.error)
       })
     }
     setupListener()

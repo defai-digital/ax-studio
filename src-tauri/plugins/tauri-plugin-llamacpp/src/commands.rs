@@ -31,6 +31,41 @@ use crate::process::force_terminate_process;
 
 type HmacSha256 = Hmac<Sha256>;
 
+fn spawn_session_reaper<R: Runtime>(app_handle: tauri::AppHandle<R>, pid: i32) {
+    tauri::async_runtime::spawn(async move {
+        let state: State<LlamacppState> = app_handle.state();
+        let sessions = state.llama_server_process.clone();
+
+        loop {
+            tokio::time::sleep(Duration::from_secs(5)).await;
+
+            let should_remove = {
+                let mut process_map = sessions.lock().await;
+                match process_map.get_mut(&pid) {
+                    Some(session) => match session.child.try_wait() {
+                        Ok(Some(status)) => {
+                            log::info!("Reaping exited llama session {} with status {}", pid, status);
+                            true
+                        }
+                        Ok(None) => false,
+                        Err(err) => {
+                            log::warn!("Failed to poll llama session {}: {}", pid, err);
+                            false
+                        }
+                    },
+                    None => return,
+                }
+            };
+
+            if should_remove {
+                let mut process_map = sessions.lock().await;
+                process_map.remove(&pid);
+                return;
+            }
+        }
+    });
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct UnloadResult {
     success: bool,
@@ -66,7 +101,7 @@ pub async fn load_llama_model<R: Runtime>(
     let bin_path = validate_binary_path(backend_path)?;
 
     // Build arguments and env vars depending on engine type
-    let (mut args, mut merged_envs, api_key) = if is_ax_serving {
+    let (mut args, merged_envs, api_key) = if is_ax_serving {
         let ax_builder = AxServingArgumentBuilder::new(config.clone(), is_embedding);
         let ax_args = ax_builder.build(&model_id, &model_path, port, mmproj_path.clone());
 
@@ -154,8 +189,8 @@ pub async fn load_llama_model<R: Runtime>(
     // Spawn the child process
     let mut child = command.spawn().map_err(ServerError::Io)?;
 
-    let stderr = child.stderr.take().expect("stderr was piped");
-    let stdout = child.stdout.take().expect("stdout was piped");
+    let stderr = child.stderr.take().ok_or_else(|| ServerError::InvalidArgument("stderr pipe not available".into()))?;
+    let stdout = child.stdout.take().ok_or_else(|| ServerError::InvalidArgument("stdout pipe not available".into()))?;
 
     // Create channels for communication between tasks
     let (ready_tx, mut ready_rx) = mpsc::channel::<bool>(1);
@@ -327,6 +362,8 @@ pub async fn load_llama_model<R: Runtime>(
             info: session_info.clone(),
         },
     );
+    drop(process_map);
+    spawn_session_reaper(app_handle, pid);
 
     Ok(session_info)
 }
@@ -490,8 +527,8 @@ pub async fn start_ax_serving<R: Runtime>(
 
     let mut child = command.spawn().map_err(ServerError::Io)?;
 
-    let stderr = child.stderr.take().expect("stderr was piped");
-    let stdout = child.stdout.take().expect("stdout was piped");
+    let stderr = child.stderr.take().ok_or_else(|| ServerError::InvalidArgument("stderr pipe not available".into()))?;
+    let stdout = child.stdout.take().ok_or_else(|| ServerError::InvalidArgument("stdout pipe not available".into()))?;
 
     let (ready_tx, mut ready_rx) = mpsc::channel::<bool>(1);
 
@@ -656,6 +693,8 @@ pub async fn start_ax_serving<R: Runtime>(
             info: session_info.clone(),
         },
     );
+    drop(process_map);
+    spawn_session_reaper(app_handle, session_info.pid);
 
     Ok(session_info)
 }

@@ -22,7 +22,13 @@ export class DefaultMessagesService implements MessagesService {
       ExtensionManager.getInstance()
         .get<ConversationalExtension>(ExtensionTypeEnum.Conversational)
         ?.listMessages(threadId)
-        ?.catch(() => []) ?? []
+        ?.catch((error) => {
+          console.warn(
+            `Failed to list messages for thread ${threadId}:`,
+            error
+          )
+          return []
+        }) ?? []
     )
   }
 
@@ -32,12 +38,22 @@ export class DefaultMessagesService implements MessagesService {
       return message
     }
 
-    return (
-      ExtensionManager.getInstance()
-        .get<ConversationalExtension>(ExtensionTypeEnum.Conversational)
-        ?.createMessage(message)
-        ?.catch(() => message) ?? message
+    const extension = ExtensionManager.getInstance().get<ConversationalExtension>(
+      ExtensionTypeEnum.Conversational
     )
+    if (!extension) return message
+
+    try {
+      return await extension.createMessage(message)
+    } catch (error) {
+      console.error(
+        `Failed to create message for thread ${message.thread_id}:`,
+        error
+      )
+      throw error instanceof Error
+        ? error
+        : new Error(`Failed to create message for thread ${message.thread_id}`)
+    }
   }
 
   async modifyMessage(message: ThreadMessage): Promise<ThreadMessage> {
@@ -46,12 +62,19 @@ export class DefaultMessagesService implements MessagesService {
       return message
     }
 
-    return (
-      ExtensionManager.getInstance()
-        .get<ConversationalExtension>(ExtensionTypeEnum.Conversational)
-        ?.modifyMessage(message)
-        ?.catch(() => message) ?? message
+    const extension = ExtensionManager.getInstance().get<ConversationalExtension>(
+      ExtensionTypeEnum.Conversational
     )
+    if (!extension) return message
+
+    try {
+      return await extension.modifyMessage(message)
+    } catch (error) {
+      console.error(`Failed to modify message ${message.id}:`, error)
+      throw error instanceof Error
+        ? error
+        : new Error(`Failed to modify message ${message.id}`)
+    }
   }
 
   async deleteMessage(threadId: string, messageId: string): Promise<void> {
@@ -60,8 +83,23 @@ export class DefaultMessagesService implements MessagesService {
       return
     }
 
-    await ExtensionManager.getInstance()
-      .get<ConversationalExtension>(ExtensionTypeEnum.Conversational)
-      ?.deleteMessage(threadId, messageId)
+    const extension = ExtensionManager.getInstance().get<ConversationalExtension>(
+      ExtensionTypeEnum.Conversational
+    )
+    if (!extension) {
+      // Previously used optional chaining and silently succeeded — the UI
+      // would show the message removed while storage still held it. Throw
+      // instead so the caller can roll the optimistic delete back.
+      throw new Error('Conversational extension not available')
+    }
+
+    try {
+      await extension.deleteMessage(threadId, messageId)
+    } catch (error) {
+      console.error(`Failed to delete message ${messageId}:`, error)
+      throw error instanceof Error
+        ? error
+        : new Error(`Failed to delete message ${messageId}`)
+    }
   }
 }

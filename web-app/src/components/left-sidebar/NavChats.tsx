@@ -6,8 +6,8 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuAction,
-  useSidebar,
 } from '@/components/ui/sidebar'
+import { useSidebar } from '@/components/ui/sidebar-context'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,11 +21,11 @@ import {
 import { Download, GripVertical, MoreHorizontal, Pin, PinOff, Pencil, Trash2 } from 'lucide-react'
 import { exportThread, exportAllThreads } from '@/lib/thread-export'
 import { memo, useCallback, useMemo, useRef, useState } from 'react'
-import { useThreads } from '@/hooks/useThreads'
+import { useThreads } from '@/hooks/threads/useThreads'
 import ThreadList from '@/containers/ThreadList'
-import { DeleteAllThreadsDialog } from '@/containers/dialogs/DeleteAllThreadsDialog'
+import { DeleteAllThreadsDialog } from '@/containers/dialogs/thread/DeleteAllThreadsDialog'
 import { groupByDate, type DateGroup } from '@/lib/date-group'
-import { usePinnedThreads } from '@/hooks/usePinnedThreads'
+import { usePinnedThreads } from '@/hooks/threads/usePinnedThreads'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { RenameThreadDialog, DeleteThreadDialog } from '@/containers/dialogs'

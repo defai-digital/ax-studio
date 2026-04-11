@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { createDocumentAttachment, type Attachment } from '@/types/attachment'
-import { useAttachments } from '@/hooks/useAttachments'
+import { useAttachments } from '@/hooks/chat/useAttachments'
 import { FileStat } from '@ax-studio/core'
 import { useFileRegistry, projectCollectionId } from '@/lib/file-registry'
 import { IconLoader2, IconPaperclip } from '@tabler/icons-react'
@@ -304,6 +304,10 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
     e.preventDefault()
     e.stopPropagation()
     setIsDragging(false)
+
+    // Mirror the Upload button's guard — drag-and-drop must not bypass it
+    // and race concurrent uploads against loadProjectFiles().
+    if (uploading) return
 
     if (!attachmentsEnabled) {
       toast.info(

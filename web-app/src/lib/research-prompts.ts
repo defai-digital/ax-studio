@@ -1,4 +1,4 @@
-import type { ResearchSource } from '@/hooks/useResearchPanel'
+import type { ResearchSource } from '@/hooks/research/useResearchPanel'
 
 /**
  * Ask the model to decompose the user's query into `breadth` sub-questions.

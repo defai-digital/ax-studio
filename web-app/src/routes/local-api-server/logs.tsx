@@ -20,10 +20,14 @@ function LogsViewer() {
   const serviceHub = useServiceHub()
 
   useEffect(() => {
+    let isMounted = true
+    let unsubscribe = () => {}
+
     serviceHub
       .app()
       .readLogs()
       .then((logData) => {
+        if (!isMounted) return
         const logs = logData
           .filter((log) => log?.target === SERVER_LOG_TARGET)
           .filter(Boolean) as LogEntry[]
@@ -34,7 +38,10 @@ function LogsViewer() {
           scrollToBottom()
         }, 100)
       })
-    let unsubscribe = () => {}
+      .catch((error) => {
+        console.error('[local-api-server/logs] Failed to read logs:', error)
+      })
+
     serviceHub
       .events()
       .listen(LOG_EVENT_NAME, (event) => {
@@ -52,9 +59,18 @@ function LogsViewer() {
         }
       })
       .then((unsub) => {
+        if (!isMounted) {
+          unsub()
+          return
+        }
         unsubscribe = unsub
       })
+      .catch((error) => {
+        console.error('[local-api-server/logs] Failed to subscribe to log events:', error)
+      })
+
     return () => {
+      isMounted = false
       unsubscribe()
     }
   }, [serviceHub])

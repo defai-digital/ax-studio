@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { Route as GeneralRoute } from '../general'
 
 // Mock all the dependencies
-vi.mock('@/containers/SettingsMenu', () => ({
+vi.mock('@/components/common/SettingsMenu', () => ({
   default: () => <div data-testid="settings-menu">Settings Menu</div>,
 }))
 
@@ -13,7 +13,7 @@ vi.mock('@/containers/HeaderPage', () => ({
   ),
 }))
 
-vi.mock('@/containers/Card', () => ({
+vi.mock('@/components/common/Card', () => ({
   Card: ({
     title,
     children,
@@ -51,13 +51,13 @@ vi.mock('@/containers/LanguageSwitcher', () => ({
   default: () => <div data-testid="language-switcher">Language Switcher</div>,
 }))
 
-vi.mock('@/containers/dialogs/ChangeDataFolderLocation', () => ({
+vi.mock('@/containers/dialogs/thread/ChangeDataFolderLocation', () => ({
   default: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="change-data-folder-dialog">{children}</div>
   ),
 }))
 
-vi.mock('@/hooks/useGeneralSetting', () => ({
+vi.mock('@/hooks/settings/useGeneralSetting', () => ({
   useGeneralSetting: () => ({
     spellCheckChatInput: true,
     setSpellCheckChatInput: vi.fn(),
@@ -73,7 +73,7 @@ vi.mock('@/hooks/useGeneralSetting', () => ({
 // Create a controllable mock
 const mockCheckForUpdate = vi.fn()
 
-vi.mock('@/hooks/useAppUpdater', () => ({
+vi.mock('@/hooks/updater/useAppUpdater', () => ({
   useAppUpdater: () => ({
     checkForUpdate: mockCheckForUpdate,
   }),

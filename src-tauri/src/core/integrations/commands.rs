@@ -3,12 +3,115 @@ use tauri::{AppHandle, Runtime};
 use tauri_plugin_store::StoreExt;
 
 use super::constants::{integration_env_keys, integration_validation_url};
-use super::oauth;
+use super::{oauth, secure_store};
 
 const STORE_NAME: &str = "integrations.json";
 
 fn cred_key(integration: &str) -> String {
     format!("credentials.{integration}")
+}
+
+fn read_legacy_credentials_from_store<R: Runtime>(
+    app: &AppHandle<R>,
+    integration: &str,
+) -> Result<Option<HashMap<String, String>>, String> {
+    let store = app
+        .store(STORE_NAME)
+        .map_err(|e| format!("Failed to open store: {e}"))?;
+
+    let Some(value) = store.get(&cred_key(integration)) else {
+        return Ok(None);
+    };
+
+    let creds: HashMap<String, String> = serde_json::from_value(value)
+        .map_err(|e| format!("Failed to parse legacy credentials for {integration}: {e}"))?;
+    Ok(Some(creds))
+}
+
+fn delete_legacy_credentials_from_store<R: Runtime>(
+    app: &AppHandle<R>,
+    integration: &str,
+) -> Result<(), String> {
+    let store = app
+        .store(STORE_NAME)
+        .map_err(|e| format!("Failed to open store: {e}"))?;
+    store.delete(&cred_key(integration));
+    Ok(())
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn save_credentials_internal<R: Runtime>(
+    app: &AppHandle<R>,
+    integration: &str,
+    credentials: &HashMap<String, String>,
+) -> Result<(), String> {
+    secure_store::save_credentials(integration, credentials)?;
+    delete_legacy_credentials_from_store(app, integration)?;
+    Ok(())
+}
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+fn save_credentials_internal<R: Runtime>(
+    app: &AppHandle<R>,
+    integration: &str,
+    credentials: &HashMap<String, String>,
+) -> Result<(), String> {
+    let store = app
+        .store(STORE_NAME)
+        .map_err(|e| format!("Failed to open store: {e}"))?;
+    store.set(&cred_key(integration), serde_json::json!(credentials));
+    Ok(())
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn read_credentials_internal<R: Runtime>(
+    app: &AppHandle<R>,
+    integration: &str,
+) -> Result<Option<HashMap<String, String>>, String> {
+    if let Some(credentials) = secure_store::read_credentials(integration)? {
+        return Ok(Some(credentials));
+    }
+
+    let Some(credentials) = read_legacy_credentials_from_store(app, integration)? else {
+        return Ok(None);
+    };
+
+    secure_store::save_credentials(integration, &credentials)?;
+    delete_legacy_credentials_from_store(app, integration)?;
+    Ok(Some(credentials))
+}
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+fn read_credentials_internal<R: Runtime>(
+    app: &AppHandle<R>,
+    integration: &str,
+) -> Result<Option<HashMap<String, String>>, String> {
+    read_legacy_credentials_from_store(app, integration)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn delete_credentials_internal<R: Runtime>(
+    app: &AppHandle<R>,
+    integration: &str,
+) -> Result<(), String> {
+    secure_store::delete_credentials(integration)?;
+    delete_legacy_credentials_from_store(app, integration)?;
+    Ok(())
+}
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+fn delete_credentials_internal<R: Runtime>(
+    app: &AppHandle<R>,
+    integration: &str,
+) -> Result<(), String> {
+    delete_legacy_credentials_from_store(app, integration)
+}
+
+fn has_credentials_internal<R: Runtime>(
+    app: &AppHandle<R>,
+    integration: &str,
+) -> Result<bool, String> {
+    read_credentials_internal(app, integration).map(|credentials| credentials.is_some())
 }
 
 /// Save credential(s) for an integration into the secure store.
@@ -18,27 +121,13 @@ pub async fn save_integration_token(
     integration: String,
     credentials: HashMap<String, String>,
 ) -> Result<(), String> {
-    // Security warning: Credentials are stored as plaintext JSON via tauri-plugin-store
-    log::warn!(
-        "⚠️ SECURITY: Credentials for '{}' stored as plaintext JSON via tauri-plugin-store. \
-        Consider migrating to tauri-plugin-keyring or OS keychain for encrypted storage.",
-        integration
-    );
-
-    let store = app
-        .store(STORE_NAME)
-        .map_err(|e| format!("Failed to open store: {e}"))?;
-    store.set(&cred_key(&integration), serde_json::json!(credentials));
-    Ok(())
+    save_credentials_internal(&app, &integration, &credentials)
 }
 
 /// Delete all credentials for an integration.
 #[tauri::command]
 pub async fn delete_integration_token(app: AppHandle, integration: String) -> Result<(), String> {
-    let store = app
-        .store(STORE_NAME)
-        .map_err(|e| format!("Failed to open store: {e}"))?;
-    store.delete(&cred_key(&integration));
+    delete_credentials_internal(&app, &integration)?;
 
     // Clean up config files for OAuth integrations
     if integration == "google-workspace" {
@@ -53,23 +142,17 @@ pub async fn delete_integration_token(app: AppHandle, integration: String) -> Re
 /// Check if credentials exist for a given integration (returns bool, never the token).
 #[tauri::command]
 pub async fn get_integration_status(app: AppHandle, integration: String) -> Result<bool, String> {
-    let store = app
-        .store(STORE_NAME)
-        .map_err(|e| format!("Failed to open store: {e}"))?;
-    Ok(store.get(&cred_key(&integration)).is_some())
+    has_credentials_internal(&app, &integration)
 }
 
 /// Return a map of integration_id → has_credentials for all known integrations.
 #[tauri::command]
 pub async fn get_all_integration_statuses(app: AppHandle) -> Result<HashMap<String, bool>, String> {
     let env_keys = integration_env_keys();
-    let store = app
-        .store(STORE_NAME)
-        .map_err(|e| format!("Failed to open store: {e}"))?;
 
     let mut statuses = HashMap::new();
     for integration in env_keys.keys() {
-        let has_creds = store.get(&cred_key(integration)).is_some();
+        let has_creds = has_credentials_internal(&app, integration)?;
         statuses.insert(integration.to_string(), has_creds);
     }
     Ok(statuses)
@@ -80,18 +163,8 @@ pub fn read_credentials<R: Runtime>(
     app: &AppHandle<R>,
     integration: &str,
 ) -> Result<HashMap<String, String>, String> {
-    let store = app
-        .store(STORE_NAME)
-        .map_err(|e| format!("Failed to open store: {e}"))?;
-
-    let value = store
-        .get(&cred_key(integration))
-        .ok_or_else(|| format!("No credentials stored for {integration}"))?;
-
-    let creds: HashMap<String, String> = serde_json::from_value(value)
-        .map_err(|e| format!("Failed to parse credentials for {integration}: {e}"))?;
-
-    Ok(creds)
+    read_credentials_internal(app, integration)?
+        .ok_or_else(|| format!("No credentials stored for {integration}"))
 }
 
 /// Start an OAuth2 flow for integrations that require it (e.g. Google Workspace).
@@ -115,14 +188,10 @@ pub async fn start_oauth_flow(
 
             let tokens =
                 oauth::initiate_google_oauth(&app, client_id, client_secret, scopes).await?;
-
-            // Write config files for the MCP server
-            oauth::write_google_workspace_config(client_id, client_secret, &tokens)?;
-
-            let store = app
-                .store(STORE_NAME)
-                .map_err(|e| format!("Failed to open store: {e}"))?;
-            store.delete(&cred_key("google-workspace"));
+            let secure_credentials =
+                oauth::google_workspace_credentials(client_id, client_secret, &tokens)?;
+            save_credentials_internal(&app, "google-workspace", &secure_credentials)?;
+            let _ = oauth::cleanup_google_workspace_config();
 
             Ok("Google Workspace authorized successfully".to_string())
         }
@@ -156,7 +225,8 @@ async fn validate_linear(credentials: &HashMap<String, String>) -> Result<String
     let token = credentials
         .get("LINEAR_API_KEY")
         .ok_or("Missing LINEAR_API_KEY")?;
-    let url = integration_validation_url("linear").unwrap();
+    let url = integration_validation_url("linear")
+        .ok_or_else(|| "Failed to build Linear validation URL".to_string())?;
 
     let client = reqwest::Client::new();
     let resp = client
@@ -190,7 +260,8 @@ async fn validate_notion(credentials: &HashMap<String, String>) -> Result<String
     let token = credentials
         .get("NOTION_TOKEN")
         .ok_or("Missing NOTION_TOKEN")?;
-    let url = integration_validation_url("notion").unwrap();
+    let url = integration_validation_url("notion")
+        .ok_or_else(|| "Failed to build Notion validation URL".to_string())?;
 
     let client = reqwest::Client::new();
     let resp = client
@@ -396,14 +467,31 @@ async fn validate_postgres(credentials: &HashMap<String, String>) -> Result<Stri
         .get("POSTGRES_CONNECTION_STRING")
         .ok_or("Missing POSTGRES_CONNECTION_STRING")?;
 
-    // Basic format validation — actual connection test happens when MCP server starts
-    if conn_str.starts_with("postgresql://") || conn_str.starts_with("postgres://") {
-        Ok("Connection string format valid".to_string())
-    } else {
-        Err("Invalid connection string. Must start with postgresql:// or postgres://".to_string())
+    let url = url::Url::parse(conn_str)
+        .map_err(|e| format!("Invalid PostgreSQL connection string: {e}"))?;
+
+    if !matches!(url.scheme(), "postgres" | "postgresql") {
+        return Err(
+            "Invalid connection string. Must start with postgresql:// or postgres://".to_string(),
+        );
     }
+
+    if url.host_str().is_none() {
+        return Err("Invalid connection string. Missing database host.".to_string());
+    }
+
+    if url.username().is_empty() {
+        return Err("Invalid connection string. Missing database username.".to_string());
+    }
+
+    let database_name = url.path().trim_start_matches('/');
+    if database_name.is_empty() {
+        return Err("Invalid connection string. Missing database name.".to_string());
+    }
+
+    Ok("Connection string format valid".to_string())
 }
 
 async fn validate_google_workspace() -> Result<String, String> {
-    oauth::validate_google_workspace_config()
+    Err("Google Workspace OAuth validation is completed during authorization.".to_string())
 }

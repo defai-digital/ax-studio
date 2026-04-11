@@ -34,6 +34,11 @@ function LogsViewer() {
           // Scroll to bottom after initial logs are loaded
           if (needScroll) setTimeout(() => scrollToBottom(), 100)
         })
+        .catch((error) => {
+          // Poll runs every 3s — swallow the error here but log it so
+          // persistent backend failures are still diagnosable.
+          console.error('[LogsViewer] Failed to read logs:', error)
+        })
     }
     updateLogs()
 

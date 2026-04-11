@@ -1,10 +1,10 @@
 import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router'
 import ChatInput from '@/containers/ChatInput'
 import HeaderPage from '@/containers/HeaderPage'
-import { useTools } from '@/hooks/useTools'
+import { useTools } from '@/hooks/tools/useTools'
 import { cn } from '@/lib/utils'
 
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import SetupScreen from '@/containers/SetupScreen'
 import { route } from '@/constants/routes'
 import { localStorageKey } from '@/constants/localStorage'
@@ -17,19 +17,13 @@ type SearchParams = {
   }
 }
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useThreads } from '@/hooks/useThreads'
+import { useThreads } from '@/hooks/threads/useThreads'
 import DropdownModelProvider from '@/containers/DropdownModelProvider'
-import { useGeneralSetting } from '@/hooks/useGeneralSetting'
+import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { resolveSystemPrompt } from '@/lib/system-prompt'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import {
-  Code2,
-  PenTool,
-  BarChart3,
-  Lightbulb,
-  Bug,
-  Search,
   Zap,
   Columns2,
   Cpu,
@@ -38,7 +32,6 @@ import {
   Wrench,
   MessageSquareText,
   Users,
-  type LucideIcon,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -47,7 +40,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useAgentTeamStore } from '@/stores/agent-team-store'
+import { usePrompt } from '@/hooks/ui/usePrompt'
 import { motion } from 'motion/react'
+import { WorkflowSelector } from '@/components/smart-start/WorkflowSelector'
 
 export const Route = createFileRoute(route.home)({
   component: Index,
@@ -60,74 +55,12 @@ export const Route = createFileRoute(route.home)({
   },
 })
 
-type SuggestedPrompt = {
-  icon: LucideIcon
-  label: string
-  prompt: string
-  tag: string
-  color: string
-}
-
-const suggestedPrompts: SuggestedPrompt[] = [
-  {
-    icon: Code2,
-    label: 'Build REST API',
-    prompt: 'Help me build a REST API with authentication and CRUD endpoints',
-    tag: 'Code',
-    color: 'indigo',
-  },
-  {
-    icon: PenTool,
-    label: 'Write blog post',
-    prompt: 'Write a blog post about the latest trends in AI technology',
-    tag: 'Write',
-    color: 'emerald',
-  },
-  {
-    icon: BarChart3,
-    label: 'Analyze data',
-    prompt: 'Analyze this dataset and provide insights with visualizations',
-    tag: 'Analyze',
-    color: 'cyan',
-  },
-  {
-    icon: Lightbulb,
-    label: 'Brainstorm ideas',
-    prompt: 'Brainstorm creative ideas for a new mobile app',
-    tag: 'Ideate',
-    color: 'amber',
-  },
-  {
-    icon: Bug,
-    label: 'Debug code',
-    prompt: 'Help me debug this code and find the root cause of the issue',
-    tag: 'Debug',
-    color: 'rose',
-  },
-  {
-    icon: Search,
-    label: 'Research topic',
-    prompt: 'Research and summarize the current state of quantum computing',
-    tag: 'Research',
-    color: 'violet',
-  },
-]
-
 const capabilityBadges = [
   { icon: Cpu, label: 'Local models' },
   { icon: Bolt, label: 'Lightning fast' },
   { icon: Shield, label: 'Private & local' },
   { icon: Wrench, label: 'Tool use & MCP' },
 ]
-
-const tagColorMap: Record<string, string> = {
-  indigo: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
-  emerald: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  cyan: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
-  amber: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  rose: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
-  violet: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
-}
 
 function Index() {
   const navigate = useNavigate()
@@ -140,6 +73,7 @@ function Index() {
   const selectedModel = search.model
   const { setCurrentThreadId, createThread } = useThreads()
   const { globalDefaultPrompt } = useGeneralSetting()
+  const setGlobalPrompt = usePrompt((state) => state.setPrompt)
   useTools()
 
   const [showThreadPromptEditor, setShowThreadPromptEditor] = useState(false)
@@ -396,62 +330,23 @@ function Index() {
               })}
             </motion.div>
 
-            {/* Suggested prompts grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {suggestedPrompts.map((item, i) => {
-                const Icon = item.icon
-                return (
-                  <motion.button
-                    key={item.label}
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 + i * 0.04, duration: 0.35 }}
-                    onClick={() => {
-                      const input =
-                        document.querySelector<HTMLTextAreaElement>(
-                          '[data-chat-input]'
-                        )
-                      if (input) {
-                        const nativeInputValueSetter =
-                          Object.getOwnPropertyDescriptor(
-                            window.HTMLTextAreaElement.prototype,
-                            'value'
-                          )?.set
-                        nativeInputValueSetter?.call(input, item.prompt)
-                        input.dispatchEvent(
-                          new Event('input', { bubbles: true })
-                        )
-                        input.focus()
-                      }
-                    }}
-                    className="group text-left rounded-xl border bg-card/50 p-3.5 hover:bg-card hover:border-border/80 hover:shadow-sm transition-all cursor-pointer"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="shrink-0 mt-0.5">
-                        <Icon className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium mb-1 group-hover:text-foreground transition-colors">
-                          {item.label}
-                        </div>
-                        <div className="text-xs text-muted-foreground/70 line-clamp-2 mb-2">
-                          {item.prompt}
-                        </div>
-                        <span
-                          className={cn(
-                            'inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border font-medium',
-                            tagColorMap[item.color] ??
-                              'bg-muted text-muted-foreground'
-                          )}
-                        >
-                          {item.tag}
-                        </span>
-                      </div>
-                    </div>
-                  </motion.button>
-                )
-              })}
-            </div>
+            {/* Smart Start workflow selector */}
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.35 }}
+            >
+              <WorkflowSelector
+                onPromptReady={(prompt) => {
+                  setGlobalPrompt(prompt)
+                  const input =
+                    document.querySelector<HTMLTextAreaElement>(
+                      '[data-chat-input]'
+                    )
+                  input?.focus()
+                }}
+              />
+            </motion.div>
           </div>
         </div>
         {/* ChatInput pinned at bottom */}

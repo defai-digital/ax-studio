@@ -8,14 +8,15 @@ export function ExtensionProvider({ children }: PropsWithChildren) {
   const [finishedSetup, setFinishedSetup] = useState(false)
   const setupExtensions = useCallback(async () => {
     // Setup core window object for both platforms
-    window.core = {
-      api: APIs,
-    }
+    const core =
+      window.core ?? ({ api: APIs } as NonNullable<Window['core']>)
+    window.core = core
+    core.api = APIs
 
-    window.core.events = new EventEmitter()
-    window.core.extensionManager = new ExtensionManager()
-    window.core.engineManager = new EngineManager()
-    window.core.modelManager = new ModelManager()
+    core.events = new EventEmitter()
+    core.extensionManager = new ExtensionManager()
+    core.engineManager = new EngineManager()
+    core.modelManager = new ModelManager()
 
     // Register extensions - same pattern for both platforms
     await ExtensionManager.getInstance()
@@ -29,15 +30,12 @@ export function ExtensionProvider({ children }: PropsWithChildren) {
   }, [])
 
   useEffect(() => {
-    let cancelled = false
-    setupExtensions().then(() => {
-      if (cancelled) {
-        ExtensionManager.getInstance().unload()
-      }
-    })
+    setupExtensions()
 
     return () => {
-      cancelled = true
+      // Cleanup unloads extensions exactly once. We don't need a cancelled
+      // flag here — any in-flight setup will race with unload, but unloading
+      // after setup completes in a cleanup is the expected behaviour.
       ExtensionManager.getInstance().unload()
     }
   }, [setupExtensions])

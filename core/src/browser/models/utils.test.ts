@@ -222,12 +222,17 @@ describe('normalizeValue', () => {
   })
 
   it('should handle edge cases for normalization', () => {
-    expect(normalizeValue('ctx_len', -5.7)).toBe(-6)
+    expect(normalizeValue('ctx_len', -5.7)).toBe(-5)
     expect(normalizeValue('token_limit', 'abc')).toBeNaN()
     expect(normalizeValue('max_tokens', null)).toBe(0)
     expect(normalizeValue('ngl', undefined)).toBeNaN()
     expect(normalizeValue('n_parallel', Infinity)).toBe(Infinity)
     expect(normalizeValue('cpu_threads', -Infinity)).toBe(-Infinity)
+  })
+
+  it('should return NaN for invalid numeric float inputs instead of the original string', () => {
+    expect(normalizeValue('temperature', 'invalid')).toBeNaN()
+    expect(normalizeValue('top_p', 'oops')).toBeNaN()
   })
 
   it('should not normalize non-integer parameters', () => {
@@ -279,6 +284,24 @@ describe('extractInferenceParams', () => {
     const modelParams = { temperature: 'invalid', top_p: 0.8 }
     const result = extractInferenceParams(modelParams as any)
     expect(result).toEqual({ top_p: 0.8 })
+  })
+
+  it('does not mutate the input params while extracting inference parameters', () => {
+    const modelParams = {
+      temperature: 0.7,
+      token_limit: 123.9,
+      top_p: 0.95,
+    }
+
+    const snapshot = { ...modelParams }
+    const result = extractInferenceParams(modelParams as any)
+
+    expect(result).toEqual({
+      temperature: 0.7,
+      token_limit: 123,
+      top_p: 0.95,
+    })
+    expect(modelParams).toEqual(snapshot)
   })
 })
 
@@ -333,12 +356,27 @@ describe('extractModelLoadParams', () => {
     const modelParams = { ctx_len: -1, ngl: 'invalid' }
     const originParams = { ctx_len: 2048, ngl: 12 }
     const result = extractModelLoadParams(modelParams as any, originParams)
-    expect(result).toEqual({})
+    expect(result).toEqual({ ctx_len: 2048, ngl: 12 })
   })
 
   it('should skip invalid values when no origin params provided', () => {
     const modelParams = { ctx_len: -1, embedding: true }
     const result = extractModelLoadParams(modelParams as any)
     expect(result).toEqual({ embedding: true })
+  })
+
+  it('falls back to origin params without mutating the source model params', () => {
+    const modelParams = { ctx_len: -1, ngl: 'invalid', embedding: true }
+    const originParams = { ctx_len: 4096, ngl: 32 }
+
+    const snapshot = { ...modelParams }
+    const result = extractModelLoadParams(modelParams as any, originParams as any)
+
+    expect(result).toEqual({
+      ctx_len: 4096,
+      ngl: 32,
+      embedding: true,
+    })
+    expect(modelParams).toEqual(snapshot)
   })
 })

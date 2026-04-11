@@ -255,11 +255,30 @@ You have access to the user's personal knowledge base via the \`fabric_search\` 
 - Do not say you cannot access the knowledge base — you can, via the tools above.
 - When answering, clearly indicate which parts of your response come from the knowledge base.`
 
+/**
+ * Appended when research or local knowledge is active.
+ * Instructs the model to cite sources using numbered references.
+ */
+export const CITATION_FORMAT_INSTRUCTION = `
+
+## Source citations
+
+When your response draws on information from provided sources, context, or search results:
+
+1. Use numbered references like [1], [2] etc. to cite specific claims or facts.
+2. Place the citation immediately after the relevant statement.
+3. Only cite sources that were actually provided to you — never fabricate citations.
+4. If you are uncertain about a claim or cannot find a source for it, say so clearly rather than presenting it as fact.
+5. When no external sources are available, respond based on your knowledge but do not add fake citation numbers.`
+
 export const buildChatPromptInjection = (
-  resolved: ResolvedSystemPrompt
+  resolved: ResolvedSystemPrompt,
+  options?: { enableCitations?: boolean }
 ): ChatPromptInjection => {
-  return {
-    systemMessage: resolved.resolvedPrompt + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION + ARTIFACT_FORMAT_INSTRUCTION,
+  let systemMessage = resolved.resolvedPrompt + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION + ARTIFACT_FORMAT_INSTRUCTION
+  if (options?.enableCitations) {
+    systemMessage += CITATION_FORMAT_INSTRUCTION
   }
+  return { systemMessage }
 }
 

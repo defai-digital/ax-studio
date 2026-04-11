@@ -22,7 +22,9 @@ export function DeleteAssistantDialog({
   onConfirm,
 }: DeleteAssistantDialogProps) {
   const { t } = useTranslation()
-  const deleteButtonRef = useRef<HTMLButtonElement>(null)
+  // Focus Cancel (not the destructive button) so users who habitually
+  // press Enter to dismiss dialogs don't accidentally confirm a delete.
+  const cancelButtonRef = useRef<HTMLButtonElement>(null)
 
   const handleConfirm = () => {
     onConfirm()
@@ -32,19 +34,13 @@ export function DeleteAssistantDialog({
     onOpenChange(false)
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleConfirm()
-    }
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className="sm:max-w-[425px] max-w-[90vw]"
         onOpenAutoFocus={(e) => {
           e.preventDefault()
-          deleteButtonRef.current?.focus()
+          cancelButtonRef.current?.focus()
         }}
       >
         <DialogHeader>
@@ -55,6 +51,7 @@ export function DeleteAssistantDialog({
         </DialogHeader>
         <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
           <Button
+            ref={cancelButtonRef}
             variant="outline"
             size="sm"
             onClick={handleCancel}
@@ -63,11 +60,9 @@ export function DeleteAssistantDialog({
             {t('assistants:cancel')}
           </Button>
           <Button
-            ref={deleteButtonRef}
             variant="destructive"
             onClick={handleConfirm}
             size="sm"
-            onKeyDown={handleKeyDown}
             className="w-full sm:w-auto"
             aria-label={t('assistants:delete')}
           >

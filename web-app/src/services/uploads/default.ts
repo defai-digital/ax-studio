@@ -65,10 +65,13 @@ function parsePipelineMetrics(result: {
   }
   try {
     const metrics = JSON.parse(text)
+    // Use `Number(...) || 0` instead of `?? 0` so a string-typed count
+    // from an older MCP server version (`"1"`) is coerced to a number
+    // rather than flowing through and breaking downstream arithmetic.
     return {
-      filesSucceeded: metrics.filesSucceeded ?? 0,
-      totalChunksGenerated: metrics.totalChunksGenerated ?? 0,
-      errors: Array.isArray(metrics.errors) ? metrics.errors : [],
+      filesSucceeded: Number(metrics?.filesSucceeded) || 0,
+      totalChunksGenerated: Number(metrics?.totalChunksGenerated) || 0,
+      errors: Array.isArray(metrics?.errors) ? metrics.errors : [],
     }
   } catch {
     throw new Error(`Failed to parse pipeline metrics: ${text.slice(0, 200)}`)

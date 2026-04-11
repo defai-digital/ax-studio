@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import { Route as ExtensionsRoute } from '../extensions'
 
 // Mock dependencies
-vi.mock('@/containers/SettingsMenu', () => ({
+vi.mock('@/components/common/SettingsMenu', () => ({
   default: () => <div data-testid="settings-menu">Settings Menu</div>,
 }))
 
@@ -13,7 +13,7 @@ vi.mock('@/containers/HeaderPage', () => ({
   ),
 }))
 
-vi.mock('@/containers/Card', () => ({
+vi.mock('@/components/common/Card', () => ({
   Card: ({ header, children }: { header?: React.ReactNode; children: React.ReactNode }) => (
     <div data-testid="card">
       {header && <div data-testid="card-header">{header}</div>}

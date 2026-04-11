@@ -5,7 +5,7 @@ import { PortInput } from '../PortInput'
 const mockSetServerPort = vi.fn()
 let mockServerPort = 1337
 
-vi.mock('@/hooks/useLocalApiServer', () => ({
+vi.mock('@/hooks/settings/useLocalApiServer', () => ({
   useLocalApiServer: () => ({
     serverPort: mockServerPort,
     setServerPort: mockSetServerPort,

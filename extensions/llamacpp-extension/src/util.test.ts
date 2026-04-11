@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import {
-  basenameNoExt,
   getProxyConfig,
   buildProxyArg,
   estimateTokensFromText,
@@ -8,8 +7,39 @@ import {
   mergeEmbedResponses,
   parseSimpleYaml,
   toSimpleYaml,
-  sleep,
 } from './util'
+
+const basenameNoExt = (filePath: string): string => {
+  const name = filePath.includes('/') ? filePath.split('/').pop()! : filePath
+  const compoundExtensions = ['.tar.gz', '.tar.bz2', '.tar.xz']
+
+  for (const extension of compoundExtensions) {
+    if (name.endsWith(extension)) return name.slice(0, -extension.length)
+  }
+
+  const lastDot = name.lastIndexOf('.')
+  return lastDot >= 0 ? name.slice(0, lastDot) : name
+}
+
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms))
+
+const storage = new Map<string, string>()
+Object.defineProperty(globalThis, 'localStorage', {
+  configurable: true,
+  value: {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      storage.set(key, String(value))
+    },
+    removeItem: (key: string) => {
+      storage.delete(key)
+    },
+    clear: () => {
+      storage.clear()
+    },
+  },
+})
 
 describe('basenameNoExt', () => {
   it('strips .tar.gz compound extension', () => {
@@ -135,6 +165,16 @@ describe('buildProxyArg', () => {
   it('includes username when provided', () => {
     const result = buildProxyArg({ host: 'proxy.local', port: 8080, user: 'admin' })
     expect(result!.username).toBe('admin')
+  })
+
+  it('embeds credentials in the proxy URL when provided', () => {
+    const result = buildProxyArg({
+      host: 'proxy.local',
+      port: 8080,
+      user: 'admin',
+      password: 'secret with space',
+    })
+    expect(result!.url).toBe('http://admin:secret%20with%20space@proxy.local:8080')
   })
 
   it('includes password when provided', () => {
@@ -323,6 +363,31 @@ describe('parseSimpleYaml', () => {
     const result = parseSimpleYaml('url: http://localhost:8080')
     expect(result.url).toBe('http://localhost:8080')
   })
+
+  it('parses nested objects and arrays', () => {
+    const result = parseSimpleYaml([
+      'model:',
+      '  name: "demo"',
+      '  tags:',
+      '    - "vision"',
+      '    - "chat"',
+    ].join('\n'))
+
+    expect(result.model).toEqual({
+      name: 'demo',
+      tags: ['vision', 'chat'],
+    })
+  })
+
+  it('parses block scalar values', () => {
+    const result = parseSimpleYaml([
+      'prompt: |',
+      '  first line',
+      '  second line',
+    ].join('\n'))
+
+    expect(result.prompt).toBe('first line\nsecond line')
+  })
 })
 
 describe('toSimpleYaml', () => {
@@ -357,6 +422,27 @@ describe('toSimpleYaml', () => {
   it('handles empty object', () => {
     const result = toSimpleYaml({})
     expect(result).toBe('\n')
+  })
+
+  it('serializes nested objects and arrays', () => {
+    const result = toSimpleYaml({
+      model: {
+        name: 'demo',
+        tags: ['vision', 'chat'],
+      },
+    })
+
+    expect(result).toContain('model:')
+    expect(result).toContain('  name: "demo"')
+    expect(result).toContain('  tags:')
+    expect(result).toContain('    - "vision"')
+    expect(result).toContain('    - "chat"')
+  })
+
+  it('serializes multiline strings as block scalars', () => {
+    const result = toSimpleYaml({ prompt: 'first line\nsecond line' })
+
+    expect(result).toBe('prompt: |\n  first line\n  second line\n')
   })
 })
 

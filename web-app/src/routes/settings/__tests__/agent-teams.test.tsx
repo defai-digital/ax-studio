@@ -30,7 +30,7 @@ vi.mock('@/containers/HeaderPage', () => ({
   ),
 }))
 
-vi.mock('@/containers/SettingsMenu', () => ({
+vi.mock('@/components/common/SettingsMenu', () => ({
   default: () => <div data-testid="settings-menu">Settings Menu</div>,
 }))
 
@@ -172,7 +172,7 @@ const mockAssistants = [
 
 const mockAddAssistant = vi.fn()
 
-vi.mock('@/hooks/useAssistant', () => ({
+vi.mock('@/hooks/chat/useAssistant', () => ({
   useAssistant: () => ({
     assistants: mockAssistants,
     addAssistant: mockAddAssistant,

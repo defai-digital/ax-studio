@@ -94,6 +94,22 @@ describe('LocalOAIEngine', () => {
     })
   })
 
+  describe('onUnload', () => {
+    it('should remove local model event listeners', () => {
+      engine.onLoad()
+      engine.onUnload()
+
+      expect(events.off).toHaveBeenCalledWith(
+        ModelEvent.OnModelInit,
+        expect.any(Function)
+      )
+      expect(events.off).toHaveBeenCalledWith(
+        ModelEvent.OnModelStop,
+        expect.any(Function)
+      )
+    })
+  })
+
   describe('properties', () => {
     it('should have correct default function names', () => {
       expect(engine.loadModelFunctionName).toBe('loadModel')

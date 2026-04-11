@@ -50,19 +50,14 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
         return Ok(());
     }
 
-    // Attempt to remove extensions folder
-    if extensions_path.exists() {
-        fs::remove_dir_all(&extensions_path).unwrap_or_else(|_| {
-            log::info!("Failed to remove existing extensions folder, it may not exist.");
-        });
+    let staging_path = extensions_path.with_extension("staging");
+    if staging_path.exists() {
+        fs::remove_dir_all(&staging_path)
+            .map_err(|e| format!("Failed to clear extension staging directory: {e}"))?;
     }
+    fs::create_dir_all(&staging_path).map_err(|e| e.to_string())?;
 
-    // Attempt to create it again
-    if !extensions_path.exists() {
-        fs::create_dir_all(&extensions_path).map_err(|e| e.to_string())?;
-    }
-
-    let extensions_json_path = extensions_path.join("extensions.json");
+    let extensions_json_path = staging_path.join("extensions.json");
     let mut extensions_list = if extensions_json_path.exists() {
         let existing_data =
             fs::read_to_string(&extensions_json_path).unwrap_or_else(|_| "[]".to_string());
@@ -94,7 +89,7 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
                 })?;
 
             let extension_name = extension_name.ok_or("package.json not found in archive")?;
-            let extension_dir = extensions_path.join(extension_name.clone());
+            let extension_dir = staging_path.join(extension_name.clone());
             fs::create_dir_all(&extension_dir).map_err(|e| e.to_string())?;
 
             let tar_gz = File::open(&path).map_err(|e| e.to_string())?;
@@ -102,11 +97,31 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
             let mut archive = Archive::new(gz_decoder);
             for entry in archive.entries().map_err(|e| e.to_string())? {
                 let mut entry = entry.map_err(|e| e.to_string())?;
+
+                // Reject symlink / hardlink entries — a symlink followed by a
+                // file entry through that link is a classic archive extraction
+                // escape (lexical path checks still pass, but the actual write
+                // lands outside `extension_dir`).
+                let entry_type = entry.header().entry_type();
+                if entry_type.is_symlink() || entry_type.is_hard_link() {
+                    log::warn!(
+                        "Rejecting symlink/hardlink entry in extension archive: {}",
+                        entry.path().map(|p| p.display().to_string()).unwrap_or_default()
+                    );
+                    continue;
+                }
+
                 let file_path = entry.path().map_err(|e| e.to_string())?;
                 let components: Vec<_> = file_path.components().collect();
                 if components.len() > 1 {
                     let relative_path: PathBuf = components[1..].iter().collect();
                     let target_path = extension_dir.join(relative_path);
+                    if !target_path.starts_with(&extension_dir) {
+                        return Err(format!(
+                            "Blocked extension archive path traversal: {}",
+                            file_path.display()
+                        ));
+                    }
                     if let Some(parent) = target_path.parent() {
                         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
                     }
@@ -149,6 +164,13 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
         serde_json::to_string_pretty(&extensions_list).map_err(|e| e.to_string())?,
     )
     .map_err(|e| e.to_string())?;
+
+    if extensions_path.exists() {
+        fs::remove_dir_all(&extensions_path)
+            .map_err(|e| format!("Failed to remove existing extensions directory: {e}"))?;
+    }
+    fs::rename(&staging_path, &extensions_path)
+        .map_err(|e| format!("Failed to promote staged extensions: {e}"))?;
 
     Ok(())
 }
@@ -200,7 +222,9 @@ pub fn migrate_mcp_servers(
         }
     }
     if mcp_version < 6 {
-        log::info!("Migrating MCP schema version 6: Removing deprecated integration-github MCP server");
+        log::info!(
+            "Migrating MCP schema version 6: Removing deprecated integration-github MCP server"
+        );
         if let Err(e) = remove_mcp_server_keys(app_handle.clone(), &["integration-github"]) {
             log::error!("Failed to remove integration-github: {e}");
         }
@@ -212,7 +236,9 @@ pub fn migrate_mcp_servers(
         }
     }
     store.set("mcp_version", 7);
-    store.save().expect("Failed to save store");
+    store
+        .save()
+        .map_err(|e| format!("Failed to save store during MCP migration: {e}"))?;
     Ok(())
 }
 
@@ -389,7 +415,10 @@ fn patch_ax_studio_sqlite_flag(app_handle: tauri::AppHandle) -> Result<(), Strin
                     .any(|a| a.as_str() == Some("--experimental-sqlite"));
                 if !has_flag {
                     // Insert at the front so it precedes the script path
-                    args.insert(0, serde_json::Value::String("--experimental-sqlite".to_string()));
+                    args.insert(
+                        0,
+                        serde_json::Value::String("--experimental-sqlite".to_string()),
+                    );
                     changed = true;
                 }
             }
@@ -540,7 +569,7 @@ pub fn setup_tray(app: &App) -> tauri::Result<TrayIcon> {
                 app.exit(0);
             }
             other => {
-                println!("menu item {other} not handled");
+                log::debug!("Menu item {other} not handled");
             }
         })
         .build(app)
@@ -596,7 +625,10 @@ pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
 
     let mut store_path = get_app_data_folder_path(app.handle().clone());
     store_path.push("store.json");
-    let store = app.handle().store(store_path).expect("Store not initialized");
+    // Use `?` propagation instead of `.expect(...)` so a bad `store.json`
+    // (corrupted file, bad permissions, disk full) surfaces as a recoverable
+    // setup error rather than a hard panic with no actionable message.
+    let store = app.handle().store(store_path)?;
     let stored_version = store
         .get("version")
         .and_then(|v| v.as_str().map(String::from))
@@ -609,7 +641,12 @@ pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         log::error!("Failed to migrate MCP servers: {e}");
     }
     store.set("version", serde_json::json!(app_version));
-    store.save().expect("Failed to save store");
+    // Best-effort save: log the failure but don't crash. All migrations
+    // have already run successfully; losing only the version stamp is
+    // much less bad than panicking here.
+    if let Err(e) = store.save() {
+        log::error!("Failed to persist version to store after setup: {e}");
+    }
 
     #[cfg(desktop)]
     if option_env!("ENABLE_SYSTEM_TRAY_ICON").unwrap_or("false") == "true" {
@@ -661,21 +698,38 @@ pub fn app_run_handler(app: &tauri::AppHandle, event: RunEvent) {
             tauri::async_runtime::block_on(async {
                 use crate::core::mcp::helpers::background_cleanup_mcp_servers;
                 let state = app_handle.state::<super::state::AppState>();
-                let cleanup_future = background_cleanup_mcp_servers(&app_handle, &state);
-                match tokio::time::timeout(
-                    tokio::time::Duration::from_secs(10),
-                    cleanup_future,
-                )
+                let mut cleanup_guard = state.background_cleanup_handle.lock().await;
+                if cleanup_guard.is_none() {
+                    let cleanup_app = app_handle.clone();
+                    let cleanup_task = tauri::async_runtime::spawn(async move {
+                        let state = cleanup_app.state::<super::state::AppState>();
+                        background_cleanup_mcp_servers(&cleanup_app, &state).await;
+                        #[cfg(not(any(target_os = "ios", target_os = "android")))]
+                        {
+                            let _ =
+                                tauri_plugin_llamacpp::cleanup_llama_processes(cleanup_app.clone())
+                                    .await;
+                            log::info!("llama.cpp process cleanup completed");
+                        }
+                    });
+                    *cleanup_guard = Some(cleanup_task);
+                }
+                drop(cleanup_guard);
+
+                let cleanup_handle = {
+                    let mut cleanup_guard = state.background_cleanup_handle.lock().await;
+                    cleanup_guard.take()
+                };
+
+                match tokio::time::timeout(tokio::time::Duration::from_secs(10), async {
+                    if let Some(handle) = cleanup_handle {
+                        let _ = handle.await;
+                    }
+                })
                 .await
                 {
                     Ok(_) => log::info!("MCP cleanup completed successfully"),
                     Err(_) => log::warn!("MCP cleanup timed out after 10 seconds"),
-                }
-                #[cfg(not(any(target_os = "ios", target_os = "android")))]
-                {
-                    let _ =
-                        tauri_plugin_llamacpp::cleanup_llama_processes(app_handle.clone()).await;
-                    log::info!("llama.cpp process cleanup completed");
                 }
                 log::info!("App cleanup completed");
             });

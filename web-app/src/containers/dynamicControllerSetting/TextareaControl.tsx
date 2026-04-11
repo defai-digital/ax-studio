@@ -1,5 +1,5 @@
 import { Textarea } from '@/components/ui/textarea'
-import { useGeneralSetting } from '@/hooks/useGeneralSetting'
+import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { cn } from '@/lib/utils'
 
 type TextareaControlProps = {

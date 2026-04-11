@@ -13,12 +13,12 @@ import {
 import { toast } from 'sonner'
 import { CardItem } from '../Card'
 import { EngineManager } from '@ax-studio/core'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useRouter } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { predefinedProviders } from '@/constants/providers'
-import { useFavoriteModel } from '@/hooks/useFavoriteModel'
+import { useFavoriteModel } from '@/hooks/models/useFavoriteModel'
 
 type Props = {
   provider?: ProviderObject
@@ -52,12 +52,15 @@ const DeleteProvider = ({ provider }: Props) => {
       }),
     })
     setTimeout(() => {
-      router.navigate({
-        to: route.settings.providers,
-        params: {
-          providerName: providers[0].provider,
-        },
-      })
+      const currentProviders = useModelProvider.getState().providers
+      if (currentProviders.length > 0) {
+        router.navigate({
+          to: route.settings.providers,
+          params: { providerName: currentProviders[0].provider },
+        })
+      } else {
+        router.navigate({ to: route.settings.providers })
+      }
     }, 0)
   }
 

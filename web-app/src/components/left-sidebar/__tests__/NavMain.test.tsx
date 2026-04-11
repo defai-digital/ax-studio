@@ -18,7 +18,7 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useSearchDialog', () => ({
+vi.mock('@/hooks/ui/useSearchDialog', () => ({
   useSearchDialog: () => ({
     open: false,
     setOpen: mockSetSearchOpen,
@@ -60,11 +60,15 @@ vi.mock('@/components/ui/sidebar', () => ({
   ),
   SidebarMenuButton: ({
     children,
+    asChild: _asChild,
+    tooltip: _tooltip,
     ...props
   }: {
     children: React.ReactNode
     asChild?: boolean
     tooltip?: string
+    onMouseEnter?: () => void
+    onMouseLeave?: () => void
   }) => <div {...props}>{children}</div>,
   SidebarMenuItem: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>

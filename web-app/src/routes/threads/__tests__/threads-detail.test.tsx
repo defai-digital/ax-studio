@@ -3,11 +3,11 @@ import { render, screen } from '@testing-library/react'
 import { Route } from '../$threadId'
 
 // Mock dependencies
-vi.mock('@/hooks/useThreads', () => ({
+vi.mock('@/hooks/threads/useThreads', () => ({
   useThreads: vi.fn(),
 }))
 
-vi.mock('@/hooks/useAssistant', () => ({
+vi.mock('@/hooks/chat/useAssistant', () => ({
   useAssistant: () => ({
     assistants: [],
     currentAssistant: null,
@@ -15,11 +15,11 @@ vi.mock('@/hooks/useAssistant', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useTools', () => ({
+vi.mock('@/hooks/tools/useTools', () => ({
   useTools: vi.fn(),
 }))
 
-vi.mock('@/hooks/use-chat', () => ({
+vi.mock('@/hooks/chat/use-chat', () => ({
   useChat: () => ({
     messages: [],
     status: 'ready',
@@ -32,27 +32,27 @@ vi.mock('@/hooks/use-chat', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: () => ({
     selectedModel: null,
     selectedProvider: null,
   }),
 }))
 
-vi.mock('@/hooks/useGeneralSetting', () => ({
+vi.mock('@/hooks/settings/useGeneralSetting', () => ({
   useGeneralSetting: () => ({
     globalDefaultPrompt: '',
     autoTuningEnabled: false,
   }),
 }))
 
-vi.mock('@/hooks/useMessages', () => ({
+vi.mock('@/hooks/chat/useMessages', () => ({
   useMessages: () => ({
     messages: {},
   }),
 }))
 
-vi.mock('@/hooks/thread/use-thread-memory', () => ({
+vi.mock('@/hooks/threads/use-thread-memory', () => ({
   useThreadMemory: () => ({
     memorySuffix: '',
     lastUserInputRef: { current: '' },
@@ -62,20 +62,20 @@ vi.mock('@/hooks/thread/use-thread-memory', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useLocalKnowledge', () => ({
+vi.mock('@/hooks/research/useLocalKnowledge', () => ({
   useLocalKnowledge: () => ({
     isLocalKnowledgeEnabledForThread: vi.fn().mockReturnValue(false),
   }),
 }))
 
-vi.mock('@/hooks/thread/use-thread-artifacts', () => ({
+vi.mock('@/hooks/threads/use-thread-artifacts', () => ({
   useThreadArtifacts: () => ({
     pinnedArtifact: null,
     clearArtifact: vi.fn(),
   }),
 }))
 
-vi.mock('@/hooks/thread/use-thread-research', () => ({
+vi.mock('@/hooks/threads/use-thread-research', () => ({
   useThreadResearch: () => ({
     pinnedResearch: null,
     clearResearch: vi.fn(),
@@ -83,7 +83,7 @@ vi.mock('@/hooks/thread/use-thread-research', () => ({
   }),
 }))
 
-vi.mock('@/hooks/thread/use-thread-config', () => ({
+vi.mock('@/hooks/threads/use-thread-config', () => ({
   useThreadConfig: () => ({
     promptResolution: { resolvedPrompt: '' },
     optimizedModelConfig: {
@@ -95,7 +95,7 @@ vi.mock('@/hooks/thread/use-thread-config', () => ({
   }),
 }))
 
-vi.mock('@/hooks/thread/use-thread-tools', () => ({
+vi.mock('@/hooks/threads/use-thread-tools', () => ({
   useThreadTools: () => ({
     followUpMessage: null,
     onToolCall: vi.fn(),
@@ -116,7 +116,7 @@ vi.mock('@/hooks/thread/use-thread-tools', () => ({
   }),
 }))
 
-vi.mock('@/hooks/thread/use-thread-split', () => ({
+vi.mock('@/hooks/threads/use-thread-split', () => ({
   useThreadSplit: () => ({
     splitPaneOrder: [],
     splitThreadId: null,
@@ -126,11 +126,11 @@ vi.mock('@/hooks/thread/use-thread-split', () => ({
   }),
 }))
 
-vi.mock('@/hooks/thread/use-thread-effects', () => ({
+vi.mock('@/hooks/threads/use-thread-effects', () => ({
   useThreadEffects: vi.fn(),
 }))
 
-vi.mock('@/hooks/thread/use-thread-chat', () => ({
+vi.mock('@/hooks/threads/use-thread-chat', () => ({
   useThreadChat: () => ({
     processAndSendMessage: vi.fn(),
     persistMessageOnFinish: vi.fn(),
@@ -141,7 +141,7 @@ vi.mock('@/hooks/thread/use-thread-chat', () => ({
   }),
 }))
 
-vi.mock('@/routes/threads/ThreadView', () => ({
+vi.mock('@/containers/threads/ThreadView', () => ({
   ThreadView: () => <div data-testid="thread-view" />,
 }))
 
@@ -160,7 +160,7 @@ vi.mock('zustand/react/shallow', () => ({
 }))
 
 import { useParams, useNavigate } from '@tanstack/react-router'
-import { useThreads } from '@/hooks/useThreads'
+import { useThreads } from '@/hooks/threads/useThreads'
 
 describe('Threads Detail Route', () => {
   beforeEach(() => {

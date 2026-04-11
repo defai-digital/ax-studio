@@ -1,8 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { memo, useState, useCallback } from 'react'
+import { memo, useState, useCallback, useEffect } from 'react'
 import type { UIMessage, ChatStatus } from 'ai'
 import { RenderMarkdown } from './RenderMarkdown'
 import { cn } from '@/lib/utils'
+import { SourcesFooter } from '@/components/citations/SourcesFooter'
+import { useCitations } from '@/hooks/citations/use-citations'
+import type { CitationData } from '@/types/citation-types'
+import { useGuardrails } from '@/hooks/settings/useGuardrails'
 import { twMerge } from 'tailwind-merge'
 import {
   Reasoning,
@@ -16,11 +20,11 @@ import {
   ToolInput,
   ToolOutput,
 } from '@/components/ai-elements/tool'
-import { CopyButton } from './CopyButton'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { CopyButton } from '@/components/common/CopyButton'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { IconRefresh, IconPaperclip } from '@tabler/icons-react'
-import { EditMessageDialog } from '@/containers/dialogs/EditMessageDialog'
-import { DeleteMessageDialog } from '@/containers/dialogs/DeleteMessageDialog'
+import { EditMessageDialog } from '@/containers/dialogs/message/EditMessageDialog'
+import { DeleteMessageDialog } from '@/containers/dialogs/message/DeleteMessageDialog'
 import TokenSpeedIndicator from '@/containers/TokenSpeedIndicator'
 import { extractFilesFromPrompt, FileMetadata } from '@/lib/fileMetadata'
 import { useMemo } from 'react'
@@ -30,6 +34,7 @@ import { RunLogSummary } from '@/components/RunLogViewer'
 import type { AgentStatusData } from '@/types/agent-data-parts'
 import type { RunLogData } from '@/lib/multi-agent/run-log'
 import { Zap, GitBranch, ThumbsUp, ThumbsDown } from 'lucide-react'
+import { useMessages } from '@/hooks/chat/useMessages'
 import { RoutingBadge } from '@/components/RoutingBadge'
 
 const CHAT_STATUS = {
@@ -69,11 +74,43 @@ export const MessageItem = memo(
     onDelete,
   }: MessageItemProps) => {
     const selectedModel = useModelProvider((state) => state.selectedModel)
+    const updateMessage = useMessages((state) => state.updateMessage)
     const [previewImage, setPreviewImage] = useState<{
       url: string
       filename?: string
     } | null>(null)
 
+    const meta = message.metadata as Record<string, unknown> | undefined
+    const currentRating = meta?.rating as 'up' | 'down' | undefined
+
+    // Hydrate citation data from message metadata into the citation store.
+    // Use a stable flag to avoid re-running on every streaming chunk.
+    const hydrateCitations = useCitations((s) => s.hydrate)
+    const hasCitationData = !!meta?.citationData
+    useEffect(() => {
+      if (message.role === 'assistant' && hasCitationData) {
+        hydrateCitations(message.id, meta)
+      }
+    }, [message.id, message.role, hasCitationData, hydrateCitations, meta])
+    const citationData = useCitations((s) => s.getCitations(message.id))
+    const flagLowConfidence = useGuardrails((s) => s.flagLowConfidence)
+
+    const handleRating = useCallback(
+      (rating: 'up' | 'down') => {
+        if (!threadId) return
+        const existingMeta = (message.metadata ?? {}) as Record<string, unknown>
+        const newRating = existingMeta.rating === rating ? undefined : rating
+        updateMessage({
+          id: message.id,
+          thread_id: threadId,
+          metadata: {
+            ...existingMeta,
+            rating: newRating,
+          },
+        } as any)
+      },
+      [message.id, message.metadata, threadId, updateMessage]
+    )
 
     const handleRegenerate = useCallback(() => {
       onRegenerate?.(message.id)
@@ -500,6 +537,14 @@ export const MessageItem = memo(
               }
             })}
 
+            {/* Sources footer — shown when citation data exists */}
+            {message.role === 'assistant' && citationData && (
+              <SourcesFooter
+                citationData={citationData}
+                showConfidence={flagLowConfidence}
+              />
+            )}
+
             {/* Action Bar */}
             <div className="flex items-center justify-between mt-2 opacity-0 group-hover/message:opacity-100 transition-opacity">
               <div
@@ -527,8 +572,7 @@ export const MessageItem = memo(
                   </Button>
                 )}
 
-                {/* Fork conversation — disabled until fork logic is implemented */}
-                {/* TODO: Wire to fork/branch logic when available */}
+                {/* Fork conversation — disabled until fork flow is implemented */}
                 <Button
                   variant="ghost"
                   size="icon-xs"
@@ -546,10 +590,11 @@ export const MessageItem = memo(
                   size="icon-xs"
                   title="Good response"
                   aria-label="Good response"
-                  className="text-muted-foreground/50 hover:text-emerald-500"
-                  onClick={() => {
-                    // TODO: Store rating in message metadata when rating infrastructure exists
-                  }}
+                  className={cn(
+                    'text-muted-foreground/50 hover:text-emerald-500',
+                    currentRating === 'up' && 'text-emerald-500'
+                  )}
+                  onClick={() => handleRating('up')}
                 >
                   <ThumbsUp className="size-3.5" />
                 </Button>
@@ -558,10 +603,11 @@ export const MessageItem = memo(
                   size="icon-xs"
                   title="Poor response"
                   aria-label="Poor response"
-                  className="text-muted-foreground/50 hover:text-rose-500"
-                  onClick={() => {
-                    // TODO: Store rating in message metadata when rating infrastructure exists
-                  }}
+                  className={cn(
+                    'text-muted-foreground/50 hover:text-rose-500',
+                    currentRating === 'down' && 'text-rose-500'
+                  )}
+                  onClick={() => handleRating('down')}
                 >
                   <ThumbsDown className="size-3.5" />
                 </Button>

@@ -13,13 +13,13 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }))
 
-vi.mock('@/hooks/useThreadManagement', () => ({
+vi.mock('@/hooks/threads/useThreadManagement', () => ({
   useThreadManagement: () => ({
     folders: [],
   }),
 }))
 
-vi.mock('@/hooks/useAssistant', () => ({
+vi.mock('@/hooks/chat/useAssistant', () => ({
   useAssistant: () => ({
     assistants: [],
     addAssistant: vi.fn(),
@@ -31,7 +31,7 @@ vi.mock('lucide-react', () => ({
   Plus: () => <span />,
 }))
 
-vi.mock('@/containers/AvatarEmoji', () => ({
+vi.mock('@/components/common/AvatarEmoji', () => ({
   AvatarEmoji: () => <span />,
 }))
 

@@ -10,11 +10,17 @@ use rmcp::{
     service::RunningService,
     RoleClient, ServiceError,
 };
+use tokio::sync::watch;
 use tokio::sync::{oneshot, Mutex};
 
 /// Server handle type for managing the proxy server lifecycle
-pub type ServerHandle =
-    tauri::async_runtime::JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>>;
+pub struct ServerHandle {
+    pub task:
+        tauri::async_runtime::JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>>,
+    pub shutdown_tx: watch::Sender<bool>,
+}
+
+pub type ProviderModelIndex = HashMap<String, Vec<String>>;
 
 /// Provider configuration for remote model providers
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
@@ -32,6 +38,35 @@ pub struct ProviderCustomHeader {
     pub value: String,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct ProviderState {
+    pub configs: HashMap<String, ProviderConfig>,
+    pub model_index: ProviderModelIndex,
+}
+
+impl ProviderState {
+    pub fn sync_model_index(&mut self) {
+        self.model_index = build_provider_model_index(&self.configs);
+    }
+}
+
+impl RunningServiceEnum {
+    pub async fn list_all_tools(&self) -> Result<Vec<Tool>, ServiceError> {
+        match self {
+            Self::NoInit(s) => s.list_all_tools().await,
+            Self::WithInit(s) => s.list_all_tools().await,
+        }
+    }
+    pub async fn call_tool(
+        &self,
+        params: CallToolRequestParam,
+    ) -> Result<CallToolResult, ServiceError> {
+        match self {
+            Self::NoInit(s) => s.call_tool(params).await,
+            Self::WithInit(s) => s.call_tool(params).await,
+        }
+    }
+}
 
 pub enum RunningServiceEnum {
     NoInit(RunningService<RoleClient, ()>),
@@ -46,15 +81,33 @@ pub struct AppState {
     pub mcp_active_servers: Arc<Mutex<HashMap<String, serde_json::Value>>>,
     pub server_handle: Arc<Mutex<Option<ServerHandle>>>,
     pub tool_call_cancellations: Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
+    pub akidb_sync_cancellation: Arc<Mutex<Option<oneshot::Sender<()>>>>,
     pub mcp_settings: Arc<Mutex<McpSettings>>,
     pub mcp_shutdown_in_progress: Arc<Mutex<bool>>,
     pub mcp_monitoring_tasks: Arc<Mutex<HashMap<String, tauri::async_runtime::JoinHandle<()>>>>,
     pub background_cleanup_handle: Arc<Mutex<Option<tauri::async_runtime::JoinHandle<()>>>>,
     pub mcp_server_pids: Arc<Mutex<HashMap<String, u32>>>,
-    /// Remote provider configurations (e.g., Anthropic, OpenAI, etc.)
-    pub provider_configs: Arc<Mutex<HashMap<String, ProviderConfig>>>,
+    /// Remote provider configurations and model index are kept under one lock.
+    pub provider_state: Arc<Mutex<ProviderState>>,
     /// One-time write targets approved via native save dialog
     pub approved_save_paths: Arc<Mutex<HashSet<PathBuf>>>,
+}
+
+pub fn build_provider_model_index(
+    provider_configs: &HashMap<String, ProviderConfig>,
+) -> ProviderModelIndex {
+    let mut index = HashMap::new();
+
+    for config in provider_configs.values() {
+        for model in &config.models {
+            index
+                .entry(model.clone())
+                .or_insert_with(Vec::new)
+                .push(config.provider.clone());
+        }
+    }
+
+    index
 }
 
 #[cfg(test)]
@@ -159,23 +212,5 @@ mod tests {
         assert_eq!(config.provider, cloned.provider);
         assert_eq!(config.api_key, cloned.api_key);
         assert_eq!(config.custom_headers.len(), cloned.custom_headers.len());
-    }
-}
-
-impl RunningServiceEnum {
-    pub async fn list_all_tools(&self) -> Result<Vec<Tool>, ServiceError> {
-        match self {
-            Self::NoInit(s) => s.list_all_tools().await,
-            Self::WithInit(s) => s.list_all_tools().await,
-        }
-    }
-    pub async fn call_tool(
-        &self,
-        params: CallToolRequestParam,
-    ) -> Result<CallToolResult, ServiceError> {
-        match self {
-            Self::NoInit(s) => s.call_tool(params).await,
-            Self::WithInit(s) => s.call_tool(params).await,
-        }
     }
 }

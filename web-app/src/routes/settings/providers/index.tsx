@@ -1,10 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
-import SettingsMenu from '@/containers/SettingsMenu'
+import SettingsMenu from '@/components/common/SettingsMenu'
 import HeaderPage from '@/containers/HeaderPage'
 import { Button } from '@/components/ui/button'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useNavigate } from '@tanstack/react-router'
 import {
   cn,
@@ -12,7 +12,7 @@ import {
   getProviderColor,
   getProviderDescription,
 } from '@/lib/utils'
-import ProvidersAvatar from '@/containers/ProvidersAvatar'
+import ProvidersAvatar from '@/components/common/ProvidersAvatar'
 import { AddProviderDialog } from '@/containers/dialogs'
 import { Switch } from '@/components/ui/switch'
 import { useCallback } from 'react'

@@ -16,7 +16,7 @@ vi.mock('@tanstack/react-router', () => ({
   useSearch: () => ({}),
 }))
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: () => ({
     providers: [{ provider: 'openai', api_key: 'test-key', active: true }],
     selectedModel: { id: 'gpt-4', provider: 'openai' },
@@ -24,7 +24,7 @@ vi.mock('@/hooks/useModelProvider', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useThreads', () => ({
+vi.mock('@/hooks/threads/useThreads', () => ({
   useThreads: (selector?: any) => {
     const state = {
       setCurrentThreadId: mockSetCurrentThreadId,
@@ -36,13 +36,13 @@ vi.mock('@/hooks/useThreads', () => ({
   },
 }))
 
-vi.mock('@/hooks/useGeneralSetting', () => ({
+vi.mock('@/hooks/settings/useGeneralSetting', () => ({
   useGeneralSetting: () => ({
     globalDefaultPrompt: 'You are a helpful assistant.',
   }),
 }))
 
-vi.mock('@/hooks/useTools', () => ({
+vi.mock('@/hooks/tools/useTools', () => ({
   useTools: vi.fn(),
 }))
 

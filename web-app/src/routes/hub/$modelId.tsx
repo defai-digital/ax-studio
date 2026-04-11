@@ -16,18 +16,18 @@ import {
 } from 'lucide-react'
 import { motion } from 'motion/react'
 import { route } from '@/constants/routes'
-import { useModelSources } from '@/hooks/useModelSources'
+import { useModelSources } from '@/hooks/models/useModelSources'
 import { extractModelName, extractDescription } from '@/lib/models'
 import { RenderMarkdown } from '@/containers/RenderMarkdown'
-import { useEffect, useMemo, useCallback, useState } from 'react'
-import { useDownloadStore } from '@/hooks/useDownloadStore'
+import { useEffect, useMemo, useCallback, useState, useRef } from 'react'
+import { useDownloadStore } from '@/hooks/models/useDownloadStore'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import type { CatalogModel, ModelQuant } from '@/services/models/types'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
 import { sanitizeModelId } from '@/lib/utils'
-import { useGeneralSetting } from '@/hooks/useGeneralSetting'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { ModelInfoHoverCard } from '@/containers/ModelInfoHoverCard'
 import { DEFAULT_MODEL_QUANTIZATIONS } from '@/constants/models'
 import { useTranslation } from '@/i18n'
@@ -67,15 +67,22 @@ function HubModelDetailContent() {
   const [modelSupportStatus, setModelSupportStatus] = useState<
     Record<string, 'RED' | 'YELLOW' | 'GREEN' | 'LOADING' | 'GREY'>
   >({})
+  const inFlightModelChecks = useRef(new Set<string>())
+  // Mirror `modelSupportStatus` into a ref so `checkModelSupport` can read
+  // the latest guard value without listing it as a dep (otherwise every
+  // status update recreates the callback and forces every
+  // ModelInfoHoverCard in the list to re-render).
+  const modelSupportStatusRef = useRef(modelSupportStatus)
+  modelSupportStatusRef.current = modelSupportStatus
 
   useEffect(() => {
     fetchSources()
   }, [fetchSources])
 
-  const fetchRepo = useCallback(async () => {
+  const fetchRepo = useCallback(async (signal?: AbortSignal) => {
     const repoInfo = await serviceHub
       .models()
-      .fetchHuggingFaceRepo(search.repo || modelId, huggingfaceToken)
+      .fetchHuggingFaceRepo(search.repo || modelId, huggingfaceToken, signal)
     if (repoInfo) {
       const repoDetail = serviceHub
         .models()
@@ -85,12 +92,25 @@ function HubModelDetailContent() {
   }, [serviceHub, modelId, search, huggingfaceToken])
 
   useEffect(() => {
-    fetchRepo()
+    const controller = new AbortController()
+    fetchRepo(controller.signal).catch((error) => {
+      if (error instanceof DOMException && error.name === 'AbortError') return
+      console.error('Failed to fetch Hugging Face repo:', error)
+    })
+
+    return () => {
+      controller.abort()
+    }
   }, [modelId, fetchRepo])
   // Find the model data from sources
   const modelData = useMemo(() => {
     return sources.find((model) => model.model_name === modelId) ?? repoData
   }, [sources, modelId, repoData])
+
+  // `readmeUrl` must be derived AFTER `modelData` — reading it before the
+  // const declaration previously hit the Temporal Dead Zone and threw
+  // `ReferenceError: Cannot access 'modelData' before initialization`.
+  const readmeUrl = modelData?.readme
 
   // Download processes
   const downloadProcesses = useMemo(
@@ -122,13 +142,18 @@ function HubModelDetailContent() {
     [navigate]
   )
 
-  // Format the date
+  // Format the date. Use `Math.floor` (not `ceil`) so a 1-hour-old
+  // release doesn't show "1 day ago", and special-case the 0/1 day
+  // buckets as "Today" / "Yesterday" instead of the ungrammatical
+  // "0 days ago".
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
     const now = new Date()
     const diffTime = Math.abs(now.getTime() - date.getTime())
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
 
+    if (diffDays === 0) return 'Today'
+    if (diffDays === 1) return 'Yesterday'
     if (diffDays < 7) {
       return `${diffDays} days ago`
     } else if (diffDays < 30) {
@@ -148,12 +173,19 @@ function HubModelDetailContent() {
     async (variant: ModelQuant) => {
       const modelKey = variant.model_id
 
-      // Don't check again if already checking or checked
-      if (modelSupportStatus[modelKey]) {
+      // Don't check again if already checking or checked. Read from the ref
+      // so this callback doesn't depend on `modelSupportStatus` — otherwise
+      // every status update would recreate the callback and cascade renders
+      // through every ModelInfoHoverCard on the page.
+      if (
+        inFlightModelChecks.current.has(modelKey) ||
+        modelSupportStatusRef.current[modelKey]
+      ) {
         return
       }
 
       // Set loading state
+      inFlightModelChecks.current.add(modelKey)
       setModelSupportStatus((prev) => ({
         ...prev,
         [modelKey]: 'LOADING',
@@ -175,9 +207,11 @@ function HubModelDetailContent() {
           ...prev,
           [modelKey]: 'RED',
         }))
+      } finally {
+        inFlightModelChecks.current.delete(modelKey)
       }
     },
-    [modelSupportStatus, serviceHub]
+    [serviceHub]
   )
 
   // Extract tags from quants (model variants)
@@ -203,33 +237,50 @@ function HubModelDetailContent() {
 
   // Fetch README content when modelData.readme is available
   useEffect(() => {
-    if (modelData?.readme) {
-      setIsLoadingReadme(true)
-      // Try fetching without headers first
-      // There is a weird issue where this HF link will return error when access public repo with auth header
-      fetch(modelData.readme)
-        .then((response) => {
-          if (!response.ok && huggingfaceToken && modelData?.readme) {
-            // Retry with Authorization header if first fetch failed
-            return fetch(modelData.readme, {
-              headers: {
-                Authorization: `Bearer ${huggingfaceToken}`,
-              },
-            })
-          }
-          return response
-        })
-        .then((response) => response.text())
-        .then((content) => {
-          setReadmeContent(content)
-          setIsLoadingReadme(false)
-        })
-        .catch((error) => {
-          console.error('Failed to fetch README:', error)
-          setIsLoadingReadme(false)
-        })
+    if (!readmeUrl) {
+      setReadmeContent('')
+      setIsLoadingReadme(false)
+      return
     }
-  }, [modelData?.readme, huggingfaceToken])
+
+    const controller = new AbortController()
+    const { signal } = controller
+
+    ;(async () => {
+      setIsLoadingReadme(true)
+      try {
+        let response = await fetch(readmeUrl, { signal })
+        if (!response.ok && huggingfaceToken) {
+          response = await fetch(readmeUrl, {
+            headers: { Authorization: `Bearer ${huggingfaceToken}` },
+            signal,
+          })
+        }
+
+        if (!response.ok) {
+          console.warn(`Failed to fetch README: ${response.status}`)
+          if (!signal.aborted) setReadmeContent('')
+          return
+        }
+
+        const content = await response.text()
+        if (!signal.aborted) {
+          setReadmeContent(content)
+        }
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return
+        console.error('Failed to fetch README:', error)
+      } finally {
+        if (!signal.aborted) {
+          setIsLoadingReadme(false)
+        }
+      }
+    })()
+
+    return () => {
+      controller.abort()
+    }
+  }, [readmeUrl, huggingfaceToken])
 
   if (!modelData) {
     return (
@@ -408,7 +459,7 @@ function HubModelDetailContent() {
                       ?.progress || 0
                   // Check if model is already downloaded by looking
                   // at the llamacpp provider's installed models list
-                  const isDownloaded = !!llamaProvider?.models.some(
+                  const isDownloaded = !!llamaProvider?.models?.some(
                     (m: { id: string }) =>
                       m.id === variant.model_id ||
                       m.id ===

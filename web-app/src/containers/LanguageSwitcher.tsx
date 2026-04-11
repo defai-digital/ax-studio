@@ -1,4 +1,4 @@
-import { useGeneralSetting } from '@/hooks/useGeneralSetting'
+import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { useAppTranslation } from '@/i18n'
 import {
   DropdownMenu,

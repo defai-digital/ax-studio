@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SystemMonitorRouteImport } from './routes/system-monitor'
 import { Route as LogsRouteImport } from './routes/logs'
+import { Route as ActivityRouteImport } from './routes/activity'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as HubIndexRouteImport } from './routes/hub/index'
 import { Route as ThreadsThreadIdRouteImport } from './routes/threads/$threadId'
@@ -24,6 +25,7 @@ import { Route as SettingsInterfaceRouteImport } from './routes/settings/interfa
 import { Route as SettingsIntegrationsRouteImport } from './routes/settings/integrations'
 import { Route as SettingsHttpsProxyRouteImport } from './routes/settings/https-proxy'
 import { Route as SettingsHardwareRouteImport } from './routes/settings/hardware'
+import { Route as SettingsGuardrailsRouteImport } from './routes/settings/guardrails'
 import { Route as SettingsGeneralRouteImport } from './routes/settings/general'
 import { Route as SettingsExtensionsRouteImport } from './routes/settings/extensions'
 import { Route as SettingsEngineSettingsRouteImport } from './routes/settings/engine-settings'
@@ -44,6 +46,11 @@ const SystemMonitorRoute = SystemMonitorRouteImport.update({
 const LogsRoute = LogsRouteImport.update({
   id: '/logs',
   path: '/logs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ActivityRoute = ActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -111,6 +118,11 @@ const SettingsHardwareRoute = SettingsHardwareRouteImport.update({
   path: '/settings/hardware',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsGuardrailsRoute = SettingsGuardrailsRouteImport.update({
+  id: '/settings/guardrails',
+  path: '/settings/guardrails',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsGeneralRoute = SettingsGeneralRouteImport.update({
   id: '/settings/general',
   path: '/settings/general',
@@ -170,6 +182,7 @@ const SettingsProvidersProviderNameRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/activity': typeof ActivityRoute
   '/logs': typeof LogsRoute
   '/system-monitor': typeof SystemMonitorRoute
   '/hub/$modelId': typeof HubModelIdRoute
@@ -181,6 +194,7 @@ export interface FileRoutesByFullPath {
   '/settings/engine-settings': typeof SettingsEngineSettingsRoute
   '/settings/extensions': typeof SettingsExtensionsRoute
   '/settings/general': typeof SettingsGeneralRoute
+  '/settings/guardrails': typeof SettingsGuardrailsRoute
   '/settings/hardware': typeof SettingsHardwareRoute
   '/settings/https-proxy': typeof SettingsHttpsProxyRoute
   '/settings/integrations': typeof SettingsIntegrationsRoute
@@ -198,6 +212,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/activity': typeof ActivityRoute
   '/logs': typeof LogsRoute
   '/system-monitor': typeof SystemMonitorRoute
   '/hub/$modelId': typeof HubModelIdRoute
@@ -209,6 +224,7 @@ export interface FileRoutesByTo {
   '/settings/engine-settings': typeof SettingsEngineSettingsRoute
   '/settings/extensions': typeof SettingsExtensionsRoute
   '/settings/general': typeof SettingsGeneralRoute
+  '/settings/guardrails': typeof SettingsGuardrailsRoute
   '/settings/hardware': typeof SettingsHardwareRoute
   '/settings/https-proxy': typeof SettingsHttpsProxyRoute
   '/settings/integrations': typeof SettingsIntegrationsRoute
@@ -227,6 +243,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/activity': typeof ActivityRoute
   '/logs': typeof LogsRoute
   '/system-monitor': typeof SystemMonitorRoute
   '/hub/$modelId': typeof HubModelIdRoute
@@ -238,6 +255,7 @@ export interface FileRoutesById {
   '/settings/engine-settings': typeof SettingsEngineSettingsRoute
   '/settings/extensions': typeof SettingsExtensionsRoute
   '/settings/general': typeof SettingsGeneralRoute
+  '/settings/guardrails': typeof SettingsGuardrailsRoute
   '/settings/hardware': typeof SettingsHardwareRoute
   '/settings/https-proxy': typeof SettingsHttpsProxyRoute
   '/settings/integrations': typeof SettingsIntegrationsRoute
@@ -257,6 +275,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/activity'
     | '/logs'
     | '/system-monitor'
     | '/hub/$modelId'
@@ -268,6 +287,7 @@ export interface FileRouteTypes {
     | '/settings/engine-settings'
     | '/settings/extensions'
     | '/settings/general'
+    | '/settings/guardrails'
     | '/settings/hardware'
     | '/settings/https-proxy'
     | '/settings/integrations'
@@ -285,6 +305,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/activity'
     | '/logs'
     | '/system-monitor'
     | '/hub/$modelId'
@@ -296,6 +317,7 @@ export interface FileRouteTypes {
     | '/settings/engine-settings'
     | '/settings/extensions'
     | '/settings/general'
+    | '/settings/guardrails'
     | '/settings/hardware'
     | '/settings/https-proxy'
     | '/settings/integrations'
@@ -313,6 +335,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/activity'
     | '/logs'
     | '/system-monitor'
     | '/hub/$modelId'
@@ -324,6 +347,7 @@ export interface FileRouteTypes {
     | '/settings/engine-settings'
     | '/settings/extensions'
     | '/settings/general'
+    | '/settings/guardrails'
     | '/settings/hardware'
     | '/settings/https-proxy'
     | '/settings/integrations'
@@ -342,6 +366,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ActivityRoute: typeof ActivityRoute
   LogsRoute: typeof LogsRoute
   SystemMonitorRoute: typeof SystemMonitorRoute
   HubModelIdRoute: typeof HubModelIdRoute
@@ -353,6 +378,7 @@ export interface RootRouteChildren {
   SettingsEngineSettingsRoute: typeof SettingsEngineSettingsRoute
   SettingsExtensionsRoute: typeof SettingsExtensionsRoute
   SettingsGeneralRoute: typeof SettingsGeneralRoute
+  SettingsGuardrailsRoute: typeof SettingsGuardrailsRoute
   SettingsHardwareRoute: typeof SettingsHardwareRoute
   SettingsHttpsProxyRoute: typeof SettingsHttpsProxyRoute
   SettingsIntegrationsRoute: typeof SettingsIntegrationsRoute
@@ -383,6 +409,13 @@ declare module '@tanstack/react-router' {
       path: '/logs'
       fullPath: '/logs'
       preLoaderRoute: typeof LogsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/activity': {
+      id: '/activity'
+      path: '/activity'
+      fullPath: '/activity'
+      preLoaderRoute: typeof ActivityRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -476,6 +509,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsHardwareRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings/guardrails': {
+      id: '/settings/guardrails'
+      path: '/settings/guardrails'
+      fullPath: '/settings/guardrails'
+      preLoaderRoute: typeof SettingsGuardrailsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings/general': {
       id: '/settings/general'
       path: '/settings/general'
@@ -558,6 +598,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ActivityRoute: ActivityRoute,
   LogsRoute: LogsRoute,
   SystemMonitorRoute: SystemMonitorRoute,
   HubModelIdRoute: HubModelIdRoute,
@@ -569,6 +610,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsEngineSettingsRoute: SettingsEngineSettingsRoute,
   SettingsExtensionsRoute: SettingsExtensionsRoute,
   SettingsGeneralRoute: SettingsGeneralRoute,
+  SettingsGuardrailsRoute: SettingsGuardrailsRoute,
   SettingsHardwareRoute: SettingsHardwareRoute,
   SettingsHttpsProxyRoute: SettingsHttpsProxyRoute,
   SettingsIntegrationsRoute: SettingsIntegrationsRoute,

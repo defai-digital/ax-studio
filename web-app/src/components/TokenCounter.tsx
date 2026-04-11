@@ -6,7 +6,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { useTokensCount } from '@/hooks/useTokensCount'
+import { useTokensCount } from '@/hooks/chat/useTokensCount'
 import { ThreadMessage } from '@ax-studio/core'
 
 interface TokenCounterProps {

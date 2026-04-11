@@ -5,7 +5,7 @@ import {
   mergePatternFacts,
   buildMemoryContext,
 } from '../memory-extractor'
-import type { MemoryEntry } from '@/hooks/useMemory'
+import type { MemoryEntry } from '@/hooks/integrations/useMemory'
 
 function makeEntry(overrides: Partial<MemoryEntry> = {}): MemoryEntry {
   const now = Date.now()

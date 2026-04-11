@@ -15,10 +15,6 @@ pub struct StartServerConfig {
     pub proxy_timeout: u64,
 }
 
-fn requires_authentication(host: &str, cors_enabled: bool) -> bool {
-    cors_enabled || !matches!(host, "127.0.0.1" | "localhost" | "::1")
-}
-
 #[tauri::command]
 pub async fn start_server<R: Runtime>(
     app_handle: AppHandle<R>,
@@ -35,11 +31,8 @@ pub async fn start_server<R: Runtime>(
         proxy_timeout,
     } = config;
 
-    if requires_authentication(&host, cors_enabled) && api_key.trim().is_empty() {
-        return Err(
-            "An API key is required when CORS is enabled or the server binds to a non-loopback host"
-                .to_string(),
-        );
+    if api_key.trim().is_empty() {
+        return Err("A non-empty API key is required to start the local proxy server".to_string());
     }
 
     let server_handle = state.server_handle.clone();
@@ -62,14 +55,86 @@ pub async fn start_server<R: Runtime>(
 
 #[cfg(test)]
 mod tests {
-    use super::requires_authentication;
+    use super::{get_server_status, start_server, stop_server, StartServerConfig};
+    use crate::core::state::{AppState, ProviderState, SharedMcpServers};
+    use std::collections::{HashMap, HashSet};
+    use std::sync::Arc;
+    use tauri::{test::mock_app, Manager};
+    use tokio::sync::Mutex;
+
+    fn test_app_state() -> AppState {
+        let mcp_servers: SharedMcpServers = Arc::new(Mutex::new(HashMap::new()));
+        AppState {
+            app_token: None,
+            mcp_servers,
+            download_manager: Arc::new(Mutex::new(
+                crate::core::downloads::models::DownloadManagerState::default(),
+            )),
+            mcp_active_servers: Arc::new(Mutex::new(HashMap::new())),
+            server_handle: Arc::new(Mutex::new(None)),
+            tool_call_cancellations: Arc::new(Mutex::new(HashMap::new())),
+            akidb_sync_cancellation: Arc::new(Mutex::new(None)),
+            mcp_settings: Arc::new(Mutex::new(crate::core::mcp::models::McpSettings::default())),
+            mcp_shutdown_in_progress: Arc::new(Mutex::new(false)),
+            mcp_monitoring_tasks: Arc::new(Mutex::new(HashMap::new())),
+            background_cleanup_handle: Arc::new(Mutex::new(None)),
+            mcp_server_pids: Arc::new(Mutex::new(HashMap::new())),
+            provider_state: Arc::new(Mutex::new(ProviderState::default())),
+            approved_save_paths: Arc::new(Mutex::new(HashSet::new())),
+        }
+    }
 
     #[test]
-    fn test_requires_authentication_for_cors_or_non_loopback() {
-        assert!(!requires_authentication("127.0.0.1", false));
-        assert!(!requires_authentication("localhost", false));
-        assert!(requires_authentication("0.0.0.0", false));
-        assert!(requires_authentication("127.0.0.1", true));
+    fn test_start_server_config_keeps_api_key() {
+        let config = StartServerConfig {
+            host: "127.0.0.1".to_string(),
+            port: 3000,
+            prefix: "/v1".to_string(),
+            api_key: "test-key".to_string(),
+            trusted_hosts: vec!["localhost".to_string()],
+            cors_enabled: false,
+            proxy_timeout: 30,
+        };
+
+        assert_eq!(config.api_key, "test-key");
+    }
+
+    #[tokio::test]
+    async fn test_start_server_rejects_empty_api_key() {
+        let app = mock_app();
+        app.manage(test_app_state());
+
+        let result = start_server(
+            app.handle().clone(),
+            app.state::<AppState>(),
+            StartServerConfig {
+                host: "127.0.0.1".to_string(),
+                port: 0,
+                prefix: "/v1".to_string(),
+                api_key: "   ".to_string(),
+                trusted_hosts: vec!["localhost".to_string()],
+                cors_enabled: false,
+                proxy_timeout: 30,
+            },
+        )
+        .await;
+
+        assert_eq!(
+            result.unwrap_err(),
+            "A non-empty API key is required to start the local proxy server"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_server_status_and_stop_server_when_not_running() {
+        let app = mock_app();
+        app.manage(test_app_state());
+
+        let status = get_server_status(app.state::<AppState>()).await.unwrap();
+        assert!(!status);
+
+        let stop_result = stop_server(app.state::<AppState>()).await;
+        assert!(stop_result.is_ok());
     }
 }
 

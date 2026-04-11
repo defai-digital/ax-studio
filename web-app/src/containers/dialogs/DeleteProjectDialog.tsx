@@ -10,8 +10,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { useThreads } from '@/hooks/useThreads'
-import { useThreadManagement } from '@/hooks/useThreadManagement'
+import { useThreads } from '@/hooks/threads/useThreads'
+import { useThreadManagement } from '@/hooks/threads/useThreadManagement'
 import { AlertTriangle } from 'lucide-react'
 
 interface DeleteProjectDialogProps {
@@ -28,7 +28,9 @@ export function DeleteProjectDialog({
   projectName,
 }: DeleteProjectDialogProps) {
   const { t } = useTranslation()
-  const deleteButtonRef = useRef<HTMLButtonElement>(null)
+  // Focus Cancel instead of the destructive button so Enter-to-dismiss
+  // doesn't accidentally wipe the project.
+  const cancelButtonRef = useRef<HTMLButtonElement>(null)
   const threads = useThreads((state) => state.threads)
   const { deleteFolderWithThreads } = useThreadManagement()
 
@@ -57,12 +59,6 @@ export function DeleteProjectDialog({
     }
   }
 
-  const handleKeyDown = async (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      await handleConfirm()
-    }
-  }
-
   const hasThreads = threadCount > 0
 
   return (
@@ -70,7 +66,7 @@ export function DeleteProjectDialog({
       <DialogContent
         onOpenAutoFocus={(e) => {
           e.preventDefault()
-          deleteButtonRef.current?.focus()
+          cancelButtonRef.current?.focus()
         }}
       >
         <DialogHeader>
@@ -93,6 +89,7 @@ export function DeleteProjectDialog({
         )}
         <DialogFooter>
           <Button
+            ref={cancelButtonRef}
             size="sm"
             variant="outline"
             onClick={() => onOpenChange(false)}
@@ -100,11 +97,9 @@ export function DeleteProjectDialog({
             {t('cancel')}
           </Button>
           <Button
-            ref={deleteButtonRef}
             size="sm"
             variant="destructive"
             onClick={handleConfirm}
-            onKeyDown={handleKeyDown}
             aria-label={t('projects.deleteProjectDialog.ariaLabel', {
               projectName: projectName || t('projects.title').toLowerCase(),
             })}

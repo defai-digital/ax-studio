@@ -11,10 +11,8 @@ pub fn get_app_extensions_path<R: Runtime>(app_handle: tauri::AppHandle<R>) -> P
 }
 
 #[tauri::command]
-pub fn install_extensions<R: Runtime>(app: AppHandle<R>) {
-    if let Err(err) = setup::install_extensions(app, true) {
-        log::error!("Failed to install extensions: {err}");
-    }
+pub fn install_extensions<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
+    setup::install_extensions(app, true).map_err(|e| format!("Failed to install extensions: {e}"))
 }
 
 #[tauri::command]

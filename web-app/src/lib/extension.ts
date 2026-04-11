@@ -124,7 +124,12 @@ export class ExtensionManager {
    * Loads all registered extension.
    */
   async load() {
-    await Promise.all(this.listExtensions().map((ext) => ext.onLoad()))
+    const results = await Promise.allSettled(this.listExtensions().map((ext) => ext.onLoad()))
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        console.error('Extension load failed:', result.reason)
+      }
+    }
   }
 
   /**
@@ -182,27 +187,28 @@ export class ExtensionManager {
     
     // Import class for Tauri extensions
     const extensionUrl = extension.url
-    await import(/* @vite-ignore */ getServiceHub().core().convertFileSrc(extensionUrl)).then(
-      (extensionClass) => {
-        // Register class if it has a default export
-        if (
-          typeof extensionClass.default === 'function' &&
-          extensionClass.default.prototype
-        ) {
-          this.register(
+    try {
+      const extensionClass = await import(/* @vite-ignore */ getServiceHub().core().convertFileSrc(extensionUrl))
+      // Register class if it has a default export
+      if (
+        typeof extensionClass.default === 'function' &&
+        extensionClass.default.prototype
+      ) {
+        this.register(
+          extension.name,
+          new extensionClass.default(
+            extension.url,
             extension.name,
-            new extensionClass.default(
-              extension.url,
-              extension.name,
-              extension.productName,
-              extension.active,
-              extension.description,
-              extension.version
-            )
+            extension.productName,
+            extension.active,
+            extension.description,
+            extension.version
           )
-        }
+        )
       }
-    )
+    } catch (error) {
+      console.error(`Failed to import extension "${extension.name}":`, error)
+    }
   }
 
   /**
@@ -213,9 +219,14 @@ export class ExtensionManager {
     // Get active extensions
     const activeExtensions = (await this.getActive()) ?? []
     // Activate all
-    await Promise.all(
+    const results = await Promise.allSettled(
       activeExtensions.map((ext: Extension) => this.activateExtension(ext))
     )
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        console.error('Extension activation failed:', result.reason)
+      }
+    }
   }
 
   /**
@@ -252,8 +263,13 @@ export class ExtensionManager {
    * Shared instance of ExtensionManager.
    */
   static getInstance() {
-    if (!window.core.extensionManager)
-      window.core.extensionManager = new ExtensionManager()
-    return window.core.extensionManager as ExtensionManager
+    const core = window.core
+    if (!core) {
+      throw new Error('window.core is not initialized')
+    }
+    if (!core.extensionManager) {
+      core.extensionManager = new ExtensionManager()
+    }
+    return core.extensionManager
   }
 }

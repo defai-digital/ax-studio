@@ -4,7 +4,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { fontSizeOptions, useInterfaceSettings } from '@/hooks/useInterfaceSettings'
+import { fontSizeOptions, useInterfaceSettings } from '@/hooks/settings/useInterfaceSettings'
 import { cn } from '@/lib/utils'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { Button } from '@/components/ui/button'

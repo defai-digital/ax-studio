@@ -77,7 +77,10 @@ impl CustomUpdater {
     /// Create a new custom updater
     pub fn new() -> Result<Self, UpdateError> {
         // Ensure the signing key is not the default test key
-        assert!(SECRET_KEY != "local-dev-test-key-not-for-production", "AX_STUDIO_SIGNING_KEY must not be the default test key");
+        assert!(
+            SECRET_KEY != "local-dev-test-key-not-for-production",
+            "AX_STUDIO_SIGNING_KEY must not be the default test key"
+        );
 
         let client = Client::builder()
             .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
@@ -249,19 +252,14 @@ impl CustomUpdater {
     }
 }
 
-impl Default for CustomUpdater {
-    fn default() -> Self {
-        Self::new().expect("Failed to create default CustomUpdater")
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_version_comparison() {
-        let updater = CustomUpdater::new().unwrap();
+        let updater = CustomUpdater::new()
+            .unwrap_or_else(|e| panic!("Failed to create CustomUpdater in test: {e}"));
 
         assert!(updater.is_update_available("1.0.0", "1.0.1"));
         assert!(updater.is_update_available("1.0.0", "1.1.0"));

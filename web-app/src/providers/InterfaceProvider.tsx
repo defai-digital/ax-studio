@@ -2,8 +2,8 @@ import { useEffect } from 'react'
 import {
   useInterfaceSettings,
   applyAccentColorToDOM,
-} from '@/hooks/useInterfaceSettings'
-import { useTheme } from '@/hooks/useTheme'
+} from '@/hooks/settings/useInterfaceSettings'
+import { useTheme } from '@/hooks/ui/useTheme'
 
 /**
  * InterfaceProvider ensures interface settings are applied on every page load.

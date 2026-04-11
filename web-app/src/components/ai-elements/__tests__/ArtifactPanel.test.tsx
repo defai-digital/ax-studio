@@ -9,7 +9,7 @@ const mockRestoreVersion = vi.fn()
 let mockPinned: Record<string, unknown> | null = null
 let mockHistory: Array<Record<string, unknown>> = []
 
-vi.mock('@/hooks/useArtifactPanel', () => ({
+vi.mock('@/hooks/ui/useArtifactPanel', () => ({
   useArtifactPanel: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       pinnedByThread: { 'thread-1': mockPinned },

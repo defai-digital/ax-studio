@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 let mockStreamingTokenSpeed = 0
 let mockStreamingTokenCount = 0
 
-vi.mock('@/hooks/useAppState', () => ({
+vi.mock('@/hooks/settings/useAppState', () => ({
   useAppState: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       tokenSpeed: mockStreamingTokenSpeed > 0
@@ -13,7 +13,7 @@ vi.mock('@/hooks/useAppState', () => ({
     }),
 }))
 
-vi.mock('@/utils/number', () => ({
+vi.mock('@/lib/utils/number', () => ({
   toNumber: (val: unknown) => {
     const num = Number(val)
     return isNaN(num) ? 0 : num

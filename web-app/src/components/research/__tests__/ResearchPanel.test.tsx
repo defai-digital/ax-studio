@@ -2,19 +2,19 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ResearchPanel } from '../ResearchPanel'
-import type { ResearchEntry } from '@/hooks/useResearchPanel'
+import type { ResearchEntry } from '@/hooks/research/useResearchPanel'
 
 let mockEntry: ResearchEntry | null = null
 const mockCancelResearch = vi.fn()
 
-vi.mock('@/hooks/useResearchPanel', () => ({
+vi.mock('@/hooks/research/useResearchPanel', () => ({
   useResearchPanel: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       getPinned: (_threadId: string) => mockEntry,
     }),
 }))
 
-vi.mock('@/hooks/useResearch', () => ({
+vi.mock('@/hooks/research/useResearch', () => ({
   useResearch: () => ({
     cancelResearch: mockCancelResearch,
   }),

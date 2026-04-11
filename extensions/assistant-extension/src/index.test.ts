@@ -8,6 +8,7 @@ const {
   mockWriteFileSync,
   mockRm,
   mockJoinPath,
+  mockShowToast,
 } = vi.hoisted(() => ({
   mockExistsSync: vi.fn(),
   mockMkdir: vi.fn(),
@@ -16,6 +17,7 @@ const {
   mockWriteFileSync: vi.fn(),
   mockRm: vi.fn(),
   mockJoinPath: vi.fn(),
+  mockShowToast: vi.fn(),
 }))
 
 vi.mock('@ax-studio/core', () => {
@@ -51,6 +53,7 @@ vi.mock('@ax-studio/core', () => {
       rm: mockRm,
     },
     joinPath: mockJoinPath,
+    showToast: mockShowToast,
   }
 })
 
@@ -148,14 +151,12 @@ describe('AxStudioAssistantExtension', () => {
   })
 
   describe('getAssistants', () => {
-    it('returns default assistant when directory does not exist', async () => {
+    it('returns empty array when directory does not exist', async () => {
       mockExistsSync.mockResolvedValueOnce(false)
 
       const result = await ext.getAssistants()
 
-      expect(result).toHaveLength(1)
-      expect(result[0].id).toBe('ax-studio')
-      expect(result[0].name).toBe('Ax-Studio')
+      expect(result).toEqual([])
     })
 
     it('reads and parses assistant files from directory', async () => {
@@ -223,6 +224,71 @@ describe('AxStudioAssistantExtension', () => {
         'Failed to read assistant bad:',
         expect.any(SyntaxError)
       )
+      expect(mockShowToast).toHaveBeenCalledWith(
+        'Some assistants could not be loaded',
+        'Skipped corrupt assistant data for bad.'
+      )
+
+      consoleSpy.mockRestore()
+    })
+
+    it('returns valid assistants even when another file has malformed JSON', async () => {
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {})
+
+      mockExistsSync.mockResolvedValueOnce(true)
+      mockReaddirSync.mockResolvedValue(['good', 'bad'])
+      mockJoinPath.mockResolvedValueOnce(
+        'file://assistants/good/assistant.json'
+      )
+      mockExistsSync.mockResolvedValueOnce(true)
+      mockReadFileSync.mockResolvedValueOnce(
+        JSON.stringify({ id: 'good', name: 'Good Assistant' })
+      )
+      mockJoinPath.mockResolvedValueOnce(
+        'file://assistants/bad/assistant.json'
+      )
+      mockExistsSync.mockResolvedValueOnce(true)
+      mockReadFileSync.mockResolvedValueOnce('invalid json{{{')
+
+      const result = await ext.getAssistants()
+
+      expect(result).toEqual([{ id: 'good', name: 'Good Assistant' }])
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Failed to read assistant bad:',
+        expect.any(SyntaxError)
+      )
+      expect(mockShowToast).toHaveBeenCalledWith(
+        'Some assistants could not be loaded',
+        'Skipped corrupt assistant data for bad.'
+      )
+
+      consoleSpy.mockRestore()
+    })
+
+    it('treats structurally invalid assistant JSON as corrupt data', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      mockExistsSync.mockResolvedValueOnce(true)
+      mockReaddirSync.mockResolvedValue(['bad-shape'])
+      mockJoinPath.mockResolvedValueOnce(
+        'file://assistants/bad-shape/assistant.json'
+      )
+      mockExistsSync.mockResolvedValueOnce(true)
+      mockReadFileSync.mockResolvedValueOnce(JSON.stringify({ id: 123 }))
+
+      const result = await ext.getAssistants()
+
+      expect(result).toEqual([])
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Failed to read assistant bad-shape:',
+        expect.any(Error)
+      )
+      expect(mockShowToast).toHaveBeenCalledWith(
+        'Some assistants could not be loaded',
+        'Skipped corrupt assistant data for bad-shape.'
+      )
 
       consoleSpy.mockRestore()
     })
@@ -276,12 +342,14 @@ describe('AxStudioAssistantExtension', () => {
   })
 
   describe('deleteAssistant', () => {
-    it('removes the assistant file when it exists', async () => {
+    it('removes the assistant file and folder when they exist', async () => {
       const assistant = { id: 'del-me', name: 'Delete Me' } as any
 
       mockJoinPath.mockResolvedValueOnce(
         'file://assistants/del-me/assistant.json'
       )
+      mockJoinPath.mockResolvedValueOnce('file://assistants/del-me')
+      mockExistsSync.mockResolvedValueOnce(true)
       mockExistsSync.mockResolvedValueOnce(true)
       mockRm.mockResolvedValue(undefined)
 
@@ -290,6 +358,7 @@ describe('AxStudioAssistantExtension', () => {
       expect(mockRm).toHaveBeenCalledWith(
         'file://assistants/del-me/assistant.json'
       )
+      expect(mockRm).toHaveBeenCalledWith('file://assistants/del-me')
     })
 
     it('does nothing when assistant file does not exist', async () => {
@@ -298,6 +367,8 @@ describe('AxStudioAssistantExtension', () => {
       mockJoinPath.mockResolvedValueOnce(
         'file://assistants/ghost/assistant.json'
       )
+      mockJoinPath.mockResolvedValueOnce('file://assistants/ghost')
+      mockExistsSync.mockResolvedValueOnce(false)
       mockExistsSync.mockResolvedValueOnce(false)
 
       await ext.deleteAssistant(assistant)

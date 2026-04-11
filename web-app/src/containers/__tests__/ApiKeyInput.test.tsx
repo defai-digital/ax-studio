@@ -5,7 +5,7 @@ import { ApiKeyInput } from '../ApiKeyInput'
 const mockSetApiKey = vi.fn()
 let mockApiKey = ''
 
-vi.mock('@/hooks/useLocalApiServer', () => ({
+vi.mock('@/hooks/settings/useLocalApiServer', () => ({
   useLocalApiServer: () => ({
     apiKey: mockApiKey,
     setApiKey: mockSetApiKey,

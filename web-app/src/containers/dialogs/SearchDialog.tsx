@@ -21,8 +21,8 @@ import {
   Blocks,
 } from 'lucide-react'
 import Fuse from 'fuse.js'
-import { useThreads } from '@/hooks/useThreads'
-import { useProjectDialog } from '@/hooks/useProjectDialog'
+import { useThreads } from '@/hooks/threads/useThreads'
+import { useProjectDialog } from '@/hooks/ui/useProjectDialog'
 import { localStorageKey } from '@/constants/localStorage'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { cn } from '@/lib/utils'
@@ -218,7 +218,10 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
     if (!stored) return []
 
     try {
-      const threadIds = JSON.parse(stored) as string[]
+      const parsed = JSON.parse(stored)
+      const threadIds = Array.isArray(parsed)
+        ? parsed.filter((id): id is string => typeof id === 'string')
+        : []
       return threadIds
         .map((id) => threads[id])
         .filter((thread): thread is Thread => thread !== undefined)
@@ -242,7 +245,10 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
 
     if (stored) {
       try {
-        threadIds = JSON.parse(stored) as string[]
+        const parsed = JSON.parse(stored)
+        threadIds = Array.isArray(parsed)
+          ? parsed.filter((id): id is string => typeof id === 'string')
+          : []
       } catch {
         threadIds = []
       }

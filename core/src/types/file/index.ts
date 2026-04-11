@@ -4,7 +4,9 @@ export type FileStat = {
 }
 
 export type DownloadState = {
-  modelId: string // TODO: change to download id
+  downloadId: string
+  /** @deprecated Use downloadId. Kept temporarily for existing event payloads. */
+  modelId?: string
   fileName: string
   time?: DownloadTime
   speed?: number

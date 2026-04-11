@@ -2,14 +2,14 @@ import { useEffect, useState, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { toast } from 'sonner'
 import { IconDatabase, IconFolder, IconRefresh } from '@tabler/icons-react'
-import { Card, CardItem } from '@/containers/Card'
+import { Card, CardItem } from '@/components/common/Card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import {
   useAkidbConfig,
   createDefaultConfig,
   type AkidbConfig,
-} from '@/hooks/useAkidbConfig'
+} from '@/hooks/research/useAkidbConfig'
 
 const FREQUENCY_OPTIONS = [
   { label: 'Every 10 minutes', value: 10 },

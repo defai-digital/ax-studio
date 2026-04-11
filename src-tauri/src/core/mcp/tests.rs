@@ -1,6 +1,6 @@
 use super::helpers::{add_server_config, add_server_config_with_path, run_mcp_commands};
 use crate::core::app::commands::get_app_data_folder_path;
-use crate::core::state::{AppState, SharedMcpServers};
+use crate::core::state::{AppState, ProviderState, SharedMcpServers};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
@@ -20,14 +20,13 @@ fn test_app_state(mcp_servers: SharedMcpServers) -> AppState {
         mcp_active_servers: Arc::new(Mutex::new(HashMap::new())),
         server_handle: Arc::new(Mutex::new(None)),
         tool_call_cancellations: Arc::new(Mutex::new(HashMap::new())),
-        mcp_settings: Arc::new(Mutex::new(
-            crate::core::mcp::models::McpSettings::default(),
-        )),
+        akidb_sync_cancellation: Arc::new(Mutex::new(None)),
+        mcp_settings: Arc::new(Mutex::new(crate::core::mcp::models::McpSettings::default())),
         mcp_shutdown_in_progress: Arc::new(Mutex::new(false)),
         mcp_monitoring_tasks: Arc::new(Mutex::new(HashMap::new())),
         background_cleanup_handle: Arc::new(Mutex::new(None)),
         mcp_server_pids: Arc::new(Mutex::new(HashMap::new())),
-        provider_configs: Arc::new(Mutex::new(HashMap::new())),
+        provider_state: Arc::new(Mutex::new(ProviderState::default())),
         approved_save_paths: Arc::new(Mutex::new(HashSet::new())),
     }
 }
@@ -365,4 +364,3 @@ async fn test_stop_mcp_servers_prevents_concurrent_shutdown() {
         assert!(*shutdown_flag);
     }
 }
-

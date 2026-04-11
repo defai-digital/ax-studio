@@ -1,12 +1,13 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 
 import { useAgentTeamStore } from '@/stores/agent-team-store'
-import { useAssistant } from '@/hooks/useAssistant'
+import { useAssistant } from '@/hooks/chat/useAssistant'
 
 import HeaderPage from '@/containers/HeaderPage'
-import SettingsMenu from '@/containers/SettingsMenu'
+import SettingsMenu from '@/components/common/SettingsMenu'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -54,10 +55,11 @@ function AgentTeamsContent() {
     createTeam,
     updateTeam,
     deleteTeam,
+    duplicateTeam,
     exportTeam,
     importTeam,
   } = useAgentTeamStore()
-  const { assistants, addAssistant } = useAssistant()
+  const { assistants, addAssistant, deleteAssistant } = useAssistant()
 
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingTeam, setEditingTeam] = useState<AgentTeam | null>(null)
@@ -95,18 +97,17 @@ function AgentTeamsContent() {
   }
 
   const handleDuplicate = async (team: AgentTeam) => {
-    await createTeam({
-      name: `${team.name} (Copy)`,
-      description: team.description,
-      orchestration: team.orchestration,
-      orchestrator_instructions: team.orchestrator_instructions,
-      orchestrator_model_id: team.orchestrator_model_id,
-      agent_ids: [...team.agent_ids],
-      variables: team.variables,
-      token_budget: team.token_budget,
-      cost_approval_threshold: team.cost_approval_threshold,
-      parallel_stagger_ms: team.parallel_stagger_ms,
-    })
+    // Use the store's `duplicateTeam` which creates independent copies of
+    // the agents (and rolls them back if `createTeam` fails). The previous
+    // `createTeam` path reused the original team's `agent_ids`, meaning
+    // the "copy" actually shared agents — editing or deleting an agent on
+    // one team affected the other.
+    await duplicateTeam(
+      team.id,
+      () => assistants,
+      addAssistant,
+      deleteAssistant
+    )
   }
 
   const handleSave = async (team: AgentTeam) => {
@@ -182,12 +183,16 @@ function AgentTeamsContent() {
       try {
         const text = await file.text()
         const data = JSON.parse(text)
-        if (!data.team || !data.agents) {
-          throw new Error('Invalid team export format')
+        if (
+          !data.team || typeof data.team !== 'object' ||
+          !Array.isArray(data.agents) || data.agents.length === 0
+        ) {
+          throw new Error('Invalid team export format: expected { team: {...}, agents: [...] }')
         }
-        await importTeam(data, addAssistant)
-      } catch {
-        console.error('Failed to import team file')
+        await importTeam(data, addAssistant, deleteAssistant)
+      } catch (err) {
+        console.error('Failed to import team file:', err)
+        toast.error(err instanceof Error ? err.message : 'Failed to import team file')
       }
     }
     input.click()

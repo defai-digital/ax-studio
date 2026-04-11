@@ -9,7 +9,7 @@ export interface chatCompletionRequestMessage {
   reasoning?: string | null // Some models return reasoning in completed responses
   reasoning_content?: string | null // Some models return reasoning in completed responses
   name?: string
-  tool_calls?: any[] // Simplified tool_call_id?: string
+  tool_calls?: ToolCall[]
 }
 
 export interface Content {
@@ -45,6 +45,15 @@ export interface ToolCallSpec {
   type: 'function'
   function: {
     name: string
+  }
+}
+
+export interface ToolCall {
+  id?: string
+  type: 'function'
+  function: {
+    name: string
+    arguments?: string
   }
 }
 
@@ -106,13 +115,29 @@ export interface chatCompletionRequest {
 }
 
 export interface chat_template_kdict {
-  enable_thinking: false
+  enable_thinking: boolean
+}
+
+/**
+ * Streaming delta variant of `ToolCall`. Chunks deliver tool calls
+ * incrementally (`function.arguments` is streamed token-by-token), so
+ * every field is optional and `index` marks which tool-call slot the
+ * delta applies to.
+ */
+export interface ToolCallDelta {
+  index?: number
+  id?: string
+  type?: 'function'
+  function?: {
+    name?: string
+    arguments?: string
+  }
 }
 
 export interface chatCompletionChunkChoiceDelta {
   content?: string | null
   role?: 'system' | 'user' | 'assistant' | 'tool'
-  tool_calls?: any[] // Simplified
+  tool_calls?: ToolCallDelta[]
 }
 
 export interface chatCompletionChunkChoice {
@@ -142,7 +167,7 @@ export interface chatCompletionChoice {
   index: number
   message: chatCompletionRequestMessage // Response message
   finish_reason: 'stop' | 'length' | 'tool_calls' | 'content_filter' | 'function_call'
-  logprobs?: any // Simplified
+  logprobs?: Record<string, unknown> | null
 }
 
 export interface chatCompletion {
@@ -164,16 +189,18 @@ export interface chatCompletion {
 export interface modelInfo {
   id: string // e.g. "qwen3-4B" or "org/model/quant"
   name: string // human‑readable, e.g., "Qwen3 4B Q4_0"
+  description?: string
   quant_type?: string // q4_0 (optional as it might be part of ID or name)
   providerId: string // e.g. "llama.cpp"
   port: number
   sizeBytes: number
   tags?: string[]
   path?: string // Absolute path to the model file, if applicable
-  // Additional provider-specific metadata can be added here
   embedding?: boolean
-  [key: string]: any
+  engine?: string
 }
+
+export type ModelLoadSettings = Record<string, unknown>
 
 // 1. /list
 export type listResult = modelInfo[]
@@ -211,6 +238,7 @@ export interface ImportOptions {
   modelSize?: number
   mmprojSha256?: string
   mmprojSize?: number
+  downloadHeaders?: Record<string, string>
   // Additional files to download for MLX models
   files?: Array<{
     url: string
@@ -246,7 +274,14 @@ export abstract class AIEngine extends BaseExtension {
    * Registers AI Engines
    */
   registerEngine() {
-    EngineManager.instance().register(this)
+    const manager = EngineManager.instance()
+    const existingEngine = manager.get(this.provider)
+
+    if (existingEngine && existingEngine !== this) {
+      console.warn(`Overwriting registered engine for provider "${this.provider}"`)
+    }
+
+    manager.register(this)
   }
 
   /**
@@ -269,7 +304,7 @@ export abstract class AIEngine extends BaseExtension {
    */
   abstract load(
     modelId: string,
-    settings?: any,
+    settings?: ModelLoadSettings,
     isEmbedding?: boolean,
     bypassAutoUnload?: boolean
   ): Promise<SessionInfo>

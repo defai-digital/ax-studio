@@ -47,19 +47,19 @@ vi.mock('@/stores/agent-team-store', () => ({
   },
 }))
 
-vi.mock('@/hooks/useAssistant', () => ({
+vi.mock('@/hooks/chat/useAssistant', () => ({
   useAssistant: {
     getState: () => mockAssistantStore,
   },
 }))
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: {
     getState: () => mockProviderState,
   },
 }))
 
-vi.mock('@/hooks/useThreads', () => ({
+vi.mock('@/hooks/threads/useThreads', () => ({
   useThreads: {
     getState: () => ({
       updateThread: vi.fn(),

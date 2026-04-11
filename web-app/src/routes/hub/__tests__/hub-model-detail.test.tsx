@@ -9,14 +9,14 @@ vi.mock('@/containers/HeaderPage', () => ({
   ),
 }))
 
-vi.mock('@/hooks/useModelSources', () => ({
+vi.mock('@/hooks/models/useModelSources', () => ({
   useModelSources: () => ({
     sources: [],
     fetchSources: vi.fn(),
   }),
 }))
 
-vi.mock('@/hooks/useGeneralSetting', () => ({
+vi.mock('@/hooks/settings/useGeneralSetting', () => ({
   useGeneralSetting: () => ({
     huggingfaceToken: null,
   }),
@@ -33,7 +33,7 @@ vi.mock('@/hooks/useServiceHub', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useDownloadStore', () => ({
+vi.mock('@/hooks/models/useDownloadStore', () => ({
   useDownloadStore: () => ({
     downloads: {},
     localDownloadingModels: new Set(),
@@ -41,7 +41,7 @@ vi.mock('@/hooks/useDownloadStore', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: vi.fn().mockImplementation((selector) =>
     selector({
       getProviderByName: vi.fn().mockReturnValue({

@@ -1,15 +1,15 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
-import SettingsMenu from '@/containers/SettingsMenu'
+import SettingsMenu from '@/components/common/SettingsMenu'
 import HeaderPage from '@/containers/HeaderPage'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
-import { Card, CardItem } from '@/containers/Card'
+import { Card, CardItem } from '@/components/common/Card'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { useGeneralSetting } from '@/hooks/useGeneralSetting'
-import { useAppUpdater } from '@/hooks/useAppUpdater'
+import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
+import { useAppUpdater } from '@/hooks/updater/useAppUpdater'
 import { useEffect, useState, useCallback } from 'react'
-import ChangeDataFolderLocation from '@/containers/dialogs/ChangeDataFolderLocation'
+import ChangeDataFolderLocation from '@/containers/dialogs/thread/ChangeDataFolderLocation'
 import { FactoryResetDialog } from '@/containers/dialogs'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import {
@@ -27,9 +27,9 @@ import { isDev } from '@/lib/utils'
 import { SystemEvent } from '@/types/events'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { useHardware } from '@/hooks/useHardware'
+import { useHardware } from '@/hooks/settings/useHardware'
 import LanguageSwitcher from '@/containers/LanguageSwitcher'
-import { isRootDir } from '@/utils/path'
+import { isRootDir } from '@/lib/utils/path'
 import { fallbackDefaultPrompt } from '@/lib/system-prompt'
 const TOKEN_VALIDATION_TIMEOUT_MS = 10_000
 
@@ -81,15 +81,24 @@ function General() {
     fetchDataFolder()
   }, [serviceHub])
 
+  const [isResetting, setIsResetting] = useState(false)
+
   const resetApp = async () => {
     // Prevent resetting if data folder is root directory
     if (isRootDir(appDataFolder ?? '/')) {
       toast.error(t('settings:general.couldNotResetRootDirectory'))
       return
     }
+    setIsResetting(true)
     pausePolling()
-    // TODO: Loading indicator
-    await serviceHub.app().factoryReset()
+    try {
+      await serviceHub.app().factoryReset()
+    } catch (error) {
+      console.error('Factory reset failed:', error)
+      toast.error(t('settings:general.factoryResetFailed', { defaultValue: 'Factory reset failed' }))
+    } finally {
+      setIsResetting(false)
+    }
   }
 
   const handleOpenLogs = async () => {
@@ -452,8 +461,8 @@ function General() {
                   })}
                   actions={
                     <FactoryResetDialog onReset={resetApp}>
-                      <Button variant="destructive" size="sm">
-                        {t('common:reset')}
+                      <Button variant="destructive" size="sm" disabled={isResetting}>
+                        {isResetting ? t('common:resetting', { defaultValue: 'Resetting...' }) : t('common:reset')}
                       </Button>
                     </FactoryResetDialog>
                   }

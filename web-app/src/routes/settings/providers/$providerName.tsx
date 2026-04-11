@@ -1,16 +1,16 @@
-import { Card, CardItem } from '@/containers/Card'
+import { Card, CardItem } from '@/components/common/Card'
 import HeaderPage from '@/containers/HeaderPage'
-import SettingsMenu from '@/containers/SettingsMenu'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import SettingsMenu from '@/components/common/SettingsMenu'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { cn, getProviderTitle, getProviderColor, getModelDisplayName } from '@/lib/utils'
 import { createFileRoute, Link, useParams } from '@tanstack/react-router'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import Capabilities from '@/containers/Capabilities'
+import Capabilities from '@/components/common/Capabilities'
 import { DynamicControllerSetting } from '@/containers/dynamicControllerSetting'
 import { RenderMarkdown } from '@/containers/RenderMarkdown'
-import { DialogEditModel } from '@/containers/dialogs/EditModel'
+import { DialogEditModel } from '@/containers/dialogs/model/EditModel'
 import { ModelSetting } from '@/containers/ModelSetting'
-import { DialogDeleteModel } from '@/containers/dialogs/DeleteModel'
+import { DialogDeleteModel } from '@/containers/dialogs/model/DeleteModel'
 import { FavoriteModelAction } from '@/containers/FavoriteModelAction'
 import { route } from '@/constants/routes'
 import DeleteProvider from '@/containers/dialogs/DeleteProvider'
@@ -23,11 +23,11 @@ import { RefreshCw, Search, Plug, CheckCircle2, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { predefinedProviders } from '@/constants/providers'
-import { DialogAddModel } from '@/containers/dialogs/AddModel'
-import { SelectModelGroups } from '@/containers/dialogs/SelectModelGroups'
+import { DialogAddModel } from '@/containers/dialogs/model/AddModel'
+import { SelectModelGroups } from '@/containers/dialogs/model/SelectModelGroups'
 import { groupModelsByPrefix, type ModelGroup } from '@/lib/model-group-utils'
 import { getModelCapabilities } from '@/lib/models'
-import ProvidersAvatar from '@/containers/ProvidersAvatar'
+import ProvidersAvatar from '@/components/common/ProvidersAvatar'
 
 const URL_REGEX = /^https?:\/\/[^\s]+$/
 const XSS_PATTERN = /<[^>]*>|javascript:/i
@@ -570,7 +570,7 @@ function ProviderDetail() {
                 </div>
 
                 <Card>
-                  {provider?.models.length ? (
+                  {provider?.models?.length ? (
                     provider?.models
                     .filter((model) => {
                       if (!modelSearch) return true

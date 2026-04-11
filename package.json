@@ -15,7 +15,7 @@
     ]
   },
   "scripts": {
-    "lint": "yarn workspace @ax-studio/web-app lint",
+    "lint": "yarn workspace @ax-studio/core lint && yarn workspace @ax-studio/web-app lint",
     "dev": "yarn dev:tauri",
     "ios": "yarn tauri ios dev",
     "android": "yarn tauri android dev",
@@ -25,7 +25,7 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "test:module:audit": "node scripts/testing/module-coverage-audit.mjs --out-dir report/testing",
-    "test:module:gate": "node scripts/testing/module-coverage-gate.mjs --audit report/testing/module-coverage-audit.json --thresholds testing/module-thresholds.json --mode advisory",
+    "test:module:gate": "node scripts/testing/module-coverage-gate.mjs --audit report/testing/module-coverage-audit.json --thresholds scripts/testing/module-thresholds.json --mode advisory",
     "test:quality:gates": "bash scripts/testing/run-quality-gates.sh",
     "test:prepare": "yarn build:icon && yarn copy:assets:tauri && yarn build --no-bundle ",
     "dev:web": "yarn workspace @ax-studio/web-app dev",
@@ -55,6 +55,7 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.7.0",
+    "@types/diff": "^8.0.0",
     "@vitest/coverage-v8": "^3.1.3",
     "cpx": "^1.5.0",
     "cross-env": "^7.0.3",
@@ -66,7 +67,7 @@
     "unzipper": "^0.12.3",
     "vitest": "^3.1.3"
   },
-  "version": "0.9.11",
+  "version": "1.3.0",
   "installConfig": {
     "hoistingLimits": "workspaces"
   },

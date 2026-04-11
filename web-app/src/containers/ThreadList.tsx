@@ -1,8 +1,8 @@
 import { Download, Folder, ImagePlus, MessageCircle, MoreHorizontal, Pencil, Pin, PinOff, Trash2, X } from 'lucide-react'
 import { exportThread } from '@/lib/thread-export'
-import { useThreads } from '@/hooks/useThreads'
-import { useMessages } from '@/hooks/useMessages'
-import { useThreadManagement } from '@/hooks/useThreadManagement'
+import { useThreads } from '@/hooks/threads/useThreads'
+import { useMessages } from '@/hooks/chat/useMessages'
+import { useThreadManagement } from '@/hooks/threads/useThreadManagement'
 import { useCallback } from 'react'
 
 import {
@@ -26,8 +26,8 @@ import {
   SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
-  useSidebar,
 } from '@/components/ui/sidebar'
+import { useSidebar } from '@/components/ui/sidebar-context'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { memo, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'

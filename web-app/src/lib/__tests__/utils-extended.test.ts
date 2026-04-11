@@ -176,20 +176,20 @@ describe('basenameNoExt', () => {
     expect(basenameNoExt('FILE.ZIP')).toBe('FILE')
   })
 
-  // DISCOVERED BUG: When a file has no extension, path.extname returns '',
-  // so base.slice(0, -''.length) = base.slice(0, -0) = base.slice(0, 0) = ''
-  // This means extensionless files incorrectly return empty string.
-  it('BUG: returns empty string for extensionless files', () => {
-    // This is a bug: basenameNoExt('Makefile') should return 'Makefile'
-    // but returns '' because slice(0, -0) === slice(0, 0) === ''
-    expect(basenameNoExt('Makefile')).toBe('')
+  // Regression: path.extname('Makefile') === '', and
+  // `base.slice(0, -''.length)` collapses to `base.slice(0, 0)` which
+  // returns ''. The implementation now guards against the empty-ext case
+  // and returns the full basename instead.
+  it('returns the full basename for extensionless files', () => {
+    expect(basenameNoExt('Makefile')).toBe('Makefile')
+    expect(basenameNoExt('README')).toBe('README')
+    expect(basenameNoExt('LICENSE')).toBe('LICENSE')
   })
 
-  it('BUG: returns empty string for dotfiles without extension', () => {
-    // .gitignore has extname '' in Node (it's treated as a dotfile, not extension)
-    // Wait: actually path.extname('.gitignore') returns '' in Node
-    // So this also hits the bug
-    expect(basenameNoExt('.gitignore')).toBe('')
+  it('returns the full basename for dotfiles (Node treats them as no extension)', () => {
+    // `path.extname('.gitignore')` is '' in Node — dotfiles are not
+    // considered to have an extension.
+    expect(basenameNoExt('.gitignore')).toBe('.gitignore')
   })
 
   it('handles file with just an extension-like name', () => {

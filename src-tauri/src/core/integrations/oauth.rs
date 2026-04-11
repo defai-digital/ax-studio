@@ -3,12 +3,18 @@ use hyper::{Body, Request, Response, Server, StatusCode};
 use rand::Rng;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-
+use std::fs;
+use std::future::Future;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::oneshot;
 
 const GOOGLE_AUTH_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
+const PKCE_CODE_VERIFIER_BYTES: usize = 64;
+const OAUTH_CALLBACK_TIMEOUT: Duration = Duration::from_secs(300);
+const GOOGLE_WORKSPACE_RUNTIME_HOME_DIR: &str = "ax-studio-google-workspace-runtime";
 
 /// OAuth tokens returned after a successful authorization flow.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -21,7 +27,9 @@ pub struct OAuthTokens {
 /// Generate a cryptographically random PKCE code verifier (base64url, 43-128 chars).
 fn generate_code_verifier() -> String {
     let mut rng = rand::thread_rng();
-    let bytes: Vec<u8> = (0..64).map(|_| rng.gen::<u8>()).collect();
+    let bytes: Vec<u8> = (0..PKCE_CODE_VERIFIER_BYTES)
+        .map(|_| rng.gen::<u8>())
+        .collect();
     base64url_encode(&bytes)
 }
 
@@ -93,6 +101,44 @@ pub async fn initiate_google_oauth(
     client_secret: &str,
     scopes: &str,
 ) -> Result<OAuthTokens, String> {
+    initiate_google_oauth_with(
+        client_id,
+        client_secret,
+        scopes,
+        |auth_url| {
+            use tauri_plugin_opener::OpenerExt;
+            app.opener()
+                .open_url(auth_url, None::<&str>)
+                .map_err(|e| format!("Failed to open browser: {e}"))
+        },
+        |client_id, client_secret, code, redirect_uri, code_verifier| async move {
+            exchange_code_for_tokens(
+                &client_id,
+                &client_secret,
+                &code,
+                &redirect_uri,
+                &code_verifier,
+            )
+            .await
+        },
+        OAUTH_CALLBACK_TIMEOUT,
+    )
+    .await
+}
+
+async fn initiate_google_oauth_with<OpenBrowser, ExchangeTokens, ExchangeFuture>(
+    client_id: &str,
+    client_secret: &str,
+    scopes: &str,
+    open_browser: OpenBrowser,
+    exchange_tokens: ExchangeTokens,
+    timeout: Duration,
+) -> Result<OAuthTokens, String>
+where
+    OpenBrowser: FnOnce(&str) -> Result<(), String>,
+    ExchangeTokens: FnOnce(String, String, String, String, String) -> ExchangeFuture,
+    ExchangeFuture: Future<Output = Result<OAuthTokens, String>>,
+{
     // Generate PKCE pair
     let code_verifier = generate_code_verifier();
     let code_challenge = compute_code_challenge(&code_verifier);
@@ -147,13 +193,14 @@ pub async fn initiate_google_oauth(
     let server_handle = tokio::spawn(graceful);
 
     // Open the authorization URL in the user's browser
-    use tauri_plugin_opener::OpenerExt;
-    app.opener()
-        .open_url(&auth_url, None::<&str>)
-        .map_err(|e| format!("Failed to open browser: {e}"))?;
+    if let Err(error) = open_browser(&auth_url) {
+        let _ = shutdown_tx.send(());
+        let _ = server_handle.await;
+        return Err(error);
+    }
 
     // Wait for the callback with a 5-minute timeout
-    let code = match tokio::time::timeout(tokio::time::Duration::from_secs(300), rx).await {
+    let code = match tokio::time::timeout(timeout, rx).await {
         Ok(Ok(result)) => result?,
         Ok(Err(_)) => return Err("OAuth callback channel closed unexpectedly".to_string()),
         Err(_) => {
@@ -167,12 +214,12 @@ pub async fn initiate_google_oauth(
     let _ = server_handle.await;
 
     // Exchange authorization code for tokens
-    exchange_code_for_tokens(
-        client_id,
-        client_secret,
-        &code,
-        &redirect_uri,
-        &code_verifier,
+    exchange_tokens(
+        client_id.to_string(),
+        client_secret.to_string(),
+        code,
+        redirect_uri,
+        code_verifier,
     )
     .await
 }
@@ -315,55 +362,124 @@ async fn exchange_code_for_tokens(
     })
 }
 
-/// Write the credential and token files that the Google Workspace MCP server expects.
-pub fn write_google_workspace_config(
-    client_id: &str,
-    client_secret: &str,
-    tokens: &OAuthTokens,
-) -> Result<(), String> {
-    // Security warning: OAuth tokens written as plaintext to filesystem
-    log::warn!(
-        "⚠️ SECURITY: OAuth tokens for Google Workspace written as plaintext JSON to ~/.google-mcp/. \
-        Consider using OS keychain or encrypted storage for production deployments."
-    );
-    // Security warning: OAuth tokens written as plaintext to filesystem
-    log::warn!(
-        "⚠️ SECURITY: OAuth tokens for Google Workspace written as plaintext JSON to ~/.google-mcp/. \
-        Consider using OS keychain or encrypted storage for production deployments."
-    );
-    let config_dir = dirs::home_dir()
-        .ok_or("Cannot determine home directory")?
-        .join(".google-mcp");
+fn google_workspace_runtime_home() -> PathBuf {
+    std::env::temp_dir().join(GOOGLE_WORKSPACE_RUNTIME_HOME_DIR)
+}
 
-    let tokens_dir = config_dir.join("tokens");
-    std::fs::create_dir_all(&tokens_dir)
-        .map_err(|e| format!("Failed to create config directory: {e}"))?;
+fn google_workspace_runtime_config_dir() -> PathBuf {
+    google_workspace_runtime_home().join(".google-mcp")
+}
 
+fn apply_secure_dir_permissions(path: &Path) {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let dir_mode = std::fs::Permissions::from_mode(0o700);
-        let _ = std::fs::set_permissions(&config_dir, dir_mode.clone());
-        let _ = std::fs::set_permissions(&tokens_dir, dir_mode);
+        let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o700));
     }
+}
 
-    // Write credentials.json (top-level)
-    let credentials = serde_json::json!({
+fn apply_secure_file_permissions(path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
+    }
+}
+
+/// Convert OAuth output into the secure credential payload stored for Google Workspace.
+pub fn google_workspace_credentials(
+    client_id: &str,
+    client_secret: &str,
+    tokens: &OAuthTokens,
+) -> Result<HashMap<String, String>, String> {
+    let refresh_token = tokens
+        .refresh_token
+        .as_ref()
+        .ok_or_else(|| "Missing refresh token from Google OAuth flow".to_string())?;
+
+    let mut credentials = HashMap::new();
+    credentials.insert("client_id".to_string(), client_id.to_string());
+    credentials.insert("client_secret".to_string(), client_secret.to_string());
+    credentials.insert("refresh_token".to_string(), refresh_token.clone());
+    if let Some(expiry_timestamp) = tokens.expiry_timestamp {
+        credentials.insert("expiry_timestamp".to_string(), expiry_timestamp.to_string());
+    }
+    Ok(credentials)
+}
+
+/// Validate the secure Google Workspace credential payload.
+pub fn validate_google_workspace_credentials(
+    credentials: &HashMap<String, String>,
+) -> Result<String, String> {
+    let has_client_id = credentials
+        .get("client_id")
+        .map(|value| !value.trim().is_empty())
+        .unwrap_or(false);
+    let has_client_secret = credentials
+        .get("client_secret")
+        .map(|value| !value.trim().is_empty())
+        .unwrap_or(false);
+    let has_refresh_token = credentials
+        .get("refresh_token")
+        .map(|value| !value.trim().is_empty())
+        .unwrap_or(false);
+
+    if has_client_id && has_client_secret && has_refresh_token {
+        Ok("Google Workspace authorized".to_string())
+    } else {
+        Err("Google Workspace credentials are incomplete. Please re-authorize.".to_string())
+    }
+}
+
+/// Stage the temporary config files the Google Workspace MCP server expects.
+///
+/// Secrets remain in the OS secure store at rest and are only materialized under
+/// a process-scoped temporary home directory immediately before the MCP server starts.
+pub fn stage_google_workspace_runtime_config(
+    credentials: &HashMap<String, String>,
+) -> Result<HashMap<String, String>, String> {
+    validate_google_workspace_credentials(credentials)?;
+
+    cleanup_google_workspace_config()?;
+
+    let runtime_home = google_workspace_runtime_home();
+    let config_dir = google_workspace_runtime_config_dir();
+    let tokens_dir = config_dir.join("tokens");
+
+    fs::create_dir_all(&tokens_dir)
+        .map_err(|e| format!("Failed to create runtime config directory: {e}"))?;
+    apply_secure_dir_permissions(&runtime_home);
+    apply_secure_dir_permissions(&config_dir);
+    apply_secure_dir_permissions(&tokens_dir);
+
+    let client_id = credentials
+        .get("client_id")
+        .ok_or_else(|| "Missing client_id in Google Workspace credentials".to_string())?;
+    let client_secret = credentials
+        .get("client_secret")
+        .ok_or_else(|| "Missing client_secret in Google Workspace credentials".to_string())?;
+    let refresh_token = credentials
+        .get("refresh_token")
+        .ok_or_else(|| "Missing refresh_token in Google Workspace credentials".to_string())?;
+
+    let credentials_path = config_dir.join("credentials.json");
+    let accounts_path = config_dir.join("accounts.json");
+    let token_path = tokens_dir.join("default.json");
+
+    let installed_credentials = serde_json::json!({
         "installed": {
             "client_id": client_id,
             "client_secret": client_secret,
             "redirect_uris": ["http://localhost"]
         }
     });
-    std::fs::write(
-        config_dir.join("credentials.json"),
-        serde_json::to_string_pretty(&credentials)
-            .map_err(|e| format!("Failed to serialize credentials: {e}"))?,
+    fs::write(
+        &credentials_path,
+        serde_json::to_string_pretty(&installed_credentials)
+            .map_err(|e| format!("Failed to serialize runtime credentials: {e}"))?,
     )
-    .map_err(|e| format!("Failed to write credentials.json: {e}"))?;
+    .map_err(|e| format!("Failed to write runtime credentials.json: {e}"))?;
 
-    // Write accounts.json (registers the default account)
-    let token_path = tokens_dir.join("default.json");
     let now = chrono::Utc::now().to_rfc3339();
     let accounts = serde_json::json!({
         "accounts": {
@@ -374,40 +490,37 @@ pub fn write_google_workspace_config(
                 "addedAt": now
             }
         },
-        "credentialsPath": config_dir.join("credentials.json").to_string_lossy().to_string()
+        "credentialsPath": credentials_path.to_string_lossy().to_string()
     });
-    std::fs::write(
-        config_dir.join("accounts.json"),
+    fs::write(
+        &accounts_path,
         serde_json::to_string_pretty(&accounts)
-            .map_err(|e| format!("Failed to serialize accounts: {e}"))?,
+            .map_err(|e| format!("Failed to serialize runtime accounts: {e}"))?,
     )
-    .map_err(|e| format!("Failed to write accounts.json: {e}"))?;
+    .map_err(|e| format!("Failed to write runtime accounts.json: {e}"))?;
 
-    // Write tokens/default.json in the format google-workspace-mcp expects
     let token = serde_json::json!({
         "type": "authorized_user",
         "client_id": client_id,
         "client_secret": client_secret,
-        "refresh_token": tokens.refresh_token
+        "refresh_token": refresh_token
     });
-    std::fs::write(
+    fs::write(
         &token_path,
         serde_json::to_string_pretty(&token)
-            .map_err(|e| format!("Failed to serialize token: {e}"))?,
+            .map_err(|e| format!("Failed to serialize runtime token: {e}"))?,
     )
-    .map_err(|e| format!("Failed to write token file: {e}"))?;
+    .map_err(|e| format!("Failed to write runtime token file: {e}"))?;
 
-    // Restrict file permissions on Unix (credentials contain secrets)
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mode = std::fs::Permissions::from_mode(0o600);
-        let _ = std::fs::set_permissions(config_dir.join("credentials.json"), mode.clone());
-        let _ = std::fs::set_permissions(config_dir.join("accounts.json"), mode.clone());
-        let _ = std::fs::set_permissions(&token_path, mode);
-    }
+    apply_secure_file_permissions(&credentials_path);
+    apply_secure_file_permissions(&accounts_path);
+    apply_secure_file_permissions(&token_path);
 
-    Ok(())
+    let mut env = HashMap::new();
+    let runtime_home_str = runtime_home.to_string_lossy().to_string();
+    env.insert("HOME".to_string(), runtime_home_str.clone());
+    env.insert("USERPROFILE".to_string(), runtime_home_str);
+    Ok(env)
 }
 
 /// Bind to an ephemeral port (port 0) assigned by the OS and return the listener.
@@ -418,53 +531,32 @@ pub(crate) async fn find_available_port() -> Result<(std::net::TcpListener, u16)
     Ok((listener, port))
 }
 
-/// Check if Google Workspace config files exist with a valid refresh token.
-pub fn validate_google_workspace_config() -> Result<String, String> {
-    let config_dir = dirs::home_dir()
-        .ok_or("Cannot determine home directory")?
-        .join(".google-mcp");
-
-    // Check accounts.json exists and has accounts
-    let accounts_path = config_dir.join("accounts.json");
-    if !accounts_path.exists() {
-        return Err("No accounts configured. Please authorize with Google first.".to_string());
-    }
-
-    let token_path = config_dir.join("tokens").join("default.json");
-    if !token_path.exists() {
-        return Err("No token file found. Please authorize with Google first.".to_string());
-    }
-
-    let content = std::fs::read_to_string(&token_path)
-        .map_err(|e| format!("Failed to read token file: {e}"))?;
-
-    let token: serde_json::Value =
-        serde_json::from_str(&content).map_err(|e| format!("Failed to parse token file: {e}"))?;
-
-    if token
-        .get("refresh_token")
-        .and_then(|v| v.as_str())
-        .is_some()
-    {
-        Ok("Google Workspace authorized".to_string())
-    } else {
-        Err("Token file exists but missing refresh_token. Please re-authorize.".to_string())
-    }
-}
-
 /// Clean up Google Workspace config files on disconnect.
+///
+/// This removes both the old legacy `~/.google-mcp` layout and the current
+/// temporary runtime home used only while the Google Workspace MCP server runs.
 pub fn cleanup_google_workspace_config() -> Result<(), String> {
-    let config_dir = dirs::home_dir()
-        .ok_or("Cannot determine home directory")?
-        .join(".google-mcp");
-
-    if config_dir.exists() {
-        std::fs::remove_dir_all(&config_dir)
-            .map_err(|e| format!("Failed to remove config directory: {e}"))?;
+    if let Some(home_dir) = dirs::home_dir() {
+        let legacy_config_dir = home_dir.join(".google-mcp");
+        if legacy_config_dir.exists() {
+            fs::remove_dir_all(&legacy_config_dir)
+                .map_err(|e| format!("Failed to remove legacy Google Workspace config: {e}"))?;
+        }
     }
+
+    let runtime_home = google_workspace_runtime_home();
+    if runtime_home.exists() {
+        fs::remove_dir_all(&runtime_home)
+            .map_err(|e| format!("Failed to remove Google Workspace runtime config: {e}"))?;
+    }
+
     Ok(())
 }
 
+// Loopback-only URL validator for OAuth sandbox redirects. Kept as a
+// public helper with dedicated tests for use by future sandbox features
+// even though no production caller exists today.
+#[allow(dead_code)]
 pub fn is_allowed_sandbox_url(url: &str) -> bool {
     let parsed = match url::Url::parse(url) {
         Ok(parsed) => parsed,
@@ -485,8 +577,17 @@ pub fn is_allowed_sandbox_url(url: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_oauth_result, is_allowed_sandbox_url};
+    use super::{
+        cleanup_google_workspace_config, extract_oauth_result, google_workspace_credentials,
+        google_workspace_runtime_config_dir, initiate_google_oauth_with, is_allowed_sandbox_url,
+        stage_google_workspace_runtime_config, validate_google_workspace_credentials, OAuthTokens,
+    };
     use std::collections::HashMap;
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    };
+    use std::time::Duration;
 
     #[test]
     fn test_extract_oauth_result_accepts_matching_state() {
@@ -527,15 +628,135 @@ mod tests {
         assert!(!is_allowed_sandbox_url("file:///tmp/test"));
     }
 
+    #[test]
+    fn test_google_workspace_credentials_capture_refresh_token() {
+        let tokens = OAuthTokens {
+            access_token: "access-token".to_string(),
+            refresh_token: Some("refresh-token".to_string()),
+            expiry_timestamp: Some(42),
+        };
+
+        let credentials =
+            google_workspace_credentials("client-id", "client-secret", &tokens).unwrap();
+
+        assert_eq!(credentials.get("client_id").unwrap(), "client-id");
+        assert_eq!(credentials.get("client_secret").unwrap(), "client-secret");
+        assert_eq!(credentials.get("refresh_token").unwrap(), "refresh-token");
+        assert_eq!(credentials.get("expiry_timestamp").unwrap(), "42");
+    }
+
+    #[test]
+    fn test_stage_google_workspace_runtime_config_writes_temp_runtime_files() {
+        let _ = cleanup_google_workspace_config();
+        let credentials = HashMap::from([
+            ("client_id".to_string(), "client-id".to_string()),
+            ("client_secret".to_string(), "client-secret".to_string()),
+            ("refresh_token".to_string(), "refresh-token".to_string()),
+        ]);
+
+        let env = stage_google_workspace_runtime_config(&credentials).unwrap();
+        let config_dir = google_workspace_runtime_config_dir();
+
+        assert!(config_dir.join("credentials.json").exists());
+        assert!(config_dir.join("accounts.json").exists());
+        assert!(config_dir.join("tokens").join("default.json").exists());
+        assert_eq!(env.get("HOME"), env.get("USERPROFILE"));
+        assert_eq!(
+            validate_google_workspace_credentials(&credentials).unwrap(),
+            "Google Workspace authorized"
+        );
+
+        cleanup_google_workspace_config().unwrap();
+        assert!(!config_dir.exists());
+    }
+
     #[tokio::test]
     async fn test_find_available_port_returns_bound_listener() {
         let (listener, port) = super::find_available_port().await.unwrap();
         // The port should be ephemeral (high number, not in 12300-12400 range)
-        assert!(port >= 1024 && port <= 65535);
+        assert!(port >= 1024);
         assert_ne!(port, 0);
         // Listener should be bound to 127.0.0.1:port
         let addr = listener.local_addr().unwrap();
-        assert_eq!(addr.ip(), std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST));
+        assert_eq!(
+            addr.ip(),
+            std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST)
+        );
         assert_eq!(addr.port(), port);
+    }
+
+    #[tokio::test]
+    async fn test_initiate_google_oauth_completes_callback_and_exchanges_tokens() {
+        let tokens = initiate_google_oauth_with(
+            "client-id",
+            "client-secret",
+            "scope-a scope-b",
+            |auth_url| {
+                let url = url::Url::parse(auth_url).unwrap();
+                let redirect_uri = url
+                    .query_pairs()
+                    .find(|(key, _)| key == "redirect_uri")
+                    .map(|(_, value)| value.to_string())
+                    .unwrap();
+                let state = url
+                    .query_pairs()
+                    .find(|(key, _)| key == "state")
+                    .map(|(_, value)| value.to_string())
+                    .unwrap();
+
+                tokio::spawn(async move {
+                    let callback_url = format!("{redirect_uri}?code=auth-code&state={state}");
+                    let response = reqwest::get(callback_url).await.unwrap();
+                    assert_eq!(response.status(), reqwest::StatusCode::OK);
+                });
+
+                Ok(())
+            },
+            |client_id, client_secret, code, redirect_uri, code_verifier| async move {
+                assert_eq!(client_id, "client-id");
+                assert_eq!(client_secret, "client-secret");
+                assert_eq!(code, "auth-code");
+                assert!(redirect_uri.starts_with("http://localhost:"));
+                assert!(!code_verifier.is_empty());
+
+                Ok(OAuthTokens {
+                    access_token: "access-token".to_string(),
+                    refresh_token: Some("refresh-token".to_string()),
+                    expiry_timestamp: Some(1234),
+                })
+            },
+            Duration::from_secs(5),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(tokens.access_token, "access-token");
+        assert_eq!(tokens.refresh_token.as_deref(), Some("refresh-token"));
+    }
+
+    #[tokio::test]
+    async fn test_initiate_google_oauth_returns_browser_open_error() {
+        let exchange_called = Arc::new(AtomicBool::new(false));
+        let exchange_called_for_closure = Arc::clone(&exchange_called);
+
+        let error = initiate_google_oauth_with(
+            "client-id",
+            "client-secret",
+            "scope-a",
+            |_auth_url| Err("Failed to open browser: opener unavailable".to_string()),
+            move |_client_id, _client_secret, _code, _redirect_uri, _code_verifier| {
+                let exchange_called = Arc::clone(&exchange_called_for_closure);
+                async move {
+                    exchange_called.store(true, Ordering::SeqCst);
+                    unreachable!("token exchange should not run when browser open fails")
+                }
+            },
+            Duration::from_millis(100),
+        )
+        .await
+        .unwrap_err();
+
+        assert_eq!(error, "Failed to open browser: opener unavailable");
+        assert!(!exchange_called.load(Ordering::SeqCst));
     }
 }

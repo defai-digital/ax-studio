@@ -3,28 +3,39 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // --- Mocks ---
 
-const mockAddLocalDownloadingModel = vi.fn()
-const mockPullModelWithMetadata = vi.fn()
+const {
+  mockAddLocalDownloadingModel,
+  mockRemoveLocalDownloadingModel,
+  mockPullModelWithMetadata,
+  mockToastError,
+  mockGetProviderByName,
+} = vi.hoisted(() => ({
+  mockAddLocalDownloadingModel: vi.fn(),
+  mockRemoveLocalDownloadingModel: vi.fn(),
+  mockPullModelWithMetadata: vi.fn(),
+  mockToastError: vi.fn(),
+  mockGetProviderByName: vi.fn(),
+}))
 
-vi.mock('@/hooks/useDownloadStore', () => ({
+vi.mock('@/hooks/models/useDownloadStore', () => ({
   useDownloadStore: vi.fn((selector) => {
     const state = {
       downloads: {},
       localDownloadingModels: new Set<string>(),
       addLocalDownloadingModel: mockAddLocalDownloadingModel,
+      removeLocalDownloadingModel: mockRemoveLocalDownloadingModel,
     }
     return typeof selector === 'function' ? selector(state) : state
   }),
 }))
 
-vi.mock('@/hooks/useGeneralSetting', () => ({
+vi.mock('@/hooks/settings/useGeneralSetting', () => ({
   useGeneralSetting: vi.fn((selector) =>
     selector({ huggingfaceToken: 'hf-test-token' })
   ),
 }))
 
-const mockGetProviderByName = vi.fn()
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: vi.fn((selector) =>
     selector({ getProviderByName: mockGetProviderByName })
   ),
@@ -42,6 +53,12 @@ vi.mock('@/i18n', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
   }),
+}))
+
+vi.mock('sonner', () => ({
+  toast: {
+    error: mockToastError,
+  },
 }))
 
 vi.mock('@ax-studio/core', () => ({
@@ -92,7 +109,7 @@ vi.mock('lucide-react', () => ({
 }))
 
 import { DownloadButtonPlaceholder } from '../DownloadButton'
-import { useDownloadStore } from '@/hooks/useDownloadStore'
+import { useDownloadStore } from '@/hooks/models/useDownloadStore'
 
 describe('DownloadButtonPlaceholder', () => {
   const baseModel = {
@@ -114,6 +131,7 @@ describe('DownloadButtonPlaceholder', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetProviderByName.mockReturnValue({ models: [] })
+    mockPullModelWithMetadata.mockResolvedValue(undefined)
   })
 
   it('renders HuggingFace link when model has no quants', () => {
@@ -217,6 +235,7 @@ describe('DownloadButtonPlaceholder', () => {
         },
         localDownloadingModels: new Set(['test-model-q4_k_m']),
         addLocalDownloadingModel: mockAddLocalDownloadingModel,
+        removeLocalDownloadingModel: mockRemoveLocalDownloadingModel,
       }
       return typeof selector === 'function' ? selector(state) : state
     })
@@ -237,6 +256,7 @@ describe('DownloadButtonPlaceholder', () => {
         downloads: {},
         localDownloadingModels: new Set(['test-model-q4_k_m']),
         addLocalDownloadingModel: mockAddLocalDownloadingModel,
+        removeLocalDownloadingModel: mockRemoveLocalDownloadingModel,
       }
       return typeof selector === 'function' ? selector(state) : state
     })
@@ -293,5 +313,30 @@ describe('DownloadButtonPlaceholder', () => {
 
     fireEvent.click(screen.getByText('hub:download'))
     expect(mockAddLocalDownloadingModel).toHaveBeenCalledWith('test-model-fp16')
+  })
+
+  it('removes local downloading state and shows an error when the download fails to start', async () => {
+    mockPullModelWithMetadata.mockRejectedValueOnce(new Error('IPC unavailable'))
+
+    render(
+      <DownloadButtonPlaceholder
+        model={baseModel}
+        handleUseModel={handleUseModel}
+      />
+    )
+
+    fireEvent.click(screen.getByText('hub:download'))
+
+    await vi.waitFor(() => {
+      expect(mockRemoveLocalDownloadingModel).toHaveBeenCalledWith(
+        'test-model-q4_k_m'
+      )
+      expect(mockToastError).toHaveBeenCalledWith(
+        'Failed to start model download',
+        expect.objectContaining({
+          description: 'IPC unavailable',
+        })
+      )
+    })
   })
 })

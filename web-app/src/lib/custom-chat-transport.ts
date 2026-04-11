@@ -8,14 +8,14 @@ import {
   jsonSchema,
 } from 'ai'
 import { useServiceStore, getServiceHub } from '@/hooks/useServiceHub'
-import { useToolAvailable } from '@/hooks/useToolAvailable'
-import { useLocalKnowledge } from '@/hooks/useLocalKnowledge'
+import { useToolAvailable } from '@/hooks/tools/useToolAvailable'
+import { useLocalKnowledge } from '@/hooks/research/useLocalKnowledge'
 import { ModelFactory } from './model-factory'
-import { useModelProvider } from '@/hooks/useModelProvider'
-import { useAssistant } from '@/hooks/useAssistant'
-import { useThreads } from '@/hooks/useThreads'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
+import { useAssistant } from '@/hooks/chat/useAssistant'
+import { useThreads } from '@/hooks/threads/useThreads'
 import { useFileRegistry, threadCollectionId, projectCollectionId } from '@/lib/file-registry'
-import { useRouterSettings } from '@/hooks/useRouterSettings'
+import { useRouterSettings } from '@/hooks/settings/useRouterSettings'
 import { routeMessage, getAvailableModelsForRouter } from './llm-router'
 import type { CostEstimate } from './multi-agent/cost-estimation'
 import { executeSingleAgentStream } from './transport/single-agent-transport'
@@ -24,7 +24,7 @@ import type { TokenUsageCallback, ServiceHub, SendMessagesOptions } from './tran
 import { prepareProviderForChat } from './chat/model-session'
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
 import { isPlatformTauri } from '@/lib/platform'
-import { useLocalApiServer } from '@/hooks/useLocalApiServer'
+import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
 
 const httpFetch = isPlatformTauri() ? tauriFetch : globalThis.fetch
 

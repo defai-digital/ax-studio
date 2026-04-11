@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { Route as InterfaceRoute } from '../interface'
 
 // Mock all the dependencies
-vi.mock('@/containers/SettingsMenu', () => ({
+vi.mock('@/components/common/SettingsMenu', () => ({
   default: () => <div data-testid="settings-menu">Settings Menu</div>,
 }))
 
@@ -13,7 +13,7 @@ vi.mock('@/containers/HeaderPage', () => ({
   ),
 }))
 
-vi.mock('@/containers/Card', () => ({
+vi.mock('@/components/common/Card', () => ({
   Card: ({ title, children }: { title?: string; children: React.ReactNode }) => (
     <div data-testid="card" data-title={title}>
       {title && <div data-testid="card-title">{title}</div>}
@@ -41,7 +41,7 @@ vi.mock('@/containers/AccentColorPicker', () => ({
   AccentColorPicker: () => <div data-testid="accent-color-picker">Accent Color Picker</div>,
 }))
 
-vi.mock('@/hooks/useInterfaceSettings', () => ({
+vi.mock('@/hooks/settings/useInterfaceSettings', () => ({
   useInterfaceSettings: () => ({
     resetInterface: vi.fn(),
   }),

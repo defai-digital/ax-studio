@@ -20,8 +20,12 @@ export class TauriProvidersService extends DefaultProvidersService {
   }
 
   async getProviders(): Promise<ModelProvider[]> {
+    // Built-in cloud providers are safe to build without any I/O, so compute
+    // them outside the per-engine try/catch — a failure in a single local
+    // engine must not hide working cloud providers from the UI.
+    let builtinProviders: ModelProvider[] = []
     try {
-      const builtinProviders = predefinedProviders.map((provider) => {
+      builtinProviders = predefinedProviders.map((provider) => {
         let models = provider.models as Model[]
         if (Object.keys(providerModels).includes(provider.provider)) {
           const providerKey = provider.provider as keyof typeof providerModels
@@ -43,11 +47,15 @@ export class TauriProvidersService extends DefaultProvidersService {
           ...provider,
           models,
         }
-      }).filter(Boolean)
+      }).filter(Boolean) as ModelProvider[]
+    } catch (error) {
+      console.error('Error building built-in providers list:', error)
+    }
 
-      const runtimeProviders: ModelProvider[] = []
-      for (const [providerName, value] of EngineManager.instance().engines) {
-        const models = await value.list() ?? [] 
+    const runtimeProviders: ModelProvider[] = []
+    for (const [providerName, value] of EngineManager.instance().engines) {
+      try {
+        const models = (await value.list()) ?? []
         const provider: ModelProvider = {
           active: true, // Runtime engines (llamacpp, mlx) are active by default
           persist: true,
@@ -122,13 +130,17 @@ export class TauriProvidersService extends DefaultProvidersService {
           ),
         }
         runtimeProviders.push(provider)
+      } catch (error) {
+        console.error(
+          `Error listing provider from engine "${providerName}":`,
+          error
+        )
+        // Skip this engine and continue — don't hide all providers on
+        // a single local engine failure.
       }
-
-      return runtimeProviders.concat(builtinProviders as ModelProvider[])
-    } catch (error: unknown) {
-      console.error('Error getting providers in Tauri:', error)
-      return []
     }
+
+    return runtimeProviders.concat(builtinProviders)
   }
 
   async fetchModelsFromProvider(provider: ModelProvider): Promise<string[]> {

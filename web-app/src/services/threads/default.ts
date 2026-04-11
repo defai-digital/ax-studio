@@ -54,7 +54,7 @@ export class DefaultThreadsService implements ThreadsService {
         })
         ?.catch((e) => {
           console.error('Error fetching threads:', e)
-          return []
+          return [] // Fallback: empty thread list allows app to load
         }) ?? []
     )
   }
@@ -72,7 +72,7 @@ export class DefaultThreadsService implements ThreadsService {
     const assistantsPayload = hasRealAssistant
       ? [
           {
-            ...thread.assistants![0],
+            ...thread.assistants[0],
             model: {
               id: thread.model?.id ?? '*',
               engine: thread.model?.provider ?? 'ax-studio',
@@ -91,38 +91,44 @@ export class DefaultThreadsService implements ThreadsService {
           },
         ]
 
-    return (
-      ExtensionManager.getInstance()
-        .get<ConversationalExtension>(ExtensionTypeEnum.Conversational)
-        ?.createThread({
-          ...thread,
-          assistants: assistantsPayload,
-          metadata: {
-            ...thread.metadata,
-            order: thread.order,
-          },
-        })
-        .then((e) => {
-          // Model is always stored in assistants[0].model
-          const model = e.assistants?.[0]?.model
-            ? {
-                id: e.assistants[0].model.id,
-                provider: e.assistants[0].model.engine,
-              }
-            : thread.model
-
-          const assistants = e.assistants
-
-          return {
-            ...e,
-            updated: e.updated,
-            model,
-            order: e.metadata?.order ?? thread.order,
-            assistants,
-          } as Thread
-        })
-        .catch(() => thread) ?? thread
+    const extension = ExtensionManager.getInstance().get<ConversationalExtension>(
+      ExtensionTypeEnum.Conversational
     )
+    if (!extension) return thread
+
+    try {
+      const e = await extension.createThread({
+        ...thread,
+        assistants: assistantsPayload,
+        metadata: {
+          ...thread.metadata,
+          order: thread.order,
+        },
+      })
+
+      // Model is always stored in assistants[0].model
+      const model = e.assistants?.[0]?.model
+        ? {
+            id: e.assistants[0].model.id,
+            provider: e.assistants[0].model.engine,
+          }
+        : thread.model
+
+      const assistants = e.assistants
+
+      return {
+        ...e,
+        updated: e.updated,
+        model,
+        order: e.metadata?.order ?? thread.order,
+        assistants,
+      } as Thread
+    } catch (error) {
+      console.error(`Failed to create thread ${thread.id}:`, error)
+      throw error instanceof Error
+        ? error
+        : new Error(`Failed to create thread ${thread.id}`)
+    }
   }
 
   async updateThread(thread: Thread): Promise<void> {
@@ -131,9 +137,19 @@ export class DefaultThreadsService implements ThreadsService {
       return
     }
 
-    await ExtensionManager.getInstance()
-      .get<ConversationalExtension>(ExtensionTypeEnum.Conversational)
-      ?.modifyThread({
+    const extension = ExtensionManager.getInstance().get<ConversationalExtension>(
+      ExtensionTypeEnum.Conversational
+    )
+    if (!extension) {
+      // Previously optional-chained, so renames/favourites silently
+      // "succeeded" but never reached storage — on the next app reload
+      // the old title/favourite flag would reappear. Throw so callers
+      // can surface the failure.
+      throw new Error('Conversational extension not available')
+    }
+
+    try {
+      await extension.modifyThread({
         ...thread,
         assistants: thread.assistants?.map((e) => {
           return {
@@ -167,6 +183,12 @@ export class DefaultThreadsService implements ThreadsService {
         created: Date.now() / 1000,
         updated: Date.now() / 1000,
       })
+    } catch (error) {
+      console.error(`Failed to update thread ${thread.id}:`, error)
+      throw error instanceof Error
+        ? error
+        : new Error(`Failed to update thread ${thread.id}`)
+    }
   }
 
   async deleteThread(threadId: string): Promise<void> {
@@ -175,8 +197,22 @@ export class DefaultThreadsService implements ThreadsService {
       return
     }
 
-    await ExtensionManager.getInstance()
-      .get<ConversationalExtension>(ExtensionTypeEnum.Conversational)
-      ?.deleteThread(threadId)
+    const extension = ExtensionManager.getInstance().get<ConversationalExtension>(
+      ExtensionTypeEnum.Conversational
+    )
+    if (!extension) {
+      // Previously optional-chained and silently no-oped, leaving the
+      // thread on disk. Throw so the caller can roll the delete back.
+      throw new Error('Conversational extension not available')
+    }
+
+    try {
+      await extension.deleteThread(threadId)
+    } catch (error) {
+      console.error(`Failed to delete thread ${threadId}:`, error)
+      throw error instanceof Error
+        ? error
+        : new Error(`Failed to delete thread ${threadId}`)
+    }
   }
 }

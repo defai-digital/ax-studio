@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/naming-convention */
 import { ModelParams, ModelRuntimeParams, ModelSettingParams } from '../../types'
 
 /**
@@ -15,9 +13,13 @@ export const validationRules: { [key: string]: (value: any) => boolean } = {
   stop: (value: any) => Array.isArray(value) && value.every((v) => typeof v === 'string'),
   frequency_penalty: (value: any) => typeof value === 'number' && value >= -2 && value <= 2,
   presence_penalty: (value: any) => typeof value === 'number' && value >= -2 && value <= 2,
-  repeat_last_n: (value: any) => typeof value === 'number',
-  repeat_penalty: (value: any) => typeof value === 'number',
-  min_p: (value: any) => typeof value === 'number',
+  // Use `Number.isFinite` so users can't set `Infinity` / `-Infinity`
+  // — they satisfy `typeof === 'number'` and `!isNaN` but pass straight
+  // through to llama.cpp and can destabilize the sampler. Also enforce
+  // the documented numeric ranges.
+  repeat_last_n: (value: any) => Number.isFinite(value) && value >= 0,
+  repeat_penalty: (value: any) => Number.isFinite(value) && value >= 0,
+  min_p: (value: any) => Number.isFinite(value) && value >= 0 && value <= 1,
 
   ctx_len: (value: any) => Number.isInteger(value) && value >= 0,
   ngl: (value: any) => Number.isInteger(value) && value >= 0,
@@ -48,7 +50,7 @@ export const normalizeValue = (key: string, value: any) => {
     key === 'cpu_threads'
   ) {
     // Convert to integer
-    return Math.floor(Number(value))
+    return Math.trunc(Number(value))
   }
   if (
     key === 'temperature' ||
@@ -62,9 +64,10 @@ export const normalizeValue = (key: string, value: any) => {
   ) {
     // Convert to float
     const newValue = parseFloat(value)
-    if (newValue !== null && !isNaN(newValue)) {
+    if (!isNaN(newValue)) {
       return newValue
     }
+    return NaN
   }
   return value
 }
@@ -100,16 +103,14 @@ export const extractInferenceParams = (
       if (validate && !validate(normalizeValue(key, value))) {
         // Invalid value - fall back to origin value
         if (originParams && key in originParams) {
-          Object.assign(runtimeParams, {
-            ...runtimeParams,
-            [key]: originParams[key as keyof typeof originParams],
-          })
+          runtimeParams[key as keyof ModelRuntimeParams] =
+            originParams[key as keyof typeof originParams] as never
         }
       } else {
-        Object.assign(runtimeParams, {
-          ...runtimeParams,
-          [key]: normalizeValue(key, value),
-        })
+        runtimeParams[key as keyof ModelRuntimeParams] = normalizeValue(
+          key,
+          value
+        ) as never
       }
     }
   }
@@ -162,16 +163,14 @@ export const extractModelLoadParams = (
       if (validate && !validate(normalizeValue(key, value))) {
         // Invalid value - fall back to origin value
         if (originParams && key in originParams) {
-          Object.assign(modelParams, {
-            ...modelParams,
-            [key]: originParams[key as keyof typeof originParams],
-          })
+          settingParams[key as keyof ModelSettingParams] =
+            originParams[key as keyof typeof originParams] as never
         }
       } else {
-        Object.assign(settingParams, {
-          ...settingParams,
-          [key]: normalizeValue(key, value),
-        })
+        settingParams[key as keyof ModelSettingParams] = normalizeValue(
+          key,
+          value
+        ) as never
       }
     }
   }

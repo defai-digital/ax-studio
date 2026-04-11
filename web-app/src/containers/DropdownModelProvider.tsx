@@ -4,23 +4,23 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { cn, getProviderTitle, getModelDisplayName, getProviderColor } from '@/lib/utils'
-import { highlightFzfMatch } from '@/utils/highlight'
-import Capabilities from './Capabilities'
+import { highlightFzfMatch } from '@/lib/utils/highlight'
+import Capabilities from '@/components/common/Capabilities'
 import { useNavigate } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
-import { useThreads } from '@/hooks/useThreads'
+import { useThreads } from '@/hooks/threads/useThreads'
 import { ModelSetting } from '@/containers/ModelSetting'
 import { Fzf } from 'fzf'
 import { localStorageKey } from '@/constants/localStorage'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { useFavoriteModel } from '@/hooks/useFavoriteModel'
+import { useFavoriteModel } from '@/hooks/models/useFavoriteModel'
 import { predefinedProviders } from '@/constants/providers'
 import { ChevronDown, Search, Check, Star, CircleOff, Settings, X, Route } from 'lucide-react'
-import { getLastUsedModel } from '@/utils/getModelToStart'
+import { getLastUsedModel } from '@/lib/utils/getModelToStart'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useRouterSettings } from '@/hooks/useRouterSettings'
+import { useRouterSettings } from '@/hooks/settings/useRouterSettings'
 
 type DropdownModelProviderProps = {
   model?: ThreadModel
@@ -273,14 +273,16 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
   model,
   useLastUsedModel = false,
 }: DropdownModelProviderProps) {
-  const {
-    providers,
-    getProviderByName,
-    selectModelProvider,
-    getModelBy,
-    selectedProvider,
-    selectedModel,
-  } = useModelProvider()
+  // Subscribe to the individual fields this component reads rather than
+  // the whole `useModelProvider` state. The full-state subscription
+  // forced a re-render on every unrelated mutation (e.g. `deletedModels`
+  // updates), which was expensive given the virtualized model list.
+  const providers = useModelProvider((s) => s.providers)
+  const selectedProvider = useModelProvider((s) => s.selectedProvider)
+  const selectedModel = useModelProvider((s) => s.selectedModel)
+  const getProviderByName = useModelProvider((s) => s.getProviderByName)
+  const selectModelProvider = useModelProvider((s) => s.selectModelProvider)
+  const getModelBy = useModelProvider((s) => s.getModelBy)
   const [displayModel, setDisplayModel] = useState<string>('')
   const { updateCurrentThreadModel } = useThreads()
   const navigate = useNavigate()

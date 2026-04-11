@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
-import { useModelSources } from '@/hooks/useModelSources'
+import { useModelSources } from '@/hooks/models/useModelSources'
 import { cn } from '@/lib/utils'
 import {
   useState,
@@ -11,7 +11,7 @@ import {
   useRef,
   useTransition,
 } from 'react'
-import { CardItem } from '@/containers/Card'
+import { CardItem } from '@/components/common/Card'
 import { extractModelName, extractDescription } from '@/lib/models'
 import { IconDownload, IconFileCode } from '@tabler/icons-react'
 import { Switch } from '@/components/ui/switch'
@@ -41,8 +41,8 @@ import {
 import { motion, AnimatePresence } from 'motion/react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import Fuse from 'fuse.js'
-import { useGeneralSetting } from '@/hooks/useGeneralSetting'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { DownloadButtonPlaceholder } from '@/containers/DownloadButton'
 import { useShallow } from 'zustand/shallow'
 import { ModelDownloadAction } from '@/containers/ModelDownloadAction'
@@ -105,10 +105,20 @@ function HubContent() {
   const [modelSupportStatus, setModelSupportStatus] = useState<
     Record<string, 'RED' | 'YELLOW' | 'GREEN' | 'GREY' | 'LOADING'>
   >({})
+  // Mirror `modelSupportStatus` into a ref so `checkModelSupport` below can
+  // read the latest status without listing the state as a dep — doing so
+  // would recreate the callback on every set and cascade renders through
+  // every ModelInfoHoverCard in the list.
+  const modelSupportStatusRef =
+    useRef<Record<string, 'RED' | 'YELLOW' | 'GREEN' | 'GREY' | 'LOADING'>>(
+      {}
+    )
+  modelSupportStatusRef.current = modelSupportStatus
   const [isInitialLoad, setIsInitialLoad] = useState(true)
   const addModelSourceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   )
+  const huggingFaceRepoRequestRef = useRef<AbortController | null>(null)
 
   const filters: {
     id: FilterTag
@@ -169,7 +179,7 @@ function HubContent() {
     (model: CatalogModel) => {
       const llamaProvider = getProviderByName('llamacpp')
       return !!model.quants?.some((quant) =>
-        llamaProvider?.models.some((m) => {
+        llamaProvider?.models?.some((m) => {
           const parts = quant.model_id.split('/')
           const name = parts.length > 1 ? parts[1] : parts[0]
           const sanitizedName = sanitizeModelId(name)
@@ -256,11 +266,19 @@ function HubContent() {
       clearTimeout(addModelSourceTimeoutRef.current)
     }
 
+    if (huggingFaceRepoRequestRef.current) {
+      huggingFaceRepoRequestRef.current.abort()
+      huggingFaceRepoRequestRef.current = null
+    }
+
     addModelSourceTimeoutRef.current = setTimeout(async () => {
+      const controller = new AbortController()
+      huggingFaceRepoRequestRef.current = controller
+
       try {
         const repoInfo = await serviceHub
           .models()
-          .fetchHuggingFaceRepo(searchValue, huggingfaceToken)
+          .fetchHuggingFaceRepo(searchValue, huggingfaceToken, controller.signal)
         if (repoInfo) {
           const catalogModel = serviceHub
             .models()
@@ -277,12 +295,26 @@ function HubContent() {
           }
         }
       } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return
         console.error('Error fetching repository info:', error)
       } finally {
-        setIsSearching(false)
+        if (huggingFaceRepoRequestRef.current === controller) {
+          huggingFaceRepoRequestRef.current = null
+          setIsSearching(false)
+        }
       }
     }, 500)
   }
+
+  useEffect(() => {
+    return () => {
+      if (addModelSourceTimeoutRef.current) {
+        clearTimeout(addModelSourceTimeoutRef.current)
+      }
+      huggingFaceRepoRequestRef.current?.abort()
+      huggingFaceRepoRequestRef.current = null
+    }
+  }, [])
 
   const handleSearchChange = (e: ChangeEvent<HTMLInputElement>) => {
     setIsSearching(false)
@@ -320,7 +352,9 @@ function HubContent() {
     async (variant: { model_id: string; path: string }) => {
       const modelKey = variant.model_id
 
-      if (modelSupportStatus[modelKey]) {
+      // Read from the ref — listing `modelSupportStatus` as a dep below
+      // would cascade re-renders across every ModelInfoHoverCard on set.
+      if (modelSupportStatusRef.current[modelKey]) {
         return
       }
 
@@ -347,7 +381,7 @@ function HubContent() {
         }))
       }
     },
-    [modelSupportStatus, serviceHub]
+    [serviceHub]
   )
 
   const clearFilters = useCallback(() => {

@@ -4,23 +4,31 @@
 
 import { invoke } from '@tauri-apps/api/core'
 import { MCPTool } from '@/types/completion'
-import { DEFAULT_MCP_SETTINGS } from '@/hooks/useMCPServers'
-import type { MCPServerConfig, MCPServers, MCPSettings } from '@/hooks/useMCPServers'
+import { DEFAULT_MCP_SETTINGS } from '@/hooks/tools/useMCPServers'
+import type { MCPServerConfig, MCPServers, MCPSettings } from '@/hooks/tools/useMCPServers'
 import type { MCPConfig } from './types'
 import { DefaultMCPService } from './default'
 import { mcpServersSchema, mcpSettingsSchema } from '@/schemas/mcp.schema'
 
+const getCoreApi = () => {
+  if (!window.core?.api) {
+    throw new Error('MCP API is unavailable')
+  }
+
+  return window.core.api
+}
+
 export class TauriMCPService extends DefaultMCPService {
   async updateMCPConfig(configs: string): Promise<void> {
-    await window.core?.api?.saveMcpConfigs({ configs })
+    await getCoreApi().saveMcpConfigs({ configs })
   }
 
   async restartMCPServers(): Promise<void> {
-    await window.core?.api?.restartMcpServers()
+    await getCoreApi().restartMcpServers()
   }
 
   async getMCPConfig(): Promise<MCPConfig> {
-    const rawConfig = await window.core?.api?.getMcpConfigs()
+    const rawConfig = await getCoreApi().getMcpConfigs()
     const configString = typeof rawConfig === 'string' ? rawConfig.trim() : ''
 
     const defaultResponse = (): MCPConfig => ({
@@ -70,11 +78,11 @@ export class TauriMCPService extends DefaultMCPService {
   }
 
   async getTools(): Promise<MCPTool[]> {
-    return (await window.core?.api?.getTools()) ?? []
+    return (await getCoreApi().getTools()) ?? []
   }
 
   async getConnectedServers(): Promise<string[]> {
-    return (await window.core?.api?.getConnectedServers()) ?? []
+    return (await getCoreApi().getConnectedServers()) ?? []
   }
 
   async callTool(args: {
@@ -82,7 +90,10 @@ export class TauriMCPService extends DefaultMCPService {
     serverName?: string
     arguments: object
   }): Promise<{ error: string; content: { text: string }[] }> {
-    return (await window.core?.api?.callTool(args)) ?? { error: 'MCP service unavailable', content: [] }
+    return (await getCoreApi().callTool(args)) ?? {
+      error: 'MCP service unavailable',
+      content: [],
+    }
   }
 
   callToolWithCancellation(args: {
@@ -100,21 +111,21 @@ export class TauriMCPService extends DefaultMCPService {
 
     // Create the tool call promise with cancellation token
     const promise: Promise<{ error: string; content: { text: string }[] }> =
-      window.core?.api?.callTool({
+      getCoreApi().callTool({
         ...args,
         cancellationToken: token
       }) ?? Promise.reject(new Error('MCP service unavailable'))
 
     // Create cancel function
-    const cancel = async () => {
-      await window.core?.api?.cancelToolCall({ cancellationToken: token })
+  const cancel = async () => {
+      await getCoreApi().cancelToolCall({ cancellationToken: token })
     }
 
     return { promise, cancel, token }
   }
 
   async cancelToolCall(cancellationToken: string): Promise<void> {
-    return await window.core?.api?.cancelToolCall({ cancellationToken })
+    return await getCoreApi().cancelToolCall({ cancellationToken })
   }
 
   async activateMCPServer(name: string, config: MCPServerConfig): Promise<void> {

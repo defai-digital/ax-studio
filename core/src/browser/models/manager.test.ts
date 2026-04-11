@@ -35,18 +35,28 @@ describe('ModelManager', () => {
     it('should set itself on window.core.modelManager when window exists', () => {
       expect((global.window as any).core.modelManager).toBe(modelManager)
     })
+
+    it('should not throw when window is unavailable', () => {
+      const originalWindow = (global as any).window
+      delete (global as any).window
+
+      expect(() => new ModelManager()).not.toThrow()
+
+      ;(global as any).window = originalWindow
+    })
   })
 
   describe('register', () => {
-    it('should register a new model', () => {
+    it('should register a new model', async () => {
       modelManager.register(mockModel)
+      await Promise.resolve()
 
       expect(modelManager.models.has('test-model-1')).toBe(true)
       expect(modelManager.models.get('test-model-1')).toEqual(mockModel)
       expect(events.emit).toHaveBeenCalledWith(ModelEvent.OnModelsUpdate, {})
     })
 
-    it('should merge existing model with new model data', () => {
+    it('should merge existing model with new model data and prefer the new values', async () => {
       const existingModel: Model = {
         id: 'test-model-1',
         name: 'Existing Model',
@@ -61,15 +71,31 @@ describe('ModelManager', () => {
 
       modelManager.register(existingModel)
       modelManager.register(updatedModel)
+      await Promise.resolve()
 
       const registeredModel = modelManager.models.get('test-model-1')
       expect(registeredModel).toEqual({
         id: 'test-model-1',
-        name: 'Existing Model',
+        name: 'Updated Model',
         description: 'Existing description',
         version: '2.0.0',
       })
-      expect(events.emit).toHaveBeenCalledTimes(2)
+      expect(events.emit).toHaveBeenCalledTimes(1)
+    })
+
+    it('should batch model update events emitted in the same tick', async () => {
+      const model1: Model = { id: 'model-1', name: 'Model 1' } as Model
+      const model2: Model = { id: 'model-2', name: 'Model 2' } as Model
+
+      modelManager.register(model1)
+      modelManager.register(model2)
+
+      expect(events.emit).not.toHaveBeenCalled()
+
+      await Promise.resolve()
+
+      expect(events.emit).toHaveBeenCalledTimes(1)
+      expect(events.emit).toHaveBeenCalledWith(ModelEvent.OnModelsUpdate, {})
     })
   })
 
@@ -110,6 +136,18 @@ describe('ModelManager', () => {
 
       const instance = ModelManager.instance()
       expect(instance).toBe(existingManager)
+    })
+
+    it('should reuse a cached instance when window is unavailable', () => {
+      const originalWindow = (global as any).window
+      delete (global as any).window
+
+      const first = ModelManager.instance()
+      const second = ModelManager.instance()
+
+      expect(first).toBe(second)
+
+      ;(global as any).window = originalWindow
     })
   })
 

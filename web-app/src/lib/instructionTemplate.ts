@@ -1,4 +1,4 @@
-import { formatDate } from '@/utils/formatDate'
+import { formatDate } from '@/lib/utils/formatDate'
 
 /**
  * Render assistant instructions by replacing supported placeholders.

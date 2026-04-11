@@ -16,11 +16,22 @@ export class TauriAppService extends DefaultAppService {
     for (const [, engine] of EngineManager.instance().engines) {
       const activeModels = await engine.getLoadedModels()
       if (activeModels) {
-        await Promise.all(activeModels.map((model: string) => engine.unload(model)))
+        const unloadTasks = activeModels.map(async (model: string) => {
+          try {
+            await engine.unload(model)
+          } catch (error) {
+            console.error(`Failed to unload model "${model}" during reset`, error)
+          }
+        })
+        await Promise.all(unloadTasks)
       }
     }
-    window.localStorage.clear()
+    // IMPORTANT: invoke the backend reset FIRST, then clear localStorage only
+    // on success. Clearing localStorage first leaves the app in an
+    // inconsistent state (frontend wiped, backend data intact) if the
+    // native command fails (disk full, permission denied, backend crash).
     await invoke('factory_reset')
+    window.localStorage.clear()
   }
 
   async readLogs(): Promise<LogEntry[]> {
@@ -41,7 +52,14 @@ export class TauriAppService extends DefaultAppService {
   }
 
   async relocateAppDataFolder(path: string): Promise<void> {
-    await window.core?.api?.changeAppDataFolder({ newDataFolder: path })
+    // Previously used optional chaining — when `window.core.api` wasn't
+    // available (service-hub not ready yet, wrong platform) this resolved
+    // to `undefined` and `await undefined` silently succeeded, leaving the
+    // user thinking the data folder was moved. Throw instead so the UI can
+    // show a real error and the user can retry.
+    const api = window.core?.api
+    if (!api) throw new Error('Core API not available')
+    await api.changeAppDataFolder({ newDataFolder: path })
   }
 
   parseLogLine(line: string): LogEntry {

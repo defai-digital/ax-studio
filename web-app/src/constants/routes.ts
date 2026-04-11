@@ -24,7 +24,9 @@ export const route = {
     agent_teams: '/settings/agent-teams',
     engine_settings: '/settings/engine-settings',
     llm_router: '/settings/llm-router',
+    guardrails: '/settings/guardrails',
   },
+  activity: '/activity',
   hub: {
     index: '/hub/',
     model: '/hub/$modelId',

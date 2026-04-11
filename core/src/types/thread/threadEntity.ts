@@ -14,9 +14,9 @@ export type Thread = {
   title: string
   /** Assistants in this thread. **/
   assistants: ThreadAssistantInfo[]
-  /** The timestamp indicating when this thread was created, represented in ISO 8601 format. **/
+  /** The timestamp indicating when this thread was created, represented as a Unix timestamp. **/
   created: number
-  /** The timestamp indicating when this thread was updated, represented in ISO 8601 format. **/
+  /** The timestamp indicating when this thread was updated, represented as a Unix timestamp. **/
   updated: number
   /** The additional metadata of this thread. **/
   metadata?: Record<string, unknown>

@@ -1,10 +1,10 @@
-import { useAppUpdater } from '@/hooks/useAppUpdater'
+import { useAppUpdater } from '@/hooks/updater/useAppUpdater'
 
 import { IconDownload } from '@tabler/icons-react'
 import { Button } from '@/components/ui/button'
 
 import { useState, useEffect } from 'react'
-import { useReleaseNotes } from '@/hooks/useReleaseNotes'
+import { useReleaseNotes } from '@/hooks/updater/useReleaseNotes'
 import { RenderMarkdown } from '../RenderMarkdown'
 import { cn, isDev } from '@/lib/utils'
 import { isNightly, isBeta } from '@/lib/version'
@@ -34,12 +34,19 @@ const DialogAppUpdater = () => {
     isUpdateAvailable: false,
   })
 
+  // Field-level dep array instead of whole-object — this component only
+  // cares about two fields, and listing `updateState` as a dep fires on
+  // every download-progress tick (which belongs to DownloadManagement).
+  const {
+    remindMeLater: updateStateRemindMeLater,
+    isUpdateAvailable: updateStateIsUpdateAvailable,
+  } = updateState
   useEffect(() => {
     setAppUpdateState({
-      remindMeLater: updateState.remindMeLater,
-      isUpdateAvailable: updateState.isUpdateAvailable,
+      remindMeLater: updateStateRemindMeLater,
+      isUpdateAvailable: updateStateIsUpdateAvailable,
     })
-  }, [updateState])
+  }, [updateStateRemindMeLater, updateStateIsUpdateAvailable])
 
   if (appUpdateState.remindMeLater) return null
 

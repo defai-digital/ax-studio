@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('@/hooks/useArtifactPanel', () => ({
+vi.mock('@/hooks/ui/useArtifactPanel', () => ({
   useArtifactPanel: vi.fn((selector) =>
     selector({
       pinArtifact: vi.fn(),
@@ -18,7 +18,7 @@ vi.mock('@/components/ai-elements/ArtifactPreview', () => ({
 }))
 
 import { ArtifactBlock } from '../ArtifactBlock'
-import { useArtifactPanel } from '@/hooks/useArtifactPanel'
+import { useArtifactPanel } from '@/hooks/ui/useArtifactPanel'
 
 describe('ArtifactBlock', () => {
   const defaultProps = {

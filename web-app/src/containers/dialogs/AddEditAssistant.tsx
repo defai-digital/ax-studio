@@ -25,9 +25,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { useTheme } from '@/hooks/useTheme'
-import { teamEmoji } from '@/utils/teamEmoji'
-import { AvatarEmoji } from '@/containers/AvatarEmoji'
+import { useTheme } from '@/hooks/ui/useTheme'
+import { teamEmoji } from '@/lib/utils/teamEmoji'
+import { AvatarEmoji } from '@/components/common/AvatarEmoji'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { cn, isDev } from '@/lib/utils'
 
@@ -59,6 +59,11 @@ export default function AddEditAssistant({
   const [paramsKeys, setParamsKeys] = useState<string[]>([''])
   const [paramsValues, setParamsValues] = useState<unknown[]>([''])
   const [paramsTypes, setParamsTypes] = useState<string[]>(['string'])
+  // Stable React keys for the three parallel `params*` arrays. Keeps
+  // input focus + typed values attached to the correct row when the
+  // user removes a parameter mid-list — using `key={index}` caused
+  // React to reuse the row below as if nothing was removed.
+  const [paramsIds, setParamsIds] = useState<string[]>(() => [crypto.randomUUID()])
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const emojiPickerRef = useRef<HTMLDivElement>(null)
   const emojiPickerTriggerRef = useRef<HTMLDivElement>(null)
@@ -112,6 +117,12 @@ export default function AddEditAssistant({
       setParamsKeys(keys.length > 0 ? keys : [''])
       setParamsValues(values.length > 0 ? values : [''])
       setParamsTypes(types.length > 0 ? types : ['string'])
+      setParamsIds(
+        Array.from(
+          { length: Math.max(keys.length, 1) },
+          () => crypto.randomUUID()
+        )
+      )
     } else if (open) {
       // Add mode - reset form
       resetForm()
@@ -126,6 +137,7 @@ export default function AddEditAssistant({
     setParamsKeys([''])
     setParamsValues([''])
     setParamsTypes(['string'])
+    setParamsIds([crypto.randomUUID()])
     setNameError(null)
     setShowEmojiPicker(false)
     // setToolStepsInput('20')
@@ -190,18 +202,22 @@ export default function AddEditAssistant({
     setParamsKeys([...paramsKeys, ''])
     setParamsValues([...paramsValues, ''])
     setParamsTypes([...paramsTypes, 'string'])
+    setParamsIds([...paramsIds, crypto.randomUUID()])
   }
 
   const handleRemoveParameter = (index: number) => {
     const newKeys = [...paramsKeys]
     const newValues = [...paramsValues]
     const newTypes = [...paramsTypes]
+    const newIds = [...paramsIds]
     newKeys.splice(index, 1)
     newValues.splice(index, 1)
     newTypes.splice(index, 1)
+    newIds.splice(index, 1)
     setParamsKeys(newKeys.length > 0 ? newKeys : [''])
     setParamsValues(newValues.length > 0 ? newValues : [''])
     setParamsTypes(newTypes.length > 0 ? newTypes : ['string'])
+    setParamsIds(newIds.length > 0 ? newIds : [crypto.randomUUID()])
   }
 
   const handleSave = () => {
@@ -226,7 +242,7 @@ export default function AddEditAssistant({
     // const parsedToolSteps = Number(toolStepsInput)
     const assistant: Assistant = {
       avatar,
-      id: initialData?.id || Math.random().toString(36).substring(7),
+      id: initialData?.id || crypto.randomUUID(),
       name,
       created_at: initialData?.created_at || Date.now(),
       description,
@@ -386,6 +402,7 @@ export default function AddEditAssistant({
                       const newKeys = [...paramsKeys]
                       const newValues = [...paramsValues]
                       const newTypes = [...paramsTypes]
+                      const newIds = [...paramsIds]
 
                       // If the last param is empty, replace it, otherwise add new
                       if (paramsKeys[paramsKeys.length - 1] === '') {
@@ -397,6 +414,8 @@ export default function AddEditAssistant({
                             : typeof setting.value === 'number'
                               ? 'number'
                               : 'string'
+                        // `newIds` already has the right length here —
+                        // the placeholder id at the last slot stays.
                       } else {
                         newKeys.push(setting.key)
                         newValues.push(setting.value)
@@ -407,11 +426,13 @@ export default function AddEditAssistant({
                               ? 'number'
                               : 'string'
                         )
+                        newIds.push(crypto.randomUUID())
                       }
 
                       setParamsKeys(newKeys)
                       setParamsValues(newValues)
                       setParamsTypes(newTypes)
+                      setParamsIds(newIds)
                     }
                   }}
                   className={cn(
@@ -438,11 +459,11 @@ export default function AddEditAssistant({
             </div>
 
             {paramsKeys.map((key, index) => (
-              <div key={index} className="flex items-center gap-4">
-                <div
-                  key={index}
-                  className="flex items-center flex-col sm:flex-row w-full gap-2"
-                >
+              <div
+                key={paramsIds[index] ?? `param-${index}`}
+                className="flex items-center gap-4"
+              >
+                <div className="flex items-center flex-col sm:flex-row w-full gap-2">
                   <Input
                     value={key}
                     onChange={(e) =>

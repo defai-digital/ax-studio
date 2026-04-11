@@ -1,3 +1,5 @@
+import type { SecretString } from '../engine'
+
 /**
  * GGUF Metadata of the model source
  */
@@ -45,7 +47,7 @@ export interface Metadata {
   spaces: string[]
   tags: string[]
   usedStorage: number
-  apiKey?: string
+  apiKey?: SecretString
 }
 
 /**

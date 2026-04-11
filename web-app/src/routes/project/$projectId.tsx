@@ -1,16 +1,16 @@
 import { createFileRoute, useParams } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 
-import { useThreadManagement } from '@/hooks/useThreadManagement'
-import { useThreads } from '@/hooks/useThreads'
-import { useAssistant } from '@/hooks/useAssistant'
+import { useThreadManagement } from '@/hooks/threads/useThreadManagement'
+import { useThreads } from '@/hooks/threads/useThreads'
+import { useAssistant } from '@/hooks/chat/useAssistant'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 
 import ChatInput from '@/containers/ChatInput'
 import HeaderPage from '@/containers/HeaderPage'
 import ThreadList from '@/containers/ThreadList'
 import ProjectFiles from '@/containers/ProjectFiles'
-import { AvatarEmoji } from '@/containers/AvatarEmoji'
+import { AvatarEmoji } from '@/components/common/AvatarEmoji'
 
 import {
   FolderOpen,
@@ -31,7 +31,7 @@ import {
 import { Button } from '@/components/ui/button'
 import AddProjectDialog from '@/containers/dialogs/AddProjectDialog'
 import { DeleteProjectDialog } from '@/containers/dialogs/DeleteProjectDialog'
-import { DeleteAllThreadsInProjectDialog } from '@/containers/dialogs/DeleteAllThreadsInProjectDialog'
+import { DeleteAllThreadsInProjectDialog } from '@/containers/dialogs/thread/DeleteAllThreadsInProjectDialog'
 import { SidebarMenu } from '@/components/ui/sidebar'
 
 export const Route = createFileRoute('/project/$projectId')({

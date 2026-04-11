@@ -7,7 +7,7 @@ const mockGetProviderByName = vi.fn()
 const mockUpdateSettings = vi.fn()
 const mockFetchModelsFromProvider = vi.fn()
 
-vi.mock('@/containers/SettingsMenu', () => ({
+vi.mock('@/components/common/SettingsMenu', () => ({
   default: () => <div data-testid="settings-menu" />,
 }))
 
@@ -17,7 +17,7 @@ vi.mock('@/containers/HeaderPage', () => ({
   ),
 }))
 
-vi.mock('@/containers/Card', () => ({
+vi.mock('@/components/common/Card', () => ({
   Card: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="card">{children}</div>
   ),
@@ -38,7 +38,7 @@ vi.mock('@/containers/Card', () => ({
   ),
 }))
 
-vi.mock('@/containers/Capabilities', () => ({
+vi.mock('@/components/common/Capabilities', () => ({
   default: () => <div />,
 }))
 
@@ -62,7 +62,7 @@ vi.mock('@/containers/RenderMarkdown', () => ({
   RenderMarkdown: () => <div />,
 }))
 
-vi.mock('@/containers/dialogs/EditModel', () => ({
+vi.mock('@/containers/dialogs/model/EditModel', () => ({
   DialogEditModel: () => <div />,
 }))
 
@@ -70,7 +70,7 @@ vi.mock('@/containers/ModelSetting', () => ({
   ModelSetting: () => <div />,
 }))
 
-vi.mock('@/containers/dialogs/DeleteModel', () => ({
+vi.mock('@/containers/dialogs/model/DeleteModel', () => ({
   DialogDeleteModel: () => <div />,
 }))
 
@@ -82,15 +82,15 @@ vi.mock('@/containers/dialogs/DeleteProvider', () => ({
   default: () => <div data-testid="delete-provider" />,
 }))
 
-vi.mock('@/containers/dialogs/AddModel', () => ({
+vi.mock('@/containers/dialogs/model/AddModel', () => ({
   DialogAddModel: () => <div />,
 }))
 
-vi.mock('@/containers/ProvidersAvatar', () => ({
+vi.mock('@/components/common/ProvidersAvatar', () => ({
   default: () => <div data-testid="providers-avatar" />,
 }))
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: () => ({
     getProviderByName: mockGetProviderByName,
     updateProvider: mockUpdateProvider,

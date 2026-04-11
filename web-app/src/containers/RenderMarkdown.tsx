@@ -1,4 +1,4 @@
-import { type ReactNode, memo, useMemo, useState, useEffect, useRef } from 'react'
+import { type ReactNode, isValidElement, memo, useMemo, useState, useEffect, useRef, useCallback } from 'react'
 import { AXMarkdown, axDefaultRehypePlugins } from '@/lib/markdown/renderer'
 import { cn, disableIndentedCodeBlockPlugin } from '@/lib/utils'
 import { cjk } from '@streamdown/cjk'
@@ -6,15 +6,26 @@ import { code } from '@streamdown/code'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
+import { CitationChip } from '@/components/citations/CitationChip'
+import { useCitations } from '@/hooks/citations/use-citations'
+
+/** Recursively extract text from React children (handles Streamdown's animated <span> wraps). */
+function extractTextFromNode(node: ReactNode): string {
+  if (typeof node === 'string') return node
+  if (typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(extractTextFromNode).join('')
+  if (isValidElement(node) && node.props?.children) return extractTextFromNode(node.props.children)
+  return ''
+}
 import 'katex/dist/katex.min.css'
 import mermaidLib from 'mermaid'
 import DOMPurify from 'dompurify'
-import { useTheme } from '@/hooks/useTheme'
+import { useTheme } from '@/hooks/ui/useTheme'
 import { PythonCodeBlock } from '@/components/ai-elements/PythonCodeBlock'
 import { ArtifactBlock } from '@/components/ai-elements/ArtifactBlock'
 import { RenderableCodeBlock } from '@/components/ai-elements/RenderableCodeBlock'
 import { MermaidError } from '@/components/MermaidError'
-import type { ArtifactType } from '@/lib/artifact-harness'
+import type { ArtifactType } from '@/lib/artifacts/harness'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Components = any
@@ -152,7 +163,8 @@ function sanitizeMermaidFences(input: string): string {
         let prev = ''
         while (fixed !== prev) {
           prev = fixed
-          fixed = fixed.replace(/^[ \t]*state\s+[^\n{]+\{[ \t]*\n([\s\S]*?)\n[ \t]*\}/gm, '$1')
+          // Only match lines that open a block (end with `{`), not `state X as Y` aliases
+          fixed = fixed.replace(/^[ \t]*state\s+\S+[^\n]*\{[ \t]*\n([\s\S]*?)\n[ \t]*\}/gm, '$1')
         }
       }
 
@@ -331,7 +343,9 @@ function MermaidDiagram({ source, theme }: { source: string; theme: string }) {
   useEffect(() => {
     let cancelled = false
 
-    mermaidLib.initialize({ startOnLoad: false, securityLevel: 'strict', theme: theme as never })
+    // Use 'loose' security: Mermaid v11 renders labels via <foreignObject> HTML,
+    // which 'strict' mode strips. DOMPurify sanitizes the final SVG output.
+    mermaidLib.initialize({ startOnLoad: false, securityLevel: 'loose', theme: theme as never })
     const renderWithRetry = async () => {
       const id = `mermaid-${Math.random().toString(36).slice(2)}`
 
@@ -393,7 +407,12 @@ function MermaidDiagram({ source, theme }: { source: string; theme: string }) {
     return () => { cancelled = true }
   }, [source, theme, retryCount])
   const clean = useMemo(
-    () => svgContent ? DOMPurify.sanitize(svgContent, { USE_PROFILES: { svg: true, svgFilters: true } }) : null,
+    // Allow foreignObject + HTML tags that Mermaid v11 uses for text labels
+    () => svgContent ? DOMPurify.sanitize(svgContent, {
+      USE_PROFILES: { svg: true, svgFilters: true },
+      ADD_TAGS: ['foreignObject', 'div', 'span', 'p', 'br'],
+      ADD_ATTR: ['xmlns', 'requiredExtensions'],
+    }) : null,
     [svgContent]
   )
 
@@ -615,11 +634,35 @@ function RenderMarkdownComponent({
     [isUser, isStreaming, threadId, messageId]
   )
 
+  // Citation-aware anchor override: renders [N] links as CitationChip when sources exist
+  const citationData = useCitations((s) => messageId ? s.getCitations(messageId) : undefined)
+
+  const anchorOverride = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ({ children, href, node, ...props }: any) => {
+      // Extract text from children (Streamdown's animated mode wraps text in <span>)
+      const text = extractTextFromNode(children)
+      const match = text.match(/^\[(\d+)\]$/)
+
+      if (match && citationData?.sources) {
+        const index = parseInt(match[1], 10) - 1
+        const source = citationData.sources[index]
+        if (source) {
+          return <CitationChip number={index + 1} source={source} />
+        }
+      }
+
+      // Default anchor rendering — spread props first so our explicit attrs win
+      return <a {...props} href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+    },
+    [citationData]
+  )
+
   // Merge our pre override with any caller-supplied components.
   // Caller components take precedence (spread after).
   const mergedComponents = useMemo(
-    () => ({ pre: preOverride, ...components }),
-    [preOverride, components]
+    () => ({ pre: preOverride, a: anchorOverride, ...components }),
+    [preOverride, anchorOverride, components]
   )
 
   // Render the markdown content
@@ -662,5 +705,10 @@ export const RenderMarkdown = memo(
   RenderMarkdownComponent,
   (prevProps, nextProps) =>
     prevProps.content === nextProps.content &&
-    prevProps.isStreaming === nextProps.isStreaming
+    prevProps.isStreaming === nextProps.isStreaming &&
+    prevProps.messageId === nextProps.messageId &&
+    prevProps.threadId === nextProps.threadId &&
+    prevProps.isUser === nextProps.isUser &&
+    prevProps.className === nextProps.className &&
+    prevProps.components === nextProps.components
 )

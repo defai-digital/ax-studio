@@ -10,10 +10,27 @@ import {
  * functionality for managing threads.
  */
 export default class AxStudioConversationalExtension extends ConversationalExtension {
+  private getCoreApi() {
+    const api = window.core?.api
+    if (!api) {
+      throw new Error('Core API not initialized')
+    }
+    return api
+  }
+
+  private async callApi<T>(operation: string, fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      throw new Error(`Conversational extension ${operation} failed: ${message}`)
+    }
+  }
+
   /**
    * Called when the extension is loaded.
    */
-  async onLoad() {
+  async onLoad(): Promise<void> {
     // no-opt
   }
 
@@ -26,15 +43,17 @@ export default class AxStudioConversationalExtension extends ConversationalExten
    * Returns a Promise that resolves to an array of Conversation objects.
    */
   async listThreads(): Promise<Thread[]> {
-    return window.core.api.listThreads()
+    const api = this.getCoreApi()
+    return this.callApi('listThreads', () => api.listThreads())
   }
 
   /**
    * Saves a Thread object to a json file.
    * @param thread The Thread object to save.
    */
-  async createThread(thread: Thread): Promise<Thread> {
-    return window.core.api.createThread({ thread })
+  async createThread(thread: Partial<Thread>): Promise<Thread> {
+    const api = this.getCoreApi()
+    return this.callApi('createThread', () => api.createThread({ thread }))
   }
 
   /**
@@ -42,7 +61,8 @@ export default class AxStudioConversationalExtension extends ConversationalExten
    * @param thread The Thread object to save.
    */
   async modifyThread(thread: Thread): Promise<void> {
-    return window.core.api.modifyThread({ thread })
+    const api = this.getCoreApi()
+    return this.callApi('modifyThread', () => api.modifyThread({ thread }))
   }
 
   /**
@@ -50,7 +70,8 @@ export default class AxStudioConversationalExtension extends ConversationalExten
    * @param threadId The ID of the thread to delete.
    */
   async deleteThread(threadId: string): Promise<void> {
-    return window.core.api.deleteThread({ threadId })
+    const api = this.getCoreApi()
+    return this.callApi('deleteThread', () => api.deleteThread({ threadId }))
   }
 
   /**
@@ -58,8 +79,9 @@ export default class AxStudioConversationalExtension extends ConversationalExten
    * @param message The ThreadMessage object to be added.
    * @returns A Promise that resolves when the message has been added.
    */
-  async createMessage(message: ThreadMessage): Promise<ThreadMessage> {
-    return window.core.api.createMessage({ message })
+  async createMessage(message: Partial<ThreadMessage>): Promise<ThreadMessage> {
+    const api = this.getCoreApi()
+    return this.callApi('createMessage', () => api.createMessage({ message }))
   }
 
   /**
@@ -68,7 +90,8 @@ export default class AxStudioConversationalExtension extends ConversationalExten
    * @returns
    */
   async modifyMessage(message: ThreadMessage): Promise<ThreadMessage> {
-    return window.core.api.modifyMessage({ message })
+    const api = this.getCoreApi()
+    return this.callApi('modifyMessage', () => api.modifyMessage({ message }))
   }
 
   /**
@@ -78,7 +101,10 @@ export default class AxStudioConversationalExtension extends ConversationalExten
    * @returns A Promise that resolves when the message has been successfully deleted.
    */
   async deleteMessage(threadId: string, messageId: string): Promise<void> {
-    return window.core.api.deleteMessage({ threadId, messageId })
+    const api = this.getCoreApi()
+    return this.callApi('deleteMessage', () =>
+      api.deleteMessage({ threadId, messageId })
+    )
   }
 
   /**
@@ -87,7 +113,8 @@ export default class AxStudioConversationalExtension extends ConversationalExten
    * @returns A Promise that resolves to an array of ThreadMessage objects.
    */
   async listMessages(threadId: string): Promise<ThreadMessage[]> {
-    return window.core.api.listMessages({ threadId })
+    const api = this.getCoreApi()
+    return this.callApi('listMessages', () => api.listMessages({ threadId }))
   }
 
   /**
@@ -97,7 +124,10 @@ export default class AxStudioConversationalExtension extends ConversationalExten
    * the details of the assistant associated with the specified thread.
    */
   async getThreadAssistant(threadId: string): Promise<ThreadAssistantInfo> {
-    return window.core.api.getThreadAssistant({ threadId })
+    const api = this.getCoreApi()
+    return this.callApi('getThreadAssistant', () =>
+      api.getThreadAssistant({ threadId })
+    )
   }
   /**
    * Creates a new assistant for the specified thread.
@@ -109,7 +139,10 @@ export default class AxStudioConversationalExtension extends ConversationalExten
     threadId: string,
     assistant: ThreadAssistantInfo
   ): Promise<ThreadAssistantInfo> {
-    return window.core.api.createThreadAssistant(threadId, assistant)
+    const api = this.getCoreApi()
+    return this.callApi('createThreadAssistant', () =>
+      api.createThreadAssistant({ threadId, assistant })
+    )
   }
 
   /**
@@ -122,6 +155,9 @@ export default class AxStudioConversationalExtension extends ConversationalExten
     threadId: string,
     assistant: ThreadAssistantInfo
   ): Promise<ThreadAssistantInfo> {
-    return window.core.api.modifyThreadAssistant({ threadId, assistant })
+    const api = this.getCoreApi()
+    return this.callApi('modifyThreadAssistant', () =>
+      api.modifyThreadAssistant({ threadId, assistant })
+    )
   }
 }

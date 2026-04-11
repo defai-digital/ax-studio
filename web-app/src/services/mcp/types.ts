@@ -3,7 +3,7 @@
  */
 
 import { MCPTool, MCPToolCallResult } from '@ax-studio/core'
-import type { MCPServerConfig, MCPServers, MCPSettings } from '@/hooks/useMCPServers'
+import type { MCPServerConfig, MCPServers, MCPSettings } from '@/hooks/tools/useMCPServers'
 
 export interface MCPConfig {
   mcpServers?: MCPServers

@@ -15,8 +15,8 @@ import {
   ToolContent,
   ToolInput,
   ToolOutput,
-  useTool,
 } from '../tool'
+import { useTool } from '../tool-context'
 
 describe('Tool', () => {
   it('renders children inside a collapsible', () => {

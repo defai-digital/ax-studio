@@ -1,25 +1,26 @@
 import TextareaAutosize from 'react-textarea-autosize'
 import { cn } from '@/lib/utils'
-import { usePrompt } from '@/hooks/usePrompt'
-import { useThreads } from '@/hooks/useThreads'
-import { useCallback, useEffect, useRef, useState, memo } from 'react'
+import { usePrompt } from '@/hooks/ui/usePrompt'
+import { useThreads } from '@/hooks/threads/useThreads'
+import { useCallback, useEffect, useRef, useState, memo, useMemo } from 'react'
 import { IconX } from '@tabler/icons-react'
-import { useGeneralSetting } from '@/hooks/useGeneralSetting'
-import { useModelProvider } from '@/hooks/useModelProvider'
-import { useAppState } from '@/hooks/useAppState'
+import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
+import { useAppState } from '@/hooks/settings/useAppState'
 import type { ChatStatus } from 'ai'
-import { useAssistant } from '@/hooks/useAssistant'
-import { useMemory } from '@/hooks/useMemory'
-import { useLocalKnowledge } from '@/hooks/useLocalKnowledge'
-import { useTools } from '@/hooks/useTools'
-import { useMessages } from '@/hooks/useMessages'
+import { useAssistant } from '@/hooks/chat/useAssistant'
+import { useMemory } from '@/hooks/integrations/useMemory'
+import { useLocalKnowledge } from '@/hooks/research/useLocalKnowledge'
+import { useTools } from '@/hooks/tools/useTools'
+import { useMessages } from '@/hooks/chat/useMessages'
 import { useShallow } from 'zustand/react/shallow'
 import { ExtensionTypeEnum, MCPExtension } from '@ax-studio/core'
 import { ExtensionManager } from '@/lib/extension'
-import { useChatSendHandler } from '@/hooks/use-chat-send-handler'
-import { useChatAttachments, NEW_THREAD_ATTACHMENT_KEY } from '@/hooks/useChatAttachments'
-import { useDocumentAttachmentHandler } from '@/hooks/use-document-attachment-handler'
-import { ChatInputToolbar } from '@/containers/ChatInputToolbar'
+import { useChatSendHandler } from '@/hooks/chat/use-chat-send-handler'
+import { useChatAttachments, NEW_THREAD_ATTACHMENT_KEY } from '@/hooks/chat/useChatAttachments'
+import { useDocumentAttachmentHandler } from '@/hooks/chat/use-document-attachment-handler'
+import { useImageAttachmentHandler } from '@/hooks/chat/use-image-attachment-handler'
+import { ChatInputToolbar } from '@/components/chat/ChatInputToolbar'
 import { ChatInputAttachments } from '@/components/ChatInputAttachments'
 import { TokenCounter } from '@/components/TokenCounter'
 import { useTranslation } from '@/i18n/react-i18next-compat'
@@ -47,6 +48,7 @@ const ChatInput = memo(function ChatInput({
   chatStatus,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [isFocused, setIsFocused] = useState(false)
   const [rows, setRows] = useState(1)
   const [message, setMessage] = useState('')
@@ -54,7 +56,10 @@ const ChatInput = memo(function ChatInput({
   const [tooltipToolsAvailable, setTooltipToolsAvailable] = useState(false)
   const [selectedAssistant, setSelectedAssistant] = useState<Assistant | undefined>(undefined)
 
-  const abortControllers = useAppState((state) => state.abortControllers)
+  // Don't subscribe to the whole `abortControllers` record — every
+  // streaming token on any thread would re-render ChatInput. We only
+  // need the current thread's controller at stop-time, so read from the
+  // store snapshot inside `stopStreaming` below.
   const cancelToolCall = useAppState((state) => state.cancelToolCall)
   const tools = useAppState((state) => state.tools)
   const globalPrompt = usePrompt((state) => state.prompt)
@@ -136,6 +141,24 @@ const ChatInput = memo(function ChatInput({
   })
 
   const selectedModel = useModelProvider((state) => state.selectedModel) ?? undefined
+  const hasVisionSupport = selectedModel?.capabilities?.includes('vision') ?? false
+  const {
+    isDragOver,
+    handleFileChange,
+    handleImagePickerClick,
+    handleDragEnter,
+    handleDragLeave,
+    handleDragOver,
+    handleDrop,
+    handlePaste,
+  } = useImageAttachmentHandler({
+    attachmentsKey,
+    effectiveThreadId,
+    fileInputRef,
+    textareaRef,
+    hasMmproj: hasVisionSupport,
+    setMessage,
+  })
   const assistants = useAssistant((state) => state.assistants)
 
   const threadMessages = useMessages(
@@ -155,6 +178,25 @@ const ChatInput = memo(function ChatInput({
     },
     [setGlobalPrompt, threadId]
   )
+
+  // Prompt improvement suggestion — appears after user pauses typing (2s, >30 chars)
+  const [showImproveHint, setShowImproveHint] = useState(false)
+  const improveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (improveTimerRef.current) clearTimeout(improveTimerRef.current)
+    setShowImproveHint(false)
+
+    const trimmed = prompt.trim()
+    if (trimmed.length > 30 && initialMessage) {
+      improveTimerRef.current = setTimeout(() => {
+        setShowImproveHint(true)
+      }, 2000)
+    }
+    return () => {
+      if (improveTimerRef.current) clearTimeout(improveTimerRef.current)
+    }
+  }, [prompt, initialMessage])
 
   // Focus management
   useEffect(() => {
@@ -198,10 +240,10 @@ const ChatInput = memo(function ChatInput({
   const stopStreaming = useCallback(
     (tid: string) => {
       if (onStop) onStop()
-      else abortControllers[tid]?.abort()
+      else useAppState.getState().abortControllers[tid]?.abort()
       cancelToolCall?.()
     },
-    [abortControllers, cancelToolCall, onStop]
+    [cancelToolCall, onStop]
   )
 
   const hasActiveMCPServers = tools.length > 0
@@ -211,8 +253,42 @@ const ChatInput = memo(function ChatInput({
   const isStreaming = chatStatus === 'submitted' || chatStatus === 'streaming'
 
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+        multiple
+        className="hidden"
+        onChange={handleFileChange}
+      />
+      {/* Prompt improvement suggestion */}
+      {showImproveHint && (
+        <div className="flex items-center justify-between gap-2 mb-2 px-3 py-2 rounded-xl bg-primary/5 border border-primary/20 animate-in fade-in-0 slide-in-from-bottom-1 duration-200">
+          <span className="text-xs text-muted-foreground">
+            Want me to make this more specific for better results?
+          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowImproveHint(false)}
+              className="text-[11px] text-muted-foreground hover:text-foreground px-2 py-1 rounded-md hover:bg-muted transition-colors"
+            >
+              Send as-is
+            </button>
+          </div>
+        </div>
+      )}
       <div className="relative">
+        {isDragOver && (
+          <div className="absolute inset-0 z-30 rounded-2xl border-2 border-dashed border-primary/60 bg-primary/5 pointer-events-none" />
+        )}
         <div className="relative rounded-2xl">
           {/* Streaming glow border — spinning conic gradient */}
           {isStreaming && (
@@ -255,6 +331,9 @@ const ChatInput = memo(function ChatInput({
                     handleSendMessage(prompt)
                   }
                 }
+              }}
+              onPaste={(e) => {
+                void handlePaste(e)
               }}
               placeholder={t('common:placeholder.chatInput')}
               aria-label={t('common:placeholder.chatInput')}
@@ -311,6 +390,7 @@ const ChatInput = memo(function ChatInput({
           stopStreaming={stopStreaming}
           handleSendMessage={handleSendMessage}
           onAttachDocuments={handleAttachDocsIngest}
+          onAttachImages={handleImagePickerClick}
           ingestingDocs={ingestingDocs}
         />
       </div>

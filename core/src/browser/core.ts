@@ -1,11 +1,9 @@
-import { SystemInformation } from '../types'
-
 /**
  * Validates that a URL has a safe protocol (http or https).
  * @param url - The URL to validate
  * @throws Error if the URL has an unsafe protocol
  */
-const validateUrlProtocol = (url: string): void => {
+export const validateUrlProtocol = (url: string): void => {
   try {
     const parsedUrl = new URL(url)
     if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
@@ -19,20 +17,29 @@ const validateUrlProtocol = (url: string): void => {
   }
 }
 
+const getCoreApi = () => {
+  const api = globalThis.core?.api
+  if (!api) {
+    throw new Error('Core API bridge is not available')
+  }
+  return api
+}
+
 /**
  * Gets the application data folder path.
  *
  * @returns {Promise<string>} A Promise that resolves with the application data folder path.
  */
-const getAppDataFolderPath = (): Promise<string> => globalThis.core.api?.getAppDataFolderPath()
+const getAppDataFolderPath = (): Promise<string> =>
+  getCoreApi().getAppDataFolderPath() as Promise<string>
 
 /**
  * Opens the file explorer at a specific path.
  * @param {string} path - The path to open in the file explorer.
  * @returns {Promise<any>} A promise that resolves when the file explorer is opened.
  */
-const openFileExplorer: (path: string) => Promise<any> = (path) =>
-  globalThis.core.api?.openFileExplorer({ path })
+const openFileExplorer: (path: string) => Promise<void> = (path) =>
+  getCoreApi().openFileExplorer({ path }) as Promise<void>
 
 /**
  * Joins multiple paths together.
@@ -40,21 +47,23 @@ const openFileExplorer: (path: string) => Promise<any> = (path) =>
  * @returns {Promise<string>} A promise that resolves with the joined path.
  */
 const joinPath: (args: string[]) => Promise<string> = (args) =>
-  globalThis.core.api?.joinPath({ args })
+  getCoreApi().joinPath({ args }) as Promise<string>
 
 /**
  * Get dirname of a file path.
  * @param path - The file path to retrieve dirname.
  * @returns {Promise<string>} A promise that resolves the dirname.
  */
-const dirName: (path: string) => Promise<string> = (path) => globalThis.core.api?.dirName(path)
+const dirName: (path: string) => Promise<string> = (path) =>
+  getCoreApi().dirName({ args: [path] }) as Promise<string>
 
 /**
  * Retrieve the basename from an url.
  * @param path - The path to retrieve.
  * @returns {Promise<string>} A promise that resolves with the basename.
  */
-const baseName: (paths: string) => Promise<string> = (path) => globalThis.core.api?.baseName(path)
+const baseName: (path: string) => Promise<string> = (path) =>
+  getCoreApi().baseName({ args: [path] }) as Promise<string>
 
 /**
  * Opens an external URL in the default web browser.
@@ -62,9 +71,9 @@ const baseName: (paths: string) => Promise<string> = (path) => globalThis.core.a
  * @param {string} url - The URL to open.
  * @returns {Promise<any>} - A promise that resolves when the URL has been successfully opened.
  */
-const openExternalUrl: (url: string) => Promise<any> = (url) => {
+const openExternalUrl: (url: string) => Promise<void> = (url) => {
   validateUrlProtocol(url)
-  return globalThis.core.api?.openExternalUrl(url)
+  return getCoreApi().openExternalUrl(url) as Promise<void>
 }
 
 /**
@@ -72,13 +81,15 @@ const openExternalUrl: (url: string) => Promise<any> = (url) => {
  *
  * @returns {Promise<string>} - A promise that resolves with the resource path.
  */
-const getResourcePath: () => Promise<string> = () => globalThis.core.api?.getResourcePath()
+const getResourcePath: () => Promise<string> = () =>
+  getCoreApi().getResourcePath() as Promise<string>
 
 /**
  * Gets the user's home path.
  * @returns return user's home path
  */
-const getUserHomePath = (): Promise<string> => globalThis.core.api?.getUserHomePath()
+const getUserHomePath = (): Promise<string> =>
+  getCoreApi().getUserHomePath() as Promise<string>
 
 /**
  * Log to file from browser processes.
@@ -86,7 +97,7 @@ const getUserHomePath = (): Promise<string> => globalThis.core.api?.getUserHomeP
  * @param message - Message to log.
  */
 const log: (message: string, fileName?: string) => void = (message, fileName) =>
-  globalThis.core.api?.log(message, fileName)
+  void getCoreApi().log(message, fileName)
 
 /**
  * Check whether the path is a subdirectory of another path.
@@ -97,7 +108,7 @@ const log: (message: string, fileName?: string) => void = (message, fileName) =>
  * @returns {Promise<boolean>} - A promise that resolves with a boolean indicating whether the path is a subdirectory.
  */
 const isSubdirectory: (from: string, to: string) => Promise<boolean> = (from: string, to: string) =>
-  globalThis.core.api?.isSubdirectory(from, to)
+  getCoreApi().isSubdirectory(from, to) as Promise<boolean>
 
 /**
  * Show toast message from browser processes.
@@ -106,7 +117,7 @@ const isSubdirectory: (from: string, to: string) => Promise<boolean> = (from: st
  * @returns
  */
 const showToast: (title: string, message: string) => void = (title, message) =>
-  globalThis.core.api?.showToast(title, message)
+  void getCoreApi().showToast(title, message)
 
 /**
  * Register extension point function type definition
@@ -114,7 +125,7 @@ const showToast: (title: string, message: string) => void = (title, message) =>
 export type RegisterExtensionPoint = (
   extensionName: string,
   extensionId: string,
-  method: Function,
+  method: (...args: unknown[]) => unknown,
   priority?: number
 ) => void
 

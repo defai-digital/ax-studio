@@ -13,7 +13,6 @@ export default defineConfig({
     SETTINGS: JSON.stringify(settingJson),
     ENGINE: JSON.stringify(pkgJson.engine),
     IS_WINDOWS: JSON.stringify(process.platform === 'win32'),
-    IS_MAC: JSON.stringify(process.platform === 'darwin'),
     IS_MACOS: JSON.stringify(process.platform === 'darwin'),
     IS_LINUX: JSON.stringify(process.platform === 'linux'),
   },

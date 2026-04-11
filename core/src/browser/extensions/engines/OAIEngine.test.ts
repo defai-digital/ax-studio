@@ -5,10 +5,6 @@ import {
   MessageEvent,
   InferenceEvent,
   MessageRequest,
-  MessageRequestType,
-  MessageStatus,
-  ChatCompletionRole,
-  ContentType,
 } from '../../../types'
 
 vi.mock('../../events')
@@ -42,9 +38,50 @@ describe('OAIEngine', () => {
     )
   })
 
+  it('should remove event listeners on unload', () => {
+    engine.onLoad()
+    engine.onUnload()
+
+    expect(events.off).toHaveBeenCalledWith(
+      MessageEvent.OnMessageSent,
+      expect.any(Function)
+    )
+    expect(events.off).toHaveBeenCalledWith(
+      InferenceEvent.OnInferenceStopped,
+      expect.any(Function)
+    )
+  })
+
   it('should stop inference', () => {
     engine.stopInference()
     expect(engine.isCancelled).toBe(true)
     expect(engine.controller.signal.aborted).toBe(true)
+  })
+
+  it('logs rejected inference requests triggered by the message event', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const error = new Error('boom')
+    vi.spyOn(engine, 'inference').mockRejectedValue(error)
+
+    engine.onLoad()
+
+    const messageHandler = vi
+      .mocked(events.on)
+      .mock.calls.find(([eventName]) => eventName === MessageEvent.OnMessageSent)?.[1] as
+      | ((data: MessageRequest) => void)
+      | undefined
+
+    expect(messageHandler).toBeDefined()
+
+    messageHandler?.({ attachments: [] } as MessageRequest)
+
+    await vi.waitFor(() => {
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[OAIEngine] Failed to run inference:',
+        error
+      )
+    })
+
+    consoleSpy.mockRestore()
   })
 })

@@ -1,14 +1,14 @@
-import { useModelProvider } from '@/hooks/useModelProvider'
-import { useAppUpdater } from '@/hooks/useAppUpdater'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
+import { useAppUpdater } from '@/hooks/updater/useAppUpdater'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useEffect, useCallback } from 'react'
-import { useMCPServers, DEFAULT_MCP_SETTINGS } from '@/hooks/useMCPServers'
-import { useAssistant } from '@/hooks/useAssistant'
+import { useMCPServers, DEFAULT_MCP_SETTINGS } from '@/hooks/tools/useMCPServers'
+import { useAssistant } from '@/hooks/chat/useAssistant'
 import { useNavigate } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
-import { useThreads } from '@/hooks/useThreads'
-import { useLocalApiServer } from '@/hooks/useLocalApiServer'
-import { useAppState } from '@/hooks/useAppState'
+import { useThreads } from '@/hooks/threads/useThreads'
+import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
+import { useAppState } from '@/hooks/settings/useAppState'
 import { isDev } from '@/lib/utils'
 import { bootstrapProviders } from '@/lib/bootstrap/bootstrap-providers'
 import { bootstrapThreads } from '@/lib/bootstrap/bootstrap-threads'
@@ -56,7 +56,13 @@ export function DataProvider() {
       const params = url.pathname.split('/').filter((s) => s.length > 0)
       if (params.length < 3) return
       const resource = params.slice(1).join('/')
-      navigate({ to: route.hub.model, search: { repo: resource } })
+      // `route.hub.model` is `/hub/$modelId` — the `modelId` param is
+      // required, otherwise TanStack Router throws at runtime.
+      navigate({
+        to: route.hub.model,
+        params: { modelId: resource },
+        search: { repo: resource },
+      })
     },
     [navigate]
   )
@@ -78,16 +84,22 @@ export function DataProvider() {
       setAssistants,
       initializeWithLastUsed,
       onDeepLink: handleDeepLink,
-    }).then(({ unsubscribeDeepLink }) => {
-      if (unmounted) {
-        // Component unmounted before bootstrap resolved — clean up immediately
-        unsubscribeDeepLink()
-      } else {
-        cleanupDeepLink = unsubscribeDeepLink
-      }
     })
+      .then(({ unsubscribeDeepLink }) => {
+        if (unmounted) {
+          // Component unmounted before bootstrap resolved — clean up immediately
+          unsubscribeDeepLink()
+        } else {
+          cleanupDeepLink = unsubscribeDeepLink
+        }
+      })
+      .catch((error) => {
+        console.error('[DataProvider] bootstrapProviders failed:', error)
+      })
 
-    bootstrapThreads({ serviceHub, setThreads })
+    bootstrapThreads({ serviceHub, setThreads }).catch((error) => {
+      console.error('[DataProvider] bootstrapThreads failed:', error)
+    })
 
     cleanupUpdater = bootstrapUpdater({ checkForUpdate, isDev: isDev() })
 

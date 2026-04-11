@@ -50,6 +50,7 @@ describe('AxStudioConversationalExtension', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.stubGlobal('core', { api: mockApi })
     ext = new AxStudioConversationalExtension('', '')
   })
 
@@ -86,6 +87,20 @@ describe('AxStudioConversationalExtension', () => {
 
       expect(result).toEqual([])
     })
+
+    it('throws a clear error when core api is not initialized', async () => {
+      vi.stubGlobal('core', undefined)
+
+      await expect(ext.listThreads()).rejects.toThrow('Core API not initialized')
+    })
+
+    it('wraps api errors with operation context', async () => {
+      mockApi.listThreads.mockRejectedValue(new Error('boom'))
+
+      await expect(ext.listThreads()).rejects.toThrow(
+        'Conversational extension listThreads failed: boom'
+      )
+    })
   })
 
   describe('createThread', () => {
@@ -98,6 +113,16 @@ describe('AxStudioConversationalExtension', () => {
 
       expect(mockApi.createThread).toHaveBeenCalledWith({ thread })
       expect(result).toEqual(created)
+    })
+
+    it('accepts partial thread payloads', async () => {
+      mockApi.createThread.mockResolvedValue({ id: 'generated-thread' })
+
+      await ext.createThread({ title: 'Draft Thread' })
+
+      expect(mockApi.createThread).toHaveBeenCalledWith({
+        thread: { title: 'Draft Thread' },
+      })
     })
   })
 
@@ -133,6 +158,16 @@ describe('AxStudioConversationalExtension', () => {
       expect(mockApi.createMessage).toHaveBeenCalledWith({ message })
       expect(result.id).toBe('m1')
       expect(result.created_at).toBe(99999)
+    })
+
+    it('accepts partial message payloads', async () => {
+      mockApi.createMessage.mockResolvedValue({ id: 'm1', thread_id: 't1' })
+
+      await ext.createMessage({ thread_id: 't1' })
+
+      expect(mockApi.createMessage).toHaveBeenCalledWith({
+        message: { thread_id: 't1' },
+      })
     })
   })
 
@@ -192,16 +227,16 @@ describe('AxStudioConversationalExtension', () => {
   })
 
   describe('createThreadAssistant', () => {
-    it('passes threadId and assistant as separate arguments', async () => {
+    it('passes threadId and assistant wrapped in payload', async () => {
       const assistant = { assistant_id: 'a1', model: 'gpt-4' } as any
       mockApi.createThreadAssistant.mockResolvedValue(assistant)
 
       const result = await ext.createThreadAssistant('t1', assistant)
 
-      expect(mockApi.createThreadAssistant).toHaveBeenCalledWith(
-        't1',
-        assistant
-      )
+      expect(mockApi.createThreadAssistant).toHaveBeenCalledWith({
+        threadId: 't1',
+        assistant,
+      })
       expect(result).toEqual(assistant)
     })
   })

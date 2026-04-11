@@ -9,7 +9,7 @@ vi.mock('../RenderMarkdown', () => ({
   ),
 }))
 
-vi.mock('../CopyButton', () => ({
+vi.mock('@/components/common/CopyButton', () => ({
   CopyButton: ({ text }: { text: string }) => (
     <button data-testid="copy-button" data-text={text}>
       Copy
@@ -17,17 +17,17 @@ vi.mock('../CopyButton', () => ({
   ),
 }))
 
-vi.mock('@/hooks/useModelProvider', () => ({
+vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: vi.fn((selector) =>
     selector({ selectedModel: { id: 'test-model', name: 'Test Model' } })
   ),
 }))
 
-vi.mock('@/containers/dialogs/EditMessageDialog', () => ({
+vi.mock('@/containers/dialogs/message/EditMessageDialog', () => ({
   EditMessageDialog: () => <button data-testid="edit-dialog">Edit</button>,
 }))
 
-vi.mock('@/containers/dialogs/DeleteMessageDialog', () => ({
+vi.mock('@/containers/dialogs/message/DeleteMessageDialog', () => ({
   DeleteMessageDialog: ({ onDelete }: { onDelete: () => void }) => (
     <button data-testid="delete-dialog" onClick={onDelete}>
       Delete

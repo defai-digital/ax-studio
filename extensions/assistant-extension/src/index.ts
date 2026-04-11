@@ -1,9 +1,39 @@
-import { Assistant, AssistantExtension, fs, joinPath } from '@ax-studio/core'
+import {
+  Assistant,
+  AssistantExtension,
+  fs,
+  joinPath,
+  showToast,
+} from '@ax-studio/core'
 /**
  * AxStudioAssistantExtension is an AssistantExtension implementation that provides
  * functionality for managing assistants.
  */
 export default class AxStudioAssistantExtension extends AssistantExtension {
+  private isAssistant(value: unknown): value is Assistant {
+    return (
+      !!value &&
+      typeof value === 'object' &&
+      typeof (value as Assistant).id === 'string' &&
+      typeof (value as Assistant).name === 'string'
+    )
+  }
+
+  private reportCorruptAssistants(assistants: string[]) {
+    if (assistants.length === 0) return
+    const preview = assistants.slice(0, 3).join(', ')
+    const suffix =
+      assistants.length > 3 ? ` and ${assistants.length - 3} more` : ''
+    try {
+      showToast(
+        'Some assistants could not be loaded',
+        `Skipped corrupt assistant data for ${preview}${suffix}.`
+      )
+    } catch (error) {
+      console.warn('Failed to show assistant load warning:', error)
+    }
+  }
+
   /**
    * Called when the extension is loaded.
    */
@@ -33,10 +63,10 @@ export default class AxStudioAssistantExtension extends AssistantExtension {
   onUnload(): void {}
 
   async getAssistants(): Promise<Assistant[]> {
-    if (!(await fs.existsSync('file://assistants')))
-      return [this.defaultAssistant]
+    if (!(await fs.existsSync('file://assistants'))) return []
     const assistants = await fs.readdirSync('file://assistants')
     const assistantsData: Assistant[] = []
+    const corruptAssistants: string[] = []
     for (const assistant of assistants) {
       const assistantPath = await joinPath([
         'file://assistants',
@@ -47,11 +77,16 @@ export default class AxStudioAssistantExtension extends AssistantExtension {
 
       try {
         const assistantData = JSON.parse(await fs.readFileSync(assistantPath))
-        assistantsData.push(assistantData as Assistant)
+        if (!this.isAssistant(assistantData)) {
+          throw new Error('Invalid assistant record')
+        }
+        assistantsData.push(assistantData)
       } catch (error) {
         console.error(`Failed to read assistant ${assistant}:`, error)
+        corruptAssistants.push(assistant)
       }
     }
+    this.reportCorruptAssistants(corruptAssistants)
     return assistantsData
   }
 
@@ -86,8 +121,12 @@ export default class AxStudioAssistantExtension extends AssistantExtension {
       assistant.id,
       'assistant.json',
     ])
+    const assistantFolder = await joinPath(['file://assistants', assistant.id])
     if (await fs.existsSync(assistantPath)) {
       await fs.rm(assistantPath)
+    }
+    if (await fs.existsSync(assistantFolder)) {
+      await fs.rm(assistantFolder)
     }
   }
 
