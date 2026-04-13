@@ -37,8 +37,29 @@ import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
 import { isPlatformTauri } from '@/lib/platform'
 import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
 
-// Use Tauri's HTTP plugin on native; fall back to native fetch for web/browser.
-const httpFetch = isPlatformTauri() ? tauriFetch : globalThis.fetch
+// SSE streaming to the LOCAL proxy (127.0.0.1:1337) must use the webview's
+// native fetch — Tauri's HTTP plugin buffers the entire SSE body before
+// returning a Response, so `response.body` is effectively a completed stream
+// by the time the AI SDK reads it and no tokens ever render incrementally.
+// The proxy enables CORS headers, so the native preflight succeeds.
+// Remote HTTPS targets keep using Tauri's plugin to bypass the webview's
+// same-origin restrictions.
+const httpFetch: typeof globalThis.fetch = (input, init) => {
+  const url =
+    typeof input === 'string'
+      ? input
+      : input instanceof URL
+        ? input.href
+        : (input as Request).url
+  const isLocalProxy =
+    url.startsWith('http://127.0.0.1') ||
+    url.startsWith('http://localhost') ||
+    url.startsWith('http://0.0.0.0')
+  if (isPlatformTauri() && !isLocalProxy) {
+    return tauriFetch(input, init) as unknown as Promise<Response>
+  }
+  return globalThis.fetch(input, init)
+}
 
 /**
  * Returns the base URL of the local proxy server.
@@ -152,6 +173,25 @@ function createStreamingPatchFetch(baseFetch: typeof httpFetch): typeof httpFetc
                 delta.role = String(delta.role)
                 patched = true
               }
+
+              // Fix 4: Promote `reasoning_content` to `content` for reasoning
+              // models exposed via OpenAI-compatible endpoints (DeepSeek-R1,
+              // Cloudflare's @cf/zai-org/glm-4.7-flash, etc.). These models
+              // emit their output in a non-standard `reasoning_content` field
+              // that the Vercel AI SDK's OpenAI-compat parser ignores, so the
+              // UI shows nothing but the "thinking" indicator forever.
+              // Merge into `content` so the chat actually renders.
+              if (
+                'reasoning_content' in delta &&
+                typeof delta.reasoning_content === 'string' &&
+                delta.reasoning_content.length > 0
+              ) {
+                const existing =
+                  typeof delta.content === 'string' ? delta.content : ''
+                delta.content = existing + delta.reasoning_content
+                delete delta.reasoning_content
+                patched = true
+              }
             }
 
             // Only re-serialize if we actually changed something (avoid unnecessary work)
@@ -241,14 +281,27 @@ export class ModelFactory {
     // All providers go through the proxy using the OpenAI-compatible format.
     // The proxy routes the request to the correct upstream based on model_id lookup
     // in provider_configs, injects the real API key, and applies custom headers.
+    //
+    // Auth: the local proxy runs with its own `proxy_api_key` for access control
+    // (not the upstream provider key). The client must prove it's allowed to use
+    // this proxy; the proxy then swaps in the real provider key before forwarding.
+    // Previously no Authorization header was sent, so the proxy replied 401 and
+    // the UI hung on "thinking" forever waiting for a stream that never started.
+    const localProxyKey = useLocalApiServer.getState().apiKey
+    const proxyHeaders: Record<string, string> = {
+      'X-Ax-Provider': provider.provider,
+    }
+    if (localProxyKey && localProxyKey.trim().length > 0) {
+      proxyHeaders.Authorization = `Bearer ${localProxyKey}`
+    }
+
     const proxyModel = createOpenAICompatible({
       name: providerName,
       baseURL: proxyUrl,
-      // No Authorization header here — proxy injects the real key from provider_configs.
       // Passing a headers object prevents the SDK from looking up env vars.
       // X-Ax-Provider tells the proxy which registered provider to route to,
       // avoiding ambiguity when the same model ID exists in multiple providers.
-      headers: { 'X-Ax-Provider': provider.provider },
+      headers: proxyHeaders,
       includeUsage: true,
       fetch: fetchFn,
     })

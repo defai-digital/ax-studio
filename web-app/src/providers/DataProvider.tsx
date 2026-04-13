@@ -33,6 +33,7 @@ export function DataProvider() {
     setServerPort,
     apiPrefix,
     apiKey,
+    setApiKey,
     trustedHosts,
     corsEnabled,
     verboseLogs,
@@ -120,6 +121,7 @@ export function DataProvider() {
       },
       setServerStatus,
       setServerPort,
+      setApiKey,
     })
 
     return () => {

@@ -3,6 +3,13 @@ import { persist } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
 import { createSafeJSONStorage } from '@/lib/storage'
 
+const generateDefaultApiKey = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return 'ax-' + crypto.randomUUID().replace(/-/g, '')
+  }
+  return 'ax-' + Math.random().toString(36).slice(2) + Date.now().toString(36)
+}
+
 type LocalApiServerState = {
   // Run local API server once app opens
   enableOnStartup: boolean
@@ -41,12 +48,15 @@ export const useLocalApiServer = create<LocalApiServerState>()(
       setEnableOnStartup: (value) => set({ enableOnStartup: value }),
       serverHost: '127.0.0.1',
       setServerHost: (value) => set({ serverHost: value }),
-      // Use port 0 (auto-assign) for mobile to avoid conflicts, 1337 for desktop
-      serverPort: (typeof window !== 'undefined' && (window as { IS_ANDROID?: boolean }).IS_ANDROID) || (typeof window !== 'undefined' && (window as { IS_IOS?: boolean }).IS_IOS) ? 0 : 1337,
+      serverPort: 1337,
       setServerPort: (value) => set({ serverPort: value }),
       apiPrefix: '/v1',
       setApiPrefix: (value) => set({ apiPrefix: value }),
-      corsEnabled: false,
+      // Default to true — the frontend webview (http://localhost:1420 in dev)
+      // uses native fetch to hit the local proxy, which triggers CORS preflight.
+      // Without this the browser rejects the request with "Load failed" before
+      // any bytes hit the network.
+      corsEnabled: true,
       setCorsEnabled: (value) => set({ corsEnabled: value }),
       verboseLogs: true,
       setVerboseLogs: (value) => set({ verboseLogs: value }),
@@ -62,7 +72,7 @@ export const useLocalApiServer = create<LocalApiServerState>()(
       setTrustedHosts: (hosts) => set({ trustedHosts: hosts }),
       proxyTimeout: 600,
       setProxyTimeout: (value) => set({ proxyTimeout: value }),
-      apiKey: '',
+      apiKey: generateDefaultApiKey(),
       setApiKey: (value) => set({ apiKey: value }),
     }),
     {
