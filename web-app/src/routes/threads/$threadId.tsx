@@ -11,9 +11,7 @@ import { useMessages } from '@/hooks/chat/useMessages'
 
 // Validation helper for threadId
 const isValidThreadId = (id: string): boolean => {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-    id
-  )
+  return /^[0-9a-z]{26}$/i.test(id)
 }
 
 import { extractContentPartsFromUIMessage } from '@/lib/messages'
