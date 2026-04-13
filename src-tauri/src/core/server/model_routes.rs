@@ -572,18 +572,89 @@ pub(super) async fn dispatch_to_upstream(
                 config.cors_enabled,
             );
 
+            // DIAGNOSTIC: log upstream status and content-type so we can see
+            // whether a hung-chat case is "proxy streamed nothing" vs "upstream
+            // returned a JSON error" vs "response has no compatible chunks".
+            let upstream_status = response.status();
+            let upstream_ct = response
+                .headers()
+                .get(hyper::header::CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("<unknown>")
+                .to_string();
+            log::info!(
+                "Upstream response: status={} content-type={}",
+                upstream_status,
+                upstream_ct
+            );
+
             let mut stream = response.bytes_stream();
             let (mut sender, body) = hyper::Body::channel();
 
             tokio::spawn(async move {
-                // Regular passthrough - when /messages succeeds directly,
-                // the response is already in the correct format
+                let is_sse = upstream_ct.contains("text/event-stream");
+                let mut total_bytes: usize = 0;
+                let mut chunk_count: usize = 0;
+                let mut patched_lines_logged: usize = 0;
+                // SSE messages can split across network chunks — buffer partial
+                // lines so we always parse complete `data: {...}` records.
+                let mut line_buffer = String::new();
+
                 while let Some(chunk_result) = stream.next().await {
                     match chunk_result {
                         Ok(chunk) => {
-                            if sender.send_data(chunk).await.is_err() {
-                                log::debug!("Client disconnected during streaming");
-                                break;
+                            chunk_count += 1;
+                            total_bytes += chunk.len();
+
+                            // Non-SSE responses: pass through unchanged.
+                            if !is_sse {
+                                if sender.send_data(chunk).await.is_err() {
+                                    log::debug!("Client disconnected during streaming");
+                                    break;
+                                }
+                                continue;
+                            }
+
+                            // Decode; for SSE tokens are ASCII/UTF-8 safe.
+                            let s = match std::str::from_utf8(&chunk) {
+                                Ok(v) => v,
+                                Err(_) => {
+                                    // Non-UTF8 (shouldn't happen on SSE): pass through.
+                                    if sender.send_data(chunk).await.is_err() { break }
+                                    continue;
+                                }
+                            };
+                            line_buffer.push_str(s);
+
+                            let mut out = String::with_capacity(line_buffer.len());
+                            // Drain complete lines (delimited by '\n').
+                            while let Some(newline_idx) = line_buffer.find('\n') {
+                                let line: String = line_buffer.drain(..=newline_idx).collect();
+                                let patched = patch_sse_line(&line);
+                                // Log the first few patched lines so we can verify the
+                                // `reasoning_content` → `content` rewrite is working.
+                                if patched_lines_logged < 3
+                                    && patched != line
+                                    && patched.trim_start().starts_with("data:")
+                                {
+                                    patched_lines_logged += 1;
+                                    let preview_len = patched.len().min(400);
+                                    log::info!(
+                                        "Patched SSE line #{patched_lines_logged}: {}",
+                                        &patched[..preview_len]
+                                    );
+                                }
+                                out.push_str(&patched);
+                            }
+                            if !out.is_empty() {
+                                if sender
+                                    .send_data(hyper::body::Bytes::from(out))
+                                    .await
+                                    .is_err()
+                                {
+                                    log::debug!("Client disconnected during streaming");
+                                    break;
+                                }
                             }
                         }
                         Err(e) => {
@@ -592,7 +663,18 @@ pub(super) async fn dispatch_to_upstream(
                         }
                     }
                 }
-                log::debug!("Streaming complete to client");
+
+                // Flush any trailing partial line (rare but correct).
+                if !line_buffer.is_empty() {
+                    let tail = patch_sse_line(&line_buffer);
+                    let _ = sender.send_data(hyper::body::Bytes::from(tail)).await;
+                }
+
+                log::info!(
+                    "Streaming complete to client: {} total bytes in {} chunks",
+                    total_bytes,
+                    chunk_count
+                );
             });
 
             Ok(builder
@@ -615,6 +697,96 @@ pub(super) async fn dispatch_to_upstream(
                 .unwrap_or_else(|_| Response::new(Body::from("Internal server error"))))
         }
     }
+}
+
+/// Patch a single SSE line in-place before forwarding to the client.
+///
+/// Reasoning models exposed over OpenAI-compatible endpoints (e.g.
+/// DeepSeek-R1, Cloudflare's `@cf/zai-org/glm-4.7-flash`) only emit their
+/// output under non-standard `delta.reasoning` / `delta.reasoning_content`
+/// fields. The Vercel AI SDK's OpenAI parser only reads `delta.content`,
+/// so without this promotion 100% of the tokens arrive but nothing renders
+/// in the chat UI — user sees the "thinking" indicator forever.
+///
+/// Non-`data:` lines and malformed JSON pass through untouched.
+fn patch_sse_line(line: &str) -> String {
+    // Preserve non-data lines (event:, id:, retry:, blank lines) verbatim.
+    let trimmed = line.trim_start();
+    if !trimmed.starts_with("data:") {
+        return line.to_string();
+    }
+    let (prefix_ws_len, _) = line
+        .char_indices()
+        .find(|(_, c)| !c.is_whitespace())
+        .unwrap_or((0, ' '));
+    let prefix = &line[..prefix_ws_len];
+
+    // Strip "data:" and any whitespace after it, but remember line ending.
+    let after_data = &trimmed[5..];
+    let (payload_str, trailing_newline) = match after_data.strip_suffix("\r\n") {
+        Some(s) => (s.trim_start(), "\r\n"),
+        None => match after_data.strip_suffix('\n') {
+            Some(s) => (s.trim_start(), "\n"),
+            None => (after_data.trim_start(), ""),
+        },
+    };
+    // Sentinel [DONE] passes through unchanged.
+    if payload_str == "[DONE]" {
+        return line.to_string();
+    }
+    // Parse JSON; on failure, pass through.
+    let mut value: serde_json::Value = match serde_json::from_str(payload_str) {
+        Ok(v) => v,
+        Err(_) => return line.to_string(),
+    };
+    let choices = match value.get_mut("choices").and_then(|c| c.as_array_mut()) {
+        Some(c) => c,
+        None => return line.to_string(),
+    };
+    let mut changed = false;
+    for choice in choices.iter_mut() {
+        let delta = match choice.get_mut("delta").and_then(|d| d.as_object_mut()) {
+            Some(d) => d,
+            None => continue,
+        };
+        // Take reasoning_content string if present & non-empty.
+        let reasoning = delta
+            .get("reasoning_content")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .or_else(|| {
+                delta
+                    .get("reasoning")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            });
+        if let Some(r) = reasoning {
+            if !r.is_empty() {
+                let existing = delta
+                    .get("content")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .unwrap_or_default();
+                delta.insert(
+                    "content".to_string(),
+                    serde_json::Value::String(format!("{existing}{r}")),
+                );
+                // Remove reasoning fields so the client's OpenAI parser doesn't
+                // double-process them; AI SDK ignores unknown fields but we want
+                // the body as clean as possible.
+                delta.remove("reasoning_content");
+                delta.remove("reasoning");
+                changed = true;
+            }
+        }
+    }
+    if !changed {
+        return line.to_string();
+    }
+    let Ok(new_payload) = serde_json::to_string(&value) else {
+        return line.to_string();
+    };
+    format!("{prefix}data: {new_payload}{trailing_newline}")
 }
 
 #[cfg(test)]
