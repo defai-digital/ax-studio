@@ -148,30 +148,46 @@ export default class AxStudioDownloadManager extends BaseExtension {
     // Sanitize taskId for Tauri event name compatibility
     const safeTaskId = this._sanitizeTaskId(taskId)
 
-    // relay tauri events to onProgress callback
-    const unlisten = await listen<DownloadEvent>(
-      `download-${safeTaskId}`,
-      (event) => {
-        if (onProgress) {
-          let payload = event.payload
-          onProgress(payload.transferred, payload.total)
-        }
-      }
-    )
-
+    let unlisten: (() => void) | undefined
     try {
-      await invoke<void>('download_files', {
-        items,
-        taskId: safeTaskId,
-        headers: requestHeaders ?? {},
-      })
-    } catch (error) {
-      console.error('Error downloading task', taskId, error)
-      throw error
+      try {
+        unlisten = await listen<DownloadEvent>(
+          `download-${safeTaskId}`,
+          (event) => {
+            if (onProgress) {
+              let payload = event.payload
+              onProgress(payload.transferred, payload.total)
+            }
+          }
+        )
+      } catch (listenErr) {
+        const msg =
+          listenErr instanceof Error ? listenErr.message : String(listenErr)
+        console.error(
+          `[download-ext] listen() failed for 'download-${safeTaskId}':`,
+          listenErr
+        )
+        throw new Error(`listen(download-${safeTaskId}) failed: ${msg}`)
+      }
+
+      try {
+        await invoke<void>('download_files', {
+          items,
+          taskId: safeTaskId,
+          headers: requestHeaders ?? {},
+        })
+      } catch (invokeErr) {
+        const msg =
+          invokeErr instanceof Error ? invokeErr.message : String(invokeErr)
+        console.error(
+          `[download-ext] invoke('download_files') failed for task ${taskId}:`,
+          invokeErr
+        )
+        throw new Error(`download_files failed: ${msg}`)
+      }
     } finally {
-      // Give already-queued progress callbacks one turn to run before removing the listener.
       await Promise.resolve()
-      unlisten()
+      if (unlisten) unlisten()
     }
   }
 
