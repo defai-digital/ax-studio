@@ -152,9 +152,20 @@ export function DownloadButtonPlaceholder({
       .catch((error) => {
         console.error('Failed to start model download:', error)
         removeLocalDownloadingModel(modelId)
+        const description =
+          error instanceof Error
+            ? error.message
+            : typeof error === 'string'
+              ? error
+              : (() => {
+                  try {
+                    return JSON.stringify(error)
+                  } catch {
+                    return String(error)
+                  }
+                })()
         toast.error('Failed to start model download', {
-          description:
-            error instanceof Error ? error.message : 'Please try again.',
+          description: description || 'Unknown error (check DevTools console).',
         })
       })
   }

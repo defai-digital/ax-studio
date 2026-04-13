@@ -51,24 +51,28 @@ export const ModelDownloadAction = ({
   const navigate = useNavigate()
 
   useEffect(() => {
+    const baseModelId = variant.model_id.split('/').pop() || ''
+    const sanitizedBaseId = sanitizeModelId(baseModelId)
     const isDownloaded = llamaProvider?.models.some(
       (m: { id: string }) =>
         m.id === variant.model_id ||
-        m.id === `${model.developer}/${sanitizeModelId(variant.model_id.split('/').pop() || '')}`
+        m.id === sanitizedBaseId ||
+        m.id === `${model.developer}/${sanitizedBaseId}`
     )
     setDownloaded(!!isDownloaded)
   }, [llamaProvider, variant.model_id, model.developer])
 
   useEffect(() => {
+    const sid = sanitizeModelId(variant.model_id.split('/').pop() || variant.model_id)
     const handleVerified = (state: DownloadState) => {
       const downloadId = state.downloadId ?? state.modelId
-      if (downloadId === variant.model_id) setDownloaded(true)
+      if (downloadId === variant.model_id || downloadId === sid) setDownloaded(true)
     }
     // Also listen for onModelImported — onFileDownloadAndVerificationSuccess
     // only fires when SHA256 verification is enabled (skipVerification=false).
     // onModelImported fires unconditionally after model.yml is written.
     const handleImported = (payload: { modelId?: string }) => {
-      if (payload?.modelId === variant.model_id) setDownloaded(true)
+      if (payload?.modelId === variant.model_id || payload?.modelId === sid) setDownloaded(true)
     }
     events.on(
       DownloadEvent.onFileDownloadAndVerificationSuccess,
@@ -98,11 +102,15 @@ export const ModelDownloadAction = ({
   )
 
   const handleDownloadModel = useCallback(async () => {
+    // Sanitize model ID so the download directory uses underscores instead of dots.
+    // This keeps the on-disk name consistent with what the llamacpp extension expects.
+    const baseModelId = variant.model_id.split('/').pop() || variant.model_id
+    const downloadModelId = sanitizeModelId(baseModelId)
     addLocalDownloadingModel(variant.model_id)
     serviceHub
       .models()
       .pullModelWithMetadata(
-        variant.model_id,
+        downloadModelId,
         variant.path,
         (
           model.mmproj_models?.find(
@@ -114,9 +122,20 @@ export const ModelDownloadAction = ({
       .catch((error) => {
         console.error('Failed to start model download:', error)
         removeLocalDownloadingModel(variant.model_id)
+        const description =
+          error instanceof Error
+            ? error.message
+            : typeof error === 'string'
+              ? error
+              : (() => {
+                  try {
+                    return JSON.stringify(error)
+                  } catch {
+                    return String(error)
+                  }
+                })()
         toast.error('Failed to start model download', {
-          description:
-            error instanceof Error ? error.message : 'Please try again.',
+          description: description || 'Unknown error (check DevTools console).',
         })
       })
   }, [
@@ -129,11 +148,18 @@ export const ModelDownloadAction = ({
     removeLocalDownloadingModel,
   ])
 
+  const sanitizedModelId = sanitizeModelId(
+    variant.model_id.split('/').pop() || variant.model_id
+  )
   const isDownloading =
     localDownloadingModels.has(variant.model_id) ||
-    downloadProcesses.some((e) => e.id === variant.model_id)
+    downloadProcesses.some(
+      (e) => e.id === variant.model_id || e.id === sanitizedModelId
+    )
   const downloadProgress =
-    downloadProcesses.find((e) => e.id === variant.model_id)?.progress || 0
+    downloadProcesses.find(
+      (e) => e.id === variant.model_id || e.id === sanitizedModelId
+    )?.progress || 0
 
   if (isDownloading) {
     return (
@@ -149,11 +175,23 @@ export const ModelDownloadAction = ({
   }
 
   if (isDownloaded) {
+    // Use sanitized ID to match what's stored on disk (dots → underscores)
+    const localModelId = llamaProvider?.models.find(
+      (m: { id: string }) => {
+        const baseModelId = variant.model_id.split('/').pop() || ''
+        const sanitizedBaseId = sanitizeModelId(baseModelId)
+        return (
+          m.id === variant.model_id ||
+          m.id === sanitizedBaseId ||
+          m.id === `${model.developer}/${sanitizedBaseId}`
+        )
+      }
+    )?.id ?? variant.model_id
     return (
       <Button
         variant="default"
         size="sm"
-        onClick={() => handleUseModel(variant.model_id)}
+        onClick={() => handleUseModel(localModelId)}
         title={t('hub:useModel')}
       >
         {t('hub:newChat')}

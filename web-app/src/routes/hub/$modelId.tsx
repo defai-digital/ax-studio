@@ -569,11 +569,20 @@ function HubModelDetailContent() {
                                     )
                                 } catch (error) {
                                   console.error('Failed to start model download:', error)
+                                  const description =
+                                    error instanceof Error
+                                      ? error.message
+                                      : typeof error === 'string'
+                                        ? error
+                                        : (() => {
+                                            try {
+                                              return JSON.stringify(error)
+                                            } catch {
+                                              return String(error)
+                                            }
+                                          })()
                                   toast.error('Failed to download model', {
-                                    description:
-                                      error instanceof Error
-                                        ? error.message
-                                        : 'Please try again.',
+                                    description: description || 'Unknown error (check DevTools console).',
                                   })
                                 }
                               }}
