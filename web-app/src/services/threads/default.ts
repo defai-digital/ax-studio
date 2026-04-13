@@ -7,6 +7,35 @@ import { ConversationalExtension, ExtensionTypeEnum } from '@ax-studio/core'
 import type { ThreadsService } from './types'
 import { TEMPORARY_CHAT_ID } from '@/constants/chat'
 
+/**
+ * Rust's ThreadRecord expects whole-second i64 timestamps. Historical
+ * frontend code paths (and legacy on-disk thread.json files) sometimes
+ * produced `Date.now() / 1000` with fractional seconds, which Tauri's
+ * IPC deserializer rejects outright ("invalid type: floating point ...,
+ * expected i64"). Sanitize defensively here so every call — regardless
+ * of caller — ends up with a safe integer.
+ */
+const toWholeSeconds = (value: unknown): number | undefined => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+  // Detect values that are in ms (> year 33658) and downshift to seconds.
+  const seconds = value > 1e12 ? value / 1000 : value
+  return Math.floor(seconds)
+}
+
+const normalizeThreadTimestamps = <T extends { created?: unknown; updated?: unknown }>(
+  thread: T
+): T => {
+  const created = toWholeSeconds((thread as { created?: unknown }).created)
+  const updated =
+    toWholeSeconds((thread as { updated?: unknown }).updated) ??
+    Math.floor(Date.now() / 1000)
+  return {
+    ...thread,
+    ...(created !== undefined ? { created } : {}),
+    updated,
+  }
+}
+
 export class DefaultThreadsService implements ThreadsService {
   async fetchThreads(): Promise<Thread[]> {
     return (
@@ -97,14 +126,16 @@ export class DefaultThreadsService implements ThreadsService {
     if (!extension) return thread
 
     try {
-      const e = await extension.createThread({
-        ...thread,
-        assistants: assistantsPayload,
-        metadata: {
-          ...thread.metadata,
-          order: thread.order,
-        },
-      })
+      const e = await extension.createThread(
+        normalizeThreadTimestamps({
+          ...thread,
+          assistants: assistantsPayload,
+          metadata: {
+            ...thread.metadata,
+            order: thread.order,
+          },
+        })
+      )
 
       // Model is always stored in assistants[0].model
       const model = e.assistants?.[0]?.model
@@ -149,7 +180,7 @@ export class DefaultThreadsService implements ThreadsService {
     }
 
     try {
-      await extension.modifyThread({
+      await extension.modifyThread(normalizeThreadTimestamps({
         ...thread,
         assistants: thread.assistants?.map((e) => {
           return {
@@ -180,9 +211,9 @@ export class DefaultThreadsService implements ThreadsService {
           order: thread.order,
         },
         object: 'thread',
-        created: Date.now() / 1000,
-        updated: Date.now() / 1000,
-      })
+        created: Math.floor(Date.now() / 1000),
+        updated: Math.floor(Date.now() / 1000),
+      }))
     } catch (error) {
       console.error(`Failed to update thread ${thread.id}:`, error)
       throw error instanceof Error

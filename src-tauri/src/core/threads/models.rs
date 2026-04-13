@@ -1,5 +1,39 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
+
+/// Deserializer that accepts integers, floats (truncated), or null/missing
+/// for optional timestamp fields. The frontend historically wrote
+/// `Date.now() / 1000` (a float with fractional seconds) to thread.json;
+/// strict i64 deserialization rejects those records and breaks thread
+/// listing and create/modify for any legacy payload. We accept the float
+/// and truncate to whole seconds rather than failing the whole command.
+fn deserialize_optional_i64_lenient<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<Value>::deserialize(deserializer)?;
+    match value {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Number(n)) => {
+            if let Some(i) = n.as_i64() {
+                Ok(Some(i))
+            } else if let Some(u) = n.as_u64() {
+                Ok(Some(u as i64))
+            } else if let Some(f) = n.as_f64() {
+                if f.is_finite() {
+                    Ok(Some(f.trunc() as i64))
+                } else {
+                    Ok(None)
+                }
+            } else {
+                Ok(None)
+            }
+        }
+        Some(other) => Err(serde::de::Error::custom(format!(
+            "expected number or null for timestamp, got {other}"
+        ))),
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct ThreadRecord {
@@ -11,9 +45,9 @@ pub struct ThreadRecord {
     pub title: Option<String>,
     #[serde(default)]
     pub assistants: Vec<Value>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_i64_lenient")]
     pub created: Option<i64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_i64_lenient")]
     pub updated: Option<i64>,
     #[serde(default)]
     pub metadata: Option<Value>,
@@ -40,11 +74,9 @@ pub struct MessageRecord {
     pub content: Vec<Value>,
     #[serde(default)]
     pub status: Option<String>,
-    #[serde(default)]
-    #[serde(rename = "created_at")]
+    #[serde(default, rename = "created_at", deserialize_with = "deserialize_optional_i64_lenient")]
     pub created_at: Option<i64>,
-    #[serde(default)]
-    #[serde(rename = "completed_at")]
+    #[serde(default, rename = "completed_at", deserialize_with = "deserialize_optional_i64_lenient")]
     pub completed_at: Option<i64>,
     #[serde(default)]
     pub metadata: Option<Value>,
