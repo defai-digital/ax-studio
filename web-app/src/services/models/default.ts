@@ -408,12 +408,31 @@ export class DefaultModelsService implements ModelsService {
       return keyMappings[key] || key
     }
 
+    // Only keys in this set are load-time llama.cpp overrides. Everything
+    // else (temperature, top_p, top_k, frequency_penalty, …) is a per-request
+    // sampling parameter and must NOT be forwarded to engine.load() — the
+    // llamacpp extension used to hard-fail with "Unsupported load override
+    // setting: <name>" when mixed settings leaked through.
+    const LOAD_TIME_SETTING_KEYS = new Set<string>([
+      'fit', 'fit_target', 'fit_ctx',
+      'chat_template', 'n_gpu_layers', 'offload_mmproj',
+      'cpu_moe', 'n_cpu_moe', 'override_tensor_buffer_t',
+      'ctx_size', 'threads', 'threads_batch',
+      'n_predict', 'batch_size', 'ubatch_size',
+      'device', 'split_mode', 'main_gpu',
+      'flash_attn', 'cont_batching',
+      // common aliases that mapSettingKey normalizes to allowed keys
+      'ctx_len', 'ngl',
+    ])
+
     const settings = modelConfig?.settings
       ? Object.fromEntries(
-          Object.entries(modelConfig.settings).map(([key, value]) => [
-            mapSettingKey(key),
-            value.controller_props?.value,
-          ])
+          Object.entries(modelConfig.settings)
+            .filter(([key]) => LOAD_TIME_SETTING_KEYS.has(key))
+            .map(([key, value]) => [
+              mapSettingKey(key),
+              value.controller_props?.value,
+            ])
         )
       : undefined
 

@@ -1248,7 +1248,15 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     if (overrideSettings) {
       for (const [key, value] of Object.entries(overrideSettings)) {
         if (!ALLOWED_LOAD_OVERRIDE_KEYS.has(key as keyof LlamacppConfig)) {
-          throw new Error(`Unsupported load override setting: ${key}`)
+          // Historically this threw, which killed model load whenever the
+          // caller happened to pass a sampling param (temperature, top_p, …)
+          // among the settings — those are per-request params, not load-time
+          // overrides. Skip silently with a debug log instead of failing the
+          // whole load; the sampling params are applied later per message.
+          console.debug(
+            `[llamacpp] Ignoring non-load setting "${key}" at load time (runtime-only param)`
+          )
+          continue
         }
         if (value !== undefined && value !== '' && value !== null) {
           ;(mergedConfig as Record<string, unknown>)[key] = value
@@ -1677,13 +1685,36 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       )
     }
 
-    const appData = await getAppDataFolderPath()
-    const modelDir = await this._modelDir(modelId)
-    const modelFilePath = await joinPath([modelDir, 'model.gguf'])
+    const _wrap = async <T>(label: string, fn: () => Promise<T>): Promise<T> => {
+      try {
+        return await fn()
+      } catch (e) {
+        const msg =
+          e instanceof Error
+            ? e.message
+            : typeof e === 'string'
+              ? e
+              : JSON.stringify(e)
+        console.error(`[llamacpp] ${label} failed:`, e)
+        throw new Error(`${label}: ${msg}`)
+      }
+    }
+
+    const appData = await _wrap('getAppDataFolderPath', () => getAppDataFolderPath())
+    const modelDir = await _wrap('_modelDir', () => this._modelDir(modelId))
+    const modelFilePath = await _wrap('joinPath(model.gguf)', () =>
+      joinPath([modelDir, 'model.gguf'])
+    )
     const relativeModelPath = `llamacpp/models/${modelId}/model.gguf`
 
-    if (!(await fs.existsSync(modelDir))) await fs.mkdir(modelDir)
-    await this._validatePathWithinModelsDir(modelFilePath, 'Model')
+    const modelDirExists = await _wrap('fs.existsSync(modelDir)', () =>
+      fs.existsSync(modelDir)
+    )
+    if (!modelDirExists)
+      await _wrap('fs.mkdir(modelDir)', () => fs.mkdir(modelDir))
+    await _wrap('_validatePathWithinModelsDir', () =>
+      this._validatePathWithinModelsDir(modelFilePath, 'Model')
+    )
 
     const downloadExt = (window as any).core?.extensionManager?.getByName(
       '@ax-studio/download-extension'
