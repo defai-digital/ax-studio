@@ -37,6 +37,29 @@ export function openExternalUrl(url: string) {
   window?.open(url, '_blank')
 }
 
+// Tauri filesystem-style commands whose Rust signature is
+//   fn name(app_handle, request: SomeRequest)
+// Tauri's IPC layer expects the payload as `{ request: { ... } }`.
+// Every entry here gets wrapped automatically below so callers can keep
+// using the legacy `{ args: [...] }` / `{ path: "..." }` shapes.
+const REQUEST_WRAPPED_COMMANDS = new Set<string>([
+  'rm',
+  'mkdir',
+  'mv',
+  'join_path',
+  'exists_sync',
+  'file_stat',
+  'read_file_sync',
+  'write_file_sync',
+  'readdir_sync',
+  'read_dir_sync',
+  'write_yaml',
+  'read_yaml',
+  'decompress',
+  'append_file_sync',
+  'unlink_sync',
+])
+
 export const APIs = {
   ...Object.values(Routes).reduce((acc, proxy) => {
     return {
@@ -96,6 +119,17 @@ export const APIs = {
               proxy_timeout: pickNumber(raw, ['proxy_timeout', 'proxyTimeout']),
             }
             return getServiceHub().core().invoke(command, { config })
+          }
+
+          // Wrap args for commands whose Rust signature takes a `request:` param.
+          // Without this wrap, Tauri rejects the IPC call with
+          // "missing required key request" and the caller sees a cryptic string.
+          if (REQUEST_WRAPPED_COMMANDS.has(command)) {
+            // If the caller already wrapped it (defensive), pass through.
+            if (args && typeof args === 'object' && 'request' in args) {
+              return getServiceHub().core().invoke(command, args)
+            }
+            return getServiceHub().core().invoke(command, { request: args ?? {} })
           }
 
           return getServiceHub().core().invoke(command, args)
