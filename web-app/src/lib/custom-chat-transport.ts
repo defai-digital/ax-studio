@@ -305,14 +305,19 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
         // Not cached — run preflight
         const routerResult = this.lastRouterResult
         try {
-          const { serverHost, serverPort, apiPrefix } = useLocalApiServer.getState()
+          const { serverHost, serverPort, apiPrefix, apiKey: localProxyKey } =
+            useLocalApiServer.getState()
           const proxyUrl = `http://${serverHost}:${serverPort}${apiPrefix}`
+          const preflightHeaders: Record<string, string> = {
+            'Content-Type': 'application/json',
+            'X-Ax-Provider': finalProviderId,
+          }
+          if (localProxyKey && localProxyKey.trim().length > 0) {
+            preflightHeaders.Authorization = `Bearer ${localProxyKey}`
+          }
           const preflight = await httpFetch(`${proxyUrl}/chat/completions`, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Ax-Provider': finalProviderId,
-            },
+            headers: preflightHeaders,
             body: JSON.stringify({
               model: finalModelId,
               messages: [{ role: 'user', content: '.' }],

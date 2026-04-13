@@ -178,6 +178,20 @@ function normalizeOpenAICompatiblePayload(
     }
   }
 
+  // Promote reasoning_content/reasoning to content for reasoning models
+  // (DeepSeek-R1, Cloudflare @cf/zai-org/glm-4.7-flash, etc.) whose output
+  // arrives in non-standard fields the Vercel AI SDK ignores.
+  for (const field of ['reasoning_content', 'reasoning'] as const) {
+    const value = payload[field]
+    if (typeof value === 'string' && value.length > 0) {
+      const existing = typeof payload.content === 'string' ? payload.content : ''
+      payload.content = existing + value
+      delete payload[field]
+      changed = true
+      break // only promote the first one found
+    }
+  }
+
   if ('role' in payload && payload.role != null && typeof payload.role !== 'string') {
     payload.role = String(payload.role)
     changed = true
@@ -418,14 +432,27 @@ export class ModelFactory {
     // All providers go through the proxy using the OpenAI-compatible format.
     // The proxy routes the request to the correct upstream based on model_id lookup
     // in provider_configs, injects the real API key, and applies custom headers.
+    //
+    // Auth: the local proxy runs with its own `proxy_api_key` for access control
+    // (not the upstream provider key). The client must prove it's allowed to use
+    // this proxy; the proxy then swaps in the real provider key before forwarding.
+    // Previously no Authorization header was sent, so the proxy replied 401 and
+    // the UI hung on "thinking" forever waiting for a stream that never started.
+    const localProxyKey = useLocalApiServer.getState().apiKey
+    const proxyHeaders: Record<string, string> = {
+      'X-Ax-Provider': provider.provider,
+    }
+    if (localProxyKey && localProxyKey.trim().length > 0) {
+      proxyHeaders.Authorization = `Bearer ${localProxyKey}`
+    }
+
     const proxyModel = createOpenAICompatible({
       name: providerName,
       baseURL: proxyUrl,
-      // No Authorization header here — proxy injects the real key from provider_configs.
       // Passing a headers object prevents the SDK from looking up env vars.
       // X-Ax-Provider tells the proxy which registered provider to route to,
       // avoiding ambiguity when the same model ID exists in multiple providers.
-      headers: { 'X-Ax-Provider': provider.provider },
+      headers: proxyHeaders,
       includeUsage: true,
       fetch: fetchFn,
     })

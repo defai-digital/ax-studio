@@ -22,6 +22,9 @@ export type BootstrapLocalApiInput = {
   config: LocalApiServerConfig
   setServerStatus: (status: 'pending' | 'running' | 'stopped') => void
   setServerPort: (port: number) => void
+  /** Persist the apiKey the server actually launched with so the chat client
+   *  can send the matching `Authorization: Bearer <key>` header. */
+  setApiKey?: (key: string) => void
 }
 
 let bootstrapLocalApiInFlight: Promise<BootstrapResult> | null = null
@@ -29,7 +32,7 @@ let bootstrapLocalApiInFlight: Promise<BootstrapResult> | null = null
 export async function bootstrapLocalApi(
   input: BootstrapLocalApiInput
 ): Promise<BootstrapResult> {
-  const { serviceHub, enabled, config, setServerStatus, setServerPort } = input
+  const { serviceHub, enabled, config, setServerStatus, setServerPort, setApiKey } = input
 
   if (!enabled) return ok()
 
@@ -39,6 +42,22 @@ export async function bootstrapLocalApi(
     const result = await bootstrapLocalApiInFlight
     setServerStatus(result.ok ? 'running' : 'stopped')
     return result
+  }
+
+  // Rust rejects empty API keys, so ensure we always send a non-empty one.
+  const effectiveApiKey =
+    config.apiKey && config.apiKey.trim().length > 0
+      ? config.apiKey
+      : 'ax-' +
+        (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID().replace(/-/g, '')
+          : Math.random().toString(36).slice(2) + Date.now().toString(36))
+
+  // Persist the effective key back to the Zustand store so that chat
+  // requests (model-factory.ts, custom-chat-transport.ts) read the SAME
+  // value and can attach it as a Bearer token.
+  if (effectiveApiKey !== config.apiKey && setApiKey) {
+    setApiKey(effectiveApiKey)
   }
 
   bootstrapLocalApiInFlight = (async () => {
@@ -52,13 +71,15 @@ export async function bootstrapLocalApi(
 
       setServerStatus('pending')
 
+      // CORS must be enabled so the webview can reach the proxy via native fetch.
+      // Force it on to survive users with persisted `false` from old defaults.
       const actualPort = await window.core?.api?.startServer({
         host: config.host,
         port: config.port,
         prefix: config.prefix,
-        apiKey: config.apiKey,
+        apiKey: effectiveApiKey,
         trustedHosts: config.trustedHosts,
-        isCorsEnabled: config.corsEnabled,
+        isCorsEnabled: true,
         isVerboseEnabled: config.verboseLogs,
         proxyTimeout: config.proxyTimeout,
       })

@@ -3,6 +3,13 @@ import { persist } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
 import { createSafeJSONStorage } from '@/lib/storage'
 
+const generateDefaultApiKey = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return 'ax-' + crypto.randomUUID().replace(/-/g, '')
+  }
+  return 'ax-' + Math.random().toString(36).slice(2) + Date.now().toString(36)
+}
+
 type LocalApiServerState = {
   // Run local API server once app opens
   enableOnStartup: boolean
@@ -45,7 +52,11 @@ export const useLocalApiServer = create<LocalApiServerState>()(
       setServerPort: (value) => set({ serverPort: value }),
       apiPrefix: '/v1',
       setApiPrefix: (value) => set({ apiPrefix: value }),
-      corsEnabled: false,
+      // Default to true — the frontend webview (http://localhost:1420 in dev)
+      // uses native fetch to hit the local proxy, which triggers CORS preflight.
+      // Without this the browser rejects the request with "Load failed" before
+      // any bytes hit the network.
+      corsEnabled: true,
       setCorsEnabled: (value) => set({ corsEnabled: value }),
       verboseLogs: true,
       setVerboseLogs: (value) => set({ verboseLogs: value }),
@@ -61,7 +72,7 @@ export const useLocalApiServer = create<LocalApiServerState>()(
       setTrustedHosts: (hosts) => set({ trustedHosts: hosts }),
       proxyTimeout: 600,
       setProxyTimeout: (value) => set({ proxyTimeout: value }),
-      apiKey: '',
+      apiKey: generateDefaultApiKey(),
       setApiKey: (value) => set({ apiKey: value }),
     }),
     {
