@@ -24,13 +24,6 @@ use super::{
 };
 
 pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> Result<(), String> {
-    // Skip extension installation on mobile platforms
-    // Mobile uses pre-bundled extensions loaded via MobileCoreService in the frontend
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    {
-        return Ok(());
-    }
-
     let extensions_path = get_app_extensions_path(app.clone());
     let pre_install_path = app
         .path()
@@ -133,12 +126,15 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
                 .as_ref()
                 .and_then(|manifest| manifest["main"].as_str())
                 .unwrap_or("index.js");
-            let url = extension_dir.join(main_entry).to_string_lossy().to_string();
+            // Use the final extensions_path (not staging_path) for url/origin,
+            // because staging is renamed to extensions after extraction is done.
+            let final_extension_dir = extensions_path.join(extension_name.clone());
+            let url = final_extension_dir.join(main_entry).to_string_lossy().to_string();
 
             let new_extension = serde_json::json!({
                 "url": url,
                 "name": extension_name.clone(),
-                "origin": extension_dir.to_string_lossy(),
+                "origin": final_extension_dir.to_string_lossy(),
                 "active": true,
                 "description": extension_manifest
                     .as_ref()
@@ -619,7 +615,6 @@ pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
             ])
             .build(),
     )?;
-    #[cfg(not(any(target_os = "ios", target_os = "android")))]
     app.handle()
         .plugin(tauri_plugin_updater::Builder::new().build())?;
 
@@ -653,21 +648,11 @@ pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         log::info!("Enabling system tray icon");
         let _ = setup_tray(app);
     }
-    #[cfg(all(feature = "deep-link", any(windows, target_os = "linux")))]
+    #[cfg(all(feature = "deep-link", windows))]
     {
         use tauri_plugin_deep_link::DeepLinkExt;
         app.deep_link().register_all()?;
     }
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    {
-        let app_handle = app.handle().clone();
-        tauri::async_runtime::spawn(async move {
-            if let Err(e) = crate::core::threads::db::init_database(&app_handle).await {
-                log::error!("Failed to initialize mobile database: {}", e);
-            }
-        });
-    }
-
     setup_mcp(app);
     setup_theme_listener(app)?;
     Ok(())
@@ -677,12 +662,9 @@ pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
 pub fn app_run_handler(app: &tauri::AppHandle, event: RunEvent) {
     if let RunEvent::Exit = event {
         let app_handle = app.clone();
-        #[cfg(not(any(target_os = "ios", target_os = "android")))]
-        {
-            if let Some(window) = app_handle.get_webview_window("main") {
-                let _ = window.emit("app-shutting-down", ());
-                let _ = window.hide();
-            }
+        if let Some(window) = app_handle.get_webview_window("main") {
+            let _ = window.emit("app-shutting-down", ());
+            let _ = window.hide();
         }
         let state = app_handle.state::<super::state::AppState>();
         let cleanup_already_running = tokio::task::block_in_place(|| {
@@ -704,13 +686,10 @@ pub fn app_run_handler(app: &tauri::AppHandle, event: RunEvent) {
                     let cleanup_task = tauri::async_runtime::spawn(async move {
                         let state = cleanup_app.state::<super::state::AppState>();
                         background_cleanup_mcp_servers(&cleanup_app, &state).await;
-                        #[cfg(not(any(target_os = "ios", target_os = "android")))]
-                        {
-                            let _ =
-                                tauri_plugin_llamacpp::cleanup_llama_processes(cleanup_app.clone())
-                                    .await;
-                            log::info!("llama.cpp process cleanup completed");
-                        }
+                        let _ =
+                            tauri_plugin_llamacpp::cleanup_llama_processes(cleanup_app.clone())
+                                .await;
+                        log::info!("llama.cpp process cleanup completed");
                     });
                     *cleanup_guard = Some(cleanup_task);
                 }

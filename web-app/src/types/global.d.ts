@@ -25,9 +25,6 @@ declare global {
   declare const IS_WEB_APP: boolean
   declare const IS_MACOS: boolean
   declare const IS_WINDOWS: boolean
-  declare const IS_LINUX: boolean
-  declare const IS_IOS: boolean
-  declare const IS_ANDROID: boolean
   declare const PLATFORM: string
   declare const VERSION: string
   declare const AUTO_UPDATER_DISABLED: boolean

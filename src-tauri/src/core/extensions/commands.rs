@@ -17,14 +17,6 @@ pub fn install_extensions<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
 
 #[tauri::command]
 pub fn get_active_extensions<R: Runtime>(app: AppHandle<R>) -> Vec<serde_json::Value> {
-    // On mobile platforms, extensions are pre-bundled in the frontend
-    // Return empty array so frontend's MobileCoreService handles it
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    {
-        return vec![];
-    }
-
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
         let mut path = get_app_extensions_path(app);
         path.push("extensions.json");

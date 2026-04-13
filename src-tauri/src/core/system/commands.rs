@@ -120,15 +120,11 @@ pub fn factory_reset<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    // close window (not available on mobile platforms)
-    #[cfg(not(any(target_os = "ios", target_os = "android")))]
-    {
-        let windows = app_handle.webview_windows();
-        for (label, window) in windows.iter() {
-            window.close().unwrap_or_else(|_| {
-                log::warn!("Failed to close window: {label:?}");
-            });
-        }
+    let windows = app_handle.webview_windows();
+    for (label, window) in windows.iter() {
+        window.close().unwrap_or_else(|_| {
+            log::warn!("Failed to close window: {label:?}");
+        });
     }
     let data_folder = get_app_data_folder_path(app_handle.clone());
     log::info!("Factory reset, removing data folder: {data_folder:?}");
