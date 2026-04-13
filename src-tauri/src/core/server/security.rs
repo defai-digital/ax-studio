@@ -12,7 +12,7 @@ pub(crate) fn trusted_cors_origin(
     }
 
     let parsed_origin = url::Url::parse(origin).ok()?;
-    if !matches!(parsed_origin.scheme(), "http" | "https") {
+    if !matches!(parsed_origin.scheme(), "http" | "https" | "tauri") {
         return None;
     }
 
@@ -40,8 +40,23 @@ pub fn add_cors_headers_with_host_and_origin(
     trusted_hosts: &[Vec<String>],
     cors_enabled: bool,
 ) -> hyper::http::response::Builder {
+    // When CORS is disabled, still add headers if the request comes from
+    // a local origin hitting the loopback proxy.  This covers:
+    //   - tauri://localhost (production Tauri webview)
+    //   - http://localhost:* (Vite dev server during development)
+    //   - https://tauri.localhost (alternative Tauri origin)
+    // The Tauri webview uses globalThis.fetch for SSE streaming because
+    // the Tauri HTTP plugin's ReadableStream doesn't support pipeThrough().
+    // Without CORS headers the browser rejects the response.
     if !cors_enabled {
-        return builder;
+        let is_loopback_host = is_valid_host(host, &[]);
+        let is_local_origin = origin.starts_with("tauri://")
+            || origin.starts_with("https://tauri.")
+            || origin.starts_with("http://localhost")
+            || origin.starts_with("http://127.0.0.1");
+        if !(is_loopback_host && is_local_origin) {
+            return builder;
+        }
     }
 
     let mut builder = builder;

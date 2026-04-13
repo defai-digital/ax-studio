@@ -78,4 +78,31 @@ describe('bootstrapLocalApi', () => {
     expect(result.ok).toBe(false)
     expect(input.setServerStatus).toHaveBeenCalledWith('stopped')
   })
+
+  it('reuses the in-flight start call instead of invoking startServer twice', async () => {
+    let resolveStart: ((port: number) => void) | undefined
+    ;(globalThis as any).window.core.api.startServer = vi.fn(
+      () =>
+        new Promise<number>((resolve) => {
+          resolveStart = resolve
+        })
+    )
+
+    const firstInput = makeInput({ serviceHub: makeServiceHub(false) as any })
+    const secondInput = makeInput({ serviceHub: makeServiceHub(false) as any })
+
+    const firstPromise = bootstrapLocalApi(firstInput)
+    await Promise.resolve()
+    const secondPromise = bootstrapLocalApi(secondInput)
+    await Promise.resolve()
+
+    expect((globalThis as any).window.core.api.startServer).toHaveBeenCalledTimes(1)
+
+    resolveStart?.(39291)
+
+    await expect(firstPromise).resolves.toEqual({ ok: true })
+    await expect(secondPromise).resolves.toEqual({ ok: true })
+    expect(secondInput.setServerStatus).toHaveBeenCalledWith('pending')
+    expect(secondInput.setServerStatus).toHaveBeenLastCalledWith('running')
+  })
 })

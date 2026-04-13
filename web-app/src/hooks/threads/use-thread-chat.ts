@@ -220,16 +220,6 @@ export function useThreadChat({
         }
         // Re-read after waiting
         pendingAttachments = getAttachments()
-        const timedOut = pendingAttachments.some(
-          (a) =>
-            a.type === 'document' &&
-            (a.processing || (!a.processed && !a.error))
-        )
-        if (timedOut) {
-          console.warn(
-            '[use-thread-chat] Document processing timed out after 30s — sending message with available attachments only'
-          )
-        }
       }
 
       // Only include fully processed attachments

@@ -818,11 +818,20 @@ async fn _get_maybe_resume_with_hmac(
     url: &str,
     start_bytes: u64,
 ) -> Result<reqwest::Response, String> {
-    // Ensure the signing key is not the default test key
-    assert!(
-        SECRET_KEY != "local-dev-test-key-not-for-production",
-        "AX_STUDIO_SIGNING_KEY must not be the default test key"
-    );
+    // Ensure the signing key is not the default debug-mode key. Returning an
+    // error here (instead of panicking via `assert!`) lets the download path
+    // fall back to the unauthenticated original URL instead of crashing.
+    //
+    // NOTE: this previously checked `local-dev-test-key-not-for-production`
+    // which never matched the actual debug fallback (`debug-mode-key`), so
+    // the guard was a silent no-op.
+    if SECRET_KEY == "debug-mode-key" {
+        return Err(
+            "AX_STUDIO_SIGNING_KEY must be set at build time; \
+             the debug fallback key cannot be used for mirror downloads"
+                .to_string(),
+        );
+    }
 
     // Generate HMAC headers for request authentication
     let nonce_seed = get_download_nonce_seed();

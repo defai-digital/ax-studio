@@ -105,7 +105,7 @@ export function useChatSendHandler({
             'useChatSendHandler'
           )
           if (!storedTemporaryMessage || !storedTempNavigation) {
-            throw new Error('Unable to persist the temporary chat message')
+            console.warn('sessionStorage write failed for temporary chat; continuing navigation')
           }
           // Transfer pending attachments to the temporary chat ID
           useChatAttachments.getState().transferAttachments(
@@ -191,7 +191,7 @@ export function useChatSendHandler({
             'useChatSendHandler'
           )
           if (!storedInitialMessage) {
-            throw new Error('Unable to persist the new thread message')
+            console.warn('sessionStorage write failed for initial message; continuing navigation')
           }
 
           router.navigate({

@@ -180,8 +180,8 @@ export class DefaultThreadsService implements ThreadsService {
           order: thread.order,
         },
         object: 'thread',
-        created: Date.now() / 1000,
-        updated: Date.now() / 1000,
+        created: Math.floor(Date.now() / 1000),
+        updated: Math.floor(Date.now() / 1000),
       })
     } catch (error) {
       console.error(`Failed to update thread ${thread.id}:`, error)

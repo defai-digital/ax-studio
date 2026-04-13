@@ -7,6 +7,13 @@ pub fn resolve_path<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     path: &str,
 ) -> Result<PathBuf, String> {
+    // Allow HTTP/HTTPS URLs to pass through unchanged. These are not local
+    // filesystem paths and shouldn't be subject to the path-traversal check
+    // that follows; otherwise model downloads from remote URLs are blocked.
+    if path.starts_with("http://") || path.starts_with("https://") {
+        return Ok(PathBuf::from(path));
+    }
+
     let app_data_folder = get_app_data_folder_path(app_handle.clone());
     let canonical_app_data = app_data_folder
         .canonicalize()

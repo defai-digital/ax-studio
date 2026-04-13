@@ -231,12 +231,13 @@ describe('TauriMCPService', () => {
       await expect(mcpService.getTools()).rejects.toThrow('Failed to get tools')
     })
 
-    it('should return empty array when window.core.api is unavailable', async () => {
+    it('should handle undefined window.core.api', async () => {
       const originalCore = window.core
       // @ts-ignore
       window.core = undefined
 
       const result = await mcpService.getTools()
+
       expect(result).toEqual([])
 
       window.core = originalCore
@@ -271,12 +272,13 @@ describe('TauriMCPService', () => {
       await expect(mcpService.getConnectedServers()).rejects.toThrow('Failed to get connected servers')
     })
 
-    it('should return empty array when window.core.api is unavailable', async () => {
+    it('should handle undefined window.core.api', async () => {
       const originalCore = window.core
       // @ts-ignore
       window.core = undefined
 
       const result = await mcpService.getConnectedServers()
+
       expect(result).toEqual([])
 
       window.core = originalCore

@@ -24,6 +24,8 @@ export type BootstrapLocalApiInput = {
   setServerPort: (port: number) => void
 }
 
+let bootstrapLocalApiInFlight: Promise<BootstrapResult> | null = null
+
 export async function bootstrapLocalApi(
   input: BootstrapLocalApiInput
 ): Promise<BootstrapResult> {
@@ -31,35 +33,51 @@ export async function bootstrapLocalApi(
 
   if (!enabled) return ok()
 
-  try {
-    const isRunning = await serviceHub.app().getServerStatus()
-    if (isRunning) {
-      console.log('Local API Server is already running')
-      setServerStatus('running')
-      return ok()
-    }
-
+  if (bootstrapLocalApiInFlight) {
     setServerStatus('pending')
 
-    const actualPort = await window.core?.api?.startServer({
-      host: config.host,
-      port: config.port,
-      prefix: config.prefix,
-      apiKey: config.apiKey,
-      trustedHosts: config.trustedHosts,
-      isCorsEnabled: config.corsEnabled,
-      isVerboseEnabled: config.verboseLogs,
-      proxyTimeout: config.proxyTimeout,
-    })
+    const result = await bootstrapLocalApiInFlight
+    setServerStatus(result.ok ? 'running' : 'stopped')
+    return result
+  }
 
-    if (actualPort && actualPort !== config.port) {
-      setServerPort(actualPort)
+  bootstrapLocalApiInFlight = (async () => {
+    try {
+      const isRunning = await serviceHub.app().getServerStatus()
+      if (isRunning) {
+        console.log('Local API Server is already running')
+        setServerStatus('running')
+        return ok()
+      }
+
+      setServerStatus('pending')
+
+      const actualPort = await window.core?.api?.startServer({
+        host: config.host,
+        port: config.port,
+        prefix: config.prefix,
+        apiKey: config.apiKey,
+        trustedHosts: config.trustedHosts,
+        isCorsEnabled: config.corsEnabled,
+        isVerboseEnabled: config.verboseLogs,
+        proxyTimeout: config.proxyTimeout,
+      })
+
+      if (actualPort && actualPort !== config.port) {
+        setServerPort(actualPort)
+      }
+      setServerStatus('running')
+      return ok()
+    } catch (error) {
+      console.error('Failed to start Local API Server on startup:', error)
+      setServerStatus('stopped')
+      return fail(error)
     }
-    setServerStatus('running')
-    return ok()
-  } catch (error) {
-    console.error('Failed to start Local API Server on startup:', error)
-    setServerStatus('stopped')
-    return fail(error)
+  })()
+
+  try {
+    return await bootstrapLocalApiInFlight
+  } finally {
+    bootstrapLocalApiInFlight = null
   }
 }

@@ -135,7 +135,10 @@ export default class AxStudioAssistantExtension extends AssistantExtension {
     thread_location: undefined,
     id: 'ax-studio',
     object: 'assistant',
-    created_at: Date.now() / 1000,
+    // Math.floor matches the convention used by useThreads.ts and
+    // services/threads/default.ts so the Rust side never sees a
+    // fractional Unix timestamp it can't deserialize as i64.
+    created_at: Math.floor(Date.now() / 1000),
     name: 'Ax-Studio',
     description:
       "Ax-Studio is a helpful desktop assistant that can reason through complex tasks and use tools to complete them on the user's behalf.",

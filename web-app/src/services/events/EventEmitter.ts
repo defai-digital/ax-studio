@@ -29,15 +29,15 @@ export class EventEmitter {
   }
 
   public off(eventName: string, handler: EventHandler): void {
-    const handlers = this.handlers.get(eventName)
-    if (!handlers) return
-
-    const index = handlers.indexOf(handler)
-    if (index !== -1) {
-      handlers.splice(index, 1)
+    if (!this.handlers.has(eventName)) {
+      return
     }
-    if (handlers.length === 0) {
-      this.handlers.delete(eventName)
+
+    const handlers = this.handlers.get(eventName)
+    const index = handlers?.indexOf(handler)
+
+    if (index !== undefined && index !== -1) {
+      handlers?.splice(index, 1)
     }
   }
 

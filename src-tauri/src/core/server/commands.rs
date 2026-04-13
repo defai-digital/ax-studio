@@ -15,6 +15,16 @@ pub struct StartServerConfig {
     pub proxy_timeout: u64,
 }
 
+/// The proxy only needs an API key when something other than the local app
+/// can reach it: either CORS is on (browsers from any origin can call it) or
+/// the server binds to a non-loopback host (exposed on the network). For the
+/// default case (loopback + no CORS) the request handler in `proxy.rs` skips
+/// auth entirely when `proxy_api_key.is_empty()`, so requiring a key here
+/// would just block the in-app chat from starting on a fresh install.
+fn requires_authentication(host: &str, cors_enabled: bool) -> bool {
+    cors_enabled || !matches!(host, "127.0.0.1" | "localhost" | "::1")
+}
+
 #[tauri::command]
 pub async fn start_server<R: Runtime>(
     app_handle: AppHandle<R>,
@@ -31,8 +41,11 @@ pub async fn start_server<R: Runtime>(
         proxy_timeout,
     } = config;
 
-    if api_key.trim().is_empty() {
-        return Err("A non-empty API key is required to start the local proxy server".to_string());
+    if requires_authentication(&host, cors_enabled) && api_key.trim().is_empty() {
+        return Err(
+            "An API key is required when CORS is enabled or the server binds to a non-loopback host"
+                .to_string(),
+        );
     }
 
     let server_handle = state.server_handle.clone();
@@ -55,7 +68,9 @@ pub async fn start_server<R: Runtime>(
 
 #[cfg(test)]
 mod tests {
-    use super::{get_server_status, start_server, stop_server, StartServerConfig};
+    use super::{
+        get_server_status, requires_authentication, start_server, stop_server, StartServerConfig,
+    };
     use crate::core::state::{AppState, ProviderState, SharedMcpServers};
     use std::collections::{HashMap, HashSet};
     use std::sync::Arc;
@@ -99,8 +114,32 @@ mod tests {
         assert_eq!(config.api_key, "test-key");
     }
 
+    #[test]
+    fn test_requires_authentication_loopback_no_cors() {
+        // Default desktop case: bind to loopback, CORS off → no auth required.
+        // The proxy.rs request handler short-circuits the auth check when
+        // proxy_api_key is empty, so an empty key is fine here.
+        assert!(!requires_authentication("127.0.0.1", false));
+        assert!(!requires_authentication("localhost", false));
+        assert!(!requires_authentication("::1", false));
+    }
+
+    #[test]
+    fn test_requires_authentication_cors_enabled() {
+        // CORS enabled → browser-origin requests can hit us, key is required.
+        assert!(requires_authentication("127.0.0.1", true));
+        assert!(requires_authentication("localhost", true));
+    }
+
+    #[test]
+    fn test_requires_authentication_non_loopback_host() {
+        // Non-loopback host (network-exposed) → key is required.
+        assert!(requires_authentication("0.0.0.0", false));
+        assert!(requires_authentication("192.168.1.10", false));
+    }
+
     #[tokio::test]
-    async fn test_start_server_rejects_empty_api_key() {
+    async fn test_start_server_rejects_empty_api_key_when_cors_enabled() {
         let app = mock_app();
         app.manage(test_app_state());
 
@@ -113,7 +152,7 @@ mod tests {
                 prefix: "/v1".to_string(),
                 api_key: "   ".to_string(),
                 trusted_hosts: vec!["localhost".to_string()],
-                cors_enabled: false,
+                cors_enabled: true,
                 proxy_timeout: 30,
             },
         )
@@ -121,7 +160,7 @@ mod tests {
 
         assert_eq!(
             result.unwrap_err(),
-            "A non-empty API key is required to start the local proxy server"
+            "An API key is required when CORS is enabled or the server binds to a non-loopback host"
         );
     }
 

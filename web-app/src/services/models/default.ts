@@ -205,13 +205,11 @@ export class DefaultModelsService implements ModelsService {
 
   async updateModel(modelId: string, model: Partial<CoreModel>): Promise<void> {
     if (model.settings) {
-      const engine = this.getEngine()
-      if (engine) {
-        await engine.updateSettings(
-          model.settings as SettingComponentProps[]
-        )
-      }
+      this.getEngine()?.updateSettings(
+        model.settings as SettingComponentProps[]
+      )
     }
+    // Note: Model name/ID updates are handled at the provider level in the frontend
     console.log('Model update request processed for modelId:', modelId)
   }
 
@@ -320,9 +318,9 @@ export class DefaultModelsService implements ModelsService {
     const mlxEngine = this.getEngine('mlx')
     try {
       await Promise.allSettled([
-        llamacppEngine ? llamacppEngine.abortImport(id) : Promise.resolve(),
-        mlxEngine ? mlxEngine.abortImport(id) : Promise.resolve(),
-      ])
+        llamacppEngine?.abortImport(id),
+        mlxEngine?.abortImport(id),
+      ].filter(Boolean))
     } finally {
       events.emit(DownloadEvent.onFileDownloadStopped, {
         modelId: id,
@@ -351,9 +349,7 @@ export class DefaultModelsService implements ModelsService {
     model: string,
     provider?: string
   ): Promise<UnloadResult | undefined> {
-    const engine = this.getEngine(provider)
-    if (!engine) return undefined
-    return engine.unload(model)
+    return this.getEngine(provider)?.unload(model)
   }
 
   async stopAllModels(): Promise<void> {
@@ -397,7 +393,7 @@ export class DefaultModelsService implements ModelsService {
     }
 
     // Find the model configuration to get settings
-    const modelConfig = provider.models?.find((m) => m.id === model)
+    const modelConfig = provider.models.find((m) => m.id === model)
 
     // Key mapping function to transform setting keys
     const mapSettingKey = (key: string): string => {

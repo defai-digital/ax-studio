@@ -120,6 +120,7 @@ export async function executeSingleAgentStream(
       return undefined
     },
     onError: (error) => {
+      console.error('[SingleAgentTransport] stream error:', error)
       if (error == null) return 'Unknown error'
       if (typeof error === 'string') return error
       if (error instanceof Error) return error.message

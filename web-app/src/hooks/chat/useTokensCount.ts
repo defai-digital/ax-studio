@@ -89,13 +89,11 @@ export const useTokensCount = (
   }, [messages])
 
   const getMaxTokens = useCallback((): number | undefined => {
-    console.log('getMaxTokens: Model settings:', selectedModel?.settings)
     const raw =
       selectedModel?.settings?.ctx_len?.controller_props?.value ??
       selectedModel?.settings?.ctx_size?.controller_props?.value
     const parsed = Number(raw)
     if (Number.isFinite(parsed) && parsed > 0) {
-      console.log('getMaxTokens: Found setting value:', parsed)
       return parsed
     }
 
@@ -150,7 +148,6 @@ export const useTokensCount = (
       return looksLikeHostedModel ? 8192 : 4096
     }
 
-    console.log('useTokensCount: No max tokens found')
     return undefined
   }, [selectedModel, providers])
 

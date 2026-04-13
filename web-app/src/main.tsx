@@ -44,7 +44,6 @@ const bootstrap = async () => {
   } catch (error) {
     console.error('Failed to initialize app:', error)
     showStartupError()
-  } finally {
     hideInitialLoader()
   }
 }

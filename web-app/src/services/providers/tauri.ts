@@ -23,18 +23,18 @@ export class TauriProvidersService extends DefaultProvidersService {
     // Built-in cloud providers are safe to build without any I/O, so compute
     // them outside the per-engine try/catch — a failure in a single local
     // engine must not hide working cloud providers from the UI.
-    const builtinProviders: ModelProvider[] = []
-    for (const provider of predefinedProviders) {
-      try {
+    let builtinProviders: ModelProvider[] = []
+    try {
+      builtinProviders = predefinedProviders.map((provider) => {
         let models = provider.models as Model[]
         if (Object.keys(providerModels).includes(provider.provider)) {
           const providerKey = provider.provider as keyof typeof providerModels
           const builtInModels = (providerModels[providerKey]?.models ?? []) as unknown as string[]
 
           if (Array.isArray(builtInModels)) {
-            const originalModels = models
             models = builtInModels.map((model) => {
-              const modelManifest = originalModels.find((e) => e.id === model)
+              const modelManifest = models.find((e) => e.id === model)
+              // TODO: Check chat_template for tool call support
               return {
                 ...(modelManifest ?? { id: model, name: model }),
                 capabilities: getModelCapabilities(provider.provider, model),
@@ -43,14 +43,13 @@ export class TauriProvidersService extends DefaultProvidersService {
           }
         }
 
-        builtinProviders.push({
+        return {
           ...provider,
           models,
-        } as ModelProvider)
-      } catch (error) {
-        console.error(`Error building provider "${provider.provider}":`, error)
-        builtinProviders.push({ ...provider } as ModelProvider)
-      }
+        }
+      }).filter(Boolean) as ModelProvider[]
+    } catch (error) {
+      console.error('Error building built-in providers list:', error)
     }
 
     const runtimeProviders: ModelProvider[] = []

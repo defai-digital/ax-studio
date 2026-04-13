@@ -104,8 +104,13 @@ pub async fn register_provider_configs_batch(
                 .collect(),
             models: request.models,
         };
+        log::info!(
+            "Registered provider config (batch): {provider_name} base_url={:?} has_key={} models_count={}",
+            config.base_url.as_deref().map(|u| if u.len() > 40 { &u[..40] } else { u }),
+            config.api_key.as_ref().is_some_and(|k| !k.is_empty()),
+            config.models.len(),
+        );
         provider_state.configs.insert(provider_name.clone(), config);
-        log::info!("Registered provider config (batch): {provider_name}");
     }
     provider_state.sync_model_index();
     Ok(())

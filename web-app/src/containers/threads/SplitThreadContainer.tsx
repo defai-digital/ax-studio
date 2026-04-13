@@ -103,6 +103,7 @@ export function SplitThreadContainer({
     setMessages: setChatMessages,
     stop,
     addToolOutput,
+    getLastRouterResult,
   } = useChat({
     sessionId: threadId,
     sessionTitle: thread?.title,
@@ -127,9 +128,51 @@ export function SplitThreadContainer({
     experimental_throttle: 50,
     onFinish: ({ message, isAbort }) => {
       if (!isAbort && message.role === 'assistant') {
-        const contentParts = extractContentPartsFromUIMessage(message)
-        processMemoryOnFinish(message, contentParts, setChatMessages)
-        persistMessageOnFinishRef.current?.(message, contentParts)
+        // Attach routing metadata if the LLM router made a decision. Mirrors
+        // the behaviour of $threadId.tsx so split-thread mode also persists
+        // and renders the routing badge. The enriched copy is built
+        // immutably (no mutation of the AI SDK message object) and is used
+        // for both persistence and memory processing so the badge survives
+        // a reload.
+        const routerResult = getLastRouterResult()
+        let messageForPersistence = message
+        if (routerResult?.routed) {
+          const routingMeta = {
+            modelId: routerResult.modelId,
+            providerId: routerResult.providerId,
+            reason: routerResult.reason,
+            routed: true,
+            latencyMs: routerResult.latencyMs,
+          }
+          messageForPersistence = {
+            ...message,
+            metadata: {
+              ...((message.metadata ?? {}) as Record<string, unknown>),
+              routing: routingMeta,
+            },
+          }
+          setChatMessages((prev) =>
+            prev.map((m) =>
+              m.id === message.id
+                ? {
+                    ...m,
+                    metadata: {
+                      ...((m.metadata ?? {}) as Record<string, unknown>),
+                      routing: routingMeta,
+                    },
+                  }
+                : m,
+            ),
+          )
+        }
+        const contentParts =
+          extractContentPartsFromUIMessage(messageForPersistence)
+        processMemoryOnFinish(
+          messageForPersistence,
+          contentParts,
+          setChatMessages,
+        )
+        persistMessageOnFinishRef.current?.(messageForPersistence, contentParts)
       }
       startToolExecution(addToolOutput)
     },

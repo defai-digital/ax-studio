@@ -76,11 +76,21 @@ pub struct CustomUpdater {
 impl CustomUpdater {
     /// Create a new custom updater
     pub fn new() -> Result<Self, UpdateError> {
-        // Ensure the signing key is not the default test key
-        assert!(
-            SECRET_KEY != "local-dev-test-key-not-for-production",
-            "AX_STUDIO_SIGNING_KEY must not be the default test key"
-        );
+        // Ensure the signing key is not the default debug-mode key. Returning
+        // an error here (instead of panicking via `assert!`) keeps the app
+        // alive in misconfigured production builds and lets the caller
+        // surface a meaningful message.
+        //
+        // NOTE: this previously checked `local-dev-test-key-not-for-production`
+        // which never matched the actual debug fallback (`debug-mode-key`),
+        // so the guard was a silent no-op.
+        if SECRET_KEY == "debug-mode-key" {
+            return Err(UpdateError::InvalidResponse(
+                "AX_STUDIO_SIGNING_KEY must be set at build time; \
+                 the debug fallback key cannot be used for updates"
+                    .to_string(),
+            ));
+        }
 
         let client = Client::builder()
             .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
@@ -258,8 +268,16 @@ mod tests {
 
     #[test]
     fn test_version_comparison() {
-        let updater = CustomUpdater::new()
-            .unwrap_or_else(|e| panic!("Failed to create CustomUpdater in test: {e}"));
+        // Construct directly so the test does not depend on AX_STUDIO_SIGNING_KEY
+        // being set in the test environment (CustomUpdater::new() rejects the
+        // debug fallback key, which is what tests use).
+        let updater = CustomUpdater {
+            client: Client::builder()
+                .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
+                .build()
+                .expect("Failed to build reqwest client in test"),
+            secret_key: "test-key".to_string(),
+        };
 
         assert!(updater.is_update_available("1.0.0", "1.0.1"));
         assert!(updater.is_update_available("1.0.0", "1.1.0"));

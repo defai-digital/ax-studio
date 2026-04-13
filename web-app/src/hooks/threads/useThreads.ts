@@ -140,7 +140,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
           [threadId]: {
             ...state.threads[threadId],
             isFavorite: !state.threads[threadId].isFavorite,
-            updated: Date.now() / 1000,
+            updated: Math.floor(Date.now() / 1000),
           },
         },
       }
@@ -371,7 +371,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       id: isTemporary ? TEMPORARY_CHAT_ID : ulid(),
       title: title ?? (isTemporary ? 'Temporary Chat' : 'New Thread'),
       model,
-      updated: Date.now() / 1000,
+      updated: Math.floor(Date.now() / 1000),
       assistants: assistant ? [assistant] : [],
       ...(projectMetadata &&
         !isTemporary && {
@@ -441,7 +441,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
           [state.currentThreadId as string]: {
             ...state.threads[state.currentThreadId as string],
             assistants: assistant ? [assistant] : [],
-            updated: Date.now() / 1000,
+            updated: Math.floor(Date.now() / 1000),
           },
         },
       }
@@ -474,7 +474,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       const updatedThread = {
         ...thread,
         title: newTitle,
-        updated: Date.now() / 1000,
+        updated: Math.floor(Date.now() / 1000),
       }
       getServiceHub()
         .threads()
@@ -504,7 +504,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       // Update the thread with new timestamp and set it to order 1 (top)
       const updatedThread = {
         ...thread,
-        updated: Date.now() / 1000,
+        updated: Math.floor(Date.now() / 1000),
       }
 
       // Update all other threads to increment their order by 1
@@ -537,7 +537,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       const updatedThread = {
         ...thread,
         ...updates,
-        updated: Date.now() / 1000,
+        updated: Math.floor(Date.now() / 1000),
       }
 
       getServiceHub()

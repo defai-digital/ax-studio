@@ -30,12 +30,14 @@ use ax_studio_utils::{can_override_npx, can_override_uvx};
 const ALLOWED_COMMANDS: &[&str] = &["node", "python", "python3", "bun", "npx", "uvx"];
 const DEFAULT_MCP_CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// Environment variables that should be rejected for security reasons
+/// Environment variables that should be rejected for security reasons.
+/// PATH is intentionally NOT in this list — many MCP servers (especially
+/// uvx-based ones with custom Python toolchains) need a custom PATH to find
+/// their interpreter, and blocking it breaks those servers.
 const DANGEROUS_ENV_KEYS: &[&str] = &[
     "LD_PRELOAD",
     "DYLD_INSERT_LIBRARIES",
     "LD_LIBRARY_PATH",
-    "PATH",
 ];
 
 // Re-export ShutdownContext so existing `use super::helpers::ShutdownContext`
@@ -699,7 +701,12 @@ mod tests {
             "safe"
         );
         assert!(result.envs.get("LD_PRELOAD").is_none());
-        assert!(result.envs.get("PATH").is_none());
+        // PATH is intentionally allowed — MCP servers with custom toolchains
+        // (e.g. uvx) need a custom PATH to locate their interpreter.
+        assert_eq!(
+            result.envs.get("PATH").unwrap().as_str().unwrap(),
+            "/evil/path"
+        );
     }
 
     #[test]

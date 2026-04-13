@@ -133,12 +133,23 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
                 .as_ref()
                 .and_then(|manifest| manifest["main"].as_str())
                 .unwrap_or("index.js");
-            let url = extension_dir.join(main_entry).to_string_lossy().to_string();
+            // Build the URL/origin against the FINAL extensions path, not the
+            // staging path. The staging directory is renamed to `extensions/`
+            // at the end of this function (line ~172), so URLs that reference
+            // `extensions.staging/...` would point at a path that no longer
+            // exists. The frontend would then fail to load the extension and
+            // every conversational/persistence call throws "Conversational
+            // extension not available".
+            let final_extension_dir = extensions_path.join(extension_name.clone());
+            let url = final_extension_dir
+                .join(main_entry)
+                .to_string_lossy()
+                .to_string();
 
             let new_extension = serde_json::json!({
                 "url": url,
                 "name": extension_name.clone(),
-                "origin": extension_dir.to_string_lossy(),
+                "origin": final_extension_dir.to_string_lossy(),
                 "active": true,
                 "description": extension_manifest
                     .as_ref()

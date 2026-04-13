@@ -70,7 +70,14 @@ fn handle_cors_preflight(req: &Request<Body>, config: &ProxyConfig) -> Option<Re
         return None;
     }
 
-    if !config.cors_enabled {
+    // When CORS is disabled but the server is on loopback, still accept
+    // preflight requests.  The Tauri webview uses globalThis.fetch (not the
+    // Tauri HTTP plugin) for streaming SSE because the plugin's ReadableStream
+    // doesn't support pipeThrough().  Native fetch triggers CORS preflight
+    // for the tauri:// origin → localhost:1337 cross-origin request.
+    // Blocking it would break chat streaming entirely.
+    let is_loopback = matches!(config.host.as_str(), "127.0.0.1" | "localhost" | "::1");
+    if !config.cors_enabled && !is_loopback {
         return Some(finalize_response(
             Response::builder().status(StatusCode::FORBIDDEN),
             Body::from("CORS is disabled"),
@@ -315,18 +322,16 @@ fn validate_request(
     } else if is_whitelisted_path {
         log::debug!("Bypassing authorization check for whitelisted path: {path}");
     } else {
-        let mut error_response = Response::builder().status(StatusCode::SERVICE_UNAVAILABLE);
-        error_response = add_cors_headers_with_host_and_origin(
-            error_response,
-            host_header,
-            origin_header,
-            &config.trusted_hosts,
-            config.cors_enabled,
+        // proxy_api_key is empty and path is not whitelisted.
+        // Bypass the proxy's own token check — this is safe because
+        // commands.rs::requires_authentication() only allows the proxy to start
+        // with an empty key when the bind host is loopback AND CORS is disabled,
+        // so nothing off-machine can reach this branch. The upstream provider
+        // key is still injected from provider_configs in dispatch_to_upstream;
+        // this only skips the proxy's *own* token check, not provider auth.
+        log::debug!(
+            "Bypassing authorization check: proxy api key is unset (loopback-only mode), path: {path}"
         );
-        return Some(finalize_response(
-            error_response,
-            Body::from("Proxy API key is not configured"),
-        ));
     }
 
     if path == "/configs" || path.starts_with("/configs/") || path.starts_with("/configs?") {
@@ -739,13 +744,36 @@ mod tests {
 
     #[test]
     fn test_validate_request_empty_api_key_skips_auth() {
+        // When the proxy is running with an empty api_key (loopback-only mode,
+        // enforced at startup by commands.rs::requires_authentication), the
+        // request handler must bypass its own token check so the in-app chat
+        // can call /chat/completions without sending a token header. The
+        // upstream provider key is still injected from provider_configs.
         let config = test_config(false, "");
         let headers = hyper::HeaderMap::new();
         let result = validate_request("/chat/completions", "localhost:1337", "", &headers, &config);
-        assert!(result.is_some());
-        if let Some(resp) = result {
-            assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
-        }
+        assert!(
+            result.is_none(),
+            "validate_request must bypass auth when proxy_api_key is empty"
+        );
+    }
+
+    #[test]
+    fn test_validate_request_empty_api_key_ignores_token_headers() {
+        // With an empty proxy_api_key, the proxy ignores any client-supplied
+        // bearer/x-api-key entirely — neither matching nor non-matching tokens
+        // should change the bypass behavior.
+        let config = test_config(false, "");
+        let mut headers = hyper::HeaderMap::new();
+        headers.insert(
+            hyper::header::AUTHORIZATION,
+            "Bearer some-arbitrary-key".parse().unwrap(),
+        );
+        let result = validate_request("/chat/completions", "localhost:1337", "", &headers, &config);
+        assert!(
+            result.is_none(),
+            "validate_request must bypass auth when proxy_api_key is empty, even if a token is supplied"
+        );
     }
 
     // --- get_destination_path tests (additional coverage beyond tests.rs) ---

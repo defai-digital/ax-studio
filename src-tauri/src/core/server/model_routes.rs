@@ -171,7 +171,7 @@ fn resolve_provider_config_from_map(
     let Some(provider_cfg) = provider_configs.get(provider_name.as_str()) else {
         return Ok(None);
     };
-    let Some(base_url) = provider_cfg.base_url.as_deref() else {
+    let Some(base_url) = provider_cfg.base_url.as_deref().filter(|u| !u.is_empty()) else {
         return Ok(None);
     };
 
@@ -243,7 +243,9 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
         if let Some(hint) = provider_hint {
             if let Some(cfg) = provider_configs.get(hint) {
                 log::debug!("Using provider hint from X-Ax-Provider header: {hint}");
-                if let Some(base_url) = cfg.base_url.as_deref() {
+                if let Some(base_url) =
+                    cfg.base_url.as_deref().filter(|u| !u.is_empty())
+                {
                     Ok(Some(ResolvedProviderConfig {
                         target_base_url: build_upstream_url(
                             base_url,
@@ -254,14 +256,31 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
                         provider_custom_headers: cfg.custom_headers.clone(),
                     }))
                 } else {
-                    log::debug!("Provider hint '{hint}' matched but has no base_url, falling back to heuristic");
-                    resolve_provider_config_from_map(
+                    // Provider is registered but has no base_url — fall through to
+                    // heuristic first (handles prefixed model IDs like "openai/gpt-4"),
+                    // then return an actionable error if that also fails.
+                    log::debug!("Provider hint '{hint}' matched but has no base_url, trying heuristic");
+                    let heuristic = resolve_provider_config_from_map(
                         &provider_configs,
                         &provider_model_index,
                         &model_id,
                         destination_path,
                         is_anthropic_messages,
-                    )
+                    );
+                    match &heuristic {
+                        Ok(None) => {
+                            log::warn!(
+                                "Provider '{hint}' has no Base URL configured and heuristic \
+                                 lookup failed for model '{model_id}'. The provider must have \
+                                 a Base URL set in Settings → AI Providers."
+                            );
+                            Err(format!(
+                                "Provider '{hint}' has no Base URL configured. \
+                                 Set one in Settings → AI Providers → {hint}."
+                            ))
+                        }
+                        _ => heuristic,
+                    }
                 }
             } else {
                 log::debug!("Provider hint '{hint}' not found in registered providers, falling back to heuristic");
@@ -574,13 +593,18 @@ pub(super) async fn dispatch_to_upstream(
 
             let mut stream = response.bytes_stream();
             let (mut sender, body) = hyper::Body::channel();
+            let upstream_url_for_log = upstream_url.clone();
 
             tokio::spawn(async move {
                 // Regular passthrough - when /messages succeeds directly,
                 // the response is already in the correct format
+                let mut total_bytes: usize = 0;
+                let mut chunk_count: usize = 0;
                 while let Some(chunk_result) = stream.next().await {
                     match chunk_result {
                         Ok(chunk) => {
+                            total_bytes += chunk.len();
+                            chunk_count += 1;
                             if sender.send_data(chunk).await.is_err() {
                                 log::debug!("Client disconnected during streaming");
                                 break;
@@ -592,7 +616,20 @@ pub(super) async fn dispatch_to_upstream(
                         }
                     }
                 }
-                log::debug!("Streaming complete to client");
+                // Log byte and chunk counts so a silent empty response (e.g. an
+                // upstream that returns 200 with an empty/error body) is
+                // immediately visible in the logs instead of looking like a
+                // successful stream.
+                if total_bytes == 0 {
+                    log::warn!(
+                        "Streaming complete with EMPTY body — 0 bytes / 0 chunks from {upstream_url_for_log}. \
+                         Likely an upstream error returned with a 2xx status; check the network response in the client."
+                    );
+                } else {
+                    log::debug!(
+                        "Streaming complete to client: {chunk_count} chunks, {total_bytes} bytes from {upstream_url_for_log}"
+                    );
+                }
             });
 
             Ok(builder

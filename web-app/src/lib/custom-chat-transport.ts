@@ -22,29 +22,28 @@ import { executeSingleAgentStream } from './transport/single-agent-transport'
 import { executeMultiAgentStream } from './transport/multi-agent-transport'
 import type { TokenUsageCallback, ServiceHub, SendMessagesOptions } from './transport/transport-types'
 import { prepareProviderForChat } from './chat/model-session'
-import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
-import { isPlatformTauri } from '@/lib/platform'
 import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
 
-const httpFetch = isPlatformTauri() ? tauriFetch : globalThis.fetch
+// Use native fetch — same reason as model-factory.ts (Tauri plugin ReadableStream
+// incompatibility). Proxy accepts CORS from tauri:// origins on loopback.
+const httpFetch = globalThis.fetch
 
-// Cache preflight results so each model is only validated once per TTL window.
-// Successful models are cached for 10 minutes; failed models for 2 minutes
-// (so transient failures don't permanently block a model).
-const PREFLIGHT_SUCCESS_TTL_MS = 10 * 60 * 1000
-const PREFLIGHT_FAILURE_TTL_MS = 2 * 60 * 1000
+// Cache preflight results so each model is only validated once.
+// Failed models are remembered permanently (until page reload).
+// Successful models are cached for 10 minutes.
+const PREFLIGHT_TTL_MS = 10 * 60 * 1000
 const preflightCache = new Map<string, { ok: boolean; ts: number }>()
 
 function isModelPreflightCached(modelId: string, providerId: string): boolean | null {
   const key = `${providerId}::${modelId}`
   const entry = preflightCache.get(key)
   if (!entry) return null
-  const ttl = entry.ok ? PREFLIGHT_SUCCESS_TTL_MS : PREFLIGHT_FAILURE_TTL_MS
-  if (Date.now() - entry.ts > ttl) {
+  if (!entry.ok) return false // failed models stay rejected
+  if (Date.now() - entry.ts > PREFLIGHT_TTL_MS) {
     preflightCache.delete(key)
     return null
   }
-  return entry.ok ? true : false
+  return true
 }
 
 function cachePreflightResult(modelId: string, providerId: string, ok: boolean) {

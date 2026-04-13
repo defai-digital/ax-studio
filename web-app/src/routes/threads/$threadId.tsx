@@ -9,11 +9,24 @@ import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { useMessages } from '@/hooks/chat/useMessages'
 
-// Validation helper for threadId
+// Validation helper for threadId. Accepts:
+//   - ULID (26 char Crockford base32) — what `createThread` generates via ulid()
+//   - UUID (8-4-4-4-12 hex) — legacy thread IDs from before the ulid migration
+//   - `temporary-chat` — the reserved TEMPORARY_CHAT_ID constant
+// Anything else is rejected to prevent route-param injection (slashes, dots,
+// query strings, etc.) from reaching the threads store.
 const isValidThreadId = (id: string): boolean => {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-    id
-  )
+  // ULID: 26 chars, Crockford base32 (excludes I, L, O, U)
+  if (/^[0-9A-HJKMNP-TV-Z]{26}$/i.test(id)) return true
+  // UUID
+  if (
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+  ) {
+    return true
+  }
+  // Reserved temporary-chat ID
+  if (id === 'temporary-chat') return true
+  return false
 }
 
 import { extractContentPartsFromUIMessage } from '@/lib/messages'
@@ -168,9 +181,13 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     experimental_throttle: 50,
     onFinish: ({ message, isAbort }) => {
       if (!isAbort && message.role === 'assistant') {
-        // Attach routing metadata if the router made a decision
+        // Attach routing metadata if the router made a decision. We build an
+        // immutable enriched copy (`messageForPersistence`) instead of mutating
+        // the AI SDK's message object, then use that copy for both the React
+        // state update and the on-disk persistence so the routing badge
+        // survives reloads.
         const routerResult = getLastRouterResult()
-        if (import.meta.env.DEV && routerResult?.routed) console.log('[LLM Router] onFinish routerResult:', JSON.stringify(routerResult))
+        let messageForPersistence = message
         if (routerResult?.routed) {
           const routingMeta = {
             modelId: routerResult.modelId,
@@ -178,6 +195,13 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
             reason: routerResult.reason,
             routed: true,
             latencyMs: routerResult.latencyMs,
+          }
+          messageForPersistence = {
+            ...message,
+            metadata: {
+              ...((message.metadata ?? {}) as Record<string, unknown>),
+              routing: routingMeta,
+            },
           }
           // Update chat state so the UI re-renders with the routing badge
           setChatMessages((prev) =>
@@ -188,9 +212,9 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
             ),
           )
         }
-        const contentParts = extractContentPartsFromUIMessage(message)
-        processMemoryOnFinish(message, contentParts, setChatMessages)
-        persistMessageOnFinishRef.current?.(message, contentParts)
+        const contentParts = extractContentPartsFromUIMessage(messageForPersistence)
+        processMemoryOnFinish(messageForPersistence, contentParts, setChatMessages)
+        persistMessageOnFinishRef.current?.(messageForPersistence, contentParts)
       }
       startToolExecution(addToolOutput)
     },

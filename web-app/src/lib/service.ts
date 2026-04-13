@@ -37,6 +37,35 @@ export function openExternalUrl(url: string) {
   window?.open(url, '_blank')
 }
 
+// Filesystem commands in src-tauri/src/core/filesystem/commands.rs take a
+// single struct parameter named `request` (e.g. `request: SinglePathRequest`).
+// In Tauri 2 the parameter name maps to a top-level key in the invoke args,
+// so a JS call like `existsSync({ args: ['/path'] })` produces
+// `{ args: ['/path'] }` and Tauri reports
+// "command exists_sync missing required key request".
+//
+// Core's fs/core helper modules (`core/src/browser/fs.ts`,
+// `core/src/browser/core.ts`) still use the legacy unwrapped shape, so we
+// wrap them here. Also covers a couple of commands that nominally live
+// outside `filesystem/commands.rs` but use the same `request: ...` pattern
+// (`open_file_explorer` is parameter-named directly so it's *not* in the set).
+const FILESYSTEM_REQUEST_COMMANDS: ReadonlySet<string> = new Set([
+  'exists_sync',
+  'join_path',
+  'mkdir',
+  'rm',
+  'mv',
+  'file_stat',
+  'read_file_sync',
+  'write_file_sync',
+  'readdir_sync',
+  'unlink_sync',
+  'append_file_sync',
+  'write_yaml',
+  'read_yaml',
+  'decompress',
+])
+
 export const APIs = {
   ...Object.values(Routes).reduce((acc, proxy) => {
     return {
@@ -96,6 +125,18 @@ export const APIs = {
               proxy_timeout: pickNumber(raw, ['proxy_timeout', 'proxyTimeout']),
             }
             return getServiceHub().core().invoke(command, { config })
+          }
+
+          // Wrap legacy unwrapped filesystem-command args under `request:`
+          // unless the caller already supplied that key.
+          if (
+            FILESYSTEM_REQUEST_COMMANDS.has(command) &&
+            args &&
+            !('request' in args)
+          ) {
+            return getServiceHub()
+              .core()
+              .invoke(command, { request: args })
           }
 
           return getServiceHub().core().invoke(command, args)

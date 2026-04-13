@@ -33,12 +33,15 @@ export interface ModelParameters {
 
 import { type LanguageModel } from 'ai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
-import { isPlatformTauri } from '@/lib/platform'
 import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
 
-// Use Tauri's HTTP plugin on native; fall back to native fetch for web/browser.
-const httpFetch = isPlatformTauri() ? tauriFetch : globalThis.fetch
+// Use the webview's native fetch for AI requests to the local proxy.
+// Tauri's HTTP plugin (tauriFetch) bypasses CORS but its Response.body
+// ReadableStream doesn't support pipeThrough() — which the AI SDK v5
+// requires for SSE parsing (TextDecoderStream → EventSourceParserStream).
+// The Rust proxy accepts CORS preflight from tauri:// origins on loopback,
+// so native fetch works without CORS issues.
+const httpFetch = globalThis.fetch
 
 /**
  * Returns the base URL of the local proxy server.
@@ -71,6 +74,197 @@ function toOpenAIParams(parameters: Record<string, unknown>): Record<string, unk
   return result
 }
 
+function toOpenAICompatibleString(value: unknown): string | null {
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value)
+  }
+  if (Array.isArray(value)) {
+    const text = value
+      .map((item) => toOpenAICompatibleString(item))
+      .filter((item): item is string => item != null && item.length > 0)
+      .join('')
+
+    if (text.length > 0) return text
+
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return null
+    }
+  }
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+
+    if (typeof record.text === 'string') return record.text
+    if (typeof record.value === 'string') return record.value
+
+    if (Array.isArray(record.content)) {
+      return toOpenAICompatibleString(record.content)
+    }
+
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return null
+    }
+  }
+
+  return null
+}
+
+function normalizeOpenAICompatibleToolCall(
+  toolCall: unknown,
+  index: number,
+  requireIndex: boolean
+): { toolCall: unknown; changed: boolean } {
+  if (!toolCall || typeof toolCall !== 'object' || Array.isArray(toolCall)) {
+    return { toolCall, changed: false }
+  }
+
+  const normalized = { ...(toolCall as Record<string, unknown>) }
+  let changed = false
+
+  if (requireIndex && typeof normalized.index !== 'number') {
+    normalized.index = index
+    changed = true
+  }
+
+  if (normalized.id != null && typeof normalized.id !== 'string') {
+    normalized.id = String(normalized.id)
+    changed = true
+  }
+
+  if (
+    normalized.function &&
+    typeof normalized.function === 'object' &&
+    !Array.isArray(normalized.function)
+  ) {
+    const fn = { ...(normalized.function as Record<string, unknown>) }
+
+    if (fn.name != null && typeof fn.name !== 'string') {
+      fn.name = String(fn.name)
+      changed = true
+    }
+
+    if (fn.arguments != null && typeof fn.arguments !== 'string') {
+      const normalizedArguments = toOpenAICompatibleString(fn.arguments)
+      if (normalizedArguments != null) {
+        fn.arguments = normalizedArguments
+        changed = true
+      }
+    }
+
+    normalized.function = fn
+  }
+
+  return { toolCall: normalized, changed }
+}
+
+function normalizeOpenAICompatiblePayload(
+  payload: Record<string, unknown>,
+  requireToolCallIndex: boolean
+): boolean {
+  let changed = false
+
+  for (const field of ['content', 'reasoning_content', 'reasoning'] as const) {
+    const value = payload[field]
+    if (value != null && typeof value !== 'string') {
+      const normalizedValue = toOpenAICompatibleString(value)
+      if (normalizedValue != null) {
+        payload[field] = normalizedValue
+        changed = true
+      }
+    }
+  }
+
+  if ('role' in payload && payload.role != null && typeof payload.role !== 'string') {
+    payload.role = String(payload.role)
+    changed = true
+  }
+
+  if (Array.isArray(payload.tool_calls)) {
+    payload.tool_calls = payload.tool_calls.map((toolCall, index) => {
+      const normalizedToolCall = normalizeOpenAICompatibleToolCall(
+        toolCall,
+        index,
+        requireToolCallIndex
+      )
+      changed ||= normalizedToolCall.changed
+      return normalizedToolCall.toolCall
+    })
+  }
+
+  return changed
+}
+
+export function normalizeOpenAICompatibleEventData(data: string): string {
+  try {
+    const parsed = JSON.parse(data) as Record<string, unknown>
+    if (!Array.isArray(parsed.choices)) return data
+
+    let changed = false
+
+    for (const choice of parsed.choices) {
+      if (!choice || typeof choice !== 'object' || Array.isArray(choice)) continue
+
+      const normalizedChoice = choice as Record<string, unknown>
+
+      if (
+        normalizedChoice.finish_reason != null &&
+        typeof normalizedChoice.finish_reason !== 'string'
+      ) {
+        normalizedChoice.finish_reason = String(normalizedChoice.finish_reason)
+        changed = true
+      }
+
+      if (
+        normalizedChoice.delta &&
+        typeof normalizedChoice.delta === 'object' &&
+        !Array.isArray(normalizedChoice.delta)
+      ) {
+        changed =
+          normalizeOpenAICompatiblePayload(
+            normalizedChoice.delta as Record<string, unknown>,
+            true
+          ) || changed
+      }
+
+      if (
+        normalizedChoice.message &&
+        typeof normalizedChoice.message === 'object' &&
+        !Array.isArray(normalizedChoice.message)
+      ) {
+        changed =
+          normalizeOpenAICompatiblePayload(
+            normalizedChoice.message as Record<string, unknown>,
+            false
+          ) || changed
+      }
+    }
+
+    return changed ? JSON.stringify(parsed) : data
+  } catch {
+    return data
+  }
+}
+
+function normalizeOpenAICompatibleSseLine(line: string): string {
+  const prefix = line.startsWith('data: ')
+    ? 'data: '
+    : line.startsWith('data:')
+      ? 'data:'
+      : null
+
+  if (!prefix) return line
+
+  const data = line.slice(prefix.length).trimStart()
+  if (data === '[DONE]') return line
+
+  const normalized = normalizeOpenAICompatibleEventData(data)
+  return normalized === data ? line : `${prefix}${normalized}`
+}
+
 /**
  * Creates a fetch wrapper that normalizes non-standard streaming SSE responses.
  *
@@ -81,9 +275,10 @@ function toOpenAIParams(parameters: Record<string, unknown>): Record<string, unk
  * 1. **Missing tool_call index** (Gemini): Gemini's OpenAI-compatible SSE omits the
  *    required `index` field on `choices[].delta.tool_calls[]` items.
  *
- * 2. **Numeric content** (Cloudflare Workers AI): Some models return
- *    `choices[].delta.content` as a number (e.g. `0`) instead of a string (`"0"`).
- *    This happens when the model outputs a digit token.
+ * 2. **Non-string content/reasoning/tool args** (Cloudflare Workers AI and others):
+ *    Some models return text-ish fields as numbers, arrays, or objects rather than
+ *    plain strings. This includes `content`, `reasoning_content`, `reasoning`, and
+ *    `tool_calls[].function.arguments`.
  *
  * 3. **Numeric role** (various): Some providers return `role` as a non-string value.
  *
@@ -93,86 +288,68 @@ function createStreamingPatchFetch(baseFetch: typeof httpFetch): typeof httpFetc
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const response = await baseFetch(input, init)
     const contentType = response.headers.get('content-type') ?? ''
+
+    // Tauri HTTP plugin's Response.text() can hang on error responses with
+    // empty or non-JSON content-type. Intercept non-200 responses here and
+    // re-create a plain Response whose body the AI SDK can safely read.
+    if (!response.ok) {
+      let errorBody = ''
+      try {
+        // Read with a 5-second timeout to prevent hanging
+        errorBody = await Promise.race([
+          response.text(),
+          new Promise<string>((_, reject) =>
+            setTimeout(() => reject(new Error('Timeout reading error body')), 5000)
+          ),
+        ])
+      } catch {
+        errorBody = `HTTP ${response.status} ${response.statusText || 'Error'}`
+      }
+      console.error(`[StreamingPatch] proxy error ${response.status}: ${errorBody.slice(0, 300)}`)
+      // Return a new Response with a plain-text body the SDK can parse
+      return new Response(errorBody, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: new Headers({ 'content-type': 'text/plain' }),
+      })
+    }
+
     if (!contentType.includes('text/event-stream') || !response.body) {
       return response
     }
 
-    const reader = response.body.getReader()
     const encoder = new TextEncoder()
     const decoder = new TextDecoder()
     let buffer = ''
 
-    const transformedBody = new ReadableStream({
-      async pull(controller) {
-        const { done, value } = await reader.read()
-        if (done) {
-          if (buffer.trim()) controller.enqueue(encoder.encode(buffer))
-          controller.close()
-          return
-        }
-
-        buffer += decoder.decode(value, { stream: true })
+    const transform = new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        buffer += decoder.decode(chunk, { stream: true })
         const lines = buffer.split('\n')
         buffer = lines.pop() ?? ''
 
-        const patched = lines.map((line) => {
-          if (!line.startsWith('data: ')) return line
-          const json = line.slice(6)
-          if (json === '[DONE]') return line
-          try {
-            const parsed = JSON.parse(json)
-            if (!Array.isArray(parsed.choices)) return line
-
-            let patched = false
-            for (const choice of parsed.choices) {
-              const delta = choice.delta
-              if (!delta) continue
-
-              // Fix 1: Coerce non-string `content` to string (Cloudflare Workers AI)
-              if ('content' in delta && delta.content != null && typeof delta.content !== 'string') {
-                delta.content = String(delta.content)
-                patched = true
-              }
-
-              // Fix 2: Inject missing `index` on tool_calls (Gemini)
-              if (Array.isArray(delta.tool_calls)) {
-                delta.tool_calls = delta.tool_calls.map(
-                  (tc: Record<string, unknown>, i: number) => {
-                    if (typeof tc.index !== 'number') {
-                      patched = true
-                      return { index: i, ...tc }
-                    }
-                    return tc
-                  }
-                )
-              }
-
-              // Fix 3: Coerce non-string `role` to string
-              if ('role' in delta && delta.role != null && typeof delta.role !== 'string') {
-                delta.role = String(delta.role)
-                patched = true
-              }
-            }
-
-            // Only re-serialize if we actually changed something (avoid unnecessary work)
-            return patched ? `data: ${JSON.stringify(parsed)}` : line
-          } catch {
-            return line
-          }
-        })
+        const patched = lines.map((line) => normalizeOpenAICompatibleSseLine(line))
 
         controller.enqueue(encoder.encode(patched.join('\n') + '\n'))
       },
-      cancel() {
-        reader.cancel()
+      flush(controller) {
+        if (buffer.trim()) {
+          controller.enqueue(encoder.encode(normalizeOpenAICompatibleSseLine(buffer)))
+        }
       },
     })
 
-    return new Response(transformedBody, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: response.headers,
-    })
+    try {
+      const patchedBody = response.body.pipeThrough(transform)
+      return new Response(patchedBody, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      })
+    } catch (e) {
+      console.warn('[StreamingPatch] pipeThrough failed, returning original:', e)
+      return response
+    }
   }
 }
 

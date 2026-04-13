@@ -28,17 +28,19 @@ fn detect_shell_env_file(home_dir: &str, is_macos: bool) -> (&'static str, Strin
     }
 }
 
-// Validate environment variable key format: must match ^[A-Z_][A-Z0-9_]*$
+// Validate environment variable key format: must match ^[a-zA-Z_][a-zA-Z0-9_]*$
+// Lowercase is allowed because real-world env vars like `http_proxy`, `no_proxy`,
+// and `https_proxy` are conventionally lowercase.
 fn is_valid_env_key(key: &str) -> bool {
     if key.is_empty() {
         return false;
     }
     let chars: Vec<char> = key.chars().collect();
-    if !chars[0].is_ascii_uppercase() && chars[0] != '_' {
+    if !chars[0].is_ascii_alphabetic() && chars[0] != '_' {
         return false;
     }
     for &ch in &chars[1..] {
-        if !ch.is_ascii_uppercase() && !ch.is_ascii_digit() && ch != '_' {
+        if !ch.is_ascii_alphanumeric() && ch != '_' {
             return false;
         }
     }
@@ -442,12 +444,16 @@ mod tests {
         assert!(is_valid_env_key("_PRIVATE_VAR"));
         assert!(is_valid_env_key("VAR1"));
         assert!(is_valid_env_key("A"));
+        // Lowercase env vars like http_proxy, no_proxy are common and valid.
+        assert!(is_valid_env_key("http_proxy"));
+        assert!(is_valid_env_key("no_proxy"));
+        assert!(is_valid_env_key("mixedCase_Var1"));
     }
 
     #[test]
     fn test_is_valid_env_key_invalid_keys() {
         assert!(!is_valid_env_key(""));
-        assert!(!is_valid_env_key("lowercase"));
+        // Note: "lowercase" is now valid (see test_is_valid_env_key_valid_keys).
         assert!(!is_valid_env_key("VAR-NAME"));
         assert!(!is_valid_env_key("VAR.NAME"));
         assert!(!is_valid_env_key("VAR NAME"));

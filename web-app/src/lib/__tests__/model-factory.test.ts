@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { ModelFactory } from '../model-factory'
+import { ModelFactory, normalizeOpenAICompatibleEventData } from '../model-factory'
 import type { ProviderObject } from '@ax-studio/core'
 
 // Mock the Tauri invoke function
@@ -25,6 +25,94 @@ vi.mock('@ai-sdk/google', () => ({
 describe('ModelFactory', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  describe('normalizeOpenAICompatibleEventData', () => {
+    it('normalizes non-string content and reasoning fields in streaming chunks', () => {
+      const input = JSON.stringify({
+        choices: [
+          {
+            delta: {
+              content: [
+                { type: 'text', text: 'Hel' },
+                { type: 'text', text: 'lo' },
+              ],
+              reasoning_content: [
+                { type: 'reasoning', text: 'Think' },
+                { type: 'reasoning', text: 'ing' },
+              ],
+              role: 1,
+            },
+          },
+        ],
+      })
+
+      const output = JSON.parse(normalizeOpenAICompatibleEventData(input))
+
+      expect(output.choices[0].delta.content).toBe('Hello')
+      expect(output.choices[0].delta.reasoning_content).toBe('Thinking')
+      expect(output.choices[0].delta.role).toBe('1')
+    })
+
+    it('normalizes tool call metadata for streaming chunks', () => {
+      const input = JSON.stringify({
+        choices: [
+          {
+            delta: {
+              tool_calls: [
+                {
+                  id: 42,
+                  function: {
+                    name: 7,
+                    arguments: { city: 'Surat' },
+                  },
+                },
+              ],
+            },
+            finish_reason: false,
+          },
+        ],
+      })
+
+      const output = JSON.parse(normalizeOpenAICompatibleEventData(input))
+
+      expect(output.choices[0].delta.tool_calls[0]).toMatchObject({
+        index: 0,
+        id: '42',
+        function: {
+          name: '7',
+          arguments: '{"city":"Surat"}',
+        },
+      })
+      expect(output.choices[0].finish_reason).toBe('false')
+    })
+
+    it('leaves valid chunks unchanged', () => {
+      const input = JSON.stringify({
+        choices: [
+          {
+            delta: {
+              content: 'hello',
+              reasoning_content: 'thinking',
+              role: 'assistant',
+              tool_calls: [
+                {
+                  index: 0,
+                  id: 'tool-1',
+                  function: {
+                    name: 'weather',
+                    arguments: '{"city":"Surat"}',
+                  },
+                },
+              ],
+            },
+            finish_reason: 'stop',
+          },
+        ],
+      })
+
+      expect(normalizeOpenAICompatibleEventData(input)).toBe(input)
+    })
   })
 
   describe('createModel', () => {
