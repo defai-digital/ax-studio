@@ -30,7 +30,6 @@ vi.mock('zustand/middleware', () => ({
 
 // Mock global constants
 Object.defineProperty(global, 'IS_WINDOWS', { value: false, writable: true })
-Object.defineProperty(global, 'IS_LINUX', { value: false, writable: true })
 Object.defineProperty(global, 'IS_MACOS', { value: false, writable: true })
 Object.defineProperty(global, 'IS_TAURI', { value: false, writable: true })
 Object.defineProperty(global, 'IS_WEB_APP', { value: false, writable: true })

@@ -5,14 +5,10 @@ import {
   hideInitialLoader,
   patchBlobDownloads,
   preventDefaultFileDrop,
-  setupMobileViewport,
   showStartupError,
 } from '@/lib/bootstrap/app-startup'
 
 import './index.css'
-
-// Initialize mobile setup
-setupMobileViewport()
 
 // Prevent files from opening when dropped
 const cleanupFileDropGuards = preventDefaultFileDrop()

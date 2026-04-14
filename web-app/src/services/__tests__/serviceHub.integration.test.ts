@@ -5,10 +5,6 @@ import { isPlatformTauri } from '@/lib/platform/utils'
 // Mock platform detection
 vi.mock('@/lib/platform/utils', () => ({
   isPlatformTauri: vi.fn().mockReturnValue(false),
-  isPlatformIOS: vi.fn().mockReturnValue(false),
-  isPlatformAndroid: vi.fn().mockReturnValue(false),
-  isIOS: vi.fn().mockReturnValue(false),
-  isAndroid: vi.fn().mockReturnValue(false)
 }))
 
 // Mock @ax-studio/core EngineManager to prevent initialization issues

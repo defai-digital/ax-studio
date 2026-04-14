@@ -39,7 +39,6 @@ fn delete_legacy_credentials_from_store<R: Runtime>(
     Ok(())
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn save_credentials_internal<R: Runtime>(
     app: &AppHandle<R>,
     integration: &str,
@@ -50,20 +49,6 @@ fn save_credentials_internal<R: Runtime>(
     Ok(())
 }
 
-#[cfg(any(target_os = "android", target_os = "ios"))]
-fn save_credentials_internal<R: Runtime>(
-    app: &AppHandle<R>,
-    integration: &str,
-    credentials: &HashMap<String, String>,
-) -> Result<(), String> {
-    let store = app
-        .store(STORE_NAME)
-        .map_err(|e| format!("Failed to open store: {e}"))?;
-    store.set(&cred_key(integration), serde_json::json!(credentials));
-    Ok(())
-}
-
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn read_credentials_internal<R: Runtime>(
     app: &AppHandle<R>,
     integration: &str,
@@ -81,15 +66,6 @@ fn read_credentials_internal<R: Runtime>(
     Ok(Some(credentials))
 }
 
-#[cfg(any(target_os = "android", target_os = "ios"))]
-fn read_credentials_internal<R: Runtime>(
-    app: &AppHandle<R>,
-    integration: &str,
-) -> Result<Option<HashMap<String, String>>, String> {
-    read_legacy_credentials_from_store(app, integration)
-}
-
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn delete_credentials_internal<R: Runtime>(
     app: &AppHandle<R>,
     integration: &str,
@@ -97,14 +73,6 @@ fn delete_credentials_internal<R: Runtime>(
     secure_store::delete_credentials(integration)?;
     delete_legacy_credentials_from_store(app, integration)?;
     Ok(())
-}
-
-#[cfg(any(target_os = "android", target_os = "ios"))]
-fn delete_credentials_internal<R: Runtime>(
-    app: &AppHandle<R>,
-    integration: &str,
-) -> Result<(), String> {
-    delete_legacy_credentials_from_store(app, integration)
 }
 
 fn has_credentials_internal<R: Runtime>(

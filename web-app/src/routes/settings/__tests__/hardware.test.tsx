@@ -107,8 +107,6 @@ vi.mock('@tanstack/react-router', () => ({
 // Mock platform utils to enable hardware monitoring
 vi.mock('@/lib/platform/utils', () => ({
   isPlatformTauri: () => true,
-  isPlatformIOS: () => false,
-  isPlatformAndroid: () => false,
   getUnavailableFeatureMessage: () => 'Feature not available',
 }))
 

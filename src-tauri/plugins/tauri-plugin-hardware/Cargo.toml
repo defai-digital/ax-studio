@@ -20,11 +20,14 @@ sysinfo = "0.34.2"
 tauri = { version = "2.5.0", default-features = false, features = ["test"] }
 tokio = { version = "1", features = ["time"] }
 
-# Desktop-only dependencies
-[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
-vulkano = "0.34"
-ash = "0.37"
-nvml-wrapper = "0.10.0"
+[dependencies.vulkano]
+version = "0.34"
+
+[dependencies.ash]
+version = "0.37"
+
+[dependencies.nvml-wrapper]
+version = "0.10.0"
 
 # Windows-specific dependencies
 [target.'cfg(windows)'.dependencies]

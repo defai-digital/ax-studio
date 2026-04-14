@@ -122,15 +122,11 @@ pub fn factory_reset<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    // close window (not available on mobile platforms)
-    #[cfg(not(any(target_os = "ios", target_os = "android")))]
-    {
-        let windows = app_handle.webview_windows();
-        for (label, window) in windows.iter() {
-            window.close().unwrap_or_else(|_| {
-                log::warn!("Failed to close window: {label:?}");
-            });
-        }
+    let windows = app_handle.webview_windows();
+    for (label, window) in windows.iter() {
+        window.close().unwrap_or_else(|_| {
+            log::warn!("Failed to close window: {label:?}");
+        });
     }
     let data_folder = get_app_data_folder_path(app_handle.clone());
     log::info!("Factory reset, removing data folder: {data_folder:?}");
@@ -236,25 +232,6 @@ pub async fn read_logs<R: Runtime>(app: AppHandle<R>) -> Result<String, String> 
 // check if a system library is available
 #[tauri::command]
 pub fn is_library_available(library: &str) -> bool {
-    #[cfg(target_os = "linux")]
-    {
-        if library == "libvulkan.so.1" {
-            return std::path::Path::new("/usr/lib/libvulkan.so.1").exists()
-                || std::path::Path::new("/usr/lib64/libvulkan.so.1").exists()
-                || std::path::Path::new("/lib/x86_64-linux-gnu/libvulkan.so.1").exists();
-        }
-        if library == "libcuda.so.1" {
-            return std::path::Path::new("/usr/lib/libcuda.so.1").exists()
-                || std::path::Path::new("/usr/lib64/libcuda.so.1").exists()
-                || std::path::Path::new("/usr/lib/x86_64-linux-gnu/libcuda.so.1").exists();
-        }
-        if library == "libGL.so.1" {
-            return std::path::Path::new("/usr/lib/libGL.so.1").exists()
-                || std::path::Path::new("/usr/lib64/libGL.so.1").exists()
-                || std::path::Path::new("/usr/lib/x86_64-linux-gnu/libGL.so.1").exists();
-        }
-    }
-
     #[cfg(target_os = "macos")]
     {
         if library == "Metal.framework/Metal" {
@@ -386,31 +363,6 @@ pub fn launch_claude_code_with_config(
             Err(e) => {
                 // Cannot write to shell config file - return error instead of escalating privileges
                 return Err(format!("Cannot write to shell config file {}: {}. Please ensure write permissions or configure manually.", env_file_path, e));
-            }
-        }
-    } else if cfg!(target_os = "linux") {
-        let home_dir = std::env::var("HOME").map_err(|e| e.to_string())?;
-        let (shell_name, env_file_path) = detect_shell_env_file(&home_dir, false);
-        log::info!(
-            "Detected shell: {}, writing env to: {}",
-            shell_name,
-            env_file_path
-        );
-
-        match std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .open(&env_file_path)
-        {
-            Ok(_) => {
-                write_env_to_shell(&env_file_path, &env_vars)?;
-                return Ok(());
-            }
-            Err(_) => {
-                let ax_studio_config_dir = format!("{}/.config/ax-studio", home_dir);
-                let ext = if shell_name == "bash" { "bash" } else { "zsh" };
-                let env_file = format!("{}/claude-code-env.{}", ax_studio_config_dir, ext);
-                return Err(format!("NEED_PERMISSION:{}", env_file));
             }
         }
     } else {

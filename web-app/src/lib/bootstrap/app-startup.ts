@@ -39,42 +39,6 @@ export function showStartupError() {
     '<div style="height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;text-align:center;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#666;">Ax-Studio failed to initialize. Please restart the app.</div>'
 }
 
-export function setupMobileViewport() {
-  const isMobile =
-    /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
-    (typeof window.matchMedia === 'function' &&
-      window.matchMedia('(max-width: 768px)').matches)
-
-  if (!isMobile) return
-
-  const viewportMeta = document.querySelector('meta[name="viewport"]')
-  if (viewportMeta) {
-    viewportMeta.setAttribute(
-      'content',
-      'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover'
-    )
-  }
-
-  const style = document.createElement('style')
-  style.textContent = `
-    body {
-      padding-top: env(safe-area-inset-top);
-      padding-bottom: env(safe-area-inset-bottom);
-      padding-left: env(safe-area-inset-left);
-      padding-right: env(safe-area-inset-right);
-    }
-
-    #root {
-      min-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-    }
-
-    input, textarea, select {
-      font-size: 16px !important;
-    }
-  `
-  document.head.appendChild(style)
-}
-
 export function preventDefaultFileDrop(): () => void {
   const handleDragOver = (event: Event) => event.preventDefault()
   const handleDrop = (event: Event) => event.preventDefault()

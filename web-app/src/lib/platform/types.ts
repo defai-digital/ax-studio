@@ -6,7 +6,7 @@
 /**
  * Supported platforms
  */
-export type Platform = 'tauri' | 'web' | 'ios' | 'android'
+export type Platform = 'tauri' | 'web'
 
 /**
  * Platform Feature Enum

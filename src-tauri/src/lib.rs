@@ -8,20 +8,14 @@ use core::{
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 
-#[cfg_attr(
-    all(mobile, any(target_os = "android", target_os = "ios")),
-    tauri::mobile_entry_point
-)]
 pub fn run() {
-    let mut builder = tauri::Builder::default();
-    #[cfg(desktop)]
-    {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|_app, argv, _cwd| {
+    let builder = tauri::Builder::default().plugin(tauri_plugin_single_instance::init(
+        |_app, argv, _cwd| {
             log::info!(
                 "A new app instance was opened with {argv:?} and the deep link event was already triggered"
             );
-        }));
-    }
+        },
+    ));
 
     let mut app_builder = builder
         .plugin(tauri_plugin_os::init())
@@ -34,22 +28,10 @@ pub fn run() {
     {
         app_builder = app_builder.plugin(tauri_plugin_deep_link::init());
     }
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    {
-        app_builder = app_builder.plugin(tauri_plugin_hardware::init());
-    }
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    {
-        app_builder = app_builder.plugin(tauri_plugin_llamacpp::init());
-    }
+    app_builder = app_builder.plugin(tauri_plugin_hardware::init());
+    app_builder = app_builder.plugin(tauri_plugin_llamacpp::init());
 
-    // Desktop: include updater commands
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let app_builder = app_builder.invoke_handler(commands::desktop_handlers!());
-
-    // Mobile: no updater commands
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    let app_builder = app_builder.invoke_handler(commands::mobile_handlers!());
 
     let app = app_builder
         .manage(AppState {

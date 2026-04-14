@@ -12,8 +12,6 @@
 
 pub mod commands;
 mod constants;
-#[cfg(any(test, target_os = "android", target_os = "ios"))]
-pub mod db;
 pub mod helpers;
 pub mod models;
 pub mod utils;

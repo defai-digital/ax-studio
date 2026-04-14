@@ -78,15 +78,6 @@ export default defineConfig(({ mode }) => {
       IS_WINDOWS: JSON.stringify(
         process.env.TAURI_ENV_PLATFORM?.includes('windows') ?? false
       ),
-      IS_LINUX: JSON.stringify(
-        process.env.TAURI_ENV_PLATFORM?.includes('linux') ?? false
-      ),
-      IS_IOS: JSON.stringify(
-        process.env.TAURI_ENV_PLATFORM?.includes('ios') ?? false
-      ),
-      IS_ANDROID: JSON.stringify(
-        process.env.TAURI_ENV_PLATFORM?.includes('android') ?? false
-      ),
       PLATFORM: JSON.stringify(process.env.TAURI_ENV_PLATFORM),
 
       VERSION: JSON.stringify(packageJson.version),

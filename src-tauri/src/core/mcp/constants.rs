@@ -39,7 +39,7 @@ pub const DEFAULT_MCP_CONFIG: &str = r#"{
       "command": "node",
       "args": ["--experimental-sqlite", "~/Documents/Defai/ax/ax-fabric/packages/fabric-ingest/dist/cli.js", "mcp", "server"],
       "env": {},
-      "active": false,
+      "active": true,
       "official": true
     }
   },

@@ -17,45 +17,34 @@ pub fn install_extensions<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
 
 #[tauri::command]
 pub fn get_active_extensions<R: Runtime>(app: AppHandle<R>) -> Vec<serde_json::Value> {
-    // On mobile platforms, extensions are pre-bundled in the frontend
-    // Return empty array so frontend's MobileCoreService handles it
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    {
-        return vec![];
-    }
+    let mut path = get_app_extensions_path(app);
+    path.push("extensions.json");
+    log::info!("get app extensions, path: {path:?}");
 
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    {
-        let mut path = get_app_extensions_path(app);
-        path.push("extensions.json");
-        log::info!("get app extensions, path: {path:?}");
-
-        let contents = fs::read_to_string(path);
-        let contents: Vec<serde_json::Value> = match contents {
-            Ok(data) => match serde_json::from_str::<Vec<serde_json::Value>>(&data) {
-                Ok(exts) => exts
-                    .into_iter()
-                    .map(|ext| {
-                        serde_json::json!({
-                            "url": ext["url"],
-                            "name": ext["name"],
-                            "productName": ext["productName"],
-                            "active": ext["active"],
-                            "description": ext["description"],
-                            "version": ext["version"]
-                        })
+    let contents = fs::read_to_string(path);
+    match contents {
+        Ok(data) => match serde_json::from_str::<Vec<serde_json::Value>>(&data) {
+            Ok(exts) => exts
+                .into_iter()
+                .map(|ext| {
+                    serde_json::json!({
+                        "url": ext["url"],
+                        "name": ext["name"],
+                        "productName": ext["productName"],
+                        "active": ext["active"],
+                        "description": ext["description"],
+                        "version": ext["version"]
                     })
-                    .collect(),
-                Err(error) => {
-                    log::error!("Failed to parse extensions.json: {error}");
-                    vec![]
-                }
-            },
+                })
+                .collect(),
             Err(error) => {
-                log::error!("Failed to read extensions.json: {error}");
+                log::error!("Failed to parse extensions.json: {error}");
                 vec![]
             }
-        };
-        contents
+        },
+        Err(error) => {
+            log::error!("Failed to read extensions.json: {error}");
+            vec![]
+        }
     }
 }

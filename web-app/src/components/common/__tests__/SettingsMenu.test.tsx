@@ -4,8 +4,6 @@ import SettingsMenu from '../SettingsMenu'
 import { useMatches } from '@tanstack/react-router'
 
 // Mock global platform constants - simulate desktop (Tauri) environment
-Object.defineProperty(global, 'IS_IOS', { value: false, writable: true })
-Object.defineProperty(global, 'IS_ANDROID', { value: false, writable: true })
 Object.defineProperty(global, 'IS_WEB_APP', { value: false, writable: true })
 
 // Mock dependencies

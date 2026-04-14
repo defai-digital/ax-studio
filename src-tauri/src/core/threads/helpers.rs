@@ -14,9 +14,9 @@ use super::utils::{get_messages_path, get_thread_metadata_path};
 // Global per-thread locks for message file writes
 pub static MESSAGE_LOCKS: OnceLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> = OnceLock::new();
 
-/// Check if the platform should use SQLite (mobile platforms)
+/// Check if the platform should use SQLite
 pub fn should_use_sqlite() -> bool {
-    cfg!(any(target_os = "android", target_os = "ios"))
+    false
 }
 
 /// Get a lock for a specific thread to ensure thread-safe message file operations
@@ -208,11 +208,7 @@ mod tests {
 
     #[test]
     fn test_should_use_sqlite() {
-        let result = should_use_sqlite();
-        #[cfg(not(any(target_os = "android", target_os = "ios")))]
-        assert!(!result);
-        #[cfg(any(target_os = "android", target_os = "ios"))]
-        assert!(result);
+        assert!(!should_use_sqlite());
     }
 
     #[test]

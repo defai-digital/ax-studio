@@ -148,17 +148,6 @@ pub fn get_configuration_file_path<R: Runtime>(app_handle: tauri::AppHandle<R>) 
     });
 
     let package_name = env!("CARGO_PKG_NAME");
-    #[cfg(target_os = "linux")]
-    let old_data_dir = {
-        if let Some(config_path) = dirs::config_dir() {
-            config_path.join(package_name)
-        } else {
-            log::debug!("Could not determine config directory");
-            app_path.parent().unwrap_or(&app_path).join(package_name)
-        }
-    };
-
-    #[cfg(not(target_os = "linux"))]
     let old_data_dir = app_path.parent().unwrap_or(&app_path).join(package_name);
 
     if old_data_dir.exists() {

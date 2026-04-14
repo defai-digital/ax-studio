@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 const SERVICE_NAME: &str = "ax-studio.integrations";
 
-#[cfg(all(not(test), not(any(target_os = "android", target_os = "ios"))))]
+#[cfg(not(test))]
 pub fn save_credentials(
     integration: &str,
     credentials: &HashMap<String, String>,
@@ -16,7 +16,7 @@ pub fn save_credentials(
         .map_err(|e| format!("Failed to save credentials in secure store: {e}"))
 }
 
-#[cfg(all(not(test), not(any(target_os = "android", target_os = "ios"))))]
+#[cfg(not(test))]
 pub fn read_credentials(integration: &str) -> Result<Option<HashMap<String, String>>, String> {
     let entry = keyring::Entry::new(SERVICE_NAME, integration)
         .map_err(|e| format!("Failed to initialize secure store entry: {e}"))?;
@@ -30,7 +30,7 @@ pub fn read_credentials(integration: &str) -> Result<Option<HashMap<String, Stri
     }
 }
 
-#[cfg(all(not(test), not(any(target_os = "android", target_os = "ios"))))]
+#[cfg(not(test))]
 pub fn delete_credentials(integration: &str) -> Result<(), String> {
     let entry = keyring::Entry::new(SERVICE_NAME, integration)
         .map_err(|e| format!("Failed to initialize secure store entry: {e}"))?;
@@ -43,14 +43,14 @@ pub fn delete_credentials(integration: &str) -> Result<(), String> {
     }
 }
 
-#[cfg(any(test, target_os = "android", target_os = "ios"))]
+#[cfg(test)]
 fn test_store() -> &'static std::sync::Mutex<HashMap<String, String>> {
     static STORE: std::sync::OnceLock<std::sync::Mutex<HashMap<String, String>>> =
         std::sync::OnceLock::new();
     STORE.get_or_init(|| std::sync::Mutex::new(HashMap::new()))
 }
 
-#[cfg(any(test, target_os = "android", target_os = "ios"))]
+#[cfg(test)]
 pub fn save_credentials(
     integration: &str,
     credentials: &HashMap<String, String>,
@@ -64,7 +64,7 @@ pub fn save_credentials(
     Ok(())
 }
 
-#[cfg(any(test, target_os = "android", target_os = "ios"))]
+#[cfg(test)]
 pub fn read_credentials(integration: &str) -> Result<Option<HashMap<String, String>>, String> {
     let store = test_store()
         .lock()
@@ -78,7 +78,7 @@ pub fn read_credentials(integration: &str) -> Result<Option<HashMap<String, Stri
         .map_err(|e| format!("Failed to parse secure credentials: {e}"))
 }
 
-#[cfg(any(test, target_os = "android", target_os = "ios"))]
+#[cfg(test)]
 pub fn delete_credentials(integration: &str) -> Result<(), String> {
     let mut store = test_store()
         .lock()

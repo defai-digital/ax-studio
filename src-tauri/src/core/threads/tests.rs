@@ -157,33 +157,16 @@ async fn test_create_and_get_thread_assistant() {
 
 #[test]
 fn test_should_use_sqlite_platform_detection() {
-    // Test that should_use_sqlite returns correct value based on platform
-    // On desktop platforms (macOS, Linux, Windows), it should return false
-    // On mobile platforms (Android, iOS), it should return true
-
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    {
-        assert!(
-            should_use_sqlite(),
-            "should_use_sqlite should return true on mobile platforms"
-        );
-    }
-
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    {
-        assert!(
-            !should_use_sqlite(),
-            "should_use_sqlite should return false on desktop platforms"
-        );
-    }
+    assert!(
+        !should_use_sqlite(),
+        "should_use_sqlite should return false on desktop platforms"
+    );
 }
 
 #[tokio::test]
 async fn test_desktop_storage_backend() {
-    // This test verifies that on desktop platforms, the file-based storage is used
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let (app, _data_dir) = mock_app_with_temp_data_dir();
     {
-        let (app, _data_dir) = mock_app_with_temp_data_dir();
 
         // Create a thread
         let thread = ThreadRecord {
@@ -279,11 +262,8 @@ async fn test_modify_and_delete_thread() {
         .unwrap();
 
     // Verify deletion
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    {
-        let thread_dir = data_dir.join(&thread_id);
-        assert!(!thread_dir.exists(), "Thread directory should be deleted");
-    }
+    let thread_dir = data_dir.join(&thread_id);
+    assert!(!thread_dir.exists(), "Thread directory should be deleted");
 
     // Clean up
     let _ = fs::remove_dir_all(data_dir);

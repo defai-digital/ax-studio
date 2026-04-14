@@ -4,7 +4,7 @@
  */
 
 import { PlatformFeature } from './types'
-import { isPlatformTauri, isPlatformIOS, isPlatformAndroid } from './utils'
+import { isPlatformTauri } from './utils'
 
 /**
  * Platform Features Configuration
@@ -12,35 +12,28 @@ import { isPlatformTauri, isPlatformIOS, isPlatformAndroid } from './utils'
  */
 export const PlatformFeatures: Record<PlatformFeature, boolean> = {
   // Hardware monitoring and GPU usage
-  [PlatformFeature.HARDWARE_MONITORING]:
-    isPlatformTauri() && !isPlatformIOS() && !isPlatformAndroid(),
+  [PlatformFeature.HARDWARE_MONITORING]: isPlatformTauri(),
 
   // Local model inference (llama.cpp)
-  [PlatformFeature.LOCAL_INFERENCE]:
-    isPlatformTauri() && !isPlatformIOS() && !isPlatformAndroid(),
+  [PlatformFeature.LOCAL_INFERENCE]: isPlatformTauri(),
 
   // Local API server
-  [PlatformFeature.LOCAL_API_SERVER]:
-    isPlatformTauri() && !isPlatformIOS() && !isPlatformAndroid(),
+  [PlatformFeature.LOCAL_API_SERVER]: isPlatformTauri(),
 
   // Hub/model downloads
-  [PlatformFeature.MODEL_HUB]:
-    isPlatformTauri() && !isPlatformIOS() && !isPlatformAndroid(),
+  [PlatformFeature.MODEL_HUB]: isPlatformTauri(),
 
   // System integrations (logs, file explorer, etc.)
-  [PlatformFeature.SYSTEM_INTEGRATIONS]:
-    isPlatformTauri() && !isPlatformIOS() && !isPlatformAndroid(),
+  [PlatformFeature.SYSTEM_INTEGRATIONS]: isPlatformTauri(),
 
   // HTTPS proxy
-  [PlatformFeature.HTTPS_PROXY]:
-    isPlatformTauri() && !isPlatformIOS() && !isPlatformAndroid(),
+  [PlatformFeature.HTTPS_PROXY]: isPlatformTauri(),
 
   // Default model providers (OpenAI, Anthropic, etc.) - disabled for web-only Ax-Studio builds
   [PlatformFeature.DEFAULT_PROVIDERS]: isPlatformTauri(),
 
   // Projects management
-  [PlatformFeature.PROJECTS]:
-    isPlatformTauri() && !isPlatformIOS() && !isPlatformAndroid(),
+  [PlatformFeature.PROJECTS]: isPlatformTauri(),
 
   // Web-specific automatic model selection from Ax-Studio provider - enabled for web only
   [PlatformFeature.WEB_AUTO_MODEL_SELECTION]: !isPlatformTauri(),
@@ -52,20 +45,17 @@ export const PlatformFeatures: Record<PlatformFeature, boolean> = {
   [PlatformFeature.MCP_AUTO_APPROVE_TOOLS]: !isPlatformTauri(),
 
   // MCP servers settings page - disabled for web
-  [PlatformFeature.MCP_SERVERS_SETTINGS]:
-    isPlatformTauri() && !isPlatformIOS() && !isPlatformAndroid(),
+  [PlatformFeature.MCP_SERVERS_SETTINGS]: isPlatformTauri(),
 
   // Extensions settings page - disabled for web
-  [PlatformFeature.EXTENSIONS_SETTINGS]:
-    isPlatformTauri(),
+  [PlatformFeature.EXTENSIONS_SETTINGS]: isPlatformTauri(),
 
   // Assistant functionality - disabled for web
   [PlatformFeature.ASSISTANTS]: isPlatformTauri(),
 
   // Shortcut
-  [PlatformFeature.SHORTCUT]: !isPlatformIOS() && !isPlatformAndroid(),
+  [PlatformFeature.SHORTCUT]: true,
 
   // File attachments/RAG UI and tooling - desktop platforms only
-  [PlatformFeature.FILE_ATTACHMENTS]:
-    isPlatformTauri() && !isPlatformIOS() && !isPlatformAndroid(),
+  [PlatformFeature.FILE_ATTACHMENTS]: isPlatformTauri(),
 }
