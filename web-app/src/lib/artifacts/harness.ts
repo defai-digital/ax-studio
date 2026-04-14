@@ -708,22 +708,6 @@ function buildVegaHarnessInline(source: string, vegaJs: string, vegaLiteJs: stri
 // ---------------------------------------------------------------------------
 
 /**
- * Synchronous build — only works for html and svg (no vendor scripts needed).
- * @deprecated Use buildHarnessAsync for all types.
- */
-export function buildHarness(type: ArtifactType, source: string, _baseUrl?: string): string {
-  switch (type) {
-    case 'html': return buildHtmlHarness(source)
-    case 'svg': return buildSvgHarness(source)
-    default:
-      // Fallback for callers that haven't migrated: return a placeholder
-      return buildHtmlHarness(
-        `<p style="padding:1rem;font-family:monospace;color:#888">Loading ${type} artifact…</p>`
-      )
-  }
-}
-
-/**
  * Async build — fetches vendor scripts (cached after first call) and inlines
  * them directly in the srcdoc HTML so no <script src=""> is needed inside the
  * sandboxed iframe. JSX is transformed in the main thread.
