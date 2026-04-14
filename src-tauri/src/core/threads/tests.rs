@@ -1,5 +1,4 @@
 use super::commands::*;
-use super::helpers::should_use_sqlite;
 use super::models::{MessageRecord, ThreadRecord};
 use crate::core::app::commands::get_app_data_folder_path;
 use futures_util::future;
@@ -153,14 +152,6 @@ async fn test_create_and_get_thread_assistant() {
 
     // Clean up
     let _ = fs::remove_dir_all(data_dir);
-}
-
-#[test]
-fn test_should_use_sqlite_platform_detection() {
-    assert!(
-        !should_use_sqlite(),
-        "should_use_sqlite should return false on desktop platforms"
-    );
 }
 
 #[tokio::test]

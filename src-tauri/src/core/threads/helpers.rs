@@ -14,10 +14,6 @@ use super::utils::{get_messages_path, get_thread_metadata_path};
 // Global per-thread locks for message file writes
 pub static MESSAGE_LOCKS: OnceLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> = OnceLock::new();
 
-/// Check if the platform should use SQLite
-pub fn should_use_sqlite() -> bool {
-    false
-}
 
 /// Get a lock for a specific thread to ensure thread-safe message file operations
 pub async fn get_lock_for_thread(thread_id: &str) -> Arc<Mutex<()>> {
@@ -204,11 +200,6 @@ mod tests {
 
     fn cleanup_test_dir(dir: &std::path::Path) {
         let _ = fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn test_should_use_sqlite() {
-        assert!(!should_use_sqlite());
     }
 
     #[test]

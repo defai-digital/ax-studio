@@ -11,17 +11,11 @@ use crate::core::state::AppState;
 
 /// Detect the user's default shell and return the appropriate env file path.
 /// Returns (shell_name, env_file_path).
-fn detect_shell_env_file(home_dir: &str, is_macos: bool) -> (&'static str, String) {
+fn detect_shell_env_file(home_dir: &str) -> (&'static str, String) {
     let shell = std::env::var("SHELL").unwrap_or_default();
     if shell.ends_with("/bash") {
-        // macOS uses login shells in Terminal, so ~/.bash_profile is sourced.
-        // Linux interactive shells source ~/.bashrc.
-        let file = if is_macos {
-            format!("{}/.bash_profile", home_dir)
-        } else {
-            format!("{}/.bashrc", home_dir)
-        };
-        ("bash", file)
+        // macOS uses login shells in Terminal, so ~/.bash_profile is sourced
+        ("bash", format!("{}/.bash_profile", home_dir))
     } else {
         // Default to zsh (macOS default since Catalina)
         ("zsh", format!("{}/.zshenv", home_dir))
@@ -343,7 +337,7 @@ pub fn launch_claude_code_with_config(
 
     if cfg!(target_os = "macos") {
         let home_dir = std::env::var("HOME").map_err(|e| e.to_string())?;
-        let (shell_name, env_file_path) = detect_shell_env_file(&home_dir, true);
+        let (shell_name, env_file_path) = detect_shell_env_file(&home_dir);
         log::info!(
             "Detected shell: {}, writing env to: {}",
             shell_name,
