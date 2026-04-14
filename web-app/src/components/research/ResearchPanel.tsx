@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   XIcon,
   CopyIcon,
@@ -10,7 +10,7 @@ import {
   DownloadIcon,
 } from 'lucide-react'
 import { useResearchPanel } from '@/hooks/research/useResearchPanel'
-import { useResearch } from '@/hooks/research/useResearch'
+import { cancelResearchForThread } from '@/hooks/research/useResearch'
 import { ResearchProgress } from './ResearchProgress'
 import { ResearchReport } from './ResearchReport'
 import { SourcesList } from './SourcesList'
@@ -25,7 +25,7 @@ interface ResearchPanelProps {
 
 export function ResearchPanel({ threadId, onClose }: ResearchPanelProps) {
   const entry = useResearchPanel((s) => s.getPinned(threadId))
-  const { cancelResearch } = useResearch(threadId)
+  const cancelResearch = useCallback(() => cancelResearchForThread(threadId), [threadId])
 
   const [activeTab, setActiveTab] = useState<Tab>('progress')
   const [copied, setCopied] = useState(false)
@@ -117,20 +117,7 @@ export function ResearchPanel({ threadId, onClose }: ResearchPanelProps) {
           {/* Status badge */}
           <span className={cn('text-[10px] font-medium px-1.5', statusColor)}>{statusLabel}</span>
 
-          {/* Tab buttons */}
-          <button
-            onClick={() => pickTab('progress')}
-            className={cn(
-              'flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors',
-              activeTab === 'progress'
-                ? 'text-foreground bg-background shadow-sm'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/70'
-            )}
-            title="Progress"
-          >
-            <ActivityIcon size={12} />
-            Progress
-          </button>
+          {/* Tab buttons — Report first so it's the leftmost tab */}
           <button
             onClick={() => pickTab('report')}
             className={cn(
@@ -143,6 +130,19 @@ export function ResearchPanel({ threadId, onClose }: ResearchPanelProps) {
           >
             <FileTextIcon size={12} />
             Report
+          </button>
+          <button
+            onClick={() => pickTab('progress')}
+            className={cn(
+              'flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors',
+              activeTab === 'progress'
+                ? 'text-foreground bg-background shadow-sm'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/70'
+            )}
+            title="Progress"
+          >
+            <ActivityIcon size={12} />
+            Progress
           </button>
           <button
             onClick={() => pickTab('sources')}

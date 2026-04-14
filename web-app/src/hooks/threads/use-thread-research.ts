@@ -13,7 +13,7 @@ function parseResearchDepth(afterCommand: string): 2 | 3 {
 export function useThreadResearch(threadId: string) {
   const pinnedResearch = useResearchPanel((s) => s.getPinned(threadId))
   const clearResearch = useResearchPanel((s) => s.clearResearch)
-  const { startResearch } = useResearch(threadId)
+  const { startResearch, cancelResearch } = useResearch(threadId)
 
   const handleResearchCommand = useCallback(
     (text: string): boolean => {
@@ -31,5 +31,5 @@ export function useThreadResearch(threadId: string) {
     [startResearch]
   )
 
-  return { pinnedResearch, clearResearch, startResearch, handleResearchCommand }
+  return { pinnedResearch, clearResearch, startResearch, cancelResearch, handleResearchCommand }
 }

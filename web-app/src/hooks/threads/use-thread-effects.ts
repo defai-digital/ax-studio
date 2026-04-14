@@ -147,6 +147,14 @@ export function useThreadEffects({
   // subsequent thread in the same session silently dropped its initial
   // message.
   const initialMessageSentForThreadRef = useRef<string | null>(null)
+  // Use refs for all callbacks so the effect only re-runs when threadId changes.
+  // Callbacks are recreated on every render (unstable deps chain via Zustand
+  // selectors), so putting them in the dep array would re-trigger the effect.
+  const handleResearchCommandRef = useRef(handleResearchCommand)
+  handleResearchCommandRef.current = handleResearchCommand
+  const processAndSendMessageRef = useRef(processAndSendMessage)
+  processAndSendMessageRef.current = processAndSendMessage
+
   useEffect(() => {
     if (initialMessageSentForThreadRef.current === threadId) return
 
@@ -159,7 +167,6 @@ export function useThreadEffects({
     if (!storedMessage) return
 
     let cancelled = false
-    let startedResearch = false
 
     safeStorageRemoveItem(sessionStorage, initialMessageKey, 'useThreadEffects')
     initialMessageSentForThreadRef.current = threadId
@@ -175,25 +182,25 @@ export function useThreadEffects({
           return
         }
         if (cancelled) return
-        if (handleResearchCommand(message.text)) {
-          startedResearch = true
-          if (cancelled) cancelResearch()
+        if (handleResearchCommandRef.current(message.text)) {
+          // Research started — do NOT cancel on cleanup. Research runs independently
+          // of this effect's lifecycle and should only be cancelled by the user.
           return
         }
         if (cancelled) return
-        await processAndSendMessage(message.text)
+        await processAndSendMessageRef.current(message.text)
       } catch (error) {
         console.error('Failed to parse initial message:', error)
       }
     })()
 
     return () => {
+      // Only cancel in-progress chat streaming, not research.
+      // React StrictMode runs this cleanup on every mount cycle, so cancelling
+      // research here would abort it immediately on the first message.
       cancelled = true
-      if (startedResearch) {
-        cancelResearch()
-      }
     }
-  }, [threadId, processAndSendMessage, handleResearchCommand, cancelResearch])
+  }, [threadId])
 
   // ─── Apply thread prompt + agent team from sessionStorage ────────────────
   // Merge both sessionStorage carries in a SINGLE updateThread call. The

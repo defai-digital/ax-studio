@@ -37,6 +37,11 @@ const MAX_SOURCES = 40
 // Module-level map so cancelResearch() works from any hook instance
 const activeAbortControllers = new Map<string, AbortController>()
 
+/** Cancel research for a thread without needing to mount the full useResearch hook. */
+export function cancelResearchForThread(threadId: string) {
+  activeAbortControllers.get(threadId)?.abort()
+}
+
 function saveMessageToChat(threadId: string, msg: ThreadMessage) {
   useMessages.getState().addMessage(msg)
   const uiMsg = convertThreadMessageToUIMessage(msg)
@@ -64,18 +69,22 @@ function saveMessageToChat(threadId: string, msg: ThreadMessage) {
 }
 
 export function useResearch(threadId: string) {
-  const updateResearch = useResearchPanel((s) => s.updateResearch)
-  const openResearch = useResearchPanel((s) => s.openResearch)
-  const addActivityEvent = useActivityFeed((s) => s.addEvent)
+  // Use .getState() for store actions — they never change, so no subscriptions
+  // needed. Subscribing via selectors creates new function refs on every render
+  // which cascades into useCallback/useEffect dependency churn and causes
+  // in-flight research to be cancelled whenever the component re-renders.
+  // Use getState() for store actions to get stable references that don't
+  // cause useCallback deps to churn on every render.
+  const addActivityEvent = useActivityFeed.getState().addEvent
 
   const addStep = useCallback(
     (step: Omit<ResearchStep, 'timestamp'>) => {
-      updateResearch(threadId, (prev) => ({
+      useResearchPanel.getState().updateResearch(threadId, (prev) => ({
         ...prev,
         steps: [...prev.steps, { ...step, timestamp: Date.now() }],
       }))
     },
-    [threadId, updateResearch]
+    [threadId]
   )
 
   const startResearch = useCallback(
@@ -84,7 +93,7 @@ export function useResearch(threadId: string) {
       activeAbortControllers.set(threadId, ac)
       const signal = ac.signal
 
-      openResearch(threadId, query, depth)
+      useResearchPanel.getState().openResearch(threadId, query, depth)
 
       const depthLabel = depth === 3 ? 'Deep' : 'Standard'
       saveMessageToChat(threadId, {
@@ -297,7 +306,7 @@ export function useResearch(threadId: string) {
         for await (const chunk of textStream) {
           if (signal.aborted) break
           report += chunk
-          updateResearch(threadId, (prev) => ({ ...prev, reportMarkdown: report }))
+          useResearchPanel.getState().updateResearch(threadId, (prev) => ({ ...prev, reportMarkdown: report }))
         }
 
         // Continuation loop — continue mid-sentence cuts (up to 2 rounds)
@@ -323,7 +332,7 @@ export function useResearch(threadId: string) {
           for await (const chunk of contStream) {
             if (signal.aborted) break
             report += chunk
-            updateResearch(threadId, (prev) => ({ ...prev, reportMarkdown: report }))
+            useResearchPanel.getState().updateResearch(threadId, (prev) => ({ ...prev, reportMarkdown: report }))
           }
         }
 
@@ -347,7 +356,7 @@ export function useResearch(threadId: string) {
           for await (const chunk of conclusionStream) {
             if (signal.aborted) break
             report += chunk
-            updateResearch(threadId, (prev) => ({ ...prev, reportMarkdown: report }))
+            useResearchPanel.getState().updateResearch(threadId, (prev) => ({ ...prev, reportMarkdown: report }))
           }
         }
 
@@ -379,7 +388,7 @@ export function useResearch(threadId: string) {
           completed_at: Date.now(),
         })
 
-        updateResearch(threadId, (prev) => ({
+        useResearchPanel.getState().updateResearch(threadId, (prev) => ({
           ...prev,
           status: 'done',
           sources: allSources,
@@ -396,7 +405,7 @@ export function useResearch(threadId: string) {
       } catch (err) {
         const isAbort = signal.aborted || (err instanceof Error && err.name === 'AbortError')
         const msg = getErrorMessage(err)
-        updateResearch(threadId, (prev) => ({
+        useResearchPanel.getState().updateResearch(threadId, (prev) => ({
           ...prev,
           status: isAbort ? 'cancelled' : 'error',
           error: isAbort ? undefined : msg,
@@ -406,7 +415,7 @@ export function useResearch(threadId: string) {
         activeAbortControllers.delete(threadId)
       }
     },
-    [threadId, openResearch, updateResearch, addStep, addActivityEvent]
+    [threadId, addStep]
   )
 
   const cancelResearch = useCallback(() => {

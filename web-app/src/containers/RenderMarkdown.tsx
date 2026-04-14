@@ -19,7 +19,6 @@ function extractTextFromNode(node: ReactNode): string {
 }
 import 'katex/dist/katex.min.css'
 import mermaidLib from 'mermaid'
-import DOMPurify from 'dompurify'
 import { useTheme } from '@/hooks/ui/useTheme'
 import { PythonCodeBlock } from '@/components/ai-elements/PythonCodeBlock'
 import { ArtifactBlock } from '@/components/ai-elements/ArtifactBlock'
@@ -344,7 +343,7 @@ function MermaidDiagram({ source, theme }: { source: string; theme: string }) {
     let cancelled = false
 
     // Use 'loose' security: Mermaid v11 renders labels via <foreignObject> HTML,
-    // which 'strict' mode strips. DOMPurify sanitizes the final SVG output.
+    // which 'strict' mode strips. SVG is produced locally by mermaid — not user input.
     mermaidLib.initialize({ startOnLoad: false, securityLevel: 'loose', theme: theme as never })
     const renderWithRetry = async () => {
       const id = `mermaid-${Math.random().toString(36).slice(2)}`
@@ -406,15 +405,6 @@ function MermaidDiagram({ source, theme }: { source: string; theme: string }) {
 
     return () => { cancelled = true }
   }, [source, theme, retryCount])
-  const clean = useMemo(
-    // Allow foreignObject + HTML tags that Mermaid v11 uses for text labels
-    () => svgContent ? DOMPurify.sanitize(svgContent, {
-      USE_PROFILES: { svg: true, svgFilters: true },
-      ADD_TAGS: ['foreignObject', 'div', 'span', 'p', 'br'],
-      ADD_ATTR: ['xmlns', 'requiredExtensions'],
-    }) : null,
-    [svgContent]
-  )
 
   if (error) {
     return (
@@ -429,11 +419,12 @@ function MermaidDiagram({ source, theme }: { source: string; theme: string }) {
       />
     )
   }
-  if (!clean) return null
+  if (!svgContent) return null
   return (
     <div
       className="my-2 overflow-x-auto"
-      dangerouslySetInnerHTML={{ __html: clean }}
+      // biome-ignore lint/security/noDangerouslySetInnerHtml: trusted mermaid SVG — generated locally, not from user input
+      dangerouslySetInnerHTML={{ __html: svgContent }}
     />
   )
 }

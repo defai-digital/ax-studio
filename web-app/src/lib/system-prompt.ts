@@ -44,10 +44,7 @@ export const DIAGRAM_FORMAT_INSTRUCTION = `
 
 NEVER include diagrams, flowcharts, or mermaid code blocks unless the user explicitly asks for one (e.g. "draw a diagram", "show me a flowchart", "visualize this"). By default, always respond with text only.
 
-When a diagram IS explicitly requested, use a mermaid code fence:
-\`\`\`mermaid
-<valid mermaid syntax>
-\`\`\`
+When a diagram IS explicitly requested, use a mermaid code fence with valid mermaid syntax inside it.
 
 Mermaid syntax rules (only when generating a requested diagram):
 - Wrap node labels in double quotes when they contain special characters: A["Label (with parens)"]

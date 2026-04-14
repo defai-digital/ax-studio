@@ -309,7 +309,7 @@ export function ThreadView({
             )}
           </div>
         ) : (
-          // Normal view: optional right panel
+          // Normal view: chat on left, research/artifact panel on right
           <div className={hasPanels ? 'grid grid-cols-2 gap-2 px-2 pb-2 h-full' : 'flex flex-1 flex-col h-full overflow-hidden'}>
             <MainThreadPane
               threadId={threadId}
