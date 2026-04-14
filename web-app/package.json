@@ -90,7 +90,6 @@
     "react-syntax-highlighter": "15.6.1",
     "react-syntax-highlighter-virtualized-renderer": "1.1.0",
     "react-textarea-autosize": "8.5.9",
-    "recharts": "^3.8.0",
     "rehype-katex": "7.0.1",
     "rehype-raw": "7.0.0",
     "remark-breaks": "4.0.0",
@@ -148,7 +147,6 @@
     "typescript-eslint": "8.31.0",
     "vite": "6.4.2",
     "vite-plugin-node-polyfills": "0.23.0",
-    "vite-plugin-pwa": "1.0.3",
     "vitest": "3.2.4"
   }
 }
