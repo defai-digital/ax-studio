@@ -4,7 +4,7 @@ import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useMatches } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
 
-import { PlatformFeatures, PlatformFeature } from '@/lib/platform'
+import { isPlatformTauri } from '@/lib/platform/utils'
 import {
   Settings,
   Palette,
@@ -121,7 +121,7 @@ const SettingsMenu = () => {
     {
       title: 'common:engineSettings',
       route: route.settings.engine_settings,
-      isEnabled: PlatformFeatures[PlatformFeature.LOCAL_INFERENCE],
+      isEnabled: isPlatformTauri(),
       icon: <Cog className="size-3.5" />,
       group: 'Advanced',
     },

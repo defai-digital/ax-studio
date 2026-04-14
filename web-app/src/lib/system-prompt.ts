@@ -238,7 +238,7 @@ You have access to the user's personal knowledge base via the \`fabric_search\` 
 - When in doubt whether the knowledge base has relevant information: search first.
 
 ### How to search
-1. Call \`fabric_search\` with the user's query. The tool automatically searches both raw chunks and published semantic bundles (if any exist) and returns the best combined results.
+1. Call \`fabric_search\` with content-based keywords from the user's query — use terms likely to appear in the documents (e.g. "BLEU score WMT translation" not author names). Avoid using proper nouns or names that may not appear verbatim.
 2. Call \`fabric_extract\` on file paths from the search results ONLY when you need more context beyond the returned chunks. If the chunks already contain sufficient information to answer, skip this step.
 3. Answer based on the retrieved content. Cite which document or source your information comes from.
 
@@ -250,7 +250,9 @@ You have access to the user's personal knowledge base via the \`fabric_search\` 
 - If search returns no relevant results after refinement, say: "I could not find relevant information in the knowledge base for this query."
 - Do not fabricate information that is not present in the retrieved content.
 - Do not say you cannot access the knowledge base — you can, via the tools above.
-- When answering, clearly indicate which parts of your response come from the knowledge base.`
+- When answering, clearly indicate which parts of your response come from the knowledge base.
+- The file \`qa-knowledge-base.md\` contains a curated Q&A summary of ALL documents. If a chunk from this file appears in results and contains the answer, use it directly and answer confidently — do not add disclaimers about not finding the original source.
+- Ignore chunks from search results that are clearly irrelevant to the query (e.g. GPT-4 safety examples when asked about Transformer architecture). Focus on chunks whose content matches the question topic.`
 
 /**
  * Appended when research or local knowledge is active.

@@ -1,6 +1,6 @@
 import { type ThreadMessage } from '@ax-studio/core'
 import { toast } from 'sonner'
-import { isPlatformTauri } from '@/lib/platform'
+import { isPlatformTauri } from '@/lib/platform/utils'
 import { getServiceHub } from '@/hooks/useServiceHub'
 import {
   type WorkspaceChatExportFormat,

@@ -19,7 +19,7 @@ import { toNumber } from '@/lib/utils/number'
 import { Button } from '@/components/ui/button'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useAppState } from '@/hooks/settings/useAppState'
-import { PlatformFeatures, PlatformFeature } from '@/lib/platform'
+import { isPlatformTauri } from '@/lib/platform/utils'
 import { toast } from 'sonner'
 
 export const Route = createFileRoute(route.settings.hardware)({
@@ -406,7 +406,7 @@ function HardwareContent() {
                     )}
 
                   {/* Engine (llama.cpp) update section — desktop only */}
-                  {PlatformFeatures[PlatformFeature.LOCAL_INFERENCE] && (
+                  {isPlatformTauri() && (
                     <Card title={t('settings:hardware.engineUpdates')}>
                       <CardItem
                         title={t('settings:hardware.checkForBackendUpdates')}

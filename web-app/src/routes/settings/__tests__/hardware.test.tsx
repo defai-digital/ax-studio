@@ -107,12 +107,6 @@ vi.mock('@tanstack/react-router', () => ({
 // Mock platform utils to enable hardware monitoring
 vi.mock('@/lib/platform/utils', () => ({
   isPlatformTauri: () => true,
-  getUnavailableFeatureMessage: () => 'Feature not available',
-}))
-
-// Mock PlatformGuard to always render children
-vi.mock('@/lib/platform/PlatformGuard', () => ({
-  PlatformGuard: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
 global.IS_MACOS = false

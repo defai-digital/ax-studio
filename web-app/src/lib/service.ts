@@ -1,6 +1,6 @@
 import { CoreRoutes, APIRoutes } from '@ax-studio/core'
 import { getServiceHub } from '@/hooks/useServiceHub'
-import { isPlatformTauri } from '@/lib/platform'
+import { isPlatformTauri } from '@/lib/platform/utils'
 import type { InvokeArgs } from '@/services/core/types'
 
 export const AppRoutes = [

@@ -51,34 +51,4 @@ describe('platform/utils', () => {
     })
   })
 
-  describe('getUnavailableFeatureMessage', () => {
-    it('formats PascalCase feature name with spaces', async () => {
-      const { getUnavailableFeatureMessage } = await import('../utils')
-      const { PlatformFeature } = await import('../types')
-
-      const msg = getUnavailableFeatureMessage(PlatformFeature.HARDWARE_MONITORING)
-      expect(msg).toContain('Hardware')
-      expect(msg).toContain('monitoring')
-      // First letter is uppercased, rest lowercased by the regex
-      expect(msg).toContain('Hardware')
-    })
-
-    it('includes the platform name in the message', async () => {
-      const { getUnavailableFeatureMessage } = await import('../utils')
-      const { PlatformFeature } = await import('../types')
-
-      const msg = getUnavailableFeatureMessage(PlatformFeature.LOCAL_INFERENCE)
-      expect(msg).toContain('platform')
-    })
-
-    it('converts camelCase feature value to human-readable format', async () => {
-      const { getUnavailableFeatureMessage } = await import('../utils')
-      const { PlatformFeature } = await import('../types')
-
-      const msg = getUnavailableFeatureMessage(PlatformFeature.MODEL_HUB)
-      // 'modelHub' → 'model Hub' → 'Model hub'
-      expect(msg).toMatch(/model\s*Hub/i)
-    })
-  })
-
 })
