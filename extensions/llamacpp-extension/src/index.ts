@@ -1761,11 +1761,13 @@ export default class AxStudioLlamacppExtension extends AIEngine {
             `SHA256 mismatch for model "${modelId}". File may be corrupted.`
           )
         }
-        events.emit(DownloadEvent.onFileDownloadAndVerificationSuccess, {
-          downloadId: modelId,
-          modelId,
-        })
       }
+      // Always emit success — most HuggingFace models have no SHA256,
+      // so emitting only inside the if block means the model never registers.
+      events.emit(DownloadEvent.onFileDownloadAndVerificationSuccess, {
+        downloadId: modelId,
+        modelId,
+      })
     } else {
       // Local file — copy to models directory
       const canonicalModelPath = await this._canonicalizeExistingImportSourcePath(
