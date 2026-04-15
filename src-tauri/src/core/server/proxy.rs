@@ -10,6 +10,7 @@ use subtle::ConstantTimeEq;
 use super::security::{add_cors_headers_with_host_and_origin, trusted_cors_origin};
 use super::{gateway_routes, model_routes};
 
+
 /// Finalize a response builder into a `Response<Body>`, never panicking.
 ///
 /// `Response::builder().body(...)` can only fail if a previously chained
@@ -124,7 +125,7 @@ fn handle_cors_preflight(req: &Request<Body>, config: &ProxyConfig) -> Option<Re
     }
 
     let request_path = req.uri().path();
-    let whitelisted_paths = ["/", "/openapi.json", "/favicon.ico"];
+    let whitelisted_paths = ["/favicon.ico"];
     let is_whitelisted_path = whitelisted_paths.contains(&request_path);
 
     let is_trusted = if is_whitelisted_path {
@@ -241,14 +242,7 @@ fn validate_request(
     headers: &hyper::HeaderMap,
     config: &ProxyConfig,
 ) -> Option<Response<Body>> {
-    let whitelisted_paths = [
-        "/",
-        "/openapi.json",
-        "/favicon.ico",
-        "/docs/swagger-ui.css",
-        "/docs/swagger-ui-bundle.js",
-        "/docs/swagger-ui-standalone-preset.js",
-    ];
+    let whitelisted_paths = ["/favicon.ico"];
     // Allow loopback processes (e.g. fabric-ingest MCP server) to call the
     // embeddings endpoint without a Bearer token. The proxy only binds to
     // 127.0.0.1, so no external origin can reach this path.
@@ -403,21 +397,6 @@ pub(super) async fn proxy_request<R: tauri::Runtime>(
                 &app_handle,
             )
             .await);
-        }
-        (hyper::Method::GET, "/openapi.json") => {
-            return Ok(gateway_routes::handle_openapi_route(&config));
-        }
-        (hyper::Method::GET, "/") => {
-            return Ok(gateway_routes::handle_docs_root_route(
-                &host_header,
-                &origin_header,
-                &config,
-            ));
-        }
-        (hyper::Method::GET, path) => {
-            if let Some(resp) = gateway_routes::handle_static_asset(path) {
-                return Ok(resp);
-            }
         }
         _ => {}
     }

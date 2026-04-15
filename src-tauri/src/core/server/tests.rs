@@ -34,27 +34,19 @@ mod tests {
 
     #[test]
     fn test_messages_in_cors_whitelist() {
-        let whitelisted_paths = ["/", "/openapi.json", "/favicon.ico", "/messages"];
+        let whitelisted_paths = ["/favicon.ico", "/messages"];
         assert!(whitelisted_paths.contains(&"/messages"));
     }
 
     #[test]
     fn test_messages_in_main_whitelist() {
-        let whitelisted_paths = [
-            "/",
-            "/openapi.json",
-            "/favicon.ico",
-            "/docs/swagger-ui.css",
-            "/docs/swagger-ui-bundle.js",
-            "/docs/swagger-ui-standalone-preset.js",
-            "/messages",
-        ];
+        let whitelisted_paths = ["/favicon.ico", "/messages"];
         assert!(whitelisted_paths.contains(&"/messages"));
     }
 
     #[test]
     fn test_messages_subpath_not_in_exact_whitelist() {
-        let whitelisted_paths = ["/", "/openapi.json", "/favicon.ico", "/messages"];
+        let whitelisted_paths = ["/favicon.ico", "/messages"];
         // Only exact match
         assert!(!whitelisted_paths.contains(&"/messages/threads"));
         assert!(!whitelisted_paths.contains(&"/messages/api"));
