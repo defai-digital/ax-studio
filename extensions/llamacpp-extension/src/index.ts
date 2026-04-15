@@ -198,6 +198,21 @@ const ALLOWED_LOAD_OVERRIDE_KEYS = new Set<keyof LlamacppConfig>([
   'rope_freq_base',
   'rope_freq_scale',
   'ctx_shift',
+  'temperature',
+  'top_k',
+  'top_p',
+  'min_p',
+  'typical_p',
+  'repeat_penalty',
+  'repeat_last_n',
+  'presence_penalty',
+  'frequency_penalty',
+  'seed',
+  'mirostat',
+  'mirostat_lr',
+  'mirostat_ent',
+  'grammar_file',
+  'json_schema_file',
 ])
 
 const DEFAULT_LOAD_TIMEOUT_SECONDS = 600
@@ -1835,15 +1850,20 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     }
 
     // ── Write model.yml ──
-    await this._writeModelConfig(modelId, {
-      model_path: relativeModelPath,
-      mmproj_path: relativeMmprojPath,
-      name: modelId,
-      size_bytes: sizeBytes,
-      embedding: isEmbedding,
-      sha256: opts.modelSha256,
-      mmproj_sha256: opts.mmprojSha256,
-    })
+    try {
+      await this._writeModelConfig(modelId, {
+        model_path: relativeModelPath,
+        mmproj_path: relativeMmprojPath,
+        name: modelId,
+        size_bytes: sizeBytes,
+        embedding: isEmbedding,
+        sha256: opts.modelSha256,
+        mmproj_sha256: opts.mmprojSha256,
+      })
+    } catch (e) {
+      console.error('[llamacpp] Failed to write model.yml for', modelId, e)
+      throw new Error(`Failed to save model configuration for "${modelId}": ${(e as Error).message}`)
+    }
 
     events.emit(AppEvent.onModelImported, { modelId })
   }

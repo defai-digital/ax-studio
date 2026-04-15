@@ -385,11 +385,23 @@ pub fn read_yaml<R: Runtime>(
 
 #[tauri::command]
 /// Extract a `.tar.gz` or `.zip` archive into an app-data subdirectory.
+/// Accepts either a wrapped `request` object or flat `path`/`output_dir`/`outputDir` args.
 pub fn decompress<R: Runtime>(
     app: tauri::AppHandle<R>,
-    request: DecompressRequest,
+    path: Option<String>,
+    output_dir: Option<String>,
+    #[allow(non_snake_case)] outputDir: Option<String>,
+    request: Option<DecompressRequest>,
 ) -> Result<(), String> {
-    let (path, output_dir) = request.into_parts()?;
+    let resolved_output = output_dir.or(outputDir);
+    let (path, output_dir) = if let Some(req) = request {
+        req.into_parts()?
+    } else {
+        match (path, resolved_output) {
+            (Some(p), Some(o)) if !p.is_empty() && !o.is_empty() => (p, o),
+            _ => return Err("decompress error: Invalid argument".to_string()),
+        }
+    };
     let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app.clone());
     let path_buf = ax_studio_utils::normalize_path(&app_data_folder.join(&path));
 
@@ -434,19 +446,7 @@ pub fn decompress<R: Runtime>(
                 .to_string_lossy()
                 .to_string();
 
-            // Reject symlink / hardlink entries outright — a symlink followed
-            // by a file entry through that link is a classic archive
-            // extraction escape (the lexical path check below would still
-            // pass, but the actual write would land outside output_dir_buf).
             let entry_type = entry.header().entry_type();
-            if entry_type.is_symlink() || entry_type.is_hard_link() {
-                log::warn!(
-                    "Rejecting symlink/hardlink entry in tar: {}",
-                    entry_path_string
-                );
-                continue;
-            }
-
             let full_path =
                 ax_studio_utils::normalize_path(&output_dir_buf.join(&entry_path_string));
             if !full_path.starts_with(&output_dir_buf) {
@@ -465,6 +465,68 @@ pub fn decompress<R: Runtime>(
                     )
                 })?;
             }
+
+            // Safely extract symlinks only if the link target stays within
+            // output_dir_buf. Without this, llama.cpp's libXYZ.0.dylib ->
+            // libXYZ.0.0.8763.dylib symlinks are dropped and the binary
+            // fails to load its dynamic libraries at runtime.
+            // Hardlinks are still rejected since they can cross filesystem
+            // boundaries and are rarely used in release archives.
+            if entry_type.is_symlink() {
+                let link_target = entry
+                    .link_name()
+                    .map_err(|e| format!("Invalid symlink target: {e}"))?
+                    .ok_or_else(|| "Symlink entry missing target".to_string())?
+                    .to_path_buf();
+
+                // Resolve the link target relative to where the symlink lives
+                let link_parent = full_path.parent().unwrap_or(&output_dir_buf);
+                let resolved_target =
+                    ax_studio_utils::normalize_path(&link_parent.join(&link_target));
+                if !resolved_target.starts_with(&output_dir_buf) {
+                    log::warn!(
+                        "Rejecting symlink with out-of-bounds target: {} -> {}",
+                        entry_path_string,
+                        link_target.display()
+                    );
+                    continue;
+                }
+
+                // Remove any existing file at the symlink path (re-extract case)
+                let _ = fs::remove_file(&full_path);
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::symlink;
+                    symlink(&link_target, &full_path).map_err(|e| {
+                        format!(
+                            "Failed to create symlink `{}` -> `{}`: {e}",
+                            full_path.display(),
+                            link_target.display()
+                        )
+                    })?;
+                }
+                #[cfg(windows)]
+                {
+                    // On Windows, create a file symlink (requires SeCreateSymbolicLinkPrivilege)
+                    if let Err(e) = std::os::windows::fs::symlink_file(&link_target, &full_path) {
+                        log::warn!(
+                            "Failed to create symlink on Windows `{}` -> `{}`: {e}",
+                            full_path.display(),
+                            link_target.display()
+                        );
+                    }
+                }
+                continue;
+            }
+
+            if entry_type.is_hard_link() {
+                log::warn!(
+                    "Rejecting hardlink entry in tar: {}",
+                    entry_path_string
+                );
+                continue;
+            }
+
             entry.unpack(&full_path).map_err(|e| {
                 format!(
                     "failed to unpack `{}` into `{}`: {e}",
