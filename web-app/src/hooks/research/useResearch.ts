@@ -4,7 +4,6 @@ import { useResearchPanel, type ResearchSource, type ResearchStep } from '@/hook
 import { useMessages } from '@/hooks/chat/useMessages'
 import { useChatSessions } from '@/stores/chat-session-store'
 import { type CitationSource, type CitationData, computeConfidence } from '@/types/citation-types'
-import { useActivityFeed } from '@/hooks/activity/use-activity-feed'
 import { convertThreadMessageToUIMessage } from '@/lib/messages'
 import type { ThreadMessage } from '@ax-studio/core'
 import {
@@ -69,14 +68,6 @@ function saveMessageToChat(threadId: string, msg: ThreadMessage) {
 }
 
 export function useResearch(threadId: string) {
-  // Use .getState() for store actions — they never change, so no subscriptions
-  // needed. Subscribing via selectors creates new function refs on every render
-  // which cascades into useCallback/useEffect dependency churn and causes
-  // in-flight research to be cancelled whenever the component re-renders.
-  // Use getState() for store actions to get stable references that don't
-  // cause useCallback deps to churn on every render.
-  const addActivityEvent = useActivityFeed.getState().addEvent
-
   const addStep = useCallback(
     (step: Omit<ResearchStep, 'timestamp'>) => {
       useResearchPanel.getState().updateResearch(threadId, (prev) => ({
@@ -395,13 +386,6 @@ export function useResearch(threadId: string) {
           steps: [...prev.steps, { type: 'done', timestamp: Date.now() }],
         }))
 
-        // Log to Activity Feed
-        addActivityEvent({
-          type: 'research',
-          title: `Research completed: "${query}"`,
-          detail: `Found ${allSources.length} sources`,
-          threadId,
-        })
       } catch (err) {
         const isAbort = signal.aborted || (err instanceof Error && err.name === 'AbortError')
         const msg = getErrorMessage(err)

@@ -16,10 +16,7 @@ test('testNativeRouteEnum', () => {
   expect(NativeRoute.setCloseApp).toBe('setCloseApp');
   expect(NativeRoute.setMaximizeApp).toBe('setMaximizeApp');
   expect(NativeRoute.showOpenMenu).toBe('showOpenMenu');
-  expect(NativeRoute.hideQuickAskWindow).toBe('hideQuickAskWindow');
-  expect(NativeRoute.sendQuickAskInput).toBe('sendQuickAskInput');
   expect(NativeRoute.hideMainWindow).toBe('hideMainWindow');
   expect(NativeRoute.showMainWindow).toBe('showMainWindow');
-  expect(NativeRoute.quickAskSizeUpdated).toBe('quickAskSizeUpdated');
   expect(NativeRoute.ackDeepLink).toBe('ackDeepLink');
 });

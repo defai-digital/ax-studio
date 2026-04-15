@@ -1,5 +1,3 @@
-import { ChatCompletionMessage } from '../inference'
-
 /**
  * Native Route APIs
  * @description Enum of all the routes exposed by the app
@@ -19,13 +17,9 @@ export enum NativeRoute {
   setMaximizeApp = 'setMaximizeApp',
   showOpenMenu = 'showOpenMenu',
 
-  hideQuickAskWindow = 'hideQuickAskWindow',
-  sendQuickAskInput = 'sendQuickAskInput',
-
   hideMainWindow = 'hideMainWindow',
   showMainWindow = 'showMainWindow',
 
-  quickAskSizeUpdated = 'quickAskSizeUpdated',
   ackDeepLink = 'ackDeepLink',
   factoryReset = 'factoryReset',
 
@@ -59,9 +53,6 @@ export enum AppEvent {
   onAppUpdateDownloadError = 'onAppUpdateDownloadError',
   onAppUpdateDownloadSuccess = 'onAppUpdateDownloadSuccess',
   onModelImported = 'onModelImported',
-
-  onUserSubmitQuickAsk = 'onUserSubmitQuickAsk',
-  onSelectedText = 'onSelectedText',
 
   onDeepLink = 'onDeepLink',
   onMainViewStateChange = 'onMainViewStateChange',
@@ -159,8 +150,3 @@ export const CoreRoutes = [
 
 export const APIRoutes = [...CoreRoutes, ...Object.values(NativeRoute)]
 export const APIEvents = [...Object.values(AppEvent), ...Object.values(DownloadEvent)]
-export type PayloadType = {
-  messages: ChatCompletionMessage[]
-  model: string
-  stream: boolean
-}

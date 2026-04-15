@@ -46,12 +46,16 @@ export type AgentTimeout = {
 export type Assistant = {
   /** Represents the avatar of the user. */
   avatar: string
-  /** Represents the location of the thread. */
-  thread_location: string | undefined
+  /**
+   * @deprecated Unused field — always set to `undefined`; never read elsewhere.
+   */
+  thread_location?: string
   /** Represents the unique identifier of the object. */
   id: string
-  /** Represents the object. */
-  object: string
+  /**
+   * @deprecated Legacy type tag. No code branches on this value.
+   */
+  object?: string
   /** Represents the creation timestamp of the object. */
   created_at: number
   /** Represents the name of the object. */

@@ -82,10 +82,6 @@ macro_rules! desktop_handlers {
             // Download
             crate::core::downloads::commands::download_files,
             crate::core::downloads::commands::cancel_download_task,
-            // Code execution
-            crate::core::code_execution::commands::execute_python_code,
-            crate::core::code_execution::commands::check_sandbox_status,
-            crate::core::code_execution::commands::reset_sandbox_session,
             // Research commands
             crate::core::research::commands::scrape_url,
             // Custom updater commands (desktop only)

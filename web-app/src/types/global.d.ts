@@ -29,11 +29,8 @@ declare global {
   declare const VERSION: string
   declare const AUTO_UPDATER_DISABLED: boolean
   declare const UPDATE_CHECK_INTERVAL_MS: number
-  declare const GA_MEASUREMENT_ID: string
   declare const IS_DEV: boolean
   interface Window {
     core: AppCore | undefined
-    gtag?: (...args: unknown[]) => void
-    dataLayer?: unknown[]
   }
 }

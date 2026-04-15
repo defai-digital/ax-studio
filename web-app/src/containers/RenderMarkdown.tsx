@@ -20,7 +20,6 @@ function extractTextFromNode(node: ReactNode): string {
 import 'katex/dist/katex.min.css'
 import mermaidLib from 'mermaid'
 import { useTheme } from '@/hooks/ui/useTheme'
-import { PythonCodeBlock } from '@/components/ai-elements/PythonCodeBlock'
 import { ArtifactBlock } from '@/components/ai-elements/ArtifactBlock'
 import { RenderableCodeBlock } from '@/components/ai-elements/RenderableCodeBlock'
 import { MermaidError } from '@/components/MermaidError'
@@ -242,50 +241,6 @@ function extractHastText(node: unknown): string {
     return (n.children as unknown[]).map(extractHastText).join('')
   }
   return ''
-}
-
-const PYTHON_LANG_RE = /^(language-)?(python\d*|py\d*)$/i
-
-const PYTHON_HEURISTICS = [
-  /^import\s+\w/m,
-  /^from\s+\w+\s+import/m,
-  /^def\s+\w+\s*\(/m,
-  /^class\s+\w+/m,
-  /print\s*\(/,
-]
-
-/**
- * If a HAST pre node wraps a Python code block, returns the code text.
- * Returns null otherwise.
- *
- * Detection order:
- * 1. Explicit language tag matching python / py / python3 / py3 (case-insensitive)
- * 2. No language tag → fall back to content heuristics (import, def, class, print)
- */
-function getPythonCode(preNode: unknown): string | null {
-  if (!preNode || typeof preNode !== 'object') return null
-  const node = preNode as Record<string, unknown>
-  const children = node.children as unknown[] | undefined
-  if (!Array.isArray(children) || children.length === 0) return null
-
-  const codeEl = children[0] as Record<string, unknown>
-  if (!codeEl || codeEl.tagName !== 'code') return null
-
-  const props = codeEl.properties as Record<string, unknown> | undefined
-  const classes = props?.className
-  const code = extractHastText(codeEl)
-
-  if (Array.isArray(classes) && classes.length > 0) {
-    // Explicit language tag present — only match Python variants
-    const isPython = classes.some(
-      (c) => typeof c === 'string' && PYTHON_LANG_RE.test(c)
-    )
-    return isPython ? code : null
-  }
-
-  // No language tag — use heuristics to avoid false positives on generic blocks
-  const looksLikePython = PYTHON_HEURISTICS.some((re) => re.test(code))
-  return looksLikePython ? code : null
 }
 
 /** Returns true if the HAST pre node wraps a mermaid code block. */
@@ -548,8 +503,7 @@ function RenderMarkdownComponent({
 
   /**
    * Custom `pre` component:
-   * - For Python code blocks in assistant messages (not streaming): wraps with
-   *   PythonCodeBlock which adds a Run button + execution results.
+   * - Intercepts Mermaid, Artifact, and RenderableCodeBlock patterns.
    * - All other cases: return children unchanged (same as Streamdown default).
    *
    * Streamdown passes `passNode: true` so we receive the HAST pre node as `node`.
@@ -612,13 +566,6 @@ function RenderMarkdownComponent({
             )
           }
 
-          // 3. Python blocks
-          const pythonCode = getPythonCode(node)
-          if (pythonCode !== null) {
-            return (
-              <PythonCodeBlock code={pythonCode} threadId={threadId ?? messageId}>{children}</PythonCodeBlock>
-            )
-          }
         }
         return <>{children}</>
       },

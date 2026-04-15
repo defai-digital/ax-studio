@@ -26,7 +26,6 @@ export const route = {
     llm_router: '/settings/llm-router',
     guardrails: '/settings/guardrails',
   },
-  activity: '/activity',
   hub: {
     index: '/hub/',
     model: '/hub/$modelId',

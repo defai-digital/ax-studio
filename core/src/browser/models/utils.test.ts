@@ -337,15 +337,15 @@ describe('extractModelLoadParams', () => {
   })
 
   it('should handle parameters without validation rules', () => {
+    // `engine` is a string provider name — it belongs in inference params, not
+    // model load settings. Verify only genuine setting-level fields pass through.
     const modelParams = {
-      engine: 'llama',
       pre_prompt: 'System:',
       system_prompt: 'You are helpful',
       model_path: '/path',
     }
     const result = extractModelLoadParams(modelParams as any)
     expect(result).toEqual({
-      engine: 'llama',
       pre_prompt: 'System:',
       system_prompt: 'You are helpful',
       model_path: '/path',

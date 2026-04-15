@@ -145,7 +145,6 @@ export const extractModelLoadParams = (
     cont_batching: undefined,
     vision_model: undefined,
     text_model: undefined,
-    engine: undefined,
     top_p: undefined,
     top_k: undefined,
     min_p: undefined,

@@ -87,14 +87,17 @@ export const MessageItem = memo(
     const currentRating = meta?.rating as 'up' | 'down' | undefined
 
     // Hydrate citation data from message metadata into the citation store.
-    // Use a stable flag to avoid re-running on every streaming chunk.
+    // Only re-run when the message ID changes or citation data first appears.
+    // Avoid depending on `meta` directly — it's a new object reference on every
+    // render, which was causing "Maximum update depth exceeded" during streaming.
     const hydrateCitations = useCitations((s) => s.hydrate)
     const hasCitationData = !!meta?.citationData
     useEffect(() => {
       if (message.role === 'assistant' && hasCitationData) {
-        hydrateCitations(message.id, meta)
+        hydrateCitations(message.id, message.metadata as Record<string, unknown> | undefined)
       }
-    }, [message.id, message.role, hasCitationData, hydrateCitations, meta])
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [message.id, message.role, hasCitationData])
     const citationData = useCitations((s) => s.getCitations(message.id))
     const flagLowConfidence = useGuardrails((s) => s.flagLowConfidence)
 

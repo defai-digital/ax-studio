@@ -10,7 +10,7 @@ test('testValidModelCreation', () => {
     id: 'model1',
     name: 'Test Model',
     created: Date.now(),
-    description: 'A cool model from Huggingface',
+    description: 'Model description',
     settings: { ctx_len: 100, ngl: 50, embedding: true },
     parameters: { temperature: 0.5, token_limit: 100, top_k: 10 },
     metadata: { author: 'Author', tags: ['tag1', 'tag2'], size: 100 },
