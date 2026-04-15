@@ -322,37 +322,6 @@ export const useModelProvider = create<ModelProviderState>()(
             }
           })
         }
-        if (version <= 8 && state?.providers) {
-          state.providers.forEach((provider) => {
-            // Migrate Mistral provider base URL to add /v1
-            if (provider.provider === 'mistral') {
-              if (provider.base_url === 'https://api.mistral.ai') {
-                provider.base_url = 'https://api.mistral.ai/v1'
-              }
-
-              // Update base-url in settings
-              if (provider.settings) {
-                const baseUrlSetting = provider.settings.find(
-                  (s) => s.key === 'base-url'
-                )
-                if (
-                  baseUrlSetting?.controller_props?.value ===
-                  'https://api.mistral.ai'
-                ) {
-                  baseUrlSetting.controller_props.value =
-                    'https://api.mistral.ai/v1'
-                }
-                if (
-                  baseUrlSetting?.controller_props?.placeholder ===
-                  'https://api.mistral.ai'
-                ) {
-                  baseUrlSetting.controller_props.placeholder =
-                    'https://api.mistral.ai/v1'
-                }
-              }
-            }
-          })
-        }
 
         if (version <= 9 && state?.providers) {
           state.providers = state.providers.filter(

@@ -405,7 +405,7 @@ function createCustomFetch(
  *   - Forwarding to the correct upstream URL (cloud or localhost)
  *
  * Supported via provider_configs registration:
- *   Cloud  : OpenAI, Anthropic, Gemini, Groq, Mistral, Azure, OpenRouter, HuggingFace, …
+ *   Cloud  : OpenAI, Anthropic, Gemini, Groq, Azure, OpenRouter, HuggingFace, …
  *   Local  : Ollama (localhost:11434), LM Studio (localhost:1234), your FastAPI (port 8000)
  */
 export class ModelFactory {

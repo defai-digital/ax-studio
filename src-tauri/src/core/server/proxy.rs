@@ -249,7 +249,13 @@ fn validate_request(
         "/docs/swagger-ui-bundle.js",
         "/docs/swagger-ui-standalone-preset.js",
     ];
-    let is_whitelisted_path = whitelisted_paths.contains(&path);
+    // Allow loopback processes (e.g. fabric-ingest MCP server) to call the
+    // embeddings endpoint without a Bearer token. The proxy only binds to
+    // 127.0.0.1, so no external origin can reach this path.
+    // Note: `path` here is the destination path with the /v1 prefix stripped.
+    let is_loopback_embeddings = (path == "/embeddings" || path == "/v1/embeddings")
+        && matches!(host_header, "127.0.0.1:1337" | "localhost:1337");
+    let is_whitelisted_path = whitelisted_paths.contains(&path) || is_loopback_embeddings;
 
     if !is_whitelisted_path {
         if !host_header.is_empty() {

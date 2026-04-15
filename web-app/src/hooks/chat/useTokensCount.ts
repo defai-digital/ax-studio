@@ -103,7 +103,6 @@ export const useTokensCount = (
     const looksLikeHostedModel = selectedModel?.id && (
       selectedModel.id.includes('gpt') ||
       selectedModel.id.includes('claude') ||
-      selectedModel.id.includes('mistral') ||
       selectedModel.id.includes('groq') ||
       selectedModel.id.includes('gemini') ||
       selectedModel.id.includes('deepseek') ||
@@ -129,7 +128,6 @@ export const useTokensCount = (
         { pattern: /claude-3/i, tokens: 200000 }, // Covers all Claude 3 variants
 
         // Other providers
-        { pattern: /mistral/i, tokens: 32000 },
         { pattern: /groq/i, tokens: 128000 },
         { pattern: /gemini/i, tokens: 32768 },
         { pattern: /deepseek/i, tokens: 32768 },

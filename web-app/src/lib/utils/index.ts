@@ -73,8 +73,6 @@ export function getProviderLogo(provider: string) {
       return '/images/model-provider/anthropic.svg'
     case 'huggingface':
       return '/images/model-provider/huggingface.svg'
-    case 'mistral':
-      return '/images/model-provider/mistral.svg'
     case 'openrouter':
       return '/images/model-provider/open-router.svg'
     case 'groq':
@@ -102,8 +100,6 @@ export function getProviderColor(provider: string): string {
       return '#4285f4'
     case 'groq':
       return '#f97316'
-    case 'mistral':
-      return '#ff7000'
     case 'openrouter':
       return '#6366f1'
     case 'huggingface':
@@ -127,8 +123,6 @@ export function getProviderDescription(provider: string): string {
       return 'Gemini Pro and Ultra'
     case 'groq':
       return 'Ultra-fast inference'
-    case 'mistral':
-      return 'Mistral Large, Codestral'
     case 'openrouter':
       return 'Multi-provider API gateway'
     case 'huggingface':

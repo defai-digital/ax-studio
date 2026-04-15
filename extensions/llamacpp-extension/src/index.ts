@@ -297,6 +297,49 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     })
 
     this.registerEngine()
+
+    // Auto-start the local embedding model if one is configured in Knowledge Base settings.
+    // Runs in the background so it doesn't block app startup.
+    void this._autoStartEmbeddingModel().catch((e) => {
+      console.warn('[llamacpp] Auto-start embedding model failed:', e)
+    })
+  }
+
+  private async _autoStartEmbeddingModel(): Promise<void> {
+    type AkidbConfig = {
+      embedder?: {
+        type?: string
+        model_id?: string
+        base_url?: string
+      }
+    }
+    let config: AkidbConfig | null = null
+    try {
+      config = await invoke<AkidbConfig | null>('read_akidb_config')
+    } catch (e) {
+      console.debug('[llamacpp] Could not read akidb config for auto-start:', e)
+      return
+    }
+    if (!config?.embedder?.model_id) return
+
+    const { type, model_id, base_url } = config.embedder
+    const isLocal =
+      type === 'local' ||
+      (type === 'http' &&
+        !!base_url &&
+        (base_url.includes('127.0.0.1') || base_url.includes('localhost')))
+    if (!isLocal) return
+
+    // Only load if the model file exists (i.e. has been downloaded)
+    const modelCfg = await this._readModelConfig(model_id).catch(() => null)
+    if (!modelCfg) {
+      console.debug(`[llamacpp] Embedding model "${model_id}" not found locally, skipping auto-start`)
+      return
+    }
+
+    console.info(`[llamacpp] Auto-starting embedding model: ${model_id}`)
+    await this.load(model_id, undefined, true)
+    console.info(`[llamacpp] Embedding model "${model_id}" started successfully`)
   }
 
   override async onUnload(): Promise<void> {
