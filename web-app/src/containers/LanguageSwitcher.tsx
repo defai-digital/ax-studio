@@ -13,13 +13,9 @@ import { ChevronsUpDown } from 'lucide-react'
 const LANGUAGES = [
   { value: 'en', label: 'English' },
   { value: 'fr', label: 'Français' },
-  { value: 'id', label: 'Bahasa' },
-  { value: 'pl', label: 'Polski' },
-  { value: 'vn', label: 'Tiếng Việt' },
   { value: 'zh-CN', label: '简体中文' },
   { value: 'zh-TW', label: '繁體中文' },
   { value: 'de-DE', label: 'Deutsch' },
-  { value: 'cs', label: 'Čeština' },
   { value: 'pt-BR', label: 'Português (Brasil)' },
   { value: 'ja', label: '日本語' },
   { value: 'ru', label: 'Русский' },
