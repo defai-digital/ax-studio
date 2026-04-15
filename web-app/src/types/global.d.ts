@@ -4,8 +4,6 @@ import type { ExtensionManager } from '@/lib/extension'
 
 export {}
 
-declare module 'react-syntax-highlighter-virtualized-renderer'
-
 type AppCore = {
   api: Record<string, (...args: any[]) => any> & {
     openExternalUrl: (url: string) => void
@@ -29,7 +27,6 @@ declare global {
   declare const VERSION: string
   declare const AUTO_UPDATER_DISABLED: boolean
   declare const UPDATE_CHECK_INTERVAL_MS: number
-  declare const IS_DEV: boolean
   interface Window {
     core: AppCore | undefined
   }
