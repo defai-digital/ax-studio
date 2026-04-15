@@ -20,7 +20,6 @@ import {
   Globe,
   Brain,
   Users,
-  Link as LinkIcon,
   Route,
   ShieldCheck,
 } from 'lucide-react'
@@ -152,13 +151,6 @@ const SettingsMenu = () => {
       route: route.settings.agent_teams,
       isEnabled: true,
       icon: <Users className="size-3.5" />,
-      group: 'Other',
-    },
-    {
-      title: 'common:integrations',
-      route: route.settings.integrations,
-      isEnabled: true,
-      icon: <LinkIcon className="size-3.5" />,
       group: 'Other',
     },
   ]

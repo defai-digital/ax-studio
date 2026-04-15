@@ -96,13 +96,6 @@ macro_rules! desktop_handlers {
             crate::core::agent_run_logs::save_agent_run_log,
             crate::core::agent_run_logs::list_agent_run_logs,
             crate::core::agent_run_logs::get_agent_run_log,
-            // Integration commands
-            crate::core::integrations::commands::save_integration_token,
-            crate::core::integrations::commands::delete_integration_token,
-            crate::core::integrations::commands::get_integration_status,
-            crate::core::integrations::commands::get_all_integration_statuses,
-            crate::core::integrations::commands::validate_integration_token,
-            crate::core::integrations::commands::start_oauth_flow,
         ]
     };
 }

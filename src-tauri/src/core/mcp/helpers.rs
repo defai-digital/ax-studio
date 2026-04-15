@@ -404,52 +404,6 @@ async fn schedule_mcp_start_task<R: Runtime>(
                     cmd.arg(arg);
                 }
             });
-        // Inject credentials from secure store for managed integrations
-        if let Some(obj) = config.as_object() {
-            if obj.get("managed").and_then(|v| v.as_bool()) == Some(true) {
-                if let Some(integration_id) = obj.get("integration").and_then(|v| v.as_str()) {
-                    match crate::core::integrations::commands::read_credentials(
-                        &app,
-                        integration_id,
-                    ) {
-                        Ok(creds) => {
-                            if integration_id == "google-workspace" {
-                                match crate::core::integrations::oauth::stage_google_workspace_runtime_config(&creds) {
-                                    Ok(runtime_env) => {
-                                        for (env_key, value) in runtime_env {
-                                            cmd.env(env_key, value);
-                                        }
-                                    }
-                                    Err(e) => {
-                                        log::warn!(
-                                            "Failed to stage Google Workspace runtime credentials for integration '{integration_id}': {e}"
-                                        );
-                                    }
-                                }
-                            } else {
-                                let env_keys =
-                                    crate::core::integrations::constants::integration_env_keys();
-                                if let Some(expected_keys) = env_keys.get(integration_id) {
-                                    for env_key in expected_keys {
-                                        if let Some(value) = creds.get(*env_key) {
-                                            cmd.env(env_key, value);
-                                        }
-                                    }
-                                }
-                            }
-                            log::info!(
-                                "Injected secure-store credentials for managed integration '{integration_id}' into MCP server '{name}'"
-                            );
-                        }
-                        Err(e) => {
-                            log::warn!(
-                                "Failed to read secure-store credentials for integration '{integration_id}': {e}"
-                            );
-                        }
-                    }
-                }
-            }
-        }
 
         config_params.envs.iter().for_each(|(k, v)| {
             if let Some(v_str) = v.as_str() {

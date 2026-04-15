@@ -21,7 +21,6 @@ import { Route as SettingsMcpServersRouteImport } from './routes/settings/mcp-se
 import { Route as SettingsLocalApiServerRouteImport } from './routes/settings/local-api-server'
 import { Route as SettingsLlmRouterRouteImport } from './routes/settings/llm-router'
 import { Route as SettingsInterfaceRouteImport } from './routes/settings/interface'
-import { Route as SettingsIntegrationsRouteImport } from './routes/settings/integrations'
 import { Route as SettingsHttpsProxyRouteImport } from './routes/settings/https-proxy'
 import { Route as SettingsHardwareRouteImport } from './routes/settings/hardware'
 import { Route as SettingsGuardrailsRouteImport } from './routes/settings/guardrails'
@@ -95,11 +94,6 @@ const SettingsLlmRouterRoute = SettingsLlmRouterRouteImport.update({
 const SettingsInterfaceRoute = SettingsInterfaceRouteImport.update({
   id: '/settings/interface',
   path: '/settings/interface',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SettingsIntegrationsRoute = SettingsIntegrationsRouteImport.update({
-  id: '/settings/integrations',
-  path: '/settings/integrations',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsHttpsProxyRoute = SettingsHttpsProxyRouteImport.update({
@@ -190,7 +184,6 @@ export interface FileRoutesByFullPath {
   '/settings/guardrails': typeof SettingsGuardrailsRoute
   '/settings/hardware': typeof SettingsHardwareRoute
   '/settings/https-proxy': typeof SettingsHttpsProxyRoute
-  '/settings/integrations': typeof SettingsIntegrationsRoute
   '/settings/interface': typeof SettingsInterfaceRoute
   '/settings/llm-router': typeof SettingsLlmRouterRoute
   '/settings/local-api-server': typeof SettingsLocalApiServerRoute
@@ -219,7 +212,6 @@ export interface FileRoutesByTo {
   '/settings/guardrails': typeof SettingsGuardrailsRoute
   '/settings/hardware': typeof SettingsHardwareRoute
   '/settings/https-proxy': typeof SettingsHttpsProxyRoute
-  '/settings/integrations': typeof SettingsIntegrationsRoute
   '/settings/interface': typeof SettingsInterfaceRoute
   '/settings/llm-router': typeof SettingsLlmRouterRoute
   '/settings/local-api-server': typeof SettingsLocalApiServerRoute
@@ -249,7 +241,6 @@ export interface FileRoutesById {
   '/settings/guardrails': typeof SettingsGuardrailsRoute
   '/settings/hardware': typeof SettingsHardwareRoute
   '/settings/https-proxy': typeof SettingsHttpsProxyRoute
-  '/settings/integrations': typeof SettingsIntegrationsRoute
   '/settings/interface': typeof SettingsInterfaceRoute
   '/settings/llm-router': typeof SettingsLlmRouterRoute
   '/settings/local-api-server': typeof SettingsLocalApiServerRoute
@@ -280,7 +271,6 @@ export interface FileRouteTypes {
     | '/settings/guardrails'
     | '/settings/hardware'
     | '/settings/https-proxy'
-    | '/settings/integrations'
     | '/settings/interface'
     | '/settings/llm-router'
     | '/settings/local-api-server'
@@ -309,7 +299,6 @@ export interface FileRouteTypes {
     | '/settings/guardrails'
     | '/settings/hardware'
     | '/settings/https-proxy'
-    | '/settings/integrations'
     | '/settings/interface'
     | '/settings/llm-router'
     | '/settings/local-api-server'
@@ -338,7 +327,6 @@ export interface FileRouteTypes {
     | '/settings/guardrails'
     | '/settings/hardware'
     | '/settings/https-proxy'
-    | '/settings/integrations'
     | '/settings/interface'
     | '/settings/llm-router'
     | '/settings/local-api-server'
@@ -368,7 +356,6 @@ export interface RootRouteChildren {
   SettingsGuardrailsRoute: typeof SettingsGuardrailsRoute
   SettingsHardwareRoute: typeof SettingsHardwareRoute
   SettingsHttpsProxyRoute: typeof SettingsHttpsProxyRoute
-  SettingsIntegrationsRoute: typeof SettingsIntegrationsRoute
   SettingsInterfaceRoute: typeof SettingsInterfaceRoute
   SettingsLlmRouterRoute: typeof SettingsLlmRouterRoute
   SettingsLocalApiServerRoute: typeof SettingsLocalApiServerRoute
@@ -466,13 +453,6 @@ declare module '@tanstack/react-router' {
       path: '/settings/interface'
       fullPath: '/settings/interface'
       preLoaderRoute: typeof SettingsInterfaceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings/integrations': {
-      id: '/settings/integrations'
-      path: '/settings/integrations'
-      fullPath: '/settings/integrations'
-      preLoaderRoute: typeof SettingsIntegrationsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings/https-proxy': {
@@ -592,7 +572,6 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsGuardrailsRoute: SettingsGuardrailsRoute,
   SettingsHardwareRoute: SettingsHardwareRoute,
   SettingsHttpsProxyRoute: SettingsHttpsProxyRoute,
-  SettingsIntegrationsRoute: SettingsIntegrationsRoute,
   SettingsInterfaceRoute: SettingsInterfaceRoute,
   SettingsLlmRouterRoute: SettingsLlmRouterRoute,
   SettingsLocalApiServerRoute: SettingsLocalApiServerRoute,

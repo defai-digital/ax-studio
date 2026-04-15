@@ -446,7 +446,6 @@ pub async fn get_mcp_configs<R: Runtime>(app: AppHandle<R>) -> Result<String, St
         "browsermcp",
         "fetch",
         "serper",
-        "integration-github",
     ] {
         if mcp_servers.remove(*key).is_some() {
             mutated = true;

@@ -4,7 +4,6 @@ pub mod app;
 pub mod downloads;
 pub mod extensions;
 pub mod filesystem;
-pub mod integrations;
 pub mod mcp;
 pub mod research;
 pub mod server;
