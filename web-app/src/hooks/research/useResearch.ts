@@ -288,6 +288,7 @@ export function useResearch(threadId: string) {
         const writerPrompt = WRITER_PROMPT(query, numberedContext, allSources)
         addStep({ type: 'writing', message: 'Writing report…' })
         let report = ''
+        let lastReportFlush = 0
         const { textStream } = streamText({
           model,
           messages: [{ role: 'user', content: writerPrompt }],
@@ -297,8 +298,16 @@ export function useResearch(threadId: string) {
         for await (const chunk of textStream) {
           if (signal.aborted) break
           report += chunk
-          useResearchPanel.getState().updateResearch(threadId, (prev) => ({ ...prev, reportMarkdown: report }))
+          // Throttle UI updates to max every 100ms to prevent React
+          // "Maximum update depth exceeded" from rapid sequential state changes
+          const now = Date.now()
+          if (now - lastReportFlush >= 100) {
+            lastReportFlush = now
+            useResearchPanel.getState().updateResearch(threadId, (prev) => ({ ...prev, reportMarkdown: report }))
+          }
         }
+        // Final flush to ensure the complete report is shown
+        useResearchPanel.getState().updateResearch(threadId, (prev) => ({ ...prev, reportMarkdown: report }))
 
         // Continuation loop — continue mid-sentence cuts (up to 2 rounds)
         for (let round = 0; round < 2 && !signal.aborted; round++) {
@@ -323,8 +332,13 @@ export function useResearch(threadId: string) {
           for await (const chunk of contStream) {
             if (signal.aborted) break
             report += chunk
-            useResearchPanel.getState().updateResearch(threadId, (prev) => ({ ...prev, reportMarkdown: report }))
+            const now = Date.now()
+            if (now - lastReportFlush >= 100) {
+              lastReportFlush = now
+              useResearchPanel.getState().updateResearch(threadId, (prev) => ({ ...prev, reportMarkdown: report }))
+            }
           }
+          useResearchPanel.getState().updateResearch(threadId, (prev) => ({ ...prev, reportMarkdown: report }))
         }
 
         // Add Conclusion if missing
@@ -347,8 +361,13 @@ export function useResearch(threadId: string) {
           for await (const chunk of conclusionStream) {
             if (signal.aborted) break
             report += chunk
-            useResearchPanel.getState().updateResearch(threadId, (prev) => ({ ...prev, reportMarkdown: report }))
+            const now = Date.now()
+            if (now - lastReportFlush >= 100) {
+              lastReportFlush = now
+              useResearchPanel.getState().updateResearch(threadId, (prev) => ({ ...prev, reportMarkdown: report }))
+            }
           }
+          useResearchPanel.getState().updateResearch(threadId, (prev) => ({ ...prev, reportMarkdown: report }))
         }
 
         const sourceFooter = allSources.length > 0
