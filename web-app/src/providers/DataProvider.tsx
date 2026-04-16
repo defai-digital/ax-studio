@@ -1,7 +1,7 @@
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useAppUpdater } from '@/hooks/updater/useAppUpdater'
 import { useServiceHub } from '@/hooks/useServiceHub'
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useRef } from 'react'
 import { useMCPServers, DEFAULT_MCP_SETTINGS } from '@/hooks/tools/useMCPServers'
 import { useAssistant } from '@/hooks/chat/useAssistant'
 import { useNavigate } from '@tanstack/react-router'
@@ -19,6 +19,10 @@ import { syncRemoteProviders as syncRemoteProviderConfigs } from '@/lib/provider
 
 export function DataProvider() {
   const { setProviders, providers } = useModelProvider()
+  // Track whether the initial bootstrap sync has already registered providers.
+  // Effect 2 must skip the first fire (triggered by bootstrapProviders setting
+  // providers) to avoid registering every provider twice on startup.
+  const bootstrapSyncDone = useRef(false)
   const { checkForUpdate } = useAppUpdater()
   const { setServers, setSettings } = useMCPServers()
   const { setAssistants, initializeWithLastUsed } = useAssistant()
@@ -79,7 +83,13 @@ export function DataProvider() {
 
     bootstrapProviders({
       serviceHub,
-      setProviders,
+      setProviders: (providers, pathSep) => {
+        setProviders(providers, pathSep)
+        // Mark that bootstrap has synced providers — Effect 2 should skip
+        // its first fire (which is caused by this setProviders call) to
+        // avoid registering all providers twice on startup.
+        bootstrapSyncDone.current = true
+      },
       setServers,
       setSettings: (s) => setSettings(s ?? DEFAULT_MCP_SETTINGS),
       setAssistants,
@@ -137,7 +147,11 @@ export function DataProvider() {
 
   // ─── Effect 2: Reactive remote provider sync ──────────────────────────────
   // Re-fires when providers change (e.g. user adds/removes a provider or key).
+  // Skips the first fire caused by bootstrapProviders — that sync already
+  // happened inside Effect 1, so running it again would double-register
+  // every provider (especially costly for providers with many models).
   useEffect(() => {
+    if (!bootstrapSyncDone.current) return
     void syncRemoteProviders(providers)
   }, [providers])
 
