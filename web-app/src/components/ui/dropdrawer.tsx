@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import * as React from "react";
 
