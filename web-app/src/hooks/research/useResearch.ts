@@ -291,6 +291,7 @@ export function useResearch(threadId: string) {
         let lastReportFlush = 0
         const { textStream } = streamText({
           model,
+          system: 'Output only the final report. Do not include any reasoning, analysis, planning, or thinking steps. Start directly with ## Executive Summary.',
           messages: [{ role: 'user', content: writerPrompt }],
           maxOutputTokens: 12000,
           abortSignal: signal,
@@ -325,6 +326,7 @@ export function useResearch(threadId: string) {
             `Write only the remaining body content (no Conclusion section — that will be added separately).`
           const { textStream: contStream } = streamText({
             model,
+            system: 'Output only the continuation text. Do not include any reasoning, analysis, or thinking steps.',
             messages: [{ role: 'user', content: continuePrompt }],
             maxOutputTokens: 4000,
             abortSignal: signal,
@@ -354,6 +356,7 @@ export function useResearch(threadId: string) {
             `Start your response directly with "## Conclusion".`
           const { textStream: conclusionStream } = streamText({
             model,
+            system: 'Output only the ## Conclusion section. Do not include any reasoning, analysis, or thinking steps.',
             messages: [{ role: 'user', content: conclusionPrompt }],
             maxOutputTokens: 800,
             abortSignal: signal,
@@ -369,6 +372,12 @@ export function useResearch(threadId: string) {
           }
           useResearchPanel.getState().updateResearch(threadId, (prev) => ({ ...prev, reportMarkdown: report }))
         }
+
+        // Strip any leaked thinking/reasoning blocks that reasoning models
+        // (e.g. Qwen3, Claude with extended thinking) may output as plain text
+        report = report
+          .replace(/^[\s\S]*?(##\s*Executive Summary)/m, '$1')
+          .trim()
 
         const sourceFooter = allSources.length > 0
           ? '\n\n---\n**Sources:** ' + allSources.map((s, i) => `[[${i + 1}]](${s.url})`).join(' ')

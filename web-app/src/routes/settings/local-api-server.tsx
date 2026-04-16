@@ -20,7 +20,7 @@ import { IconSettings2 } from '@tabler/icons-react'
 import { Server } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ApiKeyInput } from '@/containers/ApiKeyInput'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { toast } from 'sonner'
 import { getModelToStart } from '@/lib/utils/getModelToStart'
 import { LogViewer } from '@/components/LogViewer'
@@ -501,29 +501,6 @@ function LocalAPIServerContent() {
                     }
                   />
 
-                  <CardItem
-                    title={t('settings:localApiServer.swaggerDocs')}
-                    description={t('settings:localApiServer.swaggerDocsDesc')}
-                    actions={
-                      <a
-                        href={`http://${serverHost}:${serverPort}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={cn(
-                          isServerRunning ? '' : 'pointer-events-none'
-                        )}
-                      >
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={!isServerRunning}
-                          title={t('settings:localApiServer.swaggerDocs')}
-                        >
-                          <span>{t('settings:localApiServer.openDocs')}</span>
-                        </Button>
-                      </a>
-                    }
-                  />
                 </Card>
 
                 {/* AkiDB folder sync configuration */}
