@@ -47,7 +47,7 @@ NEVER include diagrams, flowcharts, or mermaid code blocks unless the user expli
 When a diagram IS explicitly requested, use a mermaid code fence with valid mermaid syntax inside it.
 
 Mermaid syntax rules (only when generating a requested diagram):
-- Wrap node labels in double quotes when they contain special characters: A["Label (with parens)"]
+- Wrap node labels in double quotes when they contain special characters or spaces: A["Label (with parens)"], A["Multi word label"]
 - classDiagram: use \`List~Task~\` not \`List<Task>\`, no \`enum {A, B}\` in class body
 - erDiagram: quote SQL reserved words: \`"ORDER"\` not \`ORDER\`; NEVER add \`class\`, \`classDef\`, or \`style\` blocks — only entity definitions and relationship lines are valid in erDiagram; NEVER use \`%%\` comments inside entity definitions — comments are only allowed on their own line outside entity blocks
 - sequenceDiagram: every message on a single line

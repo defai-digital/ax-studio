@@ -56,9 +56,9 @@ interface MarkdownProps {
  * with a Mermaid shape specifier ([ ( / \ >).
  * Only operates inside ```mermaid fences.
  */
-function sanitizeMermaidFences(input: string): string {
+export function sanitizeMermaidFences(input: string): string {
   // Characters that break Mermaid's parser inside unquoted [ ] labels
-  const UNSAFE = /['()|<>]/
+  const UNSAFE = /['()|<> ]/
 
   // Step 1: Close any mermaid fence that was truncated (model ran out of tokens
   // mid-response). Split on ```mermaid — if the last segment has no closing ```
@@ -73,6 +73,14 @@ function sanitizeMermaidFences(input: string): string {
     }
   }
 
+  // Step 1b: Normalize fences where the diagram type is on the same line as
+  // the opening fence — e.g. "```mermaid classDiagram" → "```mermaid\nclassDiagram"
+  // This happens when some models omit the newline after the fence marker.
+  text = text.replace(
+    /```mermaid (classDiagram|flowchart|sequenceDiagram|gantt|erDiagram|pie|gitGraph|mindmap|timeline|xychart|quadrantChart|stateDiagram)/gi,
+    (_m, diagramType) => `\`\`\`mermaid\n${diagramType}`
+  )
+
   // Step 2: Process every (now properly closed) mermaid fence.
   return text.replace(
     /(```mermaid[^\n]*\n)([\s\S]*?)(```)/g,
@@ -81,6 +89,14 @@ function sanitizeMermaidFences(input: string): string {
 
       // Fix 1: strip any nested ```mermaid fence that the model put inside the source
       fixed = fixed.replace(/^```mermaid\s*/i, '').replace(/```\s*$/, '').trimStart()
+
+      // Fix 1b: strip invalid quoted title comments that some models add on the
+      // diagram type line. e.g.:
+      //   erDiagram """My Title"""  → erDiagram
+      //   erDiagram ""My Title""   → erDiagram
+      //   classDiagram "My Title"  → classDiagram
+      // None of these are valid Mermaid syntax and cause parse errors.
+      fixed = fixed.replace(/^(\w+)\s+"{1,3}[^"]*"{1,3}/m, '$1')
 
       // Fix 2: bare "flowchart" with no direction → add TD
       fixed = fixed.replace(/^(flowchart)\s*$/im, 'flowchart TD')
@@ -121,6 +137,15 @@ function sanitizeMermaidFences(input: string): string {
         // Mermaid throws "expecting ATTRIBUTE_WORD, got COMMENT".
         // Top-level (column-0) comments are preserved.
         fixed = fixed.replace(/^([ \t]+)%%.*$/gm, '')
+
+        // Fix 11: convert invalid relationship dash patterns to valid Mermaid ER syntax.
+        // Some models output "----", "---", "--|", "|--", "-->", "--" etc. which are
+        // invalid — valid ER relationships require cardinality markers.
+        // Map common invalid patterns to ||--|| (one-to-one) as a safe fallback.
+        fixed = fixed.replace(
+          /^([ \t]*)(\w+)\s+(?:--[-|>]+|[-|]+-[-|>]*|[-]{2,}[|]?)\s+(\w+)\s*:/gm,
+          '$1$2 ||--|| $3 :'
+        )
       }
 
       // Fix 6: strip inline parenthesised text from mindmap node labels.
@@ -133,7 +158,7 @@ function sanitizeMermaidFences(input: string): string {
             const trimmed = line.trimStart()
             // Leave empty lines, comments, and lines that intentionally start
             // with a shape specifier (e.g. `((root))`, `[rect]`, `{{cloud}}`)
-            if (!trimmed || trimmed.startsWith('%%') || /^[[({]/.test(trimmed)) return line
+            if (!trimmed || trimmed.startsWith('%%') || /^[\[({]/.test(trimmed)) return line
             // Remove " (inner text)" patterns — keep the inner text, drop parens
             return line.replace(/\s+\(([^)\n]*)\)/g, (_, inner) => inner ? ` ${inner}` : '')
           })
@@ -161,8 +186,7 @@ function sanitizeMermaidFences(input: string): string {
         let prev = ''
         while (fixed !== prev) {
           prev = fixed
-          // Only match lines that open a block (end with `{`), not `state X as Y` aliases
-          fixed = fixed.replace(/^[ \t]*state\s+\S+[^\n]*\{[ \t]*\n([\s\S]*?)\n[ \t]*\}/gm, '$1')
+          fixed = fixed.replace(/^[ \t]*state\s+[^\n{]+\{[ \t]*\n([\s\S]*?)\n[ \t]*\}/gm, '$1')
         }
       }
 
@@ -326,6 +350,17 @@ function MermaidDiagram({ source, theme }: { source: string; theme: string }) {
         // Fix: unquote identifiers (state diagrams)
         if (/STRING|quotes?|"/i.test(msg) && /stateDiagram/i.test(source.split('\n')[0] ?? '')) {
           patched = patched.replace(/"([A-Za-z_]\w*)"/g, '$1')
+          changed = true
+        }
+        // Fix: quote [] labels containing spaces (SQE / UNICODE_TEXT error)
+        if (/SQE|UNICODE_TEXT/i.test(msg)) {
+          patched = patched.replace(
+            /\[(?!["[/\\(>|])([^\]\n"]+)\]/g,
+            (_m, inner: string) => {
+              if (!/ /.test(inner)) return _m
+              return `["${inner.replace(/"/g, '\\"')}"]`
+            }
+          )
           changed = true
         }
         // Fix: CRLF line endings
