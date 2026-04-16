@@ -228,16 +228,8 @@ describe('getProviderColor', () => {
     expect(getProviderColor('groq')).toBe('#f97316')
   })
 
-  it('returns correct color for mistral', () => {
-    expect(getProviderColor('mistral')).toBe('#ff7000')
-  })
-
   it('returns correct color for openrouter', () => {
     expect(getProviderColor('openrouter')).toBe('#6366f1')
-  })
-
-  it('returns correct color for huggingface', () => {
-    expect(getProviderColor('huggingface')).toBe('#ffcc00')
   })
 
   it('returns correct color for azure', () => {
@@ -262,8 +254,8 @@ describe('getProviderColor', () => {
 
   it('all returned values are valid hex colors', () => {
     const providers = [
-      'openai', 'anthropic', 'gemini', 'groq', 'mistral',
-      'openrouter', 'huggingface', 'azure', 'cohere', 'unknown',
+      'openai', 'anthropic', 'gemini', 'groq',
+      'openrouter', 'azure', 'cohere', 'unknown',
     ]
     for (const p of providers) {
       expect(getProviderColor(p)).toMatch(/^#[0-9a-f]{6}$/)
@@ -288,18 +280,10 @@ describe('getProviderDescription', () => {
     expect(getProviderDescription('groq')).toBe('Ultra-fast inference')
   })
 
-  it('returns correct description for mistral', () => {
-    expect(getProviderDescription('mistral')).toBe('Mistral Large, Codestral')
-  })
-
   it('returns correct description for openrouter', () => {
     expect(getProviderDescription('openrouter')).toBe(
       'Multi-provider API gateway'
     )
-  })
-
-  it('returns correct description for huggingface', () => {
-    expect(getProviderDescription('huggingface')).toBe('Open-source model hub')
   })
 
   it('returns correct description for azure', () => {

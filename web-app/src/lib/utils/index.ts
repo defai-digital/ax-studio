@@ -71,8 +71,6 @@ export function getProviderLogo(provider: string) {
   switch (provider) {
     case 'anthropic':
       return '/images/model-provider/anthropic.svg'
-    case 'huggingface':
-      return '/images/model-provider/huggingface.svg'
     case 'openrouter':
       return '/images/model-provider/open-router.svg'
     case 'groq':
@@ -102,8 +100,6 @@ export function getProviderColor(provider: string): string {
       return '#f97316'
     case 'openrouter':
       return '#6366f1'
-    case 'huggingface':
-      return '#ffcc00'
     case 'azure':
       return '#0078d4'
     case 'cohere':
@@ -125,8 +121,6 @@ export function getProviderDescription(provider: string): string {
       return 'Ultra-fast inference'
     case 'openrouter':
       return 'Multi-provider API gateway'
-    case 'huggingface':
-      return 'Open-source model hub'
     case 'azure':
       return 'Azure OpenAI Service'
     default:
@@ -142,8 +136,6 @@ export const getProviderTitle = (provider: string) => {
       return 'OpenRouter'
     case 'gemini':
       return 'Gemini'
-    case 'huggingface':
-      return 'Hugging Face'
     default:
       return provider.charAt(0).toUpperCase() + provider.slice(1)
   }
