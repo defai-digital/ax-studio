@@ -1320,8 +1320,6 @@ __metadata:
     radix-ui: "npm:^1.4.3"
     react: "npm:19.0.0"
     react-dom: "npm:19.0.0"
-    react-markdown: "npm:10.1.0"
-    react-resizable-panels: "npm:3.0.5"
     react-textarea-autosize: "npm:8.5.9"
     rehype-katex: "npm:7.0.1"
     remark-gfm: "npm:4.0.1"
@@ -11699,7 +11697,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"hast-util-to-jsx-runtime@npm:^2.0.0, hast-util-to-jsx-runtime@npm:^2.3.6":
+"hast-util-to-jsx-runtime@npm:^2.3.6":
   version: 2.3.6
   resolution: "hast-util-to-jsx-runtime@npm:2.3.6"
   dependencies:
@@ -11820,7 +11818,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"html-url-attributes@npm:^3.0.0, html-url-attributes@npm:^3.0.1":
+"html-url-attributes@npm:^3.0.1":
   version: 3.0.1
   resolution: "html-url-attributes@npm:3.0.1"
   checksum: 10c0/496e4908aa8b77665f348b4b03521901794f648b8ac34a581022cd6f2c97934d5c910cd91bc6593bbf2994687549037bc2520fcdc769b31484f29ffdd402acd0
@@ -15198,28 +15196,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-markdown@npm:10.1.0":
-  version: 10.1.0
-  resolution: "react-markdown@npm:10.1.0"
-  dependencies:
-    "@types/hast": "npm:^3.0.0"
-    "@types/mdast": "npm:^4.0.0"
-    devlop: "npm:^1.0.0"
-    hast-util-to-jsx-runtime: "npm:^2.0.0"
-    html-url-attributes: "npm:^3.0.0"
-    mdast-util-to-hast: "npm:^13.0.0"
-    remark-parse: "npm:^11.0.0"
-    remark-rehype: "npm:^11.0.0"
-    unified: "npm:^11.0.0"
-    unist-util-visit: "npm:^5.0.0"
-    vfile: "npm:^6.0.0"
-  peerDependencies:
-    "@types/react": ">=18"
-    react: ">=18"
-  checksum: 10c0/4a5dc7d15ca6d05e9ee95318c1904f83b111a76f7588c44f50f1d54d4c97193b84e4f64c4b592057c989228238a2590306cedd0c4d398e75da49262b2b5ae1bf
-  languageName: node
-  linkType: hard
-
 "react-refresh@npm:^0.17.0":
   version: 0.17.0
   resolution: "react-refresh@npm:0.17.0"
@@ -15259,16 +15235,6 @@ __metadata:
     "@types/react":
       optional: true
   checksum: 10c0/7ad8f6ffd3e2aedf9b3d79f0c9088a9a3d7c5332d80c923427a6d97fe0626fb4cb33a6d9174d19fad57d860be69c96f68497a0619c3a8af0e8a5332e49bdde31
-  languageName: node
-  linkType: hard
-
-"react-resizable-panels@npm:3.0.5":
-  version: 3.0.5
-  resolution: "react-resizable-panels@npm:3.0.5"
-  peerDependencies:
-    react: ^16.14.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
-    react-dom: ^16.14.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
-  checksum: 10c0/c6f18dcd3e24410084a8075ffd17c95940322e4a2a51362a0acd2fd2a875a052eac9b3ee589c41e43b603ac614c4cd1d8196ff6fc5f6a72aad837ddea499f816
   languageName: node
   linkType: hard
 
@@ -15640,7 +15606,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"remark-rehype@npm:^11.0.0, remark-rehype@npm:^11.1.2":
+"remark-rehype@npm:^11.1.2":
   version: 11.1.2
   resolution: "remark-rehype@npm:11.1.2"
   dependencies:
