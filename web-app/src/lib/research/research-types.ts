@@ -20,12 +20,6 @@ export interface MCPToolCallResult {
   content: MCPContent[]
 }
 
-export interface NativeSearchResult {
-  url: string
-  title: string
-  snippet: string
-}
-
 export interface WikiSearchResult {
   title: string
   snippet: string

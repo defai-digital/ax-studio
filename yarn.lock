@@ -1228,7 +1228,6 @@ __metadata:
     tslib: "npm:^2.6.2"
     typescript: "npm:^5.8.3"
     typescript-eslint: "npm:8.31.0"
-    ulidx: "npm:^2.3.0"
     vitest: "npm:^2.1.8"
   peerDependencies:
     react: 19.0.0
@@ -16532,7 +16531,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ulidx@npm:2.4.1, ulidx@npm:^2.3.0":
+"ulidx@npm:2.4.1":
   version: 2.4.1
   resolution: "ulidx@npm:2.4.1"
   dependencies:
