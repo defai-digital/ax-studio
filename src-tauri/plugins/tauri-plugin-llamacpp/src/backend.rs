@@ -181,12 +181,6 @@ pub struct SystemFeatures {
     vulkan: bool,
 }
 
-#[derive(Serialize)]
-pub struct SupportedBackendsResult {
-    supported_backend_names: Vec<String>,
-    merged_backends: Vec<BackendInfo>,
-}
-
 #[tauri::command]
 pub fn determine_supported_backends(
     os_type: String,
@@ -465,14 +459,6 @@ pub struct UpdateCheckResult {
     pub update_needed: bool,
     pub new_version: String,
     pub target_backend: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct BackendConfigResult {
-    pub best_available: String,
-    pub effective_backend: String,
-    pub backend_downloaded: bool,
-    pub settings_updated: bool,
 }
 
 #[tauri::command]

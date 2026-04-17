@@ -17,7 +17,6 @@ byteorder = "1.5.0"
 hmac = "0.12.1"
 ax-studio-utils = { path = "../../utils", package = "ax-studio-utils" }
 log = "0.4"
-rand = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 sha2 = "0.10.9"
 sysinfo = "0.34.2"
@@ -26,7 +25,7 @@ thiserror = "2.0.12"
 tokio = { version = "1", features = ["full"] }
 tauri-plugin-hardware = { path = "../tauri-plugin-hardware" }
 
-reqwest = { version = "0.11", features = ["json", "blocking", "stream", "native-tls"] }
+reqwest = { version = "0.11", features = ["json", "stream", "native-tls"] }
 
 # Unix-specific dependencies
 [target.'cfg(unix)'.dependencies]

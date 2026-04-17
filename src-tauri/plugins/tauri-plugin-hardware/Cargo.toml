@@ -23,9 +23,6 @@ tokio = { version = "1", features = ["time"] }
 [dependencies.vulkano]
 version = "0.34"
 
-[dependencies.ash]
-version = "0.37"
-
 [dependencies.nvml-wrapper]
 version = "0.10.0"
 

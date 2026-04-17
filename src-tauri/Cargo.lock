@@ -302,7 +302,6 @@ dependencies = [
  "ax-studio-utils",
  "chrono",
  "dirs",
- "env",
  "fix-path-env",
  "flate2",
  "futures-util",
@@ -312,7 +311,6 @@ dependencies = [
  "hostname",
  "hyper 0.14.32",
  "libc",
- "libloading 0.8.9",
  "log",
  "nix",
  "rand 0.8.5",
@@ -356,13 +354,11 @@ dependencies = [
  "base64 0.22.1",
  "hmac",
  "rand 0.8.5",
- "reqwest 0.11.27",
  "serde",
  "serde_json",
  "sha2",
  "tokio",
  "tokio-util",
- "url",
  "windows-sys 0.60.2",
 ]
 
@@ -1367,15 +1363,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "env"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc95de49ad098572c02d3fbf368c9a020bfff5ae78483685b77f51d8a7e9486d"
-dependencies = [
- "num_threads",
 ]
 
 [[package]]
@@ -5735,7 +5722,6 @@ dependencies = [
 name = "tauri-plugin-hardware"
 version = "0.6.599"
 dependencies = [
- "ash",
  "libc",
  "libloading 0.8.9",
  "log",
@@ -5784,7 +5770,6 @@ dependencies = [
  "libc",
  "log",
  "nix",
- "rand 0.8.5",
  "reqwest 0.11.27",
  "serde",
  "sha2",

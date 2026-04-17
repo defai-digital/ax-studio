@@ -347,17 +347,11 @@ impl ArgumentBuilder {
 }
 /// Builds CLI arguments for ax-serving binary instead of llama-server.
 /// ax-serving uses: `ax-serving serve -m <model> --port <port> --model-id <id> [--host 127.0.0.1]`
-pub struct AxServingArgumentBuilder {
-    config: LlamacppConfig,
-    is_embedding: bool,
-}
+pub struct AxServingArgumentBuilder;
 
 impl AxServingArgumentBuilder {
-    pub fn new(config: LlamacppConfig, is_embedding: bool) -> Self {
-        Self {
-            config,
-            is_embedding,
-        }
+    pub fn new(_config: LlamacppConfig, _is_embedding: bool) -> Self {
+        Self
     }
 
     /// Build ax-serving CLI arguments.
