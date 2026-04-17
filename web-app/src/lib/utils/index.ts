@@ -129,6 +129,18 @@ export function formatMegaBytes(mb: number) {
   }
 }
 
+export function formatBytes(bytes?: number): string {
+  if (!bytes || bytes <= 0) return ''
+  const units = ['B', 'KB', 'MB', 'GB']
+  let i = 0
+  let val = bytes
+  while (val >= 1024 && i < units.length - 1) {
+    val /= 1024
+    i++
+  }
+  return `${val.toFixed(i === 0 ? 0 : 1)} ${units[i]}`
+}
+
 export function isDev() {
   return window.location.host.startsWith('localhost:')
 }

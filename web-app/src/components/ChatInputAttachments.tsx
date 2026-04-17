@@ -3,7 +3,7 @@
  * Pure presentational component; no service calls or side effects.
  */
 import { Loader2, Paperclip, X } from "lucide-react";
-import { cn } from '@/lib/utils'
+import { cn, formatBytes } from '@/lib/utils'
 import {
   Tooltip,
   TooltipContent,
@@ -11,18 +11,6 @@ import {
 } from '@/components/ui/tooltip'
 import type { Attachment } from '@/types/attachment'
 import { motion, AnimatePresence } from 'motion/react'
-
-function formatBytes(bytes?: number): string {
-  if (!bytes || bytes <= 0) return ''
-  const units = ['B', 'KB', 'MB', 'GB']
-  let i = 0
-  let val = bytes
-  while (val >= 1024 && i < units.length - 1) {
-    val /= 1024
-    i++
-  }
-  return `${val.toFixed(i === 0 ? 0 : 1)} ${units[i]}`
-}
 
 type Props = {
   attachments: Attachment[]
