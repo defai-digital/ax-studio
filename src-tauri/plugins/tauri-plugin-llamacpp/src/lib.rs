@@ -32,7 +32,6 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             commands::find_session_by_model,
             commands::get_loaded_models,
             commands::get_all_sessions,
-            commands::get_session_by_model,
             commands::start_ax_serving,
             // GGUF commands
             gguf::commands::read_gguf_metadata,

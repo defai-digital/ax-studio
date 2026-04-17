@@ -464,15 +464,6 @@ pub async fn get_all_sessions<R: Runtime>(
     get_all_active_sessions(app_handle).await
 }
 
-/// Get session information by model ID
-#[tauri::command]
-pub async fn get_session_by_model<R: Runtime>(
-    app_handle: tauri::AppHandle<R>,
-    model_id: String,
-) -> Result<Option<SessionInfo>, String> {
-    find_session_by_model_id(app_handle, &model_id).await
-}
-
 /// Start ax-serving as a long-running service (no model pre-loaded).
 /// Models are loaded/unloaded at runtime via ax-serving's HTTP API.
 #[tauri::command]

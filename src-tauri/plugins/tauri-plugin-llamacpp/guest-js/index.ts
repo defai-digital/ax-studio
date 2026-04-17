@@ -169,12 +169,6 @@ export async function getAllSessions(): Promise<SessionInfo[]> {
   return await invoke('plugin:llamacpp|get_all_sessions')
 }
 
-export async function getSessionByModel(
-  modelId: string
-): Promise<SessionInfo | null> {
-  return await invoke('plugin:llamacpp|get_session_by_model', { modelId })
-}
-
 // GGUF commands
 export async function readGgufMetadata(path: string): Promise<GgufMetadata> {
   return await invoke('plugin:llamacpp|read_gguf_metadata', { path })
