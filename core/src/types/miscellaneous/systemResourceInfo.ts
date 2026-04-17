@@ -1,9 +1,5 @@
 import { GpuAdditionalInformation } from '../hardware'
 
-export type SystemResourceInfo = {
-  memAvailable: number
-}
-
 export type CpuSettings = {
   threads?: number
   affinity?: number[]
@@ -29,11 +25,6 @@ export type GpuSettingInfo = {
   additional_information?: GpuAdditionalInformation
 }
 
-export type SystemInformation = {
-  gpuSetting?: GpuSetting
-  osInfo?: OperatingSystemInfo
-}
-
 export const SupportedPlatforms = ['win32', 'linux', 'darwin'] as const
 export type SupportedPlatformTuple = typeof SupportedPlatforms
 export type SupportedPlatform = SupportedPlatformTuple[number]
@@ -43,9 +34,4 @@ export type OperatingSystemInfo = {
   arch: string
   totalMem: number
   freeMem: number
-}
-
-export type CpuCoreInfo = {
-  model: string
-  speed: number
 }

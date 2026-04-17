@@ -156,11 +156,6 @@ export type ModelRuntimeParams = {
   engine?: string
 }
 
-// Represents a model that failed to initialize, including the error
-export type ModelInitFailed = Model & {
-  error: Error
-}
-
 /**
  * ModelParams types
  */
