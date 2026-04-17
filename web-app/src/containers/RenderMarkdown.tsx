@@ -308,6 +308,46 @@ function extractMermaidBlocks(content: string): string[] {
   return blocks
 }
 
+/**
+ * Extract all artifact-* blocks from the raw markdown string in document order.
+ * Returns { type, source } pairs matched to HAST pre nodes by index.
+ *
+ * We extract from raw string because Shiki doesn't recognise "artifact-svg" etc.
+ * as valid language identifiers — it falls back to "text", losing the CSS class
+ * that the HAST-based getArtifactInfo() relies on.
+ */
+function extractArtifactBlocks(content: string): Array<{ type: ArtifactType; source: string }> {
+  const blocks: Array<{ type: ArtifactType; source: string }> = []
+  const ARTIFACT_TYPES: ArtifactType[] = ['html', 'react', 'svg', 'chartjs', 'vega']
+  const pattern = new RegExp(
+    `\`\`\`artifact-(${ARTIFACT_TYPES.join('|')})[^\\n]*\\n([\\s\\S]*?)\`\`\``,
+    'gi'
+  )
+  let match
+  while ((match = pattern.exec(content)) !== null) {
+    const type = match[1].toLowerCase() as ArtifactType
+    const source = match[2].trim()
+    if (source) blocks.push({ type, source })
+  }
+  return blocks
+}
+
+/** Returns true if the HAST pre node wraps an artifact-* code block. */
+function isArtifactNode(preNode: unknown): boolean {
+  if (!preNode || typeof preNode !== 'object') return false
+  const node = preNode as Record<string, unknown>
+  const children = node.children as unknown[] | undefined
+  if (!Array.isArray(children) || children.length === 0) return false
+  const codeEl = children[0] as Record<string, unknown>
+  if (!codeEl || codeEl.tagName !== 'code') return false
+  const props = codeEl.properties as Record<string, unknown> | undefined
+  const classes = props?.className
+  if (!Array.isArray(classes)) return false
+  return classes.some(
+    (c) => typeof c === 'string' && /^language-artifact-/i.test(c)
+  )
+}
+
 /** Renders a mermaid diagram directly via mermaidLib, bypassing Streamdown's plugin.
  *  Uses a 2-attempt error-driven retry pipeline:
  *    Attempt 1: render source as-is
@@ -532,9 +572,16 @@ function RenderMarkdownComponent({
   const mermaidBlocksRef = useRef<string[]>([])
   mermaidBlocksRef.current = useMemo(() => extractMermaidBlocks(normalizedContent), [normalizedContent])
 
-  // Counter reset at the start of every render so each render pass indexes from 0.
+  // Extract artifact-* blocks from raw string — Shiki doesn't recognise
+  // "artifact-svg" etc. so CSS-class detection fails; string extraction is reliable.
+  const artifactBlocksRef = useRef<Array<{ type: ArtifactType; source: string }>>([])
+  artifactBlocksRef.current = useMemo(() => extractArtifactBlocks(normalizedContent), [normalizedContent])
+
+  // Counters reset at the start of every render so each render pass indexes from 0.
   const mermaidIdxRef = useRef(0)
   mermaidIdxRef.current = 0
+  const artifactIdxRef = useRef(0)
+  artifactIdxRef.current = 0
 
   /**
    * Custom `pre` component:
@@ -573,7 +620,37 @@ function RenderMarkdownComponent({
             return <MermaidDiagram source={source} theme={mermaidThemeRef.current} />
           }
 
-          // 1. Explicit artifact-* fences + auto-detected full HTML docs
+          // 1. Explicit artifact-* fences — use string-extracted source to bypass
+          //    Shiki's unknown-language fallback which loses the CSS class.
+          if (isArtifactNode(node)) {
+            const artifact = artifactBlocksRef.current[artifactIdxRef.current++]
+            if (artifact) {
+              return (
+                <ArtifactBlock type={artifact.type} source={artifact.source} threadId={threadId ?? messageId}>
+                  {children}
+                </ArtifactBlock>
+              )
+            }
+          }
+
+          // 1b. Fallback: match by source text when Shiki lost the artifact- class
+          {
+            const next = artifactBlocksRef.current[artifactIdxRef.current]
+            if (next) {
+              const codeEl = (node as Record<string, unknown>)?.children as unknown[] | undefined
+              const nodeText = codeEl ? extractHastText(codeEl[0]).trim() : ''
+              if (nodeText === next.source) {
+                artifactIdxRef.current++
+                return (
+                  <ArtifactBlock type={next.type} source={next.source} threadId={threadId ?? messageId}>
+                    {children}
+                  </ArtifactBlock>
+                )
+              }
+            }
+          }
+
+          // 1c. Auto-detected full HTML docs + JSX/SVG blocks
           const artifactInfo = getArtifactInfo(node)
           if (artifactInfo !== null) {
             return (
