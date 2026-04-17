@@ -24,9 +24,8 @@ vi.mock('@/components/ui/button', () => ({
   ),
 }))
 
-vi.mock('@tabler/icons-react', () => ({
-  IconStar: () => <span data-testid="icon-star" />,
-  IconStarFilled: () => <span data-testid="icon-star-filled" />,
+vi.mock('lucide-react', () => ({
+  Star: ({ fill }: { fill?: string }) => <span data-testid={fill ? "icon-star-filled" : "icon-star"} />,
 }))
 
 const mockModel = {

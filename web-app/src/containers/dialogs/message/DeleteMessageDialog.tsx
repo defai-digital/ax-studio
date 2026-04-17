@@ -1,3 +1,4 @@
+import { Trash2 } from "lucide-react";
 import { useState, useRef } from 'react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import {
@@ -11,7 +12,6 @@ import {
   DialogHeader,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { IconTrash } from '@tabler/icons-react'
 
 interface DeleteMessageDialogProps {
   onDelete: () => void
@@ -42,7 +42,7 @@ export function DeleteMessageDialog({ onDelete }: DeleteMessageDialogProps) {
         }
       }}
     >
-      <IconTrash size={16} />
+      <Trash2 size={16} />
     </Button>
   )
 

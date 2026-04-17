@@ -2,13 +2,13 @@
  * ChatInputAttachments — renders the attachment preview tiles inside ChatInput.
  * Pure presentational component; no service calls or side effects.
  */
+import { Loader2, Paperclip, X } from "lucide-react";
 import { cn } from '@/lib/utils'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { IconLoader2, IconPaperclip, IconX } from '@tabler/icons-react'
 import type { Attachment } from '@/types/attachment'
 import { motion, AnimatePresence } from 'motion/react'
 
@@ -74,11 +74,11 @@ export function ChatInputAttachments({ attachments, onRemove }: Props) {
                             />
                           ) : att.processing ? (
                             <div className="flex items-center justify-center text-muted-foreground">
-                              <IconLoader2 size={18} className="animate-spin" />
+                              <Loader2 size={18} className="animate-spin" />
                             </div>
                           ) : (
                             <div className="flex flex-col items-center justify-center text-muted-foreground">
-                              <IconPaperclip size={18} />
+                              <Paperclip size={18} />
                               {ext && (
                                 <span className="text-[10px] leading-none mt-0.5 uppercase opacity-70">
                                   .{ext}
@@ -119,7 +119,7 @@ export function ChatInputAttachments({ attachments, onRemove }: Props) {
                         className="absolute -top-1 -right-2.5 bg-destructive size-5 flex rounded-full items-center justify-center cursor-pointer hover:scale-110 transition-transform"
                         onClick={() => onRemove(idx)}
                       >
-                        <IconX className="text-neutral-200" size={14} />
+                        <X className="text-neutral-200" size={14} />
                       </div>
                     )}
                   </motion.div>

@@ -1,3 +1,4 @@
+import { Download, X } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -9,7 +10,6 @@ import { useLeftPanel } from '@/hooks/ui/useLeftPanel'
 import { useAppUpdater } from '@/hooks/updater/useAppUpdater'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { DownloadEvent, DownloadState, events, AppEvent } from '@ax-studio/core'
-import { IconDownload, IconX } from '@tabler/icons-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslation } from '@/i18n/react-i18next-compat'
@@ -363,7 +363,7 @@ export function DownloadManagement() {
             ) : (
               <div className="fixed bottom-4 left-4 z-50 size-10 border-2 rounded-full shadow-md cursor-pointer flex items-center justify-center">
                 <div className="relative">
-                  <IconDownload
+                  <Download
                     className="text-muted-foreground -mt-1"
                     size={20}
                   />
@@ -417,7 +417,7 @@ export function DownloadManagement() {
                         {download.name}
                       </p>
                       <div className="shrink-0 flex items-center space-x-0.5">
-                        <IconX
+                        <X
                           size={16}
                           className="text-muted-foreground cursor-pointer"
                           title="Cancel download"

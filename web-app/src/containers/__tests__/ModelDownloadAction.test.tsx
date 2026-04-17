@@ -90,8 +90,8 @@ vi.mock('@/components/ui/progress', () => ({
   ),
 }))
 
-vi.mock('@tabler/icons-react', () => ({
-  IconDownload: () => <span data-testid="download-icon" />,
+vi.mock('lucide-react', () => ({
+  Download: () => <span data-testid="download-icon" />,
 }))
 
 import { ModelDownloadAction } from '../ModelDownloadAction'

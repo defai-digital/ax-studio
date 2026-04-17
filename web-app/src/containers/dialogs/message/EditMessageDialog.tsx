@@ -10,8 +10,7 @@ import {
   DialogHeader,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { FileText, X } from 'lucide-react'
-import { IconPencil } from '@tabler/icons-react'
+import { FileText, Pencil, X } from "lucide-react";
 import {
   extractFilesFromPrompt,
   injectFilesIntoPrompt,
@@ -93,7 +92,7 @@ export function EditMessageDialog({
         }
       }}
     >
-      <IconPencil size={16} />
+      <Pencil size={16} />
     </Button>
   )
 

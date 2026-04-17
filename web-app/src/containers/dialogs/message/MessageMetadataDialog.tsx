@@ -1,3 +1,4 @@
+import { Info } from "lucide-react";
 import { useState } from 'react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import {
@@ -7,7 +8,6 @@ import {
   DialogTitle,
   DialogHeader,
 } from '@/components/ui/dialog'
-import { IconInfoCircle } from '@tabler/icons-react'
 import {
   Tooltip,
   TooltipContent,
@@ -43,7 +43,7 @@ export function MessageMetadataDialog({
             }
           }}
         >
-          <IconInfoCircle size={16} />
+          <Info size={16} />
         </div>
       </TooltipTrigger>
       <TooltipContent>

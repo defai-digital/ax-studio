@@ -3,13 +3,7 @@ import { route } from '@/constants/routes'
 import HeaderPage from '@/containers/HeaderPage'
 import SettingsMenu from '@/components/common/SettingsMenu'
 import { Card, CardItem } from '@/components/common/Card'
-import {
-  IconPencil,
-  IconPlus,
-  IconTrash,
-  IconCodeCircle,
-} from '@tabler/icons-react'
-import { Wrench } from 'lucide-react'
+import { Code, Pencil, Plus, Trash2, Wrench } from "lucide-react";
 import {
   useMCPServers,
   MCPServerConfig,
@@ -405,7 +399,7 @@ function MCPServersDesktop() {
               onClick={() => handleOpenDialog()}
               className="relative z-50"
             >
-              <IconPlus size={18} className="text-muted-foreground" />
+              <Plus size={18} className="text-muted-foreground" />
               {t('mcp-servers:addServer')}
             </Button>
           </div>
@@ -454,7 +448,7 @@ function MCPServersDesktop() {
                             size="icon-xs"
                             variant="ghost"
                           >
-                            <IconCodeCircle
+                            <Code
                               size={18}
                               className="text-muted-foreground"
                             />
@@ -626,7 +620,7 @@ function MCPServersDesktop() {
                                 serverName: key,
                               })}
                             >
-                              <IconCodeCircle
+                              <Code
                                 size={18}
                                 className="text-muted-foreground"
                               />
@@ -637,7 +631,7 @@ function MCPServersDesktop() {
                               onClick={() => handleEdit(key)}
                               title={t('mcp-servers:editServer')}
                             >
-                              <IconPencil
+                              <Pencil
                                 size={18}
                                 className="text-muted-foreground"
                               />
@@ -648,7 +642,7 @@ function MCPServersDesktop() {
                               onClick={() => handleDeleteClick(key)}
                               title={t('mcp-servers:deleteServer.title')}
                             >
-                              <IconTrash
+                              <Trash2
                                 size={18}
                                 className="text-muted-foreground"
                               />

@@ -4,22 +4,13 @@ import { route } from '@/constants/routes'
 import SettingsMenu from '@/components/common/SettingsMenu'
 import HeaderPage from '@/containers/HeaderPage'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { Brain } from 'lucide-react'
+import { Brain, Check, Download, MessageSquare, Search, Trash2, Upload, X } from "lucide-react";
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardItem } from '@/components/common/Card'
 import { useMemory, MEMORY_LIMIT } from '@/hooks/integrations/useMemory'
 import type { MemoryEntry } from '@/hooks/integrations/useMemory'
-import {
-  IconTrash,
-  IconCheck,
-  IconX,
-  IconSearch,
-  IconDownload,
-  IconUpload,
-  IconMessage,
-} from '@tabler/icons-react'
 import { toast } from 'sonner'
 
 export const Route = createFileRoute(route.settings.memory)({
@@ -91,7 +82,7 @@ function MemoryRow({
             className="h-6 w-6 shrink-0"
             onClick={handleSave}
           >
-            <IconCheck size={14} className="text-green-500" />
+            <Check size={14} className="text-green-500" />
           </Button>
           <Button
             variant="ghost"
@@ -100,7 +91,7 @@ function MemoryRow({
             onMouseDown={(e) => e.preventDefault()}
             onClick={handleCancel}
           >
-            <IconX size={14} className="text-muted-foreground" />
+            <X size={14} className="text-muted-foreground" />
           </Button>
         </>
       ) : (
@@ -125,7 +116,7 @@ function MemoryRow({
               onClick={() => onNavigateToThread(entry.sourceThreadId)}
               title="Go to source thread"
             >
-              <IconMessage size={14} className="text-muted-foreground" />
+              <MessageSquare size={14} className="text-muted-foreground" />
             </Button>
           )}
           <Button
@@ -134,7 +125,7 @@ function MemoryRow({
             className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100"
             onClick={() => onDelete(entry.id)}
           >
-            <IconTrash size={14} className="text-destructive" />
+            <Trash2 size={14} className="text-destructive" />
           </Button>
         </>
       )}
@@ -317,7 +308,7 @@ function MemorySettings() {
                   <>
                     {/* Search bar */}
                     <div className="relative mb-3">
-                      <IconSearch
+                      <Search
                         size={14}
                         className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
                       />
@@ -372,7 +363,7 @@ function MemorySettings() {
                     onClick={handleExport}
                     disabled={memories.length === 0}
                   >
-                    <IconDownload size={14} className="mr-1.5" />
+                    <Download size={14} className="mr-1.5" />
                     Export
                   </Button>
                   <Button
@@ -381,7 +372,7 @@ function MemorySettings() {
                     onClick={() => fileInputRef.current?.click()}
                     disabled={!memoryEnabled}
                   >
-                    <IconUpload size={14} className="mr-1.5" />
+                    <Upload size={14} className="mr-1.5" />
                     Import
                   </Button>
                   <input

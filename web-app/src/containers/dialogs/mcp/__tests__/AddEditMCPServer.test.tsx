@@ -1,3 +1,4 @@
+import { Code, GripVertical } from "lucide-react";
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import AddEditMCPServer from '../AddEditMCPServer'
@@ -13,11 +14,11 @@ vi.mock('@/lib/utils', () => ({
   cn: (...args: unknown[]) => args.filter(Boolean).join(' '),
 }))
 
-vi.mock('@tabler/icons-react', () => ({
-  IconPlus: () => <span data-testid="icon-plus" />,
-  IconTrash: () => <span data-testid="icon-trash" />,
-  IconGripVertical: () => <span />,
-  IconCodeDots: () => <span data-testid="icon-code" />,
+vi.mock('lucide-react', () => ({
+  Plus: () => <span data-testid="icon-plus" />,
+  Trash2: () => <span data-testid="icon-trash" />,
+  GripVertical: () => <span />,
+  Code: () => <span data-testid="icon-code" />,
 }))
 
 vi.mock('@uiw/react-textarea-code-editor', () => ({

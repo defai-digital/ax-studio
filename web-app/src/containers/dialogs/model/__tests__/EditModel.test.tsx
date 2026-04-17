@@ -1,3 +1,4 @@
+import { AlertTriangle, Check, Eye, Sparkles, Wrench } from "lucide-react";
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render } from '@testing-library/react'
 import { DialogEditModel } from '../EditModel'
@@ -74,15 +75,15 @@ vi.mock('@/components/ui/button', () => ({
 }))
 
 // Mock other UI components
-vi.mock('@tabler/icons-react', () => ({
-  IconPencil: () => <div data-testid="pencil-icon" />,
-  IconCheck: () => <div data-testid="check-icon" />,
-  IconX: () => <div data-testid="x-icon" />,
-  IconAlertTriangle: () => <div data-testid="alert-triangle-icon" />,
-  IconEye: () => <div data-testid="eye-icon" />,
-  IconTool: () => <div data-testid="tool-icon" />,
-  IconLoader2: () => <div data-testid="loader-icon" />,
-  IconSparkles: () => <div data-testid="sparkles-icon" />,
+vi.mock('lucide-react', () => ({
+  Pencil: () => <div data-testid="pencil-icon" />,
+  Check: () => <div data-testid="check-icon" />,
+  X: () => <div data-testid="x-icon" />,
+  AlertTriangle: () => <div data-testid="alert-triangle-icon" />,
+  Eye: () => <div data-testid="eye-icon" />,
+  Wrench: () => <div data-testid="tool-icon" />,
+  Loader2: () => <div data-testid="loader-icon" />,
+  Sparkles: () => <div data-testid="sparkles-icon" />,
 }))
 
 describe('DialogEditModel - Basic Component Tests', () => {

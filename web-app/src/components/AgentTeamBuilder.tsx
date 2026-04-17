@@ -1,3 +1,4 @@
+import { ChevronDown, ChevronUp, GripVertical, Pencil, PlusCircle, Trash2 } from "lucide-react";
 import { useState, useEffect } from 'react'
 import {
   Dialog,
@@ -22,14 +23,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import {
-  IconCirclePlus,
-  IconPencil,
-  IconTrash,
-  IconGripVertical,
-  IconChevronUp,
-  IconChevronDown,
-} from '@tabler/icons-react'
 
 type Props = {
   open: boolean
@@ -400,14 +393,14 @@ export function AgentTeamBuilder({ open, onOpenChange, team, onSave }: Props) {
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button size="sm" variant="outline">
-                      <IconCirclePlus size={14} />
+                      <PlusCircle size={14} />
                       Add Agent
-                      <IconChevronDown size={14} />
+                      <ChevronDown size={14} />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-64">
                     <DropdownMenuItem onSelect={handleAddAgent}>
-                      <IconCirclePlus size={14} />
+                      <PlusCircle size={14} />
                       Create New Agent
                     </DropdownMenuItem>
                     {availableAgents.length > 0 && (
@@ -450,7 +443,7 @@ export function AgentTeamBuilder({ open, onOpenChange, team, onSave }: Props) {
                         key={agentId}
                         className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 border border-border/40"
                       >
-                        <IconGripVertical
+                        <GripVertical
                           size={14}
                           className="text-muted-foreground shrink-0"
                         />
@@ -478,7 +471,7 @@ export function AgentTeamBuilder({ open, onOpenChange, team, onSave }: Props) {
                             onClick={() => handleMoveAgent(index, 'up')}
                             disabled={index === 0}
                           >
-                            <IconChevronUp size={12} />
+                            <ChevronUp size={12} />
                           </Button>
                           <Button
                             variant="ghost"
@@ -486,21 +479,21 @@ export function AgentTeamBuilder({ open, onOpenChange, team, onSave }: Props) {
                             onClick={() => handleMoveAgent(index, 'down')}
                             disabled={index === agentIds.length - 1}
                           >
-                            <IconChevronDown size={12} />
+                            <ChevronDown size={12} />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon-xs"
                             onClick={() => handleEditAgent(agentId)}
                           >
-                            <IconPencil size={12} />
+                            <Pencil size={12} />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon-xs"
                             onClick={() => handleRemoveAgent(agentId)}
                           >
-                            <IconTrash
+                            <Trash2
                               size={12}
                               className="text-destructive"
                             />
@@ -537,7 +530,7 @@ export function AgentTeamBuilder({ open, onOpenChange, team, onSave }: Props) {
                   variant="outline"
                   onClick={handleAddVariable}
                 >
-                  <IconCirclePlus size={14} />
+                  <PlusCircle size={14} />
                   Add Variable
                 </Button>
               </div>
@@ -569,7 +562,7 @@ export function AgentTeamBuilder({ open, onOpenChange, team, onSave }: Props) {
                     size="icon-sm"
                     onClick={() => handleRemoveVariable(i)}
                   >
-                    <IconTrash size={14} className="text-destructive" />
+                    <Trash2 size={14} className="text-destructive" />
                   </Button>
                 </div>
               ))}

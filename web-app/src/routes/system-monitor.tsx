@@ -1,10 +1,10 @@
+import { Monitor } from "lucide-react";
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { useHardware } from '@/hooks/settings/useHardware'
 import { Progress } from '@/components/ui/progress'
 import { route } from '@/constants/routes'
 import { formatMegaBytes } from '@/lib/utils'
-import { IconDeviceDesktopAnalytics } from '@tabler/icons-react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { toNumber } from '@/lib/utils/number'
 import { useServiceHub } from '@/hooks/useServiceHub'
@@ -51,7 +51,7 @@ function SystemMonitorContent() {
   return (
     <div className="flex flex-col h-full bg-background overflow-y-auto p-6">
       <div className="flex items-center mb-4 gap-2">
-        <IconDeviceDesktopAnalytics className="text-muted-foreground/80 size-6" />
+        <Monitor className="text-muted-foreground/80 size-6" />
         <h1 className="text-xl font-bold text-muted-foreground">
           {t('system-monitor:title')}
         </h1>

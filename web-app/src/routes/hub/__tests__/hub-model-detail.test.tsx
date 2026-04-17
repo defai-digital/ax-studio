@@ -118,8 +118,8 @@ vi.mock('lucide-react', () => ({
   HardDrive: () => <div />,
 }))
 
-vi.mock('@tabler/icons-react', () => ({
-  IconArrowLeft: () => <div />,
+vi.mock('lucide-react', () => ({
+  ArrowLeft: () => <div />,
 }))
 
 vi.mock('@/lib/models', () => ({

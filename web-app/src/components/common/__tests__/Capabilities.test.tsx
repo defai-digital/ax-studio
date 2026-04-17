@@ -11,12 +11,12 @@ vi.mock('@/components/ui/tooltip', () => ({
 }))
 
 // Mock Tabler icons
-vi.mock('@tabler/icons-react', () => ({
-  IconEye: () => <div data-testid="icon-eye">Eye Icon</div>,
-  IconTool: () => <div data-testid="icon-tool">Tool Icon</div>,
-  IconAtom: () => <div data-testid="icon-atom">Atom Icon</div>,
-  IconWorld: () => <div data-testid="icon-world">World Icon</div>,
-  IconCodeCircle2: () => <div data-testid="icon-code">Code Icon</div>,
+vi.mock('lucide-react', () => ({
+  Eye: () => <div data-testid="icon-eye">Eye Icon</div>,
+  Wrench: () => <div data-testid="icon-tool">Tool Icon</div>,
+  Atom: () => <div data-testid="icon-atom">Atom Icon</div>,
+  Globe: () => <div data-testid="icon-world">World Icon</div>,
+  Binary: () => <div data-testid="icon-code">Code Icon</div>,
 }))
 
 describe('Capabilities', () => {

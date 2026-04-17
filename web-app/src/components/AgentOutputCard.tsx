@@ -1,12 +1,6 @@
+import { Check, ChevronDown, ChevronRight, Loader2, X } from "lucide-react";
 import { memo, useState } from 'react'
 import { cn } from '@/lib/utils'
-import {
-  IconChevronDown,
-  IconChevronRight,
-  IconCheck,
-  IconX,
-  IconLoader2,
-} from '@tabler/icons-react'
 type AgentOutputCardProps = {
   agentName: string
   agentRole?: string
@@ -42,11 +36,11 @@ const statusConfig = {
 const StatusIcon = ({ status }: { status: 'running' | 'complete' | 'error' }) => {
   switch (status) {
     case 'running':
-      return <IconLoader2 size={14} className="text-blue-500 animate-spin" />
+      return <Loader2 size={14} className="text-blue-500 animate-spin" />
     case 'complete':
-      return <IconCheck size={14} className="text-green-500" />
+      return <Check size={14} className="text-green-500" />
     case 'error':
-      return <IconX size={14} className="text-red-500" />
+      return <X size={14} className="text-red-500" />
   }
 }
 
@@ -84,9 +78,9 @@ export const AgentOutputCard = memo(function AgentOutputCard({
         {/* Expand/collapse icon */}
         {hasDetails ? (
           isCollapsed ? (
-            <IconChevronRight size={14} className="text-muted-foreground" />
+            <ChevronRight size={14} className="text-muted-foreground" />
           ) : (
-            <IconChevronDown size={14} className="text-muted-foreground" />
+            <ChevronDown size={14} className="text-muted-foreground" />
           )
         ) : (
           <div className="w-3.5" />
@@ -139,9 +133,9 @@ export const AgentOutputCard = memo(function AgentOutputCard({
                 }}
               >
                 {toolCallsExpanded ? (
-                  <IconChevronDown size={12} />
+                  <ChevronDown size={12} />
                 ) : (
-                  <IconChevronRight size={12} />
+                  <ChevronRight size={12} />
                 )}
                 Tools used ({toolCalls.length})
               </button>
@@ -183,9 +177,9 @@ export const AgentOutputCard = memo(function AgentOutputCard({
                 }}
               >
                 {outputExpanded ? (
-                  <IconChevronDown size={12} />
+                  <ChevronDown size={12} />
                 ) : (
-                  <IconChevronRight size={12} />
+                  <ChevronRight size={12} />
                 )}
                 Agent output
               </button>

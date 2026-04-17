@@ -1,3 +1,4 @@
+import { AlertTriangle, Eye, Loader2, Pencil, Wrench } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -10,13 +11,6 @@ import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 
 import { useModelProvider } from '@/hooks/models/useModelProvider'
-import {
-  IconPencil,
-  IconEye,
-  IconTool,
-  IconAlertTriangle,
-  IconLoader2,
-} from '@tabler/icons-react'
 import { useState, useEffect } from 'react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { toast } from 'sonner'
@@ -184,7 +178,7 @@ export const DialogEditModel = ({
     <Dialog open={isOpen} onOpenChange={handleDialogChange}>
       <DialogTrigger asChild>
         <div className="size-6 cursor-pointer flex items-center justify-center rounded transition-all duration-200 ease-in-out">
-          <IconPencil size={18} className="text-muted-foreground" />
+          <Pencil size={18} className="text-muted-foreground" />
         </div>
       </DialogTrigger>
       <DialogContent onKeyDown={handleKeyDown}>
@@ -220,7 +214,7 @@ export const DialogEditModel = ({
 
         {/* Warning Banner */}
         <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/5 border border-amber-500/10">
-          <IconAlertTriangle className="size-4 text-amber-500 shrink-0 mt-0.5" />
+          <AlertTriangle className="size-4 text-amber-500 shrink-0 mt-0.5" />
           <div className="text-[12px]">
             <p className="font-medium mb-0.5 text-foreground">
               {t('providers:editModel.warning.title')}
@@ -238,7 +232,7 @@ export const DialogEditModel = ({
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <IconTool className="size-4 text-muted-foreground" />
+                <Wrench className="size-4 text-muted-foreground" />
                 <span className="text-sm">
                   {t('providers:editModel.tools')}
                 </span>
@@ -255,7 +249,7 @@ export const DialogEditModel = ({
 
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <IconEye className="size-4 text-muted-foreground" />
+                <Eye className="size-4 text-muted-foreground" />
                 <span className="text-sm">
                   {t('providers:editModel.vision')}
                 </span>
@@ -281,7 +275,7 @@ export const DialogEditModel = ({
           >
             {isLoading ? (
               <>
-                <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Saving...
               </>
             ) : (

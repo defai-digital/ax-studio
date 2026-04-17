@@ -1,8 +1,6 @@
+import { PanelLeft } from "lucide-react";
 import { useLeftPanel } from '@/hooks/ui/useLeftPanel'
 import { cn } from '@/lib/utils'
-import {
-  IconLayoutSidebar,
-} from '@tabler/icons-react'
 import { ReactNode, memo } from 'react'
 import { Button } from '@/components/ui/button'
 
@@ -33,7 +31,7 @@ const HeaderPage = memo(function HeaderPage({ children }: HeaderPageProps) {
             onClick={() => setLeftPanel(!open)}
             aria-label="Toggle sidebar"
           >
-            <IconLayoutSidebar
+            <PanelLeft
               className="text-muted-foreground relative size-4.5"
             />
           </Button>

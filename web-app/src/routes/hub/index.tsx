@@ -13,7 +13,6 @@ import {
 } from 'react'
 import { CardItem } from '@/components/common/Card'
 import { extractModelName, extractDescription } from '@/lib/models'
-import { IconDownload, IconFileCode } from '@tabler/icons-react'
 import { Switch } from '@/components/ui/switch'
 import { ModelInfoHoverCard } from '@/containers/ModelInfoHoverCard'
 import {
@@ -25,19 +24,7 @@ import {
 import { useServiceHub } from '@/hooks/useServiceHub'
 import type { CatalogModel } from '@/services/models/types'
 import HeaderPage from '@/containers/HeaderPage'
-import {
-  ChevronsUpDown,
-  Eye,
-  Loader,
-  Wrench,
-  Atom,
-  HardDrive,
-  Search,
-  X,
-  CheckCircle2,
-  MessageCircle,
-  RotateCcw,
-} from 'lucide-react'
+import { Atom, CheckCircle2, ChevronsUpDown, Download, Eye, FileCode, HardDrive, Loader, MessageCircle, RotateCcw, Search, Wrench, X } from "lucide-react";
 import { motion, AnimatePresence } from 'motion/react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import Fuse from 'fuse.js'
@@ -767,7 +754,7 @@ function HubContent() {
                         <div className="flex items-center justify-between gap-3 pt-3 border-t border-border/40 mt-auto">
                           <div className="flex items-center gap-1 text-[11px] text-muted-foreground/50 min-w-0 overflow-hidden">
                             <span className="flex items-center gap-1 whitespace-nowrap">
-                              <IconDownload size={12} className="shrink-0" />
+                              <Download size={12} className="shrink-0" />
                               {model.downloads
                                 ? `${(model.downloads / 1000).toFixed(0)}k`
                                 : '0'}
@@ -776,7 +763,7 @@ function HubContent() {
                               &middot;
                             </span>
                             <span className="flex items-center gap-1 whitespace-nowrap">
-                              <IconFileCode size={12} className="shrink-0" />
+                              <FileCode size={12} className="shrink-0" />
                               {model.quants?.length || 0}
                             </span>
                           </div>

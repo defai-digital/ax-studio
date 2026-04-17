@@ -1,3 +1,4 @@
+import { ChevronDown, Plus, Smile, Trash2 } from "lucide-react";
 import { useState, useEffect, useRef } from 'react'
 import {
   Dialog,
@@ -8,12 +9,6 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  IconPlus,
-  IconTrash,
-  IconChevronDown,
-  IconMoodSmile,
-} from '@tabler/icons-react'
 import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react'
 
 import { Textarea } from '@/components/ui/textarea'
@@ -285,7 +280,7 @@ export default function AddEditAssistant({
                     textClassName=""
                   />
                 ) : (
-                  <IconMoodSmile size={18} className="text-muted-foreground" />
+                  <Smile size={18} className="text-muted-foreground" />
                 )}
               </div>
               <div className="relative" ref={emojiPickerRef}>
@@ -454,7 +449,7 @@ export default function AddEditAssistant({
                 size="icon-xs"
                 onClick={handleAddParameter}
               >
-                <IconPlus size={18} className="text-muted-foreground" />
+                <Plus size={18} className="text-muted-foreground" />
               </Button>
             </div>
 
@@ -483,7 +478,7 @@ export default function AddEditAssistant({
                           }
                           readOnly
                         />
-                        <IconChevronDown
+                        <ChevronDown
                           size={14}
                           className="text-muted-foreground absolute right-2 top-1/2 -translate-y-1/2"
                         />
@@ -533,7 +528,7 @@ export default function AddEditAssistant({
                             }
                             readOnly
                           />
-                          <IconChevronDown
+                          <ChevronDown
                             size={14}
                             className="text-muted-foreground absolute right-2 top-1/2 -translate-y-1/2"
                           />
@@ -587,7 +582,7 @@ export default function AddEditAssistant({
                   size="icon-sm"
                   onClick={() => handleRemoveParameter(index)}
                 >
-                  <IconTrash size={18} className="text-destructive" />
+                  <Trash2 size={18} className="text-destructive" />
                 </Button>
               </div>
             ))}

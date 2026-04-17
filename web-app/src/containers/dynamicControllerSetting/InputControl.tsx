@@ -2,8 +2,7 @@ import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
-import { Copy, Eye, EyeOff, CopyCheck } from 'lucide-react'
-import { IconMinus, IconPlus } from '@tabler/icons-react'
+import { Copy, CheckCheck, Eye, EyeOff, Minus, Plus } from "lucide-react";
 import { cn } from '@/lib/utils'
 
 type InputControl = {
@@ -78,7 +77,7 @@ export function InputControl({
           onClick={() => handleNumberAdjustment(-step)}
           disabled={min !== undefined && numericValue <= min}
         >
-          <IconMinus className='size-3! text-muted-foreground' />
+          <Minus className='size-3! text-muted-foreground' />
         </Button>
         <Button
           variant="outline"
@@ -89,7 +88,7 @@ export function InputControl({
           onClick={() => handleNumberAdjustment(step)}
           disabled={max !== undefined && numericValue >= max}
         >
-          <IconPlus className='size-3! text-muted-foreground' />
+          <Plus className='size-3! text-muted-foreground' />
         </Button>
       </ButtonGroup>
     )
@@ -129,7 +128,7 @@ export function InputControl({
             className="p-1 rounded  text-muted-foreground"
           >
             {isCopied ? (
-              <CopyCheck className="text-primary" size={16} />
+              <CheckCheck className="text-primary" size={16} />
             ) : (
               <Copy size={16} />
             )}

@@ -97,7 +97,7 @@ vi.mock('@/constants/routes', () => ({
   } 
 }))
 vi.mock('@/constants/windows', () => ({ windowKey: { systemMonitorWindow: 'monitor' } }))
-vi.mock('@tabler/icons-react', () => ({ IconDeviceDesktopAnalytics: () => <div data-testid="icon" /> }))
+vi.mock('lucide-react', () => ({ Monitor: () => <div data-testid="icon" /> }))
 
 // Mock the route structure properly
 vi.mock('@tanstack/react-router', () => ({

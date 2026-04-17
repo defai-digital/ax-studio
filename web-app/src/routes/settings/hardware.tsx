@@ -10,10 +10,9 @@ import { useHardware } from '@/hooks/settings/useHardware'
 import { useLlamacppDevices } from '@/hooks/models/useLlamacppDevices'
 import { useBackendUpdater } from '@/hooks/updater/useBackendUpdater'
 import { useEffect, useState } from 'react'
-import { IconDeviceDesktopAnalytics } from '@tabler/icons-react'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import type { HardwareData, SystemUsage } from '@/services/hardware/types'
-import { Cpu as CpuIcon } from 'lucide-react'
+import { Cpu as CpuIcon, Monitor } from "lucide-react";
 import { cn, formatMegaBytes } from '@/lib/utils'
 import { toNumber } from '@/lib/utils/number'
 import { Button } from '@/components/ui/button'
@@ -171,7 +170,7 @@ function HardwareContent() {
             className="flex items-center gap-2 relative z-50"
             onClick={handleClickSystemMonitor}
           >
-            <IconDeviceDesktopAnalytics className="text-muted-foreground size-5" />
+            <Monitor className="text-muted-foreground size-5" />
             <p>{t('settings:hardware.systemMonitor')}</p>
           </Button>
         </div>

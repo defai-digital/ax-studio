@@ -1,4 +1,4 @@
-import { IconSettings } from '@tabler/icons-react'
+import { Settings } from "lucide-react";
 import debounce from 'lodash.debounce'
 
 import {
@@ -123,7 +123,7 @@ export function ModelSetting({
     <Sheet>
       <SheetTrigger asChild>
         <Button variant="ghost" size="icon-xs">
-          <IconSettings size={18} className="text-muted-foreground" />
+          <Settings size={18} className="text-muted-foreground" />
         </Button>
       </SheetTrigger>
       <SheetContent className="overflow-y-auto">

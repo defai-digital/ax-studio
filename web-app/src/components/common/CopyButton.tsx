@@ -1,5 +1,5 @@
+import { Copy, CheckCheck } from "lucide-react";
 import { Button } from '@/components/ui/button'
-import { IconCopy, IconCopyCheck } from '@tabler/icons-react'
 import { useEffect, useRef, useState } from 'react'
 
 const fallbackCopyText = (text: string): boolean => {
@@ -69,10 +69,10 @@ export const CopyButton = ({ text }: { text: string }) => {
     >
       {copied ? (
         <>
-          <IconCopyCheck size={16} className="text-primary" />
+          <CheckCheck size={16} className="text-primary" />
         </>
       ) : (
-        <IconCopy size={16} />
+        <Copy size={16} />
       )}
     </Button>
   )

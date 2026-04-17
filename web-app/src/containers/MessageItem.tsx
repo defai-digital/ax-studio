@@ -22,7 +22,6 @@ import {
 } from '@/components/ai-elements/tool'
 import { CopyButton } from '@/components/common/CopyButton'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
-import { IconRefresh, IconPaperclip } from '@tabler/icons-react'
 import { EditMessageDialog } from '@/containers/dialogs/message/EditMessageDialog'
 import { DeleteMessageDialog } from '@/containers/dialogs/message/DeleteMessageDialog'
 import TokenSpeedIndicator from '@/containers/TokenSpeedIndicator'
@@ -33,7 +32,7 @@ import { AgentOutputCard } from '@/components/AgentOutputCard'
 import { RunLogSummary } from '@/components/RunLogViewer'
 import type { AgentStatusData } from '@/types/agent-data-parts'
 import type { RunLogData } from '@/lib/multi-agent/run-log'
-import { Zap, GitBranch, ThumbsUp, ThumbsDown } from 'lucide-react'
+import { GitBranch, Paperclip, RefreshCw, ThumbsDown, ThumbsUp, Zap } from "lucide-react";
 import { useMessages } from '@/hooks/chat/useMessages'
 import { RoutingBadge } from '@/components/RoutingBadge'
 
@@ -208,7 +207,7 @@ export const MessageItem = memo(
                         key={`file-${idx}-${file.id}`}
                         className="flex items-center gap-2 px-3 py-2 rounded-xl bg-muted border border-border/50 text-[12px]"
                       >
-                        <IconPaperclip
+                        <Paperclip
                           size={14}
                           className="text-muted-foreground"
                         />
@@ -576,7 +575,7 @@ export const MessageItem = memo(
                     aria-label="Regenerate response"
                     className="text-muted-foreground/50 hover:text-foreground"
                   >
-                    <IconRefresh size={14} />
+                    <RefreshCw size={14} />
                   </Button>
                 )}
 

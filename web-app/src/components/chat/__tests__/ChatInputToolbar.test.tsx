@@ -1,3 +1,4 @@
+import { Brain } from "lucide-react";
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { ChatInputToolbar } from '../ChatInputToolbar'
@@ -150,7 +151,7 @@ describe('ChatInputToolbar — Phase 3 Manual Test Protocol', () => {
   it('memory button calls toggleMemory when clicked', () => {
     const toggleMemory = vi.fn()
     render(<ChatInputToolbar {...createProps({ toggleMemory })} />)
-    // Memory button has IconBrain - find it via the button with onClick={toggleMemory}
+    // Memory button has Brain - find it via the button with onClick={toggleMemory}
     const buttons = screen.getAllByRole('button')
     const memoryButton = buttons.find(b => b.getAttribute('class')?.includes('relative'))
     if (memoryButton) {

@@ -1,3 +1,4 @@
+import { LayoutTemplate, Upload } from "lucide-react";
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { Route as AgentTeamsRoute } from '../agent-teams'
@@ -80,14 +81,14 @@ vi.mock('@/lib/utils', () => ({
   cn: (...args: unknown[]) => args.filter(Boolean).join(' '),
 }))
 
-vi.mock('@tabler/icons-react', () => ({
-  IconCirclePlus: () => <span data-testid="icon-plus" />,
-  IconPencil: () => <span data-testid="icon-pencil" />,
-  IconTrash: () => <span data-testid="icon-trash" />,
-  IconTemplate: () => <span data-testid="icon-template" />,
-  IconCopy: () => <span data-testid="icon-copy" />,
-  IconDownload: () => <span data-testid="icon-download" />,
-  IconUpload: () => <span data-testid="icon-upload" />,
+vi.mock('lucide-react', () => ({
+  PlusCircle: () => <span data-testid="icon-plus" />,
+  Pencil: () => <span data-testid="icon-pencil" />,
+  Trash2: () => <span data-testid="icon-trash" />,
+  LayoutTemplate: () => <span data-testid="icon-template" />,
+  Copy: () => <span data-testid="icon-copy" />,
+  Download: () => <span data-testid="icon-download" />,
+  Upload: () => <span data-testid="icon-upload" />,
 }))
 
 vi.mock('lucide-react', () => ({

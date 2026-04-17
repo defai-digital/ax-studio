@@ -1,3 +1,4 @@
+import { Plus, Trash2 } from "lucide-react";
 import { useState, useEffect, useRef } from 'react'
 import {
   Dialog,
@@ -7,7 +8,6 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { IconPlus, IconTrash } from '@tabler/icons-react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 type EnvVar = { key: string; value: string }
 
@@ -115,7 +115,7 @@ export default function AddEditCustomCliDialog({
                 className="size-6 cursor-pointer flex items-center justify-center rounded hover:bg-secondary transition-all duration-200 ease-in-out"
                 onClick={handleAddEnv}
               >
-                <IconPlus size={16} className="text-muted-foreground" />
+                <Plus size={16} className="text-muted-foreground" />
               </div>
             </div>
 
@@ -138,7 +138,7 @@ export default function AddEditCustomCliDialog({
                     className="size-6 cursor-pointer flex items-center justify-center rounded hover:bg-secondary transition-all duration-200 ease-in-out"
                     onClick={() => handleRemoveEnv(index)}
                   >
-                    <IconTrash size={16} className="text-destructive" />
+                    <Trash2 size={16} className="text-destructive" />
                   </div>
                 )}
               </div>

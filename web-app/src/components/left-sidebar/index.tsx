@@ -17,8 +17,7 @@ import {
   SidebarHeader,
   SidebarRail,
 } from '@/components/ui/sidebar'
-import { Zap } from 'lucide-react'
-import { IconBrandDiscord } from '@tabler/icons-react'
+import { MessageCircle, Zap } from "lucide-react";
 import {
   SettingsIcon,
   type SettingsIconHandle,
@@ -105,7 +104,7 @@ export function LeftSidebar() {
               rel="noopener noreferrer"
               className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all"
             >
-              <IconBrandDiscord size={16} className="shrink-0" />
+              <MessageCircle size={16} className="shrink-0" />
               <span>Share Feedback</span>
             </a>
           </div>

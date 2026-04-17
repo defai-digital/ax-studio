@@ -1266,7 +1266,6 @@ __metadata:
     "@streamdown/cjk": "npm:^1.0.1"
     "@streamdown/code": "npm:^1.0.1"
     "@streamdown/mermaid": "npm:^1.0.2"
-    "@tabler/icons-react": "npm:3.34.0"
     "@tailwindcss/vite": "npm:4.1.4"
     "@tanstack/react-router": "npm:^1.121.34"
     "@tanstack/react-virtual": "npm:3.13.12"
@@ -5580,24 +5579,6 @@ __metadata:
   peerDependencies:
     react: ^18.0.0 || ^19.0.0
   checksum: 10c0/3ba4f56bccf9ecfa0f74fe82c3f4c68967c5b065b10c031187fda6db5ca8df61da077ba54161de2b99eb37c6e2a1e7f360c7b8028405f842ffd0490099229e87
-  languageName: node
-  linkType: hard
-
-"@tabler/icons-react@npm:3.34.0":
-  version: 3.34.0
-  resolution: "@tabler/icons-react@npm:3.34.0"
-  dependencies:
-    "@tabler/icons": "npm:3.34.0"
-  peerDependencies:
-    react: ">= 16"
-  checksum: 10c0/b2d094c6ae02fc157d9a059e06c65b1dd49a96c7fc77a57bc9acf289899df66504bcab533e7a22d9ec3ca7c3952176c6c916e84aff827b24d2c69ecc7bfc737d
-  languageName: node
-  linkType: hard
-
-"@tabler/icons@npm:3.34.0":
-  version: 3.34.0
-  resolution: "@tabler/icons@npm:3.34.0"
-  checksum: 10c0/7b4bb937e051ece9258ab4321363f284a4c1d53fbe0211c6976bff41d0ca031e8196156595bb30fa2bfb963f1771814d1438aa01a4422df9a6e21a46ebe6cc9b
   languageName: node
   linkType: hard
 

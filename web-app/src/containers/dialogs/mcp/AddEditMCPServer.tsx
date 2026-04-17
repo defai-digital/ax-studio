@@ -1,3 +1,4 @@
+import { Code, GripVertical, Plus, Trash2 } from "lucide-react";
 import { useState, useEffect } from 'react'
 import {
   Dialog,
@@ -9,12 +10,6 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import {
-  IconPlus,
-  IconTrash,
-  IconGripVertical,
-  IconCodeDots,
-} from '@tabler/icons-react'
 import { MCPServerConfig } from '@/hooks/tools/useMCPServers'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import {
@@ -81,7 +76,7 @@ function SortableArgItem({
         {...listeners}
         className="size-6 cursor-move flex items-center justify-center rounded hover:bg-secondary transition-all duration-200 ease-in-out"
       >
-        <IconGripVertical size={16} className="text-muted-foreground" />
+        <GripVertical size={16} className="text-muted-foreground" />
       </div>
       <Input
         value={value}
@@ -94,7 +89,7 @@ function SortableArgItem({
           className="size-6 cursor-pointer flex items-center justify-center rounded hover:bg-secondary transition-all duration-200 ease-in-out"
           onClick={onRemove}
         >
-          <IconTrash size={16} className="text-destructive" />
+          <Trash2 size={16} className="text-destructive" />
         </div>
       )}
     </div>
@@ -409,7 +404,7 @@ export default function AddEditMCPServer({
               title="Add server by JSON"
               onClick={() => setIsToggled(!isToggled)}
             >
-              <IconCodeDots className="h-5 w-5 cursor-pointer transition-colors duration-200" />
+              <Code className="h-5 w-5 cursor-pointer transition-colors duration-200" />
             </div>
           </DialogTitle>
         </DialogHeader>
@@ -536,7 +531,7 @@ export default function AddEditMCPServer({
                     className="size-6 cursor-pointer flex items-center justify-center rounded hover:bg-secondary transition-all duration-200 ease-in-out"
                     onClick={handleAddArg}
                   >
-                    <IconPlus size={16} className="text-muted-foreground" />
+                    <Plus size={16} className="text-muted-foreground" />
                   </div>
                 </div>
 
@@ -584,7 +579,7 @@ export default function AddEditMCPServer({
                     className="size-6 cursor-pointer flex items-center justify-center rounded hover:bg-secondary transition-all duration-200 ease-in-out"
                     onClick={handleAddEnv}
                   >
-                    <IconPlus size={16} className="text-muted-foreground" />
+                    <Plus size={16} className="text-muted-foreground" />
                   </div>
                 </div>
 
@@ -611,7 +606,7 @@ export default function AddEditMCPServer({
                         className="size-6 cursor-pointer flex items-center justify-center rounded hover:bg-secondary transition-all duration-200 ease-in-out"
                         onClick={() => handleRemoveEnv(index)}
                       >
-                        <IconTrash size={16} className="text-destructive" />
+                        <Trash2 size={16} className="text-destructive" />
                       </div>
                     )}
                   </div>
@@ -628,7 +623,7 @@ export default function AddEditMCPServer({
                       className="size-6 cursor-pointer flex items-center justify-center rounded hover:bg-secondary transition-all duration-200 ease-in-out"
                       onClick={handleAddHeader}
                     >
-                      <IconPlus size={16} className="text-muted-foreground" />
+                      <Plus size={16} className="text-muted-foreground" />
                     </div>
                   </div>
 
@@ -658,7 +653,7 @@ export default function AddEditMCPServer({
                           className="size-6 cursor-pointer flex items-center justify-center rounded hover:bg-secondary transition-all duration-200 ease-in-out"
                           onClick={() => handleRemoveHeader(index)}
                         >
-                          <IconTrash size={16} className="text-destructive" />
+                          <Trash2 size={16} className="text-destructive" />
                         </div>
                       )}
                     </div>

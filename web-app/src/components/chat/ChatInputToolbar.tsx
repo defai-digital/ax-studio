@@ -21,17 +21,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu'
-import { ArrowUp, PlusIcon, AppWindowIcon, SearchIcon, Paperclip, Loader2, ImagePlus } from 'lucide-react'
-import {
-  IconAtom,
-  IconTool,
-  IconCodeCircle2,
-  IconPlayerStopFilled,
-  IconUser,
-  IconBrain,
-  IconHierarchy2,
-  IconDatabase,
-} from '@tabler/icons-react'
+import { AppWindowIcon, ArrowUp, Atom, Brain, Database, GitFork, ImagePlus, Loader2, Paperclip, PlusIcon, SearchIcon, Square, User, Wrench, Binary } from "lucide-react";
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { TokenCounter } from '@/components/TokenCounter'
 import { AvatarEmoji } from '@/components/common/AvatarEmoji'
@@ -193,7 +183,7 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                 {!projectId && (
                   <DropdownMenuSub>
                     <DropdownMenuSubTrigger>
-                      <IconUser size={18} className="text-muted-foreground" />
+                      <User size={18} className="text-muted-foreground" />
                       <span>Use Assistant</span>
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent>
@@ -263,7 +253,7 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                 </DropdownMenuSub>
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger>
-                    <IconHierarchy2 size={18} className="text-muted-foreground" />
+                    <GitFork size={18} className="text-muted-foreground" />
                     <span>Generate Diagram</span>
                   </DropdownMenuSubTrigger>
                   <DropdownMenuSubContent>
@@ -297,7 +287,7 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon-xs">
-                    <IconCodeCircle2 size={18} className="text-muted-foreground" />
+                    <Binary size={18} className="text-muted-foreground" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent><p>{t('embeddings')}</p></TooltipContent>
@@ -332,7 +322,7 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                       >
                         {() => (
                           <div className="p-1 flex items-center justify-center rounded-sm transition-all duration-200 ease-in-out gap-1 cursor-pointer">
-                            <IconTool size={18} className="text-muted-foreground" />
+                            <Wrench size={18} className="text-muted-foreground" />
                           </div>
                         )}
                       </DropdownToolsAvailable>
@@ -346,7 +336,7 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="icon-xs" className="relative" onClick={() => toggleMemory()}>
-                  <IconBrain
+                  <Brain
                     size={18}
                     className={cn(isMemoryEnabled ? 'text-primary' : 'text-muted-foreground')}
                   />
@@ -365,7 +355,7 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="icon-xs" onClick={() => toggleLocalKnowledge()}>
-                  <IconDatabase
+                  <Database
                     size={18}
                     className={cn(isLocalKnowledgeEnabled ? 'text-primary' : 'text-muted-foreground')}
                   />
@@ -380,7 +370,7 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon-xs">
-                    <IconAtom size={18} className="text-muted-foreground" />
+                    <Atom size={18} className="text-muted-foreground" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent><p>{t('reasoning')}</p></TooltipContent>
@@ -409,7 +399,7 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
               className="rounded-full mr-1 mb-1"
               onClick={() => { if (effectiveThreadId) stopStreaming(effectiveThreadId) }}
             >
-              <IconPlayerStopFilled />
+              <Square />
             </Button>
           ) : (
             <Button

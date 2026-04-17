@@ -1,3 +1,4 @@
+import { Loader } from "lucide-react";
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { Route as ProviderDetailRoute } from '../$providerName'
@@ -164,8 +165,8 @@ vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn() },
 }))
 
-vi.mock('@tabler/icons-react', () => ({
-  IconLoader: () => <span data-testid="icon-loader" />,
+vi.mock('lucide-react', () => ({
+  Loader: () => <span data-testid="icon-loader" />,
 }))
 
 vi.mock('lucide-react', () => ({

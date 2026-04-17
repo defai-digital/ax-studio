@@ -1,16 +1,10 @@
+import { Atom, Binary, Eye, Globe, Wrench } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import {
-  IconEye,
-  IconTool,
-  IconAtom,
-  IconWorld,
-  IconCodeCircle2,
-} from '@tabler/icons-react'
 import { Fragment, memo } from 'react'
 
 interface CapabilitiesProps {
@@ -29,11 +23,11 @@ const capabilityStyles: Record<string, string> = {
 
 function getIcon(capability: string) {
   switch (capability) {
-    case 'vision': return <IconEye className="size-2.5" />
-    case 'tools': return <IconTool className="size-2.5" />
-    case 'reasoning': return <IconAtom className="size-2.5" />
-    case 'embeddings': return <IconCodeCircle2 className="size-2.5" />
-    case 'web_search': return <IconWorld className="size-2.5" />
+    case 'vision': return <Eye className="size-2.5" />
+    case 'tools': return <Wrench className="size-2.5" />
+    case 'reasoning': return <Atom className="size-2.5" />
+    case 'embeddings': return <Binary className="size-2.5" />
+    case 'web_search': return <Globe className="size-2.5" />
     default: return null
   }
 }

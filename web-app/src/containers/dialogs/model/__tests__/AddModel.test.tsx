@@ -36,8 +36,8 @@ vi.mock('@/lib/models', () => ({
   getModelCapabilities: () => ({}),
 }))
 
-vi.mock('@tabler/icons-react', () => ({
-  IconPlus: () => <span data-testid="icon-plus" />,
+vi.mock('lucide-react', () => ({
+  Plus: () => <span data-testid="icon-plus" />,
 }))
 
 vi.mock('@/components/common/ModelCombobox', () => ({

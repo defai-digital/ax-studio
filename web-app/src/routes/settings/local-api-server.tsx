@@ -16,8 +16,7 @@ import { useAppState } from '@/hooks/settings/useAppState'
 
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
-import { IconSettings2 } from '@tabler/icons-react'
-import { Server } from 'lucide-react'
+import { Server, Wrench, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 import { cn } from '@/lib/utils'
 import { ApiKeyInput } from '@/containers/ApiKeyInput'
 import { useEffect, useState, useCallback } from 'react'
@@ -36,11 +35,6 @@ import {
   CollapsibleTrigger,
   CollapsibleContent,
 } from '@/components/ui/collapsible'
-import {
-  IconChevronDown,
-  IconChevronUp,
-  IconExternalLink,
-} from '@tabler/icons-react'
 
 export const Route = createFileRoute(route.settings.local_api_server)({
   component: LocalAPIServerContent,
@@ -289,7 +283,7 @@ function LocalAPIServerContent() {
           <Popover>
             <PopoverTrigger asChild>
               <Button size="sm" variant="outline" className="relative z-50">
-                <IconSettings2 size={16} />
+                <Wrench size={16} />
                 Configuration
               </Button>
             </PopoverTrigger>
@@ -513,8 +507,8 @@ function LocalAPIServerContent() {
               <Collapsible defaultOpen={false}>
                 <div className="flex items-center justify-between">
                   <CollapsibleTrigger className="flex items-center gap-2 hover:no-underline data-[state=open]:[&>svg.chevron-down]:hidden data-[state=closed]:[&>svg.chevron-up]:hidden">
-                    <IconChevronDown size={16} className="chevron-down" />
-                    <IconChevronUp size={16} className="chevron-up" />
+                    <ChevronDown size={16} className="chevron-down" />
+                    <ChevronUp size={16} className="chevron-up" />
                     <span className="font-medium text-sm">Server Log</span>
                   </CollapsibleTrigger>
                   <Button
@@ -523,7 +517,7 @@ function LocalAPIServerContent() {
                     onClick={handleOpenLogs}
                     className="text-muted-foreground hover:text-foreground"
                   >
-                    <IconExternalLink size={14} className="mr-1" />
+                    <ExternalLink size={14} className="mr-1" />
                     Open in New Window
                   </Button>
                 </div>

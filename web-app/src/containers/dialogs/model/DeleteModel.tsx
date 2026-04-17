@@ -1,3 +1,4 @@
+import { Trash2 } from "lucide-react";
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -12,7 +13,6 @@ import {
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 
-import { IconTrash } from '@tabler/icons-react'
 
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
@@ -95,7 +95,7 @@ export const DialogDeleteModel = ({
     <Dialog>
       <DialogTrigger asChild>
         <div className="size-6 cursor-pointer flex items-center justify-center rounded transition-all duration-200 ease-in-out">
-          <IconTrash size={18} className="text-muted-foreground" />
+          <Trash2 size={18} className="text-muted-foreground" />
         </div>
       </DialogTrigger>
       <DialogContent>

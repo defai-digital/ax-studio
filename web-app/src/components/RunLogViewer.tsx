@@ -1,3 +1,4 @@
+import { ChevronDown, ChevronRight, Clock, Coins } from "lucide-react";
 import { memo, useState } from 'react'
 import {
   Dialog,
@@ -6,12 +7,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
-import {
-  IconChevronDown,
-  IconChevronRight,
-  IconClock,
-  IconCoins,
-} from '@tabler/icons-react'
 import type { RunLogData, RunLogStep } from '@/lib/multi-agent/run-log'
 
 type RunLogSummaryProps = {
@@ -35,7 +30,7 @@ export const RunLogSummary = memo(function RunLogSummary({
         className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors mt-1 mb-2"
         onClick={() => setDetailsOpen(true)}
       >
-        <IconCoins size={12} />
+        <Coins size={12} />
         <span>
           {agentCount} agent{agentCount !== 1 ? 's' : ''} &middot;{' '}
           {runLog.total_tokens.toLocaleString()} tokens &middot; {durationSec}s
@@ -202,9 +197,9 @@ function StepRow({ step, index }: { step: RunLogStep; index: number }) {
         <span className="text-muted-foreground w-4">{index + 1}.</span>
         {hasToolCalls ? (
           expanded ? (
-            <IconChevronDown size={12} />
+            <ChevronDown size={12} />
           ) : (
-            <IconChevronRight size={12} />
+            <ChevronRight size={12} />
           )
         ) : (
           <span className="w-3" />
@@ -220,7 +215,7 @@ function StepRow({ step, index }: { step: RunLogStep; index: number }) {
             <>
               <span>{step.tokens_used.toLocaleString()} tok</span>
               <span className="flex items-center gap-0.5">
-                <IconClock size={10} />
+                <Clock size={10} />
                 {((step.duration_ms ?? 0) / 1000).toFixed(1)}s
               </span>
             </>

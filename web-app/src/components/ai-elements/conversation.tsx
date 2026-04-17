@@ -1,6 +1,6 @@
+import { ArrowDown } from "lucide-react";
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { IconArrowDown } from '@tabler/icons-react'
 import type { ComponentProps } from 'react'
 import { useCallback, memo } from 'react'
 import { StickToBottom, useStickToBottomContext } from 'use-stick-to-bottom'
@@ -99,7 +99,7 @@ export const ConversationScrollButton = ({
             variant="outline"
             {...props}
           >
-            <IconArrowDown className="size-3.5" />
+            <ArrowDown className="size-3.5" />
             Scroll to bottom
           </Button>
         </motion.div>

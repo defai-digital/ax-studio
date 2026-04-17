@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +12,6 @@ import { Button } from '@/components/ui/button'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useProviderModels } from '@/hooks/models/useProviderModels'
 import { ModelCombobox } from '@/components/common/ModelCombobox'
-import { IconPlus } from '@tabler/icons-react'
 import { useState } from 'react'
 import { getProviderTitle } from '@/lib/utils'
 import { useTranslation } from '@/i18n/react-i18next-compat'
@@ -72,7 +72,7 @@ export const DialogAddModel = ({ provider, trigger }: DialogAddModelProps) => {
       <DialogTrigger asChild>
         {trigger || (
           <Button variant="secondary" size="icon-xs">
-            <IconPlus size={18} className="text-muted-foreground" />
+            <Plus size={18} className="text-muted-foreground" />
           </Button>
         )}
       </DialogTrigger>

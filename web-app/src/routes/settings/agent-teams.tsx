@@ -18,16 +18,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
-import {
-  IconCirclePlus,
-  IconPencil,
-  IconTrash,
-  IconTemplate,
-  IconCopy,
-  IconDownload,
-  IconUpload,
-} from '@tabler/icons-react'
-import { Users } from 'lucide-react'
+import { Copy, Download, LayoutTemplate, Pencil, PlusCircle, Trash2, Upload, Users } from "lucide-react";
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { AgentTeamBuilder } from '@/components/AgentTeamBuilder'
 import { TEMPLATES } from '@/lib/multi-agent/templates'
@@ -254,7 +245,7 @@ function AgentTeamsContent() {
           <span className="font-medium text-base font-studio">Settings</span>
           <div className="flex items-center gap-2 relative z-50">
             <Button onClick={handleImportFile} size="sm" variant="outline">
-              <IconUpload size={16} />
+              <Upload size={16} />
               Import
             </Button>
             <Button
@@ -262,11 +253,11 @@ function AgentTeamsContent() {
               size="sm"
               variant="outline"
             >
-              <IconTemplate size={16} />
+              <LayoutTemplate size={16} />
               Template
             </Button>
             <Button onClick={handleCreate} size="sm" variant="outline">
-              <IconCirclePlus size={16} />
+              <PlusCircle size={16} />
               Create Team
             </Button>
           </div>
@@ -362,7 +353,7 @@ function AgentTeamsContent() {
                               title="Export team"
                               onClick={() => handleExport(team.id)}
                             >
-                              <IconDownload className="text-muted-foreground size-4" />
+                              <Download className="text-muted-foreground size-4" />
                             </Button>
                             <Button
                               variant="ghost"
@@ -370,7 +361,7 @@ function AgentTeamsContent() {
                               title="Duplicate team"
                               onClick={() => handleDuplicate(team)}
                             >
-                              <IconCopy className="text-muted-foreground size-4" />
+                              <Copy className="text-muted-foreground size-4" />
                             </Button>
                             <Button
                               variant="ghost"
@@ -378,7 +369,7 @@ function AgentTeamsContent() {
                               title="Edit team"
                               onClick={() => handleEdit(team)}
                             >
-                              <IconPencil className="text-muted-foreground size-4" />
+                              <Pencil className="text-muted-foreground size-4" />
                             </Button>
                             <Button
                               variant="ghost"
@@ -386,7 +377,7 @@ function AgentTeamsContent() {
                               title="Delete team"
                               onClick={() => handleDeleteClick(team.id)}
                             >
-                              <IconTrash className="text-destructive size-4" />
+                              <Trash2 className="text-destructive size-4" />
                             </Button>
                           </div>
                         </div>

@@ -10,11 +10,10 @@ import {
 } from '@/components/ai-elements/conversation'
 import { PromptProgress } from '@/components/PromptProgress'
 import { Button } from '@/components/ui/button'
-import { IconAlertCircle } from '@tabler/icons-react'
 import { OUT_OF_CONTEXT_SIZE } from '@/lib/utils/error'
 import { safeStorageGetItem, safeStorageSetItem } from '@/lib/storage'
 import { motion, AnimatePresence } from 'motion/react'
-import { GitBranch, X } from 'lucide-react'
+import { AlertCircle, GitBranch, X } from "lucide-react";
 
 const CHAT_STATUS = { SUBMITTED: 'submitted' } as const
 
@@ -123,7 +122,7 @@ export function MessagesArea({
               className="px-4 py-3 mx-4 my-2 rounded-xl border border-destructive/15 bg-destructive/5"
             >
               <div className="flex items-start gap-3">
-                <IconAlertCircle className="size-5 text-destructive shrink-0 mt-0.5" />
+                <AlertCircle className="size-5 text-destructive shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p className="text-sm font-medium text-destructive mb-1">Error generating response</p>
                   <p className="text-[13px] text-muted-foreground leading-relaxed">{error.message}</p>
@@ -133,7 +132,7 @@ export function MessagesArea({
                       error.message?.toLowerCase().includes('limit'))) ||
                     error.message === OUT_OF_CONTEXT_SIZE) && handleContextSizeIncrease ? (
                     <Button variant="outline" size="sm" className="mt-3" onClick={handleContextSizeIncrease}>
-                      <IconAlertCircle className="size-4 mr-2" />Increase Context Size
+                      <AlertCircle className="size-4 mr-2" />Increase Context Size
                     </Button>
                   ) : null}
                 </div>

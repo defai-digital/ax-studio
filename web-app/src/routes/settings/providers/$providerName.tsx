@@ -16,10 +16,7 @@ import { route } from '@/constants/routes'
 import DeleteProvider from '@/containers/dialogs/DeleteProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { Button } from '@/components/ui/button'
-import {
-  IconLoader,
-} from '@tabler/icons-react'
-import { RefreshCw, Search, Plug, CheckCircle2, XCircle } from 'lucide-react'
+import { CheckCircle2, Loader, Plug, RefreshCw, Search, XCircle } from "lucide-react";
 import { toast } from 'sonner'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { predefinedProviders } from '@/constants/providers'
@@ -506,7 +503,7 @@ function ProviderDetail() {
                         disabled={connectionStatus === 'testing' || !provider?.base_url}
                       >
                         {connectionStatus === 'testing' ? (
-                          <IconLoader
+                          <Loader
                             size={14}
                             className="text-muted-foreground animate-spin mr-1.5"
                           />
@@ -554,7 +551,7 @@ function ProviderDetail() {
                           disabled={refreshingModels}
                         >
                           {refreshingModels ? (
-                            <IconLoader
+                            <Loader
                               size={14}
                               className="text-muted-foreground animate-spin mr-1.5"
                             />
@@ -650,7 +647,7 @@ function ProviderDetail() {
                         <div className="flex items-center gap-2">
                           <div className="flex items-center gap-2 animate-pulse">
                             <div className="flex gap-2 px-2 py-1 rounded-full text-xs">
-                              <IconLoader
+                              <Loader
                                 size={16}
                                 className="animate-spin"
                               />

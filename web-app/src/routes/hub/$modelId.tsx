@@ -5,15 +5,7 @@ import {
   useNavigate,
   useSearch,
 } from '@tanstack/react-router'
-import { IconArrowLeft } from '@tabler/icons-react'
-import {
-  Eye,
-  Wrench,
-  Calendar,
-  Download,
-  ExternalLink,
-  HardDrive,
-} from 'lucide-react'
+import { ArrowLeft, Calendar, Download, ExternalLink, Eye, HardDrive, Wrench } from "lucide-react";
 import { motion } from 'motion/react'
 import { route } from '@/constants/routes'
 import { useModelSources } from '@/hooks/models/useModelSources'
@@ -300,7 +292,7 @@ function HubModelDetailContent() {
             className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
             style={{ fontSize: '13px' }}
           >
-            <IconArrowLeft size={16} />
+            <ArrowLeft size={16} />
             Back to Hub
           </button>
         </HeaderPage>
@@ -320,7 +312,7 @@ function HubModelDetailContent() {
           className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
           style={{ fontSize: '13px' }}
         >
-          <IconArrowLeft size={16} />
+          <ArrowLeft size={16} />
           Back to Hub
         </button>
       </HeaderPage>

@@ -1,6 +1,6 @@
+import { Download } from "lucide-react";
 import { useAppUpdater } from '@/hooks/updater/useAppUpdater'
 
-import { IconDownload } from '@tabler/icons-react'
 import { Button } from '@/components/ui/button'
 
 import { useState, useEffect } from 'react'
@@ -61,7 +61,7 @@ const DialogAppUpdater = () => {
           <div className="px-2 py-4">
             <div className="px-4">
               <div className="flex items-start gap-2">
-                <IconDownload
+                <Download
                   size={20}
                   className="shrink-0 text-muted-foreground mt-1"
                 />

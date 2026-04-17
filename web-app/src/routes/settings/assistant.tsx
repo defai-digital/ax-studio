@@ -5,7 +5,6 @@ import { useState } from 'react'
 import { useAssistant } from '@/hooks/chat/useAssistant'
 
 import HeaderPage from '@/containers/HeaderPage'
-import { IconCirclePlus, IconPencil, IconTrash } from '@tabler/icons-react'
 import AddEditAssistant from '@/containers/dialogs/AddEditAssistant'
 import { DeleteAssistantDialog } from '@/containers/dialogs'
 import { AvatarEmoji } from '@/components/common/AvatarEmoji'
@@ -13,7 +12,7 @@ import { useTranslation } from '@/i18n/react-i18next-compat'
 import { Button } from '@/components/ui/button'
 import SettingsMenu from '@/components/common/SettingsMenu'
 import { cn } from '@/lib/utils'
-import { Bot } from 'lucide-react'
+import { Bot, Pencil, PlusCircle, Trash2 } from "lucide-react";
 
 export const Route = createFileRoute(route.settings.assistant)({
   component: AssistantContent,
@@ -72,7 +71,7 @@ function AssistantContent() {
             variant="outline"
             className="relative z-50"
           >
-            <IconCirclePlus size={16} />
+            <PlusCircle size={16} />
             {t('assistants:addAssistant')}
           </Button>
         </div>
@@ -138,7 +137,7 @@ function AssistantContent() {
                           setOpen(true)
                         }}
                       >
-                        <IconPencil className="text-muted-foreground size-4" />
+                        <Pencil className="text-muted-foreground size-4" />
                       </Button>
                       <Button
                         variant="ghost"
@@ -146,7 +145,7 @@ function AssistantContent() {
                         title={t('assistants:deleteAssistant')}
                         onClick={() => handleDelete(assistant.id)}
                       >
-                        <IconTrash className="text-destructive size-4" />
+                        <Trash2 className="text-destructive size-4" />
                       </Button>
                     </div>
                   </div>

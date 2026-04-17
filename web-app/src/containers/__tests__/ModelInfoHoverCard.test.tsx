@@ -23,8 +23,8 @@ vi.mock('@/components/ui/hover-card', () => ({
   ),
 }))
 
-vi.mock('@tabler/icons-react', () => ({
-  IconInfoCircle: ({ size }: { size: number }) => (
+vi.mock('lucide-react', () => ({
+  Info: ({ size }: { size: number }) => (
     <span data-testid="info-icon" data-size={size} />
   ),
 }))

@@ -1,7 +1,7 @@
+import { Database, Folder, RefreshCw } from "lucide-react";
 import { useEffect, useState, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { toast } from 'sonner'
-import { IconDatabase, IconFolder, IconRefresh } from '@tabler/icons-react'
 import { Card, CardItem } from '@/components/common/Card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -159,7 +159,7 @@ export default function AkidbConfigPanel() {
       <Card
         header={
           <div className="mb-3 flex w-full items-center gap-3">
-            <IconDatabase
+            <Database
               size={20}
               className="shrink-0 text-muted-foreground"
             />
@@ -178,7 +178,7 @@ export default function AkidbConfigPanel() {
     <Card
       header={
         <div className="mb-3 flex w-full items-center gap-3">
-          <IconDatabase
+          <Database
             size={20}
             className="shrink-0 text-muted-foreground"
           />
@@ -203,7 +203,7 @@ export default function AkidbConfigPanel() {
               placeholder="/Users/me/Documents/MyKnowledgeBase"
             />
             <Button variant="outline" size="sm" onClick={handleBrowse}>
-              <IconFolder size={14} className="mr-1" />
+              <Folder size={14} className="mr-1" />
               Browse
             </Button>
           </div>
@@ -259,7 +259,7 @@ export default function AkidbConfigPanel() {
           onClick={handleSyncNow}
           disabled={syncing || !dataFolder.trim()}
         >
-          <IconRefresh size={14} className={syncing ? 'mr-1 animate-spin' : 'mr-1'} />
+          <RefreshCw size={14} className={syncing ? 'mr-1 animate-spin' : 'mr-1'} />
           {syncing ? 'Syncing...' : 'Sync Now'}
         </Button>
       </div>

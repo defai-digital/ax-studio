@@ -1,4 +1,4 @@
-import { IconStar, IconStarFilled } from '@tabler/icons-react'
+import { Star } from "lucide-react";
 import { useFavoriteModel } from '@/hooks/models/useFavoriteModel'
 import { Button } from '@/components/ui/button'
 
@@ -18,9 +18,9 @@ export function FavoriteModelAction({ model }: FavoriteModelActionProps) {
       onClick={() => toggleFavorite(model)}
     >
       {isModelFavorite ? (
-        <IconStarFilled size={18} className="text-muted-foreground" />
+        <Star size={18} className="text-muted-foreground" fill="currentColor" />
       ) : (
-        <IconStar size={18} className="text-muted-foreground" />
+        <Star size={18} className="text-muted-foreground" />
       )}
     </Button>
   )

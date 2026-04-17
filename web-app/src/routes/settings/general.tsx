@@ -12,16 +12,7 @@ import { useEffect, useState, useCallback } from 'react'
 import ChangeDataFolderLocation from '@/containers/dialogs/thread/ChangeDataFolderLocation'
 import { FactoryResetDialog } from '@/containers/dialogs'
 import { useServiceHub } from '@/hooks/useServiceHub'
-import {
-  IconBrandDiscord,
-  IconBrandGithub,
-  IconExternalLink,
-  IconFolder,
-  IconLogs,
-  IconCopy,
-  IconCopyCheck,
-} from '@tabler/icons-react'
-import { Settings } from 'lucide-react'
+import { CheckCheck, Copy, ExternalLink, Folder, Github, MessageCircle, ScrollText, Settings } from "lucide-react";
 import { toast } from 'sonner'
 import { isDev } from '@/lib/utils'
 import { SystemEvent } from '@/types/events'
@@ -366,7 +357,7 @@ function General() {
                         >
                           {isCopied ? (
                             <div className="flex items-center gap-1">
-                              <IconCopyCheck
+                              <CheckCheck
                                 size={14}
                                 className="text-green-500 dark:text-green-600"
                               />
@@ -375,7 +366,7 @@ function General() {
                               </span>
                             </div>
                           ) : (
-                            <IconCopy
+                            <Copy
                               size={14}
                               className="text-muted-foreground"
                             />
@@ -392,7 +383,7 @@ function General() {
                         title={t('settings:dataFolder.appData')}
                         onClick={handleDataFolderChange}
                       >
-                        <IconFolder
+                        <Folder
                           size={12}
                           className="text-muted-foreground"
                         />
@@ -446,7 +437,7 @@ function General() {
                         }}
                         title={t('settings:general.revealLogs')}
                       >
-                        <IconFolder
+                        <Folder
                           size={12}
                           className="text-muted-foreground"
                         />
@@ -458,7 +449,7 @@ function General() {
                         onClick={handleOpenLogs}
                         title={t('settings:dataFolder.appLogs')}
                       >
-                        <IconLogs size={12} className="text-muted-foreground" />
+                        <ScrollText size={12} className="text-muted-foreground" />
                         <span>{t('settings:general.openLogs')}</span>
                       </Button>
                     </div>
@@ -595,7 +586,7 @@ function General() {
                     >
                       <div className="flex items-center gap-1">
                         <span>{t('settings:general.viewDocs')}</span>
-                        <IconExternalLink size={14} />
+                        <ExternalLink size={14} />
                       </div>
                     </a>
                   }
@@ -611,7 +602,7 @@ function General() {
                     >
                       <div className="flex items-center gap-1">
                         <span>{t('settings:general.viewReleases')}</span>
-                        <IconExternalLink size={14} />
+                        <ExternalLink size={14} />
                       </div>
                     </a>
                   }
@@ -629,7 +620,7 @@ function General() {
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      <IconBrandGithub
+                      <Github
                         size={18}
                         className="text-muted-foreground"
                       />
@@ -645,7 +636,7 @@ function General() {
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      <IconBrandDiscord
+                      <MessageCircle
                         size={18}
                         className="text-muted-foreground"
                       />
@@ -666,7 +657,7 @@ function General() {
                     >
                       <div className="flex items-center gap-1">
                         <span>{t('settings:general.reportIssue')}</span>
-                        <IconExternalLink size={14} />
+                        <ExternalLink size={14} />
                       </div>
                     </a>
                   }

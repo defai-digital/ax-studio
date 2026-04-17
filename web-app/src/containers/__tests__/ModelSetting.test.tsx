@@ -73,8 +73,8 @@ vi.mock('@/containers/dynamicControllerSetting', () => ({
   ),
 }))
 
-vi.mock('@tabler/icons-react', () => ({
-  IconSettings: () => <span data-testid="settings-icon" />,
+vi.mock('lucide-react', () => ({
+  Settings: () => <span data-testid="settings-icon" />,
 }))
 
 import { ModelSetting } from '../ModelSetting'

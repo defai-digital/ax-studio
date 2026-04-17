@@ -1,3 +1,4 @@
+import { Download } from "lucide-react";
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { route } from '@/constants/routes'
@@ -9,7 +10,6 @@ import { useTranslation } from '@/i18n'
 import { CatalogModel } from '@/services/models/types'
 import { sanitizeModelId } from '@/lib/utils'
 import { AppEvent, DownloadEvent, DownloadState, events } from '@ax-studio/core'
-import { IconDownload } from '@tabler/icons-react'
 import { useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
@@ -205,7 +205,7 @@ export const ModelDownloadAction = ({
       title={t('hub:downloadModel')}
       onClick={handleDownloadModel}
     >
-      <IconDownload size={16} className="text-muted-foreground" />
+      <Download size={16} className="text-muted-foreground" />
     </div>
   )
 }

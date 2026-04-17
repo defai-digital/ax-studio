@@ -1,3 +1,4 @@
+import { Pencil } from "lucide-react";
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import {
@@ -10,7 +11,6 @@ import {
   DialogHeader,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { IconEdit } from '@tabler/icons-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { toast } from 'sonner'
 
@@ -89,7 +89,7 @@ export function RenameThreadDialog({
       {!withoutTrigger && (
         <DialogTrigger asChild>
           <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-            <IconEdit />
+            <Pencil />
             <span>{t('common:rename')}</span>
           </DropdownMenuItem>
         </DialogTrigger>

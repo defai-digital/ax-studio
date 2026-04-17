@@ -1,8 +1,8 @@
+import { ChevronDown, Loader2, RefreshCw } from "lucide-react";
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { IconChevronDown, IconLoader2, IconRefresh } from '@tabler/icons-react'
 import { cn } from '@/lib/utils'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 
@@ -77,7 +77,7 @@ const ErrorSection = ({
 
 const LoadingSection = ({ t }: { t: (key: string) => string }) => (
   <div className="flex items-center justify-center px-3 py-3 text-sm text-muted-foreground">
-    <IconLoader2 className="h-4 w-4 animate-spin mr-2 text-muted-foreground" />
+    <Loader2 className="h-4 w-4 animate-spin mr-2 text-muted-foreground" />
     <span className="text-sm text-muted-foreground">{t('common:loading')}</span>
   </div>
 )
@@ -427,9 +427,9 @@ export function ModelCombobox({
               aria-label="Refresh models"
             >
               {loading ? (
-                <IconLoader2 className="size-4 animate-spin" />
+                <Loader2 className="size-4 animate-spin" />
               ) : (
-                <IconRefresh className="size-4 opacity-70" />
+                <RefreshCw className="size-4 opacity-70" />
               )}
             </Button>
           )}
@@ -440,7 +440,7 @@ export function ModelCombobox({
             onMouseDown={(e) => e.preventDefault()}
             onClick={handleDropdownToggle}
           >
-            <IconChevronDown className="size-4 opacity-50" />
+            <ChevronDown className="size-4 opacity-50" />
           </Button>
         </div>
 

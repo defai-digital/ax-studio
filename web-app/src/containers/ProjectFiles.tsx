@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { FileText, UploadIcon, X } from 'lucide-react'
+import { FileText, Loader2, Paperclip, UploadIcon, X } from "lucide-react";
 import { Button } from '@/components/ui/button'
 import {
   Tooltip,
@@ -14,7 +14,6 @@ import { createDocumentAttachment, type Attachment } from '@/types/attachment'
 import { useAttachments } from '@/hooks/chat/useAttachments'
 import { FileStat } from '@ax-studio/core'
 import { useFileRegistry, projectCollectionId } from '@/lib/file-registry'
-import { IconLoader2, IconPaperclip } from '@tabler/icons-react'
 
 type ProjectFilesProps = {
   projectId: string
@@ -383,7 +382,7 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
           disabled={uploading}
         >
           {uploading ? (
-            <IconLoader2 className="size-3.5 animate-spin" />
+            <Loader2 className="size-3.5 animate-spin" />
           ) : (
             <UploadIcon className="size-3.5" />
           )}
@@ -393,7 +392,7 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
 
       {loading ? (
         <div className="flex items-center justify-center py-8">
-          <IconLoader2 className="size-6 animate-spin text-muted-foreground" />
+          <Loader2 className="size-6 animate-spin text-muted-foreground" />
         </div>
       ) : isEmpty ? (
         <div
@@ -428,7 +427,7 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
               key={file.id}
               className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/30 group"
             >
-              <IconPaperclip className="size-3.5 text-muted-foreground shrink-0" />
+              <Paperclip className="size-3.5 text-muted-foreground shrink-0" />
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="text-[13px] flex-1 truncate">

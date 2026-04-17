@@ -1,3 +1,4 @@
+import { Smile } from "lucide-react";
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import AddEditAssistant from '../AddEditAssistant'
@@ -30,11 +31,11 @@ vi.mock('emoji-picker-react', () => ({
   Theme: {},
 }))
 
-vi.mock('@tabler/icons-react', () => ({
-  IconPlus: () => <span data-testid="icon-plus" />,
-  IconTrash: () => <span data-testid="icon-trash" />,
-  IconChevronDown: () => <span />,
-  IconMoodSmile: () => <span data-testid="icon-mood" />,
+vi.mock('lucide-react', () => ({
+  Plus: () => <span data-testid="icon-plus" />,
+  Trash2: () => <span data-testid="icon-trash" />,
+  ChevronDown: () => <span />,
+  Smile: () => <span data-testid="icon-mood" />,
 }))
 
 vi.mock('@/components/common/AvatarEmoji', () => ({

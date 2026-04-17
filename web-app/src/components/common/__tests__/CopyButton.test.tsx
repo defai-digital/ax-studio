@@ -14,9 +14,9 @@ vi.mock('@/components/ui/button', () => ({
   ),
 }))
 
-vi.mock('@tabler/icons-react', () => ({
-  IconCopy: () => <span data-testid="icon-copy" />,
-  IconCopyCheck: () => <span data-testid="icon-copy-check" />,
+vi.mock('lucide-react', () => ({
+  Copy: () => <span data-testid="icon-copy" />,
+  CheckCheck: () => <span data-testid="icon-copy-check" />,
 }))
 
 describe('CopyButton', () => {

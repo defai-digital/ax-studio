@@ -3,7 +3,6 @@ import { cn } from '@/lib/utils'
 import { usePrompt } from '@/hooks/ui/usePrompt'
 import { useThreads } from '@/hooks/threads/useThreads'
 import { useCallback, useEffect, useRef, useState, memo, useMemo } from 'react'
-import { IconX } from '@tabler/icons-react'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useAppState } from '@/hooks/settings/useAppState'
@@ -24,7 +23,7 @@ import { ChatInputToolbar } from '@/components/chat/ChatInputToolbar'
 import { ChatInputAttachments } from '@/components/ChatInputAttachments'
 import { TokenCounter } from '@/components/TokenCounter'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { Wrench, Globe, Atom, Code2 } from 'lucide-react'
+import { Atom, Code2, Globe, Wrench, X } from "lucide-react";
 
 type ChatInputProps = {
   className?: string
@@ -399,7 +398,7 @@ const ChatInput = memo(function ChatInput({
         <div className="-mt-0.5 mx-2 pb-2 px-3 pt-1.5 rounded-b-lg text-xs text-destructive transition-all duration-200 ease-in-out">
           <div className="flex items-center gap-1 justify-between">
             {message}
-            <IconX
+            <X
               className="size-3 text-muted-foreground cursor-pointer"
               onClick={() => setMessage('')}
             />

@@ -1,3 +1,4 @@
+import { Trash2 } from "lucide-react";
 import { useState, useRef } from 'react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import {
@@ -11,7 +12,6 @@ import {
   DialogHeader,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { IconTrash } from '@tabler/icons-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { toast } from 'sonner'
 
@@ -55,7 +55,7 @@ export function DeleteAllThreadsInProjectDialog({
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <DropdownMenuItem variant="destructive" onSelect={(e) => e.preventDefault()}>
-          <IconTrash size={16} />
+          <Trash2 size={16} />
           <span>{t('common:deleteAll')}</span>
         </DropdownMenuItem>
       </DialogTrigger>

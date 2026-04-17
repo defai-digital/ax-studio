@@ -1,3 +1,4 @@
+import { Folder } from "lucide-react";
 import {
   Dialog,
   DialogClose,
@@ -9,7 +10,6 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { IconFolder } from '@tabler/icons-react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 
 interface ChangeDataFolderLocationProps {
@@ -36,7 +36,7 @@ export default function ChangeDataFolderLocation({
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <IconFolder size={20} />
+            <Folder size={20} />
             {t('settings:dialogs.changeDataFolder.title')}
           </DialogTitle>
           <DialogDescription>
