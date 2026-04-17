@@ -22,54 +22,6 @@ fn get_lock_file_path<R: Runtime>(app: &AppHandle<R>, port: u16) -> Result<PathB
     Ok(app_data_dir.join(format!("mcp_lock_{}.json", port)))
 }
 
-// Public API kept for symmetry with read/delete/cleanup operations.
-// Called by future MCP lifecycle management once per-server PID tracking
-// is fully wired up; keep the implementation stable to avoid API churn.
-#[allow(dead_code)]
-pub fn create_lock_file<R: Runtime>(
-    app: &AppHandle<R>,
-    port: u16,
-    server_name: &str,
-) -> Result<(), String> {
-    let lock_path = get_lock_file_path(app, port)?;
-
-    // Warn if overwriting an existing lock file
-    if lock_path.exists() {
-        if let Some(existing) = read_lock_file(app, port) {
-            log::warn!(
-                "Overwriting existing lock file for port {} (PID {}, server '{}')",
-                port,
-                existing.pid,
-                existing.server_name
-            );
-        }
-    }
-
-    // Ensure parent directory exists
-    if let Some(parent) = lock_path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create lock file directory: {}", e))?;
-    }
-
-    let lock = McpLockFile {
-        pid: std::process::id(),
-        port,
-        server_name: server_name.to_string(),
-        created_at: chrono::Utc::now().to_rfc3339(),
-        hostname: hostname::get()
-            .map(|h| h.to_string_lossy().to_string())
-            .unwrap_or_else(|_| "unknown".to_string()),
-    };
-
-    let lock_json = serde_json::to_string_pretty(&lock)
-        .map_err(|e| format!("Failed to serialize lock: {}", e))?;
-
-    fs::write(&lock_path, lock_json).map_err(|e| format!("Failed to write lock file: {}", e))?;
-
-    log::debug!("Created lock file for port {} at {:?}", port, lock_path);
-    Ok(())
-}
-
 pub fn read_lock_file<R: Runtime>(app: &AppHandle<R>, port: u16) -> Option<McpLockFile> {
     let lock_path = get_lock_file_path(app, port).ok()?;
 

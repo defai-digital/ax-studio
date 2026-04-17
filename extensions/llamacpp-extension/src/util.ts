@@ -14,20 +14,6 @@ export interface ProxyConfig {
 }
 
 /**
- * Extract a filename without its extension.
- * Handles compound extensions (.tar.gz, .tar.bz2) and single extensions.
- */
-function basenameNoExt(filePath: string): string {
-  const name = filePath.includes('/') ? filePath.split('/').pop()! : filePath
-  const COMPOUND_EXTENSIONS = ['.tar.gz', '.tar.bz2', '.tar.xz']
-  for (const ext of COMPOUND_EXTENSIONS) {
-    if (name.endsWith(ext)) return name.slice(0, -ext.length)
-  }
-  const lastDot = name.lastIndexOf('.')
-  return lastDot >= 0 ? name.slice(0, lastDot) : name
-}
-
-/**
  * Read proxy configuration from localStorage.
  * Returns null if proxy is disabled or not configured.
  */
@@ -438,9 +424,3 @@ export function toSimpleYaml(
   return `${serializeYamlValue(filtered).join('\n')}\n`
 }
 
-/**
- * Sleep for a given number of milliseconds.
- */
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}

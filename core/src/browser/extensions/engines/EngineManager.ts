@@ -5,7 +5,6 @@ import { AIEngine } from './AIEngine'
  */
 export class EngineManager {
   public engines = new Map<string, AIEngine>()
-  public controller: AbortController | null = null
   private static cachedInstance: EngineManager | null = null
 
   /**
