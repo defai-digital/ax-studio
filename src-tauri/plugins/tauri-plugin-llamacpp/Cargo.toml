@@ -14,23 +14,23 @@ links = "tauri-plugin-llamacpp"
 [dependencies]
 base64 = "0.22.1"
 byteorder = "1.5.0"
-hmac = "0.12.1"
-ax-studio-utils = { path = "../../utils", package = "ax-studio-utils" }
-log = "0.4"
-serde = { version = "1.0", features = ["derive"] }
-sha2 = "0.10.9"
-sysinfo = "0.34.2"
-tauri = { version = "2.5.0", default-features = false, features = [] }
-thiserror = "2.0.12"
-tokio = { version = "1", features = ["full"] }
-tauri-plugin-hardware = { path = "../tauri-plugin-hardware" }
+hmac = { workspace = true }
+ax-studio-utils = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true }
+sha2 = { workspace = true }
+sysinfo = { workspace = true }
+tauri = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tauri-plugin-hardware = { workspace = true }
 
-reqwest = { version = "0.11", features = ["json", "stream", "native-tls"] }
+reqwest = { workspace = true, features = ["native-tls"] }
 
 # Unix-specific dependencies
 [target.'cfg(unix)'.dependencies]
-nix = { version = "=0.30.1", features = ["signal", "process"] }
-libc = "0.2"
+nix = { workspace = true }
+libc = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.0"

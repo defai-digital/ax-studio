@@ -353,10 +353,12 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "hmac",
+ "log",
  "rand 0.8.5",
  "serde",
  "serde_json",
  "sha2",
+ "tempfile",
  "tokio",
  "tokio-util",
  "windows-sys 0.60.2",
@@ -5777,6 +5779,7 @@ dependencies = [
  "tauri",
  "tauri-plugin",
  "tauri-plugin-hardware",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
 ]

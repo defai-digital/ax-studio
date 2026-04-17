@@ -12,12 +12,11 @@ exclude = ["/examples", "/dist-js", "/guest-js", "/node_modules"]
 links = "tauri-plugin-hardware"
 
 [dependencies]
-libc = "0.2"
-log = "0.4"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-sysinfo = "0.34.2"
-tauri = { version = "2.5.0", default-features = false, features = ["test"] }
+libc = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true }
+sysinfo = { workspace = true }
+tauri = { workspace = true, features = ["test"] }
 tokio = { version = "1", features = ["time"] }
 
 [dependencies.vulkano]
@@ -32,3 +31,6 @@ libloading = "0.8"
 
 [build-dependencies]
 tauri-plugin = { version = "2.3.1", features = ["build"] }
+
+[dev-dependencies]
+serde_json = { workspace = true }
