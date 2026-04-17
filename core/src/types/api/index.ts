@@ -149,4 +149,3 @@ export const CoreRoutes = [
 ]
 
 export const APIRoutes = [...CoreRoutes, ...Object.values(NativeRoute)]
-export const APIEvents = [...Object.values(AppEvent), ...Object.values(DownloadEvent)]

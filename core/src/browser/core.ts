@@ -120,16 +120,6 @@ const showToast: (title: string, message: string) => void = (title, message) =>
   void getCoreApi().showToast(title, message)
 
 /**
- * Register extension point function type definition
- */
-export type RegisterExtensionPoint = (
-  extensionName: string,
-  extensionId: string,
-  method: (...args: unknown[]) => unknown,
-  priority?: number
-) => void
-
-/**
  * Functions exports
  */
 export {

@@ -17,12 +17,6 @@ export interface MCPToolCallResult {
   }>
 }
 
-export interface MCPServerInfo {
-  name: string
-  connected: boolean
-  tools?: MCPTool[]
-}
-
 /**
  * Props for MCP tool UI components
  */
