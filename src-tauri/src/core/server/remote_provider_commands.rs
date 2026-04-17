@@ -1,14 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-use crate::core::state::{AppState, ProviderConfig};
-
-/// Custom header for provider requests
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProviderCustomHeader {
-    pub header: String,
-    pub value: String,
-}
+use crate::core::state::{AppState, ProviderConfig, ProviderCustomHeader};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ProviderHeaderView {
@@ -62,15 +55,8 @@ pub async fn register_provider_config(
         provider: request.provider.clone(),
         api_key: request.api_key,
         base_url: request.base_url,
-        custom_headers: request
-            .custom_headers
-            .into_iter()
-            .map(|h| crate::core::state::ProviderCustomHeader {
-                header: h.header,
-                value: h.value,
-            })
-            .collect(),
-        models: request.models, // Models will be added when they are configured
+        custom_headers: request.custom_headers,
+        models: request.models,
     };
 
     let provider_name = request.provider.clone();
@@ -94,14 +80,7 @@ pub async fn register_provider_configs_batch(
             provider: request.provider,
             api_key: request.api_key,
             base_url: request.base_url,
-            custom_headers: request
-                .custom_headers
-                .into_iter()
-                .map(|h| crate::core::state::ProviderCustomHeader {
-                    header: h.header,
-                    value: h.value,
-                })
-                .collect(),
+            custom_headers: request.custom_headers,
             models: request.models,
         };
         log::info!(
@@ -172,7 +151,7 @@ mod tests {
             provider: "openai".to_string(),
             api_key: Some("secret-key".to_string()),
             base_url: Some("https://api.example.com".to_string()),
-            custom_headers: vec![crate::core::state::ProviderCustomHeader {
+            custom_headers: vec![ProviderCustomHeader {
                 header: "X-Custom".to_string(),
                 value: "top-secret".to_string(),
             }],
