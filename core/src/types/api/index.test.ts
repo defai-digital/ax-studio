@@ -1,22 +1,14 @@
-
-
 import { test, expect } from 'vitest'
 import { NativeRoute } from '../index';
 
 test('testNativeRouteEnum', () => {
   expect(NativeRoute.openExternalUrl).toBe('openExternalUrl');
-  expect(NativeRoute.openAppDirectory).toBe('openAppDirectory');
   expect(NativeRoute.openFileExplorer).toBe('openFileExplorer');
   expect(NativeRoute.selectDirectory).toBe('selectDirectory');
   expect(NativeRoute.selectFiles).toBe('selectFiles');
   expect(NativeRoute.relaunch).toBe('relaunch');
-  expect(NativeRoute.setNativeThemeLight).toBe('setNativeThemeLight');
-  expect(NativeRoute.setNativeThemeDark).toBe('setNativeThemeDark');
-  expect(NativeRoute.setMinimizeApp).toBe('setMinimizeApp');
-  expect(NativeRoute.setCloseApp).toBe('setCloseApp');
-  expect(NativeRoute.setMaximizeApp).toBe('setMaximizeApp');
-  expect(NativeRoute.showOpenMenu).toBe('showOpenMenu');
-  expect(NativeRoute.hideMainWindow).toBe('hideMainWindow');
-  expect(NativeRoute.showMainWindow).toBe('showMainWindow');
-  expect(NativeRoute.ackDeepLink).toBe('ackDeepLink');
+  expect(NativeRoute.factoryReset).toBe('factoryReset');
+  expect(NativeRoute.startServer).toBe('startServer');
+  expect(NativeRoute.stopServer).toBe('stopServer');
+  expect(NativeRoute.appToken).toBe('appToken');
 });

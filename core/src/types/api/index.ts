@@ -4,29 +4,15 @@
  */
 export enum NativeRoute {
   openExternalUrl = 'openExternalUrl',
-  openAppDirectory = 'openAppDirectory',
   openFileExplorer = 'openFileExplorer',
   selectDirectory = 'selectDirectory',
   selectFiles = 'selectFiles',
   relaunch = 'relaunch',
-  setNativeThemeLight = 'setNativeThemeLight',
-  setNativeThemeDark = 'setNativeThemeDark',
 
-  setMinimizeApp = 'setMinimizeApp',
-  setCloseApp = 'setCloseApp',
-  setMaximizeApp = 'setMaximizeApp',
-  showOpenMenu = 'showOpenMenu',
-
-  hideMainWindow = 'hideMainWindow',
-  showMainWindow = 'showMainWindow',
-
-  ackDeepLink = 'ackDeepLink',
   factoryReset = 'factoryReset',
 
   startServer = 'startServer',
   stopServer = 'stopServer',
-
-  appUpdateDownload = 'appUpdateDownload',
 
   appToken = 'appToken',
 }
@@ -97,11 +83,6 @@ export enum FileManagerRoute {
   getGgufFiles = 'getGgufFiles',
 }
 
-export enum ConfigRoute {
-  launchClaudeCodeWithConfig = 'launchClaudeCodeWithConfig',
-  writeEnvFileToConfig = 'writeEnvFileToConfig',
-}
-
 export type ApiFunction = (...args: readonly unknown[]) => Promise<unknown>
 
 export type NativeRouteFunctions = {
@@ -145,7 +126,6 @@ export const CoreRoutes = [
   ...Object.values(ExtensionRoute),
   ...Object.values(FileSystemRoute),
   ...Object.values(FileManagerRoute),
-  ...Object.values(ConfigRoute),
 ]
 
 export const APIRoutes = [...CoreRoutes, ...Object.values(NativeRoute)]

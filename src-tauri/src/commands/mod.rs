@@ -41,12 +41,9 @@ macro_rules! desktop_handlers {
             // System commands
             crate::core::system::commands::relaunch,
             crate::core::system::commands::canonicalize_path,
-            crate::core::system::commands::open_app_directory,
             crate::core::system::commands::open_file_explorer,
             crate::core::system::commands::factory_reset,
             crate::core::system::commands::read_logs,
-            crate::core::system::commands::is_library_available,
-            crate::core::system::commands::launch_claude_code_with_config,
             // Server commands
             crate::core::server::commands::start_server,
             crate::core::server::commands::stop_server,
@@ -55,7 +52,6 @@ macro_rules! desktop_handlers {
             crate::core::server::remote_provider_commands::register_provider_config,
             crate::core::server::remote_provider_commands::register_provider_configs_batch,
             crate::core::server::remote_provider_commands::unregister_provider_config,
-            crate::core::server::remote_provider_commands::get_provider_config,
             crate::core::server::remote_provider_commands::list_provider_configs,
             // MCP commands
             crate::core::mcp::commands::get_tools,
@@ -100,4 +96,3 @@ macro_rules! desktop_handlers {
     };
 }
 pub(crate) use desktop_handlers;
-

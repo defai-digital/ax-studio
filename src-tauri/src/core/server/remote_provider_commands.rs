@@ -113,20 +113,6 @@ pub async fn unregister_provider_config(
     }
 }
 
-/// Get provider configuration by name
-#[tauri::command]
-pub async fn get_provider_config(
-    state: State<'_, AppState>,
-    provider: String,
-) -> Result<Option<ProviderConfigView>, String> {
-    let provider_state = state.provider_state.lock().await;
-
-    Ok(provider_state
-        .configs
-        .get(&provider)
-        .map(redact_provider_config))
-}
-
 /// List all registered provider configurations (without sensitive keys)
 #[tauri::command]
 pub async fn list_provider_configs(
