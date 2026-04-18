@@ -13,15 +13,7 @@ fn fallback_system_info() -> SystemInfo {
             arch: std::env::consts::ARCH.to_string(),
             extensions: vec![],
         },
-        os_type: if cfg!(target_os = "windows") {
-            "windows".to_string()
-        } else if cfg!(target_os = "macos") {
-            "macos".to_string()
-        } else if cfg!(target_os = "linux") {
-            "linux".to_string()
-        } else {
-            "unknown".to_string()
-        },
+        os_type: std::env::consts::OS.to_string(),
         os_name: "Unknown".to_string(),
         total_memory: 0,
         gpus: vec![],
@@ -51,15 +43,7 @@ fn build_system_info() -> SystemInfo {
         }
     }
 
-    let os_type = if cfg!(target_os = "windows") {
-        "windows"
-    } else if cfg!(target_os = "macos") {
-        "macos"
-    } else if cfg!(target_os = "linux") {
-        "linux"
-    } else {
-        "unknown"
-    };
+    let os_type = std::env::consts::OS;
     let os_name = System::long_os_version().unwrap_or("Unknown".to_string());
 
     SystemInfo {
