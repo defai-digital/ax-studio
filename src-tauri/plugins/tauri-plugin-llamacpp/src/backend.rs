@@ -71,17 +71,11 @@ pub fn map_old_backend_to_new(old_backend: String) -> String {
     old_backend
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct InstalledBackend {
-    version: String,
-    backend: String,
-}
-
 #[tauri::command]
 pub async fn get_local_installed_backends(
     backends_dir: String,
-) -> Result<Vec<InstalledBackend>, String> {
-    let mut local: Vec<InstalledBackend> = Vec::new();
+) -> Result<Vec<BackendInfo>, String> {
+    let mut local: Vec<BackendInfo> = Vec::new();
     let backends_path = PathBuf::from(&backends_dir);
 
     // Check if backends directory exists
@@ -131,7 +125,7 @@ pub async fn get_local_installed_backends(
 
             // Check if backend is actually installed
             if is_backend_installed(&backend_path) {
-                local.push(InstalledBackend {
+                local.push(BackendInfo {
                     version: version_name.clone(),
                     backend: backend_name,
                 });
@@ -335,13 +329,13 @@ pub fn get_supported_features(
 
         // Check CUDA support
         if gpu_info.nvidia_info.is_some() {
-            if compare_versions(driver_version, min_cuda11_driver) >= 0 {
+            if compare_versions(driver_version, min_cuda11_driver) != std::cmp::Ordering::Less {
                 features.cuda11 = true;
             }
-            if compare_versions(driver_version, min_cuda12_driver) >= 0 {
+            if compare_versions(driver_version, min_cuda12_driver) != std::cmp::Ordering::Less {
                 features.cuda12 = true;
             }
-            if compare_versions(driver_version, min_cuda13_driver) >= 0 {
+            if compare_versions(driver_version, min_cuda13_driver) != std::cmp::Ordering::Less {
                 features.cuda13 = true;
             }
         }
@@ -355,9 +349,7 @@ pub fn get_supported_features(
     Ok(features)
 }
 
-/// Compare version strings
-/// Returns: -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
-fn compare_versions(v1: &str, v2: &str) -> i32 {
+fn compare_versions(v1: &str, v2: &str) -> std::cmp::Ordering {
     let parts1: Vec<&str> = v1.split('.').collect();
     let parts2: Vec<&str> = v2.split('.').collect();
 
@@ -374,13 +366,13 @@ fn compare_versions(v1: &str, v2: &str) -> i32 {
             .unwrap_or(0);
 
         match num1.cmp(&num2) {
-            std::cmp::Ordering::Less => return -1,
-            std::cmp::Ordering::Greater => return 1,
+            ord @ std::cmp::Ordering::Less => return ord,
+            ord @ std::cmp::Ordering::Greater => return ord,
             std::cmp::Ordering::Equal => continue,
         }
     }
 
-    0
+    std::cmp::Ordering::Equal
 }
 
 #[tauri::command]
@@ -924,13 +916,14 @@ mod tests {
 
     #[test]
     fn test_compare_versions() {
-        assert_eq!(compare_versions("1.0", "2.0"), -1);
-        assert_eq!(compare_versions("2.0", "1.0"), 1);
-        assert_eq!(compare_versions("1.0", "1.0"), 0);
-        assert_eq!(compare_versions("1.0.1", "1.0"), 1);
-        assert_eq!(compare_versions("450.80.02", "450.80.02"), 0);
-        assert_eq!(compare_versions("525.60.13", "450.80.02"), 1);
-        assert_eq!(compare_versions("10", "2"), 1); // Numeric check, not string
+        use std::cmp::Ordering;
+        assert_eq!(compare_versions("1.0", "2.0"), Ordering::Less);
+        assert_eq!(compare_versions("2.0", "1.0"), Ordering::Greater);
+        assert_eq!(compare_versions("1.0", "1.0"), Ordering::Equal);
+        assert_eq!(compare_versions("1.0.1", "1.0"), Ordering::Greater);
+        assert_eq!(compare_versions("450.80.02", "450.80.02"), Ordering::Equal);
+        assert_eq!(compare_versions("525.60.13", "450.80.02"), Ordering::Greater);
+        assert_eq!(compare_versions("10", "2"), Ordering::Greater);
     }
 
     // --- Tests for get_supported_features ---

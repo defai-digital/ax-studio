@@ -44,13 +44,13 @@ import {
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 
-function formatRelativeTime(timestamp: number): string {
+function formatRelativeTime(timestamp: number, t: (key: string, opts?: Record<string, unknown>) => string): string {
   const now = Date.now() / 1000
   const diff = now - timestamp
-  if (diff < 60) return 'Just now'
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`
+  if (diff < 60) return t('common:time.justNow')
+  if (diff < 3600) return t('common:time.minutesAgo', { count: Math.floor(diff / 60) })
+  if (diff < 86400) return t('common:time.hoursAgo', { count: Math.floor(diff / 3600) })
+  if (diff < 604800) return t('common:time.daysAgo', { count: Math.floor(diff / 86400) })
   return new Date(timestamp * 1000).toLocaleDateString()
 }
 
@@ -193,7 +193,7 @@ const ThreadItem = memo(
                   </span>
                 </div>
                 <span className="text-[11px] text-muted-foreground shrink-0">
-                  {formatRelativeTime(thread.updated)}
+                  {formatRelativeTime(thread.updated, t)}
                 </span>
               </div>
               {lastUserMessageText && (

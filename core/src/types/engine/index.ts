@@ -32,8 +32,9 @@ export class SecretString {
   }
 
   /**
-   * Serialization hook used by JSON.stringify — returns the masked string
-   * so secrets are never accidentally persisted to storage or logs.
+   * WARNING: Returns the **masked** string (e.g. "s***g"), NOT the raw secret.
+   * Using JSON.stringify on a SecretString will DESTROY the original value.
+   * Use `.value` directly if you need the plaintext for persistence.
    */
   toJSON(): string {
     return this.toString()

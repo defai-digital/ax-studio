@@ -483,5 +483,11 @@
     "chunksCount": "{{count}} chunks"
   },
   "modelsCount": "{{count}} models",
-  "manageProviders": "Manage providers →"
+  "manageProviders": "Manage providers →",
+  "time": {
+    "justNow": "Just now",
+    "minutesAgo": "{{count}}m ago",
+    "hoursAgo": "{{count}}h ago",
+    "daysAgo": "{{count}}d ago"
+  }
 }
