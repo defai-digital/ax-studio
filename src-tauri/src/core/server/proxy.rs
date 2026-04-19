@@ -56,6 +56,7 @@ pub struct ProxyConfig {
     pub trusted_hosts: Vec<Vec<String>>,
     pub cors_enabled: bool,
     pub host: String,
+    #[allow(dead_code)]
     pub port: u16,
 }
 
