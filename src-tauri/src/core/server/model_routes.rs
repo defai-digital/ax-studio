@@ -337,6 +337,257 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
     }
 }
 
+/// Attempt to re-send a failed Anthropic /messages request as /chat/completions.
+/// Returns `Some(Response)` if the fallback was attempted (success or error),
+/// or `None` if the body couldn't be transformed.
+async fn try_anthropic_fallback(
+    target_base_url: &str,
+    headers: &hyper::HeaderMap,
+    session_api_key: &Option<String>,
+    buffered_body: &Bytes,
+    destination_path: &str,
+    host_header: &str,
+    origin_header: &str,
+    config: &ProxyConfig,
+    client: &Client,
+) -> Option<Result<Response<Body>, hyper::Error>> {
+    let fallback_url = target_base_url
+        .trim_end_matches("/messages")
+        .trim_end_matches('/')
+        .to_string();
+
+    let json_body = match serde_json::from_slice::<serde_json::Value>(buffered_body) {
+        Ok(v) => v,
+        Err(_) => return None,
+    };
+    let openai_body = match transform_anthropic_to_openai(&json_body) {
+        Some(t) => t,
+        None => {
+            log::error!("transform_anthropic_to_openai returned None for body: {json_body}");
+            return None;
+        }
+    };
+
+    let chat_url = format!("{}/chat/completions", fallback_url);
+    log::info!("Fallback to chat completions: {chat_url}");
+
+    let mut fallback_req = client.post(&chat_url);
+    fallback_req = fallback_req.header("Content-Type", "application/json");
+    fallback_req = fallback_req.header("Accept-Encoding", "identity");
+
+    for (name, value) in headers.iter() {
+        if name != hyper::header::HOST
+            && name != hyper::header::AUTHORIZATION
+            && name != "content-type"
+            && name != hyper::header::CONTENT_LENGTH
+            && name != hyper::header::ACCEPT_ENCODING
+            && !super::proxy::is_hop_by_hop_header(name)
+        {
+            fallback_req = fallback_req.header(name, value);
+        }
+    }
+    if let Some(key) = session_api_key {
+        fallback_req = fallback_req.header("Authorization", format!("Bearer {key}"));
+    }
+
+    let fallback_response = fallback_req
+        .body(openai_body.to_string())
+        .send()
+        .await;
+
+    match fallback_response {
+        Ok(res) => {
+            let fallback_status = res.status();
+
+            if !fallback_status.is_success() {
+                let fallback_error =
+                    res.text()
+                        .await
+                        .unwrap_or_else(|e| format!("Failed to read error: {}", e));
+                return Some(Ok(error_response(
+                    fallback_status,
+                    fallback_error,
+                    host_header,
+                    origin_header,
+                    config,
+                )));
+            }
+
+            let mut builder = Response::builder().status(fallback_status);
+            for (name, value) in res.headers() {
+                if !is_cors_header(name.as_str())
+                    && name != hyper::header::CONTENT_LENGTH
+                {
+                    builder = builder.header(name, value);
+                }
+            }
+            builder = add_cors_headers_with_host_and_origin(
+                builder,
+                host_header,
+                origin_header,
+                &config.trusted_hosts,
+                config.cors_enabled,
+            );
+
+            let is_streaming = openai_body
+                .get("stream")
+                .and_then(|s| s.as_bool())
+                .unwrap_or(false);
+
+            let (sender, body) = hyper::Body::channel();
+            let dest_path = destination_path.to_string();
+
+            tokio::spawn(async move {
+                if is_streaming {
+                    let stream = res.bytes_stream();
+                    transform_and_forward_stream(stream, sender, &dest_path).await;
+                } else {
+                    let response_body = res.bytes().await;
+                    forward_non_streaming(response_body, sender, &dest_path).await;
+                }
+            });
+
+            Some(Ok(builder
+                .body(body)
+                .unwrap_or_else(|_| Response::new(Body::from("Internal server error")))))
+        }
+        Err(ref err) => {
+            log::error!("Chat completions fallback failed: {}", err);
+            None
+        }
+    }
+}
+
+/// Build a streaming response from a successful upstream response.
+/// Spawns a background task that forwards chunks, applying SSE line-patching
+/// for `text/event-stream` responses (e.g. promoting `reasoning_content` to `content`).
+fn build_streaming_response(
+    response: reqwest::Response,
+    status: StatusCode,
+    host_header: &str,
+    origin_header: &str,
+    config: &ProxyConfig,
+    upstream_url: &str,
+) -> Response<Body> {
+    let mut builder = Response::builder().status(status);
+
+    for (name, value) in response.headers() {
+        if !is_cors_header(name.as_str()) && name != hyper::header::CONTENT_LENGTH {
+            builder = builder.header(name, value);
+        }
+    }
+
+    builder = add_cors_headers_with_host_and_origin(
+        builder,
+        host_header,
+        origin_header,
+        &config.trusted_hosts,
+        config.cors_enabled,
+    );
+
+    let upstream_ct = response
+        .headers()
+        .get(hyper::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("<unknown>")
+        .to_string();
+    log::info!(
+        "Upstream response: status={} content-type={}",
+        response.status(),
+        upstream_ct
+    );
+
+    let mut stream = response.bytes_stream();
+    let (mut sender, body) = hyper::Body::channel();
+    let upstream_url_for_log = upstream_url.to_string();
+
+    tokio::spawn(async move {
+        let is_sse = upstream_ct.contains("text/event-stream");
+        let mut total_bytes: usize = 0;
+        let mut chunk_count: usize = 0;
+        let mut patched_lines_logged: usize = 0;
+        let mut line_buffer = String::new();
+
+        while let Some(chunk_result) = stream.next().await {
+            match chunk_result {
+                Ok(chunk) => {
+                    chunk_count += 1;
+                    total_bytes += chunk.len();
+
+                    if !is_sse {
+                        if sender.send_data(chunk).await.is_err() {
+                            log::debug!("Client disconnected during streaming");
+                            break;
+                        }
+                        continue;
+                    }
+
+                    let s = match std::str::from_utf8(&chunk) {
+                        Ok(v) => v,
+                        Err(_) => {
+                            if sender.send_data(chunk).await.is_err() { break }
+                            continue;
+                        }
+                    };
+                    line_buffer.push_str(s);
+
+                    let mut out = String::with_capacity(line_buffer.len());
+                    while let Some(newline_idx) = line_buffer.find('\n') {
+                        let line: String = line_buffer.drain(..=newline_idx).collect();
+                        let patched = patch_sse_line(&line);
+                        if patched_lines_logged < 3
+                            && patched != line
+                            && patched.trim_start().starts_with("data:")
+                        {
+                            patched_lines_logged += 1;
+                            let preview_len = patched.len().min(400);
+                            log::info!(
+                                "Patched SSE line #{patched_lines_logged}: {}",
+                                &patched[..preview_len]
+                            );
+                        }
+                        out.push_str(&patched);
+                    }
+                    if !out.is_empty() {
+                        if sender
+                            .send_data(hyper::body::Bytes::from(out))
+                            .await
+                            .is_err()
+                        {
+                            log::debug!("Client disconnected during streaming");
+                            break;
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::error!("Stream error: {e}");
+                    break;
+                }
+            }
+        }
+
+        if !line_buffer.is_empty() {
+            let tail = patch_sse_line(&line_buffer);
+            let _ = sender.send_data(hyper::body::Bytes::from(tail)).await;
+        }
+
+        if total_bytes == 0 {
+            log::warn!(
+                "Streaming complete with EMPTY body — 0 bytes / 0 chunks from {upstream_url_for_log}. \
+                 Likely an upstream error returned with a 2xx status; check the network response in the client."
+            );
+        } else {
+            log::info!(
+                "Streaming complete to client: {chunk_count} chunks, {total_bytes} bytes from {upstream_url_for_log}"
+            );
+        }
+    });
+
+    builder
+        .body(body)
+        .unwrap_or_else(|_| Response::new(Body::from("Internal server error")))
+}
+
 /// Send the buffered request to the upstream provider and return the response.
 /// Handles the Anthropic /messages → /chat/completions fallback on error.
 pub(super) async fn dispatch_to_upstream(
@@ -417,117 +668,25 @@ pub(super) async fn dispatch_to_upstream(
             if is_error && is_anthropic_messages {
                 log::warn!("Request failed for /messages with status {status}, trying /chat/completions...");
 
-                // Read the error body to return to client if fallback fails
                 let error_body = response
                     .text()
                     .await
                     .unwrap_or_else(|e| format!("Failed to read error body: {}", e));
 
-                // Clone what we need for the fallback request
-                let fallback_url = Some(target_base_url.clone()).map(|url| {
-                    url.trim_end_matches("/messages")
-                        .trim_end_matches('/')
-                        .to_string()
-                });
-                let fallback_api_key = session_api_key.clone();
-                let fallback_body = Some(buffered_body.clone());
-
-                // Transform body to OpenAI format for fallback
-                if let Some((url, openai_body)) = fallback_url.zip(fallback_body).and_then(|(url, body)| {
-                    let json_body = serde_json::from_slice::<serde_json::Value>(&body).ok()?;
-                    match transform_anthropic_to_openai(&json_body) {
-                        Some(transformed) => Some((url, transformed)),
-                        None => {
-                            log::error!("transform_anthropic_to_openai returned None for body: {json_body}");
-                            None
-                        }
-                    }
-                }) {
-                    let chat_url = format!("{}/chat/completions", url);
-                    log::info!("Fallback to chat completions: {chat_url}");
-
-                    // Reuse existing client — the primary request has completed so
-                    // its connection is back in the pool.
-                    let mut fallback_req = client.post(&chat_url);
-
-                    // Ensure Content-Type is set and prevent compression
-                    fallback_req = fallback_req.header("Content-Type", "application/json");
-                    fallback_req = fallback_req.header("Accept-Encoding", "identity");
-
-                    for (name, value) in headers.iter() {
-                        if name != hyper::header::HOST
-                            && name != hyper::header::AUTHORIZATION
-                            && name != "content-type"
-                            && name != hyper::header::CONTENT_LENGTH
-                            && name != hyper::header::ACCEPT_ENCODING
-                            && !super::proxy::is_hop_by_hop_header(name)
-                        {
-                            fallback_req = fallback_req.header(name, value);
-                        }
-                    }
-                    if let Some(key) = fallback_api_key {
-                        fallback_req = fallback_req.header("Authorization", format!("Bearer {key}"));
-                    }
-
-                    let fallback_body_str = openai_body.to_string();
-
-                    let fallback_response = fallback_req.body(fallback_body_str).send().await;
-
-                    if let Ok(res) = fallback_response {
-                        let fallback_status = res.status();
-
-                        if !fallback_status.is_success() {
-                            // Return fallback error to client
-                            let fallback_error = res.text().await.unwrap_or_else(|e| format!("Failed to read error: {}", e));
-
-                            // Return the error to client
-                            return Ok(error_response(fallback_status, fallback_error, host_header, origin_header, config));
-                        }
-
-                        let mut builder = Response::builder().status(fallback_status);
-                        for (name, value) in res.headers() {
-                            if !is_cors_header(name.as_str()) && name != hyper::header::CONTENT_LENGTH {
-                                builder = builder.header(name, value);
-                            }
-                        }
-                        builder = add_cors_headers_with_host_and_origin(
-                            builder,
-                            host_header,
-                            origin_header,
-                            &config.trusted_hosts,
-                            config.cors_enabled,
-                        );
-
-                        let is_streaming = openai_body
-                            .get("stream")
-                            .and_then(|s| s.as_bool())
-                            .unwrap_or(false);
-
-                        let (sender, body) = hyper::Body::channel();
-                        let dest_path = destination_path.clone();
-
-                        tokio::spawn(async move {
-                            if is_streaming {
-                                let stream = res.bytes_stream();
-                                transform_and_forward_stream(stream, sender, &dest_path).await;
-                            } else {
-                                let response_body = res.bytes().await;
-                                forward_non_streaming(
-                                    response_body,
-                                    sender,
-                                    &dest_path,
-                                )
-                                .await;
-                            }
-                        });
-
-                        return Ok(builder.body(body).unwrap_or_else(|_| Response::new(Body::from("Internal server error"))));
-                    } else if let Err(ref err) = fallback_response {
-                        log::error!("Chat completions fallback failed: {}", err);
-                    }
+                if let Some(result) = try_anthropic_fallback(
+                    &target_base_url,
+                    headers,
+                    &session_api_key,
+                    &buffered_body,
+                    &destination_path,
+                    host_header,
+                    origin_header,
+                    config,
+                    client,
+                ).await {
+                    return result;
                 }
 
-                // If fallback failed or wasn't attempted, return error to client
                 return Ok(error_response(status, error_body, host_header, origin_header, config));
             } else if is_error {
                 // Non-/messages error - return error response with body
@@ -545,136 +704,14 @@ pub(super) async fn dispatch_to_upstream(
             }
 
             // Success case - stream the response
-            let mut builder = Response::builder().status(status);
-
-            for (name, value) in response.headers() {
-                if !is_cors_header(name.as_str()) && name != hyper::header::CONTENT_LENGTH {
-                    builder = builder.header(name, value);
-                }
-            }
-
-            builder = add_cors_headers_with_host_and_origin(
-                builder,
+            return Ok(build_streaming_response(
+                response,
+                status,
                 host_header,
                 origin_header,
-                &config.trusted_hosts,
-                config.cors_enabled,
-            );
-
-            // DIAGNOSTIC: log upstream status and content-type so we can see
-            // whether a hung-chat case is "proxy streamed nothing" vs "upstream
-            // returned a JSON error" vs "response has no compatible chunks".
-            let upstream_status = response.status();
-            let upstream_ct = response
-                .headers()
-                .get(hyper::header::CONTENT_TYPE)
-                .and_then(|v| v.to_str().ok())
-                .unwrap_or("<unknown>")
-                .to_string();
-            log::info!(
-                "Upstream response: status={} content-type={}",
-                upstream_status,
-                upstream_ct
-            );
-
-            let mut stream = response.bytes_stream();
-            let (mut sender, body) = hyper::Body::channel();
-            let upstream_url_for_log = upstream_url.clone();
-
-            tokio::spawn(async move {
-                let is_sse = upstream_ct.contains("text/event-stream");
-                let mut total_bytes: usize = 0;
-                let mut chunk_count: usize = 0;
-                let mut patched_lines_logged: usize = 0;
-                // SSE messages can split across network chunks — buffer partial
-                // lines so we always parse complete `data: {...}` records.
-                let mut line_buffer = String::new();
-
-                while let Some(chunk_result) = stream.next().await {
-                    match chunk_result {
-                        Ok(chunk) => {
-                            chunk_count += 1;
-                            total_bytes += chunk.len();
-
-                            // Non-SSE responses: pass through unchanged.
-                            if !is_sse {
-                                if sender.send_data(chunk).await.is_err() {
-                                    log::debug!("Client disconnected during streaming");
-                                    break;
-                                }
-                                continue;
-                            }
-
-                            // Decode; for SSE tokens are ASCII/UTF-8 safe.
-                            let s = match std::str::from_utf8(&chunk) {
-                                Ok(v) => v,
-                                Err(_) => {
-                                    // Non-UTF8 (shouldn't happen on SSE): pass through.
-                                    if sender.send_data(chunk).await.is_err() { break }
-                                    continue;
-                                }
-                            };
-                            line_buffer.push_str(s);
-
-                            let mut out = String::with_capacity(line_buffer.len());
-                            // Drain complete lines (delimited by '\n').
-                            while let Some(newline_idx) = line_buffer.find('\n') {
-                                let line: String = line_buffer.drain(..=newline_idx).collect();
-                                let patched = patch_sse_line(&line);
-                                // Log the first few patched lines so we can verify the
-                                // `reasoning_content` → `content` rewrite is working.
-                                if patched_lines_logged < 3
-                                    && patched != line
-                                    && patched.trim_start().starts_with("data:")
-                                {
-                                    patched_lines_logged += 1;
-                                    let preview_len = patched.len().min(400);
-                                    log::info!(
-                                        "Patched SSE line #{patched_lines_logged}: {}",
-                                        &patched[..preview_len]
-                                    );
-                                }
-                                out.push_str(&patched);
-                            }
-                            if !out.is_empty() {
-                                if sender
-                                    .send_data(hyper::body::Bytes::from(out))
-                                    .await
-                                    .is_err()
-                                {
-                                    log::debug!("Client disconnected during streaming");
-                                    break;
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            log::error!("Stream error: {e}");
-                            break;
-                        }
-                    }
-                }
-
-                // Flush any trailing partial line (rare but correct).
-                if !line_buffer.is_empty() {
-                    let tail = patch_sse_line(&line_buffer);
-                    let _ = sender.send_data(hyper::body::Bytes::from(tail)).await;
-                }
-
-                if total_bytes == 0 {
-                    log::warn!(
-                        "Streaming complete with EMPTY body — 0 bytes / 0 chunks from {upstream_url_for_log}. \
-                         Likely an upstream error returned with a 2xx status; check the network response in the client."
-                    );
-                } else {
-                    log::info!(
-                        "Streaming complete to client: {chunk_count} chunks, {total_bytes} bytes from {upstream_url_for_log}"
-                    );
-                }
-            });
-
-            Ok(builder
-                .body(body)
-                .unwrap_or_else(|_| Response::new(Body::from("Internal server error"))))
+                config,
+                &upstream_url,
+            ));
         }
         Err(e) => {
             let error_msg = format!("Proxy request to model failed: {e}");
