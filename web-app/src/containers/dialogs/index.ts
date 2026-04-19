@@ -5,7 +5,6 @@ export { DeleteAllThreadsDialog } from './thread/DeleteAllThreadsDialog'
 
 // Message dialogs
 export { EditMessageDialog } from './message/EditMessageDialog'
-export { MessageMetadataDialog } from './message/MessageMetadataDialog'
 export { DeleteMessageDialog } from './message/DeleteMessageDialog'
 
 // System / app-level dialogs (still top-level)

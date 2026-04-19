@@ -33,123 +33,6 @@ const getImageMediaType = (url?: string): string => {
   return 'image/jpeg'
 }
 
-/**
- * Convert AI SDK UIMessage to Ax-Studio's ThreadMessage format.
- * This allows using chatMessages from useChat with ThreadContent component.
- */
-export function convertUIMessageToThreadMessage(
-  uiMessage: UIMessage,
-  threadId: string
-): ThreadMessage {
-  const content: ThreadContent[] = []
-
-  // Extract text and image parts from UIMessage
-  // Use 'any' for parts since the AI SDK types vary between versions
-  for (const part of uiMessage.parts as any[]) {
-    if (part.type === 'text') {
-      content.push({
-        type: ContentType.Text,
-        text: {
-          value: part.text,
-          annotations: [],
-        },
-      })
-    } else if (part.type === 'reasoning') {
-      // Wrap reasoning in <think> tags for compatibility with existing rendering
-      // The reasoning content is in 'reasoning' or 'text' depending on SDK version
-      const reasoningText = part.reasoning ?? part.text ?? ''
-      const existingText = content.find((c) => c.type === ContentType.Text)
-      if (existingText && existingText.text) {
-        existingText.text.value = `<think>${reasoningText}</think>${existingText.text.value}`
-      } else {
-        content.unshift({
-          type: ContentType.Text,
-          text: {
-            value: `<think>${reasoningText}</think>`,
-            annotations: [],
-          },
-        })
-      }
-    } else if (part.type === 'file' && part.mediaType) {
-      // Handle file parts (images)
-      const mediaType = part.mediaType as string
-      if (mediaType?.startsWith('image/')) {
-        content.push({
-          type: ContentType.Image,
-          image_url: {
-            url: part.url,
-            detail: 'auto',
-          },
-        })
-      }
-    }
-  }
-
-  // If no content was extracted, add empty text
-  if (content.length === 0) {
-    content.push({
-      type: ContentType.Text,
-      text: {
-        value: '',
-        annotations: [],
-      },
-    })
-  }
-
-  // Extract tool calls from parts
-  const toolCalls = (uiMessage.parts as any[])
-    .filter((part) => part.type.startsWith('tool'))
-    .map((part) => {
-      const toolName = part.toolInvocation?.toolName ?? part.type.replace('tool-', '')
-      return {
-        tool: {
-          id: part.toolCallId || part.toolInvocationId,
-          type: 'function' as const,
-          function: {
-            name: toolName,
-            arguments:
-              typeof part.input === 'string'
-                ? part.input
-                : JSON.stringify(part.input ?? part.args),
-          },
-        },
-        state: part.state === 'output-available' ? 'completed' : 'pending',
-        response: part.output ?? part.result,
-      }
-    })
-
-  // Handle createdAt - may be on the message or not depending on SDK version
-  const msgAny = uiMessage as any
-  const createdAt =
-    msgAny.createdAt instanceof Date
-      ? msgAny.createdAt.getTime()
-      : typeof msgAny.createdAt === 'number'
-        ? msgAny.createdAt
-        : Date.now()
-
-  return {
-    id: uiMessage.id,
-    object: 'thread.message',
-    thread_id: threadId,
-    role: uiMessage.role as ThreadMessage['role'],
-    content,
-    status: MessageStatus.Ready,
-    created_at: createdAt,
-    completed_at: createdAt,
-    metadata: toolCalls.length > 0 ? { tool_calls: toolCalls } : undefined,
-  }
-}
-
-/**
- * Convert an array of AI SDK UIMessages to Ax-Studio's ThreadMessage format.
- */
-export function convertUIMessagesToThreadMessages(
-  uiMessages: UIMessage[],
-  threadId: string
-): ThreadMessage[] {
-  return uiMessages.map((msg) => convertUIMessageToThreadMessage(msg, threadId))
-}
-
 // Define a temporary type for the expected tool result shape (ToolResult as before)
 export type ToolResult = {
   content: Array<{
@@ -423,7 +306,7 @@ export class CompletionMessagesBuilder {
  * @param text - The text to parse reasoning from.
  * @returns
  */
-export const parseReasoning = (text: string) => {
+const parseReasoning = (text: string) => {
   // Check for thinking formats
   const hasThinkTag = text.includes('<think>') && !text.includes('</think>')
   const hasAnalysisChannel =

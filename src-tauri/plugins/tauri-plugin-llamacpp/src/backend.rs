@@ -295,11 +295,13 @@ pub struct GpuInfo {
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 pub struct NvidiaInfo {
     compute_capability: String,
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 pub struct VulkanInfo {
     api_version: String,
 }

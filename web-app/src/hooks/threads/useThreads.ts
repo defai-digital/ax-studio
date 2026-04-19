@@ -7,11 +7,13 @@ import { TEMPORARY_CHAT_ID } from '@/constants/chat'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { useFileRegistry, threadCollectionId } from '@/lib/file-registry'
 
-// Shared persistence-error reporter for thread CRUD. The store is
-// optimistic by design, so we don't roll back the UI — but we do surface
-// the failure as a toast so the user knows their change may not survive
-// reload. (Previously all these paths used `.catch(console.error)` which
-// silently ate the error.)
+const buildSearchIndex = (threads: Record<string, Thread>): Fzf<Thread[]> => {
+  const entries = Object.values(threads).filter((t) => t.id !== TEMPORARY_CHAT_ID)
+  return new Fzf<Thread[]>(entries, {
+    selector: (item: Thread) => item.title,
+  })
+}
+
 const reportPersistenceError = (operation: string) => (error: unknown) => {
   console.error(`[threads] ${operation} persistence failed:`, error)
   toast.error(`Failed to save: ${operation}`, {
@@ -77,16 +79,9 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       },
       {} as Record<string, Thread>
     )
-    // Filter out temporary chat for search index
-    const filteredForSearch = Object.values(threadMap).filter(
-      (t) => t.id !== TEMPORARY_CHAT_ID
-    )
-
     set({
       threads: threadMap,
-      searchIndex: new Fzf<Thread[]>(filteredForSearch, {
-        selector: (item: Thread) => item.title,
-      }),
+      searchIndex: buildSearchIndex(threadMap),
     })
   },
   getFilteredThreads: (searchTerm: string) => {
@@ -105,9 +100,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
 
     let currentIndex = searchIndex
     if (!currentIndex?.find) {
-      currentIndex = new Fzf<Thread[]>(filteredThreadsValues, {
-        selector: (item: Thread) => item.title,
-      })
+      currentIndex = buildSearchIndex(threads)
       set({ searchIndex: currentIndex })
     }
 
@@ -169,14 +162,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
         threads: remainingThreads,
         currentThreadId:
           state.currentThreadId === threadId ? undefined : state.currentThreadId,
-        searchIndex: new Fzf<Thread[]>(
-          Object.values(remainingThreads).filter(
-            (t) => t.id !== TEMPORARY_CHAT_ID
-          ),
-          {
-            selector: (item: Thread) => item.title,
-          }
-        ),
+        searchIndex: buildSearchIndex(remainingThreads),
       }
     })
   },
@@ -228,14 +214,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
           state.currentThreadId && threadsToDeleteIds.includes(state.currentThreadId)
             ? undefined
             : state.currentThreadId,
-        searchIndex: new Fzf<Thread[]>(
-          Object.values(remainingThreads).filter(
-            (t) => t.id !== TEMPORARY_CHAT_ID
-          ),
-          {
-            selector: (item: Thread) => item.title,
-          }
-        ),
+        searchIndex: buildSearchIndex(remainingThreads),
       }
     })
   },
@@ -259,9 +238,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       return {
         threads: {},
         currentThreadId: undefined,
-        searchIndex: new Fzf<Thread[]>([], {
-          selector: (item: Thread) => item.title,
-        }),
+        searchIndex: buildSearchIndex({}),
       }
     })
   },
@@ -307,9 +284,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
           state.currentThreadId && threadsToDeleteIds.includes(state.currentThreadId)
             ? undefined
             : state.currentThreadId,
-        searchIndex: new Fzf<Thread[]>(Object.values(remainingThreads).filter(t => t.id !== TEMPORARY_CHAT_ID), {
-          selector: (item: Thread) => item.title,
-        }),
+        searchIndex: buildSearchIndex(remainingThreads),
       }
     })
   },
@@ -407,15 +382,10 @@ export const useThreads = create<ThreadState>()((set, get) => ({
             },
             {} as Record<string, Thread>
           )
-          const filteredForSearch = Object.values(threadMap).filter(
-            (t) => t.id !== TEMPORARY_CHAT_ID
-          )
 
           return {
             threads: threadMap,
-            searchIndex: new Fzf<Thread[]>(filteredForSearch, {
-              selector: (item: Thread) => item.title,
-            }),
+            searchIndex: buildSearchIndex(threadMap),
             currentThreadId: createdThread.id,
           }
         })
@@ -483,12 +453,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       const newThreads = { ...state.threads, [threadId]: updatedThread }
       return {
         threads: newThreads,
-        searchIndex: new Fzf<Thread[]>(
-          Object.values(newThreads).filter((t) => t.id !== TEMPORARY_CHAT_ID),
-          {
-            selector: (item: Thread) => item.title,
-          }
-        ),
+        searchIndex: buildSearchIndex(newThreads),
       }
     })
   },
@@ -548,12 +513,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       const newThreads = { ...state.threads, [threadId]: updatedThread }
       return {
         threads: newThreads,
-        searchIndex: new Fzf<Thread[]>(
-          Object.values(newThreads).filter((t) => t.id !== TEMPORARY_CHAT_ID),
-          {
-            selector: (item: Thread) => item.title,
-          }
-        ),
+        searchIndex: buildSearchIndex(newThreads),
       }
     })
   },

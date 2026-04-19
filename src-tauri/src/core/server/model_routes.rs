@@ -481,17 +481,7 @@ pub(super) async fn dispatch_to_upstream(
                             let fallback_error = res.text().await.unwrap_or_else(|e| format!("Failed to read error: {}", e));
 
                             // Return the error to client
-                            let mut error_response = Response::builder().status(fallback_status);
-                            error_response = add_cors_headers_with_host_and_origin(
-                                error_response,
-                                host_header,
-                                origin_header,
-                                &config.trusted_hosts,
-                                config.cors_enabled,
-                            );
-                            return Ok(error_response
-                                .body(Body::from(fallback_error))
-                                .unwrap_or_else(|_| Response::new(Body::from("Internal server error"))));
+                            return Ok(error_response(fallback_status, fallback_error, host_header, origin_header, config));
                         }
 
                         let mut builder = Response::builder().status(fallback_status);
@@ -538,17 +528,7 @@ pub(super) async fn dispatch_to_upstream(
                 }
 
                 // If fallback failed or wasn't attempted, return error to client
-                let mut error_response = Response::builder().status(status);
-                error_response = add_cors_headers_with_host_and_origin(
-                    error_response,
-                    host_header,
-                    origin_header,
-                    &config.trusted_hosts,
-                    config.cors_enabled,
-                );
-                return Ok(error_response
-                    .body(Body::from(error_body))
-                    .unwrap_or_else(|_| Response::new(Body::from("Internal server error"))));
+                return Ok(error_response(status, error_body, host_header, origin_header, config));
             } else if is_error {
                 // Non-/messages error - return error response with body
                 let error_body = response
@@ -561,17 +541,7 @@ pub(super) async fn dispatch_to_upstream(
                     &error_body[..error_body.len().min(500)]
                 );
 
-                let mut error_response = Response::builder().status(status);
-                error_response = add_cors_headers_with_host_and_origin(
-                    error_response,
-                    host_header,
-                    origin_header,
-                    &config.trusted_hosts,
-                    config.cors_enabled,
-                );
-                return Ok(error_response
-                    .body(Body::from(error_body))
-                    .unwrap_or_else(|_| Response::new(Body::from("Internal server error"))));
+                return Ok(error_response(status, error_body, host_header, origin_header, config));
             }
 
             // Success case - stream the response
@@ -709,17 +679,7 @@ pub(super) async fn dispatch_to_upstream(
         Err(e) => {
             let error_msg = format!("Proxy request to model failed: {e}");
             log::error!("{error_msg}");
-            let mut error_response = Response::builder().status(StatusCode::BAD_GATEWAY);
-            error_response = add_cors_headers_with_host_and_origin(
-                error_response,
-                host_header,
-                origin_header,
-                &config.trusted_hosts,
-                config.cors_enabled,
-            );
-            Ok(error_response
-                .body(Body::from(error_msg))
-                .unwrap_or_else(|_| Response::new(Body::from("Internal server error"))))
+            Ok(error_response(StatusCode::BAD_GATEWAY, error_msg, host_header, origin_header, config))
         }
     }
 }
