@@ -5,7 +5,8 @@ import type { ResearchSource } from '@/hooks/research/useResearchPanel'
  * Returns a JSON array of strings.
  */
 export function PLANNER_PROMPT(query: string, breadth: number): string {
-  return `You are a research planner. Decompose the following research query into exactly ${breadth} focused sub-questions that together will fully answer it. Make each sub-question specific and distinct — avoid overlap.
+  return `/no_think
+You are a research planner. Decompose the following research query into exactly ${breadth} focused sub-questions that together will fully answer it. Make each sub-question specific and distinct — avoid overlap.
 
 Research query: "${query}"
 
@@ -18,16 +19,15 @@ Example format: ["sub-question 1", "sub-question 2", "sub-question 3"]`
  * Returns plain prose ≤500 words.
  */
 export function SUMMARISE_PROMPT(question: string, pageText: string): string {
-  return `You are summarising a web page to answer a specific research question.
+  return `/no_think
+Summarise the page below to answer the research question. Be concise (≤200 words). Include key facts, figures, and dates. If no relevant information, reply "No relevant information found."
 
-Research question: "${question}"
+Question: "${question}"
 
-Web page content:
+Page:
 ---
-${pageText.slice(0, 8000)}
----
-
-Write a detailed summary (≤500 words) of the information in this page that is relevant to the research question. Include specific facts, figures, names, dates, and data points where available. If the page contains no relevant information, respond with "No relevant information found." Only include facts from the page.`
+${pageText.slice(0, 3000)}
+---`
 }
 
 /**
@@ -36,7 +36,8 @@ Write a detailed summary (≤500 words) of the information in this page that is 
  */
 export function DRILL_DOWN_PROMPT(question: string, summaries: string[]): string {
   const context = summaries.slice(0, 10).join('\n\n---\n\n')
-  return `You are a research analyst. Based on the summaries below collected while researching "${question}", identify 2 important follow-up questions that would deepen understanding and fill gaps in the current research.
+  return `/no_think
+You are a research analyst. Based on the summaries below collected while researching "${question}", identify 2 important follow-up questions that would deepen understanding and fill gaps in the current research.
 
 Summaries:
 ---
@@ -61,7 +62,8 @@ export function WRITER_PROMPT(
 
   const context = contextBlocks.slice(0, 100).join('\n\n---\n\n')
 
-  return `You are an expert research writer. Using the numbered research summaries below, write a comprehensive, well-structured report that fully answers the query. Complete every section — do not stop early.
+  return `/no_think
+You are an expert research writer. Using the numbered research summaries below, write a comprehensive, well-structured report that fully answers the query. Complete every section — do not stop early.
 
 Query: "${query}"
 

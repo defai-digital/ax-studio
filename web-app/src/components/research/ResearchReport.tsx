@@ -51,10 +51,20 @@ export const ResearchReport = memo(function ResearchReport({
     )
   }
 
+  if (isStreaming) {
+    return (
+      <div className="flex-1 overflow-auto p-4">
+        <pre className="whitespace-pre-wrap text-sm font-sans text-foreground leading-relaxed">
+          {processed + ' ▌'}
+        </pre>
+      </div>
+    )
+  }
+
   return (
     <div className="flex-1 overflow-auto p-4">
       <RenderMarkdown
-        content={processed + (isStreaming ? ' ▌' : '')}
+        content={processed}
         className="prose prose-sm dark:prose-invert max-w-none"
       />
     </div>

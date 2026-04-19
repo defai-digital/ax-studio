@@ -25,6 +25,9 @@ import {
 import { parseExaResults, parsePlan, parseDrillDown } from '@/lib/research/research-parsers'
 import { scrapeWithTimeout } from '@/lib/research/research-scraper'
 import { buildResearchModel } from '@/lib/research/research-model'
+import { prepareProviderForChat } from '@/lib/chat/model-session'
+import { getServiceHub } from '@/hooks/useServiceHub'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 
 export { isExaRateLimitMessage, isExaRateLimitError }
 
@@ -95,13 +98,24 @@ export function useResearch(threadId: string) {
 
       resetExaGate()
 
-      const breadth    = depth === 2 ? 3 : 4
-      const numResults = depth === 2 ? 5 : 6
-      const scrapeTop  = depth === 2 ? 3 : 4
+      const breadth    = depth === 2 ? 2 : 3
+      const numResults = depth === 2 ? 3 : 4
+      const scrapeTop  = depth === 2 ? 2 : 3
       const allSources: ResearchSource[] = []
       let exaUnavailableForRun = false
 
       try {
+        // Start the local model if needed (same as chat does via prepareProviderForChat)
+        const { selectedModel, selectedProvider, providers } = useModelProvider.getState()
+        const providerObj = providers.find((p) => p.provider === selectedProvider)
+        if (selectedModel && providerObj) {
+          try {
+            await prepareProviderForChat(getServiceHub(), providerObj, selectedModel.id)
+          } catch {
+            // Non-fatal: remote models don't need this; local model may already be loaded
+          }
+        }
+
         const model = await buildResearchModel()
 
         async function researchNode(question: string, currentDepth: number): Promise<string[]> {
@@ -121,6 +135,7 @@ export function useResearch(threadId: string) {
               if (sources.length === 0) {
                 usedLLMFallback = true
                 if (isExaRateLimitMessage(debugMsg)) exaUnavailableForRun = true
+                addStep({ type: 'searching', query: `Exa: 0 results — ${debugMsg}` })
               } else {
                 addStep({ type: 'searching', query: debugMsg })
               }
@@ -128,6 +143,7 @@ export function useResearch(threadId: string) {
               if (err instanceof Error && err.name === 'AbortError') throw err
               if (isExaRateLimitError(err)) exaUnavailableForRun = true
               usedLLMFallback = true
+              addStep({ type: 'searching', query: `Exa failed: ${err instanceof Error ? err.message : String(err)}` })
             }
           }
 
@@ -157,6 +173,7 @@ export function useResearch(threadId: string) {
                     const { text: summary } = await generateText({
                       model,
                       messages: [{ role: 'user', content: SUMMARISE_PROMPT(question, pageText) }],
+                      maxOutputTokens: 1024,
                       abortSignal: signal,
                     })
                     wikiSummaries.push(`Source: ${r.url}\n${summary}`)
@@ -177,6 +194,7 @@ export function useResearch(threadId: string) {
               const { text: knowledgeSummary } = await generateText({
                 model,
                 messages: [{ role: 'user', content: `Provide a detailed, factual summary (≤400 words) answering:\n\n"${question}"\n\nBe specific and informative.` }],
+                maxOutputTokens: 1024,
                 abortSignal: signal,
               })
               return [`[Model Knowledge]\n${knowledgeSummary}`]
@@ -216,6 +234,7 @@ export function useResearch(threadId: string) {
               const { text: summary } = await generateText({
                 model,
                 messages: [{ role: 'user', content: SUMMARISE_PROMPT(question, text) }],
+                maxOutputTokens: 1024,
                 abortSignal: signal,
               })
               validSummaries.push(`Source: ${r.url}\n${summary}`)
@@ -230,6 +249,7 @@ export function useResearch(threadId: string) {
               const { text: drillJson } = await generateText({
                 model,
                 messages: [{ role: 'user', content: DRILL_DOWN_PROMPT(question, validSummaries) }],
+                maxOutputTokens: 512,
                 abortSignal: signal,
               })
               const followUps = parseDrillDown(drillJson).slice(0, 1)
@@ -250,12 +270,20 @@ export function useResearch(threadId: string) {
         const { text: planJson } = await generateText({
           model,
           messages: [{ role: 'user', content: PLANNER_PROMPT(query, breadth) }],
+          maxOutputTokens: 2048,
           abortSignal: signal,
         })
-        const subQuestions = parsePlan(planJson)
+        let subQuestions = parsePlan(planJson)
+        // If the model returned nothing parseable, use the query itself
+        if (subQuestions.length === 0) {
+          subQuestions = [query]
+          addStep({ type: 'searching', query: `Planning returned no sub-questions — searching query directly` })
+        } else {
+          addStep({ type: 'searching', query: `${subQuestions.length} sub-questions: ${subQuestions.slice(0, 2).join(' | ')}…` })
+        }
 
-        const ENOUGH_CHARS   = depth === 2 ? 8000 : 12000
-        const ENOUGH_SOURCES = depth === 2 ? 5    : 8
+        const ENOUGH_CHARS   = depth === 2 ? 4000 : 6000
+        const ENOUGH_SOURCES = depth === 2 ? 3    : 5
 
         const context: string[] = []
         let completed = 0
@@ -289,6 +317,9 @@ export function useResearch(threadId: string) {
         addStep({ type: 'writing', message: 'Writing report…' })
         let report = ''
         let lastReportFlush = 0
+        // 800ms throttle — local models stream very fast; too-frequent setState
+        // calls cause React "Maximum update depth exceeded"
+        const STREAM_THROTTLE_MS = 800
         const { textStream } = streamText({
           model,
           system: 'Output only the final report. Do not include any reasoning, analysis, planning, or thinking steps. Start directly with ## Executive Summary.',
@@ -299,10 +330,8 @@ export function useResearch(threadId: string) {
         for await (const chunk of textStream) {
           if (signal.aborted) break
           report += chunk
-          // Throttle UI updates to max every 100ms to prevent React
-          // "Maximum update depth exceeded" from rapid sequential state changes
           const now = Date.now()
-          if (now - lastReportFlush >= 100) {
+          if (now - lastReportFlush >= STREAM_THROTTLE_MS) {
             lastReportFlush = now
             useResearchPanel.getState().updateResearch(threadId, (prev) => ({ ...prev, reportMarkdown: report }))
           }
@@ -318,7 +347,7 @@ export function useResearch(threadId: string) {
 
           addStep({ type: 'writing', message: 'Continuing report…' })
           const continuePrompt =
-            `You are continuing a research report that was cut off mid-sentence.\n\n` +
+            `/no_think\nYou are continuing a research report that was cut off mid-sentence.\n\n` +
             `Here is where the report stopped:\n---\n${report.slice(-1500)}\n---\n\n` +
             `Continue SEAMLESSLY from exactly where it stopped. ` +
             `Do NOT repeat, rewrite, or summarise anything already written. ` +
@@ -335,7 +364,7 @@ export function useResearch(threadId: string) {
             if (signal.aborted) break
             report += chunk
             const now = Date.now()
-            if (now - lastReportFlush >= 100) {
+            if (now - lastReportFlush >= STREAM_THROTTLE_MS) {
               lastReportFlush = now
               useResearchPanel.getState().updateResearch(threadId, (prev) => ({ ...prev, reportMarkdown: report }))
             }
@@ -348,7 +377,7 @@ export function useResearch(threadId: string) {
         if (!hasConclusion && !signal.aborted) {
           addStep({ type: 'writing', message: 'Writing conclusion…' })
           const conclusionPrompt =
-            `You are finishing a research report about: "${query}"\n\n` +
+            `/no_think\nYou are finishing a research report about: "${query}"\n\n` +
             `Here is the end of the report written so far:\n---\n${report.slice(-2500)}\n---\n\n` +
             `Write ONLY the ## Conclusion section (150–200 words). ` +
             `Summarise the key findings and their significance. ` +
@@ -365,7 +394,7 @@ export function useResearch(threadId: string) {
             if (signal.aborted) break
             report += chunk
             const now = Date.now()
-            if (now - lastReportFlush >= 100) {
+            if (now - lastReportFlush >= STREAM_THROTTLE_MS) {
               lastReportFlush = now
               useResearchPanel.getState().updateResearch(threadId, (prev) => ({ ...prev, reportMarkdown: report }))
             }
