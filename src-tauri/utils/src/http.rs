@@ -6,7 +6,10 @@ pub fn is_cors_header(header_name: &str) -> bool {
 
 /// Validates if host is in trusted hosts list
 pub fn is_valid_host(host: &str, trusted_hosts: &[Vec<String>]) -> bool {
-    if trusted_hosts.iter().any(|hosts| hosts.contains(&"*".to_string())) {
+    if trusted_hosts
+        .iter()
+        .any(|hosts| hosts.contains(&"*".to_string()))
+    {
         return true;
     }
 
@@ -22,7 +25,7 @@ pub fn is_valid_host(host: &str, trusted_hosts: &[Vec<String>]) -> bool {
     } else {
         host.split(':').next().unwrap_or(host)
     };
-    let default_valid_hosts = ["localhost", "127.0.0.1", "0.0.0.0"];
+    let default_valid_hosts = ["localhost", "127.0.0.1"];
 
     if default_valid_hosts
         .iter()

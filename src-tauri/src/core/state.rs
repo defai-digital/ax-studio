@@ -26,6 +26,7 @@ pub type ProviderModelIndex = HashMap<String, Vec<String>>;
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct ProviderConfig {
     pub provider: String,
+    #[serde(skip_serializing)]
     pub api_key: Option<String>,
     pub base_url: Option<String>,
     pub custom_headers: Vec<ProviderCustomHeader>,

@@ -36,17 +36,16 @@ export abstract class OAIEngine extends AIEngine {
   private loaded = false
 
   private readonly handleMessageSent = (data: MessageRequest) => {
-    // Reset the abort controller for every new inference cycle. Without
-    // this, the first `stopInference()` permanently poisons
-    // `this.controller` — `signal.aborted` stays `true` forever, and
-    // every subsequent fetch started by subclass `inference()` aborts
-    // immediately. User-visible symptom: one Cancel click breaks all
-    // future model responses until the app restarts.
     this.resetInferenceController()
     void Promise.resolve()
       .then(() => this.inference(data))
       .catch((error) => {
         console.error('[OAIEngine] Failed to run inference:', error)
+        events.emit(MessageEvent.OnMessageResponse, {
+          ...data,
+          status: 'error',
+          error: String(error?.message ?? error),
+        } as any)
       })
   }
 

@@ -119,7 +119,7 @@ const SENSITIVE_PATHS = [
   'C:\\Windows\\System32', 'C:\\Windows\\System',
 ]
 
-const validatePath = (path: string): void => {
+const validatePath = (path: string): string => {
   if (typeof path !== 'string') {
     throw new Error(`Path must be a string, got ${typeof path}`)
   }
@@ -145,6 +145,8 @@ const validatePath = (path: string): void => {
       throw new Error(`Access denied: ${path}`)
     }
   }
+
+  return normalizedPath
 }
 
 /**
@@ -154,154 +156,100 @@ const validatePath = (path: string): void => {
  * automatically makes it available to consumers (no separate export list needed).
  */
 export const fs = {
-  /**
-   * Writes data to a file at the specified path.
-   * Historical note: keeps a Sync suffix for API compatibility,
-   * but still returns a Promise because the desktop bridge is asynchronous.
-   */
   writeFileSync(path: string, data: string): Promise<void> {
-    validatePath(path)
+    const safePath = validatePath(path)
     return validateBridgeResult(
-      getCoreApi().writeFileSync({ args: [path, data] }),
+      getCoreApi().writeFileSync({ args: [safePath, data] }),
       'writeFileSync',
       expectVoid
     )
   },
 
-  /**
-   * Writes blob data to a file at the specified path.
-   * @param path - The path to file.
-   * @param data - The blob data.
-   */
   writeBlob(path: string, data: string): Promise<void> {
-    validatePath(path)
-    return validateBridgeResult(getCoreApi().writeBlob(path, data), 'writeBlob', expectVoid)
+    const safePath = validatePath(path)
+    return validateBridgeResult(getCoreApi().writeBlob(safePath, data), 'writeBlob', expectVoid)
   },
 
-  /**
-   * Reads the contents of a file at the specified path.
-   * Historical note: keeps a Sync suffix for API compatibility,
-   * but still returns a Promise because the desktop bridge is asynchronous.
-   */
   readFileSync(path: string): Promise<string> {
-    validatePath(path)
+    const safePath = validatePath(path)
     return validateBridgeResult(
-      getCoreApi().readFileSync({ args: [path] }),
+      getCoreApi().readFileSync({ args: [safePath] }),
       'readFileSync',
       expectString
     )
   },
 
-  /**
-   * Check whether the file exists.
-   * Historical note: keeps a Sync suffix for API compatibility,
-   * but still returns a Promise because the desktop bridge is asynchronous.
-   */
   existsSync(path: string): Promise<boolean> {
-    validatePath(path)
+    const safePath = validatePath(path)
     return validateBridgeResult(
-      getCoreApi().existsSync({ args: [path] }),
+      getCoreApi().existsSync({ args: [safePath] }),
       'existsSync',
       expectBoolean
     )
   },
 
-  /**
-   * List the directory files.
-   * Historical note: keeps a Sync suffix for API compatibility,
-   * but still returns a Promise because the desktop bridge is asynchronous.
-   */
   readdirSync(path: string): Promise<string[]> {
-    validatePath(path)
+    const safePath = validatePath(path)
     return validateBridgeResult(
-      getCoreApi().readdirSync({ args: [path] }),
+      getCoreApi().readdirSync({ args: [safePath] }),
       'readdirSync',
       expectStringArray
     )
   },
 
-  /**
-   * Creates a directory at the specified path.
-   */
   mkdir(path: string): Promise<void> {
-    validatePath(path)
-    return validateBridgeResult(getCoreApi().mkdir({ args: [path] }), 'mkdir', expectVoid)
+    const safePath = validatePath(path)
+    return validateBridgeResult(getCoreApi().mkdir({ args: [safePath] }), 'mkdir', expectVoid)
   },
 
-  /**
-   * Removes a directory at the specified path.
-   */
   rm(path: string): Promise<void> {
-    validatePath(path)
-    return validateBridgeResult(getCoreApi().rm({ args: [path] }), 'rm', expectVoid)
+    const safePath = validatePath(path)
+    return validateBridgeResult(getCoreApi().rm({ args: [safePath] }), 'rm', expectVoid)
   },
 
-  /**
-   * Moves a file from the source path to the destination path.
-   */
   mv(from: string, to: string): Promise<void> {
-    validatePath(from)
-    validatePath(to)
-    return validateBridgeResult(getCoreApi().mv({ args: [from, to] }), 'mv', expectVoid)
+    const safeFrom = validatePath(from)
+    const safeTo = validatePath(to)
+    return validateBridgeResult(getCoreApi().mv({ args: [safeFrom, safeTo] }), 'mv', expectVoid)
   },
 
-  /**
-   * Deletes a file from the local file system.
-   * @param path - The path of the file to delete.
-   */
   unlinkSync(path: string): Promise<void> {
-    validatePath(path)
+    const safePath = validatePath(path)
     return validateBridgeResult(
-      getCoreApi().unlinkSync({ args: [path] }),
+      getCoreApi().unlinkSync({ args: [safePath] }),
       'unlinkSync',
       expectVoid
     )
   },
 
-  /**
-   * Appends data to a file at the specified path.
-   */
   appendFileSync(path: string, data: string): Promise<void> {
-    validatePath(path)
+    const safePath = validatePath(path)
     return validateBridgeResult(
-      getCoreApi().appendFileSync({ args: [path, data] }),
+      getCoreApi().appendFileSync({ args: [safePath, data] }),
       'appendFileSync',
       expectVoid
     )
   },
 
-  /**
-   * Copies a file from the source path to the destination path.
-   */
   copyFile(src: string, dest: string): Promise<void> {
-    validatePath(src)
-    validatePath(dest)
-    return validateBridgeResult(getCoreApi().copyFile(src, dest), 'copyFile', expectVoid)
+    const safeSrc = validatePath(src)
+    const safeDest = validatePath(dest)
+    return validateBridgeResult(getCoreApi().copyFile(safeSrc, safeDest), 'copyFile', expectVoid)
   },
 
-  /**
-   * Gets the list of gguf files in a directory.
-   *
-   * @param paths - The paths to search for gguf files.
-   */
   getGgufFiles(paths: string[]): Promise<{ gguf: string[]; nonGguf: string[] }> {
-    paths.forEach((path) => validatePath(path))
+    const safePaths = paths.map((p) => validatePath(p))
     return validateBridgeResult(
-      getCoreApi().getGgufFiles(paths),
+      getCoreApi().getGgufFiles(safePaths),
       'getGgufFiles',
       expectGgufFilesResult
     )
   },
 
-  /**
-   * Gets the file's stats.
-   *
-   * @param path - The path to the file.
-   */
   fileStat(path: string): Promise<FileStat | undefined> {
-    validatePath(path)
+    const safePath = validatePath(path)
     return validateBridgeResult(
-      getCoreApi().fileStat({ args: path }),
+      getCoreApi().fileStat({ args: safePath }),
       'fileStat',
       expectFileStat
     )

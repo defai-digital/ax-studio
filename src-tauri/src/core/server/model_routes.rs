@@ -210,6 +210,17 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
         )
     })?;
 
+    const MAX_BODY_SIZE: usize = 10 * 1024 * 1024;
+    if body_bytes.len() > MAX_BODY_SIZE {
+        return Err(error_response(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            &format!("Request body exceeds {} MB limit", MAX_BODY_SIZE / 1024 / 1024),
+            host_header,
+            origin_header,
+            config,
+        ));
+    }
+
     let model_id = extract_model_id(&body_bytes).map_err(|message| {
         if is_anthropic_messages {
             log::warn!("POST body for /messages rejected: {message}");

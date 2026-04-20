@@ -14,16 +14,30 @@ pub struct McpLockFile {
     pub hostname: String,
 }
 
-fn get_lock_file_path<R: Runtime>(app: &AppHandle<R>, port: u16) -> Result<PathBuf, String> {
+fn get_lock_file_path<R: Runtime>(app: &AppHandle<R>, port: u16, server_name: Option<&str>) -> Result<PathBuf, String> {
     let app_data_dir = app
         .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {e}"))?;
-    Ok(app_data_dir.join(format!("mcp_lock_{}.json", port)))
+    let file_name = match server_name {
+        Some(name) => {
+            let safe_name: String = name
+                .chars()
+                .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
+                .collect();
+            if safe_name.is_empty() {
+                format!("mcp_lock_{}.json", port)
+            } else {
+                format!("mcp_lock_{}_{}.json", port, safe_name)
+            }
+        }
+        None => format!("mcp_lock_{}.json", port),
+    };
+    Ok(app_data_dir.join(file_name))
 }
 
 pub fn read_lock_file<R: Runtime>(app: &AppHandle<R>, port: u16) -> Option<McpLockFile> {
-    let lock_path = get_lock_file_path(app, port).ok()?;
+    let lock_path = get_lock_file_path(app, port, None).ok()?;
 
     if !lock_path.exists() {
         return None;
@@ -33,8 +47,8 @@ pub fn read_lock_file<R: Runtime>(app: &AppHandle<R>, port: u16) -> Option<McpLo
     serde_json::from_str(&lock_json).ok()
 }
 
-pub fn delete_lock_file<R: Runtime>(app: &AppHandle<R>, port: u16) -> Result<(), String> {
-    let lock_path = get_lock_file_path(app, port)?;
+pub fn delete_lock_file<R: Runtime>(app: &AppHandle<R>, port: u16, server_name: Option<&str>) -> Result<(), String> {
+    let lock_path = get_lock_file_path(app, port, server_name)?;
 
     if lock_path.exists() {
         fs::remove_file(&lock_path).map_err(|e| format!("Failed to delete lock file: {}", e))?;
@@ -106,7 +120,7 @@ pub async fn check_and_cleanup_stale_lock<R: Runtime>(
             port,
             lock.pid
         );
-        delete_lock_file(app, port)?;
+        delete_lock_file(app, port, None)?;
         return Ok(true);
     }
 

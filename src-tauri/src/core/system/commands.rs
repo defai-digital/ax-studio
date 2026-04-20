@@ -31,13 +31,15 @@ fn validate_open_path(path: &PathBuf) -> Result<PathBuf, String> {
 #[tauri::command]
 pub fn canonicalize_path(path: String) -> Result<String, String> {
     let path = PathBuf::from(path);
-    // Apply the same allow-list used by the file-explorer opener: only paths
-    // under the user's home directory or the system temp directory can be
-    // probed. Without this, the command doubled as a filesystem enumeration
-    // oracle (e.g. `/etc/passwd` canonicalizes → discloses absolute paths and
-    // home-dir usernames).
     let canonical = validate_open_path(&path)?;
-    Ok(canonical.to_string_lossy().to_string())
+    let display = canonical.to_string_lossy().to_string();
+    if let Some(home) = dirs::home_dir() {
+        let home_str = home.to_string_lossy().to_string();
+        if display.starts_with(&home_str) {
+            return Ok(display.replacen(&home_str, "~", 1));
+        }
+    }
+    Ok(display)
 }
 
 #[tauri::command]
