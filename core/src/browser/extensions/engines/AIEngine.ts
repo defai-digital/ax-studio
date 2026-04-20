@@ -118,6 +118,26 @@ export interface chat_template_kdict {
   enable_thinking: boolean
 }
 
+export function sanitizeChatCompletionRequest(req: chatCompletionRequest): chatCompletionRequest {
+  const clamp = (val: number | null | undefined, min: number, max: number): number | null | undefined => {
+    if (val == null || !Number.isFinite(val)) return val
+    return Math.max(min, Math.min(max, val))
+  }
+
+  return {
+    ...req,
+    temperature: clamp(req.temperature, 0, 2),
+    top_p: clamp(req.top_p, 0, 1),
+    min_p: clamp(req.min_p, 0, 1),
+    typical_p: clamp(req.typical_p, 0, 1),
+    top_k: req.top_k != null && Number.isFinite(req.top_k) ? Math.max(1, Math.round(req.top_k)) : req.top_k,
+    n_predict: req.n_predict != null && Number.isFinite(req.n_predict) ? Math.max(1, Math.round(req.n_predict)) : req.n_predict,
+    repeat_penalty: clamp(req.repeat_penalty, 0, 10),
+    presence_penalty: clamp(req.presence_penalty, -2, 2),
+    frequency_penalty: clamp(req.frequency_penalty, -2, 2),
+  }
+}
+
 /**
  * Streaming delta variant of `ToolCall`. Chunks deliver tool calls
  * incrementally (`function.arguments` is streamed token-by-token), so

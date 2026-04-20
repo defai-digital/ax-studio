@@ -113,6 +113,12 @@ const decodePathRecursively = (path: string): string => {
  * @param path - The path to validate
  * @throws Error if the path contains traversal attempts or invalid characters
  */
+const SENSITIVE_PATHS = [
+  '/etc/passwd', '/etc/shadow', '/etc/sudoers',
+  '/private/etc', '/System', '/Library/Preferences',
+  'C:\\Windows\\System32', 'C:\\Windows\\System',
+]
+
 const validatePath = (path: string): void => {
   if (typeof path !== 'string') {
     throw new Error(`Path must be a string, got ${typeof path}`)
@@ -125,18 +131,20 @@ const validatePath = (path: string): void => {
     .map((segment) => segment.trim())
     .filter((segment) => segment.length > 0 && segment !== '.')
 
-  // Check for path traversal attempts via directory navigation segments.
   if (normalizedSegments.includes('..')) {
     throw new Error(`Path traversal not allowed: ${path}`)
   }
 
-  // Additional validation: no null bytes, control characters
   if (normalizedPath.includes('\0') || /[\x00-\x1F\x7F-\x9F]/.test(normalizedPath)) {
     throw new Error(`Invalid characters in path: ${path}`)
   }
 
-  // Allow absolute paths - the Tauri backend should handle sandboxing
-  // Only reject obvious traversal attempts and invalid characters
+  const lower = normalizedPath.toLowerCase()
+  for (const sensitive of SENSITIVE_PATHS) {
+    if (lower.startsWith(sensitive.toLowerCase())) {
+      throw new Error(`Access denied: ${path}`)
+    }
+  }
 }
 
 /**

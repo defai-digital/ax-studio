@@ -51,6 +51,10 @@ export function resolveToolsForAgent(
     return allTools
   }
 
+  if (agent.tool_scope.tool_keys.length === 0) {
+    return allTools
+  }
+
   const matchToolKey = (scopeKey: string, toolName: string): boolean => {
     // scopeKey format: "server::tool" or just "tool"
     // toolName format: could be "server::tool" (qualified) or just "tool" (unqualified)

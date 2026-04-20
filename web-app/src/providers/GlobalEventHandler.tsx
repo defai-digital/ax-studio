@@ -214,7 +214,8 @@ export function GlobalEventHandler() {
 
     const onFileDownloadUpdate = (state: DownloadState) => {
       const downloadId = getDownloadId(state)
-      const percent = state.percent ?? (state.total ? (state.transferred ?? 0) / state.total : 0)
+      const rawPercent = state.percent ?? (state.total ? (state.transferred ?? 0) / state.total : 0)
+      const percent = Math.max(0, Math.min(100, rawPercent))
       const transferred = state.size?.transferred ?? state.transferred ?? 0
       const total = state.size?.total ?? state.total ?? 0
 

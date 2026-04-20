@@ -19,12 +19,11 @@ export abstract class RemoteOAIEngine extends OAIEngine {
    */
   override async headers(): Promise<HeadersInit> {
     const apiKey = this.apiKey?.getValue()
+    if (!apiKey) return {}
 
     return {
-      ...(apiKey && {
-        'Authorization': `Bearer ${apiKey}`,
-        'api-key': apiKey,
-      }),
+      'Authorization': `Bearer ${apiKey}`,
+      'api-key': apiKey,
     }
   }
 }

@@ -60,6 +60,9 @@ export abstract class OAIEngine extends AIEngine {
    * if they enter inference through another code path (retries, fallbacks).
    */
   protected resetInferenceController() {
+    if (this.controller && !this.controller.signal.aborted) {
+      this.controller.abort()
+    }
     this.controller = new AbortController()
     this.isCancelled = false
   }
