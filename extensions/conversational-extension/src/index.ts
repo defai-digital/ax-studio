@@ -23,7 +23,7 @@ export default class AxStudioConversationalExtension extends ConversationalExten
       return await fn()
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      throw new Error(`Conversational extension ${operation} failed: ${message}`)
+      throw new Error(`Conversational extension ${operation} failed: ${message}`, { cause: error })
     }
   }
 

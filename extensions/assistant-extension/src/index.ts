@@ -38,9 +38,9 @@ export default class AxStudioAssistantExtension extends AssistantExtension {
    * Called when the extension is loaded.
    */
   async onLoad() {
-    if (!(await fs.existsSync('file://assistants'))) {
+    try {
       await fs.mkdir('file://assistants')
-    }
+    } catch {}
 
     const assistants = await this.getAssistants()
     if (assistants.length === 0) {
@@ -92,6 +92,11 @@ export default class AxStudioAssistantExtension extends AssistantExtension {
 
   async createAssistant(assistant: Assistant): Promise<void> {
     // Validate assistant ID to prevent path traversal
+    if (assistant.id.includes('..')) {
+      throw new Error(
+        `Invalid assistant ID: "${assistant.id}". Path traversal sequences are not allowed.`
+      )
+    }
     if (!/^[a-zA-Z0-9\-_]+$/.test(assistant.id)) {
       throw new Error(
         `Invalid assistant ID: "${assistant.id}". Use only alphanumeric, hyphens, underscores.`
@@ -103,14 +108,19 @@ export default class AxStudioAssistantExtension extends AssistantExtension {
       'assistant.json',
     ])
     const assistantFolder = await joinPath(['file://assistants', assistant.id])
-    if (!(await fs.existsSync(assistantFolder))) {
+    try {
       await fs.mkdir(assistantFolder)
-    }
+    } catch {}
     await fs.writeFileSync(assistantPath, JSON.stringify(assistant, null, 2))
   }
 
   async deleteAssistant(assistant: Assistant): Promise<void> {
     // Validate assistant ID to prevent path traversal
+    if (assistant.id.includes('..')) {
+      throw new Error(
+        `Invalid assistant ID: "${assistant.id}". Path traversal sequences are not allowed.`
+      )
+    }
     if (!/^[a-zA-Z0-9\-_]+$/.test(assistant.id)) {
       throw new Error(
         `Invalid assistant ID: "${assistant.id}". Use only alphanumeric, hyphens, underscores.`

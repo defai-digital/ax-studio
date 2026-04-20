@@ -146,7 +146,7 @@ export const useTokensCount = (
       return looksLikeHostedModel ? 8192 : 4096
     }
 
-    return undefined
+    return 8192
   }, [selectedModel, providers])
 
   const runTokenCalculation = useCallback(async () => {
@@ -195,10 +195,23 @@ export const useTokensCount = (
 
         tokenCount = estimateTokensFromText(messageText)
       } else {
-        // For local models, use the backend service
         tokenCount = await serviceHub
           .models()
           .getTokensCount(selectedModel.id, messages)
+        if (tokenCount === 0 && messages.length > 0) {
+          const messageText = messages
+            .map(msg => {
+              let text = ''
+              if (msg.content) {
+                for (const item of msg.content) {
+                  text += item.text?.value || ''
+                }
+              }
+              return text
+            })
+            .join(' ')
+          tokenCount = estimateTokensFromText(messageText)
+        }
       }
 
       if (requestId !== requestIdRef.current) return

@@ -148,6 +148,9 @@ const toStringSetting = (value: SettingValue, defaultValue = ''): string =>
   value == null || value === '' ? defaultValue : String(value)
 
 async function computeFileSha256Browser(filePath: string): Promise<string> {
+  if (!filePath.startsWith('https://')) {
+    throw new Error('Only HTTPS URLs are allowed for SHA256 validation')
+  }
   if (typeof crypto === 'undefined' || !crypto.subtle) {
     throw new Error('Web Crypto API unavailable')
   }
@@ -218,6 +221,9 @@ const ALLOWED_LOAD_OVERRIDE_KEYS = new Set<keyof LlamacppConfig>([
 const DEFAULT_LOAD_TIMEOUT_SECONDS = 600
 const AX_SERVING_PORT_CHECK_TIMEOUT_MS = 3_000
 const AX_SERVING_HEALTH_CHECK_TIMEOUT_MS = 5_000
+const AX_SERVING_UNLOAD_TIMEOUT_MS = 10_000
+const DEFAULT_UBATCH_SIZE = 512
+const AUTO_GPU_LAYERS_SENTINEL = 100
 
 // ─── Main Extension Class ─────────────────────────────────────────────────────
 
@@ -428,7 +434,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         cfg.n_predict = toNumberSetting(settingValue, -1)
         break
       case 'ubatch_size':
-        cfg.ubatch_size = toNumberSetting(settingValue, 512)
+        cfg.ubatch_size = toNumberSetting(settingValue, DEFAULT_UBATCH_SIZE)
         break
       case 'device':
         cfg.device = toStringSetting(settingValue)
@@ -1055,7 +1061,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       loadBody.mmproj_path = mmprojPath
     }
     const nGpuLayers = Number(this.config.n_gpu_layers)
-    if (nGpuLayers >= 0 && nGpuLayers !== 100) {
+    if (nGpuLayers >= 0 && nGpuLayers !== AUTO_GPU_LAYERS_SENTINEL) {
       loadBody.n_gpu_layers = nGpuLayers
     }
     const ctxSize = Number(this.config.ctx_size)
@@ -1488,7 +1494,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
           const encodedId = encodeURIComponent(sessionId)
           const res = await fetch(
             `http://127.0.0.1:${this.axServingPort}/v1/models/${encodedId}`,
-            { method: 'DELETE', signal: AbortSignal.timeout(10000) }
+            { method: 'DELETE', signal: AbortSignal.timeout(AX_SERVING_UNLOAD_TIMEOUT_MS) }
           )
           if (!res.ok && res.status !== 404) {
             const errText = await res.text()
@@ -1780,7 +1786,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
     // ── Download model file if URL provided ──
     const modelPath = opts.modelPath
-    if (modelPath.startsWith('http://') || modelPath.startsWith('https://')) {
+    if (modelPath.startsWith('https://')) {
       if (!downloadExt) {
         const error = new Error('Download extension not available')
         console.error('[llamacpp] Download extension unavailable:', error)
@@ -2113,7 +2119,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     const session = await this._requireSession(modelId)
     await this._healthCheck(session.port, session.pid, modelId)
 
-    const ubatchSize = Number(this.config.ubatch_size) || 512
+    const ubatchSize = Number(this.config.ubatch_size) || DEFAULT_UBATCH_SIZE
     const batches = buildEmbedBatches(inputs, ubatchSize)
     const batchResults = []
 
