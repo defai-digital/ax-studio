@@ -47,7 +47,6 @@ export const Route = createFileRoute('/hub/$modelId')({
 function HubModelDetailContent() {
   const { t } = useTranslation()
   const { modelId: rawModelId } = useParams({ from: Route.id })
-  const modelId = sanitizeModelId(rawModelId)
   const navigate = useNavigate()
   const { huggingfaceToken } = useGeneralSetting()
   const { sources, fetchSources } = useModelSources()
@@ -83,14 +82,14 @@ function HubModelDetailContent() {
   const fetchRepo = useCallback(async (signal?: AbortSignal) => {
     const repoInfo = await serviceHub
       .models()
-      .fetchHuggingFaceRepo(search.repo || modelId, huggingfaceToken, signal)
+      .fetchHuggingFaceRepo(search.repo || rawModelId, huggingfaceToken, signal)
     if (repoInfo) {
       const repoDetail = serviceHub
         .models()
         .convertHfRepoToCatalogModel(repoInfo)
       setRepoData(repoDetail || undefined)
     }
-  }, [serviceHub, modelId, search, huggingfaceToken])
+  }, [serviceHub, rawModelId, search, huggingfaceToken])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -102,11 +101,11 @@ function HubModelDetailContent() {
     return () => {
       controller.abort()
     }
-  }, [modelId, fetchRepo])
+  }, [rawModelId, fetchRepo])
   // Find the model data from sources
   const modelData = useMemo(() => {
-    return sources.find((model) => model.model_name === modelId) ?? repoData
-  }, [sources, modelId, repoData])
+    return sources.find((model) => model.model_name === rawModelId) ?? repoData
+  }, [sources, rawModelId, repoData])
 
   // `readmeUrl` must be derived AFTER `modelData` — reading it before the
   // const declaration previously hit the Temporal Dead Zone and threw

@@ -141,17 +141,15 @@ describe('Hub Model Detail Route', () => {
     vi.clearAllMocks()
   })
 
-  it('should sanitize the modelId parameter', () => {
-    const mockModelId = 'user/model<script>alert("xss")</script>'
+  it('should use raw modelId parameter for catalog lookup', () => {
+    const mockModelId = 'user/model.v2'
     ;(useParams as any).mockReturnValue({ modelId: mockModelId })
 
     const Component = Route.component as React.ComponentType
     render(<Component />)
 
-    expect(sanitizeModelId).toHaveBeenCalledWith(mockModelId)
-    expect(sanitizeModelId).toHaveReturnedWith(
-      'user/modelscriptalertxss/script'
-    )
+    expect(sanitizeModelId).not.toHaveBeenCalledWith(mockModelId)
+    expect(screen.getByText('Model not found')).toBeInTheDocument()
   })
 
   it('should render "Model not found" when no model data', () => {
