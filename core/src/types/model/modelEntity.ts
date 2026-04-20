@@ -93,6 +93,7 @@ export type Model = {
 export type ModelMetadata = {
   author: string
   tags: string[]
+  /** Model size in bytes. */
   size: number
   cover?: string
   // These settings to preserve model settings across threads

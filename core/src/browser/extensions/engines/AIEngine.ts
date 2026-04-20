@@ -205,6 +205,12 @@ export interface chatCompletion {
 }
 // --- End OpenAI types ---
 
+export type ChatResult = chatCompletion | AsyncIterable<chatCompletionChunk>
+
+export function isStreamingResult(result: ChatResult): result is AsyncIterable<chatCompletionChunk> {
+  return result !== null && typeof result === 'object' && Symbol.asyncIterator in result
+}
+
 // Shared model metadata
 export interface modelInfo {
   id: string // e.g. "qwen3-4B" or "org/model/quant"

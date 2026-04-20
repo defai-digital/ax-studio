@@ -1,4 +1,4 @@
-import { AIEngine } from './AIEngine'
+import { AIEngine, chatCompletionRequest, chatCompletionChunk } from './AIEngine'
 import {
   InferenceEvent,
   MessageEvent,
@@ -23,10 +23,10 @@ export abstract class OAIEngine extends AIEngine {
   loadedModel: Model | undefined
 
   // Transform the payload
-  transformPayload?: Function
+  transformPayload?: (payload: chatCompletionRequest) => chatCompletionRequest
 
   // Transform the response
-  transformResponse?: Function
+  transformResponse?: (response: chatCompletionChunk) => chatCompletionChunk
 
   // Idempotency guard — see `onLoad`/`onUnload` below. Without this,
   // re-entering `onLoad()` (extension manager re-initialization, HMR)

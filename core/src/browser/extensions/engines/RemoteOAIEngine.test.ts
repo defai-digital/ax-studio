@@ -39,4 +39,30 @@ describe('RemoteOAIEngine', () => {
 
     expect(headers).toEqual({})
   })
+
+  describe('headers()', () => {
+    test('returns both Authorization and api-key when apiKey is set', async () => {
+      engine.apiKey = SecretString.from('test-key')
+      const headers = await engine.headers()
+
+      expect(headers).toEqual({
+        'Authorization': 'Bearer test-key',
+        'api-key': 'test-key',
+      })
+    })
+
+    test('returns empty object when no apiKey set', async () => {
+      engine.apiKey = undefined
+      const headers = await engine.headers()
+
+      expect(headers).toEqual({})
+    })
+
+    test('returns empty object when apiKey has empty value', async () => {
+      engine.apiKey = SecretString.from('')
+      const headers = await engine.headers()
+
+      expect(headers).toEqual({})
+    })
+  })
 })

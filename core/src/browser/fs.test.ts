@@ -167,4 +167,48 @@ describe('fs module', () => {
       )
     })
   })
+
+  describe('decodePathRecursively edge cases', () => {
+    it('should reject double-encoded traversal (%252e%252e%252f)', () => {
+      // '%252e' → decodeURI → '%2e' → decodeURI → '.' (dot)
+      // Two levels of encoding fully decode within the 32-iteration cap.
+      expect(() => fs.readFileSync('%252e%252e%252fsecret/file')).toThrow(
+        'Path traversal not allowed: %252e%252e%252fsecret/file'
+      )
+    })
+
+    it('should reject triple-encoded traversal (%25252e%25252e%25252f)', () => {
+      // Three levels of encoding still fully decode to '../' within the cap.
+      expect(() => fs.readFileSync('%25252e%25252e%25252fsecret/file')).toThrow(
+        'Path traversal not allowed: %25252e%25252e%25252fsecret/file'
+      )
+    })
+
+    it('should reject NFKC-normalized fullwidth traversal characters', () => {
+      // Fullwidth dot (U+FF0E) and fullwidth solidus (U+FF0F) normalize to
+      // '.' and '/' via NFKC. The string '..／' → '../'.
+      expect(() =>
+        fs.readFileSync('\uff0e\uff0e\uff0fsecret/file')
+      ).toThrow('Path traversal not allowed')
+    })
+
+    it('should handle 35 levels of encoding without crashing', () => {
+      // Build a path with 35 levels of URL-encoding starting from %2e%2e%2f.
+      // The 32-iteration cap cannot fully decode it, so the function falls
+      // back to the last stable value. The partially-decoded result no longer
+      // contains raw '..' segments, so validation does not throw — the Tauri
+      // backend provides the real sandboxing layer.
+      let deeplyEncoded = '%2e%2e%2f'
+      for (let i = 0; i < 35; i++) deeplyEncoded = encodeURIComponent(deeplyEncoded)
+
+      // Should NOT throw — the path is handled gracefully without error
+      expect(() => fs.writeFileSync(deeplyEncoded, 'data')).not.toThrow()
+    })
+
+    it('should reject paths with URL-encoded null bytes (%2500)', () => {
+      // '%2500' → decodeURI → '%00' → decodeURI → '\0' (null byte).
+      // The null-byte check in validatePath catches this.
+      expect(() => fs.writeFileSync('file%2500name', 'data')).toThrow('Invalid characters in path')
+    })
+  })
 })

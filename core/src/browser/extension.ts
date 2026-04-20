@@ -53,6 +53,7 @@ function buildDefaultControllerProps(
 export abstract class BaseExtension implements ExtensionType {
   protected settingFolderName = 'settings'
   protected settingFileName = 'settings.json'
+  private settingsCache: SettingComponentProps[] | null = null
 
   /** @type {string} Name of the extension. */
   name: string
@@ -232,6 +233,7 @@ export abstract class BaseExtension implements ExtensionType {
     if (!this.writeStorageItem(this.name, JSON.stringify(normalizedSettings))) {
       throw new Error(`Failed to register settings for "${this.name}"`)
     }
+    this.settingsCache = normalizedSettings
   }
 
   /**
@@ -285,7 +287,9 @@ export abstract class BaseExtension implements ExtensionType {
    */
   async getSettings(): Promise<SettingComponentProps[]> {
     if (!this.name) return []
-    return this.parseStoredSettings(this.readStorageItem(this.name), this.name)
+    if (this.settingsCache) return this.settingsCache
+    this.settingsCache = this.parseStoredSettings(this.readStorageItem(this.name), this.name)
+    return this.settingsCache
   }
 
   /**
@@ -298,15 +302,18 @@ export abstract class BaseExtension implements ExtensionType {
 
     const settings = await this.getSettings()
 
+    const updatesByKey = new Map<string, Partial<SettingComponentProps>>()
+    for (const cp of componentProps) {
+      if (cp.key) updatesByKey.set(cp.key, cp)
+    }
+
     let updatedSettings = settings.map((setting) => {
-      const updatedSetting = componentProps.find(
-        (componentProp) => componentProp.key === setting.key
-      )
+      const updatedSetting = updatesByKey.get(setting.key)
       const nextSetting = {
         ...setting,
         controllerProps: { ...setting.controllerProps },
       }
-      if (updatedSetting && updatedSetting.controllerProps) {
+      if (updatedSetting?.controllerProps) {
         nextSetting.controllerProps.value = updatedSetting.controllerProps.value
       }
       return nextSetting
@@ -331,6 +338,7 @@ export abstract class BaseExtension implements ExtensionType {
     if (!this.writeStorageItem(this.name, JSON.stringify(updatedSettings))) {
       throw new Error(`Failed to update settings for "${this.name}"`)
     }
+    this.settingsCache = updatedSettings
 
     updatedSettings.forEach((setting) => {
       this.onSettingUpdate<typeof setting.controllerProps.value>(

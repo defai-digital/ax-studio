@@ -26,6 +26,8 @@ const getCoreApi = () => {
   return api
 }
 
+export { getCoreApi }
+
 /**
  * Gets the application data folder path.
  *

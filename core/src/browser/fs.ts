@@ -1,12 +1,5 @@
 import { FileStat } from '../types'
-
-const getCoreApi = () => {
-  const api = globalThis.core?.api
-  if (!api) {
-    throw new Error('Core API bridge is not available')
-  }
-  return api
-}
+import { getCoreApi } from './core'
 
 const invalidBridgeResponse = (
   methodName: string,
@@ -95,14 +88,19 @@ const decodePathRecursively = (path: string): string => {
   // deep URL-encoding chain to slip past the `..` segment detection
   // below; the Tauri backend still sandboxes, but this keeps the
   // defense-in-depth intact.
-  for (let i = 0; i < 16; i++) {
+  let lastStable = decoded
+  for (let i = 0; i < 32; i++) {
     try {
       const next = decodeURIComponent(decoded)
       if (next === decoded) break
+      lastStable = decoded
       decoded = next
     } catch {
       break
     }
+  }
+  if (decoded !== lastStable && decodeURIComponent(decoded) !== decoded) {
+    decoded = lastStable
   }
 
   return decoded.normalize('NFKC')

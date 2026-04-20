@@ -144,3 +144,46 @@ describe('validateMessageContent', () => {
     expect(validateMessageContent([])).toBe(false);
   });
 });
+
+describe('isValidContentItem edge cases', () => {
+  it('should return false for null input', () => {
+    expect(isValidContentItem(null)).toBe(false);
+  });
+
+  it('should return false for undefined input', () => {
+    expect(isValidContentItem(undefined)).toBe(false);
+  });
+
+  it('should return false for number input', () => {
+    expect(isValidContentItem(42)).toBe(false);
+  });
+
+  it('should return false for string input', () => {
+    expect(isValidContentItem('not an object')).toBe(false);
+  });
+
+  it('should return true for valid item with extra properties', () => {
+    const item = {
+      type: ChatCompletionMessageContentType.Text,
+      text: 'Hello',
+      extra: 'should be ignored',
+      anotherExtra: 123,
+    };
+
+    expect(isValidContentItem(item)).toBe(true);
+  });
+});
+
+describe('validateMessageContent edge cases', () => {
+  it('should return false for null (not string or array)', () => {
+    expect(validateMessageContent(null as unknown as ChatCompletionMessageContent)).toBe(false);
+  });
+
+  it('should return true for array with a single valid content item', () => {
+    const singleItem: ChatCompletionMessageContent = [
+      { type: ChatCompletionMessageContentType.Text, text: 'single item' },
+    ];
+
+    expect(validateMessageContent(singleItem)).toBe(true);
+  });
+});
