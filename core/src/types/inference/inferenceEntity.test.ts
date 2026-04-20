@@ -141,6 +141,6 @@ describe('validateMessageContent', () => {
   });
 
   it('should reject empty array', () => {
-    expect(validateMessageContent([])).toBe(true); // empty array is valid
+    expect(validateMessageContent([])).toBe(false);
   });
 });

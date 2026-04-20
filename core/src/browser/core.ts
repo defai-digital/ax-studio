@@ -4,14 +4,15 @@
  * @throws Error if the URL has an unsafe protocol
  */
 export const validateUrlProtocol = (url: string): void => {
+  const trimmed = url.trim()
   try {
-    const parsedUrl = new URL(url)
+    const parsedUrl = new URL(trimmed)
     if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
       throw new Error(`Unsafe URL protocol: ${parsedUrl.protocol}. Only http and https are allowed.`)
     }
   } catch (error) {
     if (error instanceof TypeError) {
-      throw new Error(`Invalid URL format: ${url}`)
+      throw new Error(`Invalid URL format: ${trimmed}`)
     }
     throw error
   }

@@ -1,5 +1,3 @@
-import { ContentType, ContentValue } from '../message'
-
 export enum ChatCompletionRole {
   System = 'system',
   Assistant = 'assistant',
@@ -30,20 +28,21 @@ export type ChatCompletionMessageContent =
   | string
   | ChatCompletionMessageContentItem[]
 
-export function isValidContentItem(item: any): item is ChatCompletionMessageContentItem {
+export function isValidContentItem(item: unknown): item is ChatCompletionMessageContentItem {
   if (!item || typeof item !== 'object') return false
 
-  switch (item.type) {
+  const obj = item as Record<string, unknown>
+  switch (obj.type) {
     case ChatCompletionMessageContentType.Text:
-      return typeof item.text === 'string'
+      return typeof obj.text === 'string'
     case ChatCompletionMessageContentType.Image:
-      return item.image_url &&
-             typeof item.image_url === 'object' &&
-             typeof item.image_url.url === 'string'
+      return !!obj.image_url &&
+             typeof obj.image_url === 'object' &&
+             typeof (obj.image_url as Record<string, unknown>).url === 'string'
     case ChatCompletionMessageContentType.Doc:
-      return item.doc_url &&
-             typeof item.doc_url === 'object' &&
-             typeof item.doc_url.url === 'string'
+      return !!obj.doc_url &&
+             typeof obj.doc_url === 'object' &&
+             typeof (obj.doc_url as Record<string, unknown>).url === 'string'
     default:
       return false
   }
@@ -55,7 +54,7 @@ export function validateMessageContent(content: ChatCompletionMessageContent): b
   }
 
   if (Array.isArray(content)) {
-    return content.every(isValidContentItem)
+    return content.length > 0 && content.every(isValidContentItem)
   }
 
   return false

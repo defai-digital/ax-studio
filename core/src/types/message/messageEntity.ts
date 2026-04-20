@@ -175,8 +175,8 @@ export type ThreadContent = {
   // For tool call content
   tool_call_id?: string
   tool_name?: string
-  input?: unknown
-  output?: unknown
+  input?: Record<string, unknown>
+  output?: string | Record<string, unknown>
 }
 
 export interface Attachment {

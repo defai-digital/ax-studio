@@ -10,7 +10,7 @@ export interface MCPTool {
 }
 
 export interface MCPToolCallResult {
-  error: string
+  error?: string
   content: Array<{
     type?: string
     text: string

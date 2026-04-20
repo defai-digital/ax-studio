@@ -22,10 +22,14 @@ export class ModelManager {
    */
   register<T extends Model>(model: T) {
     if (this.models.has(model.id)) {
-      this.models.set(model.id, {
-        ...this.models.get(model.id),
-        ...model,
-      })
+      const existing = this.models.get(model.id)!
+      const merged = { ...existing }
+      for (const [key, value] of Object.entries(model)) {
+        if (value !== undefined) {
+          (merged as Record<string, unknown>)[key] = value
+        }
+      }
+      this.models.set(model.id, merged as Model)
     } else {
       this.models.set(model.id, model)
     }
