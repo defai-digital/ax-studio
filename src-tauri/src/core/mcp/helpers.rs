@@ -44,6 +44,38 @@ const DANGEROUS_ENV_KEYS: &[&str] = &[
 // imports keep working after the enum moved to its own module.
 pub use super::shutdown::ShutdownContext;
 
+/// Resolve a bare command name to its full canonical path using the system's
+/// default PATH (inherited from the app's own process environment).
+/// Returns `None` if the binary is not found on PATH.
+fn resolve_command_from_default_path(command: &str) -> Option<String> {
+    let default_path = env::var_os("PATH").unwrap_or_default();
+    let separator = if cfg!(windows) { ';' } else { ':' };
+    for dir in default_path.to_string_lossy().split(separator) {
+        let candidate = std::path::Path::new(dir).join(command);
+        let with_ext = if cfg!(windows) {
+            let ext = candidate.with_extension("exe");
+            if ext.is_file() {
+                Some(ext)
+            } else if candidate.is_file() {
+                Some(candidate)
+            } else {
+                None
+            }
+        } else if candidate.is_file() {
+            Some(candidate)
+        } else {
+            None
+        };
+        if let Some(path) = with_ext {
+            if let Ok(canonical) = path.canonicalize() {
+                return Some(canonical.to_string_lossy().to_string());
+            }
+            return Some(path.to_string_lossy().to_string());
+        }
+    }
+    None
+}
+
 /// Runs MCP commands by reading configuration from a JSON file and initializing servers
 ///
 /// # Arguments
@@ -349,7 +381,20 @@ async fn schedule_mcp_start_task<R: Runtime>(
             }
         }
     } else {
-        let mut cmd = Command::new(config_params.command.clone());
+        // Resolve the command to its full canonical path from the system's
+        // default PATH *before* user-provided env vars (which may include a
+        // custom PATH) are applied.  This prevents an attacker-controlled
+        // PATH from redirecting a whitelisted binary name to a malicious
+        // executable.
+        let resolved_command = if config_params.command.contains('/')
+            || config_params.command.contains('\\')
+        {
+            config_params.command.clone()
+        } else {
+            resolve_command_from_default_path(&config_params.command)
+                .unwrap_or_else(|| config_params.command.clone())
+        };
+        let mut cmd = Command::new(resolved_command);
         let bun_x_path = if cfg!(windows) {
             bin_path.join("bun.exe")
         } else {

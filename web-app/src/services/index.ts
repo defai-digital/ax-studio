@@ -172,7 +172,6 @@ class PlatformServiceHub implements ServiceHub {
       console.log('Service hub initialized successfully')
     } catch (error) {
       console.error('Failed to initialize service hub:', error)
-      this.initialized = true
       throw error
     }
   }

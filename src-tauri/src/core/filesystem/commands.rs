@@ -404,6 +404,13 @@ pub fn decompress<R: Runtime>(
     };
     let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app.clone());
     let path_buf = ax_studio_utils::normalize_path(&app_data_folder.join(&path));
+    if !path_buf.starts_with(&app_data_folder) {
+        return Err(format!(
+            "Error: archive path {} is not under app_data_folder {}",
+            path_buf.to_string_lossy(),
+            app_data_folder.to_string_lossy(),
+        ));
+    }
 
     let output_dir_buf = ax_studio_utils::normalize_path(&app_data_folder.join(&output_dir));
     if !output_dir_buf.starts_with(&app_data_folder) {
