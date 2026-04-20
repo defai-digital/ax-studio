@@ -434,11 +434,16 @@ async fn schedule_mcp_start_task<R: Runtime>(
         // Expand ~ to the user's home directory in args (shells do this
         // automatically, but direct process spawning does not).
         let home = dirs::home_dir();
+        let dangerous_flags = ["-c", "-e", "--eval", "--command", "-i", "--interactive"];
         config_params
             .args
             .iter()
             .filter_map(Value::as_str)
             .for_each(|arg| {
+                if dangerous_flags.contains(&arg) {
+                    log::warn!("Blocking dangerous interpreter flag: {}", arg);
+                    return;
+                }
                 if arg.starts_with("~/") || arg == "~" {
                     if let Some(ref h) = home {
                         cmd.arg(h.join(&arg[2..]));

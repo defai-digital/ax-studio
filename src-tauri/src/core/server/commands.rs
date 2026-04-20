@@ -96,6 +96,7 @@ mod tests {
             mcp_server_pids: Arc::new(Mutex::new(HashMap::new())),
             provider_state: Arc::new(Mutex::new(ProviderState::default())),
             approved_save_paths: Arc::new(Mutex::new(HashSet::new())),
+            factory_reset_lock: Arc::new(Mutex::new(())),
         }
     }
 

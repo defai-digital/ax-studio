@@ -49,6 +49,7 @@ pub fn run() {
             mcp_server_pids: Arc::new(Mutex::new(HashMap::new())),
             provider_state: Arc::new(Mutex::new(crate::core::state::ProviderState::default())),
             approved_save_paths: Arc::new(Mutex::new(std::collections::HashSet::new())),
+            factory_reset_lock: Arc::new(Mutex::new(())),
         })
         .setup(|app| Ok(setup::app_setup(app)?))
         .build(tauri::generate_context!());

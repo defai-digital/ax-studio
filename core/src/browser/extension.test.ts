@@ -317,4 +317,48 @@ describe('BaseExtension', () => {
       }),
     ])
   })
+
+  describe('getSetting type coercion edge cases', () => {
+    it('should coerce stored number 0 to boolean false', async () => {
+      const settings = [{ key: 'flag', controllerProps: { value: 0 } }] as any[]
+      vi.spyOn(baseExtension, 'getSettings').mockResolvedValue(settings)
+      expect(await baseExtension.getSetting('flag', false)).toBe(false)
+    })
+
+    it('should coerce stored number 1 to boolean true', async () => {
+      const settings = [{ key: 'flag', controllerProps: { value: 1 } }] as any[]
+      vi.spyOn(baseExtension, 'getSettings').mockResolvedValue(settings)
+      expect(await baseExtension.getSetting('flag', false)).toBe(true)
+    })
+
+    it('should return default for null stored value', async () => {
+      const settings = [{ key: 'setting', controllerProps: { value: null } }] as any[]
+      vi.spyOn(baseExtension, 'getSettings').mockResolvedValue(settings)
+      expect(await baseExtension.getSetting('setting', 'default')).toBe('default')
+    })
+
+    it('should coerce stored string to number', async () => {
+      const settings = [{ key: 'port', controllerProps: { value: '8080' } }] as any[]
+      vi.spyOn(baseExtension, 'getSettings').mockResolvedValue(settings)
+      expect(await baseExtension.getSetting('port', 0)).toBe(8080)
+    })
+
+    it('should return default for non-finite stored number', async () => {
+      const settings = [{ key: 'val', controllerProps: { value: 'notanumber' } }] as any[]
+      vi.spyOn(baseExtension, 'getSettings').mockResolvedValue(settings)
+      expect(await baseExtension.getSetting('val', 42)).toBe(42)
+    })
+
+    it('should coerce stored boolean to string', async () => {
+      const settings = [{ key: 'name', controllerProps: { value: true } }] as any[]
+      vi.spyOn(baseExtension, 'getSettings').mockResolvedValue(settings)
+      expect(await baseExtension.getSetting('name', 'default')).toBe('true')
+    })
+
+    it('should return default array for non-array stored value', async () => {
+      const settings = [{ key: 'list', controllerProps: { value: 'notarray' } }] as any[]
+      vi.spyOn(baseExtension, 'getSettings').mockResolvedValue(settings)
+      expect(await baseExtension.getSetting('list', ['a', 'b'])).toEqual(['a', 'b'])
+    })
+  })
 })

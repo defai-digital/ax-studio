@@ -5,7 +5,41 @@
 use ax_studio_utils::{is_valid_host, remove_prefix};
 use hyper::{Body, Request, Response, StatusCode};
 use reqwest::Client;
+use std::collections::HashMap;
+use std::sync::Mutex;
+use std::time::Instant;
 use subtle::ConstantTimeEq;
+
+const MAX_AUTH_FAILURES: usize = 10;
+const AUTH_LOCKOUT_SECS: u64 = 60;
+
+static AUTH_FAILURES: std::sync::LazyLock<Mutex<HashMap<String, (usize, Instant)>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+
+fn is_rate_limited(client_id: &str) -> bool {
+    let mut map = AUTH_FAILURES.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((count, first_failure)) = map.get(client_id) {
+        if *count >= MAX_AUTH_FAILURES && first_failure.elapsed().as_secs() < AUTH_LOCKOUT_SECS {
+            return true;
+        }
+        if first_failure.elapsed().as_secs() >= AUTH_LOCKOUT_SECS {
+            map.remove(client_id);
+        }
+    }
+    false
+}
+
+fn record_auth_failure(client_id: &str) {
+    let mut map = AUTH_FAILURES.lock().unwrap_or_else(|e| e.into_inner());
+    let entry = map.entry(client_id.to_string()).or_insert((0, Instant::now()));
+    entry.0 += 1;
+    entry.1 = Instant::now();
+}
+
+fn clear_auth_failure(client_id: &str) {
+    let mut map = AUTH_FAILURES.lock().unwrap_or_else(|e| e.into_inner());
+    map.remove(client_id);
+}
 
 use super::security::{add_cors_headers_with_host_and_origin, trusted_cors_origin};
 use super::{gateway_routes, model_routes};
@@ -287,7 +321,23 @@ fn validate_request(
     }
 
     if !is_whitelisted_path && !config.proxy_api_key.is_empty() {
-        // Use constant-time comparison for token validation to prevent timing attacks
+        let client_id = if host_header.is_empty() { "unknown" } else { host_header };
+
+        if is_rate_limited(client_id) {
+            let mut error_response = Response::builder().status(StatusCode::TOO_MANY_REQUESTS);
+            error_response = add_cors_headers_with_host_and_origin(
+                error_response,
+                host_header,
+                origin_header,
+                &config.trusted_hosts,
+                config.cors_enabled,
+            );
+            return Some(finalize_response(
+                error_response,
+                Body::from("Too many failed authentication attempts. Try again later."),
+            ));
+        }
+
         let auth_valid = headers
             .get(hyper::header::AUTHORIZATION)
             .and_then(|v| v.to_str().ok())
@@ -307,6 +357,7 @@ fn validate_request(
             .unwrap_or(false);
 
         if !auth_valid && !api_key_valid {
+            record_auth_failure(client_id);
             let mut error_response = Response::builder().status(StatusCode::UNAUTHORIZED);
             error_response = add_cors_headers_with_host_and_origin(
                 error_response,
@@ -320,6 +371,7 @@ fn validate_request(
                 Body::from("Invalid or missing authorization token"),
             ));
         }
+        clear_auth_failure(client_id);
     } else if is_whitelisted_path {
         log::debug!("Bypassing authorization check for whitelisted path: {path}");
     } else {

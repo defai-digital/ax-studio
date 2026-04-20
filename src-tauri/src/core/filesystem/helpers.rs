@@ -11,6 +11,28 @@ pub fn resolve_path<R: Runtime>(
     // filesystem paths and shouldn't be subject to the path-traversal check
     // that follows; otherwise model downloads from remote URLs are blocked.
     if path.starts_with("http://") || path.starts_with("https://") {
+        let parsed = url::Url::parse(path).map_err(|e| format!("Invalid URL: {e}"))?;
+        if parsed.scheme() != "https" && parsed.scheme() != "http" {
+            return Err(format!(
+                "Only http/https URLs are allowed, got: {}",
+                parsed.scheme()
+            ));
+        }
+        match parsed.host() {
+            Some(url::Host::Ipv4(ip))
+                if ip.is_loopback() || ip.is_private() || ip.is_unspecified() =>
+            {
+                return Err(format!(
+                    "URLs pointing to internal networks are not allowed: {path}"
+                ));
+            }
+            Some(url::Host::Domain(d)) if d == "localhost" => {
+                return Err(
+                    "URLs pointing to localhost are not allowed in filesystem paths".to_string(),
+                );
+            }
+            _ => {}
+        }
         return Ok(PathBuf::from(path));
     }
 

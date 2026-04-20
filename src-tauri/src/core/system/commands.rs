@@ -65,21 +65,25 @@ pub fn factory_reset<R: Runtime>(
             active_servers.clear();
         }
 
-        use crate::core::mcp::lockfile::cleanup_own_locks;
-        if let Err(e) = cleanup_own_locks(&app_handle) {
-            log::warn!("Failed to cleanup lock files: {}", e);
-        }
-        if data_folder.exists() {
-            if let Err(e) = fs::remove_dir_all(&data_folder) {
-                let message = format!("Failed to remove data folder: {e}");
-                log::error!("{message}");
-                return Err(message);
-            }
-        }
+        {
+            let mut reset_guard = state.factory_reset_lock.lock().await;
+            let _ = reset_guard;
 
-        // Recreate the data folder
-        fs::create_dir_all(&data_folder)
-            .map_err(|e| format!("Failed to recreate data folder: {e}"))?;
+            use crate::core::mcp::lockfile::cleanup_own_locks;
+            if let Err(e) = cleanup_own_locks(&app_handle) {
+                log::warn!("Failed to cleanup lock files: {}", e);
+            }
+            if data_folder.exists() {
+                if let Err(e) = fs::remove_dir_all(&data_folder) {
+                    let message = format!("Failed to remove data folder: {e}");
+                    log::error!("{message}");
+                    return Err(message);
+                }
+            }
+
+            fs::create_dir_all(&data_folder)
+                .map_err(|e| format!("Failed to recreate data folder: {e}"))?;
+        }
 
         // Reset the configuration
         let mut default_config = AppConfiguration::default();

@@ -258,6 +258,7 @@ export abstract class BaseExtension implements ExtensionType {
     }
     if (typeof defaultValue === 'boolean') {
       if (typeof value === 'boolean') return value as T
+      if (typeof value === 'number') return (value !== 0) as T
       if (typeof value === 'string') return (value === 'true') as T
       return defaultValue
     }

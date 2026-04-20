@@ -28,6 +28,7 @@ fn test_app_state(mcp_servers: SharedMcpServers) -> AppState {
         mcp_server_pids: Arc::new(Mutex::new(HashMap::new())),
         provider_state: Arc::new(Mutex::new(ProviderState::default())),
         approved_save_paths: Arc::new(Mutex::new(HashSet::new())),
+        factory_reset_lock: Arc::new(Mutex::new(())),
     }
 }
 
