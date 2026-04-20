@@ -40,9 +40,26 @@ export function normalizeUrl(url: string): string {
  * Reset at the start of each research run so stale chains don't carry over.
  */
 let exaGatePromise = Promise.resolve()
+let exaGateResolve: (() => void) | null = null
 
 export function resetExaGate(): void {
+  exaGateResolve?.()
+  exaGateResolve = null
   exaGatePromise = Promise.resolve()
+}
+
+function awaitGate(): Promise<void> {
+  if (!exaGateResolve) {
+    const p = new Promise<void>((resolve) => { exaGateResolve = resolve })
+    exaGatePromise = exaGatePromise.then(() => p)
+  }
+  return exaGatePromise
+}
+
+function releaseGate(): void {
+  const resolve = exaGateResolve
+  exaGateResolve = null
+  resolve?.()
 }
 
 export async function exaSearch(
@@ -50,28 +67,23 @@ export async function exaSearch(
   numResults: number,
   signal?: AbortSignal,
 ): Promise<MCPToolCallResult> {
-  const result = exaGatePromise.then(async () => {
-    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-    try {
-      return await invoke<MCPToolCallResult>('call_tool', {
-        toolName: 'web_search_exa',
-        serverName: 'exa',
-        arguments: { query: question, numResults },
-      })
-    } catch (err) {
-      if (isExaRateLimitMessage(getErrorMessage(err))) {
-        throw new ExaRateLimitError(getErrorMessage(err))
-      }
-      throw err
+  await awaitGate()
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+  try {
+    return await invoke<MCPToolCallResult>('call_tool', {
+      toolName: 'web_search_exa',
+      serverName: 'exa',
+      arguments: { query: question, numResults },
+    })
+  } catch (err) {
+    if (isExaRateLimitMessage(getErrorMessage(err))) {
+      throw new ExaRateLimitError(getErrorMessage(err))
     }
-  })
-
-  exaGatePromise = result.then(
-    async () => { await new Promise((r) => setTimeout(r, 1500)) },
-    async () => { await new Promise((r) => setTimeout(r, 1500)) }
-  )
-
-  return result
+    throw err
+  } finally {
+    await new Promise((r) => setTimeout(r, 1500))
+    releaseGate()
+  }
 }
 
 export async function searchWikipedia(

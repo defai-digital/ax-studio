@@ -26,19 +26,31 @@ use crate::core::{
 };
 use ax_studio_utils::{can_override_npx, can_override_uvx};
 
-/// Allowed executables for MCP server commands
 const ALLOWED_COMMANDS: &[&str] = &["node", "python", "python3", "bun", "npx", "uvx"];
 const DEFAULT_MCP_CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// Environment variables that should be rejected for security reasons.
-/// PATH is intentionally NOT in this list — many MCP servers (especially
-/// uvx-based ones with custom Python toolchains) need a custom PATH to find
-/// their interpreter, and blocking it breaks those servers.
 const DANGEROUS_ENV_KEYS: &[&str] = &[
     "LD_PRELOAD",
     "DYLD_INSERT_LIBRARIES",
     "LD_LIBRARY_PATH",
 ];
+
+fn is_internal_url(url: &str) -> bool {
+    let parsed = match url::Url::parse(url) {
+        Ok(p) => p,
+        Err(_) => return true,
+    };
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return true;
+    }
+    match parsed.host() {
+        Some(url::Host::Domain("localhost")) => true,
+        Some(url::Host::Ipv4(ip)) => ip.is_loopback() || ip.is_private() || ip.is_link_local() || ip.is_unspecified(),
+        Some(url::Host::Ipv6(ip)) => ip.is_loopback() || ip.is_unspecified(),
+        Some(url::Host::Domain(_)) => false,
+        None => true,
+    }
+}
 
 // Re-export ShutdownContext so existing `use super::helpers::ShutdownContext`
 // imports keep working after the enum moved to its own module.
@@ -246,6 +258,11 @@ async fn schedule_mcp_start_task<R: Runtime>(
                 "Missing MCP HTTP URL for server {name}"
             ));
         }
+        if is_internal_url(transport_url) {
+            return Err(format!(
+                "MCP HTTP URL for server {name} points to an internal/private address, which is not allowed"
+            ));
+        }
         let transport = StreamableHttpClientTransport::with_client(
             reqwest::Client::builder()
                 .default_headers({
@@ -312,6 +329,11 @@ async fn schedule_mcp_start_task<R: Runtime>(
         let transport_url = config_params.url.as_deref().unwrap_or("");
         if transport_url.is_empty() {
             return Err(format!("Missing MCP SSE URL for server {name}"));
+        }
+        if is_internal_url(transport_url) {
+            return Err(format!(
+                "MCP SSE URL for server {name} points to an internal/private address, which is not allowed"
+            ));
         }
         let transport = SseClientTransport::start_with_client(
             reqwest::Client::builder()

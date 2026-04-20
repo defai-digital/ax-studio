@@ -110,7 +110,7 @@ describe('ServiceHubProvider', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText('Service startup failed. Please restart the app.')
+        screen.getByText(/Service startup failed/)
       ).toBeInTheDocument()
     })
   })

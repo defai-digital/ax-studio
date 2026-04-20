@@ -428,11 +428,23 @@ fn resolve_fabric_cli_command<R: Runtime>(
                     .get("ax-studio")
                     .or_else(|| servers.get("ax-fabric"))
                 {
-                    let command = server
+                    let raw_command = server
                         .get("command")
                         .and_then(|v| v.as_str())
                         .unwrap_or("npx")
                         .to_string();
+
+                    let allowed = ["node", "npx", "bun", "python", "python3", "uvx"];
+                    if !raw_command.contains('/')
+                        && !raw_command.contains('\\')
+                        && !allowed.contains(&raw_command.as_str())
+                    {
+                        return Err(format!(
+                            "Blocked disallowed command '{raw_command}' in knowledge-base MCP config"
+                        ));
+                    }
+
+                    let command = raw_command;
                     let args: Vec<String> = server
                         .get("args")
                         .and_then(|a| a.as_array())

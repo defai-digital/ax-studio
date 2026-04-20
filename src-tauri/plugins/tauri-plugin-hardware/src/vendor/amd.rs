@@ -144,7 +144,13 @@ mod windows_impl {
 
     pub fn get_gpu_usage() -> Result<HashMap<String, i32>, Box<dyn std::error::Error>> {
         unsafe {
-            let lib = Library::new("atiadlxx.dll").or_else(|_| Library::new("atiadlxy.dll"))?;
+            let system_dir = std::env::var_os("SystemRoot")
+                .unwrap_or_else(|| std::ffi::OsString::from("C:\\Windows"));
+            let system32 = std::path::Path::new(&system_dir).join("System32");
+            let lib = Library::new(system32.join("atiadlxx.dll"))
+                .or_else(|_| Library::new(system32.join("atiadlxy.dll")))
+                .or_else(|_| Library::new("atiadlxx.dll"))
+                .or_else(|_| Library::new("atiadlxy.dll"))?;
 
             let adlmaincontrolcreate: Symbol<ADLMAINCONTROLCREATE> =
                 lib.get(b"AdlMainControlCreate")?;

@@ -1,7 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { DataProvider } from '../DataProvider'
-import { RouterProvider, createRouter, createRootRoute, createMemoryHistory } from '@tanstack/react-router'
 
 // Mock Tauri deep link
 vi.mock('@tauri-apps/plugin-deep-link', () => ({
@@ -49,53 +48,26 @@ vi.mock('@/hooks/tools/useMCPServers', () => ({
   })),
 }))
 
-// Mock the DataProvider to render children properly
-vi.mock('../DataProvider', () => ({
-  DataProvider: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="data-provider">{children}</div>
-  ),
-}))
-
 describe('DataProvider', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  const renderWithRouter = (children: React.ReactNode) => {
-    const rootRoute = createRootRoute({
-      component: () => (
-        <DataProvider>
-          {children}
-        </DataProvider>
-      ),
-    })
+  it('renders children when all data hooks are available', () => {
+    render(
+      <DataProvider>
+        <div data-testid="child">Test Child</div>
+      </DataProvider>
+    )
 
-    const router = createRouter({
-      routeTree: rootRoute,
-      history: createMemoryHistory({
-        initialEntries: ['/'],
-      }),
-    })
-    return render(<RouterProvider router={router} />)
-  }
-
-  it('initializes data on mount and renders without crashing', async () => {
-    // DataProvider initializes and renders children without errors
-    renderWithRouter(<div>Test Child</div>)
-    
-    await waitFor(() => {
-      expect(screen.getByText('Test Child')).toBeInTheDocument()
-    })
+    expect(screen.getByTestId('child')).toBeInTheDocument()
   })
 
   it('handles multiple children correctly', () => {
-    const TestComponent1 = () => <div>Test Child 1</div>
-    const TestComponent2 = () => <div>Test Child 2</div>
-
     render(
       <DataProvider>
-        <TestComponent1 />
-        <TestComponent2 />
+        <div>Test Child 1</div>
+        <div>Test Child 2</div>
       </DataProvider>
     )
 

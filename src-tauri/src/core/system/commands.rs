@@ -130,10 +130,25 @@ pub async fn read_logs<R: Runtime>(app: AppHandle<R>) -> Result<String, String> 
     let log_path = get_app_data_folder_path(app).join("logs").join("app.log");
     if log_path.exists() {
         let content = fs::read_to_string(log_path).map_err(|e| e.to_string())?;
-        Ok(content)
+        Ok(redact_sensitive_data(&content))
     } else {
         Err("Log file not found".to_string())
     }
+}
+
+fn redact_sensitive_data(input: &str) -> String {
+    let mut result = input.to_string();
+    let patterns = [
+        (regex::Regex::new(r"(api[_-]?key\s*[:=]\s*)[\w\-]{20,}").unwrap(), "$1[REDACTED]"),
+        (regex::Regex::new(r"(Bearer\s+)[\w\-\.]{20,}").unwrap(), "$1[REDACTED]"),
+        (regex::Regex::new(r"(authorization\s*[:=]\s*)[\w\-\.]{20,}").unwrap(), "$1[REDACTED]"),
+        (regex::Regex::new(r"(sk-)[a-zA-Z0-9]{20,}").unwrap(), "$1[REDACTED]"),
+        (regex::Regex::new(r"(token\s*[:=]\s*)[\w\-\.]{20,}").unwrap(), "$1[REDACTED]"),
+    ];
+    for (re, replacement) in &patterns {
+        result = re.replace_all(&result, *replacement).to_string();
+    }
+    result
 }
 
 #[cfg(test)]

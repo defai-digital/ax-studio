@@ -36,28 +36,6 @@ fn is_forbidden_url(url: &str) -> bool {
     }
 }
 
-async fn resolves_to_forbidden_ip(parsed: &url::Url) -> bool {
-    let domain = match parsed.host() {
-        Some(url::Host::Domain(domain)) => domain,
-        _ => return false,
-    };
-
-    let port = parsed.port_or_known_default().unwrap_or(80);
-    match tokio::net::lookup_host((domain, port)).await {
-        Ok(addrs) => {
-            let mut saw_address = false;
-            for addr in addrs {
-                saw_address = true;
-                if is_forbidden_ip(addr.ip()) {
-                    return true;
-                }
-            }
-            !saw_address
-        }
-        Err(_) => true,
-    }
-}
-
 /// Fetch a URL and extract its main text content.
 ///
 /// Returns up to 8 000 characters of cleaned body text.
@@ -66,8 +44,21 @@ async fn resolves_to_forbidden_ip(parsed: &url::Url) -> bool {
 pub async fn scrape_url(url: &str) -> Result<String, String> {
     let parsed = url::Url::parse(url).map_err(|_| "URL points to forbidden internal network")?;
 
-    if is_forbidden_url(url) || resolves_to_forbidden_ip(&parsed).await {
+    if is_forbidden_url(url) {
         return Err("URL points to forbidden internal network".to_string());
+    }
+
+    let host = parsed.host_str().unwrap_or("").to_string();
+    let port = parsed.port_or_known_default().unwrap_or(80);
+
+    let resolved_addrs = tokio::net::lookup_host((&*host, port))
+        .await
+        .map_err(|_| format!("DNS resolution failed for {host}"))?;
+
+    for addr in resolved_addrs {
+        if is_forbidden_ip(addr.ip()) {
+            return Err("URL resolves to forbidden internal network".to_string());
+        }
     }
 
     let client = reqwest::Client::builder()

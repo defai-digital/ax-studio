@@ -31,10 +31,19 @@
       "identifier": "http:default",
       "allow": [
         {
-          "url": "https://*:*"
+          "url": "https://huggingface.co/**"
         },
         {
-          "url": "http://*:*"
+          "url": "https://hf.co/**"
+        },
+        {
+          "url": "https://cdn-lfs*.huggingface.co/**"
+        },
+        {
+          "url": "http://127.0.0.1:*"
+        },
+        {
+          "url": "http://localhost:*"
         }
       ],
       "deny": []

@@ -53,7 +53,9 @@ pub fn normalize_path(path: &Path) -> PathBuf {
             }
             Component::CurDir => {}
             Component::ParentDir => {
-                ret.pop();
+                if !ret.pop() {
+                    ret.push(component.as_os_str());
+                }
             }
             Component::Normal(c) => {
                 ret.push(c);

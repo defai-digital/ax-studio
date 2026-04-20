@@ -4,6 +4,30 @@ use crate::gguf::types::{KVCacheError, KVCacheEstimate, ModelSupportStatus};
 use std::collections::HashMap;
 use std::fs;
 use tauri_plugin_hardware::get_system_info;
+
+fn is_allowed_model_url(url: &str) -> Result<(), String> {
+    let parsed = reqwest::Url::parse(url).map_err(|e| format!("Invalid URL: {e}"))?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err("Only HTTP/HTTPS URLs are allowed for model metadata".to_string());
+    }
+    let host_str = parsed.host_str().unwrap_or("");
+    if host_str.is_empty() {
+        return Err("URL has no host".to_string());
+    }
+    let allowed = ["huggingface.co", "hf.co", "cdn-lfs.huggingface.co", "cdn-lfs-us-1.huggingface.co"];
+    if !allowed.iter().any(|d| host_str == *d || host_str.ends_with(&format!(".{d}"))) {
+        return Err(format!("Model metadata URL host '{host_str}' is not in the allowlist"));
+    }
+    if parsed.socket_addrs(|| None).map_or(false, |addrs| {
+        addrs.iter().any(|a| match a.ip() {
+            std::net::IpAddr::V4(v4) => v4.is_loopback() || v4.is_private() || v4.is_unspecified(),
+            std::net::IpAddr::V6(v6) => v6.is_loopback() || v6.is_unspecified(),
+        })
+    }) {
+        return Err("Model metadata URL resolves to an internal/private address".to_string());
+    }
+    Ok(())
+}
 /// Read GGUF metadata from a model file
 #[tauri::command]
 pub async fn read_gguf_metadata(path: String) -> Result<GgufMetadata, String> {
@@ -20,8 +44,9 @@ pub async fn estimate_kv_cache_size(
 
 #[tauri::command]
 pub async fn get_model_size(path: String) -> Result<u64, String> {
-    if path.starts_with("https://") {
-        // Handle remote URL
+    if path.starts_with("https://") || path.starts_with("http://") {
+        is_allowed_model_url(&path)?;
+
         let client = reqwest::Client::new();
         let response = client
             .head(&path)

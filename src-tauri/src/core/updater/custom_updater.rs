@@ -205,6 +205,14 @@ impl CustomUpdater {
             .await
             .map_err(|e| UpdateError::ParseError(e.to_string()))?;
 
+        if let Some(ref sig) = update_info.signature {
+            if sig.is_empty() {
+                log::warn!("Update endpoint returned an empty signature — update will be rejected by Tauri's verifier");
+            }
+        } else {
+            log::warn!("Update endpoint returned no signature field — update will be rejected by Tauri's verifier");
+        }
+
         Ok(update_info)
     }
 
@@ -235,6 +243,14 @@ impl CustomUpdater {
             .json()
             .await
             .map_err(|e| UpdateError::ParseError(e.to_string()))?;
+
+        if let Some(ref sig) = update_info.signature {
+            if sig.is_empty() {
+                log::warn!("Fallback update endpoint returned an empty signature — update will be rejected by Tauri's verifier");
+            }
+        } else {
+            log::warn!("Fallback update endpoint returned no signature field — update will be rejected by Tauri's verifier");
+        }
 
         Ok(update_info)
     }
