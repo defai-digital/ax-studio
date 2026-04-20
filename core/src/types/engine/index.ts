@@ -34,10 +34,19 @@ export class SecretString {
   /**
    * WARNING: Returns the **masked** string (e.g. "s***g"), NOT the raw secret.
    * Using JSON.stringify on a SecretString will DESTROY the original value.
-   * Use `.value` directly if you need the plaintext for persistence.
+   * Use `toRaw()` if you need the plaintext for persistence.
    */
   toJSON(): string {
     return this.toString()
+  }
+
+  /**
+   * Explicitly unwrap the raw value for serialization/persistence.
+   * Prefer this over getValue() when building JSON payloads to make
+   * the intent clear at the call site.
+   */
+  toRaw(): string {
+    return this.value
   }
 
   /**

@@ -29,20 +29,22 @@ import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
 const httpFetch = globalThis.fetch
 
 // Cache preflight results so each model is only validated once.
-// Failed models are remembered permanently (until page reload).
 // Successful models are cached for 10 minutes.
+// Failed models are cached for 2 minutes (to allow retry after transient errors).
 const PREFLIGHT_TTL_MS = 10 * 60 * 1000
+const PREFLIGHT_FAIL_TTL_MS = 2 * 60 * 1000
 const preflightCache = new Map<string, { ok: boolean; ts: number }>()
 
 function isModelPreflightCached(modelId: string, providerId: string): boolean | null {
   const key = `${providerId}::${modelId}`
   const entry = preflightCache.get(key)
   if (!entry) return null
-  if (!entry.ok) return false // failed models stay rejected
-  if (Date.now() - entry.ts > PREFLIGHT_TTL_MS) {
+  const ttl = entry.ok ? PREFLIGHT_TTL_MS : PREFLIGHT_FAIL_TTL_MS
+  if (Date.now() - entry.ts > ttl) {
     preflightCache.delete(key)
     return null
   }
+  if (!entry.ok) return false
   return true
 }
 
