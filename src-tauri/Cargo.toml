@@ -117,6 +117,7 @@ glob = "0.3"
 scraper = "0.20"
 subtle = "2.6"
 regex = "1"
+base64 = "0.22"
 
 [dependencies.tauri]
 workspace = true

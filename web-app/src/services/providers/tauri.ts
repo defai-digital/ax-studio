@@ -169,13 +169,15 @@ export class TauriProvidersService extends DefaultProvidersService {
 
       // Only add authentication headers if API key is provided
       if (provider.api_key) {
-        headers['x-api-key'] = provider.api_key
         headers['Authorization'] = `Bearer ${provider.api_key}`
       }
 
       if (provider.custom_header) {
+        const blockedHeaders = new Set(['host', 'cookie', 'authorization', 'x-api-key', 'origin', 'referer'])
         provider.custom_header.forEach((header) => {
-          headers[header.header] = header.value
+          if (!blockedHeaders.has(header.header.toLowerCase())) {
+            headers[header.header] = header.value
+          }
         })
       }
 

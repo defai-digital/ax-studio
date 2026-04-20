@@ -132,28 +132,21 @@ export function GlobalEventHandler() {
         ? ERROR_CODE_MAP[matchedCode]
         : 'modelLoadFailed'
 
+      const isOOM =
+        messageKey === 'outOfMemory' ||
+        error.toLowerCase().includes('out of memory') ||
+        error.toLowerCase().includes('oom') ||
+        error.toLowerCase().includes('failed to allocate')
+
       const userMessage = t(
-        `settings:llamacpp.errors.${messageKey}` as Parameters<typeof t>[0]
+        `settings:llamacpp.errors.${isOOM ? 'outOfMemory' : messageKey}` as Parameters<typeof t>[0]
       )
 
-      // Special human-friendly overrides for context-exceeded
       const isContextExceeded =
         error.includes('finish_reason') && error.includes('length')
       if (isContextExceeded) {
         toast.error(
           t('settings:llamacpp.errors.contextExceeded' as Parameters<typeof t>[0])
-        )
-        return
-      }
-
-      // OOM heuristic
-      const isOOM =
-        error.toLowerCase().includes('out of memory') ||
-        error.toLowerCase().includes('oom') ||
-        error.toLowerCase().includes('failed to allocate')
-      if (isOOM) {
-        toast.error(
-          t('settings:llamacpp.errors.outOfMemory' as Parameters<typeof t>[0])
         )
         return
       }

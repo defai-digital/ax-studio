@@ -3,6 +3,7 @@
 use super::helpers::resolve_path;
 use super::models::{DialogOpenOptions, FileStat};
 use crate::core::state::AppState;
+use base64::Engine;
 use rfd::AsyncFileDialog;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -695,9 +696,11 @@ pub async fn save_dialog(
 pub async fn write_binary_file(
     state: State<'_, AppState>,
     path: String,
-    hex_data: String,
+    base64_data: String,
 ) -> Result<(), String> {
-    let data = hex::decode(&hex_data).map_err(|e| e.to_string())?;
+    let data = base64::engine::general_purpose::STANDARD
+        .decode(&base64_data)
+        .map_err(|e| e.to_string())?;
     let normalized_path = {
         let mut approved_save_paths = state.approved_save_paths.lock().await;
         consume_approved_save_target(&mut approved_save_paths, &path)?

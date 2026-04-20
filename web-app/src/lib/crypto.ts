@@ -90,7 +90,8 @@ export async function encrypt(text: string): Promise<string> {
   if (!text) return text
 
   if (!isCryptoAvailable) {
-    return legacyEncrypt(text)
+    console.error('Web Crypto API unavailable — cannot safely encrypt. Storing as plaintext.')
+    return ENCRYPTED_PREFIX + encodeBase64(utf8Encoder.encode(text))
   }
 
   try {
@@ -103,8 +104,8 @@ export async function encrypt(text: string): Promise<string> {
 
     return `${ENCRYPTED_PREFIX}${encodeBase64(iv)}.${encodeBase64(encrypted)}`
   } catch (error) {
-    console.warn('Falling back to legacy encryption format:', error)
-    return legacyEncrypt(text)
+    console.error('Encryption failed — data will NOT be stored securely:', error)
+    throw new Error('Encryption failed — cannot store securely')
   }
 }
 
@@ -149,7 +150,7 @@ export async function decrypt(encryptedText: string): Promise<string> {
 
     return utf8Decoder.decode(plaintext)
   } catch (error) {
-    console.warn('Failed to decrypt token, returning as-is:', error)
+    console.warn('Failed to decrypt token — returning raw value')
     // Intentionally return the raw input — recursing here would stack-overflow
     // on any corrupted `enc-v2.` value and brick the whole app.
     return encryptedText

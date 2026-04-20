@@ -107,7 +107,7 @@ export class TauriMCPService extends DefaultMCPService {
     token: string
   } {
     // Generate a unique cancellation token if not provided
-    const token = args.cancellationToken ?? `tool_call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const token = args.cancellationToken ?? `tool_call_${crypto.randomUUID()}`
 
     // Create the tool call promise with cancellation token
     const promise: Promise<{ error: string; content: { text: string }[] }> =

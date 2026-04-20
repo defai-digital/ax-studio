@@ -48,10 +48,7 @@ export async function bootstrapLocalApi(
   const effectiveApiKey =
     config.apiKey && config.apiKey.trim().length > 0
       ? config.apiKey
-      : 'ax-' +
-        (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-          ? crypto.randomUUID().replace(/-/g, '')
-          : Math.random().toString(36).slice(2) + Date.now().toString(36))
+      : 'ax-' + Array.from(crypto.getRandomValues(new Uint8Array(24)), (b) => b.toString(16).padStart(2, '0')).join('')
 
   // Persist the effective key back to the Zustand store so that chat
   // requests (model-factory.ts, custom-chat-transport.ts) read the SAME

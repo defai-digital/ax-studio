@@ -4,10 +4,8 @@ import { localStorageKey } from '@/constants/localStorage'
 import { createSafeJSONStorage } from '@/lib/storage'
 
 const generateDefaultApiKey = (): string => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return 'ax-' + crypto.randomUUID().replace(/-/g, '')
-  }
-  return 'ax-' + Math.random().toString(36).slice(2) + Date.now().toString(36)
+  const bytes = crypto.getRandomValues(new Uint8Array(24))
+  return 'ax-' + Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
 type LocalApiServerState = {

@@ -79,7 +79,7 @@ export class TauriAppService extends DefaultAppService {
     const level = levelRaw.toLowerCase() as 'info' | 'warn' | 'error' | 'debug'
 
     return {
-      timestamp: `${date} ${time}`,
+      timestamp: new Date(`${date} ${time}`).getTime(),
       level,
       target,
       message,

@@ -140,7 +140,6 @@ export const useThreads = create<ThreadState>()((set, get) => ({
     })
   },
   deleteThread: (threadId) => {
-    // Perform side effects OUTSIDE set() to avoid duplicate execution in StrictMode
     getServiceHub()
       .threads()
       .deleteThread(threadId)
@@ -148,6 +147,10 @@ export const useThreads = create<ThreadState>()((set, get) => ({
 
     const colId = threadCollectionId(threadId)
     useFileRegistry.getState().clearCollection(colId)
+
+    import('@/hooks/chat/useMessages').then(({ clearTrackedThreadMessages }) => {
+      clearTrackedThreadMessages(threadId)
+    }).catch(() => {})
     getServiceHub().mcp().callTool({
       toolName: 'akidb_delete_collection',
       arguments: { collection_id: colId },

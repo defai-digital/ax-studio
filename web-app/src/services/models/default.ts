@@ -83,7 +83,7 @@ export class DefaultModelsService implements ModelsService {
       }
 
       const response = await fetch(
-        `https://huggingface.co/api/models/${cleanRepoId}?blobs=true&files_metadata=true`,
+        `https://huggingface.co/api/models/${encodeURIComponent(cleanRepoId)}?blobs=true&files_metadata=true`,
         {
           signal,
           headers: hfToken
@@ -148,7 +148,7 @@ export class DefaultModelsService implements ModelsService {
 
       return {
         model_id: `${repo.author}/${sanitizeModelId(modelId)}`,
-        path: `https://huggingface.co/${repo.modelId}/resolve/main/${file.rfilename}`,
+        path: `https://huggingface.co/${encodeURIComponent(repo.modelId)}/resolve/main/${encodeURIComponent(file.rfilename)}`,
         file_size: formatFileSize(file.size),
       }
     })
@@ -159,7 +159,7 @@ export class DefaultModelsService implements ModelsService {
 
       return {
         model_id: sanitizeModelId(modelId),
-        path: `https://huggingface.co/${repo.modelId}/resolve/main/${file.rfilename}`,
+        path: `https://huggingface.co/${encodeURIComponent(repo.modelId)}/resolve/main/${encodeURIComponent(file.rfilename)}`,
         file_size: formatFileSize(file.size),
       }
     })
@@ -180,7 +180,7 @@ export class DefaultModelsService implements ModelsService {
 
       return {
         model_id: sanitizeModelId(modelId),
-        path: `https://huggingface.co/${repo.modelId}/resolve/main/${file.rfilename}`,
+        path: `https://huggingface.co/${encodeURIComponent(repo.modelId)}/resolve/main/${encodeURIComponent(file.rfilename)}`,
         file_size: formatFileSize(file.size),
         sha256: file.lfs?.sha256,
       }
@@ -198,7 +198,7 @@ export class DefaultModelsService implements ModelsService {
       safetensors_files: safetensorsModels,
       num_safetensors: safetensorsModels.length,
       is_mlx: hasMlxFiles,
-      readme: `https://huggingface.co/${repo.modelId}/resolve/main/README.md`,
+      readme: `https://huggingface.co/${encodeURIComponent(repo.modelId)}/resolve/main/README.md`,
       description: `**Tags**: ${repo.tags?.join(', ')}`,
     }
   }

@@ -363,7 +363,7 @@ function MermaidDiagram({ source, theme }: { source: string; theme: string }) {
 
     // Use 'loose' security: Mermaid v11 renders labels via <foreignObject> HTML,
     // which 'strict' mode strips. SVG is produced locally by mermaid — not user input.
-    mermaidLib.initialize({ startOnLoad: false, securityLevel: 'loose', theme: theme as never })
+    mermaidLib.initialize({ startOnLoad: false, securityLevel: 'strict', theme: theme as never })
     const renderWithRetry = async () => {
       const id = `mermaid-${Math.random().toString(36).slice(2)}`
 
@@ -453,8 +453,8 @@ function MermaidDiagram({ source, theme }: { source: string; theme: string }) {
   return (
     <div
       className="my-2 overflow-x-auto"
-      // biome-ignore lint/security/noDangerouslySetInnerHtml: trusted mermaid SVG — generated locally, not from user input
-      dangerouslySetInnerHTML={{ __html: svgContent }}
+      // biome-ignore lint/security/noDangerouslySetInnerHtml: mermaid SVG sanitized — foreignObject stripped, securityLevel=strict
+      dangerouslySetInnerHTML={{ __html: svgContent.replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, '') }}
     />
   )
 }
@@ -727,7 +727,7 @@ function RenderMarkdownComponent({
       <AXMarkdown
         animated={true}
         linkSafety={{
-          enabled: false,
+          enabled: true,
         }}
         className={cn(
           'w-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:border-b [&_h2]:border-border [&_h2]:pb-1.5 [&_h2]:mt-5 [&_h2]:mb-2 [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-1.5 [&_strong]:font-semibold',

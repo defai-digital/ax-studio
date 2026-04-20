@@ -135,11 +135,11 @@ async function saveBlobNative(blob: Blob, filename: string): Promise<void> {
       if (!savePath) return
 
       if (ext === 'png') {
-        const bytes = new Uint8Array(await blob.arrayBuffer())
-        const hexData = Array.from(bytes, (byte) =>
-          byte.toString(16).padStart(2, '0')
-        ).join('')
-        await invoke('write_binary_file', { path: savePath, hexData })
+        const buffer = await blob.arrayBuffer()
+        const base64Data = btoa(
+          new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+        )
+        await invoke('write_binary_file', { path: savePath, base64Data })
       } else {
         const text = await blob.text()
         await invoke('write_text_file', { path: savePath, content: text })

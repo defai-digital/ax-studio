@@ -126,7 +126,7 @@ export class DefaultRAGService implements RAGService {
       case 'retrieve':
         return this.handleRetrieve(args)
       case 'list_attachments':
-        return this.handleListAttachments(args)
+        return await this.handleListAttachments(args)
       case 'get_chunks':
         return this.handleGetChunks(args)
       default:
@@ -280,11 +280,11 @@ export class DefaultRAGService implements RAGService {
     }
   }
 
-  private handleListAttachments(args: {
+  private async handleListAttachments(args: {
     threadId?: string
     projectId?: string
     scope: 'project' | 'thread'
-  }): MCPToolCallResult {
+  }): Promise<MCPToolCallResult> {
     const collectionId = this.resolveCollectionId(args)
     if (!collectionId) return fail('No thread or project context')
 

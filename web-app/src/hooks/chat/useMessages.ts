@@ -21,7 +21,7 @@ const trackPersistedMessage = (message: ThreadMessage) => {
   }
 }
 
-const clearTrackedThreadMessages = (threadId: string) => {
+export const clearTrackedThreadMessages = (threadId: string) => {
   const prefix = `${threadId}:`
   for (const key of persistedMessages.keys()) {
     if (key.startsWith(prefix)) {

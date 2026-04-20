@@ -26,17 +26,14 @@ export class DefaultAppService implements AppService {
     return undefined
   }
 
-  async relocateAppDataFolder(path: string): Promise<void> {
-    console.log('relocateAppDataFolder called with path:', path)
-    // No-op - not implemented in default service
+  async relocateAppDataFolder(_path: string): Promise<void> {
   }
 
   async getServerStatus(): Promise<boolean> {
     return false
   }
 
-  async readYaml<T = unknown>(path: string): Promise<T> {
-    console.log('readYaml called with path:', path)
+  async readYaml<T = unknown>(_path: string): Promise<T> {
     throw new Error('readYaml not implemented in default app service')
   }
 }
