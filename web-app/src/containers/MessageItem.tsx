@@ -255,8 +255,9 @@ export const MessageItem = memo(
       partIndex: number
     ) => {
       const isImage = part.mediaType?.startsWith('image/')
+      const isSafeUrl = part.url && /^https?:|^blob:|^data:/i.test(part.url)
 
-      if (message.role === 'user' && isImage && part.url) {
+      if (message.role === 'user' && isImage && isSafeUrl) {
         return (
           <div
             key={`${message.id}-${partIndex}`}
@@ -278,7 +279,7 @@ export const MessageItem = memo(
         )
       }
 
-      if (message.role === 'assistant' && isImage && part.url) {
+      if (message.role === 'assistant' && isImage && isSafeUrl) {
         return (
           <div key={`${message.id}-${partIndex}`} className="my-2">
             <img

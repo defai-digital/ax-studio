@@ -171,6 +171,14 @@ export const useAgentTeamStore = create<AgentTeamState>((set, get) => ({
     const team = get().teams.find((t) => t.id === teamId)
     if (!team) return null
     const assistants = getAssistants()
+    const missingIds = team.agent_ids.filter(
+      (id) => !assistants.some((a) => a.id === id)
+    )
+    if (missingIds.length > 0) {
+      console.warn(
+        `exportTeam: ${missingIds.length} agent(s) referenced by team "${team.name}" were not found and will be excluded: ${missingIds.join(', ')}`
+      )
+    }
     const agents = team.agent_ids
       .map((id) => assistants.find((a) => a.id === id))
       .filter((a): a is Assistant => !!a)

@@ -51,6 +51,9 @@ export const useChatSessions = create<ChatSessionState>((set, get) => ({
     const existing = get().sessions[sessionId]
     if (existing) {
       if (existing.transport !== transport || existing.title !== title) {
+        const updatedChat = createChatFn
+          ? createChatFn(sessionId, transport)
+          : existing.chat
         set((state) => ({
           sessions: {
             ...state.sessions,
@@ -58,9 +61,11 @@ export const useChatSessions = create<ChatSessionState>((set, get) => ({
               ...existing,
               transport,
               title: title ?? existing.title,
+              chat: updatedChat,
             },
           },
         }))
+        return updatedChat
       }
       return existing.chat
     }

@@ -9,16 +9,17 @@ const IFRAME_CSP = `<meta http-equiv="Content-Security-Policy" content="default-
 
 const ERROR_REPORTER = `
 <script>
+  var _po = location.ancestorOrigins && location.ancestorOrigins[0] ? location.ancestorOrigins[0] : '*';
   window.onerror = function(msg, src, line, col, err) {
     window.parent.postMessage(
       { type: 'artifact-error', message: String(msg), stack: err ? String(err.stack) : '' },
-      '*'
+      _po
     );
   };
   window.addEventListener('unhandledrejection', function(e) {
     window.parent.postMessage(
       { type: 'artifact-error', message: String(e.reason), stack: '' },
-      '*'
+      _po
     );
   });
 </script>`.trim()
@@ -423,7 +424,7 @@ function buildReactHarnessInline(
     el.textContent = msg;
     var root = document.getElementById('root');
     if (root) root.replaceWith(el); else document.body.appendChild(el);
-    window.parent.postMessage({ type: 'artifact-error', message: msg }, '*');
+    window.parent.postMessage({ type: 'artifact-error', message: msg }, _po);
   }
 
   if (typeof React === 'undefined') { showErr('React failed to initialize'); return; }
@@ -497,7 +498,7 @@ function buildChartJsHarnessInline(source: string, chartJs: string): string {
     el.textContent = msg;
     var canvas = document.getElementById('chart');
     if (canvas) canvas.replaceWith(el); else document.body.appendChild(el);
-    window.parent.postMessage({ type: 'artifact-error', message: msg }, '*');
+    window.parent.postMessage({ type: 'artifact-error', message: msg }, _po);
   }
 
   function isValidConfig(c) {
@@ -591,7 +592,7 @@ function buildVegaHarnessInline(source: string, vegaJs: string, vegaLiteJs: stri
     el.textContent = msg;
     var vis = document.getElementById('vis');
     if (vis) vis.replaceWith(el); else document.body.appendChild(el);
-    window.parent.postMessage({ type: 'artifact-error', message: msg }, '*');
+    window.parent.postMessage({ type: 'artifact-error', message: msg }, _po);
   }
 
   var spec;

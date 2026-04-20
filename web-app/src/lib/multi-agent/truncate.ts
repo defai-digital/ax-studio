@@ -1,6 +1,7 @@
 export function truncateToTokenLimit(text: string, maxTokens: number): string {
-  if (maxTokens <= 0) return text
-  const maxChars = maxTokens * 4
+  const DEFAULT_MAX_TOKENS = 4096
+  const effectiveMax = maxTokens > 0 ? maxTokens : DEFAULT_MAX_TOKENS
+  const maxChars = effectiveMax * 4
   if (text.length <= maxChars) return text
 
   const truncated = text.slice(0, maxChars)

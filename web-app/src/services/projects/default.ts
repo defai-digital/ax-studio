@@ -58,10 +58,14 @@ export class DefaultProjectsService implements ProjectsService {
     logo?: string,
     projectPrompt?: string | null
   ): Promise<ThreadFolder> {
+    const trimmed = name.trim()
+    if (!trimmed) throw new Error('Project name must not be empty')
+    if (trimmed.length > 200) throw new Error('Project name must be at most 200 characters')
+
     return this.enqueueStorageTask(() => {
       const newProject: ThreadFolder = {
         id: ulid(),
-        name,
+        name: trimmed,
         updated_at: Date.now(),
         assistantId,
         logo,

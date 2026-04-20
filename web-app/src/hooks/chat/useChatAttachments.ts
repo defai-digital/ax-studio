@@ -51,11 +51,11 @@ export const useChatAttachments = create<AttachmentStore>()((set, get) => ({
       delete attachmentsByThread[fromKey]
 
       // Merge rather than pick one side — picking discarded the source
-      // whenever the destination already had files. Dedupe by name so the
+      // whenever the destination already had files. Dedupe by name+size so the
       // same file isn't listed twice when both sides happen to have it.
       const merged = [...existingDestination, ...fromAttachments].filter(
         (attachment, index, arr) =>
-          arr.findIndex((other) => other.name === attachment.name) === index
+          arr.findIndex((other) => other.name === attachment.name && other.size === attachment.size) === index
       )
 
       return {

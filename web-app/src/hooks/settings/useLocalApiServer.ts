@@ -47,7 +47,15 @@ export const useLocalApiServer = create<LocalApiServerState>()(
       enableOnStartup: true,
       setEnableOnStartup: (value) => set({ enableOnStartup: value }),
       serverHost: '127.0.0.1',
-      setServerHost: (value) => set({ serverHost: value }),
+      setServerHost: (value) => {
+        if (value === '0.0.0.0') {
+          console.warn(
+            'Binding to 0.0.0.0 exposes the local API server to all devices on your network. ' +
+            'Ensure a strong API key is set.'
+          )
+        }
+        set({ serverHost: value })
+      },
       serverPort: 1337,
       setServerPort: (value) => set({ serverPort: value }),
       apiPrefix: '/v1',

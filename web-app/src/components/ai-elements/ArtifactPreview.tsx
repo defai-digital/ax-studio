@@ -23,7 +23,7 @@ interface ArtifactPreviewProps {
 // ---------------------------------------------------------------------------
 function SvgPreview({ source }: { source: string }) {
   const clean = useMemo(
-    () => DOMPurify.sanitize(source, { USE_PROFILES: { svg: true, svgFilters: true } }),
+    () => DOMPurify.sanitize(source, { USE_PROFILES: { svg: true, svgFilters: true }, FORBID_TAGS: ['foreignObject'] }),
     [source]
   )
   return (

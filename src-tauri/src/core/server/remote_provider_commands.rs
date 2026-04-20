@@ -49,6 +49,10 @@ pub async fn register_provider_config(
     state: State<'_, AppState>,
     request: RegisterProviderRequest,
 ) -> Result<(), String> {
+    if let Some(ref base_url) = request.base_url {
+        validate_provider_url(base_url)?;
+    }
+
     let mut provider_state = state.provider_state.lock().await;
 
     let config = ProviderConfig {
@@ -75,6 +79,9 @@ pub async fn register_provider_configs_batch(
     let mut provider_state = state.provider_state.lock().await;
 
     for request in requests {
+        if let Some(ref base_url) = request.base_url {
+            validate_provider_url(base_url)?;
+        }
         let provider_name = request.provider.clone();
         let config = ProviderConfig {
             provider: request.provider,
@@ -125,6 +132,40 @@ pub async fn list_provider_configs(
         .values()
         .map(redact_provider_config)
         .collect())
+}
+
+fn validate_provider_url(url: &str) -> Result<(), String> {
+    let parsed = url::Url::parse(url).map_err(|e| format!("Invalid provider URL '{url}': {e}"))?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err(format!("Provider URL scheme must be http or https, got '{}'", parsed.scheme()));
+    }
+    match parsed.host() {
+        Some(url::Host::Ipv4(ip)) => {
+            if ip.is_unspecified() {
+                return Err(format!(
+                    "Provider URL must not point to an unspecified address (got {})",
+                    ip
+                ));
+            }
+            if ip.is_link_local() {
+                return Err(format!(
+                    "Provider URL must not point to a link-local address (got {})",
+                    ip
+                ));
+            }
+        }
+        Some(url::Host::Ipv6(ip)) => {
+            if ip.is_unspecified() {
+                return Err(format!(
+                    "Provider URL must not point to an unspecified address (got {})",
+                    ip
+                ));
+            }
+        }
+        Some(url::Host::Domain(_)) => {}
+        None => return Err(format!("Provider URL has no host: {url}")),
+    }
+    Ok(())
 }
 
 #[cfg(test)]

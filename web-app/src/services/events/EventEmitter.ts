@@ -7,6 +7,7 @@ type EventHandler = (...args: unknown[]) => void
 
 export class EventEmitter {
   private handlers: Map<string, EventHandler[]>
+  private static MAX_LISTENERS = 50
 
   constructor() {
     this.handlers = new Map<string, EventHandler[]>()
@@ -23,6 +24,13 @@ export class EventEmitter {
     }
 
     this.handlers.get(eventName)?.push(handler)
+
+    const count = this.handlers.get(eventName)?.length ?? 0
+    if (count > EventEmitter.MAX_LISTENERS) {
+      console.warn(
+        `EventEmitter: "${eventName}" has ${count} listeners (max ${EventEmitter.MAX_LISTENERS}). Possible memory leak.`
+      )
+    }
 
     // Return an unsubscribe function that captures the exact handler reference
     return () => this.off(eventName, handler)

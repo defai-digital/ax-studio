@@ -15,10 +15,11 @@ export function isRateLimitError(error: unknown): boolean {
 }
 
 export function isTimeoutError(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === 'TimeoutError') return true
   if (error instanceof Error) {
+    if (error.name === 'TimeoutError') return true
     const msg = error.message.toLowerCase()
     if (msg.includes('timeout') || msg.includes('timed out')) return true
-    if (error.name === 'AbortError' && msg.includes('timeout')) return true
   }
   return false
 }

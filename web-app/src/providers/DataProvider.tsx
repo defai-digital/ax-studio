@@ -61,6 +61,9 @@ export function DataProvider() {
       const params = url.pathname.split('/').filter((s) => s.length > 0)
       if (params.length < 3) return
       const resource = params.slice(1).join('/')
+        .replace(/\.\./g, '')
+        .replace(/\0/g, '')
+      if (!resource || resource.startsWith('/') || resource.includes('..')) return
       // `route.hub.model` is `/hub/$modelId` — the `modelId` param is
       // required, otherwise TanStack Router throws at runtime.
       navigate({

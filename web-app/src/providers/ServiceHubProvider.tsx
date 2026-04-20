@@ -26,8 +26,7 @@ export function ServiceHubProvider({ children }: ServiceHubProviderProps) {
       .catch((error) => {
         if (cancelled) return
         console.error('Service initialization failed:', error)
-        const message = error instanceof Error ? error.message : 'Unknown error'
-        setInitError(message)
+        setInitError(error instanceof Error ? error.message : 'Unknown error')
         setIsReady(true)
       })
 
@@ -47,7 +46,9 @@ export function ServiceHubProvider({ children }: ServiceHubProviderProps) {
             Service startup failed. You can retry — some failures are transient
             (for example momentary IPC/resource contention).
           </p>
-          <p className="text-xs text-muted-foreground/80">{initError}</p>
+          <p className="text-xs text-muted-foreground/80">
+            {initError.length > 200 ? initError.slice(0, 200) + '…' : initError}
+          </p>
           <button
             type="button"
             onClick={() => setAttempt((n) => n + 1)}
