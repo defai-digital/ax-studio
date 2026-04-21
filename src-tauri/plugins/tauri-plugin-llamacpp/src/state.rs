@@ -11,7 +11,6 @@ pub struct SessionInfo {
     pub model_id: String,
     pub model_path: String,
     pub is_embedding: bool,
-    #[serde(skip_serializing)]
     pub api_key: String,
     #[serde(default)]
     pub mmproj_path: Option<String>,
