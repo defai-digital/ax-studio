@@ -293,7 +293,10 @@ export function useThreadChat({
 
   const persistMessageOnFinish = useCallback(
     (message: UIMessage, contentParts: ThreadMessage['content']) => {
-      if (contentParts.length === 0) return
+      if (contentParts.length === 0) {
+        console.warn('[persistMessageOnFinish] No content parts to persist for message', message.id, 'parts:', message.parts?.length ?? 0)
+        return
+      }
 
       const assistantMessage: ThreadMessage = {
         type: 'text',

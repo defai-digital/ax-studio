@@ -214,6 +214,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
           )
         }
         const contentParts = extractContentPartsFromUIMessage(messageForPersistence)
+        console.info('[onFinish] Persisting assistant message', message.id, 'contentParts:', contentParts.length, 'persistRef:', !!persistMessageOnFinishRef.current)
         processMemoryOnFinish(messageForPersistence, contentParts, setChatMessages)
         persistMessageOnFinishRef.current?.(messageForPersistence, contentParts)
       }
