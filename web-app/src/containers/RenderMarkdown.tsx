@@ -438,15 +438,15 @@ function MermaidDiagram({ source, theme }: { source: string; theme: string }) {
 
   if (error) {
     return (
-      <MermaidError
-        error={error}
-        chart={source}
-        retry={() => {
-          setError(null)
-          setSvgContent(null)
-          setRetryCount((c) => c + 1)
-        }}
-      />
+      <details className="my-2 rounded-lg border border-destructive/20 bg-destructive/5">
+        <summary className="px-3 py-1.5 text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+          Mermaid diagram — syntax error (click to expand)
+        </summary>
+        <div className="px-3 pb-2">
+          <pre className="text-xs text-muted-foreground whitespace-pre-wrap overflow-x-auto">{source}</pre>
+          <p className="text-xs text-destructive mt-1">{error}</p>
+        </div>
+      </details>
     )
   }
   if (!svgContent) return null
