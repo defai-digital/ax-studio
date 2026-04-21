@@ -127,6 +127,7 @@ export function useResearch(threadId: string) {
           let usedLLMFallback = false
           if (exaUnavailableForRun) {
             usedLLMFallback = true
+            addStep({ type: 'searching', query: 'Exa unavailable (rate-limited earlier) — using fallback' })
           } else {
             try {
               const toolResult = await exaSearch(question, numResults, signal)
@@ -137,7 +138,7 @@ export function useResearch(threadId: string) {
                 if (isExaRateLimitMessage(debugMsg)) exaUnavailableForRun = true
                 addStep({ type: 'searching', query: `Exa: 0 results — ${debugMsg}` })
               } else {
-                addStep({ type: 'searching', query: debugMsg })
+                addStep({ type: 'searching', query: `Exa: ${results.length} results — ${debugMsg}` })
               }
             } catch (err) {
               if (err instanceof Error && err.name === 'AbortError') throw err
