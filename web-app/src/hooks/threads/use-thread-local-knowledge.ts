@@ -43,7 +43,10 @@ export function useThreadLocalKnowledge(threadId: string) {
           },
         })
 
-        if (result?.error) return ''
+        if (result?.error) {
+          console.warn('[LocalKnowledge] fabric_search error:', result.error)
+          return ''
+        }
 
         const chunks = formatChunks(result)
         if (!chunks) return ''

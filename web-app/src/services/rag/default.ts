@@ -240,14 +240,7 @@ export class DefaultRAGService implements RAGService {
         searchResponse = JSON.parse(text)
       } catch (err) {
         console.warn('[RAG] Failed to parse search response:', err)
-        return ok({
-          thread_id: args.threadId,
-          project_id: args.projectId,
-          scope: args.scope,
-          query,
-          citations: [],
-          mode: 'hybrid',
-        })
+        return fail(`Search returned unparseable response: ${typeof text === 'string' ? text.slice(0, 200) : 'empty'}`)
       }
 
       const citations = (searchResponse.results ?? []).map((r) => ({
@@ -338,12 +331,7 @@ export class DefaultRAGService implements RAGService {
         parsed = JSON.parse(text)
       } catch (err) {
         console.warn('[RAG] Failed to parse chunks response:', err)
-        return ok({
-          thread_id: args.threadId,
-          scope: args.scope,
-          file_id: fileId,
-          chunks: [],
-        })
+        return fail(`Chunks returned unparseable response: ${typeof text === 'string' ? text.slice(0, 200) : 'empty'}`)
       }
 
       const chunks = (parsed.results ?? []).map((r) => ({

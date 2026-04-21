@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { MCPServerConfig } from '@/hooks/tools/useMCPServers'
+import { mcpServerConfigSchema } from '@/schemas/mcp.schema'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import {
   DndContext,
@@ -309,24 +310,16 @@ export default function AddEditMCPServer({
             return
           }
 
-          // Validate the config object
-          const serverConfig = config as MCPServerConfig
-
-          // Validate type field if present
-          if (
-            serverConfig.type &&
-            !['stdio', 'http', 'sse'].includes(serverConfig.type)
-          ) {
+          const parsed = mcpServerConfigSchema.safeParse(config)
+          if (!parsed.success) {
+            const firstIssue = parsed.error.issues[0]
             setError(
-              t('mcp-servers:editJson.errorInvalidType', {
-                serverName: trimmedServerName,
-                type: serverConfig.type,
-              })
+              `${trimmedServerName}: ${firstIssue?.message ?? 'Invalid config'}`
             )
             return
           }
 
-          onSave(trimmedServerName, serverConfig as MCPServerConfig)
+          onSave(trimmedServerName, parsed.data as MCPServerConfig)
         }
         onOpenChange(false)
         resetForm()

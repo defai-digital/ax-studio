@@ -161,7 +161,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     sessionTitle: thread?.title,
     systemMessage:
       promptResolution.resolvedPrompt +
-      (currentAssistant?.instructions && currentAssistant.id !== 'ax-studio'
+      (currentAssistant?.instructions
         ? '\n\n' + currentAssistant.instructions
         : '') +
       memorySuffix +

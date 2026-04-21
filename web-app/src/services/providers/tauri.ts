@@ -100,6 +100,16 @@ export class TauriProvidersService extends DefaultProvidersService {
                 capabilities = [...capabilities, ModelCapabilities.EMBEDDINGS]
               }
 
+              // Detect vision capability for local models with mmproj
+              if (!capabilities.includes(ModelCapabilities.VISION)) {
+                const hasMmproj = model.settings?.mmproj?.controller_props?.value
+                  ?? (model as Record<string, unknown>).mmproj
+                const isKnownVisionModel = /qwen.*vl|llava|minicpm|pixtral|cogvlm|internvl|phi.*vision|gemma.*vision/i.test(model.id)
+                if (hasMmproj || isKnownVisionModel) {
+                  capabilities = [...capabilities, ModelCapabilities.VISION]
+                }
+              }
+
               return {
                 id: model.id,
                 model: model.id,
@@ -212,8 +222,17 @@ export class TauriProvidersService extends DefaultProvidersService {
       const data = await response.json()
       const parsed = providerModelsResponseSchema.safeParse(data)
       if (!parsed.success) {
+        // Try to extract model IDs from common alternative formats before giving up
+        if (Array.isArray(data?.data)) {
+          return data.data.map((m: Record<string, unknown>) => m.id).filter(Boolean)
+        }
+        if (Array.isArray(data?.models)) {
+          return data.models.map((m: string | Record<string, unknown>) => typeof m === 'string' ? m : m.id).filter(Boolean)
+        }
         console.warn('Unexpected response format from provider API:', data)
-        return []
+        throw new Error(
+          `Unexpected response format from ${provider.provider}. Expected a models list but got: ${JSON.stringify(data).slice(0, 200)}`
+        )
       }
 
       const result = parsed.data

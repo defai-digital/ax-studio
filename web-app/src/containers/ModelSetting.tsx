@@ -122,7 +122,7 @@ export function ModelSetting({
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="icon-xs">
+        <Button variant="ghost" size="icon-xs" onClick={(e) => e.stopPropagation()}>
           <Settings size={18} className="text-muted-foreground" />
         </Button>
       </SheetTrigger>

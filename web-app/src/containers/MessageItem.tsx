@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { memo, useState, useCallback, useEffect } from 'react'
 import type { UIMessage, ChatStatus } from 'ai'
+import type { ThreadMessage } from '@ax-studio/core'
 import { RenderMarkdown } from './RenderMarkdown'
 import { cn } from '@/lib/utils'
 import { SourcesFooter } from '@/components/citations/SourcesFooter'
@@ -102,18 +103,20 @@ export const MessageItem = memo(
 
     const handleRating = useCallback(
       (rating: 'up' | 'down') => {
-        if (!threadId || !storedThreadMessage) return
+        if (!threadId) return
+        const targetMessage = storedThreadMessage ?? (message as unknown as ThreadMessage)
+        if (!targetMessage) return
         const existingMeta = (message.metadata ?? {}) as Record<string, unknown>
         const newRating = existingMeta.rating === rating ? undefined : rating
         updateMessage({
-          ...storedThreadMessage,
+          ...targetMessage,
           metadata: {
             ...existingMeta,
             rating: newRating,
           },
         })
       },
-      [message.metadata, storedThreadMessage, threadId, updateMessage]
+      [message, storedThreadMessage, threadId, updateMessage]
     )
 
     const handleRegenerate = useCallback(() => {

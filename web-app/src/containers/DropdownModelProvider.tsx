@@ -408,6 +408,10 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
         // Skip embedding models - they can't be used for chat
         if (modelItem.embedding) return
 
+        const modelIdLower = modelItem.id.toLowerCase()
+        // Skip non-chat models: whisper (speech-to-text), tts, audio, embedding-only
+        if (/whisper|tts|audio|speech|embed|rerank|image-gen|diffusion| dall-e/i.test(modelIdLower)) return
+
         // Skip models that require API key but don't have one
         // For custom providers, allow if they have at least one model loaded
         const isPredefined = predefinedProviders.some((e) =>
@@ -550,8 +554,9 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
       rows.push({ type: 'fav-divider' })
     }
 
-    // Provider groups
+    // Provider groups — skip providers with no visible models
     for (const [providerKey, models] of Object.entries(groupedItems)) {
+      if (models.length === 0 && !searchValue) continue
       const providerInfo = providers.find((p) => p.provider === providerKey)
       if (!providerInfo) continue
       rows.push({ type: 'provider-header', providerKey, providerInfo })
