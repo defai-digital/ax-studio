@@ -104,11 +104,6 @@ class PlatformServiceHub implements ServiceHub {
   async initialize(): Promise<void> {
     if (this.initialized) return
 
-    console.log(
-      'Initializing service hub for platform:',
-      isPlatformTauri() ? 'Tauri' : 'Web'
-    )
-
     try {
       if (isPlatformTauri()) {
         // Desktop Tauri
@@ -169,7 +164,6 @@ class PlatformServiceHub implements ServiceHub {
       }
 
       this.initialized = true
-      console.log('Service hub initialized successfully')
     } catch (error) {
       console.error('Failed to initialize service hub:', error)
       throw error

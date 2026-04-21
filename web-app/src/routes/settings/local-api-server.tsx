@@ -69,7 +69,6 @@ function LocalAPIServerContent() {
     const checkServerStatus = async () => {
       try {
         const running = await serviceHub.app().getServerStatus()
-        console.log('Server status check:', running)
         if (running) {
           setServerStatus('running')
         }
@@ -91,7 +90,6 @@ function LocalAPIServerContent() {
   const toggleAPIServer = async () => {
     // Validate API key before starting server
     if (serverStatus === 'stopped') {
-      console.log('Starting server with port:', serverPort)
       toast.info('Starting server...', {
         description: `Attempting to start server on port ${serverPort}`,
       })
@@ -119,7 +117,6 @@ function LocalAPIServerContent() {
         .getActiveModels()
         .then((loadedModels) => {
           if (loadedModels && loadedModels.length > 0) {
-            console.log(`Using already loaded model: ${loadedModels[0]}`)
             // Model already loaded, just start the server
             return Promise.resolve()
           } else {
@@ -145,7 +142,6 @@ function LocalAPIServerContent() {
               .models()
               .startModel(modelToStart.provider, modelToStart.model, true)
               .then(() => {
-                console.log(`Model ${modelToStart.model} started successfully`)
                 setIsModelLoading(false) // Model loaded, stop loading state
                 // Refresh active models after starting
                 serviceHub

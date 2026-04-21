@@ -134,7 +134,6 @@ function RootLayout() {
             <GlobalEventHandler />
             {isLogsRoute ? <LogsLayout /> : <AppLayout />}
           </ExtensionProvider>
-          {/* <TanStackRouterDevtools position="bottom-right" /> */}
           <ToolApproval />
           <AttachmentIngestionDialog />
           <OutOfContextPromiseModal />

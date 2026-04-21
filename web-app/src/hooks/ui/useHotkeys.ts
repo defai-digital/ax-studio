@@ -48,7 +48,6 @@ export function useKeyboardShortcut({
     const handleKeyDown = (e: KeyboardEvent) => {
       // Check if we're on an excluded route
       if (excludeRoutes.includes(pathname)) {
-        // console.warn('Excluded route, not executing shortcut')
         return
       }
 

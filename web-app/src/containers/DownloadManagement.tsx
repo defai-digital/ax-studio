@@ -162,7 +162,6 @@ export function DownloadManagement() {
 
   const onFileDownloadError = useCallback(
     (state: DownloadState) => {
-      console.debug('onFileDownloadError', state)
       const downloadId = getDownloadId(state)
 
       const anyState = state as unknown as { error?: string }
@@ -215,8 +214,6 @@ export function DownloadManagement() {
 
   const onModelValidationStarted = useCallback(
     (event: { modelId: string; downloadType: string }) => {
-      console.debug('onModelValidationStarted', event)
-
       // Show validation in progress toast
       toast.info(t('common:toast.modelValidationStarted.title'), {
         id: `model-validation-started-${event.modelId}`,
@@ -231,8 +228,6 @@ export function DownloadManagement() {
 
   const onModelValidationFailed = useCallback(
     (event: { modelId: string; error: string; reason: string }) => {
-      console.debug('onModelValidationFailed', event)
-
       // Dismiss the validation started toast
       toast.dismiss(`model-validation-started-${event.modelId}`)
 
@@ -249,7 +244,6 @@ export function DownloadManagement() {
 
   const onFileDownloadSuccess = useCallback(
     async (state: DownloadState) => {
-      console.debug('onFileDownloadSuccess', state)
       const downloadId = getDownloadId(state)
 
       // Dismiss any validation started toast when download completes successfully
@@ -267,7 +261,6 @@ export function DownloadManagement() {
 
   const onFileDownloadAndVerificationSuccess = useCallback(
     async (state: DownloadState) => {
-      console.debug('onFileDownloadAndVerificationSuccess', state)
       const downloadId = getDownloadId(state)
 
       // Dismiss any validation started toast when download and verification complete successfully
@@ -287,7 +280,6 @@ export function DownloadManagement() {
   )
 
   useEffect(() => {
-    console.debug('DownloadListener: registering event listeners...')
     events.on(DownloadEvent.onFileDownloadError, onFileDownloadError)
     events.on(DownloadEvent.onFileDownloadSuccess, onFileDownloadSuccess)
     events.on(DownloadEvent.onModelValidationStarted, onModelValidationStarted)
@@ -303,7 +295,6 @@ export function DownloadManagement() {
     events.on(AppEvent.onAppUpdateDownloadError, onAppUpdateDownloadError)
 
     return () => {
-      console.debug('DownloadListener: unregistering event listeners...')
       events.off(DownloadEvent.onFileDownloadError, onFileDownloadError)
       events.off(DownloadEvent.onFileDownloadSuccess, onFileDownloadSuccess)
       events.off(

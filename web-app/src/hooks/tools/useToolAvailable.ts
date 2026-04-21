@@ -25,8 +25,6 @@ const migrateOldFormatIfNeeded = (
     return { disabledTools, defaultDisabledTools }
   }
 
-  console.log('[useToolAvailable] Migrating tool availability settings to new format (server::tool)')
-
   return {
     disabledTools: {},
     defaultDisabledTools: [],

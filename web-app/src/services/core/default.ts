@@ -7,12 +7,10 @@ import type { CoreService, InvokeArgs } from './types'
 
 export class DefaultCoreService implements CoreService {
   async invoke<T = unknown>(command: string, args?: InvokeArgs): Promise<T> {
-    console.log('Core invoke called:', { command, args })
     throw new Error('Core invoke not implemented')
   }
 
   convertFileSrc(filePath: string, protocol?: string): string {
-    console.log('convertFileSrc called:', { filePath, protocol })
     return filePath
   }
 
@@ -35,7 +33,6 @@ export class DefaultCoreService implements CoreService {
     extensions: string[],
     reload = true
   ): Promise<boolean> {
-    console.log('uninstallExtension called:', { extensions, reload })
     // No-op in default implementation
     return false
   }

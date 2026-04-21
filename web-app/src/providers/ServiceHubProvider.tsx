@@ -19,7 +19,6 @@ export function ServiceHubProvider({ children }: ServiceHubProviderProps) {
     initializeServiceHub()
       .then((hub) => {
         if (cancelled) return
-        console.log('Services initialized, initializing Zustand store')
         initializeServiceHubStore(hub)
         setIsReady(true)
       })

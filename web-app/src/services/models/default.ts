@@ -210,7 +210,6 @@ export class DefaultModelsService implements ModelsService {
       )
     }
     // Note: Model name/ID updates are handled at the provider level in the frontend
-    console.log('Model update request processed for modelId:', modelId)
   }
 
   async pullModel(

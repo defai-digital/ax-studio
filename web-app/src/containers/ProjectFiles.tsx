@@ -73,7 +73,6 @@ async function getFilesFromDirectory(
   try {
     const entries = await fs.readdirSync(dirPath)
     for (const entry of entries) {
-      console.log('Reading entry:', entry)
       const stat = await fs.fileStat(entry)
       if (stat?.isDirectory) {
         const nestedFiles = await getFilesFromDirectory(entry, fs)

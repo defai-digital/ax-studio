@@ -150,10 +150,6 @@ export class DefaultUploadsService implements UploadsService {
 
     await ensureAkidbAvailable(hub)
 
-    console.log('[Uploads] ingestDocument: calling fabric_ingest_run', {
-      path: attachment.path,
-      collectionId,
-    })
     const result = await hub.callTool({
       toolName: 'fabric_ingest_run',
       arguments: {
@@ -163,7 +159,6 @@ export class DefaultUploadsService implements UploadsService {
     })
 
     const metrics = parsePipelineMetrics(result)
-    console.log('[Uploads] fabric_ingest_run result:', metrics)
 
     if (metrics.filesSucceeded === 0) {
       const errorMsg =
@@ -174,10 +169,6 @@ export class DefaultUploadsService implements UploadsService {
     }
 
     const fileId = ulid()
-    console.log('[Uploads] ingestDocument success:', {
-      fileId,
-      chunkCount: metrics.totalChunksGenerated,
-    })
 
     useFileRegistry.getState().addFile(collectionId, {
       file_id: fileId,

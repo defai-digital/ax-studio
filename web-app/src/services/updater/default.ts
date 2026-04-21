@@ -16,7 +16,6 @@ export class DefaultUpdaterService implements UpdaterService {
   async downloadAndInstallWithProgress(
     progressCallback: (event: UpdateProgressEvent) => void
   ): Promise<void> {
-    console.log('downloadAndInstallWithProgress called with callback:', typeof progressCallback)
     // No-op for non-Tauri platforms
   }
 }

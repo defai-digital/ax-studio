@@ -190,7 +190,6 @@ const initI18n = (): I18nInstance => {
 export const loadTranslations = (): void => {
   // Translations are already loaded via import.meta.glob
   // This function exists for compatibility but doesn't need to do anything
-  console.log('Translations loaded:', Object.keys(resources))
 }
 
 // Initialize and export the i18n instance

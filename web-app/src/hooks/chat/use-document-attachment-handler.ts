@@ -239,15 +239,6 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
           updateAttachmentProcessing,
         })
 
-        console.log('[attachment-debug] processAttachmentsForSend result:', {
-          count: processedAttachments.length,
-          hasEmbeddedDocuments,
-          items: processedAttachments.map((a) => ({
-            name: a.name, processed: a.processed, injectionMode: a.injectionMode,
-            hasInlineContent: !!a.inlineContent, hasId: !!a.id, error: a.error,
-          })),
-        })
-
         if (processedAttachments.length > 0) {
           setAttachmentsForThread(attachmentsKey, (prev) =>
             prev.map((att) => {

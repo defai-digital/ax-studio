@@ -8,7 +8,6 @@ import type { MCPService, MCPConfig, ToolCallWithCancellationResult } from './ty
 
 export class DefaultMCPService implements MCPService {
   async updateMCPConfig(configs: string): Promise<void> {
-    console.log('updateMCPConfig called with configs:', configs)
     // No-op - not implemented in default service
   }
 
@@ -29,7 +28,6 @@ export class DefaultMCPService implements MCPService {
   }
 
   async callTool(args: { toolName: string; arguments: object }): Promise<MCPToolCallResult> {
-    console.log('callTool called with args:', args)
     return {
       error: '',
       content: []
@@ -41,7 +39,6 @@ export class DefaultMCPService implements MCPService {
     arguments: object
     cancellationToken?: string
   }): ToolCallWithCancellationResult {
-    console.log('callToolWithCancellation called with args:', args)
     return {
       promise: Promise.resolve({
         error: '',
@@ -53,17 +50,14 @@ export class DefaultMCPService implements MCPService {
   }
 
   async cancelToolCall(cancellationToken: string): Promise<void> {
-    console.log('cancelToolCall called with token:', cancellationToken)
     // No-op - not implemented in default service
   }
 
   async activateMCPServer(name: string, config: MCPServerConfig): Promise<void> {
-    console.log('activateMCPServer called:', { name, config })
     // No-op - not implemented in default service
   }
 
   async deactivateMCPServer(name: string): Promise<void> {
-    console.log('deactivateMCPServer called with name:', name)
     // No-op - not implemented in default service
   }
 

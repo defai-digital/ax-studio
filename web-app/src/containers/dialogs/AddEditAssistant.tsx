@@ -93,8 +93,6 @@ export default function AddEditAssistant({
       setDescription(initialData.description)
       setInstructions(initialData.instructions)
       setShowEmojiPicker(false)
-      // setToolStepsInput(String(initialData.tool_steps ?? 20))
-
       // Convert parameters object to arrays of keys and values
       const keys = Object.keys(initialData.parameters || {})
       const values = Object.values(initialData.parameters || {})
@@ -133,7 +131,6 @@ export default function AddEditAssistant({
     setParamsIds([crypto.randomUUID()])
     setNameError(null)
     setShowEmojiPicker(false)
-    // setToolStepsInput('20')
   }
 
   const handleParameterChange = (
@@ -356,22 +353,6 @@ export default function AddEditAssistant({
             <div className="flex items-center justify-between">
               <label className="text-[13px] text-muted-foreground">{t('common:settings')}</label>
             </div>
-            {/* <div className="flex justify-between items-center gap-2">
-              <div className="w-full">
-                <p className="text-sm">{t('assistants:maxToolSteps')}</p>
-              </div>
-              <Input
-                value={toolStepsInput}
-                type="number"
-                min={0}
-                step="any"
-                onChange={(e) => {
-                  setToolStepsInput(e.target.value)
-                }}
-                placeholder="20"
-                className="w-18 text-right"
-              />
-            </div> */}
           </div>
 
           <div className="space-y-2 my-4">

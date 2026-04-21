@@ -62,9 +62,8 @@ export class TauriHardwareService extends DefaultHardwareService {
     }
   }
 
-  async setActiveGpus(data: { gpus: number[] }): Promise<void> {
+  async setActiveGpus(_data: { gpus: number[] }): Promise<void> {
     // Intentionally no-op in Phase 7 UI.
     // Local GPU selection UI was removed from active product flows.
-    console.log(data)
   }
 }
