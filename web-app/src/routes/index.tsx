@@ -41,6 +41,7 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   Zap,
   Columns2,
+  ChevronDown,
   Cpu,
   Bolt,
   Shield,
@@ -264,26 +265,32 @@ function Index() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Split View"
-                  title="Split View"
-                >
-                  <Columns2 className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => handleSplit('left')}>
-                  Split Left
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleSplit('right')}>
-                  Split Right
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <div className="flex items-center">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Split View"
+                title="Split View"
+                onClick={() => void handleSplit('right')}
+              >
+                <Columns2 className="size-4" />
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon-sm" className="w-4 px-0" aria-label="Split direction">
+                    <ChevronDown className="size-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => void handleSplit('left')}>
+                    Split Left
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => void handleSplit('right')}>
+                    Split Right
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </div>
       </HeaderPage>

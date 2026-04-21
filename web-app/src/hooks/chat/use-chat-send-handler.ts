@@ -149,12 +149,13 @@ export function useChatSendHandler({
             ? assistants.find((a) => a.id === projectAssistantId)
             : selectedAssistant
 
+          const threadTitle = prompt.length > 60 ? prompt.slice(0, 60) + '…' : prompt
           const newThread = await createThread(
             {
               id: selectedModel?.id ?? defaultModel(selectedProvider),
               provider: selectedProvider,
             },
-            prompt,
+            threadTitle,
             assistant,
             projectMetadata
           )

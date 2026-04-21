@@ -2,7 +2,7 @@
  * useThreadSplit — manages split-view state (splitThreadId, splitDirection,
  * splitPaneOrder) and the handleSplit callback.
  */
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useRef } from 'react'
 import { useThreads } from '@/hooks/threads/useThreads'
 import { SESSION_STORAGE_KEY } from '@/constants/chat'
 import { safeStorageGetItem, safeStorageRemoveItem } from '@/lib/storage'
@@ -13,6 +13,7 @@ export type ThreadSplitResult = {
   splitThreadId: string | null
   setSplitThreadId: (id: string | null) => void
   splitPaneOrder: string[] | null
+  isSplitCreating: boolean
   handleSplit: (direction: 'left' | 'right') => Promise<void>
 }
 
@@ -67,6 +68,10 @@ export function useThreadSplit({ thread, selectedModel, selectedProvider }: Inpu
     return null
   })
 
+  const [isSplitCreating, setIsSplitCreating] = useState(false)
+  // Ref-based mutex prevents concurrent createThread calls from rapid double-clicks
+  const creatingRef = useRef(false)
+
   const splitPaneOrder = useMemo(() => {
     if (!splitThreadId || !splitDirection) return null
     return splitDirection === 'left' ? ['split', 'main'] : ['main', 'split']
@@ -78,17 +83,25 @@ export function useThreadSplit({ thread, selectedModel, selectedProvider }: Inpu
         setSplitDirection(direction)
         return
       }
-      const newThread = await createThread(
-        {
-          id: thread?.model?.id ?? selectedModel?.id ?? '*',
-          provider: thread?.model?.provider ?? selectedProvider,
-        },
-        'New Thread',
-        thread?.assistants?.[0],
-        thread?.metadata?.project
-      )
-      setSplitThreadId(newThread.id)
-      setSplitDirection(direction)
+      if (creatingRef.current) return
+      creatingRef.current = true
+      setIsSplitCreating(true)
+      try {
+        const newThread = await createThread(
+          {
+            id: thread?.model?.id ?? selectedModel?.id ?? '*',
+            provider: thread?.model?.provider ?? selectedProvider,
+          },
+          'New Thread',
+          thread?.assistants?.[0],
+          thread?.metadata?.project
+        )
+        setSplitThreadId(newThread.id)
+        setSplitDirection(direction)
+      } finally {
+        creatingRef.current = false
+        setIsSplitCreating(false)
+      }
     },
     [
       createThread,
@@ -102,5 +115,5 @@ export function useThreadSplit({ thread, selectedModel, selectedProvider }: Inpu
     ]
   )
 
-  return { splitDirection, setSplitDirection, splitThreadId, setSplitThreadId, splitPaneOrder, handleSplit }
+  return { splitDirection, setSplitDirection, splitThreadId, setSplitThreadId, splitPaneOrder, isSplitCreating, handleSplit }
 }

@@ -139,6 +139,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     splitThreadId,
     setSplitThreadId,
     setSplitDirection,
+    isSplitCreating,
     handleSplit,
   } = useThreadSplit({ thread, selectedModel, selectedProvider })
 
@@ -319,6 +320,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
       splitThreadId={splitThreadId}
       setSplitThreadId={setSplitThreadId}
       setSplitDirection={setSplitDirection}
+      isSplitCreating={isSplitCreating}
       handleSplit={handleSplit}
       showThreadPromptEditor={showThreadPromptEditor}
       setShowThreadPromptEditor={setShowThreadPromptEditor}

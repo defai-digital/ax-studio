@@ -176,9 +176,10 @@ export function useThreadChat({
       if (
         normalizedText &&
         currentMessages.length === 0 &&
-        (!currentThread?.title || currentThread.title === 'New Thread')
+        currentThread &&
+        (!currentThread.title || currentThread.title === 'New Thread')
       ) {
-        renameThread(threadId, normalizedText)
+        renameThread(threadId, normalizedText.length > 60 ? normalizedText.slice(0, 60) + '…' : normalizedText)
       }
 
       const messageId = generateId()

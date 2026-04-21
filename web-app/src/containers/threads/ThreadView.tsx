@@ -25,7 +25,7 @@ import { TeamVariablePrompt } from '@/components/TeamVariablePrompt'
 import { CostApprovalModal } from '@/components/CostApprovalModal'
 import { SplitThreadContainer } from '@/containers/threads/SplitThreadContainer'
 import { MainThreadPane } from '@/containers/threads/MainThreadPane'
-import { Columns2, MessageSquareText, Users } from 'lucide-react'
+import { ChevronDown, Columns2, MessageSquareText, Users } from 'lucide-react'
 import { toast } from 'sonner'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -58,6 +58,7 @@ export type ThreadViewProps = {
   splitThreadId: string | null
   setSplitThreadId: (id: string | null) => void
   setSplitDirection: (dir: 'left' | 'right' | null) => void
+  isSplitCreating: boolean
   handleSplit: (dir: 'left' | 'right') => Promise<void>
   showThreadPromptEditor: boolean
   setShowThreadPromptEditor: (show: boolean | ((v: boolean) => boolean)) => void
@@ -101,6 +102,7 @@ export function ThreadView({
   splitThreadId,
   setSplitThreadId,
   setSplitDirection,
+  isSplitCreating,
   handleSplit,
   showThreadPromptEditor,
   setShowThreadPromptEditor,
@@ -180,27 +182,41 @@ export function ThreadView({
                 <span className="size-4 flex items-center justify-center text-xs font-bold text-amber-500">!</span>
               </Button>
             )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Split View"
-                  title="Split View"
-                >
-                  <Columns2 className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => handleSplit('left')}>Split Left</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleSplit('right')}>Split Right</DropdownMenuItem>
-                {splitPaneOrder && (
-                  <DropdownMenuItem onSelect={() => { setSplitThreadId(null); setSplitDirection(null) }}>
-                    Close Split View
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <div className="flex items-center">
+              <Button
+                variant={splitPaneOrder ? 'secondary' : 'ghost'}
+                size="icon-sm"
+                aria-label={splitPaneOrder ? 'Close Split View' : 'Split View'}
+                title={splitPaneOrder ? 'Close Split View' : 'Split View'}
+                disabled={isSplitCreating}
+                onClick={() => {
+                  if (splitPaneOrder) {
+                    setSplitThreadId(null)
+                    setSplitDirection(null)
+                  } else {
+                    void handleSplit('right')
+                  }
+                }}
+              >
+                <Columns2 className="size-4" />
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon-sm" className="w-4 px-0" aria-label="Split direction" disabled={isSplitCreating}>
+                    <ChevronDown className="size-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem disabled={isSplitCreating} onSelect={() => void handleSplit('left')}>Split Left</DropdownMenuItem>
+                  <DropdownMenuItem disabled={isSplitCreating} onSelect={() => void handleSplit('right')}>Split Right</DropdownMenuItem>
+                  {splitPaneOrder && (
+                    <DropdownMenuItem onSelect={() => { setSplitThreadId(null); setSplitDirection(null) }}>
+                      Close Split View
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </div>
       </HeaderPage>

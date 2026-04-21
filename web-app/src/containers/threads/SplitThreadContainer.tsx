@@ -30,6 +30,7 @@ import {
   ARTIFACT_FORMAT_INSTRUCTION,
   LOCAL_KNOWLEDGE_INSTRUCTION,
 } from '@/lib/system-prompt'
+import { toast } from 'sonner'
 import { ResearchPanel } from '@/components/research/ResearchPanel'
 import { MainThreadPane } from '@/containers/threads/MainThreadPane'
 
@@ -224,7 +225,14 @@ export function SplitThreadContainer({
   const handleSubmit = useCallback(
     async (text: string) => {
       if (handleResearchCommand(text)) return
-      await processAndSendMessage(text)
+      try {
+        await processAndSendMessage(text)
+      } catch (error) {
+        console.error('Failed to submit split thread message:', error)
+        toast.error('Failed to send message', {
+          description: error instanceof Error ? error.message : 'Please try again.',
+        })
+      }
     },
     [processAndSendMessage, handleResearchCommand],
   )

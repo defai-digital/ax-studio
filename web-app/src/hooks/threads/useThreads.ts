@@ -449,10 +449,17 @@ export const useThreads = create<ThreadState>()((set, get) => ({
         title: newTitle,
         updated: Math.floor(Date.now() / 1000),
       }
-      getServiceHub()
-        .threads()
-        .updateThread(updatedThread)
-        .catch(reportPersistenceError('rename thread'))
+      const persist = () =>
+        getServiceHub()
+          .threads()
+          .updateThread(updatedThread)
+          .catch(reportPersistenceError('rename thread'))
+
+      if (thread.title === 'New Thread' || !thread.title) {
+        setTimeout(persist, 500)
+      } else {
+        persist()
+      }
       const newThreads = { ...state.threads, [threadId]: updatedThread }
       return {
         threads: newThreads,
