@@ -363,7 +363,7 @@ function MermaidDiagram({ source, theme }: { source: string; theme: string }) {
 
     // Use 'loose' security: Mermaid v11 renders labels via <foreignObject> HTML,
     // which 'strict' mode strips. SVG is produced locally by mermaid — not user input.
-    mermaidLib.initialize({ startOnLoad: false, securityLevel: 'strict', theme: theme as never })
+    mermaidLib.initialize({ startOnLoad: false, securityLevel: 'loose', theme: theme as never })
     const renderWithRetry = async () => {
       const id = `mermaid-${Math.random().toString(36).slice(2)}`
 
@@ -453,8 +453,8 @@ function MermaidDiagram({ source, theme }: { source: string; theme: string }) {
   return (
     <div
       className="my-2 overflow-x-auto"
-      // biome-ignore lint/security/noDangerouslySetInnerHtml: mermaid SVG sanitized — foreignObject stripped, securityLevel=strict
-      dangerouslySetInnerHTML={{ __html: svgContent.replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, '') }}
+      // biome-ignore lint/security/noDangerouslySetInnerHtml: Mermaid SVG — generated locally by mermaid library, not user input. 'loose' mode needed for text labels via foreignObject.
+      dangerouslySetInnerHTML={{ __html: svgContent }}
     />
   )
 }
