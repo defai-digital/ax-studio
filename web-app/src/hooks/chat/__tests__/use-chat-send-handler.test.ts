@@ -10,11 +10,13 @@ const {
   mockCreateThread,
   mockUpdateThread,
   mockGetProjectById,
+  mockRouterSearch,
 } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
   mockCreateThread: vi.fn(),
   mockUpdateThread: vi.fn(),
   mockGetProjectById: vi.fn(),
+  mockRouterSearch: {} as Record<string, string>,
 }))
 
 // Mutable state for model provider — cannot use vi.hoisted for these
@@ -25,7 +27,10 @@ const modelState = vi.hoisted(() => ({
 }))
 
 vi.mock('@tanstack/react-router', () => ({
-  useRouter: () => ({ navigate: mockNavigate }),
+  useRouter: () => ({
+    navigate: mockNavigate,
+    state: { location: { search: mockRouterSearch } },
+  }),
 }))
 
 vi.mock('@/constants/routes', () => ({
@@ -98,11 +103,9 @@ describe('useChatSendHandler', () => {
     modelState.selectedModel = { id: 'model-1' }
     modelState.selectedProvider = 'openai'
     sessionStorage.clear()
-    // Reset window.location.search
-    Object.defineProperty(window, 'location', {
-      value: { search: '' },
-      writable: true,
-    })
+    for (const key of Object.keys(mockRouterSearch)) {
+      delete mockRouterSearch[key]
+    }
   })
 
   // ── Phase 1: Guard branches ──────────────────────────────────────────────
@@ -156,10 +159,7 @@ describe('useChatSendHandler', () => {
   // ── Phase 3: Temporary chat path ─────────────────────────────────────────
 
   it('navigates to temporary chat and stores message in sessionStorage', async () => {
-    Object.defineProperty(window, 'location', {
-      value: { search: '?temporary-chat=true' },
-      writable: true,
-    })
+    mockRouterSearch['temporary-chat'] = 'true'
     const input = defaultInput()
     const { result } = renderHook(() => useChatSendHandler(input))
 

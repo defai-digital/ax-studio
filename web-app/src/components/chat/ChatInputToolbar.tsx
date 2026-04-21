@@ -283,6 +283,26 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
               </DropdownMenuContent>
             </DropdownMenu>
 
+            {(selectedAssistant || currentThread?.assistants?.[0]) && !projectId && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-accent/50 text-[11px] text-muted-foreground max-w-[120px] truncate">
+                    <AvatarEmoji
+                      avatar={(selectedAssistant ?? currentThread?.assistants?.[0])?.avatar}
+                      imageClassName="w-3 h-3 object-contain"
+                      textClassName="text-[10px]"
+                    />
+                    <span className="truncate">
+                      {(selectedAssistant ?? currentThread?.assistants?.[0])?.name ?? 'Assistant'}
+                    </span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Active: {(selectedAssistant ?? currentThread?.assistants?.[0])?.name ?? 'Assistant'}</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+
             {selectedModel?.capabilities?.includes('embeddings') && (
               <Tooltip>
                 <TooltipTrigger asChild>

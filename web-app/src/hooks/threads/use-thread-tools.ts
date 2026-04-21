@@ -201,11 +201,14 @@ export function useThreadTools({
 
             let result
 
+            const toolArgs = (typeof toolCall.input === 'object' && toolCall.input !== null)
+              ? toolCall.input as Record<string, unknown>
+              : {}
+
             if (ragToolNames && ragToolNames.has(toolName)) {
-              // Route to RAG service (per-thread document retrieval via AkiDB)
               result = await serviceHub.rag().callTool({
                 toolName,
-                arguments: toolCall.input as Record<string, unknown>,
+                arguments: toolArgs,
                 threadId,
                 projectId,
                 scope: projectId ? 'project' : 'thread',
@@ -213,7 +216,7 @@ export function useThreadTools({
             } else if (mcpToolNames.has(toolName)) {
               result = await serviceHub.mcp().callTool({
                 toolName,
-                arguments: toolCall.input,
+                arguments: toolArgs,
               })
             } else {
               result = { error: `Tool '${toolName}' not found in any service` }

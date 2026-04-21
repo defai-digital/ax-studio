@@ -8,8 +8,8 @@ import {
 import type { AgentStatusData } from '@/types/agent-data-parts'
 import { sanitize } from './sanitize'
 import { truncateToTokenLimit } from './truncate'
-import { extractAgentText } from './extract-agent-text'
 import { handleSubAgentError, isAbortError, isTimeoutError } from './error-handling'
+import { runSubAgent } from './run-agent'
 import type { TokenUsageTracker } from './token-usage-tracker'
 import type { AgentHealthMonitor } from './agent-health-monitor'
 import type { MultiAgentRunLog } from './run-log'
@@ -153,82 +153,39 @@ Capabilities: ${agent.description ?? agent.role ?? agent.name}`,
         })
 
         try {
-          // Create sub-agent model (on demand)
-          const subAgentModel = agent.model_override_id
-            ? await options.createModel(
-                agent.model_override_id,
-                agent.parameters ?? {}
-              )
-            : options.model
-
-          const agentTools = resolveToolsForAgent(agent, options.allTools)
-
-          // Build abort signal with timeout if configured
-          let agentAbortSignal = abortSignal
-          if (agent.timeout?.total_ms) {
-            const timeoutSignal = AbortSignal.timeout(agent.timeout.total_ms)
-            agentAbortSignal = abortSignal
-              ? AbortSignal.any([abortSignal, timeoutSignal])
-              : timeoutSignal
-          }
-
-          const subAgent = new Agent({
-            model: subAgentModel,
-            system: agent.instructions,
-            tools: agentTools,
-            stopWhen: stepCountIs(agent.max_steps ?? 10),
+          const agentResult = await runSubAgent({
+            agent,
+            prompt: scopedPrompt,
+            model: options.model,
+            createModel: options.createModel,
+            allTools: options.allTools,
+            abortSignal,
+            tokenTracker: options.tokenTracker,
+            runLog: options.runLog,
+            healthMonitor: options.healthMonitor,
           })
 
-          // Run sub-agent with scoped prompt (not messages)
-          const result = await subAgent.generate({
-            prompt: scopedPrompt,
-            abortSignal: agentAbortSignal,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } as any)
-
-          // Track tokens
-          const agentTokens = result.usage?.totalTokens ?? 0
-          options.tokenTracker.add(agentTokens)
-          options.runLog.addAgentStep(agent, result, agentTokens)
-
-          // Record success
-          options.healthMonitor.recordSuccess(agent.id)
-
-          // Collect tool calls for UI
-          const toolCallLog = result.steps
-            .flatMap((s) => s.toolCalls ?? [])
-            .map((tc) => ({ name: tc.toolName, args: tc.input }))
-
-          const agentText = extractAgentText(result)
-
-          // Diagnostic: log when result.text is empty
-          if (!result.text && agentText) {
-            console.warn(
-              `[MultiAgent] Agent "${agent.name}" had empty result.text but extractAgentText recovered ${agentText.length} chars`
-            )
-          } else if (!result.text && !agentText) {
+          const toolCallLog = agentResult.toolCalls
+          if (!agentResult.text) {
             console.warn(
               `[MultiAgent] Agent "${agent.name}" produced no text at all.`,
-              `Steps: ${result.steps.length},`,
-              `Tokens: ${agentTokens},`,
-              `FinishReason: ${result.steps[result.steps.length - 1]?.finishReason}`
+              `Tokens: ${agentResult.tokens}`
             )
           }
 
-          // Emit completion status
           options.emitDataPart('agentStatus', {
             agent_id: agent.id,
             agent_name: agent.name,
             agent_role: agent.role,
             status: 'complete',
-            tokens_used: agentTokens,
+            tokens_used: agentResult.tokens,
             tool_calls: toolCallLog,
           })
 
           return {
-            text: agentText,
+            text: agentResult.text,
             toolCalls: toolCallLog,
-            tokensUsed: agentTokens,
+            tokensUsed: agentResult.tokens,
           }
         } catch (error) {
           // Re-throw user-initiated aborts immediately (not timeouts)

@@ -158,6 +158,28 @@ export class TauriProvidersService extends DefaultProvidersService {
       throw new Error('Provider must have base_url configured')
     }
 
+    const parsedUrl = new URL(provider.base_url)
+    if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
+      throw new Error('Provider base_url must use http:// or https:// scheme')
+    }
+    const hostname = parsedUrl.hostname
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '::1' ||
+      hostname.endsWith('.local') ||
+      hostname.endsWith('.internal') ||
+      hostname.startsWith('192.168.') ||
+      hostname.startsWith('10.') ||
+      /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname) ||
+      hostname.startsWith('169.254.')
+    ) {
+      // Allow local/private addresses (Ollama, LM Studio, etc.) but not cloud metadata
+      if (hostname === '169.254.169.254') {
+        throw new Error('Cloud metadata endpoint is not allowed as provider base_url')
+      }
+    }
+
     const controller = new AbortController()
     const timeoutId = setTimeout(() => {
       controller.abort()

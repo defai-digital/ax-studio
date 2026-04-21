@@ -15,7 +15,7 @@ import type { AgentDef } from './delegation-tools'
 import { resolveToolsForAgent } from './delegation-tools'
 import { isAbortError } from './error-handling'
 import { buildOrchestratorPrompt } from './orchestrator-prompt'
-import { extractAgentText } from './extract-agent-text'
+import { runSubAgent } from './run-agent'
 
 export type ParallelOrchestrationOptions = {
   model: LanguageModel
@@ -105,78 +105,39 @@ export function buildParallelOrchestration(
           })
 
           try {
-            // Create sub-agent model
-            const subAgentModel = agent.model_override_id
-              ? await options.createModel(
-                  agent.model_override_id,
-                  agent.parameters ?? {}
-                )
-              : options.model
-
-            const agentTools = resolveToolsForAgent(agent, options.allTools)
-
-            // Build abort signal with timeout if configured
-            let agentAbortSignal = abortSignal
-            if (agent.timeout?.total_ms) {
-              const timeoutSignal = AbortSignal.timeout(agent.timeout.total_ms)
-              agentAbortSignal = abortSignal
-                ? AbortSignal.any([abortSignal, timeoutSignal])
-                : timeoutSignal
-            }
-
-            const subAgent = new Agent({
-              model: subAgentModel,
-              system: agent.instructions,
-              tools: agentTools,
-              stopWhen: stepCountIs(agent.max_steps ?? 10),
+            const agentResult = await runSubAgent({
+              agent,
+              prompt: task,
+              model: options.model,
+              createModel: options.createModel,
+              allTools: options.allTools,
+              abortSignal,
+              tokenTracker: options.tokenTracker,
+              runLog: options.runLog,
+              healthMonitor: options.healthMonitor,
             })
 
-            const result = await subAgent.generate({
-              prompt: task,
-              abortSignal: agentAbortSignal,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            } as any)
-
-            const agentTokens = result.usage?.totalTokens ?? 0
-            options.tokenTracker.add(agentTokens)
-            options.runLog.addAgentStep(agent, result, agentTokens)
-            options.healthMonitor.recordSuccess(agent.id)
-
-            const toolCallLog = result.steps
-              .flatMap((s) => s.toolCalls ?? [])
-              .map((tc) => ({ name: tc.toolName, args: tc.input }))
-
-            const agentText = extractAgentText(result)
-
-            // Diagnostic: log when result.text is empty but we recovered text
-            if (!result.text && agentText) {
-              console.warn(
-                `[MultiAgent] Agent "${agent.name}" had empty result.text but extractAgentText recovered ${agentText.length} chars`
-              )
-            } else if (!result.text && !agentText) {
+            if (!agentResult.text) {
               console.warn(
                 `[MultiAgent] Agent "${agent.name}" produced no text at all.`,
-                `Steps: ${result.steps.length},`,
-                `Tokens: ${agentTokens},`,
-                `FinishReason: ${result.steps[result.steps.length - 1]?.finishReason}`
+                `Tokens: ${agentResult.tokens}`
               )
             }
 
-            // Emit completion status
             options.emitDataPart('agentStatus', {
               agent_id: agent.id,
               agent_name: agent.name,
               agent_role: agent.role,
               status: 'complete',
-              tokens_used: agentTokens,
-              tool_calls: toolCallLog,
+              tokens_used: agentResult.tokens,
+              tool_calls: agentResult.toolCalls,
             })
 
             return {
               agent: agent.name,
               role: agent.role,
               output: truncateToTokenLimit(
-                agentText,
+                agentResult.text,
                 agent.max_result_tokens ?? 4000
               ),
             }

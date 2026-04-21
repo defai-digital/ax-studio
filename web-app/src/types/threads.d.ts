@@ -3,6 +3,22 @@ type ThreadModel = {
   provider: string
 }
 
+type ThreadProjectMeta = {
+  id: string
+  name: string
+  updated_at: number
+  logo?: string
+  projectPrompt?: string | null
+}
+
+type ThreadMetadata = {
+  project?: ThreadProjectMeta
+  threadPrompt?: string | null
+  rating?: 'up' | 'down'
+  citationData?: unknown
+  [key: string]: unknown
+}
+
 type Thread = {
   assistants?: ThreadAssistantInfo[]
   id: string
@@ -12,17 +28,7 @@ type Thread = {
   model?: ThreadModel
   updated: number
   order?: number
-  metadata?: {
-    project?: {
-      id: string
-      name: string
-      updated_at: number
-      logo?: string
-      projectPrompt?: string | null
-    }
-    threadPrompt?: string | null
-    [key: string]: unknown
-  }
+  metadata?: ThreadMetadata
 }
 
 type Assistant = {

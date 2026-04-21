@@ -187,7 +187,17 @@ export class ExtensionManager {
     // Import class for Tauri extensions
     const extensionUrl = extension.url
     try {
-      const extensionClass = await import(/* @vite-ignore */ getServiceHub().core().convertFileSrc(extensionUrl))
+      const convertedUrl = getServiceHub().core().convertFileSrc(extensionUrl)
+      const resolvedUrl = new URL(convertedUrl)
+      if (resolvedUrl.protocol !== 'https:' && resolvedUrl.protocol !== 'http:') {
+        console.error(`Extension "${extension.name}" blocked: unsupported URL protocol "${resolvedUrl.protocol}"`)
+        return
+      }
+      if (resolvedUrl.hostname !== 'localhost' && resolvedUrl.hostname !== '127.0.0.1' && resolvedUrl.protocol !== 'tauri:') {
+        console.error(`Extension "${extension.name}" blocked: URL hostname "${resolvedUrl.hostname}" is not allowed (only localhost/tauri:// allowed)`)
+        return
+      }
+      const extensionClass = await import(/* @vite-ignore */ convertedUrl)
       // Register class if it has a default export
       if (
         typeof extensionClass.default === 'function' &&

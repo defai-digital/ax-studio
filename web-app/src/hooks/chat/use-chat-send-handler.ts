@@ -53,6 +53,7 @@ export function useChatSendHandler({
   const selectedProvider = useModelProvider((s) => s.selectedProvider)
   const createThread = useThreads((s) => s.createThread)
   const router = useRouter()
+  const search = router.state?.location?.search ?? {}
   // Double-submit guard: a rapid double-click on the send button used to
   // create two threads (and navigate to one, leaving the other orphaned).
   // A ref-based mutex keeps this predictable without triggering re-renders.
@@ -85,9 +86,7 @@ export function useChatSendHandler({
         }
 
         // New-thread path — create thread and navigate
-        const isTemporaryChat = window.location.search.includes(
-          `${TEMPORARY_CHAT_QUERY_ID}=true`
-        )
+        const isTemporaryChat = search[TEMPORARY_CHAT_QUERY_ID] === 'true'
 
         const messagePayload = { text: prompt }
 

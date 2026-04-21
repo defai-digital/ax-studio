@@ -49,6 +49,9 @@ export async function executeSingleAgentStream(
 
   let streamStartTime: number | undefined
 
+  let consecutiveToolErrors = 0
+  const MAX_CONSECUTIVE_TOOL_ERRORS = 2
+
   const result = streamText({
     model,
     messages: modelMessages,
@@ -56,7 +59,25 @@ export async function executeSingleAgentStream(
     tools: shouldEnableTools ? tools : undefined,
     toolChoice: shouldEnableTools ? 'auto' : undefined,
     system: systemMessage,
-    stopWhen: shouldEnableTools ? stepCountIs(5) : stepCountIs(1),
+    stopWhen: shouldEnableTools
+      ? ({ steps }) => {
+          if (steps.length >= 5) return true
+          const lastStep = steps[steps.length - 1]
+          if (lastStep) {
+            const hasError = lastStep.toolResults?.some(
+              (r: { result?: unknown }) =>
+                typeof r.result === 'object' && r.result !== null && 'error' in (r.result as Record<string, unknown>)
+            )
+            if (hasError) {
+              consecutiveToolErrors++
+              if (consecutiveToolErrors >= MAX_CONSECUTIVE_TOOL_ERRORS) return true
+            } else {
+              consecutiveToolErrors = 0
+            }
+          }
+          return false
+        }
+      : stepCountIs(1),
   })
 
   let tokensPerSecond = 0

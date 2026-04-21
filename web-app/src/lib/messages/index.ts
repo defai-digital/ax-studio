@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { ChatCompletionMessageParam } from 'token.js'
 import { ChatCompletionMessageToolCall } from 'openai/resources'
 import { ThreadMessage, ContentType, MessageStatus } from '@ax-studio/core'
@@ -111,9 +110,11 @@ export class CompletionMessagesBuilder {
   private toCompletionParamFromThread(
     msg: ThreadMessage
   ): ChatCompletionMessageParam {
-    const inlineFileContents = Array.isArray(
-      (msg.metadata as any)?.inline_file_contents
-    )
+     const inlineFileContents = Array.isArray(
+       // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       (msg.metadata as any)?.inline_file_contents
+     )
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ? ((msg.metadata as any)?.inline_file_contents as Array<{
           name?: string
           content?: string
@@ -349,6 +350,7 @@ const parseReasoning = (text: string) => {
 export function convertThreadMessageToUIMessage(
   threadMessage: ThreadMessage
 ): UIMessage {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parts: any[] = []
 
   // Process content array - preserve original order (including tool calls)
@@ -434,6 +436,7 @@ export function convertThreadMessageToUIMessage(
 
   // BACKWARD COMPATIBILITY: Handle tool calls from metadata (old format)
   // New messages will have tool calls as separate messages with tool_call_id
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const toolCalls = (threadMessage.metadata as any)?.tool_calls
   if (Array.isArray(toolCalls)) {
     for (const tc of toolCalls) {
@@ -519,6 +522,7 @@ export function convertThreadMessagesToUIMessages(
  */
 export function extractContentPartsFromUIMessage(message: UIMessage): ThreadContent[] {
   const content: ThreadContent[] = []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parts = (message.parts ?? []) as any[]
 
   for (const part of parts) {
