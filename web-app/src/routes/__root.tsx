@@ -1,5 +1,4 @@
 import { createRootRoute, Outlet, useLocation } from '@tanstack/react-router'
-// import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 
 import DialogAppUpdater from '@/containers/dialogs/AppUpdater'
 import { Fragment } from 'react/jsx-runtime'

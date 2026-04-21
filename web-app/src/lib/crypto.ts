@@ -86,13 +86,6 @@ const getEncryptionKey = async (): Promise<CryptoKey> => {
   return keyPromise
 }
 
-const legacyEncrypt = (text: string): string => {
-  // Keep backwards compatible decode path for previously stored values.
-  // The previous XOR write path produced bytes that `decodeLegacy` could not
-  // reverse, so new legacy writes must stay decodable by plain base64 decode.
-  return encodeBase64(utf8Encoder.encode(text))
-}
-
 export async function encrypt(text: string): Promise<string> {
   if (!text) return text
 

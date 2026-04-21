@@ -12,8 +12,6 @@ import {
 // Re-export types and helpers so existing importers don't break
 export type { SessionData, ChatSession } from '@/lib/chat/chat-session-types'
 export { isSessionBusy } from '@/lib/chat/chat-session-controller'
-// import { showChatCompletionToast } from "@/components/toasts/chat-completion-toast";
-
 import type { SessionData, ChatSession } from '@/lib/chat/chat-session-types'
 
 interface ChatSessionState {

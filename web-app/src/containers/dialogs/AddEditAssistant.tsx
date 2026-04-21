@@ -63,8 +63,6 @@ export default function AddEditAssistant({
   const emojiPickerRef = useRef<HTMLDivElement>(null)
   const emojiPickerTriggerRef = useRef<HTMLDivElement>(null)
   const [nameError, setNameError] = useState<string | null>(null)
-  // const [toolStepsInput, setToolStepsInput] = useState('20')
-
   // Handle click outside emoji picker or trigger
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -234,7 +232,6 @@ export default function AddEditAssistant({
       }
     })
 
-    // const parsedToolSteps = Number(toolStepsInput)
     const assistant: Assistant = {
       avatar,
       id: initialData?.id || crypto.randomUUID(),
