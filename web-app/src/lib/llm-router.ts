@@ -327,7 +327,6 @@ export async function routeMessage(
       const latencyMs = performance.now() - startTime
 
       const parsed = parseRouterResponse(text, availableModels)
-      console.debug('[LLM Router] response:', text, '→ parsed:', parsed)
       if (!parsed) {
         return createFallbackResult(
           fallbackModelId,

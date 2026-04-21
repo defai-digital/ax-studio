@@ -66,22 +66,6 @@ export const safeStorageRemoveItem = (
   }
 }
 
-export const safeStorageGetJson = <T>(
-  storage: StorageLike,
-  key: string,
-  context?: string
-): T | null => {
-  const raw = safeStorageGetItem(storage, key, context)
-  if (!raw) return null
-
-  try {
-    return JSON.parse(raw) as T
-  } catch (error) {
-    logStorageError('parse', key, error, context)
-    return null
-  }
-}
-
 export const createSafeJSONStorage = <T>(
   getStorage: () => StorageLike,
   context?: string

@@ -93,14 +93,6 @@ export interface ModelValidationResult {
 }
 
 
-export type PreflightReason =
-  | 'AUTH_REQUIRED'
-  | 'LICENSE_NOT_ACCEPTED'
-  | 'NOT_FOUND'
-  | 'RATE_LIMITED'
-  | 'NETWORK'
-  | 'UNKNOWN'
-
 export interface ModelsService {
   getModel(modelId: string): Promise<modelInfo | undefined>
   fetchModels(): Promise<modelInfo[]>

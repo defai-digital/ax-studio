@@ -49,7 +49,7 @@ export function parseMemoryFromResponse(text: string): MemoryParseResult {
     if (Array.isArray(parsed)) {
       const facts = parsed.filter((f: unknown) => typeof f === 'string' && (f as string).trim().length > 0) as string[]
       if (facts.length > 0) {
-        console.log('[Memory] Full memory replace with facts:', facts)
+        // Memory facts extracted successfully
       }
       return { facts, isFullReplace: true, cleanedText }
     }
@@ -193,7 +193,6 @@ export function mergePatternFacts(
           updatedAt: now,
         }
         replaced = true
-        console.log(`[Memory] Updated "${result[i].fact}" → "${newFact}"`)
         break
       }
     }
@@ -206,7 +205,6 @@ export function mergePatternFacts(
         createdAt: now,
         updatedAt: now,
       })
-      console.log(`[Memory] Added new fact: "${newFact}"`)
     }
   }
 

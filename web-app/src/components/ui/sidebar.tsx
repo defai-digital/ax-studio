@@ -362,13 +362,10 @@ const SidebarRail = React.forwardRef<
 
 	return (
 		<button
-			//* updated ref to use combinedRef
 			ref={combinedRef}
 			data-sidebar="rail"
 			aria-label="Toggle Sidebar"
 			tabIndex={-1}
-			// onClick={toggleSidebar}
-			//* replace onClick with onMouseDown
 			onMouseDown={handleMouseDown}
 			title="Toggle Sidebar"
 			className={cn(

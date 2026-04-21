@@ -181,7 +181,6 @@ export class ExtensionManager {
     // Check if extension already has a pre-loaded instance (web extensions)
     if (extension.extensionInstance) {
       this.register(extension.name, extension.extensionInstance)
-      console.log(`Extension '${extension.name}' registered with pre-loaded instance`)
       return
     }
     

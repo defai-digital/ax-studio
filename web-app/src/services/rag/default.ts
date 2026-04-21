@@ -143,7 +143,6 @@ export class DefaultRAGService implements RAGService {
       return ''
     }
 
-    console.log('[RAG] parseDocument: calling fabric_extract for', path)
     try {
       const result = await hub.callTool({
         toolName: 'fabric_extract',
@@ -164,14 +163,8 @@ export class DefaultRAGService implements RAGService {
       try {
         const parsed = JSON.parse(text)
         const content = typeof parsed.text === 'string' ? parsed.text : ''
-        console.log('[RAG] parseDocument success:', content.length, 'chars')
         return content
       } catch {
-        console.log(
-          '[RAG] parseDocument success (plain text):',
-          text.length,
-          'chars'
-        )
         return text
       }
     } catch (err) {

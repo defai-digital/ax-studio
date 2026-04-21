@@ -56,9 +56,6 @@ function ExtensionsContent() {
                     <h1 className="text-foreground font-studio font-medium text-base">
                       {t('settings:extensions.title')}
                     </h1>
-                    {/* <div className="flex items-center gap-2">
-                    <Button size="sm">Install Extension</Button>
-                  </div> */}
                   </div>
                 }
               >
