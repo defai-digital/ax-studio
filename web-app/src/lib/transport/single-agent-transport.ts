@@ -10,6 +10,7 @@ import {
 import type { UIMessageChunk } from 'ai'
 import type { TokenUsageCallback } from './transport-types'
 import { stripUnavailableToolParts } from './transport-types'
+import { useAppState } from '@/hooks/settings/useAppState'
 
 export interface SingleAgentConfig {
   model: LanguageModel
@@ -102,6 +103,12 @@ export async function executeSingleAgentStream(
         } else {
           tokenSpeed = 0
         }
+
+        useAppState.getState().setTokenSpeed(
+          { id: '' } as any,
+          Math.round(tokenSpeed * 10) / 10,
+          tokenCount,
+        )
 
         return {
           usage: {

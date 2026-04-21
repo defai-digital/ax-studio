@@ -74,7 +74,7 @@ function parsePipelineMetrics(result: {
       errors: Array.isArray(metrics?.errors) ? metrics.errors : [],
     }
   } catch {
-    throw new Error(`Failed to parse pipeline metrics: ${text.slice(0, 200)}`)
+    throw new Error(`Failed to parse pipeline metrics: ${typeof text === 'string' ? text.slice(0, 200) : String(text)}`)
   }
 }
 

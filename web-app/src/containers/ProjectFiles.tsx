@@ -210,20 +210,37 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
 
       setUploading(true)
       try {
+        const errors: string[] = []
         for (const att of newAttachments) {
-          const result = await serviceHub
-            .uploads()
-            .ingestFileAttachmentForProject(projectId, att)
-          if (!result.id) {
-            throw new Error('Failed to ingest file')
+          try {
+            const result = await serviceHub
+              .uploads()
+              .ingestFileAttachmentForProject(projectId, att)
+            if (!result.id) {
+              errors.push(att.name)
+            }
+          } catch (attErr) {
+            errors.push(`${att.name}: ${attErr instanceof Error ? attErr.message : String(attErr)}`)
           }
         }
-        toast.success(
-          t('common:toast.fileUploaded.title') ?? 'File uploaded successfully'
-        )
+        if (errors.length === 0) {
+          toast.success(
+            t('common:toast.fileUploaded.title') ?? 'File uploaded successfully'
+          )
+        } else if (errors.length < newAttachments.length) {
+          toast.warning(
+            `${newAttachments.length - errors.length} of ${newAttachments.length} files uploaded`,
+            { description: errors.join('\n') }
+          )
+        } else {
+          toast.error(
+            t('common:toast.uploadFailed.title') ?? 'Failed to upload file',
+            { description: errors.join('\n') }
+          )
+        }
         await loadProjectFiles()
       } catch (error) {
-        console.error('Failed to upload file:', error)
+        console.error('Failed to upload files:', error)
         toast.error(
           t('common:toast.uploadFailed.title') ?? 'Failed to upload file',
           {

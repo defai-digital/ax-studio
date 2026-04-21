@@ -80,11 +80,9 @@ export function useThreadMemory(threadId: string) {
       }
 
       if (isNewMessage && useMemory.getState().isMemoryEnabledForThread(threadId) && contentParts.length > 0) {
-        // Serialize memory writes to prevent concurrent read-modify-write races
         memoryWriteLock = memoryWriteLock.then(() => {
         let toasted = false
 
-        // Step 1: Apply LLM delta ops (surgical add/update/delete)
         if (allOps.length > 0) {
           const existing = useMemory.getState().getMemories('default')
           const updated = applyMemoryDelta(existing, allOps, threadId)
@@ -100,9 +98,6 @@ export function useThreadMemory(threadId: string) {
           }
         }
 
-        // Step 2: Pattern fallback — use ref captured at submit time (no stale-closure issues).
-        // mergePatternFacts deduplicates by category, so no duplicates from Step 1.
-        // Always saves to also correct wrong LLM-written facts (e.g. name="vegetarian" → "Alex").
         const userText = lastUserInputRef.current
         if (userText) {
           const patternFacts = extractFactsFromPatterns(userText)
@@ -115,27 +110,36 @@ export function useThreadMemory(threadId: string) {
               toast.success(`Remembered ${newlyAdded} new fact${newlyAdded !== 1 ? 's' : ''}`)
           }
         }
-        }).catch(console.error) // end of memoryWriteLock chain
+        }).catch(console.error)
       }
 
-      // Strip memory_extract tags from the live UI chat messages
       if (useMemory.getState().isMemoryEnabledForThread(threadId)) {
         const sessions = useChatSessions.getState().sessions[threadId]
         if (sessions?.chat.messages) {
-          const cleaned = sessions.chat.messages.map((msg) => {
-            if (msg.id !== message.id || msg.role !== 'assistant') return msg
-            return {
-              ...msg,
-              parts: msg.parts.map((part) => {
-                if (part.type !== 'text') return part
-                const stripped = (part as { type: 'text'; text: string }).text
-                  .replace(/<memory_extract>[\s\S]*?<\/memory_extract>/, '')
-                  .trimEnd()
-                return { ...part, text: stripped }
-              }),
-            }
-          })
-          setChatMessages(cleaned)
+          const targetId = message.id
+          const needsStrip = sessions.chat.messages.some(
+            (msg) => msg.id === targetId && msg.role === 'assistant' &&
+              msg.parts?.some(
+                (part) => part.type === 'text' &&
+                  (part as { type: 'text'; text: string }).text.includes('<memory_extract>')
+              )
+          )
+          if (needsStrip) {
+            const cleaned = sessions.chat.messages.map((msg) => {
+              if (msg.id !== targetId || msg.role !== 'assistant') return msg
+              return {
+                ...msg,
+                parts: msg.parts.map((part) => {
+                  if (part.type !== 'text') return part
+                  const stripped = (part as { type: 'text'; text: string }).text
+                    .replace(/<memory_extract>[\s\S]*?<\/memory_extract>/, '')
+                    .trimEnd()
+                  return { ...part, text: stripped }
+                }),
+              }
+            })
+            setChatMessages(cleaned)
+          }
         }
       }
     },

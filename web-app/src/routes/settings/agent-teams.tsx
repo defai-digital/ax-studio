@@ -190,7 +190,9 @@ function AgentTeamsContent() {
     const a = document.createElement('a')
     a.href = url
     a.download = `${data.team.name.replace(/[^a-zA-Z0-9]/g, '_')}.json`
+    document.body.appendChild(a)
     a.click()
+    document.body.removeChild(a)
     URL.revokeObjectURL(url)
   }
 

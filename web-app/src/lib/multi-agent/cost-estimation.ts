@@ -18,10 +18,8 @@ export function estimateTeamRunCost(
   }>
 ): CostEstimate {
   const agentEstimates = agents.map((agent) => {
-    // Avg tokens per step: ~750 prompt + ~750 completion across typical models
     const avgTokensPerStep = 1500
     const steps = agent.max_steps ?? 10
-    // Tool overhead: broader tool access = more tool schema tokens in context
     const toolOverhead =
       !agent.tool_scope || agent.tool_scope.mode === 'all' ? 500 : 200
 
@@ -37,8 +35,14 @@ export function estimateTeamRunCost(
     }
   })
 
-  // Orchestrator overhead: system prompt + routing logic + synthesis
   const orchestratorOverhead = 3000
+
+  const totalAgentTokens = agentEstimates.reduce(
+    (s, a) => s + a.estimatedTokens,
+    0
+  )
+
+  const orchestratorOverheadWithContext = orchestratorOverhead + Math.round(totalAgentTokens * 0.15)
 
   // Evaluator-optimizer runs agents multiple times (up to max_iterations)
   const iterationMultiplier =
@@ -51,11 +55,11 @@ export function estimateTeamRunCost(
   // Min estimate: assume agents use ~30% of max steps (typical for well-scoped tasks)
   const totalMin = agentEstimates.reduce(
     (s, a) => s + a.estimatedTokens * 0.3 * iterationMultiplier,
-    orchestratorOverhead
+    orchestratorOverheadWithContext
   )
   const totalMax = agentEstimates.reduce(
     (s, a) => s + a.estimatedTokens * iterationMultiplier,
-    orchestratorOverhead
+    orchestratorOverheadWithContext
   )
 
   const budget = team.token_budget ?? 100000

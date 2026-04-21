@@ -181,14 +181,19 @@ function normalizeOpenAICompatiblePayload(
   // Promote reasoning_content/reasoning to content for reasoning models
   // (DeepSeek-R1, Cloudflare @cf/zai-org/glm-4.7-flash, etc.) whose output
   // arrives in non-standard fields the Vercel AI SDK ignores.
+  // Wrap in <think/> tags so downstream ReasoningProcessor and
+  // removeReasoningContent can properly separate reasoning from the final
+  // answer. Without tags the raw reasoning text leaks into the chat response.
   for (const field of ['reasoning_content', 'reasoning'] as const) {
     const value = payload[field]
     if (typeof value === 'string' && value.length > 0) {
       const existing = typeof payload.content === 'string' ? payload.content : ''
-      payload.content = existing + value
+      const thinkOpen = '\u003Cthink\u003E'
+      const thinkClose = '\u003C/think\u003E'
+      payload.content = existing + thinkOpen + value + thinkClose
       delete payload[field]
       changed = true
-      break // only promote the first one found
+      break
     }
   }
 

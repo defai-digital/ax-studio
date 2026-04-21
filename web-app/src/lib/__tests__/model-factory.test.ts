@@ -49,8 +49,10 @@ describe('ModelFactory', () => {
 
       const output = JSON.parse(normalizeOpenAICompatibleEventData(input))
 
-      expect(output.choices[0].delta.content).toBe('Hello')
-      expect(output.choices[0].delta.reasoning_content).toBe('Thinking')
+      const thinkOpen = '\u003Cthink\u003E'
+      const thinkClose = '\u003C/think\u003E'
+      expect(output.choices[0].delta.content).toBe(`Hello${thinkOpen}Thinking${thinkClose}`)
+      expect(output.choices[0].delta.reasoning_content).toBeUndefined()
       expect(output.choices[0].delta.role).toBe('1')
     })
 
@@ -87,13 +89,12 @@ describe('ModelFactory', () => {
       expect(output.choices[0].finish_reason).toBe('false')
     })
 
-    it('leaves valid chunks unchanged', () => {
+    it('leaves valid chunks without reasoning unchanged', () => {
       const input = JSON.stringify({
         choices: [
           {
             delta: {
               content: 'hello',
-              reasoning_content: 'thinking',
               role: 'assistant',
               tool_calls: [
                 {
@@ -112,6 +113,26 @@ describe('ModelFactory', () => {
       })
 
       expect(normalizeOpenAICompatibleEventData(input)).toBe(input)
+    })
+
+    it('promotes string reasoning_content to content wrapped in think tags', () => {
+      const input = JSON.stringify({
+        choices: [
+          {
+            delta: {
+              content: 'hello',
+              reasoning_content: 'thinking',
+              role: 'assistant',
+            },
+          },
+        ],
+      })
+
+      const output = JSON.parse(normalizeOpenAICompatibleEventData(input))
+      const thinkOpen = '\u003Cthink\u003E'
+      const thinkClose = '\u003C/think\u003E'
+      expect(output.choices[0].delta.content).toBe(`hello${thinkOpen}thinking${thinkClose}`)
+      expect(output.choices[0].delta.reasoning_content).toBeUndefined()
     })
   })
 

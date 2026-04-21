@@ -24,8 +24,8 @@ describe('estimateTeamRunCost', () => {
     expect(estimate.agents).toHaveLength(1)
     expect(estimate.agents[0].estimatedTokens).toBe(15500)
     expect(estimate.orchestratorOverhead).toBe(3000)
-    expect(estimate.range.max).toBe(15500 + 3000)
-    expect(estimate.range.min).toBe(Math.round(15500 * 0.3 + 3000))
+    expect(estimate.range.max).toBe(15500 + 3000 + Math.round(15500 * 0.15))
+    expect(estimate.range.min).toBe(Math.round(15500 * 0.3) + 3000 + Math.round(15500 * 0.15))
     expect(estimate.budget).toBe(100000)
     expect(estimate.withinBudget).toBe(true)
   })
@@ -98,7 +98,8 @@ describe('estimateTeamRunCost', () => {
       (s, a) => s + a.estimatedTokens,
       0
     )
-    const expectedMin = Math.round(agentMaxSum * 0.3 + 3000)
+    const contextOverhead = Math.round(agentMaxSum * 0.15)
+    const expectedMin = Math.round(agentMaxSum * 0.3) + 3000 + contextOverhead
     expect(estimate.range.min).toBe(expectedMin)
   })
 
@@ -112,7 +113,7 @@ describe('estimateTeamRunCost', () => {
 
     // Step-based: 1500 * 10 + 500 = 15500, but capped at 4000
     expect(estimate.agents[0].estimatedTokens).toBe(4000)
-    expect(estimate.range.max).toBe(4000 + 3000)
+    expect(estimate.range.max).toBe(4000 + 3000 + Math.round(4000 * 0.15))
     expect(estimate.withinBudget).toBe(true)
   })
 
@@ -148,9 +149,9 @@ describe('estimateTeamRunCost', () => {
 
     expect(estimate.agents[0].estimatedTokens).toBe(4000)
     expect(estimate.agents[1].estimatedTokens).toBe(4000)
-    // Total max: 4000 + 4000 + 3000 orchestrator = 11000
-    expect(estimate.range.max).toBe(11000)
-    // Total min: (4000 * 0.3 + 4000 * 0.3) + 3000 = 5400
-    expect(estimate.range.min).toBe(5400)
+    // Total max: 4000 + 4000 + 3000 + 1200 context overhead = 12200
+    expect(estimate.range.max).toBe(12200)
+    // Total min: (4000 * 0.3 + 4000 * 0.3) + 4200 = 6600
+    expect(estimate.range.min).toBe(6600)
   })
 })
