@@ -8,30 +8,33 @@ import type { LogEntry } from './types'
 import { DefaultAppService } from './default'
 
 export class TauriAppService extends DefaultAppService {
+  private resetInProgress = false
+
   async factoryReset(): Promise<void> {
-    // Kill background processes and remove data folder
-    // Note: We can't import stopAllModels directly to avoid circular dependency
-    // Instead we'll use the engine manager directly
-    const { EngineManager } = await import('@ax-studio/core')
-    for (const [, engine] of EngineManager.instance().engines) {
-      const activeModels = await engine.getLoadedModels()
-      if (activeModels) {
-        const unloadTasks = activeModels.map(async (model: string) => {
-          try {
-            await engine.unload(model)
-          } catch (error) {
-            console.error(`Failed to unload model "${model}" during reset`, error)
-          }
-        })
-        await Promise.all(unloadTasks)
-      }
+    if (this.resetInProgress) {
+      throw new Error('Factory reset already in progress')
     }
-    // IMPORTANT: invoke the backend reset FIRST, then clear localStorage only
-    // on success. Clearing localStorage first leaves the app in an
-    // inconsistent state (frontend wiped, backend data intact) if the
-    // native command fails (disk full, permission denied, backend crash).
-    await invoke('factory_reset')
-    window.localStorage.clear()
+    this.resetInProgress = true
+    try {
+      const { EngineManager } = await import('@ax-studio/core')
+      for (const [, engine] of EngineManager.instance().engines) {
+        const activeModels = await engine.getLoadedModels()
+        if (activeModels) {
+          const unloadTasks = activeModels.map(async (model: string) => {
+            try {
+              await engine.unload(model)
+            } catch (error) {
+              console.error(`Failed to unload model during reset`, error)
+            }
+          })
+          await Promise.all(unloadTasks)
+        }
+      }
+      await invoke('factory_reset')
+      window.localStorage.clear()
+    } finally {
+      this.resetInProgress = false
+    }
   }
 
   async readLogs(): Promise<LogEntry[]> {

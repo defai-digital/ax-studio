@@ -68,14 +68,20 @@ async function getNonceSeed(): Promise<string> {
 
 export class TauriUpdaterService extends DefaultUpdaterService {
   private cachedInstallableUpdate: Update | null = null
+  private checkPromise: Promise<Update | null> | null = null
 
   private async getInstallableUpdate(): Promise<Update> {
     if (this.cachedInstallableUpdate) {
       return this.cachedInstallableUpdate
     }
 
-    const update = await check()
+    if (!this.checkPromise) {
+      this.checkPromise = check()
+    }
+
+    const update = await this.checkPromise
     if (!update) {
+      this.checkPromise = null
       throw new Error('No update available')
     }
 

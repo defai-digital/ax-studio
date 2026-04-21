@@ -174,10 +174,9 @@ export function parseRouterResponse(
       }
     }
 
-    // Fuzzy: substring match, but only if the match is substantial
-    // (min 4 chars and >50% of the longer string to avoid false positives)
+    // Fuzzy: substring match, min 6 chars and >75% overlap
     const modelLower = model.toLowerCase()
-    if (modelLower.length >= 4) {
+    if (modelLower.length >= 6) {
       const fuzzy = availableModels.find((m) => {
         const idLower = m.id.toLowerCase()
         const isSubstring =
@@ -185,7 +184,7 @@ export function parseRouterResponse(
         if (!isSubstring) return false
         const shorter = Math.min(idLower.length, modelLower.length)
         const longer = Math.max(idLower.length, modelLower.length)
-        return shorter / longer > 0.5
+        return shorter / longer > 0.75
       })
       if (fuzzy) {
         return { modelId: fuzzy.id, providerId: fuzzy.provider, reason }

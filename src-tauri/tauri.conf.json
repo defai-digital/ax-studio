@@ -20,13 +20,13 @@
       ],
       "csp": {
         "default-src": "'self' customprotocol: asset: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*",
-        "connect-src": "'self' asset: ipc: data: http://asset.localhost http://ipc.localhost http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* https: http:",
+        "connect-src": "'self' asset: ipc: data: http://asset.localhost http://ipc.localhost http://127.0.0.1:* http://localhost:* ws://localhost:* ws://127.0.0.1:* https://huggingface.co https://hf.co https://cdn-lfs*.huggingface.co https://*.axstudio.ai https://updates.axstudio.ai",
         "font-src": [
           "https://fonts.gstatic.com blob: data: tauri://localhost http://tauri.localhost"
         ],
         "img-src": "'self' asset: http://asset.localhost blob: data: https:",
         "style-src": "'unsafe-inline' 'self' https://fonts.googleapis.com",
-        "script-src": "'self' 'unsafe-inline' 'unsafe-eval' asset: $APPDATA/**.* http://asset.localhost",
+        "script-src": "'self' 'unsafe-inline' 'unsafe-eval' asset: http://asset.localhost",
         "frame-src": "'self' blob: data:"
       },
       "assetProtocol": {

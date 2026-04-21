@@ -13,6 +13,7 @@ const isCryptoAvailable =
   typeof globalThis.crypto.subtle === 'object'
 
 let cachedKey: CryptoKey | null = null
+let keyPromise: Promise<CryptoKey> | null = null
 
 const encodeBase64 = (value: Uint8Array): string => {
   let binary = ''
@@ -56,27 +57,33 @@ const writeStoredKey = (key: Uint8Array) => {
 
 const getEncryptionKey = async (): Promise<CryptoKey> => {
   if (cachedKey) return cachedKey
+  if (keyPromise) return keyPromise
 
-  if (!isCryptoAvailable) {
-    throw new Error('Web Crypto API unavailable')
-  }
+  keyPromise = (async () => {
+    if (!isCryptoAvailable) {
+      throw new Error('Web Crypto API unavailable')
+    }
 
-  const storedKey = readStoredKey()
-  const rawKey = storedKey ?? crypto.getRandomValues(new Uint8Array(KEY_LENGTH_BYTES))
+    const storedKey = readStoredKey()
+    const rawKey = storedKey ?? crypto.getRandomValues(new Uint8Array(KEY_LENGTH_BYTES))
 
-  if (!storedKey) {
-    writeStoredKey(rawKey)
-  }
+    if (!storedKey) {
+      writeStoredKey(rawKey)
+    }
 
-  cachedKey = await crypto.subtle.importKey(
-    'raw',
-    rawKey,
-    { name: 'AES-GCM' },
-    false,
-    ['encrypt', 'decrypt']
-  )
+    const key = await crypto.subtle.importKey(
+      'raw',
+      rawKey,
+      { name: 'AES-GCM' },
+      false,
+      ['encrypt', 'decrypt']
+    )
 
-  return cachedKey
+    cachedKey = key
+    return key
+  })()
+
+  return keyPromise
 }
 
 const legacyEncrypt = (text: string): string => {
@@ -149,10 +156,7 @@ export async function decrypt(encryptedText: string): Promise<string> {
     )
 
     return utf8Decoder.decode(plaintext)
-  } catch (error) {
-    console.warn('Failed to decrypt token — returning raw value')
-    // Intentionally return the raw input — recursing here would stack-overflow
-    // on any corrupted `enc-v2.` value and brick the whole app.
-    return encryptedText
+  } catch {
+    return ''
   }
 }

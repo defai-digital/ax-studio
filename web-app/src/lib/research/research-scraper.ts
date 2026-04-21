@@ -3,41 +3,39 @@ import { invoke } from '@tauri-apps/api/core'
 // Blocklist of hostnames that should not be scraped (internal services, localhost, etc.)
 const BLOCKED_HOSTNAMES = new Set([
   'localhost',
-  '127.0.0.1',
-  '0.0.0.0',
-  '::1',
-  '10.0.0.0/8', // Private networks
-  '172.16.0.0/12',
-  '192.168.0.0/16',
-  '169.254.0.0/16', // Link-local
-  'fc00::/7', // Unique local addresses (IPv6)
+  'metadata.google.internal',
+  'metadata.internal',
 ])
+
+function isPrivateIPv4(ip: string): boolean {
+  const parts = ip.split('.').map(Number)
+  if (parts.length !== 4) return false
+  return (
+    parts[0] === 10 ||
+    (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+    (parts[0] === 192 && parts[1] === 168) ||
+    (parts[0] === 169 && parts[1] === 254) ||
+    (parts[0] === 127) ||
+    (parts[0] === 0 && parts[1] === 0 && parts[2] === 0 && parts[3] === 0)
+  )
+}
+
+function isPrivateIPv6(hostname: string): boolean {
+  const h = hostname.toLowerCase()
+  if (h === '::1' || h === '::' || h.startsWith('fc') || h.startsWith('fd')) return true
+  const v4Mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(h)
+  if (v4Mapped) return isPrivateIPv4(v4Mapped[1])
+  return false
+}
 
 function isValidScrapeUrl(url: string): boolean {
   try {
     const parsed = new URL(url)
-    // Only allow HTTPS
-    if (parsed.protocol !== 'https:') {
-      return false
-    }
-    // Check against blocklist
-    if (BLOCKED_HOSTNAMES.has(parsed.hostname)) {
-      return false
-    }
-    // Check for IP addresses in blocked ranges
+    if (parsed.protocol !== 'https:') return false
     const hostname = parsed.hostname
-    if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
-      const parts = hostname.split('.').map(Number)
-      // Check private IP ranges
-      if (
-        (parts[0] === 10) ||
-        (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
-        (parts[0] === 192 && parts[1] === 168) ||
-        (parts[0] === 169 && parts[1] === 254)
-      ) {
-        return false
-      }
-    }
+    if (BLOCKED_HOSTNAMES.has(hostname)) return false
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname) && isPrivateIPv4(hostname)) return false
+    if (hostname.includes(':') && isPrivateIPv6(hostname)) return false
     return true
   } catch {
     return false

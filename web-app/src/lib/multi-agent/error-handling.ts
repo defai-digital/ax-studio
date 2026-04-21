@@ -80,6 +80,6 @@ export function handleSubAgentError(
   }
 
   return {
-    error: `<agent_error name="${agent.name}" type="unknown">Agent encountered an error: ${error instanceof Error ? error.message : String(error)}</agent_error>`,
+    error: `<agent_error name="${agent.name}" type="unknown">Agent encountered an unexpected error.</agent_error>`,
   }
 }

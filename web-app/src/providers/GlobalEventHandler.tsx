@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 import { events, ModelEvent, AppEvent, DownloadEvent } from '@ax-studio/core'
 import { useNavigate } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
@@ -71,16 +72,38 @@ export function GlobalEventHandler() {
 
     /**
      * OnModelReady — the llamacpp extension emits this after a model is loaded.
-     * The engine layer is responsible for proxy registration; the app only
-     * refreshes active-model state here.
+     * Register the local provider (llamacpp/mlx) with the proxy so it can inject
+     * the correct api_key when forwarding requests to the local server port.
+     * Without this, the proxy forwards no Authorization header and the local
+     * server responds with "Invalid API Key".
      */
-    const handleModelReady = async (_payload: {
+    const handleModelReady = async (payload: {
       modelId?: string
       port?: number
       api_key?: string
       provider?: string
     }) => {
       const seq = ++eventSeq
+
+      // Register the local provider in the proxy's AppState so it knows the
+      // base_url (localhost:<port>) and api_key to inject for this session.
+      if (payload?.port) {
+        const providerName = payload.provider ?? 'llamacpp'
+        try {
+          await invoke('register_provider_config', {
+            request: {
+              provider: providerName,
+              api_key: payload.api_key ?? null,
+              base_url: `http://127.0.0.1:${payload.port}`,
+              custom_headers: [],
+              models: [],
+            },
+          })
+        } catch (err) {
+          console.error(`[GlobalEventHandler] Failed to register local provider '${providerName}' with proxy:`, err)
+        }
+      }
+
       try {
         const active = await serviceHub.models().getActiveModels()
         if (seq !== eventSeq) return
@@ -92,10 +115,19 @@ export function GlobalEventHandler() {
     }
 
     /**
-     * OnModelStopped — update active models list when a model is unloaded.
+     * OnModelStopped — update active models list and unregister the local provider
+     * from the proxy so stale sessions don't linger.
      */
-    const handleModelStopped = async () => {
+    const handleModelStopped = async (payload?: { provider?: string }) => {
       const seq = ++eventSeq
+
+      const providerName = payload?.provider ?? 'llamacpp'
+      try {
+        await invoke('unregister_provider_config', { provider: providerName })
+      } catch (err) {
+        console.error(`[GlobalEventHandler] Failed to unregister local provider '${providerName}' from proxy:`, err)
+      }
+
       try {
         const active = await serviceHub.models().getActiveModels()
         if (seq !== eventSeq) return

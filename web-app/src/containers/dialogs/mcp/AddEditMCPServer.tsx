@@ -509,6 +509,11 @@ export default function AddEditMCPServer({
                   onChange={(e) => setCommand(e.target.value)}
                   placeholder={t('mcp-servers:enterCommand')}
                 />
+                {command && /[;&|`$]/.test(command) && (
+                  <p className="text-xs text-destructive mt-1">
+                    Warning: Command contains potentially dangerous characters (;, &, |, `, $). Only use trusted MCP server configurations.
+                  </p>
+                )}
               </div>
             ) : (
               <div className="space-y-2">

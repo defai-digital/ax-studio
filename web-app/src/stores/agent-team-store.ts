@@ -224,6 +224,9 @@ export const useAgentTeamStore = create<AgentTeamState>((set, get) => ({
 
     const agentIds: string[] = []
     for (const agentDef of data.agents) {
+      if (!agentDef || typeof agentDef !== 'object' || typeof agentDef.name !== 'string' || !agentDef.name.trim()) {
+        throw new Error('Invalid agent definition: each agent must have a non-empty name')
+      }
       const agent: Assistant = {
         id: crypto.randomUUID(),
         name: agentDef.name,
