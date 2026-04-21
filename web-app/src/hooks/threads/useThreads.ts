@@ -7,13 +7,11 @@ import { TEMPORARY_CHAT_ID } from '@/constants/chat'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { useFileRegistry, threadCollectionId } from '@/lib/file-registry'
 
-const buildSearchIndex = (threads: Record<string, Thread>): Fzf<Thread[]> => {
-  const entries = Object.values(threads).filter((t) => t.id !== TEMPORARY_CHAT_ID)
-  return new Fzf<Thread[]>(entries, {
-    selector: (item: Thread) => item.title,
-  })
-}
-
+// Shared persistence-error reporter for thread CRUD. The store is
+// optimistic by design, so we don't roll back the UI — but we do surface
+// the failure as a toast so the user knows their change may not survive
+// reload. (Previously all these paths used `.catch(console.error)` which
+// silently ate the error.)
 const reportPersistenceError = (operation: string) => (error: unknown) => {
   console.error(`[threads] ${operation} persistence failed:`, error)
   toast.error(`Failed to save: ${operation}`, {
@@ -79,9 +77,16 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       },
       {} as Record<string, Thread>
     )
+    // Filter out temporary chat for search index
+    const filteredForSearch = Object.values(threadMap).filter(
+      (t) => t.id !== TEMPORARY_CHAT_ID
+    )
+
     set({
       threads: threadMap,
-      searchIndex: buildSearchIndex(threadMap),
+      searchIndex: new Fzf<Thread[]>(filteredForSearch, {
+        selector: (item: Thread) => item.title,
+      }),
     })
   },
   getFilteredThreads: (searchTerm: string) => {
@@ -100,7 +105,9 @@ export const useThreads = create<ThreadState>()((set, get) => ({
 
     let currentIndex = searchIndex
     if (!currentIndex?.find) {
-      currentIndex = buildSearchIndex(threads)
+      currentIndex = new Fzf<Thread[]>(filteredThreadsValues, {
+        selector: (item: Thread) => item.title,
+      })
       set({ searchIndex: currentIndex })
     }
 
@@ -133,13 +140,14 @@ export const useThreads = create<ThreadState>()((set, get) => ({
           [threadId]: {
             ...state.threads[threadId],
             isFavorite: !state.threads[threadId].isFavorite,
-            updated: Math.floor(Date.now() / 1000),
+            updated: Date.now() / 1000,
           },
         },
       }
     })
   },
   deleteThread: (threadId) => {
+    // Perform side effects OUTSIDE set() to avoid duplicate execution in StrictMode
     getServiceHub()
       .threads()
       .deleteThread(threadId)
@@ -147,10 +155,6 @@ export const useThreads = create<ThreadState>()((set, get) => ({
 
     const colId = threadCollectionId(threadId)
     useFileRegistry.getState().clearCollection(colId)
-
-    import('@/hooks/chat/useMessages').then(({ clearTrackedThreadMessages }) => {
-      clearTrackedThreadMessages(threadId)
-    }).catch(() => {})
     getServiceHub().mcp().callTool({
       toolName: 'akidb_delete_collection',
       arguments: { collection_id: colId },
@@ -165,7 +169,14 @@ export const useThreads = create<ThreadState>()((set, get) => ({
         threads: remainingThreads,
         currentThreadId:
           state.currentThreadId === threadId ? undefined : state.currentThreadId,
-        searchIndex: buildSearchIndex(remainingThreads),
+        searchIndex: new Fzf<Thread[]>(
+          Object.values(remainingThreads).filter(
+            (t) => t.id !== TEMPORARY_CHAT_ID
+          ),
+          {
+            selector: (item: Thread) => item.title,
+          }
+        ),
       }
     })
   },
@@ -217,7 +228,14 @@ export const useThreads = create<ThreadState>()((set, get) => ({
           state.currentThreadId && threadsToDeleteIds.includes(state.currentThreadId)
             ? undefined
             : state.currentThreadId,
-        searchIndex: buildSearchIndex(remainingThreads),
+        searchIndex: new Fzf<Thread[]>(
+          Object.values(remainingThreads).filter(
+            (t) => t.id !== TEMPORARY_CHAT_ID
+          ),
+          {
+            selector: (item: Thread) => item.title,
+          }
+        ),
       }
     })
   },
@@ -241,7 +259,9 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       return {
         threads: {},
         currentThreadId: undefined,
-        searchIndex: buildSearchIndex({}),
+        searchIndex: new Fzf<Thread[]>([], {
+          selector: (item: Thread) => item.title,
+        }),
       }
     })
   },
@@ -287,7 +307,9 @@ export const useThreads = create<ThreadState>()((set, get) => ({
           state.currentThreadId && threadsToDeleteIds.includes(state.currentThreadId)
             ? undefined
             : state.currentThreadId,
-        searchIndex: buildSearchIndex(remainingThreads),
+        searchIndex: new Fzf<Thread[]>(Object.values(remainingThreads).filter(t => t.id !== TEMPORARY_CHAT_ID), {
+          selector: (item: Thread) => item.title,
+        }),
       }
     })
   },
@@ -349,7 +371,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       id: isTemporary ? TEMPORARY_CHAT_ID : ulid(),
       title: title ?? (isTemporary ? 'Temporary Chat' : 'New Thread'),
       model,
-      updated: Math.floor(Date.now() / 1000),
+      updated: Date.now() / 1000,
       assistants: assistant ? [assistant] : [],
       ...(projectMetadata &&
         !isTemporary && {
@@ -385,10 +407,15 @@ export const useThreads = create<ThreadState>()((set, get) => ({
             },
             {} as Record<string, Thread>
           )
+          const filteredForSearch = Object.values(threadMap).filter(
+            (t) => t.id !== TEMPORARY_CHAT_ID
+          )
 
           return {
             threads: threadMap,
-            searchIndex: buildSearchIndex(threadMap),
+            searchIndex: new Fzf<Thread[]>(filteredForSearch, {
+              selector: (item: Thread) => item.title,
+            }),
             currentThreadId: createdThread.id,
           }
         })
@@ -414,7 +441,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
           [state.currentThreadId as string]: {
             ...state.threads[state.currentThreadId as string],
             assistants: assistant ? [assistant] : [],
-            updated: Math.floor(Date.now() / 1000),
+            updated: Date.now() / 1000,
           },
         },
       }
@@ -447,23 +474,21 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       const updatedThread = {
         ...thread,
         title: newTitle,
-        updated: Math.floor(Date.now() / 1000),
+        updated: Date.now() / 1000,
       }
-      const persist = () =>
-        getServiceHub()
-          .threads()
-          .updateThread(updatedThread)
-          .catch(reportPersistenceError('rename thread'))
-
-      if (thread.title === 'New Thread' || !thread.title) {
-        setTimeout(persist, 500)
-      } else {
-        persist()
-      }
+      getServiceHub()
+        .threads()
+        .updateThread(updatedThread)
+        .catch(reportPersistenceError('rename thread'))
       const newThreads = { ...state.threads, [threadId]: updatedThread }
       return {
         threads: newThreads,
-        searchIndex: buildSearchIndex(newThreads),
+        searchIndex: new Fzf<Thread[]>(
+          Object.values(newThreads).filter((t) => t.id !== TEMPORARY_CHAT_ID),
+          {
+            selector: (item: Thread) => item.title,
+          }
+        ),
       }
     })
   },
@@ -479,7 +504,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       // Update the thread with new timestamp and set it to order 1 (top)
       const updatedThread = {
         ...thread,
-        updated: Math.floor(Date.now() / 1000),
+        updated: Date.now() / 1000,
       }
 
       // Update all other threads to increment their order by 1
@@ -512,7 +537,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       const updatedThread = {
         ...thread,
         ...updates,
-        updated: Math.floor(Date.now() / 1000),
+        updated: Date.now() / 1000,
       }
 
       getServiceHub()
@@ -523,7 +548,12 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       const newThreads = { ...state.threads, [threadId]: updatedThread }
       return {
         threads: newThreads,
-        searchIndex: buildSearchIndex(newThreads),
+        searchIndex: new Fzf<Thread[]>(
+          Object.values(newThreads).filter((t) => t.id !== TEMPORARY_CHAT_ID),
+          {
+            selector: (item: Thread) => item.title,
+          }
+        ),
       }
     })
   },

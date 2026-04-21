@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import {
   Cpu,
@@ -10,7 +10,6 @@ import {
 } from 'lucide-react'
 import { useHardware } from '@/hooks/settings/useHardware'
 import { useAppState } from '@/hooks/settings/useAppState'
-import { getServiceHub } from '@/hooks/useServiceHub'
 
 function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v))
@@ -75,25 +74,9 @@ export function PerformanceMonitor() {
   const [expanded, setExpanded] = useState(false)
 
   const systemUsage = useHardware((s) => s.systemUsage)
-  const updateSystemUsage = useHardware((s) => s.updateSystemUsage)
   const hardwareData = useHardware((s) => s.hardwareData)
   const serverStatus = useAppState((s) => s.serverStatus)
   const tokenSpeed = useAppState((s) => s.tokenSpeed)
-
-  const pollRef = useRef<ReturnType<typeof setInterval>>()
-  useEffect(() => {
-    let cancelled = false
-    const poll = async () => {
-      try {
-        const hub = getServiceHub()
-        const usage = await hub.hardware().getSystemUsage()
-        if (!cancelled && usage) updateSystemUsage(usage)
-      } catch { /* ignore during shutdown */ }
-    }
-    poll()
-    pollRef.current = setInterval(poll, 5000)
-    return () => { cancelled = true; clearInterval(pollRef.current) }
-  }, [updateSystemUsage])
 
   const status: 'active' | 'idle' | 'loading' =
     serverStatus === 'running'

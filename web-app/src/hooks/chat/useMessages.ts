@@ -87,7 +87,6 @@ export const useMessages = create<MessageState>()((set, get) => ({
 
     // Persist to storage asynchronously — rollback on failure
     getServiceHub().messages().createMessage(newMessage).then((createdMessage) => {
-      console.info('[MessagePersist] Saved message', newMessage.id, 'to thread', newMessage.thread_id)
       if (createdMessage.id !== newMessage.id) {
         removeTrackedMessage(newMessage.thread_id, newMessage.id)
       }
