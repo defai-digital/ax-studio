@@ -160,8 +160,8 @@ export function useResearch(threadId: string) {
                   }
                 }
                 const wikiSummaries: string[] = []
-                for (const r of wikiResults) {
-                  if (signal.aborted) break
+                const scrapeTasks = wikiResults.map(async (r) => {
+                  if (signal.aborted) return null
                   addStep({ type: 'scraping', message: `Scraping: ${r.title}` })
                   let pageText = r.snippet
                   if (depth > 1) {
@@ -176,12 +176,14 @@ export function useResearch(threadId: string) {
                       maxOutputTokens: 1024,
                       abortSignal: signal,
                     })
-                    wikiSummaries.push(`Source: ${r.url}\n${summary}`)
+                    return `Source: ${r.url}\n${summary}`
                   } catch (err) {
                     if (err instanceof Error && err.name === 'AbortError') throw err
-                    wikiSummaries.push(`Source: ${r.url}\n${pageText.slice(0, 500)}`)
+                    return `Source: ${r.url}\n${pageText.slice(0, 500)}`
                   }
-                }
+                })
+                const results = await Promise.all(scrapeTasks)
+                wikiSummaries.push(...results.filter(Boolean))
                 return wikiSummaries.filter(Boolean)
               }
             } catch (err) {
@@ -286,18 +288,22 @@ export function useResearch(threadId: string) {
         const ENOUGH_SOURCES = depth === 2 ? 3    : 5
 
         const context: string[] = []
-        let completed = 0
-        for (const q of subQuestions) {
-          if (signal.aborted) break
-          const summaries = await researchNode(q, depth)
-          context.push(...summaries)
-          completed++
-          if (completed >= 2) {
-            const totalChars = context.reduce((n, s) => n + s.length, 0)
-            if (allSources.length >= ENOUGH_SOURCES && totalChars >= ENOUGH_CHARS) {
-              addStep({ type: 'searching', query: `Enough info gathered (${allSources.length} sources) — writing report` })
-              break
-            }
+        const MAX_CONCURRENT = 2
+        const queue = [...subQuestions]
+        const workers = Array.from({ length: Math.min(MAX_CONCURRENT, queue.length) }, async () => {
+          while (queue.length > 0) {
+            const q = queue.shift()
+            if (!q || signal.aborted) break
+            const summaries = await researchNode(q, depth)
+            context.push(...summaries)
+          }
+        })
+        await Promise.all(workers)
+
+        if (allSources.length >= ENOUGH_SOURCES) {
+          const totalChars = context.reduce((n, s) => n + s.length, 0)
+          if (totalChars >= ENOUGH_CHARS) {
+            addStep({ type: 'searching', query: `Enough info gathered (${allSources.length} sources) — writing report` })
           }
         }
 
