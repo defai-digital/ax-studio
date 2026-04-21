@@ -22,7 +22,6 @@ import mermaidLib from 'mermaid'
 import { useTheme } from '@/hooks/ui/useTheme'
 import { ArtifactBlock } from '@/components/ai-elements/ArtifactBlock'
 import { RenderableCodeBlock } from '@/components/ai-elements/RenderableCodeBlock'
-import { MermaidError } from '@/components/MermaidError'
 import type { ArtifactType } from '@/lib/artifacts/harness'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
