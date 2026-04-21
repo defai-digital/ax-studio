@@ -316,12 +316,11 @@ export function ThreadView({
                   />
                 </div>
               ) : (
-                <div key="split-pane" className="relative h-full">
-                  <SplitThreadContainer
-                    threadId={splitThreadId}
-                    onClose={() => { setSplitThreadId(null); setSplitDirection(null) }}
-                  />
-                </div>
+                <SplitThreadContainer
+                  key="split-pane"
+                  threadId={splitThreadId}
+                  onClose={() => { setSplitThreadId(null); setSplitDirection(null) }}
+                />
               )
             )}
           </div>

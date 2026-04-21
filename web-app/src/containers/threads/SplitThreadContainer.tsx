@@ -29,6 +29,7 @@ import {
   CODE_EXECUTION_INSTRUCTION,
   ARTIFACT_FORMAT_INSTRUCTION,
   LOCAL_KNOWLEDGE_INSTRUCTION,
+  CITATION_FORMAT_INSTRUCTION,
 } from '@/lib/system-prompt'
 import { toast } from 'sonner'
 import { ResearchPanel } from '@/components/research/ResearchPanel'
@@ -110,14 +111,15 @@ export function SplitThreadContainer({
     sessionTitle: thread?.title,
     systemMessage:
       promptResolution.resolvedPrompt +
-      (currentAssistant?.instructions && currentAssistant.id !== 'ax-studio'
+      (currentAssistant?.instructions
         ? '\n\n' + currentAssistant.instructions
         : '') +
       memorySuffix +
       DIAGRAM_FORMAT_INSTRUCTION +
       CODE_EXECUTION_INSTRUCTION +
       ARTIFACT_FORMAT_INSTRUCTION +
-      (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : ''),
+      (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : '') +
+      (localKnowledgeActive ? CITATION_FORMAT_INSTRUCTION : ''),
     modelOverrideId: optimizedModelConfig.modelId,
     activeTeamId,
     onCostApproval,
