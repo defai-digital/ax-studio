@@ -181,6 +181,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     },
     experimental_throttle: 50,
     onFinish: ({ message, isAbort }) => {
+      console.info('[onFinish] called — isAbort:', isAbort, 'role:', message.role, 'parts:', message.parts?.length ?? 0, 'content:', (message.content as string)?.length ?? 0)
       if (!isAbort && message.role === 'assistant') {
         // Attach routing metadata if the router made a decision. We build an
         // immutable enriched copy (`messageForPersistence`) instead of mutating

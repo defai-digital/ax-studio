@@ -240,6 +240,7 @@ export function useThreadChat({
         attachments,
         messageId
       )
+      console.info('[processAndSendMessage] Adding user message', messageId, 'to thread', threadId)
       addMessage(userMessage)
 
       // Build parts: text + any image file parts
