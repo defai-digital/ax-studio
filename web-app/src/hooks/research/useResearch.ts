@@ -104,6 +104,13 @@ export function useResearch(threadId: string) {
       const allSources: ResearchSource[] = []
       let exaUnavailableForRun = false
 
+      const flushSources = () => {
+        useResearchPanel.getState().updateResearch(threadId, (prev) => ({
+          ...prev,
+          sources: [...allSources],
+        }))
+      }
+
       try {
         // Start the local model if needed (same as chat does via prepareProviderForChat)
         const { selectedModel, selectedProvider, providers } = useModelProvider.getState()
@@ -160,6 +167,7 @@ export function useResearch(threadId: string) {
                     allSources.push(r)
                   }
                 }
+                flushSources()
                 const wikiSummaries: string[] = []
                 const scrapeTasks = wikiResults.map(async (r) => {
                   if (signal.aborted) return null
@@ -212,6 +220,7 @@ export function useResearch(threadId: string) {
               allSources.push(r)
             }
           }
+          flushSources()
 
           addStep({ type: 'scraping', message: `Fetching ${Math.min(results.length, scrapeTop)} pages…` })
           const pageResults = await Promise.allSettled(

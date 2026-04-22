@@ -36,45 +36,50 @@ export function normalizeUrl(url: string): string {
 }
 
 /**
- * Sequential Exa gate — only one search runs at a time, with a 1.5 s gap.
- * Reset at the start of each research run so stale chains don't carry over.
+ * Sequential Exa gate — only one search runs at a time, with a 500ms gap.
+ * Uses a promise-chain queue so the first caller proceeds immediately while
+ * subsequent callers wait in line. Reset at the start of each research run.
  */
-let exaGatePromise = Promise.resolve()
-let exaGateResolve: (() => void) | null = null
+let exaQueue: Promise<void> = Promise.resolve()
 
 export function resetExaGate(): void {
-  exaGateResolve?.()
-  exaGateResolve = null
-  exaGatePromise = Promise.resolve()
+  exaQueue = Promise.resolve()
 }
 
-function awaitGate(): Promise<void> {
-  if (!exaGateResolve) {
-    const p = new Promise<void>((resolve) => { exaGateResolve = resolve })
-    exaGatePromise = exaGatePromise.then(() => p)
-  }
-  return exaGatePromise
-}
-
-function releaseGate(): void {
-  const resolve = exaGateResolve
-  exaGateResolve = null
-  resolve?.()
-}
+const EXA_TIMEOUT_MS = 15_000
+const WIKI_TIMEOUT_MS = 10_000
 
 export async function exaSearch(
   question: string,
   numResults: number,
   signal?: AbortSignal,
 ): Promise<MCPToolCallResult> {
-  await awaitGate()
-  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+  // Each caller appends to the queue and waits for their turn.
+  // The previous tail is what THIS caller waits on; the new tail is what the NEXT caller waits on.
+  let unlockNext!: () => void
+  const mySlot = new Promise<void>((resolve) => { unlockNext = resolve })
+  const waitForTurn = exaQueue
+  exaQueue = mySlot  // next caller will wait for this slot
+
+  await waitForTurn  // wait for our turn
+  if (signal?.aborted) {
+    unlockNext()
+    throw new DOMException('Aborted', 'AbortError')
+  }
+
   try {
-    return await invoke<MCPToolCallResult>('call_tool', {
-      toolName: 'web_search_exa',
-      serverName: 'exa',
-      arguments: { query: question, numResults },
-    })
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Exa timed out after ${EXA_TIMEOUT_MS / 1000}s`)), EXA_TIMEOUT_MS)
+    )
+    const result = await Promise.race([
+      invoke<MCPToolCallResult>('call_tool', {
+        toolName: 'web_search_exa',
+        serverName: 'exa',
+        arguments: { query: question, numResults },
+      }),
+      timeoutPromise,
+    ])
+    return result
   } catch (err) {
     if (isExaRateLimitMessage(getErrorMessage(err))) {
       throw new ExaRateLimitError(getErrorMessage(err))
@@ -82,7 +87,7 @@ export async function exaSearch(
     throw err
   } finally {
     await new Promise((r) => setTimeout(r, 500))
-    releaseGate()
+    unlockNext()  // release gate for the next caller
   }
 }
 
@@ -100,12 +105,23 @@ export async function searchWikipedia(
     srlimit: String(Math.min(numResults, 5)),
     srprop: 'snippet',
   })
-  const res = await fetch(`https://en.wikipedia.org/w/api.php?${params}`, { signal })
-  if (!res.ok) throw new Error(`Wikipedia API error: ${res.status}`)
-  const data = await res.json() as { query: { search: WikiSearchResult[] } }
-  return data.query.search.map((r) => ({
-    url: `https://en.wikipedia.org/wiki/${encodeURIComponent(r.title.replace(/ /g, '_'))}`,
-    title: r.title,
-    snippet: r.snippet.replace(/<[^>]*>/g, '').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#039;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim(),
-  }))
+
+  const timeoutController = new AbortController()
+  const timer = setTimeout(() => timeoutController.abort(), WIKI_TIMEOUT_MS)
+  const combinedSignal = signal
+    ? AbortSignal.any([signal, timeoutController.signal])
+    : timeoutController.signal
+
+  try {
+    const res = await fetch(`https://en.wikipedia.org/w/api.php?${params}`, { signal: combinedSignal })
+    if (!res.ok) throw new Error(`Wikipedia API error: ${res.status}`)
+    const data = await res.json() as { query: { search: WikiSearchResult[] } }
+    return data.query.search.map((r) => ({
+      url: `https://en.wikipedia.org/wiki/${encodeURIComponent(r.title.replace(/ /g, '_'))}`,
+      title: r.title,
+      snippet: r.snippet.replace(/<[^>]*>/g, '').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#039;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim(),
+    }))
+  } finally {
+    clearTimeout(timer)
+  }
 }
