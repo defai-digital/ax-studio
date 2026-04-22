@@ -17,7 +17,6 @@ import { AddProviderDialog } from '@/containers/dialogs'
 import { Switch } from '@/components/ui/switch'
 import { useCallback } from 'react'
 import { openAIProviderSettings } from '@/constants/providers'
-import cloneDeep from 'lodash/cloneDeep'
 import { toast } from 'sonner'
 import { Plug, Plus, ChevronRight } from 'lucide-react'
 
@@ -42,7 +41,7 @@ function ModelProviders() {
         provider: name,
         active: true,
         models: [],
-        settings: cloneDeep(openAIProviderSettings) as ProviderSetting[],
+        settings: structuredClone(openAIProviderSettings) as ProviderSetting[],
         api_key: '',
         base_url: 'https://api.openai.com/v1',
       }

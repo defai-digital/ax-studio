@@ -1,41 +1,10 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import type { Node, Position } from 'unist'
-import type { Code, Paragraph, Parent, Text } from 'mdast'
-import { visit } from 'unist-util-visit'
 
+export { disableIndentedCodeBlockPlugin } from '@/lib/markdown/disable-indented-code'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
-}
-
-/**
- * Remark plugin that disables indented code block syntax.
- * Converts indented code blocks (without language specifier) to plain text paragraphs,
- * while preserving fenced code blocks with backticks.
- */
-export function disableIndentedCodeBlockPlugin() {
-  return (tree: Node) => {
-    visit(tree, 'code', (node: Code, index, parent: Parent | undefined) => {
-      // Convert indented code blocks (nodes without lang or meta property)
-      // to plain text
-      // Check if the parent exists so we can replace the node safely
-      if (!node.lang && !node.meta && parent && typeof index === 'number') {
-        const nodePosition: Position | undefined = node.position
-        const textNode: Text = {
-          type: 'text',
-          value: node.value,
-          position: nodePosition
-        }
-        const paragraphNode: Paragraph = {
-          type: 'paragraph',
-          children: [textNode],
-          position: nodePosition
-        }
-        parent.children[index] = paragraphNode
-      }
-    })
-  }
 }
 
 /**
@@ -45,78 +14,30 @@ export function getModelDisplayName(model: Model): string {
   return model.displayName || model.id
 }
 
-export function getProviderLogo(provider: string) {
-  switch (provider) {
-    case 'anthropic':
-      return '/images/model-provider/anthropic.svg'
-    case 'openrouter':
-      return '/images/model-provider/open-router.svg'
-    case 'groq':
-      return '/images/model-provider/groq.svg'
-    case 'cohere':
-      return '/images/model-provider/cohere.svg'
-    case 'gemini':
-      return '/images/model-provider/gemini.svg'
-    case 'openai':
-      return '/images/model-provider/openai.svg'
-    case 'azure':
-      return '/images/model-provider/azure.svg'
-    default:
-      return undefined
-  }
+const PROVIDER_METADATA: Record<string, { logo?: string; color: string; description: string; title: string }> = {
+  openai:     { logo: '/images/model-provider/openai.svg',       color: '#10a37f', description: 'GPT-4o, o1, and more',         title: 'OpenAI' },
+  anthropic:  { logo: '/images/model-provider/anthropic.svg',    color: '#cc7e3a', description: 'Claude 3.5, Claude 4',          title: 'Anthropic' },
+  gemini:     { logo: '/images/model-provider/gemini.svg',       color: '#4285f4', description: 'Gemini Pro and Ultra',          title: 'Gemini' },
+  groq:       { logo: '/images/model-provider/groq.svg',         color: '#f97316', description: 'Ultra-fast inference',          title: 'Groq' },
+  openrouter: { logo: '/images/model-provider/open-router.svg',  color: '#6366f1', description: 'Multi-provider API gateway',    title: 'OpenRouter' },
+  azure:      { logo: '/images/model-provider/azure.svg',        color: '#0078d4', description: 'Azure OpenAI Service',          title: 'Azure' },
+  cohere:     { logo: '/images/model-provider/cohere.svg',       color: '#39594d', description: 'Custom model provider',         title: 'Cohere' },
+}
+
+export function getProviderLogo(provider: string): string | undefined {
+  return PROVIDER_METADATA[provider]?.logo
 }
 
 export function getProviderColor(provider: string): string {
-  switch (provider) {
-    case 'openai':
-      return '#10a37f'
-    case 'anthropic':
-      return '#cc7e3a'
-    case 'gemini':
-      return '#4285f4'
-    case 'groq':
-      return '#f97316'
-    case 'openrouter':
-      return '#6366f1'
-    case 'azure':
-      return '#0078d4'
-    case 'cohere':
-      return '#39594d'
-    default:
-      return '#6b7280'
-  }
+  return PROVIDER_METADATA[provider]?.color ?? '#6b7280'
 }
 
 export function getProviderDescription(provider: string): string {
-  switch (provider) {
-    case 'openai':
-      return 'GPT-4o, o1, and more'
-    case 'anthropic':
-      return 'Claude 3.5, Claude 4'
-    case 'gemini':
-      return 'Gemini Pro and Ultra'
-    case 'groq':
-      return 'Ultra-fast inference'
-    case 'openrouter':
-      return 'Multi-provider API gateway'
-    case 'azure':
-      return 'Azure OpenAI Service'
-    default:
-      return 'Custom model provider'
-  }
+  return PROVIDER_METADATA[provider]?.description ?? 'Custom model provider'
 }
 
-export const getProviderTitle = (provider: string) => {
-  switch (provider) {
-    case 'openai':
-      return 'OpenAI'
-    case 'openrouter':
-      return 'OpenRouter'
-    case 'gemini':
-      return 'Gemini'
-    default:
-      return provider.charAt(0).toUpperCase() + provider.slice(1)
-  }
+export function getProviderTitle(provider: string): string {
+  return PROVIDER_METADATA[provider]?.title ?? (provider.charAt(0).toUpperCase() + provider.slice(1))
 }
 
 export function formatMegaBytes(mb: number) {

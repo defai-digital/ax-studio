@@ -1,6 +1,4 @@
 import { Settings } from "lucide-react";
-import debounce from 'lodash.debounce'
-
 import {
   Sheet,
   SheetContent,
@@ -16,7 +14,7 @@ import { useServiceHub } from '@/hooks/useServiceHub'
 import { cn, getModelDisplayName } from '@/lib/utils'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useAppState } from '@/hooks/settings/useAppState'
-import { useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 
 type ModelSettingProps = {
   provider: ProviderObject
@@ -32,31 +30,32 @@ export function ModelSetting({
   const serviceHub = useServiceHub()
   const setActiveModels = useAppState((state) => state.setActiveModels)
 
-  // Create a debounced version of stopModel that waits 500ms after the last call
-  const debouncedStopModel = useMemo(
-    () =>
-      debounce((modelId: string) => {
+  const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const debouncedStopModel = useCallback(
+    (modelId: string) => {
+      if (stopTimerRef.current) clearTimeout(stopTimerRef.current)
+      stopTimerRef.current = setTimeout(() => {
+        stopTimerRef.current = null
         serviceHub
           .models()
           .stopModel(modelId)
-          .then(() => {
-            // Refresh active models after stopping
-            serviceHub
-              .models()
-              .getActiveModels()
+          .then(() =>
+            serviceHub.models().getActiveModels()
               .then((models) => setActiveModels(models || []))
               .catch((err) => console.error('Failed to refresh active models:', err))
-          })
+          )
           .catch((err) => console.error('Failed to stop model:', err))
-      }, 500),
+      }, 500)
+    },
     [serviceHub, setActiveModels]
   )
 
   useEffect(() => {
     return () => {
-      debouncedStopModel.cancel()
+      if (stopTimerRef.current) clearTimeout(stopTimerRef.current)
     }
-  }, [debouncedStopModel])
+  }, [])
 
   const handleSettingChange = (
     key: string,

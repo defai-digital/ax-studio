@@ -110,7 +110,6 @@ describe('MessageItem', () => {
       render(
         <MessageItem
           message={msg}
-          isFirstMessage={true}
           isLastMessage={false}
           status="ready"
         />
@@ -126,7 +125,6 @@ describe('MessageItem', () => {
       const { container } = render(
         <MessageItem
           message={msg}
-          isFirstMessage={true}
           isLastMessage={false}
           status="ready"
         />
@@ -149,7 +147,6 @@ describe('MessageItem', () => {
       render(
         <MessageItem
           message={msg}
-          isFirstMessage={true}
           isLastMessage={false}
           status="ready"
         />
@@ -166,7 +163,6 @@ describe('MessageItem', () => {
       render(
         <MessageItem
           message={msg}
-          isFirstMessage={true}
           isLastMessage={false}
           status="ready"
           onEdit={vi.fn()}
@@ -183,7 +179,6 @@ describe('MessageItem', () => {
       render(
         <MessageItem
           message={msg}
-          isFirstMessage={true}
           isLastMessage={true}
           status="streaming"
           onEdit={vi.fn()}
@@ -202,7 +197,6 @@ describe('MessageItem', () => {
       render(
         <MessageItem
           message={msg}
-          isFirstMessage={true}
           isLastMessage={false}
           status="ready"
           onDelete={onDelete}
@@ -222,7 +216,6 @@ describe('MessageItem', () => {
       render(
         <MessageItem
           message={msg}
-          isFirstMessage={false}
           isLastMessage={false}
           status="ready"
         />
@@ -239,7 +232,6 @@ describe('MessageItem', () => {
       render(
         <MessageItem
           message={msg}
-          isFirstMessage={false}
           isLastMessage={false}
           status="ready"
         />
@@ -265,7 +257,6 @@ describe('MessageItem', () => {
       render(
         <MessageItem
           message={msg}
-          isFirstMessage={false}
           isLastMessage={false}
           status="ready"
         />
@@ -290,7 +281,6 @@ describe('MessageItem', () => {
       render(
         <MessageItem
           message={msg}
-          isFirstMessage={false}
           isLastMessage={false}
           status="ready"
         />
@@ -315,7 +305,6 @@ describe('MessageItem', () => {
       render(
         <MessageItem
           message={msg}
-          isFirstMessage={false}
           isLastMessage={false}
           status="ready"
         />
@@ -344,7 +333,6 @@ describe('MessageItem', () => {
       render(
         <MessageItem
           message={msg}
-          isFirstMessage={false}
           isLastMessage={false}
           status="ready"
         />
@@ -368,7 +356,6 @@ describe('MessageItem', () => {
       const { container } = render(
         <MessageItem
           message={msg}
-          isFirstMessage={false}
           isLastMessage={false}
           status="ready"
         />
@@ -390,7 +377,6 @@ describe('MessageItem', () => {
       render(
         <MessageItem
           message={msg}
-          isFirstMessage={false}
           isLastMessage={false}
           status="ready"
         />
@@ -408,7 +394,6 @@ describe('MessageItem', () => {
       render(
         <MessageItem
           message={msg}
-          isFirstMessage={false}
           isLastMessage={true}
           status="ready"
           onRegenerate={onRegenerate}
@@ -428,7 +413,6 @@ describe('MessageItem', () => {
       render(
         <MessageItem
           message={msg}
-          isFirstMessage={false}
           isLastMessage={true}
           status="streaming"
           onRegenerate={vi.fn()}
@@ -445,7 +429,6 @@ describe('MessageItem', () => {
       render(
         <MessageItem
           message={msg}
-          isFirstMessage={false}
           isLastMessage={false}
           status="ready"
           onRegenerate={vi.fn()}
@@ -468,7 +451,6 @@ describe('MessageItem', () => {
       render(
         <MessageItem
           message={msg}
-          isFirstMessage={false}
           isLastMessage={false}
           status="ready"
         />
@@ -497,7 +479,6 @@ describe('MessageItem', () => {
       render(
         <MessageItem
           message={msg}
-          isFirstMessage={false}
           isLastMessage={false}
           status="ready"
         />
@@ -520,7 +501,6 @@ describe('MessageItem', () => {
       render(
         <MessageItem
           message={msg}
-          isFirstMessage={false}
           isLastMessage={false}
           status="ready"
         />
@@ -545,7 +525,6 @@ describe('MessageItem', () => {
       render(
         <MessageItem
           message={msg}
-          isFirstMessage={true}
           isLastMessage={false}
           status="ready"
         />
@@ -585,7 +564,6 @@ describe('MessageItem', () => {
       render(
         <MessageItem
           message={msg}
-          isFirstMessage={false}
           isLastMessage={false}
           status="ready"
         />

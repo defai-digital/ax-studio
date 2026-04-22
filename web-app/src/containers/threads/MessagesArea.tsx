@@ -103,7 +103,6 @@ export function MessagesArea({
             >
               <MessageItem
                 message={message}
-                isFirstMessage={index === 0}
                 isLastMessage={index === chatMessages.length - 1}
                 status={status}
                 threadId={threadId}

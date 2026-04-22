@@ -1,13 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { memo, useState, useCallback, useEffect } from 'react'
+import { memo, useState, useCallback, useEffect, useMemo } from 'react'
 import type { UIMessage, ChatStatus } from 'ai'
 import { RenderMarkdown } from './RenderMarkdown'
 import { cn } from '@/lib/utils'
 import { SourcesFooter } from '@/components/citations/SourcesFooter'
 import { useCitations } from '@/hooks/citations/use-citations'
-import type { CitationData } from '@/types/citation-types'
 import { useGuardrails } from '@/hooks/settings/useGuardrails'
-import { twMerge } from 'tailwind-merge'
 import {
   Reasoning,
   ReasoningContent,
@@ -26,7 +24,6 @@ import { EditMessageDialog } from '@/containers/dialogs/message/EditMessageDialo
 import { DeleteMessageDialog } from '@/containers/dialogs/message/DeleteMessageDialog'
 import TokenSpeedIndicator from '@/containers/TokenSpeedIndicator'
 import { extractFilesFromPrompt, FileMetadata } from '@/lib/fileMetadata'
-import { useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { AgentOutputCard } from '@/components/AgentOutputCard'
 import { RunLogSummary } from '@/components/RunLogViewer'
@@ -49,7 +46,6 @@ const CONTENT_TYPE = {
 
 export type MessageItemProps = {
   message: UIMessage
-  isFirstMessage: boolean
   isLastMessage: boolean
   status: ChatStatus
   threadId?: string
@@ -58,7 +54,6 @@ export type MessageItemProps = {
   onEdit?: (messageId: string, newText: string) => void
   onDelete?: (messageId: string) => void
   assistant?: { avatar?: React.ReactNode; name?: string }
-  showAssistant?: boolean
 }
 
 export const MessageItem = memo(
@@ -318,7 +313,7 @@ export const MessageItem = memo(
             )}
             <div
               ref={isStreaming ? reasoningContainerRef : null}
-              className={twMerge(
+              className={cn(
                 'w-full overflow-auto relative',
                 isStreaming
                   ? 'max-h-32 opacity-70 mt-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden'
@@ -656,10 +651,8 @@ export const MessageItem = memo(
 
     return (
       prevProps.message === nextProps.message &&
-      prevProps.isFirstMessage === nextProps.isFirstMessage &&
       prevProps.isLastMessage === nextProps.isLastMessage &&
-      prevProps.status === nextProps.status &&
-      prevProps.showAssistant === nextProps.showAssistant
+      prevProps.status === nextProps.status
     )
   }
 )
