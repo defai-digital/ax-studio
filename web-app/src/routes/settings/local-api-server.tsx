@@ -178,11 +178,14 @@ function LocalAPIServerContent() {
           })
         })
         .then((actualPort: number) => {
-          // Store the actual port that was assigned (important for mobile with port 0)
           if (actualPort && actualPort !== serverPort) {
             setServerPort(actualPort)
           }
           setServerStatus('running')
+          toast.dismiss()
+          toast.success('Server started', {
+            description: `Local API server running on port ${actualPort || serverPort}`,
+          })
         })
         .catch((error: unknown) => {
           console.error('Error starting server or model:', error)

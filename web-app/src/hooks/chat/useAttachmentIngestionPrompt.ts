@@ -30,6 +30,8 @@ export const useAttachmentIngestionPrompt = create<AttachmentIngestionState>()(
     resolver: null,
     showPrompt: async (attachment, sizeThreshold, currentIndex, totalCount) => {
       return new Promise<'inline' | 'embeddings' | undefined>((resolve) => {
+        const { resolver: prevResolver } = get()
+        if (prevResolver) prevResolver(undefined)
         set({
           isModalOpen: true,
           currentAttachment: attachment,

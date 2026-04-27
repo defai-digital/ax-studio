@@ -136,6 +136,7 @@ function IframePreview({ type, source, version }: { type: ArtifactType; source: 
         className="w-full flex-1 border-0 bg-white"
         style={{ colorScheme: 'light' }}
         title="Artifact Preview"
+        sandbox="allow-scripts allow-same-origin"
       />
 
       {error && (

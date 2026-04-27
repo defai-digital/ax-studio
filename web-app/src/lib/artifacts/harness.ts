@@ -5,21 +5,20 @@ export type ArtifactType = 'html' | 'react' | 'svg' | 'chartjs' | 'vega'
 // Permissive CSP for the srcdoc iframe — allows inline scripts and eval.
 // WKWebView (Tauri/macOS) inherits the parent page's strict CSP inside srcdoc
 // frames; this meta tag overrides it so vendor scripts and user code can run.
-const IFRAME_CSP = `<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data:; connect-src 'self' blob: data:; form-action 'none';">`
+const IFRAME_CSP = `<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' blob: data:; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' blob: data:; connect-src 'self' blob: data:; img-src 'self' blob: data:; font-src 'self' blob: data:; form-action 'none';">`
 
 const ERROR_REPORTER = `
 <script>
-  var _po = location.ancestorOrigins && location.ancestorOrigins[0] ? location.ancestorOrigins[0] : '*';
   window.onerror = function(msg, src, line, col, err) {
     window.parent.postMessage(
       { type: 'artifact-error', message: String(msg), stack: err ? String(err.stack) : '' },
-      _po
+      '*'
     );
   };
   window.addEventListener('unhandledrejection', function(e) {
     window.parent.postMessage(
       { type: 'artifact-error', message: String(e.reason), stack: '' },
-      _po
+      '*'
     );
   });
 </script>`.trim()

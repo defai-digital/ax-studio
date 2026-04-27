@@ -90,6 +90,9 @@ export function sanitizeMermaidFences(input: string): string {
       // Fix 1: strip any nested ```mermaid fence that the model put inside the source
       fixed = fixed.replace(/^```mermaid\s*/i, '').replace(/```\s*$/, '').trimStart()
 
+      // Fix 1a: deduplicate diagram type header (models sometimes repeat it)
+      fixed = fixed.replace(/^(stateDiagram-v2|stateDiagram|classDiagram|erDiagram|sequenceDiagram|gantt|flowchart|mindmap|pie|gitGraph|timeline|xychart|quadrantChart)\s+\1\b/i, '$1')
+
       // Fix 1b: strip invalid quoted title comments that some models add on the
       // diagram type line. e.g.:
       //   erDiagram """My Title"""  → erDiagram
@@ -374,6 +377,7 @@ export function sanitizeMermaidFences(input: string): string {
 
 // Cache for normalized LaTeX content
 const latexCache = new Map<string, string>()
+const LATEX_CACHE_MAX = 50
 
 /**
  * Optimized preprocessor: normalize LaTeX fragments into $ / $$.
@@ -418,10 +422,12 @@ const normalizeLatex = (input: string): string => {
     })
     .join('')
 
-  // Cache the result (with size limit to prevent memory leaks)
-  if (latexCache.size > 100) {
-    const firstKey = latexCache.keys().next().value || ''
-    latexCache.delete(firstKey)
+  // Skip caching for very long inputs (streaming chunks) — they won't be reused
+  if (input.length > 5000) return result
+
+  if (latexCache.size >= LATEX_CACHE_MAX) {
+    const firstKey = latexCache.keys().next().value
+    if (firstKey !== undefined) latexCache.delete(firstKey)
   }
   latexCache.set(input, result)
 

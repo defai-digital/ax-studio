@@ -24,7 +24,7 @@ pub const DEFAULT_MCP_CONFIG: &str = r#"{
       "args": [
         "-y",
         "@modelcontextprotocol/server-filesystem",
-        "/path/to/other/allowed/dir"
+        "~/Desktop"
       ],
       "env": {},
       "active": false

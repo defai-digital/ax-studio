@@ -130,7 +130,10 @@ export const useProxyConfig = create<ProxyConfigState>()(
       verifyHostSSL: true,
       noProxy: '',
       setProxyEnabled: (proxyEnabled) => set({ proxyEnabled }),
-      setProxyUrl: (proxyUrl) => set({ proxyUrl }),
+      setProxyUrl: (proxyUrl) => {
+        if (proxyUrl && !/^https?:\/\/.+/i.test(proxyUrl.trim())) return
+        set({ proxyUrl: proxyUrl.trim() })
+      },
       setProxyUsername: (proxyUsername) => set({ proxyUsername }),
       setProxyPassword: (proxyPassword) => set({ proxyPassword }),
       setProxyIgnoreSSL: (proxyIgnoreSSL) => set({ proxyIgnoreSSL }),

@@ -79,12 +79,16 @@ pub async fn create_thread<R: Runtime>(
     ensure_data_dirs(app_handle.clone())?;
     let uuid = thread.id.clone();
     let thread_dir = get_thread_dir(app_handle.clone(), &uuid);
-    if !thread_dir.exists() {
-        fs::create_dir_all(&thread_dir).map_err(|e| e.to_string())?;
-    }
     let path = get_thread_metadata_path(app_handle.clone(), &uuid);
     let data = serde_json::to_string_pretty(&thread).map_err(|e| e.to_string())?;
-    fs::write(path, data).map_err(|e| e.to_string())?;
+    tokio::task::spawn_blocking(move || {
+        if !thread_dir.exists() {
+            fs::create_dir_all(&thread_dir).map_err(|e| e.to_string())?;
+        }
+        fs::write(path, data).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("create_thread task error: {e}"))??;
     Ok(thread)
 }
 
@@ -110,11 +114,16 @@ pub async fn modify_thread<R: Runtime>(
     let path = get_thread_metadata_path(app_handle.clone(), thread_id);
     let data = serde_json::to_string_pretty(&thread).map_err(|e| e.to_string())?;
     let tmp_path = path.with_extension("json.tmp");
-    fs::write(&tmp_path, &data).map_err(|e| e.to_string())?;
-    if let Err(e) = fs::rename(&tmp_path, &path) {
-        let _ = fs::remove_file(&tmp_path);
-        return Err(e.to_string());
-    }
+    tokio::task::spawn_blocking(move || {
+        fs::write(&tmp_path, &data).map_err(|e| e.to_string())?;
+        if let Err(e) = fs::rename(&tmp_path, &path) {
+            let _ = fs::remove_file(&tmp_path);
+            return Err(e.to_string());
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("modify_thread task error: {e}"))??;
     Ok(())
 }
 
@@ -130,7 +139,9 @@ pub async fn delete_thread<R: Runtime>(
 
         let thread_dir = get_thread_dir(app_handle.clone(), &thread_id);
         if thread_dir.exists() {
-            fs::remove_dir_all(&thread_dir)
+            tokio::task::spawn_blocking(move || fs::remove_dir_all(&thread_dir))
+                .await
+                .map_err(|e| format!("delete_thread task error: {e}"))?
                 .map_err(|e| format!("Failed to delete thread directory: {e}"))?;
         }
     }
