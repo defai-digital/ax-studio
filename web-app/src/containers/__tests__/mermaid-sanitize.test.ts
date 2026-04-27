@@ -133,4 +133,129 @@ class Foo {
       expect(result).toContain('```mermaid\nclassDiagram')
     })
   })
+
+  describe('Fix 1c: split single-line diagrams', () => {
+    it('splits single-line erDiagram into multi-line', () => {
+      const input = wrap(
+        'erDiagram GAS_COMPANY ||--o{ GAS_SOURCE : manages GAS_COMPANY ||--o{ PROCESSING_PLANT : operates GAS_SOURCE ||--o| PROCESSING_PLANT : supplies_to GAS_COMPANY { string id PK string name } GAS_SOURCE { string id PK float pressure }'
+      )
+      const result = sanitizeMermaidFences(input)
+      expect(result).toContain('GAS_COMPANY ||--o{ GAS_SOURCE : manages')
+      expect(result).toContain('GAS_COMPANY ||--o{ PROCESSING_PLANT : operates')
+      expect(result).toContain('GAS_SOURCE ||--o| PROCESSING_PLANT : supplies_to')
+      expect(result).toContain('GAS_COMPANY { string id PK string name }')
+      expect(result).toContain('GAS_SOURCE { string id PK float pressure }')
+      const body = result.match(/erDiagram\n([\s\S]*?)```/)?.[1] ?? ''
+      const lines = body.split('\n').filter(l => l.trim())
+      expect(lines.length).toBeGreaterThan(3)
+    })
+
+    it('does not break properly-formatted multi-line erDiagram', () => {
+      const input = wrap(`erDiagram
+    EMPLOYEE ||--|| DEPARTMENT : works_in
+    DEPARTMENT ||--o{ PROJECT : oversees`)
+      const result = sanitizeMermaidFences(input)
+      expect(result).toContain('EMPLOYEE ||--|| DEPARTMENT : works_in')
+      expect(result).toContain('DEPARTMENT ||--o{ PROJECT : oversees')
+    })
+
+    it('fixes orphan ER relationships by inferring entity from context', () => {
+      const input = wrap(
+        'erDiagram ||--o{ JOB : submits ||--o{ TASK : contains'
+      )
+      const result = sanitizeMermaidFences(input)
+      // Orphan lines should get a preceding entity name
+      const body = result.match(/erDiagram\n([\s\S]*?)```/)?.[1] ?? ''
+      const lines = body.split('\n').filter(l => l.trim())
+      // Each line should start with an entity name, not ||
+      for (const line of lines) {
+        expect(line.trim()).not.toMatch(/^\|/)
+      }
+    })
+
+    it('strips quotes from non-reserved ER entity names', () => {
+      const input = wrap(
+        'erDiagram CUSTOMER ||--o{ "PRODUCT" : buys PRODUCT ||--o{ CATEGORY : belongs_to'
+      )
+      const result = sanitizeMermaidFences(input)
+      // PRODUCT and CATEGORY are not SQL reserved words — quotes should be stripped
+      expect(result).not.toContain('"PRODUCT"')
+      expect(result).not.toContain('"CATEGORY"')
+      // Relationships preserved
+      expect(result).toContain('CUSTOMER ||--o{')
+    })
+
+    it('splits single-line classDiagram', () => {
+      const input = wrap(
+        'classDiagram class Animal { +String name +int age } class Dog { +String breed } Animal <|-- Dog'
+      )
+      const result = sanitizeMermaidFences(input)
+      expect(result).toContain('class Animal {')
+      expect(result).toContain('class Dog {')
+      expect(result).toContain('Animal <|-- Dog')
+      const body = result.match(/classDiagram\n([\s\S]*?)```/)?.[1] ?? ''
+      const lines = body.split('\n').filter(l => l.trim())
+      expect(lines.length).toBeGreaterThan(2)
+    })
+
+    it('splits single-line stateDiagram', () => {
+      const input = wrap(
+        'stateDiagram-v2 [*] --> Idle Idle --> Processing Processing --> Done Done --> [*]'
+      )
+      const result = sanitizeMermaidFences(input)
+      expect(result).toContain('[*] --> Idle')
+      expect(result).toContain('Idle --> Processing')
+      expect(result).toContain('Processing --> Done')
+      expect(result).toContain('Done --> [*]')
+    })
+
+    it('splits single-line sequenceDiagram with actors and arrows', () => {
+      const input = wrap(
+        'sequenceDiagram autonumber actor Tx as Transmitter participant Rx as Receiver Tx ->> Rx: Start Bit Rx ->> Rx: Validate Rx -->> Tx: Done'
+      )
+      const result = sanitizeMermaidFences(input)
+      expect(result).toContain('actor Tx as Transmitter')
+      expect(result).toContain('participant Rx as Receiver')
+      expect(result).toContain('Tx ->> Rx: Start Bit')
+      expect(result).toContain('Rx ->> Rx: Validate')
+      expect(result).toContain('Rx -->> Tx: Done')
+      const body = result.match(/sequenceDiagram\n([\s\S]*?)```/)?.[1] ?? ''
+      const lines = body.split('\n').filter(l => l.trim())
+      expect(lines.length).toBeGreaterThan(4)
+    })
+
+    it('splits single-line sequenceDiagram with Notes', () => {
+      const input = wrap(
+        'sequenceDiagram participant A participant B Note over A: Init A ->> B: Data Note right of B: Processing B -->> A: Done'
+      )
+      const result = sanitizeMermaidFences(input)
+      expect(result).toContain('Note over A: Init')
+      expect(result).toContain('A ->> B: Data')
+      expect(result).toContain('Note right of B: Processing')
+      expect(result).toContain('B -->> A: Done')
+    })
+
+    it('splits class diagram attributes onto separate lines', () => {
+      const input = wrap(
+        'classDiagram class Bank { +String name +int age +void validate() }'
+      )
+      const result = sanitizeMermaidFences(input)
+      expect(result).toContain('class Bank {')
+      expect(result).toContain('+String name')
+      expect(result).toContain('+int age')
+      expect(result).toContain('+void validate()')
+      const bankLine = result.split('\n').find(l => l.includes('class Bank'))
+      expect(bankLine).toBeDefined()
+      expect(bankLine!.trim()).toBe('class Bank {')
+    })
+
+    it('splits single-line mindmap at shape boundaries', () => {
+      const input = wrap(
+        'mindmap root((Machine Learning)) Supervised((Classification)) Unsupervised((Clustering))'
+      )
+      const result = sanitizeMermaidFences(input)
+      // At minimum the root and children should be on separate lines
+      expect(result).toContain('root((Machine Learning))')
+    })
+  })
 })

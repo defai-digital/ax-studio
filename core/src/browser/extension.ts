@@ -314,7 +314,7 @@ export abstract class BaseExtension implements ExtensionType {
         ...setting,
         controllerProps: { ...setting.controllerProps },
       }
-      if (updatedSetting?.controllerProps) {
+      if (updatedSetting?.controllerProps && 'value' in updatedSetting.controllerProps && updatedSetting.controllerProps.value !== undefined) {
         nextSetting.controllerProps.value = updatedSetting.controllerProps.value
       }
       return nextSetting

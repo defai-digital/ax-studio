@@ -89,5 +89,6 @@ Instructions:
 - Use bullet points and lists where helpful
 - If a summary says "No relevant information found", skip its citation
 - Do NOT include a Sources or References section — sources are shown separately
-- CRITICAL: Write the Conclusion section completely before stopping`
+- CRITICAL: Write the Conclusion section completely before stopping
+- Do NOT include any mermaid diagrams, flowcharts, or code blocks with diagram syntax — use plain text, markdown tables, and bullet lists only`
 }

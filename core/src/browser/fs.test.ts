@@ -90,7 +90,7 @@ describe('fs module', () => {
   it('should call fileStat with correct arguments', async () => {
     const path = 'path/to/file'
     await fs.fileStat(path)
-    expect(globalThis.core.api.fileStat).toHaveBeenCalledWith({ args: path })
+    expect(globalThis.core.api.fileStat).toHaveBeenCalledWith({ args: [path] })
   })
 
   describe('path validation', () => {
@@ -139,6 +139,15 @@ describe('fs module', () => {
 
     it('should validate path in fileStat', () => {
       expect(() => fs.fileStat('../escape')).toThrow('Path traversal not allowed: ../escape')
+    })
+
+    it('should reject sensitive paths with exact segment matching', () => {
+      expect(() => fs.readFileSync('/etc/passwd')).toThrow('Access denied')
+      expect(() => fs.readFileSync('/etc/shadow')).toThrow('Access denied')
+    })
+
+    it('should allow paths that merely start with same characters but are different segments', () => {
+      expect(() => fs.writeFileSync('/etcXTRA/myprefs', 'data')).not.toThrow()
     })
 
     it('should validate path in writeBlob', async () => {

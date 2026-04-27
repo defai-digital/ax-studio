@@ -97,6 +97,24 @@ describe('ModelManager', () => {
       expect(events.emit).toHaveBeenCalledTimes(1)
       expect(events.emit).toHaveBeenCalledWith(ModelEvent.OnModelsUpdate, {})
     })
+
+    it('should not crash when events.emit throws in microtask', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      vi.mocked(events.emit).mockImplementation(() => {
+        throw new Error('bridge unavailable')
+      })
+
+      modelManager.register(mockModel)
+
+      await Promise.resolve()
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[ModelManager] Failed to emit OnModelsUpdate:',
+        expect.any(Error)
+      )
+
+      consoleSpy.mockRestore()
+    })
   })
 
   describe('get', () => {

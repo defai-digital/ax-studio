@@ -23,7 +23,6 @@ export abstract class RemoteOAIEngine extends OAIEngine {
 
     return {
       'Authorization': `Bearer ${apiKey}`,
-      'api-key': apiKey,
     }
   }
 }

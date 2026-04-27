@@ -84,4 +84,25 @@ describe('OAIEngine', () => {
 
     consoleSpy.mockRestore()
   })
+
+  it('should guard against concurrent inference requests', async () => {
+    const inferenceSpy = vi.spyOn(engine, 'inference').mockImplementation(() => new Promise(() => {}))
+
+    engine.onLoad()
+
+    const messageHandler = vi
+      .mocked(events.on)
+      .mock.calls.find(([eventName]) => eventName === MessageEvent.OnMessageSent)?.[1] as
+      | ((data: MessageRequest) => void)
+      | undefined
+
+    expect(messageHandler).toBeDefined()
+
+    messageHandler?.({ attachments: [] } as MessageRequest)
+    messageHandler?.({ attachments: [] } as MessageRequest)
+
+    await vi.waitFor(() => {
+      expect(inferenceSpy).toHaveBeenCalledTimes(1)
+    })
+  })
 })

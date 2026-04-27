@@ -46,6 +46,13 @@ describe('test core apis', () => {
     expect(() => openExternalUrl(url)).toThrow('Invalid URL format: not-a-url')
   })
 
+  it('should reject private/local network URLs', () => {
+    expect(() => openExternalUrl('http://localhost/something')).toThrow('private/internal networks')
+    expect(() => openExternalUrl('http://127.0.0.1/something')).toThrow('private/internal networks')
+    expect(() => openExternalUrl('http://192.168.1.1/something')).toThrow('private/internal networks')
+    expect(() => openExternalUrl('http://10.0.0.1/something')).toThrow('private/internal networks')
+  })
+
   it('should join paths', async () => {
     const paths = ['/path/one', '/path/two']
     globalThis.core = {

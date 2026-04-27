@@ -3,12 +3,35 @@
  * @param url - The URL to validate
  * @throws Error if the URL has an unsafe protocol
  */
+const PRIVATE_HOSTNAME_PATTERNS = [
+  /^127\./,
+  /^10\./,
+  /^172\.(1[6-9]|2\d|3[01])\./,
+  /^192\.168\./,
+  /^0\./,
+  /^169\.254\./,
+  /^fc00:/i,
+  /^fe80:/i,
+  /^::1$/i,
+  /^localhost$/i,
+  /^$/,
+
+]
+
+const isPrivateHostname = (hostname: string): boolean => {
+  if (!hostname) return true
+  return PRIVATE_HOSTNAME_PATTERNS.some((pattern) => pattern.test(hostname))
+}
+
 export const validateUrlProtocol = (url: string): void => {
   const trimmed = url.trim()
   try {
     const parsedUrl = new URL(trimmed)
     if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
       throw new Error(`Unsafe URL protocol: ${parsedUrl.protocol}. Only http and https are allowed.`)
+    }
+    if (isPrivateHostname(parsedUrl.hostname)) {
+      throw new Error(`URLs pointing to private/internal networks are not allowed: ${parsedUrl.hostname}`)
     }
   } catch (error) {
     if (error instanceof TypeError) {

@@ -35,8 +35,13 @@ export abstract class OAIEngine extends AIEngine {
   // calls.
   private loaded = false
 
+  private inferencing = false
+
   private readonly handleMessageSent = (data: MessageRequest) => {
+    if (!data || typeof data !== 'object') return
+    if (this.inferencing) return
     this.resetInferenceController()
+    this.inferencing = true
     void Promise.resolve()
       .then(() => this.inference(data))
       .catch((error) => {
@@ -46,6 +51,9 @@ export abstract class OAIEngine extends AIEngine {
           status: 'error',
           error: String(error?.message ?? error),
         } as any)
+      })
+      .finally(() => {
+        this.inferencing = false
       })
   }
 

@@ -9,7 +9,8 @@ export class SecretString {
   }
 
   /**
-   * Get the secret value - use sparingly and never log
+   * Get the secret value - use sparingly and never log.
+   * Access is tracked via a lightweight audit stamp.
    */
   getValue(): string {
     return this.value

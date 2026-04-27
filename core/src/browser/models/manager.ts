@@ -11,8 +11,10 @@ export class ModelManager {
 
   constructor() {
     if (typeof window !== 'undefined') {
-      window.core ??= {}
-      window.core.modelManager = this
+      if (!window.core?.modelManager) {
+        window.core ??= {}
+        window.core.modelManager = this
+      }
     }
   }
 
@@ -41,7 +43,11 @@ export class ModelManager {
     this.updateEventScheduled = true
     queueMicrotask(() => {
       this.updateEventScheduled = false
-      events.emit(ModelEvent.OnModelsUpdate, {})
+      try {
+        events.emit(ModelEvent.OnModelsUpdate, {})
+      } catch (error) {
+        console.error('[ModelManager] Failed to emit OnModelsUpdate:', error)
+      }
     })
   }
 

@@ -419,9 +419,13 @@ export function useResearch(threadId: string) {
         }
 
         // Strip any leaked thinking/reasoning blocks that reasoning models
-        // (e.g. Qwen3, Claude with extended thinking) may output as plain text
+        // (e.g. Qwen3, Claude with extended thinking) may output as plain text.
+        // Also strip any mermaid code blocks — the model sometimes ignores the
+        // "no diagrams" instruction and outputs broken mermaid syntax that
+        // renders as "Syntax error in text" in the UI.
         report = report
           .replace(/^[\s\S]*?(##\s*Executive Summary)/m, '$1')
+          .replace(/```\s*mermaid[\s\S]*?```/gi, '')
           .trim()
 
         const sourceFooter = allSources.length > 0

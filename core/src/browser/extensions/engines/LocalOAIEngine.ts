@@ -23,6 +23,10 @@ export abstract class LocalOAIEngine extends OAIEngine {
       .then(() => this.loadModel(model))
       .catch((error) => {
         console.error('[LocalOAIEngine] Failed to load model:', error)
+        events.emit(ModelEvent.OnModelFail, {
+          modelId: model.id,
+          error: String(error?.message ?? error),
+        })
       })
   }
 
@@ -31,6 +35,10 @@ export abstract class LocalOAIEngine extends OAIEngine {
       .then(() => this.unloadModel(model))
       .catch((error) => {
         console.error('[LocalOAIEngine] Failed to unload model:', error)
+        events.emit(ModelEvent.OnModelFail, {
+          modelId: model.id,
+          error: String(error?.message ?? error),
+        })
       })
   }
 

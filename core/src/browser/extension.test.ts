@@ -173,6 +173,23 @@ describe('BaseExtension', () => {
     )
   })
 
+  it('should not overwrite settings value when partial input has undefined value', async () => {
+    const settings: SettingComponentProps[] = [
+      { key: 'setting1', controllerProps: { value: 'originalValue' } } as any,
+    ]
+
+    vi.spyOn(baseExtension, 'getSettings').mockResolvedValue(settings)
+    const mockSetItem = vi.spyOn(localStorage, 'setItem')
+
+    await baseExtension.updateSettings([
+      { key: 'setting1', controllerProps: { value: undefined } } as any,
+    ])
+
+    const [, payload] = mockSetItem.mock.calls[0]
+    const parsed = JSON.parse(payload)
+    expect(parsed[0].controllerProps.value).toBe('originalValue')
+  })
+
   it('should ignore malformed stored settings during registration', async () => {
     localStorage.setItem('TestExtension', '{"bad":true}')
 

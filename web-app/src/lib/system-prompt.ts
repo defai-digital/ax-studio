@@ -46,11 +46,21 @@ NEVER include diagrams, flowcharts, or mermaid code blocks unless the user expli
 
 When a diagram IS explicitly requested, use a mermaid code fence with valid mermaid syntax inside it.
 
+CRITICAL: Every diagram MUST follow these formatting rules:
+- Each statement MUST be on its own line — NEVER put multiple statements on one line
+- NEVER put the diagram type on the same line as the opening fence
+
 Mermaid syntax rules (only when generating a requested diagram):
 - Wrap node labels in double quotes when they contain special characters or spaces: A["Label (with parens)"], A["Multi word label"]
-- classDiagram: use \`List~Task~\` not \`List<Task>\`, no \`enum {A, B}\` in class body
-- erDiagram: quote SQL reserved words: \`"ORDER"\` not \`ORDER\`; NEVER add \`class\`, \`classDef\`, or \`style\` blocks — only entity definitions and relationship lines are valid in erDiagram; NEVER use \`%%\` comments inside entity definitions — comments are only allowed on their own line outside entity blocks
-- sequenceDiagram: every message on a single line
+- classDiagram: use \`List~Task~\` not \`List<Task>\`, no \`enum {A, B}\` in class body. Each attribute on its own line.
+- erDiagram: each relationship line must be: \`LEFT_ENTITY ||--o{ RIGHT_ENTITY : label\` — the LEFT entity name is ALWAYS required. Each relationship and each entity definition on its own line. Quote ONLY SQL reserved words. Example:
+\`\`\`mermaid
+erDiagram
+    USER ||--o{ ORDER : places
+    ORDER ||--o{ ITEM : contains
+    USER { string name string email }
+\`\`\`
+- sequenceDiagram: every message on its own line
 - stateDiagram: always use \`stateDiagram-v2\`; use ONLY flat transition lines (e.g. \`A --> B\`); NEVER use composite state blocks (\`state X { ... }\`) — they cause "would create a cycle" parse errors; state names must be bare identifiers (\`Placed --> Confirmed\`), NEVER quoted strings (\`"Placed" --> "Confirmed"\`)
 - gantt: every task needs format \`Task Name :status, YYYY-MM-DD, duration\`
 - mindmap: node labels must be plain text only — NEVER use \`()\`, \`[]\`, or \`{{}}\` inside node label text (they are shape-syntax tokens); write abbreviations without parentheses e.g. "CNN" not "CNN (Convolutional)"`

@@ -97,6 +97,141 @@ export function sanitizeMermaidFences(input: string): string {
       // None of these are valid Mermaid syntax and cause parse errors.
       fixed = fixed.replace(/^(\w+)\s+"{1,3}[^"]*"{1,3}/m, '$1')
 
+      // Fix 1c: Split single-line diagrams into proper multi-line format.
+      // Some models output the entire diagram body on one line; Mermaid
+      // requires each statement (relationship, entity, class, transition)
+      // on its own line.  Detect few-lines + long-content and split at
+      // statement boundaries per diagram type.
+      const _nonBlank = fixed.split('\n').filter(l => l.trim()).length
+      if (_nonBlank <= 3 && fixed.length > 40) {
+        const _dtype = fixed.trimStart().split(/[\s/-]/)[0] ?? ''
+
+        if (/^erDiagram$/i.test(_dtype)) {
+          // Strip quotes from entity names (models over-quote: "USER" ||--o{ "ORDER")
+          // Only keep quotes for known SQL reserved words
+          fixed = fixed.replace(/"([A-Z_]\w*)"/g, (_m, name) => {
+            const reserved = /^(ORDER|GROUP|SELECT|FROM|WHERE|HAVING|USER|TABLE|INDEX|KEY|VALUE|SET|NOT|NULL|AND|OR|IN|BY|AS|ON|AT|TO|OF)$/
+            return reserved.test(name) ? _m : name
+          })
+          // Split before each relationship (WORD or "WORD" CARDINALITY)
+          fixed = fixed.replace(
+            /(:[^\n]{0,80}?)\s+((?:"?[A-Z_]\w*"?\s+)?[|}o]{1,2}--[|{o]{1,2})/g,
+            '$1\n$2'
+          )
+          // Split after "erDiagram" keyword
+          fixed = fixed.replace(
+            /(erDiagram)\s+((?:"?[A-Z_]\w*"?\s+)?[|}o]{1,2}--[|{o]{1,2})/gi,
+            '$1\n$2'
+          )
+          // Split before each entity definition (WORD {)
+          fixed = fixed.replace(
+            /([^\n])\s+((?:"?[A-Z_]\w*"?\s+\{))/g,
+            '$1\n$2'
+          )
+          // Fix orphan relationships: ||--o{ ENTITY : label (no left entity)
+          // Try to extract entity from previous relationship's right side
+          const lines = fixed.split('\n')
+          const fixed2: string[] = []
+          for (const line of lines) {
+            const trimmed = line.trim()
+            // Detect orphan: line starts with cardinality
+            if (/^[|}o]{1,2}--[|{o]{1,2}\s/.test(trimmed)) {
+              // Try to find the previous entity to reuse
+              const prevEntity = fixed2.length > 0
+                ? fixed2[fixed2.length - 1].match(/\w+\s*$/) ?? []
+                : []
+              const entity = prevEntity[0] || 'ENTITY'
+              fixed2.push(entity + ' ' + trimmed)
+            } else {
+              fixed2.push(line)
+            }
+          }
+          fixed = fixed2.join('\n')
+        }
+
+        if (/^classDiagram$/i.test(_dtype)) {
+          // Split before class definitions
+          fixed = fixed.replace(/([^\n])\s+(class\s)/g, '$1\n$2')
+          // Split before relationship arrows  (<|--  ..|>  -->  ---)
+          fixed = fixed.replace(
+            /([^\n])\s+([A-Za-z_]\w*\s*(?:<\|--|\.\.[|>]|-->|---|\.\.>|\.\.))/g,
+            '$1\n$2'
+          )
+          // Split attributes inside { } onto separate lines
+          // e.g.  class Bank { +String name +int age }  →  each on own line
+          fixed = fixed.replace(
+            /(\{[^\n]*(?:[+\-#~]\s*\w+))/g,
+            (match) => {
+              const visCount = (match.match(/[+\-#~]\s*\w+/g) ?? []).length
+              if (visCount <= 1) return match
+              return match.replace(/\s*([+\-#~]\s*\w+)/g, '\n  $1').replace(/\{\s*\n/, '{\n')
+            }
+          )
+        }
+
+        if (/^stateDiagram(-v2)?$/i.test(_dtype)) {
+          // Split before [*] --> transitions
+          fixed = fixed.replace(/([^\n])\s+(\[\*\]\s*-->)/g, '$1\n$2')
+          // Split before STATE --> transitions
+          fixed = fixed.replace(/([^\n])\s+([A-Za-z_]\w*\s*-->)/g, '$1\n$2')
+          // Split before state definitions
+          fixed = fixed.replace(/([^\n])\s+(state\s)/g, '$1\n$2')
+        }
+
+        if (/^sequenceDiagram$/i.test(_dtype)) {
+          // Split before keywords
+          for (const kw of [
+            'participant', 'actor ', 'autonumber',
+            'Note right of', 'Note left of', 'Note over', 'Note right', 'Note left', 'Note ',
+            'activate', 'deactivate',
+            'loop ', 'end', 'alt ', 'else', 'opt ', 'rect ', 'par ', 'and ',
+            'create', 'destroy',
+          ]) {
+            fixed = fixed.replace(
+              new RegExp(`([^\\n])\\s+(${kw.replace(/([.*+?^${}()|[\]\\])/g, '\\$1')})`, 'g'),
+              '$1\n$2'
+            )
+          }
+          // Split before arrow messages:  WORD ->> WORD : or WORD -->> WORD : etc.
+          fixed = fixed.replace(
+            /([^\n])\s+(\w+\s*(?:->>|-->>|-\)|--x|->|-->|-x)\s+\w+\s*:)/g,
+            '$1\n$2'
+          )
+          // Split before self-referencing arrows:  Rx ->> Rx:
+          fixed = fixed.replace(
+            /([^\n])\s+(\w+\s*(?:->>|-->>|->|-->|-\)|--x|-x)\s+\w+\s*$)/gm,
+            '$1\n$2'
+          )
+        }
+
+        if (/^mindmap$/i.test(_dtype)) {
+          // Mindmap uses indentation for hierarchy.
+          // Split at shape tokens: ((root)), [rect], {{cloud}}, (rounded)
+          // and plain text nodes that follow closing shape tokens.
+          const parts = fixed.split('\n')
+          const expanded: string[] = []
+          for (const line of parts) {
+            if (line.trim().length < 3) { expanded.push(line); continue }
+            // Split at shape boundaries: ))  ]]  }}  )(  etc.
+            const split = line.replace(
+              /(\)\)|\]\]|\}\})\s+(\(\(|\[|\{\{|[A-Za-z])/g,
+              '$1\n$2'
+            )
+            // Also split plain text nodes that follow each other
+            .replace(
+              /([a-zA-Z][a-zA-Z0-9 _-]*)\s+([a-zA-Z][a-zA-Z0-9 _-]*\s)/g,
+              (m, a, b) => {
+                // Only split if both look like separate node labels
+                if (a.length > 3 && b.length > 3) return a + '\n  ' + b
+                return m
+              }
+            )
+            expanded.push(...split.split('\n'))
+          }
+          fixed = expanded.join('\n')
+        }
+      }
+
       // Fix 2: bare "flowchart" with no direction → add TD
       fixed = fixed.replace(/^(flowchart)\s*$/im, 'flowchart TD')
 
@@ -406,6 +541,36 @@ function MermaidDiagram({ source, theme }: { source: string; theme: string }) {
         if (/NEWLINE|newline/i.test(msg)) {
           patched = patched.replace(/\r\n/g, '\n')
           changed = true
+        }
+        // Fix: single-line diagram — split into multi-line
+        if (/syntax error|parse error/i.test(msg)) {
+          const srcLines = source.split('\n').filter(l => l.trim()).length
+          if (srcLines <= 3 && source.length > 40) {
+            patched = source
+              // ER: fix orphan relationships (missing left entity)
+              .replace(/(?:^|\n)\s*([|}o]{1,2}--[|{o]{1,2}\s+\w+\s*:)/gm, (_m, rest) => `UNKNOWN ${rest}`)
+              // ER: strip unnecessary quotes from entity names
+              .replace(/"([A-Z_]\w*)"/g, (_m, name) => {
+                const reserved = /^(ORDER|GROUP|SELECT|FROM|WHERE|HAVING|USER|TABLE|INDEX|KEY|VALUE|SET|NOT|NULL|AND|OR|IN|BY|AS|ON|AT|TO|OF)$/
+                return reserved.test(name) ? _m : name
+              })
+              // ER: split at relationships and entity definitions
+              .replace(/([^\n])\s+([A-Z_]\w*\s+[|}o]{1,2}--[|{o]{1,2})/g, '$1\n$2')
+              .replace(/([^\n])\s+([A-Z_]\w*\s+\{)/g, '$1\n$2')
+              // Class: split at class keyword and relationship arrows
+              .replace(/([^\n])\s+(class\s)/g, '$1\n$2')
+              .replace(/([^\n])\s+([A-Za-z_]\w*\s*(?:<\|--|\.\.[|>]|-->|---|\.\.>|\.\.))/g, '$1\n$2')
+              // State: split at transitions
+              .replace(/([^\n])\s+(\[\*\]\s*-->)/g, '$1\n$2')
+              .replace(/([^\n])\s+([A-Za-z_]\w*\s*-->)/g, '$1\n$2')
+              // Sequence: split at arrow messages
+              .replace(/([^\n])\s+(\w+\s*(?:->>|-->>|-\)|--x|->|-->|-x)\s+\w+\s*:)/g, '$1\n$2')
+              // Sequence: split at keywords
+              .replace(/([^\n])\s+(participant\s)/g, '$1\n$2')
+              .replace(/([^\n])\s+(actor\s)/g, '$1\n$2')
+              .replace(/([^\n])\s+(Note\s)/g, '$1\n$2')
+            changed = true
+          }
         }
 
         if (changed && patched !== source) {

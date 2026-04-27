@@ -139,7 +139,12 @@ const validatePath = (path: string): string => {
 
   const lower = normalizedPath.toLowerCase()
   for (const sensitive of SENSITIVE_PATHS) {
-    if (lower.startsWith(sensitive.toLowerCase())) {
+    const sensitiveLower = sensitive.toLowerCase()
+    if (
+      lower === sensitiveLower ||
+      lower.startsWith(sensitiveLower + '/') ||
+      lower.startsWith(sensitiveLower + '\\')
+    ) {
       throw new Error(`Access denied: ${path}`)
     }
   }
@@ -247,7 +252,7 @@ export const fs = {
   fileStat(path: string): Promise<FileStat | undefined> {
     const safePath = validatePath(path)
     return validateBridgeResult(
-      getCoreApi().fileStat({ args: safePath }),
+      getCoreApi().fileStat({ args: [safePath] }),
       'fileStat',
       expectFileStat
     )

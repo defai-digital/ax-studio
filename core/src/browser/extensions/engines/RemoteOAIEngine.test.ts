@@ -2,6 +2,8 @@ import { describe, test, expect, beforeEach, vi } from 'vitest'
 import { RemoteOAIEngine } from './'
 import { SecretString } from '../../../types'
 
+vi.mock('../../events')
+
 class TestRemoteOAIEngine extends RemoteOAIEngine {
   inferenceUrl: string = ''
   provider: string = 'TestRemoteOAIEngine'
@@ -12,6 +14,7 @@ describe('RemoteOAIEngine', () => {
 
   beforeEach(() => {
     engine = new TestRemoteOAIEngine('', '')
+    vi.clearAllMocks()
   })
 
   test('should call onLoad and super.onLoad', () => {
@@ -23,31 +26,13 @@ describe('RemoteOAIEngine', () => {
     expect(superOnLoadSpy).toHaveBeenCalled()
   })
 
-  test('should return headers with apiKey', async () => {
-    engine.apiKey = SecretString.from('test-api-key')
-    const headers = await engine.headers()
-
-    expect(headers).toEqual({
-      'Authorization': 'Bearer test-api-key',
-      'api-key': 'test-api-key',
-    })
-  })
-
-  test('should return empty headers when apiKey is not set', async () => {
-    engine.apiKey = undefined
-    const headers = await engine.headers()
-
-    expect(headers).toEqual({})
-  })
-
   describe('headers()', () => {
-    test('returns both Authorization and api-key when apiKey is set', async () => {
+    test('returns Authorization header when apiKey is set', async () => {
       engine.apiKey = SecretString.from('test-key')
       const headers = await engine.headers()
 
       expect(headers).toEqual({
         'Authorization': 'Bearer test-key',
-        'api-key': 'test-key',
       })
     })
 
