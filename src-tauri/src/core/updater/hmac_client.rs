@@ -52,7 +52,7 @@ pub fn generate_signature(
     let message = format!("{}:{}:{}", nonce_seed, timestamp, nonce);
 
     let mut mac =
-        HmacSha256::new_from_slice(secret_key.as_bytes()).expect("HMAC can take key of any size");
+        HmacSha256::new_from_slice(secret_key.as_bytes()).expect("HMAC accepts any key size");
     mac.update(message.as_bytes());
 
     hex::encode(mac.finalize().into_bytes())

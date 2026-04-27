@@ -260,21 +260,16 @@ impl CustomUpdater {
         let current = current.trim_start_matches('v');
         let latest = latest.trim_start_matches('v');
 
-        let current_parts: Vec<u32> = current.split('.').filter_map(|s| s.parse().ok()).collect();
-        let latest_parts: Vec<u32> = latest.split('.').filter_map(|s| s.parse().ok()).collect();
+        let Ok(current_ver) = semver::Version::parse(current) else {
+            log::warn!("Cannot parse current version '{current}', skipping update check");
+            return false;
+        };
+        let Ok(latest_ver) = semver::Version::parse(latest) else {
+            log::warn!("Cannot parse latest version '{latest}', skipping update check");
+            return false;
+        };
 
-        for i in 0..std::cmp::max(current_parts.len(), latest_parts.len()) {
-            let current_part = current_parts.get(i).unwrap_or(&0);
-            let latest_part = latest_parts.get(i).unwrap_or(&0);
-
-            if latest_part > current_part {
-                return true;
-            } else if latest_part < current_part {
-                return false;
-            }
-        }
-
-        false
+        latest_ver > current_ver
     }
 }
 
@@ -301,5 +296,8 @@ mod tests {
         assert!(!updater.is_update_available("1.0.0", "1.0.0"));
         assert!(!updater.is_update_available("1.0.1", "1.0.0"));
         assert!(updater.is_update_available("v1.0.0", "v1.0.1"));
+        assert!(!updater.is_update_available("1.0.0", "2.0.0-beta"));
+        assert!(updater.is_update_available("2.0.0-beta", "2.0.0"));
+        assert!(!updater.is_update_available("1.9.0", "2.0.0-rc.1"));
     }
 }

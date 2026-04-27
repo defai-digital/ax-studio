@@ -12,12 +12,21 @@ use subtle::ConstantTimeEq;
 
 const MAX_AUTH_FAILURES: usize = 10;
 const AUTH_LOCKOUT_SECS: u64 = 60;
+const AUTH_MAX_ENTRIES: usize = 1024;
 
 static AUTH_FAILURES: std::sync::LazyLock<Mutex<HashMap<String, (usize, Instant)>>> =
     std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
+fn lock_auth_map() -> std::sync::MutexGuard<'static, HashMap<String, (usize, Instant)>> {
+    AUTH_FAILURES.lock().unwrap_or_else(|e| {
+        log::warn!("AUTH_FAILURES mutex poisoned, reinitializing: {e}");
+        e.into_inner()
+    })
+}
+
 fn is_rate_limited(client_id: &str) -> bool {
-    let mut map = AUTH_FAILURES.lock().unwrap_or_else(|e| e.into_inner());
+    let mut map = lock_auth_map();
+    evict_stale_entries(&mut map);
     if let Some((count, first_failure)) = map.get(client_id) {
         if *count >= MAX_AUTH_FAILURES && first_failure.elapsed().as_secs() < AUTH_LOCKOUT_SECS {
             return true;
@@ -30,15 +39,38 @@ fn is_rate_limited(client_id: &str) -> bool {
 }
 
 fn record_auth_failure(client_id: &str) {
-    let mut map = AUTH_FAILURES.lock().unwrap_or_else(|e| e.into_inner());
-    let entry = map.entry(client_id.to_string()).or_insert((0, Instant::now()));
+    let mut map = lock_auth_map();
+    evict_stale_entries(&mut map);
+    let entry = map.entry(client_id.to_string()).or_insert_with(|| (0, Instant::now()));
     entry.0 += 1;
-    entry.1 = Instant::now();
 }
 
 fn clear_auth_failure(client_id: &str) {
-    let mut map = AUTH_FAILURES.lock().unwrap_or_else(|e| e.into_inner());
+    let mut map = lock_auth_map();
     map.remove(client_id);
+}
+
+fn evict_stale_entries(map: &mut HashMap<String, (usize, Instant)>) {
+    if map.len() <= AUTH_MAX_ENTRIES {
+        return;
+    }
+    map.retain(|_, (_, first_failure)| first_failure.elapsed().as_secs() < AUTH_LOCKOUT_SECS);
+    if map.len() > AUTH_MAX_ENTRIES {
+        let to_remove: Vec<String> = map
+            .iter()
+            .filter_map(|(k, (_, t))| {
+                if t.elapsed().as_secs() >= AUTH_LOCKOUT_SECS {
+                    Some(k.clone())
+                } else {
+                    None
+                }
+            })
+            .take(map.len() - AUTH_MAX_ENTRIES / 2)
+            .collect();
+        for key in to_remove {
+            map.remove(&key);
+        }
+    }
 }
 
 use super::security::{add_cors_headers_with_host_and_origin, trusted_cors_origin};
@@ -281,7 +313,8 @@ fn validate_request(
     // 127.0.0.1, so no external origin can reach this path.
     // Note: `path` here is the destination path with the /v1 prefix stripped.
     let is_loopback_embeddings = (path == "/embeddings" || path == "/v1/embeddings")
-        && matches!(host_header, "127.0.0.1:1337" | "localhost:1337");
+        && (config.host == "127.0.0.1" || config.host == "localhost" || config.host == "::1")
+        && host_header.starts_with(&config.host);
     let is_whitelisted_path = whitelisted_paths.contains(&path) || is_loopback_embeddings;
 
     if !is_whitelisted_path {
@@ -436,10 +469,8 @@ pub(super) async fn proxy_request<R: tauri::Runtime>(
         return Ok(resp);
     }
 
-    let destination_path = path.clone();
-
     // Static / meta routes (GET only — no body needed)
-    match (method.clone(), destination_path.as_str()) {
+    match (method.clone(), path.as_str()) {
         (hyper::Method::GET, "/models") => {
             return Ok(gateway_routes::handle_models_route(
                 &host_header,
@@ -453,7 +484,7 @@ pub(super) async fn proxy_request<R: tauri::Runtime>(
     }
 
     // Model provider routing (POST /messages, POST /chat/completions, etc.)
-    match (method.clone(), destination_path.as_str()) {
+    match (method.clone(), path.as_str()) {
         (hyper::Method::POST, "/messages")
         | (hyper::Method::POST, "/chat/completions")
         | (hyper::Method::POST, "/completions")
@@ -461,7 +492,7 @@ pub(super) async fn proxy_request<R: tauri::Runtime>(
         | (hyper::Method::POST, "/messages/count_tokens") => {
             let provider_hint = headers.get("x-ax-provider").and_then(|v| v.to_str().ok());
             let resolution = match model_routes::resolve_model_route(
-                &destination_path,
+                &path,
                 body,
                 &host_header,
                 &origin_header,
@@ -476,7 +507,7 @@ pub(super) async fn proxy_request<R: tauri::Runtime>(
             };
             return model_routes::dispatch_to_upstream(
                 resolution,
-                &destination_path,
+                &path,
                 &headers,
                 &host_header,
                 &origin_header,
@@ -490,7 +521,7 @@ pub(super) async fn proxy_request<R: tauri::Runtime>(
 
     // Catch-all
     Ok(gateway_routes::handle_unknown_route(
-        &destination_path,
+        &path,
         &method,
         &host_header,
         &origin_header,

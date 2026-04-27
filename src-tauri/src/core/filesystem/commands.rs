@@ -167,16 +167,28 @@ pub(crate) fn normalize_save_target_path(path: &str) -> Result<PathBuf, String> 
         .parent()
         .ok_or_else(|| "save path must include a parent directory".to_string())?;
 
-    let canonical_parent = parent
-        .canonicalize()
-        .unwrap_or_else(|_| ax_studio_utils::normalize_path(Path::new(parent)));
+    let canonical_parent = parent.canonicalize().map_err(|e| {
+        format!(
+            "Cannot resolve save path parent '{}': {e}",
+            parent.display()
+        )
+    })?;
     Ok(canonical_parent.join(file_name))
+}
+
+const MAX_APPROVED_SAVE_PATHS: usize = 256;
+
+fn evict_stale_save_paths(approved_save_paths: &mut std::collections::HashSet<PathBuf>) {
+    if approved_save_paths.len() > MAX_APPROVED_SAVE_PATHS {
+        approved_save_paths.clear();
+    }
 }
 
 pub(crate) fn approve_save_target(
     approved_save_paths: &mut std::collections::HashSet<PathBuf>,
     path: &str,
 ) -> Result<(), String> {
+    evict_stale_save_paths(approved_save_paths);
     let normalized = normalize_save_target_path(path)?;
     approved_save_paths.insert(normalized);
     Ok(())
@@ -705,7 +717,10 @@ pub async fn write_binary_file(
         let mut approved_save_paths = state.approved_save_paths.lock().await;
         consume_approved_save_target(&mut approved_save_paths, &path)?
     };
-    std::fs::write(&normalized_path, &data).map_err(|e| e.to_string())
+    tokio::task::spawn_blocking(move || std::fs::write(&normalized_path, &data))
+        .await
+        .map_err(|e| format!("write_binary_file task join error: {e}"))?
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -719,6 +734,9 @@ pub async fn write_text_file(
         let mut approved_save_paths = state.approved_save_paths.lock().await;
         consume_approved_save_target(&mut approved_save_paths, &path)?
     };
-    std::fs::write(&normalized_path, content).map_err(|e| e.to_string())
+    tokio::task::spawn_blocking(move || std::fs::write(&normalized_path, content))
+        .await
+        .map_err(|e| format!("write_text_file task join error: {e}"))?
+        .map_err(|e| e.to_string())
 }
 

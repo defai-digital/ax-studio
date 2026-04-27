@@ -118,6 +118,7 @@ scraper = "0.20"
 subtle = "2.6"
 regex = "1"
 base64 = "0.22"
+semver = "1"
 
 [dependencies.tauri]
 workspace = true

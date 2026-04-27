@@ -312,7 +312,7 @@ fn extract_tool_result_content(content: Option<&serde_json::Value>) -> String {
         Some(c) if c.is_string() => c.as_str().unwrap_or("").to_string(),
         Some(c) if c.is_array() => c
             .as_array()
-            .unwrap()
+            .unwrap_or(&Vec::new())
             .iter()
             .filter_map(|b| {
                 if b.get("type").and_then(|t| t.as_str()) == Some("text") {

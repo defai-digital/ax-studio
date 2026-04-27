@@ -397,14 +397,14 @@ pub async fn get_mcp_configs<R: Runtime>(app: AppHandle<R>) -> Result<String, St
         match serde_json::from_str(&config_string) {
             Ok(v) => v,
             Err(error) => {
-                // Quarantine corrupt config file instead of silently destroying it
+                let rename_src = path.clone();
                 let backup_path = path.with_extension("json.corrupt");
-                if let Err(e) = std::fs::rename(&path, &backup_path) {
+                let backup_display = backup_path.display().to_string();
+                if let Err(e) = tokio::task::spawn_blocking(move || std::fs::rename(&rename_src, &backup_path)).await {
                     log::error!("Failed to quarantine corrupt MCP config: {e}");
                 }
                 log::error!(
-                    "MCP config corrupted, quarantined to {:?}: {error}",
-                    backup_path
+                    "MCP config corrupted, quarantined to {backup_display}: {error}"
                 );
                 json!({})
             }

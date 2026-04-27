@@ -48,6 +48,11 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
         fs::remove_dir_all(&staging_path)
             .map_err(|e| format!("Failed to clear extension staging directory: {e}"))?;
     }
+
+    if !pre_install_path.exists() {
+        return Ok(());
+    }
+
     fs::create_dir_all(&staging_path).map_err(|e| e.to_string())?;
 
     let extensions_json_path = staging_path.join("extensions.json");
@@ -281,7 +286,7 @@ mod tests {
     fn test_resolve_ax_fabric_mcp_config_structure() {
         let config = resolve_ax_fabric_mcp_config();
         assert_eq!(config["command"], "npx");
-        let args = config["args"].as_array().unwrap();
+        let args = config["args"].as_array().expect("'args' must be an array in test");
         assert_eq!(args.len(), 4);
         assert_eq!(args[0], "-y");
         assert_eq!(args[1], AX_STUDIO_MCP_PACKAGE);
@@ -296,7 +301,7 @@ mod tests {
         assert_eq!(config["active"], false);
         assert_eq!(config["official"], true);
         assert!(config["env"].is_object());
-        let args = config["args"].as_array().unwrap();
+        let args = config["args"].as_array().expect("'args' must be an array in test");
         assert!(args.contains(&serde_json::json!("-y")));
         assert!(args.contains(&serde_json::json!(AX_STUDIO_MCP_PACKAGE)));
     }
@@ -315,7 +320,7 @@ mod tests {
         let mut buf = Vec::new();
         {
             let mut builder = Builder::new(&mut buf);
-            builder.finish().unwrap();
+            builder.finish().expect("archive builder finish should not fail in test");
         }
 
         let cursor = Cursor::new(buf);

@@ -146,7 +146,13 @@ pub async fn list_messages<R: Runtime>(
 ) -> Result<Vec<MessageRecord>, String> {
     let lock = get_lock_for_thread(&thread_id).await;
     let _guard = lock.lock().await;
-    let messages = read_messages_from_file(app_handle, &thread_id);
+    let app_handle_clone = app_handle.clone();
+    let thread_id_clone = thread_id.clone();
+    let messages = tokio::task::spawn_blocking(move || {
+        read_messages_from_file(app_handle_clone, &thread_id_clone)
+    })
+    .await
+    .map_err(|e| format!("list_messages task error: {e}"))?;
     drop(_guard);
     drop(lock);
     prune_unused_message_locks().await;

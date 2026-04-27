@@ -48,7 +48,10 @@ pub async fn scrape_url(url: &str) -> Result<String, String> {
         return Err("URL points to forbidden internal network".to_string());
     }
 
-    let host = parsed.host_str().unwrap_or("").to_string();
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| format!("URL has no host: {url}"))?
+        .to_string();
     let port = parsed.port_or_known_default().unwrap_or(80);
 
     let resolved_addrs = tokio::net::lookup_host((&*host, port))
