@@ -43,7 +43,7 @@ pub fn canonicalize_path(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn factory_reset<R: Runtime>(
+pub async fn factory_reset<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
@@ -56,44 +56,41 @@ pub fn factory_reset<R: Runtime>(
     let data_folder = get_app_data_folder_path(app_handle.clone());
     log::info!("Factory reset, removing data folder: {data_folder:?}");
 
-    tauri::async_runtime::block_on(async {
-        let _ =
-            stop_mcp_servers_with_context(&app_handle, &state, ShutdownContext::FactoryReset).await;
+    let _ =
+        stop_mcp_servers_with_context(&app_handle, &state, ShutdownContext::FactoryReset).await;
 
-        {
-            let mut active_servers = state.mcp_active_servers.lock().await;
-            active_servers.clear();
+    {
+        let mut active_servers = state.mcp_active_servers.lock().await;
+        active_servers.clear();
+    }
+
+    {
+        let _reset_guard = state.factory_reset_lock.lock().await;
+
+        use crate::core::mcp::lockfile::cleanup_own_locks;
+        if let Err(e) = cleanup_own_locks(&app_handle) {
+            log::warn!("Failed to cleanup lock files: {}", e);
+        }
+        if data_folder.exists() {
+            if let Err(e) = fs::remove_dir_all(&data_folder) {
+                let message = format!("Failed to remove data folder: {e}");
+                log::error!("{message}");
+                return Err(message);
+            }
         }
 
-        {
-            let mut reset_guard = state.factory_reset_lock.lock().await;
-            let _ = reset_guard;
+        fs::create_dir_all(&data_folder)
+            .map_err(|e| format!("Failed to recreate data folder: {e}"))?;
+    }
 
-            use crate::core::mcp::lockfile::cleanup_own_locks;
-            if let Err(e) = cleanup_own_locks(&app_handle) {
-                log::warn!("Failed to cleanup lock files: {}", e);
-            }
-            if data_folder.exists() {
-                if let Err(e) = fs::remove_dir_all(&data_folder) {
-                    let message = format!("Failed to remove data folder: {e}");
-                    log::error!("{message}");
-                    return Err(message);
-                }
-            }
+    // Reset the configuration
+    let mut default_config = AppConfiguration::default();
+    default_config.data_folder = default_data_folder_path(app_handle.clone());
+    update_app_configuration(app_handle.clone(), default_config)?;
 
-            fs::create_dir_all(&data_folder)
-                .map_err(|e| format!("Failed to recreate data folder: {e}"))?;
-        }
-
-        // Reset the configuration
-        let mut default_config = AppConfiguration::default();
-        default_config.data_folder = default_data_folder_path(app_handle.clone());
-        update_app_configuration(app_handle.clone(), default_config)?;
-
-        app_handle.restart();
-        #[allow(unreachable_code)]
-        Ok(())
-    })
+    app_handle.restart();
+    #[allow(unreachable_code)]
+    Ok(())
 }
 
 #[tauri::command]

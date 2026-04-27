@@ -170,11 +170,22 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
     .map_err(|e| e.to_string())?;
 
     if extensions_path.exists() {
-        fs::remove_dir_all(&extensions_path)
-            .map_err(|e| format!("Failed to remove existing extensions directory: {e}"))?;
+        let old_path = extensions_path.with_extension("old");
+        // Rename existing dir out of the way first (atomic on same filesystem)
+        if let Err(e) = fs::rename(&extensions_path, &old_path) {
+            log::warn!("Could not rename old extensions dir: {e}, attempting remove_dir_all");
+            fs::remove_dir_all(&extensions_path)
+                .map_err(|e| format!("Failed to remove existing extensions directory: {e}"))?;
+        }
+        // Promote staged extensions
+        fs::rename(&staging_path, &extensions_path)
+            .map_err(|e| format!("Failed to promote staged extensions: {e}"))?;
+        // Clean up old dir after successful swap
+        let _ = fs::remove_dir_all(&old_path);
+    } else {
+        fs::rename(&staging_path, &extensions_path)
+            .map_err(|e| format!("Failed to promote staged extensions: {e}"))?;
     }
-    fs::rename(&staging_path, &extensions_path)
-        .map_err(|e| format!("Failed to promote staged extensions: {e}"))?;
 
     Ok(())
 }
@@ -196,7 +207,7 @@ pub fn migrate_mcp_servers(
             serde_json::json!({
                   "command": "npx",
                   "args": ["-y", "exa-mcp-server"],
-                  "env": { "EXA_API_KEY": "YOUR_EXA_API_KEY_HERE" },
+                  "env": {},
                   "active": false
             }),
         );

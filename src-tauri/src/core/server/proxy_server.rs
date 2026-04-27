@@ -67,7 +67,6 @@ async fn start_server_internal<R: tauri::Runtime>(
         trusted_hosts,
         cors_enabled,
         host: host.clone(),
-        port,
     };
 
     // Use user-configured timeout for overall request, cap connect timeout at 30s

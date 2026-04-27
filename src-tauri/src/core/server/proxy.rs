@@ -90,8 +90,6 @@ pub struct ProxyConfig {
     pub trusted_hosts: Vec<Vec<String>>,
     pub cors_enabled: bool,
     pub host: String,
-    #[allow(dead_code)]
-    pub port: u16,
 }
 
 /// Determines the final destination path based on the original request path
@@ -511,7 +509,6 @@ mod tests {
             trusted_hosts: vec![vec!["localhost".to_string(), "1337".to_string()]],
             cors_enabled,
             host: "localhost".to_string(),
-            port: 1337,
         }
     }
 

@@ -28,6 +28,7 @@ pub async fn list_threads<R: Runtime>(
 
     task::spawn_blocking(move || -> Result<Vec<ThreadRecord>, String> {
         let mut threads = Vec::new();
+        let mut skipped = 0u32;
         if !data_dir.exists() {
             return Ok(threads);
         }
@@ -43,6 +44,7 @@ pub async fn list_threads<R: Runtime>(
                     match serde_json::from_str(&data) {
                         Ok(thread) => threads.push(thread),
                         Err(e) => {
+                            skipped += 1;
                             log::warn!(
                                 "Failed to parse thread metadata {}: {e}",
                                 thread_metadata_path.display()
@@ -51,6 +53,10 @@ pub async fn list_threads<R: Runtime>(
                     }
                 }
             }
+        }
+
+        if skipped > 0 {
+            log::warn!("{skipped} thread(s) skipped due to malformed metadata");
         }
 
         Ok(threads)

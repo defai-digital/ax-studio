@@ -78,13 +78,15 @@ pub async fn download_files<R: Runtime>(
 
 #[tauri::command]
 pub async fn cancel_download_task(state: State<'_, AppState>, task_id: &str) -> Result<(), String> {
-    // NOTE: might want to add User-Agent header
-    let download_manager = state.download_manager.lock().await;
-    if let Some(task) = download_manager.cancel_tokens.get(task_id) {
-        task.token.cancel();
-        log::info!("Cancelled download task: {task_id}");
-        Ok(())
-    } else {
-        Err(format!("No download task: {task_id}"))
-    }
+    let token = {
+        let download_manager = state.download_manager.lock().await;
+        download_manager
+            .cancel_tokens
+            .get(task_id)
+            .map(|t| t.token.clone())
+            .ok_or_else(|| format!("No download task: {task_id}"))?
+    };
+    token.cancel();
+    log::info!("Cancelled download task: {task_id}");
+    Ok(())
 }

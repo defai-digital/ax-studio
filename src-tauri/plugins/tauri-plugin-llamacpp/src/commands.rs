@@ -87,7 +87,15 @@ pub async fn load_llama_model<R: Runtime>(
     timeout: u64,
 ) -> ServerResult<SessionInfo> {
     let state: State<LlamacppState> = app_handle.state();
-    let mut process_map = state.llama_server_process.lock().await;
+
+    // Check for existing session and drop lock immediately — don't hold it
+    // during the expensive child-process spawn and readiness wait.
+    {
+        let process_map = state.llama_server_process.lock().await;
+        if let Some(existing) = process_map.values().find(|s| s.info.model_id == model_id) {
+            return Ok(existing.info.clone());
+        }
+    }
 
     let is_ax_serving = config.engine_type == "ax-serving";
 
@@ -361,15 +369,17 @@ pub async fn load_llama_model<R: Runtime>(
         mmproj_path: mmproj_path_string,
     };
 
-    // Insert session info to process_map
-    process_map.insert(
-        pid.clone(),
-        LLamaBackendSession {
-            child,
-            info: session_info.clone(),
-        },
-    );
-    drop(process_map);
+    // Insert session info to process_map (re-acquire lock briefly)
+    {
+        let mut process_map = state.llama_server_process.lock().await;
+        process_map.insert(
+            pid.clone(),
+            LLamaBackendSession {
+                child,
+                info: session_info.clone(),
+            },
+        );
+    }
     spawn_session_reaper(app_handle, pid);
 
     Ok(session_info)

@@ -553,7 +553,13 @@ fn emit_mcp_update_event<R: Runtime>(app: &AppHandle<R>, name: &str) {
 }
 
 pub fn extract_command_args(config: &Value) -> Option<McpServerConfig> {
-    let obj = config.as_object()?;
+    let obj = match config.as_object() {
+        Some(o) => o,
+        None => {
+            log::warn!("MCP config is not a JSON object");
+            return None;
+        }
+    };
     let transport_type = obj.get("type").and_then(|t| t.as_str()).map(String::from);
     let url = obj.get("url").and_then(|u| u.as_str()).map(String::from);
 
@@ -565,12 +571,14 @@ pub fn extract_command_args(config: &Value) -> Option<McpServerConfig> {
             if is_http {
                 String::new()
             } else {
+                log::warn!("MCP config missing or empty 'command' field and is not HTTP");
                 return None;
             }
         }
     };
 
     if !is_http && !ALLOWED_COMMANDS.contains(&command.as_str()) {
+        log::warn!("MCP config command '{command}' is not in allowed list");
         return None;
     }
 
@@ -596,6 +604,20 @@ pub fn extract_command_args(config: &Value) -> Option<McpServerConfig> {
 
     // Filter out dangerous environment variables
     envs.retain(|k, _| !DANGEROUS_ENV_KEYS.contains(&k.as_str()));
+
+    // Filter dangerous env VALUES that could override critical paths
+    const DANGEROUS_ENV_VALUE_PREFIXES: &[&str] = &[
+        "HOME=", "PATH=", "USER=", "SHELL=", "TMPDIR=", "TEMP=", "TMP=",
+        "APPDATA=", "PROGRAMFILES=", "SYSTEMROOT=", "LD_PRELOAD=",
+    ];
+    envs.retain(|k, v| {
+        let v_str = match v.as_str() {
+            Some(s) => s,
+            None => return true,
+        };
+        let entry = format!("{k}={v_str}");
+        !DANGEROUS_ENV_VALUE_PREFIXES.iter().any(|prefix| entry.eq_ignore_ascii_case(prefix))
+    });
 
     Some(McpServerConfig {
         timeout,

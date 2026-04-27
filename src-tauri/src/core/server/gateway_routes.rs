@@ -69,7 +69,6 @@ mod tests {
             trusted_hosts: vec![],
             cors_enabled: false,
             host: "127.0.0.1".to_string(),
-            port: 1337,
         }
     }
 

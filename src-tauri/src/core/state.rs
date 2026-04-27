@@ -33,6 +33,20 @@ pub struct ProviderConfig {
     pub models: Vec<String>,
 }
 
+impl ProviderConfig {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.provider.trim().is_empty() {
+            return Err("Provider name must not be empty".to_string());
+        }
+        if let Some(ref url) = self.base_url {
+            if !url.trim().is_empty() && url::Url::parse(url).is_err() {
+                return Err(format!("Invalid base_url for provider '{}': {}", self.provider, url));
+            }
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct ProviderCustomHeader {
     pub header: String,

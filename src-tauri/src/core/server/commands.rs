@@ -48,6 +48,13 @@ pub async fn start_server<R: Runtime>(
         );
     }
 
+    if port == 0 {
+        return Err("Port must be a non-zero value".to_string());
+    }
+    if host.trim().is_empty() {
+        return Err("Host must not be empty".to_string());
+    }
+
     let server_handle = state.server_handle.clone();
 
     let actual_port = proxy_server::start_server(

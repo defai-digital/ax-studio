@@ -82,12 +82,6 @@ const expectFileStat = (
 const decodePathRecursively = (path: string): string => {
   let decoded = path
 
-  // Loop until `decodeURIComponent` reaches a fixed point (or 16 hops —
-  // a generous upper bound to guarantee termination on pathological
-  // inputs). The previous 3-iteration cap could theoretically allow a
-  // deep URL-encoding chain to slip past the `..` segment detection
-  // below; the Tauri backend still sandboxes, but this keeps the
-  // defense-in-depth intact.
   let lastStable = decoded
   for (let i = 0; i < 32; i++) {
     try {
@@ -103,7 +97,22 @@ const decodePathRecursively = (path: string): string => {
     decoded = lastStable
   }
 
-  return decoded.normalize('NFKC')
+  // Apply NFKC normalization BEFORE returning so that the traversal
+  // check in validatePath() sees the fully-normalized path.  Re-decode
+  // after normalization to catch any new escape sequences created by
+  // the normalization itself.
+  decoded = decoded.normalize('NFKC')
+  for (let i = 0; i < 4; i++) {
+    try {
+      const next = decodeURIComponent(decoded)
+      if (next === decoded) break
+      decoded = next
+    } catch {
+      break
+    }
+  }
+
+  return decoded
 }
 
 /**

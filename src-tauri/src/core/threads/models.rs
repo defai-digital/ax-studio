@@ -100,6 +100,15 @@ pub struct ThreadRecord {
     pub extra: Map<String, Value>,
 }
 
+impl ThreadRecord {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.id.trim().is_empty() {
+            return Err("ThreadRecord has empty id".to_string());
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct MessageRecord {
     #[serde(default)]
@@ -146,6 +155,18 @@ pub struct MessageRecord {
     pub extra: Map<String, Value>,
 }
 
+impl MessageRecord {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.id.trim().is_empty() {
+            return Err("MessageRecord has empty id".to_string());
+        }
+        if self.thread_id.trim().is_empty() {
+            return Err(format!("MessageRecord {} has empty thread_id", self.id));
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -158,7 +179,8 @@ mod tests {
             "created": 1774958339,
             "updated": 1774958400
         }"#;
-        let thread: ThreadRecord = serde_json::from_str(json).expect("integer timestamps must parse");
+        let thread: ThreadRecord =
+            serde_json::from_str(json).expect("integer timestamps must parse");
         assert_eq!(thread.created, Some(1774958339));
         assert_eq!(thread.updated, Some(1774958400));
     }
@@ -216,8 +238,8 @@ mod tests {
             "created_at": 1774958339.354,
             "completed_at": 1774958340.789
         }"#;
-        let message: MessageRecord = serde_json::from_str(json)
-            .expect("legacy float timestamps must deserialize");
+        let message: MessageRecord =
+            serde_json::from_str(json).expect("legacy float timestamps must deserialize");
         assert_eq!(message.created_at, Some(1774958339));
         assert_eq!(message.completed_at, Some(1774958340));
     }
