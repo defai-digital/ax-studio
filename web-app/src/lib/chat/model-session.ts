@@ -46,7 +46,7 @@ function formatErrorMessage(err: unknown): string {
     if (typeof obj.message === 'string') return obj.message
     if (typeof obj.error === 'string') return obj.error
     try {
-      return JSON.stringify(err)
+      return JSON.stringify(err, Object.keys(err as object).filter(k => !['stack', 'fileName', 'lineNumber', 'columnNumber'].includes(k)))
     } catch {
       return Object.prototype.toString.call(err)
     }

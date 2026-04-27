@@ -103,11 +103,14 @@ pub async fn run_mcp_commands<R: Runtime>(
 ) -> Result<(), String> {
     let app_path = get_app_data_folder_path(app.clone());
     let app_path_str = app_path.to_string_lossy().to_string();
+    let config_path = app_path_str.clone() + "/mcp_config.json";
     log::trace!(
         "Load MCP configs from {}",
-        app_path_str.clone() + "/mcp_config.json"
+        config_path
     );
-    let config_content = std::fs::read_to_string(app_path_str + "/mcp_config.json")
+    let config_content = tokio::task::spawn_blocking(move || std::fs::read_to_string(config_path))
+        .await
+        .map_err(|e| format!("Failed to read MCP config: {e}"))?
         .map_err(|e| format!("Failed to read config file: {e}"))?;
 
     let mcp_servers: serde_json::Value = serde_json::from_str(&config_content)
@@ -456,7 +459,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
         // Expand ~ to the user's home directory in args (shells do this
         // automatically, but direct process spawning does not).
         let home = dirs::home_dir();
-        let dangerous_flags = ["-c", "-e", "--eval", "--command", "-i", "--interactive"];
+        let dangerous_flags = ["-c", "-e", "--eval", "--command", "-i", "--interactive", "--exec"];
         config_params
             .args
             .iter()

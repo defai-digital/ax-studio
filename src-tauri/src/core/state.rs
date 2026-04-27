@@ -154,7 +154,7 @@ mod tests {
         };
         let json = serde_json::to_value(&config).unwrap();
         assert_eq!(json["provider"], "openai");
-        assert_eq!(json["api_key"], "sk-test-key");
+        assert!(json.get("api_key").is_none(), "api_key should not be serialized");
         assert_eq!(json["base_url"], "https://api.openai.com/v1");
         assert_eq!(json["custom_headers"][0]["header"], "X-Custom");
         assert_eq!(json["custom_headers"][0]["value"], "custom-value");

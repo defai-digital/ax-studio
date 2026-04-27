@@ -125,12 +125,14 @@ pub fn open_file_explorer(path: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn read_logs<R: Runtime>(app: AppHandle<R>) -> Result<String, String> {
     let log_path = get_app_data_folder_path(app).join("logs").join("app.log");
-    if log_path.exists() {
-        let content = fs::read_to_string(log_path).map_err(|e| e.to_string())?;
-        Ok(redact_sensitive_data(&content))
-    } else {
-        Err("Log file not found".to_string())
+    if !log_path.exists() {
+        return Err("Log file not found".to_string());
     }
+    let content = tokio::task::spawn_blocking(move || fs::read_to_string(log_path))
+        .await
+        .map_err(|e| format!("read_logs task error: {e}"))?
+        .map_err(|e| e.to_string())?;
+    Ok(redact_sensitive_data(&content))
 }
 
 fn redact_sensitive_data(input: &str) -> String {

@@ -123,7 +123,10 @@ export const useAgentTeamStore = create<AgentTeamState>((set, get) => ({
     set((s) => ({ teams: s.teams.filter((t) => t.id !== teamId) }))
   },
 
-  getTeam: (teamId) => get().teams.find((t) => t.id === teamId),
+  getTeam: (teamId) => {
+    const team = get().teams.find((t) => t.id === teamId)
+    return team ? { ...team } : undefined
+  },
 
   duplicateTeam: async (teamId, getAssistants, addAssistant, removeAssistant) => {
     const team = get().teams.find((t) => t.id === teamId)

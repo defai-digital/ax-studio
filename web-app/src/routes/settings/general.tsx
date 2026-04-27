@@ -145,8 +145,8 @@ function General() {
       try {
         await serviceHub.models().stopAllModels()
         serviceHub.events().emit(SystemEvent.KILL_SIDECAR)
-        setTimeout(async () => {
-          try {
+        await new Promise((resolve) => setTimeout(resolve, 500))
+        try {
             // Prevent relocating to root directory (e.g., C:\ or D:\ on Windows, / on Unix)
             if (isRootDir(selectedNewPath))
               throw new Error(t('settings:general.couldNotRelocateToRoot'))
@@ -164,7 +164,6 @@ function General() {
                 : t('settings:general.failedToRelocateDataFolder')
             )
           }
-        }, 1000)
       } catch (error) {
         console.error('Failed to relocate data folder:', error)
         // Revert the data folder path on error

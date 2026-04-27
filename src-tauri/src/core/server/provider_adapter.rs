@@ -596,9 +596,10 @@ pub(super) async fn transform_and_forward_stream<S>(
                             }
 
                             accumulated_content.push_str(text);
+                            let idx = text_block_index.unwrap_or(next_block_index);
                             let delta_event = serde_json::json!({
                                 "type": "content_block_delta",
-                                "index": text_block_index.unwrap(),
+                                "index": idx,
                                 "delta": { "type": "text_delta", "text": text }
                             });
                             if sender.send_data(sse_event(&delta_event)).await.is_err() {

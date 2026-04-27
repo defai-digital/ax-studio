@@ -28,9 +28,12 @@ pub fn validate_binary_path(backend_path: &str) -> ServerResult<PathBuf> {
     #[cfg(target_os = "macos")]
     {
         let path_str = server_path_buf.display().to_string();
-        let is_in_user_dir = path_str.contains("/.ax-studio/")
-            || path_str.contains("/Library/Application Support/")
-            || path_str.contains("/.local/share/");
+        let canonical =
+            std::fs::canonicalize(&server_path_buf).unwrap_or_else(|_| server_path_buf.clone());
+        let canonical_str = canonical.to_string_lossy();
+        let is_in_user_dir = canonical_str.contains("/.ax-studio/")
+            || canonical_str.contains("/Library/Application Support/")
+            || canonical_str.contains("/.local/share/");
         if is_in_user_dir {
             use std::process::{Command, Stdio};
             match Command::new("xattr")

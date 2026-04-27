@@ -217,21 +217,11 @@ export function useChat(
     }
   }, [chatResult.status, resetTokenSpeed])
 
-  // Refresh tools when MCP or RAG tool names change (e.g., when MCP servers start/stop)
-  useEffect(() => {
-    if (transportRef.current) {
-      // Use forceRefreshTools to update the transport's tool cache
-      // This ensures the transport has the latest tools when MCP server status changes
-      transportRef.current.refreshTools()
-    }
-  }, [mcpToolNames])
-
-  // Refresh tools when local knowledge toggle changes — keeps tools list in sync with system prompt
   useEffect(() => {
     if (transportRef.current) {
       transportRef.current.refreshTools()
     }
-  }, [localKnowledgeEnabled])
+  }, [mcpToolNames, localKnowledgeEnabled])
 
   // Expose method to push a system message directly to the transport (bypasses React render cycle)
   const updateSystemMessageDirect = useCallback((msg: string | undefined) => {

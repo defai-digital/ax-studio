@@ -31,15 +31,19 @@ export function ModelSetting({
   const setActiveModels = useAppState((state) => state.setActiveModels)
 
   const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const stopModelIdRef = useRef<string | null>(null)
 
   const debouncedStopModel = useCallback(
     (modelId: string) => {
       if (stopTimerRef.current) clearTimeout(stopTimerRef.current)
+      stopModelIdRef.current = modelId
       stopTimerRef.current = setTimeout(() => {
         stopTimerRef.current = null
+        const targetId = stopModelIdRef.current
+        if (!targetId) return
         serviceHub
           .models()
-          .stopModel(modelId)
+          .stopModel(targetId)
           .then(() =>
             serviceHub.models().getActiveModels()
               .then((models) => setActiveModels(models || []))

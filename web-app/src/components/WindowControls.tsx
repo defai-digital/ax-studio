@@ -3,19 +3,27 @@ import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
 import { Button } from '@/components/ui/button'
 
 export const WindowControls = () => {
-  const appWindow = getCurrentWebviewWindow()
+  const appWindow = (() => {
+    try {
+      return getCurrentWebviewWindow()
+    } catch {
+      return null
+    }
+  })()
 
   const handleMinimize = async () => {
-    await appWindow.minimize()
+    await appWindow?.minimize()
   }
 
   const handleMaximize = async () => {
-    await appWindow.toggleMaximize()
+    await appWindow?.toggleMaximize()
   }
 
   const handleClose = async () => {
-    await appWindow.close()
+    await appWindow?.close()
   }
+
+  if (!appWindow) return null
 
   return (
     <div className="absolute top-0 z-50 right-4 h-15">

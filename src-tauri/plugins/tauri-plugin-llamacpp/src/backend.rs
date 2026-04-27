@@ -627,19 +627,20 @@ pub async fn check_backend_for_updates(
     let target_backend_string =
         find_latest_version_for_backend(version_backends, current_effective_backend_type.clone());
 
-    if target_backend_string.is_none() {
-        log::warn!(
-            "No available versions found for current backend type: {}",
-            current_effective_backend_type
-        );
-        return Ok(UpdateCheckResult {
-            update_needed: false,
-            new_version: "0".to_string(),
-            target_backend: None,
-        });
-    }
-
-    let target_backend_string = target_backend_string.unwrap();
+    let target_backend_string = match target_backend_string {
+        Some(s) => s,
+        None => {
+            log::warn!(
+                "No available versions found for current backend type: {}",
+                current_effective_backend_type
+            );
+            return Ok(UpdateCheckResult {
+                update_needed: false,
+                new_version: "0".to_string(),
+                target_backend: None,
+            });
+        }
+    };
     let target_parts: Vec<&str> = target_backend_string.split('/').collect();
     let latest_version = target_parts[0];
 
