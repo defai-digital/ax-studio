@@ -253,6 +253,35 @@ export function sanitizeMermaidFences(input: string): string {
       // Count unmatched { } braces and append the missing closing braces.
       const firstLine = fixed.trimStart().split('\n')[0] ?? ''
       if (/^classDiagram\b/i.test(firstLine)) {
+        // Fix 4a: replace array type syntax (byte[], string[], etc.) that causes
+        // lexical errors in Mermaid. Replace [] with Array suffix.
+        fixed = fixed.replace(/\b(\w+)\[\]/g, '$1Array')
+
+        // Fix 4b: deduplicate class definitions. LLMs sometimes output the same
+        // class block twice. Keep only the first occurrence of each class name.
+        const seenClasses = new Set<string>()
+        const lines = fixed.split('\n')
+        const filtered: string[] = []
+        let skipUntilClose = false
+        for (const line of lines) {
+          const classMatch = line.match(/^\s*(?:class\s+)?(\w+)\s*\{/)
+          if (classMatch) {
+            if (seenClasses.has(classMatch[1])) {
+              skipUntilClose = true
+              continue
+            }
+            seenClasses.add(classMatch[1])
+          }
+          if (skipUntilClose) {
+            if (/^\s*\}/.test(line)) {
+              skipUntilClose = false
+            }
+            continue
+          }
+          filtered.push(line)
+        }
+        fixed = filtered.join('\n')
+
         const opens = (fixed.match(/\{/g) ?? []).length
         const closes = (fixed.match(/\}/g) ?? []).length
         if (opens > closes) {

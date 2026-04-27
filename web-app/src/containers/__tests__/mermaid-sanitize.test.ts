@@ -258,4 +258,155 @@ class Foo {
       expect(result).toContain('root((Machine Learning))')
     })
   })
+
+  describe('Fix 4a: array type syntax in classDiagram', () => {
+    it('replaces byte[] with byteArray', () => {
+      const input = wrap(`classDiagram
+class DataPacket {
+  string id
+  byte[] payload
+  int sequence_number
+}`)
+      const result = sanitizeMermaidFences(input)
+      expect(result).toContain('byteArray payload')
+      expect(result).not.toContain('byte[]')
+    })
+
+    it('replaces string[] with stringArray', () => {
+      const input = wrap(`classDiagram
+class Foo {
+  string[] items
+}`)
+      const result = sanitizeMermaidFences(input)
+      expect(result).toContain('stringArray items')
+    })
+  })
+
+  describe('Fix 4b: deduplicate class definitions', () => {
+    it('removes duplicate class blocks', () => {
+      const input = wrap(`classDiagram
+class DataPacket {
+  string id
+}
+class SerialController {
+  string name
+}
+DataPacket {
+  string id
+}`)
+      const result = sanitizeMermaidFences(input)
+      const occurrences = result.split('\n').filter(l => l.includes('DataPacket {')).length
+      expect(occurrences).toBe(1)
+    })
+  })
+
+  describe('real-world classDiagram from user', () => {
+    it('sanitizes the serial controller diagram without errors', () => {
+      const input = `\`\`\`mermaid
+classDiagram
+    SerialController "1" *--o "1" SerialPort : manages
+    SerialController "1" *--o "1" Transmitter : controls
+    SerialController "1" *--o "1" Receiver : controls
+    SerialController "1" *--o "1" Buffer : coordinates
+
+    SerialPort "1" --> "1" DataPacket : sends
+    SerialPort "1" --> "1" StatusMonitor : updates
+
+    Transmitter "1" --> "1" DataPacket : transmits
+    Transmitter "1" --> "1" ErrorHandler : reports
+    Transmitter "1" --> "1" SerialPort : uses
+
+    Receiver "1" --> "1" DataPacket : receives
+    Receiver "1" --> "1" ErrorHandler : reports
+    Receiver "1" --> "1" Buffer : stores
+
+    Buffer "1" --> "1" DataPacket : stores
+    Buffer "1" --> "1" Transmitter : feeds
+    Buffer "1" --> "1" Receiver : feeds
+
+    StatusMonitor "1" --> "1" SerialController : reports
+    StatusMonitor "1" --> "1" DataPacket : monitors
+
+    ErrorHandler "1" --> "1" SerialController : reports
+    ErrorHandler "1" --> "1" Transmitter : notifies
+    ErrorHandler "1" --> "1" Receiver : notifies
+
+    DataPacket {
+        string id
+        byte[] payload
+        int sequence_number
+        timestamp created_at
+    }
+
+    SerialController {
+        string name
+        int max_retries
+        boolean enabled
+        DataPacket[] history
+    }
+
+    SerialPort {
+        string device_id
+        int baud_rate
+        int data_bits
+        int stop_bits
+        boolean connected
+    }
+
+    Transmitter {
+        int transmit_speed
+        boolean auto_send
+        int send_queue_size
+    }
+
+    Receiver {
+        int receive_speed
+        boolean auto_receive
+        int receive_buffer_size
+    }
+
+    Buffer {
+        int capacity
+        int current_size
+        boolean overflow
+        boolean underflow
+    }
+
+    StatusMonitor {
+        string system_state
+        int error_count
+        double uptime
+        boolean healthy
+    }
+
+    ErrorHandler {
+        int error_level
+        string error_type
+        boolean critical
+        boolean active
+    }
+
+    DataPacket {
+        string id
+        byte[] payload
+        int sequence_number
+        timestamp created_at
+    }
+
+    SerialController ..> Transmitter : delegates
+    SerialController ..> Receiver : delegates
+    Transmitter ..> Receiver : communicates
+\`\`\``
+      const result = sanitizeMermaidFences(input)
+      console.log('=== SANITIZED OUTPUT ===')
+      console.log(result)
+      console.log('=== END ===')
+      // No byte[] should remain
+      expect(result).not.toContain('byte[]')
+      expect(result).not.toContain('DataPacket[]')
+      // Only one DataPacket class definition
+      const dataPacketBlocks = result.split('\\n').filter(l => /DataPacket\s*\{/.test(l))
+      expect(dataPacketBlocks.length).toBe(1)
+    })
+  })
 })
