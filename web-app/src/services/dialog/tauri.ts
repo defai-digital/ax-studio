@@ -3,10 +3,9 @@
  */
 
 import { invoke } from '@tauri-apps/api/core'
-import type { DialogOpenOptions } from './types'
-import { DefaultDialogService } from './default'
+import type { DialogOpenOptions, DialogService } from './types'
 
-export class TauriDialogService extends DefaultDialogService {
+export class TauriDialogService implements DialogService {
   async open(options?: DialogOpenOptions): Promise<string | string[] | null> {
     try {
       const result = await invoke<string | string[] | null>('open_dialog', {

@@ -22,13 +22,6 @@ export type ModelArtifact = {
  */
 export type Model = {
   /**
-   * The type of the object.
-   * Default: "model"
-   * @deprecated Legacy field. No code branches on this value.
-   */
-  object?: string
-
-  /**
    * The version of the model.
    */
   version: string

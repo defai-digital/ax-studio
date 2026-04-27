@@ -3,9 +3,9 @@
  */
 
 import { onOpenUrl, getCurrent } from '@tauri-apps/plugin-deep-link'
-import { DefaultDeepLinkService } from './default'
+import type { DeepLinkService } from './types'
 
-export class TauriDeepLinkService extends DefaultDeepLinkService {
+export class TauriDeepLinkService implements DeepLinkService {
   async onOpenUrl(handler: (urls: string[]) => void): Promise<() => void> {
     try {
       return await onOpenUrl(handler)

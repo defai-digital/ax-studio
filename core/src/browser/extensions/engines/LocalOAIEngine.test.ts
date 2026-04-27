@@ -26,7 +26,6 @@ class TestLocalOAIEngine extends LocalOAIEngine {
 describe('LocalOAIEngine', () => {
   let engine: TestLocalOAIEngine
   const mockModel: Model & { file_path?: string } = {
-    object: 'model',
     version: '1.0.0',
     format: 'gguf',
     sources: [],

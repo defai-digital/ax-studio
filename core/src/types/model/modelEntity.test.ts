@@ -3,7 +3,6 @@ import { Model } from '../model'
 
 test('testValidModelCreation', () => {
   const model: Model = {
-    object: 'model',
     version: '1.0',
     format: 'format1',
     sources: [{ filename: 'model.bin', url: 'http://example.com/model.bin' }],
@@ -18,7 +17,6 @@ test('testValidModelCreation', () => {
   }
 
   expect(model).toBeDefined()
-  expect(model.object).toBe('model')
   expect(model.version).toBe('1.0')
   expect(model.sources).toHaveLength(1)
   expect(model.sources[0].filename).toBe('model.bin')

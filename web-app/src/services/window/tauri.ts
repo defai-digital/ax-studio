@@ -3,12 +3,11 @@
  */
 
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow'
-import type { WindowConfig, WebviewWindowInstance } from './types'
-import { DefaultWindowService } from './default'
+import type { WindowConfig, WebviewWindowInstance, WindowService } from './types'
 import { themeStorageSchema } from '@/schemas/window.schema'
 import { safeStorageGetItem } from '@/lib/storage'
 
-export class TauriWindowService extends DefaultWindowService {
+export class TauriWindowService implements WindowService {
   async createWebviewWindow(
     config: WindowConfig
   ): Promise<WebviewWindowInstance> {

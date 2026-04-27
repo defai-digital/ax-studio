@@ -4,10 +4,9 @@
 
 import { invoke } from '@tauri-apps/api/core'
 import { AppConfiguration } from '@ax-studio/core'
-import type { LogEntry } from './types'
-import { DefaultAppService } from './default'
+import type { LogEntry, AppService } from './types'
 
-export class TauriAppService extends DefaultAppService {
+export class TauriAppService implements AppService {
   private resetInProgress = false
 
   async factoryReset(): Promise<void> {

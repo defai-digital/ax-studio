@@ -6,8 +6,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { MCPTool } from '@/types/completion'
 import { DEFAULT_MCP_SETTINGS } from '@/hooks/tools/useMCPServers'
 import type { MCPServerConfig, MCPServers, MCPSettings } from '@/hooks/tools/useMCPServers'
-import type { MCPConfig } from './types'
-import { DefaultMCPService } from './default'
+import type { MCPConfig, MCPService } from './types'
 import { mcpServersSchema, mcpSettingsSchema } from '@/schemas/mcp.schema'
 
 const getCoreApi = () => {
@@ -18,7 +17,7 @@ const getCoreApi = () => {
   return window.core.api
 }
 
-export class TauriMCPService extends DefaultMCPService {
+export class TauriMCPService implements MCPService {
   async updateMCPConfig(configs: string): Promise<void> {
     await getCoreApi().saveMcpConfigs({ configs })
   }

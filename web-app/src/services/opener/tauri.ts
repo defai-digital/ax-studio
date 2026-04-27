@@ -3,9 +3,9 @@
  */
 
 import { revealItemInDir } from '@tauri-apps/plugin-opener'
-import { DefaultOpenerService } from './default'
+import type { OpenerService } from './types'
 
-export class TauriOpenerService extends DefaultOpenerService {
+export class TauriOpenerService implements OpenerService {
   async revealItemInDir(path: string): Promise<void> {
     try {
       await revealItemInDir(path)

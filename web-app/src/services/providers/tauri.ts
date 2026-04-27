@@ -9,11 +9,11 @@ import { ModelCapabilities } from '@/types/models'
 import { modelSettings } from '@/lib/predefined'
 import { ExtensionManager } from '@/lib/extension'
 import { fetch as fetchTauri } from '@tauri-apps/plugin-http'
-import { DefaultProvidersService } from './default'
+import type { ProvidersService } from './types'
 import { getModelCapabilities } from '@/lib/models'
 import { providerModelsResponseSchema } from '@/schemas/providers.schema'
 
-export class TauriProvidersService extends DefaultProvidersService {
+export class TauriProvidersService implements ProvidersService {
   fetch(): typeof fetch {
     // Tauri implementation uses Tauri's fetch to avoid CORS issues
     return fetchTauri as typeof fetch

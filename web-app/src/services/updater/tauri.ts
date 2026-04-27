@@ -10,8 +10,7 @@
 import { check, Update } from '@tauri-apps/plugin-updater'
 import { invoke } from '@tauri-apps/api/core'
 import { load } from '@tauri-apps/plugin-store'
-import type { UpdateInfo, UpdateProgressEvent } from './types'
-import { DefaultUpdaterService } from './default'
+import type { UpdateInfo, UpdateProgressEvent, UpdaterService } from './types'
 
 // Store key for nonce seed
 const STORE_NAME = 'updater.json'
@@ -66,7 +65,7 @@ async function getNonceSeed(): Promise<string> {
   return nonceSeedPromise
 }
 
-export class TauriUpdaterService extends DefaultUpdaterService {
+export class TauriUpdaterService implements UpdaterService {
   private cachedInstallableUpdate: Update | null = null
   private checkPromise: Promise<Update | null> | null = null
 

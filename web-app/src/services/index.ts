@@ -7,31 +7,16 @@
 
 import { isPlatformTauri } from '@/lib/platform/utils'
 
-// Import default services
-import { DefaultThemeService } from './theme/default'
-import { DefaultWindowService } from './window/default'
-import { DefaultEventsService } from './events/default'
-import { DefaultHardwareService } from './hardware/default'
-import { DefaultAppService } from './app/default'
 import { DefaultMessagesService } from './messages/default'
-import { DefaultMCPService } from './mcp/default'
-import { DefaultThreadsService } from './threads/default'
-import { DefaultProvidersService } from './providers/default'
-import { DefaultModelsService } from './models/default'
 import { DefaultAssistantsService } from './assistants/default'
-import { DefaultDialogService } from './dialog/default'
-import { DefaultOpenerService } from './opener/default'
-import { DefaultUpdaterService } from './updater/default'
-import { DefaultPathService } from './path/default'
-import { DefaultCoreService } from './core/default'
-import { DefaultDeepLinkService } from './deeplink/default'
 import { DefaultProjectsService } from './projects/default'
+import { DefaultModelsService } from './models/default'
 import { DefaultRAGService } from './rag/default'
 import type { RAGService } from './rag/types'
 import { DefaultUploadsService } from './uploads/default'
 import type { UploadsService } from './uploads/types'
+import { DefaultThreadsService } from './threads/default'
 
-// Import service types
 import type { ThemeService } from './theme/types'
 import type { WindowService } from './window/types'
 import type { EventsService } from './events/types'
@@ -52,7 +37,6 @@ import type { DeepLinkService } from './deeplink/types'
 import type { ProjectsService } from './projects/types'
 
 export interface ServiceHub {
-  // Service getters - all synchronous after initialization
   theme(): ThemeService
   window(): WindowService
   events(): EventsService
@@ -76,37 +60,33 @@ export interface ServiceHub {
 }
 
 class PlatformServiceHub implements ServiceHub {
-  private themeService: ThemeService = new DefaultThemeService()
-  private windowService: WindowService = new DefaultWindowService()
-  private eventsService: EventsService = new DefaultEventsService()
-  private hardwareService: HardwareService = new DefaultHardwareService()
-  private appService: AppService = new DefaultAppService()
+  private themeService!: ThemeService
+  private windowService!: WindowService
+  private eventsService!: EventsService
+  private hardwareService!: HardwareService
+  private appService!: AppService
   private messagesService: MessagesService = new DefaultMessagesService()
-  private mcpService: MCPService = new DefaultMCPService()
+  private mcpService!: MCPService
   private threadsService: ThreadsService = new DefaultThreadsService()
-  private providersService: ProvidersService = new DefaultProvidersService()
+  private providersService!: ProvidersService
   private modelsService: ModelsService = new DefaultModelsService()
   private assistantsService: AssistantsService = new DefaultAssistantsService()
-  private dialogService: DialogService = new DefaultDialogService()
-  private openerService: OpenerService = new DefaultOpenerService()
-  private updaterService: UpdaterService = new DefaultUpdaterService()
-  private pathService: PathService = new DefaultPathService()
-  private coreService: CoreService = new DefaultCoreService()
-  private deepLinkService: DeepLinkService = new DefaultDeepLinkService()
+  private dialogService!: DialogService
+  private openerService!: OpenerService
+  private updaterService!: UpdaterService
+  private pathService!: PathService
+  private coreService!: CoreService
+  private deepLinkService!: DeepLinkService
   private projectsService: ProjectsService = new DefaultProjectsService()
   private ragService: RAGService = new DefaultRAGService()
   private uploadsService: UploadsService = new DefaultUploadsService()
   private initialized = false
 
-  /**
-   * Initialize all platform services
-   */
   async initialize(): Promise<void> {
     if (this.initialized) return
 
     try {
       if (isPlatformTauri()) {
-        // Desktop Tauri
         const [
           themeModule,
           windowModule,
@@ -152,8 +132,6 @@ class PlatformServiceHub implements ServiceHub {
         this.deepLinkService = new deepLinkModule.TauriDeepLinkService()
       }
 
-      // Give RAG & Uploads services a back-reference so they can call
-      // mcp() for AkiDB operations.
       if ('setMcpService' in this.ragService) {
         const svc = this.ragService as { setMcpService: (mcp: MCPService) => void }
         svc.setMcpService(this.mcpService)
@@ -178,7 +156,6 @@ class PlatformServiceHub implements ServiceHub {
     }
   }
 
-  // Service getters - all synchronous after initialization
   theme(): ThemeService {
     this.ensureInitialized()
     return this.themeService

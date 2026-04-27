@@ -3,8 +3,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core'
-import type { HardwareData, SystemUsage, DeviceList } from './types'
-import { DefaultHardwareService } from './default'
+import type { HardwareData, SystemUsage, DeviceList, HardwareService } from './types'
 
 /**
  * Lightweight runtime guard for the hardware plugin responses. The
@@ -17,7 +16,7 @@ import { DefaultHardwareService } from './default'
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
-export class TauriHardwareService extends DefaultHardwareService {
+export class TauriHardwareService implements HardwareService {
   async getHardwareInfo(): Promise<HardwareData | null> {
     try {
       const raw = await invoke<unknown>('plugin:hardware|get_system_info')

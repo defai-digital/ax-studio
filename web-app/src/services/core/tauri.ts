@@ -4,10 +4,9 @@
 
 import { invoke, convertFileSrc } from '@tauri-apps/api/core'
 import type { ExtensionManifest } from '@/lib/extension'
-import type { InvokeArgs } from './types'
-import { DefaultCoreService } from './default'
+import type { InvokeArgs, CoreService } from './types'
 
-export class TauriCoreService extends DefaultCoreService {
+export class TauriCoreService implements CoreService {
   async invoke<T = unknown>(command: string, args?: InvokeArgs): Promise<T> {
     try {
       return await invoke<T>(command, args)
