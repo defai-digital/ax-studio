@@ -18,6 +18,7 @@ export const useProviderModels = (provider?: ModelProvider): UseProviderModelsSt
   const [error, setError] = useState<string | null>(null)
   const prevProviderKey = useRef<string>('')
   const requestIdRef = useRef(0)
+  const abortRef = useRef<AbortController | null>(null)
 
   const fetchModels = useCallback(async () => {
     if (!provider || !provider.base_url) {
@@ -47,28 +48,30 @@ export const useProviderModels = (provider?: ModelProvider): UseProviderModelsSt
     }
 
     const currentRequestId = ++requestIdRef.current
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
     setLoading(true)
     setError(null)
 
     try {
       const fetchedModels = await serviceHub.providers().fetchModelsFromProvider(provider)
-      if (currentRequestId !== requestIdRef.current) return
+      if (currentRequestId !== requestIdRef.current || controller.signal.aborted) return
       const sortedModels = [...fetchedModels].sort((a, b) => a.localeCompare(b))
 
       setModels(sortedModels)
 
-      // Cache the results
       modelsCache.set(cacheKey, {
         models: sortedModels,
         timestamp: Date.now(),
       })
     } catch (err) {
-      if (currentRequestId !== requestIdRef.current) return
+      if (currentRequestId !== requestIdRef.current || controller.signal.aborted) return
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch models'
       setError(errorMessage)
       console.error(`Error fetching models from ${provider.provider}:`, err)
     } finally {
-      if (currentRequestId === requestIdRef.current) setLoading(false)
+      if (currentRequestId === requestIdRef.current && !controller.signal.aborted) setLoading(false)
     }
   }, [provider, serviceHub])
 
@@ -82,6 +85,7 @@ export const useProviderModels = (provider?: ModelProvider): UseProviderModelsSt
 
   useEffect(() => {
     fetchModels()
+    return () => { abortRef.current?.abort() }
   }, [fetchModels])
 
   return {

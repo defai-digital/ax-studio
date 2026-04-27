@@ -116,7 +116,7 @@ export function DownloadButtonPlaceholder({
   if ((model.quants?.length ?? 0) === 0) {
     return (
       <a
-        href={`https://huggingface.co/${model.model_name}`}
+        href={`https://huggingface.co/${encodeURIComponent(model.model_name)}`}
         target="_blank"
         rel="noopener noreferrer"
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted hover:bg-accent text-foreground/70 hover:text-foreground text-[12px] font-medium transition-colors border border-border/50"

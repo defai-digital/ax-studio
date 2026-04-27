@@ -1,5 +1,5 @@
 import { isDev } from '@/lib/utils'
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { events, AppEvent } from '@ax-studio/core'
 import type { UpdateInfo } from '@/services/updater/types'
 import { SystemEvent } from '@/types/events'
@@ -17,6 +17,7 @@ export interface UpdateState {
 
 export const useAppUpdater = () => {
   const serviceHub = useServiceHub()
+  const abortRef = useRef<AbortController | null>(null)
   const [updateState, setUpdateState] = useState<UpdateState>({
     isUpdateAvailable: false,
     updateInfo: null,
@@ -55,8 +56,11 @@ export const useAppUpdater = () => {
     async (resetRemindMeLater = false) => {
       console.log('Checking for updates...')
 
+      abortRef.current?.abort()
+      const controller = new AbortController()
+      abortRef.current = controller
+
       try {
-        // Reset remindMeLater if requested (e.g., when called from settings)
         if (resetRemindMeLater && !AUTO_UPDATER_DISABLED) {
           const newState = {
             remindMeLater: false,
@@ -65,13 +69,12 @@ export const useAppUpdater = () => {
             ...prev,
             ...newState,
           }))
-          // Sync to other instances
           syncStateToOtherInstances(newState)
         }
 
         if (!isDev()) {
-          // Production mode - use actual Tauri updater
           const update = await serviceHub.updater().check()
+          if (controller.signal.aborted) return null
 
           if (update) {
             if (AUTO_UPDATER_DISABLED) {
@@ -162,6 +165,10 @@ export const useAppUpdater = () => {
 
     if (!updateState.updateInfo) return
 
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     try {
       setUpdateState((prev) => ({
         ...prev,
@@ -171,10 +178,13 @@ export const useAppUpdater = () => {
       let downloaded = 0
       let contentLength = 0
       await serviceHub.models().stopAllModels()
+      if (controller.signal.aborted) return
       serviceHub.events().emit(SystemEvent.KILL_SIDECAR)
       await new Promise((resolve) => setTimeout(resolve, 1000))
+      if (controller.signal.aborted) return
 
       await serviceHub.updater().downloadAndInstallWithProgress((event) => {
+        if (controller.signal.aborted) return
         switch (event.event) {
           case 'Started':
             contentLength = event.data?.contentLength || 0

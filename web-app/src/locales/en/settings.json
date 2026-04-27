@@ -277,7 +277,10 @@
     "updating": "Updating...",
     "updateNow": "Update Now",
     "updateSuccess": "Llamacpp updated successfully",
-    "updateError": "Failed to update Llamacpp"
+    "updateError": "Failed to update Llamacpp",
+    "updateAvailable": "A llama.cpp update is available",
+    "upToDate": "You're running the latest llama.cpp version",
+    "checkError": "Failed to check for updates"
   },
   "backendInstallSuccess": "Backend installed successfully",
   "backendInstallError": "Failed to install backend",

@@ -425,4 +425,22 @@ gantt
       expect(result).not.toContain('section Execution\n\n')
     })
   })
+
+  describe('sequenceDiagram single-line', () => {
+    it('splits single-line sequenceDiagram with numbered messages', () => {
+      const input = '```mermaid\nsequenceDiagram participant Consumer participant Service participant Database Consumer->>Service: 1. Send request Service->>Service: 2. Authenticate request Service->>Database: 3. Query database Database-->>Service: 4. Return data Service->>Service: 5. Process and format data Service-->>Consumer: 6. Send response\n```'
+      const result = sanitizeMermaidFences(input)
+      console.log('=== SANITIZED OUTPUT ===')
+      console.log(result)
+      console.log('=== END ===')
+      const lines = result.split('\n').filter(l => l.trim())
+      expect(lines.length).toBeGreaterThan(4)
+      expect(result).toContain('participant Consumer')
+      expect(result).toContain('Consumer->>Service')
+      expect(result).toContain('Database-->>Service')
+      expect(result).toContain('Service-->>Consumer')
+      const arrowLines = lines.filter(l => /->>|-->>/.test(l))
+      expect(arrowLines.length).toBe(6)
+    })
+  })
 })

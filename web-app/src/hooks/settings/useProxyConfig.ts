@@ -131,8 +131,9 @@ export const useProxyConfig = create<ProxyConfigState>()(
       noProxy: '',
       setProxyEnabled: (proxyEnabled) => set({ proxyEnabled }),
       setProxyUrl: (proxyUrl) => {
-        if (proxyUrl && !/^https?:\/\/.+/i.test(proxyUrl.trim())) return
-        set({ proxyUrl: proxyUrl.trim() })
+        const trimmed = proxyUrl.trim()
+        if (trimmed && !/^https?:\/\/[^/]+(\/.*)?$/i.test(trimmed)) return
+        set({ proxyUrl: trimmed })
       },
       setProxyUsername: (proxyUsername) => set({ proxyUsername }),
       setProxyPassword: (proxyPassword) => set({ proxyPassword }),

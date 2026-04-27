@@ -67,6 +67,7 @@ export const useTokensCount = (
   const debounceTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const latestCalculationRef = useRef<(() => Promise<void>) | null>(null)
   const requestIdRef = useRef(0)
+  const abortRef = useRef<AbortController | null>(null)
   // Backoff: after consecutive apply-template failures, pause retries for 30s
   const consecutiveErrorsRef = useRef(0)
   const backoffUntilRef = useRef(0)
@@ -116,7 +117,6 @@ export const useTokensCount = (
 
     const isHosted = looksLikeHostedModel || isHostedModel(selectedModel, providers)
     if (isHosted && selectedModel?.id) {
-      // Common context lengths for popular models - more comprehensive patterns
       const modelPatterns: Array<{ pattern: RegExp, tokens: number }> = [
         // OpenAI models
         { pattern: /gpt-4o/i, tokens: 128000 },
@@ -129,9 +129,13 @@ export const useTokensCount = (
 
         // Other providers
         { pattern: /groq/i, tokens: 128000 },
-        { pattern: /gemini/i, tokens: 32768 },
-        { pattern: /deepseek/i, tokens: 32768 },
+        { pattern: /gemini/i, tokens: 128000 },
+        { pattern: /deepseek/i, tokens: 64000 },
         { pattern: /qwen/i, tokens: 32768 },
+        { pattern: /mistral/i, tokens: 32000 },
+        { pattern: /llama/i, tokens: 128000 },
+        { pattern: /command/i, tokens: 128000 },
+        { pattern: /google/i, tokens: 128000 },
       ]
 
       // Check if model ID matches any known patterns
@@ -150,8 +154,11 @@ export const useTokensCount = (
   }, [selectedModel, providers])
 
   const runTokenCalculation = useCallback(async () => {
-    // Skip if still within backoff window (consecutive failures)
     if (Date.now() < backoffUntilRef.current) return
+
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
 
     const requestId = ++requestIdRef.current
     const maxTokens = getMaxTokens()
@@ -178,15 +185,12 @@ export const useTokensCount = (
       let tokenCount: number
 
       if (isHosted) {
-        // For hosted models, use local token estimation
         const messageText = messages
           .map(msg => {
             let text = ''
             if (msg.content) {
               for (const item of msg.content) {
                 text += item.text?.value || ''
-                // Note: We don't count image tokens in this simple estimation
-                // Could be enhanced later if needed
               }
             }
             return text
@@ -198,6 +202,7 @@ export const useTokensCount = (
         tokenCount = await serviceHub
           .models()
           .getTokensCount(selectedModel.id, messages)
+        if (controller.signal.aborted) return
         if (tokenCount === 0 && messages.length > 0) {
           const messageText = messages
             .map(msg => {
@@ -214,9 +219,8 @@ export const useTokensCount = (
         }
       }
 
-      if (requestId !== requestIdRef.current) return
+      if (requestId !== requestIdRef.current || controller.signal.aborted) return
 
-      // Success — reset error backoff
       consecutiveErrorsRef.current = 0
 
       const percentage =
@@ -230,14 +234,11 @@ export const useTokensCount = (
         isNearLimit: percentage !== undefined ? percentage >= 80 : false,
       })
     } catch (error) {
-      if (requestId !== requestIdRef.current) return
+      if (requestId !== requestIdRef.current || controller.signal.aborted) return
 
       const msg = error instanceof Error ? error.message : String(error)
 
-      // For hosted models, 404 is expected - don't back off since we use local estimation
       if (!isHosted) {
-        // 404 means the endpoint doesn't exist on this backend (e.g. ax-serving).
-        // Back off for 1 hour immediately — retrying will never succeed.
         if (msg.includes('404')) {
           backoffUntilRef.current = Date.now() + 60 * 60 * 1000
         } else {
@@ -277,6 +278,7 @@ export const useTokensCount = (
       if (debounceTimeoutRef.current) {
         clearTimeout(debounceTimeoutRef.current)
       }
+      abortRef.current?.abort()
     }
   }, [prompt, messageSignature, selectedModel?.id])
 

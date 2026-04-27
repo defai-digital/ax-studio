@@ -4,7 +4,7 @@
  *
  * Returns callbacks and derived state; no JSX.
  */
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import {
   ContentType,
   MessageStatus,
@@ -62,6 +62,11 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
   const attachmentsKeyRef = useRef(attachmentsKey)
   attachmentsKeyRef.current = attachmentsKey
 
+  const docAbortRef = useRef<AbortController | null>(null)
+  useEffect(() => {
+    return () => { docAbortRef.current?.abort() }
+  }, [])
+
   const updateAttachmentProcessing = useCallback(
     (
       fileName: string,
@@ -109,9 +114,10 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
     async (docs: Attachment[]) => {
       if (!docs.length) return
 
-      // Mark all docs as processing IMMEDIATELY so the send guard and
-      // readyAttachments filter can detect in-flight work before any async
-      // operations (model startup, prompt dialog, MCP calls) begin.
+      docAbortRef.current?.abort()
+      const controller = new AbortController()
+      docAbortRef.current = controller
+
       setAttachmentsForThread(attachmentsKey, (prev) =>
         prev.map((att) => {
           const isTarget = docs.some(
@@ -121,10 +127,6 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
         })
       )
 
-      // On the home page effectiveThreadId is undefined — use a temporary ID
-      // so that inline parsing still works. Embeddings mode will use this as
-      // the AkiDB collection name; the real thread ID is patched later when
-      // the thread is created and attachments are transferred.
       const processingThreadId = effectiveThreadId || '__pending__'
 
       const modelReady = await (async () => {
@@ -135,6 +137,7 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
         try {
           updateLoadingModel(true)
           await serviceHub.models().startModel(provider, selectedModel.id)
+          if (controller.signal.aborted) return false
           const active = await serviceHub.models().getActiveModels()
           setActiveModels(active || [])
           return active?.includes(selectedModel.id) ?? false
@@ -145,6 +148,8 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
           updateLoadingModel(false)
         }
       })()
+
+      if (controller.signal.aborted) return
 
       const modelContextLength = (() => {
         const ctx = selectedModel?.settings?.ctx_len?.controller_props?.value
@@ -181,6 +186,7 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
 
       if (docsNeedingPrompt.length > 0) {
         for (let i = 0; i < docsNeedingPrompt.length; i++) {
+          if (controller.signal.aborted) return
           const doc = docsNeedingPrompt[i]
           const choice = await useAttachmentIngestionPrompt
             .getState()
@@ -238,6 +244,8 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
           perFileChoices: docChoices.size > 0 ? docChoices : undefined,
           updateAttachmentProcessing,
         })
+
+        if (controller.signal.aborted) return
 
         if (processedAttachments.length > 0) {
           setAttachmentsForThread(attachmentsKey, (prev) =>

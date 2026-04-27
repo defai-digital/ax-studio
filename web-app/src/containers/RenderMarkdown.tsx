@@ -111,6 +111,12 @@ export function sanitizeMermaidFences(input: string): string {
         const _dtype = fixed.trimStart().split(/[\s/-]/)[0] ?? ''
 
         if (/^erDiagram$/i.test(_dtype)) {
+          // Fix incomplete ER cardinalities: ||--| → ||--|| and }--| → }--|{
+          // Models sometimes omit the second half of the right-side cardinality
+          fixed = fixed.replace(/(\|\|--)\|(?![|{])/g, '$1||')   // ||--| → ||--||
+          fixed = fixed.replace(/(}--)\|(?![|{])/g, '$1|{')      // }--| → }--|{
+          fixed = fixed.replace(/(\|\|--o)(?![|{])/g, '$1{')     // ||--o → ||--o{
+
           // Strip quotes from entity names (models over-quote: "USER" ||--o{ "ORDER")
           // Only keep quotes for known SQL reserved words
           fixed = fixed.replace(/"([A-Z_]\w*)"/g, (_m, name) => {
@@ -183,12 +189,23 @@ export function sanitizeMermaidFences(input: string): string {
         }
 
         if (/^sequenceDiagram$/i.test(_dtype)) {
-          // Split before keywords
+          // Split before arrow messages FIRST (before keyword splitting
+          // to avoid false matches on "and", "end" etc. inside labels)
+          fixed = fixed.replace(
+            /([^\n])\s+(\w+\s*(?:->>|-->>|-\)|--x|->|-->|-x)\s*\w+\s*:)/g,
+            '$1\n$2'
+          )
+          fixed = fixed.replace(
+            /([^\n])\s+(\w+\s*(?:->>|-->>|->|-->|-\)|--x|-x)\s*\w+\s*$)/gm,
+            '$1\n$2'
+          )
+          // Split before keywords (skip 'and' and 'end' which are common in
+          // message labels — they get handled by the newline-based context)
           for (const kw of [
             'participant', 'actor ', 'autonumber',
             'Note right of', 'Note left of', 'Note over', 'Note right', 'Note left', 'Note ',
             'activate', 'deactivate',
-            'loop ', 'end', 'alt ', 'else', 'opt ', 'rect ', 'par ', 'and ',
+            'loop ', 'alt ', 'else', 'opt ', 'rect ', 'par ',
             'create', 'destroy',
           ]) {
             fixed = fixed.replace(
@@ -196,16 +213,6 @@ export function sanitizeMermaidFences(input: string): string {
               '$1\n$2'
             )
           }
-          // Split before arrow messages:  WORD ->> WORD : or WORD -->> WORD : etc.
-          fixed = fixed.replace(
-            /([^\n])\s+(\w+\s*(?:->>|-->>|-\)|--x|->|-->|-x)\s+\w+\s*:)/g,
-            '$1\n$2'
-          )
-          // Split before self-referencing arrows:  Rx ->> Rx:
-          fixed = fixed.replace(
-            /([^\n])\s+(\w+\s*(?:->>|-->>|->|-->|-\)|--x|-x)\s+\w+\s*$)/gm,
-            '$1\n$2'
-          )
         }
 
         if (/^mindmap$/i.test(_dtype)) {
@@ -541,7 +548,17 @@ function MermaidDiagram({ source, theme }: { source: string; theme: string }) {
 
     // Use 'loose' security: Mermaid v11 renders labels via <foreignObject> HTML,
     // which 'strict' mode strips. SVG is produced locally by mermaid — not user input.
-    mermaidLib.initialize({ startOnLoad: false, securityLevel: 'loose', theme: theme as never })
+    mermaidLib.initialize({
+      startOnLoad: false,
+      securityLevel: 'loose',
+      theme: (theme ?? 'default') as never,
+      fontSize: 13,
+      htmlLabels: true,
+      flowchart: { useMaxWidth: true, htmlLabels: true },
+      sequence: { useMaxWidth: true, actorFontSize: 13, noteFontSize: 12, messageFontSize: 13 },
+      er: { useMaxWidth: true },
+      gantt: { useMaxWidth: true },
+    })
     const renderWithRetry = async () => {
       const id = `mermaid-${Math.random().toString(36).slice(2)}`
 
@@ -662,7 +679,12 @@ function MermaidDiagram({ source, theme }: { source: string; theme: string }) {
     <div
       className="my-2 overflow-x-auto"
       // biome-ignore lint/security/noDangerouslySetInnerHtml: Mermaid SVG — generated locally by mermaid library, not user input. 'loose' mode needed for text labels via foreignObject.
-      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(svgContent, { USE_PROFILES: { svg: true }, FORBID_TAGS: ['style'], ADD_TAGS: ['foreignObject'], ADD_ATTR: ['class', 'xmlns'] }) }}
+      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(svgContent, {
+        USE_PROFILES: { svg: true, svgFilters: true },
+        ADD_TAGS: ['foreignObject', 'marker', 'defs', 'style'],
+        ADD_ATTR: ['class', 'xmlns', 'style', 'marker-end', 'marker-start', 'marker-mid', 'dominant-baseline', 'text-anchor', 'rx', 'ry', 'stroke-dasharray', 'stroke-width', 'fill-opacity', 'stroke-opacity', 'font-size', 'font-family'],
+      }) }}
+      style={{ lineHeight: 1 }}
     />
   )
 }
@@ -803,8 +825,7 @@ function RenderMarkdownComponent({
   const preOverride = useMemo(
     () =>
       ({ node, children }: { node?: unknown; children?: ReactNode }) => {
-        if (!isUser && !isStreaming) {
-          // Debug: log first code block we encounter so devs can verify detection
+        if (!isUser) {
           if (import.meta.env.DEV) {
             const _codeEl = ((node as Record<string, unknown>)?.children as Record<string, unknown>[] | undefined)?.[0]
             const _cls = (_codeEl?.properties as Record<string, unknown> | undefined)?.className
@@ -813,13 +834,8 @@ function RenderMarkdownComponent({
             }
           }
 
-          // 0. Mermaid diagrams — use source extracted from the raw content string
-          //    to avoid Shiki stripping newlines from the HAST text nodes.
-          if (isMermaidNode(node)) {
-            // Primary: indexed lookup from pre-extracted string blocks
+          if (!isStreaming && isMermaidNode(node)) {
             const indexed = mermaidBlocksRef.current[mermaidIdxRef.current++]
-            // Fallback: walk the HAST text nodes (handles edge cases where
-            // the extraction regex didn't match the fence)
             const hastSource = indexed === undefined
               ? extractHastText(((node as Record<string, unknown>).children as unknown[] | undefined)?.[0]).trim()
               : undefined
@@ -828,8 +844,6 @@ function RenderMarkdownComponent({
             return <MermaidDiagram source={source} theme={mermaidThemeRef.current} />
           }
 
-          // 1. Explicit artifact-* fences — use string-extracted source to bypass
-          //    Shiki's unknown-language fallback which loses the CSS class.
           if (isArtifactNode(node)) {
             const artifact = artifactBlocksRef.current[artifactIdxRef.current++]
             if (artifact) {
@@ -841,7 +855,6 @@ function RenderMarkdownComponent({
             }
           }
 
-          // 1b. Fallback: match by source text when Shiki lost the artifact- class
           {
             const next = artifactBlocksRef.current[artifactIdxRef.current]
             if (next) {
@@ -858,32 +871,32 @@ function RenderMarkdownComponent({
             }
           }
 
-          // 1c. Auto-detected full HTML docs + JSX/SVG blocks
-          const artifactInfo = getArtifactInfo(node)
-          if (artifactInfo !== null) {
-            return (
-              <ArtifactBlock
-                type={artifactInfo.type}
-                source={artifactInfo.source}
-                threadId={threadId ?? messageId}
-              >
-                {children}
-              </ArtifactBlock>
-            )
-          }
+          if (!isStreaming) {
+            const artifactInfo = getArtifactInfo(node)
+            if (artifactInfo !== null) {
+              return (
+                <ArtifactBlock
+                  type={artifactInfo.type}
+                  source={artifactInfo.source}
+                  threadId={threadId ?? messageId}
+                >
+                  {children}
+                </ArtifactBlock>
+              )
+            }
 
-          // 2. Plain html/jsx/tsx/svg blocks — show a Render button on hover
-          const renderableInfo = getRenderableInfo(node)
-          if (renderableInfo !== null) {
-            return (
-              <RenderableCodeBlock
-                type={renderableInfo.type}
-                source={renderableInfo.source}
-                threadId={threadId ?? messageId}
-              >
-                {children}
-              </RenderableCodeBlock>
-            )
+            const renderableInfo = getRenderableInfo(node)
+            if (renderableInfo !== null) {
+              return (
+                <RenderableCodeBlock
+                  type={renderableInfo.type}
+                  source={renderableInfo.source}
+                  threadId={threadId ?? messageId}
+                >
+                  {children}
+                </RenderableCodeBlock>
+              )
+            }
           }
 
         }

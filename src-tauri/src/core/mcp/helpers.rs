@@ -33,6 +33,7 @@ const DANGEROUS_ENV_KEYS: &[&str] = &[
     "LD_PRELOAD",
     "DYLD_INSERT_LIBRARIES",
     "LD_LIBRARY_PATH",
+    "DYLD_LIBRARY_PATH",
 ];
 
 fn is_internal_url(url: &str) -> bool {

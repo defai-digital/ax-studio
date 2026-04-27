@@ -53,10 +53,12 @@ export function useImageAttachmentHandler({
   // after navigation / unmount instead of updating attachments on a
   // thread the user is no longer viewing.
   const mountedRef = useRef(true)
+  const ingestionAbortRef = useRef<AbortController | null>(null)
   useEffect(() => {
     mountedRef.current = true
     return () => {
       mountedRef.current = false
+      ingestionAbortRef.current?.abort()
     }
   }, [])
 
@@ -148,12 +150,12 @@ export function useImageAttachmentHandler({
       })
 
       if (effectiveThreadId && newFiles.length > 0) {
+        ingestionAbortRef.current?.abort()
+        const controller = new AbortController()
+        ingestionAbortRef.current = controller
         void (async () => {
           for (const img of newFiles) {
-            // Skip if the hook has unmounted (thread switch, component
-            // teardown) — otherwise ingest callbacks would keep writing
-            // attachments onto a stale thread key after navigation.
-            if (!mountedRef.current) return
+            if (!mountedRef.current || controller.signal.aborted) return
             try {
               setAttachmentsForThread(attachmentsKey, (prev) =>
                 prev.map((a) =>
@@ -165,7 +167,7 @@ export function useImageAttachmentHandler({
               const result = await serviceHub
                 .uploads()
                 .ingestImage(effectiveThreadId, img)
-              if (!mountedRef.current) return
+              if (!mountedRef.current || controller.signal.aborted) return
               if (result?.id) {
                 setAttachmentsForThread(attachmentsKey, (prev) =>
                   prev.map((a) =>
@@ -179,7 +181,7 @@ export function useImageAttachmentHandler({
               }
             } catch (error) {
               console.error('Failed to ingest image:', error)
-              if (!mountedRef.current) return
+              if (!mountedRef.current || controller.signal.aborted) return
               setAttachmentsForThread(attachmentsKey, (prev) =>
                 prev.filter((a) => !(a.name === img.name && a.type === 'image'))
               )

@@ -177,7 +177,7 @@ pub async fn load_llama_model<R: Runtime>(
     let mut command = Command::new(&bin_path);
 
     command.args(&args);
-    let dangerous_env = ["LD_PRELOAD", "DYLD_INSERT_LIBRARIES", "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"];
+    let dangerous_env = ["LD_PRELOAD", "DYLD_INSERT_LIBRARIES", "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH", "PATH"];
     for (k, v) in &merged_envs {
         if dangerous_env.contains(&k.as_str()) {
             log::warn!("Blocking dangerous env var {} from llama-server", k);

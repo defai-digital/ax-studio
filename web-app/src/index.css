@@ -189,7 +189,8 @@
     caret-color: var(--foreground);
   }
   body {
-    @apply bg-background text-foreground font-sans text-sm antialiased overflow-hidden;
+    @apply bg-background text-foreground font-sans antialiased overflow-hidden;
+    font-size: var(--text-sm);
   }
 
   ::-ms-reveal {
@@ -338,4 +339,16 @@
 [role='log'] > div > div {
   max-width: 100%;
   min-width: 0;
+}
+
+/* Mermaid diagram responsive sizing — SVG should fill the container
+   and scale down rather than overflow and clip text */
+.overflow-x-auto > svg {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+.overflow-x-auto foreignObject {
+  overflow: visible;
 }

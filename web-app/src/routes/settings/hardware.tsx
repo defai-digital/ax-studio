@@ -427,7 +427,18 @@ function HardwareContent() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => checkForUpdate(true)}
+                              onClick={async () => {
+                                try {
+                                  const result = await checkForUpdate(true)
+                                  if (result) {
+                                    toast.info(t('settings:backendUpdater.updateAvailable'))
+                                  } else {
+                                    toast.success(t('settings:backendUpdater.upToDate'))
+                                  }
+                                } catch {
+                                  toast.error(t('settings:backendUpdater.checkError'))
+                                }
+                              }}
                             >
                               {t('settings:hardware.checkNow')}
                             </Button>

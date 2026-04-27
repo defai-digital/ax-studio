@@ -102,7 +102,6 @@ export function useThreadChat({
   }, [threadId])
 
   useEffect(() => {
-    // Skip if chat already has messages (e.g., returning to a streaming conversation)
     const existingSession = useChatSessions.getState().sessions[threadId]
     if (
       (existingSession?.chat?.messages?.length ?? 0) > 0 ||
@@ -112,13 +111,13 @@ export function useThreadChat({
       return
     }
 
-    let ignore = false
+    const controller = new AbortController()
 
     serviceHub
       .messages()
       .fetchMessages(threadId)
       .then((fetchedMessages) => {
-        if (ignore) return
+        if (controller.signal.aborted) return
         if (fetchedMessages && fetchedMessages.length > 0) {
           const currentLocalMessages = useMessages
             .getState()
@@ -146,7 +145,7 @@ export function useThreadChat({
         }
       })
       .catch((error) => {
-        if (!ignore) {
+        if (!controller.signal.aborted) {
           console.error(
             `Failed to fetch messages for thread ${threadId}:`,
             error
@@ -155,7 +154,7 @@ export function useThreadChat({
       })
 
     return () => {
-      ignore = true
+      controller.abort()
     }
   }, [threadId, serviceHub, setMessages, setChatMessages])
 
@@ -430,12 +429,14 @@ export function useThreadChat({
   // Keep a handle on the pending regenerate timer so navigation / unmount
   // cancels it instead of firing handleRegenerate() on an unmounted component.
   const contextIncreaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const contextIncreaseAbortRef = useRef<AbortController | null>(null)
   useEffect(() => {
     return () => {
       if (contextIncreaseTimerRef.current) {
         clearTimeout(contextIncreaseTimerRef.current)
         contextIncreaseTimerRef.current = null
       }
+      contextIncreaseAbortRef.current?.abort()
     }
   }, [])
 
@@ -474,13 +475,18 @@ export function useThreadChat({
     updatedModels[modelIndex] = updatedModel as Model
     updateProvider(provider.provider, { models: updatedModels })
 
+    contextIncreaseAbortRef.current?.abort()
+    const controller = new AbortController()
+    contextIncreaseAbortRef.current = controller
+
     await serviceHub.models().stopModel(selectedModel.id)
+    if (controller.signal.aborted) return
     if (contextIncreaseTimerRef.current) {
       clearTimeout(contextIncreaseTimerRef.current)
     }
     contextIncreaseTimerRef.current = setTimeout(() => {
       contextIncreaseTimerRef.current = null
-      if (unmountedRef.current) return
+      if (unmountedRef.current || controller.signal.aborted) return
       handleRegenerate()
     }, 1000)
   }, [

@@ -3,62 +3,96 @@ import SettingsMenu from '@/components/common/SettingsMenu'
 import HeaderPage from '@/containers/HeaderPage'
 import { Card, CardItem } from '@/components/common/Card'
 import { useAttachments } from '@/hooks/chat/useAttachments'
-import type { SettingComponentProps } from '@ax-studio/core'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { DynamicControllerSetting } from '@/containers/dynamicControllerSetting'
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { Switch } from '@/components/ui/switch'
 import { useShallow } from 'zustand/react/shallow'
 import { FileText } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 export const Route = createFileRoute('/settings/attachments')({
   component: AttachmentsSettings,
 })
 
-// Helper to extract constraints from settingsDefs
-function getConstraints(def: SettingComponentProps) {
-  const props = def.controllerProps as Partial<{
-    min: number
-    max: number
-    step: number
-  }>
-  return {
-    min: props.min ?? -Infinity,
-    max: props.max ?? Infinity,
-    step: props.step ?? 1,
-  }
+type SearchMode = 'auto' | 'ann' | 'linear'
+type ParseMode = 'auto' | 'inline' | 'embeddings' | 'prompt'
+
+function DebouncedInput({
+  value,
+  min,
+  max,
+  step,
+  onChange,
+}: {
+  value: number
+  min?: number
+  max?: number
+  step?: number
+  onChange: (v: number) => void
+}) {
+  const [local, setLocal] = useState(String(value))
+  const timerRef = useRef<ReturnType<typeof setTimeout>>()
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
+
+  useEffect(() => {
+    setLocal(String(value))
+  }, [value])
+
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const raw = e.target.value
+      setLocal(raw)
+      if (timerRef.current) clearTimeout(timerRef.current)
+      timerRef.current = setTimeout(() => {
+        const num = Number(raw)
+        if (!Number.isFinite(num)) return
+        const clamped = Math.max(min ?? -Infinity, Math.min(max ?? Infinity, num))
+        onChangeRef.current(clamped)
+      }, 500)
+    },
+    [min, max]
+  )
+
+  return (
+    <input
+      type="number"
+      value={local}
+      onChange={handleChange}
+      min={min}
+      max={max}
+      step={step ?? 1}
+      className="w-24 h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground text-right focus:outline-none focus:ring-1 focus:ring-primary"
+    />
+  )
 }
 
-// Helper to validate and clamp numeric values
-function clampValue(
-  val: unknown,
-  def: SettingComponentProps,
-  currentValue: number
-): number {
-  const num = typeof val === 'number' ? val : Number(val)
-  if (!Number.isFinite(num)) return currentValue
-  const { min, max, step } = getConstraints(def)
-  // Floor integer values, preserve decimals for threshold
-  const adjusted = step >= 1 ? Math.floor(num) : num
-  return Math.max(min, Math.min(max, adjusted))
+function SelectInput<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T
+  options: { value: T; label: string }[]
+  onChange: (v: T) => void
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value as T)}
+      className="h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+    >
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  )
 }
 
 function AttachmentsSettings() {
   const { t } = useTranslation()
-  const hookDefs = useAttachments((s) => s.settingsDefs)
-  const loadDefs = useAttachments((s) => s.loadSettingsDefs)
-  const [defs, setDefs] = useState<SettingComponentProps[]>([])
 
-  // Load schema from extension via the hook once
-  useEffect(() => {
-    loadDefs()
-  }, [loadDefs])
-
-  // Mirror the hook's defs into local state for display
-  useEffect(() => {
-    setDefs(hookDefs)
-  }, [hookDefs])
-
-  // Track values for live updates
   const sel = useAttachments(
     useShallow((s) => ({
       enabled: s.enabled,
@@ -82,105 +116,24 @@ function AttachmentsSettings() {
     }))
   )
 
-  // Local state for inputs to allow intermediate values while typing
-  const [localValues, setLocalValues] = useState<
-    Record<string, string | number | boolean | string[]>
-  >({})
+  const parseModeOptions: { value: ParseMode; label: string }[] = [
+    { value: 'auto', label: t('settings:attachments.parseModeAuto') },
+    { value: 'inline', label: t('settings:attachments.parseModeInline') },
+    { value: 'embeddings', label: t('settings:attachments.parseModeEmbeddings') },
+    { value: 'prompt', label: t('settings:attachments.parseModePrompt') },
+  ]
 
-  // Debounce timers
-  const timersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
-
-  // Cleanup timers on unmount
-  useEffect(() => {
-    const timers = timersRef.current
-    return () => {
-      Object.values(timers).forEach(clearTimeout)
-    }
-  }, [])
-
-  // Debounced setter with validation
-  const debouncedSet = useCallback(
-    (key: string, val: unknown, def: SettingComponentProps) => {
-      // Clear existing timer for this key
-      if (timersRef.current[key]) {
-        clearTimeout(timersRef.current[key])
-      }
-
-      // Set local value immediately for responsive UI
-      setLocalValues((prev) => ({
-        ...prev,
-        [key]: val as string | number | boolean | string[],
-      }))
-
-      // For non-numeric inputs, apply immediately without debounce
-      if (key === 'enabled' || key === 'search_mode' || key === 'parse_mode') {
-        if (key === 'enabled') sel.setEnabled(!!val)
-        else if (key === 'search_mode')
-          sel.setSearchMode(val as 'auto' | 'ann' | 'linear')
-        else if (key === 'parse_mode')
-          sel.setParseMode(val as 'auto' | 'inline' | 'embeddings' | 'prompt')
-        return
-      }
-
-      // For numeric inputs, debounce the validation and sync
-      timersRef.current[key] = setTimeout(() => {
-        const currentStoreValue = (() => {
-          switch (key) {
-            case 'max_file_size_mb':
-              return sel.maxFileSizeMB
-            case 'retrieval_limit':
-              return sel.retrievalLimit
-            case 'retrieval_threshold':
-              return sel.retrievalThreshold
-            case 'chunk_size_chars':
-              return sel.chunkSizeChars
-            case 'overlap_chars':
-              return sel.overlapChars
-            case 'auto_inline_context_ratio':
-              return sel.autoInlineContextRatio
-            default:
-              return 0
-          }
-        })()
-
-        const validated = clampValue(val, def, currentStoreValue)
-
-        switch (key) {
-          case 'max_file_size_mb':
-            sel.setMaxFileSizeMB(validated)
-            break
-          case 'retrieval_limit':
-            sel.setRetrievalLimit(validated)
-            break
-          case 'retrieval_threshold':
-            sel.setRetrievalThreshold(validated)
-            break
-          case 'chunk_size_chars':
-            sel.setChunkSizeChars(validated)
-            break
-          case 'overlap_chars':
-            sel.setOverlapChars(validated)
-            break
-          case 'auto_inline_context_ratio':
-            sel.setAutoInlineContextRatio(validated)
-            break
-        }
-
-        // Update local value to validated one
-        setLocalValues((prev) => ({
-          ...prev,
-          [key]: validated as string | number | boolean | string[],
-        }))
-      }, 500) // 500ms debounce
-    },
-    [sel]
-  )
+  const searchModeOptions: { value: SearchMode; label: string }[] = [
+    { value: 'auto', label: t('settings:attachments.searchModeAuto') },
+    { value: 'ann', label: t('settings:attachments.searchModeAnn') },
+    { value: 'linear', label: t('settings:attachments.searchModeLinear') },
+  ]
 
   return (
     <div className="flex flex-col h-svh w-full">
       <HeaderPage>
         <div className="flex items-center gap-2 w-full">
-          <span className='font-medium text-base font-studio'>{t('common:settings')}</span>
+          <span className="font-medium text-base font-studio">{t('common:settings')}</span>
         </div>
       </HeaderPage>
       <div className="flex flex-1 min-h-0">
@@ -196,92 +149,127 @@ function AttachmentsSettings() {
           </div>
           <div className="px-8 py-7">
             <div className="max-w-2xl space-y-6">
-            <Card title={t('common:attachments') || 'Attachments'}>
-              {defs.map((d) => {
-                // Use local value if typing, else use store value
-                const storeValue = (() => {
-                  switch (d.key) {
-                    case 'enabled':
-                      return sel.enabled
-                    case 'max_file_size_mb':
-                      return sel.maxFileSizeMB
-                    case 'retrieval_limit':
-                      return sel.retrievalLimit
-                    case 'retrieval_threshold':
-                      return sel.retrievalThreshold
-                    case 'chunk_size_chars':
-                      return sel.chunkSizeChars
-                    case 'overlap_chars':
-                      return sel.overlapChars
-                    case 'search_mode':
-                      return sel.searchMode
-                    case 'parse_mode':
-                      return sel.parseMode
-                    case 'auto_inline_context_ratio':
-                      return sel.autoInlineContextRatio
-                    default:
-                      return d?.controllerProps?.value
+              <Card title={t('settings:attachments.featureTitle')}>
+                <CardItem
+                  title={t('settings:attachments.enable')}
+                  description={t('settings:attachments.enableDesc')}
+                  actions={
+                    <Switch
+                      checked={sel.enabled}
+                      onCheckedChange={sel.setEnabled}
+                    />
                   }
-                })()
-
-                const currentValue =
-                  localValues[d.key] !== undefined
-                    ? localValues[d.key]
-                    : storeValue
-
-                // Convert to DynamicControllerSetting compatible props
-                const baseProps = d.controllerProps
-                const normalizedValue: string | number | boolean = (() => {
-                  if (Array.isArray(currentValue)) {
-                    return currentValue.join(',')
+                />
+                <CardItem
+                  title={t('settings:attachments.parseMode')}
+                  description={t('settings:attachments.parseModeDesc')}
+                  actions={
+                    <SelectInput
+                      value={sel.parseMode}
+                      options={parseModeOptions}
+                      onChange={sel.setParseMode}
+                    />
                   }
-                  return currentValue as string | number | boolean
-                })()
+                />
+                <CardItem
+                  title={t('settings:attachments.autoInlineThreshold')}
+                  description={t('settings:attachments.autoInlineThresholdDesc')}
+                  actions={
+                    <DebouncedInput
+                      value={sel.autoInlineContextRatio}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      onChange={sel.setAutoInlineContextRatio}
+                    />
+                  }
+                />
+              </Card>
 
-                const props = {
-                  value: normalizedValue,
-                  placeholder:
-                    'placeholder' in baseProps
-                      ? baseProps.placeholder
-                      : undefined,
-                  type: 'type' in baseProps ? baseProps.type : undefined,
-                  options:
-                    'options' in baseProps ? baseProps.options : undefined,
-                  input_actions:
-                    'inputActions' in baseProps
-                      ? baseProps.inputActions
-                      : undefined,
-                  rows: undefined,
-                  min: 'min' in baseProps ? baseProps.min : undefined,
-                  max: 'max' in baseProps ? baseProps.max : undefined,
-                  step: 'step' in baseProps ? baseProps.step : undefined,
-                  recommended:
-                    'recommended' in baseProps
-                      ? baseProps.recommended
-                      : undefined,
-                }
+              <Card title={t('settings:attachments.limitsTitle')}>
+                <CardItem
+                  title={t('settings:attachments.maxFile')}
+                  description={t('settings:attachments.maxFileDesc')}
+                  actions={
+                    <DebouncedInput
+                      value={sel.maxFileSizeMB}
+                      min={1}
+                      max={1024}
+                      step={1}
+                      onChange={sel.setMaxFileSizeMB}
+                    />
+                  }
+                />
+              </Card>
 
-                const title = d.titleKey ? t(d.titleKey) : d.title
-                const description = d.descriptionKey
-                  ? t(d.descriptionKey)
-                  : d.description
+              <Card title={t('settings:attachments.retrievalTitle')}>
+                <CardItem
+                  title={t('settings:attachments.topK')}
+                  description={t('settings:attachments.topKDesc')}
+                  actions={
+                    <DebouncedInput
+                      value={sel.retrievalLimit}
+                      min={1}
+                      max={100}
+                      step={1}
+                      onChange={sel.setRetrievalLimit}
+                    />
+                  }
+                />
+                <CardItem
+                  title={t('settings:attachments.threshold')}
+                  description={t('settings:attachments.thresholdDesc')}
+                  actions={
+                    <DebouncedInput
+                      value={sel.retrievalThreshold}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      onChange={sel.setRetrievalThreshold}
+                    />
+                  }
+                />
+                <CardItem
+                  title={t('settings:attachments.searchMode')}
+                  description={t('settings:attachments.searchModeDesc')}
+                  actions={
+                    <SelectInput
+                      value={sel.searchMode}
+                      options={searchModeOptions}
+                      onChange={sel.setSearchMode}
+                    />
+                  }
+                />
+              </Card>
 
-                return (
-                  <CardItem
-                    key={d.key}
-                    title={title}
-                    description={description}
-                    actions={
-                      <DynamicControllerSetting
-                        controllerType={d.controllerType}
-                        controllerProps={props}
-                        onChange={(val) => debouncedSet(d.key, val, d)}
-                      />
-                    }
-                  />
-                )
-              })}
-            </Card>
+              <Card title={t('settings:attachments.chunkingTitle')}>
+                <CardItem
+                  title={t('settings:attachments.chunkSize')}
+                  description={t('settings:attachments.chunkSizeDesc')}
+                  actions={
+                    <DebouncedInput
+                      value={sel.chunkSizeChars}
+                      min={64}
+                      max={8192}
+                      step={64}
+                      onChange={sel.setChunkSizeChars}
+                    />
+                  }
+                />
+                <CardItem
+                  title={t('settings:attachments.chunkOverlap')}
+                  description={t('settings:attachments.chunkOverlapDesc')}
+                  actions={
+                    <DebouncedInput
+                      value={sel.overlapChars}
+                      min={0}
+                      max={2048}
+                      step={16}
+                      onChange={sel.setOverlapChars}
+                    />
+                  }
+                />
+              </Card>
             </div>
           </div>
         </div>
