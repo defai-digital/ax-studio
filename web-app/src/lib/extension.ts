@@ -238,11 +238,11 @@ export class ExtensionManager {
       return
     }
     const res = await getServiceHub().core().installExtension(extensions)
-    return res.map(async (ext: ExtensionManifest) => {
-      const extension = new Extension(ext.name, ext.url)
+    return Promise.all(res.map(async (ext: ExtensionManifest) => {
+      const extension = new Extension(ext.url, ext.name)
       await this.activateExtension(extension)
       return extension
-    })
+    }))
   }
 
   /**

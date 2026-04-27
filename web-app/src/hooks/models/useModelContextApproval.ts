@@ -21,6 +21,10 @@ export const useContextSizeApproval = create<ApprovalState>()((set, get) => ({
 
   showApprovalModal: async () => {
     return new Promise<'ctx_len' | 'context_shift' | undefined>((resolve) => {
+      const state = get()
+      if (state.modalProps) {
+        state.modalProps.onDeny()
+      }
       set({
         isModalOpen: true,
         modalProps: {

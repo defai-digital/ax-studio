@@ -27,6 +27,10 @@ import { type ThreadMessage } from '@ax-studio/core'
 // Module-level mutex to serialize concurrent memory write operations
 let memoryWriteLock: Promise<void> = Promise.resolve()
 
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => { memoryWriteLock = Promise.resolve() })
+}
+
 export function useThreadMemory(threadId: string) {
   const globalMemoryEnabled = useMemory((state) => state.memoryEnabled)
   const memoryEnabledPerThread = useMemory((state) => state.memoryEnabledPerThread)
@@ -46,6 +50,15 @@ export function useThreadMemory(threadId: string) {
   // More reliable than store-based checks (avoids timing races with onFinish
   // being called multiple times for the same message).
   const processedMemoryMsgIds = useRef(new Set<string>())
+
+  const addProcessedId = useCallback((id: string) => {
+    const set = processedMemoryMsgIds.current
+    if (set.size > 500) {
+      const iter = set.values()
+      for (let i = 0; i < 250; i++) { iter.next(); set.delete(iter.next().value) }
+    }
+    set.add(id)
+  }, [])
 
   // Captured at submit time so onFinish can read the user's text without
   // stale-closure issues (the closure over onFinish would otherwise see an
@@ -67,7 +80,7 @@ export function useThreadMemory(threadId: string) {
     ) => {
       // Ref-based dedup — store-based check is unreliable (timing issues)
       const isNewMessage = !processedMemoryMsgIds.current.has(message.id)
-      if (isNewMessage) processedMemoryMsgIds.current.add(message.id)
+      if (isNewMessage) addProcessedId(message.id)
 
       // Strip memory tags + collect LLM delta ops from all content parts
       const allOps: MemoryDeltaOp[] = []

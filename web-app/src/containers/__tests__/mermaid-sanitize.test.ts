@@ -409,4 +409,20 @@ classDiagram
       expect(dataPacketBlocks.length).toBe(1)
     })
   })
+
+  describe('gantt chart', () => {
+    it('fixes empty sections that cause parse errors', () => {
+      const input = `\`\`\`mermaid
+gantt
+    title Project Timeline
+    dateFormat YYYY-MM-DD
+    section Execution
+
+    Task 1 :a1, 2024-01-01, 30d
+    Task 2 :a2, after a1, 20d
+\`\`\``
+      const result = sanitizeMermaidFences(input)
+      expect(result).not.toContain('section Execution\n\n')
+    })
+  })
 })

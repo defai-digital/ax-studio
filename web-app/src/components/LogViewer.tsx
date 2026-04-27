@@ -62,11 +62,7 @@ export function LogViewer() {
         }
       })
       .then((unsub) => {
-        if (isMounted) {
-          unsubscribe = unsub
-        } else {
-          unsub()
-        }
+        unsubscribe = unsub
       })
       .catch((error) => {
         console.error('[LogViewer] Failed to subscribe to log events:', error)

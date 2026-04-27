@@ -243,6 +243,10 @@ function DropDrawerContent({
       if (id) {
         setSubmenuContentCache((prev) => {
           const newCache = new Map(prev);
+          if (newCache.size > 50) {
+            const firstKey = newCache.keys().next().value
+            if (firstKey) newCache.delete(firstKey)
+          }
           newCache.set(id, submenuContent);
           return newCache;
         });

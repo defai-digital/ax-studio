@@ -1,4 +1,5 @@
 import { type ReactNode, isValidElement, memo, useMemo, useState, useEffect, useRef, useCallback } from 'react'
+import DOMPurify from 'dompurify'
 import { AXMarkdown, axDefaultRehypePlugins } from '@/lib/markdown/renderer'
 import { cn, disableIndentedCodeBlockPlugin } from '@/lib/utils'
 import { cjk } from '@streamdown/cjk'
@@ -353,6 +354,14 @@ export function sanitizeMermaidFences(input: string): string {
         }
       }
 
+      // Fix 10a: gantt charts — remove blank lines after section headers.
+      // Mermaid expects task data immediately after `section X`; a blank line
+      // between the section header and the first task causes "Expecting
+      // 'taskData', got 'NL'".
+      if (/^gantt\b/i.test(firstLine)) {
+        fixed = fixed.replace(/(^[ \t]*section\s+\S.*\n)\n+/gm, '$1')
+      }
+
       // Fix 10: collapse consecutive blank lines (all diagram types).
       // Previous fixes may leave behind empty lines; 3+ consecutive
       // newlines can cause spurious parse errors in some diagram types.
@@ -647,7 +656,7 @@ function MermaidDiagram({ source, theme }: { source: string; theme: string }) {
     <div
       className="my-2 overflow-x-auto"
       // biome-ignore lint/security/noDangerouslySetInnerHtml: Mermaid SVG — generated locally by mermaid library, not user input. 'loose' mode needed for text labels via foreignObject.
-      dangerouslySetInnerHTML={{ __html: svgContent }}
+      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(svgContent, { USE_PROFILES: { svg: true }, FORBID_TAGS: ['style'], ADD_TAGS: ['foreignObject'], ADD_ATTR: ['class', 'xmlns'] }) }}
     />
   )
 }

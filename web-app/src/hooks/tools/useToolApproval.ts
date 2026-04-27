@@ -58,13 +58,16 @@ export const useToolApproval = create<ToolApprovalState>()(
         return new Promise<boolean>((resolve) => {
           const state = get()
 
-          // Auto-approve if the user has enabled auto-approval setting
+          // Resolve any orphaned previous modal to prevent Promise leak
+          if (state.modalProps) {
+            state.modalProps.onDeny()
+          }
+
           if (state.allowAllMCPPermissions) {
             resolve(true)
             return
           }
 
-          // Check if tool is already approved for this thread
           if (state.isToolApproved(threadId, toolName)) {
             resolve(true)
             return

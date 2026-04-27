@@ -152,6 +152,8 @@ export function useSidebarResize({
 	const dragStartPoint = React.useRef(0);
 	const lastDragDirection = React.useRef<"expand" | "collapse" | null>(null);
 	const lastTogglePoint = React.useRef(0);
+	const currentWidthRef = React.useRef(currentWidth);
+	currentWidthRef.current = currentWidth;
 	const lastToggleWidth = React.useRef(0);
 	const toggleCooldown = React.useRef(false);
 	const lastToggleTime = React.useRef(0);
@@ -241,7 +243,7 @@ export function useSidebarResize({
 			}
 
 			// Store initial state
-			const currentWidthPx = isCollapsed ? 0 : toPx(currentWidth);
+			const currentWidthPx = isCollapsed ? 0 : toPx(currentWidthRef.current);
 			startWidth.current = currentWidthPx;
 			startX.current = e.clientX;
 			dragStartPoint.current = e.clientX;
@@ -266,7 +268,7 @@ export function useSidebarResize({
 
 			e.preventDefault();
 		},
-		[enableDrag, isCollapsed, currentWidth, isNested],
+		[enableDrag, isCollapsed, isNested],
 	);
 
 	// Handle mouse movement and resizing
@@ -282,7 +284,7 @@ export function useSidebarResize({
 
 			if (isDragging.current) {
 				// Get unit for width calculations
-				const { unit } = parseWidth(currentWidth);
+				const { unit } = parseWidth(currentWidthRef.current);
 
 				// Get current rail position for ultra-precise tracking
 				let currentRailRect = railRect.current;
@@ -463,7 +465,6 @@ export function useSidebarResize({
 		onResize,
 		onToggle,
 		isCollapsed,
-		currentWidth,
 		persistWidth,
 		setIsDraggingRail,
 		minWidthPx,

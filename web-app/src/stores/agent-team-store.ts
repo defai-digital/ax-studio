@@ -55,9 +55,13 @@ interface AgentTeamState {
   ) => Promise<AgentTeam>
 }
 
-// Module-level dedupe handle for concurrent `loadTeams()` calls — see
-// the `loadTeams` implementation below for why.
+// Module-level dedupe handle for concurrent `loadTeams()` calls.
+// Reset on HMR so stale promises don't prevent re-fetching.
 let loadTeamsPromise: Promise<void> | null = null
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => { loadTeamsPromise = null })
+}
 
 export const useAgentTeamStore = create<AgentTeamState>((set, get) => ({
   teams: [],

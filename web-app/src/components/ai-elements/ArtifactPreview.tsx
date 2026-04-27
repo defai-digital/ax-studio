@@ -97,6 +97,7 @@ function IframePreview({ type, source, version }: { type: ArtifactType; source: 
   // Listen for runtime errors posted from inside the iframe
   useEffect(() => {
     const handler = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin && event.origin !== 'null') return
       if (event.source !== iframeRef.current?.contentWindow) return
       if (event.data?.type === 'artifact-error') {
         setError(event.data.message || 'Unknown error in artifact')
