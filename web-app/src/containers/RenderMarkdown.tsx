@@ -268,13 +268,28 @@ export function sanitizeMermaidFences(input: string): string {
         // lexical errors in Mermaid. Replace [] with Array suffix.
         fixed = fixed.replace(/\b(\w+)\[\]/g, '$1Array')
 
+        // Fix: replace generic syntax List~Type~ with List_Type (tilde breaks parser)
+        fixed = fixed.replace(/(\w+)~(\w+)~/g, '$1_$2')
+
         // Fix: strip invalid quoted multiplicity/label tokens from relationships.
         // LLMs often output: ATM "1" -- "" Customer  or  A "0.." o-- "1" B
-        // These quoted tokens are not valid Mermaid classDiagram syntax.
-        // Strip:  "1"  "0..*"  "0.."  "1..*"  ""  etc. from relationship lines.
         fixed = fixed.replace(
           /("(?:[0-9]+(?:\.\.(?:\*)|[0-9]*)?|\*(?:\.\.)?|[0-9]*\.\.[0-9*]*)?")\s*/g,
           ''
+        )
+
+        // Fix: split method parameters that contain spaces (Mermaid doesn't allow spaces in params)
+        // e.g. +addPort(SerialPort port) → +addPort(SerialPort_port)
+        fixed = fixed.replace(
+          /(\w+)\((\w+)\s+(\w+)\)/g,
+          '$1($2_$3)'
+        )
+
+        // Fix: ensure <<interface>> stereotypes are on their own class line
+        // LLMs sometimes put: class Foo <<interface>> {  → should be: class Foo { on next line: <<interface>>
+        fixed = fixed.replace(
+          /class\s+(\w+)\s+<<(\w+)>>\s*\{/g,
+          'class $1 {\n  <<$2>>'
         )
 
         // Fix 4b: deduplicate class definitions. LLMs sometimes output the same
