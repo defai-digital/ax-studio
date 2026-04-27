@@ -22,6 +22,7 @@ import { useThreads } from '@/hooks/threads/useThreads'
 import { processAttachmentsForSend } from '@/lib/attachmentProcessing'
 import { useFileRegistry, threadCollectionId } from '@/lib/file-registry'
 import { createDocumentAttachment, type Attachment } from '@/types/attachment'
+import { getModelContextLength } from '@/lib/models'
 
 const ATTACHMENT_AUTO_INLINE_FALLBACK_BYTES = 512 * 1024
 
@@ -151,15 +152,7 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
 
       if (controller.signal.aborted) return
 
-      const modelContextLength = (() => {
-        const ctx = selectedModel?.settings?.ctx_len?.controller_props?.value
-        if (typeof ctx === 'number') return ctx
-        if (typeof ctx === 'string') {
-          const parsed = parseInt(ctx, 10)
-          return Number.isFinite(parsed) ? parsed : undefined
-        }
-        return undefined
-      })()
+      const modelContextLength = getModelContextLength(selectedModel)
 
       const rawContextThreshold =
         typeof modelContextLength === 'number' && modelContextLength > 0

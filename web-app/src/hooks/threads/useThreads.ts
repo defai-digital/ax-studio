@@ -18,11 +18,17 @@ const reportPersistenceError = (operation: string) => (error: unknown) => {
   console.error(`[threads] ${operation} persistence failed:`, error)
   toast.error(`Failed to save: ${operation}`, {
     id: `threads-persist-${operation}`,
-    description:
-      error instanceof Error
-        ? error.message
-        : 'Your change is visible now but may not survive reload.',
   })
+}
+
+function cleanupThreadResources(threadId: string) {
+  getServiceHub().threads().deleteThread(threadId).catch(console.error)
+  const colId = threadCollectionId(threadId)
+  useFileRegistry.getState().clearCollection(colId)
+  getServiceHub().mcp().callTool({
+    toolName: 'akidb_delete_collection',
+    arguments: { collection_id: colId },
+  }).catch(() => {})
 }
 type ThreadState = {
   threads: Record<string, Thread>
@@ -140,23 +146,11 @@ export const useThreads = create<ThreadState>()((set, get) => ({
     })
   },
   deleteThread: (threadId) => {
-    getServiceHub()
-      .threads()
-      .deleteThread(threadId)
-      .catch(reportPersistenceError('delete thread'))
-
-    const colId = threadCollectionId(threadId)
-    useFileRegistry.getState().clearCollection(colId)
+    cleanupThreadResources(threadId)
 
     import('@/hooks/chat/useMessages').then(({ clearTrackedThreadMessages }) => {
       clearTrackedThreadMessages(threadId)
     }).catch(() => {})
-    getServiceHub().mcp().callTool({
-      toolName: 'akidb_delete_collection',
-      arguments: { collection_id: colId },
-    }).catch(() => {
-      // Ignore — collection may not exist if no docs were ever attached
-    })
 
     set((state) => {
       const { [threadId]: _, ...remainingThreads } = state.threads
@@ -187,18 +181,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
           !state.threads[threadId].metadata?.project
       )
 
-      // Delete threads + clean up AkiDB collections
-      threadsToDeleteIds.forEach((threadId) => {
-        getServiceHub().threads().deleteThread(threadId).catch(console.error)
-        const colId = threadCollectionId(threadId)
-        useFileRegistry.getState().clearCollection(colId)
-        getServiceHub().mcp().callTool({
-          toolName: 'akidb_delete_collection',
-          arguments: { collection_id: colId },
-        }).catch((error) => {
-          console.warn('[threads] Failed to delete AkiDB collection:', colId, error)
-        })
-      })
+      threadsToDeleteIds.forEach(cleanupThreadResources)
 
       // Keep favorite threads and threads with project metadata
       const remainingThreads = threadsToKeepIds.reduce(
@@ -225,18 +208,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
     set((state) => {
       const allThreadIds = Object.keys(state.threads)
 
-      // Delete all threads + clean up AkiDB collections
-      allThreadIds.forEach((threadId) => {
-        getServiceHub().threads().deleteThread(threadId).catch(console.error)
-        const colId = threadCollectionId(threadId)
-        useFileRegistry.getState().clearCollection(colId)
-        getServiceHub().mcp().callTool({
-          toolName: 'akidb_delete_collection',
-          arguments: { collection_id: colId },
-        }).catch((error) => {
-          console.warn('[threads] Failed to delete AkiDB collection:', colId, error)
-        })
-      })
+      allThreadIds.forEach(cleanupThreadResources)
 
       return {
         threads: {},
@@ -255,18 +227,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
           state.threads[threadId].metadata?.project?.id === projectId
       )
 
-      // Delete threads belonging to this project + clean up AkiDB collections
-      threadsToDeleteIds.forEach((threadId) => {
-        getServiceHub().threads().deleteThread(threadId).catch(console.error)
-        const colId = threadCollectionId(threadId)
-        useFileRegistry.getState().clearCollection(colId)
-        getServiceHub().mcp().callTool({
-          toolName: 'akidb_delete_collection',
-          arguments: { collection_id: colId },
-        }).catch((error) => {
-          console.warn('[threads] Failed to delete AkiDB collection:', colId, error)
-        })
-      })
+      threadsToDeleteIds.forEach(cleanupThreadResources)
 
       // Keep threads that don't belong to this project
       const remainingThreads = allThreadIds

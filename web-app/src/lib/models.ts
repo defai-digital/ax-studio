@@ -90,3 +90,15 @@ export const extractModelName = (model?: string) => {
 export const extractModelRepo = (model?: string) => {
   return model?.replace('https://huggingface.co/', '')
 }
+
+export function getModelContextLength(model?: { settings?: Record<string, { controller_props?: { value?: unknown } }> }): number | undefined {
+  const raw =
+    model?.settings?.ctx_len?.controller_props?.value ??
+    model?.settings?.ctx_size?.controller_props?.value
+  if (typeof raw === 'number') return raw > 0 ? raw : undefined
+  if (typeof raw === 'string') {
+    const parsed = parseInt(raw, 10)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
+  }
+  return undefined
+}

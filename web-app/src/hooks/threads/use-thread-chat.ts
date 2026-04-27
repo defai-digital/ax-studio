@@ -24,6 +24,7 @@ import {
   NEW_THREAD_ATTACHMENT_KEY,
 } from '@/hooks/chat/useChatAttachments'
 import { newUserThreadContent } from '@/lib/completion'
+import { getModelContextLength } from '@/lib/models'
 import { convertThreadMessagesToUIMessages } from '@/lib/messages'
 import {
   ThreadMessage,
@@ -453,8 +454,7 @@ export function useThreadChat({
     if (modelIndex === -1) return
 
     const model = provider.models[modelIndex]
-    const currentCtxLen =
-      (model.settings?.ctx_len?.controller_props?.value as number) ?? 8192
+    const currentCtxLen = getModelContextLength(model) ?? 8192
     const newCtxLen = Math.round(Math.max(8192, currentCtxLen) * 1.5)
 
     const updatedModel = {

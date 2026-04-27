@@ -3,6 +3,7 @@ import { ThreadMessage } from '@ax-studio/core'
 import { usePrompt } from '@/hooks/ui/usePrompt'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceStore } from '@/hooks/useServiceHub'
+import { getModelContextLength } from '@/lib/models'
 // Simple token estimation for hosted models when backend token counting is unavailable
 // Rough approximation: ~4 characters per token for English text
 const estimateTokensFromText = (text: string): number => {
@@ -90,13 +91,8 @@ export const useTokensCount = (
   }, [messages])
 
   const getMaxTokens = useCallback((): number | undefined => {
-    const raw =
-      selectedModel?.settings?.ctx_len?.controller_props?.value ??
-      selectedModel?.settings?.ctx_size?.controller_props?.value
-    const parsed = Number(raw)
-    if (Number.isFinite(parsed) && parsed > 0) {
-      return parsed
-    }
+    const ctxLength = getModelContextLength(selectedModel)
+    if (ctxLength !== undefined) return ctxLength
 
     // For hosted models without explicit settings, provide defaults based on model ID
     // First check if this looks like a hosted model by examining the model ID patterns
