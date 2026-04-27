@@ -268,6 +268,15 @@ export function sanitizeMermaidFences(input: string): string {
         // lexical errors in Mermaid. Replace [] with Array suffix.
         fixed = fixed.replace(/\b(\w+)\[\]/g, '$1Array')
 
+        // Fix: strip invalid quoted multiplicity/label tokens from relationships.
+        // LLMs often output: ATM "1" -- "" Customer  or  A "0.." o-- "1" B
+        // These quoted tokens are not valid Mermaid classDiagram syntax.
+        // Strip:  "1"  "0..*"  "0.."  "1..*"  ""  etc. from relationship lines.
+        fixed = fixed.replace(
+          /("(?:[0-9]+(?:\.\.(?:\*)|[0-9]*)?|\*(?:\.\.)?|[0-9]*\.\.[0-9*]*)?")\s*/g,
+          ''
+        )
+
         // Fix 4b: deduplicate class definitions. LLMs sometimes output the same
         // class block twice. Keep only the first occurrence of each class name.
         const seenClasses = new Set<string>()
