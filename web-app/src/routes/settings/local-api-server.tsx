@@ -6,10 +6,14 @@ import { Card, CardItem } from '@/components/common/Card'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { ServerHostSwitcher } from '@/containers/ServerHostSwitcher'
-import { PortInput } from '@/containers/PortInput'
-import { ProxyTimeoutInput } from '@/containers/ProxyTimeoutInput'
-import { ApiPrefixInput } from '@/containers/ApiPrefixInput'
+import { Input } from '@/components/ui/input'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { ChevronsUpDown } from 'lucide-react'
 import { TrustedHostsInput } from '@/containers/TrustedHostsInput'
 import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
 import { useAppState } from '@/hooks/settings/useAppState'
@@ -35,6 +39,89 @@ import {
   CollapsibleTrigger,
   CollapsibleContent,
 } from '@/components/ui/collapsible'
+
+const PATH_TRAVERSAL_RE = /(?:\.\.|\/\.\.|\.(?=\/))/
+const VALID_PREFIX_RE = /^\/[a-zA-Z0-9_\-/]*$/
+
+function sanitizePrefix(raw: string): string {
+  let prefix = raw.trim().replace(/\\/g, '/')
+  if (!prefix.startsWith('/')) prefix = '/' + prefix
+  prefix = prefix.replace(/\/+/g, '/').replace(/\/+$/, '')
+  if (PATH_TRAVERSAL_RE.test(prefix) || !VALID_PREFIX_RE.test(prefix)) return ''
+  return prefix || '/'
+}
+
+function PortInput({ isServerRunning }: { isServerRunning?: boolean }) {
+  const { serverPort, setServerPort } = useLocalApiServer()
+  const [inputValue, setInputValue] = useState(serverPort.toString())
+  return (
+    <Input type="number" min={0} max={65535} value={inputValue}
+      onChange={(e) => setInputValue(e.target.value)}
+      onBlur={() => {
+        const port = parseInt(inputValue)
+        if (!isNaN(port) && port >= 0 && port <= 65535) setServerPort(port)
+        else setInputValue(serverPort.toString())
+      }}
+      className={cn('w-24 h-8 text-sm', isServerRunning && 'opacity-50 pointer-events-none')}
+    />
+  )
+}
+
+function ProxyTimeoutInput({ isServerRunning }: { isServerRunning?: boolean }) {
+  const { proxyTimeout, setProxyTimeout } = useLocalApiServer()
+  const [inputValue, setInputValue] = useState(proxyTimeout.toString())
+  return (
+    <Input type="number" min={0} max={86400} value={inputValue}
+      onChange={(e) => setInputValue(e.target.value)}
+      onBlur={() => {
+        const timeout = parseInt(inputValue)
+        if (!isNaN(timeout) && timeout >= 0 && timeout <= 86400) setProxyTimeout(timeout)
+        else setInputValue(proxyTimeout.toString())
+      }}
+      className={cn('w-24 h-8 text-sm', isServerRunning && 'opacity-50 pointer-events-none')}
+    />
+  )
+}
+
+const hostOptions = [{ value: '127.0.0.1', label: '127.0.0.1' }, { value: '0.0.0.0', label: '0.0.0.0' }]
+
+function ServerHostSwitcher({ isServerRunning }: { isServerRunning?: boolean }) {
+  const { serverHost, setServerHost } = useLocalApiServer()
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild className={cn(isServerRunning && 'opacity-50 pointer-events-none')}>
+        <Button variant="outline" size="sm" className="w-full justify-between" title="Edit Server Host">
+          {serverHost}
+          <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground ml-2" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-24">
+        {hostOptions.map((item) => (
+          <DropdownMenuItem key={item.value}
+            className={cn('cursor-pointer my-0.5', serverHost === item.value && 'bg-secondary')}
+            onClick={() => setServerHost(item.value as '127.0.0.1' | '0.0.0.0')}
+          >{item.label}</DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function ApiPrefixInput({ isServerRunning }: { isServerRunning?: boolean }) {
+  const { apiPrefix, setApiPrefix } = useLocalApiServer()
+  const [inputValue, setInputValue] = useState(apiPrefix)
+  return (
+    <Input type="text" value={inputValue} placeholder="/v1"
+      onChange={(e) => setInputValue(e.target.value)}
+      onBlur={() => {
+        const prefix = sanitizePrefix(inputValue)
+        if (prefix) { setApiPrefix(prefix); setInputValue(prefix) }
+        else setInputValue(apiPrefix)
+      }}
+      className={cn('w-24 h-8 text-sm', isServerRunning && 'opacity-50 pointer-events-none')}
+    />
+  )
+}
 
 export const Route = createFileRoute(route.settings.local_api_server)({
   component: LocalAPIServerContent,

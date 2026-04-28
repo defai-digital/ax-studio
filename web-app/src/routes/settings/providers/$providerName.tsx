@@ -6,17 +6,17 @@ import { cn, getProviderTitle, getProviderColor, getModelDisplayName } from '@/l
 import { createFileRoute, Link, useParams } from '@tanstack/react-router'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import Capabilities from '@/components/common/Capabilities'
-import { DynamicControllerSetting } from '@/containers/dynamicControllerSetting'
+import { DynamicControllerSetting } from '@/containers/DynamicControllerSetting'
 import { RenderMarkdown } from '@/containers/RenderMarkdown'
 import { DialogEditModel } from '@/containers/dialogs/model/EditModel'
 import { ModelSetting } from '@/containers/ModelSetting'
 import { DialogDeleteModel } from '@/containers/dialogs/model/DeleteModel'
-import { FavoriteModelAction } from '@/containers/FavoriteModelAction'
 import { route } from '@/constants/routes'
 import DeleteProvider from '@/containers/dialogs/DeleteProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { Button } from '@/components/ui/button'
-import { CheckCircle2, Loader, Plug, RefreshCw, Search, XCircle } from "lucide-react";
+import { CheckCircle2, Loader, Plug, RefreshCw, Search, Star, XCircle } from "lucide-react";
+import { useFavoriteModel } from '@/hooks/models/useFavoriteModel'
 import { toast } from 'sonner'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { predefinedProviders } from '@/constants/providers'
@@ -32,6 +32,20 @@ const XSS_PATTERN = /<[^>]*>|javascript:/i
 const providerSearchSchema = z.object({
   step: z.string().optional(),
 })
+
+function FavoriteModelAction({ model }: { model: Model }) {
+  const { isFavorite, toggleFavorite } = useFavoriteModel()
+  const isModelFavorite = isFavorite(model.id)
+  return (
+    <Button aria-label="Toggle favorite" variant="ghost" size="icon-xs" onClick={() => toggleFavorite(model)}>
+      {isModelFavorite ? (
+        <Star size={18} className="text-muted-foreground" fill="currentColor" />
+      ) : (
+        <Star size={18} className="text-muted-foreground" />
+      )}
+    </Button>
+  )
+}
 
 function validateSettingValue(
   key: string,
