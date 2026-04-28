@@ -190,7 +190,7 @@ function General() {
     if (selectedNewPath) {
       try {
         await serviceHub.models().stopAllModels()
-        serviceHub.events().emit(SystemEvent.KILL_SIDECAR)
+        serviceHub.events()?.emit(SystemEvent.KILL_SIDECAR)
         await new Promise((resolve) => setTimeout(resolve, 500))
         try {
             // Prevent relocating to root directory (e.g., C:\ or D:\ on Windows, / on Unix)

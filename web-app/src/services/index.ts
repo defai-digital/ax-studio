@@ -39,7 +39,7 @@ import type { ProjectsService } from './projects/types'
 export interface ServiceHub {
   theme(): ThemeService
   window(): WindowService
-  events(): EventsService
+  events(): EventsService | undefined
   hardware(): HardwareService
   app(): AppService
   messages(): MessagesService
@@ -166,7 +166,7 @@ class PlatformServiceHub implements ServiceHub {
     return this.windowService
   }
 
-  events(): EventsService {
+  events(): EventsService | undefined {
     this.ensureInitialized()
     return this.eventsService
   }

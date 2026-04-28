@@ -680,6 +680,15 @@ pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
 
     setup_mcp(app);
     setup_theme_listener(app)?;
+
+    // Explicitly focus the main window on startup.
+    // On macOS 15 with transparent + macOSPrivateApi windows, the WebKit
+    // webview sometimes fails to become the first responder for input events
+    // without an explicit set_focus() call.
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_focus();
+    }
+
     Ok(())
 }
 

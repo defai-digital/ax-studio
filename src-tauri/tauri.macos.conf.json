@@ -21,7 +21,7 @@
         "decorations": true,
         "titleBarStyle": "Overlay",
         "windowEffects": {
-          "effects": ["fullScreenUI", "mica", "tabbed", "blur", "acrylic"],
+          "effects": ["fullScreenUI", "sidebar"],
           "state": "active"
         },
         "dragDropEnabled": false

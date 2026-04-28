@@ -47,17 +47,18 @@ export const useTools = () => {
 
     let unsubscribe = () => {}
     let unmounted = false
-    serviceHub.events().listen(SystemEvent.MCP_UPDATE, setTools).then((unsub) => {
-      if (unmounted) {
-        // Component already unmounted while we were waiting on the async
-        // listen() — clean up immediately so the listener doesn't leak.
-        unsub()
-        return
-      }
-      unsubscribe = unsub
-    }).catch((error) => {
-      console.error('Failed to set up MCP update listener:', error)
-    })
+    const eventsService = serviceHub.events()
+    if (eventsService) {
+      eventsService.listen(SystemEvent.MCP_UPDATE, setTools).then((unsub) => {
+        if (unmounted) {
+          unsub()
+          return
+        }
+        unsubscribe = unsub
+      }).catch((error) => {
+        console.error('Failed to set up MCP update listener:', error)
+      })
+    }
     return () => {
       unmounted = true
       unsubscribe()

@@ -179,7 +179,7 @@ export const useAppUpdater = () => {
       let contentLength = 0
       await serviceHub.models().stopAllModels()
       if (controller.signal.aborted) return
-      serviceHub.events().emit(SystemEvent.KILL_SIDECAR)
+      serviceHub.events()?.emit(SystemEvent.KILL_SIDECAR)
       await new Promise((resolve) => setTimeout(resolve, 1000))
       if (controller.signal.aborted) return
 

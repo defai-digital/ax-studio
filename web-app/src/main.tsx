@@ -24,6 +24,13 @@ if (!rootElement) {
 
 const bootstrap = async () => {
   try {
+    // Ensure the window has input focus — on macOS 15 with transparent
+    // Tauri windows the WebKit view can start without being the first responder.
+    if ('__TAURI__' in window) {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window')
+      getCurrentWindow().setFocus().catch(() => {})
+    }
+
     const [{ routeTree }] = await Promise.all([
       import('./routeTree.gen'),
       import('./i18n'),
