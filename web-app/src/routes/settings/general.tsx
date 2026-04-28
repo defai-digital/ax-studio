@@ -35,9 +35,7 @@ const LANGUAGES = [
   { value: 'fr', label: 'Français' },
   { value: 'zh-CN', label: '简体中文' },
   { value: 'zh-TW', label: '繁體中文' },
-  { value: 'de-DE', label: 'Deutsch' },
   { value: 'ja', label: '日本語' },
-  { value: 'ru', label: 'Русский' },
 ]
 
 function LanguageSwitcher() {
