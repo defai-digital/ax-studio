@@ -3,7 +3,7 @@
  * Pure memos; no effects, no subscriptions.
  */
 import { useMemo } from 'react'
-import { resolveSystemPrompt, getOptimizedModelConfig } from '@/lib/system-prompt'
+import { resolveSystemPrompt, getOptimizedModelConfig } from '@/lib/prompts/system-prompt'
 
 type Input = {
   thread: Thread | undefined

@@ -57,7 +57,7 @@ vi.mock('@/stores/agent-team-store', () => ({
   },
 }))
 
-vi.mock('@/lib/system-prompt', () => ({
+vi.mock('@/lib/prompts/system-prompt', () => ({
   resolveSystemPrompt: () => ({
     resolvedPrompt: 'You are a helpful assistant.',
     source: 'global',

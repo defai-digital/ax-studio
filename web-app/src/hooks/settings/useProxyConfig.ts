@@ -2,19 +2,19 @@ import { create } from 'zustand'
 import { persist, type PersistStorage, type StorageValue } from 'zustand/middleware'
 import { AES, enc } from 'crypto-js'
 import { localStorageKey } from '@/constants/localStorage'
-import { encrypt as cryptoEncrypt, decrypt as cryptoDecrypt } from '@/lib/crypto'
+import { encrypt as cryptoEncrypt, decrypt as cryptoDecrypt } from '@/lib/storage/crypto'
 import {
   safeStorageGetItem,
   safeStorageRemoveItem,
   safeStorageSetItem,
-} from '@/lib/storage'
+} from '@/lib/storage/storage'
 
 // Legacy decrypt — still used to read values written by the previous
 // hardcoded-AES implementation, so existing users don't lose their
-// proxy password on upgrade. New writes go through `@/lib/crypto` which
+// proxy password on upgrade. New writes go through `@/lib/storage/crypto` which
 // uses Web Crypto AES-GCM with a per-install random key.
 // SECURITY NOTE: This key is intentionally hardcoded for backwards-compatible
-// decryption only. All NEW writes use per-install AES-GCM via @/lib/crypto.
+// decryption only. All NEW writes use per-install AES-GCM via @/lib/storage/crypto.
 // Once all users have migrated, this legacy path can be removed.
 const LEGACY_ENCRYPTION_KEY = 'ax-studio-secure-proxy-key'
 

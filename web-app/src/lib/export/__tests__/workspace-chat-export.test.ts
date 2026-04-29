@@ -7,7 +7,7 @@ import {
   workspaceChatsToCsv,
   workspaceChatsToJson,
   workspaceChatsToOpenAIJsonl,
-} from '@/lib/workspace-chat-export'
+} from '@/lib/export/workspace-chat-export'
 
 const workspace: ThreadFolder = {
   id: 'workspace-1',

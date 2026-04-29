@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getDateGroup, groupByDate, type DateGroup } from '../date-group'
+import { getDateGroup, groupByDate, type DateGroup } from '@/lib/utils/date-group'
 
 // Helper: create a Date that is `daysAgo` days before now, at local midnight
 function daysAgo(n: number): Date {

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { createSafeJSONStorage } from '@/lib/storage'
+import { createSafeJSONStorage } from '@/lib/storage/storage'
 
 export type DataMode = 'local-only' | 'hybrid' | 'cloud'
 

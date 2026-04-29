@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
 import { useTheme } from '@/hooks/ui/useTheme'
-import { createSafeJSONStorage } from '@/lib/storage'
+import { createSafeJSONStorage } from '@/lib/storage/storage'
 
 export type FontSize = '14px' | '15px' | '16px' | '18px' | '20px'
 

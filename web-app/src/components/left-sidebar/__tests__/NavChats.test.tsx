@@ -63,7 +63,7 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
   }),
 }))
 
-vi.mock('@/lib/date-group', () => ({
+vi.mock('@/lib/utils/date-group', () => ({
   groupByDate: vi.fn(
     (items: Thread[], _getTs: unknown, pinnedSet: Set<string>, _getId: unknown) => {
       const nonPinned = items.filter((t: Thread) => !pinnedSet.has(t.id))
@@ -93,7 +93,7 @@ vi.mock('@/containers/dialogs', () => ({
   DeleteThreadDialog: () => null,
 }))
 
-vi.mock('@/lib/thread-export', () => ({
+vi.mock('@/lib/export/thread-export', () => ({
   exportThread: vi.fn(),
   exportAllThreads: vi.fn(),
 }))

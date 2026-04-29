@@ -2,7 +2,7 @@ import { localStorageKey } from '@/constants/localStorage'
 import {
   safeStorageGetItem,
   safeStorageSetItem,
-} from '@/lib/storage'
+} from '@/lib/storage/storage'
 
 // Validation helper for stored settings structure
 const isValidStoredSettings = (parsed: unknown): parsed is { state: { currentLanguage: string } } => {

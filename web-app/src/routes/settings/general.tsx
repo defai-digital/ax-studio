@@ -27,7 +27,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { isRootDir } from '@/lib/utils/path'
-import { fallbackDefaultPrompt } from '@/lib/system-prompt'
+import { fallbackDefaultPrompt } from '@/lib/prompts/system-prompt'
 const TOKEN_VALIDATION_TIMEOUT_MS = 10_000
 
 const LANGUAGES = [

@@ -7,7 +7,7 @@
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { localStorageKey } from '@/constants/localStorage'
 import { Button } from '@/components/ui/button'
-import { safeStorageSetItem } from '@/lib/storage'
+import { safeStorageSetItem } from '@/lib/storage/storage'
 import HeaderPage from './HeaderPage'
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'

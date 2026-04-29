@@ -23,7 +23,7 @@ import {
   safeStorageGetItem,
   safeStorageRemoveItem,
   safeStorageSetItem,
-} from '@/lib/storage'
+} from '@/lib/storage/storage'
 
 type Input = {
   onSubmit?: (text: string) => void

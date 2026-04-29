@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
 import { ANTHROPIC_DEFAULT_HEADERS } from '@/constants/providers'
 import { mergeProviders } from '@/lib/providers/model-provider-merge'
-import { createSafeJSONStorage } from '@/lib/storage'
+import { createSafeJSONStorage } from '@/lib/storage/storage'
 
 function syncSelectedModel(
   providers: ModelProvider[],

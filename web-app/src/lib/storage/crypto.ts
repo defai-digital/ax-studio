@@ -1,4 +1,4 @@
-import { safeStorageGetItem, safeStorageSetItem } from '@/lib/storage'
+import { safeStorageGetItem, safeStorageSetItem } from '@/lib/storage/storage'
 
 const KEY_LENGTH_BYTES = 32
 const IV_LENGTH_BYTES = 12

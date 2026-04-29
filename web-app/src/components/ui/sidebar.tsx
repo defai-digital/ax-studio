@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/sidebar-context";
 import { useIsMobile } from "@/hooks/ui/use-mobile";
 import { useSidebarResize } from "@/hooks/ui/use-sidebar-resize";
-import { mergeButtonRefs } from "@/lib/merge-button-refs";
+import { mergeButtonRefs } from "@/lib/utils/merge-button-refs";
 import { cn } from "@/lib/utils";
 
 const SIDEBAR_COOKIE_NAME = "sidebar:state";

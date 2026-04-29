@@ -104,7 +104,7 @@ vi.mock('@/components/ui/button', () => ({
   ),
 }))
 
-vi.mock('@/lib/thread-export', () => ({
+vi.mock('@/lib/export/thread-export', () => ({
   exportThread: vi.fn(),
 }))
 

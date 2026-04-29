@@ -9,7 +9,7 @@ import {
   workspaceChatsToCsv,
   workspaceChatsToAlpacaJson,
   workspaceChatsToOpenAIJsonl,
-} from '@/lib/workspace-chat-export'
+} from '@/lib/export/workspace-chat-export'
 
 const EXPORT_CONFIG: Record<
   WorkspaceChatExportFormat,

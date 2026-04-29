@@ -14,8 +14,8 @@ import {
   useState,
 } from "react";
 import { createHighlighter, type BundledLanguage, type Highlighter, type ShikiTransformer } from "shiki";
-import { axStudioLightTheme } from "@/lib/shiki-theme-light";
-import { axStudioDarkTheme } from "@/lib/shiki-theme-dark";
+import { axStudioLightTheme } from "@/lib/themes/shiki-theme-light";
+import { axStudioDarkTheme } from "@/lib/themes/shiki-theme-dark";
 
 // --- Singleton highlighter (shared across all CodeBlock instances) ---
 let _highlighterPromise: Promise<Highlighter> | null = null;

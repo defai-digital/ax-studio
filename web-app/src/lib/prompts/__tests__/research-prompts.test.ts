@@ -4,7 +4,7 @@ import {
   SUMMARISE_PROMPT,
   DRILL_DOWN_PROMPT,
   WRITER_PROMPT,
-} from '../research-prompts'
+} from '@/lib/prompts/research-prompts'
 
 describe('PLANNER_PROMPT', () => {
   it('includes the query in the prompt', () => {

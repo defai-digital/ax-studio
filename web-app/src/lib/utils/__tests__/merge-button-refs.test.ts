@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { mergeButtonRefs } from '../merge-button-refs'
+import { mergeButtonRefs } from '@/lib/utils/merge-button-refs'
 
 describe('mergeButtonRefs', () => {
   it('returns a function', () => {

@@ -29,7 +29,7 @@ import {
   CODE_EXECUTION_INSTRUCTION,
   ARTIFACT_FORMAT_INSTRUCTION,
   LOCAL_KNOWLEDGE_INSTRUCTION,
-} from '@/lib/system-prompt'
+} from '@/lib/prompts/system-prompt'
 import { ResearchPanel } from '@/components/research/ResearchPanel'
 import { MainThreadPane } from '@/containers/threads/MainThreadPane'
 

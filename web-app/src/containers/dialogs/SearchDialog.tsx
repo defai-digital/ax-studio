@@ -30,7 +30,7 @@ import {
   safeStorageGetItem,
   safeStorageRemoveItem,
   safeStorageSetItem,
-} from '@/lib/storage'
+} from '@/lib/storage/storage'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import { TEMPORARY_CHAT_ID } from '@/constants/chat'
 

@@ -5,7 +5,7 @@ vi.mock('ai', () => ({ generateText: vi.fn(), streamText: vi.fn() }))
 vi.mock('../useResearchPanel', () => ({ useResearchPanel: vi.fn() }))
 vi.mock('@/hooks/models/useModelProvider', () => ({ useModelProvider: { getState: vi.fn() } }))
 vi.mock('@/lib/model-factory', () => ({ ModelFactory: { createModel: vi.fn() } }))
-vi.mock('@/lib/research-prompts', () => ({
+vi.mock('@/lib/prompts/research-prompts', () => ({
   PLANNER_PROMPT: vi.fn(),
   SUMMARISE_PROMPT: vi.fn(),
   DRILL_DOWN_PROMPT: vi.fn(),

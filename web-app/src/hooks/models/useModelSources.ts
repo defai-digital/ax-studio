@@ -4,7 +4,7 @@ import { persist } from 'zustand/middleware'
 import { getServiceHub } from '@/hooks/useServiceHub'
 import type { CatalogModel } from '@/services/models/types'
 import { sanitizeModelId } from '@/lib/utils'
-import { createSafeJSONStorage } from '@/lib/storage'
+import { createSafeJSONStorage } from '@/lib/storage/storage'
 
 // Zustand store for model sources
 type ModelSourcesState = {

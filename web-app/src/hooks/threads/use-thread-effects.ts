@@ -12,7 +12,7 @@ import { defaultAssistant } from '@/hooks/chat/useAssistant'
 import {
   safeStorageGetItem,
   safeStorageRemoveItem,
-} from '@/lib/storage'
+} from '@/lib/storage/storage'
 
 export type ThreadEffectsInput = {
   threadId: string

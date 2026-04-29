@@ -36,7 +36,7 @@ import {
   ARTIFACT_FORMAT_INSTRUCTION,
   LOCAL_KNOWLEDGE_INSTRUCTION,
   CITATION_FORMAT_INSTRUCTION,
-} from '@/lib/system-prompt'
+} from '@/lib/prompts/system-prompt'
 import type { UIMessage } from '@ai-sdk/react'
 import type { ThreadMessage } from '@ax-studio/core'
 import { useThreadMemory } from '@/hooks/threads/use-thread-memory'

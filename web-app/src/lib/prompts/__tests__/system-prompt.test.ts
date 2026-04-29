@@ -4,7 +4,7 @@ import {
   fallbackDefaultPrompt,
   getOptimizedModelConfig,
   resolveSystemPrompt,
-} from '@/lib/system-prompt'
+} from '@/lib/prompts/system-prompt'
 
 describe('resolveSystemPrompt', () => {
   it('uses thread prompt over project/global/fallback', () => {

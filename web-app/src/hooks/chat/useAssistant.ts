@@ -2,7 +2,7 @@ import { getServiceHub } from '@/hooks/useServiceHub'
 import { Assistant as CoreAssistant } from '@ax-studio/core'
 import { create } from 'zustand'
 import { localStorageKey } from '@/constants/localStorage'
-import { safeStorageGetItem, safeStorageSetItem } from '@/lib/storage'
+import { safeStorageGetItem, safeStorageSetItem } from '@/lib/storage/storage'
 
 interface AssistantState {
   assistants: Assistant[]

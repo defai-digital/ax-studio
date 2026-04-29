@@ -7,7 +7,7 @@ import {
   safeStorageGetItem,
   safeStorageRemoveItem,
   safeStorageSetItem,
-} from '@/lib/storage'
+} from '@/lib/storage/storage'
 
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import SetupScreen from '@/containers/SetupScreen'
@@ -35,7 +35,7 @@ const homeSearchSchema = z.object({
 import { useThreads } from '@/hooks/threads/useThreads'
 import DropdownModelProvider from '@/containers/DropdownModelProvider'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
-import { resolveSystemPrompt } from '@/lib/system-prompt'
+import { resolveSystemPrompt } from '@/lib/prompts/system-prompt'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import {

@@ -11,7 +11,7 @@ import {
 import { PromptProgress } from '@/components/PromptProgress'
 import { Button } from '@/components/ui/button'
 import { OUT_OF_CONTEXT_SIZE } from '@/lib/utils/error'
-import { safeStorageGetItem, safeStorageSetItem } from '@/lib/storage'
+import { safeStorageGetItem, safeStorageSetItem } from '@/lib/storage/storage'
 import { motion, AnimatePresence } from 'motion/react'
 import { AlertCircle, GitBranch, X } from "lucide-react";
 

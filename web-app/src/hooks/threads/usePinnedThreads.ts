@@ -1,5 +1,5 @@
 import { useSyncExternalStore, useCallback, useMemo } from 'react'
-import { safeStorageGetItem, safeStorageSetItem } from '@/lib/storage'
+import { safeStorageGetItem, safeStorageSetItem } from '@/lib/storage/storage'
 
 const STORAGE_KEY = 'ax-pinned-threads'
 

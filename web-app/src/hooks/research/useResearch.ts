@@ -11,7 +11,7 @@ import {
   SUMMARISE_PROMPT,
   DRILL_DOWN_PROMPT,
   WRITER_PROMPT,
-} from '@/lib/research-prompts'
+} from '@/lib/prompts/research-prompts'
 import { newUserThreadContent, newAssistantThreadContent } from '@/lib/completion'
 import {
   exaSearch,

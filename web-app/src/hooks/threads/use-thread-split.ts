@@ -5,7 +5,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useThreads } from '@/hooks/threads/useThreads'
 import { SESSION_STORAGE_KEY } from '@/constants/chat'
-import { safeStorageGetItem, safeStorageRemoveItem } from '@/lib/storage'
+import { safeStorageGetItem, safeStorageRemoveItem } from '@/lib/storage/storage'
 
 export type ThreadSplitResult = {
   splitDirection: 'left' | 'right' | null

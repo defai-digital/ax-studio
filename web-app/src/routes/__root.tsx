@@ -22,7 +22,7 @@ import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { LeftSidebar } from '@/components/left-sidebar'
 import { WindowControls } from '@/components/WindowControls'
 import { motion } from 'motion/react'
-import { pageVariants, pageTransition } from '@/lib/animations'
+import { pageVariants, pageTransition } from '@/lib/utils/animations'
 import { hideInitialLoader } from '@/lib/bootstrap/app-startup'
 
 export const Route = createRootRoute({
