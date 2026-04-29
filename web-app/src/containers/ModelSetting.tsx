@@ -8,7 +8,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
-import { DynamicControllerSetting } from '@/containers/dynamicControllerSetting'
+import { DynamicControllerSetting } from '@/containers/DynamicControllerSetting'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { cn, getModelDisplayName } from '@/lib/utils'

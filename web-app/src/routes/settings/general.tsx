@@ -12,17 +12,63 @@ import { useEffect, useState, useCallback } from 'react'
 import ChangeDataFolderLocation from '@/containers/dialogs/thread/ChangeDataFolderLocation'
 import { FactoryResetDialog } from '@/containers/dialogs'
 import { useServiceHub } from '@/hooks/useServiceHub'
-import { CheckCheck, Copy, ExternalLink, Folder, Github, MessageCircle, ScrollText, Settings } from "lucide-react";
+import { CheckCheck, Copy, ChevronsUpDown, ExternalLink, Folder, Github, MessageCircle, ScrollText, Settings } from "lucide-react";
 import { toast } from 'sonner'
-import { isDev } from '@/lib/utils'
+import { isDev, cn } from '@/lib/utils'
 import { SystemEvent } from '@/types/events'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useHardware } from '@/hooks/settings/useHardware'
-import LanguageSwitcher from '@/containers/LanguageSwitcher'
+import { useAppTranslation } from '@/i18n'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { isRootDir } from '@/lib/utils/path'
 import { fallbackDefaultPrompt } from '@/lib/system-prompt'
 const TOKEN_VALIDATION_TIMEOUT_MS = 10_000
+
+const LANGUAGES = [
+  { value: 'en', label: 'English' },
+  { value: 'fr', label: 'Français' },
+  { value: 'zh-CN', label: '简体中文' },
+  { value: 'zh-TW', label: '繁體中文' },
+  { value: 'de-DE', label: 'Deutsch' },
+  { value: 'ja', label: '日本語' },
+  { value: 'ru', label: 'Русский' },
+]
+
+function LanguageSwitcher() {
+  const { i18n, t } = useAppTranslation()
+  const { setCurrentLanguage, currentLanguage } = useGeneralSetting()
+  const changeLanguage = (lng: string) => {
+    i18n.changeLanguage(lng)
+    setCurrentLanguage(lng as Language)
+  }
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="w-full justify-between">
+          {LANGUAGES.find((lang) => lang.value === currentLanguage)?.label || t('common:english')}
+          <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground ml-2" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-40">
+        {LANGUAGES.map((lang) => (
+          <DropdownMenuItem
+            key={lang.value}
+            className={cn('cursor-pointer my-0.5', currentLanguage === lang.value && 'bg-secondary-foreground/8')}
+            onClick={() => changeLanguage(lang.value)}
+          >
+            {lang.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
 
 export const Route = createFileRoute(route.settings.general)({
   component: General,
