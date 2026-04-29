@@ -7,18 +7,12 @@ import { Button } from '@/components/ui/button'
 import { Card, CardItem } from '@/components/common/Card'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
-import { useAppUpdater } from '@/hooks/updater/useAppUpdater'
-import { useEffect, useState, useCallback } from 'react'
 import ChangeDataFolderLocation from '@/containers/dialogs/thread/ChangeDataFolderLocation'
 import { FactoryResetDialog } from '@/containers/dialogs'
-import { useServiceHub } from '@/hooks/useServiceHub'
-import { CheckCheck, Copy, ChevronsUpDown, ExternalLink, Folder, Github, MessageCircle, ScrollText, Settings } from "lucide-react";
-import { toast } from 'sonner'
-import { isDev, cn } from '@/lib/utils'
-import { SystemEvent } from '@/types/events'
+import { CheckCheck, Copy, ChevronsUpDown, ExternalLink, Folder, Github, MessageCircle, ScrollText, Settings } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { useHardware } from '@/hooks/settings/useHardware'
 import { useAppTranslation } from '@/i18n'
 import {
   DropdownMenu,
@@ -26,9 +20,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { isRootDir } from '@/lib/utils/path'
 import { fallbackDefaultPrompt } from '@/lib/prompts/system-prompt'
-const TOKEN_VALIDATION_TIMEOUT_MS = 10_000
+import { useGeneralSettingsPage } from '@/hooks/settings/useGeneralSettingsPage'
 
 const LANGUAGES = [
   { value: 'en', label: 'English' },
@@ -86,155 +79,29 @@ function General() {
     applyMode,
     setApplyMode,
   } = useGeneralSetting()
+
   const safeGlobalDefaultPrompt = globalDefaultPrompt ?? ''
-  const serviceHub = useServiceHub()
 
-  const openFileTitle = (): string => {
-    if (IS_MACOS) {
-      return t('settings:general.showInFinder')
-    } else if (IS_WINDOWS) {
-      return t('settings:general.showInFileExplorer')
-    } else {
-      return t('settings:general.openContainingFolder')
-    }
-  }
-  const { checkForUpdate } = useAppUpdater()
-  const { pausePolling } = useHardware()
-  const [appDataFolder, setAppDataFolder] = useState<string | undefined>()
-  const [isCopied, setIsCopied] = useState(false)
-  const [selectedNewPath, setSelectedNewPath] = useState<string | null>(null)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
-  const [isValidatingToken, setIsValidatingToken] = useState(false)
-
-  useEffect(() => {
-    const fetchDataFolder = async () => {
-      try {
-        const path = await serviceHub.app().getAppDataFolder()
-        setAppDataFolder(path)
-      } catch (error) {
-        console.error('Failed to read app data folder:', error)
-        toast.error(
-          t('settings:general.failedToLoadDataFolder', {
-            defaultValue: 'Failed to load app data folder',
-          })
-        )
-      }
-    }
-
-    fetchDataFolder()
-  }, [serviceHub, t])
-
-  const [isResetting, setIsResetting] = useState(false)
-
-  const resetApp = async () => {
-    // Prevent resetting if data folder is root directory
-    if (isRootDir(appDataFolder ?? '/')) {
-      toast.error(t('settings:general.couldNotResetRootDirectory'))
-      return
-    }
-    setIsResetting(true)
-    pausePolling()
-    try {
-      await serviceHub.app().factoryReset()
-    } catch (error) {
-      console.error('Factory reset failed:', error)
-      toast.error(t('settings:general.factoryResetFailed', { defaultValue: 'Factory reset failed' }))
-    } finally {
-      setIsResetting(false)
-    }
-  }
-
-  const handleOpenLogs = async () => {
-    try {
-      await serviceHub.window().openLogsWindow()
-    } catch (error) {
-      console.error('Failed to open logs window:', error)
-    }
-  }
-
-  const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text)
-      setIsCopied(true)
-      setTimeout(() => setIsCopied(false), 2000) // Reset after 2 seconds
-    } catch (error) {
-      console.error('Failed to copy to clipboard:', error)
-    }
-  }
-
-  const handleDataFolderChange = async () => {
-    let selectedPath: string | string[] | null = null
-    try {
-      selectedPath = await serviceHub.dialog().open({
-        multiple: false,
-        directory: true,
-        defaultPath: appDataFolder,
-      })
-    } catch (error) {
-      console.error('Failed to open data folder picker:', error)
-      toast.error(t('settings:general.failedToRelocateDataFolderDesc'))
-      return
-    }
-
-    if (selectedPath === appDataFolder) return
-    if (selectedPath !== null) {
-      setSelectedNewPath(selectedPath as string)
-      setIsDialogOpen(true)
-    }
-  }
-
-  const confirmDataFolderChange = async () => {
-    if (selectedNewPath) {
-      try {
-        await serviceHub.models().stopAllModels()
-        serviceHub.events().emit(SystemEvent.KILL_SIDECAR)
-        await new Promise((resolve) => setTimeout(resolve, 500))
-        try {
-            // Prevent relocating to root directory (e.g., C:\ or D:\ on Windows, / on Unix)
-            if (isRootDir(selectedNewPath))
-              throw new Error(t('settings:general.couldNotRelocateToRoot'))
-            await serviceHub.app().relocateAppDataFolder(selectedNewPath)
-            setAppDataFolder(selectedNewPath)
-            // Only relaunch if relocation was successful
-            window.core?.api?.relaunch()
-            setSelectedNewPath(null)
-            setIsDialogOpen(false)
-          } catch (error) {
-            console.error(error)
-            toast.error(
-              error instanceof Error
-                ? error.message
-                : t('settings:general.failedToRelocateDataFolder')
-            )
-          }
-      } catch (error) {
-        console.error('Failed to relocate data folder:', error)
-        // Revert the data folder path on error
-        const originalPath = await serviceHub.app().getAppDataFolder()
-        setAppDataFolder(originalPath)
-
-        toast.error(t('settings:general.failedToRelocateDataFolderDesc'))
-      }
-    }
-  }
-
-  const handleCheckForUpdate = useCallback(async () => {
-    setIsCheckingUpdate(true)
-    try {
-      if (isDev()) return toast.info(t('settings:general.devVersion'))
-      const update = await checkForUpdate(true)
-      if (!update) {
-        toast.info(t('settings:general.noUpdateAvailable'))
-      }
-      // If update is available, the AppUpdater dialog will automatically show
-    } catch (error) {
-      console.error('Failed to check for updates:', error)
-      toast.error(t('settings:general.updateError'))
-    } finally {
-      setIsCheckingUpdate(false)
-    }
-  }, [t, checkForUpdate])
+  const {
+    appDataFolder,
+    isCopied,
+    selectedNewPath,
+    isDialogOpen,
+    setIsDialogOpen,
+    setSelectedNewPath,
+    isCheckingUpdate,
+    isValidatingToken,
+    isResetting,
+    openFileTitle,
+    copyToClipboard,
+    handleDataFolderChange,
+    confirmDataFolderChange,
+    handleCheckForUpdate,
+    resetApp,
+    validateHuggingFaceToken,
+    handleOpenLogs,
+    revealLogsFolder,
+  } = useGeneralSettingsPage()
 
   return (
     <div className="flex flex-col h-svh w-full">
@@ -365,17 +232,13 @@ function General() {
               {/* Data folder - Desktop only */}
               <Card title={t('common:dataFolder')}>
                 <CardItem
-                  title={t('settings:dataFolder.appData', {
-                    ns: 'settings',
-                  })}
+                  title={t('settings:dataFolder.appData', { ns: 'settings' })}
                   align="start"
                   className="items-start flex-row gap-2"
                   description={
                     <>
                       <span>
-                        {t('settings:dataFolder.appDataDesc', {
-                          ns: 'settings',
-                        })}
+                        {t('settings:dataFolder.appDataDesc', { ns: 'settings' })}
                         &nbsp;
                       </span>
                       <div className="flex items-center gap-2 mt-1 ">
@@ -388,31 +251,17 @@ function General() {
                           </span>
                         </div>
                         <button
-                          onClick={() =>
-                            appDataFolder && copyToClipboard(appDataFolder)
-                          }
+                          onClick={() => appDataFolder && copyToClipboard(appDataFolder)}
                           className="cursor-pointer flex items-center justify-center rounded-sm bg-secondary transition-all duration-200 ease-in-out p-1"
-                          title={
-                            isCopied
-                              ? t('settings:general.copied')
-                              : t('settings:general.copyPath')
-                          }
+                          title={isCopied ? t('settings:general.copied') : t('settings:general.copyPath')}
                         >
                           {isCopied ? (
                             <div className="flex items-center gap-1">
-                              <CheckCheck
-                                size={14}
-                                className="text-green-500 dark:text-green-600"
-                              />
-                              <span className="text-xs leading-0">
-                                {t('settings:general.copied')}
-                              </span>
+                              <CheckCheck size={14} className="text-green-500 dark:text-green-600" />
+                              <span className="text-xs leading-0">{t('settings:general.copied')}</span>
                             </div>
                           ) : (
-                            <Copy
-                              size={14}
-                              className="text-muted-foreground"
-                            />
+                            <Copy size={14} className="text-muted-foreground" />
                           )}
                         </button>
                       </div>
@@ -426,10 +275,7 @@ function General() {
                         title={t('settings:dataFolder.appData')}
                         onClick={handleDataFolderChange}
                       >
-                        <Folder
-                          size={12}
-                          className="text-muted-foreground"
-                        />
+                        <Folder size={12} className="text-muted-foreground" />
                         <span>{t('settings:general.changeLocation')}</span>
                       </Button>
                       {selectedNewPath && (
@@ -440,9 +286,7 @@ function General() {
                           open={isDialogOpen}
                           onOpenChange={(open) => {
                             setIsDialogOpen(open)
-                            if (!open) {
-                              setSelectedNewPath(null)
-                            }
+                            if (!open) setSelectedNewPath(null)
                           }}
                         >
                           <div />
@@ -452,9 +296,7 @@ function General() {
                   }
                 />
                 <CardItem
-                  title={t('settings:dataFolder.appLogs', {
-                    ns: 'settings',
-                  })}
+                  title={t('settings:dataFolder.appLogs', { ns: 'settings' })}
                   description={t('settings:dataFolder.appLogsDesc')}
                   className="items-start flex-row gap-y-2"
                   actions={
@@ -463,27 +305,10 @@ function General() {
                         variant="outline"
                         size="sm"
                         className="p-0"
-                        onClick={async () => {
-                          if (appDataFolder) {
-                            try {
-                              const logsPath = `${appDataFolder}/logs`
-                              await serviceHub
-                                .opener()
-                                .revealItemInDir(logsPath)
-                            } catch (error) {
-                              console.error(
-                                'Failed to reveal logs folder:',
-                                error
-                              )
-                            }
-                          }
-                        }}
+                        onClick={revealLogsFolder}
                         title={t('settings:general.revealLogs')}
                       >
-                        <Folder
-                          size={12}
-                          className="text-muted-foreground"
-                        />
+                        <Folder size={12} className="text-muted-foreground" />
                         <span>{openFileTitle()}</span>
                       </Button>
                       <Button
@@ -503,16 +328,14 @@ function General() {
               {/* Advanced - Desktop only */}
               <Card title="Advanced">
                 <CardItem
-                  title={t('settings:others.resetFactory', {
-                    ns: 'settings',
-                  })}
-                  description={t('settings:others.resetFactoryDesc', {
-                    ns: 'settings',
-                  })}
+                  title={t('settings:others.resetFactory', { ns: 'settings' })}
+                  description={t('settings:others.resetFactoryDesc', { ns: 'settings' })}
                   actions={
                     <FactoryResetDialog onReset={resetApp}>
                       <Button variant="destructive" size="sm" disabled={isResetting}>
-                        {isResetting ? t('common:resetting', { defaultValue: 'Resetting...' }) : t('common:reset')}
+                        {isResetting
+                          ? t('common:resetting', { defaultValue: 'Resetting...' })
+                          : t('common:reset')}
                       </Button>
                     </FactoryResetDialog>
                   }
@@ -522,12 +345,8 @@ function General() {
               {/* Other */}
               <Card title={t('common:others')}>
                 <CardItem
-                  title={t('settings:others.spellCheck', {
-                    ns: 'settings',
-                  })}
-                  description={t('settings:others.spellCheckDesc', {
-                    ns: 'settings',
-                  })}
+                  title={t('settings:others.spellCheck', { ns: 'settings' })}
+                  description={t('settings:others.spellCheckDesc', { ns: 'settings' })}
                   actions={
                     <Switch
                       checked={spellCheckChatInput}
@@ -536,12 +355,8 @@ function General() {
                   }
                 />
                 <CardItem
-                  title={t('settings:general.huggingfaceToken', {
-                    ns: 'settings',
-                  })}
-                  description={t('settings:general.huggingfaceTokenDesc', {
-                    ns: 'settings',
-                  })}
+                  title={t('settings:general.huggingfaceToken', { ns: 'settings' })}
+                  description={t('settings:general.huggingfaceTokenDesc', { ns: 'settings' })}
                   actions={
                     <div className="flex items-center gap-2">
                       <Input
@@ -555,59 +370,7 @@ function General() {
                         variant="outline"
                         size="sm"
                         disabled={isValidatingToken}
-                        onClick={async () => {
-                          const token = (huggingfaceToken || '').trim()
-                          if (!token) {
-                            toast.error(
-                              'Please enter a Hugging Face token to validate'
-                            )
-                            return
-                          }
-                          setIsValidatingToken(true)
-                          const controller = new AbortController()
-                          const timeoutId = setTimeout(
-                            () => controller.abort(),
-                            TOKEN_VALIDATION_TIMEOUT_MS
-                          )
-                          try {
-                            const resp = await fetch(
-                              'https://huggingface.co/api/whoami-v2',
-                              {
-                                headers: { Authorization: `Bearer ${token}` },
-                                signal: controller.signal,
-                              }
-                            )
-                            if (resp.ok) {
-                              const data = await resp.json()
-                              toast.success('Token is valid', {
-                                description: data?.name
-                                  ? `Signed in as ${data.name}`
-                                  : 'Your Hugging Face token is valid.',
-                              })
-                            } else {
-                              toast.error('Token invalid', {
-                                description:
-                                  'The provided Hugging Face token is invalid. Please check your token and try again.',
-                              })
-                            }
-                          } catch (e) {
-                            const name = (e as { name?: string })?.name
-                            if (name === 'AbortError') {
-                              toast.error('Validation timed out', {
-                                description:
-                                  'The validation request timed out. Please check your network connection and try again.',
-                              })
-                            } else {
-                              toast.error('Validation failed', {
-                                description:
-                                  'A network error occurred while validating the token. Please check your internet connection.',
-                              })
-                            }
-                          } finally {
-                            clearTimeout(timeoutId)
-                            setIsValidatingToken(false)
-                          }
-                        }}
+                        onClick={validateHuggingFaceToken}
                       >
                         Verify
                       </Button>
@@ -622,11 +385,7 @@ function General() {
                   title={t('settings:general.documentation')}
                   description={t('settings:general.documentationDesc')}
                   actions={
-                    <a
-                      href="https://axstudio.ai/docs"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
+                    <a href="https://axstudio.ai/docs" target="_blank" rel="noopener noreferrer">
                       <div className="flex items-center gap-1">
                         <span>{t('settings:general.viewDocs')}</span>
                         <ExternalLink size={14} />
@@ -663,10 +422,7 @@ function General() {
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      <Github
-                        size={18}
-                        className="text-muted-foreground"
-                      />
+                      <Github size={18} className="text-muted-foreground" />
                     </a>
                   }
                 />
@@ -679,10 +435,7 @@ function General() {
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      <MessageCircle
-                        size={18}
-                        className="text-muted-foreground"
-                      />
+                      <MessageCircle size={18} className="text-muted-foreground" />
                     </a>
                   }
                 />
@@ -694,10 +447,7 @@ function General() {
                   title={t('settings:general.reportAnIssue')}
                   description={t('settings:general.reportAnIssueDesc')}
                   actions={
-                    <a
-                      href="https://github.com/ax-studio/ax-studio/issues/new"
-                      target="_blank"
-                    >
+                    <a href="https://github.com/ax-studio/ax-studio/issues/new" target="_blank">
                       <div className="flex items-center gap-1">
                         <span>{t('settings:general.reportIssue')}</span>
                         <ExternalLink size={14} />
@@ -714,9 +464,7 @@ function General() {
                   description={
                     <div className="text-muted-foreground -mt-2">
                       <p>{t('settings:general.creditsDesc1')}</p>
-                      <p className="mt-2">
-                        {t('settings:general.creditsDesc2')}
-                      </p>
+                      <p className="mt-2">{t('settings:general.creditsDesc2')}</p>
                     </div>
                   }
                 />
