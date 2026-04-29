@@ -1294,7 +1294,6 @@ __metadata:
     eslint-plugin-react-hooks: "npm:5.2.0"
     eslint-plugin-react-refresh: "npm:0.4.20"
     fuse.js: "npm:7.1.0"
-    fzf: "npm:0.5.2"
     globals: "npm:16.0.0"
     jsdom: "npm:26.1.0"
     katex: "npm:0.16.22"
@@ -1313,7 +1312,6 @@ __metadata:
     tailwind-merge: "npm:3.3.1"
     tailwindcss: "npm:4.1.17"
     token.js: "npm:token.js-fork@0.7.31"
-    tw-animate-css: "npm:1.2.8"
     typescript: "npm:5.9.2"
     typescript-eslint: "npm:8.31.0"
     ulidx: "npm:2.4.1"
@@ -10123,13 +10121,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"fzf@npm:0.5.2":
-  version: 0.5.2
-  resolution: "fzf@npm:0.5.2"
-  checksum: 10c0/5b1f945b289855891c4e3cb03db35381f8d85464dceb15b6d32f0fc74e43d7d2b9a13554cf78a86760ba762de39134d40644ccb54e60668a4bc5b15c4765d36e
-  languageName: node
-  linkType: hard
-
 "gaxios@npm:^6.0.0, gaxios@npm:^6.1.1":
   version: 6.7.1
   resolution: "gaxios@npm:6.7.1"
@@ -15547,13 +15538,6 @@ __metadata:
   version: 0.0.1
   resolution: "tty-browserify@npm:0.0.1"
   checksum: 10c0/5e34883388eb5f556234dae75b08e069b9e62de12bd6d87687f7817f5569430a6dfef550b51dbc961715ae0cd0eb5a059e6e3fc34dc127ea164aa0f9b5bb033d
-  languageName: node
-  linkType: hard
-
-"tw-animate-css@npm:1.2.8":
-  version: 1.2.8
-  resolution: "tw-animate-css@npm:1.2.8"
-  checksum: 10c0/395b0a10e6f9a0e3522e5c065d20af20bdf1eddebc6502dbde7ffd4123117c8015ebb91c4e18887282b44e4f5c3c8a9dc087802ee44569ef81e6e1e6d0fabfdb
   languageName: node
   linkType: hard
 

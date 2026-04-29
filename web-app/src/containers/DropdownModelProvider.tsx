@@ -6,13 +6,13 @@ import {
 } from '@/components/ui/popover'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { cn, getProviderTitle, getModelDisplayName, getProviderColor } from '@/lib/utils'
-import { highlightFzfMatch } from '@/lib/utils/highlight'
+import { highlightMatch } from '@/lib/utils/highlight'
 import Capabilities from '@/components/common/Capabilities'
 import { useNavigate } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import { useThreads } from '@/hooks/threads/useThreads'
 import { ModelSetting } from '@/containers/ModelSetting'
-import { Fzf } from 'fzf'
+import Fuse, { type FuseResult } from 'fuse.js'
 import { localStorageKey } from '@/constants/localStorage'
 import { safeStorageSetItem } from '@/lib/storage'
 import { useTranslation } from '@/i18n/react-i18next-compat'
@@ -440,11 +440,12 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
     return items
   }, [providers])
 
-  // Create Fzf instance for fuzzy search
-  const fzfInstance = useMemo(() => {
-    return new Fzf(searchableItems, {
-      selector: (item) =>
-        `${getModelDisplayName(item.model)} ${item.model.id}`.toLowerCase(),
+  // Create Fuse instance for fuzzy search
+  const fuseInstance = useMemo(() => {
+    return new Fuse(searchableItems, {
+      keys: ['searchStr'],
+      threshold: 0.35,
+      includeMatches: true,
     })
   }, [searchableItems])
 
@@ -457,27 +458,24 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
   const filteredItems = useMemo(() => {
     if (!searchValue) return searchableItems
 
-    const results = fzfInstance.find(searchValue.toLowerCase())
+    const results = fuseInstance.search(searchValue.toLowerCase())
     // Cap results to prevent excessive DOM work on broad queries
     const capped = results.length > MAX_SEARCH_RESULTS
       ? results.slice(0, MAX_SEARCH_RESULTS)
       : results
 
-    return capped.map((result) => {
+    return capped.map((result: FuseResult<SearchableModel>) => {
       const item = result.item
-      const positions = Array.from(result.positions) || []
-      const highlightedId = highlightFzfMatch(
-        item.model.id,
-        positions,
-        'text-accent'
-      )
+      const idMatch = result.matches?.find((m) => m.key === 'searchStr')
+      const indices = (idMatch?.indices ?? []) as [number, number][]
+      const highlightedId = highlightMatch(item.model.id, indices, 'text-accent')
 
       return {
         ...item,
         highlightedId,
       }
     })
-  }, [searchableItems, searchValue, fzfInstance])
+  }, [searchableItems, searchValue, fuseInstance])
 
   // Group filtered items by provider, excluding favorites when not searching
   const groupedItems = useMemo(() => {

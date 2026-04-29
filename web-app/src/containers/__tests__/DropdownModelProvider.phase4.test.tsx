@@ -116,7 +116,7 @@ vi.mock('@/lib/utils/getModelToStart', () => ({
 }))
 
 vi.mock('@/lib/utils/highlight', () => ({
-  highlightFzfMatch: (text: string) => text,
+  highlightMatch: (text: string) => text,
 }))
 
 // Mock UI components

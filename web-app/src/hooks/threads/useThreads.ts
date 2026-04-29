@@ -2,15 +2,17 @@ import { create } from 'zustand'
 import { ulid } from 'ulidx'
 import { toast } from 'sonner'
 import { getServiceHub } from '@/hooks/useServiceHub'
-import { Fzf } from 'fzf'
+import Fuse, { type FuseResult } from 'fuse.js'
 import { TEMPORARY_CHAT_ID } from '@/constants/chat'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { useFileRegistry, threadCollectionId } from '@/lib/file-registry'
 
-const buildSearchIndex = (threads: Record<string, Thread>): Fzf<Thread[]> => {
+const buildSearchIndex = (threads: Record<string, Thread>): Fuse<Thread> => {
   const entries = Object.values(threads).filter((t) => t.id !== TEMPORARY_CHAT_ID)
-  return new Fzf<Thread[]>(entries, {
-    selector: (item: Thread) => item.title,
+  return new Fuse(entries, {
+    keys: ['title'],
+    threshold: 0.4,
+    includeScore: true,
   })
 }
 
@@ -63,7 +65,7 @@ type ThreadState = {
   updateThreadTimestamp: (threadId: string) => void
   updateThread: (threadId: string, updates: Partial<Thread>) => void
   deleteAllThreadsByProject: (projectId: string) => void
-  searchIndex: Fzf<Thread[]> | null
+  searchIndex: Fuse<Thread> | null
 }
 
 export const useThreads = create<ThreadState>()((set, get) => ({
@@ -105,20 +107,17 @@ export const useThreads = create<ThreadState>()((set, get) => ({
     }
 
     let currentIndex = searchIndex
-    if (!currentIndex?.find) {
+    if (!currentIndex?.search) {
       currentIndex = buildSearchIndex(threads)
       set({ searchIndex: currentIndex })
     }
 
     // Use the index to search and return matching threads
-    const fzfResults = currentIndex.find(searchTerm)
-    return fzfResults.map(
-      (result: { item: Thread; positions: Set<number> }) => {
-        const thread = result.item // Fzf stores the original item here
-
+    const fuseResults = currentIndex.search(searchTerm)
+    return fuseResults.map(
+      (result: FuseResult<Thread>) => {
         return {
-          ...thread,
-          title: thread.title, // Override title with highlighted version
+          ...result.item,
         }
       }
     )
@@ -450,7 +449,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
           console.error('[threads] timestamp persist failed:', error)
         })
 
-      // The Fzf index is keyed on `title`, not `updated`, so a bare
+      // The Fuse index is keyed on `title`, not `updated`, so a bare
       // timestamp refresh doesn't need the O(n) rebuild — reuse the
       // existing index.
       return {
