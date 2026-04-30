@@ -205,6 +205,10 @@ export function MainThreadPane({
                   agents={agent.agents}
                   selectedAgent={agent.selectedAgent}
                   onSelectAgent={agent.setSelectedAgent}
+                  selectedProvider={agent.selectedProvider}
+                  onSelectProvider={agent.setSelectedProvider}
+                  selectedModel={agent.selectedModel}
+                  onSelectModel={agent.setSelectedModel}
                   onSubmit={agent.runAgent}
                   isRunning={agent.status === 'running'}
                   axError={agent.axError}

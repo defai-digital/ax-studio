@@ -29,6 +29,8 @@ export function useAgentMode(threadId: string) {
   const [lines, setLines] = useState<AgentLine[]>([])
   const [agents, setAgents] = useState<AxAgent[]>([])
   const [selectedAgent, setSelectedAgent] = useState<string>('standard')
+  const [selectedProvider, setSelectedProvider] = useState<string | null>('opencode')
+  const [selectedModel, setSelectedModel] = useState<string | null>(null)
   const [axVersion, setAxVersion] = useState<string | null>(null)
   const [axError, setAxError] = useState<string | null>(null)
   const sessionId = `agent-${threadId}`
@@ -90,7 +92,13 @@ export function useAgentMode(threadId: string) {
     setStatus('running')
 
     try {
-      await invoke('ax_run_agent', { sessionId, agentId: selectedAgent, task })
+      await invoke('ax_run_agent', {
+        sessionId,
+        agentId: selectedAgent,
+        task,
+        provider: selectedProvider ?? undefined,
+        model: selectedModel ?? undefined,
+      })
     } catch (err) {
       const errorText = typeof err === 'string' ? err : String(err)
       setLines([{ kind: 'error', text: errorText, timestamp: Date.now() }])
@@ -122,6 +130,10 @@ export function useAgentMode(threadId: string) {
     agents,
     selectedAgent,
     setSelectedAgent,
+    selectedProvider,
+    setSelectedProvider,
+    selectedModel,
+    setSelectedModel,
     axVersion,
     axError,
     runAgent,

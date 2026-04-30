@@ -4,16 +4,52 @@ import { Textarea } from '@/components/ui/textarea'
 import { SendHorizonal, Loader2 } from 'lucide-react'
 import type { AxAgent } from '@/hooks/agent/useAgentMode'
 
+const PROVIDERS = [
+  { value: 'opencode', label: 'OpenCode (default)' },
+  { value: '', label: 'Auto' },
+  { value: 'claude', label: 'Claude (Anthropic)' },
+  { value: 'openai', label: 'OpenAI' },
+  { value: 'gemini', label: 'Gemini (Google)' },
+  { value: 'grok', label: 'Grok (xAI)' },
+  { value: 'groq', label: 'Groq' },
+  { value: 'opencode', label: 'OpenCode (GLM / multi-model)' },
+  { value: 'local-llm', label: 'Local LLM' },
+]
+
+const MODEL_HINTS: Record<string, string> = {
+  opencode: 'e.g. ollama-cloud/glm-4.7',
+  claude: 'e.g. claude-sonnet-4-6',
+  openai: 'e.g. gpt-4o',
+  gemini: 'e.g. gemini-2.5-flash',
+  grok: 'e.g. grok-3',
+  groq: 'e.g. llama-3.3-70b-versatile',
+}
+
 type Props = {
   agents: AxAgent[]
   selectedAgent: string
   onSelectAgent: (id: string) => void
+  selectedProvider: string | null
+  onSelectProvider: (provider: string | null) => void
+  selectedModel: string | null
+  onSelectModel: (model: string | null) => void
   onSubmit: (message: string) => Promise<void>
   isRunning: boolean
   axError?: string | null
 }
 
-export function AgentInput({ agents, selectedAgent, onSelectAgent, onSubmit, isRunning, axError }: Props) {
+export function AgentInput({
+  agents,
+  selectedAgent,
+  onSelectAgent,
+  selectedProvider,
+  onSelectProvider,
+  selectedModel,
+  onSelectModel,
+  onSubmit,
+  isRunning,
+  axError,
+}: Props) {
   const [value, setValue] = useState('')
 
   const handleSubmit = async () => {
@@ -45,20 +81,40 @@ export function AgentInput({ agents, selectedAgent, onSelectAgent, onSubmit, isR
 
   return (
     <div className="flex flex-col gap-2 rounded-xl border bg-background px-3 py-2 shadow-sm">
-      {displayAgents.length > 0 && (
+      <div className="flex gap-2">
+        {displayAgents.length > 0 && (
+          <select
+            value={selectedAgent}
+            onChange={(e) => onSelectAgent(e.target.value)}
+            disabled={isRunning}
+            className="h-7 flex-1 rounded-md bg-muted/40 px-2 text-xs border-0 focus:outline-none"
+          >
+            {displayAgents.map((agent) => (
+              <option key={agent.id} value={agent.id}>
+                {agent.id}{agent.description ? ` — ${agent.description}` : ''}
+              </option>
+            ))}
+          </select>
+        )}
         <select
-          value={selectedAgent}
-          onChange={(e) => onSelectAgent(e.target.value)}
+          value={selectedProvider ?? ''}
+          onChange={(e) => onSelectProvider(e.target.value || null)}
           disabled={isRunning}
-          className="h-7 w-full rounded-md bg-muted/40 px-2 text-xs border-0 focus:outline-none"
+          className="h-7 flex-1 rounded-md bg-muted/40 px-2 text-xs border-0 focus:outline-none"
         >
-          {displayAgents.map((agent) => (
-            <option key={agent.id} value={agent.id}>
-              {agent.id}{agent.description ? ` — ${agent.description}` : ''}
-            </option>
+          {PROVIDERS.map((p) => (
+            <option key={p.value} value={p.value}>{p.label}</option>
           ))}
         </select>
-      )}
+        <input
+          type="text"
+          value={selectedModel ?? ''}
+          onChange={(e) => onSelectModel(e.target.value || null)}
+          disabled={isRunning}
+          placeholder={selectedProvider ? (MODEL_HINTS[selectedProvider] ?? 'Model (optional)') : 'Model (optional)'}
+          className="h-7 flex-1 rounded-md bg-muted/40 px-2 text-xs border border-transparent focus:outline-none focus:border-border"
+        />
+      </div>
       <div className="flex gap-2 items-end">
         <Textarea
           value={value}

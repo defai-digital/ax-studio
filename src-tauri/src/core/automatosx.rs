@@ -81,18 +81,22 @@ pub async fn ax_run_agent(
     session_id: String,
     agent_id: String,
     task: String,
+    provider: Option<String>,
+    model: Option<String>,
 ) -> Result<(), String> {
     fix_path_env::fix().ok();
 
     let input_json = format!(r#"{{"query":"{}"}}"#, task.replace('"', "\\\""));
 
-    let mut child = Command::new("ax")
-        .args([
-            "agent", "run", &agent_id,
-            "--provider", "opencode",
-            "--input", &input_json,
-            "--format", "json",
-        ])
+    let mut cmd = Command::new("ax");
+    cmd.args(["agent", "run", &agent_id, "--input", &input_json, "--format", "json"]);
+    if let Some(p) = &provider {
+        cmd.args(["--provider", p]);
+    }
+    if let Some(m) = &model {
+        cmd.args(["--model", m]);
+    }
+    let mut child = cmd
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -198,10 +202,10 @@ fn parse_agent_output(raw: &str) -> String {
     }
 
     if let Ok(val) = serde_json::from_str::<serde_json::Value>(trimmed) {
-        // data.output is the step map
-        let output = val.pointer("/data/output").unwrap_or(&val);
+        // actual ax output: { "success": true, "output": { "synthesize": { "content": "..." }, ... } }
+        let step_map = val.pointer("/output").unwrap_or(&val);
 
-        if let Some(obj) = output.as_object() {
+        if let Some(obj) = step_map.as_object() {
             // Preferred step order
             for key in &["synthesize", "analyze", "scope"] {
                 if let Some(content) = obj.get(*key).and_then(|s| s.get("content")).and_then(|c| c.as_str()) {
@@ -210,7 +214,7 @@ fn parse_agent_output(raw: &str) -> String {
                     }
                 }
             }
-            // Fall back to first step with content
+            // Fall back to any step with non-empty content
             for (_, step) in obj {
                 if let Some(content) = step.get("content").and_then(|c| c.as_str()) {
                     if !content.is_empty() {
@@ -220,10 +224,19 @@ fn parse_agent_output(raw: &str) -> String {
             }
         }
 
-        // Try top-level string fields
-        if let Some(s) = output.as_str() {
-            return s.to_string();
+        // Fallback: scan stepResults array for any output with content
+        if let Some(steps) = val.pointer("/stepResults").and_then(|s| s.as_array()) {
+            for step in steps {
+                if let Some(content) = step.pointer("/output/content").and_then(|c| c.as_str()) {
+                    if !content.is_empty() {
+                        return content.to_string();
+                    }
+                }
+            }
         }
+
+        // Last resort: return the raw JSON so nothing is silently swallowed
+        return trimmed.to_string();
     }
 
     trimmed.to_string()
