@@ -6,6 +6,7 @@ import { useState, useMemo, useCallback } from 'react'
 import { useThreads } from '@/hooks/threads/useThreads'
 import { SESSION_STORAGE_KEY } from '@/constants/chat'
 import { safeStorageGetItem, safeStorageRemoveItem } from '@/lib/storage/storage'
+import { toast } from 'sonner'
 
 export type ThreadSplitResult = {
   splitDirection: 'left' | 'right' | null
@@ -78,17 +79,24 @@ export function useThreadSplit({ thread, selectedModel, selectedProvider }: Inpu
         setSplitDirection(direction)
         return
       }
-      const newThread = await createThread(
-        {
-          id: thread?.model?.id ?? selectedModel?.id ?? '*',
-          provider: thread?.model?.provider ?? selectedProvider,
-        },
-        'New Thread',
-        thread?.assistants?.[0],
-        thread?.metadata?.project
-      )
-      setSplitThreadId(newThread.id)
-      setSplitDirection(direction)
+      try {
+        const newThread = await createThread(
+          {
+            id: thread?.model?.id ?? selectedModel?.id ?? '*',
+            provider: thread?.model?.provider ?? selectedProvider,
+          },
+          'New Thread',
+          thread?.assistants?.[0],
+          thread?.metadata?.project
+        )
+        setSplitThreadId(newThread.id)
+        setSplitDirection(direction)
+      } catch (error) {
+        console.error('Failed to create split thread:', error)
+        toast.error('Failed to open split view', {
+          description: error instanceof Error ? error.message : 'Please try again.',
+        })
+      }
     },
     [
       createThread,
