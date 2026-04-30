@@ -2,8 +2,8 @@
  * ThreadView — pure layout component for the ThreadDetail route.
  *
  * Renders the full page chrome: header, toolbar, chat pane, split view,
- * artifact/research side panels, and modals. No data-fetching or business
- * logic — receives everything it needs as props.
+ * artifact/research side panels. No data-fetching or business logic —
+ * receives everything it needs as props.
  */
 import type { RefObject } from 'react'
 import { useNavigate } from '@tanstack/react-router'
@@ -21,17 +21,9 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ArtifactPanel } from '@/components/ai-elements/ArtifactPanel'
 import { ResearchPanel } from '@/components/research/ResearchPanel'
-import { TeamVariablePrompt } from '@/components/TeamVariablePrompt'
-import { CostApprovalModal } from '@/components/CostApprovalModal'
 import { SplitThreadContainer } from '@/containers/threads/SplitThreadContainer'
 import { MainThreadPane } from '@/containers/threads/MainThreadPane'
-import { Columns2, MessageSquareText, Users } from 'lucide-react'
-import { toast } from 'sonner'
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AgentTeam = any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type CostApprovalState = any | null
+import { Columns2, MessageSquareText } from 'lucide-react'
 
 export type ThreadViewProps = {
   threadId: string
@@ -65,17 +57,6 @@ export type ThreadViewProps = {
   setThreadPromptDraft: (draft: string) => void
   promptResolution: { source: string; resolvedPrompt: string }
   updateThread: (id: string, updates: Partial<Thread>) => void
-  activeTeam: AgentTeam
-  activeTeamId: string | undefined
-  activeTeamSnapshot: unknown
-  agentTeams: AgentTeam[]
-  handleTeamChange: (teamId: string | undefined) => void
-  teamTokensUsed: number
-  costApprovalState: CostApprovalState
-  setCostApprovalState: (state: CostApprovalState) => void
-  showVariablePrompt: boolean
-  setShowVariablePrompt: (show: boolean) => void
-  handleVariableSubmit: (values: Record<string, string>) => void
 }
 
 export function ThreadView({
@@ -108,17 +89,6 @@ export function ThreadView({
   setThreadPromptDraft,
   promptResolution,
   updateThread,
-  activeTeam,
-  activeTeamId,
-  activeTeamSnapshot,
-  agentTeams,
-  handleTeamChange,
-  teamTokensUsed,
-  costApprovalState,
-  setCostApprovalState,
-  showVariablePrompt,
-  setShowVariablePrompt,
-  handleVariableSubmit,
 }: ThreadViewProps) {
   const navigate = useNavigate()
   const hasPanels = Boolean(pinnedArtifact || pinnedResearch)
@@ -138,46 +108,6 @@ export function ThreadView({
                 onClick={() => setShowThreadPromptEditor((v) => !v)}
               >
                 <MessageSquareText className="size-4" />
-              </Button>
-            )}
-            {!splitPaneOrder && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant={activeTeamId ? 'secondary' : 'ghost'}
-                    size="icon-sm"
-                    aria-label="Agent Team"
-                    title={activeTeam ? activeTeam.name : 'Agent Team'}
-                  >
-                    <Users className="size-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={() => handleTeamChange(undefined)}>
-                    No Team (single agent)
-                  </DropdownMenuItem>
-                  {agentTeams.map((team: AgentTeam) => (
-                    <DropdownMenuItem key={team.id} onSelect={() => handleTeamChange(team.id)}>
-                      {team.name}{team.id === activeTeamId && ' ✓'}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-            {activeTeamId && activeTeamSnapshot && activeTeam && (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Update Team Config"
-                title="Update Team Config"
-                onClick={async () => {
-                  await updateThread(threadId, {
-                    metadata: { ...(thread?.metadata ?? {}), agent_team_snapshot: null },
-                  })
-                  toast.success('Team config will refresh on next run')
-                }}
-              >
-                <span className="size-4 flex items-center justify-center text-xs font-bold text-amber-500">!</span>
               </Button>
             )}
             <DropdownMenu>
@@ -205,26 +135,7 @@ export function ThreadView({
         </div>
       </HeaderPage>
       <div className="flex flex-1 flex-col h-full overflow-hidden">
-        {/* ── Panels ── */}
         <div className="px-4 md:px-8 shrink-0">
-          {/* Team info bar */}
-          {!splitPaneOrder && activeTeam && (
-            <div className="mx-auto w-full md:w-4/5 xl:w-4/6 pb-2 flex items-center gap-2 text-xs text-muted-foreground">
-              <span>{activeTeam.name}</span>
-              <span>&middot;</span>
-              <span>{activeTeam.agent_ids.length} agent{activeTeam.agent_ids.length !== 1 ? 's' : ''}</span>
-              {activeTeam.token_budget && (
-                <><span>&middot;</span><span>{teamTokensUsed.toLocaleString()} / {activeTeam.token_budget.toLocaleString()} tokens</span></>
-              )}
-              {!activeTeam.token_budget && teamTokensUsed > 0 && (
-                <><span>&middot;</span><span>{teamTokensUsed.toLocaleString()} tokens used</span></>
-              )}
-              {activeTeamSnapshot && (
-                <><span>&middot;</span><span className="text-amber-500">Snapshot active</span></>
-              )}
-            </div>
-          )}
-          {/* Thread prompt editor */}
           {!splitPaneOrder && showThreadPromptEditor && (
             <div className="mx-auto w-full md:w-4/5 xl:w-4/6 mt-2 rounded-md border bg-card p-3 space-y-2">
               <p className="text-xs text-muted-foreground">
@@ -253,9 +164,7 @@ export function ThreadView({
           )}
         </div>
 
-        {/* ── Body ── */}
         {splitPaneOrder && splitThreadId ? (
-          // Split view: two side-by-side panes
           <div className="grid grid-cols-2 gap-2 px-2 pb-2 h-full">
             {splitPaneOrder.map((pane) =>
               pane === 'main' ? (
@@ -286,10 +195,6 @@ export function ThreadView({
                     setThreadPromptDraft={setThreadPromptDraft}
                     promptResolution={promptResolution}
                     updateThread={updateThread}
-                    agentTeams={agentTeams}
-                    activeTeamId={activeTeamId}
-                    activeTeam={activeTeam}
-                    handleTeamChange={handleTeamChange}
                     isSplitView
                     onSplitClose={() => {
                       if (!splitThreadId) return
@@ -309,7 +214,6 @@ export function ThreadView({
             )}
           </div>
         ) : (
-          // Normal view: chat on left, research/artifact panel on right
           <div className={hasPanels ? 'grid grid-cols-2 gap-2 px-2 pb-2 h-full' : 'flex flex-1 flex-col h-full overflow-hidden'}>
             <MainThreadPane
               threadId={threadId}
@@ -343,25 +247,6 @@ export function ThreadView({
           </div>
         )}
       </div>
-
-      {/* Modals */}
-      {activeTeam && activeTeam.variables && activeTeam.variables.length > 0 && (
-        <TeamVariablePrompt
-          open={showVariablePrompt}
-          onOpenChange={setShowVariablePrompt}
-          teamName={activeTeam.name}
-          variables={activeTeam.variables}
-          onSubmit={handleVariableSubmit}
-        />
-      )}
-      {costApprovalState && (
-        <CostApprovalModal
-          open={true}
-          estimate={costApprovalState.estimate}
-          onApprove={() => { costApprovalState.resolve(true); setCostApprovalState(null) }}
-          onCancel={() => { costApprovalState.resolve(false); setCostApprovalState(null) }}
-        />
-      )}
     </div>
   )
 }

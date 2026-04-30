@@ -19,11 +19,7 @@ import { useServiceHub } from '@/hooks/useServiceHub'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useThreads } from '@/hooks/threads/useThreads'
 import { useChatAttachments, NEW_THREAD_ATTACHMENT_KEY } from '@/hooks/chat/useChatAttachments'
-import {
-  safeStorageGetItem,
-  safeStorageRemoveItem,
-  safeStorageSetItem,
-} from '@/lib/storage/storage'
+import { safeStorageSetItem } from '@/lib/storage/storage'
 
 type Input = {
   onSubmit?: (text: string) => void
@@ -165,22 +161,6 @@ export function useChatSendHandler({
             NEW_THREAD_ATTACHMENT_KEY,
             newThread.id
           )
-
-          const storedTeamId = safeStorageGetItem(
-            sessionStorage,
-            SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID,
-            'useChatSendHandler'
-          )
-          if (storedTeamId) {
-            safeStorageRemoveItem(
-              sessionStorage,
-              SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID,
-              'useChatSendHandler'
-            )
-            useThreads.getState().updateThread(newThread.id, {
-              metadata: { ...(newThread.metadata ?? {}), agent_team_id: storedTeamId },
-            })
-          }
 
           setSelectedAssistant(undefined)
 

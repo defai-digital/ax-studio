@@ -1,0 +1,90 @@
+SECTION 1: SYSTEM OVERVIEW
+,,,,,,
+System,Type,Orchestration Style,Pre-built Agents,Memory,License,Tech Stack
+AX Studio (Native),Desktop App + Web,Router / Sequential / Parallel / Evaluator-Optimizer,0 (custom per team),Planned (Phase 2),Proprietary,TypeScript + Rust (Tauri) + React
+AutomatosX,MCP Server + CLI,DAG Workflows + Parallel,28 specialist agents,SQLite built-in,BSL 1.1 → Apache 2.0 (after 4 years),Node.js + npm
+OpenClaw,Personal AI Gateway,Channel Routing + LLM,N/A (routing focused),Session-based,MIT,Node.js + 25+ messaging channels
+
+,,,,,,
+SECTION 2: FEATURE COMPARISON
+,,,,,,
+Feature,AX Studio (Native),AutomatosX,OpenClaw,Notes
+Orchestration Modes,"Router, Sequential, Parallel, Evaluator-Optimizer",DAG Workflows,Multi-channel routing,AX Studio has more modes
+Pre-built Specialist Agents,None,28 (security / DevOps / ML / architect etc.),None,AutomatosX wins here
+Persistent Memory,Not yet (roadmap),Yes — SQLite,Session-based only,AutomatosX fills AX gap
+Multi-model Discussion (Claude + Gemini + Grok),No,Yes (ax_discuss),No,AutomatosX unique feature
+Code Review Built-in,No,Yes (ax_review_analyze),No,AutomatosX unique feature
+Governance Gates,Cost approval threshold,Guard policies + rate limiting,Security sandboxing,Both have governance
+Voice Support,No,No,Yes (wake words + continuous),OpenClaw unique
+Messaging Channels (WhatsApp / Slack / Discord),No,No,25+ channels,OpenClaw unique
+MCP Tool Integration,Yes (in progress),80+ tools,Limited,AX closest to full MCP
+Visual UI / Desktop App,Yes (full Tauri app),No (CLI only),Menu bar + canvas,AX Studio best UI
+Per-agent Model Override,Yes,No,No,AX Studio unique
+Cost Approval Before Run,Yes,No,No,AX Studio unique
+Run Log / Execution Trace,Yes,Yes (ax_trace_*),No,Both have tracing
+
+,,,,,,
+SECTION 3: THREE OPTIONS ANALYSIS
+,,,,,,
+Dimension,Option A — Keep Native (Extend),Option B1 — Supplement with AutomatosX (RECOMMENDED),Option B2 — Replace with AutomatosX,Option C — Isolate into AutomatosX (Thin Shell)
+What it means,Keep building natively. Fill gaps yourself.,Keep AX agents + add AutomatosX as MCP server.,Delete AX orchestration. AutomatosX does everything.,AX Studio becomes launcher only. All agents live in AutomatosX.
+Lines of Code Removed,0,0,~3500 lines,~6100 lines
+New Dependencies Added,None,AutomatosX MCP server,AutomatosX MCP server,AutomatosX as external process
+User Setup Friction,None (current state),Low — MCP auto-registration,Low — MCP auto-registration,High — must install AutomatosX separately
+Feature Loss,None,None,4 orchestration modes + cost approval + per-agent model override,ALL native agent features gone
+Feature Gain,None (you build everything yourself),28 agents + SQLite memory + governance + multi-model discussion,Same as B1,Same as B1
+Implementation Complexity,Low (keep) / High (reach parity),Low-Medium,High — rewrite orchestration UI + transport,Medium — delete + build thin launcher
+Risk Level,Low-Medium,Low,High,Medium-High
+Reversibility,N/A,High — just disconnect MCP,Low — hard to rebuild deleted code,Low — hard to rebuild deleted code
+Product Differentiation,Fully maintained,Enhanced,Reduced,Minimal
+Impact on App Slimming,None,None (additive),Moderate,Maximum
+OpenClaw Role,Separate future integration,Separate future integration,Separate future integration,Separate future integration
+Time to Implement,Months (build everything),Days to weeks,Months (rewrite + regression test),Weeks
+
+,,,,,,
+SECTION 4: CODE / MODULES AFFECTED PER OPTION
+,,,,,,
+File / Module,Current Lines,Option A,Option B1 (Recommended),Option B2,Option C
+web-app/src/lib/multi-agent/ (13 files),1429,Keep,Keep,DELETE,DELETE
+web-app/src/lib/transport/multi-agent-transport.ts,525,Keep,Keep,REWRITE,DELETE
+web-app/src/components/AgentTeamBuilder.tsx,635,Keep,Keep + gallery tab,REWRITE,DELETE
+web-app/src/components/AgentEditor.tsx,405,Keep,Keep,DELETE or repurpose,DELETE
+web-app/src/components/AgentOutputCard.tsx,199,Keep,Keep,Keep (render AutomatosX results),DELETE
+web-app/src/components/RunLogViewer.tsx,~250,Keep,Keep + ax_trace wiring,REWRITE,DELETE
+web-app/src/stores/agent-team-store.ts,~150,Keep,Keep,DELETE or simplify,DELETE
+src-tauri/src/core/agent_teams.rs,309,Keep,Keep,Slim to read-only,DELETE
+src-tauri/src/core/agent_run_logs.rs,~200,Keep,Keep,DELETE,DELETE
+agent-teams/*.json (6 templates),6 files,Keep,Keep,DELETE or convert,DELETE
+New: AutomatosX MCP registration config,0,N/A,ADD (~50 lines),ADD (~50 lines),ADD (~50 lines)
+New: Specialist agent gallery UI,0,N/A,ADD (~200 lines),ADD (~200 lines),N/A
+New: AutomatosX launcher panel,0,N/A,N/A,N/A,ADD (~150 lines)
+New: AutomatosX IPC bridge (Rust),0,N/A,N/A,N/A,ADD (~100 lines)
+
+,,,,,,
+SECTION 5: RISK REGISTER
+,,,,,,
+Risk,Applies To,Severity,Mitigation
+AutomatosX BSL 1.1 license — cannot fork/compete for 4 years,"B1, B2, C",Medium,Legal review before shipping. B1 is safest — you can disconnect MCP at any time.
+AutomatosX breaking change breaks AX Studio,"B2, C",High,Pin AutomatosX version. B1 avoids this — AX runs independently.
+Deleting 4000+ lines of working tested code,"B2, C",High,Full regression test suite before deletion. Prefer B1 — nothing deleted.
+User setup friction (install AutomatosX separately),"B2, C",Medium,Bundle AutomatosX install into AX Studio onboarding flow.
+Option A: slow to reach feature parity,A,Medium,Parallel-track AutomatosX integration while building natively.
+OpenClaw dependency on external messaging services,Future,Low,Treat as Phase 3. Do not integrate now.
+
+,,,,,,
+SECTION 6: RECOMMENDED IMPLEMENTATION ROADMAP (OPTION B1)
+,,,,,,
+Phase,Action,Effort,Outcome
+Phase 1 — Week 1-2,Register AutomatosX as MCP server in AX Studio MCP settings,Low,28 specialist agents + 80 tools appear in agent teams
+Phase 2 — Week 2-4,Expose ax_agent_run + ax_discuss + ax_memory_* + ax_guard_check as delegation tools,Low-Medium,Memory gap filled. Multi-model discussion available. Governance gates active.
+Phase 3 — Week 4-6,Add Specialist Agent Gallery tab in AgentTeamBuilder.tsx,Medium,Non-technical users can pick pre-built specialist agents without prompt engineering
+Phase 4 — Week 6-8,Wire ax_trace_* output into RunLogViewer.tsx,Medium,Unified run logs across AX agents and AutomatosX agents
+Phase 5 — Future,OpenClaw channel integration (WhatsApp / Discord → AX agent teams),High,Inbound messaging triggers AX agent team workflows
+
+,,,,,,
+SECTION 7: FINAL VERDICT
+,,,,,,
+Recommendation,Option B1 — Supplement AX Studio with AutomatosX via MCP,,,,
+One-line reason,"Keep your 4100+ lines of working orchestration code. Add AutomatosX as an MCP server to instantly get 28 specialist agents, SQLite memory, and governance — zero lines of native code deleted.",,,,
+OpenClaw verdict,Do not integrate now. It solves messaging channels (WhatsApp / Telegram / Discord) — a completely different problem. Revisit in Phase 5 as an inbound trigger for AX agent teams.,,,,
+AutomatosX license warning,AutomatosX is BSL 1.1 — get legal sign-off before shipping a commercial product that depends on it.,,,,

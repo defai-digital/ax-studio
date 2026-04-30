@@ -19,7 +19,6 @@ import {
   Server,
   Globe,
   Brain,
-  Users,
   Route,
   ShieldCheck,
 } from 'lucide-react'
@@ -144,13 +143,6 @@ const SettingsMenu = () => {
       route: route.settings.memory,
       isEnabled: true,
       icon: <Brain className="size-3.5" />,
-      group: 'Other',
-    },
-    {
-      title: 'common:agentTeams',
-      route: route.settings.agent_teams,
-      isEnabled: true,
-      icon: <Users className="size-3.5" />,
       group: 'Other',
     },
   ]

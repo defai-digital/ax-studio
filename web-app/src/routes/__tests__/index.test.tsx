@@ -46,16 +46,6 @@ vi.mock('@/hooks/tools/useTools', () => ({
   useTools: vi.fn(),
 }))
 
-vi.mock('@/stores/agent-team-store', () => ({
-  useAgentTeamStore: (selector?: any) => {
-    const state = {
-      teams: [],
-      isLoaded: true,
-      loadTeams: vi.fn(),
-    }
-    return selector ? selector(state) : state
-  },
-}))
 
 vi.mock('@/lib/prompts/system-prompt', () => ({
   resolveSystemPrompt: () => ({
@@ -127,7 +117,6 @@ vi.mock('@/constants/localStorage', () => ({
 vi.mock('@/constants/chat', () => ({
   SESSION_STORAGE_KEY: {
     NEW_THREAD_PROMPT: 'new-thread-prompt',
-    NEW_THREAD_TEAM_ID: 'new-thread-team-id',
     SPLIT_VIEW_INFO: 'split-view-info',
   },
 }))

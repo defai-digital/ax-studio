@@ -3,17 +3,10 @@ import { renderHook } from '@testing-library/react'
 import { useThreadEffects, type ThreadEffectsInput } from '../use-thread-effects'
 import { defaultAssistant } from '@/hooks/chat/useAssistant'
 
-// Mock Tauri invoke (used for team token loading)
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn().mockResolvedValue([]),
-}))
-
-// Mock constants
 vi.mock('@/constants/chat', () => ({
   SESSION_STORAGE_KEY: {
     INITIAL_MESSAGE_TEMPORARY: 'initial-message-temporary',
     NEW_THREAD_PROMPT: 'new-thread-prompt',
-    NEW_THREAD_TEAM_ID: 'new-thread-team-id',
     SPLIT_VIEW_INFO: 'split-view-info',
   },
   SESSION_STORAGE_PREFIX: {
@@ -42,8 +35,6 @@ describe('useThreadEffects', () => {
       status: 'idle',
       assistants: [],
       selectedModel: undefined,
-      activeTeamId: undefined,
-      setTeamTokensUsed: vi.fn(),
       reasoningContainerRef: { current: null },
       setCurrentThreadId: vi.fn(),
       setCurrentAssistant: vi.fn(),
@@ -84,12 +75,6 @@ describe('useThreadEffects', () => {
     renderHook(() => useThreadEffects(defaultInput))
 
     expect(defaultInput.setThreadPromptDraft).toHaveBeenCalledWith('')
-  })
-
-  it('resets team tokens to 0 when no activeTeamId', () => {
-    renderHook(() => useThreadEffects(defaultInput))
-
-    expect(defaultInput.setTeamTokensUsed).toHaveBeenCalledWith(0)
   })
 
   it('sends initial message from sessionStorage', async () => {
@@ -178,29 +163,6 @@ describe('useThreadEffects', () => {
     renderHook(() => useThreadEffects(defaultInput))
 
     expect(sessionStorage.getItem('new-thread-prompt')).toBeNull()
-  })
-
-  it('applies agent team from sessionStorage', () => {
-    sessionStorage.setItem('new-thread-team-id', 'team-1')
-
-    renderHook(() => useThreadEffects(defaultInput))
-
-    expect(defaultInput.updateThread).toHaveBeenCalledWith(
-      threadId,
-      expect.objectContaining({
-        metadata: expect.objectContaining({
-          agent_team_id: 'team-1',
-        }),
-      })
-    )
-  })
-
-  it('removes agent team from sessionStorage after applying', () => {
-    sessionStorage.setItem('new-thread-team-id', 'team-1')
-
-    renderHook(() => useThreadEffects(defaultInput))
-
-    expect(sessionStorage.getItem('new-thread-team-id')).toBeNull()
   })
 
   it('sets current assistant when matching assistant found', () => {

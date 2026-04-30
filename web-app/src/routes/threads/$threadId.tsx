@@ -120,19 +120,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     followUpMessage,
     onToolCall,
     startToolExecution,
-    onCostApproval,
-    costApprovalState,
-    setCostApprovalState,
-    agentTeams,
-    activeTeamId,
-    activeTeam,
-    activeTeamSnapshot,
-    showVariablePrompt,
-    setShowVariablePrompt,
-    teamTokensUsed,
-    setTeamTokensUsed,
-    handleVariableSubmit,
-    handleTeamChange,
   } = useThreadTools({ threadId, projectId })
   const {
     splitPaneOrder,
@@ -171,8 +158,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
       (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : '') +
       (localKnowledgeActive || alwaysCiteSources ? CITATION_FORMAT_INSTRUCTION : ''),
     modelOverrideId: optimizedModelConfig.modelId,
-    activeTeamId,
-    onCostApproval,
     inferenceParameters: {
       temperature: optimizedModelConfig.temperature,
       top_p: optimizedModelConfig.top_p,
@@ -252,8 +237,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     status,
     assistants,
     selectedModel,
-    activeTeamId,
-    setTeamTokensUsed,
     reasoningContainerRef,
     setCurrentThreadId,
     setCurrentAssistant,
@@ -326,17 +309,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
       setThreadPromptDraft={setThreadPromptDraft}
       promptResolution={promptResolution}
       updateThread={updateThread}
-      activeTeam={activeTeam}
-      activeTeamId={activeTeamId}
-      activeTeamSnapshot={activeTeamSnapshot}
-      agentTeams={agentTeams}
-      handleTeamChange={handleTeamChange}
-      teamTokensUsed={teamTokensUsed}
-      costApprovalState={costApprovalState}
-      setCostApprovalState={setCostApprovalState}
-      showVariablePrompt={showVariablePrompt}
-      setShowVariablePrompt={setShowVariablePrompt}
-      handleVariableSubmit={handleVariableSubmit}
     />
   )
 }

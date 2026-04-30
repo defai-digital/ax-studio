@@ -75,11 +75,6 @@ export function SplitThreadContainer({
     followUpMessage,
     onToolCall,
     startToolExecution,
-    onCostApproval,
-    agentTeams,
-    activeTeamId,
-    activeTeam,
-    handleTeamChange,
   } = useThreadTools({ threadId, projectId })
 
   // ─── UI state ─────────────────────────────────────────────────────────────
@@ -118,8 +113,6 @@ export function SplitThreadContainer({
       ARTIFACT_FORMAT_INSTRUCTION +
       (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : ''),
     modelOverrideId: optimizedModelConfig.modelId,
-    activeTeamId,
-    onCostApproval,
     inferenceParameters: {
       temperature: optimizedModelConfig.temperature,
       top_p: optimizedModelConfig.top_p,
@@ -278,10 +271,6 @@ export function SplitThreadContainer({
         updateThread={updateThread}
         isSplitView
         onSplitClose={onClose}
-        agentTeams={agentTeams}
-        activeTeamId={activeTeamId}
-        activeTeam={activeTeam}
-        handleTeamChange={handleTeamChange}
       />
     </div>
   )

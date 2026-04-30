@@ -17,10 +17,8 @@ import { useThreads } from '@/hooks/threads/useThreads'
 import { useFileRegistry, threadCollectionId, projectCollectionId } from '@/lib/file-registry'
 import { useRouterSettings } from '@/hooks/settings/useRouterSettings'
 import { routeMessage, getAvailableModelsForRouter } from './llm-router'
-import type { CostEstimate } from './multi-agent/cost-estimation'
 import { executeSingleAgentStream } from './transport/single-agent-transport'
-import { executeMultiAgentStream } from './transport/multi-agent-transport'
-import type { TokenUsageCallback, ServiceHub, SendMessagesOptions } from './transport/transport-types'
+import type { TokenUsageCallback, ServiceHub } from './transport/transport-types'
 import { prepareProviderForChat } from './chat/model-session'
 import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
 
@@ -65,8 +63,6 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
   private threadId?: string
   private inferenceParameters: Record<string, unknown>
   private modelOverrideId?: string
-  private activeTeamId?: string
-  private costApprovalCallback?: (estimate: CostEstimate) => Promise<boolean>
 
   constructor(
     systemMessage?: string,
@@ -85,10 +81,6 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
   updateInferenceParameters(parameters: Record<string, unknown>) { this.inferenceParameters = { ...parameters } }
   updateModelOverrideId(modelId: string | undefined) { this.modelOverrideId = modelId }
   setOnTokenUsage(callback: TokenUsageCallback | undefined) { this.onTokenUsage = callback }
-  updateActiveTeamId(teamId: string | undefined) { this.activeTeamId = teamId }
-  setCostApprovalCallback(callback: ((estimate: CostEstimate) => Promise<boolean>) | undefined) {
-    this.costApprovalCallback = callback
-  }
 
   private getThreadMetadata(): Record<string, unknown> | null {
     if (!this.threadId) return null
@@ -189,29 +181,6 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
       & { trigger: 'submit-message' | 'regenerate-message'; messageId: string | undefined }
       & ChatRequestOptions
   ): Promise<ReadableStream<UIMessageChunk>> {
-    if (this.activeTeamId) {
-      return executeMultiAgentStream(options as SendMessagesOptions, {
-        teamId: this.activeTeamId,
-        model: this.model!,
-        tools: this.tools,
-        systemMessage: this.systemMessage,
-        threadId: this.threadId,
-        inferenceParameters: this.inferenceParameters,
-        modelOverrideId: this.modelOverrideId,
-        onTokenUsage: this.onTokenUsage,
-        costApprovalCallback: this.costApprovalCallback,
-        getThreadMetadata: () => this.getThreadMetadata(),
-        mapUserInlineAttachments: (msgs) => this.mapUserInlineAttachments(msgs),
-        refreshTools: () => this.refreshTools(),
-        onFallbackToSingleAgent: (opts) => {
-          const savedTeamId = this.activeTeamId
-          this.activeTeamId = undefined
-          return this.sendMessages(opts as Parameters<typeof this.sendMessages>[0])
-            .finally(() => { this.activeTeamId = savedTeamId })
-        },
-      })
-    }
-
     const selectedModelId = useModelProvider.getState().selectedModel?.id
     const selectedProviderId = useModelProvider.getState().selectedProvider
 

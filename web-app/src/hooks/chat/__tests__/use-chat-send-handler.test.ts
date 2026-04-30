@@ -37,7 +37,6 @@ vi.mock('@/constants/chat', () => ({
   TEMPORARY_CHAT_QUERY_ID: 'temporary-chat',
   SESSION_STORAGE_KEY: {
     INITIAL_MESSAGE_TEMPORARY: 'initial-message-temporary',
-    NEW_THREAD_TEAM_ID: 'new-thread-team-id',
   },
   SESSION_STORAGE_PREFIX: {
     INITIAL_MESSAGE: 'initial-message-',
@@ -256,24 +255,6 @@ describe('useChatSendHandler', () => {
     )
   })
 
-  it('handles stored team ID by updating thread metadata', async () => {
-    const newThread = { id: 'thread-team', metadata: { existing: true } }
-    mockCreateThread.mockResolvedValue(newThread)
-    sessionStorage.setItem('new-thread-team-id', 'team-xyz')
-
-    const input = defaultInput()
-    const { result } = renderHook(() => useChatSendHandler(input))
-
-    await act(async () => {
-      await result.current.handleSendMessage('team prompt')
-    })
-
-    expect(mockUpdateThread).toHaveBeenCalledWith('thread-team', {
-      metadata: { existing: true, agent_team_id: 'team-xyz' },
-    })
-    // Team ID should be removed from sessionStorage
-    expect(sessionStorage.getItem('new-thread-team-id')).toBeNull()
-  })
 
   it('gracefully handles project fetch failure', async () => {
     mockGetProjectById.mockRejectedValue(new Error('Network error'))

@@ -9,7 +9,6 @@ import {
   type ChatInit,
   type LanguageModelUsage,
 } from 'ai'
-import { z } from 'zod/v4'
 import { useEffect, useMemo, useRef, useCallback } from 'react'
 import { useChatSessions } from '@/stores/chat-session-store'
 import { useAppState } from '@/hooks/settings/useAppState'
@@ -22,9 +21,7 @@ type CustomChatOptions = Omit<ChatInit<UIMessage>, 'transport'> &
     systemMessage?: string
     inferenceParameters?: Record<string, unknown>
     modelOverrideId?: string
-    activeTeamId?: string
     onTokenUsage?: (usage: LanguageModelUsage, messageId: string) => void
-    onCostApproval?: (estimate: import('@/lib/multi-agent/cost-estimation').CostEstimate) => Promise<boolean>
   }
 
 // This is a wrapper around the AI SDK's useChat hook
@@ -40,9 +37,7 @@ export function useChat(
     systemMessage,
     inferenceParameters: rawInferenceParameters = {},
     modelOverrideId,
-    activeTeamId,
     onTokenUsage,
-    onCostApproval,
     ...chatInitOptions
   } = options ?? {}
   // Stabilize inferenceParameters: update the ref only when content changes,
@@ -102,18 +97,6 @@ export function useChat(
     }
   }, [modelOverrideId])
 
-  useEffect(() => {
-    if (transportRef.current) {
-      transportRef.current.updateActiveTeamId(activeTeamId)
-    }
-  }, [activeTeamId])
-
-  useEffect(() => {
-    if (transportRef.current) {
-      transportRef.current.setCostApprovalCallback(onCostApproval)
-    }
-  }, [onCostApproval])
-
   // Set up streaming token speed callback to update global state
   const resetTokenSpeed = useAppState((state) => state.resetTokenSpeed)
 
@@ -161,47 +144,6 @@ export function useChat(
       : { transport: transportRef.current, ...chatInitOptions }),
     experimental_throttle: options?.experimental_throttle,
     resume: false,
-    dataPartSchemas: {
-      agentStatus: z.object({
-        agent_id: z.string(),
-        agent_name: z.string(),
-        agent_role: z.string().optional(),
-        status: z.enum(['running', 'complete', 'error']),
-        tokens_used: z.number(),
-        tool_calls: z
-          .array(z.object({ name: z.string(), args: z.unknown() }))
-          .optional(),
-        error: z.string().optional(),
-      }),
-      agentToolCall: z.object({
-        agent_id: z.string(),
-        tool_name: z.string(),
-        args: z.unknown(),
-        result: z.string().optional(),
-        status: z.enum(['calling', 'complete', 'error']),
-      }),
-      runLog: z.object({
-        id: z.string(),
-        team_id: z.string(),
-        thread_id: z.string(),
-        status: z.enum(['running', 'completed', 'failed']),
-        steps: z.array(z.object({
-          agent_id: z.string(),
-          agent_name: z.string(),
-          agent_role: z.string().optional(),
-          tokens_used: z.number(),
-          duration_ms: z.number(),
-          status: z.enum(['complete', 'error']),
-          error: z.string().optional(),
-          tool_calls: z.array(z.object({ name: z.string(), args: z.unknown() })).optional(),
-        })),
-        total_tokens: z.number(),
-        orchestrator_tokens: z.number(),
-        started_at: z.number(),
-        completed_at: z.number().optional(),
-        error: z.string().optional(),
-      }),
-    },
   })
 
   useEffect(() => {
