@@ -6,6 +6,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { MessageSquareText } from 'lucide-react'
 import ChatInput from '@/containers/ChatInput'
 import { MessagesArea } from '@/containers/threads/MessagesArea'
+import { useAgentMode } from '@/hooks/agent/useAgentMode'
+import { AgentModeToggle } from '@/components/agent/AgentModeToggle'
+import { AgentMessage } from '@/components/agent/AgentMessage'
+import { AgentInput } from '@/components/agent/AgentInput'
 
 export type MainThreadPaneProps = {
   threadId: string
@@ -58,6 +62,8 @@ export function MainThreadPane({
   isSplitView = false,
   onSplitClose,
 }: MainThreadPaneProps) {
+  const agent = useAgentMode(threadId)
+
   const containerCls = isSplitView
     ? 'h-full rounded-xl border bg-background overflow-hidden flex flex-col relative'
     : hasPanels
@@ -82,6 +88,11 @@ export function MainThreadPane({
               <span className="truncate">{title}</span>
             </div>
             <div className="flex items-center gap-0.5 shrink-0">
+              <AgentModeToggle
+                enabled={agent.isAgentMode}
+                onToggle={() => agent.setIsAgentMode((v) => !v)}
+                axError={agent.axError}
+              />
               <Button
                 variant={showThreadPromptEditor ? 'secondary' : 'ghost'}
                 size="icon-xs"
@@ -167,8 +178,41 @@ export function MainThreadPane({
             className="absolute -top-8 left-0 right-0 h-8 pointer-events-none z-10"
             style={{ background: 'linear-gradient(to top, var(--background) 20%, transparent)' }}
           />
-          <div className={inputCls}>
-            <ChatInput threadId={threadId} model={threadModel} onSubmit={handleSubmit} onStop={stop} chatStatus={status} />
+          <div className={inputCls + ' space-y-2'}>
+            {/* Agent mode toggle — always visible at the bottom */}
+            <div className="flex items-center gap-2">
+              <AgentModeToggle
+                enabled={agent.isAgentMode}
+                onToggle={() => agent.setIsAgentMode((v) => !v)}
+                axError={agent.axError}
+              />
+              <span className="text-xs text-muted-foreground">
+                {agent.isAgentMode ? 'Agent Mode (AutomatosX)' : 'Switch to Agent Mode'}
+              </span>
+            </div>
+
+            {agent.isAgentMode ? (
+              <div className="space-y-3">
+                {(agent.lines.length > 0 || agent.status !== 'idle') && (
+                  <AgentMessage
+                    lines={agent.lines}
+                    status={agent.status}
+                    onStop={agent.stopAgent}
+                    onReset={agent.resetAgent}
+                  />
+                )}
+                <AgentInput
+                  agents={agent.agents}
+                  selectedAgent={agent.selectedAgent}
+                  onSelectAgent={agent.setSelectedAgent}
+                  onSubmit={agent.runAgent}
+                  isRunning={agent.status === 'running'}
+                  axError={agent.axError}
+                />
+              </div>
+            ) : (
+              <ChatInput threadId={threadId} model={threadModel} onSubmit={handleSubmit} onStop={stop} chatStatus={status} />
+            )}
           </div>
         </div>
       </div>

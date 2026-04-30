@@ -1,5 +1,4 @@
-pub mod agent_run_logs;
-pub mod agent_teams;
+pub mod automatosx;
 pub mod app;
 pub mod downloads;
 pub mod extensions;

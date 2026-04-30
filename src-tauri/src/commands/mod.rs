@@ -83,15 +83,11 @@ macro_rules! desktop_handlers {
             // Custom updater commands (desktop only)
             crate::core::updater::commands::check_for_app_updates,
             crate::core::updater::commands::is_update_available,
-            // Agent teams
-            crate::core::agent_teams::list_agent_teams,
-            crate::core::agent_teams::get_agent_team,
-            crate::core::agent_teams::save_agent_team,
-            crate::core::agent_teams::delete_agent_team,
-            // Agent run logs
-            crate::core::agent_run_logs::save_agent_run_log,
-            crate::core::agent_run_logs::list_agent_run_logs,
-            crate::core::agent_run_logs::get_agent_run_log,
+            // AutomatosX agent mode
+            crate::core::automatosx::ax_check,
+            crate::core::automatosx::ax_list_agents,
+            crate::core::automatosx::ax_run_agent,
+            crate::core::automatosx::ax_stop,
         ]
     };
 }
