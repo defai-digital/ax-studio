@@ -58,6 +58,10 @@ import { usePrompt } from '@/hooks/ui/usePrompt'
 import { motion } from 'motion/react'
 import { WorkflowSelector } from '@/components/smart-start/WorkflowSelector'
 import { toast } from 'sonner'
+import { useAgentMode } from '@/hooks/agent/useAgentMode'
+import { AgentModeToggle } from '@/components/agent/AgentModeToggle'
+import { AgentInput } from '@/components/agent/AgentInput'
+import { AgentMessage } from '@/components/agent/AgentMessage'
 
 export const Route = createFileRoute(route.home)({
   component: Index,
@@ -85,6 +89,8 @@ function Index() {
   const { globalDefaultPrompt } = useGeneralSetting()
   const setGlobalPrompt = usePrompt((state) => state.setPrompt)
   useTools()
+
+  const agent = useAgentMode('home')
 
   const [showThreadPromptEditor, setShowThreadPromptEditor] = useState(false)
   const [threadPromptDraft, setThreadPromptDraft] = useState(
@@ -189,6 +195,11 @@ function Index() {
         <div className="flex items-center w-full pr-4">
           <DropdownModelProvider model={selectedModel} useLastUsedModel />
           <div className="flex items-center gap-1 ml-auto shrink-0">
+            <AgentModeToggle
+              enabled={agent.isAgentMode}
+              onToggle={() => agent.setIsAgentMode((v) => !v)}
+              axError={agent.axError}
+            />
             <Button
               variant={showThreadPromptEditor ? 'secondary' : 'ghost'}
               size="icon-sm"
@@ -336,14 +347,39 @@ function Index() {
             </motion.div>
           </div>
         </div>
-        {/* ChatInput pinned at bottom */}
+        {/* Input pinned at bottom */}
         <div className="shrink-0 px-3 pb-2 sm:pb-4">
-          <div className="mx-auto w-full max-w-2xl">
-            <ChatInput
-              showSpeedToken={false}
-              model={selectedModel}
-              initialMessage={true}
-            />
+          <div className="mx-auto w-full max-w-2xl space-y-2">
+            {agent.isAgentMode ? (
+              <>
+                {(agent.lines.length > 0 || agent.status !== 'idle') && (
+                  <AgentMessage
+                    lines={agent.lines}
+                    status={agent.status}
+                    onStop={agent.stopAgent}
+                    onReset={agent.resetAgent}
+                  />
+                )}
+                <AgentInput
+                  agents={agent.agents}
+                  selectedAgent={agent.selectedAgent}
+                  onSelectAgent={agent.setSelectedAgent}
+                  selectedProvider={agent.selectedProvider}
+                  onSelectProvider={agent.setSelectedProvider}
+                  selectedModel={agent.selectedModel}
+                  onSelectModel={agent.setSelectedModel}
+                  onSubmit={agent.runAgent}
+                  isRunning={agent.status === 'running'}
+                  axError={agent.axError}
+                />
+              </>
+            ) : (
+              <ChatInput
+                showSpeedToken={false}
+                model={selectedModel}
+                initialMessage={true}
+              />
+            )}
           </div>
         </div>
       </div>
