@@ -1,4 +1,4 @@
-import type { RefObject } from 'react'
+import { type RefObject, useEffect, useRef } from 'react'
 import type { UIMessage } from '@ai-sdk/react'
 import type { ChatStatus } from 'ai'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,12 @@ import { useAgentMode } from '@/hooks/agent/useAgentMode'
 import { AgentModeToggle } from '@/components/agent/AgentModeToggle'
 import { AgentMessage } from '@/components/agent/AgentMessage'
 import { AgentInput } from '@/components/agent/AgentInput'
+import { safeStorageGetItem, safeStorageRemoveItem } from '@/lib/storage/storage'
+import { SESSION_STORAGE_KEY } from '@/constants/chat'
+import { useMessages } from '@/hooks/chat/useMessages'
+import { useChatSessions } from '@/stores/chat-session-store'
+import { convertThreadMessageToUIMessage } from '@/lib/messages'
+import { newUserThreadContent, newAssistantThreadContent } from '@/lib/completion'
 
 export type MainThreadPaneProps = {
   threadId: string
@@ -63,6 +69,80 @@ export function MainThreadPane({
   onSplitClose,
 }: MainThreadPaneProps) {
   const agent = useAgentMode(threadId)
+  const agentRef = useRef(agent)
+  agentRef.current = agent
+  const didAutoRun = useRef(false)
+
+  useEffect(() => {
+    if (didAutoRun.current) return
+    const raw = safeStorageGetItem(sessionStorage, SESSION_STORAGE_KEY.AGENT_TASK, 'MainThreadPane')
+    if (!raw) return
+    didAutoRun.current = true
+    safeStorageRemoveItem(sessionStorage, SESSION_STORAGE_KEY.AGENT_TASK, 'MainThreadPane')
+    try {
+      const cfg = JSON.parse(raw) as {
+        task: string
+        agentId: string
+        provider: string | null
+        model: string | null
+      }
+      // Save user task as first chat message
+      const userMsg = newUserThreadContent(threadId, cfg.task)
+      useMessages.getState().addMessage(userMsg)
+      const uiUserMsg = convertThreadMessageToUIMessage(userMsg)
+      if (uiUserMsg) {
+        useChatSessions.setState((state) => {
+          const session = state.sessions[threadId]
+          if (!session) return state
+          return {
+            sessions: {
+              ...state.sessions,
+              [threadId]: { ...session, chat: { ...session.chat, messages: [...session.chat.messages, uiUserMsg] } },
+            },
+          }
+        })
+      }
+      agentRef.current.setIsAgentMode(true)
+      agentRef.current.runAgentWithConfig(cfg.task, cfg.agentId, cfg.provider, cfg.model)
+    } catch {
+      // ignore malformed payload
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Save agent output as assistant message when run completes
+  const savedLinesCount = useRef(0)
+  useEffect(() => {
+    if (agent.status !== 'done' && agent.status !== 'error') {
+      if (agent.status === 'idle') savedLinesCount.current = 0
+      return
+    }
+    if (agent.lines.length === 0 || savedLinesCount.current === agent.lines.length) return
+    savedLinesCount.current = agent.lines.length
+
+    const outputText = agent.lines
+      .filter((l) => l.kind === 'line' || l.kind === 'done')
+      .map((l) => l.text)
+      .join('\n')
+      .trim()
+    if (!outputText) return
+
+    const assistantMsg = newAssistantThreadContent(threadId, outputText, { source: 'agent' })
+    useMessages.getState().addMessage(assistantMsg)
+    const uiMsg = convertThreadMessageToUIMessage(assistantMsg)
+    if (!uiMsg) return
+    useChatSessions.setState((state) => {
+      const session = state.sessions[threadId]
+      if (!session) return state
+      return {
+        sessions: {
+          ...state.sessions,
+          [threadId]: { ...session, chat: { ...session.chat, messages: [...session.chat.messages, uiMsg] } },
+        },
+      }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agent.status, agent.lines.length])
 
   const containerCls = isSplitView
     ? 'h-full rounded-xl border bg-background overflow-hidden flex flex-col relative'

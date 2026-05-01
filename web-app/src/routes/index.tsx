@@ -15,7 +15,7 @@ import SetupScreen from '@/containers/SetupScreen'
 import { route } from '@/constants/routes'
 import { localStorageKey } from '@/constants/localStorage'
 import { SESSION_STORAGE_KEY } from '@/constants/chat'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod/v4'
 
 type SearchParams = {
@@ -61,7 +61,6 @@ import { toast } from 'sonner'
 import { useAgentMode } from '@/hooks/agent/useAgentMode'
 import { AgentModeToggle } from '@/components/agent/AgentModeToggle'
 import { AgentInput } from '@/components/agent/AgentInput'
-import { AgentMessage } from '@/components/agent/AgentMessage'
 
 export const Route = createFileRoute(route.home)({
   component: Index,
@@ -91,6 +90,38 @@ function Index() {
   useTools()
 
   const agent = useAgentMode('home')
+  const agentRef = useRef(agent)
+  agentRef.current = agent
+
+  const handleAgentSubmit = useCallback(
+    async (task: string) => {
+      try {
+        const modelConfig = {
+          id: selectedModel?.id ?? activeModel?.id ?? '*',
+          provider: selectedModel?.provider ?? selectedProvider,
+        }
+        const thread = await createThread(modelConfig, 'Agent Task')
+        safeStorageSetItem(
+          sessionStorage,
+          SESSION_STORAGE_KEY.AGENT_TASK,
+          JSON.stringify({
+            task,
+            agentId: agentRef.current.selectedAgent,
+            provider: agentRef.current.selectedProvider,
+            model: agentRef.current.selectedModel,
+          }),
+          'routes/index'
+        )
+        navigate({ to: '/threads/$threadId', params: { threadId: thread.id } })
+      } catch (error) {
+        console.error('Failed to create agent thread:', error)
+        toast.error('Failed to start agent', {
+          description: error instanceof Error ? error.message : 'Please try again.',
+        })
+      }
+    },
+    [createThread, selectedModel, activeModel, selectedProvider, navigate]
+  )
 
   const [showThreadPromptEditor, setShowThreadPromptEditor] = useState(false)
   const [threadPromptDraft, setThreadPromptDraft] = useState(
@@ -351,28 +382,18 @@ function Index() {
         <div className="shrink-0 px-3 pb-2 sm:pb-4">
           <div className="mx-auto w-full max-w-2xl space-y-2">
             {agent.isAgentMode ? (
-              <>
-                {(agent.lines.length > 0 || agent.status !== 'idle') && (
-                  <AgentMessage
-                    lines={agent.lines}
-                    status={agent.status}
-                    onStop={agent.stopAgent}
-                    onReset={agent.resetAgent}
-                  />
-                )}
-                <AgentInput
-                  agents={agent.agents}
-                  selectedAgent={agent.selectedAgent}
-                  onSelectAgent={agent.setSelectedAgent}
-                  selectedProvider={agent.selectedProvider}
-                  onSelectProvider={agent.setSelectedProvider}
-                  selectedModel={agent.selectedModel}
-                  onSelectModel={agent.setSelectedModel}
-                  onSubmit={agent.runAgent}
-                  isRunning={agent.status === 'running'}
-                  axError={agent.axError}
-                />
-              </>
+              <AgentInput
+                agents={agent.agents}
+                selectedAgent={agent.selectedAgent}
+                onSelectAgent={agent.setSelectedAgent}
+                selectedProvider={agent.selectedProvider}
+                onSelectProvider={agent.setSelectedProvider}
+                selectedModel={agent.selectedModel}
+                onSelectModel={agent.setSelectedModel}
+                onSubmit={handleAgentSubmit}
+                isRunning={false}
+                axError={agent.axError}
+              />
             ) : (
               <ChatInput
                 showSpeedToken={false}

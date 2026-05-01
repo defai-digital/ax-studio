@@ -106,6 +106,35 @@ export function useAgentMode(threadId: string) {
     }
   }, [sessionId, selectedAgent, status])
 
+  const runAgentWithConfig = useCallback(async (
+    task: string,
+    agentId: string,
+    provider: string | null,
+    model: string | null,
+  ) => {
+    if (!IS_TAURI) return
+    if (status === 'running') return
+    setLines([])
+    setStatus('running')
+    setSelectedAgent(agentId)
+    if (provider !== null) setSelectedProvider(provider)
+    if (model !== null) setSelectedModel(model)
+
+    try {
+      await invoke('ax_run_agent', {
+        sessionId,
+        agentId,
+        task,
+        provider: provider ?? undefined,
+        model: model ?? undefined,
+      })
+    } catch (err) {
+      const errorText = typeof err === 'string' ? err : String(err)
+      setLines([{ kind: 'error', text: errorText, timestamp: Date.now() }])
+      setStatus('error')
+    }
+  }, [sessionId, status])
+
   const stopAgent = useCallback(async () => {
     if (!IS_TAURI) return
     try {
@@ -137,6 +166,7 @@ export function useAgentMode(threadId: string) {
     axVersion,
     axError,
     runAgent,
+    runAgentWithConfig,
     stopAgent,
     resetAgent,
     isAxInstalled: axVersion !== null,
