@@ -16,7 +16,6 @@ export type AttachmentsSettings = {
 type AttachmentsStore = AttachmentsSettings & {
   // Dynamic controller definitions for rendering UI
   settingsDefs: SettingComponentProps[]
-  loadSettingsDefs: () => Promise<boolean>
   setEnabled: (v: boolean) => void
   setMaxFileSizeMB: (v: number) => void
   setRetrievalLimit: (v: number) => void
@@ -39,10 +38,6 @@ export const useAttachments = create<AttachmentsStore>()((set) => ({
   parseMode: 'auto',
   autoInlineContextRatio: 0.75,
   settingsDefs: [],
-  loadSettingsDefs: async () => {
-    // RAGExtension removed; settings are managed locally only
-    return false
-  },
   setEnabled: (v) => {
     set((s) => ({
       enabled: v,

@@ -9,7 +9,7 @@ import { cn, sanitizeModelId } from '@/lib/utils'
 import { CatalogModel } from '@/services/models/types'
 import { AppEvent, DownloadEvent, DownloadState, events } from '@ax-studio/core'
 import { toast } from 'sonner'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { DEFAULT_MODEL_QUANTIZATIONS } from '@/constants/models'
 import { ExternalLink, Download, Pause, Play } from 'lucide-react'
@@ -109,10 +109,6 @@ export function DownloadButtonPlaceholder({
     }
   }, [modelId])
 
-  const isRecommendedModel = useCallback((_: string) => {
-    return false
-  }, [])
-
   if ((model.quants?.length ?? 0) === 0) {
     return (
       <a
@@ -134,8 +130,6 @@ export function DownloadButtonPlaceholder({
 
   const downloadProgress =
     downloadProcesses.find((e) => e.id === modelId)?.progress || 0
-
-  const isRecommended = isRecommendedModel(model.model_name)
 
   const handleDownload = async () => {
     // Immediately set local downloading state and start download
@@ -187,7 +181,7 @@ export function DownloadButtonPlaceholder({
     <div
       className={cn(
         'flex items-center',
-        isRecommended && 'hub-download-button-step'
+        false && 'hub-download-button-step'
       )}
     >
       {isDownloading && !isDownloaded && (
