@@ -1,4 +1,7 @@
 {
+  "title": "モデルハブ",
+  "subtitle": "オープンソースのAIモデルを発見してダウンロード。ローカル推論に最適化。",
+  "allModels": "すべてのモデル",
   "sortNewest": "新着順",
   "sortMostDownloaded": "ダウンロード数順",
   "newChat": "新しいチャット",

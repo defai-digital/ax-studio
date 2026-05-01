@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { ThreadMessage } from '@ax-studio/core'
-import { MCPTool } from '@/types/completion'
+import { MCPTool } from '@/types/mcp'
 import { ChatCompletionMessageToolCall } from 'openai/resources'
 
 export type PromptProgress = {

@@ -1,4 +1,7 @@
 {
+  "title": "Hub de modèles",
+  "subtitle": "Découvrez et téléchargez des modèles IA open-source. Optimisé pour l'inférence locale.",
+  "allModels": "Tous les modèles",
   "sortNewest": "Le plus récent",
   "sortMostDownloaded": "Le plus téléchargé",
   "newChat": "Nouvelle conversation",

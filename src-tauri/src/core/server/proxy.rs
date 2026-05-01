@@ -13,6 +13,7 @@ use subtle::ConstantTimeEq;
 const MAX_AUTH_FAILURES: usize = 10;
 const AUTH_LOCKOUT_SECS: u64 = 60;
 const AUTH_MAX_ENTRIES: usize = 1024;
+const WHITELISTED_PATHS: &[&str] = &["/favicon.ico"];
 
 static AUTH_FAILURES: std::sync::LazyLock<Mutex<HashMap<String, (usize, Instant)>>> =
     std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -190,8 +191,7 @@ fn handle_cors_preflight(req: &Request<Body>, config: &ProxyConfig) -> Option<Re
     }
 
     let request_path = req.uri().path();
-    let whitelisted_paths = ["/favicon.ico"];
-    let is_whitelisted_path = whitelisted_paths.contains(&request_path);
+    let is_whitelisted_path = WHITELISTED_PATHS.contains(&request_path);
 
     let is_trusted = if is_whitelisted_path {
         log::debug!("CORS preflight: Bypassing host check for whitelisted path: {request_path}");
@@ -307,7 +307,6 @@ fn validate_request(
     headers: &hyper::HeaderMap,
     config: &ProxyConfig,
 ) -> Option<Response<Body>> {
-    let whitelisted_paths = ["/favicon.ico"];
     // Allow loopback processes (e.g. fabric-ingest MCP server) to call the
     // embeddings endpoint without a Bearer token. The proxy only binds to
     // 127.0.0.1, so no external origin can reach this path.
@@ -315,7 +314,7 @@ fn validate_request(
     let is_loopback_embeddings = (path == "/embeddings" || path == "/v1/embeddings")
         && (config.host == "127.0.0.1" || config.host == "localhost" || config.host == "::1")
         && host_header.starts_with(&config.host);
-    let is_whitelisted_path = whitelisted_paths.contains(&path) || is_loopback_embeddings;
+    let is_whitelisted_path = WHITELISTED_PATHS.contains(&path) || is_loopback_embeddings;
 
     if !is_whitelisted_path {
         if !host_header.is_empty() {

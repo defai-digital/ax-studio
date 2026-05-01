@@ -27,31 +27,6 @@ pub async fn start_server<R: tauri::Runtime>(
     proxy_timeout: u64,
     app_handle: tauri::AppHandle<R>,
 ) -> Result<u16, Box<dyn std::error::Error + Send + Sync>> {
-    start_server_internal(
-        server_handle,
-        host,
-        port,
-        prefix,
-        proxy_api_key,
-        trusted_hosts,
-        cors_enabled,
-        proxy_timeout,
-        app_handle,
-    )
-    .await
-}
-
-async fn start_server_internal<R: tauri::Runtime>(
-    server_handle: Arc<Mutex<Option<ServerHandle>>>,
-    host: String,
-    port: u16,
-    prefix: String,
-    proxy_api_key: String,
-    trusted_hosts: Vec<Vec<String>>,
-    cors_enabled: bool,
-    proxy_timeout: u64,
-    app_handle: tauri::AppHandle<R>,
-) -> Result<u16, Box<dyn std::error::Error + Send + Sync>> {
     let mut handle_guard = server_handle.lock().await;
     if handle_guard.is_some() {
         return Err("Server is already running".into());

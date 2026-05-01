@@ -3,7 +3,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core'
-import { MCPTool } from '@/types/completion'
+import { MCPTool } from '@/types/mcp'
 import { DEFAULT_MCP_SETTINGS } from '@/hooks/tools/useMCPServers'
 import type { MCPServerConfig, MCPServers, MCPSettings } from '@/hooks/tools/useMCPServers'
 import type { MCPConfig, MCPService } from './types'

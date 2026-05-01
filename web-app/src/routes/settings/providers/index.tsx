@@ -109,7 +109,7 @@ function ModelProviders() {
                     className="text-muted-foreground"
                     style={{ fontSize: '13px' }}
                   >
-                    {t('provider:connectDescription', {
+                    {t('providers:connectDescription', {
                       defaultValue:
                         'Connect external APIs and local model engines.',
                     })}
@@ -122,7 +122,7 @@ function ModelProviders() {
                   >
                     <Button className="rounded-lg h-8 text-[12px]">
                       <Plus className="size-3 mr-1.5" />
-                      {t('provider:addProvider')}
+                      {t('providers:addProvider')}
                     </Button>
                   </AddProviderDialog>
                 </div>

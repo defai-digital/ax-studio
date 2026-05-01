@@ -52,29 +52,6 @@ pub async fn prune_unused_message_locks() {
     }
 }
 
-/// Write messages to a thread's messages.jsonl file (atomic: write to .tmp then rename)
-///
-/// Currently used only via rewrite_messages_file and tests; kept as a
-/// standalone primitive for direct callers added by future thread-storage
-/// features.
-#[allow(dead_code)]
-pub fn write_messages_to_file(
-    messages: &[MessageRecord],
-    path: &std::path::Path,
-) -> Result<(), String> {
-    let tmp_path = path.with_extension("jsonl.tmp");
-    let mut file = File::create(&tmp_path).map_err(|e| e.to_string())?;
-    for msg in messages {
-        let data = serde_json::to_string(msg).map_err(|e| e.to_string())?;
-        writeln!(file, "{data}").map_err(|e| e.to_string())?;
-    }
-    file.flush().map_err(|e| e.to_string())?;
-    file.sync_all().map_err(|e| e.to_string())?;
-    drop(file);
-    fs::rename(&tmp_path, path).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
 /// Read messages from a thread's messages.jsonl file
 pub fn read_messages_from_file<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
@@ -173,89 +150,6 @@ where
     Ok(changed)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::{json, Map};
-
-    fn make_test_message(role: &str, content_text: &str) -> MessageRecord {
-        MessageRecord {
-            object: "message".to_string(),
-            thread_id: "thread-1".to_string(),
-            role: role.to_string(),
-            content: vec![json!({"type": "text", "text": content_text})],
-            extra: Map::new(),
-            ..Default::default()
-        }
-    }
-
-    fn make_test_dir(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir()
-            .join("ax_studio_test")
-            .join(name)
-            .join(format!("{}", std::process::id()));
-        let _ = fs::create_dir_all(&dir);
-        dir
-    }
-
-    fn cleanup_test_dir(dir: &std::path::Path) {
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn test_write_messages_to_file_basic() {
-        let dir = make_test_dir("write_basic");
-        let path = dir.join("messages.jsonl");
-
-        let messages = vec![
-            make_test_message("user", "Hello"),
-            make_test_message("assistant", "Hi there"),
-        ];
-
-        write_messages_to_file(&messages, &path).unwrap();
-
-        assert!(path.exists());
-        let content = fs::read_to_string(&path).unwrap();
-        let lines: Vec<&str> = content.trim().split('\n').collect();
-        assert_eq!(lines.len(), 2);
-
-        let msg0: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
-        assert_eq!(msg0["role"], "user");
-        let msg1: serde_json::Value = serde_json::from_str(lines[1]).unwrap();
-        assert_eq!(msg1["role"], "assistant");
-
-        cleanup_test_dir(&dir);
-    }
-
-    #[test]
-    fn test_write_messages_to_file_empty() {
-        let dir = make_test_dir("write_empty");
-        let path = dir.join("messages.jsonl");
-
-        write_messages_to_file(&[], &path).unwrap();
-
-        assert!(path.exists());
-        let content = fs::read_to_string(&path).unwrap();
-        assert!(content.is_empty());
-
-        cleanup_test_dir(&dir);
-    }
-
-    #[test]
-    fn test_write_messages_to_file_atomic_no_tmp_leftover() {
-        let dir = make_test_dir("write_atomic");
-        let path = dir.join("messages.jsonl");
-        let tmp_path = path.with_extension("jsonl.tmp");
-
-        let messages = vec![make_test_message("user", "test")];
-        write_messages_to_file(&messages, &path).unwrap();
-
-        assert!(!tmp_path.exists());
-        assert!(path.exists());
-
-        cleanup_test_dir(&dir);
-    }
-}
 
 /// Remove the per-thread lock entry when a thread is deleted.
 pub async fn remove_lock_for_thread(thread_id: &str) {

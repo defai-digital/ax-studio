@@ -111,7 +111,7 @@ export function AddProviderDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle>{t('provider:addOpenAIProvider')}</DialogTitle>
+          <DialogTitle>{t('providers:addOpenAIProvider')}</DialogTitle>
         </DialogHeader>
         <div>
           <input
@@ -123,7 +123,7 @@ export function AddProviderDialog({
                 ? 'border-red-500/50 focus:border-red-500/70'
                 : 'border-border/50'
             }`}
-            placeholder={t('provider:enterNameForProvider')}
+            placeholder={t('providers:enterNameForProvider')}
             onKeyDown={handleKeyDown}
           />
           {validationError && (

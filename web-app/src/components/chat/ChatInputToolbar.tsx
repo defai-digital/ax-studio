@@ -28,7 +28,7 @@ import { AvatarEmoji } from '@/components/common/AvatarEmoji'
 import DropdownToolsAvailable from '@/containers/DropdownToolsAvailable'
 import { McpExtensionToolLoader } from '@/containers/McpExtensionToolLoader'
 import type { ThreadMessage } from '@ax-studio/core'
-import type { MCPTool } from '@/types/completion'
+import type { MCPTool } from '@/types/mcp'
 
 const ARTIFACT_PROMPTS = [
   { label: 'HTML Page',        prompt: 'Build an artifact-html page for '            },

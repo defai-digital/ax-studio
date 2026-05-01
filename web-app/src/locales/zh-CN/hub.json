@@ -1,4 +1,7 @@
 {
+  "title": "模型中心",
+  "subtitle": "发现并下载开源AI模型。针对本地推理优化。",
+  "allModels": "全部模型",
   "sortNewest": "最新",
   "sortMostDownloaded": "最多下载",
   "newChat": "新对话",

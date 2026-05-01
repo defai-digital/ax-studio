@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useToolAvailable } from '../useToolAvailable'
-import type { MCPTool } from '@/types/completion'
+import type { MCPTool } from '@/types/mcp'
 
 // Mock constants
 vi.mock('@/constants/localStorage', () => ({

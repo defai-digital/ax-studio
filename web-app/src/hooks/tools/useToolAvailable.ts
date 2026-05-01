@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
 import { createSafeJSONStorage } from '@/lib/storage/storage'
-import { MCPTool } from '@/types/completion'
+import { MCPTool } from '@/types/mcp'
 
 // Helper function to create composite key for server+tool
 const createToolKey = (serverName: string, toolName: string) => {

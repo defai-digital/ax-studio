@@ -97,14 +97,14 @@ describe('useGeneralSetting', () => {
       expect(result.current.currentLanguage).toBe('pt-BR')
     })
 
-    it('should set language to Russian', () => {
+    it('should set language to French', () => {
       const { result } = renderHook(() => useGeneralSetting())
 
       act(() => {
-        result.current.setCurrentLanguage('ru')
+        result.current.setCurrentLanguage('fr')
       })
 
-      expect(result.current.currentLanguage).toBe('ru')
+      expect(result.current.currentLanguage).toBe('fr')
     })
 
     it('should change language multiple times', () => {
@@ -131,9 +131,9 @@ describe('useGeneralSetting', () => {
       expect(result.current.currentLanguage).toBe('pt-BR')
 
       act(() => {
-        result.current.setCurrentLanguage('ru')
+        result.current.setCurrentLanguage('zh-CN')
       })
-      expect(result.current.currentLanguage).toBe('ru')
+      expect(result.current.currentLanguage).toBe('zh-CN')
 
       act(() => {
         result.current.setCurrentLanguage('en')
