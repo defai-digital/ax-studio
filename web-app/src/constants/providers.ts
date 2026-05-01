@@ -3,6 +3,8 @@ export const ANTHROPIC_VERSION_VALUE = '2023-06-01'
 export const ANTHROPIC_BROWSER_ACCESS_HEADER = 'anthropic-dangerous-direct-browser-access'
 export const ANTHROPIC_BROWSER_ACCESS_VALUE = 'true'
 
+export const LOCAL_PROVIDER_IDS = new Set(['llamacpp', 'mlx', 'ollama'])
+
 /** Default custom headers required for direct Anthropic API access from a browser. */
 export const ANTHROPIC_DEFAULT_HEADERS = [
   { header: ANTHROPIC_VERSION_HEADER, value: ANTHROPIC_VERSION_VALUE },

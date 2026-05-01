@@ -4,6 +4,7 @@ import { type ArtifactType } from '@/lib/artifacts/harness'
 import { useArtifactPanel } from '@/hooks/ui/useArtifactPanel'
 import { ArtifactPreview } from './ArtifactPreview'
 import { cn } from '@/lib/utils'
+import { ARTIFACT_TYPE_LABEL } from './artifact-types'
 
 interface ArtifactBlockProps {
   type: ArtifactType
@@ -32,14 +33,6 @@ class PreviewErrorBoundary extends Component<
     }
     return this.props.children
   }
-}
-
-const TYPE_LABEL: Record<ArtifactType, string> = {
-  html: 'HTML',
-  react: 'React',
-  svg: 'SVG',
-  chartjs: 'Chart.js',
-  vega: 'Vega-Lite',
 }
 
 function CopyButton({ source }: { source: string }) {
@@ -80,7 +73,7 @@ export const ArtifactBlock = memo(function ArtifactBlock({
     }
   }
 
-  const label = TYPE_LABEL[type]
+  const label = ARTIFACT_TYPE_LABEL[type]
 
   return (
     <div className="rounded-xl border border-border overflow-hidden my-2">

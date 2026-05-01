@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { invoke } from '@tauri-apps/api/core'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { CitationData } from '@/types/citation-types'
+import { getDomain, openUrl } from '@/lib/utils/url'
 
 const confidenceConfig: Record<
   CitationData['confidence'],
@@ -45,18 +45,6 @@ function ConfidenceBadge({ confidence }: { confidence: CitationData['confidence'
       </Tooltip>
     </TooltipProvider>
   )
-}
-
-function getDomain(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '')
-  } catch {
-    return url
-  }
-}
-
-function openUrl(url: string) {
-  invoke('plugin:opener|open_url', { url }).catch(console.warn)
 }
 
 interface SourcesFooterProps {

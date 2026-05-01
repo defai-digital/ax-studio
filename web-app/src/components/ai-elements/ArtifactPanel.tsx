@@ -2,16 +2,8 @@ import { XIcon, CodeIcon, EyeIcon, CopyIcon, CheckIcon, HistoryIcon, RotateCcwIc
 import { useState, useEffect } from 'react'
 import { useArtifactPanel, type ArtifactEntry } from '@/hooks/ui/useArtifactPanel'
 import { ArtifactPreview } from './ArtifactPreview'
-import { type ArtifactType } from '@/lib/artifacts/harness'
 import { cn } from '@/lib/utils'
-
-const TYPE_LABEL: Record<ArtifactType, string> = {
-  html: 'HTML',
-  react: 'React',
-  svg: 'SVG',
-  chartjs: 'Chart.js',
-  vega: 'Vega-Lite',
-}
+import { ARTIFACT_TYPE_LABEL } from './artifact-types'
 
 type Tab = 'preview' | 'source' | 'history'
 
@@ -49,7 +41,7 @@ export function ArtifactPanel({ threadId, onClose }: ArtifactPanelProps) {
 
   if (!pinned) return null
 
-  const label = TYPE_LABEL[pinned.type]
+  const label = ARTIFACT_TYPE_LABEL[pinned.type]
 
   const handleCopy = async () => {
     try {
@@ -203,7 +195,7 @@ export function ArtifactPanel({ threadId, onClose }: ArtifactPanelProps) {
                         v{entry.version}
                       </span>
                       <span className="shrink-0 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground px-1.5 py-0.5 bg-muted rounded">
-                        {TYPE_LABEL[entry.type]}
+                        {ARTIFACT_TYPE_LABEL[entry.type]}
                       </span>
                       <span className="text-muted-foreground truncate">
                         {idx === 0 ? 'Latest' : formatRelativeTime(entry.timestamp)}

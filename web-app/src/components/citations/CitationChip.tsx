@@ -1,19 +1,7 @@
 import { useState } from 'react'
-import { invoke } from '@tauri-apps/api/core'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import type { CitationSource } from '@/types/citation-types'
-
-function getDomain(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '')
-  } catch {
-    return url
-  }
-}
-
-function openUrl(url: string) {
-  invoke('plugin:opener|open_url', { url }).catch(console.warn)
-}
+import { getDomain, openUrl } from '@/lib/utils/url'
 
 interface CitationChipProps {
   /** The citation number (1-based) */

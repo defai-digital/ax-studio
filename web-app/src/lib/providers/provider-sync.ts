@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
+import { LOCAL_PROVIDER_IDS } from '@/constants/providers'
 
 type ProviderCustomHeader = { header: string; value: string }
 
@@ -13,8 +14,6 @@ export type RegisterProviderRequest = {
 type RegisteredProviderConfigView = {
   provider: string
 }
-
-const LOCAL_PROVIDER_IDS = new Set(['llamacpp', 'mlx', 'ollama'])
 
 function isRemoteProvider(provider: ModelProvider): boolean {
   return !LOCAL_PROVIDER_IDS.has(provider.provider)

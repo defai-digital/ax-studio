@@ -3,6 +3,7 @@ import { AppWindowIcon } from 'lucide-react'
 import { type ArtifactType } from '@/lib/artifacts/harness'
 import { ArtifactBlock } from './ArtifactBlock'
 import { cn } from '@/lib/utils'
+import { ARTIFACT_TYPE_LABEL } from './artifact-types'
 
 interface RenderableCodeBlockProps {
   type: ArtifactType
@@ -11,19 +12,6 @@ interface RenderableCodeBlockProps {
   children: ReactNode
 }
 
-const TYPE_LABEL: Record<ArtifactType, string> = {
-  html: 'HTML',
-  react: 'React',
-  svg: 'SVG',
-  chartjs: 'Chart.js',
-  vega: 'Vega-Lite',
-}
-
-/**
- * Wraps a plain code block (html/jsx/tsx/svg) with a "Render" button in the
- * top-right corner. Clicking switches the block in-place to an ArtifactBlock
- * so the user can preview it without asking the model to regenerate.
- */
 export const RenderableCodeBlock = memo(function RenderableCodeBlock({
   type,
   source,
@@ -45,7 +33,7 @@ export const RenderableCodeBlock = memo(function RenderableCodeBlock({
       {/* Render button — always visible in top-right corner */}
       <button
         onClick={() => setRendered(true)}
-        title={`Render as ${TYPE_LABEL[type]} artifact`}
+        title={`Render as ${ARTIFACT_TYPE_LABEL[type]} artifact`}
         className={cn(
           'absolute top-2 right-2 z-10',
           'flex items-center gap-1 px-2 py-1 rounded text-xs font-medium',

@@ -1,6 +1,5 @@
 import type { ServiceHub } from '@/services'
-
-const LOCAL_PROVIDER_IDS = new Set(['llamacpp', 'mlx', 'ollama'])
+import { LOCAL_PROVIDER_IDS } from '@/constants/providers'
 
 export function isLocalProvider(provider: ProviderObject): boolean {
   return LOCAL_PROVIDER_IDS.has(provider.provider)
