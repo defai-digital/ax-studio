@@ -36,10 +36,10 @@ pub const DEFAULT_MCP_CONFIG: &str = r#"{
       "active": false
     },
     "ax-studio": {
-      "command": "node",
-      "args": ["--experimental-sqlite", "~/ax-fabric/packages/fabric-ingest/dist/cli.js", "mcp", "server"],
+      "command": "npx",
+      "args": ["-y", "@ax-studio/fabric-ingest", "mcp", "server"],
       "env": {},
-      "active": true,
+      "active": false,
       "official": true
     }
   },
