@@ -57,6 +57,7 @@ import { invoke } from '@tauri-apps/api/core'
 
 import {
   configureBackends,
+  awaitPendingConfigureBackends,
   downloadBackend,
   updateBackend,
   installBackendFromFile,
@@ -1268,8 +1269,13 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     overrideSettings?: Partial<Record<keyof LlamacppConfig, unknown>>,
     isEmbedding = false
   ): Promise<SessionInfo> {
-    // Resolve backend binary
-    const versionBackend = await this.getSetting<string>('version_backend', '')
+    // Resolve backend binary — if empty, backend config may still be running
+    // from startup (fire-and-forget). Wait for it before giving up.
+    let versionBackend = await this.getSetting<string>('version_backend', '')
+    if (!versionBackend) {
+      await awaitPendingConfigureBackends()
+      versionBackend = await this.getSetting<string>('version_backend', '')
+    }
     if (!versionBackend) {
       throw new Error(
         'No backend selected. Please configure the engine backend in settings.'

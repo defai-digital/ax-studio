@@ -465,6 +465,11 @@ export async function configureBackends(
   return configureBackendsPromise
 }
 
+/** Resolves when any in-flight configureBackends call finishes, or immediately if none is running. */
+export function awaitPendingConfigureBackends(): Promise<void> {
+  return configureBackendsPromise ?? Promise.resolve()
+}
+
 // ─── Update / install ─────────────────────────────────────────────────────────
 
 /**
