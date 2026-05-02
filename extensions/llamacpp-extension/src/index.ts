@@ -1387,6 +1387,10 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     const exePath = await getBackendExePath(version, backend)
     if (!(await fs.existsSync(exePath))) {
       if (!this.pendingDownloads.has(key)) {
+        showToast(
+          'Downloading engine',
+          `Setting up llama.cpp backend (${backend}) for the first time. This may take a few minutes.`
+        )
         const downloadPromise = downloadBackend(version, backend).finally(
           () => {
             this.pendingDownloads.delete(key)
