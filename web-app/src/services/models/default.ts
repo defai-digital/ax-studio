@@ -383,7 +383,12 @@ export class DefaultModelsService implements ModelsService {
     bypassAutoUnload: boolean = false
   ): Promise<SessionInfo | undefined> {
     const engine = this.getEngine(provider.provider)
-    if (!engine) return undefined
+    if (!engine) {
+      throw new Error(
+        `Local engine "${provider.provider}" is not available. ` +
+        `Try restarting the app — the engine may still be initializing.`
+      )
+    }
 
     const loadedModels = (await engine.getLoadedModels()) ?? []
     if (loadedModels.includes(model)) {
