@@ -156,6 +156,15 @@ fn is_backend_installed(backend_dir: &PathBuf) -> bool {
         return true;
     }
 
+    // Check ggml-org structure: llama-{version}/llama-server
+    // The version directory name follows the pattern: llama-{parent_dir_name}
+    if let Some(version_name) = backend_dir.parent().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().to_string()) {
+        let ggml_path = backend_dir.join(format!("llama-{version_name}")).join(exe_name);
+        if ggml_path.exists() {
+            return true;
+        }
+    }
+
     // Otherwise check root directory (llama-server)
     let root_path = backend_dir.join(exe_name);
     root_path.exists()

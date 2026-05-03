@@ -58,11 +58,14 @@ import { invoke } from '@tauri-apps/api/core'
 import {
   configureBackends,
   awaitPendingBackendSelection,
+  awaitPendingConfigureBackends,
   downloadBackend,
   updateBackend,
   installBackendFromFile,
   getBackendExePath,
   getAxServingBinaryPath,
+  isValidBackendString,
+  resolveBackendVersion,
   BackendUpdateInfo,
   checkForBackendUpdate,
   fetchRemoteBackends,
@@ -395,9 +398,17 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     const settingValue = value as SettingValue
     const cfg = this.config
     switch (key) {
-      case 'version_backend':
-        cfg.version_backend = toStringSetting(settingValue)
+      case 'version_backend': {
+        const val = toStringSetting(settingValue)
+        // Reject malformed values — only accept well-formed
+        // "{version}/{platform}" strings (e.g. "b9010/macos-arm64").
+        if (val && !isValidBackendString(val)) {
+          console.warn(`[llamacpp] Rejecting malformed version_backend update: "${val}"`)
+          break
+        }
+        cfg.version_backend = val
         break
+      }
       case 'auto_update_engine':
         this.autoUpdateEngine = toBooleanSetting(settingValue)
         cfg.auto_update_engine = toBooleanSetting(settingValue)
@@ -1269,12 +1280,26 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     overrideSettings?: Partial<Record<keyof LlamacppConfig, unknown>>,
     isEmbedding = false
   ): Promise<SessionInfo> {
-    // Resolve backend binary — if empty, backend config may still be running
-    // from startup (fire-and-forget). Wait only for Phase 1 (selection) to
-    // avoid blocking on the binary download which can take several minutes.
-    // Cap the wait at 15s so a hung Rust IPC call in Phase 1 never causes an
-    // indefinite "thinking" hang in the chat UI.
+    // ── Resolve backend version ────────────────────────────────────────────
+    // Flow: stored setting → local discovery → wait for configureBackends()
     let versionBackend = await this.getSetting<string>('version_backend', '')
+
+    // Reject malformed stored values (e.g. absolute paths from old bugs)
+    if (versionBackend && !isValidBackendString(versionBackend)) {
+      console.warn(`[llamacpp] Clearing malformed version_backend: "${versionBackend}"`)
+      versionBackend = ''
+      await this._updateSettingValue('version_backend', '')
+    }
+
+    // If no valid setting, try local discovery (uses proper Rust API with timeout)
+    if (!versionBackend) {
+      versionBackend = await resolveBackendVersion()
+      if (versionBackend) {
+        await this._updateSettingValue('version_backend', versionBackend)
+      }
+    }
+
+    // If still nothing, wait for configureBackends() to finish discovery
     if (!versionBackend) {
       await Promise.race([
         awaitPendingBackendSelection(),
@@ -1282,6 +1307,20 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       ])
       versionBackend = await this.getSetting<string>('version_backend', '')
     }
+    if (!versionBackend) {
+      await Promise.race([
+        awaitPendingConfigureBackends(),
+        new Promise<void>((resolve) => setTimeout(resolve, 60_000)),
+      ])
+      versionBackend = await this.getSetting<string>('version_backend', '')
+    }
+
+    // Final validation — reject any malformed value that slipped through
+    if (versionBackend && !isValidBackendString(versionBackend)) {
+      console.warn(`[llamacpp] Rejecting malformed version_backend: "${versionBackend}"`)
+      versionBackend = ''
+    }
+
     if (!versionBackend) {
       throw new Error(
         'Engine is still initializing. Please wait a moment and try again.'

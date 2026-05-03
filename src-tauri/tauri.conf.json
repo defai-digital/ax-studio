@@ -20,7 +20,7 @@
       ],
       "csp": {
         "default-src": "'self' customprotocol: asset: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*",
-        "connect-src": "'self' asset: ipc: data: http://asset.localhost http://ipc.localhost http://127.0.0.1:* http://localhost:* ws://localhost:* ws://127.0.0.1:* https://huggingface.co https://hf.co https://cdn-lfs*.huggingface.co https://*.axstudio.ai https://updates.axstudio.ai",
+        "connect-src": "'self' asset: ipc: data: http://asset.localhost http://ipc.localhost http://127.0.0.1:* http://localhost:* ws://localhost:* ws://127.0.0.1:* https://huggingface.co https://hf.co https://cdn-lfs*.huggingface.co https://*.axstudio.ai https://updates.axstudio.ai https://api.github.com https://objects.githubusercontent.com https://github-releases.githubusercontent.com",
         "font-src": [
           "https://fonts.gstatic.com blob: data: tauri://localhost http://tauri.localhost"
         ],

@@ -7,6 +7,7 @@
 
 import { getAppDataFolderPath, joinPath, fs, events } from '@ax-studio/core'
 import { invoke } from '@tauri-apps/api/core'
+import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
 import {
   getLocalInstalledBackendsInternal,
   listSupportedBackendsFromRust,
@@ -187,10 +188,20 @@ export async function fetchRemoteBackends(): Promise<BackendVersion[]> {
   }
 
   try {
-    const response = await fetch(GITHUB_RELEASES_URL, {
-      headers: { Accept: 'application/vnd.github.v3+json' },
-      signal: AbortSignal.timeout(GITHUB_API_TIMEOUT_MS),
-    })
+    // Try Tauri HTTP plugin first (bypasses CSP), fall back to global fetch.
+    // CSP connect-src also includes api.github.com as defense-in-depth.
+    const doFetch = typeof tauriFetch === 'function' ? tauriFetch : fetch
+    const response = await Promise.race([
+      doFetch(GITHUB_RELEASES_URL, {
+        headers: { Accept: 'application/vnd.github.v3+json' },
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error('GitHub API timeout')),
+          GITHUB_API_TIMEOUT_MS
+        )
+      ),
+    ])
     if (!response.ok) throw new Error(`GitHub API ${response.status}`)
 
     const releases = (await response.json()) as GithubRelease[]
@@ -432,7 +443,7 @@ let configureBackendsSelectionPromise: Promise<void> | null = null
 export async function configureBackends(
   currentVersionBackend: string,
   autoUpdate: boolean,
-  onSettingUpdate: (key: string, value: string) => void
+  onSettingUpdate: (key: string, value: string) => void | Promise<void>
 ): Promise<void> {
   if (configureBackendsPromise) {
     console.log('[llamacpp] configureBackends already running, reusing in-flight call')
@@ -453,10 +464,24 @@ export async function configureBackends(
       // prioritizeBackends) are only needed when no backend is selected yet — on some
       // machines these calls can hang indefinitely, so skip them when a backend is
       // already configured.
-      const [localBackends, remoteBackends] = await Promise.all([
-        getLocalInstalledBackends(),
-        fetchRemoteBackends(),
+      // Timeout the entire discovery: getLocalInstalledBackends or
+      // fetchRemoteBackends can hang indefinitely on some machines
+      // (Tauri IPC deadlock, network issues).  12s is generous —
+      // fetchRemoteBackends already has a 5s per-request timeout.
+      const discoveryResult = await Promise.race([
+        Promise.all([getLocalInstalledBackends(), fetchRemoteBackends()]),
+        new Promise<[BackendVersion[], BackendVersion[]]>((resolve) =>
+          setTimeout(() => {
+            console.warn('[llamacpp] Backend discovery timed out after 12s, using empty lists')
+            resolve([[], []])
+          }, 12_000)
+        ),
       ])
+      const [localBackends, remoteBackends] = discoveryResult
+      console.debug(
+        `[llamacpp] configureBackends: currentVersionBackend="${currentVersionBackend}", ` +
+        `localBackends=${localBackends.length}, remoteBackends=${remoteBackends.length}`
+      )
 
       if (!targetVersionBackend) {
         const hw = await getHardwareInfo()
@@ -478,11 +503,32 @@ export async function configureBackends(
         // JS fallback: pick from remote list by OS keyword
         if (!picked && remoteBackends.length > 0) {
           picked = pickDefaultBackend(hw.osType, remoteBackends)
+          console.debug(`[llamacpp] JS fallback picked: ${picked}`)
+        }
+
+        // Final fallback: if remote discovery failed (CSP, network, etc.)
+        // use the newest locally installed backend.  This ensures the engine
+        // can start even when GitHub is unreachable.
+        if (!picked && localBackends.length > 0) {
+          const latest = localBackends.reduce((a, b) =>
+            b.version > a.version ? b : a
+          )
+          picked = `${latest.version}/${latest.backend}`
+          console.debug(
+            `[llamacpp] Remote backends unavailable, using local backend: ${picked}`
+          )
         }
 
         if (picked) {
           targetVersionBackend = picked
-          onSettingUpdate('version_backend', picked)
+          await onSettingUpdate('version_backend', picked)
+          console.log(`[llamacpp] version_backend set to: ${picked}`)
+        } else {
+          console.warn(
+            `[llamacpp] No backend could be selected! ` +
+            `remoteBackends=${remoteBackends.length}, localBackends=${localBackends.length}, ` +
+            `hw.osType=${hw.osType}`
+          )
         }
       }
 
@@ -531,6 +577,60 @@ export function awaitPendingBackendSelection(): Promise<void> {
 /** Resolves when the full configureBackends call finishes (including download), or immediately if not running. */
 export function awaitPendingConfigureBackends(): Promise<void> {
   return configureBackendsPromise ?? Promise.resolve()
+}
+
+// ─── Backend resolution (for model load path) ────────────────────────────────
+
+/** Timeout for local backend discovery via Rust IPC (ms). */
+const LOCAL_DISCOVERY_TIMEOUT_MS = 6_000
+
+/**
+ * Regex for a well-formed backend string: "{version}/{platform}".
+ * Rejects absolute paths, empty segments, and malformed values.
+ */
+const BACKEND_STRING_RE = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/
+
+/** Check whether a version_backend string is well-formed. */
+export function isValidBackendString(value: string): boolean {
+  return BACKEND_STRING_RE.test(value)
+}
+
+/**
+ * Try to discover a locally installed backend via Rust IPC, using the
+ * official API package (not raw invoke strings).  Returns a well-formed
+ * "{version}/{platform}" string, or empty string if nothing found.
+ *
+ * This is the single source of truth for local backend discovery outside
+ * of configureBackends().
+ */
+export async function resolveBackendVersion(): Promise<string> {
+  try {
+    const backendsDir = await getBackendsDir()
+    if (!(await fs.existsSync(backendsDir))) return ''
+
+    const localBackends = await Promise.race([
+      getLocalInstalledBackendsInternal(backendsDir),
+      new Promise<BackendVersion[]>((resolve) =>
+        setTimeout(() => {
+          console.warn('[llamacpp] Local backend discovery timed out')
+          resolve([])
+        }, LOCAL_DISCOVERY_TIMEOUT_MS)
+      ),
+    ])
+
+    if (localBackends.length === 0) return ''
+
+    // Pick the latest version
+    const latest = localBackends.reduce((a, b) =>
+      b.version > a.version ? b : a
+    )
+    const result = `${latest.version}/${latest.backend}`
+    console.debug(`[llamacpp] Resolved local backend: ${result}`)
+    return result
+  } catch (e) {
+    console.warn('[llamacpp] Local backend discovery failed:', e)
+    return ''
+  }
 }
 
 // ─── Update / install ─────────────────────────────────────────────────────────

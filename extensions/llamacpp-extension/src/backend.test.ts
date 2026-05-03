@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => ({
   existsSync: vi.fn(async () => false),
   mkdir: vi.fn(async () => {}),
   rm: vi.fn(async () => {}),
+  tauriFetchMock: vi.fn((...args: Parameters<typeof fetch>) =>
+    (globalThis as any).fetch(...args)
+  ),
 }))
 
 function ensureLocalStorage() {
@@ -32,6 +35,12 @@ function ensureLocalStorage() {
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
+}))
+
+// Mock the Tauri HTTP plugin — the mock delegates to globalThis.fetch
+// so existing test assertions on `fetch` still work.
+vi.mock('@tauri-apps/plugin-http', () => ({
+  fetch: mocks.tauriFetchMock,
 }))
 
 vi.mock('@ax-studio/tauri-plugin-llamacpp-api', () => ({
