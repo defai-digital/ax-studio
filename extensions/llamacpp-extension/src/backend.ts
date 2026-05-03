@@ -388,6 +388,32 @@ export async function checkForBackendUpdate(
   }
 }
 
+// ─── Default backend selection (JS fallback) ─────────────────────────────────
+
+/**
+ * Pick the best backend from a list purely in JS, without Rust IPC.
+ * Used when Rust ranking calls hang or fail.
+ */
+function pickDefaultBackend(osType: string, backends: BackendVersion[]): string | null {
+  if (backends.length === 0) return null
+  // Use the latest release version
+  const latest = backends.reduce((a, b) => (b.version > a.version ? b : a)).version
+  const candidates = backends.filter((b) => b.version === latest)
+
+  const keywords =
+    osType === 'macOS'
+      ? ['macos-arm64', 'macos-x64', 'macos', 'metal']
+      : osType === 'windows'
+        ? ['cuda', 'vulkan', 'avx2', 'avx']
+        : ['ubuntu', 'linux', 'avx2', 'avx']
+
+  for (const kw of keywords) {
+    const match = candidates.find((b) => b.backend.toLowerCase().includes(kw))
+    if (match) return `${match.version}/${match.backend}`
+  }
+  return `${candidates[0].version}/${candidates[0].backend}`
+}
+
 // ─── configureBackends ────────────────────────────────────────────────────────
 
 // Share in-flight backend discovery so duplicate callers observe the same work.
@@ -433,15 +459,30 @@ export async function configureBackends(
       ])
 
       if (!targetVersionBackend) {
-        // Fresh install: discover hardware and pick the best backend via Rust
         const hw = await getHardwareInfo()
-        await getSupportedFeaturesFromRust(hw.osType, hw.cpuExtensions, hw.gpus)
-        const allBackends = await listSupportedBackendsFromRust(remoteBackends, localBackends)
-        const hasGpu = hw.gpus.length > 0
-        const best: BestBackendResult = await prioritizeBackends(allBackends, hasGpu)
-        if (best?.backend_string) {
-          targetVersionBackend = best.backend_string
-          onSettingUpdate('version_backend', best.backend_string)
+        // Rust IPC calls can hang indefinitely on some machines.
+        // Give each 6 seconds then fall back to a JS heuristic.
+        const withFallback = <T>(p: Promise<T>, fallback: T): Promise<T> =>
+          Promise.race([p, new Promise<T>((r) => setTimeout(() => r(fallback), 6_000))])
+
+        let picked: string | null = null
+        try {
+          await withFallback(getSupportedFeaturesFromRust(hw.osType, hw.cpuExtensions, hw.gpus), undefined)
+          const ranked = await withFallback(listSupportedBackendsFromRust(remoteBackends, localBackends), remoteBackends)
+          const best = await withFallback(prioritizeBackends(ranked, hw.gpus.length > 0), null)
+          if (best?.backend_string) picked = best.backend_string
+        } catch (e) {
+          console.warn('[llamacpp] Rust backend ranking failed, using JS fallback:', e)
+        }
+
+        // JS fallback: pick from remote list by OS keyword
+        if (!picked && remoteBackends.length > 0) {
+          picked = pickDefaultBackend(hw.osType, remoteBackends)
+        }
+
+        if (picked) {
+          targetVersionBackend = picked
+          onSettingUpdate('version_backend', picked)
         }
       }
 
