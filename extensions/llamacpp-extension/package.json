@@ -1,7 +1,7 @@
 {
   "name": "@ax-studio/llamacpp-extension",
   "productName": "llama.cpp Inference Engine",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "This extension enables llama.cpp local inference for Ax-Studio",
   "main": "dist/index.js",
   "module": "dist/module.js",

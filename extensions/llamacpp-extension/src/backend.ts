@@ -420,22 +420,23 @@ export async function configureBackends(
 
   configureBackendsPromise = (async () => {
     try {
-      const [localBackends, remoteBackends, hw] = await Promise.all([
-        getLocalInstalledBackends(),
-        fetchRemoteBackends(),
-        getHardwareInfo(),
-      ])
-
-      // Report hardware to Rust so it can rank backends correctly
-      await getSupportedFeaturesFromRust(hw.osType, hw.cpuExtensions, hw.gpus)
-
-      // Merge local + remote into a ranked list
-      const allBackends = await listSupportedBackendsFromRust(remoteBackends, localBackends)
-
       let targetVersionBackend = currentVersionBackend
 
-      // If no backend set (first run), pick the best for this hardware
+      // Fetch remote backends and hardware info.
+      // The Rust IPC calls (getSupportedFeaturesFromRust, listSupportedBackendsFromRust,
+      // prioritizeBackends) are only needed when no backend is selected yet — on some
+      // machines these calls can hang indefinitely, so skip them when a backend is
+      // already configured.
+      const [localBackends, remoteBackends] = await Promise.all([
+        getLocalInstalledBackends(),
+        fetchRemoteBackends(),
+      ])
+
       if (!targetVersionBackend) {
+        // Fresh install: discover hardware and pick the best backend via Rust
+        const hw = await getHardwareInfo()
+        await getSupportedFeaturesFromRust(hw.osType, hw.cpuExtensions, hw.gpus)
+        const allBackends = await listSupportedBackendsFromRust(remoteBackends, localBackends)
         const hasGpu = hw.gpus.length > 0
         const best: BestBackendResult = await prioritizeBackends(allBackends, hasGpu)
         if (best?.backend_string) {
