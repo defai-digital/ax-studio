@@ -1272,14 +1272,19 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     // Resolve backend binary — if empty, backend config may still be running
     // from startup (fire-and-forget). Wait only for Phase 1 (selection) to
     // avoid blocking on the binary download which can take several minutes.
+    // Cap the wait at 15s so a hung Rust IPC call in Phase 1 never causes an
+    // indefinite "thinking" hang in the chat UI.
     let versionBackend = await this.getSetting<string>('version_backend', '')
     if (!versionBackend) {
-      await awaitPendingBackendSelection()
+      await Promise.race([
+        awaitPendingBackendSelection(),
+        new Promise<void>((resolve) => setTimeout(resolve, 15_000)),
+      ])
       versionBackend = await this.getSetting<string>('version_backend', '')
     }
     if (!versionBackend) {
       throw new Error(
-        'No backend selected. Please configure the engine backend in settings.'
+        'Engine is still initializing. Please wait a moment and try again.'
       )
     }
     const [version, ...rest] = versionBackend.split('/')
