@@ -393,6 +393,11 @@ export async function checkForBackendUpdate(
 // Share in-flight backend discovery so duplicate callers observe the same work.
 let configureBackendsPromise: Promise<void> | null = null
 
+// Resolves as soon as Phase 1 (backend selection) completes — before the
+// binary download starts.  _doLoadLlamacpp awaits this, not the full promise,
+// so model load is never blocked by a multi-minute download.
+let configureBackendsSelectionPromise: Promise<void> | null = null
+
 /**
  * Main entry point called on extension load.
  * Discovers available backends, selects the best one, checks for updates,
@@ -407,6 +412,11 @@ export async function configureBackends(
     console.log('[llamacpp] configureBackends already running, reusing in-flight call')
     return configureBackendsPromise
   }
+
+  let resolveSelection!: () => void
+  configureBackendsSelectionPromise = new Promise<void>((resolve) => {
+    resolveSelection = resolve
+  })
 
   configureBackendsPromise = (async () => {
     try {
@@ -434,6 +444,10 @@ export async function configureBackends(
         }
       }
 
+      // Phase 1 (selection) is complete — unblock any concurrent model loads
+      // before starting the potentially long binary download.
+      resolveSelection()
+
       // Emit update notification if auto-update is on
       if (autoUpdate && targetVersionBackend && remoteBackends.length > 0) {
         const updateInfo = await checkForBackendUpdate(targetVersionBackend, remoteBackends)
@@ -442,7 +456,7 @@ export async function configureBackends(
         }
       }
 
-      // Ensure selected backend binary is on disk
+      // Ensure selected backend binary is on disk (Phase 2 — may be slow)
       if (targetVersionBackend) {
         const [version, ...rest] = targetVersionBackend.split('/')
         const backend = rest.join('/')
@@ -455,17 +469,24 @@ export async function configureBackends(
         }
       }
     } catch (e) {
+      resolveSelection?.()  // always unblock waiters even on error
       console.error('[llamacpp] configureBackends failed:', e)
       throw e
     } finally {
       configureBackendsPromise = null
+      configureBackendsSelectionPromise = null
     }
   })()
 
   return configureBackendsPromise
 }
 
-/** Resolves when any in-flight configureBackends call finishes, or immediately if none is running. */
+/** Resolves when Phase 1 (backend selection) of configureBackends completes, or immediately if not running. */
+export function awaitPendingBackendSelection(): Promise<void> {
+  return configureBackendsSelectionPromise ?? Promise.resolve()
+}
+
+/** Resolves when the full configureBackends call finishes (including download), or immediately if not running. */
 export function awaitPendingConfigureBackends(): Promise<void> {
   return configureBackendsPromise ?? Promise.resolve()
 }

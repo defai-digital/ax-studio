@@ -57,7 +57,7 @@ import { invoke } from '@tauri-apps/api/core'
 
 import {
   configureBackends,
-  awaitPendingConfigureBackends,
+  awaitPendingBackendSelection,
   downloadBackend,
   updateBackend,
   installBackendFromFile,
@@ -1270,10 +1270,11 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     isEmbedding = false
   ): Promise<SessionInfo> {
     // Resolve backend binary — if empty, backend config may still be running
-    // from startup (fire-and-forget). Wait for it before giving up.
+    // from startup (fire-and-forget). Wait only for Phase 1 (selection) to
+    // avoid blocking on the binary download which can take several minutes.
     let versionBackend = await this.getSetting<string>('version_backend', '')
     if (!versionBackend) {
-      await awaitPendingConfigureBackends()
+      await awaitPendingBackendSelection()
       versionBackend = await this.getSetting<string>('version_backend', '')
     }
     if (!versionBackend) {
@@ -1382,23 +1383,30 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
     // Coalesce concurrent download requests for the same backend
     const pending = this.pendingDownloads.get(key)
-    if (pending) await pending
+    if (pending) {
+      // Download already in progress — throw immediately rather than blocking
+      // the model load.  The user will see the "Downloading engine" toast and
+      // can retry once it completes.
+      throw new Error(
+        `Engine backend (${backend}) is being downloaded. Please wait for the notification and try again.`
+      )
+    }
 
     const exePath = await getBackendExePath(version, backend)
     if (!(await fs.existsSync(exePath))) {
-      if (!this.pendingDownloads.has(key)) {
-        showToast(
-          'Downloading engine',
-          `Setting up llama.cpp backend (${backend}) for the first time. This may take a few minutes.`
-        )
-        const downloadPromise = downloadBackend(version, backend).finally(
-          () => {
-            this.pendingDownloads.delete(key)
-          }
-        )
-        this.pendingDownloads.set(key, downloadPromise)
-      }
-      await this.pendingDownloads.get(key)
+      // Start the download in the background; throw so the chat request fails
+      // fast with a clear message instead of blocking for several minutes.
+      showToast(
+        'Downloading engine',
+        `Setting up llama.cpp backend (${backend}) for the first time. This may take a few minutes.`
+      )
+      const downloadPromise = downloadBackend(version, backend).finally(() => {
+        this.pendingDownloads.delete(key)
+      })
+      this.pendingDownloads.set(key, downloadPromise)
+      throw new Error(
+        `Engine backend (${backend}) is not yet downloaded. Setup has started — please try again in a few minutes.`
+      )
     }
 
     return exePath
