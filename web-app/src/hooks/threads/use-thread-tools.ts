@@ -21,6 +21,7 @@ export type ThreadToolsResult = {
   followUpMessage: (args: { messages: UIMessage[] }) => boolean
   onToolCall: (args: { toolCall: { toolName: string; toolCallId: string; input: unknown } }) => void
   startToolExecution: (addToolOutput: AddToolOutputFn) => void
+  resetTurnState: () => void
 }
 
 export function useThreadTools({
@@ -61,6 +62,10 @@ export function useThreadTools({
   }
 
   const toolCallAbortController = useRef<AbortController | null>(null)
+
+  // Persists across multiple startToolExecution calls within one chat turn.
+  // Prevents the model from calling fabric_search more than once per turn.
+  const fabricSearchUsedInTurn = useRef(false)
 
   const followUpMessage = useCallback(
     ({ messages }: { messages: UIMessage[] }): boolean => {
@@ -104,9 +109,23 @@ export function useThreadTools({
           if (signal.aborted) break
           try {
             const toolName = toolCall.toolName
+
+            // Reject duplicate fabric_search calls — return the instruction to answer
+            if (toolName === 'fabric_search' && fabricSearchUsedInTurn.current) {
+              addToolOutput({
+                tool: toolCall.toolName,
+                toolCallId: toolCall.toolCallId,
+                output: [{
+                  type: 'text',
+                  text: 'Search already completed. You must now write your answer based on the previous search results. Do NOT call any tools. Just write a complete text response.',
+                }],
+              })
+              continue
+            }
+
             const approved = await useToolApproval
               .getState()
-              .showApprovalModal(toolName, threadId, toolCall.input)
+              .showApprovalModal(toolName, threadId, toolCall.input as Record<string, unknown>)
 
             if (!approved) {
               addToolOutput({
@@ -128,9 +147,14 @@ export function useThreadTools({
                 scope: projectId ? 'project' : 'thread',
               })
             } else if (mcpToolNames.has(toolName)) {
-              result = await serviceHub.mcp().callTool({ toolName, arguments: toolCall.input })
+              result = await serviceHub.mcp().callTool({ toolName, arguments: toolCall.input as Record<string, unknown> })
             } else {
               result = { error: `Tool '${toolName}' not found in any service` }
+            }
+
+            // Mark fabric_search as called
+            if (toolName === 'fabric_search' && !result.error) {
+              fabricSearchUsedInTurn.current = true
             }
 
             if (result.error) {
@@ -141,7 +165,25 @@ export function useThreadTools({
                 errorText: `Error: ${result.error}`,
               })
             } else {
-              addToolOutput({ tool: toolCall.toolName, toolCallId: toolCall.toolCallId, output: result.content })
+              // For fabric_search, append an instruction to the tool result so the model
+              // knows to answer immediately and not call the tool again.
+              let output = result.content
+              if (toolName === 'fabric_search' && Array.isArray(output)) {
+                const hasResults = output.some(
+                  (c: { type?: string; text?: string }) =>
+                    c?.type === 'text' && c.text && c.text.includes('"results"')
+                )
+                if (hasResults) {
+                  output = [
+                    ...output,
+                    {
+                      type: 'text',
+                      text: '\n\n---\nINSTRUCTION: Based on the search results above, you MUST now write your full answer. Start writing immediately — do NOT say "let me" or "I will explain". For each finding, state what it is, why it matters, and what should be done. Do NOT call any tools. Write a complete answer now.',
+                    },
+                  ]
+                }
+              }
+              addToolOutput({ tool: toolCall.toolName, toolCallId: toolCall.toolCallId, output })
             }
           } catch (error) {
             const isAbort = error instanceof Error && error.name === 'AbortError'
@@ -171,5 +213,5 @@ export function useThreadTools({
     [serviceHub, threadId, projectId]
   )
 
-  return { toolCallAbortController, followUpMessage, onToolCall, startToolExecution }
+  return { toolCallAbortController, followUpMessage, onToolCall, startToolExecution, resetTurnState: () => { fabricSearchUsedInTurn.current = false } }
 }

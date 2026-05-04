@@ -120,7 +120,7 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
             mcpTools.forEach((tool) => {
               const serverName = (tool as { server?: string }).server || 'unknown'
               if (!isToolDisabled(serverName, tool.name)) {
-                if (serverName === 'ax-studio' && !localKnowledgeEnabled) return
+                if ((serverName === 'ax-studio' || serverName === 'ax-fabric') && !localKnowledgeEnabled) return
                 toolsRecord[tool.name] = {
                   description: tool.description,
                   inputSchema: jsonSchema(tool.inputSchema as Record<string, unknown>),

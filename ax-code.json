@@ -1,6 +1,11 @@
 {
   "$schema": "https://ax-code.ai/config.json",
+  "autonomous": true,
   "routing": {
     "llm": true
+  },
+  "isolation": {
+    "mode": "workspace-write",
+    "network": false
   }
 }

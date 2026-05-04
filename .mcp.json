@@ -3,6 +3,12 @@
     "exa": {
       "type": "http",
       "url": "https://mcp.exa.ai/mcp"
+    },
+    "ax-fabric": {
+      "command": "node",
+      "args": ["/Users/devop/Documents/ax studio/ax-fabric/packages/fabric-ingest/dist/cli.js", "mcp", "server"],
+      "type": "stdio",
+      "active": true
     }
   }
 }

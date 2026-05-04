@@ -120,6 +120,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     followUpMessage,
     onToolCall,
     startToolExecution,
+    resetTurnState,
   } = useThreadTools({ threadId, projectId })
   const {
     splitPaneOrder,
@@ -251,6 +252,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   const handleSubmit = useCallback(
     async (text: string) => {
       if (handleResearchCommand(text)) return
+      resetTurnState() // Reset fabric_search dedup tracker for new user message
       try {
         await processAndSendMessage(text)
       } catch (error) {
@@ -261,7 +263,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
         })
       }
     },
-    [processAndSendMessage, handleResearchCommand]
+    [processAndSendMessage, handleResearchCommand, resetTurnState]
   )
 
   const threadModel = useMemo(() => thread?.model, [thread])

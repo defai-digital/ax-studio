@@ -21,6 +21,10 @@ export type ServiceHub = {
     getTools(): Promise<
       Array<{ name: string; description: string; inputSchema: unknown }>
     >
+    callTool(args: { toolName: string; serverName?: string; arguments: object }): Promise<{
+      error?: string
+      content?: Array<{ type?: string; text?: string }>
+    }>
   }
   rag(): {
     getTools(): Promise<

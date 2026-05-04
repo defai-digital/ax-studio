@@ -29,6 +29,7 @@ import {
   CODE_EXECUTION_INSTRUCTION,
   ARTIFACT_FORMAT_INSTRUCTION,
   LOCAL_KNOWLEDGE_INSTRUCTION,
+  CITATION_FORMAT_INSTRUCTION,
 } from '@/lib/prompts/system-prompt'
 import { ResearchPanel } from '@/components/research/ResearchPanel'
 import { MainThreadPane } from '@/containers/threads/MainThreadPane'
@@ -75,6 +76,7 @@ export function SplitThreadContainer({
     followUpMessage,
     onToolCall,
     startToolExecution,
+    resetTurnState,
   } = useThreadTools({ threadId, projectId })
 
   // ─── UI state ─────────────────────────────────────────────────────────────
@@ -111,7 +113,8 @@ export function SplitThreadContainer({
       DIAGRAM_FORMAT_INSTRUCTION +
       CODE_EXECUTION_INSTRUCTION +
       ARTIFACT_FORMAT_INSTRUCTION +
-      (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : ''),
+      (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : '') +
+      (localKnowledgeActive ? CITATION_FORMAT_INSTRUCTION : ''),
     modelOverrideId: optimizedModelConfig.modelId,
     inferenceParameters: {
       temperature: optimizedModelConfig.temperature,
@@ -217,9 +220,10 @@ export function SplitThreadContainer({
   const handleSubmit = useCallback(
     async (text: string) => {
       if (handleResearchCommand(text)) return
+      resetTurnState()
       await processAndSendMessage(text)
     },
-    [processAndSendMessage, handleResearchCommand],
+    [processAndSendMessage, handleResearchCommand, resetTurnState],
   )
 
   // ─── Derived values ──────────────────────────────────────────────────────

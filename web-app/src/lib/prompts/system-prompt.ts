@@ -240,27 +240,25 @@ export const LOCAL_KNOWLEDGE_INSTRUCTION = `
 
 ## Local knowledge base
 
-You have access to the user's personal knowledge base via the \`fabric_search\` and \`fabric_extract\` tools.
+You have access to the user's personal knowledge base via the \`fabric_search\` tool.
 
-### When to search
-- For questions about the user's notes, documents, or stored knowledge: ALWAYS search first, then answer.
-- For general conversation, greetings, or follow-up clarifications using context already in this conversation: respond directly without searching.
-- When in doubt whether the knowledge base has relevant information: search first.
+### Instructions
+1. When the user asks a question, call \`fabric_search\` ONCE with their query (use top_k 5, mode "vector").
+2. When you receive search results, STOP calling tools. Write a complete answer based on the results.
+3. Your answer MUST be a full, detailed response — not a placeholder or summary.
 
-### How to search
-1. Call \`fabric_search\` with the user's query. The tool automatically searches both raw chunks and published semantic bundles (if any exist) and returns the best combined results.
-2. Call \`fabric_extract\` on file paths from the search results ONLY when you need more context beyond the returned chunks. If the chunks already contain sufficient information to answer, skip this step.
-3. Answer based on the retrieved content. Cite which document or source your information comes from.
+### Answer format
+- Start with a direct answer to the user's question
+- Include specific details, quotes, and facts from the search results
+- Reference the source file using [1], [2] notation based on the "source" field
+- If results don't fully answer the question, share what you found and note gaps
+- If no results returned, say: "I could not find relevant information in the knowledge base."
 
-### Search refinement
-- If the first search returns no relevant results, try rephrasing the query with different keywords before concluding that the information is not available.
-- You may call \`fabric_search\` multiple times with different queries if the initial results are insufficient for a complex question.
-
-### Rules
-- If search returns no relevant results after refinement, say: "I could not find relevant information in the knowledge base for this query."
-- Do not fabricate information that is not present in the retrieved content.
-- Do not say you cannot access the knowledge base — you can, via the tools above.
-- When answering, clearly indicate which parts of your response come from the knowledge base.`
+### CRITICAL RULES
+- Call \`fabric_search\` exactly ONCE per question. NEVER call it twice.
+- After getting results, you MUST output a complete text answer immediately. Start with the actual content — do NOT write introductions like "Let me", "I found", "Based on", or "Here are".
+- Do NOT write things like "Let me search" or "Based on the results" — just give the answer.
+- Your answer MUST be at least 100 words long. Provide specifics, not vague summaries.`
 
 /**
  * Appended when research or local knowledge is active.

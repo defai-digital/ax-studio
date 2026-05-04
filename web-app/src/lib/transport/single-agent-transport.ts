@@ -55,7 +55,7 @@ export async function executeSingleAgentStream(
     tools: shouldEnableTools ? tools : undefined,
     toolChoice: shouldEnableTools ? 'auto' : undefined,
     system: systemMessage,
-    stopWhen: shouldEnableTools ? stepCountIs(5) : stepCountIs(1),
+    stopWhen: shouldEnableTools ? stepCountIs(3) : stepCountIs(1),
   })
 
   let tokensPerSecond = 0
