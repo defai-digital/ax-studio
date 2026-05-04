@@ -21,6 +21,7 @@ import { useAppState } from '@/hooks/settings/useAppState'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { Server, Wrench, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
+import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
 import { cn } from '@/lib/utils'
 import { ApiKeyInput } from '@/containers/ApiKeyInput'
 import { useEffect, useState, useCallback } from 'react'
@@ -506,22 +507,7 @@ function LocalAPIServerContent() {
             className="flex-1 overflow-y-auto"
             style={{ scrollbarWidth: 'none' }}
           >
-            <div className="flex items-center gap-3 px-8 py-5 border-b border-border/40 bg-background sticky top-0 z-10">
-              <div
-                className="size-7 rounded-lg flex items-center justify-center"
-                style={{
-                  background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                }}
-              >
-                <Server className="size-3.5 text-white" strokeWidth={2.5} />
-              </div>
-              <h1
-                className="text-foreground tracking-tight"
-                style={{ fontSize: '16px', fontWeight: 600 }}
-              >
-                {t('common:local_api_server')}
-              </h1>
-            </div>
+            <SettingsPageLayout icon={Server} title={t('common:local_api_server')} />
             <div className="px-8 py-7">
               <div className="max-w-2xl space-y-6">
                 {/* General Settings */}

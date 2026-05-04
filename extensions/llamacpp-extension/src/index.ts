@@ -1094,7 +1094,6 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
     if (loadRes.status === 409) {
       // Model already loaded — this is fine
-      console.log(`[llamacpp] ax-serving: model "${modelId}" already loaded`)
     } else if (!loadRes.ok) {
       const errText = await loadRes.text()
       throw new Error(
@@ -1102,9 +1101,6 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       )
     } else {
       const loadData = await loadRes.json()
-      console.log(
-        `[llamacpp] ax-serving: loaded "${modelId}" (arch=${loadData.architecture}, ctx=${loadData.context_length}, ${loadData.load_time_ms}ms)`
-      )
     }
 
     // Create synthetic session (ax-serving manages the process, not Tauri plugin)
@@ -1182,16 +1178,10 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     const binaryPath = await getAxServingBinaryPath()
     const port = await getRandomPort()
 
-    console.log(
-      `[llamacpp] Starting ax-serving at ${binaryPath} on port ${port}`
-    )
     const session = await startAxServing(binaryPath, port, this.timeout)
 
     this.axServingPort = session.port
     this.axServingPid = session.pid
-    console.log(
-      `[llamacpp] ax-serving started (PID=${session.pid}, port=${session.port})`
-    )
   }
 
   private async _syncLocalProviderRegistration(preferred?: {
@@ -1510,10 +1500,6 @@ export default class AxStudioLlamacppExtension extends AIEngine {
    * because onSettingUpdate is synchronous.
    */
   private _handleEngineSwitch(from: string, to: string): void {
-    console.log(
-      `[llamacpp] Engine switch: ${from} → ${to}, unloading active text models`
-    )
-
     this.engineSwitchQueue = this.engineSwitchQueue
       .catch((error) =>
         console.debug('[llamacpp] Previous engine switch failed before queuing a new one:', error)
@@ -1526,9 +1512,6 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         if (from === 'ax-serving' && this.axServingPid > 0) {
           try {
             await unloadLlamaModel(this.axServingPid)
-            console.log(
-              '[llamacpp] ax-serving process stopped after engine switch'
-            )
           } catch (e) {
             console.warn('[llamacpp] Failed to stop ax-serving process:', e)
           }

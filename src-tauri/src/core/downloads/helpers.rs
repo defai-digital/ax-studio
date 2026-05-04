@@ -1146,36 +1146,5 @@ pub async fn _get_maybe_resume(
     url: &str,
     start_bytes: u64,
 ) -> Result<reqwest::Response, String> {
-    let request = if start_bytes > 0 {
-        client
-            .get(url)
-            .header("Range", format!("bytes={start_bytes}-"))
-    } else {
-        client.get(url)
-    };
-
-    let resp = tokio::time::timeout(Duration::from_secs(30), request.send())
-        .await
-        .map_err(|_| "Request timed out after 30s".to_string())?
-        .map_err(err_to_string)?;
-
-    if start_bytes > 0 {
-        if resp.status() != reqwest::StatusCode::PARTIAL_CONTENT {
-            return Err(format!(
-                "Failed to resume download: HTTP status {}, {}",
-                resp.status(),
-                resp.text().await.unwrap_or_default()
-            ));
-        }
-        Ok(resp)
-    } else {
-        if !resp.status().is_success() {
-            return Err(format!(
-                "Failed to download: HTTP status {}, {}",
-                resp.status(),
-                resp.text().await.unwrap_or_default()
-            ));
-        }
-        Ok(resp)
-    }
+    _get_maybe_resume_internal(client, url, start_bytes).await
 }

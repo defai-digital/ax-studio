@@ -323,10 +323,6 @@ function HubContent() {
 
   const navigate = useNavigate()
 
-  const isRecommendedModel = useCallback((_: string) => {
-    return false
-  }, [])
-
   const handleUseModel = useCallback(
     (modelId: string) => {
       navigate({
@@ -666,9 +662,6 @@ function HubContent() {
                               <h3
                                 className={cn(
                                   'font-semibold text-foreground group-hover:text-primary transition-colors truncate capitalize',
-                                  isRecommendedModel(model.model_name)
-                                    ? 'hub-model-card-step'
-                                    : ''
                                 )}
                                 style={{ fontSize: '14px' }}
                                 title={extractModelName(model.model_name) || ''}

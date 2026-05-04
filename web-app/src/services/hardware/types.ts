@@ -17,7 +17,6 @@ export interface HardwareService {
   getHardwareInfo(): Promise<HardwareData | null>
   getSystemUsage(): Promise<SystemUsage | null>
   getLlamacppDevices(): Promise<DeviceList[]>
-  setActiveGpus(data: { gpus: number[] }): Promise<void>
 }
 
 // Re-export hardware types for convenience

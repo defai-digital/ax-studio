@@ -3,7 +3,7 @@ use hyper::{Body, Response, StatusCode};
 use serde_json;
 use tauri::Manager;
 
-use super::proxy::ProxyConfig;
+use super::proxy::{ProxyConfig, finalize_response};
 use super::security::add_cors_headers_with_host_and_origin;
 use crate::core::state::AppState;
 
@@ -55,22 +55,6 @@ pub(super) async fn handle_models_route<R: tauri::Runtime>(
     log::debug!("Returning {} remote models", remote_models.len());
 
     finalize_response(response_builder, Body::from(body_str))
-}
-
-fn finalize_response(
-    builder: hyper::http::response::Builder,
-    body: Body,
-) -> Response<Body> {
-    match builder.body(body) {
-        Ok(resp) => resp,
-        Err(err) => {
-            log::error!("Failed to build HTTP response: {err}");
-            Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(Body::from("Internal proxy error"))
-                .unwrap_or_else(|_| Response::new(Body::from("Internal proxy error")))
-        }
-    }
 }
 
 /// Handle unrecognized routes — returns 404.

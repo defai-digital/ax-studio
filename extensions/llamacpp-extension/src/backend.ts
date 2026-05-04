@@ -446,7 +446,6 @@ export async function configureBackends(
   onSettingUpdate: (key: string, value: string) => void | Promise<void>
 ): Promise<void> {
   if (configureBackendsPromise) {
-    console.log('[llamacpp] configureBackends already running, reusing in-flight call')
     return configureBackendsPromise
   }
 
@@ -522,7 +521,6 @@ export async function configureBackends(
         if (picked) {
           targetVersionBackend = picked
           await onSettingUpdate('version_backend', picked)
-          console.log(`[llamacpp] version_backend set to: ${picked}`)
         } else {
           console.warn(
             `[llamacpp] No backend could be selected! ` +
@@ -551,7 +549,6 @@ export async function configureBackends(
         if (version && backend) {
           const installed = await isBackendInstalled(version, backend)
           if (!installed) {
-            console.log(`[llamacpp] Downloading backend: ${targetVersionBackend}`)
             await downloadBackend(version, backend)
           }
         }

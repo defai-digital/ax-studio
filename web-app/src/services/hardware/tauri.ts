@@ -61,8 +61,4 @@ export class TauriHardwareService implements HardwareService {
     }
   }
 
-  async setActiveGpus(_data: { gpus: number[] }): Promise<void> {
-    // Intentionally no-op in Phase 7 UI.
-    // Local GPU selection UI was removed from active product flows.
-  }
 }

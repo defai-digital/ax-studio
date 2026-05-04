@@ -12,7 +12,6 @@ const mockHardwareService = {
   getHardwareInfo: vi.fn().mockResolvedValue(null),
   getSystemUsage: vi.fn().mockResolvedValue(null),
   getLlamacppDevices: mockGetLlamacppDevices,
-  setActiveGpus: vi.fn().mockResolvedValue(undefined),
   getGpuInfo: vi.fn().mockResolvedValue([]),
   getCpuInfo: vi.fn().mockResolvedValue({}),
   getMemoryInfo: vi.fn().mockResolvedValue({}),

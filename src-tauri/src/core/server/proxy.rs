@@ -85,7 +85,7 @@ use super::{gateway_routes, model_routes};
 /// value). The previous code used `.unwrap()` everywhere, which would
 /// crash the entire Tauri app on the hot path. This helper degrades
 /// gracefully to a 500 fallback response so the server stays alive.
-fn finalize_response(
+pub(super) fn finalize_response(
     builder: hyper::http::response::Builder,
     body: Body,
 ) -> Response<Body> {

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { TauriHardwareService } from '../hardware/tauri'
 import { HardwareData, SystemUsage } from '@/hooks/settings/useHardware'
 import { invoke } from '@tauri-apps/api/core'
@@ -172,53 +172,6 @@ describe('TauriHardwareService', () => {
       expect(result.gpus).toHaveLength(2)
       expect(result.gpus[0].uuid).toBe('gpu-uuid-1')
       expect(result.gpus[1].uuid).toBe('gpu-uuid-2')
-    })
-  })
-
-  describe('setActiveGpus', () => {
-    let consoleSpy: ReturnType<typeof vi.spyOn>
-
-    beforeEach(() => {
-      consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    })
-
-    afterEach(() => {
-      consoleSpy.mockRestore()
-    })
-
-    it('should log the provided GPU data', async () => {
-      const gpuData = { gpus: [0, 1, 2] }
-
-      await hardwareService.setActiveGpus(gpuData)
-      expect(consoleSpy).toHaveBeenCalledWith(gpuData)
-    })
-
-    it('should handle empty GPU array', async () => {
-      const gpuData = { gpus: [] }
-
-      await hardwareService.setActiveGpus(gpuData)
-
-      expect(consoleSpy).toHaveBeenCalledWith(gpuData)
-    })
-
-    it('should handle single GPU', async () => {
-      const gpuData = { gpus: [1] }
-
-      await hardwareService.setActiveGpus(gpuData)
-
-      expect(consoleSpy).toHaveBeenCalledWith(gpuData)
-    })
-
-    it('should complete successfully', async () => {
-      const gpuData = { gpus: [0, 1] }
-
-      await expect(hardwareService.setActiveGpus(gpuData)).resolves.toBeUndefined()
-    })
-
-    it('should not throw any errors', async () => {
-      const gpuData = { gpus: [0, 1, 2, 3] }
-
-      expect(() => hardwareService.setActiveGpus(gpuData)).not.toThrow()
     })
   })
 

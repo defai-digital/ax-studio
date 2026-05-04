@@ -7,6 +7,7 @@ import { useTranslation } from '@/i18n/react-i18next-compat'
 import { Switch } from '@/components/ui/switch'
 import { useShallow } from 'zustand/react/shallow'
 import { FileText } from 'lucide-react'
+import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 export const Route = createFileRoute('/settings/attachments')({
@@ -139,14 +140,7 @@ function AttachmentsSettings() {
       <div className="flex flex-1 min-h-0">
         <SettingsMenu />
         <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
-          <div className="flex items-center gap-3 px-8 py-5 border-b border-border/40 bg-background sticky top-0 z-10">
-            <div className="size-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
-              <FileText className="size-3.5 text-white" strokeWidth={2.5} />
-            </div>
-            <h1 className="text-foreground tracking-tight" style={{ fontSize: '16px', fontWeight: 600 }}>
-              {t('common:attachments') || 'Attachments'}
-            </h1>
-          </div>
+          <SettingsPageLayout icon={FileText} title={t('common:attachments') || 'Attachments'} />
           <div className="px-8 py-7">
             <div className="max-w-2xl space-y-6">
               <Card title={t('settings:attachments.featureTitle')}>
