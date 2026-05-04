@@ -4,7 +4,6 @@
   "version": "1.0.4",
   "description": "This extension enables llama.cpp local inference for Ax-Studio",
   "main": "dist/index.js",
-  "module": "dist/module.js",
   "engine": "llamacpp",
   "author": "Ax-Studio <service@axstudio.ai>",
   "license": "Apache-2.0",
@@ -32,9 +31,7 @@
     "@ax-studio/tauri-plugin-llamacpp-api": "link:../../src-tauri/plugins/tauri-plugin-llamacpp",
     "@tauri-apps/api": "2.8.0",
     "@tauri-apps/plugin-http": "2.5.0",
-    "@tauri-apps/plugin-log": "^2.6.0",
-    "fetch-retry": "^5.0.6",
-    "ulidx": "2.4.1"
+    "@tauri-apps/plugin-log": "^2.6.0"
   },
   "files": [
     "dist/*",
@@ -42,9 +39,7 @@
     "LICENSE",
     "NOTICE"
   ],
-  "bundleDependencies": [
-    "fetch-retry"
-  ],
+  "bundleDependencies": [],
   "installConfig": {
     "hoistingLimits": "workspaces"
   },

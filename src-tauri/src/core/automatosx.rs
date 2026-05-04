@@ -27,7 +27,6 @@ pub struct AxAgent {
 /// Check if `ax` CLI is installed and return its version string.
 #[tauri::command]
 pub async fn ax_check() -> Result<String, String> {
-    fix_path_env::fix().ok();
     let output = Command::new("ax")
         .arg("--version")
         .output()
@@ -45,7 +44,6 @@ pub async fn ax_check() -> Result<String, String> {
 /// List all available agents from `ax agent list`.
 #[tauri::command]
 pub async fn ax_list_agents() -> Result<Vec<AxAgent>, String> {
-    fix_path_env::fix().ok();
     let output = Command::new("ax")
         .args(["agent", "list"])
         .output()
@@ -82,8 +80,6 @@ pub async fn ax_run_agent(
     provider: Option<String>,
     model: Option<String>,
 ) -> Result<(), String> {
-    fix_path_env::fix().ok();
-
     let input_json = format!(r#"{{"query":"{}"}}"#, task.replace('"', "\\\""));
 
     let mut cmd = Command::new("ax");

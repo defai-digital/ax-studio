@@ -17,8 +17,7 @@
     "build:publish": "rimraf *.tgz --glob || true && yarn build && npm pack && cpx *.tgz ../../pre-install"
   },
   "exports": {
-    ".": "./dist/index.js",
-    "./main": "./dist/module.js"
+    ".": "./dist/index.js"
   },
   "devDependencies": {
     "cpx": "1.5.0",

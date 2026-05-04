@@ -69,6 +69,7 @@ import {
   BackendUpdateInfo,
   checkForBackendUpdate,
   fetchRemoteBackends,
+  formatError,
 } from './backend'
 
 import {
@@ -138,9 +139,6 @@ type ChatRequestBody = chatCompletionRequest & {
 }
 
 type DeviceInfoLike = DeviceInfo | DeviceList
-
-const getErrorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error)
 
 const toNumberSetting = (value: SettingValue, defaultValue = 0): number =>
   value === '' || value == null ? defaultValue : Number(value)
@@ -694,7 +692,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     try {
       return await invoke<string>('canonicalize_path', { path: normalizedPath })
     } catch (error) {
-      throw new Error(`${label} path is invalid: ${getErrorMessage(error)}`)
+      throw new Error(`${label} path is invalid: ${formatError(error)}`)
     }
   }
 
@@ -1010,7 +1008,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
           return await this._doLoadAxServing(modelId, cfg, embedding)
         } catch (axErr: unknown) {
           console.warn(
-            `[llamacpp] ax-serving failed, falling back to llamacpp: ${getErrorMessage(axErr)}`
+            `[llamacpp] ax-serving failed, falling back to llamacpp: ${formatError(axErr)}`
           )
         }
       }
@@ -1024,7 +1022,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     } catch (e: unknown) {
       events.emit(ModelEvent.OnModelFail, {
         modelId,
-        error: getErrorMessage(e),
+        error: formatError(e),
       })
       throw e
     }
@@ -1568,7 +1566,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       return result
     } catch (e: unknown) {
       console.error('[llamacpp] unload error:', e)
-      return { success: false, error: getErrorMessage(e) }
+      return { success: false, error: formatError(e) }
     }
   }
 
@@ -1739,7 +1737,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
           )
         }
       } catch (e: unknown) {
-        if (getErrorMessage(e).includes('evicted')) throw e
+        if (formatError(e).includes('evicted')) throw e
         // ax-serving process may have crashed — mark only this model unhealthy first.
         console.error('[llamacpp] ax-serving health check failed:', e)
         this.axServingSessions.delete(modelId)
@@ -1777,7 +1775,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         throw new Error(`Model "${modelId}" server unavailable. Please reload.`)
       }
     } catch (e: unknown) {
-      const message = getErrorMessage(e)
+      const message = formatError(e)
       if (message.includes('crashed') || message.includes('unavailable')) throw e
       // Timeout or network error — the server may still be initializing, continue
     }

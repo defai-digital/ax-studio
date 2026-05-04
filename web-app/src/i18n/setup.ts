@@ -186,12 +186,6 @@ const initI18n = (): I18nInstance => {
   return i18nInstance
 }
 
-// Load translations function (for compatibility with reference implementation)
-export const loadTranslations = (): void => {
-  // Translations are already loaded via import.meta.glob
-  // This function exists for compatibility but doesn't need to do anything
-}
-
 // Initialize and export the i18n instance
 const i18n = initI18n()
 

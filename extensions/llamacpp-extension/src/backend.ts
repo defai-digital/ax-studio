@@ -52,7 +52,7 @@ interface GithubRelease {
 
 type HardwareGpuInfo = GpuInfo
 
-const formatError = (error: unknown): string =>
+export const formatError = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
 const sleep = (ms: number): Promise<void> =>
@@ -66,6 +66,7 @@ async function removePathIfPresent(path: string, label: string): Promise<void> {
   }
 }
 
+/** @internal Test-only: resets the remote backends cache between tests. */
 export function clearRemoteBackendsCacheForTests(): void {
   remoteBackendsCache = null
 }

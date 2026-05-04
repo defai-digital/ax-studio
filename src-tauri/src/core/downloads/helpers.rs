@@ -1,7 +1,5 @@
 use super::models::{DownloadEvent, DownloadItem, ProgressTracker, ProxyConfig};
 use crate::core::app::commands::get_app_data_folder_path;
-use crate::core::updater::hmac_client::SignedRequestHeaders;
-use crate::core::updater::session::get_session_id;
 use ax_studio_utils::normalize_path;
 use futures_util::{future::join_all, StreamExt};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
@@ -16,81 +14,10 @@ use url::Url;
 
 // ===== CONSTANTS =====
 
-/// Ax-Studio mirror prefix for HuggingFace downloads
-/// CDN mirrors are disabled until the domains are provisioned.
-/// Set these to valid URLs when cdn.axstudio.ai is available.
-const AX_STUDIO_MIRROR_PREFIX_STABLE: &str = "";
-const AX_STUDIO_MIRROR_PREFIX_NIGHTLY: &str = "";
-
-/// Domains that should use mirror download with fallback
-/// Empty list effectively disables mirror attempts.
-const MIRROR_DOMAINS: &[&str] = &[];
-
-/// Check if this is a nightly build based on package name
-fn is_nightly_build() -> bool {
-    let pkg_name = env!("CARGO_PKG_NAME");
-    pkg_name.to_lowercase().contains("nightly")
-}
-
-/// Get the appropriate mirror prefix based on build type
-fn get_mirror_prefix() -> &'static str {
-    if is_nightly_build() {
-        AX_STUDIO_MIRROR_PREFIX_NIGHTLY
-    } else {
-        AX_STUDIO_MIRROR_PREFIX_STABLE
-    }
-}
-
-/// Secret key for HMAC request authentication
-/// In release: Must be set via AX_STUDIO_SIGNING_KEY environment variable at build time
-/// In debug: Falls back to a debug key
-/// Must not be the default test key
-#[cfg(debug_assertions)]
-const SECRET_KEY: &str = match option_env!("AX_STUDIO_SIGNING_KEY") {
-    Some(key) => key,
-    None => "debug-mode-key",
-};
-#[cfg(not(debug_assertions))]
-const SECRET_KEY: &str = env!("AX_STUDIO_SIGNING_KEY");
-
 // ===== UTILITY FUNCTIONS =====
 
 pub fn err_to_string<E: std::fmt::Display>(e: E) -> String {
     format!("Error: {e}")
-}
-
-/// Converts a URL to Ax-Studio mirror URL if applicable
-/// e.g., https://huggingface.co/... -> https://cdn.axstudio.ai/huggingface.co/...
-/// or for nightly: https://huggingface.co/... -> https://cdn-nightly.axstudio.ai/huggingface.co/...
-pub fn convert_to_mirror_url(url: &str) -> Option<String> {
-    let parsed = Url::parse(url).ok()?;
-    let host = parsed.host_str()?;
-
-    // Check if the domain should use mirror
-    if MIRROR_DOMAINS
-        .iter()
-        .any(|domain| host == *domain || host.ends_with(&format!(".{}", domain)))
-    {
-        // Remove the scheme (https://) and any leading slashes to avoid // in path
-        let url_without_scheme = url
-            .strip_prefix("https://")
-            .or_else(|| url.strip_prefix("http://"))?
-            .trim_start_matches('/');
-
-        Some(format!("{}{}", get_mirror_prefix(), url_without_scheme))
-    } else {
-        None
-    }
-}
-
-/// Get session identifier for request signing
-fn get_download_nonce_seed() -> String {
-    get_session_id()
-}
-
-/// Get current app version from Cargo.toml
-fn get_app_version() -> &'static str {
-    env!("CARGO_PKG_VERSION")
 }
 
 // ===== VALIDATION FUNCTIONS =====
@@ -655,7 +582,7 @@ async fn download_single_file(
 
     let (resp, actual_url) = if should_resume {
         let downloaded_size = tmp_save_path.metadata().map_err(err_to_string)?.len();
-        match _get_maybe_resume(&client, &item.url, downloaded_size).await {
+        match _get_maybe_resume_internal(&client, &item.url, downloaded_size).await {
             Ok(resp) => {
                 log::info!(
                     "Resume download: {}, already downloaded {} bytes",
@@ -705,11 +632,6 @@ async fn download_single_file(
             total: init_total,
         },
     );
-
-    // Log which URL is being used for download
-    if actual_url != item.url {
-        log::info!("Downloading via Ax-Studio mirror: {}", actual_url);
-    }
 
     let mut stream = resp.bytes_stream();
 
@@ -796,100 +718,15 @@ async fn download_single_file(
 
 // ===== HTTP CLIENT HELPER FUNCTIONS =====
 
-/// Attempts to download from mirror URL first, falls back to original URL if mirror fails
-/// When using mirror URL, adds HMAC headers for request authentication
+/// Attempts download directly from the given URL with resume support
 pub async fn _get_maybe_resume_with_fallback(
     client: &reqwest::Client,
     url: &str,
     start_bytes: u64,
 ) -> Result<(reqwest::Response, String), String> {
-    // Try mirror URL first if applicable
-    if let Some(mirror_url) = convert_to_mirror_url(url) {
-        log::info!("Attempting download from Ax-Studio mirror: {}", mirror_url);
-        match _get_maybe_resume_with_hmac(client, &mirror_url, start_bytes).await {
-            Ok(resp) => {
-                log::info!("Successfully connected to Ax-Studio mirror");
-                return Ok((resp, mirror_url));
-            }
-            Err(e) => {
-                log::warn!(
-                    "Ax-Studio mirror download failed: {}. Falling back to original URL...",
-                    e
-                );
-            }
-        }
-    }
-
-    // Fallback to original URL (no HMAC headers needed)
-    log::info!("Downloading from original URL: {}", url);
+    log::info!("Downloading from URL: {}", url);
     let resp = _get_maybe_resume_internal(client, url, start_bytes).await?;
     Ok((resp, url.to_string()))
-}
-
-/// Download from URL with HMAC headers for Ax-Studio mirror authentication
-async fn _get_maybe_resume_with_hmac(
-    client: &reqwest::Client,
-    url: &str,
-    start_bytes: u64,
-) -> Result<reqwest::Response, String> {
-    // Ensure the signing key is not the default debug-mode key. Returning an
-    // error here (instead of panicking via `assert!`) lets the download path
-    // fall back to the unauthenticated original URL instead of crashing.
-    //
-    // NOTE: this previously checked `local-dev-test-key-not-for-production`
-    // which never matched the actual debug fallback (`debug-mode-key`), so
-    // the guard was a silent no-op.
-    if SECRET_KEY == "debug-mode-key" {
-        return Err(
-            "AX_STUDIO_SIGNING_KEY must be set at build time; \
-             the debug fallback key cannot be used for mirror downloads"
-                .to_string(),
-        );
-    }
-
-    // Generate HMAC headers for request authentication
-    let nonce_seed = get_download_nonce_seed();
-    let app_version = get_app_version();
-    let signed_headers = SignedRequestHeaders::new(SECRET_KEY, &nonce_seed, app_version);
-
-    let mut request = if start_bytes > 0 {
-        client
-            .get(url)
-            .header("Range", format!("bytes={start_bytes}-"))
-    } else {
-        client.get(url)
-    };
-
-    // Add HMAC headers
-    for (key, value) in signed_headers.to_header_pairs() {
-        request = request.header(key, value);
-    }
-
-    // Use a short timeout for mirror requests so that an unreachable CDN
-    // (e.g. cdn.axstudio.ai not yet live) fails fast and falls back to the
-    // original URL instead of blocking the download for 30+ seconds.
-    let resp = tokio::time::timeout(Duration::from_secs(15), request.send())
-        .await
-        .map_err(|_| "Mirror request timed out after 15s".to_string())?
-        .map_err(err_to_string)?;
-
-    if start_bytes > 0 {
-        if resp.status() != reqwest::StatusCode::PARTIAL_CONTENT {
-            return Err(format!(
-                "Failed to resume download: HTTP status {}, {}",
-                resp.status(),
-                resp.text().await.unwrap_or_default()
-            ));
-        }
-    } else if !resp.status().is_success() {
-        return Err(format!(
-            "Failed to download: HTTP status {}, {}",
-            resp.status(),
-            resp.text().await.unwrap_or_default()
-        ));
-    }
-
-    Ok(resp)
 }
 
 /// Internal function to attempt download from a single URL (without HMAC)
@@ -950,21 +787,6 @@ mod tests {
         let result = err_to_string(err);
         assert!(result.starts_with("Error: "));
         assert!(result.contains("file missing"));
-    }
-
-    // --- convert_to_mirror_url ---
-
-    #[test]
-    fn test_convert_to_mirror_url_no_mirror_domains() {
-        // MIRROR_DOMAINS is empty, so no URL should be mirrored
-        let result = convert_to_mirror_url("https://huggingface.co/models/test");
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_convert_to_mirror_url_invalid_url() {
-        let result = convert_to_mirror_url("not a url");
-        assert!(result.is_none());
     }
 
     // --- validate_proxy_config ---
@@ -1120,12 +942,4 @@ mod tests {
         let result = _convert_headers(&headers).unwrap();
         assert!(result.is_empty());
     }
-}
-
-pub async fn _get_maybe_resume(
-    client: &reqwest::Client,
-    url: &str,
-    start_bytes: u64,
-) -> Result<reqwest::Response, String> {
-    _get_maybe_resume_internal(client, url, start_bytes).await
 }

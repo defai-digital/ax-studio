@@ -13,7 +13,6 @@ __metadata:
     cpx: "npm:1.5.0"
     rimraf: "npm:6.0.1"
     rolldown: "npm:1.0.0-beta.1"
-    run-script-os: "npm:1.1.6"
     typescript: "npm:5.9.2"
   languageName: unknown
   linkType: soft
@@ -32,37 +31,37 @@ __metadata:
 
 "@ax-studio/core@file:../../core/package.tgz::locator=%40ax-studio%2Fassistant-extension%40workspace%3Aassistant-extension":
   version: 1.1.0
-  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=f1c8ff&locator=%40ax-studio%2Fassistant-extension%40workspace%3Aassistant-extension"
+  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=f837e5&locator=%40ax-studio%2Fassistant-extension%40workspace%3Aassistant-extension"
   peerDependencies:
     react: 19.0.0
-  checksum: 10c0/99313ba07b707142db23be55c0cd9437612b23e0af954cddb5de106b928de891ea1b4ef6c126ff8b3b1ce1d0d76ff16dd6ba23cd96af8e834a4cf99c5a8eba3a
+  checksum: 10c0/ed7239dc669b595b1497a7572e8d7a0000020ec4af282960cb3a9461d68e6c5e2edf5a702d09cabb1f721ba34a759970f2ddb1b2ba801eba450f5bf2064a0329
   languageName: node
   linkType: hard
 
 "@ax-studio/core@file:../../core/package.tgz::locator=%40ax-studio%2Fconversational-extension%40workspace%3Aconversational-extension":
   version: 1.1.0
-  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=f1c8ff&locator=%40ax-studio%2Fconversational-extension%40workspace%3Aconversational-extension"
+  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=f837e5&locator=%40ax-studio%2Fconversational-extension%40workspace%3Aconversational-extension"
   peerDependencies:
     react: 19.0.0
-  checksum: 10c0/99313ba07b707142db23be55c0cd9437612b23e0af954cddb5de106b928de891ea1b4ef6c126ff8b3b1ce1d0d76ff16dd6ba23cd96af8e834a4cf99c5a8eba3a
+  checksum: 10c0/ed7239dc669b595b1497a7572e8d7a0000020ec4af282960cb3a9461d68e6c5e2edf5a702d09cabb1f721ba34a759970f2ddb1b2ba801eba450f5bf2064a0329
   languageName: node
   linkType: hard
 
 "@ax-studio/core@file:../../core/package.tgz::locator=%40ax-studio%2Fdownload-extension%40workspace%3Adownload-extension":
   version: 1.1.0
-  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=f1c8ff&locator=%40ax-studio%2Fdownload-extension%40workspace%3Adownload-extension"
+  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=f837e5&locator=%40ax-studio%2Fdownload-extension%40workspace%3Adownload-extension"
   peerDependencies:
     react: 19.0.0
-  checksum: 10c0/99313ba07b707142db23be55c0cd9437612b23e0af954cddb5de106b928de891ea1b4ef6c126ff8b3b1ce1d0d76ff16dd6ba23cd96af8e834a4cf99c5a8eba3a
+  checksum: 10c0/ed7239dc669b595b1497a7572e8d7a0000020ec4af282960cb3a9461d68e6c5e2edf5a702d09cabb1f721ba34a759970f2ddb1b2ba801eba450f5bf2064a0329
   languageName: node
   linkType: hard
 
 "@ax-studio/core@file:../../core/package.tgz::locator=%40ax-studio%2Fllamacpp-extension%40workspace%3Allamacpp-extension":
   version: 1.1.0
-  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=f1c8ff&locator=%40ax-studio%2Fllamacpp-extension%40workspace%3Allamacpp-extension"
+  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=f837e5&locator=%40ax-studio%2Fllamacpp-extension%40workspace%3Allamacpp-extension"
   peerDependencies:
     react: 19.0.0
-  checksum: 10c0/99313ba07b707142db23be55c0cd9437612b23e0af954cddb5de106b928de891ea1b4ef6c126ff8b3b1ce1d0d76ff16dd6ba23cd96af8e834a4cf99c5a8eba3a
+  checksum: 10c0/ed7239dc669b595b1497a7572e8d7a0000020ec4af282960cb3a9461d68e6c5e2edf5a702d09cabb1f721ba34a759970f2ddb1b2ba801eba450f5bf2064a0329
   languageName: node
   linkType: hard
 
@@ -75,7 +74,6 @@ __metadata:
     cpx: "npm:1.5.0"
     rimraf: "npm:6.0.1"
     rolldown: "npm:1.0.0-beta.1"
-    run-script-os: "npm:1.1.6"
     typescript: "npm:5.8.3"
     vitest: "npm:3.2.4"
   languageName: unknown
@@ -91,11 +89,9 @@ __metadata:
     "@tauri-apps/plugin-http": "npm:2.5.0"
     "@tauri-apps/plugin-log": "npm:^2.6.0"
     cpx: "npm:1.5.0"
-    fetch-retry: "npm:^5.0.6"
     rimraf: "npm:3.0.2"
     rolldown: "npm:1.0.0-beta.1"
     typescript: "npm:5.9.2"
-    ulidx: "npm:2.4.1"
     vitest: "npm:3.2.4"
   languageName: unknown
   linkType: soft
@@ -1543,13 +1539,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"fetch-retry@npm:^5.0.6":
-  version: 5.0.6
-  resolution: "fetch-retry@npm:5.0.6"
-  checksum: 10c0/349f50db631039630e915f70c763469cb696f3ac92ca6f63823109334a2bc62f63670b8c5a5c7e0195c39df517e60ef385cc5264f4c4904d0c6707d371fa8999
-  languageName: node
-  linkType: hard
-
 "file-uri-to-path@npm:1.0.0":
   version: 1.0.0
   resolution: "file-uri-to-path@npm:1.0.0"
@@ -2178,13 +2167,6 @@ __metadata:
   version: 6.0.3
   resolution: "kind-of@npm:6.0.3"
   checksum: 10c0/61cdff9623dabf3568b6445e93e31376bee1cdb93f8ba7033d86022c2a9b1791a1d9510e026e6465ebd701a6dd2f7b0808483ad8838341ac52f003f512e0b4c4
-  languageName: node
-  linkType: hard
-
-"layerr@npm:^3.0.0":
-  version: 3.0.0
-  resolution: "layerr@npm:3.0.0"
-  checksum: 10c0/320c9b9cf1392c73c9ff8f8d1bb7a782093ac7341fe5d7fea6ebfeea6d785af8e0fc573541431b6ffcb268577f8aea66168757e73a15035568a00ab9e4370705
   languageName: node
   linkType: hard
 
@@ -3049,16 +3031,6 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"run-script-os@npm:1.1.6":
-  version: 1.1.6
-  resolution: "run-script-os@npm:1.1.6"
-  bin:
-    run-os: index.js
-    run-script-os: index.js
-  checksum: 10c0/620e240a650c666bb8e3f5437680d88c522366e6c68d4867300caf6cad010c85ff36a016de2c71010debaf10e968966b2c6aaa8816bab8298381e5620d41d8aa
-  languageName: node
-  linkType: hard
-
 "safe-buffer@npm:^5.0.1":
   version: 5.2.1
   resolution: "safe-buffer@npm:5.2.1"
@@ -3502,15 +3474,6 @@ __metadata:
     tsc: bin/tsc
     tsserver: bin/tsserver
   checksum: 10c0/34d2a8e23eb8e0d1875072064d5e1d9c102e0bdce56a10a25c0b917b8aa9001a9cf5c225df12497e99da107dc379360bc138163c66b55b95f5b105b50578067e
-  languageName: node
-  linkType: hard
-
-"ulidx@npm:2.4.1":
-  version: 2.4.1
-  resolution: "ulidx@npm:2.4.1"
-  dependencies:
-    layerr: "npm:^3.0.0"
-  checksum: 10c0/3cbe05123b4b49d262e26cd0edd3ac38a4f9e97f043d47ae7daa88502748881d1615d832e3bcb29698ca2429947c24494929ba35b40d6bf38df891cb15642d2e
   languageName: node
   linkType: hard
 
