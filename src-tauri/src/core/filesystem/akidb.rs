@@ -337,7 +337,7 @@ pub fn read_akidb_config() -> Result<Option<AkidbConfig>, String> {
 
     let file = fs::File::open(&path_to_read).map_err(|e| e.to_string())?;
     let reader = std::io::BufReader::new(file);
-    let config: AkidbConfig = serde_yml::from_reader(reader).map_err(|e| {
+    let config: AkidbConfig = serde_yaml::from_reader(reader).map_err(|e| {
         format!(
             "Failed to parse knowledge-base config {}: {e}",
             path_to_read.display()
@@ -351,7 +351,7 @@ pub fn read_akidb_config() -> Result<Option<AkidbConfig>, String> {
 #[tauri::command]
 pub fn write_akidb_config(config: AkidbConfig) -> Result<(), String> {
     let home = dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
-    let yaml = serde_yml::to_string(&config)
+    let yaml = serde_yaml::to_string(&config)
         .map_err(|e| format!("Failed to serialize knowledge-base config: {e}"))?;
 
     // Write to preferred path (~/.ax-studio/config.yaml)

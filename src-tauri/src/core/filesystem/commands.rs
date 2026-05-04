@@ -368,7 +368,7 @@ pub fn write_yaml(
         ));
     }
     let tmp_path = save_path.with_extension("yaml.tmp");
-    let _: serde_yml::Value = serde_yml::from_str(&data).map_err(|e| e.to_string())?;
+    let _: serde_yaml::Value = serde_yaml::from_str(&data).map_err(|e| e.to_string())?;
     fs::write(&tmp_path, data).map_err(|e| e.to_string())?;
     fs::rename(&tmp_path, &save_path).map_err(|e| e.to_string())?;
     Ok(())
@@ -392,7 +392,7 @@ pub fn read_yaml<R: Runtime>(
     }
     let file = fs::File::open(&path).map_err(|e| e.to_string())?;
     let reader = std::io::BufReader::new(file);
-    let data: serde_json::Value = serde_yml::from_reader(reader).map_err(|e| e.to_string())?;
+    let data: serde_json::Value = serde_yaml::from_reader(reader).map_err(|e| e.to_string())?;
     Ok(data)
 }
 
