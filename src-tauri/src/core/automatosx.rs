@@ -1,5 +1,5 @@
 use std::process::Stdio;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, LazyLock};
 use std::collections::HashMap;
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -7,9 +7,7 @@ use tokio::process::{Child, Command};
 
 type ProcessMap = Arc<Mutex<HashMap<String, Child>>>;
 
-lazy_static::lazy_static! {
-    static ref PROCESSES: ProcessMap = Arc::new(Mutex::new(HashMap::new()));
-}
+static PROCESSES: LazyLock<ProcessMap> = LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
 
 #[derive(serde::Serialize, Clone)]
 pub struct AgentEvent {

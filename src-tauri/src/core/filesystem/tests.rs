@@ -259,7 +259,7 @@ fn test_decompress_extracts_zip_archive_within_app_data_folder() {
     {
         let file = File::create(&archive_path).unwrap();
         let mut zip = zip::ZipWriter::new(file);
-        let options = zip::write::FileOptions::default();
+        let options = zip::write::SimpleFileOptions::default();
         zip.start_file("nested/example.txt", options).unwrap();
         zip.write_all(b"hello from zip").unwrap();
         zip.finish().unwrap();
@@ -288,7 +288,7 @@ fn test_decompress_rejects_zip_path_traversal_entries() {
     {
         let file = File::create(&archive_path).unwrap();
         let mut zip = zip::ZipWriter::new(file);
-        let options = zip::write::FileOptions::default();
+        let options = zip::write::SimpleFileOptions::default();
         zip.start_file("../escape.txt", options).unwrap();
         zip.write_all(b"escape").unwrap();
         zip.finish().unwrap();

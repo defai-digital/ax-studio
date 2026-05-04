@@ -36,23 +36,6 @@ const DANGEROUS_ENV_KEYS: &[&str] = &[
     "DYLD_LIBRARY_PATH",
 ];
 
-fn is_internal_url(url: &str) -> bool {
-    let parsed = match url::Url::parse(url) {
-        Ok(p) => p,
-        Err(_) => return true,
-    };
-    if !matches!(parsed.scheme(), "http" | "https") {
-        return true;
-    }
-    match parsed.host() {
-        Some(url::Host::Domain("localhost")) => true,
-        Some(url::Host::Ipv4(ip)) => ip.is_loopback() || ip.is_private() || ip.is_link_local() || ip.is_unspecified(),
-        Some(url::Host::Ipv6(ip)) => ip.is_loopback() || ip.is_unspecified(),
-        Some(url::Host::Domain(_)) => false,
-        None => true,
-    }
-}
-
 // Re-export ShutdownContext so existing `use super::helpers::ShutdownContext`
 // imports keep working after the enum moved to its own module.
 pub use super::shutdown::ShutdownContext;
@@ -262,7 +245,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
                 "Missing MCP HTTP URL for server {name}"
             ));
         }
-        if is_internal_url(transport_url) {
+        if ax_studio_utils::is_internal_url(transport_url) {
             return Err(format!(
                 "MCP HTTP URL for server {name} points to an internal/private address, which is not allowed"
             ));
@@ -334,7 +317,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
         if transport_url.is_empty() {
             return Err(format!("Missing MCP SSE URL for server {name}"));
         }
-        if is_internal_url(transport_url) {
+        if ax_studio_utils::is_internal_url(transport_url) {
             return Err(format!(
                 "MCP SSE URL for server {name} points to an internal/private address, which is not allowed"
             ));

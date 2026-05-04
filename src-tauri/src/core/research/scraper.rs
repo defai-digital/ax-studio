@@ -1,40 +1,4 @@
 use scraper::{Html, Selector};
-use std::net::IpAddr;
-
-fn is_forbidden_ip(ip: IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(ipv4) => {
-            ipv4.is_loopback() || ipv4.is_private() || ipv4.is_link_local() || ipv4.is_unspecified()
-        }
-        IpAddr::V6(ipv6) => {
-            ipv6.is_loopback()
-                || ipv6.is_unspecified()
-                || ((ipv6.octets()[0] & 0xfe) == 0xfe && (ipv6.octets()[1] & 0xc0) == 0x80)
-                || (ipv6.octets()[0] & 0xfe) == 0xfc
-        }
-    }
-}
-
-/// Check if a URL points to forbidden internal/private networks.
-/// Rejects loopback, link-local, and private IP ranges to prevent SSRF.
-fn is_forbidden_url(url: &str) -> bool {
-    let parsed = match url::Url::parse(url) {
-        Ok(parsed) => parsed,
-        Err(_) => return true, // Invalid URLs are forbidden
-    };
-
-    if !matches!(parsed.scheme(), "http" | "https") {
-        return true; // Only allow HTTP/HTTPS
-    }
-
-    match parsed.host() {
-        Some(url::Host::Domain("localhost")) => true,
-        Some(url::Host::Ipv4(ipv4)) => is_forbidden_ip(IpAddr::V4(ipv4)),
-        Some(url::Host::Ipv6(ipv6)) => is_forbidden_ip(IpAddr::V6(ipv6)),
-        Some(url::Host::Domain(_)) => false, // Other domains are allowed
-        None => true,                        // No host is forbidden
-    }
-}
 
 /// Fetch a URL and extract its main text content.
 ///
@@ -44,7 +8,7 @@ fn is_forbidden_url(url: &str) -> bool {
 pub async fn scrape_url(url: &str) -> Result<String, String> {
     let parsed = url::Url::parse(url).map_err(|_| "URL points to forbidden internal network")?;
 
-    if is_forbidden_url(url) {
+    if ax_studio_utils::is_internal_url(url) {
         return Err("URL points to forbidden internal network".to_string());
     }
 
@@ -59,7 +23,7 @@ pub async fn scrape_url(url: &str) -> Result<String, String> {
         .map_err(|_| format!("DNS resolution failed for {host}"))?;
 
     for addr in resolved_addrs {
-        if is_forbidden_ip(addr.ip()) {
+        if ax_studio_utils::is_private_ip(addr.ip()) {
             return Err("URL resolves to forbidden internal network".to_string());
         }
     }
@@ -151,6 +115,19 @@ fn extract_text(html: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::net::IpAddr;
+
+    async fn resolves_to_forbidden_ip(url: &url::Url) -> bool {
+        let host = match url.host_str() {
+            Some(h) => h,
+            None => return true,
+        };
+        let port = url.port_or_known_default().unwrap_or(80);
+        match tokio::net::lookup_host((&*host.to_string(), port)).await {
+            Ok(addrs) => addrs.any(|addr| ax_studio_utils::is_private_ip(addr.ip())),
+            Err(_) => true,
+        }
+    }
     use super::*;
 
     #[test]
@@ -265,61 +242,53 @@ mod tests {
 
     #[test]
     fn test_is_forbidden_url_rejects_internal_addresses() {
-        // Reject localhost hostname
-        assert!(is_forbidden_url("http://localhost"));
-        assert!(is_forbidden_url("https://localhost:8080"));
+        assert!(ax_studio_utils::is_internal_url("http://localhost"));
+        assert!(ax_studio_utils::is_internal_url("https://localhost:8080"));
 
-        // Reject loopback IPs
-        assert!(is_forbidden_url("http://127.0.0.1"));
-        assert!(is_forbidden_url("https://127.0.0.1:443"));
-        assert!(is_forbidden_url("http://[::1]"));
-        assert!(is_forbidden_url("https://[::1]:8443"));
+        assert!(ax_studio_utils::is_internal_url("http://127.0.0.1"));
+        assert!(ax_studio_utils::is_internal_url("https://127.0.0.1:443"));
+        assert!(ax_studio_utils::is_internal_url("http://[::1]"));
+        assert!(ax_studio_utils::is_internal_url("https://[::1]:8443"));
 
-        // Reject link-local
-        assert!(is_forbidden_url("http://169.254.1.1"));
-        assert!(is_forbidden_url("http://[fe80::1]"));
+        assert!(ax_studio_utils::is_internal_url("http://169.254.1.1"));
+        assert!(ax_studio_utils::is_internal_url("http://[fe80::1]"));
 
-        // Reject private IPs
-        assert!(is_forbidden_url("http://10.0.0.1"));
-        assert!(is_forbidden_url("http://172.16.0.1"));
-        assert!(is_forbidden_url("http://192.168.1.1"));
-        assert!(is_forbidden_url("http://[fc00::1]"));
+        assert!(ax_studio_utils::is_internal_url("http://10.0.0.1"));
+        assert!(ax_studio_utils::is_internal_url("http://172.16.0.1"));
+        assert!(ax_studio_utils::is_internal_url("http://192.168.1.1"));
+        assert!(ax_studio_utils::is_internal_url("http://[fc00::1]"));
 
-        // Reject unspecified
-        assert!(is_forbidden_url("http://0.0.0.0"));
-        assert!(is_forbidden_url("http://[::]"));
+        assert!(ax_studio_utils::is_internal_url("http://0.0.0.0"));
+        assert!(ax_studio_utils::is_internal_url("http://[::]"));
     }
 
     #[test]
     fn test_is_forbidden_url_allows_external_addresses() {
-        // Allow external hostnames
-        assert!(!is_forbidden_url("http://example.com"));
-        assert!(!is_forbidden_url("https://api.github.com"));
-        assert!(!is_forbidden_url("http://google.com:8080"));
+        assert!(!ax_studio_utils::is_internal_url("http://example.com"));
+        assert!(!ax_studio_utils::is_internal_url("https://api.github.com"));
+        assert!(!ax_studio_utils::is_internal_url("http://google.com:8080"));
 
-        // Allow external IPs (not in forbidden ranges)
-        assert!(!is_forbidden_url("http://8.8.8.8"));
-        assert!(!is_forbidden_url("https://1.1.1.1"));
+        assert!(!ax_studio_utils::is_internal_url("http://8.8.8.8"));
+        assert!(!ax_studio_utils::is_internal_url("https://1.1.1.1"));
     }
 
     #[test]
     fn test_is_forbidden_url_rejects_invalid_and_unsupported() {
-        // Reject invalid URLs
-        assert!(is_forbidden_url("not-a-url"));
-        assert!(is_forbidden_url("ftp://example.com"));
-        assert!(is_forbidden_url("file:///etc/passwd"));
-        assert!(is_forbidden_url(""));
+        assert!(ax_studio_utils::is_internal_url("not-a-url"));
+        assert!(ax_studio_utils::is_internal_url("ftp://example.com"));
+        assert!(ax_studio_utils::is_internal_url("file:///etc/passwd"));
+        assert!(ax_studio_utils::is_internal_url(""));
     }
 
     #[test]
     fn test_is_forbidden_ip_rejects_private_ranges() {
-        assert!(is_forbidden_ip(IpAddr::V4(std::net::Ipv4Addr::new(
+        assert!(ax_studio_utils::is_private_ip(IpAddr::V4(std::net::Ipv4Addr::new(
             127, 0, 0, 1
         ))));
-        assert!(is_forbidden_ip(IpAddr::V4(std::net::Ipv4Addr::new(
+        assert!(ax_studio_utils::is_private_ip(IpAddr::V4(std::net::Ipv4Addr::new(
             10, 0, 0, 1
         ))));
-        assert!(!is_forbidden_ip(IpAddr::V4(std::net::Ipv4Addr::new(
+        assert!(!ax_studio_utils::is_private_ip(IpAddr::V4(std::net::Ipv4Addr::new(
             8, 8, 8, 8
         ))));
     }

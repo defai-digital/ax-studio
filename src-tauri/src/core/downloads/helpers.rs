@@ -95,27 +95,8 @@ fn get_app_version() -> &'static str {
 
 // ===== VALIDATION FUNCTIONS =====
 
-fn is_internal_download_url(url: &str) -> bool {
-    let parsed = match Url::parse(url) {
-        Ok(p) => p,
-        Err(_) => return true,
-    };
-    if !matches!(parsed.scheme(), "http" | "https") {
-        return true;
-    }
-    match parsed.host() {
-        Some(url::Host::Domain("localhost")) => true,
-        Some(url::Host::Ipv4(ip)) => {
-            ip.is_loopback() || ip.is_private() || ip.is_link_local() || ip.is_unspecified()
-        }
-        Some(url::Host::Ipv6(ip)) => ip.is_loopback() || ip.is_unspecified(),
-        Some(url::Host::Domain(_)) => false,
-        None => true,
-    }
-}
-
 fn validate_download_url(url: &str) -> Result<(), String> {
-    if is_internal_download_url(url) {
+    if ax_studio_utils::is_internal_url(url) {
         return Err(format!(
             "Download URL '{}' points to an internal/private address",
             url

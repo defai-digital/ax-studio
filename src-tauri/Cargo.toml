@@ -65,7 +65,7 @@ tauri-build = { version = "2.0.2", features = [] }
 
 [dependencies]
 dirs = "6.0.0"
-reqwest = { workspace = true, features = ["native-tls-vendored"] }
+reqwest = { workspace = true, features = ["rustls-tls"] }
 tauri-plugin-updater = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs" }
@@ -89,10 +89,10 @@ rmcp = { version = "0.8.5", features = [
 ] }
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde_yaml = "0.9.34"
+serde_yml = "0.0.12"
 sha2 = { workspace = true }
 tar = "0.4"
-zip = "0.6"
+zip = "2"
 tauri-plugin-deep-link = { version = "2", optional = true }
 tauri-plugin-hardware = { workspace = true, optional = true }
 tauri-plugin-llamacpp = { workspace = true, optional = true }
@@ -114,7 +114,6 @@ rfd = { version = "0.15.4", default-features = false, features = [
 chrono = { version = "0.4", features = ["serde"] }
 hostname = "0.4"
 glob = "0.3"
-lazy_static = "1.5"
 scraper = "0.20"
 subtle = "2.6"
 regex = "1"
