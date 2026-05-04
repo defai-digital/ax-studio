@@ -9,7 +9,6 @@ import * as file from './file';
 import * as config from './config';
 import * as api from './api';
 import * as setting from './setting';
-import * as engine from './engine';
 import * as mcp from './mcp';
 
 test('test_module_exports', () => {
@@ -22,6 +21,5 @@ test('test_module_exports', () => {
       expect(config).toBeDefined();
       expect(api).toBeDefined();
       expect(setting).toBeDefined();
-      expect(engine).toBeDefined();
       expect(mcp).toBeDefined();
     });

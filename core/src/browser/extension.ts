@@ -5,7 +5,6 @@ export enum ExtensionTypeEnum {
   Assistant = 'assistant',
   Conversational = 'conversational',
   Model = 'model',
-  SystemMonitoring = 'systemMonitoring',
   MCP = 'mcp',
   HuggingFace = 'huggingFace',
   Engine = 'engine',
