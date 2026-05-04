@@ -87,9 +87,9 @@ export function createDefaultConfig(dataFolder?: string): AkidbConfig {
     },
     embedder: {
       type: 'http',
-      model_id: 'gte-qwen2-1.5b-instruct-q4_k_m',
-      dimension: 1536,
-      batch_size: 4,
+      model_id: 'nomic-embed-text-v1.5',
+      dimension: 768,
+      batch_size: 64,
       timeout_ms: 120000,
       base_url: 'http://127.0.0.1:18080',
     },

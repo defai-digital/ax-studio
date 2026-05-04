@@ -20,6 +20,7 @@ const FREQUENCY_OPTIONS = [
 ]
 
 const EMBEDDING_MODEL_OPTIONS = [
+  { label: 'nomic-embed-text-v1.5 (Local, 768d)', value: 'nomic-embed-text-v1.5', dimension: 768 },
   { label: 'gte-qwen2-1.5b-instruct-q4_k_m (Local, 1536d)', value: 'gte-qwen2-1.5b-instruct-q4_k_m', dimension: 1536 },
   { label: 'all-minilm-l6-v2-q4_k_m (Local, 384d)', value: 'all-minilm-l6-v2-q4_k_m', dimension: 384 },
   { label: 'text-embedding-3-small (OpenAI, 1536d)', value: 'text-embedding-3-small', dimension: 1536 },
@@ -33,8 +34,8 @@ export default function AkidbConfigPanel() {
 
   const [dataFolder, setDataFolder] = useState('')
   const [frequency, setFrequency] = useState(60)
-  const [embeddingModel, setEmbeddingModel] = useState('gte-qwen2-1.5b-instruct-q4_k_m')
-  const [embeddingDimension, setEmbeddingDimension] = useState(1536)
+  const [embeddingModel, setEmbeddingModel] = useState('nomic-embed-text-v1.5')
+  const [embeddingDimension, setEmbeddingDimension] = useState(768)
 
   // Load config from the AX Studio path, with legacy fallback handled by Rust.
   useEffect(() => {
@@ -275,9 +276,9 @@ export default function AkidbConfigPanel() {
                 : 'Up to date'}
           </p>
           <p className="text-xs text-muted-foreground">
-            {status.indexed_files} indexed
-            {status.pending_files > 0 &&
-              ` · ${status.pending_files} pending`}
+            {status.indexed_files + status.pending_files} indexed
+            {status.indexed_files > 0 &&
+              ` (${status.indexed_files} new this sync)`}
             {status.error_files > 0 && ` · ${status.error_files} errors`}
             {' '}/{' '}
             {status.total_files} total

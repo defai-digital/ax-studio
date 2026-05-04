@@ -412,10 +412,8 @@ fn resolve_fabric_cli_command<R: Runtime>(
     // Use the same data folder as the rest of the app (get_app_data_folder_path),
     // NOT app_data_dir() — in dev mode these resolve to different directories.
     let mut path = crate::core::app::commands::get_app_data_folder_path(app.clone());
-    // mcp_config.json lives one level up from the data/ subfolder
-    if path.ends_with("data") {
-        path.pop();
-    }
+    // mcp_config.json lives inside the data/ subfolder alongside other config
+    // (the data_folder path already ends with "data")
     path.push("mcp_config.json");
 
     if path.exists() {
