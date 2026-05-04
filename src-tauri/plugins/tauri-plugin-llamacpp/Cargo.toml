@@ -25,7 +25,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tauri-plugin-hardware = { workspace = true }
 
-reqwest = { workspace = true, features = ["rustls-tls"] }
+reqwest = { workspace = true, features = ["native-tls"] }
 
 # Unix-specific dependencies
 [target.'cfg(unix)'.dependencies]
