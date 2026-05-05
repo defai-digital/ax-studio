@@ -4,7 +4,7 @@
   "description": "enables the default permissions for mobile platforms",
   "windows": ["main"],
   "remote": {
-    "urls": ["http://*"]
+    "urls": []
   },
   "permissions": [
     "core:default",
@@ -25,10 +25,31 @@
       "identifier": "http:default",
       "allow": [
         {
-          "url": "https://*:*"
+          "url": "https://huggingface.co/**"
         },
         {
-          "url": "http://*:*"
+          "url": "https://hf.co/**"
+        },
+        {
+          "url": "https://cdn-lfs*.huggingface.co/**"
+        },
+        {
+          "url": "https://api.github.com/**"
+        },
+        {
+          "url": "https://github.com/**"
+        },
+        {
+          "url": "https://objects.githubusercontent.com/**"
+        },
+        {
+          "url": "https://github-releases.githubusercontent.com/**"
+        },
+        {
+          "url": "http://127.0.0.1:*"
+        },
+        {
+          "url": "http://localhost:*"
         }
       ],
       "deny": []
@@ -47,9 +68,6 @@
         },
         {
           "url": "http://127.0.0.1:*"
-        },
-        {
-          "url": "http://0.0.0.0:*"
         }
       ]
     }
