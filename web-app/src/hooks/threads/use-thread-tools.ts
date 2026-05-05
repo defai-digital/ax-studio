@@ -117,7 +117,7 @@ export function useThreadTools({
                 toolCallId: toolCall.toolCallId,
                 output: [{
                   type: 'text',
-                  text: 'Search already completed. You must now write your answer based on the previous search results. Do NOT call any tools. Just write a complete text response.',
+                  text: 'STOP. fabric_search was already called. You MUST NOT call it again. Write your complete answer now using the previous search results. Do NOT call any tools. Just write your answer text immediately.',
                 }],
               })
               continue
@@ -178,7 +178,7 @@ export function useThreadTools({
                     ...output,
                     {
                       type: 'text',
-                      text: '\n\n---\nINSTRUCTION: Based on the search results above, you MUST now write your full answer. Start writing immediately — do NOT say "let me" or "I will explain". For each finding, state what it is, why it matters, and what should be done. Do NOT call any tools. Write a complete answer now.',
+                      text: '\n\n---\nINSTRUCTION: Based on the search results above, you MUST now write your full answer immediately.\n\nCRITICAL RULES:\n- Do NOT call fabric_search or any other tool again\n- Do NOT say "let me search" or "I need more information"\n- Do NOT say "let me" or "I will explain"\n- Work with the results you have — even if they seem incomplete\n- Start writing your answer NOW\n- If the results are incomplete, say so in your answer and describe what you found\n- Your response must be at least 100 words',
                     },
                   ]
                 }
