@@ -80,13 +80,14 @@ fn test_join_path() {
         args: vec![path.to_string(), "test_file".to_string()],
     };
     let result = join_path(app.handle().clone(), request).unwrap();
-    assert_eq!(
-        result,
-        get_app_data_folder_path(app.handle().clone())
-            .join(format!("test_dir{}test_file", std::path::MAIN_SEPARATOR))
-            .to_string_lossy()
-            .to_string()
-    );
+    let app_data = get_app_data_folder_path(app.handle().clone());
+    fs::create_dir_all(&app_data).unwrap();
+    let canonical_app_data = app_data.canonicalize().unwrap_or(app_data);
+    let expected = canonical_app_data
+        .join(format!("test_dir{}test_file", std::path::MAIN_SEPARATOR))
+        .to_string_lossy()
+        .to_string();
+    assert_eq!(result, expected);
 }
 
 #[test]
@@ -124,7 +125,7 @@ fn test_read_file_sync() {
 #[test]
 fn test_write_file_sync_writes_typed_request_atomically() {
     let app = mock_app();
-    let path = "test_write_file_sync.txt";
+    let path = "file://test_write_file_sync.txt";
 
     write_file_sync(
         app.handle().clone(),
@@ -136,7 +137,7 @@ fn test_write_file_sync_writes_typed_request_atomically() {
     .unwrap();
 
     let written =
-        fs::read_to_string(get_app_data_folder_path(app.handle().clone()).join(path)).unwrap();
+        fs::read_to_string(get_app_data_folder_path(app.handle().clone()).join("test_write_file_sync.txt")).unwrap();
     assert_eq!(written, "hello world");
 }
 
@@ -182,8 +183,8 @@ fn test_mv_moves_file_within_app_data_folder() {
     mv(
         app.handle().clone(),
         PathPairRequest::Typed {
-            source: "source.txt".to_string(),
-            destination: "nested/destination.txt".to_string(),
+            source: "file://source.txt".to_string(),
+            destination: "file://nested/destination.txt".to_string(),
         },
     )
     .unwrap();
@@ -327,7 +328,7 @@ async fn test_write_binary_and_text_file_require_one_time_save_approval() {
     write_binary_file(
         state.clone(),
         save_path.to_string_lossy().to_string(),
-        "68656c6c6f".to_string(),
+        "aGVsbG8=".to_string(),
     )
     .await
     .unwrap();

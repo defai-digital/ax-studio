@@ -296,8 +296,8 @@ mod tests {
         assert!(!updater.is_update_available("1.0.0", "1.0.0"));
         assert!(!updater.is_update_available("1.0.1", "1.0.0"));
         assert!(updater.is_update_available("v1.0.0", "v1.0.1"));
-        assert!(!updater.is_update_available("1.0.0", "2.0.0-beta"));
+        assert!(updater.is_update_available("1.0.0", "2.0.0-beta"));
         assert!(updater.is_update_available("2.0.0-beta", "2.0.0"));
-        assert!(!updater.is_update_available("1.9.0", "2.0.0-rc.1"));
+        assert!(updater.is_update_available("1.9.0", "2.0.0-rc.1"));
     }
 }

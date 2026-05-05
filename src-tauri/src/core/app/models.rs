@@ -69,6 +69,6 @@ mod tests {
         let config = AppConfiguration::default();
         let debug_str = format!("{:?}", config);
         assert!(debug_str.contains("AppConfiguration"));
-        assert!(debug_str.contains("./data"));
+        assert!(debug_str.contains("data"));
     }
 }

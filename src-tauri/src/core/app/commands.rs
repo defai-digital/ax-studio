@@ -97,14 +97,11 @@ pub fn update_app_configuration<R: Runtime>(
 #[tauri::command]
 pub fn get_app_data_folder_path<R: Runtime>(app_handle: tauri::AppHandle<R>) -> PathBuf {
     if cfg!(test) {
-        use std::cell::RefCell;
-        thread_local! {
-            static TEST_DATA_DIR: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
-        }
+        use std::sync::OnceLock;
+        static TEST_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 
-        return TEST_DATA_DIR.with(|dir| {
-            let mut dir = dir.borrow_mut();
-            if dir.is_none() {
+        return TEST_DATA_DIR
+            .get_or_init(|| {
                 let unique_id = std::thread::current().id();
                 let timestamp = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -113,10 +110,9 @@ pub fn get_app_data_folder_path<R: Runtime>(app_handle: tauri::AppHandle<R>) -> 
                 let path = std::env::temp_dir()
                     .join(format!("ax-studio-test-data-{unique_id:?}-{timestamp}"));
                 let _ = fs::create_dir_all(&path);
-                *dir = Some(path);
-            }
-            dir.clone().unwrap()
-        });
+                path
+            })
+            .clone();
     }
 
     let app_configurations = get_app_configurations(app_handle);

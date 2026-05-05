@@ -243,17 +243,20 @@ pub fn mv<R: Runtime>(
     let (source_arg, destination_arg) = request.into_paths("mv")?;
 
     let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app_handle.clone());
+    let canonical_app_data = app_data_folder
+        .canonicalize()
+        .unwrap_or_else(|_| app_data_folder.clone());
     let source = resolve_path(app_handle.clone(), &source_arg)?;
     let destination = resolve_path(app_handle, &destination_arg)?;
 
-    if !source.starts_with(&app_data_folder) {
+    if !source.starts_with(&canonical_app_data) {
         return Err(format!(
             "mv error: source path {} is not under app data folder",
             source.display()
         ));
     }
 
-    if !destination.starts_with(&app_data_folder) {
+    if !destination.starts_with(&canonical_app_data) {
         return Err(format!(
             "mv error: destination path {} is not under app data folder",
             destination.display()
@@ -275,11 +278,13 @@ pub fn join_path<R: Runtime>(
 ) -> Result<String, String> {
     let args = request.into_parts()?;
     let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app_handle.clone());
+    let canonical_app_data = app_data_folder
+        .canonicalize()
+        .unwrap_or_else(|_| app_data_folder.clone());
     let path = resolve_path(app_handle, &args[0])?;
     let joined_path = args[1..].iter().fold(path, |acc, part| acc.join(part));
-    // Normalize to resolve any ".." segments from subsequent args
     let normalized = ax_studio_utils::normalize_path(&joined_path);
-    if !normalized.starts_with(&app_data_folder) {
+    if !normalized.starts_with(&canonical_app_data) {
         return Err(format!(
             "join_path error: result path {} is outside app data folder",
             normalized.display()

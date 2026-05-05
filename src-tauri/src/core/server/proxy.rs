@@ -713,7 +713,7 @@ mod tests {
     fn test_validate_request_whitelisted_path_bypasses_all() {
         let config = test_config(false, "secret-key");
         let headers = hyper::HeaderMap::new();
-        let result = validate_request("/", "", "", &headers, &config);
+        let result = validate_request("/favicon.ico", "", "", &headers, &config);
         assert!(result.is_none());
     }
 
