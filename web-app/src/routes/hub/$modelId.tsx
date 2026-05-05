@@ -249,6 +249,15 @@ function HubModelDetailContent() {
     ;(async () => {
       setIsLoadingReadme(true)
       try {
+        // Validate the README URL before fetching — model metadata comes from
+        // external sources (HuggingFace API) and should only point to HTTPS hosts.
+        const parsed = new URL(readmeUrl)
+        if (parsed.protocol !== 'https:') {
+          console.warn(`[hub] README URL rejected (not HTTPS): ${readmeUrl}`)
+          setReadmeContent('')
+          return
+        }
+
         let response = await fetch(readmeUrl, { signal })
         if (!response.ok && huggingfaceToken) {
           response = await fetch(readmeUrl, {
