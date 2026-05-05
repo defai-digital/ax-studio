@@ -1,4 +1,4 @@
-import { type RefObject, useEffect, useRef } from 'react'
+import { type RefObject, useEffect } from 'react'
 import type { UIMessage } from '@ai-sdk/react'
 import type { ChatStatus } from 'ai'
 import { Button } from '@/components/ui/button'
@@ -6,16 +6,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { MessageSquareText } from 'lucide-react'
 import ChatInput from '@/containers/ChatInput'
 import { MessagesArea } from '@/containers/threads/MessagesArea'
-import { useAgentMode } from '@/hooks/agent/useAgentMode'
-import { AgentModeToggle } from '@/components/agent/AgentModeToggle'
-import { AgentMessage } from '@/components/agent/AgentMessage'
-import { AgentInput } from '@/components/agent/AgentInput'
-import { safeStorageGetItem, safeStorageRemoveItem } from '@/lib/storage/storage'
-import { SESSION_STORAGE_KEY } from '@/constants/chat'
-import { useMessages } from '@/hooks/chat/useMessages'
-import { useChatSessions } from '@/stores/chat-session-store'
-import { convertThreadMessageToUIMessage } from '@/lib/messages'
-import { newUserThreadContent, newAssistantThreadContent } from '@/lib/completion'
 
 export type MainThreadPaneProps = {
   threadId: string
@@ -68,82 +58,6 @@ export function MainThreadPane({
   isSplitView = false,
   onSplitClose,
 }: MainThreadPaneProps) {
-  const agent = useAgentMode(threadId)
-  const agentRef = useRef(agent)
-  agentRef.current = agent
-  const didAutoRun = useRef(false)
-
-  useEffect(() => {
-    if (didAutoRun.current) return
-    const raw = safeStorageGetItem(sessionStorage, SESSION_STORAGE_KEY.AGENT_TASK, 'MainThreadPane')
-    if (!raw) return
-    didAutoRun.current = true
-    safeStorageRemoveItem(sessionStorage, SESSION_STORAGE_KEY.AGENT_TASK, 'MainThreadPane')
-    try {
-      const cfg = JSON.parse(raw) as {
-        task: string
-        agentId: string
-        provider: string | null
-        model: string | null
-      }
-      // Save user task as first chat message
-      const userMsg = newUserThreadContent(threadId, cfg.task)
-      useMessages.getState().addMessage(userMsg)
-      const uiUserMsg = convertThreadMessageToUIMessage(userMsg)
-      if (uiUserMsg) {
-        useChatSessions.setState((state) => {
-          const session = state.sessions[threadId]
-          if (!session) return state
-          return {
-            sessions: {
-              ...state.sessions,
-              [threadId]: { ...session, chat: { ...session.chat, messages: [...session.chat.messages, uiUserMsg] } },
-            },
-          }
-        })
-      }
-      agentRef.current.setIsAgentMode(true)
-      agentRef.current.runAgentWithConfig(cfg.task, cfg.agentId, cfg.provider, cfg.model)
-    } catch {
-      // ignore malformed payload
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // Save agent output as assistant message when run completes
-  const savedLinesCount = useRef(0)
-  useEffect(() => {
-    if (agent.status !== 'done' && agent.status !== 'error') {
-      if (agent.status === 'idle') savedLinesCount.current = 0
-      return
-    }
-    if (agent.lines.length === 0 || savedLinesCount.current === agent.lines.length) return
-    savedLinesCount.current = agent.lines.length
-
-    const outputText = agent.lines
-      .filter((l) => l.kind === 'line' || l.kind === 'done')
-      .map((l) => l.text)
-      .join('\n')
-      .trim()
-    if (!outputText) return
-
-    const assistantMsg = newAssistantThreadContent(threadId, outputText, { source: 'agent' })
-    useMessages.getState().addMessage(assistantMsg)
-    const uiMsg = convertThreadMessageToUIMessage(assistantMsg)
-    if (!uiMsg) return
-    useChatSessions.setState((state) => {
-      const session = state.sessions[threadId]
-      if (!session) return state
-      return {
-        sessions: {
-          ...state.sessions,
-          [threadId]: { ...session, chat: { ...session.chat, messages: [...session.chat.messages, uiMsg] } },
-        },
-      }
-    })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agent.status, agent.lines.length])
-
   const containerCls = isSplitView
     ? 'h-full rounded-xl border bg-background overflow-hidden flex flex-col relative'
     : hasPanels
@@ -168,11 +82,6 @@ export function MainThreadPane({
               <span className="truncate">{title}</span>
             </div>
             <div className="flex items-center gap-0.5 shrink-0">
-              <AgentModeToggle
-                enabled={agent.isAgentMode}
-                onToggle={() => agent.setIsAgentMode((v) => !v)}
-                axError={agent.axError}
-              />
               <Button
                 variant={showThreadPromptEditor ? 'secondary' : 'ghost'}
                 size="icon-xs"
@@ -258,45 +167,8 @@ export function MainThreadPane({
             className="absolute -top-8 left-0 right-0 h-8 pointer-events-none z-10"
             style={{ background: 'linear-gradient(to top, var(--background) 20%, transparent)' }}
           />
-          <div className={inputCls + ' space-y-2'}>
-            {/* Agent mode toggle — always visible at the bottom */}
-            <div className="flex items-center gap-2">
-              <AgentModeToggle
-                enabled={agent.isAgentMode}
-                onToggle={() => agent.setIsAgentMode((v) => !v)}
-                axError={agent.axError}
-              />
-              <span className="text-xs text-muted-foreground">
-                {agent.isAgentMode ? 'Agent Mode (AutomatosX)' : 'Switch to Agent Mode'}
-              </span>
-            </div>
-
-            {agent.isAgentMode ? (
-              <div className="space-y-3">
-                {(agent.lines.length > 0 || agent.status !== 'idle') && (
-                  <AgentMessage
-                    lines={agent.lines}
-                    status={agent.status}
-                    onStop={agent.stopAgent}
-                    onReset={agent.resetAgent}
-                  />
-                )}
-                <AgentInput
-                  agents={agent.agents}
-                  selectedAgent={agent.selectedAgent}
-                  onSelectAgent={agent.setSelectedAgent}
-                  selectedProvider={agent.selectedProvider}
-                  onSelectProvider={agent.setSelectedProvider}
-                  selectedModel={agent.selectedModel}
-                  onSelectModel={agent.setSelectedModel}
-                  onSubmit={agent.runAgent}
-                  isRunning={agent.status === 'running'}
-                  axError={agent.axError}
-                />
-              </div>
-            ) : (
-              <ChatInput threadId={threadId} model={threadModel} onSubmit={handleSubmit} onStop={stop} chatStatus={status} />
-            )}
+          <div className={inputCls}>
+            <ChatInput threadId={threadId} model={threadModel} onSubmit={handleSubmit} onStop={stop} chatStatus={status} />
           </div>
         </div>
       </div>

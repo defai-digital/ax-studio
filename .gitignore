@@ -73,11 +73,9 @@ llm-docs
 .claude
 
 # Local AI tool configs
-.automatosx/
 .ax-grok/
 .gemini/
 opencode.json
-automatosx/
 agent-teams/
 .mcp.json
 

@@ -83,11 +83,6 @@ macro_rules! desktop_handlers {
             // Custom updater commands (desktop only)
             crate::core::updater::commands::check_for_app_updates,
             crate::core::updater::commands::is_update_available,
-            // AutomatosX agent mode
-            crate::core::automatosx::ax_check,
-            crate::core::automatosx::ax_list_agents,
-            crate::core::automatosx::ax_run_agent,
-            crate::core::automatosx::ax_stop,
         ]
     };
 }

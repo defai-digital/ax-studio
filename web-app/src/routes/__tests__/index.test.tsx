@@ -242,12 +242,6 @@ describe('Home Page (index.tsx) — Manual Test Protocol', () => {
     expect(sessionStorage.getItem('new-thread-prompt')).toBe('Custom system prompt')
   })
 
-  // Protocol #14: Agent team selector renders
-  it('renders agent team selector', () => {
-    renderIndex()
-    expect(screen.getByLabelText('Agent Team')).toBeInTheDocument()
-  })
-
   // Protocol #15: Split view menu renders
   it('renders split view with left/right options', () => {
     renderIndex()

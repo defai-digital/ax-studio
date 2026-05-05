@@ -1,4 +1,3 @@
-pub mod automatosx;
 pub mod app;
 pub mod downloads;
 pub mod extensions;

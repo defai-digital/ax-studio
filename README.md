@@ -102,27 +102,6 @@ The important distinction is that `ax-studio` is not just a model picker inside 
 - You want AI workflows that remain local-first while still supporting hosted providers when needed
 - You need data boundary controls and guardrails for privacy-sensitive work
 
-## The AutomatosX Ecosystem
-
-AX Studio is the general-purpose workspace layer inside the broader AutomatosX platform:
-
-<p align="center">
-  <img src="docs/images/automatosx-studio-stack.png" alt="AutomatosX ecosystem with AX Studio" width="860" />
-</p>
-
-Source: [docs/automatosx-studio-stack.mmd](docs/automatosx-studio-stack.mmd)
-
-Within AutomatosX, `ax-studio` is the general AI workspace. `AX Code` focuses on coding execution, `AX Engine` handles inference, `AX Serving` handles orchestration, `AX Fabric` handles knowledge, and `AX Trust` provides governance and policy boundaries.
-
-| Component | Repository | Role |
-|-----------|-----------|------|
-| **AX Studio** | [defai-digital/ax-studio](https://github.com/defai-digital/ax-studio) | General AI workspace for chat, tools, local inference, research, and artifacts |
-| **AX Code** | [defai-digital/ax-code](https://github.com/defai-digital/ax-code) | AI coding runtime and developer-focused execution surface |
-| **AX Trust** | — | Governance and policy boundaries for controlled execution |
-| **AX Serving** | [defai-digital/ax-serving](https://github.com/defai-digital/ax-serving) | Orchestration, routing, and serving for production inference |
-| **AX Fabric** | [defai-digital/ax-fabric](https://github.com/defai-digital/ax-fabric) | Knowledge infrastructure, retrieval, and knowledge lifecycle |
-| **AX Engine** | [defai-digital/ax-engine](https://github.com/defai-digital/ax-engine) | Local and sovereign inference optimized for Apple Silicon |
-
 ---
 
 ## Get Started in 60 Seconds
@@ -369,7 +348,7 @@ Join us on [Discord](https://discord.gg/cTavsMgu).
 
 ## Project History
 
-AX Studio was originally derived from [Jan](https://github.com/janhq/jan), licensed under the Apache License 2.0. It has since been substantially reworked and is now independently maintained and operated by DEFAI Private Limited as a decoupled product within the broader AutomatosX ecosystem.
+AX Studio was originally derived from [Jan](https://github.com/janhq/jan), licensed under the Apache License 2.0. It has since been substantially reworked and is now independently maintained and operated by DEFAI Private Limited.
 
 ## License
 

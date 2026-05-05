@@ -23,8 +23,6 @@ import { ResearchPanel } from '@/components/research/ResearchPanel'
 import { SplitThreadContainer } from '@/containers/threads/SplitThreadContainer'
 import { MainThreadPane } from '@/containers/threads/MainThreadPane'
 import { Columns2, MessageSquareText } from 'lucide-react'
-import { useAgentMode } from '@/hooks/agent/useAgentMode'
-import { AgentModeToggle } from '@/components/agent/AgentModeToggle'
 
 export type ThreadViewProps = {
   threadId: string
@@ -88,7 +86,6 @@ export function ThreadView({
 }: ThreadViewProps) {
   const navigate = useNavigate()
   const hasPanels = Boolean(pinnedResearch)
-  const agent = useAgentMode(threadId)
 
   return (
     <div className="flex flex-col h-[calc(100dvh-(env(safe-area-inset-bottom)+env(safe-area-inset-top)))]">
@@ -96,11 +93,6 @@ export function ThreadView({
         <div className="flex items-center w-full pr-4">
           <DropdownModelProvider model={threadModel} />
           <div className="flex items-center gap-1 ml-auto shrink-0">
-            <AgentModeToggle
-              enabled={agent.isAgentMode}
-              onToggle={() => agent.setIsAgentMode((v) => !v)}
-              axError={agent.axError}
-            />
             {!splitPaneOrder && (
               <Button
                 variant={showThreadPromptEditor ? 'secondary' : 'ghost'}

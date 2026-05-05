@@ -15,7 +15,7 @@ import SetupScreen from '@/containers/SetupScreen'
 import { route } from '@/constants/routes'
 import { localStorageKey } from '@/constants/localStorage'
 import { SESSION_STORAGE_KEY } from '@/constants/chat'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { z } from 'zod/v4'
 
 type SearchParams = {
@@ -58,9 +58,6 @@ import { usePrompt } from '@/hooks/ui/usePrompt'
 import { motion } from 'motion/react'
 import { WorkflowSelector } from '@/components/smart-start/WorkflowSelector'
 import { toast } from 'sonner'
-import { useAgentMode } from '@/hooks/agent/useAgentMode'
-import { AgentModeToggle } from '@/components/agent/AgentModeToggle'
-import { AgentInput } from '@/components/agent/AgentInput'
 
 export const Route = createFileRoute(route.home)({
   component: Index,
@@ -89,40 +86,6 @@ function Index() {
   const setGlobalPrompt = usePrompt((state) => state.setPrompt)
   useTools()
 
-  const agent = useAgentMode('home')
-  const agentRef = useRef(agent)
-  agentRef.current = agent
-
-  const handleAgentSubmit = useCallback(
-    async (task: string) => {
-      try {
-        const modelConfig = {
-          id: selectedModel?.id ?? activeModel?.id ?? '*',
-          provider: selectedModel?.provider ?? selectedProvider,
-        }
-        const thread = await createThread(modelConfig, 'Agent Task')
-        safeStorageSetItem(
-          sessionStorage,
-          SESSION_STORAGE_KEY.AGENT_TASK,
-          JSON.stringify({
-            task,
-            agentId: agentRef.current.selectedAgent,
-            provider: agentRef.current.selectedProvider,
-            model: agentRef.current.selectedModel,
-          }),
-          'routes/index'
-        )
-        navigate({ to: '/threads/$threadId', params: { threadId: thread.id } })
-      } catch (error) {
-        console.error('Failed to create agent thread:', error)
-        toast.error('Failed to start agent', {
-          description: error instanceof Error ? error.message : 'Please try again.',
-        })
-      }
-    },
-    [createThread, selectedModel, activeModel, selectedProvider, navigate]
-  )
-
   const [showThreadPromptEditor, setShowThreadPromptEditor] = useState(false)
   const [threadPromptDraft, setThreadPromptDraft] = useState(
     () =>
@@ -148,12 +111,8 @@ function Index() {
           id: selectedModel?.id ?? activeModel?.id ?? '*',
           provider: selectedModel?.provider ?? selectedProvider,
         }
-        // Create threads sequentially — concurrent Promise.all triggers the
-        // dedup guard on the second call, returning the current thread ID
-        // instead of a new Thread object, leaving splitThread.id undefined.
         const mainThread = await createThread(modelConfig, 'New Thread')
         const splitThread = await createThread(modelConfig, 'New Thread')
-        // Store split info so $threadId picks it up on mount
         const stored = safeStorageSetItem(
           sessionStorage,
           SESSION_STORAGE_KEY.SPLIT_VIEW_INFO,
@@ -178,8 +137,6 @@ function Index() {
     [createThread, selectedModel, activeModel?.id, selectedProvider, navigate]
   )
 
-  // Track setup completion in React state so the component re-renders when the
-  // user completes setup (navigating to the same route would not trigger a re-render).
   const [setupCompleted, setSetupCompleted] = useState(
     () =>
       safeStorageGetItem(
@@ -197,7 +154,6 @@ function Index() {
     setCurrentThreadId(undefined)
   }, [setCurrentThreadId])
 
-  // Persist thread prompt draft to sessionStorage so it survives navigation to new thread
   useEffect(() => {
     const trimmed = threadPromptDraft.trim()
     if (trimmed) {
@@ -226,11 +182,6 @@ function Index() {
         <div className="flex items-center w-full pr-4">
           <DropdownModelProvider model={selectedModel} useLastUsedModel />
           <div className="flex items-center gap-1 ml-auto shrink-0">
-            <AgentModeToggle
-              enabled={agent.isAgentMode}
-              onToggle={() => agent.setIsAgentMode((v) => !v)}
-              axError={agent.axError}
-            />
             <Button
               variant={showThreadPromptEditor ? 'secondary' : 'ghost'}
               size="icon-sm"
@@ -380,27 +331,12 @@ function Index() {
         </div>
         {/* Input pinned at bottom */}
         <div className="shrink-0 px-3 pb-2 sm:pb-4">
-          <div className="mx-auto w-full max-w-2xl space-y-2">
-            {agent.isAgentMode ? (
-              <AgentInput
-                agents={agent.agents}
-                selectedAgent={agent.selectedAgent}
-                onSelectAgent={agent.setSelectedAgent}
-                selectedProvider={agent.selectedProvider}
-                onSelectProvider={agent.setSelectedProvider}
-                selectedModel={agent.selectedModel}
-                onSelectModel={agent.setSelectedModel}
-                onSubmit={handleAgentSubmit}
-                isRunning={false}
-                axError={agent.axError}
-              />
-            ) : (
-              <ChatInput
-                showSpeedToken={false}
-                model={selectedModel}
-                initialMessage={true}
-              />
-            )}
+          <div className="mx-auto w-full max-w-2xl">
+            <ChatInput
+              showSpeedToken={false}
+              model={selectedModel}
+              initialMessage={true}
+            />
           </div>
         </div>
       </div>
