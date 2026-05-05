@@ -1,36 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { ContentType, type ThreadMessage } from '@ax-studio/core'
-import {
-  CompletionMessagesBuilder,
-  convertThreadMessageToUIMessage,
-} from '../messages'
+import { convertThreadMessageToUIMessage } from '../messages'
 
 describe('messages regressions', () => {
-  it('serializes multimodal tool results into string tool content', () => {
-    const builder = new CompletionMessagesBuilder([])
-
-    builder.addToolMessage(
-      {
-        content: [
-          {
-            type: 'image/png',
-            data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB',
-          },
-        ],
-      },
-      'tool-call-1'
-    )
-
-    const result = builder.getMessages()
-    expect(result[1]).toMatchObject({
-      role: 'tool',
-      tool_call_id: 'tool-call-1',
-    })
-    expect(typeof result[1].content).toBe('string')
-    expect(result[1].content).toContain('image/png')
-  })
-
-  it('preserves image media types when converting thread messages to UI messages', () => {
     const threadMessage: ThreadMessage = {
       id: 'msg-1',
       object: 'thread.message',

@@ -1,8 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
   sanitizeModelId,
-  extractThinkingContent,
-  basenameNoExt,
   getProviderColor,
   getProviderDescription,
   cn,

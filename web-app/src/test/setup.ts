@@ -5,6 +5,19 @@ import * as matchers from '@testing-library/jest-dom/matchers'
 // extends Vitest's expect method with methods from react-testing-library
 expect.extend(matchers)
 
+// Ensure localStorage is properly mocked for jsdom
+// Some test environments override localStorage with incomplete mocks
+const localStorageStore: Record<string, string> = {}
+const mockLocalStorage = {
+  getItem: vi.fn((key: string) => localStorageStore[key] ?? null),
+  setItem: vi.fn((key: string, value: string) => { localStorageStore[key] = String(value) }),
+  removeItem: vi.fn((key: string) => { delete localStorageStore[key] }),
+  clear: vi.fn(() => { Object.keys(localStorageStore).forEach(k => delete localStorageStore[k]) }),
+  get length() { return Object.keys(localStorageStore).length },
+  key: vi.fn((index: number) => Object.keys(localStorageStore)[index] ?? null),
+}
+Object.defineProperty(window, 'localStorage', { value: mockLocalStorage })
+
 // Create a mock ServiceHub
 const mockServiceHub = {
   theme: () => ({
