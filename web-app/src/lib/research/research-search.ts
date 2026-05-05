@@ -68,17 +68,18 @@ export async function exaSearch(
   }
 
   try {
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`Exa timed out after ${EXA_TIMEOUT_MS / 1000}s`)), EXA_TIMEOUT_MS)
-    )
+    let exaTimeoutId: ReturnType<typeof setTimeout>
     const result = await Promise.race([
       invoke<MCPToolCallResult>('call_tool', {
         toolName: 'web_search_exa',
         serverName: 'exa',
         arguments: { query: question, numResults },
       }),
-      timeoutPromise,
+      new Promise<never>((_, reject) => {
+        exaTimeoutId = setTimeout(() => reject(new Error(`Exa timed out after ${EXA_TIMEOUT_MS / 1000}s`)), EXA_TIMEOUT_MS)
+      }),
     ])
+    clearTimeout(exaTimeoutId)
     return result
   } catch (err) {
     if (isExaRateLimitMessage(getErrorMessage(err))) {

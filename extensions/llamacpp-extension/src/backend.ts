@@ -192,17 +192,19 @@ export async function fetchRemoteBackends(): Promise<BackendVersion[]> {
     // Try Tauri HTTP plugin first (bypasses CSP), fall back to global fetch.
     // CSP connect-src also includes api.github.com as defense-in-depth.
     const doFetch = typeof tauriFetch === 'function' ? tauriFetch : fetch
+    let ghTimeoutId: ReturnType<typeof setTimeout>
     const response = await Promise.race([
       doFetch(GITHUB_RELEASES_URL, {
         headers: { Accept: 'application/vnd.github.v3+json' },
       }),
-      new Promise<never>((_, reject) =>
-        setTimeout(
+      new Promise<never>((_, reject) => {
+        ghTimeoutId = setTimeout(
           () => reject(new Error('GitHub API timeout')),
           GITHUB_API_TIMEOUT_MS
         )
-      ),
+      }),
     ])
+    clearTimeout(ghTimeoutId)
     if (!response.ok) throw new Error(`GitHub API ${response.status}`)
 
     const releases = (await response.json()) as GithubRelease[]
@@ -468,15 +470,17 @@ export async function configureBackends(
       // fetchRemoteBackends can hang indefinitely on some machines
       // (Tauri IPC deadlock, network issues).  12s is generous —
       // fetchRemoteBackends already has a 5s per-request timeout.
+      let discoveryTimeoutId!: ReturnType<typeof setTimeout>
       const discoveryResult = await Promise.race([
         Promise.all([getLocalInstalledBackends(), fetchRemoteBackends()]),
-        new Promise<[BackendVersion[], BackendVersion[]]>((resolve) =>
-          setTimeout(() => {
+        new Promise<[BackendVersion[], BackendVersion[]]>((resolve) => {
+          discoveryTimeoutId = setTimeout(() => {
             console.warn('[llamacpp] Backend discovery timed out after 12s, using empty lists')
             resolve([[], []])
           }, 12_000)
-        ),
+        }),
       ])
+      clearTimeout(discoveryTimeoutId)
       const [localBackends, remoteBackends] = discoveryResult
       console.debug(
         `[llamacpp] configureBackends: currentVersionBackend="${currentVersionBackend}", ` +
@@ -606,15 +610,17 @@ export async function resolveBackendVersion(): Promise<string> {
     const backendsDir = await getBackendsDir()
     if (!(await fs.existsSync(backendsDir))) return ''
 
+    let localTimeoutId!: ReturnType<typeof setTimeout>
     const localBackends = await Promise.race([
       getLocalInstalledBackendsInternal(backendsDir),
-      new Promise<BackendVersion[]>((resolve) =>
-        setTimeout(() => {
+      new Promise<BackendVersion[]>((resolve) => {
+        localTimeoutId = setTimeout(() => {
           console.warn('[llamacpp] Local backend discovery timed out')
           resolve([])
         }, LOCAL_DISCOVERY_TIMEOUT_MS)
-      ),
+      }),
     ])
+    clearTimeout(localTimeoutId)
 
     if (localBackends.length === 0) return ''
 

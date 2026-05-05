@@ -308,16 +308,19 @@ function createStreamingPatchFetch(baseFetch: typeof httpFetch): typeof httpFetc
     // re-create a plain Response whose body the AI SDK can safely read.
     if (!response.ok) {
       let errorBody = ''
+      let errorTimeoutId: ReturnType<typeof setTimeout>
       try {
         // Read with a 5-second timeout to prevent hanging
         errorBody = await Promise.race([
           response.text(),
-          new Promise<string>((_, reject) =>
-            setTimeout(() => reject(new Error('Timeout reading error body')), 5000)
-          ),
+          new Promise<string>((_, reject) => {
+            errorTimeoutId = setTimeout(() => reject(new Error('Timeout reading error body')), 5000)
+          }),
         ])
       } catch {
         errorBody = `HTTP ${response.status} ${response.statusText || 'Error'}`
+      } finally {
+        clearTimeout(errorTimeoutId)
       }
       console.error(`[StreamingPatch] proxy error ${response.status}: ${errorBody.slice(0, 300)}`)
       // Return a new Response with a plain-text body the SDK can parse
