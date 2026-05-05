@@ -15,10 +15,9 @@
   "scripts": {
     "test": "vitest run",
     "build": "rolldown -c rolldown.config.mjs",
-    "build:publish": "rimraf *.tgz --glob || true && yarn build && npm pack && cpx *.tgz ../../pre-install"
+    "build:publish": "rimraf *.tgz --glob || true && yarn build && npm pack && cp *.tgz ../../pre-install"
   },
   "devDependencies": {
-    "cpx": "1.5.0",
     "rimraf": "6.0.1",
     "rolldown": "1.0.0-beta.1",
     "typescript": "5.8.3",
