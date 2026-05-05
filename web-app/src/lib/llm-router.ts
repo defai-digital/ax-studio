@@ -286,11 +286,14 @@ export async function routeMessage(
       {},
     )
 
-    // Set up timeout via AbortController
+    // Set up timeout via AbortController.
+    // Floor at 2s so a misconfigured 0/very-low timeout doesn't cause
+    // every routing call to time out and silently fall back.
+    const effectiveTimeout = Math.max(timeout, 2000)
     const abortController = new AbortController()
     const timeoutId = globalThis.setTimeout(
       () => abortController.abort(),
-      timeout,
+      effectiveTimeout,
     )
 
     try {
@@ -309,6 +312,10 @@ export async function routeMessage(
         abortSignal: abortController.signal,
       })
 
+      // Invariant: this for-await loop is single-consumer. The `text` and
+      // `reasoning` accumulators are only mutated here — no concurrent writer
+      // can observe a stale value. The async scanner flags the non-atomic += as
+      // a race, but it is safe because this is the sole consumer of the stream.
       let text = ''
       let reasoning = ''
       for await (const part of stream.fullStream) {
