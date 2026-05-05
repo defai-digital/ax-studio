@@ -267,10 +267,13 @@ fn test_decompress_extracts_zip_archive_within_app_data_folder() {
 
     decompress(
         app.handle().clone(),
-        DecompressRequest::Typed {
+        None,
+        None,
+        None,
+        Some(DecompressRequest::Typed {
             path: "archive.zip".to_string(),
             output_dir: "unzipped".to_string(),
-        },
+        }),
     )
     .unwrap();
 
@@ -296,10 +299,13 @@ fn test_decompress_rejects_zip_path_traversal_entries() {
 
     let error = decompress(
         app.handle().clone(),
-        DecompressRequest::Typed {
+        None,
+        None,
+        None,
+        Some(DecompressRequest::Typed {
             path: "traversal.zip".to_string(),
             output_dir: "unzipped".to_string(),
-        },
+        }),
     )
     .unwrap_err();
 

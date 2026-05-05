@@ -124,7 +124,7 @@ mod tests {
         };
         let port = url.port_or_known_default().unwrap_or(80);
         match tokio::net::lookup_host((&*host.to_string(), port)).await {
-            Ok(addrs) => addrs.any(|addr| ax_studio_utils::is_private_ip(addr.ip())),
+            Ok(mut addrs) => addrs.any(|addr| ax_studio_utils::is_private_ip(addr.ip())),
             Err(_) => true,
         }
     }
