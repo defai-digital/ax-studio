@@ -1,11 +1,10 @@
 // scripts/download.js
 import https from 'https'
-import fs, { copyFile, mkdirSync } from 'fs'
+import fs, { copyFile, cpSync, mkdirSync } from 'fs'
 import os from 'os'
 import path from 'path'
 import unzipper from 'unzipper'
 import { x as tarExtract } from 'tar'
-import { copySync } from 'cpx'
 
 function download(url, dest) {
   return new Promise((resolve, reject) => {
@@ -120,7 +119,7 @@ async function main() {
     await decompress(bunPath, tempBinDir)
   }
   try {
-    copySync(
+    cpSync(
       path.join(tempBinDir, `bun-${bunPlatform}`, 'bun'),
       path.join(binDir)
     )
@@ -172,7 +171,7 @@ async function main() {
     // Expect EEXIST error
   }
   try {
-    copySync(
+    cpSync(
       path.join(tempBinDir, `bun-${bunPlatform}`, 'bun.exe'),
       path.join(binDir)
     )
@@ -200,7 +199,7 @@ async function main() {
     await decompress(uvPath, tempBinDir)
   }
   try {
-    copySync(path.join(tempBinDir, `uv-${uvPlatform}`, 'uv'), path.join(binDir))
+    cpSync(path.join(tempBinDir, `uv-${uvPlatform}`, 'uv'), path.join(binDir))
     fs.chmod(path.join(binDir, 'uv'), 0o755, (err) => {
       if (err) {
         console.log('Add execution permission failed!', err)
@@ -249,7 +248,7 @@ async function main() {
     // Expect EEXIST error
   }
   try {
-    copySync(path.join(tempBinDir, 'uv.exe'), path.join(binDir))
+    cpSync(path.join(tempBinDir, 'uv.exe'), path.join(binDir))
     if (platform === 'win32') {
       copyFile(
         path.join(binDir, 'uv.exe'),
