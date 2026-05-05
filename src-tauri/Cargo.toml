@@ -68,7 +68,7 @@ dirs = "6.0.0"
 reqwest = { workspace = true, features = ["native-tls-vendored"] }
 tauri-plugin-updater = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
-fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs" }
+fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs", rev = "c4c45d503ea115a839aae718d02f79e7c7f0f673" }
 flate2 = "1.0"
 futures-util = "0.3.31"
 hex = "0.4"

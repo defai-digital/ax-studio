@@ -51,15 +51,13 @@ pub fn get_app_configurations<R: Runtime>(app_handle: tauri::AppHandle<R>) -> Ap
                     // silently returned the default config and left the
                     // corrupt file in place — the user's custom data
                     // folder path reverted to default with no UI signal.
-                    let quarantine_path = configuration_file.with_extension(
-                        format!(
-                            "corrupt-{}.json",
-                            std::time::SystemTime::now()
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .map(|d| d.as_secs())
-                                .unwrap_or(0)
-                        ),
-                    );
+                    let quarantine_path = configuration_file.with_extension(format!(
+                        "corrupt-{}.json",
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_secs())
+                            .unwrap_or(0)
+                    ));
                     match fs::rename(&configuration_file, &quarantine_path) {
                         Ok(()) => log::error!(
                             "Failed to parse app config; quarantined to {quarantine_path:?} and returning defaults. Parse error: {err}"
@@ -223,9 +221,4 @@ pub fn change_app_data_folder<R: Runtime>(
 
     // Save the updated configuration
     update_app_configuration(app_handle, configuration)
-}
-
-#[tauri::command]
-pub fn app_token(state: State<'_, AppState>) -> Option<String> {
-    state.app_token.clone()
 }

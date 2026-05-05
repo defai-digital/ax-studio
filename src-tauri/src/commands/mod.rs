@@ -33,7 +33,6 @@ macro_rules! desktop_handlers {
             crate::core::app::commands::get_configuration_file_path,
             crate::core::app::commands::default_data_folder_path,
             crate::core::app::commands::change_app_data_folder,
-            crate::core::app::commands::app_token,
             // Extension commands
             crate::core::extensions::commands::get_app_extensions_path,
             crate::core::extensions::commands::install_extensions,

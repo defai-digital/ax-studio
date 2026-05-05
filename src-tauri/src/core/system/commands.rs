@@ -135,16 +135,22 @@ pub async fn read_logs<R: Runtime>(app: AppHandle<R>) -> Result<String, String> 
     Ok(redact_sensitive_data(&content))
 }
 
+/// Compiled regex patterns for sensitive data redaction.
+/// Uses `OnceLock` to compile once and never panic — avoids `.unwrap()` with `panic = "abort"`.
+static REDACT_PATTERNS: std::sync::OnceLock<Vec<(regex::Regex, &str)>> = std::sync::OnceLock::new();
+
 fn redact_sensitive_data(input: &str) -> String {
+    let patterns = REDACT_PATTERNS.get_or_init(|| {
+        vec![
+            (regex::Regex::new(r"(api[_-]?key\s*[:=]\s*)[\w\-]{20,}").expect("valid api_key regex"), "$1[REDACTED]"),
+            (regex::Regex::new(r"(Bearer\s+)[\w\-\.]{20,}").expect("valid bearer regex"), "$1[REDACTED]"),
+            (regex::Regex::new(r"(authorization\s*[:=]\s*)[\w\-\.]{20,}").expect("valid auth regex"), "$1[REDACTED]"),
+            (regex::Regex::new(r"(sk-)[a-zA-Z0-9]{20,}").expect("valid sk- regex"), "$1[REDACTED]"),
+            (regex::Regex::new(r"(token\s*[:=]\s*)[\w\-\.]{20,}").expect("valid token regex"), "$1[REDACTED]"),
+        ]
+    });
     let mut result = input.to_string();
-    let patterns = [
-        (regex::Regex::new(r"(api[_-]?key\s*[:=]\s*)[\w\-]{20,}").unwrap(), "$1[REDACTED]"),
-        (regex::Regex::new(r"(Bearer\s+)[\w\-\.]{20,}").unwrap(), "$1[REDACTED]"),
-        (regex::Regex::new(r"(authorization\s*[:=]\s*)[\w\-\.]{20,}").unwrap(), "$1[REDACTED]"),
-        (regex::Regex::new(r"(sk-)[a-zA-Z0-9]{20,}").unwrap(), "$1[REDACTED]"),
-        (regex::Regex::new(r"(token\s*[:=]\s*)[\w\-\.]{20,}").unwrap(), "$1[REDACTED]"),
-    ];
-    for (re, replacement) in &patterns {
+    for (re, replacement) in patterns {
         result = re.replace_all(&result, *replacement).to_string();
     }
     result
