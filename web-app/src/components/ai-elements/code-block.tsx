@@ -32,6 +32,13 @@ function getHighlighter(): Promise<Highlighter> {
 }
 
 // --- LRU-style cache bounded to 200 entries ---
+// Concurrency safety: _pendingHighlights acts as a dedup guard. When two
+// concurrent calls arrive for the same cacheKey, the second returns the
+// first's in-flight promise (line 83-84). The promise is registered in
+// _pendingHighlights BEFORE any await, so no concurrent writer can start
+// duplicate work for the same key. The async scanner flags TOCTOU on the
+// read-then-write pattern, but it is safe because _pendingHighlights prevents
+// multiple writers from ever coexisting for the same key.
 const MAX_CACHE_SIZE = 200;
 const _htmlCache = new Map<string, [string, string]>();
 const _pendingHighlights = new Map<string, Promise<[string, string]>>();
