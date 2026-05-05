@@ -93,7 +93,6 @@ function getDialogFilters(ext: string) {
   const map: Record<string, { name: string; extensions: string[] }> = {
     svg: { name: 'SVG Image', extensions: ['svg'] },
     png: { name: 'PNG Image', extensions: ['png'] },
-    mmd: { name: 'Mermaid Source', extensions: ['mmd'] },
   }
 
   return map[ext] ? [map[ext]] : []
@@ -108,10 +107,6 @@ function getFilePickerTypes(ext: string): FilePickerAcceptType[] {
     png: {
       description: 'PNG Image',
       accept: { 'image/png': ['.png'] },
-    },
-    mmd: {
-      description: 'Mermaid Source',
-      accept: { 'text/plain': ['.mmd'] },
     },
   }
 
@@ -176,7 +171,7 @@ async function saveBlobNative(blob: Blob, filename: string): Promise<void> {
     })
   } catch (error) {
     if (!(error instanceof Error && error.name === 'AbortError')) {
-      console.error('[ax-studio] diagram save failed:', error)
+      console.error('[ax-studio] blob save failed:', error)
     }
   }
 }

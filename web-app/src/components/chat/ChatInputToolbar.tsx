@@ -21,7 +21,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu'
-import { AppWindowIcon, ArrowUp, Atom, Brain, Database, GitFork, ImagePlus, Loader2, Paperclip, PlusIcon, SearchIcon, Square, User, Wrench, Binary } from "lucide-react";
+import { ArrowUp, Atom, Brain, Database, ImagePlus, Loader2, Paperclip, PlusIcon, SearchIcon, Square, User, Wrench, Binary } from "lucide-react";
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { TokenCounter } from '@/components/TokenCounter'
 import { AvatarEmoji } from '@/components/common/AvatarEmoji'
@@ -29,24 +29,6 @@ import DropdownToolsAvailable from '@/containers/DropdownToolsAvailable'
 import { McpExtensionToolLoader } from '@/containers/McpExtensionToolLoader'
 import type { ThreadMessage } from '@ax-studio/core'
 import type { MCPTool } from '@/types/mcp'
-
-const ARTIFACT_PROMPTS = [
-  { label: 'HTML Page',        prompt: 'Build an artifact-html page for '            },
-  { label: 'React Component',  prompt: 'Build an artifact-react component for '      },
-  { label: 'SVG Graphic',      prompt: 'Create an artifact-svg illustration of '     },
-  { label: 'Chart.js Chart',   prompt: 'Create an artifact-chartjs chart showing '   },
-  { label: 'Vega-Lite Chart',  prompt: 'Create an artifact-vega chart showing '      },
-] as const
-
-const DIAGRAM_PROMPTS = [
-  { label: 'Flowchart',        prompt: 'Draw a flowchart for '                        },
-  { label: 'Sequence Diagram', prompt: 'Draw a sequence diagram showing '             },
-  { label: 'Class Diagram',    prompt: 'Draw a class diagram for '                    },
-  { label: 'ER Diagram',       prompt: 'Draw an ER diagram for '                      },
-  { label: 'State Machine',    prompt: 'Draw a state diagram for '                    },
-  { label: 'Gantt Chart',      prompt: 'Create a Gantt chart for '                    },
-  { label: 'Mind Map',         prompt: 'Create a mind map for '                       },
-] as const
 
 const RESEARCH_PROMPTS = [
   { label: 'Standard', prompt: '/research:standard ', description: 'Balanced depth with page scraping' },
@@ -238,32 +220,6 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                     </DropdownMenuSubContent>
                   </DropdownMenuSub>
                 )}
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <AppWindowIcon size={18} className="text-muted-foreground" />
-                    <span>Generate Artifact</span>
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    {ARTIFACT_PROMPTS.map(({ label, prompt: p }) => (
-                      <DropdownMenuItem key={label} onClick={() => applyQuickPrompt(p)}>
-                        <span>{label}</span>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <GitFork size={18} className="text-muted-foreground" />
-                    <span>Generate Diagram</span>
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    {DIAGRAM_PROMPTS.map(({ label, prompt: p }) => (
-                      <DropdownMenuItem key={label} onClick={() => applyQuickPrompt(p)}>
-                        <span>{label}</span>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger>
                     <SearchIcon size={18} className="text-muted-foreground" />

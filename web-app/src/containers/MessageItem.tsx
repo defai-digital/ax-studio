@@ -338,37 +338,6 @@ export const MessageItem = memo(
         ? (part.toolName as string)
         : part.type.split('-').slice(1).join('-')
 
-      // generate_diagram: render the diagram inline via the Mermaid pipeline
-      // instead of showing a JSON tool card
-      if (toolName === 'generate_diagram') {
-        // Strip fence markers if the model returned them inside the source field
-        // (double-fencing causes a parse error: ```mermaid\n```mermaid\n...\n```)
-        const rawSource: string = part.output?.source ?? ''
-        const source = rawSource
-          .replace(/^```mermaid\s*/i, '')
-          .replace(/```\s*$/, '')
-          .trim()
-        const title: string = part.output?.title ?? ''
-        if (source) {
-          return (
-            <div key={`${message.id}-${partIndex}`} className="mb-2">
-              {title && (
-                <p className="text-xs text-muted-foreground mb-1 font-medium">
-                  {title}
-                </p>
-              )}
-              <RenderMarkdown
-                content={`\`\`\`mermaid\n${source}\n\`\`\``}
-                messageId={message.id}
-              />
-            </div>
-          )
-        }
-        // Tool call in progress — source not yet available, render nothing.
-        // The diagram will appear as soon as the tool output resolves.
-        return null
-      }
-
       return (
         <Tool
           key={`${message.id}-${partIndex}`}

@@ -25,9 +25,7 @@ import { useThreadTools } from '@/hooks/threads/use-thread-tools'
 import { useThreadResearch } from '@/hooks/threads/use-thread-research'
 import { extractContentPartsFromUIMessage } from '@/lib/messages'
 import {
-  DIAGRAM_FORMAT_INSTRUCTION,
   CODE_EXECUTION_INSTRUCTION,
-  ARTIFACT_FORMAT_INSTRUCTION,
   LOCAL_KNOWLEDGE_INSTRUCTION,
   CITATION_FORMAT_INSTRUCTION,
 } from '@/lib/prompts/system-prompt'
@@ -110,9 +108,7 @@ export function SplitThreadContainer({
         ? '\n\n' + currentAssistant.instructions
         : '') +
       memorySuffix +
-      DIAGRAM_FORMAT_INSTRUCTION +
       CODE_EXECUTION_INSTRUCTION +
-      ARTIFACT_FORMAT_INSTRUCTION +
       (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : '') +
       (localKnowledgeActive ? CITATION_FORMAT_INSTRUCTION : ''),
     modelOverrideId: optimizedModelConfig.modelId,

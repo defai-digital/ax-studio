@@ -68,13 +68,6 @@ vi.mock('@/hooks/research/useLocalKnowledge', () => ({
   }),
 }))
 
-vi.mock('@/hooks/threads/use-thread-artifacts', () => ({
-  useThreadArtifacts: () => ({
-    pinnedArtifact: null,
-    clearArtifact: vi.fn(),
-  }),
-}))
-
 vi.mock('@/hooks/threads/use-thread-research', () => ({
   useThreadResearch: () => ({
     pinnedResearch: null,

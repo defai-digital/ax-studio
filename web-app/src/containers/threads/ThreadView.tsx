@@ -2,7 +2,7 @@
  * ThreadView — pure layout component for the ThreadDetail route.
  *
  * Renders the full page chrome: header, toolbar, chat pane, split view,
- * artifact/research side panels. No data-fetching or business logic —
+ * research side panels. No data-fetching or business logic —
  * receives everything it needs as props.
  */
 import type { RefObject } from 'react'
@@ -19,7 +19,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { ArtifactPanel } from '@/components/ai-elements/ArtifactPanel'
 import { ResearchPanel } from '@/components/research/ResearchPanel'
 import { SplitThreadContainer } from '@/containers/threads/SplitThreadContainer'
 import { MainThreadPane } from '@/containers/threads/MainThreadPane'
@@ -42,9 +41,6 @@ export type ThreadViewProps = {
   handleDeleteMessage: (messageId: string) => void
   handleContextSizeIncrease: () => Promise<void>
   reasoningContainerRef: RefObject<HTMLDivElement | null>
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  pinnedArtifact: any
-  clearArtifact: (threadId: string) => void
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   pinnedResearch: any
   clearResearch: (threadId: string) => void
@@ -76,8 +72,6 @@ export function ThreadView({
   handleDeleteMessage,
   handleContextSizeIncrease,
   reasoningContainerRef,
-  pinnedArtifact,
-  clearArtifact,
   pinnedResearch,
   clearResearch,
   splitPaneOrder,
@@ -93,7 +87,7 @@ export function ThreadView({
   updateThread,
 }: ThreadViewProps) {
   const navigate = useNavigate()
-  const hasPanels = Boolean(pinnedArtifact || pinnedResearch)
+  const hasPanels = Boolean(pinnedResearch)
   const agent = useAgentMode(threadId)
 
   return (
@@ -248,9 +242,6 @@ export function ThreadView({
             />
             {pinnedResearch && (
               <ResearchPanel threadId={threadId} onClose={() => clearResearch(threadId)} />
-            )}
-            {!pinnedResearch && pinnedArtifact && (
-              <ArtifactPanel threadId={threadId} onClose={() => clearArtifact(threadId)} />
             )}
           </div>
         )}

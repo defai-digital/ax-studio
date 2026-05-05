@@ -33,37 +33,7 @@ export interface ChatPromptInjection {
 
 export const fallbackDefaultPrompt = 'You are a helpful assistant.'
 
-/**
- * Appended to every resolved system prompt regardless of source.
- * Instructs the model to only produce Mermaid diagrams when explicitly
- * requested by the user, and provides syntax guidelines.
- */
-export const DIAGRAM_FORMAT_INSTRUCTION = `
 
-## Diagram rules
-
-NEVER include diagrams, flowcharts, or mermaid code blocks unless the user explicitly asks for one (e.g. "draw a diagram", "show me a flowchart", "visualize this"). By default, always respond with text only.
-
-When a diagram IS explicitly requested, use a mermaid code fence with valid mermaid syntax inside it.
-
-CRITICAL: Every diagram MUST follow these formatting rules:
-- Each statement MUST be on its own line — NEVER put multiple statements on one line
-- NEVER put the diagram type on the same line as the opening fence
-
-Mermaid syntax rules (only when generating a requested diagram):
-- Wrap node labels in double quotes when they contain special characters or spaces: A["Label (with parens)"], A["Multi word label"]
-- classDiagram: use \`List~Task~\` not \`List<Task>\`, no \`enum {A, B}\` in class body. Each attribute on its own line.
-- erDiagram: each relationship line must be: \`LEFT_ENTITY ||--o{ RIGHT_ENTITY : label\` — the LEFT entity name is ALWAYS required. Each relationship and each entity definition on its own line. Quote ONLY SQL reserved words. Example:
-\`\`\`mermaid
-erDiagram
-    USER ||--o{ ORDER : places
-    ORDER ||--o{ ITEM : contains
-    USER { string name string email }
-\`\`\`
-- sequenceDiagram: every message on its own line
-- stateDiagram: always use \`stateDiagram-v2\`; use ONLY flat transition lines (e.g. \`A --> B\`); NEVER use composite state blocks (\`state X { ... }\`) — they cause "would create a cycle" parse errors; state names must be bare identifiers (\`Placed --> Confirmed\`), NEVER quoted strings (\`"Placed" --> "Confirmed"\`)
-- gantt: every task needs format \`Task Name :status, YYYY-MM-DD, duration\`
-- mindmap: node labels must be plain text only — NEVER use \`()\`, \`[]\`, or \`{{}}\` inside node label text (they are shape-syntax tokens); write abbreviations without parentheses e.g. "CNN" not "CNN (Convolutional)"`
 
 const normalizePrompt = (value: unknown): string | null => {
   if (typeof value !== 'string') return null
@@ -142,7 +112,7 @@ export const getOptimizedModelConfig = (
   }
 
   // --- max_output_tokens ---
-  // Base is 4096 — enough for a complete artifact or code block.
+  // Base is 4096 — enough for a complete code block.
   // 1200 was too low and truncated model output mid-generation.
   let targetTokens = 4096
   if (isReasoning) {
@@ -170,7 +140,7 @@ export const getOptimizedModelConfig = (
 }
 
 /**
- * Appended to every resolved system prompt alongside DIAGRAM_FORMAT_INSTRUCTION.
+ * Appended to every resolved system prompt.
  * Tells every model that a Python code execution engine is available so it never
  * refuses data/visualization tasks with "I cannot do that".
  */
@@ -178,63 +148,18 @@ export const CODE_EXECUTION_INSTRUCTION = `
 
 ## Python code execution
 
-Tool priority — always pick the best tool in this order:
-1. **Mermaid diagram** — for Gantt charts, flowcharts, ER diagrams, sequence diagrams, mind maps, etc. (see Diagram rules above)
-2. **Artifact** (\`artifact-chartjs\` or \`artifact-vega\`) — for interactive bar, line, pie, scatter, or other charts that do not need computation
-3. **Python** — only when actual computation is required: statistical analysis, data processing, machine learning, simulations, or generating a chart from real computed data
-
 Use Python when asked to:
 - Run a calculation, simulation, or algorithm → write Python
 - Process or analyse data that requires computation → write Python
 - Create or display a table / DataFrame → write Python using pandas
-- Generate a chart that genuinely requires computed data (not just static sample data) → write Python using matplotlib or seaborn
+- Generate a chart from computed data → write Python using matplotlib or seaborn
 
 Rules:
-- NEVER use Python just to draw a static chart — use Mermaid or an artifact instead
 - ALWAYS write a \`\`\`python code block when Python is the right tool — never say "I cannot run code"
 - Use \`plt.show()\` for charts — figures are captured automatically
 - For DataFrames always put \`df\` or \`display(df)\` as the LAST line — NEVER use \`print(df)\` (it outputs plain text, not a styled table)
 - Import libraries at the top of the code block; commonly used ones are matplotlib, pandas, numpy, seaborn — if a package is missing the user will see a ModuleNotFoundError and can install it
 - Keep code self-contained — define all data inside the block`
-
-/**
- * Appended to every resolved system prompt alongside DIAGRAM_FORMAT_INSTRUCTION
- * and CODE_EXECUTION_INSTRUCTION. Instructs the model to wrap self-contained,
- * interactive outputs in artifact fences so the UI can render them in a preview pane.
- */
-export const ARTIFACT_FORMAT_INSTRUCTION = `
-
-## Artifacts
-
-When generating a **self-contained, renderable output** that the user can interact with visually, wrap it in a fenced code block using one of these language identifiers:
-
-| Output type         | Fence identifier      |
-|---------------------|-----------------------|
-| HTML page/component | \`\`\`artifact-html   |
-| React component     | \`\`\`artifact-react  |
-| SVG graphic         | \`\`\`artifact-svg      |
-| Chart.js chart      | \`\`\`artifact-chartjs  |
-| Vega-Lite chart     | \`\`\`artifact-vega     |
-
-Rules:
-- Use artifacts for complete, standalone outputs — landing pages, interactive demos, data visualizations, SVG illustrations.
-- Do NOT use artifact fences for code examples, snippets, or partial code — only complete, immediately renderable output.
-- Do NOT output multiple artifact blocks for the same thing. If your first artifact attempt is complete, do not add alternative versions or fallback attempts in the same response.
-- React artifacts (\`artifact-react\`):
-  - Must define a function component named \`App\` (e.g. \`function App() { ... }\`).
-  - Do NOT include \`import\` statements — React, useState, useEffect, useRef, useCallback, useMemo, and other hooks are already available as globals.
-  - Do NOT use \`export default\`. Just define \`function App() { ... }\`.
-  - Use lowercase JavaScript keywords: \`const\`, \`function\`, \`return\`, \`if\`, \`true\`, \`false\`, \`null\` — NEVER \`Const\`, \`Function\`, \`Return\`, etc.
-  - Use lowercase HTML tags in JSX: \`<div>\`, \`<button>\`, \`<span>\` — NEVER \`<Div>\`, \`<Button>\`, \`<Span>\`.
-  - Use correct JSX attribute casing: \`className\`, \`onClick\`, \`onChange\` — NEVER \`ClassName\`, \`OnClick\`.
-  - NEVER use \`artifact-html\` with React/JSX code. Always use \`artifact-react\` for React components.
-- SVG artifacts must be a single \`<svg>\` element with a \`viewBox\` attribute.
-- Chart.js artifacts (\`artifact-chartjs\`) must be ONLY the config object — no variable assignments, no imports, no surrounding code. Must have a \`type\` and \`data\` property. Callback functions in \`options\` are allowed.
-- Vega-Lite artifacts (\`artifact-vega\`) must be a valid Vega-Lite v5 JSON spec. Required: \`$schema\`, \`data\`, and \`mark\` (single chart) or \`layer\`/\`hconcat\`/\`vconcat\` (multi-chart). Do NOT use \`views\` — use \`vconcat\` or \`hconcat\` instead.
-- When asked to fix or update an artifact, always output the full updated version in a new artifact block.
-- Keep artifacts self-contained — inline all styles, use no external imports beyond the available runtime (React 19, Tailwind CSS, Chart.js 4, Vega-Lite 5, standard HTML/CSS/JS).
-- React artifacts run in a single-file sandbox. Do NOT use \`fetch()\`, \`XMLHttpRequest\`, or any external API calls — they will fail due to sandbox restrictions. Use hardcoded sample data instead.
-- For styling in React artifacts, prefer Tailwind utility classes (available globally) or inline \`style={{}}\` objects. Do NOT put CSS in a string variable and render it as \`{styles}\` — use \`<style>\` tags directly in the JSX or inline styles.`
 
 export const LOCAL_KNOWLEDGE_INSTRUCTION = `
 
@@ -280,7 +205,7 @@ export const buildChatPromptInjection = (
   resolved: ResolvedSystemPrompt,
   options?: { enableCitations?: boolean }
 ): ChatPromptInjection => {
-  let systemMessage = resolved.resolvedPrompt + DIAGRAM_FORMAT_INSTRUCTION + CODE_EXECUTION_INSTRUCTION + ARTIFACT_FORMAT_INSTRUCTION
+  let systemMessage = resolved.resolvedPrompt + CODE_EXECUTION_INSTRUCTION
   if (options?.enableCitations) {
     systemMessage += CITATION_FORMAT_INSTRUCTION
   }

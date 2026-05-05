@@ -31,9 +31,7 @@ const isValidThreadId = (id: string): boolean => {
 
 import { extractContentPartsFromUIMessage } from '@/lib/messages'
 import {
-  DIAGRAM_FORMAT_INSTRUCTION,
   CODE_EXECUTION_INSTRUCTION,
-  ARTIFACT_FORMAT_INSTRUCTION,
   LOCAL_KNOWLEDGE_INSTRUCTION,
   CITATION_FORMAT_INSTRUCTION,
 } from '@/lib/prompts/system-prompt'
@@ -41,7 +39,6 @@ import type { UIMessage } from '@ai-sdk/react'
 import type { ThreadMessage } from '@ax-studio/core'
 import { useThreadMemory } from '@/hooks/threads/use-thread-memory'
 import { useLocalKnowledge } from '@/hooks/research/useLocalKnowledge'
-import { useThreadArtifacts } from '@/hooks/threads/use-thread-artifacts'
 import { useThreadResearch } from '@/hooks/threads/use-thread-research'
 import { useThreadChat } from '@/hooks/threads/use-thread-chat'
 import { useThreadTools } from '@/hooks/threads/use-thread-tools'
@@ -106,7 +103,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   )
   const alwaysCiteSources = useGuardrails((s) => s.alwaysCiteSources)
   const projectId = thread?.metadata?.project?.id
-  const { pinnedArtifact, clearArtifact } = useThreadArtifacts(threadId)
   const { pinnedResearch, clearResearch, handleResearchCommand, cancelResearch } =
     useThreadResearch(threadId)
   const { promptResolution, optimizedModelConfig } = useThreadConfig({
@@ -153,9 +149,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
         ? '\n\n' + currentAssistant.instructions
         : '') +
       memorySuffix +
-      DIAGRAM_FORMAT_INSTRUCTION +
       CODE_EXECUTION_INSTRUCTION +
-      ARTIFACT_FORMAT_INSTRUCTION +
       (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : '') +
       (localKnowledgeActive || alwaysCiteSources ? CITATION_FORMAT_INSTRUCTION : ''),
     modelOverrideId: optimizedModelConfig.modelId,
@@ -296,8 +290,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
       handleDeleteMessage={handleDeleteMessage}
       handleContextSizeIncrease={handleContextSizeIncrease}
       reasoningContainerRef={reasoningContainerRef}
-      pinnedArtifact={pinnedArtifact}
-      clearArtifact={clearArtifact}
       pinnedResearch={pinnedResearch}
       clearResearch={clearResearch}
       splitPaneOrder={splitPaneOrder}

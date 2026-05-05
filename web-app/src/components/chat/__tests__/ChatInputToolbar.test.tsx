@@ -196,10 +196,8 @@ describe('ChatInputToolbar — Phase 3 Manual Test Protocol', () => {
   })
 
   // Quick prompt dropdown items
-  it('renders artifact and diagram quick prompt options', () => {
+  it('renders deep research quick prompt option', () => {
     render(<ChatInputToolbar {...createProps()} />)
-    expect(screen.getByText('Generate Artifact')).toBeInTheDocument()
-    expect(screen.getByText('Generate Diagram')).toBeInTheDocument()
     expect(screen.getByText('Deep Research')).toBeInTheDocument()
   })
 
