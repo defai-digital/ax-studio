@@ -30,49 +30,6 @@ vi.mock('@/lib/extension', () => ({
   }
 }))
 
-// Mock dynamic imports for web services
-vi.mock('../theme/web', () => ({
-  WebThemeService: vi.fn().mockImplementation(() => ({
-    setTheme: vi.fn(),
-    getCurrentWindow: vi.fn()
-  }))
-}))
-
-vi.mock('../app/web', () => ({
-  WebAppService: vi.fn().mockImplementation(() => ({}))
-}))
-
-vi.mock('../path/web', () => ({
-  WebPathService: vi.fn().mockImplementation(() => ({}))
-}))
-
-vi.mock('../core/web', () => ({
-  WebCoreService: vi.fn().mockImplementation(() => ({}))
-}))
-
-vi.mock('../dialog/web', () => ({
-  WebDialogService: vi.fn().mockImplementation(() => ({}))
-}))
-
-vi.mock('../events/web', () => ({
-  WebEventsService: vi.fn().mockImplementation(() => ({
-    emit: vi.fn(),
-    listen: vi.fn()
-  }))
-}))
-
-vi.mock('../window/web', () => ({
-  WebWindowService: vi.fn().mockImplementation(() => ({}))
-}))
-
-vi.mock('../deeplink/web', () => ({
-  WebDeepLinkService: vi.fn().mockImplementation(() => ({}))
-}))
-
-vi.mock('../providers/web', () => ({
-  WebProvidersService: vi.fn().mockImplementation(() => ({}))
-}))
-
 // Mock dynamic imports for Tauri services
 vi.mock('../theme/tauri', () => ({
   TauriThemeService: vi.fn().mockImplementation(() => ({
@@ -151,10 +108,8 @@ describe('ServiceHub Integration Tests', () => {
       serviceHub = await initializeServiceHub()
 
       expect(serviceHub).toBeDefined()
-      expect(console.log).toHaveBeenCalledWith(
-        'Initializing service hub for platform:',
-        'Web'
-      )
+      expect(serviceHub.theme()).toBeDefined()
+      expect(serviceHub.events()).toBeDefined()
     })
 
     it('should initialize with Tauri services when on Tauri', async () => {
@@ -163,10 +118,8 @@ describe('ServiceHub Integration Tests', () => {
       serviceHub = await initializeServiceHub()
 
       expect(serviceHub).toBeDefined()
-      expect(console.log).toHaveBeenCalledWith(
-        'Initializing service hub for platform:',
-        'Tauri'
-      )
+      expect(serviceHub.theme()).toBeDefined()
+      expect(serviceHub.events()).toBeDefined()
     })
   })
 

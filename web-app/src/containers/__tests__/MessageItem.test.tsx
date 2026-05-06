@@ -463,8 +463,8 @@ describe('MessageItem', () => {
     })
   })
 
-  describe('agent status deduplication', () => {
-    it('only renders the latest status per agent_id', () => {
+  describe('agent status parts', () => {
+    it('ignores legacy data-agentStatus parts that are no longer rendered by MessageItem', () => {
       const msg = makeMessage({
         role: 'assistant',
         parts: [
@@ -493,9 +493,7 @@ describe('MessageItem', () => {
           status="ready"
         />
       )
-      // Only one agent card should render (the latest)
-      const cards = screen.getAllByTestId('agent-output-card')
-      expect(cards).toHaveLength(1)
+      expect(screen.queryByTestId('agent-output-card')).toBeNull()
     })
   })
 })

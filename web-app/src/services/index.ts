@@ -82,6 +82,154 @@ class PlatformServiceHub implements ServiceHub {
   private uploadsService: UploadsService = new DefaultUploadsService()
   private initialized = false
 
+  private initializeWebFallbacks(): void {
+    const eventTarget = new EventTarget()
+    const unsupported = (service: string) =>
+      new Error(`${service} is not available in web mode`)
+
+    this.themeService = {
+      setTheme: async (theme) => {
+        if (typeof document !== 'undefined') {
+          document.documentElement.style.colorScheme = theme ?? ''
+        }
+      },
+      getCurrentWindow: () => ({
+        setTheme: (theme) => this.themeService.setTheme(theme),
+      }),
+    }
+
+    this.windowService = {
+      createWebviewWindow: async () => {
+        throw unsupported('Window service')
+      },
+      getWebviewWindowByLabel: async () => null,
+      openWindow: async ({ url }) => {
+        if (typeof window !== 'undefined') {
+          window.open(url, '_blank', 'noopener,noreferrer')
+        }
+      },
+      openLogsWindow: async () => {},
+      openSystemMonitorWindow: async () => {},
+      openLocalApiServerLogsWindow: async () => {},
+    }
+
+    this.eventsService = {
+      emit: async (event, payload) => {
+        eventTarget.dispatchEvent(new CustomEvent(event, { detail: payload }))
+      },
+      listen: async (event, handler) => {
+        const listener = (e: Event) => {
+          handler({ payload: (e as CustomEvent).detail })
+        }
+        eventTarget.addEventListener(event, listener)
+        return () => eventTarget.removeEventListener(event, listener)
+      },
+    }
+
+    this.hardwareService = {
+      getHardwareInfo: async () => null,
+      getSystemUsage: async () => null,
+      getLlamacppDevices: async () => [],
+    }
+
+    this.appService = {
+      factoryReset: async () => {
+        window.localStorage.clear()
+      },
+      readLogs: async () => [],
+      parseLogLine: (line) => ({
+        timestamp: Date.now(),
+        level: 'info',
+        target: 'web',
+        message: line ?? '',
+      }),
+      getAppDataFolder: async () => undefined,
+      relocateAppDataFolder: async () => {
+        throw unsupported('App data relocation')
+      },
+      getServerStatus: async () => false,
+      readYaml: async () => {
+        throw unsupported('YAML file access')
+      },
+    }
+
+    const unavailableToolResult = {
+      content: [],
+      isError: true,
+    } as Awaited<ReturnType<MCPService['callTool']>>
+
+    this.mcpService = {
+      updateMCPConfig: async () => {},
+      restartMCPServers: async () => {},
+      getMCPConfig: async () => ({}),
+      getTools: async () => [],
+      getConnectedServers: async () => [],
+      callTool: async () => unavailableToolResult,
+      callToolWithCancellation: ({ cancellationToken }) => ({
+        promise: Promise.resolve(unavailableToolResult),
+        cancel: async () => {},
+        token: cancellationToken ?? crypto.randomUUID(),
+      }),
+      cancelToolCall: async () => {},
+      activateMCPServer: async () => {},
+      deactivateMCPServer: async () => {},
+    }
+
+    this.providersService = {
+      getProviders: async () => [],
+      fetchModelsFromProvider: async () => [],
+      updateSettings: async () => {},
+      fetch: () => fetch,
+    }
+
+    this.dialogService = {
+      open: async () => null,
+      save: async () => null,
+    }
+
+    this.openerService = {
+      revealItemInDir: async () => {},
+    }
+
+    this.updaterService = {
+      check: async () => null,
+      installAndRestart: async () => {},
+      downloadAndInstallWithProgress: async () => {},
+    }
+
+    this.pathService = {
+      sep: () => '/',
+      join: async (...segments) => segments.filter(Boolean).join('/').replace(/\/+/g, '/'),
+      dirname: async (path) => {
+        const normalized = path.replace(/\/+$/, '')
+        const index = normalized.lastIndexOf('/')
+        return index > 0 ? normalized.slice(0, index) : '/'
+      },
+      basename: async (path) => path.split('/').filter(Boolean).pop() ?? '',
+      extname: async (path) => {
+        const name = path.split('/').pop() ?? ''
+        const index = name.lastIndexOf('.')
+        return index > 0 ? name.slice(index) : ''
+      },
+    }
+
+    this.coreService = {
+      invoke: async (command) => {
+        throw unsupported(`Core command "${command}"`)
+      },
+      convertFileSrc: (filePath) => filePath,
+      getActiveExtensions: async () => [],
+      installExtensions: async () => {},
+      installExtension: async (extensions) => extensions,
+      uninstallExtension: async () => false,
+    }
+
+    this.deepLinkService = {
+      onOpenUrl: async () => () => {},
+      getCurrent: async () => [],
+    }
+  }
+
   async initialize(): Promise<void> {
     if (this.initialized) return
 
@@ -130,6 +278,8 @@ class PlatformServiceHub implements ServiceHub {
         this.pathService = new pathModule.TauriPathService()
         this.coreService = new coreModule.TauriCoreService()
         this.deepLinkService = new deepLinkModule.TauriDeepLinkService()
+      } else {
+        this.initializeWebFallbacks()
       }
 
       if ('setMcpService' in this.ragService) {

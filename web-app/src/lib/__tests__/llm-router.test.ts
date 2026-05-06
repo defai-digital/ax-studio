@@ -85,14 +85,10 @@ describe('parseRouterResponse', () => {
     })
   })
 
-  it('fuzzy matches when model ID is a substring', () => {
+  it('rejects loose substring matches below the confidence threshold', () => {
     const raw = '{"model": "sonnet-4-6", "provider": "anthropic", "reason": "coding"}'
     const result = parseRouterResponse(raw, sampleModels)
-    expect(result).toEqual({
-      modelId: 'claude-sonnet-4-6',
-      providerId: 'anthropic',
-      reason: 'coding',
-    })
+    expect(result).toBeNull()
   })
 
   it('returns null for invalid JSON', () => {

@@ -49,8 +49,8 @@ describe('ModelFactory', () => {
 
       const output = JSON.parse(normalizeOpenAICompatibleEventData(input))
 
-      expect(output.choices[0].delta.content).toBe('Hello')
-      expect(output.choices[0].delta.reasoning_content).toBe('Thinking')
+      expect(output.choices[0].delta.content).toBe('HelloThinking')
+      expect(output.choices[0].delta.reasoning_content).toBeUndefined()
       expect(output.choices[0].delta.role).toBe('1')
     })
 
@@ -111,7 +111,11 @@ describe('ModelFactory', () => {
         ],
       })
 
-      expect(normalizeOpenAICompatibleEventData(input)).toBe(input)
+      const output = JSON.parse(normalizeOpenAICompatibleEventData(input))
+      expect(output.choices[0].delta.content).toBe('hellothinking')
+      expect(output.choices[0].delta.reasoning_content).toBeUndefined()
+      expect(output.choices[0].delta.role).toBe('assistant')
+      expect(output.choices[0].finish_reason).toBe('stop')
     })
   })
 

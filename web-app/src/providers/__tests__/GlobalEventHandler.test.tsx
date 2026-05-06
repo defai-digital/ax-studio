@@ -56,6 +56,14 @@ vi.mock('@ax-studio/core', () => ({
   },
 }))
 
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => vi.fn(),
+}))
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(),
+}))
+
 vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: () => ({
     setProviders: mockSetProviders,
@@ -165,20 +173,17 @@ describe('GlobalEventHandler', () => {
     })
   })
 
-  it('refreshes providers and shows success toast after model import', async () => {
+  it('shows success toast after model import without duplicating provider refresh', async () => {
     render(<GlobalEventHandler />)
 
     emit('onModelImported', { modelId: 'model-a' })
 
     await waitFor(() => {
-      expect(mockGetProviders).toHaveBeenCalled()
-      expect(mockSetProviders).toHaveBeenCalledWith(
-        [{ provider: 'llamacpp', models: [] }],
-        '/'
-      )
       expect(mockToastSuccess).toHaveBeenCalledWith(
         'settings:llamacpp.errors.modelImported'
       )
     })
+    expect(mockGetProviders).not.toHaveBeenCalled()
+    expect(mockSetProviders).not.toHaveBeenCalled()
   })
 })

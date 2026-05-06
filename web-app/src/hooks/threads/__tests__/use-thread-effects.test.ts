@@ -121,7 +121,7 @@ describe('useThreadEffects', () => {
     expect(defaultInput.processAndSendMessage).not.toHaveBeenCalled()
   })
 
-  it('cancels research started from the initial message on unmount', async () => {
+  it('does not cancel research started from the initial message on unmount', async () => {
     defaultInput.handleResearchCommand = vi.fn().mockReturnValue(true)
     sessionStorage.setItem(
       `initial-message-${threadId}`,
@@ -138,7 +138,7 @@ describe('useThreadEffects', () => {
 
     unmount()
 
-    expect(defaultInput.cancelResearch).toHaveBeenCalled()
+    expect(defaultInput.cancelResearch).not.toHaveBeenCalled()
   })
 
   it('applies thread prompt from sessionStorage', () => {

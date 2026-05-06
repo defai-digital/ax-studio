@@ -46,6 +46,28 @@ vi.mock('@/hooks/tools/useTools', () => ({
   useTools: vi.fn(),
 }))
 
+const mockSetPrompt = vi.fn()
+
+vi.mock('@/hooks/ui/usePrompt', () => ({
+  usePrompt: (selector?: any) => {
+    const state = { setPrompt: mockSetPrompt }
+    return selector ? selector(state) : state
+  },
+}))
+
+vi.mock('@/components/smart-start/WorkflowSelector', () => ({
+  WorkflowSelector: ({ onPromptReady }: { onPromptReady: (prompt: string) => void }) => (
+    <button
+      type="button"
+      onClick={() =>
+        onPromptReady('Help me build a REST API with authentication and CRUD endpoints')
+      }
+    >
+      Build REST API
+    </button>
+  ),
+}))
+
 
 vi.mock('@/lib/prompts/system-prompt', () => ({
   resolveSystemPrompt: () => ({
@@ -156,30 +178,15 @@ describe('Home Page (index.tsx) — Manual Test Protocol', () => {
     ).toBeInTheDocument()
   })
 
-  // Protocol #8: 6 suggested prompt cards with tags
-  it('renders 6 suggested prompt cards with colored tags', () => {
+  // Protocol #8: Smart Start workflow selector
+  it('renders the Smart Start workflow selector', () => {
     renderIndex()
 
     expect(screen.getByText('Build REST API')).toBeInTheDocument()
-    expect(screen.getByText('Write blog post')).toBeInTheDocument()
-    expect(screen.getByText('Analyze data')).toBeInTheDocument()
-    expect(screen.getByText('Brainstorm ideas')).toBeInTheDocument()
-    expect(screen.getByText('Debug code')).toBeInTheDocument()
-    expect(screen.getByText('Research topic')).toBeInTheDocument()
-
-    // Colored tags (use exact match to avoid collision with prompt card labels)
-    expect(screen.getByText('Code')).toBeInTheDocument()
-    // "Write" appears as both a tag and part of "Write blog post" label
-    expect(screen.getAllByText('Write').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText('Analyze')).toBeInTheDocument()
-    expect(screen.getByText('Ideate')).toBeInTheDocument()
-    // "Debug" appears as both a tag and part of "Debug code" label
-    expect(screen.getAllByText('Debug').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText('Research')).toBeInTheDocument()
   })
 
-  // Protocol #9: Prompt card click fills input
-  it('fills chat input when a suggested prompt card is clicked', () => {
+  // Protocol #9: Workflow selection prepares the prompt
+  it('sets global prompt when a workflow is selected', () => {
     renderIndex()
 
     // Create a mock textarea to simulate the chat input
@@ -189,7 +196,7 @@ describe('Home Page (index.tsx) — Manual Test Protocol', () => {
 
     fireEvent.click(screen.getByText('Build REST API'))
 
-    expect(textarea.value).toBe(
+    expect(mockSetPrompt).toHaveBeenCalledWith(
       'Help me build a REST API with authentication and CRUD endpoints'
     )
 
