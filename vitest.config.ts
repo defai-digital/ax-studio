@@ -11,6 +11,9 @@ export default defineConfig({
 
       // llama.cpp extension - unit tests for local engine lifecycle helpers
       './extensions/llamacpp-extension',
+
+      // Test infrastructure guardrails
+      './scripts/testing',
     ],
     coverage: {
       provider: 'v8',

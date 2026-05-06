@@ -70,6 +70,9 @@ endif
 test-quality:
 	bash scripts/testing/run-quality-gates.sh
 
+test-quality-blocking:
+	COVERAGE_GATE_MODE=blocking bash scripts/testing/run-quality-gates.sh
+
 # Build
 build: install-and-build install-rust-targets
 	yarn build
