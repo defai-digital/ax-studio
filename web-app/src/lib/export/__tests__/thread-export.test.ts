@@ -1,68 +1,174 @@
-import { describe, it, expect } from 'vitest'
+import { ContentType, MessageStatus, type ThreadMessage } from '@ax-studio/core'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// toSafeFileName is not exported, so we test it via a module-internal approach.
-// We'll re-implement the logic to verify correctness, or test it indirectly.
-// Since we can't import it directly, let's test the logic inline.
+const mocks = vi.hoisted(() => ({
+  isTauri: false,
+  serviceHub: null as any,
+  toast: {
+    error: vi.fn(),
+    success: vi.fn(),
+    warning: vi.fn(),
+  },
+}))
 
-describe('toSafeFileName logic', () => {
-  // Replicate the function since it's not exported
-  const toSafeFileName = (value: string): string =>
-    value
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'chat'
+vi.mock('@/lib/platform/utils', () => ({
+  isPlatformTauri: () => mocks.isTauri,
+}))
 
-  it('converts simple title to lowercase kebab-case', () => {
-    expect(toSafeFileName('My Chat Title')).toBe('my-chat-title')
+vi.mock('@/hooks/useServiceHub', () => ({
+  getServiceHub: () => mocks.serviceHub,
+}))
+
+vi.mock('sonner', () => ({
+  toast: mocks.toast,
+}))
+
+import { exportAllThreads, exportThread } from '../thread-export'
+
+const thread = {
+  id: 'thread-1',
+  title: 'Project: Launch Plan!',
+  updated: 1_736_200_000_000,
+}
+
+const message: ThreadMessage = {
+  id: 'msg-1',
+  object: 'thread.message',
+  thread_id: 'thread-1',
+  role: 'user',
+  content: [
+    {
+      type: ContentType.Text,
+      text: { value: 'Draft the launch email.', annotations: [] },
+    },
+  ],
+  status: MessageStatus.Ready,
+  created_at: 1_736_200_000_000,
+  completed_at: 1_736_200_000_100,
+}
+
+describe('thread export', () => {
+  const fetchMessages = vi.fn()
+  const fetchThreads = vi.fn()
+  const save = vi.fn()
+  const invoke = vi.fn()
+  const createObjectURL = vi.fn(() => 'blob:export')
+  const revokeObjectURL = vi.fn()
+  const click = vi.fn()
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2025-01-02T12:00:00.000Z'))
+    mocks.isTauri = false
+    mocks.serviceHub = {
+      messages: () => ({ fetchMessages }),
+      threads: () => ({ fetchThreads }),
+      dialog: () => ({ save }),
+      core: () => ({ invoke }),
+    }
+    vi.stubGlobal('URL', {
+      createObjectURL,
+      revokeObjectURL,
+    })
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(click)
   })
 
-  it('removes special characters', () => {
-    expect(toSafeFileName('Hello! @World #2024')).toBe('hello-world-2024')
+  it('shows an unavailable toast when service hub is missing', async () => {
+    mocks.serviceHub = null
+
+    await exportThread(thread, 'json')
+
+    expect(mocks.toast.error).toHaveBeenCalledWith('Export unavailable')
   })
 
-  it('strips leading and trailing hyphens', () => {
-    expect(toSafeFileName('---test---')).toBe('test')
+  it('warns when a thread has no messages to export', async () => {
+    fetchMessages.mockResolvedValueOnce([])
+
+    await exportThread(thread, 'csv')
+
+    expect(fetchMessages).toHaveBeenCalledWith('thread-1')
+    expect(mocks.toast.warning).toHaveBeenCalledWith('No messages to export')
   })
 
-  it('collapses multiple non-alphanumeric chars into single hyphen', () => {
-    expect(toSafeFileName('a!!!b???c')).toBe('a-b-c')
+  it('downloads a single thread export in web mode', async () => {
+    fetchMessages.mockResolvedValueOnce([message])
+
+    await exportThread(thread, 'json')
+
+    expect(createObjectURL).toHaveBeenCalledTimes(1)
+    expect(click).toHaveBeenCalledTimes(1)
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:export')
+    expect(mocks.toast.success).toHaveBeenCalledWith(
+      'Exported "Project: Launch Plan!" as JSON',
+    )
   })
 
-  it('returns "chat" for empty string', () => {
-    expect(toSafeFileName('')).toBe('chat')
+  it('writes a single thread export through Tauri when a save path is selected', async () => {
+    mocks.isTauri = true
+    fetchMessages.mockResolvedValueOnce([message])
+    save.mockResolvedValueOnce('/tmp/project-launch-plan-2025-01-02-csv.csv')
+
+    await exportThread(thread, 'csv')
+
+    expect(save).toHaveBeenCalledWith({
+      defaultPath: 'project-launch-plan-2025-01-02-csv.csv',
+      filters: [{ name: 'CSV', extensions: ['csv'] }],
+    })
+    expect(invoke).toHaveBeenCalledWith('write_text_file', {
+      path: '/tmp/project-launch-plan-2025-01-02-csv.csv',
+      content: expect.stringContaining('workspace_id,workspace_name,thread_id'),
+    })
   })
 
-  it('returns "chat" for string with only special chars', () => {
-    expect(toSafeFileName('!!!@@@###')).toBe('chat')
+  it('does not write when the Tauri save dialog is cancelled', async () => {
+    mocks.isTauri = true
+    fetchMessages.mockResolvedValueOnce([message])
+    save.mockResolvedValueOnce(null)
+
+    await exportThread(thread, 'openai-jsonl')
+
+    expect(invoke).not.toHaveBeenCalled()
+    expect(mocks.toast.success).not.toHaveBeenCalled()
   })
 
-  it('handles unicode combining characters by removing them', () => {
-    // The combining acute accent (\u0301) is not a-z0-9, so it gets replaced
-    // but the base 'e' remains since it IS a-z
-    expect(toSafeFileName('cafe\u0301 au lait')).toBe('cafe-au-lait')
+  it('exports all threads and fetches messages for each valid thread', async () => {
+    fetchThreads.mockResolvedValueOnce([
+      thread,
+      { id: 'thread-2', title: '', updated: 0 },
+    ])
+    fetchMessages
+      .mockResolvedValueOnce([message])
+      .mockResolvedValueOnce([{ ...message, id: 'msg-2', thread_id: 'thread-2' }])
+
+    await exportAllThreads('alpaca')
+
+    expect(fetchMessages).toHaveBeenCalledWith('thread-1')
+    expect(fetchMessages).toHaveBeenCalledWith('thread-2')
+    expect(click).toHaveBeenCalledTimes(1)
+    expect(mocks.toast.success).toHaveBeenCalledWith(
+      'Exported 2 chats as JSON (Alpaca)',
+    )
   })
 
-  it('handles numbers correctly', () => {
-    expect(toSafeFileName('Chat 42 - Session 3')).toBe('chat-42-session-3')
+  it('warns when there are no chats to export', async () => {
+    fetchThreads.mockResolvedValueOnce([])
+
+    await exportAllThreads('json')
+
+    expect(mocks.toast.warning).toHaveBeenCalledWith('No chats to export')
   })
 
-  it('handles single character titles', () => {
-    expect(toSafeFileName('A')).toBe('a')
-  })
-})
+  it('shows an error toast when export fails', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    fetchMessages.mockRejectedValueOnce(new Error('disk unavailable'))
 
-describe('EXPORT_CONFIG', () => {
-  // We can't import the non-exported config, but we can verify the structure
-  // by checking it's used properly in the module.
-  // This is a structural verification.
+    await exportThread(thread, 'json')
 
-  it('has expected format types', () => {
-    const expectedFormats = ['csv', 'json', 'alpaca', 'openai-jsonl']
-    // These are the formats the module supports, verified by reading the source
-    expect(expectedFormats).toHaveLength(4)
-    expect(expectedFormats).toContain('csv')
-    expect(expectedFormats).toContain('json')
-    expect(expectedFormats).toContain('alpaca')
-    expect(expectedFormats).toContain('openai-jsonl')
+    expect(error).toHaveBeenCalledWith(
+      'Failed to export thread:',
+      expect.any(Error),
+    )
+    expect(mocks.toast.error).toHaveBeenCalledWith('Failed to export chat')
   })
 })

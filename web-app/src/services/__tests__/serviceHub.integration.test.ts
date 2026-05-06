@@ -98,6 +98,7 @@ describe('ServiceHub Integration Tests', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks()
+    vi.mocked(isPlatformTauri).mockReturnValue(false)
     serviceHub = await initializeServiceHub()
   })
 
@@ -194,5 +195,159 @@ describe('ServiceHub Integration Tests', () => {
       expect(typeof events.listen).toBe('function')
     })
 
+    it('should apply theme changes in web fallback mode', async () => {
+      await serviceHub.theme().setTheme('dark')
+      expect(document.documentElement.style.colorScheme).toBe('dark')
+
+      await serviceHub.theme().getCurrentWindow().setTheme('light')
+      expect(document.documentElement.style.colorScheme).toBe('light')
+    })
+
+    it('should dispatch and unsubscribe web fallback events', async () => {
+      const handler = vi.fn()
+      const unlisten = await serviceHub.events().listen('test-event', handler)
+
+      await serviceHub.events().emit('test-event', { ok: true })
+      expect(handler).toHaveBeenCalledWith({ payload: { ok: true } })
+
+      unlisten()
+      await serviceHub.events().emit('test-event', { ok: false })
+      expect(handler).toHaveBeenCalledTimes(1)
+    })
+
+    it('should expose safe web fallback window behavior', async () => {
+      const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+
+      await expect(
+        serviceHub.window().createWebviewWindow({
+          label: 'logs',
+          url: '/logs',
+        })
+      ).rejects.toThrow('Window service is not available in web mode')
+      await expect(
+        serviceHub.window().getWebviewWindowByLabel('logs')
+      ).resolves.toBeNull()
+      await serviceHub.window().openWindow({ label: 'logs', url: '/logs' })
+      await serviceHub.window().openLogsWindow()
+      await serviceHub.window().openSystemMonitorWindow()
+      await serviceHub.window().openLocalApiServerLogsWindow()
+
+      expect(openSpy).toHaveBeenCalledWith(
+        '/logs',
+        '_blank',
+        'noopener,noreferrer'
+      )
+      openSpy.mockRestore()
+    })
+
+    it('should expose safe web fallback app behavior', async () => {
+      window.localStorage.setItem('key', 'value')
+
+      await serviceHub.app().factoryReset()
+      expect(window.localStorage.getItem('key')).toBeNull()
+      expect(serviceHub.app().parseLogLine('plain log')).toEqual(
+        expect.objectContaining({
+          level: 'info',
+          target: 'web',
+          message: 'plain log',
+        })
+      )
+      await expect(serviceHub.app().readLogs()).resolves.toEqual([])
+      await expect(serviceHub.app().getAppDataFolder()).resolves.toBeUndefined()
+      await expect(serviceHub.app().getServerStatus()).resolves.toBe(false)
+      await expect(
+        serviceHub.app().relocateAppDataFolder('/tmp/data')
+      ).rejects.toThrow('App data relocation is not available in web mode')
+      await expect(serviceHub.app().readYaml('/tmp/config.yaml')).rejects.toThrow(
+        'YAML file access is not available in web mode'
+      )
+    })
+
+    it('should expose safe web fallback MCP behavior', async () => {
+      await serviceHub.mcp().updateMCPConfig({})
+      await serviceHub.mcp().restartMCPServers()
+      await expect(serviceHub.mcp().getMCPConfig()).resolves.toEqual({})
+      await expect(serviceHub.mcp().getTools()).resolves.toEqual([])
+      await expect(serviceHub.mcp().getConnectedServers()).resolves.toEqual([])
+      await expect(
+        serviceHub.mcp().callTool({ server: 'missing', name: 'noop', arguments: {} })
+      ).resolves.toEqual({ content: [], isError: true })
+
+      const cancellable = serviceHub.mcp().callToolWithCancellation({
+        server: 'missing',
+        name: 'noop',
+        arguments: {},
+        cancellationToken: 'token-1',
+      })
+      await expect(cancellable.promise).resolves.toEqual({
+        content: [],
+        isError: true,
+      })
+      await expect(cancellable.cancel()).resolves.toBeUndefined()
+      expect(cancellable.token).toBe('token-1')
+      await serviceHub.mcp().cancelToolCall('token-1')
+      await serviceHub.mcp().activateMCPServer('server-1')
+      await serviceHub.mcp().deactivateMCPServer('server-1')
+    })
+
+    it('should expose safe web fallback provider and desktop utility services', async () => {
+      await expect(serviceHub.providers().getProviders()).resolves.toEqual([])
+      await expect(
+        serviceHub.providers().fetchModelsFromProvider({} as ModelProvider)
+      ).resolves.toEqual([])
+      await expect(
+        serviceHub.providers().updateSettings('openai', [])
+      ).resolves.toBeUndefined()
+      expect(serviceHub.providers().fetch()).toBe(fetch)
+
+      await expect(serviceHub.dialog().open()).resolves.toBeNull()
+      await expect(serviceHub.dialog().save()).resolves.toBeNull()
+      await expect(
+        serviceHub.opener().revealItemInDir('/tmp/file.txt')
+      ).resolves.toBeUndefined()
+      await expect(serviceHub.updater().check()).resolves.toBeNull()
+      await expect(serviceHub.updater().installAndRestart()).resolves.toBeUndefined()
+      await expect(
+        serviceHub.updater().downloadAndInstallWithProgress(vi.fn())
+      ).resolves.toBeUndefined()
+      await expect(serviceHub.hardware().getHardwareInfo()).resolves.toBeNull()
+      await expect(serviceHub.hardware().getSystemUsage()).resolves.toBeNull()
+      await expect(serviceHub.hardware().getLlamacppDevices()).resolves.toEqual([])
+    })
+
+    it('should expose web fallback path, core, and deeplink helpers', async () => {
+      await expect(serviceHub.path().join('/tmp', '', 'models')).resolves.toBe(
+        '/tmp/models'
+      )
+      await expect(serviceHub.path().dirname('/tmp/models/file.gguf')).resolves.toBe(
+        '/tmp/models'
+      )
+      await expect(serviceHub.path().basename('/tmp/models/file.gguf')).resolves.toBe(
+        'file.gguf'
+      )
+      await expect(serviceHub.path().extname('/tmp/models/file.gguf')).resolves.toBe(
+        '.gguf'
+      )
+      expect(serviceHub.path().sep()).toBe('/')
+
+      await expect(serviceHub.core().invoke('read_logs')).rejects.toThrow(
+        'Core command "read_logs" is not available in web mode'
+      )
+      expect(serviceHub.core().convertFileSrc('/tmp/file.txt')).toBe('/tmp/file.txt')
+      await expect(serviceHub.core().getActiveExtensions()).resolves.toEqual([])
+      await expect(serviceHub.core().installExtensions()).resolves.toBeUndefined()
+      await expect(
+        serviceHub.core().installExtension([
+          { url: '/extensions/a.js', name: 'extension-a' },
+        ])
+      ).resolves.toEqual([{ url: '/extensions/a.js', name: 'extension-a' }])
+      await expect(serviceHub.core().uninstallExtension(['extension-a'])).resolves.toBe(
+        false
+      )
+
+      const unlisten = await serviceHub.deeplink().onOpenUrl(vi.fn())
+      expect(() => unlisten()).not.toThrow()
+      await expect(serviceHub.deeplink().getCurrent()).resolves.toEqual([])
+    })
   })
 })

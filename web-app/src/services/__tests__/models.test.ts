@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { DefaultModelsService } from '../models/default'
 import type { HuggingFaceRepo, CatalogModel } from '../models/types'
-import { EngineManager, events, DownloadEvent } from '@ax-studio/core'
+import { EngineManager, events, DownloadEvent, ContentType } from '@ax-studio/core'
 import bundledModelCatalog from '@/data/model-catalog.json'
 
 const { mockEvents, mockDownloadEvent } = vi.hoisted(() => ({
@@ -20,6 +20,10 @@ vi.mock('@ax-studio/core', () => ({
   },
   events: mockEvents,
   DownloadEvent: mockDownloadEvent,
+  ContentType: {
+    Text: 'text',
+    Image: 'image',
+  },
 }))
 
 // Mock fetch
@@ -42,6 +46,8 @@ describe('DefaultModelsService', () => {
     isModelSupported: vi.fn(),
     isToolSupported: vi.fn(),
     checkMmprojExists: vi.fn(),
+    validateGgufFile: vi.fn(),
+    getTokensCount: vi.fn(),
   }
 
   const mockEngineManager = {
@@ -51,6 +57,8 @@ describe('DefaultModelsService', () => {
   beforeEach(() => {
     modelsService = new DefaultModelsService()
     vi.clearAllMocks()
+    mockEngineManager.get.mockReset()
+    mockEngineManager.get.mockReturnValue(mockEngine)
     ;(EngineManager.instance as any).mockReturnValue(mockEngineManager)
     mockEvents.emit.mockClear()
   })
@@ -270,6 +278,31 @@ describe('DefaultModelsService', () => {
         })
       )
     })
+
+    it('should emit stopped event even when one provider abort fails', async () => {
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const llamaEngine = {
+        ...mockEngine,
+        abortImport: vi.fn().mockRejectedValue(new Error('llama abort failed')),
+      }
+      const mlxEngine = {
+        ...mockEngine,
+        abortImport: vi.fn().mockResolvedValue(undefined),
+      }
+      mockEngineManager.get.mockImplementation((provider: string) =>
+        provider === 'mlx' ? mlxEngine : llamaEngine
+      )
+
+      await modelsService.abortDownload('model1')
+
+      expect(llamaEngine.abortImport).toHaveBeenCalledWith('model1')
+      expect(mlxEngine.abortImport).toHaveBeenCalledWith('model1')
+      expect(events.emit).toHaveBeenCalledWith(
+        DownloadEvent.onFileDownloadStopped,
+        { modelId: 'model1', downloadType: 'Model' }
+      )
+      consoleSpy.mockRestore()
+    })
   })
 
   describe('deleteModel', () => {
@@ -279,6 +312,17 @@ describe('DefaultModelsService', () => {
       await modelsService.deleteModel(id)
 
       expect(mockEngine.delete).toHaveBeenCalledWith(id)
+    })
+
+    it('should throw when deleting without an available engine', async () => {
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      mockEngineManager.get.mockReturnValue(undefined)
+
+      await expect(modelsService.deleteModel('model1', 'mlx')).rejects.toThrow(
+        '[ModelsService] Cannot delete model: engine "mlx" is not available.'
+      )
+
+      consoleSpy.mockRestore()
     })
   })
 
@@ -323,6 +367,23 @@ describe('DefaultModelsService', () => {
       await modelsService.stopAllModels()
 
       expect(mockEngine.unload).not.toHaveBeenCalled()
+    })
+
+    it('should continue stopping models when one unload rejects', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      mockEngine.getLoadedModels.mockResolvedValue(['model1', 'model2'])
+      mockEngine.unload
+        .mockRejectedValueOnce(new Error('unload failed'))
+        .mockResolvedValue(undefined)
+
+      await modelsService.stopAllModels()
+
+      expect(mockEngine.unload).toHaveBeenCalledTimes(4)
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[ModelsService] stopAllModels unload failed:',
+        expect.any(Error)
+      )
+      warnSpy.mockRestore()
     })
   })
 
@@ -432,6 +493,52 @@ describe('DefaultModelsService', () => {
         {},
         false,
         false
+      )
+    })
+
+    it('should throw a helpful error when the provider engine is unavailable', async () => {
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      mockEngineManager.get.mockReturnValue(undefined)
+
+      await expect(
+        modelsService.startModel({ provider: 'llamacpp', models: [] } as any, 'model1')
+      ).rejects.toThrow(
+        'Local engine "llamacpp" is not available. Try restarting the app'
+      )
+
+      consoleSpy.mockRestore()
+    })
+
+    it('should forward only load-time settings and bypass flag', async () => {
+      const provider = {
+        provider: 'llamacpp',
+        models: [
+          {
+            id: 'model1',
+            settings: {
+              ctx_len: { controller_props: { value: 8192 } },
+              ngl: { controller_props: { value: 99 } },
+              temperature: { controller_props: { value: 0.7 } },
+              top_p: { controller_props: { value: 0.9 } },
+              flash_attn: { controller_props: { value: true } },
+            },
+          },
+        ],
+      } as any
+      mockEngine.getLoadedModels.mockResolvedValue([])
+      mockEngine.load.mockResolvedValue({ id: 'session1' })
+
+      await modelsService.startModel(provider, 'model1', true)
+
+      expect(mockEngine.load).toHaveBeenCalledWith(
+        'model1',
+        {
+          ctx_size: 8192,
+          n_gpu_layers: 99,
+          flash_attn: true,
+        },
+        false,
+        true
       )
     })
   })
@@ -728,6 +835,74 @@ describe('DefaultModelsService', () => {
       // Verify the GGUF file is present in siblings
       expect(result?.siblings?.some((s) => s.rfilename.endsWith('.gguf'))).toBe(
         true
+      )
+    })
+  })
+
+  describe('pullModelWithMetadata', () => {
+    it('should include model and mmproj metadata from Hugging Face siblings', async () => {
+      const repoResponse: HuggingFaceRepo = {
+        id: 'repo-id',
+        modelId: 'org/model',
+        sha: 'sha',
+        downloads: 0,
+        likes: 0,
+        tags: [],
+        createdAt: '2026-01-01T00:00:00.000Z',
+        private: false,
+        disabled: false,
+        gated: false,
+        author: 'org',
+        siblings: [
+          {
+            rfilename: 'model-q4.gguf',
+            lfs: { sha256: 'model-sha', size: 123, pointerSize: 123 },
+          },
+          {
+            rfilename: 'mmproj-model.gguf',
+            lfs: { sha256: 'mmproj-sha', size: 456, pointerSize: 456 },
+          },
+        ],
+      }
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue(repoResponse),
+      } as unknown as Response)
+
+      await modelsService.pullModelWithMetadata(
+        'org/model-q4',
+        'https://huggingface.co/org/model/resolve/main/model-q4.gguf',
+        'https://huggingface.co/org/model/resolve/main/mmproj-model.gguf'
+      )
+
+      expect(mockEngine.import).toHaveBeenCalledWith('org/model-q4', {
+        modelPath: 'https://huggingface.co/org/model/resolve/main/model-q4.gguf',
+        modelSha256: 'model-sha',
+        modelSize: 123,
+        mmprojPath:
+          'https://huggingface.co/org/model/resolve/main/mmproj-model.gguf',
+        mmprojSha256: 'mmproj-sha',
+        mmprojSize: 456,
+        downloadHeaders: undefined,
+      })
+    })
+
+    it('should skip metadata fetch when verification is disabled', async () => {
+      await modelsService.pullModelWithMetadata(
+        'org/model-q4',
+        'https://huggingface.co/org/model/resolve/main/model-q4.gguf',
+        undefined,
+        undefined,
+        true
+      )
+
+      expect(fetch).not.toHaveBeenCalled()
+      expect(mockEngine.import).toHaveBeenCalledWith(
+        'org/model-q4',
+        expect.objectContaining({
+          modelSha256: undefined,
+          modelSize: undefined,
+        })
       )
     })
   })
@@ -1139,6 +1314,210 @@ describe('DefaultModelsService', () => {
       const result = await modelsService.isModelSupported('/path/to/model.gguf')
 
       expect(result).toBe('GREY')
+    })
+  })
+
+  describe('checkMmprojExistsAndUpdateOffloadMMprojSetting', () => {
+    it('should add offload_mmproj setting when mmproj exists and setting is missing', async () => {
+      const updateProvider = vi.fn()
+      const provider = {
+        provider: 'llamacpp',
+        models: [
+          {
+            id: 'vision-model',
+            settings: {
+              ctx_len: { key: 'ctx_len', controller_props: { value: 4096 } },
+            },
+          },
+        ],
+      }
+      mockEngine.checkMmprojExists.mockResolvedValue(true)
+
+      const result =
+        await modelsService.checkMmprojExistsAndUpdateOffloadMMprojSetting(
+          'vision-model',
+          updateProvider,
+          () => provider as any
+        )
+
+      expect(result).toEqual({ exists: true, settingsUpdated: true })
+      expect(updateProvider).toHaveBeenCalledWith('llamacpp', {
+        models: [
+          expect.objectContaining({
+            id: 'vision-model',
+            settings: expect.objectContaining({
+              offload_mmproj: expect.objectContaining({
+                key: 'offload_mmproj',
+                controller_type: 'checkbox',
+              }),
+            }),
+          }),
+        ],
+      })
+    })
+
+    it('should not update provider when mmproj setting already exists', async () => {
+      const updateProvider = vi.fn()
+      mockEngine.checkMmprojExists.mockResolvedValue(true)
+
+      const result =
+        await modelsService.checkMmprojExistsAndUpdateOffloadMMprojSetting(
+          'vision-model',
+          updateProvider,
+          () =>
+            ({
+              provider: 'llamacpp',
+              models: [
+                {
+                  id: 'vision-model',
+                  settings: { offload_mmproj: { key: 'offload_mmproj' } },
+                },
+              ],
+            }) as any
+        )
+
+      expect(result).toEqual({ exists: true, settingsUpdated: false })
+      expect(updateProvider).not.toHaveBeenCalled()
+    })
+
+    it('should return false when mmproj check fails', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      mockEngine.checkMmprojExists.mockRejectedValue(new Error('scan failed'))
+
+      await expect(
+        modelsService.checkMmprojExistsAndUpdateOffloadMMprojSetting('model1')
+      ).resolves.toEqual({ exists: false, settingsUpdated: false })
+
+      errorSpy.mockRestore()
+    })
+  })
+
+  describe('validateGgufFile', () => {
+    it('should validate GGUF files through the llama.cpp engine', async () => {
+      mockEngine.validateGgufFile.mockResolvedValue({ isValid: true })
+
+      await expect(
+        modelsService.validateGgufFile('/models/model.gguf')
+      ).resolves.toEqual({ isValid: true })
+
+      expect(mockEngine.validateGgufFile).toHaveBeenCalledWith(
+        '/models/model.gguf'
+      )
+    })
+
+    it('should report unavailable validation method', async () => {
+      mockEngineManager.get.mockReturnValue({
+        ...mockEngine,
+        validateGgufFile: undefined,
+      })
+
+      await expect(
+        modelsService.validateGgufFile('/models/model.gguf')
+      ).resolves.toEqual({
+        isValid: false,
+        error: 'Validation method not available',
+      })
+    })
+
+    it('should return validation errors instead of throwing', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      mockEngine.validateGgufFile.mockRejectedValue(new Error('bad header'))
+
+      await expect(
+        modelsService.validateGgufFile('/models/broken.gguf')
+      ).resolves.toEqual({
+        isValid: false,
+        error: 'bad header',
+      })
+
+      errorSpy.mockRestore()
+    })
+  })
+
+  describe('getTokensCount', () => {
+    it('should transform text and image messages before token counting', async () => {
+      mockEngine.getLoadedModels.mockResolvedValue(['model1'])
+      mockEngine.getTokensCount.mockResolvedValue(42)
+
+      const result = await modelsService.getTokensCount('model1', [
+        {
+          role: 'user',
+          content: [
+            {
+              type: ContentType.Text,
+              text: { value: 'hello' },
+            },
+            {
+              type: ContentType.Image,
+              image_url: { url: 'file://image.png', detail: 'high' },
+            },
+          ],
+        },
+        {
+          role: 'assistant',
+          content: [{ type: ContentType.Text, text: { value: 'response' } }],
+        },
+        {
+          role: 'user',
+          content: [],
+        },
+      ] as any)
+
+      expect(result).toBe(42)
+      expect(mockEngine.getTokensCount).toHaveBeenCalledWith({
+        modelId: 'model1',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'hello' },
+              {
+                type: 'image_url',
+                image_url: { url: 'file://image.png', detail: 'high' },
+              },
+            ],
+          },
+          {
+            role: 'assistant',
+            content: 'response',
+          },
+        ],
+        chat_template_kwargs: {
+          enable_thinking: false,
+        },
+      })
+    })
+
+    it('should return zero when the model is not loaded locally', async () => {
+      mockEngine.getLoadedModels.mockResolvedValue(['other-model'])
+
+      await expect(
+        modelsService.getTokensCount('model1', [
+          {
+            role: 'user',
+            content: [{ type: ContentType.Text, text: { value: 'hello' } }],
+          },
+        ] as any)
+      ).resolves.toBe(0)
+
+      expect(mockEngine.getTokensCount).not.toHaveBeenCalled()
+    })
+
+    it('should return zero when token counting fails', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      mockEngine.getLoadedModels.mockResolvedValue(['model1'])
+      mockEngine.getTokensCount.mockRejectedValue(new Error('tokenizer failed'))
+
+      await expect(
+        modelsService.getTokensCount('model1', [
+          {
+            role: 'user',
+            content: [{ type: ContentType.Text, text: { value: 'hello' } }],
+          },
+        ] as any)
+      ).resolves.toBe(0)
+
+      errorSpy.mockRestore()
     })
   })
 })

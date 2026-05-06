@@ -67,6 +67,19 @@ describe('TauriHardwareService', () => {
       expect(vi.mocked(invoke)).toHaveBeenCalledWith('plugin:hardware|get_system_info')
     })
 
+    it('should return null when hardware info has an unexpected shape', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      vi.mocked(invoke).mockResolvedValue('not-an-object')
+
+      await expect(hardwareService.getHardwareInfo()).resolves.toBeNull()
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[TauriHardwareService] get_system_info returned unexpected shape:',
+        'not-an-object'
+      )
+      warnSpy.mockRestore()
+    })
+
     it('should return correct type from invoke', async () => {
       const mockHardwareData: HardwareData = {
         cpu: {
@@ -125,6 +138,19 @@ describe('TauriHardwareService', () => {
 
       await expect(hardwareService.getSystemUsage()).resolves.toBeNull()
       expect(vi.mocked(invoke)).toHaveBeenCalledWith('plugin:hardware|get_system_usage')
+    })
+
+    it('should return null when system usage has an unexpected shape', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      vi.mocked(invoke).mockResolvedValue(null)
+
+      await expect(hardwareService.getSystemUsage()).resolves.toBeNull()
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[TauriHardwareService] get_system_usage returned unexpected shape:',
+        null
+      )
+      warnSpy.mockRestore()
     })
 
     it('should return correct type from invoke', async () => {
@@ -212,6 +238,44 @@ describe('TauriHardwareService', () => {
       expect(vi.mocked(invoke)).toHaveBeenCalledTimes(2)
       expect(vi.mocked(invoke)).toHaveBeenNthCalledWith(1, 'plugin:hardware|get_system_info')
       expect(vi.mocked(invoke)).toHaveBeenNthCalledWith(2, 'plugin:hardware|get_system_usage')
+    })
+  })
+
+  describe('getLlamacppDevices', () => {
+    it('should return devices from the llama.cpp extension', async () => {
+      const devices = [{ id: 'gpu-1', name: 'GPU 1' }]
+      ;(window as any).core.extensionManager = {
+        getByName: vi.fn().mockReturnValue({
+          getDevices: vi.fn().mockResolvedValue(devices),
+        }),
+      }
+
+      await expect(hardwareService.getLlamacppDevices()).resolves.toEqual(devices)
+    })
+
+    it('should return an empty list when the llama.cpp extension is missing', async () => {
+      ;(window as any).core.extensionManager = {
+        getByName: vi.fn().mockReturnValue(undefined),
+      }
+
+      await expect(hardwareService.getLlamacppDevices()).resolves.toEqual([])
+    })
+
+    it('should return an empty list when the llama.cpp extension fails', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      ;(window as any).core.extensionManager = {
+        getByName: vi.fn().mockReturnValue({
+          getDevices: vi.fn().mockRejectedValue(new Error('device scan failed')),
+        }),
+      }
+
+      await expect(hardwareService.getLlamacppDevices()).resolves.toEqual([])
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        '[TauriHardwareService] getLlamacppDevices failed:',
+        expect.any(Error)
+      )
+      errorSpy.mockRestore()
     })
   })
 })
