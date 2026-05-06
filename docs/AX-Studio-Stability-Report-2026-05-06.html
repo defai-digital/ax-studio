@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AX Studio Stability & Testing Report - May 6, 2026</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f8fa;
+        --surface: #ffffff;
+        --surface-muted: #f1f5f9;
+        --text: #17202a;
+        --muted: #5b6776;
+        --border: #d8dee8;
+        --accent: #1f7a5f;
+        --accent-soft: #dff3ec;
+        --warn: #a15c00;
+        --warn-soft: #fff3d9;
+        --risk: #b42318;
+        --risk-soft: #ffe7e4;
+        --info: #285ea8;
+        --info-soft: #e6f0ff;
+        --code: #132238;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+
+      main {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 40px 24px 64px;
+      }
+
+      header {
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 28px;
+        padding-bottom: 24px;
+      }
+
+      h1,
+      h2,
+      h3 {
+        line-height: 1.2;
+        margin: 0;
+      }
+
+      h1 {
+        font-size: clamp(30px, 4vw, 48px);
+        letter-spacing: 0;
+      }
+
+      h2 {
+        font-size: 24px;
+        margin-bottom: 14px;
+      }
+
+      h3 {
+        font-size: 17px;
+        margin-bottom: 8px;
+      }
+
+      p {
+        margin: 0 0 12px;
+      }
+
+      .subtitle {
+        color: var(--muted);
+        font-size: 17px;
+        margin-top: 12px;
+        max-width: 820px;
+      }
+
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 18px;
+      }
+
+      .pill {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 13px;
+        padding: 7px 11px;
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .grid-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .grid-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 20px;
+      }
+
+      .section {
+        margin-top: 28px;
+      }
+
+      .metric {
+        font-size: 34px;
+        font-weight: 760;
+        line-height: 1;
+        margin-bottom: 8px;
+      }
+
+      .metric-label {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .status {
+        align-items: center;
+        border-radius: 8px;
+        display: flex;
+        gap: 12px;
+        padding: 14px 16px;
+      }
+
+      .status strong {
+        display: block;
+      }
+
+      .pass {
+        background: var(--accent-soft);
+        color: #155b47;
+      }
+
+      .warn {
+        background: var(--warn-soft);
+        color: var(--warn);
+      }
+
+      .risk {
+        background: var(--risk-soft);
+        color: var(--risk);
+      }
+
+      .info {
+        background: var(--info-soft);
+        color: var(--info);
+      }
+
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--border);
+        padding: 10px 8px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      td.number,
+      th.number {
+        text-align: right;
+      }
+
+      ul {
+        margin: 10px 0 0;
+        padding-left: 20px;
+      }
+
+      li {
+        margin: 6px 0;
+      }
+
+      code,
+      pre {
+        background: #edf2f7;
+        color: var(--code);
+        font-family:
+          "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+        font-size: 13px;
+      }
+
+      code {
+        border-radius: 5px;
+        padding: 2px 5px;
+      }
+
+      pre {
+        border-radius: 8px;
+        overflow-x: auto;
+        padding: 14px;
+        white-space: pre;
+      }
+
+      .timeline {
+        border-left: 2px solid var(--border);
+        margin-left: 8px;
+        padding-left: 18px;
+      }
+
+      .timeline-item {
+        margin-bottom: 18px;
+        position: relative;
+      }
+
+      .timeline-item::before {
+        background: var(--accent);
+        border: 3px solid var(--bg);
+        border-radius: 50%;
+        content: "";
+        height: 12px;
+        left: -25px;
+        position: absolute;
+        top: 3px;
+        width: 12px;
+      }
+
+      .small {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .file-list {
+        columns: 2;
+      }
+
+      .bar {
+        background: #e7ebf1;
+        border-radius: 999px;
+        height: 10px;
+        overflow: hidden;
+      }
+
+      .bar span {
+        background: var(--accent);
+        display: block;
+        height: 100%;
+      }
+
+      @media (max-width: 760px) {
+        main {
+          padding: 28px 16px 48px;
+        }
+
+        .grid-2,
+        .grid-3 {
+          grid-template-columns: 1fr;
+        }
+
+        .file-list {
+          columns: 1;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>AX Studio Stability & Testing Report</h1>
+        <p class="subtitle">
+          Summary of the stability, coverage, and automated testing hardening
+          completed on May 6, 2026 for the AX Studio revamp workspace.
+        </p>
+        <div class="meta">
+          <span class="pill">Workspace: Downloads/ax studio revamp</span>
+          <span class="pill">Date: 2026-05-06</span>
+          <span class="pill">Status: strong beta/internal confidence</span>
+          <span class="pill">Commit: not yet committed</span>
+        </div>
+      </header>
+
+      <section class="grid grid-3">
+        <article class="card">
+          <div class="metric">92-94%</div>
+          <div class="metric-label">Honest automated stability confidence</div>
+        </article>
+        <article class="card">
+          <div class="metric">3183</div>
+          <div class="metric-label">Passing tests in latest full non-coverage run</div>
+        </article>
+        <article class="card">
+          <div class="metric">37.5%</div>
+          <div class="metric-label">Route line coverage after today's route pass</div>
+        </article>
+      </section>
+
+      <section class="section grid grid-2">
+        <div class="status pass">
+          <div>
+            <strong>What is verified now</strong>
+            Lint, tests, coverage, and blocking module gates pass locally.
+          </div>
+        </div>
+        <div class="status warn">
+          <div>
+            <strong>Why this is not 98% yet</strong>
+            DMG packaging, E2E browser smoke tests, and Rust coverage are still
+            not fully verified.
+          </div>
+        </div>
+      </section>
+
+      <section class="section card">
+        <h2>Executive Summary</h2>
+        <p>
+          AX Studio is now in a significantly stronger verified state than when
+          the hardening work started. The main JavaScript/TypeScript suite is
+          green, lint is green, coverage gates can now run in blocking mode, and
+          weak areas such as services, lib, UI primitives, hooks, and routes
+          received targeted tests. The latest route pass also added Memory
+          settings workflow coverage.
+        </p>
+        <p>
+          The honest stability rating is <strong>92-94% by automated verification</strong>.
+          That is high confidence for internal or beta testing. It is not yet a
+          98% public-release claim because packaging, real browser smoke tests,
+          and Rust coverage still need dedicated validation.
+        </p>
+      </section>
+
+      <section class="section card">
+        <h2>Verification Results</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Check</th>
+              <th>Result</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>yarn lint</code></td>
+              <td>Pass</td>
+              <td>No lint errors after the latest testing changes.</td>
+            </tr>
+            <tr>
+              <td><code>yarn test</code></td>
+              <td>Pass</td>
+              <td>252 files passed, 3183 tests passed, 1 skipped.</td>
+            </tr>
+            <tr>
+              <td><code>yarn test:coverage</code></td>
+              <td>Pass</td>
+              <td>Full coverage run completed successfully.</td>
+            </tr>
+            <tr>
+              <td><code>yarn test:quality:gates:blocking</code></td>
+              <td>Pass</td>
+              <td>All configured module thresholds pass in blocking mode.</td>
+            </tr>
+            <tr>
+              <td><code>yarn build</code></td>
+              <td>Partial pass</td>
+              <td>
+                App binary and macOS <code>.app</code> bundle build. DMG creation
+                still fails in the sandbox at <code>bundle_dmg.sh</code>.
+              </td>
+            </tr>
+            <tr>
+              <td><code>git diff --check</code></td>
+              <td>Pass</td>
+              <td>No whitespace or patch formatting problems.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="section card">
+        <h2>Module Coverage Snapshot</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Module</th>
+              <th class="number">Lines</th>
+              <th class="number">Functions</th>
+              <th class="number">Branches</th>
+              <th>Gate</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>stores</td>
+              <td class="number">99.2%</td>
+              <td class="number">100.0%</td>
+              <td class="number">89.2%</td>
+              <td>Pass</td>
+            </tr>
+            <tr>
+              <td>hooks</td>
+              <td class="number">75.2%</td>
+              <td class="number">80.5%</td>
+              <td class="number">79.4%</td>
+              <td>Pass</td>
+            </tr>
+            <tr>
+              <td>services</td>
+              <td class="number">75.9%</td>
+              <td class="number">88.6%</td>
+              <td class="number">82.2%</td>
+              <td>Pass</td>
+            </tr>
+            <tr>
+              <td>lib</td>
+              <td class="number">72.3%</td>
+              <td class="number">76.1%</td>
+              <td class="number">80.2%</td>
+              <td>Pass</td>
+            </tr>
+            <tr>
+              <td>components/ui</td>
+              <td class="number">76.5%</td>
+              <td class="number">81.0%</td>
+              <td class="number">92.3%</td>
+              <td>Pass</td>
+            </tr>
+            <tr>
+              <td>containers</td>
+              <td class="number">43.7%</td>
+              <td class="number">41.2%</td>
+              <td class="number">72.9%</td>
+              <td>Pass</td>
+            </tr>
+            <tr>
+              <td>providers</td>
+              <td class="number">60.7%</td>
+              <td class="number">48.5%</td>
+              <td class="number">65.4%</td>
+              <td>Pass</td>
+            </tr>
+            <tr>
+              <td>routes</td>
+              <td class="number">37.5%</td>
+              <td class="number">40.5%</td>
+              <td class="number">66.0%</td>
+              <td>Pass</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="section card">
+        <h2>What We Did Today</h2>
+        <div class="timeline">
+          <div class="timeline-item">
+            <h3>1. Stabilized Existing Failing Tests</h3>
+            <p>
+              Cleaned up failing and order-dependent tests across services,
+              models, research hooks, export logic, and desktop adapter paths.
+            </p>
+          </div>
+          <div class="timeline-item">
+            <h3>2. Added Service and Tauri Adapter Coverage</h3>
+            <p>
+              Added coverage for providers, updater, window, core, app lifecycle,
+              and desktop adapter behavior using mocked Tauri boundaries.
+            </p>
+          </div>
+          <div class="timeline-item">
+            <h3>3. Added UI Primitive and Container Coverage</h3>
+            <p>
+              Added tests for sidebar, command, context menu, drawer,
+              ThemeSwitcher, and DynamicControllerSetting.
+            </p>
+          </div>
+          <div class="timeline-item">
+            <h3>4. Added Hook and Lib Coverage</h3>
+            <p>
+              Added or improved tests for service hub, search dialog, citations,
+              service bridge behavior, smart-start workflows, Shiki themes,
+              thread export, research flow, and message conversion.
+            </p>
+          </div>
+          <div class="timeline-item">
+            <h3>5. Created PRD and ADR Documentation</h3>
+            <p>
+              Added coverage-hardening and automated-testing strategy docs so
+              the stability work has clear product and architecture framing.
+            </p>
+          </div>
+          <div class="timeline-item">
+            <h3>6. Made Module Coverage Gates Blocking</h3>
+            <p>
+              Refactored the module coverage gate script, added tests for it,
+              added blocking commands, and updated CI to enforce module gates.
+            </p>
+          </div>
+          <div class="timeline-item">
+            <h3>7. Added Local API Server Route Workflow Tests</h3>
+            <p>
+              Added route-level tests for status check, API key validation,
+              server start payload, returned port update, success toast, and
+              stop-server behavior.
+            </p>
+          </div>
+          <div class="timeline-item">
+            <h3>8. Added Memory Settings Route Workflow Tests</h3>
+            <p>
+              Added route-level tests for empty state, enable toggle, search,
+              inline edit, source-thread navigation, delete, clear all, export,
+              and JSON backup import behavior.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section grid grid-2">
+        <article class="card">
+          <h2>Coverage Improvements</h2>
+          <p><strong>Routes improved meaningfully today.</strong></p>
+          <table>
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th class="number">Before</th>
+                <th class="number">After</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Route line coverage</td>
+                <td class="number">27.4%</td>
+                <td class="number">37.5%</td>
+              </tr>
+              <tr>
+                <td>Route function coverage</td>
+                <td class="number">33.7%</td>
+                <td class="number">40.5%</td>
+              </tr>
+              <tr>
+                <td>Lib line coverage</td>
+                <td class="number">69.8%</td>
+                <td class="number">72.3%</td>
+              </tr>
+            </tbody>
+          </table>
+        </article>
+        <article class="card">
+          <h2>Stability Assessment</h2>
+          <p>
+            AX Studio is now highly stable for internal and beta validation.
+            The correct wording is:
+          </p>
+          <div class="status info">
+            <div>
+              <strong>Recommended claim</strong>
+              AX Studio is around 92-94% verified stable by automated testing,
+              with remaining release risk in packaging, E2E, Rust coverage, and
+              lower-covered route/container workflows.
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="section card">
+        <h2>Important Files Changed or Added</h2>
+        <ul class="file-list">
+          <li><code>.github/workflows/ax-studio-linter-and-test.yml</code></li>
+          <li><code>Makefile</code></li>
+          <li><code>package.json</code></li>
+          <li><code>vitest.config.ts</code></li>
+          <li><code>scripts/testing/module-coverage-gate.mjs</code></li>
+          <li><code>scripts/testing/module-coverage-gate.test.mjs</code></li>
+          <li><code>scripts/testing/vitest.config.ts</code></li>
+          <li><code>web-app/src/routes/settings/__tests__/local-api-server.test.tsx</code></li>
+          <li><code>web-app/src/routes/settings/__tests__/memory.test.tsx</code></li>
+          <li><code>docs/PRD-Coverage-Hardening.md</code></li>
+          <li><code>docs/adr/ADR-002-coverage-hardening-strategy.md</code></li>
+          <li><code>docs/Automated-Testing-Strategy.md</code></li>
+          <li><code>docs/adr/ADR-003-automated-testing-strategy.md</code></li>
+        </ul>
+        <p class="small">
+          Note: Markdown docs are ignored by this repository's
+          <code>.gitignore</code>. They require <code>git add -f</code> if they
+          should be committed.
+        </p>
+      </section>
+
+      <section class="section card">
+        <h2>Commands Added</h2>
+        <pre>yarn test:module:gate:blocking
+yarn test:quality:gates:blocking
+make test-quality-blocking</pre>
+        <p>
+          These commands make the coverage strategy operational. The blocking
+          gate now fails if a configured module drops below threshold.
+        </p>
+      </section>
+
+      <section class="section card">
+        <h2>Remaining Risks</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Risk</th>
+              <th>Why It Matters</th>
+              <th>Recommended Fix</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>DMG packaging not verified locally</td>
+              <td>
+                The app binary and <code>.app</code> bundle build, but DMG
+                creation fails in this sandbox.
+              </td>
+              <td>Validate DMG packaging in real macOS CI or a normal macOS shell.</td>
+            </tr>
+            <tr>
+              <td>No browser E2E smoke suite yet</td>
+              <td>
+                jsdom tests do not fully prove real browser navigation,
+                rendering, and user workflow behavior.
+              </td>
+              <td>Add a small Playwright smoke suite for app shell, chat, settings, and model flows.</td>
+            </tr>
+            <tr>
+              <td>Rust coverage unknown</td>
+              <td>
+                Rust tests can pass while coverage percentage remains unknown.
+              </td>
+              <td>Add <code>cargo-llvm-cov</code> baseline in CI.</td>
+            </tr>
+            <tr>
+              <td>Routes and containers remain lower than core modules</td>
+              <td>
+                These areas drive user workflows and can hide integration bugs.
+              </td>
+              <td>Continue focused route/container workflow tests.</td>
+            </tr>
+            <tr>
+              <td>Warnings remain</td>
+              <td>
+                React <code>act(...)</code>, Radix accessibility, chunk size,
+                and Tauri identifier warnings are not failures but should be
+                classified.
+              </td>
+              <td>Create a warning policy backlog and fix release-blocking warnings.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="section card">
+        <h2>Next Recommended Steps</h2>
+        <ol>
+          <li>
+            Commit the clean checkpoint with blocking coverage gate, Local API
+            Server route tests, and Memory route tests.
+          </li>
+          <li>
+            Add route workflow tests for MCP servers, local API logs,
+            provider detail, and model hub pages.
+          </li>
+          <li>
+            Add Playwright smoke tests for the app shell and top workflows.
+          </li>
+          <li>
+            Add Rust coverage baseline with <code>cargo-llvm-cov</code>.
+          </li>
+          <li>
+            Validate DMG packaging in real macOS CI.
+          </li>
+        </ol>
+      </section>
+
+      <section class="section card">
+        <h2>Commit Guidance</h2>
+        <p>Recommended commit command for the current code/test changes:</p>
+        <pre>git add .github/workflows/ax-studio-linter-and-test.yml \
+  Makefile \
+  package.json \
+  scripts/testing/module-coverage-gate.mjs \
+  scripts/testing/module-coverage-gate.test.mjs \
+  scripts/testing/vitest.config.ts \
+  vitest.config.ts \
+  web-app/src/routes/settings/__tests__/local-api-server.test.tsx \
+  web-app/src/routes/settings/__tests__/memory.test.tsx
+
+git commit -m "test: enforce blocking coverage gate and add route workflow tests"</pre>
+        <p>Optional docs commit, because Markdown files are ignored:</p>
+        <pre>git add -f docs/PRD-Coverage-Hardening.md \
+  docs/adr/ADR-002-coverage-hardening-strategy.md \
+  docs/Automated-Testing-Strategy.md \
+  docs/adr/ADR-003-automated-testing-strategy.md \
+  docs/AX-Studio-Stability-Report-2026-05-06.html</pre>
+      </section>
+
+      <footer class="section small">
+        Generated locally in the AX Studio revamp workspace on May 6, 2026.
+      </footer>
+    </main>
+  </body>
+</html>
