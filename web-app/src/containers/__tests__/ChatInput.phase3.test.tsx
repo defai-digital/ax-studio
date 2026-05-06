@@ -58,14 +58,20 @@ vi.mock('@/hooks/models/useModelProvider', () => ({
 }))
 
 vi.mock('@/hooks/settings/useAppState', () => ({
-  useAppState: (selector?: any) => {
+  useAppState: Object.assign((selector?: any) => {
     const state = {
       abortControllers: { 'thread-1': { abort: mockAbort } },
       cancelToolCall: vi.fn(),
       tools: [],
     }
     return selector ? selector(state) : state
-  },
+  }, {
+    getState: () => ({
+      abortControllers: { 'thread-1': { abort: mockAbort } },
+      cancelToolCall: vi.fn(),
+      tools: [],
+    }),
+  }),
 }))
 
 vi.mock('@/hooks/chat/useAssistant', () => ({

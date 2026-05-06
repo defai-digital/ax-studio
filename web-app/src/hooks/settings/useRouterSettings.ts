@@ -20,6 +20,7 @@ interface RouterSettingsState {
   clearRouterModel: () => void
   setTimeoutMs: (ms: number) => void
   setThreadOverride: (threadId: string, enabled: boolean) => void
+  clearThreadOverride: (threadId: string) => void
   /** Check if auto-routing is enabled for a given thread (global + thread override) */
   isAutoRouteEnabled: (threadId?: string) => boolean
   /** Remove overrides for threads that no longer exist */
@@ -60,6 +61,12 @@ export const useRouterSettings = create<RouterSettingsState>()(
           return { threadOverrides: updated }
         }),
 
+      clearThreadOverride: (threadId) =>
+        set((state) => {
+          const updated = { ...state.threadOverrides }
+          delete updated[threadId]
+          return { threadOverrides: updated }
+        }),
 
       isAutoRouteEnabled: (threadId?: string) => {
         const state = get()

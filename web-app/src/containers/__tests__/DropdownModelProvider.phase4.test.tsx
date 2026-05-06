@@ -57,27 +57,34 @@ const mockSelectedModel = {
 // ── Mocks (before imports) ──────────────────────────
 
 vi.mock('@/hooks/models/useModelProvider', () => ({
-  useModelProvider: () => ({
-    providers: mockProviders,
-    selectedProvider: 'openai',
-    selectedModel: mockSelectedModel,
-    getProviderByName: (name: string) =>
+  useModelProvider: (selector?: any) => {
+    const state = {
+      providers: mockProviders,
+      selectedProvider: 'openai',
+      selectedModel: mockSelectedModel,
+      getProviderByName: (name: string) =>
       mockProviders.find((p) => p.provider === name),
-    selectModelProvider: mockSelectModelProvider,
-    getModelBy: (id: string) => {
-      for (const p of mockProviders) {
-        const m = p.models.find((mod: any) => mod.id === id)
-        if (m) return m
-      }
-      return undefined
+      selectModelProvider: mockSelectModelProvider,
+      getModelBy: (id: string) => {
+        for (const p of mockProviders) {
+          const m = p.models.find((mod: any) => mod.id === id)
+          if (m) return m
+        }
+        return undefined
+      },
+    }
+    return selector ? selector(state) : state
     },
-  }),
 }))
 
 vi.mock('@/hooks/threads/useThreads', () => ({
-  useThreads: () => ({
-    updateCurrentThreadModel: mockUpdateCurrentThreadModel,
-  }),
+  useThreads: (selector?: any) => {
+    const state = {
+      currentThreadId: 'thread-1',
+      updateCurrentThreadModel: mockUpdateCurrentThreadModel,
+    }
+    return selector ? selector(state) : state
+  },
 }))
 
 vi.mock('@tanstack/react-router', () => ({

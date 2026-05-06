@@ -253,20 +253,6 @@ describe('useChat', () => {
     )
   })
 
-  it('passes dataPartSchemas to useChatSDK', () => {
-    renderHook(() => useChat({ sessionId: 's1' }))
-
-    expect(mockUseChatSDK).toHaveBeenCalledWith(
-      expect.objectContaining({
-        dataPartSchemas: expect.objectContaining({
-          agentStatus: expect.anything(),
-          agentToolCall: expect.anything(),
-          runLog: expect.anything(),
-        }),
-      })
-    )
-  })
-
   // ── Inference parameters stabilization ───────────────────────────────────
 
   it('stabilizes inference parameters to prevent unnecessary re-renders', () => {

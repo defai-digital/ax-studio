@@ -62,19 +62,14 @@ describe('getDateGroup', () => {
 // ─── B. Attack Tests (Bug Exposing) ────────────────────────────────────────
 
 describe('getDateGroup — edge cases', () => {
-  it('DISCOVERED BUG: future dates incorrectly classified as "This Week"', () => {
-    // BUG: diffDays for tomorrow is -1, and -1 <= 7 is true,
-    // so future dates fall into "This Week" instead of a dedicated group.
-    // This test documents the current (buggy) behavior.
+  it('treats future dates as "Today"', () => {
     const tomorrow = new Date()
     tomorrow.setDate(tomorrow.getDate() + 1)
-    // Current behavior: returns 'This Week' because diffDays=-1 passes `<= 7`
-    expect(getDateGroup(tomorrow)).toBe('This Week')
+    expect(getDateGroup(tomorrow)).toBe('Today')
   })
 
-  it('returns "Older" for invalid date input (NaN propagation)', () => {
-    // DISCOVERED BUG: no validation — NaN diffDays falls through to "Older"
-    expect(getDateGroup('not-a-date')).toBe('Older')
+  it('treats invalid date input as "Today"', () => {
+    expect(getDateGroup('not-a-date')).toBe('Today')
   })
 
   it('handles midnight boundary — end of yesterday', () => {

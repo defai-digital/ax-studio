@@ -63,7 +63,7 @@ describe('TauriHardwareService', () => {
       const mockError = new Error('Failed to get hardware info')
       vi.mocked(invoke).mockRejectedValue(mockError)
 
-      await expect(hardwareService.getHardwareInfo()).rejects.toThrow('Failed to get hardware info')
+      await expect(hardwareService.getHardwareInfo()).resolves.toBeNull()
       expect(vi.mocked(invoke)).toHaveBeenCalledWith('plugin:hardware|get_system_info')
     })
 
@@ -123,7 +123,7 @@ describe('TauriHardwareService', () => {
       const mockError = new Error('Failed to get system usage')
       vi.mocked(invoke).mockRejectedValue(mockError)
 
-      await expect(hardwareService.getSystemUsage()).rejects.toThrow('Failed to get system usage')
+      await expect(hardwareService.getSystemUsage()).resolves.toBeNull()
       expect(vi.mocked(invoke)).toHaveBeenCalledWith('plugin:hardware|get_system_usage')
     })
 

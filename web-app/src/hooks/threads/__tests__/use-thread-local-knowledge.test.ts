@@ -89,14 +89,13 @@ describe('useThreadLocalKnowledge', () => {
       knowledge = await result.current.prepareLocalKnowledge('test query')
     })
 
-    expect(knowledge).toContain('Local Knowledge Mode (ACTIVE)')
+    expect(knowledge).toContain('Local Knowledge Base (ACTIVE)')
     expect(knowledge).toContain('Relevant knowledge about the query')
     expect(callToolMock).toHaveBeenCalledWith({
       toolName: 'fabric_search',
       arguments: {
         query: 'test query',
-        collection_id: 'thread_thread-1',
-        top_k: 3,
+        top_k: 5,
         mode: 'hybrid',
       },
     })

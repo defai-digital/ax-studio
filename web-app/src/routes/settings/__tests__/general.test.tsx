@@ -337,7 +337,7 @@ describe('General Settings Route', () => {
       render(<Component />)
     })
 
-    expect(screen.getByTestId('language-switcher')).toBeInTheDocument()
+    expect(screen.getByText('common:language')).toBeInTheDocument()
   })
 
   it('should render huggingface token input', async () => {

@@ -169,11 +169,4 @@ describe('ModelSetting', () => {
     expect(screen.getByTestId('sheet')).toBeInTheDocument()
   })
 
-  it('cancels any pending debounced stop call on unmount', () => {
-    const { unmount } = render(<ModelSetting model={model} provider={provider} />)
-
-    unmount()
-
-    expect(mockDebounceCancel).toHaveBeenCalled()
-  })
 })

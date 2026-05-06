@@ -513,10 +513,14 @@ pub async fn akidb_sync_now<R: Runtime>(
         *cancellation = Some(cancel_tx);
     }
 
+    let home = dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
+    let preferred_config = preferred_akidb_config_path(&home);
+
     log::info!(
-        "akidb_sync_now: spawning {} {:?} daemon --once",
+        "akidb_sync_now: spawning {} {:?} daemon --once --config {}",
         cli.program,
-        cli.args
+        cli.args,
+        preferred_config.display()
     );
 
     let sync_result = async {
@@ -524,6 +528,8 @@ pub async fn akidb_sync_now<R: Runtime>(
         .args(&cli.args)
         .arg("daemon")
         .arg("--once")
+        .arg("--config")
+        .arg(preferred_config.to_string_lossy().to_string())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true)

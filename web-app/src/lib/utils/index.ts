@@ -69,3 +69,31 @@ export function isDev() {
 export function sanitizeModelId(modelId: string): string {
   return modelId.replace(/[^a-zA-Z0-9/_\-.]/g, '').replace(/\./g, '_')
 }
+
+export function extractThinkingContent(value: string): string {
+  return value
+    .replace(/(?:<\|start\|>)?assistant<\|channel\|>(?:analysis|final)?<\|message\|>/g, '')
+    .replace(/<\|channel\|>(?:analysis|final)?<\|message\|>/g, '')
+    .replace(/<\/?think>/gi, '')
+    .replace(/<\|(?:start|channel|message)\|>/g, '')
+    .replace(/\bassistant\s*(?=<\|channel\|>|final\b)/g, '')
+    .replace(/\b(?:analysis|final)\b(?=<\|message\|>|$)/g, '')
+    .trim()
+}
+
+export function basenameNoExt(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, '/')
+  const base = normalized.split('/').pop() ?? ''
+  const lower = base.toLowerCase()
+  const compoundExtensions = ['.tar.gz', '.tar.bz2', '.tar.xz']
+
+  for (const extension of compoundExtensions) {
+    if (lower.endsWith(extension)) {
+      return base.slice(0, -extension.length)
+    }
+  }
+
+  const lastDot = base.lastIndexOf('.')
+  if (lastDot <= 0) return base
+  return base.slice(0, lastDot)
+}

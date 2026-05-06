@@ -5,6 +5,8 @@ import {
   getProviderDescription,
   cn,
   isDev,
+  extractThinkingContent,
+  basenameNoExt,
 } from '../utils'
 
 describe('sanitizeModelId', () => {

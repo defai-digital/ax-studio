@@ -52,7 +52,7 @@ function makeServiceHub(overrides: Record<string, unknown> = {}) {
     }),
     deeplink: () => ({
       getCurrent: vi.fn().mockResolvedValue(null),
-      onOpenUrl: vi.fn(),
+      onOpenUrl: vi.fn().mockResolvedValue(() => {}),
       ...((overrides.deeplink as Record<string, unknown>) ?? {}),
     }),
     events: () => ({

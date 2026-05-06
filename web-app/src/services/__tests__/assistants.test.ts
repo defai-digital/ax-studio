@@ -81,14 +81,14 @@ describe('DefaultAssistantsService', () => {
       expect(result).toBeUndefined()
     })
 
-    it('should return undefined when extension not found', async () => {
+    it('should throw when extension not found', async () => {
       mockExtensionManager.get.mockReturnValue(null)
       const assistant = { id: 'new-assistant', name: 'New Assistant', description: 'New assistant' }
 
-      const result = await assistantsService.createAssistant(assistant)
-
+      await expect(assistantsService.createAssistant(assistant)).rejects.toThrow(
+        'Assistant extension not available'
+      )
       expect(mockExtensionManager.get).toHaveBeenCalledWith(ExtensionTypeEnum.Assistant)
-      expect(result).toBeUndefined()
     })
 
     it('should handle error when creating assistant', async () => {
@@ -112,14 +112,14 @@ describe('DefaultAssistantsService', () => {
       expect(result).toBeUndefined()
     })
 
-    it('should return undefined when extension not found', async () => {
+    it('should throw when extension not found', async () => {
       mockExtensionManager.get.mockReturnValue(null)
       const assistant = { id: 'assistant-to-delete', name: 'Assistant to Delete', description: 'Delete me' }
 
-      const result = await assistantsService.deleteAssistant(assistant)
-
+      await expect(assistantsService.deleteAssistant(assistant)).rejects.toThrow(
+        'Assistant extension not available'
+      )
       expect(mockExtensionManager.get).toHaveBeenCalledWith(ExtensionTypeEnum.Assistant)
-      expect(result).toBeUndefined()
     })
 
     it('should handle error when deleting assistant', async () => {

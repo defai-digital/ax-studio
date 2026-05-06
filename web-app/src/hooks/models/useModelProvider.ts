@@ -197,7 +197,7 @@ export const useModelProvider = create<ModelProviderState>()(
       partialize: (state) => ({
         providers: state.providers.map((provider) => ({
           ...provider,
-          models: provider.models.map((model) => ({
+          models: (provider.models ?? []).map((model) => ({
             id: model.id,
             model: model.model,
             name: model.name,
@@ -319,6 +319,34 @@ export const useModelProvider = create<ModelProviderState>()(
                   )
                 }
               })
+            }
+          })
+        }
+
+        if (version <= 8 && state?.providers) {
+          state.providers.forEach((provider) => {
+            if (provider.provider !== 'mistral') return
+
+            if (provider.base_url === 'https://api.mistral.ai') {
+              provider.base_url = 'https://api.mistral.ai/v1'
+            }
+
+            const baseUrlSetting = provider.settings?.find(
+              (setting) => setting.key === 'base-url'
+            )
+            if (
+              baseUrlSetting?.controller_props?.value ===
+              'https://api.mistral.ai'
+            ) {
+              baseUrlSetting.controller_props.value =
+                'https://api.mistral.ai/v1'
+            }
+            if (
+              baseUrlSetting?.controller_props?.placeholder ===
+              'https://api.mistral.ai'
+            ) {
+              baseUrlSetting.controller_props.placeholder =
+                'https://api.mistral.ai/v1'
             }
           })
         }

@@ -171,7 +171,7 @@ describe('formatRelativeTime (via ThreadItem)', () => {
       makeThread({ id: 't1', title: 'Recent', updated: Date.now() / 1000 }),
     ]
     render(<ThreadList threads={threads} currentProjectId="proj1" />)
-    expect(screen.getByText('Just now')).toBeInTheDocument()
+    expect(screen.getByText('common:time.justNow')).toBeInTheDocument()
   })
 
   it('shows minutes ago for threads updated minutes ago', () => {
@@ -180,7 +180,7 @@ describe('formatRelativeTime (via ThreadItem)', () => {
       makeThread({ id: 't1', title: 'Minutes', updated: fiveMinAgo }),
     ]
     render(<ThreadList threads={threads} currentProjectId="proj1" />)
-    expect(screen.getByText('5m ago')).toBeInTheDocument()
+    expect(screen.getByText('common:time.minutesAgo')).toBeInTheDocument()
   })
 
   it('shows hours ago for threads updated hours ago', () => {
@@ -189,7 +189,7 @@ describe('formatRelativeTime (via ThreadItem)', () => {
       makeThread({ id: 't1', title: 'Hours', updated: twoHoursAgo }),
     ]
     render(<ThreadList threads={threads} currentProjectId="proj1" />)
-    expect(screen.getByText('2h ago')).toBeInTheDocument()
+    expect(screen.getByText('common:time.hoursAgo')).toBeInTheDocument()
   })
 
   it('shows days ago for threads updated days ago', () => {
@@ -198,6 +198,6 @@ describe('formatRelativeTime (via ThreadItem)', () => {
       makeThread({ id: 't1', title: 'Days', updated: threeDaysAgo }),
     ]
     render(<ThreadList threads={threads} currentProjectId="proj1" />)
-    expect(screen.getByText('3d ago')).toBeInTheDocument()
+    expect(screen.getByText('common:time.daysAgo')).toBeInTheDocument()
   })
 })

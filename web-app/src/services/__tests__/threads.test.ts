@@ -169,7 +169,7 @@ describe('DefaultThreadsService', () => {
       })
     })
 
-    it('should handle creation error and return original thread', async () => {
+    it('should throw creation errors', async () => {
       const inputThread = {
         id: '1',
         title: 'New Thread',
@@ -180,9 +180,9 @@ describe('DefaultThreadsService', () => {
         new Error('Creation failed')
       )
 
-      const result = await threadsService.createThread(inputThread as Thread)
-
-      expect(result).toEqual(inputThread)
+      await expect(threadsService.createThread(inputThread as Thread)).rejects.toThrow(
+        'Creation failed'
+      )
     })
   })
 
@@ -270,9 +270,9 @@ describe('DefaultThreadsService', () => {
         model: { id: 'gpt-4', provider: 'openai' },
       }
 
-      const result = await threadsService.updateThread(thread as Thread)
-
-      expect(result).toBeUndefined()
+      await expect(threadsService.updateThread(thread as Thread)).rejects.toThrow(
+        'Conversational extension not available'
+      )
     })
 
     it('should handle deleteThread when extension manager returns null', async () => {
@@ -280,9 +280,9 @@ describe('DefaultThreadsService', () => {
         get: vi.fn().mockReturnValue(null),
       })
 
-      const result = await threadsService.deleteThread('test-id')
-
-      expect(result).toBeUndefined()
+      await expect(threadsService.deleteThread('test-id')).rejects.toThrow(
+        'Conversational extension not available'
+      )
     })
 
     it('should handle fetchThreads with threads missing metadata', async () => {

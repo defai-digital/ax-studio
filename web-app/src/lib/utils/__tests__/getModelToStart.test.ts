@@ -78,10 +78,9 @@ describe('getLastUsedModel', () => {
     expect(getLastUsedModel()).toBe(null)
   })
 
-  it('handles stored value that is a JSON array', () => {
+  it('returns null when stored value is a JSON array', () => {
     localStorageMock.setItem('last-used-model', '["not", "an", "object"]')
-    // JSON.parse succeeds, returns the array
-    expect(getLastUsedModel()).toEqual(['not', 'an', 'object'])
+    expect(getLastUsedModel()).toBe(null)
   })
 
   // ── C: Property Tests ──

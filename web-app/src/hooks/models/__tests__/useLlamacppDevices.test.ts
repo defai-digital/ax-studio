@@ -439,8 +439,9 @@ describe('useLlamacppDevices', () => {
       })
     ).resolves.not.toThrow()
 
-    // Optimistic update still applied
-    expect(useLlamacppDevices.getState().devices[0].activated).toBe(false)
+    // Failed persistence rolls back the optimistic update.
+    expect(useLlamacppDevices.getState().devices[0].activated).toBe(true)
+    expect(useLlamacppDevices.getState().error).toBe('persist failed')
   })
 
   it('should preserve non-device settings when persisting', async () => {

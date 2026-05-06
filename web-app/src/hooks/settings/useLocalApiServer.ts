@@ -32,6 +32,8 @@ type LocalApiServerState = {
   // Trusted hosts
   trustedHosts: string[]
   setTrustedHosts: (hosts: string[]) => void
+  addTrustedHost: (host: string) => void
+  removeTrustedHost: (host: string) => void
   // Server request timeout (default 600 sec)
   proxyTimeout: number
   setProxyTimeout: (value: number) => void
@@ -66,6 +68,16 @@ export const useLocalApiServer = create<LocalApiServerState>()(
       setVerboseLogs: (value) => set({ verboseLogs: value }),
       trustedHosts: [],
       setTrustedHosts: (hosts) => set({ trustedHosts: hosts }),
+      addTrustedHost: (host) =>
+        set((state) =>
+          state.trustedHosts.includes(host)
+            ? state
+            : { trustedHosts: [...state.trustedHosts, host] }
+        ),
+      removeTrustedHost: (host) =>
+        set((state) => ({
+          trustedHosts: state.trustedHosts.filter((trustedHost) => trustedHost !== host),
+        })),
       proxyTimeout: 600,
       setProxyTimeout: (value) => set({ proxyTimeout: value }),
       apiKey: generateDefaultApiKey(),

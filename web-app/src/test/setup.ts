@@ -176,7 +176,19 @@ Object.defineProperty(window, 'matchMedia', {
     getAppDataFolderPath: vi.fn().mockResolvedValue('/mock/app/data'),
     openFileExplorer: vi.fn().mockResolvedValue(undefined),
     joinPath: vi.fn((...paths: string[]) => paths.join('/')),
-  }
+    saveMcpConfigs: vi.fn().mockResolvedValue(undefined),
+    restartMcpServers: vi.fn().mockResolvedValue(undefined),
+    getMcpConfigs: vi.fn().mockResolvedValue(''),
+    getTools: vi.fn().mockResolvedValue([]),
+    getConnectedServers: vi.fn().mockResolvedValue([]),
+    callTool: vi.fn().mockResolvedValue({ error: '', content: [] }),
+    cancelToolCall: vi.fn().mockResolvedValue(undefined),
+  },
+  events: {
+    on: vi.fn(),
+    off: vi.fn(),
+    emit: vi.fn(),
+  },
 }
 
 // Mock globalThis.fs for @ax-studio/core fs functions // cspell: disable-line

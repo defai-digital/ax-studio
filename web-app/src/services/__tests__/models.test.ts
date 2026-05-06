@@ -487,9 +487,10 @@ describe('DefaultModelsService', () => {
 
       expect(result).toEqual(mockRepoData)
       expect(fetch).toHaveBeenCalledWith(
-        'https://huggingface.co/api/models/microsoft/DialoGPT-medium?blobs=true&files_metadata=true',
+        'https://huggingface.co/api/models/microsoft%2FDialoGPT-medium?blobs=true&files_metadata=true',
         {
           headers: {},
+          signal: undefined,
         }
       )
     })
@@ -506,9 +507,10 @@ describe('DefaultModelsService', () => {
         'https://huggingface.co/microsoft/DialoGPT-medium'
       )
       expect(fetch).toHaveBeenCalledWith(
-        'https://huggingface.co/api/models/microsoft/DialoGPT-medium?blobs=true&files_metadata=true',
+        'https://huggingface.co/api/models/microsoft%2FDialoGPT-medium?blobs=true&files_metadata=true',
         {
           headers: {},
+          signal: undefined,
         }
       )
 
@@ -517,18 +519,20 @@ describe('DefaultModelsService', () => {
         'huggingface.co/microsoft/DialoGPT-medium'
       )
       expect(fetch).toHaveBeenCalledWith(
-        'https://huggingface.co/api/models/microsoft/DialoGPT-medium?blobs=true&files_metadata=true',
+        'https://huggingface.co/api/models/microsoft%2FDialoGPT-medium?blobs=true&files_metadata=true',
         {
           headers: {},
+          signal: undefined,
         }
       )
 
       // Test with trailing slash
       await modelsService.fetchHuggingFaceRepo('microsoft/DialoGPT-medium/')
       expect(fetch).toHaveBeenCalledWith(
-        'https://huggingface.co/api/models/microsoft/DialoGPT-medium?blobs=true&files_metadata=true',
+        'https://huggingface.co/api/models/microsoft%2FDialoGPT-medium?blobs=true&files_metadata=true',
         {
           headers: {},
+          signal: undefined,
         }
       )
     })
@@ -558,9 +562,10 @@ describe('DefaultModelsService', () => {
 
       expect(result).toBeNull()
       expect(fetch).toHaveBeenCalledWith(
-        'https://huggingface.co/api/models/nonexistent/model?blobs=true&files_metadata=true',
+        'https://huggingface.co/api/models/nonexistent%2Fmodel?blobs=true&files_metadata=true',
         {
           headers: {},
+          signal: undefined,
         }
       )
     })
@@ -775,12 +780,12 @@ describe('DefaultModelsService', () => {
         quants: [
           {
             model_id: 'microsoft/model-q4_0',
-            path: 'https://huggingface.co/microsoft/DialoGPT-medium/resolve/main/model-q4_0.gguf',
+            path: 'https://huggingface.co/microsoft%2FDialoGPT-medium/resolve/main/model-q4_0.gguf',
             file_size: '2.0 GB',
           },
           {
             model_id: 'microsoft/model-q8_0',
-            path: 'https://huggingface.co/microsoft/DialoGPT-medium/resolve/main/model-q8_0.GGUF',
+            path: 'https://huggingface.co/microsoft%2FDialoGPT-medium/resolve/main/model-q8_0.GGUF',
             file_size: '4.0 GB',
           },
         ],
@@ -791,7 +796,7 @@ describe('DefaultModelsService', () => {
         is_mlx: true,
         created_at: '2021-01-01T00:00:00Z',
         readme:
-          'https://huggingface.co/microsoft/DialoGPT-medium/resolve/main/README.md',
+          'https://huggingface.co/microsoft%2FDialoGPT-medium/resolve/main/README.md',
       }
 
       expect(result).toEqual(expected)
@@ -923,10 +928,10 @@ describe('DefaultModelsService', () => {
         modelsService.convertHfRepoToCatalogModel(mockHuggingFaceRepo)
 
       expect(result.quants[0].path).toBe(
-        'https://huggingface.co/microsoft/DialoGPT-medium/resolve/main/model-q4_0.gguf'
+        'https://huggingface.co/microsoft%2FDialoGPT-medium/resolve/main/model-q4_0.gguf'
       )
       expect(result.quants[1].path).toBe(
-        'https://huggingface.co/microsoft/DialoGPT-medium/resolve/main/model-q8_0.GGUF'
+        'https://huggingface.co/microsoft%2FDialoGPT-medium/resolve/main/model-q8_0.GGUF'
       )
     })
 
@@ -935,7 +940,7 @@ describe('DefaultModelsService', () => {
         modelsService.convertHfRepoToCatalogModel(mockHuggingFaceRepo)
 
       expect(result.readme).toBe(
-        'https://huggingface.co/microsoft/DialoGPT-medium/resolve/main/README.md'
+        'https://huggingface.co/microsoft%2FDialoGPT-medium/resolve/main/README.md'
       )
     })
 

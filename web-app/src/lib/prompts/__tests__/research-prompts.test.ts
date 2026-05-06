@@ -40,17 +40,17 @@ describe('SUMMARISE_PROMPT', () => {
     expect(result).toContain('The page content goes here')
   })
 
-  it('truncates page text to 8000 characters', () => {
+  it('truncates page text to 3000 characters', () => {
     const longText = 'x'.repeat(10000)
     const result = SUMMARISE_PROMPT('question', longText)
-    // The prompt should contain at most 8000 x characters from the page text
+    // The prompt should contain at most 3000 x characters from the page text
     const xCount = (result.match(/x/g) || []).length
-    expect(xCount).toBe(8000)
+    expect(xCount).toBe(3000)
   })
 
-  it('requests 500 word limit', () => {
+  it('requests concise summaries', () => {
     const result = SUMMARISE_PROMPT('q', 'text')
-    expect(result).toContain('500 words')
+    expect(result).toContain('≤200 words')
   })
 
   it('instructs to respond with no-relevant-info message when appropriate', () => {

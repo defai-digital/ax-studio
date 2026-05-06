@@ -3,6 +3,7 @@ import { ContentType, type ThreadMessage } from '@ax-studio/core'
 import { convertThreadMessageToUIMessage } from '../messages'
 
 describe('messages regressions', () => {
+  it('converts image message content into file parts', () => {
     const threadMessage: ThreadMessage = {
       id: 'msg-1',
       object: 'thread.message',
