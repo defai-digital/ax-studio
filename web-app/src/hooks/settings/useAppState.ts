@@ -55,6 +55,13 @@ type AppState = {
   setActiveModels: (models: string[]) => void
 }
 
+type TokenSpeed = {
+  lastTimestamp: number
+  tokenSpeed: number
+  tokenCount: number
+  message?: string
+}
+
 export const useAppState = create<AppState>()((set) => ({
   streamingContent: undefined,
   loadingModel: false,

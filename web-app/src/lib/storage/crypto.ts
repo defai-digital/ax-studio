@@ -73,7 +73,7 @@ const getEncryptionKey = async (): Promise<CryptoKey> => {
 
     const key = await crypto.subtle.importKey(
       'raw',
-      rawKey,
+      rawKey as unknown as BufferSource,
       { name: 'AES-GCM' },
       false,
       ['encrypt', 'decrypt']
@@ -99,7 +99,11 @@ export async function encrypt(text: string): Promise<string> {
     const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH_BYTES))
     const plaintext = utf8Encoder.encode(text)
     const encrypted = new Uint8Array(
-      await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext)
+      await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: iv as unknown as BufferSource },
+        key,
+        plaintext as unknown as BufferSource
+      )
     )
 
     return `${ENCRYPTED_PREFIX}${encodeBase64(iv)}.${encodeBase64(encrypted)}`
@@ -143,9 +147,9 @@ export async function decrypt(encryptedText: string): Promise<string> {
     const cipherText = decodeBase64(cipherBase64)
 
     const plaintext = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv },
+      { name: 'AES-GCM', iv: iv as unknown as BufferSource },
       key,
-      cipherText
+      cipherText as unknown as BufferSource
     )
 
     return utf8Decoder.decode(plaintext)

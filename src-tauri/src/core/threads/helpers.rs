@@ -1,5 +1,6 @@
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Write};
+use std::path::Path;
 use tauri::Runtime;
 
 // For async file write serialization
@@ -13,7 +14,6 @@ use super::utils::{get_messages_path, get_thread_metadata_path};
 
 // Global per-thread locks for message file writes
 pub static MESSAGE_LOCKS: OnceLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> = OnceLock::new();
-
 
 /// Get a lock for a specific thread to ensure thread-safe message file operations
 pub async fn get_lock_for_thread(thread_id: &str) -> Arc<Mutex<()>> {
@@ -52,17 +52,12 @@ pub async fn prune_unused_message_locks() {
     }
 }
 
-/// Read messages from a thread's messages.jsonl file
-pub fn read_messages_from_file<R: Runtime>(
-    app_handle: tauri::AppHandle<R>,
-    thread_id: &str,
-) -> Result<Vec<MessageRecord>, String> {
-    let path = get_messages_path(app_handle, thread_id);
+pub fn read_messages_from_path(path: &Path) -> Result<Vec<MessageRecord>, String> {
     if !path.exists() {
         return Ok(vec![]);
     }
 
-    let file = File::open(&path).map_err(|e| {
+    let file = File::open(path).map_err(|e| {
         log::error!("Error opening file {}: {}", path.display(), e);
         e.to_string()
     })?;
@@ -149,7 +144,6 @@ where
     fs::rename(&tmp_path, &path).map_err(|e| e.to_string())?;
     Ok(changed)
 }
-
 
 /// Remove the per-thread lock entry when a thread is deleted.
 pub async fn remove_lock_for_thread(thread_id: &str) {

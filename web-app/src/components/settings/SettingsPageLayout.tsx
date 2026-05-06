@@ -5,7 +5,6 @@ interface SettingsPageLayoutProps {
   title: React.ReactNode
   subtitle?: string
   gradient?: string
-  children: React.ReactNode
 }
 
 const DEFAULT_GRADIENT = 'linear-gradient(135deg, #6366f1, #8b5cf6)'
@@ -15,7 +14,6 @@ export default function SettingsPageLayout({
   title,
   subtitle,
   gradient = DEFAULT_GRADIENT,
-  children,
 }: SettingsPageLayoutProps) {
   return (
     <div className="flex items-center gap-3 px-8 py-5 border-b border-border/40 bg-background sticky top-0 z-10">

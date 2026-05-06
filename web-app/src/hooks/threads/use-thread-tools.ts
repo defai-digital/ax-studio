@@ -39,7 +39,7 @@ export function useThreadTools({
     input: unknown
   }
 
-  const setSessionTools = (tools: QueuedTool[]) => {
+  const setSessionTools = useCallback((tools: QueuedTool[]) => {
     useChatSessions.setState((state) => {
       const session = state.sessions[threadId]
       if (session) {
@@ -59,7 +59,7 @@ export function useThreadTools({
         },
       }
     })
-  }
+  }, [threadId])
 
   const toolCallAbortController = useRef<AbortController | null>(null)
 
@@ -84,7 +84,7 @@ export function useThreadTools({
       const updatedTools = [...(currentTools.tools as QueuedTool[]), toolCall as QueuedTool]
       setSessionTools(updatedTools)
     },
-    [threadId]
+    [setSessionTools, threadId]
   )
 
   const startToolExecution = useCallback(
@@ -210,7 +210,7 @@ export function useThreadTools({
         toolCallAbortController.current = null
       })
     },
-    [serviceHub, threadId, projectId]
+    [serviceHub, setSessionTools, threadId, projectId]
   )
 
   return { toolCallAbortController, followUpMessage, onToolCall, startToolExecution, resetTurnState: () => { fabricSearchUsedInTurn.current = false } }

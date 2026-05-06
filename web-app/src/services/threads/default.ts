@@ -68,11 +68,12 @@ export class DefaultThreadsService implements ThreadsService {
     // Build assistants payload - always include model info
     // If there's a real assistant (with instructions), include full assistant data
     // Otherwise, just include minimal model-only entry for storage
-    const hasRealAssistant = thread.assistants && thread.assistants.length > 0
+    const firstAssistant = thread.assistants?.[0]
+    const hasRealAssistant = Boolean(firstAssistant)
     const assistantsPayload = hasRealAssistant
       ? [
           {
-            ...thread.assistants[0],
+            ...firstAssistant,
             model: {
               id: thread.model?.id ?? '*',
               engine: thread.model?.provider ?? 'ax-studio',

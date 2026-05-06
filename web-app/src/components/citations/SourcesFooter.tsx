@@ -105,7 +105,7 @@ export function SourcesFooter({ citationData, showConfidence = true }: SourcesFo
                     alt=""
                     className="shrink-0 w-3.5 h-3.5 mt-0.5 rounded-sm"
                     onError={(e) => {
-                      ;(e.target as HTMLImageElement).style.display = 'none'
+                      e.currentTarget.style.display = 'none'
                     }}
                   />
                 ) : (

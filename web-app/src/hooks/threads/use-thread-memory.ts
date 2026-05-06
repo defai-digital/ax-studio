@@ -55,7 +55,11 @@ export function useThreadMemory(threadId: string) {
     const set = processedMemoryMsgIds.current
     if (set.size > 500) {
       const iter = set.values()
-      for (let i = 0; i < 250; i++) { iter.next(); set.delete(iter.next().value) }
+      for (let i = 0; i < 250; i++) {
+        const next = iter.next()
+        if (next.done) break
+        set.delete(next.value)
+      }
     }
     set.add(id)
   }, [])
@@ -152,7 +156,7 @@ export function useThreadMemory(threadId: string) {
         }
       }
     },
-    [threadId]
+    [addProcessedId, threadId]
   )
 
   /**

@@ -87,7 +87,7 @@ export const newUserThreadContent = (
             })),
           }
         : undefined,
-  }
+  } as unknown as ThreadMessage
 }
 
 export const newAssistantThreadContent = (
@@ -114,7 +114,7 @@ export const newAssistantThreadContent = (
   created_at: 0,
   completed_at: 0,
   metadata,
-})
+} as unknown as ThreadMessage)
 
 export const emptyThreadContent = {
   type: 'text',

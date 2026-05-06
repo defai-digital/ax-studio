@@ -152,7 +152,7 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
 
       if (controller.signal.aborted) return
 
-      const modelContextLength = getModelContextLength(selectedModel)
+      const modelContextLength = getModelContextLength(selectedModel ?? undefined)
 
       const rawContextThreshold =
         typeof modelContextLength === 'number' && modelContextLength > 0
@@ -275,8 +275,7 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
       effectiveThreadId,
       getProviderByName,
       parsePreference,
-      selectedModel?.id,
-      selectedModel?.settings?.ctx_len?.controller_props?.value,
+      selectedModel,
       selectedProvider,
       serviceHub,
       setActiveModels,

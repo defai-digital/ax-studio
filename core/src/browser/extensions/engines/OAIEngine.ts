@@ -50,7 +50,7 @@ export abstract class OAIEngine extends AIEngine {
           ...data,
           status: 'error',
           error: String(error?.message ?? error),
-        } as any)
+        } as MessageRequest & { status: 'error'; error: string })
       })
       .finally(() => {
         this.inferencing = false
@@ -94,7 +94,7 @@ export abstract class OAIEngine extends AIEngine {
     events.off(InferenceEvent.OnInferenceStopped, this.handleInferenceStopped)
   }
 
-  inference(data: MessageRequest): void | Promise<unknown> {}
+  inference(_data: MessageRequest): void | Promise<unknown> {}
 
   /**
    * Stops the inference.

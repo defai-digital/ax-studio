@@ -49,8 +49,8 @@ async function ensureAkidbAvailable(mcp: MCPService): Promise<void> {
  * JSON-encoded `PipelineMetrics` object from ax-fabric.
  */
 function parsePipelineMetrics(result: {
-  error: string
-  content: Array<{ text: string }>
+  error?: string
+  content?: Array<{ text?: string }>
 }): {
   filesSucceeded: number
   totalChunksGenerated: number

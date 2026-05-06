@@ -5,7 +5,7 @@ use tokio::task;
 use uuid::Uuid;
 
 use super::helpers::{
-    get_lock_for_thread, prune_unused_message_locks, read_messages_from_file,
+    get_lock_for_thread, prune_unused_message_locks, read_messages_from_path,
     remove_lock_for_thread, rewrite_messages_file, update_thread_metadata,
 };
 use super::models::{MessageRecord, ThreadRecord};
@@ -75,6 +75,7 @@ pub async fn create_thread<R: Runtime>(
     if thread.id.is_empty() {
         thread.id = Uuid::new_v4().to_string();
     }
+    thread.validate()?;
 
     ensure_data_dirs(app_handle.clone())?;
     let uuid = thread.id.clone();
@@ -103,6 +104,7 @@ pub async fn modify_thread<R: Runtime>(
     if thread_id.is_empty() {
         return Err("Missing thread id".to_string());
     }
+    thread.validate()?;
     let thread_dir = get_thread_dir(app_handle.clone(), thread_id);
     if !thread_dir.exists() {
         return Err("Thread directory does not exist".to_string());
@@ -157,13 +159,10 @@ pub async fn list_messages<R: Runtime>(
 ) -> Result<Vec<MessageRecord>, String> {
     let lock = get_lock_for_thread(&thread_id).await;
     let _guard = lock.lock().await;
-    let app_handle_clone = app_handle.clone();
-    let thread_id_clone = thread_id.clone();
-    let messages = tokio::task::spawn_blocking(move || {
-        read_messages_from_file(app_handle_clone, &thread_id_clone)
-    })
-    .await
-    .map_err(|e| format!("list_messages task error: {e}"))?;
+    let path = get_messages_path(app_handle.clone(), &thread_id);
+    let messages = tokio::task::spawn_blocking(move || read_messages_from_path(&path))
+        .await
+        .map_err(|e| format!("list_messages task error: {e}"))?;
     drop(_guard);
     drop(lock);
     prune_unused_message_locks().await;
@@ -179,6 +178,7 @@ pub async fn create_message<R: Runtime>(
     if message.id.is_empty() {
         message.id = Uuid::new_v4().to_string();
     }
+    message.validate()?;
 
     let thread_id = message.thread_id.clone();
     if thread_id.is_empty() {
@@ -223,6 +223,7 @@ pub async fn modify_message<R: Runtime>(
     if message_id.is_empty() {
         return Err("Missing message id".to_string());
     }
+    message.validate()?;
 
     {
         let lock = get_lock_for_thread(thread_id).await;

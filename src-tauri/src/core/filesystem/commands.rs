@@ -6,7 +6,7 @@ use crate::core::state::AppState;
 use base64::Engine;
 use rfd::AsyncFileDialog;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tauri::Runtime;
 use tauri::State;
 
@@ -545,10 +545,7 @@ pub fn decompress<R: Runtime>(
             }
 
             if entry_type.is_hard_link() {
-                log::warn!(
-                    "Rejecting hardlink entry in tar: {}",
-                    entry_path_string
-                );
+                log::warn!("Rejecting hardlink entry in tar: {}", entry_path_string);
                 continue;
             }
 
@@ -744,4 +741,3 @@ pub async fn write_text_file(
         .map_err(|e| format!("write_text_file task join error: {e}"))?
         .map_err(|e| e.to_string())
 }
-

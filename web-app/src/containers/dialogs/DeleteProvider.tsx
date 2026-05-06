@@ -25,7 +25,7 @@ type Props = {
 }
 const DeleteProvider = ({ provider }: Props) => {
   const { t } = useTranslation()
-  const { deleteProvider, providers } = useModelProvider()
+  const { deleteProvider } = useModelProvider()
   const { favoriteModels, removeFavorite } = useFavoriteModel()
   const router = useRouter()
   if (

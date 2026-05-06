@@ -15,20 +15,19 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use thiserror::Error;
 
-/// Secret key for HMAC signature
-/// In release: Must be set via AX_STUDIO_SIGNING_KEY environment variable at build time
-/// In debug: Falls back to a debug key
-/// Must not be the default test key
-#[cfg(debug_assertions)]
-const SECRET_KEY: &str = match option_env!("AX_STUDIO_SIGNING_KEY") {
-    Some(key) => key,
-    None => "debug-mode-key",
-};
-#[cfg(not(debug_assertions))]
-const SECRET_KEY: &str = env!("AX_STUDIO_SIGNING_KEY");
-
 /// Timeout for HTTP requests
 const REQUEST_TIMEOUT_SECS: u64 = 30;
+
+fn signing_key() -> Option<&'static str> {
+    option_env!("AX_STUDIO_SIGNING_KEY").and_then(|key| {
+        let trimmed = key.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
+    })
+}
 
 #[derive(Debug, Error)]
 pub enum UpdateError {
@@ -46,6 +45,9 @@ pub enum UpdateError {
 
     #[error("No endpoints configured")]
     NoEndpointsConfigured,
+
+    #[error("AX_STUDIO_SIGNING_KEY is not configured")]
+    MissingSigningKey,
 }
 
 /// Update information returned by the update check endpoint
@@ -70,36 +72,24 @@ pub struct UpdateInfo {
 /// Custom updater client
 pub struct CustomUpdater {
     client: Client,
-    secret_key: String,
+    secret_key: Option<String>,
 }
 
 impl CustomUpdater {
     /// Create a new custom updater
     pub fn new() -> Result<Self, UpdateError> {
-        // Ensure the signing key is not the default debug-mode key. Returning
-        // an error here (instead of panicking via `assert!`) keeps the app
-        // alive in misconfigured production builds and lets the caller
-        // surface a meaningful message.
-        //
-        // NOTE: this previously checked `local-dev-test-key-not-for-production`
-        // which never matched the actual debug fallback (`debug-mode-key`),
-        // so the guard was a silent no-op.
-        if SECRET_KEY == "debug-mode-key" {
-            return Err(UpdateError::InvalidResponse(
-                "AX_STUDIO_SIGNING_KEY must be set at build time; \
-                 the debug fallback key cannot be used for updates"
-                    .to_string(),
-            ));
-        }
-
         let client = Client::builder()
             .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
             .build()?;
 
-        Ok(Self {
-            client,
-            secret_key: SECRET_KEY.to_string(),
-        })
+        let secret_key = signing_key().map(str::to_string);
+        if secret_key.is_none() {
+            log::warn!(
+                "AX_STUDIO_SIGNING_KEY is not configured; signed updater endpoint will be skipped"
+            );
+        }
+
+        Ok(Self { client, secret_key })
     }
 
     /// Build User-Agent header: Ax-Studio/{version} ({os}; {arch})
@@ -133,6 +123,14 @@ impl CustomUpdater {
             let is_primary = index == 0;
 
             let result = if is_primary {
+                if self.secret_key.is_none() {
+                    log::warn!(
+                        "Skipping signed primary update endpoint because AX_STUDIO_SIGNING_KEY is not configured"
+                    );
+                    last_error = Some(UpdateError::MissingSigningKey);
+                    continue;
+                }
+
                 // First endpoint: use HMAC signing
                 log::info!("Trying primary endpoint with signing: {}", endpoint);
                 self.check_with_signing(endpoint, nonce_seed, current_version)
@@ -172,8 +170,12 @@ impl CustomUpdater {
         nonce_seed: &str,
         app_version: &str,
     ) -> Result<UpdateInfo, UpdateError> {
+        let Some(secret_key) = self.secret_key.as_deref() else {
+            return Err(UpdateError::MissingSigningKey);
+        };
+
         // Generate signed request headers
-        let headers = SignedRequestHeaders::new(&self.secret_key, nonce_seed, app_version);
+        let headers = SignedRequestHeaders::new(secret_key, nonce_seed, app_version);
 
         // Build request with security headers
         let mut request = self.client.get(endpoint);
@@ -257,6 +259,10 @@ impl CustomUpdater {
 
     /// Compare versions to check if update is available
     pub fn is_update_available(&self, current: &str, latest: &str) -> bool {
+        Self::is_newer_version(current, latest)
+    }
+
+    fn is_newer_version(current: &str, latest: &str) -> bool {
         let current = current.trim_start_matches('v');
         let latest = latest.trim_start_matches('v');
 
@@ -279,25 +285,14 @@ mod tests {
 
     #[test]
     fn test_version_comparison() {
-        // Construct directly so the test does not depend on AX_STUDIO_SIGNING_KEY
-        // being set in the test environment (CustomUpdater::new() rejects the
-        // debug fallback key, which is what tests use).
-        let updater = CustomUpdater {
-            client: Client::builder()
-                .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
-                .build()
-                .expect("Failed to build reqwest client in test"),
-            secret_key: "test-key".to_string(),
-        };
-
-        assert!(updater.is_update_available("1.0.0", "1.0.1"));
-        assert!(updater.is_update_available("1.0.0", "1.1.0"));
-        assert!(updater.is_update_available("1.0.0", "2.0.0"));
-        assert!(!updater.is_update_available("1.0.0", "1.0.0"));
-        assert!(!updater.is_update_available("1.0.1", "1.0.0"));
-        assert!(updater.is_update_available("v1.0.0", "v1.0.1"));
-        assert!(updater.is_update_available("1.0.0", "2.0.0-beta"));
-        assert!(updater.is_update_available("2.0.0-beta", "2.0.0"));
-        assert!(updater.is_update_available("1.9.0", "2.0.0-rc.1"));
+        assert!(CustomUpdater::is_newer_version("1.0.0", "1.0.1"));
+        assert!(CustomUpdater::is_newer_version("1.0.0", "1.1.0"));
+        assert!(CustomUpdater::is_newer_version("1.0.0", "2.0.0"));
+        assert!(!CustomUpdater::is_newer_version("1.0.0", "1.0.0"));
+        assert!(!CustomUpdater::is_newer_version("1.0.1", "1.0.0"));
+        assert!(CustomUpdater::is_newer_version("v1.0.0", "v1.0.1"));
+        assert!(CustomUpdater::is_newer_version("1.0.0", "2.0.0-beta"));
+        assert!(CustomUpdater::is_newer_version("2.0.0-beta", "2.0.0"));
+        assert!(CustomUpdater::is_newer_version("1.9.0", "2.0.0-rc.1"));
     }
 }

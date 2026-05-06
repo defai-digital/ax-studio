@@ -24,7 +24,7 @@ export class TauriHardwareService implements HardwareService {
         console.warn('[TauriHardwareService] get_system_info returned unexpected shape:', raw)
         return null
       }
-      return raw as HardwareData
+      return raw as unknown as HardwareData
     } catch (error) {
       console.error('[TauriHardwareService] get_system_info failed:', error)
       return null
@@ -38,7 +38,7 @@ export class TauriHardwareService implements HardwareService {
         console.warn('[TauriHardwareService] get_system_usage returned unexpected shape:', raw)
         return null
       }
-      return raw as SystemUsage
+      return raw as unknown as SystemUsage
     } catch (error) {
       console.error('[TauriHardwareService] get_system_usage failed:', error)
       return null

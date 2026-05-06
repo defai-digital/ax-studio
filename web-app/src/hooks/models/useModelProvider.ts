@@ -203,7 +203,7 @@ export const useModelProvider = create<ModelProviderState>()(
             name: model.name,
             capabilities: model.capabilities,
             embedding: model.embedding,
-            provider: model.provider,
+            provider: (model as Model & { provider?: string }).provider,
             settings: model.settings,
           })),
         })),
@@ -215,7 +215,7 @@ export const useModelProvider = create<ModelProviderState>()(
               name: state.selectedModel.name,
               capabilities: state.selectedModel.capabilities,
               embedding: state.selectedModel.embedding,
-              provider: state.selectedModel.provider,
+              provider: (state.selectedModel as Model & { provider?: string }).provider,
               settings: state.selectedModel.settings,
             }
           : null,

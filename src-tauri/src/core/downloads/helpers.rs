@@ -580,7 +580,7 @@ async fn download_single_file(
     let mut download_delta = 0u64;
     let mut initial_progress = 0u64;
 
-    let (resp, actual_url) = if should_resume {
+    let (resp, _actual_url) = if should_resume {
         let downloaded_size = tmp_save_path.metadata().map_err(err_to_string)?.len();
         match _get_maybe_resume_internal(&client, &item.url, downloaded_size).await {
             Ok(resp) => {

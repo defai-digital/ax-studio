@@ -33,7 +33,7 @@
     "download:bin": "node ./scripts/download-bin.mjs",
     "build:tauri:win32": "yarn download:bin && yarn tauri build",
     "build:tauri:darwin": "yarn download:bin && yarn tauri build --target universal-apple-darwin",
-    "build:tauri": "yarn build:icon && yarn copy:assets:tauri && yarn download:bin && yarn tauri build `node -e \"process.platform==='darwin'&&console.log('--target universal-apple-darwin')\"`",
+    "build:tauri": "yarn build:icon && yarn copy:assets:tauri && yarn download:bin && node scripts/tauri-build.mjs",
     "build:tauri:plugin:api": "cd src-tauri/plugins && yarn install && yarn workspaces foreach -Apt run build",
     "build:icon": "tauri icon ./src-tauri/icons/icon.png",
     "build:core": "cd core && yarn build && yarn pack",

@@ -62,6 +62,7 @@ pub async fn register_provider_config(
         custom_headers: request.custom_headers,
         models: request.models,
     };
+    config.validate()?;
 
     let provider_name = request.provider.clone();
     provider_state.configs.insert(provider_name.clone(), config);
@@ -90,6 +91,7 @@ pub async fn register_provider_configs_batch(
             custom_headers: request.custom_headers,
             models: request.models,
         };
+        config.validate()?;
         log::info!(
             "Registered provider config (batch): {provider_name} base_url={:?} has_key={} models_count={}",
             config.base_url.as_deref().map(|u| if u.len() > 40 { &u[..40] } else { u }),
@@ -137,7 +139,10 @@ pub async fn list_provider_configs(
 fn validate_provider_url(url: &str) -> Result<(), String> {
     let parsed = url::Url::parse(url).map_err(|e| format!("Invalid provider URL '{url}': {e}"))?;
     if !matches!(parsed.scheme(), "http" | "https") {
-        return Err(format!("Provider URL scheme must be http or https, got '{}'", parsed.scheme()));
+        return Err(format!(
+            "Provider URL scheme must be http or https, got '{}'",
+            parsed.scheme()
+        ));
     }
     match parsed.host() {
         Some(url::Host::Ipv4(ip)) => {

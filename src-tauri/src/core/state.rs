@@ -40,7 +40,10 @@ impl ProviderConfig {
         }
         if let Some(ref url) = self.base_url {
             if !url.trim().is_empty() && url::Url::parse(url).is_err() {
-                return Err(format!("Invalid base_url for provider '{}': {}", self.provider, url));
+                return Err(format!(
+                    "Invalid base_url for provider '{}': {}",
+                    self.provider, url
+                ));
             }
         }
         Ok(())
@@ -90,6 +93,7 @@ pub enum RunningServiceEnum {
 pub type SharedMcpServers = Arc<Mutex<HashMap<String, Arc<RunningServiceEnum>>>>;
 
 pub struct AppState {
+    #[allow(dead_code)]
     pub app_token: Option<String>,
     pub mcp_servers: SharedMcpServers,
     pub download_manager: Arc<Mutex<DownloadManagerState>>,
@@ -154,7 +158,10 @@ mod tests {
         };
         let json = serde_json::to_value(&config).unwrap();
         assert_eq!(json["provider"], "openai");
-        assert!(json.get("api_key").is_none(), "api_key should not be serialized");
+        assert!(
+            json.get("api_key").is_none(),
+            "api_key should not be serialized"
+        );
         assert_eq!(json["base_url"], "https://api.openai.com/v1");
         assert_eq!(json["custom_headers"][0]["header"], "X-Custom");
         assert_eq!(json["custom_headers"][0]["value"], "custom-value");

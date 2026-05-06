@@ -28,6 +28,7 @@ import { buildResearchModel } from '@/lib/research/research-model'
 import { prepareProviderForChat } from '@/lib/chat/model-session'
 import { getServiceHub } from '@/hooks/useServiceHub'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
+import type { Chat, UIMessage } from '@ai-sdk/react'
 
 export { isExaRateLimitMessage, isExaRateLimitError }
 
@@ -63,7 +64,7 @@ function saveMessageToChat(threadId: string, msg: ThreadMessage) {
           chat: {
             ...session.chat,
             messages: [...session.chat.messages, uiMsg],
-          },
+          } as unknown as Chat<UIMessage>,
         },
       },
     }
@@ -192,8 +193,10 @@ export function useResearch(threadId: string) {
                   }
                 })
                 const results = await Promise.all(scrapeTasks)
-                wikiSummaries.push(...results.filter(Boolean))
-                return wikiSummaries.filter(Boolean)
+                wikiSummaries.push(
+                  ...results.filter((result): result is string => Boolean(result))
+                )
+                return wikiSummaries
               }
             } catch (err) {
               if (err instanceof Error && err.name === 'AbortError') throw err

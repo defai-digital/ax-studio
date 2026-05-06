@@ -66,6 +66,7 @@ type ThreadState = {
   updateThread: (threadId: string, updates: Partial<Thread>) => void
   deleteAllThreadsByProject: (projectId: string) => void
   searchIndex: Fuse<Thread> | null
+  _createThreadInFlight: boolean
 }
 
 export const useThreads = create<ThreadState>()((set, get) => ({
@@ -290,7 +291,11 @@ export const useThreads = create<ThreadState>()((set, get) => ({
     isTemporary
   ) => {
     // Dedup guard: prevent concurrent duplicate thread creation (e.g., double-click)
-    if (get()._createThreadInFlight && !isTemporary) return get().currentThreadId ?? ''
+    if (get()._createThreadInFlight && !isTemporary) {
+      const currentThreadId = get().currentThreadId
+      const currentThread = currentThreadId ? get().threads[currentThreadId] : undefined
+      if (currentThread) return currentThread
+    }
     set({ _createThreadInFlight: true })
     const generalSettings = useGeneralSetting.getState()
     const shouldSnapshotGlobalPrompt =

@@ -91,7 +91,7 @@ export const useTokensCount = (
   }, [messages])
 
   const getMaxTokens = useCallback((): number | undefined => {
-    const ctxLength = getModelContextLength(selectedModel)
+    const ctxLength = getModelContextLength(selectedModel ?? undefined)
     if (ctxLength !== undefined) return ctxLength
 
     // For hosted models without explicit settings, provide defaults based on model ID

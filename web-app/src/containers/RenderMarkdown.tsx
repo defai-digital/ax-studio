@@ -14,7 +14,9 @@ function extractTextFromNode(node: ReactNode): string {
   if (typeof node === 'string') return node
   if (typeof node === 'number') return String(node)
   if (Array.isArray(node)) return node.map(extractTextFromNode).join('')
-  if (isValidElement(node) && node.props?.children) return extractTextFromNode(node.props.children)
+  if (isValidElement<{ children?: ReactNode }>(node) && node.props.children) {
+    return extractTextFromNode(node.props.children)
+  }
   return ''
 }
 import 'katex/dist/katex.min.css'

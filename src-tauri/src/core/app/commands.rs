@@ -1,10 +1,9 @@
 use std::{fs, path::PathBuf};
-use tauri::{AppHandle, Manager, Runtime, State};
+use tauri::{AppHandle, Manager, Runtime};
 
 use super::{
     constants::CONFIGURATION_FILE_NAME, helpers::copy_dir_recursive, models::AppConfiguration,
 };
-use crate::core::state::AppState;
 
 #[tauri::command]
 pub fn get_app_configurations<R: Runtime>(app_handle: tauri::AppHandle<R>) -> AppConfiguration {
@@ -97,22 +96,27 @@ pub fn update_app_configuration<R: Runtime>(
 #[tauri::command]
 pub fn get_app_data_folder_path<R: Runtime>(app_handle: tauri::AppHandle<R>) -> PathBuf {
     if cfg!(test) {
-        use std::sync::OnceLock;
-        static TEST_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
+        use std::{
+            collections::HashMap,
+            sync::{Mutex, OnceLock},
+        };
+        static TEST_DATA_DIRS: OnceLock<Mutex<HashMap<String, PathBuf>>> = OnceLock::new();
 
-        return TEST_DATA_DIR
-            .get_or_init(|| {
-                let unique_id = std::thread::current().id();
+        let thread_id = format!("{:?}", std::thread::current().id());
+        let dirs = TEST_DATA_DIRS.get_or_init(|| Mutex::new(HashMap::new()));
+        let mut dirs = dirs.lock().expect("test data dir map lock poisoned");
+        let path = dirs
+            .entry(thread_id.clone())
+            .or_insert_with(|| {
                 let timestamp = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .map(|d| d.as_nanos())
                     .unwrap_or(0);
-                let path = std::env::temp_dir()
-                    .join(format!("ax-studio-test-data-{unique_id:?}-{timestamp}"));
-                let _ = fs::create_dir_all(&path);
-                path
+                std::env::temp_dir().join(format!("ax-studio-test-data-{thread_id}-{timestamp}"))
             })
             .clone();
+        let _ = fs::create_dir_all(&path);
+        return path;
     }
 
     let app_configurations = get_app_configurations(app_handle);

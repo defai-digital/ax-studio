@@ -43,7 +43,6 @@ export function useThreadEffects({
   setCurrentAssistant,
   processAndSendMessage,
   handleResearchCommand,
-  cancelResearch,
   updateThread,
   setThreadPromptDraft,
 }: ThreadEffectsInput): void {

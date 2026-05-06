@@ -31,7 +31,7 @@ function DebouncedInput({
   onChange: (v: number) => void
 }) {
   const [local, setLocal] = useState(String(value))
-  const timerRef = useRef<ReturnType<typeof setTimeout>>()
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
 

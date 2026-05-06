@@ -24,7 +24,7 @@ import { Server, Wrench, ChevronDown, ChevronUp, ExternalLink } from "lucide-rea
 import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
 import { cn } from '@/lib/utils'
 import { ApiKeyInput } from '@/containers/ApiKeyInput'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { getModelToStart } from '@/lib/utils/getModelToStart'
 import { LogViewer } from '@/components/LogViewer'

@@ -34,8 +34,7 @@ export type InputType =
   | 'url'
   | 'dropdown'
 
-const InputActions = ['unobscure', 'copy'] as const
-export type InputActionsTuple = typeof InputActions
+export type InputActionsTuple = readonly ['unobscure', 'copy']
 export type InputAction = InputActionsTuple[number]
 export type DropdownOption = { name: string; value: string }
 

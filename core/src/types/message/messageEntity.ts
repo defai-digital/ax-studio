@@ -189,16 +189,13 @@ export interface Attachment {
    * The tools to add this file to.
    */
   tools?: Array<
-    CodeInterpreterTool | Attachment.AssistantToolsFileSearchTypeOnly
+    CodeInterpreterTool | AssistantToolsFileSearchTypeOnly
   >
 }
 
-export namespace Attachment {
-  export interface AssistantToolsFileSearchTypeOnly {
-    /**
-     * The type of tool being defined: `file_search`
-     */
-    type: 'file_search'
-  }
+export interface AssistantToolsFileSearchTypeOnly {
+  /**
+   * The type of tool being defined: `file_search`
+   */
+  type: 'file_search'
 }
-

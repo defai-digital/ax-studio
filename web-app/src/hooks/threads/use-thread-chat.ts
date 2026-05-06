@@ -71,7 +71,6 @@ export function useThreadChat({
   threadId,
   sendMessage,
   regenerate,
-  chatMessages,
   setChatMessages,
   handleRememberCommand,
   handleForgetCommand,
@@ -294,7 +293,7 @@ export function useThreadChat({
     (message: UIMessage, contentParts: ThreadMessage['content']) => {
       if (contentParts.length === 0) return
 
-      const assistantMessage: ThreadMessage = {
+      const assistantMessage = {
         type: 'text',
         role: ChatCompletionRole.Assistant,
         content: contentParts,
@@ -305,7 +304,7 @@ export function useThreadChat({
         created_at: Date.now(),
         completed_at: Date.now(),
         metadata: (message.metadata || {}) as Record<string, unknown>,
-      }
+      } as unknown as ThreadMessage
 
       const existingMessages = useMessages.getState().getMessages(threadId)
       const existingMessage = existingMessages.find((m) => m.id === message.id)

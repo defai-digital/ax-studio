@@ -203,7 +203,7 @@ export class DefaultModelsService implements ModelsService {
     }
   }
 
-  async updateModel(modelId: string, model: Partial<CoreModel>): Promise<void> {
+  async updateModel(_modelId: string, model: Partial<CoreModel>): Promise<void> {
     if (model.settings) {
       this.getEngine()?.updateSettings(
         model.settings as SettingComponentProps[]

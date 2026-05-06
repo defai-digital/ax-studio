@@ -1,4 +1,4 @@
-import { type RefObject, useEffect } from 'react'
+import { type RefObject } from 'react'
 import type { UIMessage } from '@ai-sdk/react'
 import type { ChatStatus } from 'ai'
 import { Button } from '@/components/ui/button'

@@ -411,7 +411,7 @@ export function DownloadManagement() {
                         <X
                           size={16}
                           className="text-muted-foreground cursor-pointer"
-                          title="Cancel download"
+                          aria-label="Cancel download"
                           onClick={() => {
                             serviceHub
                               .models()
