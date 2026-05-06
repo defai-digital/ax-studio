@@ -168,9 +168,12 @@ export const LOCAL_KNOWLEDGE_INSTRUCTION = `
 You have access to the user's personal knowledge base via the \`fabric_search\` tool.
 
 ### Instructions
-1. When the user asks a question, call \`fabric_search\` ONCE with their query (use top_k 5).
-   - Use mode "keyword" for file names, document titles, proper nouns, exact phrases, or short title-like queries.
-   - Use mode "hybrid" for broader conceptual questions.
+1. When the user asks a question, call \`fabric_search\` ONCE with a compact search query (use top_k 5).
+   - Do not pass the full natural-language question if a shorter query would be clearer.
+   - Include distinctive document titles, names, exact phrases, and likely answer terms from the user's question.
+   - Use mode "keyword" when the question names a specific file, document, person, project, company, or exact phrase.
+   - Use mode "hybrid" for broader conceptual questions that do not hinge on exact names.
+   - Avoid mode "vector" unless the user explicitly asks for semantic similarity search.
 2. When you receive search results, STOP calling tools. Write a complete answer based on the results.
 3. Your answer MUST be a full, detailed response — not a placeholder or summary.
 
