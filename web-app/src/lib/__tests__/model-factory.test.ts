@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ModelFactory, normalizeOpenAICompatibleEventData } from '../model-factory'
 import type { ProviderObject } from '@ax-studio/core'
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 
 // Mock the Tauri invoke function
 vi.mock('@tauri-apps/api/core', () => ({
@@ -213,6 +214,28 @@ describe('ModelFactory', () => {
       const model = await ModelFactory.createModel('custom-model', provider)
       expect(model).toBeDefined()
       expect(model.type).toBe('openai-compatible')
+    })
+
+    it('tags proxy requests with the optional request role', async () => {
+      const provider: ProviderObject = {
+        provider: 'zai-coding',
+        api_key: 'test-api-key',
+        base_url: 'https://api.z.ai/api/coding/paas/v4',
+        models: [],
+        settings: [],
+        active: true,
+      }
+
+      await ModelFactory.createModel('glm-5.1', provider, {}, { requestRole: 'router' })
+
+      expect(createOpenAICompatible).toHaveBeenCalledWith(
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'X-Ax-Provider': 'zai-coding',
+            'X-Ax-Request-Role': 'router',
+          }),
+        })
+      )
     })
   })
 })

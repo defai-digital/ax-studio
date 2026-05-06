@@ -20,6 +20,7 @@ vi.mock('@/hooks/models/useFavoriteModel', () => ({
 
 // Mock predefinedProviders
 vi.mock('@/constants/providers', () => ({
+  LOCAL_PROVIDER_IDS: new Set(['llamacpp', 'mlx', 'ollama']),
   predefinedProviders: [
     { provider: 'anthropic' },
     { provider: 'openai' },
@@ -203,6 +204,7 @@ describe('routeMessage', () => {
       'router-model',
       expect.objectContaining({ provider: 'router-provider' }),
       {},
+      { requestRole: 'router' },
     )
     expect(routerMocks.streamText).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -225,6 +227,44 @@ describe('routeMessage', () => {
     )
   })
 
+  it('routes production engineering directly to a strong remote model when available', async () => {
+    routerMocks.streamText.mockReturnValue({
+      fullStream: streamParts([
+        {
+          type: 'text-delta',
+          text: '{"model":"Qwen3_5-9B-IQ4_XS","provider":"llamacpp","reason":"local coding"}',
+        },
+      ]),
+    })
+
+    const result = await routeMessage(
+      [userMessage('Write production TypeScript with tests and edge cases')],
+      'glm-5.1',
+      'zai-coding',
+      [
+        { id: 'glm-5.1', provider: 'zai-coding', displayName: 'GLM 5.1' },
+        {
+          id: 'Qwen3_5-9B-IQ4_XS',
+          provider: 'llamacpp',
+          displayName: 'Qwen3.5 9B Local',
+        },
+      ],
+      'Qwen3_5-9B-IQ4_XS',
+      'llamacpp',
+      15000,
+    )
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        modelId: 'glm-5.1',
+        providerId: 'zai-coding',
+        reason: 'production coding',
+        routed: true,
+      }),
+    )
+    expect(routerMocks.streamText).not.toHaveBeenCalled()
+  })
+
   it('falls back to the selected model when the router times out', async () => {
     vi.useFakeTimers()
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
@@ -244,7 +284,7 @@ describe('routeMessage', () => {
 
     try {
       const resultPromise = routeMessage(
-        [userMessage('Explain this architecture')],
+        [userMessage('Tell me a fun fact')],
         'router-model',
         'router-provider',
         sampleModels,
@@ -319,9 +359,13 @@ describe('getAvailableModelsForRouter', () => {
     expect(result.find((m) => m.id === 'inactive-model')).toBeUndefined()
   })
 
-  it('excludes the router model itself', () => {
+  it('keeps the router model eligible for final responses', () => {
     const result = getAvailableModelsForRouter(mockProviders, 'gpt-4o')
-    expect(result.find((m) => m.id === 'gpt-4o')).toBeUndefined()
+    expect(result.find((m) => m.id === 'gpt-4o')).toEqual({
+      id: 'gpt-4o',
+      provider: 'openai',
+      displayName: 'GPT-4o',
+    })
   })
 
   it('includes local providers with loaded models even when no API key is configured', () => {
@@ -425,5 +469,30 @@ describe('buildRouterPrompt', () => {
       expect(user).toContain(model.id)
       expect(user).toContain(model.provider)
     }
+  })
+
+  it('tells the router to prefer strong models for production engineering', () => {
+    const { system } = buildRouterPrompt('Write production TypeScript with tests', sampleModels)
+    expect(system).toContain('production code')
+    expect(system).toContain('TypeScript/JavaScript')
+    expect(system).toContain('best practices')
+    expect(system).toContain('edge cases')
+    expect(system).toContain('Do not choose a local model for production software engineering')
+  })
+
+  it('adds routing traits to model entries', () => {
+    const { user } = buildRouterPrompt('Production TypeScript prompt', [
+      { id: 'glm-5.1', provider: 'zai-coding', displayName: 'GLM 5.1' },
+      {
+        id: 'Qwen3_5-9B-IQ4_XS',
+        provider: 'llamacpp',
+        displayName: 'Qwen3.5 9B Local',
+      },
+    ])
+
+    expect(user).toContain('glm-5.1 (zai-coding)')
+    expect(user).toContain('[remote, strong coding/reasoning]')
+    expect(user).toContain('Qwen3_5-9B-IQ4_XS (llamacpp)')
+    expect(user).toContain('[local/free')
   })
 })

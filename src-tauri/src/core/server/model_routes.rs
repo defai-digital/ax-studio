@@ -192,12 +192,19 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
     config: &ProxyConfig,
     app_handle: &tauri::AppHandle<R>,
     provider_hint: Option<&str>,
+    request_role: Option<&str>,
 ) -> Result<ProviderResolution, Response<Body>> {
     let is_anthropic_messages = destination_path == "/messages";
     if is_anthropic_messages {
-        log::info!("Handling POST request to /messages with chat/completions fallback on error");
+        log::info!(
+            "Handling POST request to /messages with chat/completions fallback on error role={}",
+            request_role.unwrap_or("unknown")
+        );
     } else {
-        log::info!("Handling POST request to {destination_path} requiring model lookup in body");
+        log::info!(
+            "Handling POST request to {destination_path} requiring model lookup in body role={}",
+            request_role.unwrap_or("unknown")
+        );
     }
 
     let body_bytes = hyper::body::to_bytes(body).await.map_err(|_| {
@@ -236,7 +243,10 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
         )
     })?;
 
-    log::debug!("Extracted model_id: {model_id}");
+    log::debug!(
+        "Extracted model_id: {model_id} role={}",
+        request_role.unwrap_or("unknown")
+    );
 
     let state = app_handle.state::<AppState>();
     let resolved = {
@@ -626,7 +636,7 @@ pub(super) async fn dispatch_to_upstream(
     for (name, value) in headers.iter() {
         // Strip auth headers — the proxy injects the real provider key below.
         // Also strip x-api-key so client dummy keys never reach the upstream API.
-        // Strip x-ax-provider — internal routing header, not for upstream providers.
+        // Strip x-ax-* headers — internal routing/trace headers, not for upstream providers.
         // Strip Content-Length — the body may have been modified by normalize_request_body
         // (e.g., reasoning fields stripped), so reqwest must recalculate it from the actual body.
         if name != hyper::header::HOST
@@ -634,6 +644,7 @@ pub(super) async fn dispatch_to_upstream(
             && name != hyper::header::CONTENT_LENGTH
             && name.as_str() != "x-api-key"
             && name.as_str() != "x-ax-provider"
+            && name.as_str() != "x-ax-request-role"
             && !super::proxy::is_hop_by_hop_header(name)
         {
             outbound_req = outbound_req.header(name, value);

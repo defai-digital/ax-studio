@@ -4,6 +4,8 @@ import type { UIMessage } from '@ai-sdk/react'
 import { ModelFactory } from '@/lib/model-factory'
 import { routeMessage, getAvailableModelsForRouter } from '@/lib/llm-router'
 import { executeSingleAgentStream } from '@/lib/transport/single-agent-transport'
+import { prepareProviderForChat } from '@/lib/chat/model-session'
+import { syncRemoteProviders } from '@/lib/providers/provider-sync'
 
 // ─── Mock all Zustand stores the transport depends on ─────────────────────
 
@@ -148,6 +150,13 @@ vi.mock('@/lib/transport/single-agent-transport', () => ({
 
 vi.mock('@/lib/chat/model-session', () => ({
   prepareProviderForChat: vi.fn(() => Promise.resolve()),
+  isLocalProvider: vi.fn((provider: ProviderObject) =>
+    ['llamacpp', 'mlx', 'ollama'].includes(provider.provider)
+  ),
+}))
+
+vi.mock('@/lib/providers/provider-sync', () => ({
+  syncRemoteProviders: vi.fn(() => Promise.resolve()),
 }))
 
 vi.mock('@/lib/model-factory', () => ({
@@ -372,6 +381,10 @@ describe('CustomChatTransport — LLM Router integration', () => {
       mocks.providers,
       'router-model'
     )
+    expect(syncRemoteProviders).toHaveBeenCalledWith(mocks.providers)
+    expect(vi.mocked(syncRemoteProviders).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(routeMessage).mock.invocationCallOrder[0]
+    )
     expect(routeMessage).toHaveBeenCalledWith(
       expect.any(Array),
       'router-model',
@@ -390,7 +403,8 @@ describe('CustomChatTransport — LLM Router integration', () => {
     expect(ModelFactory.createModel).toHaveBeenCalledWith(
       'routed-model',
       expect.objectContaining({ provider: 'routed-provider' }),
-      {}
+      {},
+      { requestRole: 'final' }
     )
     expect(executeSingleAgentStream).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -438,7 +452,8 @@ describe('CustomChatTransport — LLM Router integration', () => {
     expect(ModelFactory.createModel).toHaveBeenCalledWith(
       'test-model',
       expect.objectContaining({ provider: 'test-provider' }),
-      {}
+      {},
+      { requestRole: 'final' }
     )
     expect(transport.lastRouterResult).toEqual(
       expect.objectContaining({
@@ -482,13 +497,18 @@ describe('CustomChatTransport — LLM Router integration', () => {
       expect.objectContaining({
         headers: expect.objectContaining({
           'X-Ax-Provider': 'llamacpp',
+          'X-Ax-Request-Role': 'preflight',
         }),
       })
+    )
+    expect(vi.mocked(prepareProviderForChat).mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.fetch.mock.invocationCallOrder[0]
     )
     expect(ModelFactory.createModel).toHaveBeenCalledWith(
       'llama-3.2-3b-local.gguf',
       expect.objectContaining({ provider: 'llamacpp' }),
-      {}
+      {},
+      { requestRole: 'final' }
     )
     expect(transport.lastRouterResult).toEqual(
       expect.objectContaining({

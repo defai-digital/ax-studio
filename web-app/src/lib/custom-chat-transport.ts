@@ -19,8 +19,9 @@ import { useRouterSettings } from '@/hooks/settings/useRouterSettings'
 import { routeMessage, getAvailableModelsForRouter } from './llm-router'
 import { executeSingleAgentStream } from './transport/single-agent-transport'
 import type { TokenUsageCallback, ServiceHub } from './transport/transport-types'
-import { prepareProviderForChat } from './chat/model-session'
+import { isLocalProvider, prepareProviderForChat } from './chat/model-session'
 import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
+import { syncRemoteProviders } from './providers/provider-sync'
 
 // Use native fetch — same reason as model-factory.ts (Tauri plugin ReadableStream
 // incompatibility). Proxy accepts CORS from tauri:// origins on loopback.
@@ -33,8 +34,12 @@ const PREFLIGHT_TTL_MS = 10 * 60 * 1000
 const PREFLIGHT_FAIL_TTL_MS = 2 * 60 * 1000
 const preflightCache = new Map<string, { ok: boolean; ts: number }>()
 
+function modelProviderKey(modelId: string, providerId: string): string {
+  return `${providerId}::${modelId}`
+}
+
 function isModelPreflightCached(modelId: string, providerId: string): boolean | null {
-  const key = `${providerId}::${modelId}`
+  const key = modelProviderKey(modelId, providerId)
   const entry = preflightCache.get(key)
   if (!entry) return null
   const ttl = entry.ok ? PREFLIGHT_TTL_MS : PREFLIGHT_FAIL_TTL_MS
@@ -47,7 +52,19 @@ function isModelPreflightCached(modelId: string, providerId: string): boolean | 
 }
 
 function cachePreflightResult(modelId: string, providerId: string, ok: boolean) {
-  preflightCache.set(`${providerId}::${modelId}`, { ok, ts: Date.now() })
+  preflightCache.set(modelProviderKey(modelId, providerId), { ok, ts: Date.now() })
+}
+
+function logRouterTrace(message: string, details?: Record<string, unknown>) {
+  console.info(`[LLM Router] ${message}`, details ?? {})
+}
+
+async function syncProvidersForRouting(providers: ModelProvider[]) {
+  try {
+    await syncRemoteProviders(providers)
+  } catch (error) {
+    console.warn('[LLM Router] Provider sync before routing failed:', error)
+  }
 }
 
 export type { TokenUsageCallback }
@@ -188,6 +205,7 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
     const fallbackProviderId = selectedProviderId
     let finalModelId = fallbackModelId
     let finalProviderId = fallbackProviderId
+    let preparedForPreflightKey: string | null = null
     this.lastRouterResult = null
 
     // LLM Router: when auto-routing is enabled, the router takes priority.
@@ -198,8 +216,10 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
       routerSettings.routerModelId &&
       routerSettings.routerProviderId
     ) {
+      await syncProvidersForRouting(useModelProvider.getState().providers)
+      const providers = useModelProvider.getState().providers
       const availableModels = getAvailableModelsForRouter(
-        useModelProvider.getState().providers,
+        providers,
         routerSettings.routerModelId,
       )
       this.lastRouterResult = await routeMessage(
@@ -211,23 +231,43 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
         fallbackProviderId,
         routerSettings.timeout,
       )
+      logRouterTrace('decision complete', {
+        routerModelId: routerSettings.routerModelId,
+        routerProviderId: routerSettings.routerProviderId,
+        selectedModelId: this.lastRouterResult.modelId,
+        selectedProviderId: this.lastRouterResult.providerId,
+        routed: this.lastRouterResult.routed,
+        reason: this.lastRouterResult.reason,
+        fallbackReason: this.lastRouterResult.fallbackReason,
+        latencyMs: Math.round(this.lastRouterResult.latencyMs),
+      })
       finalModelId = this.lastRouterResult.modelId
       finalProviderId = this.lastRouterResult.providerId
     }
 
     // Helper: prepare a model and execute the stream
     const executeWithModel = async (modelId: string, providerId: string) => {
+      logRouterTrace('executing final model', {
+        modelId,
+        providerId,
+        routed: this.lastRouterResult?.routed ?? false,
+        fallbackReason: this.lastRouterResult?.fallbackReason,
+      })
       const provider = useModelProvider.getState().getProviderByName(providerId)
       if (!this.serviceHub || !modelId || !provider) {
         throw new Error('ServiceHub not initialized or model/provider missing.')
       }
 
-      await prepareProviderForChat(getServiceHub(), provider, modelId)
+      if (preparedForPreflightKey !== modelProviderKey(modelId, providerId)) {
+        await prepareProviderForChat(getServiceHub(), provider, modelId)
+      }
 
       const currentAssistant = useAssistant.getState().currentAssistant
       const inferenceParams = { ...(currentAssistant?.parameters ?? {}), ...(this.inferenceParameters ?? {}) }
 
-      this.model = await ModelFactory.createModel(modelId, provider, inferenceParams)
+      this.model = await ModelFactory.createModel(modelId, provider, inferenceParams, {
+        requestRole: 'final',
+      })
 
       // Determine tool support for this model
       const providerModels = provider.models ?? []
@@ -276,12 +316,28 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
         // Not cached — run preflight
         const routerResult = this.lastRouterResult
         try {
+          const routedProvider = useModelProvider.getState().getProviderByName(finalProviderId)
+          if (!routedProvider) {
+            throw new Error(`Provider "${finalProviderId}" is not configured`)
+          }
+          if (isLocalProvider(routedProvider)) {
+            // Local routed models need to be started first so their localhost
+            // provider is registered with the proxy before preflight runs.
+            logRouterTrace('starting local routed model before preflight', {
+              modelId: finalModelId,
+              providerId: finalProviderId,
+            })
+            await prepareProviderForChat(getServiceHub(), routedProvider, finalModelId)
+            preparedForPreflightKey = modelProviderKey(finalModelId, finalProviderId)
+          }
+
           const { serverHost, serverPort, apiPrefix, apiKey: localProxyKey } =
             useLocalApiServer.getState()
           const proxyUrl = `http://${serverHost}:${serverPort}${apiPrefix}`
           const preflightHeaders: Record<string, string> = {
             'Content-Type': 'application/json',
             'X-Ax-Provider': finalProviderId,
+            'X-Ax-Request-Role': 'preflight',
           }
           if (localProxyKey && localProxyKey.trim().length > 0) {
             preflightHeaders.Authorization = `Bearer ${localProxyKey}`
@@ -301,6 +357,10 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
             throw new Error(`${preflight.status}: ${body.slice(0, 200)}`)
           }
           cachePreflightResult(finalModelId, finalProviderId, true)
+          logRouterTrace('preflight passed', {
+            modelId: finalModelId,
+            providerId: finalProviderId,
+          })
         } catch (error) {
           cachePreflightResult(finalModelId, finalProviderId, false)
           console.warn(

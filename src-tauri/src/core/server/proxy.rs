@@ -249,6 +249,7 @@ fn handle_cors_preflight(req: &Request<Body>, config: &ProxyConfig) -> Option<Re
         "x-stainless-runtime-version",
         "x-stainless-timeout",
         "x-ax-provider",
+        "x-ax-request-role",
     ];
 
     let headers_valid = if requested_headers.is_empty() {
@@ -490,6 +491,9 @@ pub(super) async fn proxy_request<R: tauri::Runtime>(
         | (hyper::Method::POST, "/embeddings")
         | (hyper::Method::POST, "/messages/count_tokens") => {
             let provider_hint = headers.get("x-ax-provider").and_then(|v| v.to_str().ok());
+            let request_role = headers
+                .get("x-ax-request-role")
+                .and_then(|v| v.to_str().ok());
             let resolution = match model_routes::resolve_model_route(
                 &path,
                 body,
@@ -498,6 +502,7 @@ pub(super) async fn proxy_request<R: tauri::Runtime>(
                 &config,
                 &app_handle,
                 provider_hint,
+                request_role,
             )
             .await
             {
@@ -629,7 +634,7 @@ mod tests {
             .header(hyper::header::HOST, "localhost:1337")
             .header(
                 "Access-Control-Request-Headers",
-                "content-type, authorization",
+                "content-type, authorization, x-ax-request-role",
             )
             .body(Body::empty())
             .unwrap();

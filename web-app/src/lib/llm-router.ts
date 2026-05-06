@@ -15,21 +15,25 @@ import { ModelFactory } from './model-factory'
 import { buildRouterPrompt } from './llm-router-prompt'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useFavoriteModel } from '@/hooks/models/useFavoriteModel'
-import { predefinedProviders } from '@/constants/providers'
+import { LOCAL_PROVIDER_IDS, predefinedProviders } from '@/constants/providers'
 import { z } from 'zod'
 
 const MAX_MODELS_IN_PROMPT = 30
 const MAX_USER_MESSAGE_LENGTH = 1000
 const MAX_CONTEXT_LENGTH = 500
+const HIGH_RISK_ENGINEERING_PATTERN =
+  /\b(production|typescript|javascript|code|coding|debug|bug|test|tests|edge case|edge cases|architecture|architectural|refactor|security|reliability|stability|best practice|best practices|pr|pull request|review)\b/i
+const STRONG_CODING_MODEL_PATTERN =
+  /\b(glm|zai|claude|sonnet|opus|gpt|o[1345]|gemini.*pro|deepseek|coder|coding|code)\b/i
 
 /**
  * Build a flat list of available models for the router prompt.
- * Filters out embedding models and the router model itself.
+ * Filters out embedding models.
  * Prioritizes favorites, then follows provider order.
  */
 export function getAvailableModelsForRouter(
   providers: ModelProvider[],
-  routerModelId: string,
+  _routerModelId: string,
 ): AvailableModelForRouter[] {
   const favoriteIds = new Set(
     useFavoriteModel.getState().favoriteModels.map((m) => m.id),
@@ -50,7 +54,6 @@ export function getAvailableModelsForRouter(
 
     for (const model of provider.models) {
       if (model.embedding) continue
-      if (model.id === routerModelId) continue
 
       allModels.push({
         id: model.id,
@@ -68,6 +71,80 @@ export function getAvailableModelsForRouter(
   })
 
   return allModels.slice(0, MAX_MODELS_IN_PROMPT)
+}
+
+function isLocalRouterCandidate(model: AvailableModelForRouter): boolean {
+  const provider = model.provider.toLowerCase()
+  return (
+    LOCAL_PROVIDER_IDS.has(provider) ||
+    provider === 'local' ||
+    /\b(local|llama\.?cpp|ollama|mlx|lmstudio)\b/i.test(
+      `${model.id} ${model.displayName}`,
+    )
+  )
+}
+
+function isStrongCodingCandidate(model: AvailableModelForRouter): boolean {
+  return STRONG_CODING_MODEL_PATTERN.test(
+    `${model.id} ${model.provider} ${model.displayName}`,
+  )
+}
+
+function scoreStrongCodingCandidate(model: AvailableModelForRouter): number {
+  const text = `${model.id} ${model.provider} ${model.displayName}`.toLowerCase()
+  let score = 0
+
+  if (isStrongCodingCandidate(model)) score += 100
+  if (/glm|zai/.test(text)) score += 40
+  if (/claude|sonnet|opus/.test(text)) score += 35
+  if (/gpt|o[1345]/.test(text)) score += 30
+  if (/deepseek|coder|coding|code/.test(text)) score += 25
+  if (/gemini.*pro/.test(text)) score += 20
+  if (/mini|small|lite|flash|haiku|3b|7b/.test(text)) score -= 20
+  if (/5\.1|4\.6|pro|opus|sonnet/.test(text)) score += 10
+
+  return score
+}
+
+function pickStrongRemoteCodingModel(
+  availableModels: AvailableModelForRouter[],
+): AvailableModelForRouter | null {
+  const candidates = availableModels
+    .map((model, index) => ({ model, index, score: scoreStrongCodingCandidate(model) }))
+    .filter(({ model, score }) => !isLocalRouterCandidate(model) && score >= 100)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+
+  return candidates[0]?.model ?? null
+}
+
+function pickDirectEngineeringRoute(
+  userMessage: string,
+  availableModels: AvailableModelForRouter[],
+): { modelId: string; providerId: string; reason: string } | null {
+  if (!HIGH_RISK_ENGINEERING_PATTERN.test(userMessage)) return null
+
+  const replacement = pickStrongRemoteCodingModel(availableModels)
+  if (!replacement) return null
+
+  return {
+    modelId: replacement.id,
+    providerId: replacement.provider,
+    reason: 'production coding',
+  }
+}
+
+function maybeOverrideLocalEngineeringChoice(
+  userMessage: string,
+  selected: { modelId: string; providerId: string; reason: string },
+  availableModels: AvailableModelForRouter[],
+): { modelId: string; providerId: string; reason: string } | null {
+  const selectedModel = availableModels.find(
+    (model) =>
+      model.id === selected.modelId && model.provider === selected.providerId,
+  )
+  if (!selectedModel || !isLocalRouterCandidate(selectedModel)) return null
+
+  return pickDirectEngineeringRoute(userMessage, availableModels)
 }
 
 /**
@@ -258,6 +335,20 @@ export async function routeMessage(
     )
   }
 
+  const directEngineeringRoute = pickDirectEngineeringRoute(
+    userMessage,
+    availableModels,
+  )
+  if (directEngineeringRoute) {
+    return {
+      modelId: directEngineeringRoute.modelId,
+      providerId: directEngineeringRoute.providerId,
+      reason: directEngineeringRoute.reason,
+      routed: true,
+      latencyMs: performance.now() - startTime,
+    }
+  }
+
   const recentContext = getRecentContext(messages)
   const { system, user } = buildRouterPrompt(
     userMessage.slice(0, MAX_USER_MESSAGE_LENGTH),
@@ -284,6 +375,7 @@ export async function routeMessage(
       routerModelId,
       routerProvider,
       {},
+      { requestRole: 'router' },
     )
 
     // Set up timeout via AbortController.
@@ -343,10 +435,14 @@ export async function routeMessage(
         )
       }
 
+      const selected =
+        maybeOverrideLocalEngineeringChoice(userMessage, parsed, availableModels) ??
+        parsed
+
       return {
-        modelId: parsed.modelId,
-        providerId: parsed.providerId,
-        reason: parsed.reason,
+        modelId: selected.modelId,
+        providerId: selected.providerId,
+        reason: selected.reason,
         routed: true,
         latencyMs,
       }

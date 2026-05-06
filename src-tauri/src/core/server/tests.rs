@@ -100,10 +100,13 @@ mod tests {
             "origin",
             "user-agent",
             "x-api-key",
+            "x-ax-provider",
+            "x-ax-request-role",
         ];
         assert!(allowed_headers.contains(&"authorization"));
         assert!(allowed_headers.contains(&"content-type"));
         assert!(allowed_headers.contains(&"x-api-key"));
+        assert!(allowed_headers.contains(&"x-ax-request-role"));
     }
 
     // Tests for X-Api-Key header authentication support
@@ -280,7 +283,10 @@ mod tests {
             "x-stainless-runtime",
             "x-stainless-runtime-version",
             "x-stainless-timeout",
+            "x-ax-provider",
+            "x-ax-request-role",
         ];
         assert!(allowed_headers.contains(&"x-api-key"));
+        assert!(allowed_headers.contains(&"x-ax-request-role"));
     }
 }

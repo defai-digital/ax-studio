@@ -418,7 +418,8 @@ export class ModelFactory {
   static async createModel(
     modelId: string,
     provider: ProviderObject,
-    parameters: Record<string, unknown> = {}
+    parameters: Record<string, unknown> = {},
+    options: { requestRole?: 'router' | 'final' } = {}
   ): Promise<LanguageModel> {
     const proxyUrl = getProxyBaseUrl()
     const openAIParams = toOpenAIParams(parameters)
@@ -444,6 +445,9 @@ export class ModelFactory {
     const localProxyKey = useLocalApiServer.getState().apiKey
     const proxyHeaders: Record<string, string> = {
       'X-Ax-Provider': provider.provider,
+    }
+    if (options.requestRole) {
+      proxyHeaders['X-Ax-Request-Role'] = options.requestRole
     }
     if (localProxyKey && localProxyKey.trim().length > 0) {
       proxyHeaders.Authorization = `Bearer ${localProxyKey}`
