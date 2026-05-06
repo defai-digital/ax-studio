@@ -305,11 +305,11 @@
           <div class="metric-label">Honest automated stability confidence</div>
         </article>
         <article class="card">
-          <div class="metric">3183</div>
+          <div class="metric">3195</div>
           <div class="metric-label">Passing tests in latest full non-coverage run</div>
         </article>
         <article class="card">
-          <div class="metric">37.5%</div>
+          <div class="metric">40.5%</div>
           <div class="metric-label">Route line coverage after today's route pass</div>
         </article>
       </section>
@@ -338,7 +338,7 @@
           green, lint is green, coverage gates can now run in blocking mode, and
           weak areas such as services, lib, UI primitives, hooks, and routes
           received targeted tests. The latest route pass also added Memory
-          settings workflow coverage.
+          settings, LLM Router workflow coverage, and local-model routing.
         </p>
         <p>
           The honest stability rating is <strong>92-94% by automated verification</strong>.
@@ -367,7 +367,7 @@
             <tr>
               <td><code>yarn test</code></td>
               <td>Pass</td>
-              <td>252 files passed, 3183 tests passed, 1 skipped.</td>
+              <td>253 files passed, 3195 tests passed, 1 skipped.</td>
             </tr>
             <tr>
               <td><code>yarn test:coverage</code></td>
@@ -394,6 +394,198 @@
             </tr>
           </tbody>
         </table>
+      </section>
+
+      <section class="section card">
+        <h2>Real Local Model Runtime Smoke Tests</h2>
+        <p>
+          These checks called the local inference servers directly on May 6,
+          2026. They prove real model generation for reachable local backends;
+          they are separate from the automated mock/unit coverage.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Backend</th>
+              <th>Model</th>
+              <th>Result</th>
+              <th>Observed Output</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Ollama</td>
+              <td><code>qwen3.5:9b</code></td>
+              <td>Pass</td>
+              <td><code>AX_LOCAL_OK_OLLAMA</code></td>
+            </tr>
+            <tr>
+              <td>LM Studio</td>
+              <td><code>qwen/qwen3-30b-a3b-2507</code></td>
+              <td>Pass</td>
+              <td><code>AX_LOCAL_OK_LMSTUDIO_QWEN30B</code></td>
+            </tr>
+            <tr>
+              <td>llama.cpp GGUF server</td>
+              <td><code>Qwen3-8B-Q4_K_M.gguf</code></td>
+              <td>Pass</td>
+              <td><code>AX_LOCAL_OK_LLAMA_8B</code></td>
+            </tr>
+            <tr>
+              <td>AX serving</td>
+              <td><code>default</code></td>
+              <td>Pass</td>
+              <td><code>AX_LOCAL_OK_AXSERVING</code></td>
+            </tr>
+            <tr>
+              <td>LM Studio</td>
+              <td><code>qwen3.6-35b-a3b</code></td>
+              <td>Partial</td>
+              <td>
+                Generated text, but exposed reasoning and hit the token limit
+                before the final marker.
+              </td>
+            </tr>
+            <tr>
+              <td>LM Studio</td>
+              <td><code>qwen2.5-14b-instruct-uncensored</code></td>
+              <td>Blocked</td>
+              <td>Server returned <code>Failed to load model</code>.</td>
+            </tr>
+            <tr>
+              <td>AX Studio local proxy</td>
+              <td><code>/v1/models</code></td>
+              <td>Protected</td>
+              <td>
+                Server is running, but requires the app authorization token.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="section card">
+        <h2>LLM Router Feature Flow Check</h2>
+        <p>
+          The five-step router flow is covered by focused unit and integration
+          tests. The latest focused pass completed with
+          <strong>66 router-related tests passing</strong>.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Step</th>
+              <th>Status</th>
+              <th>Verified Behavior</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1. User sends a message</td>
+              <td>Pass</td>
+              <td>
+                <code>CustomChatTransport.sendMessages</code> receives the
+                submitted user message.
+              </td>
+            </tr>
+            <tr>
+              <td>2. Router model analyzes message and available models</td>
+              <td>Pass</td>
+              <td>
+                <code>routeMessage</code> builds a router prompt containing the
+                latest user message and filtered available model list.
+              </td>
+            </tr>
+            <tr>
+              <td>3. Router picks the best model</td>
+              <td>Pass</td>
+              <td>
+                Valid router JSON is parsed and validated against the available
+                model list before being accepted.
+              </td>
+            </tr>
+            <tr>
+              <td>4. Message is sent to the chosen model</td>
+              <td>Pass</td>
+              <td>
+                The transport creates the routed model and streams with that
+                provider, including local providers such as
+                <code>llamacpp</code>.
+              </td>
+            </tr>
+            <tr>
+              <td>5. Failure or timeout falls back to selected model</td>
+              <td>Pass</td>
+              <td>
+                Timeout and fallback paths return the selected model/provider
+                instead of failing the send.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          A live local-model smoke test also verified the real behavior outside
+          mocks. Three router models were tested against coding and
+          summarization prompts: <code>qwen3.5:9b</code> through Ollama,
+          <code>qwen/qwen3-30b-a3b-2507</code> through LM Studio, and
+          <code>Qwen3-8B-Q4_K_M.gguf</code> through llama.cpp. All six route
+          decisions returned parseable JSON, selected an available model, and
+          generated a real answer from the chosen backend.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Router Model</th>
+              <th>Task</th>
+              <th>Chosen Model</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>qwen3.5:9b</code></td>
+              <td>Coding</td>
+              <td><code>qwen/qwen3-30b-a3b-2507</code></td>
+              <td>Pass</td>
+            </tr>
+            <tr>
+              <td><code>qwen3.5:9b</code></td>
+              <td>Summarization</td>
+              <td><code>Qwen3-8B-Q4_K_M.gguf</code></td>
+              <td>Pass</td>
+            </tr>
+            <tr>
+              <td><code>qwen/qwen3-30b-a3b-2507</code></td>
+              <td>Coding</td>
+              <td><code>qwen3.5:9b</code></td>
+              <td>Pass</td>
+            </tr>
+            <tr>
+              <td><code>qwen/qwen3-30b-a3b-2507</code></td>
+              <td>Summarization</td>
+              <td><code>qwen3.5:9b</code></td>
+              <td>Pass</td>
+            </tr>
+            <tr>
+              <td><code>Qwen3-8B-Q4_K_M.gguf</code></td>
+              <td>Coding</td>
+              <td><code>qwen3.5:9b</code></td>
+              <td>Pass</td>
+            </tr>
+            <tr>
+              <td><code>Qwen3-8B-Q4_K_M.gguf</code></td>
+              <td>Summarization</td>
+              <td><code>qwen3.5:9b</code></td>
+              <td>Pass</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          Caveat: this live smoke test called the local model backends
+          directly. The AX Studio local proxy on <code>127.0.0.1:1337</code>
+          is running but protected by the app authorization token, so direct
+          proxy verification still requires the active app token/session.
+        </p>
       </section>
 
       <section class="section card">
@@ -432,9 +624,9 @@
             </tr>
             <tr>
               <td>lib</td>
-              <td class="number">72.3%</td>
-              <td class="number">76.1%</td>
-              <td class="number">80.2%</td>
+              <td class="number">74.9%</td>
+              <td class="number">77.5%</td>
+              <td class="number">78.5%</td>
               <td>Pass</td>
             </tr>
             <tr>
@@ -460,9 +652,9 @@
             </tr>
             <tr>
               <td>routes</td>
-              <td class="number">37.5%</td>
               <td class="number">40.5%</td>
-              <td class="number">66.0%</td>
+              <td class="number">42.9%</td>
+              <td class="number">70.6%</td>
               <td>Pass</td>
             </tr>
           </tbody>
@@ -531,6 +723,31 @@
               and JSON backup import behavior.
             </p>
           </div>
+          <div class="timeline-item">
+            <h3>9. Added LLM Router Route Workflow Tests</h3>
+            <p>
+              Added route-level tests for router enablement, available model
+              filtering, router model selection, selected-model display,
+              unavailable-model warning, and classification timeout changes.
+            </p>
+          </div>
+          <div class="timeline-item">
+            <h3>10. Verified LLM Router Send Integration</h3>
+            <p>
+              Added transport-level tests proving that enabled routing calls
+              the router, streams with the routed model when preflight passes,
+              and safely uses the selected fallback model when routing falls
+              back.
+            </p>
+          </div>
+          <div class="timeline-item">
+            <h3>11. Verified Local Model Router Paths</h3>
+            <p>
+              Added tests proving local providers such as <code>llamacpp</code>
+              can be included without API keys, selected in the router settings
+              UI, and used by chat sends through the local proxy provider header.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -550,12 +767,12 @@
               <tr>
                 <td>Route line coverage</td>
                 <td class="number">27.4%</td>
-                <td class="number">37.5%</td>
+                <td class="number">40.5%</td>
               </tr>
               <tr>
                 <td>Route function coverage</td>
                 <td class="number">33.7%</td>
-                <td class="number">40.5%</td>
+                <td class="number">42.9%</td>
               </tr>
               <tr>
                 <td>Lib line coverage</td>
@@ -593,7 +810,9 @@
           <li><code>scripts/testing/module-coverage-gate.test.mjs</code></li>
           <li><code>scripts/testing/vitest.config.ts</code></li>
           <li><code>web-app/src/routes/settings/__tests__/local-api-server.test.tsx</code></li>
+          <li><code>web-app/src/routes/settings/__tests__/llm-router.test.tsx</code></li>
           <li><code>web-app/src/routes/settings/__tests__/memory.test.tsx</code></li>
+          <li><code>web-app/src/lib/__tests__/custom-chat-transport.test.ts</code></li>
           <li><code>docs/PRD-Coverage-Hardening.md</code></li>
           <li><code>docs/adr/ADR-002-coverage-hardening-strategy.md</code></li>
           <li><code>docs/Automated-Testing-Strategy.md</code></li>
@@ -676,7 +895,7 @@ make test-quality-blocking</pre>
         <ol>
           <li>
             Commit the clean checkpoint with blocking coverage gate, Local API
-            Server route tests, and Memory route tests.
+            Server route tests, Memory route tests, and LLM Router route tests.
           </li>
           <li>
             Add route workflow tests for MCP servers, local API logs,
@@ -704,6 +923,7 @@ make test-quality-blocking</pre>
   scripts/testing/module-coverage-gate.test.mjs \
   scripts/testing/vitest.config.ts \
   vitest.config.ts \
+  web-app/src/routes/settings/__tests__/llm-router.test.tsx \
   web-app/src/routes/settings/__tests__/local-api-server.test.tsx \
   web-app/src/routes/settings/__tests__/memory.test.tsx
 

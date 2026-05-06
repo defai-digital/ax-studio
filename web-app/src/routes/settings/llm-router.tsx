@@ -37,7 +37,7 @@ function LLMRouterSettings() {
   const providers = useModelProvider((s) => s.providers)
 
   // Build a flat list of all available models (non-embedding) for the router model dropdown.
-  // Only include providers with an API key configured so the router can actually reach them.
+  // Include keyed remote providers and local/custom providers that already have models loaded.
   const availableModels = useMemo(() => {
     const models: { id: string; provider: string; displayName: string }[] = []
     for (const provider of providers) {

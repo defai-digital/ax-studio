@@ -1,8 +1,51 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { CustomChatTransport } from '../custom-chat-transport'
 import type { UIMessage } from '@ai-sdk/react'
+import { ModelFactory } from '@/lib/model-factory'
+import { routeMessage, getAvailableModelsForRouter } from '@/lib/llm-router'
+import { executeSingleAgentStream } from '@/lib/transport/single-agent-transport'
 
 // ─── Mock all Zustand stores the transport depends on ─────────────────────
+
+const mocks = vi.hoisted(() => {
+  const fetch = vi.fn(() =>
+    Promise.resolve({
+      ok: true,
+      text: () => Promise.resolve(''),
+    } as Response)
+  )
+  globalThis.fetch = fetch as unknown as typeof globalThis.fetch
+
+  const providers = [
+    {
+      provider: 'test-provider',
+      models: [{ id: 'test-model', capabilities: [] }],
+      settings: [],
+    },
+    {
+      provider: 'routed-provider',
+      models: [{ id: 'routed-model', capabilities: ['tools'] }],
+      settings: [],
+    },
+    {
+      provider: 'llamacpp',
+      models: [{ id: 'llama-3.2-3b-local.gguf', capabilities: [] }],
+      settings: [],
+    },
+  ]
+
+  return {
+    autoRouteEnabled: false,
+    fetch,
+    getProviderByName: vi.fn((providerId: string) =>
+      providers.find((provider) => provider.provider === providerId)
+    ),
+    providers,
+    routerModelId: null as string | null,
+    routerProviderId: null as string | null,
+    timeout: 10000,
+  }
+})
 
 vi.mock('@/hooks/useServiceHub', () => ({
   useServiceStore: {
@@ -42,12 +85,8 @@ vi.mock('@/hooks/models/useModelProvider', () => ({
     getState: () => ({
       selectedModel: { id: 'test-model', capabilities: [] },
       selectedProvider: 'test-provider',
-      providers: [],
-      getProviderByName: () => ({
-        provider: 'test-provider',
-        models: [],
-        settings: [],
-      }),
+      providers: mocks.providers,
+      getProviderByName: mocks.getProviderByName,
     }),
   },
 }))
@@ -67,10 +106,10 @@ vi.mock('@/hooks/threads/useThreads', () => ({
 vi.mock('@/hooks/settings/useRouterSettings', () => ({
   useRouterSettings: {
     getState: () => ({
-      isAutoRouteEnabled: () => false,
-      routerModelId: null,
-      routerProviderId: null,
-      timeout: 10000,
+      isAutoRouteEnabled: () => mocks.autoRouteEnabled,
+      routerModelId: mocks.routerModelId,
+      routerProviderId: mocks.routerProviderId,
+      timeout: mocks.timeout,
     }),
   },
 }))
@@ -131,6 +170,33 @@ function makeTransport(
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  mocks.autoRouteEnabled = false
+  mocks.routerModelId = null
+  mocks.routerProviderId = null
+  mocks.timeout = 10000
+  mocks.fetch.mockResolvedValue({
+    ok: true,
+    text: () => Promise.resolve(''),
+  } as Response)
+  ;(routeMessage as ReturnType<typeof vi.fn>).mockResolvedValue({
+    modelId: 'test-model',
+    providerId: 'test-provider',
+    reason: 'fallback',
+    routed: false,
+    fallbackReason: 'disabled',
+    latencyMs: 1,
+  })
+  ;(getAvailableModelsForRouter as ReturnType<typeof vi.fn>).mockReturnValue([
+    {
+      id: 'routed-model',
+      provider: 'routed-provider',
+      displayName: 'Routed Model',
+    },
+  ])
+})
 
 describe('CustomChatTransport — construction', () => {
   it('stores system message and thread ID', () => {
@@ -272,5 +338,164 @@ describe('CustomChatTransport — reconnectToStream', () => {
     const transport = makeTransport()
     const result = await transport.reconnectToStream({ chatId: 'c1' } as any)
     expect(result).toBeNull()
+  })
+})
+
+describe('CustomChatTransport — LLM Router integration', () => {
+  it('routes messages through the configured router and streams with the routed model', async () => {
+    mocks.autoRouteEnabled = true
+    mocks.routerModelId = 'router-model'
+    mocks.routerProviderId = 'test-provider'
+    ;(routeMessage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      modelId: 'routed-model',
+      providerId: 'routed-provider',
+      reason: 'best model for coding',
+      routed: true,
+      latencyMs: 12,
+    })
+    const transport = makeTransport({ threadId: 'thread-1' })
+    await transport.sendMessages({
+      chatId: 'chat-1',
+      messages: [
+        {
+          id: 'message-1',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Write a Rust parser' }],
+        } as UIMessage,
+      ],
+      abortSignal: undefined,
+      trigger: 'submit-message',
+      messageId: 'message-1',
+    })
+
+    expect(getAvailableModelsForRouter).toHaveBeenCalledWith(
+      mocks.providers,
+      'router-model'
+    )
+    expect(routeMessage).toHaveBeenCalledWith(
+      expect.any(Array),
+      'router-model',
+      'test-provider',
+      [
+        {
+          id: 'routed-model',
+          provider: 'routed-provider',
+          displayName: 'Routed Model',
+        },
+      ],
+      'test-model',
+      'test-provider',
+      10000
+    )
+    expect(ModelFactory.createModel).toHaveBeenCalledWith(
+      'routed-model',
+      expect.objectContaining({ provider: 'routed-provider' }),
+      {}
+    )
+    expect(executeSingleAgentStream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelSupportsTools: true,
+      })
+    )
+    expect(transport.lastRouterResult).toEqual(
+      expect.objectContaining({
+        modelId: 'routed-model',
+        providerId: 'routed-provider',
+        routed: true,
+      })
+    )
+  })
+
+  it('keeps using the selected model when router returns fallback', async () => {
+    mocks.autoRouteEnabled = true
+    mocks.routerModelId = 'router-model'
+    mocks.routerProviderId = 'test-provider'
+    ;(routeMessage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      modelId: 'test-model',
+      providerId: 'test-provider',
+      reason: 'fallback',
+      routed: false,
+      fallbackReason: 'could not parse router response',
+      latencyMs: 8,
+    })
+
+    const transport = makeTransport({ threadId: 'thread-1' })
+    await transport.sendMessages({
+      chatId: 'chat-1',
+      messages: [
+        {
+          id: 'message-1',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Hello' }],
+        } as UIMessage,
+      ],
+      abortSignal: undefined,
+      trigger: 'submit-message',
+      messageId: 'message-1',
+    })
+
+    expect(routeMessage).toHaveBeenCalledTimes(1)
+    expect(ModelFactory.createModel).toHaveBeenCalledWith(
+      'test-model',
+      expect.objectContaining({ provider: 'test-provider' }),
+      {}
+    )
+    expect(transport.lastRouterResult).toEqual(
+      expect.objectContaining({
+        modelId: 'test-model',
+        providerId: 'test-provider',
+        routed: false,
+        fallbackReason: 'could not parse router response',
+      })
+    )
+  })
+
+  it('can route chat sends to a local model provider without an API key', async () => {
+    mocks.autoRouteEnabled = true
+    mocks.routerModelId = 'router-model'
+    mocks.routerProviderId = 'test-provider'
+    ;(routeMessage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      modelId: 'llama-3.2-3b-local.gguf',
+      providerId: 'llamacpp',
+      reason: 'local model is sufficient',
+      routed: true,
+      latencyMs: 10,
+    })
+
+    const transport = makeTransport({ threadId: 'thread-1' })
+    await transport.sendMessages({
+      chatId: 'chat-1',
+      messages: [
+        {
+          id: 'message-1',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Summarize this locally' }],
+        } as UIMessage,
+      ],
+      abortSignal: undefined,
+      trigger: 'submit-message',
+      messageId: 'message-1',
+    })
+
+    expect(mocks.fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:1337/v1/chat/completions',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'X-Ax-Provider': 'llamacpp',
+        }),
+      })
+    )
+    expect(ModelFactory.createModel).toHaveBeenCalledWith(
+      'llama-3.2-3b-local.gguf',
+      expect.objectContaining({ provider: 'llamacpp' }),
+      {}
+    )
+    expect(transport.lastRouterResult).toEqual(
+      expect.objectContaining({
+        modelId: 'llama-3.2-3b-local.gguf',
+        providerId: 'llamacpp',
+        routed: true,
+      })
+    )
   })
 })
