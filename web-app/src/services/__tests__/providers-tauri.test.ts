@@ -4,6 +4,7 @@ import { ExtensionManager } from '@/lib/extension'
 import { TauriProvidersService } from '../providers/tauri'
 
 const mocks = vi.hoisted(() => ({
+  fetchNative: vi.fn(),
   fetchTauri: vi.fn(),
 }))
 
@@ -41,6 +42,7 @@ describe('TauriProvidersService', () => {
   beforeEach(() => {
     service = new TauriProvidersService()
     vi.clearAllMocks()
+    globalThis.fetch = mocks.fetchNative as typeof fetch
     EngineManager.instance().engines.clear()
     window.core.extensionManager = new ExtensionManager()
   })
@@ -88,8 +90,35 @@ describe('TauriProvidersService', () => {
     )
   })
 
+  it('trims base URL before fetching provider models', async () => {
+    mocks.fetchNative.mockResolvedValue(
+      response({
+        object: 'list',
+        data: [
+          { id: 'glm-4.6', object: 'model' },
+          { id: 'glm-4.7', object: 'model' },
+        ],
+      })
+    )
+
+    const result = await service.fetchModelsFromProvider(
+      provider({
+        provider: 'zai-coding',
+        base_url: ' https://api.z.ai/api/coding/paas/v4/ ',
+      })
+    )
+
+    expect(result).toEqual(['glm-4.6', 'glm-4.7'])
+    expect(mocks.fetchNative).toHaveBeenCalledWith(
+      'https://api.z.ai/api/coding/paas/v4/models',
+      expect.objectContaining({
+        method: 'GET',
+      })
+    )
+  })
+
   it('fetches alternative model response shapes', async () => {
-    mocks.fetchTauri.mockResolvedValue(
+    mocks.fetchNative.mockResolvedValue(
       response({ models: ['llama3', { id: 'mistral' }] })
     )
 
@@ -97,7 +126,7 @@ describe('TauriProvidersService', () => {
       service.fetchModelsFromProvider(provider({ api_key: undefined }))
     ).resolves.toEqual(['llama3', 'mistral'])
 
-    mocks.fetchTauri.mockResolvedValue(response(['qwen', { id: 'phi' }]))
+    mocks.fetchNative.mockResolvedValue(response(['qwen', { id: 'phi' }]))
 
     await expect(service.fetchModelsFromProvider(provider())).resolves.toEqual([
       'qwen',
@@ -107,7 +136,7 @@ describe('TauriProvidersService', () => {
 
   it('returns an empty list for unexpected model response payloads', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    mocks.fetchTauri.mockResolvedValue(response({ items: [{ id: 'hidden' }] }))
+    mocks.fetchNative.mockResolvedValue(response({ items: [{ id: 'hidden' }] }))
 
     await expect(service.fetchModelsFromProvider(provider())).resolves.toEqual([])
 
@@ -141,7 +170,7 @@ describe('TauriProvidersService', () => {
     ],
   ])('throws descriptive HTTP errors for status %s', async (status, statusText, message) => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    mocks.fetchTauri.mockResolvedValue(
+    mocks.fetchNative.mockResolvedValue(
       response({}, { ok: false, status, statusText })
     )
 
@@ -152,9 +181,32 @@ describe('TauriProvidersService', () => {
     errorSpy.mockRestore()
   })
 
+  it('includes provider error body for failed model responses', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.fetchNative.mockResolvedValue(
+      response(
+        {},
+        {
+          ok: false,
+          status: 401,
+          statusText: 'Unauthorized',
+          text: vi.fn().mockResolvedValue(
+            '{"error":{"code":"401","message":"token expired or incorrect"}}'
+          ),
+        } as Partial<Response>
+      )
+    )
+
+    await expect(
+      service.fetchModelsFromProvider(provider({ provider: 'zai-coding' }))
+    ).rejects.toThrow('token expired or incorrect')
+
+    errorSpy.mockRestore()
+  })
+
   it('returns a connection-focused error when the Tauri fetch fails before a response', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    mocks.fetchTauri.mockRejectedValue(new Error('fetch failed'))
+    mocks.fetchNative.mockRejectedValue(new Error('fetch failed'))
 
     await expect(service.fetchModelsFromProvider(provider())).rejects.toThrow(
       'Cannot connect to openai at https://api.openai.test/v1. Please check that the service is running and accessible.'
@@ -165,10 +217,23 @@ describe('TauriProvidersService', () => {
 
   it('wraps unknown failures with provider context', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    mocks.fetchTauri.mockRejectedValue(new Error('socket closed'))
+    mocks.fetchNative.mockRejectedValue(new Error('socket closed'))
 
     await expect(service.fetchModelsFromProvider(provider())).rejects.toThrow(
       'Unexpected error while fetching models from openai: socket closed'
+    )
+
+    errorSpy.mockRestore()
+  })
+
+  it('preserves non-Error Tauri failure details', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.fetchNative.mockRejectedValue({
+      message: 'builder error: invalid URL contains whitespace',
+    })
+
+    await expect(service.fetchModelsFromProvider(provider())).rejects.toThrow(
+      'Unexpected error while fetching models from openai: builder error: invalid URL contains whitespace'
     )
 
     errorSpy.mockRestore()

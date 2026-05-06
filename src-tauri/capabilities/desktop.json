@@ -42,6 +42,9 @@
           "url": "https://api.github.com/**"
         },
         {
+          "url": "https://api.z.ai/**"
+        },
+        {
           "url": "https://github.com/**"
         },
         {

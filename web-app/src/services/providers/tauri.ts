@@ -13,6 +13,38 @@ import type { ProvidersService } from './types'
 import { getModelCapabilities } from '@/lib/models'
 import { providerModelsResponseSchema } from '@/schemas/providers.schema'
 
+function providerErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (typeof error === 'string') return error
+  if (error && typeof error === 'object') {
+    const record = error as Record<string, unknown>
+    if (typeof record.message === 'string') return record.message
+    if (typeof record.error === 'string') return record.error
+    try {
+      return JSON.stringify(error)
+    } catch {
+      return String(error)
+    }
+  }
+  return String(error)
+}
+
+function shouldUseTauriFetch(baseUrl: string): boolean {
+  return (
+    baseUrl.includes('localhost:') ||
+    baseUrl.includes('127.0.0.1:')
+  )
+}
+
+async function readErrorBody(response: Response): Promise<string> {
+  try {
+    const text = await response.text()
+    return text.slice(0, 300)
+  } catch {
+    return ''
+  }
+}
+
 export class TauriProvidersService implements ProvidersService {
   fetch(): typeof fetch {
     // Tauri implementation uses Tauri's fetch to avoid CORS issues
@@ -144,7 +176,8 @@ export class TauriProvidersService implements ProvidersService {
   }
 
   async fetchModelsFromProvider(provider: ModelProvider): Promise<string[]> {
-    if (!provider.base_url) {
+    const baseUrl = provider.base_url?.trim().replace(/\/+$/, '')
+    if (!baseUrl) {
       throw new Error('Provider must have base_url configured')
     }
 
@@ -160,10 +193,8 @@ export class TauriProvidersService implements ProvidersService {
 
       // Add Origin header for local providers to avoid CORS issues
       // Some local providers (like Ollama) require an Origin header
-      if (
-        provider.base_url.includes('localhost:') ||
-        provider.base_url.includes('127.0.0.1:')
-      ) {
+      const useTauriFetch = shouldUseTauriFetch(baseUrl)
+      if (useTauriFetch) {
         headers['Origin'] = 'tauri://localhost'
       }
 
@@ -181,30 +212,34 @@ export class TauriProvidersService implements ProvidersService {
         })
       }
 
-      // Always use Tauri's fetch to avoid CORS issues
-      const response = await fetchTauri(`${provider.base_url}/models`, {
+      // Use native fetch for remote HTTPS providers so CSP/browser diagnostics
+      // stay accurate; keep Tauri fetch for localhost providers that need CORS help.
+      const fetchImpl = useTauriFetch ? fetchTauri : globalThis.fetch
+      const response = await fetchImpl(`${baseUrl}/models`, {
         method: 'GET',
         headers,
         signal: controller.signal,
       })
 
       if (!response.ok) {
+        const errorBody = await readErrorBody(response)
+        const details = errorBody ? `: ${errorBody}` : ''
         // Provide more specific error messages based on status code (aligned with web implementation)
         if (response.status === 401) {
           throw new Error(
-            `Authentication failed: API key is required or invalid for ${provider.provider}`
+            `Authentication failed: API key is required or invalid for ${provider.provider}${details}`
           )
         } else if (response.status === 403) {
           throw new Error(
-            `Access forbidden: Check your API key permissions for ${provider.provider}`
+            `Access forbidden: Check your API key permissions for ${provider.provider}${details}`
           )
         } else if (response.status === 404) {
           throw new Error(
-            `Models endpoint not found for ${provider.provider}. Check the base URL configuration.`
+            `Models endpoint not found for ${provider.provider}. Check the base URL configuration.${details}`
           )
         } else {
           throw new Error(
-            `Failed to fetch models from ${provider.provider}: ${response.status} ${response.statusText}`
+            `Failed to fetch models from ${provider.provider}: ${response.status} ${response.statusText}${details}`
           )
         }
       }
@@ -258,15 +293,16 @@ export class TauriProvidersService implements ProvidersService {
       }
 
       // Provide helpful error message for any connection errors
-      if (error instanceof Error && error.message.includes('fetch')) {
+      const message = providerErrorMessage(error)
+      if (message.includes('fetch')) {
         throw new Error(
-          `Cannot connect to ${provider.provider} at ${provider.base_url}. Please check that the service is running and accessible.`
+          `Cannot connect to ${provider.provider} at ${baseUrl}. Please check that the service is running and accessible.`
         )
       }
 
       // Generic fallback
       throw new Error(
-        `Unexpected error while fetching models from ${provider.provider}: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Unexpected error while fetching models from ${provider.provider}: ${message}`
       )
     } finally {
       clearTimeout(timeoutId)
