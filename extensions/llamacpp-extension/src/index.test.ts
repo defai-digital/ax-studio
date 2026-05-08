@@ -325,6 +325,64 @@ describe('AxStudioLlamacppExtension', () => {
     })
   })
 
+  it('lists local models when readdir returns relative names', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    mocks.dirState.add('/app-data/llamacpp/models/Qwen3-4B-Instruct-MLX')
+    mocks.fsState.set(
+      '/app-data/llamacpp/models/Qwen3-4B-Instruct-MLX/model.yml',
+      [
+        'model_path: llamacpp/models/Qwen3-4B-Instruct-MLX',
+        'name: Qwen3-4B-Instruct-MLX',
+        'size_bytes: 123',
+        'embedding: false',
+      ].join('\n')
+    )
+    vi.mocked((await import('@ax-studio/core')).fs.readdirSync).mockImplementation(
+      async (path: string) => {
+        if (path === '/app-data/llamacpp/models') return ['Qwen3-4B-Instruct-MLX']
+        return []
+      }
+    )
+
+    await expect(extension.list()).resolves.toMatchObject([
+      {
+        id: 'Qwen3-4B-Instruct-MLX',
+        name: 'Qwen3-4B-Instruct-MLX',
+        providerId: 'llamacpp',
+      },
+    ])
+  })
+
+  it('lists local models when readdir returns absolute paths', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    mocks.dirState.add('/app-data/llamacpp/models/gemma-4-26b-a4b-it-4bit')
+    mocks.fsState.set(
+      '/app-data/llamacpp/models/gemma-4-26b-a4b-it-4bit/model.yml',
+      [
+        'model_path: llamacpp/models/gemma-4-26b-a4b-it-4bit',
+        'name: gemma-4-26b-a4b-it-4bit',
+        'size_bytes: 456',
+        'embedding: false',
+      ].join('\n')
+    )
+    vi.mocked((await import('@ax-studio/core')).fs.readdirSync).mockImplementation(
+      async (path: string) => {
+        if (path === '/app-data/llamacpp/models') {
+          return ['/app-data/llamacpp/models/gemma-4-26b-a4b-it-4bit']
+        }
+        return []
+      }
+    )
+
+    await expect(extension.list()).resolves.toMatchObject([
+      {
+        id: 'gemma-4-26b-a4b-it-4bit',
+        name: 'gemma-4-26b-a4b-it-4bit',
+        providerId: 'llamacpp',
+      },
+    ])
+  })
+
   it('fails import when the download extension is unavailable for remote files', async () => {
     const extension = new AxStudioLlamacppExtension('', '')
 

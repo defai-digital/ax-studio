@@ -881,9 +881,21 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         : modelsDir + sep
 
       // DFS to discover model directories (handles nested IDs like "author/model")
-      // readdirSync returns full absolute paths from the Rust backend
       const topEntries: string[] = (await fs.readdirSync(modelsDir)) ?? []
-      const stack: string[] = [...topEntries]
+      const toAbsoluteEntry = async (baseDir: string, entry: string) => {
+        const normalized = entry.replace(/\\/g, '/')
+        const normalizedBase = modelsDir.replace(/\\/g, '/')
+        if (
+          normalized === normalizedBase ||
+          normalized.startsWith(normalizedBase + '/')
+        ) {
+          return entry
+        }
+        return joinPath([baseDir, entry])
+      }
+      const stack: string[] = await Promise.all(
+        topEntries.map((entry) => toAbsoluteEntry(modelsDir, entry))
+      )
 
       while (stack.length > 0) {
         const entryPath = stack.pop()!
@@ -918,8 +930,12 @@ export default class AxStudioLlamacppExtension extends AIEngine {
           // No model.yml — might be a parent directory (e.g., "bartowski/"),
           // recurse into its children
           try {
+            const stat = await fs.fileStat(entryPath).catch(() => null)
+            if (!stat?.isDirectory) continue
             const subEntries: string[] = (await fs.readdirSync(entryPath)) ?? []
-            stack.push(...subEntries)
+            for (const subEntry of subEntries) {
+              stack.push(await toAbsoluteEntry(entryPath, subEntry))
+            }
           } catch (error) {
             console.debug(`[llamacpp] Skipping unreadable model entry ${entryPath}:`, error)
           }

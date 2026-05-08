@@ -104,7 +104,10 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
                 if entry_type.is_symlink() || entry_type.is_hard_link() {
                     log::warn!(
                         "Rejecting symlink/hardlink entry in extension archive: {}",
-                        entry.path().map(|p| p.display().to_string()).unwrap_or_default()
+                        entry
+                            .path()
+                            .map(|p| p.display().to_string())
+                            .unwrap_or_default()
                     );
                     continue;
                 }
@@ -163,6 +166,10 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
                     .unwrap_or(""),
             });
 
+            extensions_list.retain(|extension| {
+                extension.get("name").and_then(|name| name.as_str())
+                    != Some(extension_name.as_str())
+            });
             extensions_list.push(new_extension);
 
             log::info!("Installed extension to {extension_dir:?}");
@@ -286,7 +293,9 @@ mod tests {
     fn test_resolve_ax_fabric_mcp_config_structure() {
         let config = resolve_ax_fabric_mcp_config();
         assert_eq!(config["command"], "npx");
-        let args = config["args"].as_array().expect("'args' must be an array in test");
+        let args = config["args"]
+            .as_array()
+            .expect("'args' must be an array in test");
         assert_eq!(args.len(), 4);
         assert_eq!(args[0], "-y");
         assert_eq!(args[1], AX_STUDIO_MCP_PACKAGE);
@@ -301,7 +310,9 @@ mod tests {
         assert_eq!(config["active"], false);
         assert_eq!(config["official"], true);
         assert!(config["env"].is_object());
-        let args = config["args"].as_array().expect("'args' must be an array in test");
+        let args = config["args"]
+            .as_array()
+            .expect("'args' must be an array in test");
         assert!(args.contains(&serde_json::json!("-y")));
         assert!(args.contains(&serde_json::json!(AX_STUDIO_MCP_PACKAGE)));
     }
@@ -320,7 +331,9 @@ mod tests {
         let mut buf = Vec::new();
         {
             let mut builder = Builder::new(&mut buf);
-            builder.finish().expect("archive builder finish should not fail in test");
+            builder
+                .finish()
+                .expect("archive builder finish should not fail in test");
         }
 
         let cursor = Cursor::new(buf);
@@ -711,9 +724,8 @@ pub fn app_run_handler(app: &tauri::AppHandle, event: RunEvent) {
                     let cleanup_task = tauri::async_runtime::spawn(async move {
                         let state = cleanup_app.state::<super::state::AppState>();
                         background_cleanup_mcp_servers(&cleanup_app, &state).await;
-                        let _ =
-                            tauri_plugin_llamacpp::cleanup_llama_processes(cleanup_app.clone())
-                                .await;
+                        let _ = tauri_plugin_llamacpp::cleanup_llama_processes(cleanup_app.clone())
+                            .await;
                         log::info!("llama.cpp process cleanup completed");
                     });
                     *cleanup_guard = Some(cleanup_task);
