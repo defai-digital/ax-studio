@@ -1,3 +1,5 @@
+import { getCleanHuggingFaceRepoId } from './huggingface'
+
 export const decodeHubRouteParam = (value: string): string => {
   try {
     return decodeURIComponent(value)
@@ -12,13 +14,8 @@ export const encodeHubRouteParam = (value: string): string => {
 
 const huggingFaceRepoIdRegex = /huggingface\.co\/([^/?#]+\/[^/?#]+)/i
 
-const sanitizeHuggingFaceRepoId = (value: string): string => {
-  return value.trim().replace(/\/$/, '')
-}
-
-const isPotentialRepoId = (value: string): boolean => {
-  return value.includes('/')
-}
+const sanitizeHuggingFaceRepoId = (value: string): string =>
+  getCleanHuggingFaceRepoId(value)
 
 export const normalizeHuggingFaceRepoId = (
   value?: string
@@ -34,13 +31,13 @@ export const normalizeHuggingFaceRepoId = (
     return sanitizeHuggingFaceRepoId(decodeHubRouteParam(matched[1] ?? ''))
   }
 
-  const withoutPrefix = sanitizeHuggingFaceRepoId(
+  const withoutPrefix = getCleanHuggingFaceRepoId(
     trimmed
       .replace(/^https?:\/\/huggingface\.co\//i, '')
       .replace(/^huggingface\.co\//i, '')
   )
 
-  if (!isPotentialRepoId(withoutPrefix)) return undefined
+  if (!withoutPrefix.includes('/')) return undefined
   return withoutPrefix
 }
 

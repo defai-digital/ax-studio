@@ -142,18 +142,23 @@ fn build_upstream_url(
     destination_path: &str,
     is_anthropic_messages: bool,
 ) -> String {
-    let trimmed = base_url
-        .trim_end_matches('/')
-        .trim_end_matches("/messages")
-        .trim_end_matches("/chat/completions")
-        .trim_end_matches("/completions")
-        .trim_end_matches("/embeddings");
+    let trimmed = strip_provider_endpoint_suffix(base_url);
 
     if is_anthropic_messages {
         format!("{trimmed}/messages")
     } else {
         format!("{trimmed}{destination_path}")
     }
+}
+
+fn strip_provider_endpoint_suffix(base_url: &str) -> &str {
+    let trimmed = base_url
+        .trim_end_matches('/')
+        .trim_end_matches("/messages")
+        .trim_end_matches("/chat/completions")
+        .trim_end_matches("/completions")
+        .trim_end_matches("/embeddings");
+    trimmed
 }
 
 fn resolve_provider_config_from_map(
@@ -375,10 +380,7 @@ async fn try_anthropic_fallback(
     config: &ProxyConfig,
     client: &Client,
 ) -> Option<Result<Response<Body>, hyper::Error>> {
-    let fallback_url = target_base_url
-        .trim_end_matches("/messages")
-        .trim_end_matches('/')
-        .to_string();
+    let fallback_url = strip_provider_endpoint_suffix(&target_base_url).to_string();
 
     let json_body = match serde_json::from_slice::<serde_json::Value>(buffered_body) {
         Ok(v) => v,
