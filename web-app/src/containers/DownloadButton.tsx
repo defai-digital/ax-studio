@@ -5,8 +5,8 @@ import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useTranslation } from '@/i18n'
-import { cn, sanitizeModelId } from '@/lib/utils'
-import { getHuggingFaceEncodedModelUrl } from '@/lib/huggingface'
+import { cn } from '@/lib/utils'
+import { getHuggingFaceModelUrl } from '@/lib/huggingface'
 import { CatalogModel } from '@/services/models/types'
 import { AppEvent, DownloadEvent, DownloadState, events } from '@ax-studio/core'
 import { toast } from 'sonner'
@@ -14,10 +14,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { DEFAULT_MODEL_QUANTIZATIONS } from '@/constants/models'
 import { ExternalLink, Download, Pause, Play } from 'lucide-react'
+import { findDownloadedLocalModel } from '@/lib/models/downloaded'
 
 type ModelProps = {
   model: CatalogModel
-  handleUseModel: (modelId: string) => void
+  handleUseModel: (modelId: string, provider?: string) => void
 }
 
 export function DownloadButtonPlaceholder({
@@ -39,8 +40,7 @@ export function DownloadButtonPlaceholder({
       }))
     )
   const { t } = useTranslation()
-  const getProviderByName = useModelProvider((state) => state.getProviderByName)
-  const llamaProvider = getProviderByName('llamacpp')
+  const providers = useModelProvider((state) => state.providers)
 
   const serviceHub = useServiceHub()
   const huggingfaceToken = useGeneralSetting((state) => state.huggingfaceToken)
@@ -68,22 +68,14 @@ export function DownloadButtonPlaceholder({
     [downloads]
   )
 
-  useEffect(() => {
-    const isDownloaded = llamaProvider?.models.some((m: { id: string }) => {
-      const parts = modelId.split('/')
-      const name = parts[parts.length - 1]
-      const sanitizedName = sanitizeModelId(name)
-      const author = parts.length > 1 ? parts.slice(0, -1).join('/') : ''
+  const downloadedModel = useMemo(
+    () => findDownloadedLocalModel(providers, modelId, model.developer),
+    [providers, modelId, model.developer]
+  )
 
-      return (
-        m.id === modelId ||
-        m.id === sanitizedName ||
-        (author && m.id === `${author}/${sanitizedName}`) ||
-        m.id === `${model.developer}/${sanitizedName}`
-      )
-    })
-    setDownloaded(!!isDownloaded)
-  }, [llamaProvider, modelId, model.developer])
+  useEffect(() => {
+    setDownloaded(!!downloadedModel)
+  }, [downloadedModel])
 
   useEffect(() => {
     const handleVerified = (state: DownloadState) => {
@@ -113,7 +105,7 @@ export function DownloadButtonPlaceholder({
   if ((model.quants?.length ?? 0) === 0) {
     return (
       <a
-        href={getHuggingFaceEncodedModelUrl(model.model_name)}
+        href={getHuggingFaceModelUrl(model.model_name)}
         target="_blank"
         rel="noopener noreferrer"
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted hover:bg-accent text-foreground/70 hover:text-foreground text-[12px] font-medium transition-colors border border-border/50"
@@ -215,7 +207,12 @@ export function DownloadButtonPlaceholder({
         <Button
           variant="default"
           size="sm"
-          onClick={() => handleUseModel(modelId)}
+          onClick={() =>
+            handleUseModel(
+              downloadedModel?.modelId ?? modelId,
+              downloadedModel?.providerId
+            )
+          }
           data-test-id={`hub-model-${modelId}`}
         >
           {t('hub:newChat')}

@@ -82,7 +82,8 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   useTools()
 
   const thread = useThreads(useShallow((state) => state.threads[threadId]))
-  const selectedModel =
+  const providers = useModelProvider((state) => state.providers)
+  const selectedModelFromStore =
     useModelProvider((state) => state.selectedModel) ?? undefined
   const selectedProvider = useModelProvider((state) => state.selectedProvider)
   const { globalDefaultPrompt, autoTuningEnabled } = useGeneralSetting()
@@ -103,6 +104,16 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   )
   const alwaysCiteSources = useGuardrails((s) => s.alwaysCiteSources)
   const projectId = thread?.metadata?.project?.id
+  const selectedModel = useMemo(() => {
+    if (!thread?.model) return selectedModelFromStore
+    return (
+      providers
+        .find((provider) => provider.provider === thread.model?.provider)
+        ?.models.find((model) => model.id === thread.model?.id) ??
+      selectedModelFromStore
+    )
+  }, [providers, selectedModelFromStore, thread?.model])
+  const selectedProviderId = thread?.model?.provider ?? selectedProvider
   const { pinnedResearch, clearResearch, handleResearchCommand, cancelResearch } =
     useThreadResearch(threadId)
   const { promptResolution, optimizedModelConfig } = useThreadConfig({
@@ -124,7 +135,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     setSplitThreadId,
     setSplitDirection,
     handleSplit,
-  } = useThreadSplit({ thread, selectedModel, selectedProvider })
+  } = useThreadSplit({ thread, selectedModel, selectedProvider: selectedProviderId })
 
   // ─── UI state ─────────────────────────────────────────────────────────────
   const [threadPromptDraft, setThreadPromptDraft] = useState('')
@@ -153,6 +164,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
       (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : '') +
       (localKnowledgeActive || alwaysCiteSources ? CITATION_FORMAT_INSTRUCTION : ''),
     modelOverrideId: optimizedModelConfig.modelId,
+    modelOverrideProviderId: selectedProviderId,
     inferenceParameters: {
       temperature: optimizedModelConfig.temperature,
       top_p: optimizedModelConfig.top_p,
@@ -211,6 +223,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     handleContextSizeIncrease,
   } = useThreadChat({
     threadId,
+    threadModel: thread?.model,
     sendMessage,
     regenerate,
     chatMessages,

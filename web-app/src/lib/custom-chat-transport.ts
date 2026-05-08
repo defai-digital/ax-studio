@@ -80,23 +80,27 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
   private threadId?: string
   private inferenceParameters: Record<string, unknown>
   private modelOverrideId?: string
+  private modelOverrideProviderId?: string
 
   constructor(
     systemMessage?: string,
     threadId?: string,
     inferenceParameters: Record<string, unknown> = {},
-    modelOverrideId?: string
+    modelOverrideId?: string,
+    modelOverrideProviderId?: string
   ) {
     this.systemMessage = systemMessage
     this.threadId = threadId
     this.inferenceParameters = { ...inferenceParameters }
     this.modelOverrideId = modelOverrideId
+    this.modelOverrideProviderId = modelOverrideProviderId
     this.serviceHub = useServiceStore.getState().serviceHub
   }
 
   updateSystemMessage(systemMessage: string | undefined) { this.systemMessage = systemMessage }
   updateInferenceParameters(parameters: Record<string, unknown>) { this.inferenceParameters = { ...parameters } }
   updateModelOverrideId(modelId: string | undefined) { this.modelOverrideId = modelId }
+  updateModelOverrideProviderId(providerId: string | undefined) { this.modelOverrideProviderId = providerId }
   setOnTokenUsage(callback: TokenUsageCallback | undefined) { this.onTokenUsage = callback }
 
   private getThreadMetadata(): Record<string, unknown> | null {
@@ -122,8 +126,16 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
       disabledToolKeys.includes(`${serverName}::${toolName}`)
 
     if (this.serviceHub) {
+      const providerId =
+        this.modelOverrideProviderId ?? useModelProvider.getState().selectedProvider
+      const modelId =
+        this.modelOverrideId ?? useModelProvider.getState().selectedModel?.id
+      const provider = providerId
+        ? useModelProvider.getState().getProviderByName(providerId)
+        : undefined
+      const model = provider?.models.find((entry) => entry.id === modelId)
       const modelSupportsTools = overrideModelSupportsTools
-        ?? useModelProvider.getState().selectedModel?.capabilities?.includes('tools')
+        ?? model?.capabilities?.includes('tools')
         ?? this.modelSupportsTools
 
       if (modelSupportsTools) {
@@ -202,7 +214,7 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
     const selectedProviderId = useModelProvider.getState().selectedProvider
 
     const fallbackModelId = this.modelOverrideId ?? selectedModelId ?? ''
-    const fallbackProviderId = selectedProviderId
+    const fallbackProviderId = this.modelOverrideProviderId ?? selectedProviderId
     let finalModelId = fallbackModelId
     let finalProviderId = fallbackProviderId
     let preparedForPreflightKey: string | null = null

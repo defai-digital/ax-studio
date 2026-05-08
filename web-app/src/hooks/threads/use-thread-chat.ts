@@ -42,6 +42,7 @@ type RegenerateFn = (args?: { messageId?: string }) => void
 
 export type ThreadChatParams = {
   threadId: string
+  threadModel?: ThreadModel
 
   // From useChat
   sendMessage: SendMessageFn
@@ -69,6 +70,7 @@ export type ThreadChatResult = {
 
 export function useThreadChat({
   threadId,
+  threadModel,
   sendMessage,
   regenerate,
   setChatMessages,
@@ -441,14 +443,16 @@ export function useThreadChat({
   }, [])
 
   const handleContextSizeIncrease = useCallback(async () => {
-    if (!selectedModel) return
-
     const updateProvider = useModelProvider.getState().updateProvider
-    const provider = getProviderByName(selectedProvider)
+    const providerName = threadModel?.provider ?? selectedProvider
+    const modelId = threadModel?.id ?? selectedModel?.id
+    if (!modelId) return
+
+    const provider = getProviderByName(providerName)
     if (!provider) return
 
     const modelIndex = provider.models.findIndex(
-      (m) => m.id === selectedModel.id
+      (m) => m.id === modelId
     )
     if (modelIndex === -1) return
 
@@ -478,7 +482,7 @@ export function useThreadChat({
     const controller = new AbortController()
     contextIncreaseAbortRef.current = controller
 
-    await serviceHub.models().stopModel(selectedModel.id)
+    await serviceHub.models().stopModel(modelId, provider.provider)
     if (controller.signal.aborted) return
     if (contextIncreaseTimerRef.current) {
       clearTimeout(contextIncreaseTimerRef.current)
@@ -491,6 +495,7 @@ export function useThreadChat({
   }, [
     selectedModel,
     selectedProvider,
+    threadModel,
     getProviderByName,
     serviceHub,
     handleRegenerate,

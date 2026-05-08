@@ -10,6 +10,7 @@ import {
 import type { UIMessageChunk } from 'ai'
 import type { TokenUsageCallback } from './transport-types'
 import { stripUnavailableToolParts } from './transport-types'
+import { useAppState } from '@/hooks/settings/useAppState'
 
 export interface SingleAgentConfig {
   model: LanguageModel
@@ -60,6 +61,22 @@ export async function executeSingleAgentStream(
 
   let tokensPerSecond = 0
   let totalChars = 0
+  let lastSpeedUpdate = 0
+
+  const updateTokenSpeed = () => {
+    if (!streamStartTime) return
+    const durationMs = Date.now() - streamStartTime
+    const tokenCount = Math.ceil(totalChars / 4)
+    if (durationMs <= 0 || tokenCount <= 0) return
+
+    const durationSec = durationMs / 1000
+    const tokenSpeed = Math.round((tokenCount / durationSec) * 10) / 10
+    useAppState.getState().setTokenSpeed(
+      { id: 'streaming' } as never,
+      tokenSpeed,
+      tokenCount
+    )
+  }
 
   return result.toUIMessageStream({
     messageMetadata: ({ part }) => {
@@ -72,6 +89,11 @@ export async function executeSingleAgentStream(
           streamStartTime = Date.now()
         }
         totalChars += text.length
+        const now = Date.now()
+        if (now - lastSpeedUpdate > 500) {
+          lastSpeedUpdate = now
+          updateTokenSpeed()
+        }
       }
 
       if (part.type === 'finish-step') {
@@ -102,6 +124,11 @@ export async function executeSingleAgentStream(
         } else {
           tokenSpeed = 0
         }
+        useAppState.getState().setTokenSpeed(
+          { id: 'streaming' } as never,
+          Math.round(tokenSpeed * 10) / 10,
+          tokenCount
+        )
 
         return {
           usage: {

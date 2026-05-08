@@ -59,7 +59,8 @@ async function withProviderTimeout<T>(
 function shouldUseTauriFetch(baseUrl: string): boolean {
   return (
     baseUrl.includes('localhost:') ||
-    baseUrl.includes('127.0.0.1:')
+    baseUrl.includes('127.0.0.1:') ||
+    baseUrl.includes('generativelanguage.googleapis.com')
   )
 }
 
@@ -259,6 +260,9 @@ export class TauriProvidersService implements ProvidersService {
       // Only add authentication headers if API key is provided
       if (provider.api_key) {
         headers['Authorization'] = `Bearer ${provider.api_key}`
+        if (provider.provider === 'gemini') {
+          headers['x-goog-api-key'] = provider.api_key
+        }
       }
 
       if (provider.custom_header) {

@@ -42,6 +42,7 @@ const ChatInput = memo(function ChatInput({
   initialMessage,
   projectId,
   threadId,
+  model,
   onSubmit,
   onStop,
   chatStatus,
@@ -139,7 +140,14 @@ const ChatInput = memo(function ChatInput({
     effectiveThreadId,
   })
 
-  const selectedModel = useModelProvider((state) => state.selectedModel) ?? undefined
+  const providers = useModelProvider((state) => state.providers)
+  const selectedModelFromStore = useModelProvider((state) => state.selectedModel) ?? undefined
+  const selectedModel = model
+    ? providers
+        .find((provider) => provider.provider === model.provider)
+        ?.models.find((providerModel) => providerModel.id === model.id) ??
+      selectedModelFromStore
+    : selectedModelFromStore
   const hasVisionSupport = selectedModel?.capabilities?.includes('vision') ?? false
   const {
     isDragOver,
@@ -408,7 +416,7 @@ const ChatInput = memo(function ChatInput({
 
       {!tokenCounterCompact && !initialMessage && (threadMessages?.length > 0 || prompt.trim().length > 0) && (
         <div className="flex-1 w-full flex justify-start px-2">
-          <TokenCounter messages={threadMessages || []} />
+          <TokenCounter messages={threadMessages || []} model={selectedModel} />
         </div>
       )}
 

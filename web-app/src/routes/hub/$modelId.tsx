@@ -17,7 +17,6 @@ import { useServiceHub } from '@/hooks/useServiceHub'
 import type { CatalogModel, ModelQuant } from '@/services/models/types'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
-import { sanitizeModelId } from '@/lib/utils'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { ModelInfoHoverCard } from '@/containers/ModelInfoHoverCard'
@@ -30,6 +29,7 @@ import {
 } from '@/lib/hub'
 import { z } from 'zod/v4'
 import { toast } from 'sonner'
+import { findDownloadedLocalModel } from '@/lib/models/downloaded'
 
 type SearchParams = {
   repo: string
@@ -57,8 +57,7 @@ function HubModelDetailContent() {
   const { sources, fetchSources } = useModelSources()
   const search = useSearch({ from: Route.id })
 
-  const getProviderByName = useModelProvider((state) => state.getProviderByName)
-  const llamaProvider = getProviderByName('llamacpp')
+  const providers = useModelProvider((state) => state.providers)
   const { downloads, localDownloadingModels, addLocalDownloadingModel } =
     useDownloadStore()
   const serviceHub = useServiceHub()
@@ -148,14 +147,14 @@ function HubModelDetailContent() {
 
   // Handle model use
   const handleUseModel = useCallback(
-    (modelId: string) => {
+    (modelId: string, provider = 'llamacpp') => {
       navigate({
         to: route.home,
         params: {},
         search: {
           model: {
             id: modelId,
-            provider: 'llamacpp',
+            provider,
           },
         },
       })
@@ -489,14 +488,12 @@ function HubModelDetailContent() {
                   const downloadProgress =
                     downloadProcesses.find((e) => e.id === variant.model_id)
                       ?.progress || 0
-                  // Check if model is already downloaded by looking
-                  // at the llamacpp provider's installed models list
-                  const isDownloaded = !!llamaProvider?.models?.some(
-                    (m: { id: string }) =>
-                      m.id === variant.model_id ||
-                      m.id ===
-                        `${modelData.developer}/${sanitizeModelId(variant.model_id.split('/').pop() || '')}`
+                  const downloadedModel = findDownloadedLocalModel(
+                    providers,
+                    variant.model_id,
+                    modelData.developer
                   )
+                  const isDownloaded = !!downloadedModel
 
                   // Extract format from model_id
                   const format = variant.model_id
@@ -562,7 +559,12 @@ function HubModelDetailContent() {
                                 variant="default"
                                 size="sm"
                                 className="rounded-lg"
-                                onClick={() => handleUseModel(variant.model_id)}
+                                onClick={() =>
+                                  handleUseModel(
+                                    downloadedModel?.modelId ?? variant.model_id,
+                                    downloadedModel?.providerId
+                                  )
+                                }
                               >
                                 {t('hub:newChat')}
                               </Button>

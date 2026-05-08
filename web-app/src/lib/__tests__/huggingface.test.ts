@@ -21,9 +21,9 @@ describe('getHuggingFaceModelUrl', () => {
 })
 
 describe('getHuggingFaceEncodedModelUrl', () => {
-  it('encodes slashes for API-safe or legacy model URL usage', () => {
+  it('preserves repo path separators for browser-facing model URLs', () => {
     expect(getHuggingFaceEncodedModelUrl('microsoft/DialoGPT-medium')).toBe(
-      'https://huggingface.co/microsoft%2FDialoGPT-medium'
+      'https://huggingface.co/microsoft/DialoGPT-medium'
     )
   })
 })
@@ -41,7 +41,7 @@ describe('getHuggingFaceEncodedModelFileUrl', () => {
     expect(
       getHuggingFaceEncodedModelFileUrl('microsoft/DialoGPT-medium', 'model-Q4_0 GGUF')
     ).toBe(
-      'https://huggingface.co/microsoft%2FDialoGPT-medium/resolve/main/model-Q4_0%20GGUF'
+      'https://huggingface.co/microsoft/DialoGPT-medium/resolve/main/model-Q4_0%20GGUF'
     )
   })
 })

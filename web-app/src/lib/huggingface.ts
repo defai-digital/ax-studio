@@ -23,7 +23,7 @@ export function getCleanHuggingFaceRepoId(rawRepoId: string): string {
 }
 
 export function getHuggingFaceEncodedModelUrl(modelName: string): string {
-  return `https://huggingface.co/${encodeURIComponent(modelName)}`
+  return getHuggingFaceModelUrl(modelName)
 }
 
 export function getHuggingFaceModelFileUrl(

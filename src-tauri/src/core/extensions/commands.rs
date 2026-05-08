@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Runtime};
 
 use crate::core::app::commands::get_app_data_folder_path;
@@ -27,8 +27,14 @@ pub fn get_active_extensions<R: Runtime>(app: AppHandle<R>) -> Vec<serde_json::V
             Ok(exts) => exts
                 .into_iter()
                 .map(|ext| {
+                    let url = ext["url"]
+                        .as_str()
+                        .and_then(|value| Path::new(value).file_name())
+                        .map(|value| value.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "index.js".to_string());
+
                     serde_json::json!({
-                        "url": ext["url"],
+                        "url": url,
                         "name": ext["name"],
                         "productName": ext["productName"],
                         "active": ext["active"],

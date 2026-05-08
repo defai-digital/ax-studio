@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::core::server::proxy;
+    use crate::core::server::{cors, proxy};
 
     #[test]
     fn test_get_destination_path_basic() {
@@ -84,7 +84,7 @@ mod tests {
 
     #[test]
     fn test_allowed_methods() {
-        let allowed_methods = super::cors::CORS_ALLOWED_METHODS;
+        let allowed_methods = cors::CORS_ALLOWED_METHODS;
         assert!(allowed_methods.contains(&"POST"));
         assert!(allowed_methods.contains(&"GET"));
         assert!(allowed_methods.contains(&"OPTIONS"));
@@ -92,7 +92,7 @@ mod tests {
 
     #[test]
     fn test_allowed_headers() {
-        let allowed_headers = super::cors::CORS_RESPONSE_ALLOWED_HEADERS;
+        let allowed_headers = cors::CORS_RESPONSE_ALLOWED_HEADERS;
         assert!(allowed_headers.contains(&"authorization"));
         assert!(allowed_headers.contains(&"content-type"));
         assert!(allowed_headers.contains(&"x-api-key"));
@@ -246,7 +246,7 @@ mod tests {
     #[test]
     fn test_x_api_key_in_cors_allowed_headers() {
         // Verify x-api-key is in the CORS allowed headers list used by the proxy
-        let allowed_headers = super::cors::CORS_PREFLIGHT_ALLOWED_HEADERS;
+        let allowed_headers = cors::CORS_PREFLIGHT_ALLOWED_HEADERS;
         assert!(allowed_headers.contains(&"x-api-key"));
         assert!(allowed_headers.contains(&"x-ax-request-role"));
     }

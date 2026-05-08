@@ -177,6 +177,34 @@ export const MessageItem = memo(
           ? extractFilesFromPrompt(part.text).cleanPrompt
           : part.text
 
+      const thinkMatch =
+        message.role === 'assistant'
+          ? displayText.match(/<think[^>]*>([\s\S]*?)(?:<\/think>|$)([\s\S]*)/i)
+          : null
+
+      if (thinkMatch) {
+        const reasoningText = thinkMatch[1]?.trim() ?? ''
+        const finalText = (thinkMatch[2] ?? '').trim()
+
+        return (
+          <div key={`${message.id}-${partIndex}`} className="w-full min-w-0 overflow-hidden">
+            {reasoningText &&
+              renderReasoningPart(
+                { type: 'reasoning', text: reasoningText },
+                partIndex
+              )}
+            {finalText && (
+              <RenderMarkdown
+                content={finalText}
+                isStreaming={isStreaming && isLastPart}
+                messageId={message.id}
+                threadId={threadId}
+              />
+            )}
+          </div>
+        )
+      }
+
       if (
         !displayText.trim() &&
         message.role === 'user' &&

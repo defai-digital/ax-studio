@@ -8,13 +8,13 @@ const {
   mockRemoveLocalDownloadingModel,
   mockPullModelWithMetadata,
   mockToastError,
-  mockGetProviderByName,
+  mockProviders,
 } = vi.hoisted(() => ({
   mockAddLocalDownloadingModel: vi.fn(),
   mockRemoveLocalDownloadingModel: vi.fn(),
   mockPullModelWithMetadata: vi.fn(),
   mockToastError: vi.fn(),
-  mockGetProviderByName: vi.fn(),
+  mockProviders: { current: [] as ModelProvider[] },
 }))
 
 vi.mock('@/hooks/models/useDownloadStore', () => ({
@@ -37,7 +37,7 @@ vi.mock('@/hooks/settings/useGeneralSetting', () => ({
 
 vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: vi.fn((selector) =>
-    selector({ getProviderByName: mockGetProviderByName })
+    selector({ providers: mockProviders.current })
   ),
 }))
 
@@ -130,7 +130,7 @@ describe('DownloadButtonPlaceholder', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    mockGetProviderByName.mockReturnValue({ models: [] })
+    mockProviders.current = []
     mockPullModelWithMetadata.mockResolvedValue(undefined)
   })
 
@@ -172,9 +172,9 @@ describe('DownloadButtonPlaceholder', () => {
   })
 
   it('renders "New Chat" button when model is downloaded', () => {
-    mockGetProviderByName.mockReturnValue({
-      models: [{ id: 'test-model-q4_k_m' }],
-    })
+    mockProviders.current = [
+      { provider: 'llamacpp', models: [{ id: 'test-model-q4_k_m' }] } as ModelProvider,
+    ]
 
     render(
       <DownloadButtonPlaceholder
@@ -187,9 +187,9 @@ describe('DownloadButtonPlaceholder', () => {
   })
 
   it('calls handleUseModel with modelId when "New Chat" is clicked', () => {
-    mockGetProviderByName.mockReturnValue({
-      models: [{ id: 'test-model-q4_k_m' }],
-    })
+    mockProviders.current = [
+      { provider: 'llamacpp', models: [{ id: 'test-model-q4_k_m' }] } as ModelProvider,
+    ]
 
     render(
       <DownloadButtonPlaceholder
@@ -199,7 +199,10 @@ describe('DownloadButtonPlaceholder', () => {
     )
 
     fireEvent.click(screen.getByText('hub:newChat'))
-    expect(handleUseModel).toHaveBeenCalledWith('test-model-q4_k_m')
+    expect(handleUseModel).toHaveBeenCalledWith(
+      'test-model-q4_k_m',
+      'llamacpp'
+    )
   })
 
   it('starts download when download button is clicked', () => {

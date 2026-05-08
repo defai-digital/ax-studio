@@ -28,8 +28,8 @@ import { huggingFaceRepoSchema } from '@/schemas/models.schema'
 import {
   getCleanHuggingFaceRepoId,
   getHuggingFaceApiModelUrl,
-  getHuggingFaceEncodedModelFileUrl,
-  getHuggingFaceEncodedModelUrl,
+  getHuggingFaceModelFileUrl,
+  getHuggingFaceModelUrl,
 } from '@/lib/huggingface'
 
 // Default provider for local inference
@@ -164,7 +164,7 @@ export class DefaultModelsService implements ModelsService {
 
       return {
         model_id: `${repo.author}/${sanitizeModelId(modelId)}`,
-        path: getHuggingFaceEncodedModelFileUrl(repo.modelId, file.rfilename),
+        path: getHuggingFaceModelFileUrl(repo.modelId, file.rfilename),
         file_size: formatFileSize(file.size),
       }
     })
@@ -175,7 +175,7 @@ export class DefaultModelsService implements ModelsService {
 
       return {
         model_id: sanitizeModelId(modelId),
-        path: getHuggingFaceEncodedModelFileUrl(repo.modelId, file.rfilename),
+        path: getHuggingFaceModelFileUrl(repo.modelId, file.rfilename),
         file_size: formatFileSize(file.size),
       }
     })
@@ -196,7 +196,7 @@ export class DefaultModelsService implements ModelsService {
 
       return {
         model_id: sanitizeModelId(modelId),
-        path: getHuggingFaceEncodedModelFileUrl(repo.modelId, file.rfilename),
+        path: getHuggingFaceModelFileUrl(repo.modelId, file.rfilename),
         file_size: formatFileSize(file.size),
         sha256: file.lfs?.sha256,
       }
@@ -214,7 +214,7 @@ export class DefaultModelsService implements ModelsService {
       safetensors_files: safetensorsModels,
       num_safetensors: safetensorsModels.length,
       is_mlx: hasMlxFiles,
-      readme: `${getHuggingFaceEncodedModelUrl(repo.modelId)}/resolve/main/README.md`,
+      readme: `${getHuggingFaceModelUrl(repo.modelId)}/resolve/main/README.md`,
       description: `**Tags**: ${repo.tags?.join(', ')}`,
     }
   }

@@ -70,6 +70,19 @@ const parseReasoning = (text: string) => {
   return { reasoningSegment: undefined, textSegment: text }
 }
 
+const splitThinkTaggedText = (text: string): {
+  reasoningText?: string
+  text: string
+} => {
+  const match = text.match(/<think[^>]*>([\s\S]*?)(?:<\/think>|$)([\s\S]*)/i)
+  if (!match) return { text }
+
+  return {
+    reasoningText: match[1]?.trim(),
+    text: (match[2] ?? '').trim(),
+  }
+}
+
 /**
  * Convert Ax-Studio's ThreadMessage format to AI SDK UIMessage format.
  * This is used to load existing messages into the AI SDK chat.
@@ -266,7 +279,18 @@ export function extractContentPartsFromUIMessage(message: UIMessage): ThreadCont
       }
     } else if (part.type === 'text') {
       // Add text content as separate item
-      const textContent = part.text ?? ''
+      const { reasoningText, text: textContent } = splitThinkTaggedText(
+        part.text ?? ''
+      )
+      if (reasoningText) {
+        content.push({
+          type: 'reasoning' as ContentType.Reasoning,
+          text: {
+            value: reasoningText,
+            annotations: [],
+          },
+        })
+      }
       if (textContent) {
         content.push({
           type: 'text' as ContentType.Text,
@@ -288,9 +312,12 @@ export function extractContentPartsFromUIMessage(message: UIMessage): ThreadCont
           },
         })
       }
-    } else if (part.type.startsWith('tool-')) {
+    } else if (part.type === 'dynamic-tool' || part.type.startsWith('tool-')) {
       // Handle tool call parts - flatten structure to match parts format
-      const toolName = (part.type as string).replace('tool-', '')
+      const toolName =
+        part.type === 'dynamic-tool'
+          ? part.toolName
+          : (part.type as string).replace('tool-', '')
       const toolCallId = part.toolCallId || part.toolInvocationId
       const input = part.input || part.args
       const output = part.output || part.result

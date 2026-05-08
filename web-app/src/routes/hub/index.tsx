@@ -36,10 +36,10 @@ import { ModelDownloadAction } from '@/containers/ModelDownloadAction'
 import { DEFAULT_MODEL_QUANTIZATIONS } from '@/constants/models'
 import { Button } from '@/components/ui/button'
 import { RenderMarkdown } from '@/containers/RenderMarkdown'
-import { sanitizeModelId } from '@/lib/utils'
 import { encodeHubRouteParam } from '@/lib/hub'
 import { z } from 'zod/v4'
 import { isMlxCatalogModel } from './-hubFilters'
+import { findDownloadedCatalogModel } from '@/lib/models/downloaded'
 
 type FilterTag = 'all' | 'downloaded' | 'mlx' | 'tools' | 'vision' | 'reasoning'
 
@@ -65,7 +65,7 @@ function HubContent() {
   const [isPending, startTransition] = useTransition()
   const huggingfaceToken = useGeneralSetting((state) => state.huggingfaceToken)
   const serviceHub = useServiceHub()
-  const getProviderByName = useModelProvider((state) => state.getProviderByName)
+  const providers = useModelProvider((state) => state.providers)
 
   const { t } = useTranslation()
 
@@ -179,23 +179,9 @@ function HubContent() {
   // Helper to check if a model is downloaded
   const isModelDownloaded = useCallback(
     (model: CatalogModel) => {
-      const llamaProvider = getProviderByName('llamacpp')
-      return !!model.quants?.some((quant) =>
-        llamaProvider?.models?.some((m) => {
-          const parts = quant.model_id.split('/')
-          const name = parts.length > 1 ? parts[1] : parts[0]
-          const sanitizedName = sanitizeModelId(name)
-          const author = parts.length > 1 ? parts[0] : ''
-          return (
-            m.id === quant.model_id ||
-            m.id === sanitizedName ||
-            (author && m.id === `${author}/${sanitizedName}`) ||
-            (model.developer && m.id === `${model.developer}/${sanitizedName}`)
-          )
-        })
-      )
+      return !!findDownloadedCatalogModel(providers, model)
     },
-    [getProviderByName]
+    [providers]
   )
 
   const filteredModels = useMemo(() => {
@@ -333,14 +319,14 @@ function HubContent() {
   const navigate = useNavigate()
 
   const handleUseModel = useCallback(
-    (modelId: string) => {
+    (modelId: string, provider = 'llamacpp') => {
       navigate({
         to: route.home,
         params: {},
         search: {
           model: {
             id: modelId,
-            provider: 'llamacpp',
+            provider,
           },
         },
       })
@@ -622,7 +608,11 @@ function HubContent() {
                         )
                       ) ?? model.quants?.[0]
 
-                    const downloaded = isModelDownloaded(model)
+                    const downloadedModel = findDownloadedCatalogModel(
+                      providers,
+                      model
+                    )
+                    const downloaded = !!downloadedModel
 
                     // Get compatibility status from the default quant
                     const compatStatus = defaultQuant
@@ -782,7 +772,11 @@ function HubContent() {
                                 <button
                                   onClick={() => {
                                     if (defaultQuant) {
-                                      handleUseModel(defaultQuant.model_id)
+                                      handleUseModel(
+                                        downloadedModel?.modelId ??
+                                          defaultQuant.model_id,
+                                        downloadedModel?.providerId
+                                      )
                                     }
                                   }}
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-[12px] font-medium shadow-sm transition-all hover:shadow-md"

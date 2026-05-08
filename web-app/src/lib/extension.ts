@@ -186,8 +186,15 @@ export class ExtensionManager {
     }
     
     // Import class for Tauri extensions
-    const extensionUrl = extension.url
+    let extensionUrl = extension.url
     try {
+      if (!/^(?:[a-z]+:|\/|[A-Za-z]:[\\/])/.test(extensionUrl)) {
+        const extensionsPath = await getServiceHub()
+          .core()
+          .invoke<string>('get_app_extensions_path')
+        extensionUrl = `${extensionsPath}/${extension.name}/${extensionUrl}`
+      }
+
       const extensionClass = await import(/* @vite-ignore */ getServiceHub().core().convertFileSrc(extensionUrl))
       // Register class if it has a default export
       if (

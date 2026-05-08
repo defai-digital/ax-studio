@@ -7,12 +7,14 @@ const {
   mockPullModelWithMetadata,
   mockNavigate,
   mockToastError,
+  mockProviders,
 } = vi.hoisted(() => ({
   mockAddLocalDownloadingModel: vi.fn(),
   mockRemoveLocalDownloadingModel: vi.fn(),
   mockPullModelWithMetadata: vi.fn(),
   mockNavigate: vi.fn(),
   mockToastError: vi.fn(),
+  mockProviders: { current: [] as ModelProvider[] },
 }))
 
 vi.mock('@/hooks/models/useDownloadStore', () => ({
@@ -32,7 +34,7 @@ vi.mock('@/hooks/settings/useGeneralSetting', () => ({
 
 vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: vi.fn((selector) =>
-    selector({ getProviderByName: () => ({ models: [] }) })
+    selector({ providers: mockProviders.current })
   ),
 }))
 
@@ -110,6 +112,7 @@ describe('ModelDownloadAction', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockProviders.current = []
     mockPullModelWithMetadata.mockResolvedValue(undefined)
   })
 

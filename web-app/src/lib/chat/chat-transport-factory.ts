@@ -10,6 +10,7 @@ export type TransportOptions = {
   sessionId?: string
   inferenceParameters?: Record<string, unknown>
   modelOverrideId?: string
+  modelOverrideProviderId?: string
 }
 
 export function createChatTransport(options: TransportOptions): CustomChatTransport {
@@ -17,6 +18,7 @@ export function createChatTransport(options: TransportOptions): CustomChatTransp
     options.systemMessage,
     options.sessionId,
     options.inferenceParameters,
-    options.modelOverrideId
+    options.modelOverrideId,
+    options.modelOverrideProviderId
   )
 }

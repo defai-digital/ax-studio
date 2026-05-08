@@ -21,6 +21,7 @@ interface TokenCounterProps {
     base64: string
     dataUrl: string
   }>
+  model?: Model
 }
 
 export const TokenCounter = memo(function TokenCounter({
@@ -28,10 +29,12 @@ export const TokenCounter = memo(function TokenCounter({
   className,
   additionalTokens = 0,
   uploadedFiles = [],
+  model,
 }: TokenCounterProps) {
   const { calculateTokens, ...tokenData } = useTokensCount(
     messages,
-    uploadedFiles
+    uploadedFiles,
+    model
   )
 
   const [isAnimating, setIsAnimating] = useState(false)

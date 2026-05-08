@@ -1,8 +1,9 @@
 use flate2::read::GzDecoder;
+use sha2::{Digest, Sha256};
 use std::{
     fs::{self, File},
     io::Read,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
 };
 use tar::Archive;
@@ -22,6 +23,72 @@ use crate::core::mcp::helpers::add_server_config;
 use super::{
     extensions::commands::get_app_extensions_path, mcp::helpers::run_mcp_commands, state::AppState,
 };
+
+const BUNDLED_EXTENSION_ARCHIVE_SHA256: &[(&str, &str)] = &[
+    (
+        "ax-studio-assistant-extension-1.0.2.tgz",
+        "8a61e4739b015f052924b21e15f926efbf40dc28666a6f6b0440862c05d7eb92",
+    ),
+    (
+        "ax-studio-conversational-extension-1.0.0.tgz",
+        "b89cc1fd246d4b720d9222943808cac8d714f6148c8a68f2f7132909dfb6e581",
+    ),
+    (
+        "ax-studio-download-extension-1.0.0.tgz",
+        "741c4225538190ca562e9f4668ab5e1adf0051e093d740ad413e2d8af21dfa13",
+    ),
+    (
+        "ax-studio-llamacpp-extension-1.0.4.tgz",
+        "a439304693fc88e318f58446aae2b42b646665c246a2db8cd429f3dd9863ad63",
+    ),
+];
+
+fn expected_extension_archive_hash(path: &Path) -> Option<&'static str> {
+    let filename = path.file_name()?.to_str()?;
+    BUNDLED_EXTENSION_ARCHIVE_SHA256
+        .iter()
+        .find_map(|(name, hash)| (*name == filename).then_some(*hash))
+}
+
+fn compute_sha256(path: &Path) -> Result<String, String> {
+    let mut file = File::open(path)
+        .map_err(|e| format!("Failed to open extension archive for hashing: {e}"))?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 8192];
+
+    loop {
+        let bytes_read = file
+            .read(&mut buffer)
+            .map_err(|e| format!("Failed to read extension archive for hashing: {e}"))?;
+        if bytes_read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..bytes_read]);
+    }
+
+    Ok(hex::encode(hasher.finalize()))
+}
+
+fn verify_extension_archive_integrity(path: &Path) -> Result<(), String> {
+    let expected_hash = expected_extension_archive_hash(path).ok_or_else(|| {
+        format!(
+            "No expected SHA-256 registered for bundled extension archive: {}",
+            path.display()
+        )
+    })?;
+    let actual_hash = compute_sha256(path)?;
+
+    if actual_hash != expected_hash {
+        return Err(format!(
+            "Extension archive integrity check failed for {}: expected {}, got {}",
+            path.display(),
+            expected_hash,
+            actual_hash
+        ));
+    }
+
+    Ok(())
+}
 
 pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> Result<(), String> {
     let extensions_path = get_app_extensions_path(app.clone());
@@ -69,6 +136,8 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
         let path = entry.path();
 
         if path.extension().is_some_and(|ext| ext == "tgz") {
+            verify_extension_archive_integrity(&path)?;
+
             let tar_gz = File::open(&path).map_err(|e| e.to_string())?;
             let gz_decoder = GzDecoder::new(tar_gz);
             let mut archive = Archive::new(gz_decoder);
@@ -506,28 +575,24 @@ fn migrate_exa_to_http(app_handle: tauri::AppHandle) -> Result<(), String> {
 pub fn extract_extension_manifest<R: Read>(
     archive: &mut Archive<R>,
 ) -> Result<Option<serde_json::Value>, String> {
-    let entry = archive
-        .entries()
-        .map_err(|e| e.to_string())?
-        .filter_map(|e| e.ok()) // Ignore errors in individual entries
-        .find(|entry| {
-            if let Ok(file_path) = entry.path() {
-                let path_str = file_path.to_string_lossy();
-                path_str == "package/package.json" || path_str == "package.json"
-            } else {
-                false
-            }
-        });
+    for entry in archive.entries().map_err(|e| e.to_string())? {
+        let mut entry = entry.map_err(|e| format!("Failed to read archive entry: {e}"))?;
+        let path_str = entry
+            .path()
+            .map_err(|e| format!("Failed to read archive entry path: {e}"))?
+            .to_string_lossy()
+            .to_string();
 
-    if let Some(mut entry) = entry {
-        let mut content = String::new();
-        entry
-            .read_to_string(&mut content)
-            .map_err(|e| e.to_string())?;
+        if path_str == "package/package.json" || path_str == "package.json" {
+            let mut content = String::new();
+            entry
+                .read_to_string(&mut content)
+                .map_err(|e| format!("Failed to read package.json from extension archive: {e}"))?;
 
-        let package_json: serde_json::Value =
-            serde_json::from_str(&content).map_err(|e| e.to_string())?;
-        return Ok(Some(package_json));
+            let package_json: serde_json::Value =
+                serde_json::from_str(&content).map_err(|e| e.to_string())?;
+            return Ok(Some(package_json));
+        }
     }
 
     Ok(None)

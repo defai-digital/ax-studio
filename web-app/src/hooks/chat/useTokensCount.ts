@@ -54,11 +54,13 @@ export const useTokensCount = (
     size: number
     base64: string
     dataUrl: string
-  }>
+  }>,
+  modelOverride?: Model
 ) => {
   const serviceHub = useServiceStore((state) => state.serviceHub)
-  const selectedModel = useModelProvider((state) => state.selectedModel)
+  const selectedModelFromStore = useModelProvider((state) => state.selectedModel)
   const providers = useModelProvider((state) => state.providers)
+  const selectedModel = modelOverride ?? selectedModelFromStore
   const [tokenData, setTokenData] = useState<TokenCountData>({
     tokenCount: 0,
     loading: false,
