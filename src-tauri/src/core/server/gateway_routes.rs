@@ -3,7 +3,7 @@ use hyper::{Body, Response, StatusCode};
 use serde_json;
 use tauri::Manager;
 
-use super::proxy::{ProxyConfig, finalize_response};
+use super::proxy::{finalize_response, ProxyConfig};
 use super::security::add_cors_headers_with_host_and_origin;
 use crate::core::state::AppState;
 

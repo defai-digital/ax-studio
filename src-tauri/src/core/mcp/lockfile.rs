@@ -14,7 +14,11 @@ pub struct McpLockFile {
     pub hostname: String,
 }
 
-fn get_lock_file_path<R: Runtime>(app: &AppHandle<R>, port: u16, server_name: Option<&str>) -> Result<PathBuf, String> {
+fn get_lock_file_path<R: Runtime>(
+    app: &AppHandle<R>,
+    port: u16,
+    server_name: Option<&str>,
+) -> Result<PathBuf, String> {
     let app_data_dir = app
         .path()
         .app_data_dir()
@@ -47,7 +51,11 @@ pub fn read_lock_file<R: Runtime>(app: &AppHandle<R>, port: u16) -> Option<McpLo
     serde_json::from_str(&lock_json).ok()
 }
 
-pub fn delete_lock_file<R: Runtime>(app: &AppHandle<R>, port: u16, server_name: Option<&str>) -> Result<(), String> {
+pub fn delete_lock_file<R: Runtime>(
+    app: &AppHandle<R>,
+    port: u16,
+    server_name: Option<&str>,
+) -> Result<(), String> {
     let lock_path = get_lock_file_path(app, port, server_name)?;
 
     if lock_path.exists() {

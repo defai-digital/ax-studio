@@ -323,7 +323,7 @@ fn extract_tool_result_content(content: Option<&serde_json::Value>) -> String {
                 acc.push_str(s);
                 acc
             }),
-    Some(c) => c.to_string(),
+        Some(c) => c.to_string(),
         None => String::new(),
     }
 }

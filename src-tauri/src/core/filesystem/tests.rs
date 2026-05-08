@@ -136,8 +136,10 @@ fn test_write_file_sync_writes_typed_request_atomically() {
     )
     .unwrap();
 
-    let written =
-        fs::read_to_string(get_app_data_folder_path(app.handle().clone()).join("test_write_file_sync.txt")).unwrap();
+    let written = fs::read_to_string(
+        get_app_data_folder_path(app.handle().clone()).join("test_write_file_sync.txt"),
+    )
+    .unwrap();
     assert_eq!(written, "hello world");
 }
 

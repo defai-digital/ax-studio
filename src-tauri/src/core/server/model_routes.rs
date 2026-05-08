@@ -221,7 +221,10 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
     if body_bytes.len() > MAX_BODY_SIZE {
         return Err(error_response(
             StatusCode::PAYLOAD_TOO_LARGE,
-            &format!("Request body exceeds {} MB limit", MAX_BODY_SIZE / 1024 / 1024),
+            &format!(
+                "Request body exceeds {} MB limit",
+                MAX_BODY_SIZE / 1024 / 1024
+            ),
             host_header,
             origin_header,
             config,
@@ -264,9 +267,7 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
         if let Some(hint) = provider_hint {
             if let Some(cfg) = provider_configs.get(hint) {
                 log::debug!("Using provider hint from X-Ax-Provider header: {hint}");
-                if let Some(base_url) =
-                    cfg.base_url.as_deref().filter(|u| !u.is_empty())
-                {
+                if let Some(base_url) = cfg.base_url.as_deref().filter(|u| !u.is_empty()) {
                     Ok(Some(ResolvedProviderConfig {
                         target_base_url: build_upstream_url(
                             base_url,
@@ -280,7 +281,9 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
                     // Provider is registered but has no base_url — fall through to
                     // heuristic first (handles prefixed model IDs like "openai/gpt-4"),
                     // then return an actionable error if that also fails.
-                    log::debug!("Provider hint '{hint}' matched but has no base_url, trying heuristic");
+                    log::debug!(
+                        "Provider hint '{hint}' matched but has no base_url, trying heuristic"
+                    );
                     let heuristic = resolve_provider_config_from_map(
                         &provider_configs,
                         &provider_model_index,
@@ -411,20 +414,17 @@ async fn try_anthropic_fallback(
         fallback_req = fallback_req.header("Authorization", format!("Bearer {key}"));
     }
 
-    let fallback_response = fallback_req
-        .body(openai_body.to_string())
-        .send()
-        .await;
+    let fallback_response = fallback_req.body(openai_body.to_string()).send().await;
 
     match fallback_response {
         Ok(res) => {
             let fallback_status = res.status();
 
             if !fallback_status.is_success() {
-                let fallback_error =
-                    res.text()
-                        .await
-                        .unwrap_or_else(|e| format!("Failed to read error: {}", e));
+                let fallback_error = res
+                    .text()
+                    .await
+                    .unwrap_or_else(|e| format!("Failed to read error: {}", e));
                 return Some(Ok(error_response(
                     fallback_status,
                     fallback_error,
@@ -436,9 +436,7 @@ async fn try_anthropic_fallback(
 
             let mut builder = Response::builder().status(fallback_status);
             for (name, value) in res.headers() {
-                if !is_cors_header(name.as_str())
-                    && name != hyper::header::CONTENT_LENGTH
-                {
+                if !is_cors_header(name.as_str()) && name != hyper::header::CONTENT_LENGTH {
                     builder = builder.header(name, value);
                 }
             }
@@ -468,9 +466,9 @@ async fn try_anthropic_fallback(
                 }
             });
 
-            Some(Ok(builder
-                .body(body)
-                .unwrap_or_else(|_| Response::new(Body::from("Internal server error")))))
+            Some(Ok(builder.body(body).unwrap_or_else(|_| {
+                Response::new(Body::from("Internal server error"))
+            })))
         }
         Err(ref err) => {
             log::error!("Chat completions fallback failed: {}", err);
@@ -546,7 +544,9 @@ fn build_streaming_response(
                     let s = match std::str::from_utf8(&chunk) {
                         Ok(v) => v,
                         Err(_) => {
-                            if sender.send_data(chunk).await.is_err() { break }
+                            if sender.send_data(chunk).await.is_err() {
+                                break;
+                            }
                             continue;
                         }
                     };
@@ -705,11 +705,19 @@ pub(super) async fn dispatch_to_upstream(
                     origin_header,
                     config,
                     client,
-                ).await {
+                )
+                .await
+                {
                     return result;
                 }
 
-                return Ok(error_response(status, error_body, host_header, origin_header, config));
+                return Ok(error_response(
+                    status,
+                    error_body,
+                    host_header,
+                    origin_header,
+                    config,
+                ));
             } else if is_error {
                 // Non-/messages error - return error response with body
                 let error_body = response
@@ -722,7 +730,13 @@ pub(super) async fn dispatch_to_upstream(
                     &error_body[..error_body.len().min(500)]
                 );
 
-                return Ok(error_response(status, error_body, host_header, origin_header, config));
+                return Ok(error_response(
+                    status,
+                    error_body,
+                    host_header,
+                    origin_header,
+                    config,
+                ));
             }
 
             // Success case - stream the response
@@ -738,7 +752,13 @@ pub(super) async fn dispatch_to_upstream(
         Err(e) => {
             let error_msg = format!("Proxy request to model failed: {e}");
             log::error!("{error_msg}");
-            Ok(error_response(StatusCode::BAD_GATEWAY, error_msg, host_header, origin_header, config))
+            Ok(error_response(
+                StatusCode::BAD_GATEWAY,
+                error_msg,
+                host_header,
+                origin_header,
+                config,
+            ))
         }
     }
 }

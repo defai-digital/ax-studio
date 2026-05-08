@@ -14,9 +14,19 @@ fn is_allowed_model_url(url: &str) -> Result<(), String> {
     if host_str.is_empty() {
         return Err("URL has no host".to_string());
     }
-    let allowed = ["huggingface.co", "hf.co", "cdn-lfs.huggingface.co", "cdn-lfs-us-1.huggingface.co"];
-    if !allowed.iter().any(|d| host_str == *d || host_str.ends_with(&format!(".{d}"))) {
-        return Err(format!("Model metadata URL host '{host_str}' is not in the allowlist"));
+    let allowed = [
+        "huggingface.co",
+        "hf.co",
+        "cdn-lfs.huggingface.co",
+        "cdn-lfs-us-1.huggingface.co",
+    ];
+    if !allowed
+        .iter()
+        .any(|d| host_str == *d || host_str.ends_with(&format!(".{d}")))
+    {
+        return Err(format!(
+            "Model metadata URL host '{host_str}' is not in the allowlist"
+        ));
     }
     if parsed.socket_addrs(|| None).map_or(false, |addrs| {
         addrs.iter().any(|a| match a.ip() {

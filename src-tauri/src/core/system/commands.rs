@@ -56,8 +56,7 @@ pub async fn factory_reset<R: Runtime>(
     let data_folder = get_app_data_folder_path(app_handle.clone());
     log::info!("Factory reset, removing data folder: {data_folder:?}");
 
-    let _ =
-        stop_mcp_servers_with_context(&app_handle, &state, ShutdownContext::FactoryReset).await;
+    let _ = stop_mcp_servers_with_context(&app_handle, &state, ShutdownContext::FactoryReset).await;
 
     {
         let mut active_servers = state.mcp_active_servers.lock().await;
@@ -142,11 +141,28 @@ static REDACT_PATTERNS: std::sync::OnceLock<Vec<(regex::Regex, &str)>> = std::sy
 fn redact_sensitive_data(input: &str) -> String {
     let patterns = REDACT_PATTERNS.get_or_init(|| {
         vec![
-            (regex::Regex::new(r"(api[_-]?key\s*[:=]\s*)[\w\-]{20,}").expect("valid api_key regex"), "$1[REDACTED]"),
-            (regex::Regex::new(r"(Bearer\s+)[\w\-\.]{20,}").expect("valid bearer regex"), "$1[REDACTED]"),
-            (regex::Regex::new(r"(authorization\s*[:=]\s*)[\w\-\.]{20,}").expect("valid auth regex"), "$1[REDACTED]"),
-            (regex::Regex::new(r"(sk-)[a-zA-Z0-9]{20,}").expect("valid sk- regex"), "$1[REDACTED]"),
-            (regex::Regex::new(r"(token\s*[:=]\s*)[\w\-\.]{20,}").expect("valid token regex"), "$1[REDACTED]"),
+            (
+                regex::Regex::new(r"(api[_-]?key\s*[:=]\s*)[\w\-]{20,}")
+                    .expect("valid api_key regex"),
+                "$1[REDACTED]",
+            ),
+            (
+                regex::Regex::new(r"(Bearer\s+)[\w\-\.]{20,}").expect("valid bearer regex"),
+                "$1[REDACTED]",
+            ),
+            (
+                regex::Regex::new(r"(authorization\s*[:=]\s*)[\w\-\.]{20,}")
+                    .expect("valid auth regex"),
+                "$1[REDACTED]",
+            ),
+            (
+                regex::Regex::new(r"(sk-)[a-zA-Z0-9]{20,}").expect("valid sk- regex"),
+                "$1[REDACTED]",
+            ),
+            (
+                regex::Regex::new(r"(token\s*[:=]\s*)[\w\-\.]{20,}").expect("valid token regex"),
+                "$1[REDACTED]",
+            ),
         ]
     });
     let mut result = input.to_string();

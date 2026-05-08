@@ -282,15 +282,15 @@ mod tests {
 
     #[test]
     fn test_is_forbidden_ip_rejects_private_ranges() {
-        assert!(ax_studio_utils::is_private_ip(IpAddr::V4(std::net::Ipv4Addr::new(
-            127, 0, 0, 1
-        ))));
-        assert!(ax_studio_utils::is_private_ip(IpAddr::V4(std::net::Ipv4Addr::new(
-            10, 0, 0, 1
-        ))));
-        assert!(!ax_studio_utils::is_private_ip(IpAddr::V4(std::net::Ipv4Addr::new(
-            8, 8, 8, 8
-        ))));
+        assert!(ax_studio_utils::is_private_ip(IpAddr::V4(
+            std::net::Ipv4Addr::new(127, 0, 0, 1)
+        )));
+        assert!(ax_studio_utils::is_private_ip(IpAddr::V4(
+            std::net::Ipv4Addr::new(10, 0, 0, 1)
+        )));
+        assert!(!ax_studio_utils::is_private_ip(IpAddr::V4(
+            std::net::Ipv4Addr::new(8, 8, 8, 8)
+        )));
     }
 
     #[tokio::test]

@@ -158,8 +158,14 @@ fn is_backend_installed(backend_dir: &PathBuf) -> bool {
 
     // Check ggml-org structure: llama-{version}/llama-server
     // The version directory name follows the pattern: llama-{parent_dir_name}
-    if let Some(version_name) = backend_dir.parent().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().to_string()) {
-        let ggml_path = backend_dir.join(format!("llama-{version_name}")).join(exe_name);
+    if let Some(version_name) = backend_dir
+        .parent()
+        .and_then(|p| p.file_name())
+        .map(|n| n.to_string_lossy().to_string())
+    {
+        let ggml_path = backend_dir
+            .join(format!("llama-{version_name}"))
+            .join(exe_name);
         if ggml_path.exists() {
             return true;
         }
@@ -932,7 +938,10 @@ mod tests {
         assert_eq!(compare_versions("1.0", "1.0"), Ordering::Equal);
         assert_eq!(compare_versions("1.0.1", "1.0"), Ordering::Greater);
         assert_eq!(compare_versions("450.80.02", "450.80.02"), Ordering::Equal);
-        assert_eq!(compare_versions("525.60.13", "450.80.02"), Ordering::Greater);
+        assert_eq!(
+            compare_versions("525.60.13", "450.80.02"),
+            Ordering::Greater
+        );
         assert_eq!(compare_versions("10", "2"), Ordering::Greater);
     }
 

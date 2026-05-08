@@ -44,7 +44,11 @@ fn spawn_session_reaper<R: Runtime>(app_handle: tauri::AppHandle<R>, pid: i32) {
                 match process_map.get_mut(&pid) {
                     Some(session) => match session.child.try_wait() {
                         Ok(Some(status)) => {
-                            log::info!("Reaping exited llama session {} with status {}", pid, status);
+                            log::info!(
+                                "Reaping exited llama session {} with status {}",
+                                pid,
+                                status
+                            );
                             true
                         }
                         Ok(None) => false,
@@ -101,7 +105,11 @@ pub async fn load_llama_model<R: Runtime>(
 
     log::info!(
         "Attempting to launch {} server at path: {:?}",
-        if is_ax_serving { "ax-serving" } else { "llama.cpp" },
+        if is_ax_serving {
+            "ax-serving"
+        } else {
+            "llama.cpp"
+        },
         backend_path
     );
     log::info!("Using configuration: {:?}", config);
@@ -177,7 +185,13 @@ pub async fn load_llama_model<R: Runtime>(
     let mut command = Command::new(&bin_path);
 
     command.args(&args);
-    let dangerous_env = ["LD_PRELOAD", "DYLD_INSERT_LIBRARIES", "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH", "PATH"];
+    let dangerous_env = [
+        "LD_PRELOAD",
+        "DYLD_INSERT_LIBRARIES",
+        "LD_LIBRARY_PATH",
+        "DYLD_LIBRARY_PATH",
+        "PATH",
+    ];
     for (k, v) in &merged_envs {
         if dangerous_env.contains(&k.as_str()) {
             log::warn!("Blocking dangerous env var {} from llama-server", k);
@@ -204,8 +218,14 @@ pub async fn load_llama_model<R: Runtime>(
     // Spawn the child process
     let mut child = command.spawn().map_err(ServerError::Io)?;
 
-    let stderr = child.stderr.take().ok_or_else(|| ServerError::InvalidArgument("stderr pipe not available".into()))?;
-    let stdout = child.stdout.take().ok_or_else(|| ServerError::InvalidArgument("stdout pipe not available".into()))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| ServerError::InvalidArgument("stderr pipe not available".into()))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| ServerError::InvalidArgument("stdout pipe not available".into()))?;
 
     // Create channels for communication between tasks
     let (ready_tx, mut ready_rx) = mpsc::channel::<bool>(1);
@@ -213,7 +233,11 @@ pub async fn load_llama_model<R: Runtime>(
     // Clone engine flag for the spawned tasks
     let is_ax_serving_stdout = is_ax_serving;
     let is_ax_serving_stderr = is_ax_serving;
-    let engine_label = if is_ax_serving { "ax-serving" } else { "llamacpp" };
+    let engine_label = if is_ax_serving {
+        "ax-serving"
+    } else {
+        "llamacpp"
+    };
 
     // Spawn task to monitor stdout for readiness
     let stdout_ready_tx = ready_tx.clone();
@@ -535,8 +559,14 @@ pub async fn start_ax_serving<R: Runtime>(
 
     let mut child = command.spawn().map_err(ServerError::Io)?;
 
-    let stderr = child.stderr.take().ok_or_else(|| ServerError::InvalidArgument("stderr pipe not available".into()))?;
-    let stdout = child.stdout.take().ok_or_else(|| ServerError::InvalidArgument("stdout pipe not available".into()))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| ServerError::InvalidArgument("stderr pipe not available".into()))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| ServerError::InvalidArgument("stdout pipe not available".into()))?;
 
     let (ready_tx, mut ready_rx) = mpsc::channel::<bool>(1);
 
@@ -670,7 +700,11 @@ pub async fn start_ax_serving<R: Runtime>(
                 break;
             }
             Ok(resp) => {
-                log::debug!("ax-serving health check attempt {}: status {}", attempt, resp.status());
+                log::debug!(
+                    "ax-serving health check attempt {}: status {}",
+                    attempt,
+                    resp.status()
+                );
             }
             Err(e) => {
                 log::debug!("ax-serving health check attempt {}: {}", attempt, e);

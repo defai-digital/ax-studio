@@ -10,12 +10,7 @@ use serde_json::Value;
 use std::{collections::HashMap, env, process::Stdio, sync::Arc, time::Duration};
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_http::reqwest;
-use tokio::{
-    io::AsyncReadExt,
-    process::Command,
-    sync::Mutex,
-    time::timeout,
-};
+use tokio::{io::AsyncReadExt, process::Command, sync::Mutex, time::timeout};
 
 #[cfg(windows)]
 use crate::core::mcp::constants::CREATE_NO_WINDOW;
@@ -88,10 +83,7 @@ pub async fn run_mcp_commands<R: Runtime>(
     let app_path = get_app_data_folder_path(app.clone());
     let app_path_str = app_path.to_string_lossy().to_string();
     let config_path = app_path_str.clone() + "/mcp_config.json";
-    log::trace!(
-        "Load MCP configs from {}",
-        config_path
-    );
+    log::trace!("Load MCP configs from {}", config_path);
     let config_content = tokio::task::spawn_blocking(move || std::fs::read_to_string(config_path))
         .await
         .map_err(|e| format!("Failed to read MCP config: {e}"))?
@@ -241,9 +233,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
     if config_params.transport_type.as_deref() == Some("http") && config_params.url.is_some() {
         let transport_url = config_params.url.as_deref().unwrap_or("");
         if transport_url.is_empty() {
-            return Err(format!(
-                "Missing MCP HTTP URL for server {name}"
-            ));
+            return Err(format!("Missing MCP HTTP URL for server {name}"));
         }
         if ax_studio_utils::is_internal_url(transport_url) {
             return Err(format!(
@@ -395,14 +385,13 @@ async fn schedule_mcp_start_task<R: Runtime>(
         // custom PATH) are applied.  This prevents an attacker-controlled
         // PATH from redirecting a whitelisted binary name to a malicious
         // executable.
-        let resolved_command = if config_params.command.contains('/')
-            || config_params.command.contains('\\')
-        {
-            config_params.command.clone()
-        } else {
-            resolve_command_from_default_path(&config_params.command)
-                .unwrap_or_else(|| config_params.command.clone())
-        };
+        let resolved_command =
+            if config_params.command.contains('/') || config_params.command.contains('\\') {
+                config_params.command.clone()
+            } else {
+                resolve_command_from_default_path(&config_params.command)
+                    .unwrap_or_else(|| config_params.command.clone())
+            };
         let mut cmd = Command::new(resolved_command);
         let bun_x_path = if cfg!(windows) {
             bin_path.join("bun.exe")
@@ -443,7 +432,15 @@ async fn schedule_mcp_start_task<R: Runtime>(
         // Expand ~ to the user's home directory in args (shells do this
         // automatically, but direct process spawning does not).
         let home = dirs::home_dir();
-        let dangerous_flags = ["-c", "-e", "--eval", "--command", "-i", "--interactive", "--exec"];
+        let dangerous_flags = [
+            "-c",
+            "-e",
+            "--eval",
+            "--command",
+            "-i",
+            "--interactive",
+            "--exec",
+        ];
         config_params
             .args
             .iter()
@@ -594,8 +591,17 @@ pub fn extract_command_args(config: &Value) -> Option<McpServerConfig> {
 
     // Filter dangerous env VALUES that could override critical paths
     const DANGEROUS_ENV_VALUE_PREFIXES: &[&str] = &[
-        "HOME=", "PATH=", "USER=", "SHELL=", "TMPDIR=", "TEMP=", "TMP=",
-        "APPDATA=", "PROGRAMFILES=", "SYSTEMROOT=", "LD_PRELOAD=",
+        "HOME=",
+        "PATH=",
+        "USER=",
+        "SHELL=",
+        "TMPDIR=",
+        "TEMP=",
+        "TMP=",
+        "APPDATA=",
+        "PROGRAMFILES=",
+        "SYSTEMROOT=",
+        "LD_PRELOAD=",
     ];
     envs.retain(|k, v| {
         let v_str = match v.as_str() {
@@ -603,7 +609,9 @@ pub fn extract_command_args(config: &Value) -> Option<McpServerConfig> {
             None => return true,
         };
         let entry = format!("{k}={v_str}");
-        !DANGEROUS_ENV_VALUE_PREFIXES.iter().any(|prefix| entry.eq_ignore_ascii_case(prefix))
+        !DANGEROUS_ENV_VALUE_PREFIXES
+            .iter()
+            .any(|prefix| entry.eq_ignore_ascii_case(prefix))
     });
 
     Some(McpServerConfig {

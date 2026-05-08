@@ -42,7 +42,9 @@ fn is_rate_limited(client_id: &str) -> bool {
 fn record_auth_failure(client_id: &str) {
     let mut map = lock_auth_map();
     evict_stale_entries(&mut map);
-    let entry = map.entry(client_id.to_string()).or_insert_with(|| (0, Instant::now()));
+    let entry = map
+        .entry(client_id.to_string())
+        .or_insert_with(|| (0, Instant::now()));
     entry.0 += 1;
 }
 
@@ -76,7 +78,6 @@ fn evict_stale_entries(map: &mut HashMap<String, (usize, Instant)>) {
 
 use super::security::{add_cors_headers_with_host_and_origin, trusted_cors_origin};
 use super::{gateway_routes, model_routes};
-
 
 /// Finalize a response builder into a `Response<Body>`, never panicking.
 ///
@@ -352,7 +353,11 @@ fn validate_request(
     }
 
     if !is_whitelisted_path && !config.proxy_api_key.is_empty() {
-        let client_id = if host_header.is_empty() { "unknown" } else { host_header };
+        let client_id = if host_header.is_empty() {
+            "unknown"
+        } else {
+            host_header
+        };
 
         if is_rate_limited(client_id) {
             let mut error_response = Response::builder().status(StatusCode::TOO_MANY_REQUESTS);
@@ -685,10 +690,7 @@ mod tests {
         let config = test_config(true, "");
         let resp = handle_cors_preflight(&req, &config).unwrap();
         assert_eq!(resp.status(), StatusCode::FORBIDDEN);
-        assert!(resp
-            .headers()
-            .get("Access-Control-Allow-Origin")
-            .is_none());
+        assert!(resp.headers().get("Access-Control-Allow-Origin").is_none());
     }
 
     #[test]
@@ -702,10 +704,7 @@ mod tests {
         let config = test_config(true, "");
         let resp = handle_cors_preflight(&req, &config).unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        assert!(resp
-            .headers()
-            .get("Access-Control-Allow-Origin")
-            .is_none());
+        assert!(resp.headers().get("Access-Control-Allow-Origin").is_none());
         assert!(resp
             .headers()
             .get("Access-Control-Allow-Credentials")
@@ -769,7 +768,13 @@ mod tests {
             "Bearer my-secret".parse().unwrap(),
         );
         headers.insert(hyper::header::HOST, "localhost:1337".parse().unwrap());
-        let result = validate_request("/configs/something", "localhost:1337", "", &headers, &config);
+        let result = validate_request(
+            "/configs/something",
+            "localhost:1337",
+            "",
+            &headers,
+            &config,
+        );
         assert!(result.is_some());
         if let Some(resp) = result {
             assert_eq!(resp.status(), StatusCode::NOT_FOUND);
