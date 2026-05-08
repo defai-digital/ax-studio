@@ -24,9 +24,18 @@ describe('DefaultThreadsService', () => {
     get: vi.fn().mockReturnValue(mockConversationalExtension),
   }
 
+  const mockNativeApi = {
+    listThreads: vi.fn(),
+    createThread: vi.fn(),
+    modifyThread: vi.fn(),
+    deleteThread: vi.fn(),
+  }
+
   beforeEach(() => {
     threadsService = new DefaultThreadsService()
     vi.clearAllMocks()
+    // @ts-expect-error test-only core bridge
+    window.core = undefined
     ;(ExtensionManager.getInstance as any).mockReturnValue(mockExtensionManager)
   })
 
@@ -243,23 +252,35 @@ describe('DefaultThreadsService', () => {
       expect(result).toEqual([])
     })
 
-    it('should handle createThread when extension manager returns null', async () => {
+    it('should fall back to native createThread when extension manager returns null', async () => {
       ;(ExtensionManager.getInstance as any).mockReturnValue({
         get: vi.fn().mockReturnValue(null),
       })
+      // @ts-expect-error test-only core bridge
+      window.core = { api: mockNativeApi }
 
       const inputThread = {
         id: '1',
         title: 'Test Thread',
         model: { id: 'gpt-4', provider: 'openai' },
       }
+      mockNativeApi.createThread.mockResolvedValue({
+        ...inputThread,
+        assistants: [
+          {
+            model: { id: 'gpt-4', engine: 'openai' },
+          },
+        ],
+        metadata: {},
+      })
 
       const result = await threadsService.createThread(inputThread as Thread)
 
-      expect(result).toEqual(inputThread)
+      expect(mockNativeApi.createThread).toHaveBeenCalled()
+      expect(result.model).toEqual({ id: 'gpt-4', provider: 'openai' })
     })
 
-    it('should handle updateThread when extension manager returns null', async () => {
+    it('should throw on updateThread when storage is unavailable', async () => {
       ;(ExtensionManager.getInstance as any).mockReturnValue({
         get: vi.fn().mockReturnValue(null),
       })
@@ -271,18 +292,47 @@ describe('DefaultThreadsService', () => {
       }
 
       await expect(threadsService.updateThread(thread as Thread)).rejects.toThrow(
-        'Conversational extension not available'
+        'Conversational storage is not available'
       )
     })
 
-    it('should handle deleteThread when extension manager returns null', async () => {
+    it('should throw on deleteThread when storage is unavailable', async () => {
       ;(ExtensionManager.getInstance as any).mockReturnValue({
         get: vi.fn().mockReturnValue(null),
       })
 
       await expect(threadsService.deleteThread('test-id')).rejects.toThrow(
-        'Conversational extension not available'
+        'Conversational storage is not available'
       )
+    })
+
+    it('should fall back to native storage when extension update fails', async () => {
+      // @ts-expect-error test-only core bridge
+      window.core = { api: mockNativeApi }
+      const thread = {
+        id: '1',
+        title: 'Test Thread',
+        model: { id: 'gpt-4', provider: 'openai' },
+      }
+      mockConversationalExtension.modifyThread.mockRejectedValueOnce(new Error('Extension missing file'))
+      mockNativeApi.modifyThread.mockResolvedValue(thread)
+
+      await threadsService.updateThread(thread as Thread)
+
+      expect(mockConversationalExtension.modifyThread).toHaveBeenCalled()
+      expect(mockNativeApi.modifyThread).toHaveBeenCalled()
+    })
+
+    it('should fall back to native storage when extension delete fails', async () => {
+      // @ts-expect-error test-only core bridge
+      window.core = { api: mockNativeApi }
+      mockConversationalExtension.deleteThread.mockRejectedValueOnce(new Error('Extension missing file'))
+      mockNativeApi.deleteThread.mockResolvedValue(undefined)
+
+      await threadsService.deleteThread('test-id')
+
+      expect(mockConversationalExtension.deleteThread).toHaveBeenCalledWith('test-id')
+      expect(mockNativeApi.deleteThread).toHaveBeenCalledWith({ threadId: 'test-id' })
     })
 
     it('should handle fetchThreads with threads missing metadata', async () => {

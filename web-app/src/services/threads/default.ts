@@ -11,6 +11,21 @@ import {
 import type { ThreadsService } from './types'
 import { TEMPORARY_CHAT_ID } from '@/constants/chat'
 
+function getConversationalExtension(): ConversationalExtension | undefined {
+  try {
+    return ExtensionManager.getInstance().get<ConversationalExtension>(
+      ExtensionTypeEnum.Conversational
+    ) ?? undefined
+  } catch (error) {
+    console.warn('Conversational extension is unavailable:', error)
+    return undefined
+  }
+}
+
+function getNativeApi() {
+  return window.core?.api
+}
+
 export class DefaultThreadsService implements ThreadsService {
   async fetchThreads(): Promise<Thread[]> {
     let listThreads = getListThreads()
@@ -103,52 +118,61 @@ export class DefaultThreadsService implements ThreadsService {
           },
         ]
 
-    const extension = ExtensionManager.getInstance().get<ConversationalExtension>(
-      ExtensionTypeEnum.Conversational
-    )
-    const createThread = extension
-      ? (payload: Partial<CoreThread>) => extension.createThread(payload)
-      : window.core?.api?.createThread
-        ? (payload: Partial<CoreThread>) => window.core!.api!.createThread({ thread: payload })
-        : undefined
+    const extension = getConversationalExtension()
+    const nativeApi = getNativeApi()
+    const createThreadWriters = [
+      extension
+        ? (payload: Partial<CoreThread>) => extension.createThread(payload)
+        : undefined,
+      nativeApi?.createThread
+        ? (payload: Partial<CoreThread>) => nativeApi.createThread!({ thread: payload })
+        : undefined,
+    ].filter((writer): writer is (payload: Partial<CoreThread>) => Promise<CoreThread> => Boolean(writer))
 
-    if (!createThread) {
+    if (!createThreadWriters.length) {
       throw new Error('Conversational storage is not available')
     }
 
-    try {
-      const e = await createThread({
+    const payload = {
         ...thread,
         assistants: assistantsPayload,
         metadata: {
           ...thread.metadata,
           order: thread.order,
         },
-      } as Partial<CoreThread>)
+      } as Partial<CoreThread>
 
-      // Model is always stored in assistants[0].model
-      const model = e.assistants?.[0]?.model
-        ? {
-            id: e.assistants[0].model.id,
-            provider: e.assistants[0].model.engine,
-          }
-        : thread.model
+    let lastError: unknown
+    for (const createThread of createThreadWriters) {
+      try {
+        const e = await createThread(payload)
 
-      const assistants = e.assistants
+        // Model is always stored in assistants[0].model
+        const model = e.assistants?.[0]?.model
+          ? {
+              id: e.assistants[0].model.id,
+              provider: e.assistants[0].model.engine,
+            }
+          : thread.model
 
-      return {
-        ...e,
-        updated: e.updated,
-        model,
-        order: e.metadata?.order ?? thread.order,
-        assistants,
-      } as Thread
-    } catch (error) {
-      console.error(`Failed to create thread ${thread.id}:`, error)
-      throw error instanceof Error
-        ? error
-        : new Error(`Failed to create thread ${thread.id}`)
+        const assistants = e.assistants
+
+        return {
+          ...e,
+          updated: e.updated,
+          model,
+          order: e.metadata?.order ?? thread.order,
+          assistants,
+        } as Thread
+      } catch (error) {
+        lastError = error
+        console.warn(`Failed to create thread ${thread.id}:`, error)
+      }
     }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error(`Failed to create thread ${thread.id}`)
   }
 
   async updateThread(thread: Thread): Promise<void> {
@@ -157,19 +181,22 @@ export class DefaultThreadsService implements ThreadsService {
       return
     }
 
-    const extension = ExtensionManager.getInstance().get<ConversationalExtension>(
-      ExtensionTypeEnum.Conversational
-    )
-    const modifyThread = extension
-      ? (payload: CoreThread) => extension.modifyThread(payload)
-      : window.core?.api?.modifyThread
-        ? (payload: CoreThread) => window.core!.api!.modifyThread({ thread: payload })
-        : undefined
+    const extension = getConversationalExtension()
+    const nativeApi = getNativeApi()
+    const modifyThreadWriters = [
+      extension
+        ? (payload: CoreThread) => extension.modifyThread(payload)
+        : undefined,
+      nativeApi?.modifyThread
+        ? (payload: CoreThread) => nativeApi.modifyThread!({ thread: payload })
+        : undefined,
+    ].filter((writer): writer is (payload: CoreThread) => Promise<CoreThread> => Boolean(writer))
 
-    if (!modifyThread) throw new Error('Conversational storage is not available')
+    if (!modifyThreadWriters.length) {
+      throw new Error('Conversational storage is not available')
+    }
 
-    try {
-      await modifyThread({
+    const payload = {
         ...thread,
         assistants: thread.assistants?.map((e) => {
           return {
@@ -201,13 +228,22 @@ export class DefaultThreadsService implements ThreadsService {
         },
         created: Math.floor(Date.now() / 1000),
         updated: Math.floor(Date.now() / 1000),
-      } as CoreThread)
-    } catch (error) {
-      console.error(`Failed to update thread ${thread.id}:`, error)
-      throw error instanceof Error
-        ? error
-        : new Error(`Failed to update thread ${thread.id}`)
+      } as CoreThread
+
+    let lastError: unknown
+    for (const modifyThread of modifyThreadWriters) {
+      try {
+        await modifyThread(payload)
+        return
+      } catch (error) {
+        lastError = error
+        console.warn(`Failed to update thread ${thread.id}:`, error)
+      }
     }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error(`Failed to update thread ${thread.id}`)
   }
 
   async deleteThread(threadId: string): Promise<void> {
@@ -216,35 +252,58 @@ export class DefaultThreadsService implements ThreadsService {
       return
     }
 
-    const extension = ExtensionManager.getInstance().get<ConversationalExtension>(
-      ExtensionTypeEnum.Conversational
-    )
-    const deleteThread = extension
-      ? (id: string) => extension.deleteThread(id)
-      : window.core?.api?.deleteThread
-        ? (id: string) => window.core!.api!.deleteThread({ threadId: id })
-        : undefined
+    const extension = getConversationalExtension()
+    const nativeApi = getNativeApi()
+    const deleteThreadWriters = [
+      extension ? (id: string) => extension.deleteThread(id) : undefined,
+      nativeApi?.deleteThread
+        ? (id: string) => nativeApi.deleteThread!({ threadId: id })
+        : undefined,
+    ].filter((writer): writer is (id: string) => Promise<void> => Boolean(writer))
 
-    if (!deleteThread) throw new Error('Conversational storage is not available')
-
-    try {
-      await deleteThread(threadId)
-    } catch (error) {
-      console.error(`Failed to delete thread ${threadId}:`, error)
-      throw error instanceof Error
-        ? error
-        : new Error(`Failed to delete thread ${threadId}`)
+    if (!deleteThreadWriters.length) {
+      throw new Error('Conversational storage is not available')
     }
+
+    let lastError: unknown
+    for (const deleteThread of deleteThreadWriters) {
+      try {
+        await deleteThread(threadId)
+        return
+      } catch (error) {
+        lastError = error
+        console.warn(`Failed to delete thread ${threadId}:`, error)
+      }
+    }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error(`Failed to delete thread ${threadId}`)
   }
 }
 
 function getListThreads(): (() => Promise<CoreThread[]>) | undefined {
-  const extension = ExtensionManager.getInstance().get<ConversationalExtension>(
-    ExtensionTypeEnum.Conversational
-  )
-  if (extension) return () => extension.listThreads()
-  if (window.core?.api?.listThreads) {
-    return () => window.core!.api!.listThreads()
+  const extension = getConversationalExtension()
+  const nativeApi = getNativeApi()
+  const readers = [
+    extension ? () => extension.listThreads() : undefined,
+    nativeApi?.listThreads ? () => nativeApi.listThreads!() : undefined,
+  ].filter((reader): reader is () => Promise<CoreThread[]> => Boolean(reader))
+
+  if (!readers.length) return undefined
+
+  return async () => {
+    let lastError: unknown
+    for (const listThreads of readers) {
+      try {
+        return await listThreads()
+      } catch (error) {
+        lastError = error
+        console.warn('Failed to list threads:', error)
+      }
+    }
+    throw lastError instanceof Error
+      ? lastError
+      : new Error('Failed to list threads')
   }
-  return undefined
 }

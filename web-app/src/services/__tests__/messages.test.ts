@@ -27,9 +27,18 @@ describe('DefaultMessagesService', () => {
     get: vi.fn(),
   }
 
+  const mockNativeApi = {
+    listMessages: vi.fn(),
+    createMessage: vi.fn(),
+    modifyMessage: vi.fn(),
+    deleteMessage: vi.fn(),
+  }
+
   beforeEach(() => {
     messagesService = new DefaultMessagesService()
     vi.clearAllMocks()
+    // @ts-expect-error test-only core bridge
+    window.core = undefined
     vi.mocked(ExtensionManager.getInstance).mockReturnValue(
       mockExtensionManager as ReturnType<typeof ExtensionManager.getInstance>
     )
@@ -54,7 +63,7 @@ describe('DefaultMessagesService', () => {
       expect(result).toEqual(mockMessages)
     })
 
-    it('should return empty array when extension not found', async () => {
+    it('should return empty array when storage is unavailable', async () => {
       mockExtensionManager.get.mockReturnValue(null)
       const threadId = 'thread-123'
 
@@ -64,6 +73,35 @@ describe('DefaultMessagesService', () => {
         ExtensionTypeEnum.Conversational
       )
       expect(result).toEqual([])
+    })
+
+    it('should fall back to native storage when extension is not found', async () => {
+      mockExtensionManager.get.mockReturnValue(null)
+      // @ts-expect-error test-only core bridge
+      window.core = { api: mockNativeApi }
+      const threadId = 'thread-123'
+      const mockMessages = [{ id: 'msg-1', thread_id: threadId, role: 'user' }]
+      mockNativeApi.listMessages.mockResolvedValue(mockMessages)
+
+      const result = await messagesService.fetchMessages(threadId)
+
+      expect(mockNativeApi.listMessages).toHaveBeenCalledWith({ threadId })
+      expect(result).toEqual(mockMessages)
+    })
+
+    it('should fall back to native storage when extension list fails', async () => {
+      // @ts-expect-error test-only core bridge
+      window.core = { api: mockNativeApi }
+      const threadId = 'thread-123'
+      const mockMessages = [{ id: 'msg-1', thread_id: threadId, role: 'user' }]
+      mockExtension.listMessages.mockRejectedValueOnce(new Error('Extension missing file'))
+      mockNativeApi.listMessages.mockResolvedValue(mockMessages)
+
+      const result = await messagesService.fetchMessages(threadId)
+
+      expect(mockExtension.listMessages).toHaveBeenCalledWith(threadId)
+      expect(mockNativeApi.listMessages).toHaveBeenCalledWith({ threadId })
+      expect(result).toEqual(mockMessages)
     })
 
     it('should return empty array when listMessages fails', async () => {
@@ -113,7 +151,7 @@ describe('DefaultMessagesService', () => {
       expect(result).toEqual(message)
     })
 
-    it('should throw when extension not found', async () => {
+    it('should throw when storage is unavailable', async () => {
       mockExtensionManager.get.mockReturnValue(null)
       const message = {
         id: 'msg-1',
@@ -124,7 +162,26 @@ describe('DefaultMessagesService', () => {
 
       await expect(
         messagesService.createMessage(message as never)
-      ).rejects.toThrow('Conversational extension not available')
+      ).rejects.toThrow('Conversational storage is not available')
+    })
+
+    it('should fall back to native storage when extension create fails', async () => {
+      // @ts-expect-error test-only core bridge
+      window.core = { api: mockNativeApi }
+      const message = {
+        id: 'msg-1',
+        thread_id: 'thread-123',
+        content: 'Hello',
+        role: 'user',
+      }
+      mockExtension.createMessage.mockRejectedValueOnce(new Error('Extension missing file'))
+      mockNativeApi.createMessage.mockResolvedValue(message)
+
+      const result = await messagesService.createMessage(message as never)
+
+      expect(mockExtension.createMessage).toHaveBeenCalledWith(message)
+      expect(mockNativeApi.createMessage).toHaveBeenCalledWith({ message })
+      expect(result).toEqual(message)
     })
 
     it('should throw when createMessage fails', async () => {
@@ -177,7 +234,7 @@ describe('DefaultMessagesService', () => {
       expect(result).toEqual(message)
     })
 
-    it('should throw when extension not found', async () => {
+    it('should throw when storage is unavailable', async () => {
       mockExtensionManager.get.mockReturnValue(null)
       const message = {
         id: 'msg-1',
@@ -188,7 +245,26 @@ describe('DefaultMessagesService', () => {
 
       await expect(
         messagesService.modifyMessage(message as never)
-      ).rejects.toThrow('Conversational extension not available')
+      ).rejects.toThrow('Conversational storage is not available')
+    })
+
+    it('should fall back to native storage when extension modify fails', async () => {
+      // @ts-expect-error test-only core bridge
+      window.core = { api: mockNativeApi }
+      const message = {
+        id: 'msg-1',
+        thread_id: 'thread-123',
+        content: 'Updated',
+        role: 'user',
+      }
+      mockExtension.modifyMessage.mockRejectedValueOnce(new Error('Extension missing file'))
+      mockNativeApi.modifyMessage.mockResolvedValue(message)
+
+      const result = await messagesService.modifyMessage(message as never)
+
+      expect(mockExtension.modifyMessage).toHaveBeenCalledWith(message)
+      expect(mockNativeApi.modifyMessage).toHaveBeenCalledWith({ message })
+      expect(result).toEqual(message)
     })
 
     it('should throw when modifyMessage fails', async () => {
@@ -240,12 +316,27 @@ describe('DefaultMessagesService', () => {
       expect(result).toBeUndefined()
     })
 
-    it('should throw when extension not found', async () => {
+    it('should throw when storage is unavailable', async () => {
       mockExtensionManager.get.mockReturnValue(null)
 
       await expect(
         messagesService.deleteMessage('thread-123', 'msg-1')
-      ).rejects.toThrow('Conversational extension not available')
+      ).rejects.toThrow('Conversational storage is not available')
+    })
+
+    it('should fall back to native storage when extension delete fails', async () => {
+      // @ts-expect-error test-only core bridge
+      window.core = { api: mockNativeApi }
+      mockExtension.deleteMessage.mockRejectedValueOnce(new Error('Extension missing file'))
+      mockNativeApi.deleteMessage.mockResolvedValue(undefined)
+
+      await messagesService.deleteMessage('thread-123', 'msg-1')
+
+      expect(mockExtension.deleteMessage).toHaveBeenCalledWith('thread-123', 'msg-1')
+      expect(mockNativeApi.deleteMessage).toHaveBeenCalledWith({
+        threadId: 'thread-123',
+        messageId: 'msg-1',
+      })
     })
 
     it('should handle deleteMessage error', async () => {
