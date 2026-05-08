@@ -7,7 +7,10 @@ import {
   safeStorageGetItem,
   safeStorageRemoveItem,
   safeStorageSetItem,
+  safeStorageSetJSON,
+  isStorageFlagEnabled,
 } from '@/lib/storage/storage'
+import { extractErrorMessage } from '@/lib/utils/error'
 
 
 import { useModelProvider } from '@/hooks/models/useModelProvider'
@@ -113,10 +116,10 @@ function Index() {
         }
         const mainThread = await createThread(modelConfig, 'New Thread')
         const splitThread = await createThread(modelConfig, 'New Thread')
-        const stored = safeStorageSetItem(
+        const stored = safeStorageSetJSON(
           sessionStorage,
           SESSION_STORAGE_KEY.SPLIT_VIEW_INFO,
-          JSON.stringify({ splitThreadId: splitThread.id, direction }),
+          { splitThreadId: splitThread.id, direction },
           'routes/index'
         )
         if (!stored) {
@@ -129,8 +132,7 @@ function Index() {
       } catch (error) {
         console.error('Failed to create split view:', error)
         toast.error('Failed to create split view', {
-          description:
-            error instanceof Error ? error.message : 'Please try again.',
+          description: extractErrorMessage(error, 'Please try again.'),
         })
       }
     },
@@ -139,11 +141,11 @@ function Index() {
 
   const [setupCompleted, setSetupCompleted] = useState(
     () =>
-      safeStorageGetItem(
+      isStorageFlagEnabled(
         localStorage,
         localStorageKey.setupCompleted,
         'routes/index'
-      ) === 'true'
+      )
   )
 
   const hasValidProviders =

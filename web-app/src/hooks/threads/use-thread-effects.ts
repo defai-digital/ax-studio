@@ -11,6 +11,7 @@ import { SESSION_STORAGE_PREFIX, SESSION_STORAGE_KEY } from '@/constants/chat'
 import { defaultAssistant } from '@/hooks/chat/useAssistant'
 import {
   safeStorageGetItem,
+  safeStorageParseJSONAs,
   safeStorageRemoveItem,
 } from '@/lib/storage/storage'
 
@@ -108,46 +109,39 @@ export function useThreadEffects({
     if (initialMessageSentForThreadRef.current === threadId) return
 
     const initialMessageKey = `${SESSION_STORAGE_PREFIX.INITIAL_MESSAGE}${threadId}`
-    const storedMessage = safeStorageGetItem(
+    const parsedInitialMessage = safeStorageParseJSONAs(
       sessionStorage,
       initialMessageKey,
+      (value: unknown): value is { text: string } =>
+        typeof value === 'object' &&
+        value !== null &&
+        'text' in value &&
+        typeof (value as { text?: unknown }).text === 'string',
       'useThreadEffects'
     )
-    if (!storedMessage) return
+    if (!parsedInitialMessage) return
 
-    let cancelled = false
+    const dispatchTimer = window.setTimeout(() => {
+      safeStorageRemoveItem(sessionStorage, initialMessageKey, 'useThreadEffects')
+      initialMessageSentForThreadRef.current = threadId
 
-    safeStorageRemoveItem(sessionStorage, initialMessageKey, 'useThreadEffects')
-    initialMessageSentForThreadRef.current = threadId
-
-    ;(async () => {
-      try {
-        const parsed = JSON.parse(storedMessage)
-        const message = parsed && typeof parsed === 'object' && typeof parsed.text === 'string'
-          ? (parsed as { text: string })
-          : null
+      ;(async () => {
+        const message = parsedInitialMessage.text
         if (!message) {
           console.error('Invalid initial message payload in sessionStorage')
           return
         }
-        if (cancelled) return
-        if (handleResearchCommandRef.current(message.text)) {
-          // Research started — do NOT cancel on cleanup. Research runs independently
-          // of this effect's lifecycle and should only be cancelled by the user.
+        if (handleResearchCommandRef.current(message)) {
           return
         }
-        if (cancelled) return
-        await processAndSendMessageRef.current(message.text)
-      } catch (error) {
-        console.error('Failed to parse initial message:', error)
-      }
-    })()
+        await processAndSendMessageRef.current(message)
+      })().catch((error) => {
+        console.error('Failed to process initial message:', error)
+      })
+    }, 0)
 
     return () => {
-      // Only cancel in-progress chat streaming, not research.
-      // React StrictMode runs this cleanup on every mount cycle, so cancelling
-      // research here would abort it immediately on the first message.
-      cancelled = true
+      window.clearTimeout(dispatchTimer)
     }
   }, [threadId])
 

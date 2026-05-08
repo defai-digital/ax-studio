@@ -10,8 +10,8 @@ import {
 } from '@/components/ai-elements/conversation'
 import { PromptProgress } from '@/components/PromptProgress'
 import { Button } from '@/components/ui/button'
-import { OUT_OF_CONTEXT_SIZE } from '@/lib/utils/error'
-import { safeStorageGetItem, safeStorageSetItem } from '@/lib/storage/storage'
+import { isContextSizeError } from '@/lib/utils/error'
+import { isStorageFlagEnabled, safeStorageSetItem } from '@/lib/storage/storage'
 import { motion, AnimatePresence } from 'motion/react'
 import { AlertCircle, GitBranch, X } from "lucide-react";
 
@@ -48,15 +48,15 @@ export function MessagesArea({
   const metadata = thread?.metadata as Record<string, any> | undefined
   const forkedFrom = metadata?.forkedFrom || metadata?.parentThreadId
   const bannerKey = `branch-banner-dismissed-${threadId}`
+  const readBannerDismissed = () =>
+    isStorageFlagEnabled(sessionStorage, bannerKey, 'MessagesArea')
   const [bannerDismissed, setBannerDismissed] = useState(() =>
-    safeStorageGetItem(sessionStorage, bannerKey, 'MessagesArea') === 'true'
+    readBannerDismissed()
   )
 
   // Reset dismissal when thread changes
   useEffect(() => {
-    setBannerDismissed(
-      safeStorageGetItem(sessionStorage, bannerKey, 'MessagesArea') === 'true'
-    )
+    setBannerDismissed(readBannerDismissed())
   }, [bannerKey])
 
   const dismissBanner = () => {
@@ -125,11 +125,7 @@ export function MessagesArea({
                 <div className="flex-1">
                   <p className="text-sm font-medium text-destructive mb-1">Error generating response</p>
                   <p className="text-[13px] text-muted-foreground leading-relaxed">{error.message}</p>
-                  {((error.message?.toLowerCase().includes('context') &&
-                    (error.message?.toLowerCase().includes('size') ||
-                      error.message?.toLowerCase().includes('length') ||
-                      error.message?.toLowerCase().includes('limit'))) ||
-                    error.message === OUT_OF_CONTEXT_SIZE) && handleContextSizeIncrease ? (
+                  {isContextSizeError(error.message) && handleContextSizeIncrease ? (
                     <Button variant="outline" size="sm" className="mt-3" onClick={handleContextSizeIncrease}>
                       <AlertCircle className="size-4 mr-2" />Increase Context Size
                     </Button>
