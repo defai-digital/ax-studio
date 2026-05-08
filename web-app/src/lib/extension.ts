@@ -1,6 +1,8 @@
 import { AIEngine, BaseExtension, ExtensionTypeEnum } from '@ax-studio/core'
 
 import { getServiceHub } from '@/hooks/useServiceHub'
+import { APIs } from '@/lib/service'
+import { EventEmitter } from '@/services/events/EventEmitter'
 
 /**
  * Extension manifest object.
@@ -262,13 +264,19 @@ export class ExtensionManager {
    * Shared instance of ExtensionManager.
    */
   static getInstance() {
-    const core = window.core
-    if (!core) {
-      throw new Error('window.core is not initialized')
+    if (!window.core) {
+      window.core = { api: APIs }
+    } else if (!window.core.api) {
+      window.core.api = APIs
     }
-    if (!core.extensionManager) {
-      core.extensionManager = new ExtensionManager()
+
+    if (!window.core.events) {
+      window.core.events = new EventEmitter()
     }
-    return core.extensionManager
+
+    if (!window.core.extensionManager) {
+      window.core.extensionManager = new ExtensionManager()
+    }
+    return window.core.extensionManager
   }
 }

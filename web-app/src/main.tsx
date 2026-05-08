@@ -7,8 +7,21 @@ import {
   preventDefaultFileDrop,
   showStartupError,
 } from '@/lib/bootstrap/app-startup'
+import { EventEmitter } from '@/services/events/EventEmitter'
 
 import './index.css'
+
+const ensureCoreEventsBridge = () => {
+  if (!window.core) {
+    window.core = {} as NonNullable<Window['core']>
+  }
+
+  if (!window.core.events) {
+    window.core.events = new EventEmitter()
+  }
+}
+
+ensureCoreEventsBridge()
 
 // Prevent files from opening when dropped
 const cleanupFileDropGuards = preventDefaultFileDrop()
@@ -24,23 +37,32 @@ if (!rootElement) {
 
 const bootstrap = async () => {
   try {
+    console.info('[app] bootstrap started')
     const [{ routeTree }] = await Promise.all([
       import('./routeTree.gen'),
       import('./i18n'),
     ])
+    console.info('[app] router and i18n ready')
     const router = createRouter({ routeTree })
     if (!rootElement.innerHTML) {
       const root = ReactDOM.createRoot(rootElement)
+      requestAnimationFrame(() => {
+        hideInitialLoader()
+      })
       root.render(
         <StrictMode>
           <RouterProvider router={router} />
         </StrictMode>
       )
+      console.info('[app] React root rendered')
+    } else {
+      hideInitialLoader()
     }
   } catch (error) {
     console.error('Failed to initialize app:', error)
     showStartupError()
     hideInitialLoader()
+    console.error('[app] bootstrap failed:', error)
   }
 }
 

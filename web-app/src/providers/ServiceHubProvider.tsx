@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { initializeServiceHub } from '@/services'
 import { initializeServiceHubStore } from '@/hooks/useServiceHub'
+import { withTimeout } from '@/lib/utils/async'
+
+const SERVICE_HUB_INIT_TIMEOUT_MS = 12_000
 
 interface ServiceHubProviderProps {
   children: React.ReactNode
@@ -10,31 +13,61 @@ export function ServiceHubProvider({ children }: ServiceHubProviderProps) {
   const [isReady, setIsReady] = useState(false)
   const [initError, setInitError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
+  const [elapsedMs, setElapsedMs] = useState(0)
 
   useEffect(() => {
     let cancelled = false
+    const startTime = Date.now()
+    const timerId = window.setInterval(() => {
+      if (!cancelled) {
+        setElapsedMs(Date.now() - startTime)
+      }
+    }, 250)
     setInitError(null)
     setIsReady(false)
+    setElapsedMs(0)
 
-    initializeServiceHub()
+    console.info('[ServiceHubProvider] Initializing service hub...')
+    withTimeout(
+      initializeServiceHub(),
+      SERVICE_HUB_INIT_TIMEOUT_MS,
+      `Service hub initialization timed out after ${SERVICE_HUB_INIT_TIMEOUT_MS}ms`
+    )
       .then((hub) => {
         if (cancelled) return
         initializeServiceHubStore(hub)
+        const readyMs = Date.now() - startTime
+        console.info(`[ServiceHubProvider] Service hub ready in ${readyMs}ms`)
         setIsReady(true)
       })
       .catch((error) => {
         if (cancelled) return
-        console.error('Service initialization failed:', error)
-        setInitError(error instanceof Error ? error.message : 'Unknown error')
+        const message =
+          error instanceof Error ? error.message : 'Unknown error'
+        console.error('[ServiceHubProvider] Service initialization failed:', error)
+        setInitError(message)
         setIsReady(true)
       })
 
     return () => {
       cancelled = true
+      clearInterval(timerId)
     }
   }, [attempt])
 
-  if (!isReady) return null
+  if (!isReady) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-background/80 backdrop-blur">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-dashed border-primary border-t-transparent" />
+        <div className="text-sm text-muted-foreground">
+          Initializing Ax-Studio…
+        </div>
+        <div className="text-xs text-muted-foreground/80">
+          {Math.max(1, Math.ceil(elapsedMs / 1000))}s elapsed
+        </div>
+      </div>
+    )
+  }
 
   if (initError) {
     return (

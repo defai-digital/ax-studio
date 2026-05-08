@@ -11,6 +11,11 @@ import { assistantsSchema } from '@/schemas/assistants.schema'
 import { SystemEvent } from '@/types/events'
 import { type BootstrapResult, ok, fail } from './bootstrap-result'
 import { syncRemoteProviders } from '@/lib/providers/provider-sync'
+import { withTimeout } from '@/lib/utils/async'
+
+const PROVIDER_BOOTSTRAP_TIMEOUT_MS = 10_000
+const MCP_BOOTSTRAP_TIMEOUT_MS = 8_000
+const ASSISTANTS_BOOTSTRAP_TIMEOUT_MS = 8_000
 
 export type BootstrapProvidersInput = {
   serviceHub: ServiceHub
@@ -45,50 +50,59 @@ export async function bootstrapProviders(input: BootstrapProvidersInput): Promis
   let unsubscribeDeepLink: () => void = () => {}
 
   try {
-    // Load providers, MCP config, and assistants concurrently
+    // Load providers, MCP config, and assistants concurrently with bounded waits.
     await Promise.all([
-      serviceHub
-        .providers()
-        .getProviders()
-        .then((providers) => {
-          setProviders(providers, serviceHub.path().sep())
-          return syncRemoteProviders(providers).catch((err) =>
-            console.error('Failed to batch-register providers:', err)
-          )
-        })
-        .catch((error) => {
-          console.error('Failed to load providers:', error)
-        }),
-
-      serviceHub
-        .mcp()
-        .getMCPConfig()
-        .then((data) => {
-          setServers(data.mcpServers ?? {})
-          setSettings(data.mcpSettings ?? null)
-        })
-        .catch((error) => {
-          console.error('Failed to load MCP config:', error)
-        }),
-
-      serviceHub
-        .assistants()
-        .getAssistants()
-        .then((data) => {
-          const parsed = assistantsSchema.safeParse(data)
-          if (parsed.success && parsed.data.length > 0) {
-            setAssistants(parsed.data as Assistant[])
-            initializeWithLastUsed()
-          } else if (!parsed.success) {
-            console.warn(
-              'Assistants data did not match expected schema:',
-              parsed.error.message
+      withTimeout(
+        serviceHub
+          .providers()
+          .getProviders()
+          .then((providers) => {
+            setProviders(providers, serviceHub.path().sep())
+            return syncRemoteProviders(providers).catch((err) =>
+              console.error('Failed to batch-register providers:', err)
             )
-          }
-        })
-        .catch((error) => {
-          console.warn('Failed to load assistants, keeping default:', error)
-        }),
+          }),
+        PROVIDER_BOOTSTRAP_TIMEOUT_MS,
+        `Provider bootstrap timed out after ${PROVIDER_BOOTSTRAP_TIMEOUT_MS}ms`
+      ).catch((error) => {
+        console.error('[bootstrap-providers] Provider bootstrap failed:', error)
+      }),
+
+      withTimeout(
+        serviceHub
+          .mcp()
+          .getMCPConfig()
+          .then((data) => {
+            setServers(data.mcpServers ?? {})
+            setSettings(data.mcpSettings ?? null)
+          }),
+        MCP_BOOTSTRAP_TIMEOUT_MS,
+        `MCP bootstrap timed out after ${MCP_BOOTSTRAP_TIMEOUT_MS}ms`
+      ).catch((error) => {
+        console.error('[bootstrap-providers] MCP bootstrap failed:', error)
+      }),
+
+      withTimeout(
+        serviceHub
+          .assistants()
+          .getAssistants()
+          .then((data) => {
+            const parsed = assistantsSchema.safeParse(data)
+            if (parsed.success && parsed.data.length > 0) {
+              setAssistants(parsed.data as Assistant[])
+              initializeWithLastUsed()
+            } else if (!parsed.success) {
+              console.warn(
+                'Assistants data did not match expected schema:',
+                parsed.error.message
+              )
+            }
+          }),
+        ASSISTANTS_BOOTSTRAP_TIMEOUT_MS,
+        `Assistants bootstrap timed out after ${ASSISTANTS_BOOTSTRAP_TIMEOUT_MS}ms`
+      ).catch((error) => {
+        console.warn('[bootstrap-providers] Assistants bootstrap failed:', error)
+      }),
     ])
 
     // Deep link: fetch current and register listener

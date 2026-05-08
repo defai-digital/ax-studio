@@ -81,10 +81,22 @@
           showStartupError()
         }
 
+        const startupFallback = setTimeout(() => {
+          const root = document.getElementById('root')
+          if (!root || root.childElementCount === 0) {
+            startupFailSafe()
+          }
+        }, 30000)
+
         sanitizePersistedStorage()
         window.addEventListener('error', startupFailSafe, { once: true })
         window.addEventListener('unhandledrejection', startupFailSafe, {
           once: true,
+        })
+        document.addEventListener('DOMContentLoaded', () => {
+          window.addEventListener('load', () => clearTimeout(startupFallback), {
+            once: true,
+          })
         })
       })()
     </script>
