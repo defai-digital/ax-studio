@@ -187,6 +187,27 @@ fn resolve_provider_config_from_map(
     }))
 }
 
+fn should_skip_upstream_request_header(name: &hyper::header::HeaderName) -> bool {
+    let lower = name.as_str().to_ascii_lowercase();
+    matches!(name, &hyper::header::HOST
+        | &hyper::header::AUTHORIZATION
+        | &hyper::header::CONTENT_LENGTH)
+        || lower == "x-api-key"
+        || lower == "x-ax-provider"
+        || lower == "x-ax-request-role"
+        || super::proxy::is_hop_by_hop_header(name)
+}
+
+fn should_skip_anthropic_fallback_header(name: &hyper::header::HeaderName) -> bool {
+    let lower = name.as_str().to_ascii_lowercase();
+    matches!(name, &hyper::header::HOST
+        | &hyper::header::AUTHORIZATION
+        | &hyper::header::CONTENT_LENGTH
+        | &hyper::header::ACCEPT_ENCODING)
+        || lower == "content-type"
+        || super::proxy::is_hop_by_hop_header(name)
+}
+
 /// Resolve the provider for a POST model request (reads body, looks up provider config).
 /// Returns `Ok(ProviderResolution)` on success, `Err(Response)` to return an error immediately.
 pub(super) async fn resolve_model_route<R: tauri::Runtime>(
@@ -402,12 +423,7 @@ async fn try_anthropic_fallback(
     fallback_req = fallback_req.header("Accept-Encoding", "identity");
 
     for (name, value) in headers.iter() {
-        if name != hyper::header::HOST
-            && name != hyper::header::AUTHORIZATION
-            && name != "content-type"
-            && name != hyper::header::CONTENT_LENGTH
-            && name != hyper::header::ACCEPT_ENCODING
-            && !super::proxy::is_hop_by_hop_header(name)
+        if !should_skip_anthropic_fallback_header(name)
         {
             fallback_req = fallback_req.header(name, value);
         }
@@ -641,13 +657,7 @@ pub(super) async fn dispatch_to_upstream(
         // Strip x-ax-* headers — internal routing/trace headers, not for upstream providers.
         // Strip Content-Length — the body may have been modified by normalize_request_body
         // (e.g., reasoning fields stripped), so reqwest must recalculate it from the actual body.
-        if name != hyper::header::HOST
-            && name != hyper::header::AUTHORIZATION
-            && name != hyper::header::CONTENT_LENGTH
-            && name.as_str() != "x-api-key"
-            && name.as_str() != "x-ax-provider"
-            && name.as_str() != "x-ax-request-role"
-            && !super::proxy::is_hop_by_hop_header(name)
+        if !should_skip_upstream_request_header(name)
         {
             outbound_req = outbound_req.header(name, value);
         }

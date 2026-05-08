@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { HuggingFaceRepo, CatalogModel } from '@/services/models/types'
+import { getHuggingFaceModelFileUrl } from '@/lib/huggingface'
 
 // Helper function to test the conversion logic (extracted from the component)
 const convertHfRepoToCatalogModel = (repo: HuggingFaceRepo): CatalogModel => {
@@ -23,7 +24,7 @@ const convertHfRepoToCatalogModel = (repo: HuggingFaceRepo): CatalogModel => {
 
     return {
       model_id: modelId,
-      path: `https://huggingface.co/${repo.modelId}/resolve/main/${file.rfilename}`,
+      path: getHuggingFaceModelFileUrl(repo.modelId, file.rfilename),
       file_size: formatFileSize(file.size),
     }
   })
@@ -36,7 +37,7 @@ const convertHfRepoToCatalogModel = (repo: HuggingFaceRepo): CatalogModel => {
     num_quants: quants.length,
     quants: quants,
     created_at: repo.created_at,
-    readme: `https://huggingface.co/${repo.modelId}/resolve/main/README.md`,
+    readme: getHuggingFaceModelFileUrl(repo.modelId, 'README.md'),
   }
 }
 
@@ -93,22 +94,22 @@ describe('HuggingFace Repository Conversion', () => {
         quants: [
           {
             model_id: 'model-Q4_K_M',
-            path: 'https://huggingface.co/microsoft/DialoGPT-medium/resolve/main/model-Q4_K_M.gguf',
+            path: getHuggingFaceModelFileUrl('microsoft/DialoGPT-medium', 'model-Q4_K_M.gguf'),
             file_size: '2.0 GB',
           },
           {
             model_id: 'model-Q8_0',
-            path: 'https://huggingface.co/microsoft/DialoGPT-medium/resolve/main/model-Q8_0.gguf',
+            path: getHuggingFaceModelFileUrl('microsoft/DialoGPT-medium', 'model-Q8_0.gguf'),
             file_size: '4.0 GB',
           },
           {
             model_id: 'model-small',
-            path: 'https://huggingface.co/microsoft/DialoGPT-medium/resolve/main/model-small.gguf',
+            path: getHuggingFaceModelFileUrl('microsoft/DialoGPT-medium', 'model-small.gguf'),
             file_size: '512.0 MB',
           },
         ],
         created_at: '2023-01-01T00:00:00Z',
-        readme: 'https://huggingface.co/microsoft/DialoGPT-medium/resolve/main/README.md',
+        readme: getHuggingFaceModelFileUrl('microsoft/DialoGPT-medium', 'README.md'),
       })
     })
 
@@ -137,10 +138,10 @@ describe('HuggingFace Repository Conversion', () => {
       const result = convertHfRepoToCatalogModel(mockHuggingFaceRepo)
 
       expect(result.quants[0].path).toBe(
-        'https://huggingface.co/microsoft/DialoGPT-medium/resolve/main/model-Q4_K_M.gguf'
+        getHuggingFaceModelFileUrl('microsoft/DialoGPT-medium', 'model-Q4_K_M.gguf')
       )
       expect(result.quants[1].path).toBe(
-        'https://huggingface.co/microsoft/DialoGPT-medium/resolve/main/model-Q8_0.gguf'
+        getHuggingFaceModelFileUrl('microsoft/DialoGPT-medium', 'model-Q8_0.gguf')
       )
     })
 
@@ -253,7 +254,7 @@ describe('HuggingFace Repository Conversion', () => {
       const result = convertHfRepoToCatalogModel(mockHuggingFaceRepo)
 
       expect(result.readme).toBe(
-        'https://huggingface.co/microsoft/DialoGPT-medium/resolve/main/README.md'
+        getHuggingFaceModelFileUrl('microsoft/DialoGPT-medium', 'README.md')
       )
     })
 
