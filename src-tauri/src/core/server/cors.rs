@@ -12,7 +12,7 @@ pub(crate) const CORS_ALLOWED_METHODS: [&str; 6] = [
 pub(crate) const CORS_ALLOWED_METHODS_HEADER: &str =
     "GET, POST, PUT, DELETE, OPTIONS, PATCH";
 
-pub(crate) const CORS_RESPONSE_ALLOWED_HEADERS: [&str; 21] = [
+pub(crate) const CORS_RESPONSE_ALLOWED_HEADERS: [&str; 20] = [
     "authorization",
     "content-type",
     "host",
