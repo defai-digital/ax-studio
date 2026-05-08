@@ -1,9 +1,9 @@
 export type EventHandler<T = unknown> = (payload: T) => void
 
 type CoreEventsBridge = {
-  on: (eventName: string, handler: EventHandler) => void
-  off: (eventName: string, handler: EventHandler) => void
-  emit: (eventName: string, object: unknown) => void
+  on<T = unknown>(eventName: string, handler: EventHandler<T>): () => void
+  off<T = unknown>(eventName: string, handler: EventHandler<T>): void
+  emit<T = unknown>(eventName: string, object: T): void
 }
 
 const createFallbackEventsBridge = (): CoreEventsBridge => {
@@ -12,11 +12,14 @@ const createFallbackEventsBridge = (): CoreEventsBridge => {
   return {
     on: (eventName, handler) => {
       const current = handlers.get(eventName) ?? new Set<EventHandler>()
-      current.add(handler)
+      current.add(handler as EventHandler)
       handlers.set(eventName, current)
+      return () => {
+        current.delete(handler as EventHandler)
+      }
     },
     off: (eventName, handler) => {
-      handlers.get(eventName)?.delete(handler)
+      handlers.get(eventName)?.delete(handler as EventHandler)
     },
     emit: (eventName, object) => {
       handlers.get(eventName)?.forEach((handler) => handler(object))
@@ -27,7 +30,7 @@ const createFallbackEventsBridge = (): CoreEventsBridge => {
 const getEventsBridge = (): CoreEventsBridge => {
   const core = (globalThis.core ??= {})
   core.events ??= createFallbackEventsBridge()
-  return core.events
+  return core.events as CoreEventsBridge
 }
 
 /**
