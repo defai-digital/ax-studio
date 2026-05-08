@@ -1148,7 +1148,7 @@ mod tests {
                 {"role":"user","content":"bye"}
             ]}"#,
         );
-        let result = normalize_request_body(&body);
+        let result = normalize_request_body(&body, false);
         let parsed: serde_json::Value = serde_json::from_slice(&result).unwrap();
         let assistant = &parsed["messages"][1];
         assert_eq!(assistant["content"], "hi");
@@ -1163,7 +1163,7 @@ mod tests {
                 {"role":"user","content":"hello","reasoning_content":"not stripped"}
             ]}"#,
         );
-        let result = normalize_request_body(&body);
+        let result = normalize_request_body(&body, false);
         let parsed: serde_json::Value = serde_json::from_slice(&result).unwrap();
         assert_eq!(parsed["messages"][0]["reasoning_content"], "not stripped");
     }
@@ -1171,7 +1171,7 @@ mod tests {
     #[test]
     fn normalize_request_body_returns_original_when_no_reasoning() {
         let body = Bytes::from(r#"{"model":"gpt-4","messages":[{"role":"user","content":"hi"}]}"#);
-        let result = normalize_request_body(&body);
+        let result = normalize_request_body(&body, false);
         // No modification needed — should return equivalent JSON
         let original: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let normalized: serde_json::Value = serde_json::from_slice(&result).unwrap();
@@ -1181,16 +1181,44 @@ mod tests {
     #[test]
     fn normalize_request_body_handles_non_json() {
         let body = Bytes::from("not json at all");
-        let result = normalize_request_body(&body);
+        let result = normalize_request_body(&body, false);
         assert_eq!(result, body);
     }
 
     #[test]
     fn normalize_request_body_handles_no_messages_field() {
         let body = Bytes::from(r#"{"model":"gpt-4","input":"embed this"}"#);
-        let result = normalize_request_body(&body);
+        let result = normalize_request_body(&body, false);
         let original: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let normalized: serde_json::Value = serde_json::from_slice(&result).unwrap();
         assert_eq!(original, normalized);
+    }
+
+    #[test]
+    fn normalize_request_body_disables_thinking_for_local_knowledge_context() {
+        let body = Bytes::from(
+            r#"{"model":"Qwen3_5-9B-IQ4_XS","messages":[
+                {"role":"user","content":"What real-world hiring outcome did the author achieve?\n\n## Local Knowledge Base (ACTIVE)\nAfter going through this study plan, I got hired as a Software Development Engineer at Amazon."}
+            ]}"#,
+        );
+
+        let result = normalize_request_body(&body, true);
+        let parsed: serde_json::Value = serde_json::from_slice(&result).unwrap();
+
+        assert_eq!(parsed["chat_template_kwargs"]["enable_thinking"], false);
+    }
+
+    #[test]
+    fn normalize_request_body_does_not_add_chat_template_kwargs_when_not_allowed() {
+        let body = Bytes::from(
+            r#"{"model":"gpt-4","messages":[
+                {"role":"user","content":"Question\n\n## Local Knowledge Base (ACTIVE)\nRetrieved context."}
+            ]}"#,
+        );
+
+        let result = normalize_request_body(&body, false);
+        let parsed: serde_json::Value = serde_json::from_slice(&result).unwrap();
+
+        assert!(parsed.get("chat_template_kwargs").is_none());
     }
 }

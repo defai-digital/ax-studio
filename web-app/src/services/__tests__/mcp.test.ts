@@ -344,7 +344,7 @@ describe('TauriMCPService', () => {
       expect(result).toEqual(mockResult)
     })
 
-    it('should handle API rejection', async () => {
+    it('should return a structured error for non-recoverable API rejection', async () => {
       const toolArgs = {
         toolName: 'file_read',
         arguments: { path: '/path/to/file.txt' },
@@ -353,7 +353,38 @@ describe('TauriMCPService', () => {
       const mockError = new Error('Tool execution failed')
       mockCore.api.callTool.mockRejectedValue(mockError)
 
-      await expect(mcpService.callTool(toolArgs)).rejects.toThrow('Tool execution failed')
+      const result = await mcpService.callTool(toolArgs)
+
+      expect(result).toEqual({
+        error: 'Tool execution failed',
+        content: [],
+      })
+      expect(mockCore.api.restartMcpServers).not.toHaveBeenCalled()
+    })
+
+    it('should restart MCP servers and retry once for recoverable transport failures', async () => {
+      const toolArgs = {
+        serverName: 'ax-studio',
+        toolName: 'fabric_search',
+        arguments: { query: 'Coding Interview University' },
+      }
+
+      const mockResult = {
+        error: '',
+        content: [{ text: 'Search results' }],
+      }
+
+      mockCore.api.callTool
+        .mockRejectedValueOnce(new Error('Transport closed'))
+        .mockResolvedValueOnce(mockResult)
+      mockCore.api.restartMcpServers.mockResolvedValue(undefined)
+
+      const result = await mcpService.callTool(toolArgs)
+
+      expect(mockCore.api.restartMcpServers).toHaveBeenCalledTimes(1)
+      expect(mockCore.api.callTool).toHaveBeenCalledTimes(2)
+      expect(mockCore.api.callTool).toHaveBeenNthCalledWith(2, toolArgs)
+      expect(result).toEqual(mockResult)
     })
 
     it('should reject when window.core.api is unavailable', async () => {

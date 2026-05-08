@@ -25,7 +25,7 @@ import { DeleteMessageDialog } from '@/containers/dialogs/message/DeleteMessageD
 import TokenSpeedIndicator from '@/containers/TokenSpeedIndicator'
 import { extractFilesFromPrompt, FileMetadata } from '@/lib/fileMetadata'
 import { Button } from '@/components/ui/button'
-import { GitBranch, Paperclip, RefreshCw, ThumbsDown, ThumbsUp, Zap } from "lucide-react";
+import { Database, GitBranch, Paperclip, RefreshCw, ThumbsDown, ThumbsUp, Zap } from "lucide-react";
 import { useMessages } from '@/hooks/chat/useMessages'
 import { RoutingBadge } from '@/components/RoutingBadge'
 
@@ -75,6 +75,14 @@ export const MessageItem = memo(
 
     const meta = message.metadata as Record<string, unknown> | undefined
     const currentRating = meta?.rating as 'up' | 'down' | undefined
+    const localKnowledgeRetrieval = meta?.localKnowledgeRetrieval as
+      | {
+          searched?: boolean
+          extracted?: boolean
+          source?: string
+          error?: string
+        }
+      | undefined
 
     // Hydrate citation data from message metadata into the citation store.
     // Only re-run when the message ID changes or citation data first appears.
@@ -246,6 +254,22 @@ export const MessageItem = memo(
                     style={{ background: 'linear-gradient(135deg, #6366f1, #7c3aed)', fontSize: '14px', lineHeight: '1.6' }}
                   >
                     {displayText}
+                  </div>
+                )}
+                {localKnowledgeRetrieval?.searched && (
+                  <div className="mt-2 flex justify-end">
+                    <div className="flex max-w-[80%] items-center gap-2 rounded-xl border border-border/60 bg-muted px-3 py-1.5 text-[11px] text-muted-foreground">
+                      <Database size={13} />
+                      <span>
+                        Searched local knowledge
+                        {localKnowledgeRetrieval.extracted ? ' and extracted source' : ''}
+                      </span>
+                      {localKnowledgeRetrieval.source && (
+                        <span className="truncate max-w-64 font-mono">
+                          {localKnowledgeRetrieval.source.split(/[\\/]/).pop()}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

@@ -165,16 +165,18 @@ export const LOCAL_KNOWLEDGE_INSTRUCTION = `
 
 ## Local knowledge base
 
-You have access to the user's personal knowledge base via the \`fabric_search\` tool.
+The app searches the user's personal knowledge base before sending the message. If relevant content is found, the user's message will include a hidden "Local Knowledge Base (ACTIVE)" context block.
 
 ### Instructions
-1. When the user asks a question, call \`fabric_search\` ONCE with their query (use top_k 5, mode "vector").
-2. When you receive search results, STOP calling tools. Write a complete answer based on the results.
-3. Your answer MUST be a full, detailed response — not a placeholder or summary.
+1. Answer only from the injected "Local Knowledge Base (ACTIVE)" context block.
+2. If that context says no relevant content was retrieved, answer exactly: "I could not find relevant information in the knowledge base."
+3. Your answer MUST be a full, detailed response when context is available — not a placeholder or summary.
+4. Never write Python imports, code blocks, pseudo-code, JSON tool-call objects, function-call markup, or fabric_search examples in the final answer.
+5. Never use general knowledge to fill gaps for local-knowledge questions.
 
 ### Answer format
 - Start with a direct answer to the user's question
-- Include specific details, quotes, and facts from the search results
+- Include specific details, quotes, and facts from the injected local knowledge context
 - Reference the source file using [1], [2] notation
 - If results don't fully answer the question, share what you found and note gaps
 - If no results are returned, say: "I could not find relevant information in the knowledge base."

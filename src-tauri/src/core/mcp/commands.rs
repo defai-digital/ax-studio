@@ -17,6 +17,58 @@ use crate::core::{
 };
 use std::{fs, sync::Arc, time::Duration};
 
+fn is_transport_error(err: &str) -> bool {
+    let lower = err.to_lowercase();
+    lower.contains("transport closed")
+        || lower.contains("broken pipe")
+        || lower.contains("connection reset")
+        || lower.contains("channel closed")
+        || (lower.contains("transport") && lower.contains("closed"))
+}
+
+/// Remove the dead server entry and, if config is known, spawn a background
+/// restart task.  The atomic remove under the mutex prevents multiple concurrent
+/// `get_tools` calls from each spawning their own restart loop.
+async fn schedule_server_restart<R: Runtime>(
+    app: &AppHandle<R>,
+    state: &State<'_, AppState>,
+    server_name: &str,
+) {
+    let config = {
+        let active = state.mcp_active_servers.lock().await;
+        active.get(server_name).cloned()
+    };
+
+    let Some(config) = config else {
+        log::warn!("Cannot restart MCP server {server_name}: no config stored");
+        return;
+    };
+
+    // Atomic check-and-remove so only one concurrent caller triggers the restart.
+    let removed = {
+        let mut servers = state.mcp_servers.lock().await;
+        servers.remove(server_name).is_some()
+    };
+    if !removed {
+        return;
+    }
+
+    log::info!("Transport closed for MCP server {server_name} — scheduling restart");
+
+    let app_clone = app.clone();
+    let servers_clone = state.mcp_servers.clone();
+    let name_clone = server_name.to_string();
+
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        log::info!("Restarting crashed MCP server: {name_clone}");
+        match start_mcp_server(app_clone, servers_clone, name_clone.clone(), config).await {
+            Ok(_) => log::info!("MCP server {name_clone} restarted successfully after transport error"),
+            Err(e) => log::error!("Failed to restart MCP server {name_clone}: {e}"),
+        }
+    });
+}
+
 fn is_valid_mcp_identifier(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 128
@@ -165,7 +217,10 @@ pub async fn get_connected_servers(
 /// 5. Combines all tools into a single vector
 /// 6. Returns the combined list of all available tools with server information
 #[tauri::command]
-pub async fn get_tools(state: State<'_, AppState>) -> Result<Vec<ToolWithServer>, String> {
+pub async fn get_tools<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, AppState>,
+) -> Result<Vec<ToolWithServer>, String> {
     let timeout_duration = tool_call_timeout(&state).await;
     let mut all_tools: Vec<ToolWithServer> = Vec::new();
 
@@ -184,7 +239,11 @@ pub async fn get_tools(state: State<'_, AppState>) -> Result<Vec<ToolWithServer>
         let tools = match timeout(timeout_duration, tools_future).await {
             Ok(Ok(tools)) => tools,
             Ok(Err(e)) => {
-                log::warn!("MCP server {} failed to list tools: {}", server_name, e);
+                let err_str = e.to_string();
+                log::warn!("MCP server {} failed to list tools: {}", server_name, err_str);
+                if is_transport_error(&err_str) {
+                    schedule_server_restart(&app, &state, server_name).await;
+                }
                 continue;
             }
             Err(_) => {
@@ -229,7 +288,8 @@ pub async fn get_tools(state: State<'_, AppState>) -> Result<Vec<ToolWithServer>
 /// 5. Supports cancellation via cancellation_token
 /// 6. Returns error if no server has the requested tool or if specified server not found
 #[tauri::command]
-pub async fn call_tool(
+pub async fn call_tool<R: Runtime>(
+    app: AppHandle<R>,
     state: State<'_, AppState>,
     tool_name: String,
     server_name: Option<String>,
@@ -296,7 +356,11 @@ pub async fn call_tool(
             let tools = match timeout(timeout_duration, service.list_all_tools()).await {
                 Ok(Ok(tools)) => tools,
                 Ok(Err(e)) => {
-                    log::warn!("MCP server {srv_name} failed to list tools: {e}");
+                    let err_str = e.to_string();
+                    log::warn!("MCP server {srv_name} failed to list tools: {err_str}");
+                    if is_transport_error(&err_str) {
+                        schedule_server_restart(&app, &state, srv_name).await;
+                    }
                     continue;
                 }
                 Err(_) => {

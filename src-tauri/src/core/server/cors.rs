@@ -15,6 +15,32 @@ pub(crate) const CORS_ALLOWED_METHODS_HEADER: &str =
 pub(crate) const CORS_RESPONSE_ALLOWED_HEADERS_HEADER: &str =
     "Authorization, Content-Type, Host, Accept, Accept-Language, Cache-Control, Connection, DNT, If-Modified-Since, Keep-Alive, Origin, User-Agent, X-Requested-With, X-CSRF-Token, X-Forwarded-For, X-Forwarded-Proto, X-Forwarded-Host, authorization, content-type, x-api-key, x-ax-provider, x-ax-request-role";
 
+#[cfg(test)]
+pub(crate) const CORS_RESPONSE_ALLOWED_HEADERS: [&str; 22] = [
+    "Authorization",
+    "Content-Type",
+    "Host",
+    "Accept",
+    "Accept-Language",
+    "Cache-Control",
+    "Connection",
+    "DNT",
+    "If-Modified-Since",
+    "Keep-Alive",
+    "Origin",
+    "User-Agent",
+    "X-Requested-With",
+    "X-CSRF-Token",
+    "X-Forwarded-For",
+    "X-Forwarded-Proto",
+    "X-Forwarded-Host",
+    "authorization",
+    "content-type",
+    "x-api-key",
+    "x-ax-provider",
+    "x-ax-request-role",
+];
+
 pub(crate) const CORS_PREFLIGHT_ALLOWED_HEADERS: [&str; 28] = [
     "accept",
     "accept-language",

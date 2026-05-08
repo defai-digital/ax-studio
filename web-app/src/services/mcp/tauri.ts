@@ -17,6 +17,31 @@ const getCoreApi = () => {
   return window.core.api
 }
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (typeof error === 'string') return error
+  try {
+    return JSON.stringify(error)
+  } catch {
+    return String(error)
+  }
+}
+
+function isRecoverableMCPError(error: unknown): boolean {
+  const message = getErrorMessage(error).toLowerCase()
+  return (
+    message.includes('transport closed') ||
+    message.includes('connection closed') ||
+    message.includes('server disconnected') ||
+    message.includes('server') && message.includes('not found')
+  )
+}
+
+const unavailableToolResult = (error: unknown) => ({
+  error: getErrorMessage(error),
+  content: [],
+})
+
 export class TauriMCPService implements MCPService {
   async updateMCPConfig(configs: string): Promise<void> {
     await getCoreApi().saveMcpConfigs({ configs })
@@ -89,9 +114,27 @@ export class TauriMCPService implements MCPService {
     serverName?: string
     arguments: object
   }): Promise<{ error: string; content: { text: string }[] }> {
-    return (await getCoreApi().callTool(args)) ?? {
-      error: 'MCP service unavailable',
-      content: [],
+    const api = getCoreApi()
+    try {
+      return (await api.callTool(args)) ?? {
+        error: 'MCP service unavailable',
+        content: [],
+      }
+    } catch (error) {
+      if (!isRecoverableMCPError(error)) {
+        return unavailableToolResult(error)
+      }
+
+      console.warn('MCP tool call failed, restarting MCP servers and retrying once:', error)
+      try {
+        await api.restartMcpServers()
+        return (await api.callTool(args)) ?? {
+          error: 'MCP service unavailable after restart',
+          content: [],
+        }
+      } catch (retryError) {
+        return unavailableToolResult(retryError)
+      }
     }
   }
 

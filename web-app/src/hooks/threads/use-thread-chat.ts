@@ -54,7 +54,15 @@ export type ThreadChatParams = {
   handleRememberCommand: (text: string) => boolean
   handleForgetCommand: (text: string) => boolean
   lastUserInputRef: React.MutableRefObject<string>
-  prepareLocalKnowledge?: (text: string) => Promise<string>
+  prepareLocalKnowledge?: (text: string) => Promise<{
+    context: string
+    retrieval?: {
+      searched: boolean
+      extracted: boolean
+      source?: string
+      error?: string
+    }
+  }>
 }
 
 export type ThreadChatResult = {
@@ -74,6 +82,7 @@ export function useThreadChat({
   threadModel,
   sendMessage,
   regenerate,
+  chatMessages,
   setChatMessages,
   handleRememberCommand,
   handleForgetCommand,
@@ -237,9 +246,10 @@ export function useThreadChat({
       const attachments =
         readyAttachments.length > 0 ? readyAttachments : undefined
 
-      const knowledgeContext = prepareLocalKnowledge
+      const localKnowledge = prepareLocalKnowledge
         ? await prepareLocalKnowledge(normalizedText)
-        : ''
+        : { context: '' }
+      const knowledgeContext = localKnowledge.context
       const modelText = knowledgeContext
         ? `${text}${knowledgeContext}`
         : text
@@ -250,14 +260,27 @@ export function useThreadChat({
         attachments,
         messageId
       )
+      if (localKnowledge.retrieval) {
+        userMessage.metadata = {
+          ...(userMessage.metadata as Record<string, unknown> | undefined),
+          localKnowledgeRetrieval: localKnowledge.retrieval,
+        } as ThreadMessage['metadata']
+      }
       addMessage(userMessage)
       updateThreadTimestamp(threadId)
 
-      // Build parts: text + any image file parts
-      const parts: MessagePart[] = [
+      // Request parts include hidden local-knowledge context for the model.
+      // Visible parts keep the user's chat bubble clean.
+      const requestParts: MessagePart[] = [
         {
           type: 'text',
           text: modelText,
+        },
+      ]
+      const visibleParts: MessagePart[] = [
+        {
+          type: 'text',
+          text: userMessage.content[0].text?.value ?? text,
         },
       ]
 
@@ -265,20 +288,41 @@ export function useThreadChat({
       if (attachments) {
         for (const att of attachments) {
           if (att.type === 'image' && att.base64 && att.mimeType) {
-            parts.push({
+            const filePart: MessagePart = {
               type: 'file',
               mediaType: att.mimeType,
               url: `data:${att.mimeType};base64,${att.base64}`,
-            })
+            }
+            requestParts.push(filePart)
+            visibleParts.push(filePart)
           }
         }
       }
 
       sendMessage({
-        parts,
+        parts: requestParts,
         id: messageId,
         metadata: userMessage.metadata,
       })
+
+      if (knowledgeContext) {
+        queueMicrotask(() => {
+          const liveMessages =
+            useChatSessions.getState().sessions[threadId]?.chat?.messages ??
+            chatMessages
+          setChatMessages(
+            liveMessages.map((message) =>
+              message.id === messageId
+                ? {
+                    ...message,
+                    metadata: userMessage.metadata as Record<string, unknown>,
+                    parts: visibleParts,
+                  }
+                : message
+            )
+          )
+        })
+      }
 
       // Clear attachments after sending
       if (pendingAttachments.length > 0) {
@@ -291,6 +335,8 @@ export function useThreadChat({
       updateThreadTimestamp,
       renameThread,
       sendMessage,
+      chatMessages,
+      setChatMessages,
       handleRememberCommand,
       handleForgetCommand,
       lastUserInputRef,

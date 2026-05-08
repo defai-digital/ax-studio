@@ -130,19 +130,25 @@ function HardwareContent() {
     if (pollingPaused) {
       return
     }
-    const intervalId = setInterval(() => {
+    let mounted = true
+    const pollUsage = () => {
       serviceHub
         .hardware()
         .getSystemUsage()
         .then((data: SystemUsage | null) => {
-          if (data) updateSystemUsage(data)
+          if (mounted && data) updateSystemUsage(data)
         })
         .catch((error: unknown) => {
           console.error('Failed to get system usage:', error)
         })
-    }, 5000)
+    }
 
-    return () => clearInterval(intervalId)
+    const intervalId = setInterval(pollUsage, 5000)
+
+    return () => {
+      mounted = false
+      clearInterval(intervalId)
+    }
   }, [serviceHub, updateSystemUsage, pollingPaused])
 
   const handleClickSystemMonitor = async () => {

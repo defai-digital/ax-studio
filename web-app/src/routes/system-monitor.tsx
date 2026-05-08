@@ -20,21 +20,28 @@ function SystemMonitorContent() {
 
   // Poll system usage every 5 seconds
   useEffect(() => {
-    const intervalId = setInterval(() => {
+    let mounted = true
+    const updateUsage = () => {
       serviceHub
         .hardware()
         .getSystemUsage()
         .then((data) => {
-          if (data) {
+          if (mounted && data) {
             updateSystemUsage(data)
           }
         })
         .catch((error) => {
           console.error('Failed to get system usage:', error)
         })
-    }, 5000)
+    }
 
-    return () => clearInterval(intervalId)
+    updateUsage()
+    const intervalId = setInterval(updateUsage, 5000)
+
+    return () => {
+      mounted = false
+      clearInterval(intervalId)
+    }
   }, [updateSystemUsage, serviceHub])
 
   // Calculate RAM usage percentage

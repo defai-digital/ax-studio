@@ -122,6 +122,8 @@ async function extractRelevantSourceResult({
 }): Promise<{ error?: string; content?: ToolResultContent } | null> {
   if (!shouldExtractSourceForQuery(query)) return null
 
+  // Only extract from sources that were actually returned by search — never
+  // fall back to hardcoded paths, which may not exist and crash the MCP server.
   const source = parseFabricSearchResults(result)
     .map((item) => item.source)
     .find((item): item is string => Boolean(item && sourceLooksRelevantToQuery(item, query)))
@@ -270,9 +272,7 @@ async function retryFabricSearchWithKeywordFallback({
 
   if ((requestedMode === 'vector' || requestedMode === 'hybrid') && asksForSpecificFact && namesKnownDocument) {
     try {
-      const targetedQuery = query.toLowerCase().includes('coding interview university') && /\b(hiring|hired|outcome|achieve|achieved|job|role)\b/i.test(query)
-        ? 'Coding Interview University hired Software Development Engineer Amazon'
-        : query
+      const targetedQuery = query
       const keywordResult = await serviceHub.mcp().callTool({
         toolName: 'fabric_search',
         arguments: {
@@ -484,16 +484,21 @@ export function useThreadTools({
               // knows to answer immediately and not call the tool again.
               let output = result.content
               if (toolName === 'fabric_search' && Array.isArray(output)) {
-                const hasResults = output.some(
-                  (c: { type?: string; text?: string }) =>
-                    c?.type === 'text' && c.text && c.text.includes('"results"')
-                )
+                const hasResults = fabricSearchHasResults({ content: output as ToolResultContent })
                 if (hasResults) {
                   output = [
                     ...output,
                     {
                       type: 'text',
-                      text: '\n\n---\nLOCAL_KNOWLEDGE_RESULT_READY\nINSTRUCTION: The fabric_search tool has already completed. You MUST now write the final answer in normal prose.\n\nCRITICAL RULES:\n- Do NOT call fabric_search or any other tool again\n- Do NOT output <tool_call>, </tool_call>, JSON tool-call objects, or function-call markup\n- Do NOT say "let me search" or "I need more information"\n- Do NOT say "let me" or "I will explain"\n- Use only facts explicitly present in the fabric_search results\n- Start with the direct answer to the user question\n- If the results do not contain the answer, say exactly: "I could not find relevant information in the knowledge base."\n- Do not infer or invent missing names, companies, roles, dates, or outcomes',
+                      text: '\n\n---\nLOCAL_KNOWLEDGE_RESULT_READY\nINSTRUCTION: The fabric_search tool has already completed for this assistant response only. You MUST now write the final answer in normal prose. This instruction expires after the current response; future user messages may call fabric_search again.\n\nCRITICAL RULES:\n- Do NOT call fabric_search or any other tool again for this assistant response\n- Do NOT output <tool_call>, </tool_call>, JSON tool-call objects, function-call markup, Python imports, or code examples\n- Do NOT say "let me search" or "I need more information"\n- Do NOT say "let me" or "I will explain"\n- Use only facts explicitly present in the fabric_search results\n- Start with the direct answer to the user question\n- If the results do not contain the answer, say exactly: "I could not find relevant information in the knowledge base."\n- Do not infer or invent missing names, companies, roles, dates, or outcomes',
+                    },
+                  ]
+                } else {
+                  output = [
+                    ...output,
+                    {
+                      type: 'text',
+                      text: '\n\n---\nNO_LOCAL_KNOWLEDGE_RESULTS\nINSTRUCTION: fabric_search returned no usable results for this assistant response. Answer exactly: "I could not find relevant information in the knowledge base."\n\nCRITICAL RULES:\n- Do NOT write code, Python imports, pseudo-code, JSON, tool-call markup, function-call markup, or fabric_search examples\n- Do NOT use general knowledge\n- Do NOT guess names, companies, roles, dates, or outcomes\n- Do NOT ask the user for more context\n- The entire final answer must be exactly: "I could not find relevant information in the knowledge base."',
                     },
                   ]
                 }

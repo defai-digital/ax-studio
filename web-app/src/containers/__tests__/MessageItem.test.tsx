@@ -205,6 +205,31 @@ describe('MessageItem', () => {
       fireEvent.click(screen.getByTestId('delete-dialog'))
       expect(onDelete).toHaveBeenCalledWith('del-msg')
     })
+
+    it('shows local knowledge source status when a user message used retrieval', () => {
+      const msg = makeMessage({
+        role: 'user',
+        parts: [{ type: 'text', text: 'What real-world hiring outcome did the author achieve?' }],
+        metadata: {
+          localKnowledgeRetrieval: {
+            searched: true,
+            extracted: true,
+            source: '/Users/devop/Documents/akidb-testing/coding-interview-university.md',
+          },
+        },
+      } as never)
+
+      render(
+        <MessageItem
+          message={msg}
+          isLastMessage={false}
+          status="ready"
+        />
+      )
+
+      expect(screen.getByText(/Searched local knowledge and extracted source/i)).toBeInTheDocument()
+      expect(screen.getByText('coding-interview-university.md')).toBeInTheDocument()
+    })
   })
 
   describe('assistant messages', () => {

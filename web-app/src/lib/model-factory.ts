@@ -97,7 +97,22 @@ function textIncludes(value: unknown, needle: string): boolean {
 
 function hasLocalKnowledgeToolResult(messages: unknown): boolean {
   if (!Array.isArray(messages)) return false
-  return messages.some((message) => {
+
+  // Only look at messages from the current turn (after the last user message).
+  // Tool results from previous turns must not suppress tools for the next question.
+  let lastUserIdx = -1
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i]
+    if (msg && typeof msg === 'object' && !Array.isArray(msg)) {
+      if ((msg as Record<string, unknown>).role === 'user') {
+        lastUserIdx = i
+        break
+      }
+    }
+  }
+  const currentTurnMessages = lastUserIdx >= 0 ? messages.slice(lastUserIdx + 1) : messages
+
+  return currentTurnMessages.some((message) => {
     if (!message || typeof message !== 'object' || Array.isArray(message)) {
       return false
     }

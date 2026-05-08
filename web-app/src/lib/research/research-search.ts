@@ -61,7 +61,17 @@ export async function exaSearch(
   const waitForTurn = exaQueue
   exaQueue = mySlot  // next caller will wait for this slot
 
-  await waitForTurn  // wait for our turn
+  await Promise.race([
+    waitForTurn,
+    new Promise<never>((_, reject) => {
+      if (signal?.aborted) reject(new DOMException('Aborted', 'AbortError'))
+      signal?.addEventListener(
+        'abort',
+        () => reject(new DOMException('Aborted', 'AbortError')),
+        { once: true }
+      )
+    }),
+  ])
   if (signal?.aborted) {
     unlockNext()
     throw new DOMException('Aborted', 'AbortError')
@@ -87,7 +97,17 @@ export async function exaSearch(
     throw err
   } finally {
     if (exaTimeoutId) clearTimeout(exaTimeoutId)
-    await new Promise((r) => setTimeout(r, 500))
+    await new Promise<void>((resolve) => {
+      const gapTimer = setTimeout(resolve, 500)
+      signal?.addEventListener(
+        'abort',
+        () => {
+          clearTimeout(gapTimer)
+          resolve()
+        },
+        { once: true }
+      )
+    })
     unlockNext()  // release gate for the next caller
   }
 }
