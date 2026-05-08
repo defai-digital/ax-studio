@@ -37,6 +37,10 @@ pub fn is_private_ip(ip: IpAddr) -> bool {
             ipv4.is_loopback() || ipv4.is_private() || ipv4.is_link_local() || ipv4.is_unspecified()
         }
         IpAddr::V6(ipv6) => {
+            if let Some(ipv4) = ipv6.to_ipv4_mapped() {
+                return is_private_ip(IpAddr::V4(ipv4));
+            }
+
             ipv6.is_loopback()
                 || ipv6.is_unspecified()
                 || ((ipv6.octets()[0] & 0xfe) == 0xfe && (ipv6.octets()[1] & 0xc0) == 0x80)

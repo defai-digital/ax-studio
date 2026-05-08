@@ -166,9 +166,10 @@ export function useChat(
     }
   }, [sessionId, chatResult.status, updateStatus])
 
-  // Reset token speed when streaming stops
+  // Reset at the start of a new request, not when streaming stops. Clearing on
+  // completion made the UI display 0.0 tokens/sec immediately after every run.
   useEffect(() => {
-    if (chatResult.status !== 'streaming') {
+    if (chatResult.status === 'submitted') {
       resetTokenSpeed()
     }
   }, [chatResult.status, resetTokenSpeed])

@@ -284,18 +284,35 @@ pub async fn call_tool(
         }
     }
 
-    // Search for tool without holding lock
-    let mut target_service = None;
-    for (srv_name, service) in server_refs.iter() {
-        let tools = match timeout(timeout_duration, service.list_all_tools()).await {
-            Ok(Ok(tools)) => tools,
-            _ => continue,
-        };
+    // If the caller names a server, call it directly. Listing tools first is
+    // fragile for stdio MCP servers because a stale transport can fail during
+    // discovery even when the requested tool name is already known by the UI.
+    let mut target_service = server_name
+        .as_ref()
+        .and_then(|_| server_refs.first().map(|(_, service)| service.clone()));
 
-        if tools.iter().any(|t| t.name == tool_name) {
-            log::debug!("Found tool {tool_name} in server {srv_name}");
-            target_service = Some(service.clone());
-            break;
+    if target_service.is_none() {
+        for (srv_name, service) in server_refs.iter() {
+            let tools = match timeout(timeout_duration, service.list_all_tools()).await {
+                Ok(Ok(tools)) => tools,
+                Ok(Err(e)) => {
+                    log::warn!("MCP server {srv_name} failed to list tools: {e}");
+                    continue;
+                }
+                Err(_) => {
+                    log::warn!(
+                        "Listing tools for {srv_name} timed out after {} seconds",
+                        timeout_duration.as_secs()
+                    );
+                    continue;
+                }
+            };
+
+            if tools.iter().any(|t| t.name == tool_name) {
+                log::debug!("Found tool {tool_name} in server {srv_name}");
+                target_service = Some(service.clone());
+                break;
+            }
         }
     }
 

@@ -32,6 +32,32 @@ struct ResolvedProviderConfig {
     provider_custom_headers: Vec<ProviderCustomHeader>,
 }
 
+fn is_reserved_upstream_custom_header(name: &str) -> bool {
+    matches!(
+        name,
+        "accept-encoding"
+            | "authorization"
+            | "connection"
+            | "content-length"
+            | "cookie"
+            | "forwarded"
+            | "host"
+            | "origin"
+            | "proxy-authorization"
+            | "proxy-connection"
+            | "referer"
+            | "te"
+            | "trailer"
+            | "transfer-encoding"
+            | "upgrade"
+            | "x-api-key"
+            | "x-forwarded-for"
+            | "x-forwarded-host"
+            | "x-forwarded-proto"
+    ) || name.starts_with("proxy-")
+        || name.starts_with("sec-")
+}
+
 fn error_response(
     status: StatusCode,
     message: impl Into<String>,
@@ -108,8 +134,34 @@ fn request_has_tool_state(json_body: &serde_json::Value) -> bool {
         })
 }
 
-fn disable_thinking_for_tool_state(json_body: &mut serde_json::Value) -> bool {
-    if !request_has_tool_state(json_body) {
+fn request_has_local_knowledge_context(json_body: &serde_json::Value) -> bool {
+    json_body
+        .get("messages")
+        .and_then(|messages| messages.as_array())
+        .is_some_and(|messages| {
+            messages.iter().any(|message| {
+                message
+                    .get("content")
+                    .and_then(|content| content.as_str())
+                    .is_some_and(|content| content.contains("Local Knowledge Base (ACTIVE)"))
+                    || message
+                        .get("content")
+                        .and_then(|content| content.as_array())
+                        .is_some_and(|parts| {
+                            parts.iter().any(|part| {
+                                part.get("text")
+                                    .and_then(|text| text.as_str())
+                                    .is_some_and(|text| {
+                                        text.contains("Local Knowledge Base (ACTIVE)")
+                                    })
+                            })
+                        })
+            })
+        })
+}
+
+fn disable_thinking_for_deterministic_answer(json_body: &mut serde_json::Value) -> bool {
+    if !request_has_tool_state(json_body) && !request_has_local_knowledge_context(json_body) {
         return false;
     }
 
@@ -152,8 +204,8 @@ fn normalize_request_body(body_bytes: &Bytes, allow_chat_template_kwargs: bool) 
         }
     }
 
-    if allow_chat_template_kwargs && disable_thinking_for_tool_state(&mut json_body) {
-        log::debug!("Disabled chat-template thinking for tool-capable/tool-follow-up request");
+    if allow_chat_template_kwargs && disable_thinking_for_deterministic_answer(&mut json_body) {
+        log::debug!("Disabled chat-template thinking for tool/local-knowledge request");
         modified = true;
     }
 
@@ -564,7 +616,7 @@ async fn try_anthropic_fallback(
 
 /// Build a streaming response from a successful upstream response.
 /// Spawns a background task that forwards chunks, applying SSE line-patching
-/// for `text/event-stream` responses (e.g. promoting `reasoning_content` to `content`).
+/// for `text/event-stream` responses (e.g. removing private reasoning fields).
 fn build_streaming_response(
     response: reqwest::Response,
     status: StatusCode,
@@ -747,11 +799,27 @@ pub(super) async fn dispatch_to_upstream(
     // Skip reserved headers that could override auth or routing set above.
     for ch in &provider_custom_headers {
         let h = ch.header.to_ascii_lowercase();
-        if h == "host" || h == "authorization" || h == "x-api-key" {
+        if is_reserved_upstream_custom_header(&h) {
             log::debug!("Skipping reserved custom header '{}'", ch.header);
             continue;
         }
-        outbound_req = outbound_req.header(ch.header.as_str(), ch.value.as_str());
+        if ch
+            .value
+            .chars()
+            .any(|c| matches!(c, '\0' | '\r' | '\n'))
+        {
+            log::debug!("Skipping unsafe custom header value for '{}'", ch.header);
+            continue;
+        }
+        let Ok(header_name) = reqwest::header::HeaderName::from_bytes(ch.header.as_bytes()) else {
+            log::debug!("Skipping invalid custom header name '{}'", ch.header);
+            continue;
+        };
+        let Ok(header_value) = reqwest::header::HeaderValue::from_str(ch.value.as_str()) else {
+            log::debug!("Skipping invalid custom header value for '{}'", ch.header);
+            continue;
+        };
+        outbound_req = outbound_req.header(header_name, header_value);
     }
 
     let outbound_req_with_body = outbound_req.body(buffered_body_for_req);
@@ -844,13 +912,6 @@ pub(super) async fn dispatch_to_upstream(
 
 /// Patch a single SSE line in-place before forwarding to the client.
 ///
-/// Reasoning models exposed over OpenAI-compatible endpoints (e.g.
-/// DeepSeek-R1, Cloudflare's `@cf/zai-org/glm-4.7-flash`) only emit their
-/// output under non-standard `delta.reasoning` / `delta.reasoning_content`
-/// fields. The Vercel AI SDK's OpenAI parser only reads `delta.content`,
-/// so without this promotion 100% of the tokens arrive but nothing renders
-/// in the chat UI — user sees the "thinking" indicator forever.
-///
 /// Non-`data:` lines and malformed JSON pass through untouched.
 fn patch_sse_line(line: &str) -> String {
     // Preserve non-data lines (event:, id:, retry:, blank lines) verbatim.
@@ -892,35 +953,11 @@ fn patch_sse_line(line: &str) -> String {
             Some(d) => d,
             None => continue,
         };
-        // Take reasoning_content string if present & non-empty.
-        let reasoning = delta
-            .get("reasoning_content")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
-            .or_else(|| {
-                delta
-                    .get("reasoning")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-            });
-        if let Some(r) = reasoning {
-            if !r.is_empty() {
-                let existing = delta
-                    .get("content")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-                    .unwrap_or_default();
-                delta.insert(
-                    "content".to_string(),
-                    serde_json::Value::String(format!("{existing}{r}")),
-                );
-                // Remove reasoning fields so the client's OpenAI parser doesn't
-                // double-process them; AI SDK ignores unknown fields but we want
-                // the body as clean as possible.
-                delta.remove("reasoning_content");
-                delta.remove("reasoning");
-                changed = true;
-            }
+        if delta.remove("reasoning_content").is_some() {
+            changed = true;
+        }
+        if delta.remove("reasoning").is_some() {
+            changed = true;
         }
     }
     if !changed {

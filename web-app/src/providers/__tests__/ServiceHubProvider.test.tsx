@@ -21,7 +21,7 @@ describe('ServiceHubProvider', () => {
     vi.clearAllMocks()
   })
 
-  it('renders nothing while initializing', () => {
+  it('renders loading UI while initializing', () => {
     // Never resolve so it stays in loading state
     mockInitializeServiceHub.mockReturnValue(new Promise(() => {}))
 
@@ -31,7 +31,8 @@ describe('ServiceHubProvider', () => {
       </ServiceHubProvider>
     )
 
-    expect(container.innerHTML).toBe('')
+    expect(container).toHaveTextContent('Initializing Ax-Studio')
+    expect(screen.queryByTestId('child')).not.toBeInTheDocument()
   })
 
   it('renders children after successful initialization', async () => {

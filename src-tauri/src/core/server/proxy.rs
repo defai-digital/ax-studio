@@ -286,14 +286,7 @@ fn validate_request(
     headers: &hyper::HeaderMap,
     config: &ProxyConfig,
 ) -> Option<Response<Body>> {
-    // Allow loopback processes (e.g. fabric-ingest MCP server) to call the
-    // embeddings endpoint without a Bearer token. The proxy only binds to
-    // 127.0.0.1, so no external origin can reach this path.
-    // Note: `path` here is the destination path with the /v1 prefix stripped.
-    let is_loopback_embeddings = (path == "/embeddings" || path == "/v1/embeddings")
-        && (config.host == "127.0.0.1" || config.host == "localhost" || config.host == "::1")
-        && host_header.starts_with(&config.host);
-    let is_whitelisted_path = WHITELISTED_PATHS.contains(&path) || is_loopback_embeddings;
+    let is_whitelisted_path = WHITELISTED_PATHS.contains(&path);
 
     if !is_whitelisted_path {
         if !host_header.is_empty() {

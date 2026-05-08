@@ -17,38 +17,57 @@ pub fn install_extensions<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
 
 #[tauri::command]
 pub fn get_active_extensions<R: Runtime>(app: AppHandle<R>) -> Vec<serde_json::Value> {
-    let extensions_path = get_app_extensions_path(app);
+    let extensions_path = get_app_extensions_path(app.clone());
     let path = extensions_path.join("extensions.json");
     log::info!("get app extensions, path: {path:?}");
 
-    let contents = fs::read_to_string(path);
-    match contents {
-        Ok(data) => match serde_json::from_str::<Vec<serde_json::Value>>(&data) {
-            Ok(exts) => exts
-                .into_iter()
-                .map(|ext| {
-                    let url = safe_relative_extension_url(&ext, &extensions_path);
-
-                    serde_json::json!({
-                        "url": url,
-                        "name": ext["name"],
-                        "productName": ext["productName"],
-                        "active": ext["active"],
-                        "description": ext["description"],
-                        "version": ext["version"]
-                    })
-                })
-                .collect(),
-            Err(error) => {
-                log::error!("Failed to parse extensions.json: {error}");
-                vec![]
-            }
-        },
+    match read_active_extension_manifests(&path, &extensions_path) {
+        Ok(exts) => exts,
         Err(error) => {
-            log::error!("Failed to read extensions.json: {error}");
-            vec![]
+            log::error!("{error}");
+            let backup_path = path.with_extension("json.corrupt");
+            if let Err(rename_error) = fs::rename(&path, &backup_path) {
+                log::error!("Failed to quarantine corrupted extensions.json: {rename_error}");
+            }
+
+            if let Err(install_error) = setup::install_extensions(app, true) {
+                log::error!("Failed to reinstall bundled extensions: {install_error}");
+                return vec![];
+            }
+
+            read_active_extension_manifests(&path, &extensions_path).unwrap_or_else(|retry_error| {
+                log::error!("Failed to load extensions after reinstall: {retry_error}");
+                vec![]
+            })
         }
     }
+}
+
+fn read_active_extension_manifests(
+    path: &Path,
+    extensions_path: &Path,
+) -> Result<Vec<serde_json::Value>, String> {
+    let data = fs::read_to_string(path)
+        .map_err(|error| format!("Failed to read extensions.json: {error}"))?;
+
+    let exts = serde_json::from_str::<Vec<serde_json::Value>>(&data)
+        .map_err(|error| format!("Failed to parse extensions.json: {error}"))?;
+
+    Ok(exts
+        .into_iter()
+        .map(|ext| {
+            let url = safe_relative_extension_url(&ext, extensions_path);
+
+            serde_json::json!({
+                "url": url,
+                "name": ext["name"],
+                "productName": ext["productName"],
+                "active": ext["active"],
+                "description": ext["description"],
+                "version": ext["version"]
+            })
+        })
+        .collect())
 }
 
 fn safe_relative_extension_url(ext: &serde_json::Value, extensions_path: &Path) -> String {

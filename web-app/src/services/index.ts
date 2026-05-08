@@ -36,6 +36,36 @@ import type { CoreService } from './core/types'
 import type { DeepLinkService } from './deeplink/types'
 import type { ProjectsService } from './projects/types'
 
+class LazyTauriProvidersService implements ProvidersService {
+  private servicePromise: Promise<ProvidersService> | null = null
+
+  private async service(): Promise<ProvidersService> {
+    if (!this.servicePromise) {
+      this.servicePromise = import('./providers/tauri').then(
+        (module) => new module.TauriProvidersService()
+      )
+    }
+    return this.servicePromise
+  }
+
+  async getProviders(): Promise<ModelProvider[]> {
+    return (await this.service()).getProviders()
+  }
+
+  async fetchModelsFromProvider(provider: ModelProvider): Promise<string[]> {
+    return (await this.service()).fetchModelsFromProvider(provider)
+  }
+
+  async updateSettings(providerName: string, settings: ProviderSetting[]): Promise<void> {
+    return (await this.service()).updateSettings(providerName, settings)
+  }
+
+  fetch(): typeof fetch {
+    return ((input: RequestInfo | URL, init?: RequestInit) =>
+      this.service().then((service) => service.fetch()(input, init))) as typeof fetch
+  }
+}
+
 export interface ServiceHub {
   theme(): ThemeService
   window(): WindowService
@@ -242,7 +272,6 @@ class PlatformServiceHub implements ServiceHub {
           hardwareModule,
           appModule,
           mcpModule,
-          providersModule,
           dialogModule,
           openerModule,
           updaterModule,
@@ -256,7 +285,6 @@ class PlatformServiceHub implements ServiceHub {
           import('./hardware/tauri'),
           import('./app/tauri'),
           import('./mcp/tauri'),
-          import('./providers/tauri'),
           import('./dialog/tauri'),
           import('./opener/tauri'),
           import('./updater/tauri'),
@@ -271,7 +299,7 @@ class PlatformServiceHub implements ServiceHub {
         this.hardwareService = new hardwareModule.TauriHardwareService()
         this.appService = new appModule.TauriAppService()
         this.mcpService = new mcpModule.TauriMCPService()
-        this.providersService = new providersModule.TauriProvidersService()
+        this.providersService = new LazyTauriProvidersService()
         this.dialogService = new dialogModule.TauriDialogService()
         this.openerService = new openerModule.TauriOpenerService()
         this.updaterService = new updaterModule.TauriUpdaterService()

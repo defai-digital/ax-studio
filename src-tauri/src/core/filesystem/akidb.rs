@@ -142,7 +142,7 @@ fn default_metric() -> String {
     "cosine".to_string()
 }
 fn default_dimension() -> u32 {
-    1536
+    768
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
@@ -230,10 +230,10 @@ fn default_embedder_type() -> String {
     "http".to_string()
 }
 fn default_model_id() -> String {
-    "gte-qwen2-1.5b-instruct-q4_k_m".to_string()
+    "nomic-embed-text-v1.5".to_string()
 }
 fn default_embedder_dimension() -> u32 {
-    1536
+    768
 }
 fn default_batch_size() -> u32 {
     64
@@ -405,7 +405,7 @@ struct FabricCliCommand {
 }
 
 /// Resolve the fabric-ingest CLI command from the MCP config.
-/// Falls back to `npx -y @ax-studio/fabric-ingest` if the config is missing.
+/// Falls back to `npx -y @ax-fabric/fabric-ingest` if the config is missing.
 fn resolve_fabric_cli_command<R: Runtime>(
     app: &tauri::AppHandle<R>,
 ) -> Result<FabricCliCommand, String> {

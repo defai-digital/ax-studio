@@ -3,8 +3,11 @@ import { invoke } from '@tauri-apps/api/core'
 // Blocklist of hostnames that should not be scraped (internal services, localhost, etc.)
 const BLOCKED_HOSTNAMES = new Set([
   'localhost',
+  'ip6-localhost',
+  'ip6-loopback',
   'metadata.google.internal',
   'metadata.internal',
+  '169.254.169.254',
 ])
 
 function isPrivateIPv4(ip: string): boolean {
@@ -21,8 +24,17 @@ function isPrivateIPv4(ip: string): boolean {
 }
 
 function isPrivateIPv6(hostname: string): boolean {
-  const h = hostname.toLowerCase()
-  if (h === '::1' || h === '::' || h.startsWith('fc') || h.startsWith('fd')) return true
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, '')
+  if (
+    h === '::1' ||
+    h === '::' ||
+    h.startsWith('fc') ||
+    h.startsWith('fd') ||
+    h.startsWith('fe8') ||
+    h.startsWith('fe9') ||
+    h.startsWith('fea') ||
+    h.startsWith('feb')
+  ) return true
   const v4Mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(h)
   if (v4Mapped) return isPrivateIPv4(v4Mapped[1])
   return false
@@ -32,8 +44,10 @@ function isValidScrapeUrl(url: string): boolean {
   try {
     const parsed = new URL(url)
     if (parsed.protocol !== 'https:') return false
-    const hostname = parsed.hostname
+    if (parsed.username || parsed.password) return false
+    const hostname = parsed.hostname.toLowerCase().replace(/\.$/, '')
     if (BLOCKED_HOSTNAMES.has(hostname)) return false
+    if (hostname.endsWith('.localhost') || hostname.endsWith('.local')) return false
     if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname) && isPrivateIPv4(hostname)) return false
     if (hostname.includes(':') && isPrivateIPv6(hostname)) return false
     return true

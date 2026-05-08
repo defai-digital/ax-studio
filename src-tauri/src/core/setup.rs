@@ -3,7 +3,7 @@ use sha2::{Digest, Sha256};
 use std::{
     fs::{self, File},
     io::Read,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     sync::Arc,
 };
 use tar::Archive;
@@ -157,6 +157,16 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
 
             let extension_name = extension_name.ok_or("package.json not found in archive")?;
             let extension_dir = staging_path.join(extension_name.clone());
+            if !Path::new(&extension_name)
+                .components()
+                .all(|component| matches!(component, Component::Normal(_)))
+                || !extension_dir.starts_with(&staging_path)
+            {
+                return Err(format!(
+                    "Blocked unsafe extension package name: {}",
+                    extension_name
+                ));
+            }
             fs::create_dir_all(&extension_dir).map_err(|e| e.to_string())?;
 
             let tar_gz = File::open(&path).map_err(|e| e.to_string())?;
@@ -182,9 +192,24 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
                 }
 
                 let file_path = entry.path().map_err(|e| e.to_string())?;
-                let components: Vec<_> = file_path.components().collect();
-                if components.len() > 1 {
-                    let relative_path: PathBuf = components[1..].iter().collect();
+                let mut components = file_path.components();
+                let _package_root = components.next();
+                let mut relative_path = PathBuf::new();
+
+                for component in components {
+                    match component {
+                        Component::Normal(part) => relative_path.push(part),
+                        Component::CurDir => {}
+                        _ => {
+                            return Err(format!(
+                                "Blocked extension archive path traversal: {}",
+                                file_path.display()
+                            ));
+                        }
+                    }
+                }
+
+                if !relative_path.as_os_str().is_empty() {
                     let target_path = extension_dir.join(relative_path);
                     if !target_path.starts_with(&extension_dir) {
                         return Err(format!(
@@ -338,7 +363,7 @@ pub fn migrate_mcp_servers(
     Ok(())
 }
 
-const AX_STUDIO_MCP_PACKAGE: &str = "@ax-studio/fabric-ingest";
+const AX_STUDIO_MCP_PACKAGE: &str = "@ax-fabric/fabric-ingest";
 
 /// Build the default MCP server config for ax-fabric.
 /// Uses npx as the default command which will work once the package is
@@ -388,7 +413,7 @@ mod tests {
 
     #[test]
     fn test_ax_studio_mcp_package_constant() {
-        assert_eq!(AX_STUDIO_MCP_PACKAGE, "@ax-studio/fabric-ingest");
+        assert_eq!(AX_STUDIO_MCP_PACKAGE, "@ax-fabric/fabric-ingest");
     }
 
     #[test]
@@ -583,7 +608,12 @@ pub fn extract_extension_manifest<R: Read>(
             .to_string_lossy()
             .to_string();
 
-        if path_str == "package/package.json" || path_str == "package.json" {
+        let path = Path::new(&path_str);
+        let is_manifest_path = path.components().all(|component| {
+            matches!(component, Component::Normal(_) | Component::CurDir)
+        }) && (path_str == "package/package.json" || path_str == "package.json");
+
+        if is_manifest_path {
             let mut content = String::new();
             entry
                 .read_to_string(&mut content)

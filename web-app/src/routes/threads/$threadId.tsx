@@ -39,6 +39,7 @@ import type { UIMessage } from '@ai-sdk/react'
 import type { ThreadMessage } from '@ax-studio/core'
 import { useThreadMemory } from '@/hooks/threads/use-thread-memory'
 import { useLocalKnowledge } from '@/hooks/research/useLocalKnowledge'
+import { useThreadLocalKnowledge } from '@/hooks/threads/use-thread-local-knowledge'
 import { useThreadResearch } from '@/hooks/threads/use-thread-research'
 import { useThreadChat } from '@/hooks/threads/use-thread-chat'
 import { useThreadTools } from '@/hooks/threads/use-thread-tools'
@@ -102,6 +103,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   const localKnowledgeActive = useLocalKnowledge((state) =>
     state.isLocalKnowledgeEnabledForThread(threadId)
   )
+  const { prepareLocalKnowledge } = useThreadLocalKnowledge(threadId)
   const alwaysCiteSources = useGuardrails((s) => s.alwaysCiteSources)
   const projectId = thread?.metadata?.project?.id
   const selectedModel = useMemo(() => {
@@ -231,6 +233,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     handleRememberCommand,
     handleForgetCommand,
     lastUserInputRef,
+    prepareLocalKnowledge,
   })
 
   persistMessageOnFinishRef.current = persistMessageOnFinish

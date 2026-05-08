@@ -10,7 +10,7 @@ use serde_json::Value;
 use std::{collections::HashMap, env, process::Stdio, sync::Arc, time::Duration};
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_http::reqwest;
-use tokio::{io::AsyncReadExt, process::Command, sync::Mutex, time::timeout};
+use tokio::{io::AsyncReadExt, net::lookup_host, process::Command, sync::Mutex, time::timeout};
 
 #[cfg(windows)]
 use crate::core::mcp::constants::CREATE_NO_WINDOW;
@@ -30,6 +30,45 @@ const DANGEROUS_ENV_KEYS: &[&str] = &[
     "LD_LIBRARY_PATH",
     "DYLD_LIBRARY_PATH",
 ];
+
+async fn validate_external_transport_url(
+    server_name: &str,
+    transport_kind: &str,
+    transport_url: &str,
+) -> Result<(), String> {
+    if transport_url.is_empty() {
+        return Err(format!("Missing MCP {transport_kind} URL for server {server_name}"));
+    }
+
+    if ax_studio_utils::is_internal_url(transport_url) {
+        return Err(format!(
+            "MCP {transport_kind} URL for server {server_name} points to an internal/private address, which is not allowed"
+        ));
+    }
+
+    let parsed = reqwest::Url::parse(transport_url)
+        .map_err(|e| format!("Invalid MCP {transport_kind} URL for server {server_name}: {e}"))?;
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| format!("MCP {transport_kind} URL for server {server_name} is missing a host"))?;
+    let port = parsed
+        .port_or_known_default()
+        .ok_or_else(|| format!("MCP {transport_kind} URL for server {server_name} is missing a port"))?;
+
+    let addrs = lookup_host((host, port))
+        .await
+        .map_err(|e| format!("Failed to resolve MCP {transport_kind} URL for server {server_name}: {e}"))?;
+
+    for addr in addrs {
+        if ax_studio_utils::is_private_ip(addr.ip()) {
+            return Err(format!(
+                "MCP {transport_kind} URL for server {server_name} resolves to an internal/private address, which is not allowed"
+            ));
+        }
+    }
+
+    Ok(())
+}
 
 // Re-export ShutdownContext so existing `use super::helpers::ShutdownContext`
 // imports keep working after the enum moved to its own module.
@@ -232,14 +271,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
 
     if config_params.transport_type.as_deref() == Some("http") && config_params.url.is_some() {
         let transport_url = config_params.url.as_deref().unwrap_or("");
-        if transport_url.is_empty() {
-            return Err(format!("Missing MCP HTTP URL for server {name}"));
-        }
-        if ax_studio_utils::is_internal_url(transport_url) {
-            return Err(format!(
-                "MCP HTTP URL for server {name} points to an internal/private address, which is not allowed"
-            ));
-        }
+        validate_external_transport_url(&name, "HTTP", transport_url).await?;
         let transport = StreamableHttpClientTransport::with_client(
             reqwest::Client::builder()
                 .default_headers({
@@ -304,14 +336,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
     } else if config_params.transport_type.as_deref() == Some("sse") && config_params.url.is_some()
     {
         let transport_url = config_params.url.as_deref().unwrap_or("");
-        if transport_url.is_empty() {
-            return Err(format!("Missing MCP SSE URL for server {name}"));
-        }
-        if ax_studio_utils::is_internal_url(transport_url) {
-            return Err(format!(
-                "MCP SSE URL for server {name} points to an internal/private address, which is not allowed"
-            ));
-        }
+        validate_external_transport_url(&name, "SSE", transport_url).await?;
         let transport = SseClientTransport::start_with_client(
             reqwest::Client::builder()
                 .default_headers({

@@ -91,6 +91,7 @@ export const useTokensCount = (
     }
     return `${messages.length}:${totalLen}:${messages[messages.length - 1].role}`
   }, [messages])
+  const modelSignature = `${selectedModel?.id ?? ''}:${(selectedModel as { provider?: string } | undefined)?.provider ?? ''}:${getModelContextLength(selectedModel ?? undefined) ?? ''}`
 
   const getMaxTokens = useCallback((): number | undefined => {
     const ctxLength = getModelContextLength(selectedModel ?? undefined)
@@ -278,7 +279,7 @@ export const useTokensCount = (
       }
       abortRef.current?.abort()
     }
-  }, [prompt, messageSignature, selectedModel?.id])
+  }, [prompt, messageSignature, modelSignature])
 
   // Manual calculation function (for click events)
   const calculateTokens = useCallback(async () => {

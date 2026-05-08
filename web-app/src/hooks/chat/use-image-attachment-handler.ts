@@ -34,6 +34,13 @@ function getFileTypeFromExtension(fileName: string): string {
   }
 }
 
+function isSafeImagePath(path: string): boolean {
+  if (!path || path.length > 4096 || /[\0\r\n]/.test(path)) return false
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(path)) return false
+  if (path.split(/[\\/]/).includes('..')) return false
+  return getFileTypeFromExtension(path) !== ''
+}
+
 export function useImageAttachmentHandler({
   attachmentsKey,
   effectiveThreadId,
@@ -245,6 +252,9 @@ export function useImageAttachmentHandler({
           const files: File[] = []
           for (const path of paths) {
             try {
+              if (!isSafeImagePath(path)) {
+                throw new Error('Selected file path is not a supported image path')
+              }
               const { convertFileSrc } = await import('@tauri-apps/api/core')
               const fileUrl = convertFileSrc(path)
               const response = await fetch(fileUrl)

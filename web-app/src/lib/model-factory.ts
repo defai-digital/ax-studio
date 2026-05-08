@@ -255,17 +255,10 @@ function normalizeOpenAICompatiblePayload(
     }
   }
 
-  // Promote reasoning_content/reasoning to content for reasoning models
-  // (DeepSeek-R1, Cloudflare @cf/zai-org/glm-4.7-flash, etc.) whose output
-  // arrives in non-standard fields the Vercel AI SDK ignores.
   for (const field of ['reasoning_content', 'reasoning'] as const) {
-    const value = payload[field]
-    if (typeof value === 'string' && value.length > 0) {
-      const existing = typeof payload.content === 'string' ? payload.content : ''
-      payload.content = existing + value
+    if (payload[field] != null) {
       delete payload[field]
       changed = true
-      break // only promote the first one found
     }
   }
 

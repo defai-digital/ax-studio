@@ -64,6 +64,38 @@ function shouldUseTauriFetch(baseUrl: string): boolean {
   )
 }
 
+const HEADER_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
+const RESERVED_CUSTOM_HEADERS = new Set([
+  'accept-encoding',
+  'authorization',
+  'connection',
+  'content-length',
+  'cookie',
+  'forwarded',
+  'host',
+  'origin',
+  'proxy-authorization',
+  'proxy-connection',
+  'referer',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+  'x-api-key',
+  'x-forwarded-for',
+  'x-forwarded-host',
+  'x-forwarded-proto',
+])
+
+function isSafeCustomHeader(header: { header: string; value: string }): boolean {
+  const name = header.header.trim()
+  const lowerName = name.toLowerCase()
+  if (!HEADER_NAME_PATTERN.test(name)) return false
+  if (RESERVED_CUSTOM_HEADERS.has(lowerName)) return false
+  if (lowerName.startsWith('proxy-') || lowerName.startsWith('sec-')) return false
+  return !/[\0\r\n]/.test(header.value)
+}
+
 async function readErrorBody(response: Response): Promise<string> {
   try {
     const text = await response.text()
@@ -259,17 +291,19 @@ export class TauriProvidersService implements ProvidersService {
 
       // Only add authentication headers if API key is provided
       if (provider.api_key) {
-        headers['Authorization'] = `Bearer ${provider.api_key}`
         if (provider.provider === 'gemini') {
           headers['x-goog-api-key'] = provider.api_key
+        } else {
+          headers['Authorization'] = `Bearer ${provider.api_key}`
         }
       }
 
       if (provider.custom_header) {
-        const blockedHeaders = new Set(['host', 'cookie', 'authorization', 'x-api-key', 'origin', 'referer'])
         provider.custom_header.forEach((header) => {
-          if (!blockedHeaders.has(header.header.toLowerCase())) {
-            headers[header.header] = header.value
+          if (isSafeCustomHeader(header)) {
+            headers[header.header.trim()] = header.value
+          } else {
+            console.warn(`Skipped unsafe custom provider header: ${header.header}`)
           }
         })
       }

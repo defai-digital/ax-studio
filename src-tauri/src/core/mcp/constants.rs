@@ -37,7 +37,7 @@ pub const DEFAULT_MCP_CONFIG: &str = r#"{
     },
     "ax-studio": {
       "command": "npx",
-      "args": ["-y", "@ax-studio/fabric-ingest", "mcp", "server"],
+      "args": ["-y", "@ax-fabric/fabric-ingest", "mcp", "server"],
       "env": {},
       "active": false,
       "official": true

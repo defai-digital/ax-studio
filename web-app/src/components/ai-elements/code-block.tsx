@@ -43,6 +43,15 @@ const MAX_CACHE_SIZE = 200;
 const _htmlCache = new Map<string, [string, string]>();
 const _pendingHighlights = new Map<string, Promise<[string, string]>>();
 
+function cacheHighlight(cacheKey: string, result: [string, string]) {
+  while (_htmlCache.size >= MAX_CACHE_SIZE) {
+    const firstKey = _htmlCache.keys().next().value;
+    if (firstKey === undefined || firstKey === cacheKey) break;
+    _htmlCache.delete(firstKey);
+  }
+  _htmlCache.set(cacheKey, result);
+}
+
 type CodeBlockProps = HTMLAttributes<HTMLDivElement> & {
   code: string;
   language: BundledLanguage;
@@ -101,16 +110,15 @@ export async function highlightCode(
       _loadedLangs.add(language);
     }
 
+    const existing = _htmlCache.get(cacheKey);
+    if (existing) return existing;
+
     const result: [string, string] = [
       hl.codeToHtml(code, { lang: language, theme: "ax-studio-light", transformers }),
       hl.codeToHtml(code, { lang: language, theme: "ax-studio-dark", transformers }),
     ];
 
-    if (_htmlCache.size >= MAX_CACHE_SIZE) {
-      const firstKey = _htmlCache.keys().next().value;
-      if (firstKey !== undefined) _htmlCache.delete(firstKey);
-    }
-    _htmlCache.set(cacheKey, result);
+    cacheHighlight(cacheKey, result);
     return result;
   })();
 

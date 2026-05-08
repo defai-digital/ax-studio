@@ -76,7 +76,7 @@ export function createDefaultConfig(dataFolder?: string): AkidbConfig {
       root: '~/.ax-studio/data/akidb',
       collection: 'default',
       metric: 'cosine',
-      dimension: 1536,
+      dimension: 768,
     },
     ingest: {
       sources: dataFolder ? [{ path: dataFolder }] : [],

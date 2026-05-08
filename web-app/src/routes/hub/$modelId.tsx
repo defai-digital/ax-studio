@@ -35,6 +35,21 @@ type SearchParams = {
   repo: string
 }
 
+function isTrustedHuggingFaceReadmeUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value)
+    const hostname = parsed.hostname.toLowerCase()
+    return (
+      parsed.protocol === 'https:' &&
+      !parsed.username &&
+      !parsed.password &&
+      (hostname === 'huggingface.co' || hostname.endsWith('.huggingface.co'))
+    )
+  } catch {
+    return false
+  }
+}
+
 const hubModelSearchSchema = z
   .object({
     repo: z.string().optional(),
@@ -269,11 +284,8 @@ function HubModelDetailContent() {
     ;(async () => {
       setIsLoadingReadme(true)
       try {
-        // Validate the README URL before fetching — model metadata comes from
-        // external sources (HuggingFace API) and should only point to HTTPS hosts.
-        const parsed = new URL(readmeUrl)
-        if (parsed.protocol !== 'https:') {
-          console.warn(`[hub] README URL rejected (not HTTPS): ${readmeUrl}`)
+        if (!isTrustedHuggingFaceReadmeUrl(readmeUrl)) {
+          console.warn(`[hub] README URL rejected: ${readmeUrl}`)
           setReadmeContent('')
           return
         }

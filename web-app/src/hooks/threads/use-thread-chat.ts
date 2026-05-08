@@ -54,6 +54,7 @@ export type ThreadChatParams = {
   handleRememberCommand: (text: string) => boolean
   handleForgetCommand: (text: string) => boolean
   lastUserInputRef: React.MutableRefObject<string>
+  prepareLocalKnowledge?: (text: string) => Promise<string>
 }
 
 export type ThreadChatResult = {
@@ -77,6 +78,7 @@ export function useThreadChat({
   handleRememberCommand,
   handleForgetCommand,
   lastUserInputRef,
+  prepareLocalKnowledge,
 }: ThreadChatParams): ThreadChatResult {
   const serviceHub = useServiceHub()
   const addMessage = useMessages((state) => state.addMessage)
@@ -235,6 +237,13 @@ export function useThreadChat({
       const attachments =
         readyAttachments.length > 0 ? readyAttachments : undefined
 
+      const knowledgeContext = prepareLocalKnowledge
+        ? await prepareLocalKnowledge(normalizedText)
+        : ''
+      const modelText = knowledgeContext
+        ? `${text}${knowledgeContext}`
+        : text
+
       const userMessage = newUserThreadContent(
         threadId,
         text,
@@ -248,7 +257,7 @@ export function useThreadChat({
       const parts: MessagePart[] = [
         {
           type: 'text',
-          text: userMessage.content[0].text?.value ?? text,
+          text: modelText,
         },
       ]
 
@@ -285,6 +294,7 @@ export function useThreadChat({
       handleRememberCommand,
       handleForgetCommand,
       lastUserInputRef,
+      prepareLocalKnowledge,
     ]
   )
 

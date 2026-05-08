@@ -1,8 +1,6 @@
-import { safeStorageGetItem, safeStorageSetItem } from '@/lib/storage/storage'
-
 const KEY_LENGTH_BYTES = 32
 const IV_LENGTH_BYTES = 12
-const KEY_STORAGE_KEY = 'ax-studio-hf-token-key'
+const LEGACY_KEY_STORAGE_KEY = 'ax-studio-hf-token-key'
 const ENCRYPTED_PREFIX = 'enc-v2.'
 
 const utf8Encoder = new TextEncoder()
@@ -32,29 +30,6 @@ const decodeBase64 = (value: string): Uint8Array => {
   return out
 }
 
-const readStoredKey = (): Uint8Array | null => {
-  const stored = safeStorageGetItem(localStorage, KEY_STORAGE_KEY, 'crypto')
-  if (!stored) return null
-
-  try {
-    const bytes = decodeBase64(stored)
-    if (bytes.length !== KEY_LENGTH_BYTES) return null
-    return bytes
-  } catch (error) {
-    console.warn('Stored encryption key is invalid, regenerating:', error)
-    return null
-  }
-}
-
-const writeStoredKey = (key: Uint8Array) => {
-  safeStorageSetItem(
-    localStorage,
-    KEY_STORAGE_KEY,
-    encodeBase64(key),
-    'crypto'
-  )
-}
-
 const getEncryptionKey = async (): Promise<CryptoKey> => {
   if (cachedKey) return cachedKey
   if (keyPromise) return keyPromise
@@ -64,12 +39,8 @@ const getEncryptionKey = async (): Promise<CryptoKey> => {
       throw new Error('Web Crypto API unavailable')
     }
 
-    const storedKey = readStoredKey()
-    const rawKey = storedKey ?? crypto.getRandomValues(new Uint8Array(KEY_LENGTH_BYTES))
-
-    if (!storedKey) {
-      writeStoredKey(rawKey)
-    }
+    localStorage.removeItem(LEGACY_KEY_STORAGE_KEY)
+    const rawKey = crypto.getRandomValues(new Uint8Array(KEY_LENGTH_BYTES))
 
     const key = await crypto.subtle.importKey(
       'raw',
@@ -90,8 +61,7 @@ export async function encrypt(text: string): Promise<string> {
   if (!text) return text
 
   if (!isCryptoAvailable) {
-    console.error('Web Crypto API unavailable — cannot safely encrypt. Storing as plaintext.')
-    return ENCRYPTED_PREFIX + encodeBase64(utf8Encoder.encode(text))
+    throw new Error('Web Crypto API unavailable — cannot store securely')
   }
 
   try {
@@ -115,26 +85,16 @@ export async function encrypt(text: string): Promise<string> {
 
 const isLegacyFormat = (value: string): boolean => value.includes('|')
 
-const decodeLegacy = (value: string): string | null => {
-  try {
-    const [encoded] = value.split('|')
-    if (!encoded) return null
-    const bytes = decodeBase64(encoded)
-    return utf8Decoder.decode(bytes)
-  } catch {
-    return null
-  }
-}
-
 export async function decrypt(encryptedText: string): Promise<string> {
   if (!encryptedText) return encryptedText
 
   if (!isCryptoAvailable) {
-    return encryptedText
+    return ''
   }
 
   if (isLegacyFormat(encryptedText) || !encryptedText.startsWith(ENCRYPTED_PREFIX)) {
-    return decodeLegacy(encryptedText) ?? encryptedText
+    console.warn('Rejected unsupported legacy or plaintext secret format')
+    return ''
   }
 
   try {

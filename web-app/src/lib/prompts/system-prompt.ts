@@ -175,15 +175,10 @@ You have access to the user's personal knowledge base via the \`fabric_search\` 
 ### Answer format
 - Start with a direct answer to the user's question
 - Include specific details, quotes, and facts from the search results
-- Reference the source file using [1], [2] notation based on the "source" field
+- Reference the source file using [1], [2] notation
 - If results don't fully answer the question, share what you found and note gaps
 - If no results are returned, say: "I could not find relevant information in the knowledge base."
-
-### CRITICAL RULES
-- Call \`fabric_search\` exactly ONCE per question. NEVER call it twice.
-- After getting results, you MUST output a complete text answer immediately. Start with the actual content — do NOT write introductions like "Let me", "I found", "Based on", or "Here are".
-- Do NOT write things like "Let me search" or "Based on the results" — just give the answer.
-- Your answer MUST be at least 100 words long. Provide specifics, not vague summaries.`
+`
 
 /**
  * Appended when research or local knowledge is active.

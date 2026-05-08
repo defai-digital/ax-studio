@@ -6,7 +6,7 @@
     },
     "ax-fabric": {
       "command": "node",
-      "args": ["/Users/devop/Documents/ax studio/ax-fabric/packages/fabric-ingest/dist/cli.js", "mcp", "server"],
+      "args": ["--experimental-sqlite", "/Users/devop/Documents/Ax/ax-fabric/packages/fabric-ingest/dist/cli.js", "mcp", "server"],
       "type": "stdio",
       "active": true
     }

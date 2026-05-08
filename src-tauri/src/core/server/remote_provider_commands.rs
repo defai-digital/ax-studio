@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::net::ToSocketAddrs;
 use tauri::State;
 
 use crate::core::state::{AppState, ProviderConfig, ProviderCustomHeader};
@@ -50,7 +51,7 @@ pub async fn register_provider_config(
     request: RegisterProviderRequest,
 ) -> Result<(), String> {
     if let Some(ref base_url) = request.base_url {
-        validate_provider_url(base_url)?;
+        validate_provider_url(&request.provider, base_url)?;
     }
 
     let mut provider_state = state.provider_state.lock().await;
@@ -81,7 +82,7 @@ pub async fn register_provider_configs_batch(
 
     for request in requests {
         if let Some(ref base_url) = request.base_url {
-            validate_provider_url(base_url)?;
+            validate_provider_url(&request.provider, base_url)?;
         }
         let provider_name = request.provider.clone();
         let config = ProviderConfig {
@@ -136,13 +137,17 @@ pub async fn list_provider_configs(
         .collect())
 }
 
-fn validate_provider_url(url: &str) -> Result<(), String> {
+fn validate_provider_url(provider: &str, url: &str) -> Result<(), String> {
+    let allow_internal = matches!(provider, "llamacpp" | "ollama" | "lmstudio");
     let parsed = url::Url::parse(url).map_err(|e| format!("Invalid provider URL '{url}': {e}"))?;
     if !matches!(parsed.scheme(), "http" | "https") {
         return Err(format!(
             "Provider URL scheme must be http or https, got '{}'",
             parsed.scheme()
         ));
+    }
+    if !allow_internal && ax_studio_utils::is_internal_url(url) {
+        return Err("Provider URL must not point to an internal or private address".to_string());
     }
     match parsed.host() {
         Some(url::Host::Ipv4(ip)) => {
@@ -167,7 +172,22 @@ fn validate_provider_url(url: &str) -> Result<(), String> {
                 ));
             }
         }
-        Some(url::Host::Domain(_)) => {}
+        Some(url::Host::Domain(domain)) => {
+            let port = parsed.port_or_known_default().ok_or_else(|| {
+                format!("Provider URL is missing a port for scheme '{}'", parsed.scheme())
+            })?;
+            let addrs = (domain, port)
+                .to_socket_addrs()
+                .map_err(|e| format!("Failed to resolve provider URL host '{domain}': {e}"))?;
+            for addr in addrs {
+                if !allow_internal && ax_studio_utils::is_private_ip(addr.ip()) {
+                    return Err(
+                        "Provider URL must not resolve to an internal or private address"
+                            .to_string(),
+                    );
+                }
+            }
+        }
         None => return Err(format!("Provider URL has no host: {url}")),
     }
     Ok(())
