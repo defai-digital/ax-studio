@@ -7,21 +7,11 @@ import {
   preventDefaultFileDrop,
   showStartupError,
 } from '@/lib/bootstrap/app-startup'
-import { EventEmitter } from '@/services/events/EventEmitter'
+import { ensureCoreBridge } from '@/lib/bootstrap/core-bridge'
 
 import './index.css'
 
-const ensureCoreEventsBridge = () => {
-  if (!window.core) {
-    window.core = {} as NonNullable<Window['core']>
-  }
-
-  if (!window.core.events) {
-    window.core.events = new EventEmitter()
-  }
-}
-
-ensureCoreEventsBridge()
+ensureCoreBridge({ withEvents: true })
 
 // Prevent files from opening when dropped
 const cleanupFileDropGuards = preventDefaultFileDrop()

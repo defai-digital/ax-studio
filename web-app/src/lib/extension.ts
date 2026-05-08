@@ -1,8 +1,7 @@
 import { AIEngine, BaseExtension, ExtensionTypeEnum } from '@ax-studio/core'
 
 import { getServiceHub } from '@/hooks/useServiceHub'
-import { APIs } from '@/lib/service'
-import { EventEmitter } from '@/services/events/EventEmitter'
+import { ensureCoreBridge } from '@/lib/bootstrap/core-bridge'
 
 /**
  * Extension manifest object.
@@ -264,19 +263,10 @@ export class ExtensionManager {
    * Shared instance of ExtensionManager.
    */
   static getInstance() {
-    if (!window.core) {
-      window.core = { api: APIs }
-    } else if (!window.core.api) {
-      window.core.api = APIs
+    const core = ensureCoreBridge({ withApi: true, withEvents: true })
+    if (!core.extensionManager) {
+      core.extensionManager = new ExtensionManager()
     }
-
-    if (!window.core.events) {
-      window.core.events = new EventEmitter()
-    }
-
-    if (!window.core.extensionManager) {
-      window.core.extensionManager = new ExtensionManager()
-    }
-    return window.core.extensionManager
+    return core.extensionManager
   }
 }
