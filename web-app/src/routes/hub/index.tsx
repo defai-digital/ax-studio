@@ -38,8 +38,9 @@ import { Button } from '@/components/ui/button'
 import { RenderMarkdown } from '@/containers/RenderMarkdown'
 import { sanitizeModelId } from '@/lib/utils'
 import { z } from 'zod/v4'
+import { isMlxCatalogModel } from './-hubFilters'
 
-type FilterTag = 'all' | 'downloaded' | 'tools' | 'vision' | 'reasoning'
+type FilterTag = 'all' | 'downloaded' | 'mlx' | 'tools' | 'vision' | 'reasoning'
 
 type SearchParams = {
   repo: string
@@ -127,6 +128,11 @@ function HubContent() {
       icon: <HardDrive className="size-3" />,
     },
     {
+      id: 'mlx',
+      label: 'MLX',
+      icon: <Atom className="size-3" />,
+    },
+    {
       id: 'tools',
       label: 'Tool Use',
       icon: <Wrench className="size-3" />,
@@ -205,6 +211,8 @@ function HubContent() {
     // Apply filter tags
     if (activeFilter === 'downloaded') {
       filtered = filtered.filter((model) => isModelDownloaded(model))
+    } else if (activeFilter === 'mlx') {
+      filtered = filtered.filter((model) => isMlxCatalogModel(model))
     } else if (activeFilter === 'tools') {
       filtered = filtered.filter((model) => model.tools)
     } else if (activeFilter === 'vision') {
@@ -581,7 +589,7 @@ function HubContent() {
               <div className="flex items-center gap-2 justify-end sm:hidden mb-3">
                 <div className="flex items-center gap-2">
                   <Switch
-                    checked={activeFilter === 'downloaded'}
+                    checked={activeFilter === 'downloaded' || activeFilter === 'mlx'}
                     onCheckedChange={(checked) => {
                       setIsInitialLoad(true)
                       setActiveFilter(checked ? 'downloaded' : 'all')
@@ -593,7 +601,7 @@ function HubContent() {
                     }}
                   />
                   <span className="text-xs text-foreground font-medium whitespace-nowrap">
-                    {t('hub:downloaded')}
+                    {activeFilter === 'mlx' ? 'MLX' : t('hub:downloaded')}
                   </span>
                 </div>
               </div>
