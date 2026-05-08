@@ -23,6 +23,11 @@ import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { ModelInfoHoverCard } from '@/containers/ModelInfoHoverCard'
 import { DEFAULT_MODEL_QUANTIZATIONS } from '@/constants/models'
 import { useTranslation } from '@/i18n'
+import {
+  buildHuggingFaceRepoUrl,
+  decodeHubRouteParam,
+  normalizeHuggingFaceRepoId,
+} from '@/lib/hub'
 import { z } from 'zod/v4'
 import { toast } from 'sonner'
 
@@ -63,13 +68,7 @@ function HubModelDetailContent() {
   const [readmeContent, setReadmeContent] = useState<string>('')
   const [isLoadingReadme, setIsLoadingReadme] = useState(false)
 
-  const modelId = useMemo(() => {
-    try {
-      return decodeURIComponent(rawModelId)
-    } catch {
-      return rawModelId
-    }
-  }, [rawModelId])
+  const modelId = useMemo(() => decodeHubRouteParam(rawModelId), [rawModelId])
 
   // State for model support status
   const [modelSupportStatus, setModelSupportStatus] = useState<
@@ -116,47 +115,18 @@ function HubModelDetailContent() {
   }, [sources, modelId, repoData])
 
   const huggingFaceRepoId = useMemo(() => {
-    const decodeSafe = (value: string | undefined): string | undefined => {
-      if (!value) return undefined
-      try {
-        return decodeURIComponent(value)
-      } catch {
-        return value
-      }
-    }
-
-    const normalize = (value: string): string | undefined => {
-      const trimmed = value.trim()
-      if (!trimmed) return undefined
-
-      // Accept full Hugging Face URLs or repo ids.
-      const urlMatch = trimmed.match(/huggingface\.co\/([^/?#]+\/[^/?#]+)/i)
-      if (urlMatch?.[1]) return decodeSafe(urlMatch[1]?.replace(/\/$/, ''))
-
-      const candidate = decodeSafe(trimmed)
-      if (!candidate) return undefined
-
-      const withoutPrefix = candidate
-        .replace(/^https?:\/\/huggingface\.co\//i, '')
-        .replace(/^huggingface\.co\//i, '')
-        .replace(/\/$/, '')
-
-      return withoutPrefix.includes('/') ? withoutPrefix : undefined
-    }
-
-    const fromRepo = normalize(search.repo)
+    const fromRepo = normalizeHuggingFaceRepoId(search.repo)
     if (fromRepo) return fromRepo
-
-    const fromReadme = normalize(modelData?.readme)
+    const fromReadme = normalizeHuggingFaceRepoId(modelData?.readme)
     if (fromReadme) return fromReadme
 
-    return normalize(modelData?.model_name)
+    return normalizeHuggingFaceRepoId(modelData?.model_name)
   }, [search.repo, modelData?.model_name, modelData?.readme])
 
-  const huggingFaceUrl = useMemo(() => {
-    if (!huggingFaceRepoId) return ''
-    return `https://huggingface.co/${huggingFaceRepoId}`
-  }, [huggingFaceRepoId])
+  const huggingFaceUrl = useMemo(
+    () => buildHuggingFaceRepoUrl(huggingFaceRepoId),
+    [huggingFaceRepoId]
+  )
 
   // `readmeUrl` must be derived AFTER `modelData` — reading it before the
   // const declaration previously hit the Temporal Dead Zone and threw

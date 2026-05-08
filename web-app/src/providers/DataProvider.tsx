@@ -16,6 +16,7 @@ import { bootstrapUpdater } from '@/lib/bootstrap/bootstrap-updater'
 import { bootstrapEvents } from '@/lib/bootstrap/bootstrap-events'
 import { bootstrapLocalApi } from '@/lib/bootstrap/bootstrap-local-api'
 import { syncRemoteProviders as syncRemoteProviderConfigs } from '@/lib/providers/provider-sync'
+import { encodeHubRouteParam } from '@/lib/hub'
 
 export function DataProvider() {
   const { setProviders, providers } = useModelProvider()
@@ -68,7 +69,7 @@ export function DataProvider() {
       // required, otherwise TanStack Router throws at runtime.
       navigate({
         to: route.hub.model,
-        params: { modelId: encodeURIComponent(resource) },
+        params: { modelId: encodeHubRouteParam(resource) },
         search: { repo: resource },
       })
     },

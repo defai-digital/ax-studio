@@ -37,6 +37,7 @@ import { DEFAULT_MODEL_QUANTIZATIONS } from '@/constants/models'
 import { Button } from '@/components/ui/button'
 import { RenderMarkdown } from '@/containers/RenderMarkdown'
 import { sanitizeModelId } from '@/lib/utils'
+import { encodeHubRouteParam } from '@/lib/hub'
 import { z } from 'zod/v4'
 import { isMlxCatalogModel } from './-hubFilters'
 
@@ -655,7 +656,7 @@ function HubContent() {
                           navigate({
                             to: route.hub.model,
                             params: {
-                              modelId: encodeURIComponent(model.model_name),
+                              modelId: encodeHubRouteParam(model.model_name),
                             },
                           })
                         }}
