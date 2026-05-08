@@ -89,17 +89,7 @@ fn convert_messages(
                 "content": text
             }));
         } else if let Some(blocks) = system.as_array() {
-            let text: String = blocks
-                .iter()
-                .filter_map(|b| b.get("text").and_then(|t| t.as_str()))
-                .enumerate()
-                .fold(String::new(), |mut acc, (i, s)| {
-                    if i > 0 {
-                        acc.push('\n');
-                    }
-                    acc.push_str(s);
-                    acc
-                });
+            let text = extract_block_text(blocks);
             if !text.is_empty() {
                 openai_messages.push(serde_json::json!({
                     "role": "system",
@@ -238,17 +228,7 @@ fn convert_messages(
                 }
             }
             "system" | "developer" => {
-                let text: String = content_array
-                    .iter()
-                    .filter_map(|b| b.get("text").and_then(|t| t.as_str()))
-                    .enumerate()
-                    .fold(String::new(), |mut acc, (i, s)| {
-                        if i > 0 {
-                            acc.push('\n');
-                        }
-                        acc.push_str(s);
-                        acc
-                    });
+                let text = extract_block_text(content_array);
                 openai_messages.push(serde_json::json!({
                     "role": role,
                     "content": text
@@ -259,6 +239,20 @@ fn convert_messages(
     }
 
     Some(serde_json::Value::Array(openai_messages))
+}
+
+fn extract_block_text(blocks: &[serde_json::Value]) -> String {
+    blocks
+        .iter()
+        .filter_map(|block| block.get("text").and_then(|text| text.as_str()))
+        .enumerate()
+        .fold(String::new(), |mut acc, (idx, text)| {
+            if idx > 0 {
+                acc.push('\n');
+            }
+            acc.push_str(text);
+            acc
+        })
 }
 
 /// Convert text parts to OpenAI content value (string for single text, array for mixed)
@@ -329,8 +323,17 @@ fn extract_tool_result_content(content: Option<&serde_json::Value>) -> String {
                 acc.push_str(s);
                 acc
             }),
-        Some(c) => c.to_string(),
+    Some(c) => c.to_string(),
         None => String::new(),
+    }
+}
+
+fn openai_finish_reason_to_anthropic_reason(finish_reason: &str) -> String {
+    match finish_reason {
+        "stop" => "end_turn".to_string(),
+        "length" => "max_tokens".to_string(),
+        "tool_calls" => "tool_use".to_string(),
+        value => value.to_string(),
     }
 }
 
@@ -400,12 +403,7 @@ fn transform_openai_response_to_anthropic(response: &serde_json::Value) -> serde
         .and_then(|fr| fr.as_str())
         .unwrap_or("end_turn");
 
-    let stop_reason = match finish_reason {
-        "stop" => "end_turn",
-        "length" => "max_tokens",
-        "tool_calls" => "tool_use",
-        _ => finish_reason,
-    };
+    let stop_reason = openai_finish_reason_to_anthropic_reason(finish_reason);
 
     serde_json::json!({
         "id": response.get("id").unwrap_or(&serde_json::json!("")).clone(),
@@ -703,12 +701,7 @@ pub(super) async fn transform_and_forward_stream<S>(
                         let reason = finish_reason
                             .and_then(|fr| fr.as_str())
                             .unwrap_or("end_turn");
-                        let stop_reason = match reason {
-                            "stop" => "end_turn",
-                            "length" => "max_tokens",
-                            "tool_calls" => "tool_use",
-                            _ => reason,
-                        };
+                        let stop_reason = openai_finish_reason_to_anthropic_reason(reason);
                         let output_tokens = accumulated_content.split_whitespace().count() as u64;
 
                         let delta_event = serde_json::json!({
