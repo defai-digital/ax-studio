@@ -1,5 +1,6 @@
 //! CORS and security helpers for the Ax-Studio proxy server.
 
+use super::cors;
 use ax_studio_utils::is_valid_host;
 
 pub(crate) fn trusted_cors_origin(
@@ -69,8 +70,11 @@ pub fn add_cors_headers_with_host_and_origin(
     }
 
     builder = builder
-        .header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
-        .header("Access-Control-Allow-Headers", "Authorization, Content-Type, Host, Accept, Accept-Language, Cache-Control, Connection, DNT, If-Modified-Since, Keep-Alive, Origin, User-Agent, X-Requested-With, X-CSRF-Token, X-Forwarded-For, X-Forwarded-Proto, X-Forwarded-Host, authorization, content-type, x-api-key, x-ax-provider, x-ax-request-role")
+        .header("Access-Control-Allow-Methods", cors::CORS_ALLOWED_METHODS_HEADER)
+        .header(
+            "Access-Control-Allow-Headers",
+            cors::CORS_RESPONSE_ALLOWED_HEADERS_HEADER,
+        )
         .header("Vary", "Origin");
 
     builder

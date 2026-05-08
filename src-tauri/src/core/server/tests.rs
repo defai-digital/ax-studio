@@ -84,7 +84,7 @@ mod tests {
 
     #[test]
     fn test_allowed_methods() {
-        let allowed_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"];
+        let allowed_methods = super::cors::CORS_ALLOWED_METHODS;
         assert!(allowed_methods.contains(&"POST"));
         assert!(allowed_methods.contains(&"GET"));
         assert!(allowed_methods.contains(&"OPTIONS"));
@@ -92,17 +92,7 @@ mod tests {
 
     #[test]
     fn test_allowed_headers() {
-        let allowed_headers = [
-            "accept",
-            "authorization",
-            "content-type",
-            "host",
-            "origin",
-            "user-agent",
-            "x-api-key",
-            "x-ax-provider",
-            "x-ax-request-role",
-        ];
+        let allowed_headers = super::cors::CORS_RESPONSE_ALLOWED_HEADERS;
         assert!(allowed_headers.contains(&"authorization"));
         assert!(allowed_headers.contains(&"content-type"));
         assert!(allowed_headers.contains(&"x-api-key"));
@@ -256,36 +246,7 @@ mod tests {
     #[test]
     fn test_x_api_key_in_cors_allowed_headers() {
         // Verify x-api-key is in the CORS allowed headers list used by the proxy
-        let allowed_headers = [
-            "accept",
-            "accept-language",
-            "authorization",
-            "cache-control",
-            "connection",
-            "content-type",
-            "dnt",
-            "host",
-            "if-modified-since",
-            "keep-alive",
-            "origin",
-            "user-agent",
-            "x-api-key",
-            "x-csrf-token",
-            "x-forwarded-for",
-            "x-forwarded-host",
-            "x-forwarded-proto",
-            "x-requested-with",
-            "x-stainless-arch",
-            "x-stainless-lang",
-            "x-stainless-os",
-            "x-stainless-package-version",
-            "x-stainless-retry-count",
-            "x-stainless-runtime",
-            "x-stainless-runtime-version",
-            "x-stainless-timeout",
-            "x-ax-provider",
-            "x-ax-request-role",
-        ];
+        let allowed_headers = super::cors::CORS_PREFLIGHT_ALLOWED_HEADERS;
         assert!(allowed_headers.contains(&"x-api-key"));
         assert!(allowed_headers.contains(&"x-ax-request-role"));
     }

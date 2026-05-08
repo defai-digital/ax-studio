@@ -76,7 +76,10 @@ fn evict_stale_entries(map: &mut HashMap<String, (usize, Instant)>) {
     }
 }
 
-use super::security::{add_cors_headers_with_host_and_origin, trusted_cors_origin};
+use super::{
+    cors,
+    security::{add_cors_headers_with_host_and_origin, trusted_cors_origin},
+};
 use super::{gateway_routes, model_routes};
 
 /// Finalize a response builder into a `Response<Body>`, never panicking.
@@ -177,7 +180,7 @@ fn handle_cors_preflight(req: &Request<Body>, config: &ProxyConfig) -> Option<Re
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
-    let allowed_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"];
+    let allowed_methods = cors::CORS_ALLOWED_METHODS;
     let method_allowed = requested_method.is_empty()
         || allowed_methods
             .iter()
@@ -222,36 +225,7 @@ fn handle_cors_preflight(req: &Request<Body>, config: &ProxyConfig) -> Option<Re
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
-    let allowed_headers = [
-        "accept",
-        "accept-language",
-        "authorization",
-        "cache-control",
-        "connection",
-        "content-type",
-        "dnt",
-        "host",
-        "if-modified-since",
-        "keep-alive",
-        "origin",
-        "user-agent",
-        "x-api-key",
-        "x-csrf-token",
-        "x-forwarded-for",
-        "x-forwarded-host",
-        "x-forwarded-proto",
-        "x-requested-with",
-        "x-stainless-arch",
-        "x-stainless-lang",
-        "x-stainless-os",
-        "x-stainless-package-version",
-        "x-stainless-retry-count",
-        "x-stainless-runtime",
-        "x-stainless-runtime-version",
-        "x-stainless-timeout",
-        "x-ax-provider",
-        "x-ax-request-role",
-    ];
+    let allowed_headers = cors::CORS_PREFLIGHT_ALLOWED_HEADERS;
 
     let headers_valid = if requested_headers.is_empty() {
         true
@@ -276,8 +250,11 @@ fn handle_cors_preflight(req: &Request<Body>, config: &ProxyConfig) -> Option<Re
 
     let mut response = Response::builder()
         .status(StatusCode::OK)
-        .header("Access-Control-Allow-Methods", allowed_methods.join(", "))
-        .header("Access-Control-Allow-Headers", allowed_headers.join(", "))
+        .header("Access-Control-Allow-Methods", cors::CORS_ALLOWED_METHODS_HEADER)
+        .header(
+            "Access-Control-Allow-Headers",
+            cors::CORS_RESPONSE_ALLOWED_HEADERS_HEADER,
+        )
         .header("Access-Control-Max-Age", "86400")
         .header(
             "Vary",
