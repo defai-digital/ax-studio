@@ -25,11 +25,31 @@ import type {
 } from './types'
 import { getBundledModelCatalog } from './catalog'
 import { huggingFaceRepoSchema } from '@/schemas/models.schema'
+import {
+  getCleanHuggingFaceRepoId,
+  getHuggingFaceApiModelUrl,
+  getHuggingFaceEncodedModelFileUrl,
+  getHuggingFaceEncodedModelUrl,
+} from '@/lib/huggingface'
 
 // Default provider for local inference
 const defaultProvider = 'llamacpp'
 
 export class DefaultModelsService implements ModelsService {
+  private parseHuggingFaceModelPath(
+    modelPath: string
+  ): { repoId: string; filename: string } | undefined {
+    const match = modelPath.match(
+      /^https:\/\/huggingface\.co\/([^/]+\/[^/]+)\/resolve\/main\/(.+)$/
+    )
+    if (!match) return undefined
+    const [, repoId, filename] = match
+    return {
+      repoId,
+      filename,
+    }
+  }
+
   private getEngine(provider: string = defaultProvider) {
     const engine = EngineManager.instance().get(provider) as AIEngine | undefined
     if (!engine) {
@@ -72,18 +92,14 @@ export class DefaultModelsService implements ModelsService {
   ): Promise<HuggingFaceRepo | null> {
     try {
       // Clean the repo ID to handle various input formats
-      const cleanRepoId = repoId
-        .replace(/^https?:\/\/huggingface\.co\//, '')
-        .replace(/^huggingface\.co\//, '')
-        .replace(/\/$/, '') // Remove trailing slash
-        .trim()
+      const cleanRepoId = getCleanHuggingFaceRepoId(repoId)
 
       if (!cleanRepoId || !cleanRepoId.includes('/')) {
         return null
       }
 
       const response = await fetch(
-        `https://huggingface.co/api/models/${encodeURIComponent(cleanRepoId)}?blobs=true&files_metadata=true`,
+        getHuggingFaceApiModelUrl(cleanRepoId),
         {
           signal,
           headers: hfToken
@@ -148,7 +164,7 @@ export class DefaultModelsService implements ModelsService {
 
       return {
         model_id: `${repo.author}/${sanitizeModelId(modelId)}`,
-        path: `https://huggingface.co/${encodeURIComponent(repo.modelId)}/resolve/main/${encodeURIComponent(file.rfilename)}`,
+        path: getHuggingFaceEncodedModelFileUrl(repo.modelId, file.rfilename),
         file_size: formatFileSize(file.size),
       }
     })
@@ -159,7 +175,7 @@ export class DefaultModelsService implements ModelsService {
 
       return {
         model_id: sanitizeModelId(modelId),
-        path: `https://huggingface.co/${encodeURIComponent(repo.modelId)}/resolve/main/${encodeURIComponent(file.rfilename)}`,
+        path: getHuggingFaceEncodedModelFileUrl(repo.modelId, file.rfilename),
         file_size: formatFileSize(file.size),
       }
     })
@@ -180,7 +196,7 @@ export class DefaultModelsService implements ModelsService {
 
       return {
         model_id: sanitizeModelId(modelId),
-        path: `https://huggingface.co/${encodeURIComponent(repo.modelId)}/resolve/main/${encodeURIComponent(file.rfilename)}`,
+        path: getHuggingFaceEncodedModelFileUrl(repo.modelId, file.rfilename),
         file_size: formatFileSize(file.size),
         sha256: file.lfs?.sha256,
       }
@@ -198,7 +214,7 @@ export class DefaultModelsService implements ModelsService {
       safetensors_files: safetensorsModels,
       num_safetensors: safetensorsModels.length,
       is_mlx: hasMlxFiles,
-      readme: `https://huggingface.co/${encodeURIComponent(repo.modelId)}/resolve/main/README.md`,
+      readme: `${getHuggingFaceEncodedModelUrl(repo.modelId)}/resolve/main/README.md`,
       description: `**Tags**: ${repo.tags?.join(', ')}`,
     }
   }
@@ -253,12 +269,10 @@ export class DefaultModelsService implements ModelsService {
 
     // Extract repo ID from model URL
     // URL format: https://huggingface.co/{repo}/resolve/main/{filename}
-    const modelUrlMatch = modelPath.match(
-      /https:\/\/huggingface\.co\/([^/]+\/[^/]+)\/resolve\/main\/(.+)/
-    )
+    const parsedModelPath = this.parseHuggingFaceModelPath(modelPath)
 
-    if (modelUrlMatch && !skipVerification) {
-      const [, repoId, modelFilename] = modelUrlMatch
+    if (parsedModelPath && !skipVerification) {
+      const { repoId, filename: modelFilename } = parsedModelPath
 
       try {
         // Fetch real-time metadata from HuggingFace
@@ -276,11 +290,9 @@ export class DefaultModelsService implements ModelsService {
 
           // If mmproj path provided, extract its metadata too
           if (mmprojPath) {
-            const mmprojUrlMatch = mmprojPath.match(
-              /https:\/\/huggingface\.co\/[^/]+\/[^/]+\/resolve\/main\/(.+)/
-            )
-            if (mmprojUrlMatch) {
-              const [, mmprojFilename] = mmprojUrlMatch
+            const parsedMmprojPath = this.parseHuggingFaceModelPath(mmprojPath)
+            if (parsedMmprojPath) {
+              const { filename: mmprojFilename } = parsedMmprojPath
               const mmprojFile = repoInfo.siblings.find(
                 (file) => file.rfilename === mmprojFilename
               )
