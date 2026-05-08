@@ -12,6 +12,11 @@ import { fetch as fetchTauri } from '@tauri-apps/plugin-http'
 import type { ProvidersService } from './types'
 import { getModelCapabilities } from '@/lib/models'
 import { providerModelsResponseSchema } from '@/schemas/providers.schema'
+import { withTimeout } from '@/lib/utils/async'
+
+const PROVIDER_LIST_TIMEOUT_MS = 8_000
+const PROVIDER_SETTINGS_TIMEOUT_MS = 8_000
+const PROVIDER_TOOL_CHECK_TIMEOUT_MS = 3_000
 
 function providerErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message
@@ -27,6 +32,28 @@ function providerErrorMessage(error: unknown): string {
     }
   }
   return String(error)
+}
+
+async function withProviderTimeout<T>(
+  provider: string,
+  label: string,
+  promise: Promise<T>,
+  timeoutMs: number,
+  fallback: T,
+): Promise<T> {
+  try {
+    return await withTimeout(
+      promise,
+      timeoutMs,
+      `${label} timed out for provider "${provider}"`
+    )
+  } catch (error) {
+    console.warn(
+      `Failed ${label} for provider "${provider}":`,
+      providerErrorMessage(error)
+    )
+    return fallback
+  }
 }
 
 function shouldUseTauriFetch(baseUrl: string): boolean {
@@ -84,93 +111,124 @@ export class TauriProvidersService implements ProvidersService {
       console.error('Error building built-in providers list:', error)
     }
 
-    const runtimeProviders: ModelProvider[] = []
-    for (const [providerName, value] of EngineManager.instance().engines) {
-      try {
-        const models = (await value.list()) ?? []
-        const provider: ModelProvider = {
-          active: true, // Runtime engines (llamacpp, mlx) are active by default
-          persist: true,
-          provider: providerName,
-          base_url:
-            'inferenceUrl' in value
-              ? (value.inferenceUrl as string).replace('/chat/completions', '')
-              : '',
-          settings: (await value.getSettings()).map((setting) => {
-            return {
-              key: setting.key,
-              title: setting.title,
-              description: setting.description,
-              controller_type: setting.controllerType as unknown,
-              controller_props: setting.controllerProps as unknown,
-            }
-          }) as ProviderSetting[],
-          models: await Promise.all(
-            models.map(async (model) => {
-              let capabilities: string[] = []
+    const runtimeProviderPromises = Array.from(
+      EngineManager.instance().engines.entries()
+    ).map(async ([providerName, value]) => {
+      const models = await withProviderTimeout(
+        providerName,
+        'listing models',
+        value.list(),
+        PROVIDER_LIST_TIMEOUT_MS,
+        []
+      )
 
-              if ('capabilities' in model && Array.isArray(model.capabilities)) {
-                capabilities = [...(model.capabilities as string[])]
-              }
-              if (!capabilities.includes(ModelCapabilities.TOOLS)) {
-                try {
-                  const toolSupported = await value.isToolSupported(model.id)
-                  if (toolSupported) {
-                    capabilities.push(ModelCapabilities.TOOLS)
-                  }
-                } catch (error) {
-                  console.warn(
-                    `Failed to check tool support for model ${model.id}:`,
-                    error
-                  )
-                  // Continue without tool capabilities if check fails
-                }
-              }
-
-              // Add embeddings capability for embedding models
-              if (model.embedding && !capabilities.includes(ModelCapabilities.EMBEDDINGS)) {
-                capabilities = [...capabilities, ModelCapabilities.EMBEDDINGS]
-              }
-
-              return {
-                id: model.id,
-                model: model.id,
-                name: model.name,
-                description: model.description,
-                capabilities,
-                embedding: model.embedding, // Preserve embedding flag for filtering in UI
-                provider: providerName,
-                settings: Object.values(modelSettings).reduce(
-                  (acc, setting) => {
-                    let value = setting.controller_props.value
-                    if (setting.key === 'ctx_len') {
-                      value = 8192 // Default context length for Llama.cpp models
-                    }
-                    acc[setting.key] = {
-                      ...setting,
-                      controller_props: {
-                        ...setting.controller_props,
-                        value: value,
-                      },
-                    }
-                    return acc
-                  },
-                  {} as Record<string, ProviderSetting>
-                ),
-              } as Model
-            })
-          ),
-        }
-        runtimeProviders.push(provider)
-      } catch (error) {
-        console.error(
-          `Error listing provider from engine "${providerName}":`,
-          error
-        )
-        // Skip this engine and continue — don't hide all providers on
-        // a single local engine failure.
+      if (models.length === 0) {
+        return null
       }
-    }
+
+      const settings = await withProviderTimeout(
+        providerName,
+        'loading settings',
+        value.getSettings(),
+        PROVIDER_SETTINGS_TIMEOUT_MS,
+        []
+      )
+
+      const modelEntries = await Promise.allSettled(
+        models.map(async (model) => {
+          let capabilities: string[] = []
+          if ('capabilities' in model && Array.isArray(model.capabilities)) {
+            capabilities = [...(model.capabilities as string[])]
+          }
+
+          if (!capabilities.includes(ModelCapabilities.TOOLS)) {
+            const toolSupported = await withProviderTimeout(
+              providerName,
+              `tool support check (${model.id})`,
+              value.isToolSupported(model.id),
+              PROVIDER_TOOL_CHECK_TIMEOUT_MS,
+              false
+            )
+
+            if (toolSupported) {
+              capabilities.push(ModelCapabilities.TOOLS)
+            }
+          }
+
+          if (model.embedding && !capabilities.includes(ModelCapabilities.EMBEDDINGS)) {
+            capabilities = [...capabilities, ModelCapabilities.EMBEDDINGS]
+          }
+
+          return {
+            id: model.id,
+            model: model.id,
+            name: model.name,
+            description: model.description,
+            capabilities,
+            embedding: model.embedding,
+            provider: providerName,
+            settings: Object.values(modelSettings).reduce(
+              (acc, setting) => {
+                let value = setting.controller_props.value
+                if (setting.key === 'ctx_len') {
+                  value = 8192
+                }
+                acc[setting.key] = {
+                  ...setting,
+                  controller_props: {
+                    ...setting.controller_props,
+                    value,
+                  },
+                }
+                return acc
+              },
+              {} as Record<string, ProviderSetting>
+            ),
+          } as Model
+        })
+      ).catch((error: unknown) => {
+        console.warn(
+          `Error resolving models for provider "${providerName}":`,
+          providerErrorMessage(error)
+        )
+        return [] as PromiseSettledResult<Model>[]
+      })
+
+      const resolvedModels = modelEntries
+        .filter(
+          (entry): entry is PromiseFulfilledResult<Model> =>
+            entry.status === 'fulfilled'
+        )
+        .map((entry) => entry.value)
+
+      if (resolvedModels.length === 0) {
+        return null
+      }
+
+      return {
+        active: true,
+        persist: true,
+        provider: providerName,
+        base_url:
+          'inferenceUrl' in value
+            ? (value.inferenceUrl as string).replace('/chat/completions', '')
+            : '',
+        settings: settings.map((setting) => {
+          return {
+            key: setting.key,
+            title: setting.title,
+            description: setting.description,
+            controller_type: setting.controllerType as unknown,
+            controller_props: setting.controllerProps as unknown,
+          }
+        }) as ProviderSetting[],
+        models: resolvedModels,
+      } as ModelProvider
+    })
+
+    const runtimeProviders = (
+      await Promise.all(runtimeProviderPromises)
+    ).filter((provider): provider is ModelProvider => provider !== null)
 
     return runtimeProviders.concat(builtinProviders)
   }
