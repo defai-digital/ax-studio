@@ -192,7 +192,7 @@ export class ExtensionManager {
         const extensionsPath = await getServiceHub()
           .core()
           .invoke<string>('get_app_extensions_path')
-        extensionUrl = `${extensionsPath}/${extension.name}/${extensionUrl}`
+        extensionUrl = `${extensionsPath}/${extensionUrl}`
       }
 
       const extensionClass = await import(/* @vite-ignore */ getServiceHub().core().convertFileSrc(extensionUrl))

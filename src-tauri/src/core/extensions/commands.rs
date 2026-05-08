@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use tauri::{AppHandle, Runtime};
 
 use crate::core::app::commands::get_app_data_folder_path;
@@ -17,8 +17,8 @@ pub fn install_extensions<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
 
 #[tauri::command]
 pub fn get_active_extensions<R: Runtime>(app: AppHandle<R>) -> Vec<serde_json::Value> {
-    let mut path = get_app_extensions_path(app);
-    path.push("extensions.json");
+    let extensions_path = get_app_extensions_path(app);
+    let path = extensions_path.join("extensions.json");
     log::info!("get app extensions, path: {path:?}");
 
     let contents = fs::read_to_string(path);
@@ -27,11 +27,7 @@ pub fn get_active_extensions<R: Runtime>(app: AppHandle<R>) -> Vec<serde_json::V
             Ok(exts) => exts
                 .into_iter()
                 .map(|ext| {
-                    let url = ext["url"]
-                        .as_str()
-                        .and_then(|value| Path::new(value).file_name())
-                        .map(|value| value.to_string_lossy().to_string())
-                        .unwrap_or_else(|| "index.js".to_string());
+                    let url = safe_relative_extension_url(&ext, &extensions_path);
 
                     serde_json::json!({
                         "url": url,
@@ -53,4 +49,19 @@ pub fn get_active_extensions<R: Runtime>(app: AppHandle<R>) -> Vec<serde_json::V
             vec![]
         }
     }
+}
+
+fn safe_relative_extension_url(ext: &serde_json::Value, extensions_path: &Path) -> String {
+    ext["url"]
+        .as_str()
+        .and_then(|value| Path::new(value).strip_prefix(extensions_path).ok())
+        .and_then(|path| {
+            let is_safe_relative = path.components().all(|component| {
+                matches!(component, Component::Normal(_) | Component::CurDir)
+            });
+
+            is_safe_relative.then(|| path.to_string_lossy().replace('\\', "/"))
+        })
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "index.js".to_string())
 }

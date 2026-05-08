@@ -73,7 +73,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
   threads: {},
   searchIndex: null,
   setThreads: (threads) => {
-    const threadMap = threads.reduce(
+    const normalizedThreads = threads.reduce(
       (acc: Record<string, Thread>, thread) => {
         acc[thread.id] = {
           ...thread,
@@ -88,9 +88,17 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       },
       {} as Record<string, Thread>
     )
-    set({
-      threads: threadMap,
-      searchIndex: buildSearchIndex(threadMap),
+
+    set((state) => {
+      const mergedThreads = {
+        ...normalizedThreads,
+        ...state.threads,
+      }
+
+      return {
+        threads: mergedThreads,
+        searchIndex: buildSearchIndex(mergedThreads),
+      }
     })
   },
   getFilteredThreads: (searchTerm: string) => {

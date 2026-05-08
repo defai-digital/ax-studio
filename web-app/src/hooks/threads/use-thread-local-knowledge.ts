@@ -1,9 +1,70 @@
 import { useCallback } from 'react'
-import { useServiceHub } from '@/hooks/useServiceHub'
+import { getServiceHub } from '@/hooks/useServiceHub'
 import { useLocalKnowledge } from '@/hooks/research/useLocalKnowledge'
 import { threadCollectionId } from '@/lib/file-registry'
 
 const LOCAL_KNOWLEDGE_TOP_K = 5
+
+const KEYWORD_STOP_WORDS = new Set([
+  'what',
+  'which',
+  'three',
+  'listed',
+  'under',
+  'your',
+  'their',
+  'about',
+  'author',
+  'outcome',
+  'achieve',
+  'achieved',
+])
+
+function hasSearchHits(result: unknown): boolean {
+  try {
+    const r = result as { content?: Array<{ type?: string; text?: string }> }
+    const text = r.content?.find((c) => c?.type === 'text' && c.text)?.text
+    if (!text) return false
+    const parsed = JSON.parse(text) as { results?: unknown[] }
+    return Array.isArray(parsed.results) && parsed.results.length > 0
+  } catch {
+    const text = formatChunks(result)
+    return Boolean(text) && !text.includes('"results":[]')
+  }
+}
+
+function pushUnique(values: string[], value: string) {
+  const normalized = value.trim().replace(/\s+/g, ' ')
+  if (normalized && !values.includes(normalized)) values.push(normalized)
+}
+
+function buildKeywordFallbackQueries(query: string): string[] {
+  const queries: string[] = []
+  pushUnique(queries, query)
+
+  const quoted = query.match(/"([^"]+)"/g) ?? []
+  for (const value of quoted) {
+    pushUnique(queries, value.replace(/"/g, ''))
+  }
+
+  const titleMatches = query.match(/\b[A-Z][\w-]*(?:\s+[A-Z][\w-]*){1,7}\b/g) ?? []
+  for (const title of titleMatches.sort((a, b) => b.length - a.length).slice(0, 2)) {
+    pushUnique(queries, title)
+    if (/\b(hir\w*|job|role|outcome|result)\b/i.test(query)) {
+      pushUnique(queries, `${title} hired`)
+    }
+  }
+
+  const significantTerms = query
+    .replace(/[^\w\s-]/g, ' ')
+    .split(/\s+/)
+    .filter((term) => term.length > 3 && !KEYWORD_STOP_WORDS.has(term.toLowerCase()))
+    .slice(0, 8)
+    .join(' ')
+  pushUnique(queries, significantTerms)
+
+  return queries
+}
 
 function formatChunks(result: unknown): string {
   // MCP tool result is typically { content: Array<{ type: string; text: string }> }
@@ -28,8 +89,6 @@ function buildKnowledgeContext(chunks: string): string {
 }
 
 export function useThreadLocalKnowledge(threadId: string) {
-  const serviceHub = useServiceHub()
-
   const prepareLocalKnowledge = useCallback(
     async (query: string): Promise<string> => {
       const state = useLocalKnowledge.getState()
@@ -37,9 +96,10 @@ export function useThreadLocalKnowledge(threadId: string) {
       if (!enabled) return ''
 
       try {
+        const serviceHub = getServiceHub()
         // First try the default global collection (main knowledge base),
         // then fall back to the per-thread collection.
-        const result = await serviceHub.mcp().callTool({
+        let result = await serviceHub.mcp().callTool({
           toolName: 'fabric_search',
           arguments: {
             query,
@@ -47,6 +107,24 @@ export function useThreadLocalKnowledge(threadId: string) {
             mode: 'hybrid',
           },
         })
+
+        if (!result?.error && !hasSearchHits(result)) {
+          for (const fallbackQuery of buildKeywordFallbackQueries(query)) {
+            const fallbackResult = await serviceHub.mcp().callTool({
+              toolName: 'fabric_search',
+              arguments: {
+                query: fallbackQuery,
+                top_k: LOCAL_KNOWLEDGE_TOP_K,
+                mode: 'keyword',
+                layer: 'raw',
+              },
+            })
+            if (!fallbackResult?.error && hasSearchHits(fallbackResult)) {
+              result = fallbackResult
+              break
+            }
+          }
+        }
 
         if (result?.error) {
           // Fallback: try per-thread collection
@@ -68,6 +146,8 @@ export function useThreadLocalKnowledge(threadId: string) {
           return buildKnowledgeContext(threadChunks)
         }
 
+        if (!hasSearchHits(result)) return ''
+
         const chunks = formatChunks(result)
         if (!chunks) return ''
 
@@ -77,7 +157,7 @@ export function useThreadLocalKnowledge(threadId: string) {
         return ''
       }
     },
-    [serviceHub, threadId]
+    [threadId]
   )
 
   const isEnabled = useLocalKnowledge((state) =>

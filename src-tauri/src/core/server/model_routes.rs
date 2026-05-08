@@ -64,38 +64,105 @@ fn error_response(
 ///
 /// Returns the original bytes unchanged if the body is not JSON, has no `messages`
 /// array, or no assistant messages carry these fields.
-fn normalize_request_body(body_bytes: &Bytes) -> Bytes {
+fn message_has_tool_state(msg: &serde_json::Value) -> bool {
+    if msg.get("role").and_then(|role| role.as_str()) == Some("tool") {
+        return true;
+    }
+    if msg
+        .get("tool_calls")
+        .and_then(|tool_calls| tool_calls.as_array())
+        .is_some_and(|tool_calls| !tool_calls.is_empty())
+    {
+        return true;
+    }
+    msg.get("content")
+        .and_then(|content| content.as_array())
+        .is_some_and(|content| {
+            content.iter().any(|part| {
+                matches!(
+                    part.get("type").and_then(|part_type| part_type.as_str()),
+                    Some("tool_result" | "tool_use")
+                )
+            })
+        })
+}
+
+fn request_has_tool_state(json_body: &serde_json::Value) -> bool {
+    if json_body
+        .get("tools")
+        .and_then(|tools| tools.as_array())
+        .is_some_and(|tools| !tools.is_empty())
+    {
+        return true;
+    }
+    json_body
+        .get("messages")
+        .and_then(|messages| messages.as_array())
+        .is_some_and(|messages| {
+            messages
+                .last()
+                .and_then(|message| message.get("role"))
+                .and_then(|role| role.as_str())
+                == Some("assistant")
+                || messages.iter().any(message_has_tool_state)
+        })
+}
+
+fn disable_thinking_for_tool_state(json_body: &mut serde_json::Value) -> bool {
+    if !request_has_tool_state(json_body) {
+        return false;
+    }
+
+    if !json_body
+        .get("chat_template_kwargs")
+        .is_some_and(|value| value.is_object())
+    {
+        json_body["chat_template_kwargs"] = serde_json::json!({});
+    }
+
+    json_body["chat_template_kwargs"]["enable_thinking"] = serde_json::json!(false);
+    true
+}
+
+fn normalize_request_body(body_bytes: &Bytes, allow_chat_template_kwargs: bool) -> Bytes {
     let mut json_body: serde_json::Value = match serde_json::from_slice(body_bytes) {
         Ok(v) => v,
         Err(_) => return body_bytes.clone(),
     };
 
-    let messages = match json_body.get_mut("messages").and_then(|m| m.as_array_mut()) {
-        Some(msgs) => msgs,
-        None => return body_bytes.clone(),
-    };
-
     let mut modified = false;
-    for msg in messages.iter_mut() {
-        let is_assistant = msg
-            .get("role")
-            .and_then(|r| r.as_str())
-            .is_some_and(|r| r == "assistant");
-        if !is_assistant {
-            continue;
-        }
-        if let Some(obj) = msg.as_object_mut() {
-            if obj.remove("reasoning_content").is_some() {
-                modified = true;
+
+    if let Some(messages) = json_body.get_mut("messages").and_then(|m| m.as_array_mut()) {
+        for msg in messages.iter_mut() {
+            let is_assistant = msg
+                .get("role")
+                .and_then(|r| r.as_str())
+                .is_some_and(|r| r == "assistant");
+            if !is_assistant {
+                continue;
             }
-            if obj.remove("reasoning").is_some() {
-                modified = true;
+            if let Some(obj) = msg.as_object_mut() {
+                if obj.remove("reasoning_content").is_some() {
+                    modified = true;
+                }
+                if obj.remove("reasoning").is_some() {
+                    modified = true;
+                }
             }
         }
     }
 
+    if allow_chat_template_kwargs && disable_thinking_for_tool_state(&mut json_body) {
+        log::debug!("Disabled chat-template thinking for tool-capable/tool-follow-up request");
+        modified = true;
+    }
+
     if modified {
-        log::debug!("Stripped reasoning_content/reasoning from assistant messages in request body");
+        if allow_chat_template_kwargs {
+            log::debug!("Normalized request body before forwarding upstream");
+        } else {
+            log::debug!("Stripped reasoning_content/reasoning from assistant messages in request body");
+        }
         match serde_json::to_vec(&json_body) {
             Ok(bytes) => Bytes::from(bytes),
             Err(_) => body_bytes.clone(),
@@ -354,7 +421,7 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
     };
 
     // Normalize the request body: strip non-standard fields that upstream providers reject.
-    let normalized_body = normalize_request_body(&body_bytes);
+    let normalized_body = normalize_request_body(&body_bytes, !is_anthropic_messages);
 
     match resolved {
         Ok(Some(resolved)) => Ok(ProviderResolution {

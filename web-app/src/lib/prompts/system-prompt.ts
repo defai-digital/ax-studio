@@ -177,7 +177,7 @@ You have access to the user's personal knowledge base via the \`fabric_search\` 
 - Include specific details, quotes, and facts from the search results
 - Reference the source file using [1], [2] notation based on the "source" field
 - If results don't fully answer the question, share what you found and note gaps
-- If no results returned, say: "I could not find relevant information in the knowledge base."
+- If no results are returned, say: "I could not find relevant information in the knowledge base."
 
 ### CRITICAL RULES
 - Call \`fabric_search\` exactly ONCE per question. NEVER call it twice.

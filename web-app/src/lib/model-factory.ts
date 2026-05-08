@@ -74,6 +74,83 @@ function toOpenAIParams(parameters: Record<string, unknown>): Record<string, unk
   return result
 }
 
+function hasToolConversationState(messages: unknown): boolean {
+  if (!Array.isArray(messages)) return false
+  return messages.some((message) => {
+    if (!message || typeof message !== 'object' || Array.isArray(message)) {
+      return false
+    }
+    const record = message as Record<string, unknown>
+    return record.role === 'tool' ||
+      (Array.isArray(record.tool_calls) && record.tool_calls.length > 0)
+  })
+}
+
+function textIncludes(value: unknown, needle: string): boolean {
+  if (typeof value === 'string') return value.includes(needle)
+  if (Array.isArray(value)) return value.some((item) => textIncludes(item, needle))
+  if (!value || typeof value !== 'object') return false
+  return Object.values(value as Record<string, unknown>).some((item) =>
+    textIncludes(item, needle)
+  )
+}
+
+function hasLocalKnowledgeToolResult(messages: unknown): boolean {
+  if (!Array.isArray(messages)) return false
+  return messages.some((message) => {
+    if (!message || typeof message !== 'object' || Array.isArray(message)) {
+      return false
+    }
+    const record = message as Record<string, unknown>
+    return record.role === 'tool' && (
+      textIncludes(record, 'LOCAL_KNOWLEDGE_RESULT_READY') ||
+      textIncludes(record, 'fabric_search') ||
+      textIncludes(record, 'Based on the search results above')
+    )
+  })
+}
+
+function disableThinkingForToolFollowUp(
+  body: Record<string, unknown>
+): Record<string, unknown> {
+  if (!hasToolConversationState(body.messages)) return body
+
+  const existing =
+    body.chat_template_kwargs &&
+    typeof body.chat_template_kwargs === 'object' &&
+    !Array.isArray(body.chat_template_kwargs)
+      ? body.chat_template_kwargs as Record<string, unknown>
+      : {}
+
+  return {
+    ...body,
+    chat_template_kwargs: {
+      ...existing,
+      enable_thinking: false,
+    },
+  }
+}
+
+function finalizeLocalKnowledgeFollowUp(
+  body: Record<string, unknown>
+): Record<string, unknown> {
+  if (!hasLocalKnowledgeToolResult(body.messages)) return body
+
+  const next = { ...body }
+  delete next.tools
+  delete next.tool_choice
+  delete next.toolChoice
+  delete next.parallel_tool_calls
+  delete next.parallelToolCalls
+  return next
+}
+
+function prepareOpenAIRequestBody(
+  body: Record<string, unknown>
+): Record<string, unknown> {
+  return finalizeLocalKnowledgeFollowUp(disableThinkingForToolFollowUp(body))
+}
+
 function toOpenAICompatibleString(value: unknown): string | null {
   if (typeof value === 'string') return value
   if (typeof value === 'number' || typeof value === 'boolean') {
@@ -379,7 +456,7 @@ function createCustomFetch(
   parameters: Record<string, unknown>
 ): typeof httpFetch {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    if ((init?.method === 'POST' || !init?.method) && Object.keys(parameters).length > 0) {
+    if (init?.method === 'POST' || !init?.method) {
       if (typeof init?.body !== 'string') {
         // Body is Blob, ReadableStream, FormData, etc. — skip parameter injection
         return baseFetch(input, init)
@@ -391,7 +468,10 @@ function createCustomFetch(
         // body is not JSON, skip parameter injection
         return baseFetch(input, init)
       }
-      init = { ...init, body: JSON.stringify({ ...body, ...parameters }) }
+      init = {
+        ...init,
+        body: JSON.stringify(prepareOpenAIRequestBody({ ...body, ...parameters })),
+      }
     }
     return baseFetch(input, init)
   }
@@ -428,10 +508,7 @@ export class ModelFactory {
     // Normalize non-standard streaming SSE responses from various providers.
     // Applied to all providers since the proxy passes streaming bytes through unchanged.
     const baseFetch = createStreamingPatchFetch(httpFetch)
-    const fetchFn =
-      Object.keys(openAIParams).length > 0
-        ? createCustomFetch(baseFetch, openAIParams)
-        : baseFetch
+    const fetchFn = createCustomFetch(baseFetch, openAIParams)
 
     // All providers go through the proxy using the OpenAI-compatible format.
     // The proxy routes the request to the correct upstream based on model_id lookup

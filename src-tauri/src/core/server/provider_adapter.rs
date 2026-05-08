@@ -69,8 +69,40 @@ pub(super) fn transform_anthropic_to_openai(body: &serde_json::Value) -> Option<
     if let Some(stop) = body.get("stop_sequences") {
         result["stop"] = stop.clone();
     }
+    if anthropic_request_has_tool_state(body) {
+        result["chat_template_kwargs"] = serde_json::json!({
+            "enable_thinking": false
+        });
+    }
 
     Some(result)
+}
+
+fn anthropic_request_has_tool_state(body: &serde_json::Value) -> bool {
+    if body
+        .get("tools")
+        .and_then(|tools| tools.as_array())
+        .is_some_and(|tools| !tools.is_empty())
+    {
+        return true;
+    }
+
+    body.get("messages")
+        .and_then(|messages| messages.as_array())
+        .is_some_and(|messages| {
+            messages.iter().any(|msg| {
+                msg.get("content")
+                    .and_then(|content| content.as_array())
+                    .is_some_and(|content| {
+                        content.iter().any(|part| {
+                            matches!(
+                                part.get("type").and_then(|part_type| part_type.as_str()),
+                                Some("tool_result" | "tool_use")
+                            )
+                        })
+                    })
+            })
+        })
 }
 
 /// Convert Anthropic message format to OpenAI format

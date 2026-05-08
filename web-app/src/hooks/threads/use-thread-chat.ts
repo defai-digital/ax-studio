@@ -84,6 +84,7 @@ export function useThreadChat({
   const deleteMessage = useMessages((state) => state.deleteMessage)
   const setMessages = useMessages((state) => state.setMessages)
   const renameThread = useThreads((state) => state.renameThread)
+  const updateThreadTimestamp = useThreads((state) => state.updateThreadTimestamp)
   const selectedProvider = useModelProvider((state) => state.selectedProvider)
   const selectedModel = useModelProvider((state) => state.selectedModel)
   const getProviderByName = useModelProvider((state) => state.getProviderByName)
@@ -241,6 +242,7 @@ export function useThreadChat({
         messageId
       )
       addMessage(userMessage)
+      updateThreadTimestamp(threadId)
 
       // Build parts: text + any image file parts
       const parts: MessagePart[] = [
@@ -277,6 +279,7 @@ export function useThreadChat({
     [
       threadId,
       addMessage,
+      updateThreadTimestamp,
       renameThread,
       sendMessage,
       handleRememberCommand,
@@ -315,8 +318,9 @@ export function useThreadChat({
       } else {
         addMessage(assistantMessage)
       }
+      updateThreadTimestamp(threadId)
     },
-    [threadId, addMessage, updateMessage]
+    [threadId, addMessage, updateMessage, updateThreadTimestamp]
   )
 
   // ─── Regenerate ─────────────────────────────────────────────────────────────

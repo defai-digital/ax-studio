@@ -138,6 +138,26 @@ type ChatRequestBody = chatCompletionRequest & {
   mirostat_eta?: number | null
 }
 
+function hasToolConversationState(messages: chatCompletionRequest['messages']): boolean {
+  return messages.some(
+    (message) =>
+      message.role === 'tool' ||
+      (Array.isArray(message.tool_calls) && message.tool_calls.length > 0)
+  )
+}
+
+function disableThinkingForToolFollowUp(body: ChatRequestBody): ChatRequestBody {
+  if (!hasToolConversationState(body.messages)) return body
+
+  return {
+    ...body,
+    chat_template_kwargs: {
+      ...(body.chat_template_kwargs ?? {}),
+      enable_thinking: false,
+    },
+  }
+}
+
 type DeviceInfoLike = DeviceInfo | DeviceList
 
 const toNumberSetting = (value: SettingValue, defaultValue = 0): number =>
@@ -1601,14 +1621,14 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     const stream = opts.stream !== false
 
     // Augment request with per-inference settings from extension config
-    const body: ChatRequestBody = {
+    const body = disableThinkingForToolFollowUp({
       ...opts,
       stream,
       return_progress: true,
       ...(this.mirostat > 0 ? { mirostat: this.mirostat } : {}),
       ...(this.mirostat > 0 ? { mirostat_tau: this.mirostatEnt } : {}),
       ...(this.mirostat > 0 ? { mirostat_eta: this.mirostatLr } : {}),
-    }
+    })
 
     const headers: Record<string, string> = {
       'Authorization': `Bearer ${session.api_key}`,

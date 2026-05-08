@@ -58,7 +58,14 @@ export function ServiceHubProvider({ children }: ServiceHubProviderProps) {
   if (!isReady) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-background/80 backdrop-blur">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-dashed border-primary border-t-transparent" />
+        <div className="relative flex h-20 w-20 items-center justify-center">
+          <div className="absolute inset-0 animate-spin rounded-full border-2 border-dashed border-primary/60 border-t-transparent" />
+          <img
+            src="/images/ax-studio-logo.png"
+            alt="Ax-Studio"
+            className="h-14 w-14 animate-pulse rounded-2xl object-contain"
+          />
+        </div>
         <div className="text-sm text-muted-foreground">
           Initializing Ax-Studio…
         </div>

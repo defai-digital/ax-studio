@@ -24,6 +24,116 @@ export type ThreadToolsResult = {
   resetTurnState: () => void
 }
 
+type ToolResultContent = Array<{ type?: string; text?: string }>
+
+function fabricSearchHasResults(result: { content?: ToolResultContent } | undefined): boolean {
+  const text = result?.content?.find((part) => part?.type === 'text' && part.text)?.text
+  if (!text) return false
+  try {
+    const parsed = JSON.parse(text) as { results?: unknown[] }
+    return Array.isArray(parsed.results) && parsed.results.length > 0
+  } catch {
+    return !text.includes('"results":[]')
+  }
+}
+
+const KEYWORD_STOP_WORDS = new Set([
+  'what',
+  'which',
+  'who',
+  'whom',
+  'whose',
+  'when',
+  'where',
+  'why',
+  'how',
+  'did',
+  'does',
+  'the',
+  'and',
+  'that',
+  'this',
+  'with',
+  'from',
+  'into',
+  'about',
+  'author',
+  'achieve',
+  'achieved',
+])
+
+function pushUnique(values: string[], value: string) {
+  const normalized = value.trim().replace(/\s+/g, ' ')
+  if (normalized && !values.includes(normalized)) values.push(normalized)
+}
+
+function buildKeywordFallbackQueries(query: string): string[] {
+  const queries: string[] = []
+  pushUnique(queries, query)
+
+  const titleMatches = query.match(/\b[A-Z][\w-]*(?:\s+[A-Z][\w-]*){1,6}\b/g) ?? []
+  const longestTitle = titleMatches
+    .map((value) => value.trim())
+    .sort((a, b) => b.length - a.length)[0]
+  if (longestTitle) {
+    if (/\b(hir\w*|job|role|outcome|result)\b/i.test(query)) {
+      pushUnique(queries, `${longestTitle} hired`)
+    }
+    pushUnique(queries, longestTitle)
+  }
+
+  const significantTerms = query
+    .replace(/[^\w\s-]/g, ' ')
+    .split(/\s+/)
+    .filter((term) => term.length > 3 && !KEYWORD_STOP_WORDS.has(term.toLowerCase()))
+    .slice(0, 8)
+    .join(' ')
+  pushUnique(queries, significantTerms)
+
+  return queries
+}
+
+async function retryFabricSearchWithKeywordFallback({
+  serviceHub,
+  result,
+  toolInput,
+}: {
+  serviceHub: ReturnType<typeof useServiceHub>
+  result: { error?: string; content?: ToolResultContent }
+  toolInput: unknown
+}) {
+  if (fabricSearchHasResults(result)) return result
+
+  const input = toolInput && typeof toolInput === 'object'
+    ? { ...(toolInput as Record<string, unknown>) }
+    : {}
+  const query = String(input.query ?? '').trim()
+  if (!query) return result
+
+  const requestedMode = String(input.mode ?? 'vector')
+  if (requestedMode === 'keyword' && input.layer === 'raw') return result
+
+  for (const fallbackQuery of buildKeywordFallbackQueries(query)) {
+    try {
+      const fallback = await serviceHub.mcp().callTool({
+        toolName: 'fabric_search',
+        arguments: {
+          ...input,
+          query: fallbackQuery,
+          mode: 'keyword',
+          layer: 'raw',
+        },
+      })
+
+      if (fabricSearchHasResults(fallback)) return fallback
+    } catch (error) {
+      console.warn('[LocalKnowledge] keyword fallback search failed:', error)
+    }
+  }
+
+  return result
+}
+
 export function useThreadTools({
   threadId,
   projectId,
@@ -157,6 +267,14 @@ export function useThreadTools({
               fabricSearchUsedInTurn.current = true
             }
 
+            if (toolName === 'fabric_search') {
+              result = await retryFabricSearchWithKeywordFallback({
+                serviceHub,
+                result,
+                toolInput: toolCall.input,
+              })
+            }
+
             if (result.error) {
               addToolOutput({
                 state: 'output-error',
@@ -178,7 +296,7 @@ export function useThreadTools({
                     ...output,
                     {
                       type: 'text',
-                      text: '\n\n---\nINSTRUCTION: Based on the search results above, you MUST now write your full answer immediately.\n\nCRITICAL RULES:\n- Do NOT call fabric_search or any other tool again\n- Do NOT say "let me search" or "I need more information"\n- Do NOT say "let me" or "I will explain"\n- Work with the results you have — even if they seem incomplete\n- Start writing your answer NOW\n- If the results are incomplete, say so in your answer and describe what you found\n- Your response must be at least 100 words',
+                      text: '\n\n---\nLOCAL_KNOWLEDGE_RESULT_READY\nINSTRUCTION: The fabric_search tool has already completed. You MUST now write the final answer in normal prose.\n\nCRITICAL RULES:\n- Do NOT call fabric_search or any other tool again\n- Do NOT output <tool_call>, </tool_call>, JSON tool-call objects, or function-call markup\n- Do NOT say "let me search" or "I need more information"\n- Do NOT say "let me" or "I will explain"\n- Work with the results you have — even if they seem incomplete\n- Start with the direct answer to the user question\n- If the results are incomplete, say so in your answer and describe what you found\n- Your response must be at least 100 words',
                     },
                   ]
                 }
