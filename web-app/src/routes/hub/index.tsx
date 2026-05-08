@@ -655,7 +655,7 @@ function HubContent() {
                           navigate({
                             to: route.hub.model,
                             params: {
-                              modelId: model.model_name,
+                              modelId: encodeURIComponent(model.model_name),
                             },
                           })
                         }}

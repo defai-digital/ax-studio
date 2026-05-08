@@ -68,7 +68,7 @@ export function DataProvider() {
       // required, otherwise TanStack Router throws at runtime.
       navigate({
         to: route.hub.model,
-        params: { modelId: resource },
+        params: { modelId: encodeURIComponent(resource) },
         search: { repo: resource },
       })
     },

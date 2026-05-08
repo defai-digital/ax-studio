@@ -63,6 +63,14 @@ function HubModelDetailContent() {
   const [readmeContent, setReadmeContent] = useState<string>('')
   const [isLoadingReadme, setIsLoadingReadme] = useState(false)
 
+  const modelId = useMemo(() => {
+    try {
+      return decodeURIComponent(rawModelId)
+    } catch {
+      return rawModelId
+    }
+  }, [rawModelId])
+
   // State for model support status
   const [modelSupportStatus, setModelSupportStatus] = useState<
     Record<string, 'RED' | 'YELLOW' | 'GREEN' | 'LOADING' | 'GREY'>
@@ -82,14 +90,14 @@ function HubModelDetailContent() {
   const fetchRepo = useCallback(async (signal?: AbortSignal) => {
     const repoInfo = await serviceHub
       .models()
-      .fetchHuggingFaceRepo(search.repo || rawModelId, huggingfaceToken, signal)
+      .fetchHuggingFaceRepo(search.repo || modelId, huggingfaceToken, signal)
     if (repoInfo) {
       const repoDetail = serviceHub
         .models()
         .convertHfRepoToCatalogModel(repoInfo)
       setRepoData(repoDetail || undefined)
     }
-  }, [serviceHub, rawModelId, search, huggingfaceToken])
+  }, [serviceHub, modelId, search, huggingfaceToken])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -101,11 +109,54 @@ function HubModelDetailContent() {
     return () => {
       controller.abort()
     }
-  }, [rawModelId, fetchRepo])
+  }, [modelId, fetchRepo])
   // Find the model data from sources
   const modelData = useMemo(() => {
-    return sources.find((model) => model.model_name === rawModelId) ?? repoData
-  }, [sources, rawModelId, repoData])
+    return sources.find((model) => model.model_name === modelId) ?? repoData
+  }, [sources, modelId, repoData])
+
+  const huggingFaceRepoId = useMemo(() => {
+    const decodeSafe = (value: string | undefined): string | undefined => {
+      if (!value) return undefined
+      try {
+        return decodeURIComponent(value)
+      } catch {
+        return value
+      }
+    }
+
+    const normalize = (value: string): string | undefined => {
+      const trimmed = value.trim()
+      if (!trimmed) return undefined
+
+      // Accept full Hugging Face URLs or repo ids.
+      const urlMatch = trimmed.match(/huggingface\.co\/([^/?#]+\/[^/?#]+)/i)
+      if (urlMatch?.[1]) return decodeSafe(urlMatch[1]?.replace(/\/$/, ''))
+
+      const candidate = decodeSafe(trimmed)
+      if (!candidate) return undefined
+
+      const withoutPrefix = candidate
+        .replace(/^https?:\/\/huggingface\.co\//i, '')
+        .replace(/^huggingface\.co\//i, '')
+        .replace(/\/$/, '')
+
+      return withoutPrefix.includes('/') ? withoutPrefix : undefined
+    }
+
+    const fromRepo = normalize(search.repo)
+    if (fromRepo) return fromRepo
+
+    const fromReadme = normalize(modelData?.readme)
+    if (fromReadme) return fromReadme
+
+    return normalize(modelData?.model_name)
+  }, [search.repo, modelData?.model_name, modelData?.readme])
+
+  const huggingFaceUrl = useMemo(() => {
+    if (!huggingFaceRepoId) return ''
+    return `https://huggingface.co/${huggingFaceRepoId}`
+  }, [huggingFaceRepoId])
 
   // `readmeUrl` must be derived AFTER `modelData` — reading it before the
   // const declaration previously hit the Temporal Dead Zone and threw
@@ -421,15 +472,17 @@ function HubModelDetailContent() {
               </div>
 
               {/* HuggingFace link */}
-              <a
-                href={`https://huggingface.co/${modelData.model_name}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border/50 hover:border-border text-[13px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
-              >
-                <ExternalLink className="size-3.5" />
-                View on HuggingFace
-              </a>
+              {huggingFaceUrl && (
+                <a
+                  href={huggingFaceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border/50 hover:border-border text-[13px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                >
+                  <ExternalLink className="size-3.5" />
+                  View on HuggingFace
+                </a>
+              )}
             </div>
           </motion.div>
 
