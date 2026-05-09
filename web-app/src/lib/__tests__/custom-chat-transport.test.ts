@@ -577,7 +577,7 @@ describe('CustomChatTransport — LLM Router integration', () => {
     )
   })
 
-  it('waits for local model startup even when readiness was previously cached', async () => {
+  it('uses proxy preflight when local model startup does not return', async () => {
     mocks.selectedModel = { id: 'gemma-4-26b-a4b-it-4bit', capabilities: [] }
     mocks.selectedProvider = 'llamacpp'
 
@@ -598,12 +598,11 @@ describe('CustomChatTransport — LLM Router integration', () => {
 
     vi.mocked(ModelFactory.createModel).mockClear()
     vi.mocked(prepareProviderForChat).mockClear()
+    mocks.fetch.mockClear()
 
-    let resolveStart!: () => void
-    const startPromise = new Promise<void>((resolve) => {
-      resolveStart = resolve
-    })
-    vi.mocked(prepareProviderForChat).mockImplementationOnce(() => startPromise)
+    vi.mocked(prepareProviderForChat).mockImplementationOnce(
+      () => new Promise<void>(() => {})
+    )
     vi.useFakeTimers()
 
     const sendPromise = transport.sendMessages({
@@ -620,13 +619,20 @@ describe('CustomChatTransport — LLM Router integration', () => {
       messageId: 'message-2',
     })
 
-    await vi.advanceTimersByTimeAsync(10_000)
+    await vi.advanceTimersByTimeAsync(1_999)
     expect(ModelFactory.createModel).not.toHaveBeenCalled()
+    expect(mocks.fetch).not.toHaveBeenCalled()
 
-    resolveStart()
+    await vi.advanceTimersByTimeAsync(1)
     await sendPromise
     vi.useRealTimers()
 
+    expect(mocks.fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:1337/v1/chat/completions',
+      expect.objectContaining({
+        body: expect.stringContaining('"stream":false'),
+      })
+    )
     expect(ModelFactory.createModel).toHaveBeenCalledWith(
       'gemma-4-26b-a4b-it-4bit',
       expect.objectContaining({ provider: 'llamacpp' }),

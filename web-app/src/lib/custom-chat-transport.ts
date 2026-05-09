@@ -35,6 +35,7 @@ const PREFLIGHT_TTL_MS = 10 * 60 * 1000
 const PREFLIGHT_FAIL_TTL_MS = 2 * 60 * 1000
 const LOCAL_PREFLIGHT_ATTEMPTS = 60
 const LOCAL_PREFLIGHT_RETRY_MS = 500
+const LOCAL_START_MODEL_UNBLOCK_MS = 2_000
 const DEFAULT_LOCAL_MAX_OUTPUT_TOKENS = 4096
 const preflightCache = new Map<string, { ok: boolean; ts: number }>()
 
@@ -100,26 +101,44 @@ async function prepareProviderForFinalChat(
   serviceHub: ServiceHub,
   provider: ProviderObject,
   modelId: string
-) {
+): Promise<'ready' | 'continued'> {
   if (!isLocalProvider(provider)) {
     await prepareProviderForChat(serviceHub, provider, modelId)
-    return
+    return 'ready'
   }
 
-  await prepareProviderForChat(serviceHub, provider, modelId)
+  const startup = prepareProviderForChat(serviceHub, provider, modelId)
+  const startupResult = await Promise.race([
+    startup.then(() => 'ready' as const),
+    delay(LOCAL_START_MODEL_UNBLOCK_MS).then(() => 'continued' as const),
+  ])
+
+  if (startupResult === 'continued') {
+    void startup.catch((error) => {
+      console.warn(
+        '[LLM Router] Local model startup finished after chat readiness moved to proxy preflight:',
+        error
+      )
+    })
+  }
+
+  return startupResult
 }
 
 async function preflightLocalModelThroughProxy(
   modelId: string,
   providerId: string,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  force = false
 ) {
-  const cached = isModelPreflightCached(modelId, providerId)
-  if (cached === true) return
-  if (cached === false) {
-    throw new Error(
-      `Local model "${modelId}" previously failed readiness preflight`
-    )
+  if (!force) {
+    const cached = isModelPreflightCached(modelId, providerId)
+    if (cached === true) return
+    if (cached === false) {
+      throw new Error(
+        `Local model "${modelId}" previously failed readiness preflight`
+      )
+    }
   }
 
   const { serverHost, serverPort, apiPrefix, apiKey: localProxyKey } =
@@ -405,14 +424,27 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
         throw new Error('ServiceHub not initialized or model/provider missing.')
       }
 
+      let forceLocalPreflight = false
       if (preparedForPreflightKey !== modelProviderKey(modelId, providerId)) {
-        await prepareProviderForFinalChat(serviceHub, provider, modelId)
+        const startupState = await prepareProviderForFinalChat(
+          serviceHub,
+          provider,
+          modelId
+        )
+        if (startupState === 'continued') {
+          forceLocalPreflight = true
+        }
       }
       if (
         isLocalProvider(provider) &&
         preparedForPreflightKey !== modelProviderKey(modelId, providerId)
       ) {
-        await preflightLocalModelThroughProxy(modelId, providerId, options.abortSignal)
+        await preflightLocalModelThroughProxy(
+          modelId,
+          providerId,
+          options.abortSignal,
+          forceLocalPreflight
+        )
         preparedForPreflightKey = modelProviderKey(modelId, providerId)
       }
 
