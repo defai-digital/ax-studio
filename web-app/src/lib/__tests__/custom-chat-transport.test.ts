@@ -220,6 +220,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   consoleInfoSpy.mockRestore()
   consoleWarnSpy.mockRestore()
 })
@@ -568,6 +569,64 @@ describe('CustomChatTransport — LLM Router integration', () => {
     expect(vi.mocked(prepareProviderForChat).mock.invocationCallOrder[0]).toBeLessThan(
       mocks.fetch.mock.invocationCallOrder[0]
     )
+    expect(ModelFactory.createModel).toHaveBeenCalledWith(
+      'gemma-4-26b-a4b-it-4bit',
+      expect.objectContaining({ provider: 'llamacpp' }),
+      { max_output_tokens: 4096 },
+      { requestRole: 'final' }
+    )
+  })
+
+  it('waits for local model startup even when readiness was previously cached', async () => {
+    mocks.selectedModel = { id: 'gemma-4-26b-a4b-it-4bit', capabilities: [] }
+    mocks.selectedProvider = 'llamacpp'
+
+    const transport = makeTransport({ threadId: 'thread-1' })
+    await transport.sendMessages({
+      chatId: 'chat-1',
+      messages: [
+        {
+          id: 'message-1',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Warm the local readiness cache' }],
+        } as UIMessage,
+      ],
+      abortSignal: undefined,
+      trigger: 'submit-message',
+      messageId: 'message-1',
+    })
+
+    vi.mocked(ModelFactory.createModel).mockClear()
+    vi.mocked(prepareProviderForChat).mockClear()
+
+    let resolveStart!: () => void
+    const startPromise = new Promise<void>((resolve) => {
+      resolveStart = resolve
+    })
+    vi.mocked(prepareProviderForChat).mockImplementationOnce(() => startPromise)
+    vi.useFakeTimers()
+
+    const sendPromise = transport.sendMessages({
+      chatId: 'chat-1',
+      messages: [
+        {
+          id: 'message-2',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Send after engine switch' }],
+        } as UIMessage,
+      ],
+      abortSignal: undefined,
+      trigger: 'submit-message',
+      messageId: 'message-2',
+    })
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(ModelFactory.createModel).not.toHaveBeenCalled()
+
+    resolveStart()
+    await sendPromise
+    vi.useRealTimers()
+
     expect(ModelFactory.createModel).toHaveBeenCalledWith(
       'gemma-4-26b-a4b-it-4bit',
       expect.objectContaining({ provider: 'llamacpp' }),

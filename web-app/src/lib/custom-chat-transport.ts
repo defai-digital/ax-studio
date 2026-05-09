@@ -35,7 +35,6 @@ const PREFLIGHT_TTL_MS = 10 * 60 * 1000
 const PREFLIGHT_FAIL_TTL_MS = 2 * 60 * 1000
 const LOCAL_PREFLIGHT_ATTEMPTS = 60
 const LOCAL_PREFLIGHT_RETRY_MS = 500
-const LOCAL_MODEL_START_GRACE_MS = 8_000
 const DEFAULT_LOCAL_MAX_OUTPUT_TOKENS = 4096
 const preflightCache = new Map<string, { ok: boolean; ts: number }>()
 
@@ -107,34 +106,7 @@ async function prepareProviderForFinalChat(
     return
   }
 
-  const startWork = prepareProviderForChat(serviceHub, provider, modelId).catch(
-    (error) => {
-      console.warn('[LLM Router] local model start failed before proxy readiness check', {
-        modelId,
-        providerId: provider.provider,
-        error,
-      })
-      return 'failed' as const
-    }
-  )
-  let startSettled = false
-  startWork
-    .then(() => {
-      startSettled = true
-    })
-
-  await Promise.race([
-    startWork,
-    delay(LOCAL_MODEL_START_GRACE_MS).then(() => 'timeout' as const),
-  ]).then((result) => {
-    if (result === 'timeout' && !startSettled) {
-      logRouterTrace('local model start still pending; continuing with proxy readiness preflight', {
-        modelId,
-        providerId: provider.provider,
-        graceMs: LOCAL_MODEL_START_GRACE_MS,
-      })
-    }
-  })
+  await prepareProviderForChat(serviceHub, provider, modelId)
 }
 
 async function preflightLocalModelThroughProxy(
