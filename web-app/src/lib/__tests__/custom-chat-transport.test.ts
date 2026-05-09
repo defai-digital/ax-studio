@@ -31,7 +31,10 @@ const mocks = vi.hoisted(() => {
     },
     {
       provider: 'llamacpp',
-      models: [{ id: 'llama-3.2-3b-local.gguf', capabilities: [] }],
+      models: [
+        { id: 'llama-3.2-3b-local.gguf', capabilities: [] },
+        { id: 'gemma-4-26b-a4b-it-4bit', capabilities: [] },
+      ],
       settings: [],
     },
   ]
@@ -45,6 +48,8 @@ const mocks = vi.hoisted(() => {
     providers,
     routerModelId: null as string | null,
     routerProviderId: null as string | null,
+    selectedModel: { id: 'test-model', capabilities: [] },
+    selectedProvider: 'test-provider',
     timeout: 10000,
   }
 })
@@ -85,8 +90,8 @@ vi.mock('@/hooks/research/useLocalKnowledge', () => ({
 vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: {
     getState: () => ({
-      selectedModel: { id: 'test-model', capabilities: [] },
-      selectedProvider: 'test-provider',
+      selectedModel: mocks.selectedModel,
+      selectedProvider: mocks.selectedProvider,
       providers: mocks.providers,
       getProviderByName: mocks.getProviderByName,
     }),
@@ -190,6 +195,8 @@ beforeEach(() => {
   mocks.autoRouteEnabled = false
   mocks.routerModelId = null
   mocks.routerProviderId = null
+  mocks.selectedModel = { id: 'test-model', capabilities: [] }
+  mocks.selectedProvider = 'test-provider'
   mocks.timeout = 10000
   mocks.fetch.mockResolvedValue({
     ok: true,
@@ -517,7 +524,7 @@ describe('CustomChatTransport — LLM Router integration', () => {
     expect(ModelFactory.createModel).toHaveBeenCalledWith(
       'llama-3.2-3b-local.gguf',
       expect.objectContaining({ provider: 'llamacpp' }),
-      {},
+      { max_output_tokens: 4096 },
       { requestRole: 'final' }
     )
     expect(transport.lastRouterResult).toEqual(
@@ -526,6 +533,95 @@ describe('CustomChatTransport — LLM Router integration', () => {
         providerId: 'llamacpp',
         routed: true,
       })
+    )
+  })
+
+  it('preflights a directly selected local model before final streaming', async () => {
+    mocks.selectedModel = { id: 'gemma-4-26b-a4b-it-4bit', capabilities: [] }
+    mocks.selectedProvider = 'llamacpp'
+
+    const transport = makeTransport({ threadId: 'thread-1' })
+    await transport.sendMessages({
+      chatId: 'chat-1',
+      messages: [
+        {
+          id: 'message-1',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Use the local model' }],
+        } as UIMessage,
+      ],
+      abortSignal: undefined,
+      trigger: 'submit-message',
+      messageId: 'message-1',
+    })
+
+    expect(mocks.fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:1337/v1/chat/completions',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'X-Ax-Provider': 'llamacpp',
+          'X-Ax-Request-Role': 'preflight',
+        }),
+        body: expect.stringContaining('"stream":false'),
+      })
+    )
+    expect(vi.mocked(prepareProviderForChat).mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.fetch.mock.invocationCallOrder[0]
+    )
+    expect(ModelFactory.createModel).toHaveBeenCalledWith(
+      'gemma-4-26b-a4b-it-4bit',
+      expect.objectContaining({ provider: 'llamacpp' }),
+      { max_output_tokens: 4096 },
+      { requestRole: 'final' }
+    )
+  })
+
+  it('uses a minimal local provider when provider bootstrap is late', async () => {
+    mocks.selectedModel = { id: 'bootstrap-late-local.gguf', capabilities: [] }
+    mocks.selectedProvider = 'llamacpp'
+    mocks.getProviderByName.mockImplementation((providerId: string) =>
+      providerId === 'llamacpp'
+        ? undefined
+        : mocks.providers.find((provider) => provider.provider === providerId)
+    )
+
+    const transport = makeTransport({ threadId: 'thread-1' })
+    await transport.sendMessages({
+      chatId: 'chat-1',
+      messages: [
+        {
+          id: 'message-1',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Use the local model' }],
+        } as UIMessage,
+      ],
+      abortSignal: undefined,
+      trigger: 'submit-message',
+      messageId: 'message-1',
+    })
+
+    expect(prepareProviderForChat).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        provider: 'llamacpp',
+        models: [expect.objectContaining({ id: 'bootstrap-late-local.gguf' })],
+      }),
+      'bootstrap-late-local.gguf'
+    )
+    expect(mocks.fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:1337/v1/chat/completions',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'X-Ax-Provider': 'llamacpp',
+          'X-Ax-Request-Role': 'preflight',
+        }),
+      })
+    )
+    expect(ModelFactory.createModel).toHaveBeenCalledWith(
+      'bootstrap-late-local.gguf',
+      expect.objectContaining({ provider: 'llamacpp' }),
+      { max_output_tokens: 4096 },
+      { requestRole: 'final' }
     )
   })
 })

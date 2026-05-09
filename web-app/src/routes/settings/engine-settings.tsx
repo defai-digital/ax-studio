@@ -49,6 +49,31 @@ const SECTION_KEYS: Record<string, string[]> = {
   advanced: ['grammar_file', 'json_schema_file', 'no_kv_offload', 'ctx_size'],
 }
 
+const ENGINE_TYPE_OPTIONS = [
+  { name: 'llama.cpp (Default)', value: 'llamacpp' },
+  { name: 'AX Engine via ax-serving', value: 'ax-serving' },
+] as const
+
+function normalizeEngineSetting(setting: ProviderSetting): ProviderSetting {
+  if (setting.key !== 'engine_type') return setting
+
+  const currentValue =
+    typeof setting.controller_props?.value === 'string' &&
+    setting.controller_props.value.length > 0
+      ? setting.controller_props.value
+      : 'llamacpp'
+
+  return {
+    ...setting,
+    controller_type: 'dropdown',
+    controller_props: {
+      ...setting.controller_props,
+      value: currentValue,
+      options: ENGINE_TYPE_OPTIONS.map((option) => ({ ...option })),
+    },
+  }
+}
+
 function EngineSettingsContent() {
   const { t } = useTranslation()
   const serviceHub = useServiceHub()
@@ -58,12 +83,17 @@ function EngineSettingsContent() {
   const handleSettingChange = (settingIndex: number, newValue: unknown) => {
     if (!provider) return
 
-    const newSettings = [...provider.settings]
-    ;(
-      newSettings[settingIndex].controller_props as {
-        value: string | boolean | number
+    const newSettings = provider.settings.map((setting, index) => {
+      if (index !== settingIndex) return setting
+
+      return {
+        ...setting,
+        controller_props: {
+          ...setting.controller_props,
+          value: newValue as string | boolean | number,
+        },
       }
-    ).value = newValue as string | boolean | number
+    })
 
     serviceHub.providers().updateSettings('llamacpp', newSettings)
     updateProvider('llamacpp', { settings: newSettings })
@@ -76,7 +106,7 @@ function EngineSettingsContent() {
       .map((key) => {
         const index = provider.settings.findIndex((s) => s.key === key)
         if (index < 0) return null
-        return { setting: provider.settings[index], index }
+        return { setting: normalizeEngineSetting(provider.settings[index]), index }
       })
       .filter(Boolean) as {
       setting: (typeof provider.settings)[0]

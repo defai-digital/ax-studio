@@ -29,7 +29,7 @@ export function ServiceHubProvider({ children }: ServiceHubProviderProps) {
 
     console.info('[ServiceHubProvider] Initializing service hub...')
     withTimeout(
-      initializeServiceHub(),
+      Promise.resolve().then(() => initializeServiceHub()),
       SERVICE_HUB_INIT_TIMEOUT_MS,
       `Service hub initialization timed out after ${SERVICE_HUB_INIT_TIMEOUT_MS}ms`
     )
@@ -67,7 +67,7 @@ export function ServiceHubProvider({ children }: ServiceHubProviderProps) {
           />
         </div>
         <div className="text-sm text-muted-foreground">
-          Initializing Ax-Studio…
+          Initializing Ax-Studio...
         </div>
         <div className="text-xs text-muted-foreground/80">
           {Math.max(1, Math.ceil(elapsedMs / 1000))}s elapsed
@@ -82,11 +82,11 @@ export function ServiceHubProvider({ children }: ServiceHubProviderProps) {
         <div className="max-w-lg space-y-3">
           <h1 className="text-lg font-semibold">AX Studio failed to initialize</h1>
           <p className="text-sm text-muted-foreground">
-            Service startup failed. You can retry — some failures are transient
+            Service startup failed. You can retry; some failures are transient
             (for example momentary IPC/resource contention).
           </p>
           <p className="text-xs text-muted-foreground/80">
-            {initError.length > 200 ? initError.slice(0, 200) + '…' : initError}
+            {initError.length > 200 ? initError.slice(0, 200) + '...' : initError}
           </p>
           <button
             type="button"

@@ -51,6 +51,42 @@ fn bundled_extension_stamp() -> String {
         .join("\n")
 }
 
+fn bundled_extensions_ready(extensions_path: &Path) -> bool {
+    if !extensions_path.join("extensions.json").is_file() {
+        return false;
+    }
+
+    let expected_stamp = bundled_extension_stamp();
+    let installed_stamp =
+        fs::read_to_string(extensions_path.join(".bundle-stamp")).unwrap_or_default();
+
+    installed_stamp == expected_stamp
+}
+
+pub fn schedule_extension_install_if_needed(
+    extensions_path: PathBuf,
+    pre_install_path: PathBuf,
+    force: bool,
+) {
+    if !force && bundled_extensions_ready(&extensions_path) {
+        return;
+    }
+
+    log::info!("Scheduling bundled extension install. Force: {force}");
+    std::thread::spawn(move || match install_extensions_from_paths(
+        extensions_path,
+        pre_install_path,
+        force,
+    ) {
+        Ok(()) => {
+            log::info!("Bundled extension install finished");
+        }
+        Err(error) => {
+            log::error!("Failed to install bundled extensions in background: {error}");
+        }
+    });
+}
+
 fn expected_extension_archive_hash(path: &Path) -> Option<&'static str> {
     let filename = path.file_name()?.to_str()?;
     BUNDLED_EXTENSION_ARCHIVE_SHA256
@@ -107,6 +143,14 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
         .join("resources")
         .join("pre-install");
 
+    install_extensions_from_paths(extensions_path, pre_install_path, force)
+}
+
+fn install_extensions_from_paths(
+    extensions_path: PathBuf,
+    pre_install_path: PathBuf,
+    force: bool,
+) -> Result<(), String> {
     let mut clean_up = force;
 
     // Check IS_CLEAN environment variable to optionally skip extension install
@@ -456,6 +500,28 @@ mod tests {
     }
 
     #[test]
+    fn test_bundled_extensions_ready_requires_manifest_and_current_stamp() {
+        let extensions_path = std::env::temp_dir().join(format!(
+            "ax-studio-extension-ready-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&extensions_path);
+        fs::create_dir_all(&extensions_path).expect("temp dir should be created");
+
+        assert!(!bundled_extensions_ready(&extensions_path));
+
+        fs::write(extensions_path.join("extensions.json"), "[]")
+            .expect("extensions manifest should be written");
+        assert!(!bundled_extensions_ready(&extensions_path));
+
+        fs::write(extensions_path.join(".bundle-stamp"), bundled_extension_stamp())
+            .expect("bundle stamp should be written");
+        assert!(bundled_extensions_ready(&extensions_path));
+
+        let _ = fs::remove_dir_all(&extensions_path);
+    }
+
+    #[test]
     fn test_should_prevent_exit_only_for_tray_window_close() {
         assert!(should_prevent_exit_for_tray(None, true));
         assert!(!should_prevent_exit_for_tray(None, false));
@@ -796,9 +862,13 @@ pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         .and_then(|v| v.as_str().map(String::from))
         .unwrap_or_default();
     let app_version = app.config().version.clone().unwrap_or_default();
-    if let Err(e) = install_extensions(app.handle().clone(), stored_version != app_version) {
-        log::error!("Failed to install extensions: {e}");
-    }
+    let extensions_path = get_app_extensions_path(app.handle().clone());
+    let pre_install_path = app.path().resource_dir()?.join("resources").join("pre-install");
+    schedule_extension_install_if_needed(
+        extensions_path,
+        pre_install_path,
+        stored_version != app_version,
+    );
     if let Err(e) = migrate_mcp_servers(app.handle().clone(), store.clone()) {
         log::error!("Failed to migrate MCP servers: {e}");
     }

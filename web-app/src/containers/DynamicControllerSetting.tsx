@@ -6,12 +6,6 @@ import { ButtonGroup } from '@/components/ui/button-group'
 import { Textarea } from '@/components/ui/textarea'
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { SliderProps } from '@radix-ui/react-slider'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { cn } from '@/lib/utils'
@@ -254,25 +248,26 @@ export function DynamicControllerSetting({
 
   if (controllerType === 'dropdown') {
     const options = controllerProps.options ?? []
-    const selected = options.find((o) => o.value === controllerProps.value)?.name || (controllerProps.value as string)
     return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="w-full justify-between">
-            {selected}
-            <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground ml-2" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="max-h-70">
+      <div className={cn('relative w-full', className)}>
+        <select
+          value={String(controllerProps.value ?? '')}
+          onChange={(event) => {
+            const selectedOption = options.find(
+              (option) => String(option.value) === event.target.value
+            )
+            onChange(selectedOption?.value ?? event.target.value)
+          }}
+          className="border-input bg-background ring-offset-background focus-visible:ring-ring h-8 w-full appearance-none rounded-md border px-3 pr-8 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50"
+        >
           {options.map((option, i) => (
-            <DropdownMenuItem key={i} onClick={() => onChange(option.value)}
-              className={cn('flex items-center justify-between my-1', selected === option.name ? 'bg-secondary/60 hover:bg-secondary/40' : '')}
-            >
+            <option key={i} value={String(option.value)}>
               {option.name}
-            </DropdownMenuItem>
+            </option>
           ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
+        </select>
+        <ChevronsUpDown className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      </div>
     )
   }
 

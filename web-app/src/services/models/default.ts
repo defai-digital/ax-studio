@@ -64,7 +64,21 @@ export class DefaultModelsService implements ModelsService {
     engine: AIEngine,
     model: string
   ): Promise<void> {
-    await engine.syncModelRoute(model)
+    try {
+      await engine.syncModelRoute(model)
+    } catch (error) {
+      console.warn(
+        `[ModelsService] Failed to sync local model route for "${model}":`,
+        error
+      )
+    }
+  }
+
+  private syncLoadedModelRouteInBackground(
+    engine: AIEngine,
+    model: string
+  ): void {
+    void this.syncLoadedModelRoute(engine, model)
   }
 
   async getModel(modelId: string): Promise<modelInfo | undefined> {
@@ -404,7 +418,7 @@ export class DefaultModelsService implements ModelsService {
 
     const loadedModels = (await engine.getLoadedModels()) ?? []
     if (loadedModels.includes(model)) {
-      await this.syncLoadedModelRoute(engine, model)
+      this.syncLoadedModelRouteInBackground(engine, model)
       return undefined
     }
 
@@ -450,6 +464,10 @@ export class DefaultModelsService implements ModelsService {
 
     return engine
       .load(model, settings, false, bypassAutoUnload)
+      .then(async (session) => {
+        this.syncLoadedModelRouteInBackground(engine, model)
+        return session
+      })
       .catch((error) => {
         console.error(
           `Failed to start model ${model} for provider ${provider.provider}:`,

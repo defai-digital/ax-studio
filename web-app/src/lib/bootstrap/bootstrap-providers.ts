@@ -17,6 +17,43 @@ const PROVIDER_BOOTSTRAP_TIMEOUT_MS = 10_000
 const MCP_BOOTSTRAP_TIMEOUT_MS = 8_000
 const ASSISTANTS_BOOTSTRAP_TIMEOUT_MS = 8_000
 
+let providersWork: Promise<ModelProvider[]> | null = null
+let mcpConfigWork: Promise<{
+  mcpServers?: Record<string, MCPServerConfig>
+  mcpSettings?: MCPSettings | null
+}> | null = null
+let assistantsWork: Promise<unknown> | null = null
+
+function getProvidersOnce(serviceHub: ServiceHub): Promise<ModelProvider[]> {
+  providersWork ??= serviceHub
+    .providers()
+    .getProviders()
+    .finally(() => {
+      providersWork = null
+    })
+  return providersWork
+}
+
+function getMCPConfigOnce(serviceHub: ServiceHub) {
+  mcpConfigWork ??= serviceHub
+    .mcp()
+    .getMCPConfig()
+    .finally(() => {
+      mcpConfigWork = null
+    })
+  return mcpConfigWork
+}
+
+function getAssistantsOnce(serviceHub: ServiceHub): Promise<unknown> {
+  assistantsWork ??= serviceHub
+    .assistants()
+    .getAssistants()
+    .finally(() => {
+      assistantsWork = null
+    })
+  return assistantsWork
+}
+
 export type BootstrapProvidersInput = {
   serviceHub: ServiceHub
   setProviders: (providers: ModelProvider[], pathSep: string) => void
@@ -53,9 +90,7 @@ export async function bootstrapProviders(input: BootstrapProvidersInput): Promis
     // Load providers, MCP config, and assistants concurrently with bounded waits.
     await Promise.all([
       withTimeout(
-        serviceHub
-          .providers()
-          .getProviders()
+        getProvidersOnce(serviceHub)
           .then((providers) => {
             setProviders(providers, serviceHub.path().sep())
             return syncRemoteProviders(providers).catch((err) =>
@@ -69,9 +104,7 @@ export async function bootstrapProviders(input: BootstrapProvidersInput): Promis
       }),
 
       withTimeout(
-        serviceHub
-          .mcp()
-          .getMCPConfig()
+        getMCPConfigOnce(serviceHub)
           .then((data) => {
             setServers(data.mcpServers ?? {})
             setSettings(data.mcpSettings ?? null)
@@ -83,10 +116,12 @@ export async function bootstrapProviders(input: BootstrapProvidersInput): Promis
       }),
 
       withTimeout(
-        serviceHub
-          .assistants()
-          .getAssistants()
+        getAssistantsOnce(serviceHub)
           .then((data) => {
+            if (data == null) {
+              setAssistants([])
+              return
+            }
             const parsed = assistantsSchema.safeParse(data)
             if (parsed.success && parsed.data.length > 0) {
               setAssistants(parsed.data as Assistant[])

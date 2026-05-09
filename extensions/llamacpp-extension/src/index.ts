@@ -1225,6 +1225,23 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     apiKey?: string
     models?: string[]
   }) {
+    if (preferred?.port && preferred.models && preferred.models.length > 0) {
+      try {
+        await invoke('register_provider_config', {
+          request: {
+            provider: this.providerId,
+            base_url: `http://127.0.0.1:${preferred.port}/v1`,
+            api_key: preferred.apiKey ?? '',
+            custom_headers: [],
+            models: preferred.models,
+          },
+        })
+      } catch (regErr) {
+        console.warn('[llamacpp] Failed to register provider with proxy:', regErr)
+      }
+      return
+    }
+
     const llamacppModels = await getLoadedModels().catch((error: unknown) => {
       console.debug('[llamacpp] Failed to list llamacpp models during provider sync:', error)
       return [] as string[]

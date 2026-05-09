@@ -94,9 +94,9 @@ export function GlobalEventHandler() {
             request: {
               provider: providerName,
               api_key: payload.api_key ?? null,
-              base_url: `http://127.0.0.1:${payload.port}`,
+              base_url: `http://127.0.0.1:${payload.port}/v1`,
               custom_headers: [],
-              models: [],
+              models: payload.modelId ? [payload.modelId] : [],
             },
           })
         } catch (err) {

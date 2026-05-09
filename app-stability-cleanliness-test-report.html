@@ -332,7 +332,7 @@
         <div class="eyebrow">Ax Studio Revamp Quality Snapshot · Updated: latest validated local quality phase</div>
         <h1>Stability, cleanliness, and test coverage status.</h1>
         <p>
-          These percentages summarize the current local code quality, latest validation results, module coverage, and today's stability, refactoring, cleanup, and test-hardening work, including the latest clean test-output pass.
+          These percentages summarize the current local code quality, latest validation results, module coverage, and today's stability, refactoring, cleanup, and test-hardening work, including the latest clean test-output and route coverage and startup-shell pass.
         </p>
         <div class="status-row" aria-label="Current validation status">
           <span class="pill good">Vitest: pass</span>
@@ -377,11 +377,11 @@
         <article class="card metric tests">
           <div>
             <h2>Test coverage confidence</h2>
-            <div class="percent">89%</div>
-            <div class="bar"><div class="fill" style="width: 89%"></div></div>
+          <div class="percent">90%</div>
+            <div class="bar"><div class="fill" style="width: 90%"></div></div>
             <span class="badge">Healthy</span>
           </div>
-          <p>The suite is broad and passing with cleaner signal: 257 JS test files, 3,246 JS tests, 261 Rust tests, lint, targeted failure-path tests, and module coverage gates all pass. Coverage is still next quality focus because containers and routes need more user-flow and E2E tests.</p>
+          <p>The suite is broad and passing with cleaner signal: 260 JS test files, 3,257 JS tests, 262 Rust tests, lint, targeted failure-path tests, route/utility-page coverage, startup-shell coverage, and module coverage gates all pass. Coverage is still next quality focus because containers and routes need more user-flow and E2E tests.</p>
         </article>
       </section>
 
@@ -398,7 +398,7 @@
               <span class="evidence-label">Vitest tests passed</span>
             </div>
             <div class="evidence-item">
-              <span class="evidence-number">261</span>
+              <span class="evidence-number">262</span>
               <span class="evidence-label">Rust tests passed</span>
             </div>
             <div class="evidence-item">
@@ -418,7 +418,7 @@
             The app is much safer than before because Vitest, Rust tests, lint, and module coverage gates pass on the current local code.
             This pass added focused regression coverage for selected-provider model metadata so stale capabilities cannot silently hide tools.
             It also tightened production typing in chat session, markdown, completion, thread, model-selection, updater, global app bridge, and message-rendering paths.
-            The latest cleanup phase also scoped expected console warnings/errors in bootstrap, core extension, llama.cpp, model, path, provider, updater, and chat-adjacent tests, and fixed React act warnings so future failures are easier to spot.
+            The latest startup phase makes stable service hub initialization, background extension installation, and extension loading safeguards so the app shell can render while service modules initialize through the stable dynamic-import path while extension archives install and active extensions initialize in the background. The latest cleanup phase also scoped expected console warnings/errors in bootstrap, core extension, llama.cpp, model, path, provider, updater, and chat-adjacent tests, and fixed React act warnings so future failures are easier to spot.
             Packaged-app smoke coverage, real local-model lifecycle checks, and long-running MCP recovery tests remain the highest-value future validation areas.
           </div>
         </article>
@@ -434,7 +434,8 @@
             <li><strong>Reduced production type looseness:</strong> tightened chat session, markdown renderer, completion content, thread research, and dropdown model typing.</li>
             <li><strong>Cleaned remaining hand-written any usage:</strong> production any/cast scan now only reports generated route tree casts.</li>
             <li><strong>Updated regression tests:</strong> toolbar, startup, provider, hardware, MCP, model lifecycle, attachment, updater, chat-session, and tool-approval paths now have stronger coverage.</li>
-            <li><strong>Clean validation:</strong> lint, Rust tests, full JS/TS tests, module coverage gates, and latest targeted failure-path tests pass.</li>
+            <li><strong>Startup feels faster:</strong> stable service hub initialization is restored, while bundled extension installation and extension loading avoid blocking the app shell; core managers initialize synchronously and extensions load in the background with retry pickup.</li>
+            <li><strong>Clean validation:</strong> lint, Rust tests, full JS/TS tests, module coverage gates, and latest targeted startup/failure-path tests pass.</li>
             <li><strong>Cleaner test signal:</strong> expected console warnings/errors and React act warnings were scoped or fixed in high-value failure-path suites.</li>
           </ul>
         </article>

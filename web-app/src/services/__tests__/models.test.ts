@@ -493,7 +493,7 @@ describe('DefaultModelsService', () => {
         mockSession
       )
 
-      expect(mockEngine.syncModelRoute).not.toHaveBeenCalled()
+      expect(mockEngine.syncModelRoute).toHaveBeenCalledWith('model1')
       expect(mockEngine.load).toHaveBeenCalledWith(
         'model1',
         {},

@@ -306,6 +306,42 @@ fn resolve_provider_config_from_map(
     }))
 }
 
+async fn resolve_active_ax_serving_fallback<R: tauri::Runtime>(
+    app_handle: &tauri::AppHandle<R>,
+    provider_hint: Option<&str>,
+    model_id: &str,
+    destination_path: &str,
+    is_anthropic_messages: bool,
+) -> Option<ResolvedProviderConfig> {
+    if provider_hint != Some("llamacpp") {
+        return None;
+    }
+
+    let state = app_handle.try_state::<tauri_plugin_llamacpp::state::LlamacppState>()?;
+    let process_map = state.llama_server_process.lock().await;
+    let session = process_map
+        .values()
+        .find(|session| {
+            session.info.model_id == "__ax_serving__" && session.info.port > 0
+        })?;
+    let base_url = format!("http://127.0.0.1:{}/v1", session.info.port);
+
+    log::warn!(
+        "Provider 'llamacpp' was not registered for model '{model_id}'; \
+         falling back to active ax-serving route at {base_url}"
+    );
+
+    Some(ResolvedProviderConfig {
+        target_base_url: build_upstream_url(
+            &base_url,
+            destination_path,
+            is_anthropic_messages,
+        ),
+        session_api_key: None,
+        provider_custom_headers: Vec::new(),
+    })
+}
+
 fn should_skip_upstream_request_header(name: &hyper::header::HeaderName) -> bool {
     let lower = name.as_str().to_ascii_lowercase();
     matches!(name, &hyper::header::HOST
@@ -469,6 +505,40 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
                 destination_path,
                 is_anthropic_messages,
             )
+        }
+    };
+
+    let resolved = match resolved {
+        Ok(Some(config)) => Ok(Some(config)),
+        Ok(None) => {
+            if let Some(config) = resolve_active_ax_serving_fallback(
+                app_handle,
+                provider_hint,
+                &model_id,
+                destination_path,
+                is_anthropic_messages,
+            )
+            .await
+            {
+                Ok(Some(config))
+            } else {
+                Ok(None)
+            }
+        }
+        Err(message) => {
+            if let Some(config) = resolve_active_ax_serving_fallback(
+                app_handle,
+                provider_hint,
+                &model_id,
+                destination_path,
+                is_anthropic_messages,
+            )
+            .await
+            {
+                Ok(Some(config))
+            } else {
+                Err(message)
+            }
         }
     };
 

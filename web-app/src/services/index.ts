@@ -435,8 +435,21 @@ class PlatformServiceHub implements ServiceHub {
   }
 }
 
+let serviceHubSingleton: ServiceHub | null = null
+let serviceHubSingletonPromise: Promise<ServiceHub> | null = null
+let serviceHubSingletonIsTauri: boolean | null = null
+
 export async function initializeServiceHub(): Promise<ServiceHub> {
-  const serviceHub = new PlatformServiceHub()
-  await serviceHub.initialize()
-  return serviceHub
+  const currentIsTauri = isPlatformTauri()
+  if (!serviceHubSingletonPromise || serviceHubSingletonIsTauri !== currentIsTauri) {
+    serviceHubSingleton = null
+    serviceHubSingletonIsTauri = currentIsTauri
+    serviceHubSingletonPromise = (async () => {
+      const serviceHub = new PlatformServiceHub()
+      await serviceHub.initialize()
+      serviceHubSingleton = serviceHub
+      return serviceHub
+    })()
+  }
+  return serviceHubSingleton ?? serviceHubSingletonPromise
 }

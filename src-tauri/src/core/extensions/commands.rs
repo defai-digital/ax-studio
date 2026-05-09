@@ -1,6 +1,6 @@
 use std::fs;
 use std::path::{Component, Path, PathBuf};
-use tauri::{AppHandle, Runtime};
+use tauri::{AppHandle, Manager, Runtime};
 
 use crate::core::app::commands::get_app_data_folder_path;
 use crate::core::setup;
@@ -30,15 +30,17 @@ pub fn get_active_extensions<R: Runtime>(app: AppHandle<R>) -> Vec<serde_json::V
                 log::error!("Failed to quarantine corrupted extensions.json: {rename_error}");
             }
 
-            if let Err(install_error) = setup::install_extensions(app, true) {
-                log::error!("Failed to reinstall bundled extensions: {install_error}");
-                return vec![];
+            match app.path().resource_dir() {
+                Ok(resource_dir) => setup::schedule_extension_install_if_needed(
+                    extensions_path,
+                    resource_dir.join("resources").join("pre-install"),
+                    true,
+                ),
+                Err(resource_error) => {
+                    log::error!("Failed to resolve pre-install extension path: {resource_error}");
+                }
             }
-
-            read_active_extension_manifests(&path, &extensions_path).unwrap_or_else(|retry_error| {
-                log::error!("Failed to load extensions after reinstall: {retry_error}");
-                vec![]
-            })
+            vec![]
         }
     }
 }

@@ -8,7 +8,7 @@
       "value": "llamacpp",
       "options": [
         { "name": "llama.cpp (Default)", "value": "llamacpp" },
-        { "name": "ax-serving", "value": "ax-serving" }
+        { "name": "AX Engine via ax-serving", "value": "ax-serving" }
       ]
     }
   },
