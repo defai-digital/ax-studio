@@ -75,6 +75,7 @@ type Props = {
   // Actions
   stopStreaming: (threadId: string) => void
   handleSendMessage: (prompt: string) => Promise<void>
+  submitCurrentPrompt?: () => void
   onAttachDocuments?: () => void
   onAttachImages?: () => void
   ingestingDocs?: boolean
@@ -110,6 +111,7 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
   threadMessages,
   stopStreaming,
   handleSendMessage,
+  submitCurrentPrompt,
   onAttachDocuments,
   onAttachImages,
   ingestingDocs,
@@ -361,9 +363,15 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
             <Button
               variant="default"
               size="icon-sm"
-              disabled={!prompt.trim() || ingestingDocs}
+              disabled={ingestingDocs}
               data-test-id="send-message-button"
-              onClick={() => handleSendMessage(prompt)}
+              onClick={() => {
+                if (submitCurrentPrompt) {
+                  submitCurrentPrompt()
+                } else {
+                  void handleSendMessage(prompt)
+                }
+              }}
               className="rounded-full mr-1 mb-1 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white border-0 shadow-sm"
             >
               <ArrowUp className="text-white" />

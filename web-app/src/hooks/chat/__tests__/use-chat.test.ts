@@ -15,6 +15,7 @@ const {
     updateSystemMessage: vi.fn(),
     updateInferenceParameters: vi.fn(),
     updateModelOverrideId: vi.fn(),
+    updateModelOverrideProviderId: vi.fn(),
     updateActiveTeamId: vi.fn(),
     setCostApprovalCallback: vi.fn(),
     setOnTokenUsage: vi.fn(),
@@ -114,6 +115,7 @@ describe('useChat', () => {
       sessionId: 'session-1',
       inferenceParameters: {},
       modelOverrideId: undefined,
+      modelOverrideProviderId: undefined,
     })
   })
 

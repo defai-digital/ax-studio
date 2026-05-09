@@ -104,12 +104,14 @@ export function useThreadEffects({
   handleResearchCommandRef.current = handleResearchCommand
   const processAndSendMessageRef = useRef(processAndSendMessage)
   processAndSendMessageRef.current = processAndSendMessage
+  const updateThreadRef = useRef(updateThread)
+  updateThreadRef.current = updateThread
 
   useEffect(() => {
     if (initialMessageSentForThreadRef.current === threadId) return
 
     const initialMessageKey = `${SESSION_STORAGE_PREFIX.INITIAL_MESSAGE}${threadId}`
-    const parsedInitialMessage = safeStorageParseJSONAs(
+    const storedInitialMessage = safeStorageParseJSONAs(
       sessionStorage,
       initialMessageKey,
       (value: unknown): value is { text: string } =>
@@ -119,23 +121,40 @@ export function useThreadEffects({
         typeof (value as { text?: unknown }).text === 'string',
       'useThreadEffects'
     )
+    const metadataInitialMessage =
+      typeof threadRef.current?.metadata?.pendingInitialMessage === 'string'
+        ? { text: threadRef.current.metadata.pendingInitialMessage }
+        : undefined
+    const parsedInitialMessage = storedInitialMessage ?? metadataInitialMessage
     if (!parsedInitialMessage) return
 
-    const dispatchTimer = window.setTimeout(() => {
+    const clearInitialMessage = () => {
       safeStorageRemoveItem(sessionStorage, initialMessageKey, 'useThreadEffects')
-      initialMessageSentForThreadRef.current = threadId
+      const metadata = threadRef.current?.metadata
+      if (!metadata || typeof metadata.pendingInitialMessage !== 'string') return
+      const { pendingInitialMessage: _pendingInitialMessage, ...remainingMetadata } = metadata
+      updateThreadRef.current(threadId, { metadata: remainingMetadata })
+    }
 
-      ;(async () => {
+    const dispatchTimer = window.setTimeout(() => {
+      void (async () => {
+        if (initialMessageSentForThreadRef.current === threadId) return
+        initialMessageSentForThreadRef.current = threadId
+
         const message = parsedInitialMessage.text
         if (!message) {
           console.error('Invalid initial message payload in sessionStorage')
+          initialMessageSentForThreadRef.current = null
           return
         }
         if (handleResearchCommandRef.current(message)) {
+          clearInitialMessage()
           return
         }
         await processAndSendMessageRef.current(message)
+        clearInitialMessage()
       })().catch((error) => {
+        initialMessageSentForThreadRef.current = null
         console.error('Failed to process initial message:', error)
       })
     }, 0)
@@ -143,7 +162,7 @@ export function useThreadEffects({
     return () => {
       window.clearTimeout(dispatchTimer)
     }
-  }, [threadId])
+  }, [threadId, thread?.metadata?.pendingInitialMessage])
 
   // ─── Apply thread prompt from sessionStorage ──────────────────────────────
   const sessionCarryAppliedForThreadRef = useRef<string | null>(null)

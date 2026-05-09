@@ -953,6 +953,22 @@ fn patch_sse_line(line: &str) -> String {
             Some(d) => d,
             None => continue,
         };
+        let has_visible_content = delta
+            .get("content")
+            .and_then(|content| content.as_str())
+            .is_some_and(|content| !content.is_empty());
+        if !has_visible_content {
+            let reasoning_fallback = delta
+                .get("reasoning_content")
+                .and_then(|content| content.as_str())
+                .or_else(|| delta.get("reasoning").and_then(|content| content.as_str()))
+                .filter(|content| !content.is_empty())
+                .map(ToOwned::to_owned);
+            if let Some(content) = reasoning_fallback {
+                delta.insert("content".to_string(), serde_json::Value::String(content));
+                changed = true;
+            }
+        }
         if delta.remove("reasoning_content").is_some() {
             changed = true;
         }

@@ -106,8 +106,10 @@ describe('useChatSendHandler', () => {
 
   // ── Phase 1: Guard branches ──────────────────────────────────────────────
 
-  it('sets message and returns early when no model is selected', async () => {
+  it('uses the provider default model when selected model has not hydrated yet', async () => {
     modelState.selectedModel = null
+    const newThread = { id: 'fallback-thread', metadata: {} }
+    mockCreateThread.mockResolvedValue(newThread)
     const input = defaultInput()
     const { result } = renderHook(() => useChatSendHandler(input))
 
@@ -115,10 +117,15 @@ describe('useChatSendHandler', () => {
       await result.current.handleSendMessage('hello')
     })
 
-    expect(input.setMessage).toHaveBeenCalledWith(
+    expect(mockCreateThread).toHaveBeenCalledWith(
+      { id: 'default-model-id', provider: 'openai' },
+      'hello',
+      undefined,
+      undefined
+    )
+    expect(input.setMessage).not.toHaveBeenCalledWith(
       'Please select a model to start chatting.'
     )
-    expect(input.setPrompt).not.toHaveBeenCalled()
   })
 
   it('returns early for empty / whitespace-only prompt', async () => {
@@ -201,6 +208,9 @@ describe('useChatSendHandler', () => {
       JSON.stringify({ text: 'hello world' })
     )
 
+    expect(mockUpdateThread).toHaveBeenCalledWith('new-thread-1', {
+      metadata: { pendingInitialMessage: 'hello world' },
+    })
     expect(input.setSelectedAssistant).toHaveBeenCalledWith(undefined)
     expect(mockNavigate).toHaveBeenCalledWith({
       to: '/threads/$threadId',

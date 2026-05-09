@@ -91,7 +91,7 @@ describe('useThreadEffects', () => {
     })
   })
 
-  it('removes initial message from sessionStorage after reading', () => {
+  it('removes initial message from sessionStorage after queuing it', async () => {
     sessionStorage.setItem(
       `initial-message-${threadId}`,
       JSON.stringify({ text: 'temp' })
@@ -99,7 +99,59 @@ describe('useThreadEffects', () => {
 
     renderHook(() => useThreadEffects(defaultInput))
 
-    expect(sessionStorage.getItem(`initial-message-${threadId}`)).toBeNull()
+    await vi.waitFor(() => {
+      expect(sessionStorage.getItem(`initial-message-${threadId}`)).toBeNull()
+    })
+  })
+
+  it('sends pending initial message from thread metadata when sessionStorage is empty', async () => {
+    defaultInput.thread = {
+      ...defaultInput.thread!,
+      metadata: {
+        pendingInitialMessage: 'Hello from metadata',
+        threadPrompt: 'Keep this prompt',
+      },
+    } as unknown as Thread
+
+    renderHook(() => useThreadEffects(defaultInput))
+
+    await vi.waitFor(() => {
+      expect(defaultInput.processAndSendMessage).toHaveBeenCalledWith(
+        'Hello from metadata'
+      )
+    })
+    expect(defaultInput.updateThread).toHaveBeenCalledWith(threadId, {
+      metadata: { threadPrompt: 'Keep this prompt' },
+    })
+  })
+
+  it('keeps initial message in sessionStorage when queuing fails', async () => {
+    const initialMsg = JSON.stringify({ text: 'retry me' })
+    defaultInput.processAndSendMessage = vi.fn().mockRejectedValue(new Error('not ready'))
+    sessionStorage.setItem(`initial-message-${threadId}`, initialMsg)
+
+    renderHook(() => useThreadEffects(defaultInput))
+
+    await vi.waitFor(() => {
+      expect(defaultInput.processAndSendMessage).toHaveBeenCalledWith('retry me')
+    })
+    expect(sessionStorage.getItem(`initial-message-${threadId}`)).toBe(initialMsg)
+  })
+
+  it('does not mark an initial message sent when StrictMode cleanup cancels the dispatch timer', async () => {
+    const initialMsg = JSON.stringify({ text: 'strict mode first message' })
+    sessionStorage.setItem(`initial-message-${threadId}`, initialMsg)
+
+    const { unmount } = renderHook(() => useThreadEffects(defaultInput))
+    unmount()
+
+    renderHook(() => useThreadEffects(defaultInput))
+
+    await vi.waitFor(() => {
+      expect(defaultInput.processAndSendMessage).toHaveBeenCalledWith(
+        'strict mode first message'
+      )
+    })
   })
 
   it('routes /research initial message through handleResearchCommand', async () => {

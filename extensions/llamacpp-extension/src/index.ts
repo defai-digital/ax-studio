@@ -290,6 +290,8 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   // ─── Lifecycle ─────────────────────────────────────────────────────────────
 
   override async onLoad(): Promise<void> {
+    super.onLoad()
+
     const rawSettings = SETTINGS
     const isMac = IS_MACOS
 

@@ -7,7 +7,9 @@ use std::{
     sync::Arc,
 };
 use tar::Archive;
-use tauri::{App, Emitter, Manager, RunEvent, Runtime, WindowEvent, Wry};
+use tauri::{
+    App, Emitter, Manager, RunEvent, Runtime, WebviewUrl, WebviewWindowBuilder, WindowEvent, Wry,
+};
 
 #[cfg(desktop)]
 use tauri::{
@@ -27,21 +29,29 @@ use super::{
 const BUNDLED_EXTENSION_ARCHIVE_SHA256: &[(&str, &str)] = &[
     (
         "ax-studio-assistant-extension-1.0.2.tgz",
-        "8a61e4739b015f052924b21e15f926efbf40dc28666a6f6b0440862c05d7eb92",
+        "e943addb08b86ba8001d0d0eee44519610095688d192637093c118b34991aef3",
     ),
     (
         "ax-studio-conversational-extension-1.0.0.tgz",
-        "b89cc1fd246d4b720d9222943808cac8d714f6148c8a68f2f7132909dfb6e581",
+        "a50ffe1ec8b86cb88bec17defd8cdb04f4885e11651fffbb7f7a3856ee500374",
     ),
     (
         "ax-studio-download-extension-1.0.0.tgz",
-        "741c4225538190ca562e9f4668ab5e1adf0051e093d740ad413e2d8af21dfa13",
+        "8f6bc8ff6bf382e80860962ea7b62713239254dba547acc23948ac090a138770",
     ),
     (
         "ax-studio-llamacpp-extension-1.0.4.tgz",
-        "a439304693fc88e318f58446aae2b42b646665c246a2db8cd429f3dd9863ad63",
+        "2a4b29026b19d1b7fcd40973938e534d865c0ac778b145a72552b36078ce32e7",
     ),
 ];
+
+fn bundled_extension_stamp() -> String {
+    BUNDLED_EXTENSION_ARCHIVE_SHA256
+        .iter()
+        .map(|(name, hash)| format!("{name}:{hash}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 
 fn expected_extension_archive_hash(path: &Path) -> Option<&'static str> {
     let filename = path.file_name()?.to_str()?;
@@ -107,7 +117,15 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
     }
     log::info!("Installing extensions. Clean up: {clean_up}");
     if !clean_up && extensions_path.exists() {
-        return Ok(());
+        let stamp_path = extensions_path.join(".bundle-stamp");
+        let expected_stamp = bundled_extension_stamp();
+        let installed_stamp = fs::read_to_string(&stamp_path).unwrap_or_default();
+
+        if installed_stamp == expected_stamp {
+            return Ok(());
+        }
+
+        log::info!("Bundled extension archives changed. Reinstalling bundled extensions.");
     }
 
     let staging_path = extensions_path.with_extension("staging");
@@ -292,6 +310,9 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
         fs::rename(&staging_path, &extensions_path)
             .map_err(|e| format!("Failed to promote staged extensions: {e}"))?;
     }
+
+    fs::write(extensions_path.join(".bundle-stamp"), bundled_extension_stamp())
+        .map_err(|e| format!("Failed to write bundled extension stamp: {e}"))?;
 
     Ok(())
 }
@@ -732,6 +753,48 @@ fn setup_window_theme_listener<R: Runtime>(
     });
 }
 
+fn show_or_recreate_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+        return;
+    }
+
+    log::warn!("Main window was missing during exit request; recreating it");
+
+    #[cfg(debug_assertions)]
+    let webview_url = WebviewUrl::External(
+        app.config()
+            .build
+            .dev_url
+            .clone()
+            .expect("dev_url must be configured in development builds"),
+    );
+    #[cfg(not(debug_assertions))]
+    let webview_url = WebviewUrl::App("/".into());
+
+    match WebviewWindowBuilder::new(app, "main", webview_url)
+        .title("Ax-Studio")
+        .inner_size(1200.0, 800.0)
+        .min_inner_size(1024.0, 740.0)
+        .resizable(true)
+        .fullscreen(false)
+        .center()
+        .decorations(true)
+        .build()
+    {
+        Ok(window) => {
+            setup_window_theme_listener(app.clone(), window.clone());
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+        Err(error) => {
+            log::error!("Failed to recreate main window: {error}");
+        }
+    }
+}
+
 /// Tauri `.setup()` callback — runs once after the app is built.
 pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     app.handle().plugin(
@@ -793,8 +856,16 @@ pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
 
 /// Tauri `.run()` event handler — handles app lifecycle events.
 pub fn app_run_handler(app: &tauri::AppHandle, event: RunEvent) {
-    if let RunEvent::Exit = event {
-        let app_handle = app.clone();
+    match event {
+        RunEvent::ExitRequested { code, api, .. } => {
+            log::warn!("Tauri exit requested with code: {code:?}");
+            if code.is_none() {
+                api.prevent_exit();
+                show_or_recreate_main_window(app);
+            }
+        }
+        RunEvent::Exit => {
+            let app_handle = app.clone();
         if let Some(window) = app_handle.get_webview_window("main") {
             let _ = window.emit("app-shutting-down", ());
             let _ = window.hide();
@@ -845,5 +916,7 @@ pub fn app_run_handler(app: &tauri::AppHandle, event: RunEvent) {
                 log::info!("App cleanup completed");
             });
         });
+        }
+        _ => {}
     }
 }

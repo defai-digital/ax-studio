@@ -2,29 +2,14 @@
  * Default Threads Service - Web implementation
  */
 
-import { ExtensionManager } from '@/lib/extension'
-import {
-  ConversationalExtension,
-  ExtensionTypeEnum,
-  type Thread as CoreThread,
-} from '@ax-studio/core'
+import { type Thread as CoreThread } from '@ax-studio/core'
 import type { ThreadsService } from './types'
 import { TEMPORARY_CHAT_ID } from '@/constants/chat'
-
-function getConversationalExtension(): ConversationalExtension | undefined {
-  try {
-    return ExtensionManager.getInstance().get<ConversationalExtension>(
-      ExtensionTypeEnum.Conversational
-    ) ?? undefined
-  } catch (error) {
-    console.warn('Conversational extension is unavailable:', error)
-    return undefined
-  }
-}
-
-function getNativeApi() {
-  return window.core?.api
-}
+import {
+  getConversationalExtension,
+  getNativeApi,
+  runFirstSuccessful,
+} from '../conversation-storage'
 
 export class DefaultThreadsService implements ThreadsService {
   async fetchThreads(): Promise<Thread[]> {
@@ -120,59 +105,40 @@ export class DefaultThreadsService implements ThreadsService {
 
     const extension = getConversationalExtension()
     const nativeApi = getNativeApi()
-    const createThreadWriters = [
-      extension
-        ? (payload: Partial<CoreThread>) => extension.createThread(payload)
-        : undefined,
-      nativeApi?.createThread
-        ? (payload: Partial<CoreThread>) => nativeApi.createThread!({ thread: payload })
-        : undefined,
-    ].filter((writer): writer is (payload: Partial<CoreThread>) => Promise<CoreThread> => Boolean(writer))
-
-    if (!createThreadWriters.length) {
-      throw new Error('Conversational storage is not available')
-    }
-
     const payload = {
-        ...thread,
-        assistants: assistantsPayload,
-        metadata: {
-          ...thread.metadata,
-          order: thread.order,
-        },
-      } as Partial<CoreThread>
+      ...thread,
+      assistants: assistantsPayload,
+      metadata: {
+        ...thread.metadata,
+        order: thread.order,
+      },
+    } as Partial<CoreThread>
 
-    let lastError: unknown
-    for (const createThread of createThreadWriters) {
-      try {
-        const e = await createThread(payload)
+    const e = await runFirstSuccessful(
+      [
+        extension ? () => extension.createThread(payload) : undefined,
+        nativeApi?.createThread
+          ? () => nativeApi.createThread!({ thread: payload })
+          : undefined,
+      ],
+      'Conversational storage is not available',
+      (error) => console.warn(`Failed to create thread ${thread.id}:`, error)
+    )
 
-        // Model is always stored in assistants[0].model
-        const model = e.assistants?.[0]?.model
-          ? {
-              id: e.assistants[0].model.id,
-              provider: e.assistants[0].model.engine,
-            }
-          : thread.model
+    const model = e.assistants?.[0]?.model
+      ? {
+          id: e.assistants[0].model.id,
+          provider: e.assistants[0].model.engine,
+        }
+      : thread.model
 
-        const assistants = e.assistants
-
-        return {
-          ...e,
-          updated: e.updated,
-          model,
-          order: e.metadata?.order ?? thread.order,
-          assistants,
-        } as Thread
-      } catch (error) {
-        lastError = error
-        console.warn(`Failed to create thread ${thread.id}:`, error)
-      }
-    }
-
-    throw lastError instanceof Error
-      ? lastError
-      : new Error(`Failed to create thread ${thread.id}`)
+    return {
+      ...e,
+      updated: e.updated,
+      model,
+      order: e.metadata?.order ?? thread.order,
+      assistants: e.assistants,
+    } as Thread
   }
 
   async updateThread(thread: Thread): Promise<void> {
@@ -183,67 +149,50 @@ export class DefaultThreadsService implements ThreadsService {
 
     const extension = getConversationalExtension()
     const nativeApi = getNativeApi()
-    const modifyThreadWriters = [
-      extension
-        ? (payload: CoreThread) => extension.modifyThread(payload)
-        : undefined,
-      nativeApi?.modifyThread
-        ? (payload: CoreThread) => nativeApi.modifyThread!({ thread: payload })
-        : undefined,
-    ].filter((writer): writer is (payload: CoreThread) => Promise<CoreThread> => Boolean(writer))
-
-    if (!modifyThreadWriters.length) {
-      throw new Error('Conversational storage is not available')
-    }
-
     const payload = {
-        ...thread,
-        assistants: thread.assistants?.map((e) => {
-          return {
-            model: {
-              id: thread.model?.id ?? '*',
-              engine: thread.model?.provider ?? 'ax-studio',
-            },
-            id: e.id,
-            name: e.name,
-            instructions: e.instructions,
-            tools: e.tools ?? [],
-          }
-        }) ?? [
-          {
-            model: {
-              id: thread.model?.id ?? '*',
-              engine: thread.model?.provider ?? 'ax-studio',
-            },
-            id: 'ax-studio',
-            name: 'Ax-Studio',
-            instructions: '',
-            tools: [],
+      ...thread,
+      assistants: thread.assistants?.map((e) => {
+        return {
+          model: {
+            id: thread.model?.id ?? '*',
+            engine: thread.model?.provider ?? 'ax-studio',
           },
-        ],
-        metadata: {
-          ...thread.metadata,
-          is_favorite: thread.isFavorite,
-          order: thread.order,
+          id: e.id,
+          name: e.name,
+          instructions: e.instructions,
+          tools: e.tools ?? [],
+        }
+      }) ?? [
+        {
+          model: {
+            id: thread.model?.id ?? '*',
+            engine: thread.model?.provider ?? 'ax-studio',
+          },
+          id: 'ax-studio',
+          name: 'Ax-Studio',
+          instructions: '',
+          tools: [],
         },
-        created: Math.floor(Date.now() / 1000),
-        updated: Math.floor(Date.now() / 1000),
-      } as CoreThread
+      ],
+      metadata: {
+        ...thread.metadata,
+        is_favorite: thread.isFavorite,
+        order: thread.order,
+      },
+      created: Math.floor(Date.now() / 1000),
+      updated: Math.floor(Date.now() / 1000),
+    } as CoreThread
 
-    let lastError: unknown
-    for (const modifyThread of modifyThreadWriters) {
-      try {
-        await modifyThread(payload)
-        return
-      } catch (error) {
-        lastError = error
-        console.warn(`Failed to update thread ${thread.id}:`, error)
-      }
-    }
-
-    throw lastError instanceof Error
-      ? lastError
-      : new Error(`Failed to update thread ${thread.id}`)
+    await runFirstSuccessful(
+      [
+        extension ? () => extension.modifyThread(payload) : undefined,
+        nativeApi?.modifyThread
+          ? () => nativeApi.modifyThread!({ thread: payload })
+          : undefined,
+      ],
+      'Conversational storage is not available',
+      (error) => console.warn(`Failed to update thread ${thread.id}:`, error)
+    )
   }
 
   async deleteThread(threadId: string): Promise<void> {
@@ -254,31 +203,17 @@ export class DefaultThreadsService implements ThreadsService {
 
     const extension = getConversationalExtension()
     const nativeApi = getNativeApi()
-    const deleteThreadWriters = [
-      extension ? (id: string) => extension.deleteThread(id) : undefined,
-      nativeApi?.deleteThread
-        ? (id: string) => nativeApi.deleteThread!({ threadId: id })
-        : undefined,
-    ].filter((writer): writer is (id: string) => Promise<void> => Boolean(writer))
 
-    if (!deleteThreadWriters.length) {
-      throw new Error('Conversational storage is not available')
-    }
-
-    let lastError: unknown
-    for (const deleteThread of deleteThreadWriters) {
-      try {
-        await deleteThread(threadId)
-        return
-      } catch (error) {
-        lastError = error
-        console.warn(`Failed to delete thread ${threadId}:`, error)
-      }
-    }
-
-    throw lastError instanceof Error
-      ? lastError
-      : new Error(`Failed to delete thread ${threadId}`)
+    await runFirstSuccessful(
+      [
+        extension ? () => extension.deleteThread(threadId) : undefined,
+        nativeApi?.deleteThread
+          ? () => nativeApi.deleteThread!({ threadId })
+          : undefined,
+      ],
+      'Conversational storage is not available',
+      (error) => console.warn(`Failed to delete thread ${threadId}:`, error)
+    )
   }
 }
 
@@ -288,22 +223,14 @@ function getListThreads(): (() => Promise<CoreThread[]>) | undefined {
   const readers = [
     extension ? () => extension.listThreads() : undefined,
     nativeApi?.listThreads ? () => nativeApi.listThreads!() : undefined,
-  ].filter((reader): reader is () => Promise<CoreThread[]> => Boolean(reader))
+  ]
 
-  if (!readers.length) return undefined
+  if (!readers.some(Boolean)) return undefined
 
-  return async () => {
-    let lastError: unknown
-    for (const listThreads of readers) {
-      try {
-        return await listThreads()
-      } catch (error) {
-        lastError = error
-        console.warn('Failed to list threads:', error)
-      }
-    }
-    throw lastError instanceof Error
-      ? lastError
-      : new Error('Failed to list threads')
-  }
+  return () =>
+    runFirstSuccessful(
+      readers,
+      'Conversational storage is not available',
+      (error) => console.warn('Failed to list threads:', error)
+    )
 }

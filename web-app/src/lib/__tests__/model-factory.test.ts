@@ -50,7 +50,7 @@ describe('ModelFactory', () => {
 
       const output = JSON.parse(normalizeOpenAICompatibleEventData(input))
 
-      expect(output.choices[0].delta.content).toBe('HelloThinking')
+      expect(output.choices[0].delta.content).toBe('Hello')
       expect(output.choices[0].delta.reasoning_content).toBeUndefined()
       expect(output.choices[0].delta.role).toBe('1')
     })
@@ -113,10 +113,27 @@ describe('ModelFactory', () => {
       })
 
       const output = JSON.parse(normalizeOpenAICompatibleEventData(input))
-      expect(output.choices[0].delta.content).toBe('hellothinking')
+      expect(output.choices[0].delta.content).toBe('hello')
       expect(output.choices[0].delta.reasoning_content).toBeUndefined()
       expect(output.choices[0].delta.role).toBe('assistant')
       expect(output.choices[0].finish_reason).toBe('stop')
+    })
+
+    it('uses reasoning text as visible content when a stream chunk has no content', () => {
+      const input = JSON.stringify({
+        choices: [
+          {
+            delta: {
+              reasoning_content: 'thinking-only text',
+            },
+            finish_reason: null,
+          },
+        ],
+      })
+
+      const output = JSON.parse(normalizeOpenAICompatibleEventData(input))
+      expect(output.choices[0].delta.content).toBe('thinking-only text')
+      expect(output.choices[0].delta.reasoning_content).toBeUndefined()
     })
   })
 

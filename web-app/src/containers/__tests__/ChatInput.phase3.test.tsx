@@ -127,7 +127,7 @@ vi.mock('@/hooks/chat/use-chat-send-handler', () => ({
 }))
 
 vi.mock('@/components/chat/ChatInputToolbar', () => ({
-  ChatInputToolbar: ({ isStreaming, stopStreaming, handleSendMessage, prompt }: any) => (
+  ChatInputToolbar: ({ isStreaming, stopStreaming, handleSendMessage, submitCurrentPrompt, prompt }: any) => (
     <div data-testid="toolbar" data-streaming={isStreaming}>
       {isStreaming ? (
         <button data-testid="stop-btn" onClick={() => stopStreaming('thread-1')}>Stop</button>
@@ -135,7 +135,7 @@ vi.mock('@/components/chat/ChatInputToolbar', () => ({
         <button
           data-testid="send-btn"
           disabled={!prompt?.trim()}
-          onClick={() => handleSendMessage(prompt)}
+          onClick={() => submitCurrentPrompt ? submitCurrentPrompt() : handleSendMessage(prompt)}
         >
           Send
         </button>
@@ -182,6 +182,16 @@ describe('ChatInput — Phase 3 Manual Test Protocol', () => {
     fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
 
     expect(mockHandleSendMessage).toHaveBeenCalledWith('Hello world')
+  })
+
+  it('Enter key sends the live textarea value even before prompt state flushes', () => {
+    render(<ChatInput threadId="t1" />)
+    const textarea = screen.getByTestId('chat-input') as HTMLTextAreaElement
+
+    textarea.value = 'First message'
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+
+    expect(mockHandleSendMessage).toHaveBeenCalledWith('First message')
   })
 
   // Protocol #1: Enter does NOT send when input is empty

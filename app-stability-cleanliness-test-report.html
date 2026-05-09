@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ax Studio Stability, Cleanliness, and Test Coverage Report</title>
+    <style>
+      :root {
+        --bg: #f4efe6;
+        --ink: #1f2520;
+        --muted: #657064;
+        --card: #fffaf0;
+        --line: #ded4c3;
+        --green: #2f7d55;
+        --amber: #c98428;
+        --blue: #426b8f;
+        --shadow: 0 22px 60px rgba(45, 39, 28, 0.14);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at top left, rgba(47, 125, 85, 0.22), transparent 32rem),
+          radial-gradient(circle at bottom right, rgba(201, 132, 40, 0.2), transparent 30rem),
+          var(--bg);
+        color: var(--ink);
+        font-family:
+          Charter,
+          "Bitstream Charter",
+          "Sitka Text",
+          Cambria,
+          serif;
+      }
+
+      main {
+        width: min(1120px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 48px 0;
+      }
+
+      .hero {
+        display: grid;
+        gap: 22px;
+        margin-bottom: 28px;
+      }
+
+      .eyebrow {
+        color: var(--green);
+        font-family:
+          Avenir Next,
+          Trebuchet MS,
+          sans-serif;
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        max-width: 900px;
+        margin: 0;
+        font-size: clamp(38px, 6vw, 76px);
+        line-height: 0.92;
+        letter-spacing: -0.055em;
+      }
+
+      .hero p {
+        max-width: 820px;
+        margin: 0;
+        color: var(--muted);
+        font-size: 20px;
+        line-height: 1.55;
+      }
+
+      .score-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 18px;
+        margin: 32px 0;
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        background: rgba(255, 250, 240, 0.9);
+        box-shadow: var(--shadow);
+        padding: 24px;
+      }
+
+      .metric {
+        min-height: 260px;
+        display: grid;
+        align-content: space-between;
+      }
+
+      .metric h2 {
+        margin: 0;
+        font-family:
+          Avenir Next,
+          Trebuchet MS,
+          sans-serif;
+        font-size: 16px;
+        letter-spacing: -0.02em;
+      }
+
+      .percent {
+        margin: 18px 0 10px;
+        font-size: 64px;
+        font-weight: 900;
+        line-height: 1;
+        letter-spacing: -0.07em;
+      }
+
+      .bar {
+        overflow: hidden;
+        height: 12px;
+        border-radius: 999px;
+        background: #e8decc;
+      }
+
+      .fill {
+        height: 100%;
+        border-radius: inherit;
+      }
+
+      .metric p {
+        margin: 16px 0 0;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.45;
+      }
+
+      .overall .fill,
+      .overall .badge {
+        background: var(--blue);
+      }
+
+      .stability .fill,
+      .stability .badge {
+        background: var(--green);
+      }
+
+      .clean .fill,
+      .clean .badge {
+        background: var(--amber);
+      }
+
+      .tests .fill,
+      .tests .badge {
+        background: #6d7f42;
+      }
+
+      .badge {
+        display: inline-flex;
+        width: fit-content;
+        margin-top: 18px;
+        border-radius: 999px;
+        padding: 8px 12px;
+        color: white;
+        font-family:
+          Avenir Next,
+          Trebuchet MS,
+          sans-serif;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .section-grid {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 18px;
+        margin-top: 18px;
+      }
+
+      h3 {
+        margin: 0 0 14px;
+        font-size: 26px;
+        letter-spacing: -0.04em;
+      }
+
+      ul {
+        margin: 0;
+        padding-left: 20px;
+      }
+
+      li {
+        margin: 10px 0;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+
+      strong {
+        color: var(--ink);
+      }
+
+      .evidence {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .evidence-item {
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: #fffdf7;
+        padding: 18px;
+      }
+
+      .evidence-number {
+        display: block;
+        font-size: 34px;
+        font-weight: 900;
+        letter-spacing: -0.05em;
+      }
+
+      .evidence-label {
+        color: var(--muted);
+        font-family:
+          Avenir Next,
+          Trebuchet MS,
+          sans-serif;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .note {
+        margin-top: 18px;
+        border-left: 5px solid var(--green);
+        border-radius: 18px;
+        background: rgba(255, 250, 240, 0.76);
+        padding: 18px 20px;
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        overflow: hidden;
+        border-radius: 22px;
+        background: #fffdf7;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 14px 16px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--ink);
+        font-family:
+          Avenir Next,
+          Trebuchet MS,
+          sans-serif;
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      td {
+        color: var(--muted);
+        line-height: 1.45;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      footer {
+        margin-top: 24px;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.55;
+      }
+
+      @media (max-width: 920px) {
+        .score-grid,
+        .section-grid,
+        .evidence {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <div class="eyebrow">Ax Studio Revamp Quality Snapshot</div>
+        <h1>Stable enough to move forward, not yet “mission-critical done.”</h1>
+        <p>
+          These percentages are practical engineering confidence scores based on the current refactor phase,
+          passing automated validation, and the remaining risk areas seen in the app architecture.
+        </p>
+      </section>
+
+      <section class="score-grid" aria-label="Quality scores">
+        <article class="card metric overall">
+          <div>
+            <h2>Overall confidence</h2>
+            <div class="percent">85%</div>
+            <div class="bar"><div class="fill" style="width: 85%"></div></div>
+            <span class="badge">Good</span>
+          </div>
+          <p>Strong enough for continued testing and product work, with a few known risk zones still worth hardening.</p>
+        </article>
+
+        <article class="card metric stability">
+          <div>
+            <h2>App stability</h2>
+            <div class="percent">88%</div>
+            <div class="bar"><div class="fill" style="width: 88%"></div></div>
+            <span class="badge">Strong</span>
+          </div>
+          <p>Core suites are green and key crash paths were fixed. Remaining risk is mostly runtime integration: MCP, local engines, and startup sequencing.</p>
+        </article>
+
+        <article class="card metric clean">
+          <div>
+            <h2>Code cleanliness</h2>
+            <div class="percent">82%</div>
+            <div class="bar"><div class="fill" style="width: 82%"></div></div>
+            <span class="badge">Improved</span>
+          </div>
+          <p>Duplicated conversation persistence fallback logic was reduced. The repo is cleaner, but some architecture and noisy test logs remain.</p>
+        </article>
+
+        <article class="card metric tests">
+          <div>
+            <h2>Test coverage confidence</h2>
+            <div class="percent">84%</div>
+            <div class="bar"><div class="fill" style="width: 84%"></div></div>
+            <span class="badge">Healthy</span>
+          </div>
+          <p>Large automated coverage exists and passes. Missing confidence is mostly E2E coverage for real app startup, model loading, MCP tool use, and local knowledge flows.</p>
+        </article>
+      </section>
+
+      <section class="section-grid">
+        <article class="card">
+          <h3>Evidence from this phase</h3>
+          <div class="evidence">
+            <div class="evidence-item">
+              <span class="evidence-number">256</span>
+              <span class="evidence-label">Vitest files passed</span>
+            </div>
+            <div class="evidence-item">
+              <span class="evidence-number">3,231</span>
+              <span class="evidence-label">Vitest tests passed</span>
+            </div>
+            <div class="evidence-item">
+              <span class="evidence-number">260</span>
+              <span class="evidence-label">Rust lib tests passed earlier in phase</span>
+            </div>
+            <div class="evidence-item">
+              <span class="evidence-number">0</span>
+              <span class="evidence-label">Lint errors after cleanup</span>
+            </div>
+          </div>
+          <div class="note">
+            The app is much safer than before because the full test suite, lint, and core build are passing.
+            The score is not 100% because automated tests do not fully prove real Tauri startup, local model lifecycle,
+            MCP server recovery, or long-running memory behavior.
+          </div>
+        </article>
+
+        <article class="card">
+          <h3>What improved</h3>
+          <ul>
+            <li><strong>Reduced duplication:</strong> shared thread/message persistence fallback logic now lives in one helper.</li>
+            <li><strong>Fixed stability edge:</strong> initial thread messages are removed from session storage immediately to avoid replay/duplicate-send behavior.</li>
+            <li><strong>Fixed Hugging Face links:</strong> full file URLs normalize back to repository IDs instead of producing broken links.</li>
+            <li><strong>Updated regression tests:</strong> stale expectations now match current safe fallback, model routing, and provider behavior.</li>
+            <li><strong>Clean validation:</strong> lint, core build, and the full JS/TS test suite pass.</li>
+          </ul>
+        </article>
+      </section>
+
+      <section class="card" style="margin-top: 18px">
+        <h3>Remaining gaps before calling it fully stable</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Area</th>
+              <th>Current risk</th>
+              <th>Why it lowers the score</th>
+              <th>Recommended next step</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Real startup flow</td>
+              <td>Tauri startup, extension install, local API bootstrap, MCP startup, and frontend boot are complex.</td>
+              <td>Unit tests pass, but only real app/E2E tests prove the full startup path.</td>
+              <td>Add a smoke E2E test that opens the app and verifies shell, icon, chat, and service hub readiness.</td>
+            </tr>
+            <tr>
+              <td>Local knowledge / MCP</td>
+              <td>MCP transport can close or fail to list tools during long sessions.</td>
+              <td>This affects fabric search/extract reliability and user trust in local knowledge answers.</td>
+              <td>Add recovery tests and UI-visible source/tool-call confirmation for knowledge searches.</td>
+            </tr>
+            <tr>
+              <td>Local model lifecycle</td>
+              <td>Engine availability depends on llamacpp process startup, readiness, and model compatibility.</td>
+              <td>Failures here create “engine not available” or slow/hanging load states.</td>
+              <td>Add integration tests around engine readiness, failure recovery, and timeout behavior.</td>
+            </tr>
+            <tr>
+              <td>UI regression coverage</td>
+              <td>Many UI components have unit tests, but fewer full user-flow tests.</td>
+              <td>Visual or state regressions can slip through even when unit tests pass.</td>
+              <td>Add Playwright-style flows for chat history persistence, model selection, local knowledge, and hub links.</td>
+            </tr>
+            <tr>
+              <td>Test output noise</td>
+              <td>Some tests intentionally print warnings/errors while passing.</td>
+              <td>Noisy output makes real failures harder to notice quickly.</td>
+              <td>Silence expected warnings in tests with scoped spies where safe.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <footer>
+        Generated from the current Ax Studio revamp validation state. Scores are engineering confidence estimates,
+        not formal line-coverage percentages.
+      </footer>
+    </main>
+  </body>
+</html>

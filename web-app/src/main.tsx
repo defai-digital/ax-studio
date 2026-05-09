@@ -34,20 +34,17 @@ const bootstrap = async () => {
     ])
     console.info('[app] router and i18n ready')
     const router = createRouter({ routeTree })
-    if (!rootElement.innerHTML) {
-      const root = ReactDOM.createRoot(rootElement)
-      requestAnimationFrame(() => {
-        hideInitialLoader()
-      })
-      root.render(
-        <StrictMode>
-          <RouterProvider router={router} />
-        </StrictMode>
-      )
-      console.info('[app] React root rendered')
-    } else {
+    rootElement.innerHTML = ''
+    const root = ReactDOM.createRoot(rootElement)
+    requestAnimationFrame(() => {
       hideInitialLoader()
-    }
+    })
+    root.render(
+      <StrictMode>
+        <RouterProvider router={router} />
+      </StrictMode>
+    )
+    console.info('[app] React root rendered')
   } catch (error) {
     console.error('Failed to initialize app:', error)
     showStartupError()

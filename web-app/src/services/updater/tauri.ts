@@ -110,7 +110,7 @@ export class TauriUpdaterService implements UpdaterService {
         })
 
         if (customUpdate) {
-          console.log('Update found via custom updater:', customUpdate.version)
+          console.info('Update found via custom updater:', customUpdate.version)
           customUpdateInfo = {
             version: customUpdate.version,
             date: customUpdate.pub_date,

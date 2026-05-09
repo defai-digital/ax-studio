@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { isContextSizeError } from '@/lib/utils/error'
 import { isStorageFlagEnabled, safeStorageSetItem } from '@/lib/storage/storage'
 import { motion, AnimatePresence } from 'motion/react'
-import { AlertCircle, GitBranch, X } from "lucide-react";
+import { AlertCircle, GitBranch, X } from 'lucide-react'
 
 const CHAT_STATUS = { SUBMITTED: 'submitted' } as const
 
@@ -48,15 +48,15 @@ export function MessagesArea({
   const metadata = thread?.metadata as Record<string, any> | undefined
   const forkedFrom = metadata?.forkedFrom || metadata?.parentThreadId
   const bannerKey = `branch-banner-dismissed-${threadId}`
-  const readBannerDismissed = () =>
-    isStorageFlagEnabled(sessionStorage, bannerKey, 'MessagesArea')
   const [bannerDismissed, setBannerDismissed] = useState(() =>
-    readBannerDismissed()
+    isStorageFlagEnabled(sessionStorage, bannerKey, 'MessagesArea')
   )
 
   // Reset dismissal when thread changes
   useEffect(() => {
-    setBannerDismissed(readBannerDismissed())
+    setBannerDismissed(
+      isStorageFlagEnabled(sessionStorage, bannerKey, 'MessagesArea')
+    )
   }, [bannerKey])
 
   const dismissBanner = () => {

@@ -94,11 +94,12 @@ describe('ChatInputToolbar — Phase 3 Manual Test Protocol', () => {
     vi.clearAllMocks()
   })
 
-  // Protocol #3: Send button disabled when empty
-  it('send button is disabled when prompt is empty', () => {
+  // Protocol #3: Send button remains clickable when empty so the textarea
+  // fallback can read the live DOM value if React state is one tick behind.
+  it('send button is enabled when prompt is empty', () => {
     render(<ChatInputToolbar {...createProps({ prompt: '' })} />)
     const sendButton = screen.getByText((_, el) => el?.getAttribute('data-test-id') === 'send-message-button')
-    expect(sendButton).toBeDisabled()
+    expect(sendButton).not.toBeDisabled()
   })
 
   // Protocol #3: Send button enabled when prompt has text

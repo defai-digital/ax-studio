@@ -26,14 +26,29 @@ fn is_transport_error(err: &str) -> bool {
         || (lower.contains("transport") && lower.contains("closed"))
 }
 
-/// Remove the dead server entry and, if config is known, spawn a background
-/// restart task.  The atomic remove under the mutex prevents multiple concurrent
-/// `get_tools` calls from each spawning their own restart loop.
-async fn schedule_server_restart<R: Runtime>(
+async fn wait_for_server_service(
+    state: &State<'_, AppState>,
+    server_name: &str,
+    max_wait: Duration,
+) -> Option<Arc<RunningServiceEnum>> {
+    let started_at = std::time::Instant::now();
+    while started_at.elapsed() < max_wait {
+        {
+            let servers = state.mcp_servers.lock().await;
+            if let Some(service) = servers.get(server_name) {
+                return Some(service.clone());
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    None
+}
+
+async fn restart_server_now<R: Runtime>(
     app: &AppHandle<R>,
     state: &State<'_, AppState>,
     server_name: &str,
-) {
+) -> Option<Arc<RunningServiceEnum>> {
     let config = {
         let active = state.mcp_active_servers.lock().await;
         active.get(server_name).cloned()
@@ -41,32 +56,39 @@ async fn schedule_server_restart<R: Runtime>(
 
     let Some(config) = config else {
         log::warn!("Cannot restart MCP server {server_name}: no config stored");
-        return;
+        return None;
     };
 
-    // Atomic check-and-remove so only one concurrent caller triggers the restart.
     let removed = {
         let mut servers = state.mcp_servers.lock().await;
         servers.remove(server_name).is_some()
     };
+
     if !removed {
-        return;
+        log::info!(
+            "MCP server {server_name} is already restarting; waiting for replacement service"
+        );
+        return wait_for_server_service(state, server_name, Duration::from_secs(5)).await;
     }
 
-    log::info!("Transport closed for MCP server {server_name} — scheduling restart");
-
-    let app_clone = app.clone();
-    let servers_clone = state.mcp_servers.clone();
-    let name_clone = server_name.to_string();
-
-    tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(Duration::from_secs(2)).await;
-        log::info!("Restarting crashed MCP server: {name_clone}");
-        match start_mcp_server(app_clone, servers_clone, name_clone.clone(), config).await {
-            Ok(_) => log::info!("MCP server {name_clone} restarted successfully after transport error"),
-            Err(e) => log::error!("Failed to restart MCP server {name_clone}: {e}"),
+    log::info!("Transport closed for MCP server {server_name} — restarting immediately");
+    match start_mcp_server(
+        app.clone(),
+        state.mcp_servers.clone(),
+        server_name.to_string(),
+        config,
+    )
+    .await
+    {
+        Ok(_) => {
+            log::info!("MCP server {server_name} restarted successfully after transport error");
+            wait_for_server_service(state, server_name, Duration::from_secs(5)).await
         }
-    });
+        Err(e) => {
+            log::error!("Failed to restart MCP server {server_name}: {e}");
+            None
+        }
+    }
 }
 
 fn is_valid_mcp_identifier(value: &str) -> bool {
@@ -242,9 +264,34 @@ pub async fn get_tools<R: Runtime>(
                 let err_str = e.to_string();
                 log::warn!("MCP server {} failed to list tools: {}", server_name, err_str);
                 if is_transport_error(&err_str) {
-                    schedule_server_restart(&app, &state, server_name).await;
+                    if let Some(restarted_service) =
+                        restart_server_now(&app, &state, server_name).await
+                    {
+                        match timeout(timeout_duration, restarted_service.list_all_tools()).await {
+                            Ok(Ok(tools)) => tools,
+                            Ok(Err(retry_error)) => {
+                                log::warn!(
+                                    "MCP server {} failed to list tools after restart: {}",
+                                    server_name,
+                                    retry_error
+                                );
+                                continue;
+                            }
+                            Err(_) => {
+                                log::warn!(
+                                    "Listing tools for {} timed out after restart after {} seconds",
+                                    server_name,
+                                    timeout_duration.as_secs()
+                                );
+                                continue;
+                            }
+                        }
+                    } else {
+                        continue;
+                    }
+                } else {
+                    continue;
                 }
-                continue;
             }
             Err(_) => {
                 log::warn!(
@@ -350,6 +397,7 @@ pub async fn call_tool<R: Runtime>(
     let mut target_service = server_name
         .as_ref()
         .and_then(|_| server_refs.first().map(|(_, service)| service.clone()));
+    let mut target_server_name = server_name.clone();
 
     if target_service.is_none() {
         for (srv_name, service) in server_refs.iter() {
@@ -359,7 +407,33 @@ pub async fn call_tool<R: Runtime>(
                     let err_str = e.to_string();
                     log::warn!("MCP server {srv_name} failed to list tools: {err_str}");
                     if is_transport_error(&err_str) {
-                        schedule_server_restart(&app, &state, srv_name).await;
+                        if let Some(restarted_service) =
+                            restart_server_now(&app, &state, srv_name).await
+                        {
+                            let retry_tools =
+                                match timeout(timeout_duration, restarted_service.list_all_tools()).await {
+                                    Ok(Ok(tools)) => tools,
+                                    Ok(Err(retry_error)) => {
+                                        log::warn!(
+                                            "MCP server {srv_name} failed to list tools after restart: {retry_error}"
+                                        );
+                                        continue;
+                                    }
+                                    Err(_) => {
+                                        log::warn!(
+                                            "Listing tools for {srv_name} timed out after restart after {} seconds",
+                                            timeout_duration.as_secs()
+                                        );
+                                        continue;
+                                    }
+                                };
+
+                            if retry_tools.iter().any(|t| t.name == tool_name) {
+                                log::debug!("Found tool {tool_name} in restarted server {srv_name}");
+                                target_service = Some(restarted_service);
+                                break;
+                            }
+                        }
                     }
                     continue;
                 }
@@ -375,6 +449,7 @@ pub async fn call_tool<R: Runtime>(
             if tools.iter().any(|t| t.name == tool_name) {
                 log::debug!("Found tool {tool_name} in server {srv_name}");
                 target_service = Some(service.clone());
+                target_server_name = Some(srv_name.clone());
                 break;
             }
         }
@@ -391,10 +466,10 @@ pub async fn call_tool<R: Runtime>(
     // Phase 2: Call the tool without holding the servers lock
     let tool_call = service.call_tool(CallToolRequestParam {
         name: tool_name.clone().into(),
-        arguments,
+        arguments: arguments.clone(),
     });
 
-    let result = if let Some(cancel_rx) = cancel_rx {
+    let mut result = if let Some(cancel_rx) = cancel_rx {
         tokio::select! {
             result = timeout(timeout_duration, tool_call) => {
                 match result {
@@ -418,6 +493,32 @@ pub async fn call_tool<R: Runtime>(
             )),
         }
     };
+
+    if result
+        .as_ref()
+        .is_err_and(|error| is_transport_error(error))
+    {
+        if let Some(target_server_name) = target_server_name.as_deref() {
+            if let Some(restarted_service) =
+                restart_server_now(&app, &state, target_server_name).await
+            {
+                log::info!(
+                    "Retrying MCP tool call '{tool_name}' on restarted server {target_server_name}"
+                );
+                let retry_call = restarted_service.call_tool(CallToolRequestParam {
+                    name: tool_name.clone().into(),
+                    arguments,
+                });
+                result = match timeout(timeout_duration, retry_call).await {
+                    Ok(call_result) => call_result.map_err(|e| e.to_string()),
+                    Err(_) => Err(format!(
+                        "Tool call '{tool_name}' timed out after restart after {} seconds",
+                        timeout_duration.as_secs()
+                    )),
+                };
+            }
+        }
+    }
 
     remove_tool_cancellation_token(&state, cancellation_token.as_ref()).await;
 

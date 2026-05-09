@@ -237,12 +237,19 @@ const ChatInput = memo(function ChatInput({
   const { handleSendMessage } = useChatSendHandler({
     onSubmit,
     projectId,
+    selectedModel,
     assistants,
     selectedAssistant,
     setSelectedAssistant,
     setMessage,
     setPrompt,
   })
+
+  const submitCurrentPrompt = useCallback(() => {
+    const currentPrompt = textareaRef.current?.value ?? prompt
+    if (!currentPrompt.trim() || ingestingDocs) return
+    void handleSendMessage(currentPrompt)
+  }, [handleSendMessage, ingestingDocs, prompt])
 
   const stopStreaming = useCallback(
     (tid: string) => {
@@ -334,8 +341,8 @@ const ChatInput = memo(function ChatInput({
                 const isComposing = e.nativeEvent.isComposing || e.keyCode === 229
                 if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
                   e.preventDefault()
-                  if (!isStreaming && prompt.trim() && !ingestingDocs) {
-                    handleSendMessage(prompt)
+                  if (!isStreaming) {
+                    submitCurrentPrompt()
                   }
                 }
               }}
@@ -396,6 +403,7 @@ const ChatInput = memo(function ChatInput({
           threadMessages={threadMessages || []}
           stopStreaming={stopStreaming}
           handleSendMessage={handleSendMessage}
+          submitCurrentPrompt={submitCurrentPrompt}
           onAttachDocuments={handleAttachDocsIngest}
           onAttachImages={handleImagePickerClick}
           ingestingDocs={ingestingDocs}

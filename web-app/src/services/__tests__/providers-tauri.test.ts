@@ -317,14 +317,14 @@ describe('TauriProvidersService', () => {
     )
     expect(result.some((p) => p.provider === 'openai')).toBe(true)
     expect(warnSpy).toHaveBeenCalledWith(
-      'Failed to check tool support for model probe-fails:',
-      expect.any(Error)
+      'Failed tool support check (probe-fails) for provider "llamacpp":',
+      'tool probe failed'
     )
     warnSpy.mockRestore()
   })
 
   it('skips a failing runtime engine without hiding built-in providers', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     EngineManager.instance().engines.set('broken', {
       list: vi.fn().mockRejectedValue(new Error('engine unavailable')),
     } as never)
@@ -333,11 +333,11 @@ describe('TauriProvidersService', () => {
 
     expect(result.some((p) => p.provider === 'openai')).toBe(true)
     expect(result.some((p) => p.provider === 'broken')).toBe(false)
-    expect(errorSpy).toHaveBeenCalledWith(
-      'Error listing provider from engine "broken":',
-      expect.any(Error)
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Failed listing models for provider "broken":',
+      'engine unavailable'
     )
-    errorSpy.mockRestore()
+    warnSpy.mockRestore()
   })
 
   it('maps provider settings to extension-engine settings updates', async () => {
