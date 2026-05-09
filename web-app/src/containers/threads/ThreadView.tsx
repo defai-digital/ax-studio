@@ -23,6 +23,7 @@ import { ResearchPanel } from '@/components/research/ResearchPanel'
 import { SplitThreadContainer } from '@/containers/threads/SplitThreadContainer'
 import { MainThreadPane } from '@/containers/threads/MainThreadPane'
 import { Columns2, MessageSquareText } from 'lucide-react'
+import type { ResearchEntry } from '@/hooks/research/useResearchPanel'
 
 export type ThreadViewProps = {
   threadId: string
@@ -39,8 +40,7 @@ export type ThreadViewProps = {
   handleDeleteMessage: (messageId: string) => void
   handleContextSizeIncrease: () => Promise<void>
   reasoningContainerRef: RefObject<HTMLDivElement | null>
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  pinnedResearch: any
+  pinnedResearch: ResearchEntry | null
   clearResearch: (threadId: string) => void
   splitPaneOrder: string[] | null
   splitThreadId: string | null

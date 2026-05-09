@@ -11,16 +11,27 @@ export const WindowControls = () => {
     }
   })()
 
-  const handleMinimize = async () => {
-    await appWindow?.minimize()
+  const runWindowAction = async (
+    action: (() => Promise<void>) | undefined,
+    label: string
+  ) => {
+    try {
+      await action?.()
+    } catch (error) {
+      console.error(`[WindowControls] Failed to ${label}:`, error)
+    }
   }
 
-  const handleMaximize = async () => {
-    await appWindow?.toggleMaximize()
+  const handleMinimize = () => {
+    void runWindowAction(() => appWindow?.minimize(), 'minimize window')
   }
 
-  const handleClose = async () => {
-    await appWindow?.close()
+  const handleMaximize = () => {
+    void runWindowAction(() => appWindow?.toggleMaximize(), 'toggle maximize')
+  }
+
+  const handleClose = () => {
+    void runWindowAction(() => appWindow?.close(), 'close window')
   }
 
   if (!appWindow) return null

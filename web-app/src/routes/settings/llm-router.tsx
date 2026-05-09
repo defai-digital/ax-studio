@@ -20,8 +20,7 @@ import {
 import { useRouterSettings } from '@/hooks/settings/useRouterSettings'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const Route = createFileRoute(route.settings.llm_router as any)({
+export const Route = createFileRoute(route.settings.llm_router as '/settings/llm-router')({
   component: LLMRouterSettings,
 })
 

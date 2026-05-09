@@ -5,13 +5,16 @@
  * The Zustand store delegates to these functions so the logic can be unit-tested
  * in isolation without a React runtime.
  */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Chat, UIMessage } from '@ai-sdk/react'
 import type { ChatStatus } from 'ai'
 import type { CustomChatTransport } from '@/lib/custom-chat-transport'
 import type { ChatSession, SessionData } from './chat-session-types'
 
 export const STREAMING_STATUSES: ChatStatus[] = ['submitted', 'streaming']
+
+type ChatWithStatusCallback = Chat<UIMessage> & {
+  '~registerStatusCallback'?: (callback: () => void) => () => void
+}
 
 // ─── Session data ────────────────────────────────────────────────────────────
 
@@ -48,8 +51,9 @@ export function createSession(
 ): ChatSession {
   const chat = createChat()
   const syncStatus = () => onStatusChange(sessionId, chat.status)
-  const unsubscribeStatus = (chat as any)['~registerStatusCallback']
-    ? (chat as any)['~registerStatusCallback'](syncStatus)
+  const registerStatusCallback = (chat as ChatWithStatusCallback)['~registerStatusCallback']
+  const unsubscribeStatus = registerStatusCallback
+    ? registerStatusCallback(syncStatus)
     : undefined
 
   return {

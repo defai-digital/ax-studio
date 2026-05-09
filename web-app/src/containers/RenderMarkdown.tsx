@@ -1,4 +1,4 @@
-import { type ReactNode, isValidElement, memo, useMemo, useCallback } from 'react'
+import { type ComponentProps, type ReactNode, isValidElement, memo, useMemo, useCallback } from 'react'
 import { AXMarkdown, axDefaultRehypePlugins } from '@/lib/markdown/renderer'
 import { cn, disableIndentedCodeBlockPlugin } from '@/lib/utils'
 import { cjk } from '@streamdown/cjk'
@@ -21,13 +21,17 @@ function extractTextFromNode(node: ReactNode): string {
 }
 import 'katex/dist/katex.min.css'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Components = any
+type MarkdownComponents = ComponentProps<typeof AXMarkdown>['components']
+type MarkdownAnchorProps = {
+  children?: ReactNode
+  href?: string
+  node?: unknown
+} & Record<string, unknown>
 
 interface MarkdownProps {
   content: string
   className?: string
-  components?: Components
+  components?: MarkdownComponents
   isUser?: boolean
   isStreaming?: boolean
   messageId?: string
@@ -126,8 +130,7 @@ function RenderMarkdownComponent({
   const citationData = useCitations((s) => messageId ? s.getCitations(messageId) : undefined)
 
   const anchorOverride = useCallback(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ({ children, href, node: _node, ...props }: any) => {
+    ({ children, href, node: _node, ...props }: MarkdownAnchorProps) => {
       // Extract text from children (Streamdown's animated mode wraps text in <span>)
       const text = extractTextFromNode(children)
       const match = text.match(/^\[(\d+)\]$/)
@@ -178,8 +181,7 @@ function RenderMarkdownComponent({
         ]}
         components={mergedComponents}
         plugins={{
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          code: code as any,
+          code: code as NonNullable<ComponentProps<typeof AXMarkdown>['plugins']>['code'],
           cjk: cjk,
         }}
       >

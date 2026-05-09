@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // stores/useReleaseStore.ts
 import { create } from 'zustand'
 
@@ -6,7 +5,7 @@ type Release = {
   tag_name: string
   prerelease: boolean
   draft: boolean
-  [key: string]: any
+  [key: string]: unknown
 }
 
 type ReleaseState = {
@@ -38,24 +37,29 @@ export const useReleaseNotes = create<ReleaseState>((set) => ({
         { signal: controller.signal }
       )
       if (!res.ok) throw new Error('Failed to fetch releases')
-      const releases = await res.json()
+      const releases = await res.json() as Release[]
       if (controller.signal.aborted) return
 
       const stableRelease = releases.find(
-        (release: { prerelease: boolean; draft: boolean }) =>
-          !release.prerelease && !release.draft
+        (release) => !release.prerelease && !release.draft
       )
       const betaRelease = releases.find(
-        (release: { prerelease: boolean }) => release.prerelease
+        (release) => release.prerelease
       )
 
       const selected = includeBeta
         ? (betaRelease ?? stableRelease)
         : stableRelease
       set({ release: selected, loading: false })
-    } catch (err: any) {
-      if (err?.name === 'AbortError' || controller.signal.aborted) return
-      set({ error: err.message, loading: false })
+    } catch (err: unknown) {
+      if (
+        (err instanceof DOMException && err.name === 'AbortError') ||
+        controller.signal.aborted
+      ) return
+      set({
+        error: err instanceof Error ? err.message : 'Failed to fetch releases',
+        loading: false,
+      })
     } finally {
       if (currentFetchController === controller) {
         currentFetchController = null

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { LogViewer } from '../LogViewer'
 
@@ -43,21 +43,27 @@ describe('LogViewer', () => {
     vi.clearAllMocks()
   })
 
-  it('shows empty state message when no logs', () => {
+  it('shows empty state message when no logs', async () => {
     render(<LogViewer />)
-    expect(screen.getByText('No logs to display')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('No logs to display')).toBeInTheDocument()
+    })
   })
 
-  it('calls readLogs on mount', () => {
+  it('calls readLogs on mount', async () => {
     render(<LogViewer />)
-    expect(mockReadLogs).toHaveBeenCalledTimes(1)
+    await waitFor(() => {
+      expect(mockReadLogs).toHaveBeenCalledTimes(1)
+    })
   })
 
-  it('subscribes to log events on mount', () => {
+  it('subscribes to log events on mount', async () => {
     render(<LogViewer />)
-    expect(mockListen).toHaveBeenCalledWith(
-      'log://log',
-      expect.any(Function)
-    )
+    await waitFor(() => {
+      expect(mockListen).toHaveBeenCalledWith(
+        'log://log',
+        expect.any(Function)
+      )
+    })
   })
 })

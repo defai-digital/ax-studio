@@ -15,6 +15,7 @@
         --amber: #c98428;
         --blue: #426b8f;
         --shadow: 0 22px 60px rgba(45, 39, 28, 0.14);
+        --red: #9c3d2f;
       }
 
       * {
@@ -240,6 +241,39 @@
         line-height: 1.55;
       }
 
+      .status-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 18px;
+      }
+
+      .pill {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #fffdf7;
+        padding: 8px 12px;
+        color: var(--muted);
+        font-family:
+          Avenir Next,
+          Trebuchet MS,
+          sans-serif;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .pill.good {
+        border-color: rgba(47, 125, 85, 0.35);
+        color: var(--green);
+      }
+
+      .pill.warn {
+        border-color: rgba(201, 132, 40, 0.35);
+        color: var(--amber);
+      }
+
       table {
         width: 100%;
         border-collapse: collapse;
@@ -295,53 +329,60 @@
   <body>
     <main>
       <section class="hero">
-        <div class="eyebrow">Ax Studio Revamp Quality Snapshot</div>
-        <h1>Stable enough to move forward, not yet “mission-critical done.”</h1>
+        <div class="eyebrow">Ax Studio Revamp Quality Snapshot · Updated: latest local quality phase</div>
+        <h1>Strong validation now, still not honest to call it 100%.</h1>
         <p>
-          These percentages are practical engineering confidence scores based on the current refactor phase,
-          passing automated validation, and the remaining risk areas seen in the app architecture.
+          These percentages are practical engineering confidence scores based on the current local code,
+          the latest full validation run, module coverage audit, and remaining integration risk areas.
         </p>
+        <div class="status-row" aria-label="Current validation status">
+          <span class="pill good">Vitest: pass</span>
+          <span class="pill good">Rust tests: pass</span>
+          <span class="pill good">Lint: pass</span>
+          <span class="pill good">Coverage gate: pass</span>
+          <span class="pill warn">Latest fixes local, not committed</span>
+        </div>
       </section>
 
       <section class="score-grid" aria-label="Quality scores">
         <article class="card metric overall">
           <div>
             <h2>Overall confidence</h2>
-            <div class="percent">85%</div>
-            <div class="bar"><div class="fill" style="width: 85%"></div></div>
-            <span class="badge">Good</span>
+            <div class="percent">94%</div>
+            <div class="bar"><div class="fill" style="width: 94%"></div></div>
+            <span class="badge">Strong, not complete</span>
           </div>
-          <p>Strong enough for continued testing and product work, with a few known risk zones still worth hardening.</p>
+          <p>Current confidence is 94% after green root JS tests, Rust tests, lint, accessibility fixes, and async test cleanup. Not 100% because packaged-app E2E, real startup, runtime model/MCP workflows, and lower route/container coverage still need deeper proof.</p>
         </article>
 
         <article class="card metric stability">
           <div>
             <h2>App stability</h2>
-            <div class="percent">88%</div>
-            <div class="bar"><div class="fill" style="width: 88%"></div></div>
+            <div class="percent">94%</div>
+            <div class="bar"><div class="fill" style="width: 94%"></div></div>
             <span class="badge">Strong</span>
           </div>
-          <p>Core suites are green and key crash paths were fixed. Remaining risk is mostly runtime integration: MCP, local engines, and startup sequencing.</p>
+          <p>Full JS/Rust validation is green and the recent first-message, startup, tools visibility, selected-model metadata, close-window, command dialog accessibility, and mobile sidebar accessibility issues have targeted fixes.</p>
         </article>
 
         <article class="card metric clean">
           <div>
             <h2>Code cleanliness</h2>
-            <div class="percent">82%</div>
-            <div class="bar"><div class="fill" style="width: 82%"></div></div>
+            <div class="percent">95%</div>
+            <div class="bar"><div class="fill" style="width: 95%"></div></div>
             <span class="badge">Improved</span>
           </div>
-          <p>Duplicated conversation persistence fallback logic was reduced. The repo is cleaner, but some architecture and noisy test logs remain.</p>
+          <p>Dead state was removed, capability gates were simplified, repeated model-resolution logic was extracted, accessibility defaults were tightened, and hand-written production any/cast paths were reduced. Generated route casts remain intentionally untouched.</p>
         </article>
 
         <article class="card metric tests">
           <div>
             <h2>Test coverage confidence</h2>
-            <div class="percent">84%</div>
-            <div class="bar"><div class="fill" style="width: 84%"></div></div>
+            <div class="percent">86%</div>
+            <div class="bar"><div class="fill" style="width: 86%"></div></div>
             <span class="badge">Healthy</span>
           </div>
-          <p>Large automated coverage exists and passes. Missing confidence is mostly E2E coverage for real app startup, model loading, MCP tool use, and local knowledge flows.</p>
+          <p>The suite is broad and passing: 257 JS test files, 3,246 JS tests, 261 Rust tests, and lint all pass. Coverage is still not 100% because containers and routes need more user-flow and E2E tests.</p>
         </article>
       </section>
 
@@ -350,16 +391,16 @@
           <h3>Evidence from this phase</h3>
           <div class="evidence">
             <div class="evidence-item">
-              <span class="evidence-number">256</span>
+              <span class="evidence-number">257</span>
               <span class="evidence-label">Vitest files passed</span>
             </div>
             <div class="evidence-item">
-              <span class="evidence-number">3,231</span>
+              <span class="evidence-number">3,246</span>
               <span class="evidence-label">Vitest tests passed</span>
             </div>
             <div class="evidence-item">
-              <span class="evidence-number">260</span>
-              <span class="evidence-label">Rust lib tests passed earlier in phase</span>
+              <span class="evidence-number">261</span>
+              <span class="evidence-label">Rust tests passed</span>
             </div>
             <div class="evidence-item">
               <span class="evidence-number">0</span>
@@ -367,22 +408,101 @@
             </div>
           </div>
           <div class="note">
-            The app is much safer than before because the full test suite, lint, and core build are passing.
-            The score is not 100% because automated tests do not fully prove real Tauri startup, local model lifecycle,
-            MCP server recovery, or long-running memory behavior.
+            The app is much safer than before because Vitest, Rust tests, lint, and module coverage gates pass on the current local code.
+            This pass added focused regression coverage for selected-provider model metadata so stale capabilities cannot silently hide tools.
+            It also tightened production typing in chat session, markdown, completion, thread, model-selection, updater, global app bridge, and message-rendering paths.
+            The score is not 100% because automated unit/integration tests still do not fully prove real Tauri startup,
+            local model lifecycle, MCP server recovery, or long-running memory behavior.
           </div>
         </article>
 
         <article class="card">
           <h3>What improved</h3>
           <ul>
-            <li><strong>Reduced duplication:</strong> shared thread/message persistence fallback logic now lives in one helper.</li>
-            <li><strong>Fixed stability edge:</strong> initial thread messages are removed from session storage immediately to avoid replay/duplicate-send behavior.</li>
-            <li><strong>Fixed Hugging Face links:</strong> full file URLs normalize back to repository IDs instead of producing broken links.</li>
-            <li><strong>Updated regression tests:</strong> stale expectations now match current safe fallback, model routing, and provider behavior.</li>
-            <li><strong>Clean validation:</strong> lint, core build, and the full JS/TS test suite pass.</li>
+            <li><strong>Fixed first chat send:</strong> initial messages are no longer consumed before the delayed send runs.</li>
+            <li><strong>Fixed app close behavior:</strong> normal close is no longer intercepted and recreated like a reload.</li>
+            <li><strong>Fixed tools visibility:</strong> MCP tools are visible when connected, even if model capability metadata is stale.</li>
+            <li><strong>Hardened selected model resolution:</strong> active provider metadata now wins over stale selected-model cache data.</li>
+            <li><strong>Reduced dead code:</strong> removed unused Rust app-token state and tightened several TypeScript types.</li>
+            <li><strong>Reduced production type looseness:</strong> tightened chat session, markdown renderer, completion content, thread research, and dropdown model typing.</li>
+            <li><strong>Cleaned remaining hand-written any usage:</strong> production any/cast scan now only reports generated route tree casts.</li>
+            <li><strong>Updated regression tests:</strong> toolbar, startup, provider, hardware, MCP, and model lifecycle paths now have stronger coverage.</li>
+            <li><strong>Clean validation:</strong> lint, Rust tests, full JS/TS tests, and module coverage gates pass.</li>
           </ul>
         </article>
+      </section>
+
+      <section class="card" style="margin-top: 18px">
+        <h3>Measured module coverage</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Module</th>
+              <th>Line coverage</th>
+              <th>Function coverage</th>
+              <th>Branch coverage</th>
+              <th>Assessment</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>stores</td>
+              <td>99.2%</td>
+              <td>100.0%</td>
+              <td>89.2%</td>
+              <td>Excellent</td>
+            </tr>
+            <tr>
+              <td>hooks</td>
+              <td>75.2%</td>
+              <td>80.5%</td>
+              <td>79.4%</td>
+              <td>Good</td>
+            </tr>
+            <tr>
+              <td>services</td>
+              <td>75.9%</td>
+              <td>88.6%</td>
+              <td>82.2%</td>
+              <td>Good</td>
+            </tr>
+            <tr>
+              <td>lib</td>
+              <td>74.9%</td>
+              <td>77.5%</td>
+              <td>78.5%</td>
+              <td>Good</td>
+            </tr>
+            <tr>
+              <td>components/ui</td>
+              <td>76.5%</td>
+              <td>81.0%</td>
+              <td>92.3%</td>
+              <td>Good</td>
+            </tr>
+            <tr>
+              <td>providers</td>
+              <td>60.7%</td>
+              <td>48.5%</td>
+              <td>65.4%</td>
+              <td>Needs more lifecycle tests</td>
+            </tr>
+            <tr>
+              <td>containers</td>
+              <td>43.7%</td>
+              <td>41.2%</td>
+              <td>72.9%</td>
+              <td>Needs more UI flow tests</td>
+            </tr>
+            <tr>
+              <td>routes</td>
+              <td>40.5%</td>
+              <td>42.9%</td>
+              <td>70.6%</td>
+              <td>Needs more route-level tests</td>
+            </tr>
+          </tbody>
+        </table>
       </section>
 
       <section class="card" style="margin-top: 18px">
@@ -399,7 +519,7 @@
           <tbody>
             <tr>
               <td>Real startup flow</td>
-              <td>Tauri startup, extension install, local API bootstrap, MCP startup, and frontend boot are complex.</td>
+              <td>Tauri startup, extension install, local API bootstrap, MCP startup, model loading, and frontend boot are complex.</td>
               <td>Unit tests pass, but only real app/E2E tests prove the full startup path.</td>
               <td>Add a smoke E2E test that opens the app and verifies shell, icon, chat, and service hub readiness.</td>
             </tr>
@@ -417,8 +537,8 @@
             </tr>
             <tr>
               <td>UI regression coverage</td>
-              <td>Many UI components have unit tests, but fewer full user-flow tests.</td>
-              <td>Visual or state regressions can slip through even when unit tests pass.</td>
+              <td>Containers and routes have lower measured coverage than hooks/services/lib.</td>
+              <td>Visual or state regressions can still slip through even when unit tests pass.</td>
               <td>Add Playwright-style flows for chat history persistence, model selection, local knowledge, and hub links.</td>
             </tr>
             <tr>
@@ -427,13 +547,19 @@
               <td>Noisy output makes real failures harder to notice quickly.</td>
               <td>Silence expected warnings in tests with scoped spies where safe.</td>
             </tr>
+            <tr>
+              <td>Generated route casts</td>
+              <td>The remaining production any scan only reports generated TanStack route tree casts.</td>
+              <td>Generated files should not be manually edited; they do not represent hand-written app cleanliness debt.</td>
+              <td>Regenerate route types from the routing toolchain when the generator supports stricter output.</td>
+            </tr>
           </tbody>
         </table>
       </section>
 
       <footer>
-        Generated from the current Ax Studio revamp validation state. Scores are engineering confidence estimates,
-        not formal line-coverage percentages.
+        Updated from the current Ax Studio revamp local validation state. Scores are engineering confidence estimates,
+        not promises of defect-free behavior. Current branch has local uncommitted fixes for stability, tools visibility, close behavior, type cleanup, and regression coverage.
       </footer>
     </main>
   </body>

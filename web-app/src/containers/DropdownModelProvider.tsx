@@ -29,12 +29,18 @@ type DropdownModelProviderProps = {
 }
 
 /** Format a token count into a human-readable context window string. */
+type ModelWithContextWindow = Model & {
+  contextWindow?: number
+  context_length?: number
+  maxTokens?: number
+}
+
 function formatContextWindow(model: Model): string | null {
   // Model metadata may include context window info under various keys
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const m = model as any
-  const tokens: number | undefined =
-    m.contextWindow ?? m.context_length ?? m.maxTokens
+  const m = model as ModelWithContextWindow
+  const tokens = [m.contextWindow, m.context_length, m.maxTokens].find(
+    (value): value is number => typeof value === 'number'
+  )
   if (!tokens || typeof tokens !== 'number') return null
   if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(0)}M context`
   if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(0)}K context`

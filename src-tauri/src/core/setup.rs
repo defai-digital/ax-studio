@@ -7,9 +7,7 @@ use std::{
     sync::Arc,
 };
 use tar::Archive;
-use tauri::{
-    App, Emitter, Manager, RunEvent, Runtime, WebviewUrl, WebviewWindowBuilder, WindowEvent, Wry,
-};
+use tauri::{App, Emitter, Manager, RunEvent, Runtime, WindowEvent, Wry};
 
 #[cfg(desktop)]
 use tauri::{
@@ -456,6 +454,14 @@ mod tests {
         let result = extract_extension_manifest(&mut archive).unwrap();
         assert!(result.is_none());
     }
+
+    #[test]
+    fn test_should_prevent_exit_only_for_tray_window_close() {
+        assert!(should_prevent_exit_for_tray(None, true));
+        assert!(!should_prevent_exit_for_tray(None, false));
+        assert!(!should_prevent_exit_for_tray(Some(0), true));
+        assert!(!should_prevent_exit_for_tray(Some(1), true));
+    }
 }
 
 fn rename_mcp_server_key(
@@ -753,46 +759,12 @@ fn setup_window_theme_listener<R: Runtime>(
     });
 }
 
-fn show_or_recreate_main_window(app: &tauri::AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.unminimize();
-        let _ = window.show();
-        let _ = window.set_focus();
-        return;
-    }
+fn tray_icon_enabled() -> bool {
+    option_env!("ENABLE_SYSTEM_TRAY_ICON").unwrap_or("false") == "true"
+}
 
-    log::warn!("Main window was missing during exit request; recreating it");
-
-    #[cfg(debug_assertions)]
-    let webview_url = WebviewUrl::External(
-        app.config()
-            .build
-            .dev_url
-            .clone()
-            .expect("dev_url must be configured in development builds"),
-    );
-    #[cfg(not(debug_assertions))]
-    let webview_url = WebviewUrl::App("/".into());
-
-    match WebviewWindowBuilder::new(app, "main", webview_url)
-        .title("Ax-Studio")
-        .inner_size(1200.0, 800.0)
-        .min_inner_size(1024.0, 740.0)
-        .resizable(true)
-        .fullscreen(false)
-        .center()
-        .decorations(true)
-        .build()
-    {
-        Ok(window) => {
-            setup_window_theme_listener(app.clone(), window.clone());
-            let _ = window.show();
-            let _ = window.set_focus();
-        }
-        Err(error) => {
-            log::error!("Failed to recreate main window: {error}");
-        }
-    }
+fn should_prevent_exit_for_tray(code: Option<i32>, tray_enabled: bool) -> bool {
+    code.is_none() && tray_enabled
 }
 
 /// Tauri `.setup()` callback — runs once after the app is built.
@@ -859,63 +831,66 @@ pub fn app_run_handler(app: &tauri::AppHandle, event: RunEvent) {
     match event {
         RunEvent::ExitRequested { code, api, .. } => {
             log::warn!("Tauri exit requested with code: {code:?}");
-            if code.is_none() {
+            if should_prevent_exit_for_tray(code, tray_icon_enabled()) {
                 api.prevent_exit();
-                show_or_recreate_main_window(app);
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.hide();
+                }
             }
         }
         RunEvent::Exit => {
             let app_handle = app.clone();
-        if let Some(window) = app_handle.get_webview_window("main") {
-            let _ = window.emit("app-shutting-down", ());
-            let _ = window.hide();
-        }
-        let state = app_handle.state::<super::state::AppState>();
-        let cleanup_already_running = tokio::task::block_in_place(|| {
-            tauri::async_runtime::block_on(async {
-                let handle = state.background_cleanup_handle.lock().await;
-                handle.is_some()
-            })
-        });
-        if cleanup_already_running {
-            return;
-        }
-        tokio::task::block_in_place(|| {
-            tauri::async_runtime::block_on(async {
-                use crate::core::mcp::helpers::background_cleanup_mcp_servers;
-                let state = app_handle.state::<super::state::AppState>();
-                let mut cleanup_guard = state.background_cleanup_handle.lock().await;
-                if cleanup_guard.is_none() {
-                    let cleanup_app = app_handle.clone();
-                    let cleanup_task = tauri::async_runtime::spawn(async move {
-                        let state = cleanup_app.state::<super::state::AppState>();
-                        background_cleanup_mcp_servers(&cleanup_app, &state).await;
-                        let _ = tauri_plugin_llamacpp::cleanup_llama_processes(cleanup_app.clone())
-                            .await;
-                        log::info!("llama.cpp process cleanup completed");
-                    });
-                    *cleanup_guard = Some(cleanup_task);
-                }
-                drop(cleanup_guard);
-
-                let cleanup_handle = {
-                    let mut cleanup_guard = state.background_cleanup_handle.lock().await;
-                    cleanup_guard.take()
-                };
-
-                match tokio::time::timeout(tokio::time::Duration::from_secs(10), async {
-                    if let Some(handle) = cleanup_handle {
-                        let _ = handle.await;
-                    }
+            if let Some(window) = app_handle.get_webview_window("main") {
+                let _ = window.emit("app-shutting-down", ());
+                let _ = window.hide();
+            }
+            let state = app_handle.state::<super::state::AppState>();
+            let cleanup_already_running = tokio::task::block_in_place(|| {
+                tauri::async_runtime::block_on(async {
+                    let handle = state.background_cleanup_handle.lock().await;
+                    handle.is_some()
                 })
-                .await
-                {
-                    Ok(_) => log::info!("MCP cleanup completed successfully"),
-                    Err(_) => log::warn!("MCP cleanup timed out after 10 seconds"),
-                }
-                log::info!("App cleanup completed");
             });
-        });
+            if cleanup_already_running {
+                return;
+            }
+            tokio::task::block_in_place(|| {
+                tauri::async_runtime::block_on(async {
+                    use crate::core::mcp::helpers::background_cleanup_mcp_servers;
+                    let state = app_handle.state::<super::state::AppState>();
+                    let mut cleanup_guard = state.background_cleanup_handle.lock().await;
+                    if cleanup_guard.is_none() {
+                        let cleanup_app = app_handle.clone();
+                        let cleanup_task = tauri::async_runtime::spawn(async move {
+                            let state = cleanup_app.state::<super::state::AppState>();
+                            background_cleanup_mcp_servers(&cleanup_app, &state).await;
+                            let _ =
+                                tauri_plugin_llamacpp::cleanup_llama_processes(cleanup_app.clone())
+                                    .await;
+                            log::info!("llama.cpp process cleanup completed");
+                        });
+                        *cleanup_guard = Some(cleanup_task);
+                    }
+                    drop(cleanup_guard);
+
+                    let cleanup_handle = {
+                        let mut cleanup_guard = state.background_cleanup_handle.lock().await;
+                        cleanup_guard.take()
+                    };
+
+                    match tokio::time::timeout(tokio::time::Duration::from_secs(10), async {
+                        if let Some(handle) = cleanup_handle {
+                            let _ = handle.await;
+                        }
+                    })
+                    .await
+                    {
+                        Ok(_) => log::info!("MCP cleanup completed successfully"),
+                        Err(_) => log::warn!("MCP cleanup timed out after 10 seconds"),
+                    }
+                    log::info!("App cleanup completed");
+                });
+            });
         }
         _ => {}
     }

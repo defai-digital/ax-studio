@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { getLastUsedModel, getModelToStart } from '../getModelToStart'
 
 // Mock localStorage
@@ -41,9 +41,16 @@ function makeProvider(
 }
 
 describe('getLastUsedModel', () => {
+  let consoleDebugSpy: ReturnType<typeof vi.spyOn>
+
   beforeEach(() => {
     localStorageMock.clear()
     vi.clearAllMocks()
+    consoleDebugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleDebugSpy.mockRestore()
   })
 
   // ── A: Specification Tests ──
@@ -95,9 +102,16 @@ describe('getLastUsedModel', () => {
 })
 
 describe('getModelToStart', () => {
+  let consoleDebugSpy: ReturnType<typeof vi.spyOn>
+
   beforeEach(() => {
     localStorageMock.clear()
     vi.clearAllMocks()
+    consoleDebugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleDebugSpy.mockRestore()
   })
 
   const openaiProvider = makeProvider('openai', ['gpt-4', 'gpt-3.5-turbo'])

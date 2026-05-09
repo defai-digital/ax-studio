@@ -116,6 +116,7 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
   ingestingDocs,
 }: Props) {
   const { t } = useTranslation()
+  const selectedModelHasTools = selectedModel?.capabilities?.includes('tools') ?? false
 
   const applyQuickPrompt = (value: string) => {
     setPrompt(value)
@@ -251,12 +252,12 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
               </Tooltip>
             )}
 
-            {selectedModel?.capabilities?.includes('tools') && hasActiveMCPServers && (
-              MCPToolComponent ? (
+            {hasActiveMCPServers && (
+              selectedModelHasTools && MCPToolComponent ? (
                 <McpExtensionToolLoader
                   tools={tools}
                   hasActiveMCPServers={hasActiveMCPServers}
-                  selectedModelHasTools={selectedModel?.capabilities?.includes('tools') ?? false}
+                  selectedModelHasTools={selectedModelHasTools}
                   initialMessage={initialMessage}
                   threadId={effectiveThreadId}
                   MCPToolComponent={MCPToolComponent}
@@ -285,7 +286,13 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                       </DropdownToolsAvailable>
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent><p>{t('tools')}</p></TooltipContent>
+                  <TooltipContent>
+                    <p>
+                      {selectedModelHasTools
+                        ? t('tools')
+                        : 'Tools available, but the selected model is not marked as tool-capable'}
+                    </p>
+                  </TooltipContent>
                 </Tooltip>
               )
             )}

@@ -162,6 +162,7 @@ vi.mock('@/lib/utils', async (importOriginal) => {
 // ── Import after mocks ──────────────────────────────
 
 import ChatInput from '../ChatInput'
+import { resolveEffectiveSelectedModel } from '@/lib/chat/selected-model'
 
 // ── Tests ───────────────────────────────────────────
 
@@ -391,5 +392,53 @@ describe('ChatInput — Phase 3 Manual Test Protocol', () => {
     })
 
     expect(mockHandleSendMessage).not.toHaveBeenCalled()
+  })
+
+  it('resolves selected model from the active provider to avoid stale capability metadata', () => {
+    const staleModel: Model = { id: 'Qwen3_5-9B-IQ4_XS', capabilities: [] }
+    const currentProviderModel: Model = {
+      id: 'Qwen3_5-9B-IQ4_XS',
+      capabilities: ['tools', 'vision'],
+    }
+
+    const selectedModel = resolveEffectiveSelectedModel({
+      providers: [
+        {
+          active: true,
+          provider: 'llamacpp',
+          settings: [],
+          models: [currentProviderModel],
+        },
+      ],
+      selectedProvider: 'llamacpp',
+      selectedModelFromStore: staleModel,
+    })
+
+    expect(selectedModel).toBe(currentProviderModel)
+    expect(selectedModel?.capabilities).toContain('tools')
+  })
+
+  it('resolves thread model metadata from its provider before falling back to the store model', () => {
+    const fallbackModel: Model = { id: 'fallback-model', capabilities: ['tools'] }
+    const threadProviderModel: Model = {
+      id: 'thread-model',
+      capabilities: ['vision'],
+    }
+
+    const selectedModel = resolveEffectiveSelectedModel({
+      model: { id: 'thread-model', provider: 'zai-coding' },
+      providers: [
+        {
+          active: true,
+          provider: 'zai-coding',
+          settings: [],
+          models: [threadProviderModel],
+        },
+      ],
+      selectedProvider: 'llamacpp',
+      selectedModelFromStore: fallbackModel,
+    })
+
+    expect(selectedModel).toBe(threadProviderModel)
   })
 })

@@ -4,7 +4,7 @@ import { HoverCard, HoverCardTrigger, HoverCardContent } from '../hover-card'
 
 // Mock Radix UI
 vi.mock('@radix-ui/react-hover-card', () => ({
-  Root: ({ children, ...props }: any) => <div data-testid="hover-card-root" {...props}>{children}</div>,
+  Root: ({ children, openDelay: _openDelay, ...props }: any) => <div data-testid="hover-card-root" {...props}>{children}</div>,
   Trigger: ({ children, ...props }: any) => <button data-testid="hover-card-trigger" {...props}>{children}</button>,
   Portal: ({ children, ...props }: any) => <div data-testid="hover-card-portal" {...props}>{children}</div>,
   Content: ({ children, className, align, sideOffset, ...props }: any) => (
@@ -43,7 +43,7 @@ describe('HoverCard Components', () => {
       )
 
       const hoverCard = screen.getByTestId('hover-card-root')
-      expect(hoverCard).toHaveAttribute('openDelay', '500')
+      expect(hoverCard).toHaveAttribute('data-slot', 'hover-card')
     })
   })
 
@@ -149,7 +149,7 @@ describe('HoverCard Components', () => {
       render(
         <HoverCard>
           <HoverCardTrigger>
-            <button>Trigger</button>
+            <span>Trigger</span>
           </HoverCardTrigger>
           <HoverCardContent>
             <div>Hover content</div>

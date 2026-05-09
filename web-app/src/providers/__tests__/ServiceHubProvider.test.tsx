@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { ServiceHubProvider } from '../ServiceHubProvider'
 
 const mockInitializeServiceHub = vi.fn()
@@ -17,8 +17,21 @@ vi.mock('@/hooks/useServiceHub', () => ({
 }))
 
 describe('ServiceHubProvider', () => {
+  let consoleLogSpy: ReturnType<typeof vi.spyOn>
+  let consoleInfoSpy: ReturnType<typeof vi.spyOn>
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
+
   beforeEach(() => {
     vi.clearAllMocks()
+    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleLogSpy.mockRestore()
+    consoleInfoSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
   })
 
   it('renders loading UI while initializing', () => {

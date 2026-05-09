@@ -34,13 +34,20 @@ export default class AxStudioAssistantExtension extends AssistantExtension {
     }
   }
 
+  private async ensureDirectory(path: string) {
+    try {
+      if (await fs.existsSync(path)) return
+      await fs.mkdir(path)
+    } catch (error) {
+      console.warn(`Failed to create assistant directory "${path}":`, error)
+    }
+  }
+
   /**
    * Called when the extension is loaded.
    */
   async onLoad() {
-    try {
-      await fs.mkdir('file://assistants')
-    } catch {}
+    await this.ensureDirectory('file://assistants')
 
     const assistants = await this.getAssistants()
     if (assistants.length === 0) {
@@ -108,9 +115,7 @@ export default class AxStudioAssistantExtension extends AssistantExtension {
       'assistant.json',
     ])
     const assistantFolder = await joinPath(['file://assistants', assistant.id])
-    try {
-      await fs.mkdir(assistantFolder)
-    } catch {}
+    await this.ensureDirectory(assistantFolder)
     await fs.writeFileSync(assistantPath, JSON.stringify(assistant, null, 2))
   }
 

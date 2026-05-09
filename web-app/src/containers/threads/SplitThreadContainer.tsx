@@ -17,6 +17,7 @@ import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { useMessages } from '@/hooks/chat/useMessages'
 import { useLocalKnowledge } from '@/hooks/research/useLocalKnowledge'
+import { type ThreadMessage } from '@ax-studio/core'
 import { useChat } from '@/hooks/chat/use-chat'
 import { useThreadMemory } from '@/hooks/threads/use-thread-memory'
 import { useThreadConfig } from '@/hooks/threads/use-thread-config'
@@ -85,8 +86,7 @@ export function SplitThreadContainer({
   // ─── Chat session ─────────────────────────────────────────────────────────
   // Ref breaks the useChat <-> useThreadChat circular dependency (same pattern as $threadId.tsx)
   const persistMessageOnFinishRef = useRef<
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ((msg: UIMessage, parts: any[]) => void) | null
+    ((msg: UIMessage, parts: ThreadMessage['content']) => void) | null
   >(null)
 
   const {

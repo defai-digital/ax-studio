@@ -1,5 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { memo, useState, useCallback, useEffect, useMemo } from 'react'
+import { memo, type ComponentProps, useState, useCallback, useEffect, useMemo } from 'react'
 import type { UIMessage, ChatStatus } from 'ai'
 import { RenderMarkdown } from './RenderMarkdown'
 import { cn } from '@/lib/utils'
@@ -39,6 +38,23 @@ const CONTENT_TYPE = {
   FILE: 'file',
   REASONING: 'reasoning',
 } as const
+
+type FilePart = {
+  type: 'file'
+  filename?: string
+  url?: string
+  mediaType?: string
+}
+
+type ToolPart = {
+  type: 'dynamic-tool' | `tool-${string}`
+  state: ComponentProps<typeof Tool>['state']
+  toolName?: string
+  input?: unknown
+  output?: unknown
+  error?: string
+  errorText?: string
+}
 
 export type MessageItemProps = {
   message: UIMessage
@@ -375,53 +391,59 @@ export const MessageItem = memo(
       )
     }
 
-    const renderToolPart = (part: any, partIndex: number) => {
+    const renderToolPart = (part: unknown, partIndex: number) => {
       // AI SDK v5 emits two shapes for tool parts:
       //   ToolUIPart      → type: 'tool-{name}'   (static/chat-level tools)
       //   DynamicToolUIPart → type: 'dynamic-tool', toolName: string  (streamText tools)
       // Both carry a `state` field; anything else is not a tool part.
-      const isDynamic = part.type === 'dynamic-tool'
-      const isStatic = typeof part.type === 'string' && part.type.startsWith('tool-')
-      if ((!isDynamic && !isStatic) || !('state' in part)) {
+      if (!part || typeof part !== 'object' || !('type' in part) || !('state' in part)) {
         return null
       }
 
+      const maybeToolPart = part as Partial<ToolPart>
+      const isDynamic = maybeToolPart.type === 'dynamic-tool'
+      const isStatic = typeof maybeToolPart.type === 'string' && maybeToolPart.type.startsWith('tool-')
+      if ((!isDynamic && !isStatic) || !maybeToolPart.state) {
+        return null
+      }
+
+      const toolPart = maybeToolPart as ToolPart
       const toolName: string = isDynamic
-        ? (part.toolName as string)
-        : part.type.split('-').slice(1).join('-')
+        ? (toolPart.toolName ?? 'dynamic-tool')
+        : toolPart.type.split('-').slice(1).join('-')
 
       return (
         <Tool
           key={`${message.id}-${partIndex}`}
-          state={part.state}
+          state={toolPart.state}
           className="mb-3"
         >
           <ToolHeader
             title={toolName}
             type={`tool-${toolName}` as `tool-${string}`}
-            state={part.state}
+            state={toolPart.state}
           />
           <ToolContent title={toolName}>
-            {part.input && (
+            {toolPart.input && (
               <ToolInput
                 input={
-                  typeof part.input === 'string'
-                    ? part.input
-                    : JSON.stringify(part.input)
+                  typeof toolPart.input === 'string'
+                    ? toolPart.input
+                    : JSON.stringify(toolPart.input)
                 }
               />
             )}
-            {part.output && (
+            {toolPart.output && (
               <ToolOutput
-                output={part.output}
+                output={toolPart.output}
                 resolver={(input) => Promise.resolve(input)}
                 errorText={undefined}
               />
             )}
-            {part.state === 'output-error' && (
+            {toolPart.state === 'output-error' && (
               <ToolOutput
                 output={undefined}
-                errorText={part.error || part.errorText || 'Tool execution failed'}
+                errorText={toolPart.error || toolPart.errorText || 'Tool execution failed'}
                 resolver={(input) => Promise.resolve(input)}
               />
             )}
@@ -440,7 +462,7 @@ export const MessageItem = memo(
               case CONTENT_TYPE.TEXT:
                 return renderTextPart(part as { type: 'text'; text: string }, i)
               case CONTENT_TYPE.FILE:
-                return renderFilePart(part as any, i)
+                return renderFilePart(part as FilePart, i)
               default:
                 return null
             }
@@ -509,7 +531,7 @@ export const MessageItem = memo(
                 case CONTENT_TYPE.TEXT:
                   return renderTextPart(part as { type: 'text'; text: string }, i)
                 case CONTENT_TYPE.FILE:
-                  return renderFilePart(part as any, i)
+                  return renderFilePart(part as FilePart, i)
                 case CONTENT_TYPE.REASONING:
                   return renderReasoningPart(
                     part as { type: 'reasoning'; text: string },

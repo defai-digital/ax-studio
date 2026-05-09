@@ -13,8 +13,7 @@ import { useToolApproval } from '@/hooks/tools/useToolApproval'
 import { useAppState } from '@/hooks/settings/useAppState'
 import { useChatSessions } from '@/stores/chat-session-store'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type AddToolOutputFn = (...args: any[]) => any
+export type AddToolOutputFn = (...args: unknown[]) => unknown
 
 export type ThreadToolsResult = {
   toolCallAbortController: React.MutableRefObject<AbortController | null>

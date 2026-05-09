@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { WindowControls } from '../WindowControls'
 
 // ── Mocks ────────────────────────────────────────────
@@ -51,6 +51,24 @@ describe('WindowControls', () => {
     render(<WindowControls />)
     fireEvent.click(screen.getByLabelText('Close'))
     expect(mockClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('logs close failures without throwing an unhandled rejection', async () => {
+    const error = new Error('close failed')
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mockClose.mockRejectedValueOnce(error)
+
+    render(<WindowControls />)
+    fireEvent.click(screen.getByLabelText('Close'))
+
+    await waitFor(() => {
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[WindowControls] Failed to close window:',
+        error
+      )
+    })
+
+    consoleSpy.mockRestore()
   })
 
   it('renders all buttons inside a container div', () => {

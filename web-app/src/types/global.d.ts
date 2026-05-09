@@ -1,17 +1,16 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { EngineManager, ModelManager } from '@ax-studio/core'
 import type { ExtensionManager } from '@/lib/extension'
 
 export {}
 
 type AppCore = {
-  api: Record<string, (...args: any[]) => any> & {
+  api: Record<string, (...args: unknown[]) => unknown> & {
     openExternalUrl: (url: string) => void
   }
   events?: {
-    on: (eventName: string, handler: (...args: any[]) => void) => (() => void) | void
-    off: (eventName: string, handler: (...args: any[]) => void) => void
-    emit: (eventName: string, args: any) => void
+    on: (eventName: string, handler: (...args: unknown[]) => void) => (() => void) | void
+    off: (eventName: string, handler: (...args: unknown[]) => void) => void
+    emit: (eventName: string, args: unknown) => void
   }
   extensionManager?: ExtensionManager
   engineManager?: EngineManager

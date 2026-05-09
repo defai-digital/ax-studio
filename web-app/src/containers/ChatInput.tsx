@@ -23,7 +23,8 @@ import { ChatInputToolbar } from '@/components/chat/ChatInputToolbar'
 import { ChatInputAttachments } from '@/components/ChatInputAttachments'
 import { TokenCounter } from '@/components/TokenCounter'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { Atom, Code2, Globe, Wrench, X } from "lucide-react";
+import { Atom, Code2, Globe, Wrench, X } from 'lucide-react'
+import { resolveEffectiveSelectedModel } from '@/lib/chat/selected-model'
 
 type ChatInputProps = {
   className?: string
@@ -141,13 +142,14 @@ const ChatInput = memo(function ChatInput({
   })
 
   const providers = useModelProvider((state) => state.providers)
+  const selectedProvider = useModelProvider((state) => state.selectedProvider)
   const selectedModelFromStore = useModelProvider((state) => state.selectedModel) ?? undefined
-  const selectedModel = model
-    ? providers
-        .find((provider) => provider.provider === model.provider)
-        ?.models.find((providerModel) => providerModel.id === model.id) ??
-      selectedModelFromStore
-    : selectedModelFromStore
+  const selectedModel = resolveEffectiveSelectedModel({
+    model,
+    providers,
+    selectedProvider,
+    selectedModelFromStore,
+  })
   const hasVisionSupport = selectedModel?.capabilities?.includes('vision') ?? false
   const {
     isDragOver,

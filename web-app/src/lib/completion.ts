@@ -1,9 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   ContentType,
   ChatCompletionRole,
   ThreadMessage,
   MessageStatus,
+  ThreadContent,
 } from '@ax-studio/core'
 import { ulid } from 'ulidx'
 import { Attachment } from '@/types/attachment'
@@ -45,7 +45,7 @@ export const newUserThreadContent = (
   const textWithFiles =
     docMetadata.length > 0 ? injectFilesIntoPrompt(content, docMetadata) : content
 
-  const contentParts = [
+  const contentParts: ThreadContent[] = [
     {
       type: ContentType.Text,
       text: {
@@ -64,7 +64,7 @@ export const newUserThreadContent = (
           url: `data:${img.mimeType};base64,${img.base64}`,
           detail: 'auto',
         },
-      } as any)
+      })
     }
   })
 

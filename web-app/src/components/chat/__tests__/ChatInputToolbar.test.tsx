@@ -46,7 +46,9 @@ vi.mock('@/components/common/AvatarEmoji', () => ({
 }))
 
 vi.mock('@/containers/DropdownToolsAvailable', () => ({
-  default: ({ children }: any) => <div>{children?.(() => null)}</div>,
+  default: ({ children }: any) => (
+    <div data-testid="dropdown-tools-available">{children?.(false, 0)}</div>
+  ),
 }))
 
 vi.mock('@/containers/McpExtensionToolLoader', () => ({
@@ -168,6 +170,29 @@ describe('ChatInputToolbar — Phase 3 Manual Test Protocol', () => {
       prompt: 'hello',
     })} />)
     expect(screen.getByTestId('token-counter')).toBeInTheDocument()
+  })
+
+  it('shows the tools dropdown when MCP tools are connected even if model capability metadata is missing', () => {
+    render(<ChatInputToolbar {...createProps({
+      selectedModel: { id: 'custom-model', capabilities: ['completion'] } as Model,
+      tools: [{ name: 'fabric_search', server: 'ax-studio' }],
+      hasActiveMCPServers: true,
+      MCPToolComponent: null,
+    })} />)
+
+    expect(screen.getByTestId('dropdown-tools-available')).toBeInTheDocument()
+    expect(screen.queryByTestId('mcp-tool-loader')).not.toBeInTheDocument()
+  })
+
+  it('uses the MCP extension tool component when the selected model is tool-capable', () => {
+    render(<ChatInputToolbar {...createProps({
+      selectedModel: { id: 'tool-model', capabilities: ['completion', 'tools'] } as Model,
+      tools: [{ name: 'fabric_search', server: 'ax-studio' }],
+      hasActiveMCPServers: true,
+      MCPToolComponent: () => null,
+    })} />)
+
+    expect(screen.getByTestId('mcp-tool-loader')).toBeInTheDocument()
   })
 
   // Protocol #12: Token counter not shown on initial message

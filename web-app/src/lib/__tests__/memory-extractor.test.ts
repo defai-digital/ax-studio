@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { afterEach, describe, it, expect, vi } from 'vitest'
 import {
   parseMemoryFromResponse,
   extractFactsFromPatterns,
@@ -22,6 +22,11 @@ function makeEntry(overrides: Partial<MemoryEntry> = {}): MemoryEntry {
 // ─── parseMemoryFromResponse ────────────────────────────────────────────
 
 describe('parseMemoryFromResponse', () => {
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+
+  afterEach(() => {
+    consoleWarnSpy?.mockRestore()
+  })
   it('should return empty facts when no memory_extract tag is present', () => {
     const result = parseMemoryFromResponse('Hello, how are you?')
     expect(result.facts).toEqual([])
@@ -58,6 +63,7 @@ describe('parseMemoryFromResponse', () => {
   })
 
   it('should handle malformed JSON gracefully', () => {
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const text = '<memory_extract>not valid json</memory_extract>'
     const result = parseMemoryFromResponse(text)
     expect(result.facts).toEqual([])

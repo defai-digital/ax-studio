@@ -82,10 +82,7 @@ export const DialogDeleteModel = ({
   }, [provider, modelId])
 
   // Get the currently selected model
-  const selectedModel = provider.models.find(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (m: any) => m.id === selectedModelId
-  )
+  const selectedModel = provider.models.find((model) => model.id === selectedModelId)
 
   if (!selectedModel) {
     return null

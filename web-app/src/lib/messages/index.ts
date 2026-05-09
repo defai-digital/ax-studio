@@ -1,9 +1,40 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { ThreadMessage, ContentType } from '@ax-studio/core'
 import type { UIMessage } from '@ai-sdk/react'
 // Attachments are now handled upstream in newUserThreadContent
 
 type ThreadContent = NonNullable<ThreadMessage['content']>[number]
+type UIMessagePart = NonNullable<UIMessage['parts']>[number]
+type PersistableUIMessagePart = {
+  type: string
+  text?: string
+  reasoning?: string
+  mediaType?: string
+  url?: string
+  toolName?: string
+  toolCallId?: string
+  toolInvocationId?: string
+  input?: unknown
+  args?: unknown
+  output?: unknown
+  result?: unknown
+}
+
+type LegacyToolCall = {
+  id?: string
+  name?: string
+  args?: unknown
+  state?: string
+  tool?: {
+    id?: string
+    function?: {
+      name?: string
+      arguments?: unknown
+    }
+  }
+  response?: {
+    content?: Array<{ type?: string; text?: unknown } | Record<string, unknown>>
+  }
+}
 
 const getImageMediaType = (url?: string): string => {
   if (!url) return 'image/jpeg'
@@ -91,7 +122,7 @@ const splitThinkTaggedText = (text: string): {
 export function convertThreadMessageToUIMessage(
   threadMessage: ThreadMessage
 ): UIMessage {
-  const parts: any[] = []
+  const parts: UIMessagePart[] = []
 
   // Process content array - preserve original order (including tool calls)
   for (const content of threadMessage.content || []) {
@@ -176,7 +207,7 @@ export function convertThreadMessageToUIMessage(
 
   // BACKWARD COMPATIBILITY: Handle tool calls from metadata (old format)
   // New messages will have tool calls as separate messages with tool_call_id
-  const toolCalls = (threadMessage.metadata as any)?.tool_calls
+  const toolCalls = (threadMessage.metadata as { tool_calls?: LegacyToolCall[] } | undefined)?.tool_calls
   if (Array.isArray(toolCalls)) {
     for (const tc of toolCalls) {
       // Parse the result from the response.content array
@@ -261,7 +292,7 @@ export function convertThreadMessagesToUIMessages(
  */
 export function extractContentPartsFromUIMessage(message: UIMessage): ThreadContent[] {
   const content: ThreadContent[] = []
-  const parts = (message.parts ?? []) as any[]
+  const parts = (message.parts ?? []) as PersistableUIMessagePart[]
 
   for (const part of parts) {
     if (part.type === 'reasoning') {
