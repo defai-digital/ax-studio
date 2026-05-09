@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { act } from '@testing-library/react'
 import { useLlamacppDevices } from '../useLlamacppDevices'
 import { useModelProvider } from '../useModelProvider'
@@ -44,8 +44,11 @@ vi.mock('@/hooks/useServiceHub', async () => {
 })
 
 describe('useLlamacppDevices', () => {
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
+
   beforeEach(() => {
     vi.clearAllMocks()
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     // Reset store
     act(() => {
@@ -62,6 +65,10 @@ describe('useLlamacppDevices', () => {
         providers: [],
       })
     })
+  })
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore()
   })
 
   // --- Default state ---

@@ -129,7 +129,10 @@ describe('useThreadMemory', () => {
 
     it('returns true for /remember command', () => {
       const { result } = renderHook(() => useThreadMemory(threadId))
-      const handled = result.current.handleRememberCommand('/remember I like pizza')
+      let handled = false
+      act(() => {
+        handled = result.current.handleRememberCommand('/remember I like pizza')
+      })
       expect(handled).toBe(true)
     })
 

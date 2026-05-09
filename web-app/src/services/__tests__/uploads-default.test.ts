@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { DefaultUploadsService } from '../uploads/default'
 import { useFileRegistry } from '@/lib/file-registry'
 import type { Attachment } from '@/types/attachment'
@@ -38,10 +38,16 @@ function makeServiceHub(callToolResult: {
 
 describe('DefaultUploadsService', () => {
   let service: DefaultUploadsService
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
     service = new DefaultUploadsService()
     useFileRegistry.setState({ files: {} })
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleWarnSpy.mockRestore()
   })
 
   describe('ingestImage', () => {

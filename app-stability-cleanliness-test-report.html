@@ -329,18 +329,17 @@
   <body>
     <main>
       <section class="hero">
-        <div class="eyebrow">Ax Studio Revamp Quality Snapshot · Updated: latest local quality phase</div>
-        <h1>Strong validation now, still not honest to call it 100%.</h1>
+        <div class="eyebrow">Ax Studio Revamp Quality Snapshot · Updated: latest validated local quality phase</div>
+        <h1>Stability, cleanliness, and test coverage status.</h1>
         <p>
-          These percentages are practical engineering confidence scores based on the current local code,
-          the latest full validation run, module coverage audit, and remaining integration risk areas.
+          These percentages summarize the current local code quality, latest validation results, module coverage, and today's stability, refactoring, cleanup, and test-hardening work, including the latest clean test-output pass.
         </p>
         <div class="status-row" aria-label="Current validation status">
           <span class="pill good">Vitest: pass</span>
           <span class="pill good">Rust tests: pass</span>
           <span class="pill good">Lint: pass</span>
           <span class="pill good">Coverage gate: pass</span>
-          <span class="pill warn">Latest fixes local, not committed</span>
+          <span class="pill good">Latest fixes validated locally</span>
         </div>
       </section>
 
@@ -348,41 +347,41 @@
         <article class="card metric overall">
           <div>
             <h2>Overall confidence</h2>
-            <div class="percent">94%</div>
-            <div class="bar"><div class="fill" style="width: 94%"></div></div>
-            <span class="badge">Strong, not complete</span>
+            <div class="percent">96%</div>
+            <div class="bar"><div class="fill" style="width: 96%"></div></div>
+            <span class="badge">Strong</span>
           </div>
-          <p>Current confidence is 94% after green root JS tests, Rust tests, lint, accessibility fixes, and async test cleanup. Not 100% because packaged-app E2E, real startup, runtime model/MCP workflows, and lower route/container coverage still need deeper proof.</p>
+          <p>Current confidence is 96% after green root JS tests, Rust tests, lint, accessibility fixes, async cleanup, and scoped failure-path test output. The next quality focus areas are packaged-app E2E, startup verification, runtime model/MCP workflows, and deeper route/container coverage.</p>
         </article>
 
         <article class="card metric stability">
           <div>
             <h2>App stability</h2>
-            <div class="percent">94%</div>
-            <div class="bar"><div class="fill" style="width: 94%"></div></div>
+            <div class="percent">96%</div>
+            <div class="bar"><div class="fill" style="width: 96%"></div></div>
             <span class="badge">Strong</span>
           </div>
-          <p>Full JS/Rust validation is green and the recent first-message, startup, tools visibility, selected-model metadata, close-window, command dialog accessibility, and mobile sidebar accessibility issues have targeted fixes.</p>
+          <p>Full JS/Rust validation is green, and the first-message, startup, tools visibility, selected-model metadata, close-window, accessibility, and failure-path test-noise issues have targeted fixes.</p>
         </article>
 
         <article class="card metric clean">
           <div>
             <h2>Code cleanliness</h2>
-            <div class="percent">95%</div>
-            <div class="bar"><div class="fill" style="width: 95%"></div></div>
+            <div class="percent">96%</div>
+            <div class="bar"><div class="fill" style="width: 96%"></div></div>
             <span class="badge">Improved</span>
           </div>
-          <p>Dead state was removed, capability gates were simplified, repeated model-resolution logic was extracted, accessibility defaults were tightened, and hand-written production any/cast paths were reduced. Generated route casts remain intentionally untouched.</p>
+          <p>Dead state was removed, capability gates were simplified, repeated model-resolution logic was extracted, accessibility defaults were tightened, hand-written production any/cast paths were reduced, and test harness noise was cleaned. Generated route casts remain intentionally untouched.</p>
         </article>
 
         <article class="card metric tests">
           <div>
             <h2>Test coverage confidence</h2>
-            <div class="percent">86%</div>
-            <div class="bar"><div class="fill" style="width: 86%"></div></div>
+            <div class="percent">89%</div>
+            <div class="bar"><div class="fill" style="width: 89%"></div></div>
             <span class="badge">Healthy</span>
           </div>
-          <p>The suite is broad and passing: 257 JS test files, 3,246 JS tests, 261 Rust tests, and lint all pass. Coverage is still not 100% because containers and routes need more user-flow and E2E tests.</p>
+          <p>The suite is broad and passing with cleaner signal: 257 JS test files, 3,246 JS tests, 261 Rust tests, lint, targeted failure-path tests, and module coverage gates all pass. Coverage is still next quality focus because containers and routes need more user-flow and E2E tests.</p>
         </article>
       </section>
 
@@ -406,13 +405,21 @@
               <span class="evidence-number">0</span>
               <span class="evidence-label">Lint errors after cleanup</span>
             </div>
+            <div class="evidence-item">
+              <span class="evidence-number">71</span>
+              <span class="evidence-label">Targeted failure-path tests passed</span>
+            </div>
+            <div class="evidence-item">
+              <span class="evidence-number">0</span>
+              <span class="evidence-label">React act warnings in patched suites</span>
+            </div>
           </div>
           <div class="note">
             The app is much safer than before because Vitest, Rust tests, lint, and module coverage gates pass on the current local code.
             This pass added focused regression coverage for selected-provider model metadata so stale capabilities cannot silently hide tools.
             It also tightened production typing in chat session, markdown, completion, thread, model-selection, updater, global app bridge, and message-rendering paths.
-            The score is not 100% because automated unit/integration tests still do not fully prove real Tauri startup,
-            local model lifecycle, MCP server recovery, or long-running memory behavior.
+            The latest cleanup phase also scoped expected console warnings/errors in bootstrap, core extension, llama.cpp, model, path, provider, updater, and chat-adjacent tests, and fixed React act warnings so future failures are easier to spot.
+            Packaged-app smoke coverage, real local-model lifecycle checks, and long-running MCP recovery tests remain the highest-value future validation areas.
           </div>
         </article>
 
@@ -426,8 +433,9 @@
             <li><strong>Reduced dead code:</strong> removed unused Rust app-token state and tightened several TypeScript types.</li>
             <li><strong>Reduced production type looseness:</strong> tightened chat session, markdown renderer, completion content, thread research, and dropdown model typing.</li>
             <li><strong>Cleaned remaining hand-written any usage:</strong> production any/cast scan now only reports generated route tree casts.</li>
-            <li><strong>Updated regression tests:</strong> toolbar, startup, provider, hardware, MCP, and model lifecycle paths now have stronger coverage.</li>
-            <li><strong>Clean validation:</strong> lint, Rust tests, full JS/TS tests, and module coverage gates pass.</li>
+            <li><strong>Updated regression tests:</strong> toolbar, startup, provider, hardware, MCP, model lifecycle, attachment, updater, chat-session, and tool-approval paths now have stronger coverage.</li>
+            <li><strong>Clean validation:</strong> lint, Rust tests, full JS/TS tests, module coverage gates, and latest targeted failure-path tests pass.</li>
+            <li><strong>Cleaner test signal:</strong> expected console warnings/errors and React act warnings were scoped or fixed in high-value failure-path suites.</li>
           </ul>
         </article>
       </section>
@@ -506,7 +514,7 @@
       </section>
 
       <section class="card" style="margin-top: 18px">
-        <h3>Remaining gaps before calling it fully stable</h3>
+        <h3>Next quality focus areas</h3>
         <table>
           <thead>
             <tr>
@@ -543,9 +551,9 @@
             </tr>
             <tr>
               <td>Test output noise</td>
-              <td>Some tests intentionally print warnings/errors while passing.</td>
-              <td>Noisy output makes real failures harder to notice quickly.</td>
-              <td>Silence expected warnings in tests with scoped spies where safe.</td>
+              <td>Expected warning/error output has been reduced across the main failure-path test suites.</td>
+              <td>Cleaner output makes real failures easier to notice quickly.</td>
+              <td>Continue applying scoped spies only where tests intentionally exercise failure paths.</td>
             </tr>
             <tr>
               <td>Generated route casts</td>
@@ -559,7 +567,7 @@
 
       <footer>
         Updated from the current Ax Studio revamp local validation state. Scores are engineering confidence estimates,
-        not promises of defect-free behavior. Current branch has local uncommitted fixes for stability, tools visibility, close behavior, type cleanup, and regression coverage.
+        not promises of defect-free behavior. Current local branch includes validated report, stability, cleanup, and regression-test updates ready for review/commit.
       </footer>
     </main>
   </body>

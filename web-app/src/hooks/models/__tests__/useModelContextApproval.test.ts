@@ -80,11 +80,13 @@ describe('useContextSizeApproval', () => {
       })
 
       // Mock modalProps to verify they get reset
-      useContextSizeApproval.setState({
-        modalProps: {
-          onApprove: vi.fn(),
-          onDeny: vi.fn(),
-        },
+      act(() => {
+        useContextSizeApproval.setState({
+          modalProps: {
+            onApprove: vi.fn(),
+            onDeny: vi.fn(),
+          },
+        })
       })
 
       // Set to false should trigger closeModal

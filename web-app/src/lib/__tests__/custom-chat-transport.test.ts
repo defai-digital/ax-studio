@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { CustomChatTransport } from '../custom-chat-transport'
 import type { UIMessage } from '@ai-sdk/react'
 import { ModelFactory } from '@/lib/model-factory'
@@ -180,8 +180,13 @@ function makeTransport(
 
 // ─── Tests ────────────────────────────────────────────────────────────────
 
+let consoleInfoSpy: ReturnType<typeof vi.spyOn>
+let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+
 beforeEach(() => {
   vi.clearAllMocks()
+  consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+  consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
   mocks.autoRouteEnabled = false
   mocks.routerModelId = null
   mocks.routerProviderId = null
@@ -205,6 +210,11 @@ beforeEach(() => {
       displayName: 'Routed Model',
     },
   ])
+})
+
+afterEach(() => {
+  consoleInfoSpy.mockRestore()
+  consoleWarnSpy.mockRestore()
 })
 
 describe('CustomChatTransport — construction', () => {

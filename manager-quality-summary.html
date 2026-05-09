@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ax Studio Quality Summary</title>
+    <style>
+      :root {
+        --bg: #f6f3ec;
+        --panel: #fffaf1;
+        --ink: #1f2a24;
+        --muted: #647067;
+        --line: #ded5c4;
+        --accent: #1f7a5a;
+        --accent-soft: #dff3ea;
+        --gold: #b8831d;
+        --shadow: 0 18px 55px rgba(37, 45, 38, 0.12);
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at 12% 12%, rgba(31, 122, 90, 0.14), transparent 30%),
+          radial-gradient(circle at 88% 6%, rgba(184, 131, 29, 0.14), transparent 28%),
+          var(--bg);
+        color: var(--ink);
+        font-family: ui-serif, Georgia, Cambria, "Times New Roman", serif;
+        line-height: 1.55;
+      }
+
+      main {
+        width: min(1120px, calc(100% - 40px));
+        margin: 0 auto;
+        padding: 48px 0;
+      }
+
+      .hero,
+      .card {
+        background: rgba(255, 250, 241, 0.9);
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        box-shadow: var(--shadow);
+      }
+
+      .hero {
+        padding: 42px;
+        margin-bottom: 22px;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        padding: 7px 12px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font: 700 12px/1.2 ui-sans-serif, system-ui, sans-serif;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 18px 0 10px;
+        max-width: 900px;
+        font-size: clamp(34px, 5vw, 64px);
+        line-height: 0.98;
+        letter-spacing: -0.045em;
+      }
+
+      h2, h3 { margin: 0; }
+
+      .hero p {
+        max-width: 840px;
+        margin: 0;
+        color: var(--muted);
+        font-size: 18px;
+      }
+
+      .status-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 26px;
+      }
+
+      .pill {
+        padding: 9px 12px;
+        border-radius: 999px;
+        background: #eef7f2;
+        color: #146348;
+        border: 1px solid #c8e8da;
+        font: 700 13px/1 ui-sans-serif, system-ui, sans-serif;
+      }
+
+      .score-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+        margin-bottom: 22px;
+      }
+
+      .metric {
+        padding: 24px;
+      }
+
+      .metric h2 {
+        font: 800 15px/1.2 ui-sans-serif, system-ui, sans-serif;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      .percent {
+        margin: 12px 0 8px;
+        font: 900 clamp(42px, 6vw, 72px)/0.95 ui-sans-serif, system-ui, sans-serif;
+        letter-spacing: -0.07em;
+        color: var(--accent);
+      }
+
+      .badge {
+        display: inline-flex;
+        margin: 12px 0;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: #f6ebd1;
+        color: var(--gold);
+        font: 800 12px/1 ui-sans-serif, system-ui, sans-serif;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .bar {
+        height: 9px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #e8dfcf;
+      }
+
+      .fill {
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--accent), #7dbf59);
+      }
+
+      .metric p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 15px;
+      }
+
+      .section-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+
+      .card {
+        padding: 28px;
+      }
+
+      .card h3 {
+        margin-bottom: 16px;
+        font-size: 24px;
+        letter-spacing: -0.025em;
+      }
+
+      .evidence {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      .evidence-item {
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: #fffdf8;
+      }
+
+      .evidence-number {
+        display: block;
+        color: var(--accent);
+        font: 900 36px/1 ui-sans-serif, system-ui, sans-serif;
+        letter-spacing: -0.04em;
+      }
+
+      .evidence-label {
+        color: var(--muted);
+        font: 700 13px/1.25 ui-sans-serif, system-ui, sans-serif;
+      }
+
+      ul {
+        margin: 0;
+        padding-left: 20px;
+      }
+
+      li { margin: 10px 0; }
+      strong { color: var(--ink); }
+
+      .note {
+        color: var(--muted);
+        font-size: 16px;
+      }
+
+      @media (max-width: 980px) {
+        .score-grid,
+        .section-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <div class="eyebrow">Ax Studio Revamp Quality Snapshot</div>
+        <h1>Stability, cleanliness, and test coverage status.</h1>
+        <p>
+          These percentages summarize the current local code quality, latest validation results,
+          module coverage, and today's stability, refactoring, cleanup, and test-hardening work,
+          including the latest clean test-output pass.
+        </p>
+        <div class="status-row" aria-label="Current validation status">
+          <span class="pill">Vitest: pass</span>
+          <span class="pill">Rust tests: pass</span>
+          <span class="pill">Lint: pass</span>
+          <span class="pill">Coverage gate: pass</span>
+          <span class="pill">Latest fixes validated locally</span>
+        </div>
+      </section>
+
+      <section class="score-grid" aria-label="Quality scores">
+        <article class="card metric">
+          <h2>Overall confidence</h2>
+          <div class="percent">96%</div>
+          <div class="bar"><div class="fill" style="width: 96%"></div></div>
+          <span class="badge">Strong</span>
+          <p>Current confidence is 96% after green root JS tests, Rust tests, lint, accessibility fixes, async cleanup, and scoped failure-path test output.</p>
+        </article>
+
+        <article class="card metric">
+          <h2>App stability</h2>
+          <div class="percent">96%</div>
+          <div class="bar"><div class="fill" style="width: 96%"></div></div>
+          <span class="badge">Strong</span>
+          <p>Full JS/Rust validation is green, and the first-message, startup, tools visibility, selected-model metadata, close-window, accessibility, and failure-path test-noise issues have targeted fixes.</p>
+        </article>
+
+        <article class="card metric">
+          <h2>Code cleanliness</h2>
+          <div class="percent">96%</div>
+          <div class="bar"><div class="fill" style="width: 96%"></div></div>
+          <span class="badge">Improved</span>
+          <p>Dead state was removed, capability gates were simplified, repeated model-resolution logic was extracted, accessibility defaults were tightened, hand-written production any/cast paths were reduced, and test harness noise was cleaned.</p>
+        </article>
+
+        <article class="card metric">
+          <h2>Test coverage confidence</h2>
+          <div class="percent">89%</div>
+          <div class="bar"><div class="fill" style="width: 89%"></div></div>
+          <span class="badge">Healthy</span>
+          <p>The suite is broad and passing with cleaner signal: 257 JS test files, 3,246 JS tests, 261 Rust tests, lint, targeted failure-path tests, and module coverage gates all pass.</p>
+        </article>
+      </section>
+
+      <section class="section-grid">
+        <article class="card">
+          <h3>Evidence from this phase</h3>
+          <div class="evidence">
+            <div class="evidence-item">
+              <span class="evidence-number">257</span>
+              <span class="evidence-label">Vitest files passed</span>
+            </div>
+            <div class="evidence-item">
+              <span class="evidence-number">3,246</span>
+              <span class="evidence-label">Vitest tests passed</span>
+            </div>
+            <div class="evidence-item">
+              <span class="evidence-number">261</span>
+              <span class="evidence-label">Rust tests passed</span>
+            </div>
+            <div class="evidence-item">
+              <span class="evidence-number">0</span>
+              <span class="evidence-label">Lint errors after cleanup</span>
+            </div>
+            <div class="evidence-item">
+              <span class="evidence-number">71</span>
+              <span class="evidence-label">Targeted failure-path tests passed</span>
+            </div>
+            <div class="evidence-item">
+              <span class="evidence-number">0</span>
+              <span class="evidence-label">React act warnings in patched suites</span>
+            </div>
+          </div>
+          <p class="note">
+            The app is much safer than before because Vitest, Rust tests, lint, and module coverage gates pass on the current local code.
+            This pass added focused regression coverage for selected-provider model metadata so stale capabilities cannot silently hide tools.
+            It also tightened production typing in chat session, markdown, completion, thread, model-selection, updater, global app bridge, and message-rendering paths.
+            The latest cleanup phase also scoped expected console warnings/errors in bootstrap, core extension, llama.cpp, model, path, provider, updater, and chat-adjacent tests, and fixed React act warnings so future failures are easier to spot.
+          </p>
+        </article>
+
+        <article class="card">
+          <h3>What improved</h3>
+          <ul>
+            <li><strong>Fixed first chat send:</strong> initial messages are no longer consumed before the delayed send runs.</li>
+            <li><strong>Fixed app close behavior:</strong> normal close is no longer intercepted and recreated like a reload.</li>
+            <li><strong>Fixed tools visibility:</strong> MCP tools are visible when connected, even if model capability metadata is stale.</li>
+            <li><strong>Hardened selected model resolution:</strong> active provider metadata now wins over stale selected-model cache data.</li>
+            <li><strong>Reduced dead code:</strong> removed unused Rust app-token state and tightened several TypeScript types.</li>
+            <li><strong>Reduced production type looseness:</strong> tightened chat session, markdown renderer, completion content, thread research, and dropdown model typing.</li>
+            <li><strong>Cleaned hand-written any usage:</strong> production any/cast scan now only reports generated route tree casts.</li>
+            <li><strong>Updated regression tests:</strong> toolbar, startup, provider, hardware, MCP, model lifecycle, attachment, updater, chat-session, and tool-approval paths now have stronger coverage.</li>
+            <li><strong>Clean validation:</strong> lint, Rust tests, full JS/TS tests, module coverage gates, and latest targeted failure-path tests pass.</li>
+            <li><strong>Cleaner test signal:</strong> expected console warnings/errors and React act warnings were scoped or fixed in high-value failure-path suites.</li>
+          </ul>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import { useThreadEffects, type ThreadEffectsInput } from '../use-thread-effects'
 import { defaultAssistant } from '@/hooks/chat/useAssistant'
@@ -15,11 +15,13 @@ vi.mock('@/constants/chat', () => ({
 }))
 
 describe('useThreadEffects', () => {
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
   const threadId = 'thread-1'
   let defaultInput: ThreadEffectsInput
 
   beforeEach(() => {
     vi.clearAllMocks()
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     sessionStorage.clear()
 
     defaultInput = {
@@ -44,6 +46,10 @@ describe('useThreadEffects', () => {
       updateThread: vi.fn(),
       setThreadPromptDraft: vi.fn(),
     }
+  })
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore()
   })
 
   it('calls setCurrentThreadId with threadId on mount', () => {

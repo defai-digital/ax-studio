@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { invokeMock } = vi.hoisted(() => ({
   invokeMock: vi.fn(),
@@ -12,10 +12,16 @@ import { TauriMCPService } from '../mcp/tauri'
 
 describe('TauriMCPService activation commands', () => {
   let service: TauriMCPService
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
     service = new TauriMCPService()
     vi.clearAllMocks()
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore()
   })
 
   it('activates MCP servers through invoke', async () => {

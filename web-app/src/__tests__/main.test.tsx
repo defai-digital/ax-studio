@@ -36,8 +36,12 @@ if (typeof URL.createObjectURL === 'undefined') {
 describe('main.tsx', () => {
   let mockGetElementById: any
   let mockRootElement: any
+  let consoleInfoSpy: ReturnType<typeof vi.spyOn>
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
+    consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     mockRootElement = {
       innerHTML: '',
     }
@@ -52,6 +56,8 @@ describe('main.tsx', () => {
   })
 
   afterEach(() => {
+    consoleInfoSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
     vi.resetModules()
   })
 

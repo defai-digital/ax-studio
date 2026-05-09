@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest'
 import { LocalOAIEngine } from './LocalOAIEngine'
 import { events } from '../../events'
 import { Model, ModelEvent } from '../../../types'
@@ -25,6 +25,8 @@ class TestLocalOAIEngine extends LocalOAIEngine {
 
 describe('LocalOAIEngine', () => {
   let engine: TestLocalOAIEngine
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
   const mockModel: Model & { file_path?: string } = {
     version: '1.0.0',
     format: 'gguf',
@@ -41,6 +43,13 @@ describe('LocalOAIEngine', () => {
   beforeEach(() => {
     engine = new TestLocalOAIEngine('', '')
     vi.clearAllMocks()
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleWarnSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
   })
 
   describe('onLoad', () => {

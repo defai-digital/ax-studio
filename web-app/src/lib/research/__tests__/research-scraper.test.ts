@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 import { scrapeWithTimeout } from '../research-scraper'
 
 // Mock @tauri-apps/api/core
@@ -9,6 +9,16 @@ vi.mock('@tauri-apps/api/core', () => ({
 import { invoke } from '@tauri-apps/api/core'
 
 describe('scrapeWithTimeout', () => {
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleWarnSpy.mockRestore()
+  })
+
   it('should return empty string when signal is already aborted', async () => {
     const controller = new AbortController()
     controller.abort()

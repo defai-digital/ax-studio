@@ -99,6 +99,7 @@ vi.mock('lucide-react', () => ({
 import { ModelDownloadAction } from '../ModelDownloadAction'
 
 describe('ModelDownloadAction', () => {
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
   const variant = {
     model_id: 'model-q4',
     path: '/models/model-q4.gguf',
@@ -112,8 +113,13 @@ describe('ModelDownloadAction', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     mockProviders.current = []
     mockPullModelWithMetadata.mockResolvedValue(undefined)
+  })
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore()
   })
 
   it('starts a model download when clicked', () => {

@@ -196,13 +196,15 @@ describe('useToolApproval', () => {
       })
 
       // Mock modalProps to verify they get reset
-      useToolApproval.setState({
-        modalProps: {
-          toolName: 'test-tool',
-          threadId: 'test-thread',
-          onApprove: vi.fn(),
-          onDeny: vi.fn(),
-        },
+      act(() => {
+        useToolApproval.setState({
+          modalProps: {
+            toolName: 'test-tool',
+            threadId: 'test-thread',
+            onApprove: vi.fn(),
+            onDeny: vi.fn(),
+          },
+        })
       })
 
       // Set to false should trigger closeModal

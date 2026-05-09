@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 
 // Mock ExtensionManager
@@ -27,10 +27,17 @@ import type { BackendUpdateInfo } from '../useBackendUpdater'
 import { events } from '@ax-studio/core'
 
 describe('useBackendUpdater', () => {
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
+
   beforeEach(() => {
     vi.clearAllMocks()
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     mockGetByName.mockReturnValue(null)
     mockListExtensions.mockReturnValue([])
+  })
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore()
   })
 
   it('should initialize with default state', () => {
@@ -82,7 +89,6 @@ describe('useBackendUpdater', () => {
 
   describe('checkForUpdate', () => {
     it('should return null when extension is not found', async () => {
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       mockGetByName.mockReturnValue(null)
 
       const { result } = renderHook(() => useBackendUpdater())
@@ -93,7 +99,6 @@ describe('useBackendUpdater', () => {
       })
 
       expect(updateResult).toBe(null)
-      consoleErrorSpy.mockRestore()
     })
 
     it('should detect available update', async () => {
@@ -170,8 +175,6 @@ describe('useBackendUpdater', () => {
     })
 
     it('should handle errors during check', async () => {
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
       mockGetByName.mockReturnValue({
         checkBackendForUpdates: vi.fn().mockRejectedValue(new Error('Network error')),
         getSettings: vi.fn().mockResolvedValue([]),
@@ -187,7 +190,6 @@ describe('useBackendUpdater', () => {
       expect(updateResult).toBe(null)
       expect(result.current.updateState.isUpdateAvailable).toBe(false)
       expect(consoleErrorSpy).toHaveBeenCalled()
-      consoleErrorSpy.mockRestore()
     })
   })
 
@@ -262,8 +264,6 @@ describe('useBackendUpdater', () => {
     })
 
     it('should throw when wasUpdated is false', async () => {
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
       mockGetByName.mockReturnValue({
         checkBackendForUpdates: vi.fn().mockResolvedValue({
           updateNeeded: true,
@@ -291,12 +291,9 @@ describe('useBackendUpdater', () => {
       ).rejects.toThrow('Backend update reported wasUpdated=false')
 
       expect(result.current.updateState.isUpdating).toBe(false)
-      consoleErrorSpy.mockRestore()
     })
 
     it('should throw when current backend setting is not found', async () => {
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
       mockGetByName.mockReturnValue({
         checkBackendForUpdates: vi.fn().mockResolvedValue({
           updateNeeded: true,
@@ -317,8 +314,6 @@ describe('useBackendUpdater', () => {
           await result.current.updateBackend()
         })
       ).rejects.toThrow('Current backend version not found in extension settings')
-
-      consoleErrorSpy.mockRestore()
     })
   })
 

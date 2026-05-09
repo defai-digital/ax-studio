@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { invoke } from '@tauri-apps/api/core'
 
 const mocks = vi.hoisted(() => {
@@ -177,8 +177,17 @@ import AxStudioLlamacppExtension from './index'
 import { configureBackends } from './backend'
 
 describe('AxStudioLlamacppExtension', () => {
+  let consoleDebugSpy: ReturnType<typeof vi.spyOn>
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
+  let consoleInfoSpy: ReturnType<typeof vi.spyOn>
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+
   beforeEach(() => {
     vi.clearAllMocks()
+    consoleDebugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {})
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     mocks.storage.clear()
     mocks.fsState.clear()
     mocks.dirState.clear()
@@ -197,6 +206,13 @@ describe('AxStudioLlamacppExtension', () => {
       const path = (args as { path?: string } | undefined)?.path
       return path ?? ''
     })
+  })
+
+  afterEach(() => {
+    consoleDebugSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
+    consoleInfoSpy.mockRestore()
+    consoleWarnSpy.mockRestore()
   })
 
   it('shows a toast when background backend configuration fails during onLoad', async () => {

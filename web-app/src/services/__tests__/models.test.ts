@@ -415,6 +415,7 @@ describe('DefaultModelsService', () => {
     })
 
     it('should handle start model error', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       const mockSettings = {
         ctx_len: { controller_props: { value: 4096 } },
         ngl: { controller_props: { value: 32 } },
@@ -434,6 +435,11 @@ describe('DefaultModelsService', () => {
       await expect(modelsService.startModel(provider, model)).rejects.toThrow(
         error
       )
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Failed to start model model1 for provider openai:',
+        error
+      )
+      consoleSpy.mockRestore()
     })
     it('should not load model again', async () => {
       const mockSettings = {
@@ -603,7 +609,20 @@ describe('DefaultModelsService', () => {
     })
 
     it('should clean repository ID from various input formats', async () => {
-      const mockRepoData = { modelId: 'microsoft/DialoGPT-medium' }
+      const mockRepoData: HuggingFaceRepo = {
+        id: 'microsoft/DialoGPT-medium',
+        modelId: 'microsoft/DialoGPT-medium',
+        sha: 'abc123',
+        downloads: 5000,
+        likes: 100,
+        tags: ['conversational'],
+        createdAt: '2023-01-01T00:00:00Z',
+        private: false,
+        disabled: false,
+        gated: false,
+        author: 'microsoft',
+        siblings: [],
+      }
       ;(fetch as any).mockResolvedValue({
         ok: true,
         json: vi.fn().mockResolvedValue(mockRepoData),
@@ -1296,14 +1315,20 @@ describe('DefaultModelsService', () => {
     })
 
     it('should return RED when engine is not available', async () => {
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       mockEngineManager.get.mockReturnValue(null)
 
       const result = await modelsService.isModelSupported('/path/to/model.gguf')
 
       expect(result).toBe('YELLOW') // Should use fallback
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[ModelsService] Engine "llamacpp" is not available. The engine may not be initialized or registered.'
+      )
+      consoleSpy.mockRestore()
     })
 
     it('should return GREY when there is an error', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       const mockEngineWithError = {
         ...mockEngine,
         isModelSupported: vi.fn().mockRejectedValue(new Error('Test error')),
@@ -1314,6 +1339,11 @@ describe('DefaultModelsService', () => {
       const result = await modelsService.isModelSupported('/path/to/model.gguf')
 
       expect(result).toBe('GREY')
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Error checking model support for /path/to/model.gguf:',
+        expect.any(Error)
+      )
+      consoleSpy.mockRestore()
     })
   })
 

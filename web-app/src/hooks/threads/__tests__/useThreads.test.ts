@@ -217,7 +217,10 @@ describe('useThreads', () => {
 
     // Just test that the function exists
     expect(typeof result.current.getFilteredThreads).toBe('function')
-    const filtered = result.current.getFilteredThreads('test')
+    let filtered: ReturnType<typeof result.current.getFilteredThreads> = []
+    act(() => {
+      filtered = result.current.getFilteredThreads('test')
+    })
     expect(Array.isArray(filtered)).toBe(true)
   })
 

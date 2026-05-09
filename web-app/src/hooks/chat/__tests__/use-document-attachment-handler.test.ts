@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useChatAttachments } from '@/hooks/chat/useChatAttachments'
 
@@ -118,9 +118,13 @@ import { toast } from 'sonner'
 
 describe('useDocumentAttachmentHandler', () => {
   const ATTACHMENTS_KEY = 'test-thread-123'
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
     vi.clearAllMocks()
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     mockAttachmentsEnabled = true
     mockParsePreference = 'auto'
     mockMaxFileSizeMB = 50
@@ -131,6 +135,11 @@ describe('useDocumentAttachmentHandler', () => {
       useChatAttachments.setState({ attachmentsByThread: {} })
       useFileRegistry.setState({ files: {} })
     })
+  })
+
+  afterEach(() => {
+    consoleWarnSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
   })
 
   // ── Phase 1: Hook returns correct shape ──────────────────────────────────

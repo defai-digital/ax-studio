@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
 import { DefaultMessagesService } from '../messages/default'
 import { ExtensionManager } from '@/lib/extension'
 import { ExtensionTypeEnum } from '@ax-studio/core'
@@ -14,6 +14,7 @@ vi.mock('@/lib/extension', () => ({
 }))
 
 describe('DefaultMessagesService', () => {
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
   let messagesService: DefaultMessagesService
 
   const mockExtension = {
@@ -37,12 +38,17 @@ describe('DefaultMessagesService', () => {
   beforeEach(() => {
     messagesService = new DefaultMessagesService()
     vi.clearAllMocks()
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     // @ts-expect-error test-only core bridge
     window.core = undefined
     vi.mocked(ExtensionManager.getInstance).mockReturnValue(
       mockExtensionManager as ReturnType<typeof ExtensionManager.getInstance>
     )
     mockExtensionManager.get.mockReturnValue(mockExtension)
+  })
+
+  afterEach(() => {
+    consoleWarnSpy.mockRestore()
   })
 
   describe('fetchMessages', () => {

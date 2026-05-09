@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { DefaultAssistantsService } from '../assistants/default'
 import { ExtensionManager } from '@/lib/extension'
 import { ExtensionTypeEnum } from '@ax-studio/core'
@@ -14,6 +14,8 @@ vi.mock('@/lib/extension', () => ({
 
 describe('DefaultAssistantsService', () => {
   let assistantsService: DefaultAssistantsService
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
   
   const mockExtension = {
     getAssistants: vi.fn(),
@@ -28,8 +30,15 @@ describe('DefaultAssistantsService', () => {
   beforeEach(() => {
     assistantsService = new DefaultAssistantsService()
     vi.clearAllMocks()
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.mocked(ExtensionManager.getInstance).mockReturnValue(mockExtensionManager)
     mockExtensionManager.get.mockReturnValue(mockExtension)
+  })
+
+  afterEach(() => {
+    consoleWarnSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
   })
 
   describe('getAssistants', () => {
@@ -49,16 +58,12 @@ describe('DefaultAssistantsService', () => {
 
     it('should return null when extension not found', async () => {
       mockExtensionManager.get.mockReturnValue(null)
-      
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
       const result = await assistantsService.getAssistants()
 
       expect(mockExtensionManager.get).toHaveBeenCalledWith(ExtensionTypeEnum.Assistant)
-      expect(consoleSpy).toHaveBeenCalledWith('AssistantExtension not found')
+      expect(consoleWarnSpy).toHaveBeenCalledWith('AssistantExtension not found')
       expect(result).toBeNull()
-      
-      consoleSpy.mockRestore()
     })
 
     it('should handle error when getting assistants', async () => {

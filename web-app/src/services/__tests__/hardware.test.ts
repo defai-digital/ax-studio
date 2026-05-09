@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { TauriHardwareService } from '../hardware/tauri'
 import { HardwareData, SystemUsage } from '@/hooks/settings/useHardware'
 import { invoke } from '@tauri-apps/api/core'
@@ -10,10 +10,19 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 describe('TauriHardwareService', () => {
   let hardwareService: TauriHardwareService
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
     hardwareService = new TauriHardwareService()
     vi.clearAllMocks()
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleWarnSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
   })
 
   describe('getHardwareInfo', () => {
@@ -68,16 +77,14 @@ describe('TauriHardwareService', () => {
     })
 
     it('should return null when hardware info has an unexpected shape', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       vi.mocked(invoke).mockResolvedValue('not-an-object')
 
       await expect(hardwareService.getHardwareInfo()).resolves.toBeNull()
 
-      expect(warnSpy).toHaveBeenCalledWith(
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
         '[TauriHardwareService] get_system_info returned unexpected shape:',
         'not-an-object'
       )
-      warnSpy.mockRestore()
     })
 
     it('should return correct type from invoke', async () => {
@@ -141,16 +148,14 @@ describe('TauriHardwareService', () => {
     })
 
     it('should return null when system usage has an unexpected shape', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       vi.mocked(invoke).mockResolvedValue(null)
 
       await expect(hardwareService.getSystemUsage()).resolves.toBeNull()
 
-      expect(warnSpy).toHaveBeenCalledWith(
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
         '[TauriHardwareService] get_system_usage returned unexpected shape:',
         null
       )
-      warnSpy.mockRestore()
     })
 
     it('should return correct type from invoke', async () => {

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   createSessionData,
   isSessionBusy,
@@ -28,6 +28,16 @@ const makeSession = (overrides: Partial<ChatSession> = {}): ChatSession => ({
   unsubscribers: [],
   data: createSessionData(),
   ...overrides,
+})
+
+let consoleErrorSpy: ReturnType<typeof vi.spyOn>
+
+beforeEach(() => {
+  consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+})
+
+afterEach(() => {
+  consoleErrorSpy.mockRestore()
 })
 
 // ─── createSessionData ────────────────────────────────────────────────────────

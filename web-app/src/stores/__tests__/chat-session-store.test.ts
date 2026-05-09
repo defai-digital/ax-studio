@@ -1,9 +1,11 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { useChatSessions, isSessionBusy } from '../chat-session-store'
 
 vi.mock('@/lib/custom-chat-transport', () => ({
   CustomChatTransport: vi.fn(),
 }))
+
+let consoleErrorSpy: ReturnType<typeof vi.spyOn>
 
 const makeChat = (status = 'idle') => ({
   status,
@@ -15,11 +17,16 @@ const makeChat = (status = 'idle') => ({
 const makeTransport = () => ({} as any)
 
 beforeEach(() => {
+  consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
   useChatSessions.setState({
     sessions: {},
     standaloneData: {},
     activeConversationId: undefined,
   })
+})
+
+afterEach(() => {
+  consoleErrorSpy.mockRestore()
 })
 
 describe('useChatSessions — initial state', () => {

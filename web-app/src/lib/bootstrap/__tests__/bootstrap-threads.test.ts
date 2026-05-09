@@ -1,5 +1,9 @@
-import { describe, it, expect, vi } from 'vitest'
+import { afterEach, describe, it, expect, vi } from 'vitest'
 import { bootstrapThreads } from '../bootstrap-threads'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 const makeServiceHub = (threads: unknown[] = [], shouldFail = false) => ({
   threads: () => ({
@@ -22,6 +26,7 @@ describe('bootstrapThreads', () => {
   })
 
   it('returns ok: false when fetchThreads rejects', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     const setThreads = vi.fn()
     const result = await bootstrapThreads({
       serviceHub: makeServiceHub([], true) as any,

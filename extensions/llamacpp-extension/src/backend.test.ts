@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   storage: new Map<string, string>(),
@@ -91,8 +91,15 @@ import {
 } from '@ax-studio/tauri-plugin-llamacpp-api'
 
 describe('llamacpp backend helpers', () => {
+  let consoleDebugSpy: ReturnType<typeof vi.spyOn>
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+
   beforeEach(() => {
     vi.clearAllMocks()
+    consoleDebugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {})
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     mocks.storage.clear()
     mocks.existsSync.mockResolvedValue(false)
     clearRemoteBackendsCacheForTests()
@@ -120,6 +127,13 @@ describe('llamacpp backend helpers', () => {
       },
     }
     ;(globalThis as any).fetch = vi.fn()
+  })
+
+  afterEach(() => {
+    consoleDebugSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
+    consoleWarnSpy.mockRestore()
+    vi.useRealTimers()
   })
 
   it('parses matching backend assets from GitHub releases', async () => {

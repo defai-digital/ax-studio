@@ -22,6 +22,7 @@ describe('ModelManager', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(events.emit).mockReset()
     ;(global.window as any).core = {}
     modelManager = new ModelManager()
     mockModel = {

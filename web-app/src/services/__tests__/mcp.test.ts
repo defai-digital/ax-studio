@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { TauriMCPService } from '../mcp/tauri'
 import { MCPTool } from '@/types/mcp'
 import { DEFAULT_MCP_SETTINGS } from '@/hooks/tools/useMCPServers'
@@ -25,11 +25,20 @@ Object.defineProperty(global, 'window', {
 
 describe('TauriMCPService', () => {
   let mcpService: TauriMCPService
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
     mcpService = new TauriMCPService()
     window.core = mockCore
     vi.clearAllMocks()
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleWarnSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
   })
 
   describe('updateMCPConfig', () => {

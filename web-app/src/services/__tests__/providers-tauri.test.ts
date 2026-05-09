@@ -58,6 +58,7 @@ describe('TauriProvidersService', () => {
   })
 
   it('fetches OpenAI-style model responses with safe headers', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     mocks.fetchTauri.mockResolvedValue(
       response({ data: [{ id: 'gpt-4.1' }, { id: 'gpt-4.1-mini' }] })
     )
@@ -88,6 +89,10 @@ describe('TauriProvidersService', () => {
         signal: expect.any(AbortSignal),
       })
     )
+    expect(warnSpy).toHaveBeenCalledWith('Skipped unsafe custom provider header: Authorization')
+    expect(warnSpy).toHaveBeenCalledWith('Skipped unsafe custom provider header: Origin')
+    expect(warnSpy).toHaveBeenCalledWith('Skipped unsafe custom provider header: Cookie')
+    warnSpy.mockRestore()
   })
 
   it('trims base URL before fetching provider models', async () => {

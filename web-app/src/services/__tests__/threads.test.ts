@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
 import { DefaultThreadsService } from '../threads/default'
 import { ExtensionManager } from '@/lib/extension'
 import { ConversationalExtension, ExtensionTypeEnum } from '@ax-studio/core'
@@ -11,6 +11,8 @@ vi.mock('@/lib/extension', () => ({
 }))
 
 describe('DefaultThreadsService', () => {
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
   let threadsService: DefaultThreadsService
 
   const mockConversationalExtension = {
@@ -34,9 +36,16 @@ describe('DefaultThreadsService', () => {
   beforeEach(() => {
     threadsService = new DefaultThreadsService()
     vi.clearAllMocks()
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     // @ts-expect-error test-only core bridge
     window.core = undefined
     ;(ExtensionManager.getInstance as any).mockReturnValue(mockExtensionManager)
+  })
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore()
+    consoleWarnSpy.mockRestore()
   })
 
   describe('fetchThreads', () => {

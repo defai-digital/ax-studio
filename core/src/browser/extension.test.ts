@@ -9,6 +9,19 @@ class TestBaseExtension extends BaseExtension {
   onUnload(): void {}
 }
 
+let consoleErrorSpy: ReturnType<typeof vi.spyOn>
+let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+
+beforeEach(() => {
+  consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+})
+
+afterEach(() => {
+  consoleErrorSpy.mockRestore()
+  consoleWarnSpy.mockRestore()
+})
+
 describe('BaseExtension', () => {
   let baseExtension: TestBaseExtension
 

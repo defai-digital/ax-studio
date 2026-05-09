@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { DefaultRAGService } from '../rag/default'
 import { useFileRegistry } from '@/lib/file-registry'
 import type { ServiceHub } from '@/services'
@@ -16,10 +16,19 @@ function makeServiceHub(callToolResult: {
 
 describe('DefaultRAGService', () => {
   let service: DefaultRAGService
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
     service = new DefaultRAGService()
     useFileRegistry.setState({ files: {} })
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleWarnSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
   })
 
   describe('getTools', () => {

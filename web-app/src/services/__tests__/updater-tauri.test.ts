@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   check: vi.fn(),
@@ -30,9 +30,12 @@ async function createService() {
 }
 
 describe('TauriUpdaterService', () => {
+  let consoleInfoSpy: ReturnType<typeof vi.spyOn>
+
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
+    consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
     mocks.load.mockResolvedValue(mocks.store)
     mocks.store.get.mockResolvedValue('stored-nonce')
     mocks.store.set.mockResolvedValue(undefined)
@@ -41,6 +44,10 @@ describe('TauriUpdaterService', () => {
     mocks.check.mockResolvedValue(null)
     mocks.randomUUID.mockReturnValue('generated-nonce')
     vi.spyOn(crypto, 'randomUUID').mockImplementation(mocks.randomUUID)
+  })
+
+  afterEach(() => {
+    consoleInfoSpy.mockRestore()
   })
 
   it('returns standard Tauri update information when no custom update is available', async () => {
@@ -224,4 +231,3 @@ describe('TauriUpdaterService', () => {
     warnSpy.mockRestore()
   })
 })
-

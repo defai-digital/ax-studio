@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { OAIEngine } from './OAIEngine'
 import { events } from '../../events'
 import {
@@ -20,10 +20,19 @@ class TestOAIEngine extends OAIEngine {
 
 describe('OAIEngine', () => {
   let engine: TestOAIEngine
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
     engine = new TestOAIEngine('', '')
     vi.clearAllMocks()
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleWarnSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
   })
 
   it('should subscribe to events on load', () => {
@@ -59,7 +68,6 @@ describe('OAIEngine', () => {
   })
 
   it('logs rejected inference requests triggered by the message event', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const error = new Error('boom')
     vi.spyOn(engine, 'inference').mockRejectedValue(error)
 
@@ -76,13 +84,11 @@ describe('OAIEngine', () => {
     messageHandler?.({ attachments: [] } as MessageRequest)
 
     await vi.waitFor(() => {
-      expect(consoleSpy).toHaveBeenCalledWith(
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
         '[OAIEngine] Failed to run inference:',
         error
       )
     })
-
-    consoleSpy.mockRestore()
   })
 
   it('should guard against concurrent inference requests', async () => {

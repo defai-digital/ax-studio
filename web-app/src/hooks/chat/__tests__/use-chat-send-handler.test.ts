@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
@@ -92,8 +92,13 @@ function defaultInput() {
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('useChatSendHandler', () => {
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
+
   beforeEach(() => {
     vi.clearAllMocks()
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     modelState.selectedModel = { id: 'model-1' }
     modelState.selectedProvider = 'openai'
     sessionStorage.clear()
@@ -102,6 +107,11 @@ describe('useChatSendHandler', () => {
       value: { search: '' },
       writable: true,
     })
+  })
+
+  afterEach(() => {
+    consoleWarnSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
   })
 
   // ── Phase 1: Guard branches ──────────────────────────────────────────────

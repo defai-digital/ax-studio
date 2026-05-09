@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
 
 // --- Mocks ---
 
@@ -112,6 +112,7 @@ import { DownloadButtonPlaceholder } from '../DownloadButton'
 import { useDownloadStore } from '@/hooks/models/useDownloadStore'
 
 describe('DownloadButtonPlaceholder', () => {
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
   const baseModel = {
     model_name: 'test-model',
     description: 'A test model',
@@ -130,8 +131,13 @@ describe('DownloadButtonPlaceholder', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     mockProviders.current = []
     mockPullModelWithMetadata.mockResolvedValue(undefined)
+  })
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore()
   })
 
   it('renders HuggingFace link when model has no quants', () => {
