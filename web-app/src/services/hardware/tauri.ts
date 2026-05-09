@@ -5,6 +5,10 @@
 import { invoke } from '@tauri-apps/api/core'
 import type { HardwareData, SystemUsage, DeviceList, HardwareService } from './types'
 
+type LlamacppDeviceExtension = {
+  getDevices: () => Promise<DeviceList[]>
+}
+
 /**
  * Lightweight runtime guard for the hardware plugin responses. The
  * previous implementation blindly cast `invoke(...)` results to the
@@ -15,6 +19,9 @@ import type { HardwareData, SystemUsage, DeviceList, HardwareService } from './t
  */
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const hasGetDevices = (value: unknown): value is LlamacppDeviceExtension =>
+  isPlainObject(value) && typeof value.getDevices === 'function'
 
 export class TauriHardwareService implements HardwareService {
   async getHardwareInfo(): Promise<HardwareData | null> {
@@ -46,15 +53,13 @@ export class TauriHardwareService implements HardwareService {
   }
 
   async getLlamacppDevices(): Promise<DeviceList[]> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const ext = (window as any).core?.extensionManager?.getByName(
+    const ext = window.core?.extensionManager?.getByName(
       '@ax-studio/llamacpp-extension'
     )
-    if (!ext) return []
+    if (!hasGetDevices(ext)) return []
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return await (ext as any).getDevices()
+      return await ext.getDevices()
     } catch (e) {
       console.error('[TauriHardwareService] getLlamacppDevices failed:', e)
       return []

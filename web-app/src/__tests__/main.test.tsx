@@ -66,15 +66,16 @@ describe('main.tsx', () => {
     expect(mockRender).toHaveBeenCalled()
   })
 
-  it('should not render app when root element already has content', async () => {
+  it('should clear stale root content and render app when root element already has content', async () => {
     mockRootElement.innerHTML = '<div>existing content</div>'
     
     await import('../main')
     await new Promise((resolve) => setTimeout(resolve, 50))
     
     expect(mockGetElementById).toHaveBeenCalledWith('root')
-    expect(mockCreateRoot).not.toHaveBeenCalled()
-    expect(mockRender).not.toHaveBeenCalled()
+    expect(mockRootElement.innerHTML).toBe('')
+    expect(mockCreateRoot).toHaveBeenCalledWith(mockRootElement)
+    expect(mockRender).toHaveBeenCalled()
   })
 
   it('should throw error when root element is not found', async () => {

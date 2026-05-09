@@ -4,7 +4,7 @@
  * Renders: attachment dropdown, capability toggles (tools, memory, reasoning),
  * token counter, and the send/stop button. Pure UI — no data fetching.
  */
-import { memo } from 'react'
+import { memo, type ComponentType } from 'react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -27,7 +27,7 @@ import { TokenCounter } from '@/components/TokenCounter'
 import { AvatarEmoji } from '@/components/common/AvatarEmoji'
 import DropdownToolsAvailable from '@/containers/DropdownToolsAvailable'
 import { McpExtensionToolLoader } from '@/containers/McpExtensionToolLoader'
-import type { ThreadMessage } from '@ax-studio/core'
+import type { MCPToolComponentProps, ThreadMessage } from '@ax-studio/core'
 import type { MCPTool } from '@/types/mcp'
 
 const RESEARCH_PROMPTS = [
@@ -56,8 +56,7 @@ type Props = {
   // MCP tools
   tools: MCPTool[]
   hasActiveMCPServers: boolean
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  MCPToolComponent: any
+  MCPToolComponent?: ComponentType<MCPToolComponentProps> | null
   dropdownToolsAvailable: boolean
   setDropdownToolsAvailable: (v: boolean) => void
   tooltipToolsAvailable: boolean

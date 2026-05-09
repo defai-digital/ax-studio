@@ -102,6 +102,9 @@ vi.mock('@ax-studio/core', () => ({
     getSettings = mocks.getSettings
     getSetting = mocks.getSetting
     updateSettings = mocks.updateSettings
+    onLoad() {
+      this.registerEngine()
+    }
   },
   getAppDataFolderPath: mocks.getAppDataFolderPath,
   joinPath: mocks.joinPath,

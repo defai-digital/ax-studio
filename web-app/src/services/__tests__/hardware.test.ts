@@ -261,6 +261,14 @@ describe('TauriHardwareService', () => {
       await expect(hardwareService.getLlamacppDevices()).resolves.toEqual([])
     })
 
+    it('should return an empty list when the extension does not expose getDevices', async () => {
+      ;(window as any).core.extensionManager = {
+        getByName: vi.fn().mockReturnValue({ provider: 'llamacpp' }),
+      }
+
+      await expect(hardwareService.getLlamacppDevices()).resolves.toEqual([])
+    })
+
     it('should return an empty list when the llama.cpp extension fails', async () => {
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       ;(window as any).core.extensionManager = {

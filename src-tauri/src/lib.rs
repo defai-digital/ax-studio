@@ -1,7 +1,6 @@
 mod commands;
 mod core;
 
-use ax_studio_utils::generate_app_token;
 use core::{
     downloads::models::DownloadManagerState, mcp::models::McpSettings, setup, state::AppState,
 };
@@ -35,7 +34,6 @@ pub fn run() {
 
     let app = app_builder
         .manage(AppState {
-            app_token: Some(generate_app_token()),
             mcp_servers: Arc::new(Mutex::new(HashMap::new())),
             download_manager: Arc::new(Mutex::new(DownloadManagerState::default())),
             mcp_active_servers: Arc::new(Mutex::new(HashMap::new())),

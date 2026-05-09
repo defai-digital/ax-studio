@@ -93,8 +93,6 @@ pub enum RunningServiceEnum {
 pub type SharedMcpServers = Arc<Mutex<HashMap<String, Arc<RunningServiceEnum>>>>;
 
 pub struct AppState {
-    #[allow(dead_code)]
-    pub app_token: Option<String>,
     pub mcp_servers: SharedMcpServers,
     pub download_manager: Arc<Mutex<DownloadManagerState>>,
     pub mcp_active_servers: Arc<Mutex<HashMap<String, serde_json::Value>>>,

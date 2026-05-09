@@ -44,9 +44,8 @@ export function MessagesArea({
   handleContextSizeIncrease,
   contentCls,
 }: MessagesAreaProps) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const metadata = thread?.metadata as Record<string, any> | undefined
-  const forkedFrom = metadata?.forkedFrom || metadata?.parentThreadId
+  const metadata = thread?.metadata as Record<string, unknown> | undefined
+  const forkedFrom = metadata?.forkedFrom ?? metadata?.parentThreadId
   const bannerKey = `branch-banner-dismissed-${threadId}`
   const [bannerDismissed, setBannerDismissed] = useState(() =>
     isStorageFlagEnabled(sessionStorage, bannerKey, 'MessagesArea')

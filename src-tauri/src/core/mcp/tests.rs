@@ -12,7 +12,6 @@ use tokio::sync::Mutex;
 /// Helper to construct an `AppState` with the given `mcp_servers` and defaults for all other fields.
 fn test_app_state(mcp_servers: SharedMcpServers) -> AppState {
     AppState {
-        app_token: None,
         mcp_servers,
         download_manager: Arc::new(Mutex::new(
             crate::core::downloads::models::DownloadManagerState::default(),

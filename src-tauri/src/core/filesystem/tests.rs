@@ -15,7 +15,6 @@ use tokio::sync::{oneshot, Mutex};
 fn test_app_state() -> AppState {
     let mcp_servers: SharedMcpServers = Arc::new(Mutex::new(std::collections::HashMap::new()));
     AppState {
-        app_token: None,
         mcp_servers,
         download_manager: Arc::new(Mutex::new(
             crate::core::downloads::models::DownloadManagerState::default(),
