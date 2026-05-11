@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { extractErrorMessage, OUT_OF_CONTEXT_SIZE } from '../error'
+import { extractErrorMessage, OUT_OF_CONTEXT_SIZE, toError } from '../error'
 
 describe('error utilities', () => {
   describe('OUT_OF_CONTEXT_SIZE', () => {
@@ -34,6 +34,18 @@ describe('error utilities', () => {
         fileName: 'internal.ts',
         value: 42,
       })).toBe('{"code":"","value":42}')
+    })
+  })
+
+  describe('toError', () => {
+    it('returns Error instances unchanged', () => {
+      const error = new Error('boom')
+      expect(toError(error, 'fallback')).toBe(error)
+    })
+
+    it('wraps non-Error values with the fallback message', () => {
+      expect(toError('boom', 'fallback').message).toBe('fallback')
+      expect(toError({ message: 'boom' }, 'fallback').message).toBe('fallback')
     })
   })
 })

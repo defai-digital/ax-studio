@@ -5,7 +5,10 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { Progress } from '@/components/ui/progress'
-import { useDownloadStore } from '@/hooks/models/useDownloadStore'
+import {
+  toDownloadProcesses,
+  useDownloadStore,
+} from '@/hooks/models/useDownloadStore'
 import { useLeftPanel } from '@/hooks/ui/useLeftPanel'
 import { useAppUpdater } from '@/hooks/updater/useAppUpdater'
 import { useServiceHub } from '@/hooks/useServiceHub'
@@ -155,27 +158,7 @@ export function DownloadManagement() {
   }, [t])
 
   const downloadProcesses = useMemo(() => {
-    // Get downloads with progress data
-    const downloadsWithProgress = Object.values(downloads).map((download) => ({
-      id: download.name,
-      name: download.name,
-      progress: download.progress,
-      current: download.current,
-      total: download.total,
-    }))
-
-    // Add local downloading models that don't have progress data yet
-    const localDownloadsWithoutProgress = Array.from(localDownloadingModels)
-      .filter((modelId) => !downloads[modelId]) // Only include models not in downloads
-      .map((modelId) => ({
-        id: modelId,
-        name: modelId,
-        progress: 0,
-        current: 0,
-        total: 0,
-      }))
-
-    return [...downloadsWithProgress, ...localDownloadsWithoutProgress]
+    return toDownloadProcesses(downloads, localDownloadingModels)
   }, [downloads, localDownloadingModels])
 
   const downloadCount = useMemo(() => {

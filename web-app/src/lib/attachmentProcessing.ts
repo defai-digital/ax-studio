@@ -1,6 +1,6 @@
 import { ServiceHub } from '@/services'
 import { Attachment } from '@/types/attachment'
-import { extractErrorMessage } from '@/lib/utils/error'
+import { extractErrorMessage, toError } from '@/lib/utils/error'
 import { toast } from 'sonner'
 
 type AttachmentProcessingStatus = 'processing' | 'done' | 'error' | 'clear_all'
@@ -87,7 +87,7 @@ export const processAttachmentsForSend = async (
         notifyUpdate(img.name, 'error')
         const desc = extractErrorMessage(err, 'Unknown error')
         toast.error('Failed to ingest image attachment', { description: desc })
-        throw err instanceof Error ? err : new Error(desc)
+        throw toError(err, desc)
       }
     }
   }
@@ -219,7 +219,7 @@ export const processAttachmentsForSend = async (
       notifyUpdate(doc.name, 'error')
       const desc = extractErrorMessage(err, 'Unknown error')
       toast.error('Failed to index attachments', { description: desc })
-      throw err instanceof Error ? err : new Error(desc)
+      throw toError(err, desc)
     }
   }
 

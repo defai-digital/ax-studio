@@ -8,6 +8,7 @@ import { DEFAULT_MCP_SETTINGS } from '@/hooks/tools/useMCPServers'
 import type { MCPServerConfig, MCPServers, MCPSettings } from '@/hooks/tools/useMCPServers'
 import type { MCPConfig, MCPService } from './types'
 import { mcpServersSchema, mcpSettingsSchema } from '@/schemas/mcp.schema'
+import { extractErrorMessage, toError } from '@/lib/utils/error'
 
 const getCoreApi = () => {
   if (!window.core?.api) {
@@ -18,13 +19,7 @@ const getCoreApi = () => {
 }
 
 function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message
-  if (typeof error === 'string') return error
-  try {
-    return JSON.stringify(error)
-  } catch {
-    return String(error)
-  }
+  return extractErrorMessage(error, String(error))
 }
 
 function isRecoverableMCPError(error: unknown): boolean {
@@ -175,9 +170,7 @@ export class TauriMCPService implements MCPService {
       await invoke('activate_mcp_server', { name, config })
     } catch (error) {
       console.error(`Failed to activate MCP server "${name}":`, error)
-      throw error instanceof Error
-        ? error
-        : new Error(`Failed to activate MCP server "${name}"`)
+      throw toError(error, `Failed to activate MCP server "${name}"`)
     }
   }
 
@@ -186,9 +179,7 @@ export class TauriMCPService implements MCPService {
       await invoke('deactivate_mcp_server', { name })
     } catch (error) {
       console.error(`Failed to deactivate MCP server "${name}":`, error)
-      throw error instanceof Error
-        ? error
-        : new Error(`Failed to deactivate MCP server "${name}"`)
+      throw toError(error, `Failed to deactivate MCP server "${name}"`)
     }
   }
 

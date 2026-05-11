@@ -7,6 +7,10 @@ export function isContextSizeError(message: string): boolean {
   return message.trim().toLowerCase().includes(OUT_OF_CONTEXT_SIZE)
 }
 
+export function toError(error: unknown, fallbackMessage: string): Error {
+  return error instanceof Error ? error : new Error(fallbackMessage)
+}
+
 export function extractErrorMessage(
   error: unknown,
   fallback = 'Something went wrong.'

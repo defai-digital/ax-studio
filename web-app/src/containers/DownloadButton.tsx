@@ -1,12 +1,16 @@
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import { useDownloadStore } from '@/hooks/models/useDownloadStore'
+import {
+  toDownloadProcesses,
+  useDownloadStore,
+} from '@/hooks/models/useDownloadStore'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useTranslation } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { getHuggingFaceModelUrl } from '@/lib/huggingface'
+import { extractErrorMessage } from '@/lib/utils/error'
 import { CatalogModel } from '@/services/models/types'
 import { AppEvent, DownloadEvent, DownloadState, events } from '@ax-studio/core'
 import { toast } from 'sonner'
@@ -15,6 +19,7 @@ import { useShallow } from 'zustand/shallow'
 import { DEFAULT_MODEL_QUANTIZATIONS } from '@/constants/models'
 import { ExternalLink, Download, Pause, Play } from 'lucide-react'
 import { findDownloadedLocalModel } from '@/lib/models/downloaded'
+import { getPreferredMmprojPath } from '@/lib/models'
 
 type ModelProps = {
   model: CatalogModel
@@ -57,14 +62,7 @@ export function DownloadButtonPlaceholder({
   const modelId = quant?.model_id || model.model_name
 
   const downloadProcesses = useMemo(
-    () =>
-      Object.values(downloads).map((download) => ({
-        id: download.name,
-        name: download.name,
-        progress: download.progress,
-        current: download.current,
-        total: download.total,
-      })),
+    () => toDownloadProcesses(downloads),
     [downloads]
   )
 
@@ -128,29 +126,14 @@ export function DownloadButtonPlaceholder({
     // Immediately set local downloading state and start download
     addLocalDownloadingModel(modelId)
     setIsPaused(false)
-    const mmprojPath = (
-      model.mmproj_models?.find(
-        (e) => e.model_id.toLowerCase() === 'mmproj-f16'
-      ) || model.mmproj_models?.[0]
-    )?.path
+    const mmprojPath = getPreferredMmprojPath(model.mmproj_models)
     serviceHub
       .models()
       .pullModelWithMetadata(modelId, modelUrl, mmprojPath, huggingfaceToken)
       .catch((error) => {
         console.error('Failed to start model download:', error)
         removeLocalDownloadingModel(modelId)
-        const description =
-          error instanceof Error
-            ? error.message
-            : typeof error === 'string'
-              ? error
-              : (() => {
-                  try {
-                    return JSON.stringify(error)
-                  } catch {
-                    return String(error)
-                  }
-                })()
+        const description = extractErrorMessage(error, '')
         toast.error('Failed to start model download', {
           description: description || 'Unknown error (check DevTools console).',
         })

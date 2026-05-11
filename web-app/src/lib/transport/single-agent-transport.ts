@@ -11,6 +11,7 @@ import type { UIMessageChunk } from 'ai'
 import type { TokenUsageCallback } from './transport-types'
 import { stripUnavailableToolParts } from './transport-types'
 import { useAppState } from '@/hooks/settings/useAppState'
+import { extractErrorMessage } from '@/lib/utils/error'
 
 export interface SingleAgentConfig {
   model: LanguageModel
@@ -148,10 +149,7 @@ export async function executeSingleAgentStream(
     },
     onError: (error) => {
       console.error('[SingleAgentTransport] stream error:', error)
-      if (error == null) return 'Unknown error'
-      if (typeof error === 'string') return error
-      if (error instanceof Error) return error.message
-      return JSON.stringify(error)
+      return extractErrorMessage(error, 'Unknown error')
     },
     onFinish: ({ responseMessage }) => {
       if (responseMessage) {

@@ -9,10 +9,17 @@ import { ArrowLeft, Calendar, Download, ExternalLink, Eye, HardDrive, Wrench } f
 import { motion } from 'motion/react'
 import { route } from '@/constants/routes'
 import { useModelSources } from '@/hooks/models/useModelSources'
-import { extractModelName, extractDescription } from '@/lib/models'
+import {
+  extractModelName,
+  extractDescription,
+  getPreferredMmprojPath,
+} from '@/lib/models'
 import { RenderMarkdown } from '@/containers/RenderMarkdown'
 import { useEffect, useMemo, useCallback, useState, useRef } from 'react'
-import { useDownloadStore } from '@/hooks/models/useDownloadStore'
+import {
+  toDownloadProcesses,
+  useDownloadStore,
+} from '@/hooks/models/useDownloadStore'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import type { CatalogModel, ModelQuant } from '@/services/models/types'
 import { Progress } from '@/components/ui/progress'
@@ -30,6 +37,7 @@ import {
 import { z } from 'zod/v4'
 import { toast } from 'sonner'
 import { findDownloadedLocalModel } from '@/lib/models/downloaded'
+import { extractErrorMessage } from '@/lib/utils/error'
 
 type SearchParams = {
   repo: string
@@ -149,14 +157,7 @@ function HubModelDetailContent() {
 
   // Download processes
   const downloadProcesses = useMemo(
-    () =>
-      Object.values(downloads).map((download) => ({
-        id: download.name,
-        name: download.name,
-        progress: download.progress,
-        current: download.current,
-        total: download.total,
-      })),
+    () => toDownloadProcesses(downloads),
     [downloads]
   )
 
@@ -595,29 +596,14 @@ function HubModelDetailContent() {
                                     .pullModelWithMetadata(
                                       variant.model_id,
                                       variant.path,
-                                      (
-                                        modelData.mmproj_models?.find(
-                                          (e) =>
-                                            e.model_id.toLowerCase() ===
-                                            'mmproj-f16'
-                                        ) || modelData.mmproj_models?.[0]
-                                      )?.path,
+                                      getPreferredMmprojPath(
+                                        modelData.mmproj_models
+                                      ),
                                       huggingfaceToken
                                     )
                                 } catch (error) {
                                   console.error('Failed to start model download:', error)
-                                  const description =
-                                    error instanceof Error
-                                      ? error.message
-                                      : typeof error === 'string'
-                                        ? error
-                                        : (() => {
-                                            try {
-                                              return JSON.stringify(error)
-                                            } catch {
-                                              return String(error)
-                                            }
-                                          })()
+                                  const description = extractErrorMessage(error, '')
                                   toast.error('Failed to download model', {
                                     description: description || 'Unknown error (check DevTools console).',
                                   })

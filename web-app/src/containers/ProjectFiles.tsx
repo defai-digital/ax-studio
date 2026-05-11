@@ -7,14 +7,16 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { cn, formatBytes } from '@/lib/utils'
+import { basename, cn, fileExtension, formatBytes } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { createDocumentAttachment, type Attachment } from '@/types/attachment'
 import { useAttachments } from '@/hooks/chat/useAttachments'
 import { FileStat } from '@ax-studio/core'
+import { SUPPORTED_DOCUMENT_EXTENSIONS } from '@/constants/attachments'
 import { useFileRegistry, projectCollectionId } from '@/lib/file-registry'
 import { partitionDuplicateAttachments } from '@/lib/attachments/dedupe'
+import { extractErrorMessage } from '@/lib/utils/error'
 
 type ProjectFilesProps = {
   projectId: string
@@ -39,20 +41,6 @@ type UploadDropZoneProps = {
   onDragLeave: (event: DragEvent) => void
   onDrop: (event: DragEvent) => void
 }
-
-const SUPPORTED_EXTENSIONS = [
-  'pdf',
-  'docx',
-  'txt',
-  'md',
-  'csv',
-  'xlsx',
-  'xls',
-  'ods',
-  'pptx',
-  'html',
-  'htm',
-]
 
 function UploadDropZone({
   description,
@@ -145,8 +133,8 @@ async function getFilesFromDirectory(
         const nestedFiles = await getFilesFromDirectory(entry, fs)
         files.push(...nestedFiles)
       } else if (!stat?.isDirectory) {
-        const ext = entry.split('.').pop()?.toLowerCase()
-        if (ext && SUPPORTED_EXTENSIONS.includes(ext)) {
+        const ext = fileExtension(entry)
+        if (ext && SUPPORTED_DOCUMENT_EXTENSIONS.includes(ext)) {
           files.push(entry)
         }
       }
@@ -215,11 +203,11 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
 
       const preparedAttachments: Attachment[] = []
       for (const p of filePaths) {
-        const name = p.split(/[\\/]/).pop() || p
-        const fileType = name.split('.').pop()?.toLowerCase()
+        const name = basename(p) || p
+        const fileType = fileExtension(name)
 
         // Filter unsupported file types
-        if (!fileType || !SUPPORTED_EXTENSIONS.includes(fileType)) {
+        if (!fileType || !SUPPORTED_DOCUMENT_EXTENSIONS.includes(fileType)) {
           toast.warning(
             t('common:toast.unsupportedFileType.title') ??
               'Unsupported file type',
@@ -299,8 +287,7 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
         toast.error(
           t('common:toast.uploadFailed.title') ?? 'Failed to upload file',
           {
-            description:
-              error instanceof Error ? error.message : JSON.stringify(error),
+            description: extractErrorMessage(error, String(error)),
           }
         )
       } finally {
@@ -323,7 +310,7 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
         filters: [
           {
             name: 'Documents',
-            extensions: SUPPORTED_EXTENSIONS,
+            extensions: SUPPORTED_DOCUMENT_EXTENSIONS,
           },
         ],
       })
@@ -332,8 +319,7 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
       await processFilePaths(paths)
     } catch (error) {
       console.error('Failed to open file dialog:', error)
-      const desc =
-        error instanceof Error ? error.message : JSON.stringify(error)
+      const desc = extractErrorMessage(error, String(error))
       toast.error(
         t('common:toast.uploadFailed.title') ?? 'Failed to upload file',
         {
@@ -389,8 +375,7 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
       toast.error(
         t('common:toast.deleteFailed.title') ?? 'Failed to delete file',
         {
-          description:
-            error instanceof Error ? error.message : JSON.stringify(error),
+          description: extractErrorMessage(error, String(error)),
         }
       )
     }

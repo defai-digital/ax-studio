@@ -1,5 +1,6 @@
 import { models } from 'token.js'
 import { ModelCapabilities } from '@/types/models'
+import type { MMProjModel } from '@/services/models/types'
 
 export const defaultModel = (provider?: string) => {
   if (!provider || !Object.keys(models).includes(provider)) {
@@ -76,4 +77,14 @@ export function getModelContextLength(model?: { settings?: Record<string, { cont
     return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
   }
   return undefined
+}
+
+export function getPreferredMmprojPath(
+  mmprojModels?: MMProjModel[]
+): string | undefined {
+  return (
+    mmprojModels?.find(
+      (model) => model.model_id.toLowerCase() === 'mmproj-f16'
+    ) ?? mmprojModels?.[0]
+  )?.path
 }

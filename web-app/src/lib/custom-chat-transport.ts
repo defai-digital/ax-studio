@@ -23,6 +23,7 @@ import { isLocalProvider, prepareProviderForChat } from './chat/model-session'
 import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
 import { syncRemoteProviders } from './providers/provider-sync'
 import { LOCAL_PROVIDER_IDS } from '@/constants/providers'
+import { extractErrorMessage } from '@/lib/utils/error'
 
 // Use native fetch — same reason as model-factory.ts (Tauri plugin ReadableStream
 // incompatibility). Proxy accepts CORS from tauri:// origins on loopback.
@@ -189,7 +190,7 @@ async function preflightLocalModelThroughProxy(
       lastError = `${preflight.status}: ${body.slice(0, 200)}`
       if (!shouldRetryLocalPreflight(preflight.status)) break
     } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error)
+      lastError = extractErrorMessage(error, String(error))
     }
 
     if (attempt < LOCAL_PREFLIGHT_ATTEMPTS) {
@@ -560,14 +561,14 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
           cachePreflightResult(finalModelId, finalProviderId, false)
           console.warn(
             `[LLM Router] Routed model "${finalModelId}" preflight failed, falling back to "${fallbackModelId}":`,
-            error instanceof Error ? error.message : error,
+            extractErrorMessage(error, String(error)),
           )
           this.lastRouterResult = {
             modelId: fallbackModelId,
             providerId: fallbackProviderId,
             reason: 'fallback',
             routed: false,
-            fallbackReason: `routed model failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+            fallbackReason: `routed model failed: ${extractErrorMessage(error, 'unknown error')}`,
             latencyMs: routerResult.latencyMs,
           }
           return executeWithModel(fallbackModelId, fallbackProviderId)

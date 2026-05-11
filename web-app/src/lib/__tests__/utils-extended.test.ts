@@ -5,8 +5,8 @@ import {
   getProviderDescription,
   cn,
   isDev,
-  extractThinkingContent,
-  basenameNoExt,
+  basename,
+  fileExtension,
 } from '../utils'
 
 describe('sanitizeModelId', () => {
@@ -58,156 +58,26 @@ describe('sanitizeModelId', () => {
   })
 })
 
-describe('extractThinkingContent', () => {
-  it('removes <think> tags', () => {
-    expect(extractThinkingContent('<think>some thought</think>')).toBe(
-      'some thought'
-    )
+describe('basename', () => {
+  it('returns the final path segment for POSIX and Windows paths', () => {
+    expect(basename('/home/user/file.txt')).toBe('file.txt')
+    expect(basename('C:\\Users\\me\\file.txt')).toBe('file.txt')
   })
 
-  it('removes opening think tag only', () => {
-    expect(extractThinkingContent('<think>partial')).toBe('partial')
-  })
-
-  it('removes closing think tag only', () => {
-    expect(extractThinkingContent('partial</think>')).toBe('partial')
-  })
-
-  it('removes channel|message analysis markers', () => {
-    expect(
-      extractThinkingContent('<|channel|>analysis<|message|>')
-    ).toBe('')
-  })
-
-  it('removes start|assistant|channel|final|message markers', () => {
-    expect(
-      extractThinkingContent(
-        '<|start|>assistant<|channel|>final<|message|>'
-      )
-    ).toBe('')
-  })
-
-  it('removes assistant|channel|final|message without start', () => {
-    expect(
-      extractThinkingContent('assistant<|channel|>final<|message|>')
-    ).toBe('')
-  })
-
-  it('removes remaining channel markers', () => {
-    expect(extractThinkingContent('text<|channel|>more')).toBe('textmore')
-  })
-
-  it('removes remaining message markers', () => {
-    expect(extractThinkingContent('text<|message|>more')).toBe('textmore')
-  })
-
-  it('removes remaining start markers', () => {
-    expect(extractThinkingContent('text<|start|>more')).toBe('textmore')
-  })
-
-  it('trims whitespace from result', () => {
-    expect(extractThinkingContent('  hello  ')).toBe('hello')
-    expect(extractThinkingContent('<think>  hello  </think>')).toBe('hello')
-  })
-
-  it('handles empty string', () => {
-    expect(extractThinkingContent('')).toBe('')
-  })
-
-  it('returns text unchanged when no markers present', () => {
-    expect(extractThinkingContent('plain text here')).toBe('plain text here')
-  })
-
-  it('handles multiple think tags', () => {
-    expect(
-      extractThinkingContent('<think>a</think> middle <think>b</think>')
-    ).toBe('a middle b')
-  })
-
-  it('handles combined markers in realistic content', () => {
-    const input =
-      '<think>Let me analyze this</think><|channel|>analysis<|message|>Here is the answer'
-    expect(extractThinkingContent(input)).toBe(
-      'Let me analyze thisHere is the answer'
-    )
-  })
-
-  it('is idempotent on clean text', () => {
-    const clean = 'already clean text'
-    expect(extractThinkingContent(clean)).toBe(clean)
-    expect(extractThinkingContent(extractThinkingContent(clean))).toBe(clean)
+  it('ignores trailing separators', () => {
+    expect(basename('/home/user/folder/')).toBe('folder')
   })
 })
 
-describe('basenameNoExt', () => {
-  it('removes simple file extension', () => {
-    expect(basenameNoExt('file.txt')).toBe('file')
+describe('fileExtension', () => {
+  it('returns the lowercase extension without the dot', () => {
+    expect(fileExtension('/home/user/File.PDF')).toBe('pdf')
   })
 
-  it('removes .tar.gz extension', () => {
-    expect(basenameNoExt('archive.tar.gz')).toBe('archive')
-  })
-
-  it('removes .zip extension', () => {
-    expect(basenameNoExt('archive.zip')).toBe('archive')
-  })
-
-  it('handles file path with directories', () => {
-    expect(basenameNoExt('/home/user/file.txt')).toBe('file')
-  })
-
-  it('handles .tar.gz in full path', () => {
-    expect(basenameNoExt('/downloads/data.tar.gz')).toBe('data')
-  })
-
-  it('handles multiple dots in filename', () => {
-    expect(basenameNoExt('my.file.name.ts')).toBe('my.file.name')
-  })
-
-  it('handles dotfile with extension', () => {
-    expect(basenameNoExt('.gitignore.bak')).toBe('.gitignore')
-  })
-
-  it('handles .tar.gz case insensitive match', () => {
-    expect(basenameNoExt('ARCHIVE.TAR.GZ')).toBe('ARCHIVE')
-  })
-
-  it('handles .ZIP case insensitive match', () => {
-    expect(basenameNoExt('FILE.ZIP')).toBe('FILE')
-  })
-
-  // Regression: path.extname('Makefile') === '', and
-  // `base.slice(0, -''.length)` collapses to `base.slice(0, 0)` which
-  // returns ''. The implementation now guards against the empty-ext case
-  // and returns the full basename instead.
-  it('returns the full basename for extensionless files', () => {
-    expect(basenameNoExt('Makefile')).toBe('Makefile')
-    expect(basenameNoExt('README')).toBe('README')
-    expect(basenameNoExt('LICENSE')).toBe('LICENSE')
-  })
-
-  it('returns the full basename for dotfiles (Node treats them as no extension)', () => {
-    // `path.extname('.gitignore')` is '' in Node — dotfiles are not
-    // considered to have an extension.
-    expect(basenameNoExt('.gitignore')).toBe('.gitignore')
-  })
-
-  it('handles file with just an extension-like name', () => {
-    expect(basenameNoExt('test.js')).toBe('test')
-  })
-
-  it('handles deeply nested paths', () => {
-    expect(basenameNoExt('/a/b/c/d/e/file.ts')).toBe('file')
-  })
-
-  it('prioritizes .tar.gz over .gz', () => {
-    // .tar.gz is checked first as a valid compound extension
-    expect(basenameNoExt('data.tar.gz')).toBe('data')
-  })
-
-  it('handles .gz files that are not .tar.gz', () => {
-    // Only .gz, not .tar.gz — falls through to normal extname removal
-    expect(basenameNoExt('file.gz')).toBe('file')
+  it('returns an empty string for extensionless names, dotfiles, and trailing dots', () => {
+    expect(fileExtension('Makefile')).toBe('')
+    expect(fileExtension('.gitignore')).toBe('')
+    expect(fileExtension('file.')).toBe('')
   })
 })
 

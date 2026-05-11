@@ -12,6 +12,7 @@ import {
   fs,
 } from '@ax-studio/core'
 import { toast } from 'sonner'
+import { SUPPORTED_DOCUMENT_EXTENSIONS } from '@/constants/attachments'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useAppState } from '@/hooks/settings/useAppState'
@@ -24,8 +25,12 @@ import { useFileRegistry, threadCollectionId } from '@/lib/file-registry'
 import { createDocumentAttachment, type Attachment } from '@/types/attachment'
 import { getModelContextLength } from '@/lib/models'
 import { partitionDuplicateAttachments } from '@/lib/attachments/dedupe'
+import { extractErrorMessage } from '@/lib/utils/error'
+import { basename, fileExtension } from '@/lib/utils'
+import { withTimeout } from '@/lib/utils/async'
 
 const ATTACHMENT_AUTO_INLINE_FALLBACK_BYTES = 512 * 1024
+const ATTACHMENT_MODEL_READY_TIMEOUT_MS = 5_000
 
 type Input = {
   attachmentsKey: string
@@ -131,27 +136,37 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
 
       const processingThreadId = effectiveThreadId || '__pending__'
 
-      const modelReady = await (async () => {
-        if (!selectedModel?.id) return false
-        if (activeModels.includes(selectedModel.id)) return true
-        const provider = getProviderByName(selectedProvider)
-        if (!provider) return false
-        try {
-          updateLoadingModel(true)
-          await serviceHub.models().startModel(provider, selectedModel.id)
-          if (controller.signal.aborted) return false
-          const active = await serviceHub.models().getActiveModels()
-          setActiveModels(active || [])
-          return active?.includes(selectedModel.id) ?? false
-        } catch (err) {
-          console.warn('Failed to start model before attachment validation', err)
-          return false
-        } finally {
-          updateLoadingModel(false)
-        }
-      })()
-
-      if (controller.signal.aborted) return
+      let modelReadyPromise: Promise<boolean> | undefined
+      const getModelReady = () => {
+        modelReadyPromise ??= (async () => {
+          if (!selectedModel?.id) return false
+          if (activeModels.includes(selectedModel.id)) return true
+          const provider = getProviderByName(selectedProvider)
+          if (!provider) return false
+          try {
+            updateLoadingModel(true)
+            await withTimeout(
+              serviceHub.models().startModel(provider, selectedModel.id),
+              ATTACHMENT_MODEL_READY_TIMEOUT_MS,
+              'Timed out while preparing model for attachment token estimation'
+            )
+            if (controller.signal.aborted) return false
+            const active = await withTimeout(
+              serviceHub.models().getActiveModels(),
+              ATTACHMENT_MODEL_READY_TIMEOUT_MS,
+              'Timed out while checking active models for attachment token estimation'
+            )
+            setActiveModels(active || [])
+            return active?.includes(selectedModel.id) ?? false
+          } catch (err) {
+            console.warn('Failed to prepare model for attachment token estimation', err)
+            return false
+          } finally {
+            updateLoadingModel(false)
+          }
+        })()
+        return modelReadyPromise
+      }
 
       const modelContextLength = getModelContextLength(selectedModel ?? undefined)
 
@@ -203,7 +218,9 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
 
       const estimateTokens = async (text: string): Promise<number | undefined> => {
         try {
-          if (!selectedModel?.id || !modelReady) return undefined
+          if (!selectedModel?.id) return undefined
+          const modelReady = await getModelReady()
+          if (!modelReady || controller.signal.aborted) return undefined
           const tokenCount = await serviceHub.models().getTokensCount(selectedModel.id, [
             {
               id: 'inline-attachment',
@@ -258,7 +275,7 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
       } catch (e) {
         console.error('Failed to process attachments:', e)
         // Mark any still-processing attachments with error state
-        const errorMsg = e instanceof Error ? e.message : 'Processing failed'
+        const errorMsg = extractErrorMessage(e, 'Processing failed')
         setAttachmentsForThread(attachmentsKey, (prev) =>
           prev.map((att) => {
             if (att.type === 'document' && att.processing) {
@@ -320,7 +337,7 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
         filters: [
           {
             name: 'Documents',
-            extensions: ['pdf', 'docx', 'txt', 'md', 'csv', 'xlsx', 'xls', 'ods', 'pptx', 'html', 'htm'],
+            extensions: SUPPORTED_DOCUMENT_EXTENSIONS,
           },
         ],
       })
@@ -330,8 +347,8 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
 
       const preparedAttachments: Attachment[] = []
       for (const p of paths) {
-        const name = p.split(/[\\/]/).pop() || p
-        const fileType = name.split('.').pop()?.toLowerCase()
+        const name = basename(p) || p
+        const fileType = fileExtension(name)
         let size: number | undefined = undefined
         try {
           const stat = await fs.fileStat(p)
@@ -385,7 +402,7 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
       }
     } catch (e) {
       console.error('Failed to attach documents:', e)
-      const desc = e instanceof Error ? e.message : JSON.stringify(e)
+      const desc = extractErrorMessage(e, String(e))
       toast.error('Failed to attach documents', { description: desc })
     }
   }, [

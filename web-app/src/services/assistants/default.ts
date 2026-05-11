@@ -3,6 +3,7 @@
  */
 
 import { ExtensionManager } from '@/lib/extension'
+import { toError } from '@/lib/utils/error'
 import { Assistant, AssistantExtension, ExtensionTypeEnum } from '@ax-studio/core'
 import type { AssistantsService } from './types'
 
@@ -34,9 +35,7 @@ export class DefaultAssistantsService implements AssistantsService {
       await extension.createAssistant(assistant)
     } catch (error) {
       console.error(`Failed to create assistant ${assistant.id}:`, error)
-      throw error instanceof Error
-        ? error
-        : new Error(`Failed to create assistant ${assistant.id}`)
+      throw toError(error, `Failed to create assistant ${assistant.id}`)
     }
   }
 
@@ -51,9 +50,7 @@ export class DefaultAssistantsService implements AssistantsService {
       await extension.deleteAssistant(assistant)
     } catch (error) {
       console.error(`Failed to delete assistant ${assistant.id}:`, error)
-      throw error instanceof Error
-        ? error
-        : new Error(`Failed to delete assistant ${assistant.id}`)
+      throw toError(error, `Failed to delete assistant ${assistant.id}`)
     }
   }
 }

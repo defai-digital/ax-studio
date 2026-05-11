@@ -13,26 +13,11 @@ import type { ProvidersService } from './types'
 import { getModelCapabilities } from '@/lib/models'
 import { providerModelsResponseSchema } from '@/schemas/providers.schema'
 import { withTimeout } from '@/lib/utils/async'
+import { extractErrorMessage } from '@/lib/utils/error'
 
 const PROVIDER_LIST_TIMEOUT_MS = 8_000
 const PROVIDER_SETTINGS_TIMEOUT_MS = 8_000
 const PROVIDER_TOOL_CHECK_TIMEOUT_MS = 3_000
-
-function providerErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message
-  if (typeof error === 'string') return error
-  if (error && typeof error === 'object') {
-    const record = error as Record<string, unknown>
-    if (typeof record.message === 'string') return record.message
-    if (typeof record.error === 'string') return record.error
-    try {
-      return JSON.stringify(error)
-    } catch {
-      return String(error)
-    }
-  }
-  return String(error)
-}
 
 async function withProviderTimeout<T>(
   provider: string,
@@ -50,7 +35,7 @@ async function withProviderTimeout<T>(
   } catch (error) {
     console.warn(
       `Failed ${label} for provider "${provider}":`,
-      providerErrorMessage(error)
+      extractErrorMessage(error)
     )
     return fallback
   }
@@ -222,7 +207,7 @@ export class TauriProvidersService implements ProvidersService {
       ).catch((error: unknown) => {
         console.warn(
           `Error resolving models for provider "${providerName}":`,
-          providerErrorMessage(error)
+          extractErrorMessage(error)
         )
         return [] as PromiseSettledResult<Model>[]
       })
@@ -389,7 +374,7 @@ export class TauriProvidersService implements ProvidersService {
       }
 
       // Provide helpful error message for any connection errors
-      const message = providerErrorMessage(error)
+      const message = extractErrorMessage(error)
       if (message.includes('fetch')) {
         throw new Error(
           `Cannot connect to ${provider.provider} at ${baseUrl}. Please check that the service is running and accessible.`

@@ -4,6 +4,7 @@ import {
   extractDescription,
   extractModelName,
   getModelCapabilities,
+  getPreferredMmprojPath,
 } from '../models'
 import { ModelCapabilities } from '@/types/models'
 
@@ -221,5 +222,29 @@ describe('getModelCapabilities', () => {
     expect(capabilities).toContain(ModelCapabilities.COMPLETION)
     expect(capabilities).toContain(ModelCapabilities.TOOLS)
     expect(capabilities).not.toContain(ModelCapabilities.VISION)
+  })
+})
+
+describe('getPreferredMmprojPath', () => {
+  it('prefers the f16 mmproj model path', () => {
+    expect(
+      getPreferredMmprojPath([
+        { model_id: 'model.mmproj-q8', path: 'q8.gguf', file_size: '1 GB' },
+        { model_id: 'mmproj-f16', path: 'f16.gguf', file_size: '2 GB' },
+      ])
+    ).toBe('f16.gguf')
+  })
+
+  it('falls back to the first mmproj model path', () => {
+    expect(
+      getPreferredMmprojPath([
+        { model_id: 'model.mmproj-q8', path: 'q8.gguf', file_size: '1 GB' },
+      ])
+    ).toBe('q8.gguf')
+  })
+
+  it('returns undefined when no mmproj models are available', () => {
+    expect(getPreferredMmprojPath()).toBeUndefined()
+    expect(getPreferredMmprojPath([])).toBeUndefined()
   })
 })

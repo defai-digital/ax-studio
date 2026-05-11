@@ -18,6 +18,21 @@ const {
 }))
 
 vi.mock('@/hooks/models/useDownloadStore', () => ({
+  toDownloadProcesses: vi.fn(
+    (
+      downloads: Record<
+        string,
+        { name: string; progress: number; current: number; total: number }
+      >
+    ) =>
+      Object.values(downloads).map((download) => ({
+        id: download.name,
+        name: download.name,
+        progress: download.progress,
+        current: download.current,
+        total: download.total,
+      }))
+  ),
   useDownloadStore: vi.fn((selector) => {
     const state = {
       downloads: {},

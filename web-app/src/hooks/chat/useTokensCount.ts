@@ -4,6 +4,7 @@ import { usePrompt } from '@/hooks/ui/usePrompt'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceStore } from '@/hooks/useServiceHub'
 import { getModelContextLength } from '@/lib/models'
+import { extractErrorMessage } from '@/lib/utils/error'
 // Simple token estimation for hosted models when backend token counting is unavailable
 // Rough approximation: ~4 characters per token for English text
 const estimateTokensFromText = (text: string): number => {
@@ -235,7 +236,7 @@ export const useTokensCount = (
     } catch (error) {
       if (requestId !== requestIdRef.current || controller.signal.aborted) return
 
-      const msg = error instanceof Error ? error.message : String(error)
+      const msg = extractErrorMessage(error, String(error))
 
       if (!isHosted) {
         if (msg.includes('404')) {
@@ -254,8 +255,7 @@ export const useTokensCount = (
         percentage: maxTokens ? 0 : undefined,
         loading: false,
         isNearLimit: false,
-        error:
-          error instanceof Error ? error.message : 'Failed to calculate tokens',
+        error: extractErrorMessage(error, 'Failed to calculate tokens'),
       })
     }
   }, [getMaxTokens, messages, selectedModel, providers, serviceHub])

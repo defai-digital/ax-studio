@@ -4,6 +4,7 @@
 
 import { invoke } from '@tauri-apps/api/core'
 import type { DialogOpenOptions, DialogService } from './types'
+import { toError } from '@/lib/utils/error'
 
 export class TauriDialogService implements DialogService {
   async open(options?: DialogOpenOptions): Promise<string | string[] | null> {
@@ -13,9 +14,7 @@ export class TauriDialogService implements DialogService {
       })
       return result
     } catch (error) {
-      throw error instanceof Error
-        ? error
-        : new Error('Failed to open native dialog')
+      throw toError(error, 'Failed to open native dialog')
     }
   }
 
@@ -24,9 +23,7 @@ export class TauriDialogService implements DialogService {
       return await invoke<string | null>('save_dialog', { options })
     } catch (error) {
       console.error('Error opening save dialog in Tauri:', error)
-      throw error instanceof Error
-        ? error
-        : new Error('Failed to open save dialog')
+      throw toError(error, 'Failed to open save dialog')
     }
   }
 }

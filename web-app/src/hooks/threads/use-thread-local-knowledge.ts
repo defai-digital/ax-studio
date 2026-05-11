@@ -8,6 +8,7 @@ import {
   parseFabricSearchResults,
 } from '@/lib/fabric-search'
 import { pushUniqueNormalizedString } from '@/lib/utils/array'
+import { extractErrorMessage } from '@/lib/utils/error'
 
 const LOCAL_KNOWLEDGE_TOP_K = 5
 const LOCAL_KNOWLEDGE_SEARCH_TIMEOUT_MS = 12_000
@@ -97,11 +98,7 @@ function buildKeywordFallbackQueries(query: string): string[] {
 }
 
 function isRecoverableLocalKnowledgeError(error: unknown): boolean {
-  const message = error instanceof Error
-    ? error.message
-    : typeof error === 'string'
-      ? error
-      : JSON.stringify(error)
+  const message = extractErrorMessage(error, String(error))
 
   return /transport closed|connection closed|server disconnected|server .*not found|timed out/i.test(message)
 }

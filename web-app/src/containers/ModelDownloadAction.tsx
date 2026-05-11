@@ -2,18 +2,23 @@ import { Download } from "lucide-react";
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { route } from '@/constants/routes'
-import { useDownloadStore } from '@/hooks/models/useDownloadStore'
+import {
+  toDownloadProcesses,
+  useDownloadStore,
+} from '@/hooks/models/useDownloadStore'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useTranslation } from '@/i18n'
 import { CatalogModel } from '@/services/models/types'
 import { sanitizeModelId } from '@/lib/utils'
+import { extractErrorMessage } from '@/lib/utils/error'
 import { AppEvent, DownloadEvent, DownloadState, events } from '@ax-studio/core'
 import { useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { findDownloadedLocalModel } from '@/lib/models/downloaded'
+import { getPreferredMmprojPath } from '@/lib/models'
 
 export const ModelDownloadAction = ({
   variant,
@@ -37,14 +42,7 @@ export const ModelDownloadAction = ({
   const [isDownloaded, setDownloaded] = useState<boolean>(false)
 
   const downloadProcesses = useMemo(
-    () =>
-      Object.values(downloads).map((download) => ({
-        id: download.name,
-        name: download.name,
-        progress: download.progress,
-        current: download.current,
-        total: download.total,
-      })),
+    () => toDownloadProcesses(downloads),
     [downloads]
   )
 
@@ -109,28 +107,13 @@ export const ModelDownloadAction = ({
       .pullModelWithMetadata(
         downloadModelId,
         variant.path,
-        (
-          model.mmproj_models?.find(
-            (e) => e.model_id.toLowerCase() === 'mmproj-f16'
-          ) || model.mmproj_models?.[0]
-        )?.path,
+        getPreferredMmprojPath(model.mmproj_models),
         huggingfaceToken
       )
       .catch((error) => {
         console.error('Failed to start model download:', error)
         removeLocalDownloadingModel(variant.model_id)
-        const description =
-          error instanceof Error
-            ? error.message
-            : typeof error === 'string'
-              ? error
-              : (() => {
-                  try {
-                    return JSON.stringify(error)
-                  } catch {
-                    return String(error)
-                  }
-                })()
+        const description = extractErrorMessage(error, '')
         toast.error('Failed to start model download', {
           description: description || 'Unknown error (check DevTools console).',
         })
