@@ -11,6 +11,7 @@ import { useServiceHub } from '@/hooks/useServiceHub'
 import { useChatAttachments } from '@/hooks/chat/useChatAttachments'
 import { createImageAttachment, type Attachment } from '@/types/attachment'
 import { isPlatformTauri } from '@/lib/platform/utils'
+import { partitionDuplicateAttachments } from '@/lib/attachments/dedupe'
 
 export type ImageAttachmentHandlerParams = {
   attachmentsKey: string
@@ -139,18 +140,16 @@ export function useImageAttachmentHandler({
       let newFiles: Attachment[] = []
 
       setAttachmentsForThread(attachmentsKey, (currentAttachments) => {
-        const existingImageNames = new Set(
-          currentAttachments.filter((a) => a.type === 'image').map((a) => a.name)
-        )
-        duplicates = []
-        newFiles = []
-        for (const att of preparedFiles) {
-          if (existingImageNames.has(att.name)) {
-            duplicates.push(att.name)
-            continue
-          }
-          newFiles.push(att)
-        }
+        const result = partitionDuplicateAttachments({
+          existingItems: currentAttachments,
+          incomingItems: preparedFiles,
+          getExistingIdentity: (attachment) =>
+            attachment.type === 'image' ? attachment.name : undefined,
+          getIncomingIdentity: (attachment) => attachment.name,
+          getDuplicateLabel: (attachment) => attachment.name,
+        })
+        duplicates = result.duplicateLabels
+        newFiles = result.newItems
         return newFiles.length > 0
           ? [...currentAttachments, ...newFiles]
           : currentAttachments

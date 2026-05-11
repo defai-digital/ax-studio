@@ -14,6 +14,7 @@ import { createDocumentAttachment, type Attachment } from '@/types/attachment'
 import { useAttachments } from '@/hooks/chat/useAttachments'
 import { FileStat } from '@ax-studio/core'
 import { useFileRegistry, projectCollectionId } from '@/lib/file-registry'
+import { partitionDuplicateAttachments } from '@/lib/attachments/dedupe'
 
 type ProjectFilesProps = {
   projectId: string
@@ -257,17 +258,15 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
         )
       }
 
-      // Filter duplicates
-      const existingPaths = new Set(
-        files.filter((f) => f.path).map((f) => f.path)
-      )
-      const duplicates: string[] = []
-      const newAttachments = preparedAttachments.filter((att) => {
-        if (existingPaths.has(att.path)) {
-          duplicates.push(att.name)
-          return false
-        }
-        return true
+      const {
+        newItems: newAttachments,
+        duplicateLabels: duplicates,
+      } = partitionDuplicateAttachments({
+        existingItems: files,
+        incomingItems: preparedAttachments,
+        getExistingIdentity: (file) => file.path,
+        getIncomingIdentity: (attachment) => attachment.path,
+        getDuplicateLabel: (attachment) => attachment.name,
       })
 
       if (duplicates.length > 0) {

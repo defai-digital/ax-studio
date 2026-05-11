@@ -23,6 +23,7 @@ import { processAttachmentsForSend } from '@/lib/attachmentProcessing'
 import { useFileRegistry, threadCollectionId } from '@/lib/file-registry'
 import { createDocumentAttachment, type Attachment } from '@/types/attachment'
 import { getModelContextLength } from '@/lib/models'
+import { partitionDuplicateAttachments } from '@/lib/attachments/dedupe'
 
 const ATTACHMENT_AUTO_INLINE_FALLBACK_BYTES = 512 * 1024
 
@@ -360,15 +361,16 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
       let newDocAttachments: Attachment[] = []
 
       setAttachmentsForThread(attachmentsKey, (currentAttachments) => {
-        const existingPaths = new Set(
-          currentAttachments.filter((a) => a.type === 'document' && a.path).map((a) => a.path)
-        )
-        duplicates = []
-        newDocAttachments = []
-        for (const att of preparedAttachments) {
-          if (existingPaths.has(att.path)) { duplicates.push(att.name); continue }
-          newDocAttachments.push(att)
-        }
+        const result = partitionDuplicateAttachments({
+          existingItems: currentAttachments,
+          incomingItems: preparedAttachments,
+          getExistingIdentity: (attachment) =>
+            attachment.type === 'document' ? attachment.path : undefined,
+          getIncomingIdentity: (attachment) => attachment.path,
+          getDuplicateLabel: (attachment) => attachment.name,
+        })
+        duplicates = result.duplicateLabels
+        newDocAttachments = result.newItems
         return newDocAttachments.length > 0 ? [...currentAttachments, ...newDocAttachments] : currentAttachments
       })
 
