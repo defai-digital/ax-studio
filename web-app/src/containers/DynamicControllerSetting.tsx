@@ -244,6 +244,7 @@ type DynamicControllerProps = {
 }
 
 export function DynamicControllerSetting({
+  title,
   className,
   controllerType,
   controllerProps,
@@ -281,6 +282,7 @@ export function DynamicControllerSetting({
     return (
       <div className={cn('relative w-full', className)}>
         <select
+          aria-label={title ?? controllerProps.placeholder ?? 'Select option'}
           value={String(controllerProps.value ?? '')}
           onChange={(event) => {
             const selectedOption = options.find(

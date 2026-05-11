@@ -121,6 +121,7 @@ describe('DynamicControllerSetting', () => {
 
     render(
       <DynamicControllerSetting
+        title="Mode"
         controllerType="dropdown"
         controllerProps={{
           value: 'b',
@@ -133,8 +134,10 @@ describe('DynamicControllerSetting', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /beta/i }))
-    await user.click(await screen.findByText('Alpha'))
+    const select = screen.getByRole('combobox', { name: /mode/i })
+    expect(select).toHaveValue('b')
+
+    await user.selectOptions(select, 'a')
 
     expect(onChange).toHaveBeenCalledWith('a')
   })

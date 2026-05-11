@@ -198,18 +198,92 @@ describe('useThreads', () => {
     expect(result.current.threads).toEqual({})
   })
 
+  it('keeps favorites and project threads when deleting regular threads', () => {
+    const { result } = renderHook(() => useThreads())
+
+    const threads = [
+      { id: 'regular', title: 'Regular', messages: [] },
+      { id: 'favorite', title: 'Favorite', messages: [], isFavorite: true },
+      {
+        id: 'project-thread',
+        title: 'Project Thread',
+        messages: [],
+        metadata: { project: { id: 'project-1', name: 'Project 1' } },
+      },
+    ]
+
+    act(() => {
+      result.current.setThreads(threads)
+      result.current.setCurrentThreadId('regular')
+      result.current.deleteAllThreads()
+    })
+
+    expect(Object.keys(result.current.threads)).toEqual([
+      'favorite',
+      'project-thread',
+    ])
+    expect(result.current.currentThreadId).toBeUndefined()
+  })
+
+  it('clears all threads and active selection', () => {
+    const { result } = renderHook(() => useThreads())
+
+    act(() => {
+      result.current.setThreads([
+        { id: 'thread1', title: 'Thread 1', messages: [] },
+        { id: 'thread2', title: 'Thread 2', messages: [] },
+      ])
+      result.current.setCurrentThreadId('thread1')
+      result.current.clearAllThreads()
+    })
+
+    expect(result.current.threads).toEqual({})
+    expect(result.current.currentThreadId).toBeUndefined()
+  })
+
+  it('deletes only threads that belong to a project', () => {
+    const { result } = renderHook(() => useThreads())
+
+    act(() => {
+      result.current.setThreads([
+        {
+          id: 'project-a-thread',
+          title: 'Project A',
+          messages: [],
+          metadata: { project: { id: 'project-a', name: 'Project A' } },
+        },
+        {
+          id: 'project-b-thread',
+          title: 'Project B',
+          messages: [],
+          metadata: { project: { id: 'project-b', name: 'Project B' } },
+        },
+        { id: 'regular', title: 'Regular', messages: [] },
+      ])
+      result.current.setCurrentThreadId('project-a-thread')
+      result.current.deleteAllThreadsByProject('project-a')
+    })
+
+    expect(Object.keys(result.current.threads)).toEqual([
+      'project-b-thread',
+      'regular',
+    ])
+    expect(result.current.currentThreadId).toBeUndefined()
+  })
+
   it('should unstar all threads', () => {
     const { result } = renderHook(() => useThreads())
 
-    // Just test that the function exists and can be called
-    expect(typeof result.current.unstarAllThreads).toBe('function')
-
     act(() => {
+      result.current.setThreads([
+        { id: 'thread1', title: 'Thread 1', messages: [], isFavorite: true },
+        { id: 'thread2', title: 'Thread 2', messages: [], isFavorite: true },
+      ])
       result.current.unstarAllThreads()
     })
 
-    // Function executed without error
-    expect(true).toBe(true)
+    expect(result.current.threads.thread1.isFavorite).toBe(false)
+    expect(result.current.threads.thread2.isFavorite).toBe(false)
   })
 
   it('should filter threads by search term', () => {
@@ -238,5 +312,54 @@ describe('useThreads', () => {
 
     const filtered = result.current.getFilteredThreads('')
     expect(filtered).toHaveLength(2)
+  })
+
+  it('creates a thread and selects it', async () => {
+    const { result } = renderHook(() => useThreads())
+
+    await act(async () => {
+      await result.current.createThread({
+        provider: 'provider',
+        id: 'model',
+      })
+    })
+
+    expect(result.current.currentThreadId).toBe('test-thread')
+    expect(result.current.threads['test-thread']).toEqual({
+      id: 'test-thread',
+      messages: [],
+    })
+  })
+
+  it('updates the active thread assistant and model', () => {
+    const { result } = renderHook(() => useThreads())
+
+    act(() => {
+      result.current.setThreads([
+        {
+          id: 'thread1',
+          title: 'Thread 1',
+          messages: [],
+          model: { provider: 'old-provider', id: 'old-model' },
+        },
+      ])
+      result.current.setCurrentThreadId('thread1')
+      result.current.updateCurrentThreadAssistant({
+        id: 'assistant-1',
+        name: 'Assistant 1',
+      })
+      result.current.updateCurrentThreadModel({
+        provider: 'new-provider',
+        id: 'new-model',
+      })
+    })
+
+    expect(result.current.threads.thread1.assistants).toEqual([
+      { id: 'assistant-1', name: 'Assistant 1' },
+    ])
+    expect(result.current.threads.thread1.model).toEqual({
+      provider: 'new-provider',
+      id: 'new-model',
+    })
   })
 })

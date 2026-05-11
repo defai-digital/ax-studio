@@ -12,7 +12,7 @@ rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-tokio = { version = "1", features = ["process", "fs", "macros", "rt"] }
+tokio = { version = "1", features = ["process", "fs", "io-util", "macros", "rt"] }
 tokio-util = "0.7.14"
 url = "2.5"
 

@@ -25,9 +25,6 @@ fn test_get_vulkan_gpus() {
 fn test_get_vulkan_gpus_on_desktop() {
     let gpus = vulkan::get_vulkan_gpus();
 
-    // Test that function returns without panicking on desktop platforms
-    assert!(gpus.len() >= 0);
-
     // If GPUs are found, verify they have valid properties
     for (i, gpu) in gpus.iter().enumerate() {
         println!("Desktop GPU {}:", i);
@@ -61,9 +58,6 @@ fn test_get_vulkan_gpus_on_desktop() {
 #[test]
 fn test_get_vulkan_gpus_on_android() {
     let gpus = vulkan::get_vulkan_gpus();
-
-    // Test that function returns without panicking on Android
-    assert!(gpus.len() >= 0);
 
     // Android-specific validation
     for (i, gpu) in gpus.iter().enumerate() {
@@ -109,10 +103,6 @@ fn test_get_vulkan_gpus_on_android() {
 #[test]
 fn test_get_vulkan_gpus_on_ios() {
     let gpus = vulkan::get_vulkan_gpus();
-
-    // Note: iOS doesn't support Vulkan natively, so this might return empty
-    // But the function should still work without crashing
-    assert!(gpus.len() >= 0);
 
     // iOS-specific validation (if any Vulkan implementation is available via MoltenVK)
     for (i, gpu) in gpus.iter().enumerate() {
