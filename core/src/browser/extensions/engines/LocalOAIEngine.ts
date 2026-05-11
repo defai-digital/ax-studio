@@ -65,17 +65,9 @@ export abstract class LocalOAIEngine extends OAIEngine {
     super.onUnload()
   }
 
-  /**
-   * Load the model.
-   */
-  async loadModel(_model: Model & { file_path?: string }): Promise<void> {
-    // Implementation of loading the model
-  }
+  /** Override in subclasses to perform engine-specific model loading. */
+  async loadModel(_model: Model & { file_path?: string }): Promise<void> {}
 
-  /**
-   * Stops the model.
-   */
-  async unloadModel(_model?: Model) {
-    // Implementation of unloading the model
-  }
+  /** Override in subclasses to perform engine-specific model unloading. */
+  async unloadModel(_model?: Model) {}
 }

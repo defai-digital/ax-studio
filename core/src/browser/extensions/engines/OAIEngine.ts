@@ -94,6 +94,7 @@ export abstract class OAIEngine extends AIEngine {
     events.off(InferenceEvent.OnInferenceStopped, this.handleInferenceStopped)
   }
 
+  /** Override in subclasses to handle inference requests; default is a no-op. */
   inference(_data: MessageRequest): void | Promise<unknown> {}
 
   /**

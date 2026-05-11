@@ -21,6 +21,7 @@ import {
   Brain,
   Route,
   ShieldCheck,
+  Puzzle,
 } from 'lucide-react'
 
 type SettingsMenuItem = {
@@ -143,6 +144,13 @@ const SettingsMenu = () => {
       route: route.settings.memory,
       isEnabled: true,
       icon: <Brain className="size-3.5" />,
+      group: 'Other',
+    },
+    {
+      title: 'common:extensions',
+      route: route.settings.extensions,
+      isEnabled: true,
+      icon: <Puzzle className="size-3.5" />,
       group: 'Other',
     },
   ]
