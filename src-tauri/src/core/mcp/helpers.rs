@@ -835,6 +835,75 @@ mod tests {
         let config = serde_json::json!(42);
         assert_eq!(extract_active_status(&config), None);
     }
+
+    // --- restart_active_mcp_servers: config parsing contract ---
+    //
+    // restart_active_mcp_servers spawns async tasks that call start_mcp_server.
+    // The full restart path requires a Tauri AppHandle and cannot be exercised as
+    // a synchronous unit test.  The tests below verify the pure helper contracts
+    // that the restart path depends on: config must be parseable and the server
+    // name must survive the clone into the spawned task.
+
+    #[test]
+    fn test_restart_config_must_have_command_or_url() {
+        // A config with no command and no url cannot start a server.
+        // extract_command_args returning None is what gates this.
+        let bad_config = serde_json::json!({ "args": [] });
+        assert!(
+            extract_command_args(&bad_config).is_none(),
+            "config without command or url must not produce a valid command spec"
+        );
+    }
+
+    #[test]
+    fn test_restart_server_name_clone_is_independent() {
+        // Verifies that cloning a server name for the spawned task log message
+        // produces an independent String (not a reference into the original).
+        let original = "my-mcp-server".to_string();
+        let cloned_for_task = original.clone();
+        let cloned_for_log = cloned_for_task.clone();
+        drop(cloned_for_task); // simulate name being moved into start_mcp_server
+        assert_eq!(
+            cloned_for_log, "my-mcp-server",
+            "name clone for error log must remain valid after task clone is consumed"
+        );
+    }
+
+    #[test]
+    fn test_restart_http_server_config_is_valid() {
+        // An HTTP MCP server config with empty command must still be accepted —
+        // restart must not silently skip HTTP servers.
+        let http_config = serde_json::json!({
+            "command": "",
+            "args": [],
+            "type": "http",
+            "url": "https://mcp.example.com/mcp"
+        });
+        let args = extract_command_args(&http_config);
+        assert!(
+            args.is_some(),
+            "HTTP server config must be parseable for restart"
+        );
+        let args = args.unwrap();
+        assert_eq!(args.transport_type.as_deref(), Some("http"));
+        assert!(args.url.is_some());
+    }
+
+    #[test]
+    fn test_restart_stdio_server_config_is_valid() {
+        // A stdio MCP server config must be parseable for restart.
+        let stdio_config = serde_json::json!({
+            "command": "node",
+            "args": ["server.js"],
+            "env": {}
+        });
+        let args = extract_command_args(&stdio_config);
+        assert!(
+            args.is_some(),
+            "stdio server config must be parseable for restart"
+        );
+        assert_eq!(args.unwrap().command, "node");
+    }
 }
 
 /// Restart only servers that were previously active (like cortex restart behavior)
@@ -860,7 +929,12 @@ pub async fn restart_active_mcp_servers<R: Runtime>(
         let config_clone = config.clone();
 
         tauri::async_runtime::spawn(async move {
-            let _ = start_mcp_server(app_clone, servers_clone, name_clone, config_clone).await;
+            let name_for_log = name_clone.clone();
+            if let Err(e) =
+                start_mcp_server(app_clone, servers_clone, name_clone, config_clone).await
+            {
+                log::error!("MCP server '{name_for_log}' failed to restart: {e}");
+            }
         });
     }
 

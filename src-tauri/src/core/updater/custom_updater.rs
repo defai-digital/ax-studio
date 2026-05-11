@@ -18,6 +18,9 @@ use thiserror::Error;
 /// Timeout for HTTP requests
 const REQUEST_TIMEOUT_SECS: u64 = 30;
 
+/// Returns the HMAC signing key baked in at compile time, or None for dev/unsigned builds.
+/// The signed primary endpoint is skipped gracefully when this returns None — see callers.
+/// Set AX_STUDIO_SIGNING_KEY at build time for release; never hard-code a fallback value.
 fn signing_key() -> Option<&'static str> {
     option_env!("AX_STUDIO_SIGNING_KEY").and_then(|key| {
         let trimmed = key.trim();

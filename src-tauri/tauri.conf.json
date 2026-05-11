@@ -71,7 +71,7 @@
       "resolve": true
     },
     "updater": {
-      "pubkey": "PLACEHOLDER_REPLACE_WITH_AX_STUDIO_SIGNING_KEY",
+      "pubkey": "",
       "endpoints": [
         "https://updates.axstudio.ai/update-check",
         "https://github.com/ax-studio/ax-studio/releases/latest/download/latest.json"
