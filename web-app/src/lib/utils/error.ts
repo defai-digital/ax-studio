@@ -1,3 +1,5 @@
+import { uniqueStrings } from './array'
+
 export const OUT_OF_CONTEXT_SIZE =
   'the request exceeds the available context size.'
 
@@ -15,10 +17,34 @@ export function extractErrorMessage(
   if (typeof error === 'string' && error.length > 0) {
     return error
   }
+  if (Array.isArray(error)) {
+    const parts = error
+      .map((item) => extractErrorMessage(item, ''))
+      .filter(Boolean)
+    return parts.length ? uniqueStrings(parts).join('; ') : fallback
+  }
   if (error && typeof error === 'object') {
     const record = error as Record<string, unknown>
-    const message = record.message
-    if (typeof message === 'string' && message.length > 0) return message
+    for (const key of ['message', 'error', 'reason', 'detail', 'code']) {
+      const value = record[key]
+      if (typeof value === 'string' && value.trim().length > 0) return value
+    }
+    for (const key of ['error', 'cause']) {
+      const value = record[key]
+      if (!value || typeof value !== 'object') continue
+      const nested = extractErrorMessage(value, '')
+      if (nested) return nested
+    }
+    try {
+      return JSON.stringify(
+        error,
+        Object.keys(error).filter(
+          (key) => !['stack', 'fileName', 'lineNumber', 'columnNumber'].includes(key)
+        )
+      )
+    } catch {
+      return Object.prototype.toString.call(error)
+    }
   }
   return fallback
 }

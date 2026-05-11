@@ -1,9 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-// We need to access the non-exported formatAttachmentError via processAttachmentsForSend,
-// but we can also test processAttachmentsForSend with mocks.
-// Since formatAttachmentError is not exported, we test it indirectly through error paths.
-
 // Mock sonner toast
 vi.mock('sonner', () => ({
   toast: {

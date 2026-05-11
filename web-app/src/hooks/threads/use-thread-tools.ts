@@ -16,6 +16,7 @@ import {
   fabricSearchHasResults,
   parseFabricSearchResults,
 } from '@/lib/fabric-search'
+import { pushUniqueNormalizedString } from '@/lib/utils/array'
 
 export type AddToolOutputFn = (...args: unknown[]) => unknown
 
@@ -179,14 +180,9 @@ const TITLE_LEAD_STOP_WORDS = new Set([
   'show',
 ])
 
-function pushUnique(values: string[], value: string) {
-  const normalized = value.trim().replace(/\s+/g, ' ')
-  if (normalized && !values.includes(normalized)) values.push(normalized)
-}
-
 function buildKeywordFallbackQueries(query: string): string[] {
   const queries: string[] = []
-  pushUnique(queries, query)
+  pushUniqueNormalizedString(queries, query)
 
   const titleMatches = query.match(/\b[A-Z][\w-]*(?:\s+[A-Z][\w-]*){1,6}\b/g) ?? []
   const longestTitle = titleMatches
@@ -195,9 +191,9 @@ function buildKeywordFallbackQueries(query: string): string[] {
     .sort((a, b) => b.length - a.length)[0]
   if (longestTitle) {
     if (/\b(hir\w*|job|role|outcome|result)\b/i.test(query)) {
-      pushUnique(queries, `${longestTitle} hired`)
+      pushUniqueNormalizedString(queries, `${longestTitle} hired`)
     }
-    pushUnique(queries, longestTitle)
+    pushUniqueNormalizedString(queries, longestTitle)
   }
 
   const significantTerms = query
@@ -205,10 +201,10 @@ function buildKeywordFallbackQueries(query: string): string[] {
     .split(/\s+/)
     .filter((term) => term.length > 3 && !KEYWORD_STOP_WORDS.has(term.toLowerCase()))
     .slice(0, 8)
-  pushUnique(queries, significantTerms.join(' '))
+  pushUniqueNormalizedString(queries, significantTerms.join(' '))
 
   for (const term of [...significantTerms].sort((a, b) => b.length - a.length)) {
-    pushUnique(queries, term)
+    pushUniqueNormalizedString(queries, term)
   }
 
   return queries

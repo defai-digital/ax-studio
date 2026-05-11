@@ -7,6 +7,7 @@ import {
   formatFabricToolText,
   parseFabricSearchResults,
 } from '@/lib/fabric-search'
+import { pushUniqueNormalizedString } from '@/lib/utils/array'
 
 const LOCAL_KNOWLEDGE_TOP_K = 5
 const LOCAL_KNOWLEDGE_SEARCH_TIMEOUT_MS = 12_000
@@ -41,11 +42,6 @@ const KEYWORD_STOP_WORDS = new Set([
   'repository',
 ])
 
-function pushUnique(values: string[], value: string) {
-  const normalized = value.trim().replace(/\s+/g, ' ')
-  if (normalized && !values.includes(normalized)) values.push(normalized)
-}
-
 function singularizeKeyword(term: string): string {
   if (/ies$/i.test(term) && term.length > 4) return term.replace(/ies$/i, 'y')
   if (/s$/i.test(term) && !/ss$/i.test(term) && term.length > 3) return term.slice(0, -1)
@@ -58,43 +54,43 @@ function extractSignificantTerms(query: string): string[] {
     const term = rawTerm.trim()
     if (term.length <= 3) continue
     if (KEYWORD_STOP_WORDS.has(term.toLowerCase())) continue
-    pushUnique(terms, singularizeKeyword(term))
+    pushUniqueNormalizedString(terms, singularizeKeyword(term))
   }
   return terms.slice(0, 8)
 }
 
 function buildKeywordFallbackQueries(query: string): string[] {
   const queries: string[] = []
-  pushUnique(queries, query)
+  pushUniqueNormalizedString(queries, query)
 
   const quoted = query.match(/"([^"]+)"/g) ?? []
   for (const value of quoted) {
-    pushUnique(queries, value.replace(/"/g, ''))
+    pushUniqueNormalizedString(queries, value.replace(/"/g, ''))
   }
 
   const titleMatches = query.match(/\b[A-Z][\w-]*(?:\s+[A-Z][\w-]*){1,7}\b/g) ?? []
   for (const title of titleMatches.sort((a, b) => b.length - a.length).slice(0, 2)) {
-    pushUnique(queries, title)
+    pushUniqueNormalizedString(queries, title)
     if (/\b(hir\w*|job|role|outcome|result)\b/i.test(query)) {
-      pushUnique(queries, `${title} hired`)
+      pushUniqueNormalizedString(queries, `${title} hired`)
     }
   }
 
   const significantTerms = extractSignificantTerms(query)
-  pushUnique(queries, significantTerms.join(' '))
+  pushUniqueNormalizedString(queries, significantTerms.join(' '))
 
   const anchoredTerms = significantTerms.filter((term) => /[A-Z]/.test(term))
   for (const anchor of anchoredTerms.slice(0, 2)) {
     for (const term of significantTerms) {
       if (term === anchor) continue
-      pushUnique(queries, `${term} ${anchor}`)
+      pushUniqueNormalizedString(queries, `${term} ${anchor}`)
     }
   }
 
   if (/\btypescript\b/i.test(query) && /\barray|arrays\b/i.test(query)) {
-    pushUnique(queries, 'array TypeScript')
-    pushUnique(queries, 'Array types TypeScript')
-    pushUnique(queries, 'number array TypeScript')
+    pushUniqueNormalizedString(queries, 'array TypeScript')
+    pushUniqueNormalizedString(queries, 'Array types TypeScript')
+    pushUniqueNormalizedString(queries, 'number array TypeScript')
   }
 
   return queries

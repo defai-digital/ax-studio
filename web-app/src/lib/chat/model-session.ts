@@ -1,5 +1,6 @@
 import type { ServiceHub } from '@/services'
 import { LOCAL_PROVIDER_IDS } from '@/constants/providers'
+import { extractErrorMessage } from '@/lib/utils/error'
 
 export function isLocalProvider(provider: ProviderObject): boolean {
   return LOCAL_PROVIDER_IDS.has(provider.provider)
@@ -26,29 +27,8 @@ export async function prepareProviderForChat(
       await serviceHub.models().startModel(provider, modelId)
     } catch (loadError) {
       throw new Error(
-        `Failed to load model "${modelId}": ${formatErrorMessage(loadError)}`
+        `Failed to load model "${modelId}": ${extractErrorMessage(loadError)}`
       )
     }
   }
-}
-
-/**
- * Extract a human-readable message from any error shape.
- * Handles Error instances, Tauri plain-object errors ({code, message}),
- * strings, and arbitrary objects (via JSON.stringify fallback).
- */
-function formatErrorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message
-  if (typeof err === 'string') return err
-  if (err && typeof err === 'object') {
-    const obj = err as Record<string, unknown>
-    if (typeof obj.message === 'string') return obj.message
-    if (typeof obj.error === 'string') return obj.error
-    try {
-      return JSON.stringify(err, Object.keys(err as object).filter(k => !['stack', 'fileName', 'lineNumber', 'columnNumber'].includes(k)))
-    } catch {
-      return Object.prototype.toString.call(err)
-    }
-  }
-  return String(err)
 }
