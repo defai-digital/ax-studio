@@ -1,17 +1,18 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
-import { scrapeWithTimeout } from '../research-scraper'
 
-// Mock @tauri-apps/api/core
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn(),
+const mockInvoke = vi.fn()
+
+vi.mock('@/hooks/useServiceHub', () => ({
+  getServiceHub: () => ({ core: () => ({ invoke: mockInvoke }) }),
 }))
 
-import { invoke } from '@tauri-apps/api/core'
+import { scrapeWithTimeout } from '../research-scraper'
 
 describe('scrapeWithTimeout', () => {
   let consoleWarnSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
+    mockInvoke.mockReset()
     consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
 
@@ -27,7 +28,6 @@ describe('scrapeWithTimeout', () => {
   })
 
   it('should call invoke with scrape_url command', async () => {
-    const mockInvoke = vi.mocked(invoke)
     mockInvoke.mockResolvedValueOnce('<html>content</html>')
     const controller = new AbortController()
 
@@ -37,7 +37,6 @@ describe('scrapeWithTimeout', () => {
   })
 
   it('should return empty string on invoke error', async () => {
-    const mockInvoke = vi.mocked(invoke)
     mockInvoke.mockRejectedValueOnce(new Error('Network error'))
     const controller = new AbortController()
 
@@ -46,7 +45,6 @@ describe('scrapeWithTimeout', () => {
   })
 
   it('should return empty string on timeout', async () => {
-    const mockInvoke = vi.mocked(invoke)
     mockInvoke.mockImplementationOnce(
       () => new Promise((resolve) => setTimeout(resolve, 20000)),
     )
@@ -93,7 +91,6 @@ describe('scrapeWithTimeout', () => {
     })
 
     it('should accept valid HTTPS URL', async () => {
-      const mockInvoke = vi.mocked(invoke)
       mockInvoke.mockResolvedValueOnce('<html>content</html>')
       const controller = new AbortController()
 

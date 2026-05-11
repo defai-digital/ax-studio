@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core'
+import { getServiceHub } from '@/hooks/useServiceHub'
 
 // Blocklist of hostnames that should not be scraped (internal services, localhost, etc.)
 const BLOCKED_HOSTNAMES = new Set([
@@ -77,7 +77,7 @@ export async function scrapeWithTimeout(url: string, signal: AbortSignal, ms = 8
 
   try {
     return await Promise.race([
-      invoke<string>('scrape_url', { url }),
+      getServiceHub().core().invoke<string>('scrape_url', { url }),
       timeout,
       abort,
     ])

@@ -219,6 +219,9 @@ class PlatformServiceHub implements ServiceHub {
 
     this.openerService = {
       revealItemInDir: async () => {},
+      openUrl: async (url) => {
+        if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer')
+      },
     }
 
     this.updaterService = {

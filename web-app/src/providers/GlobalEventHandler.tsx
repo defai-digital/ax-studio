@@ -1,5 +1,4 @@
 import { useEffect } from 'react'
-import { invoke } from '@tauri-apps/api/core'
 import { events, ModelEvent, AppEvent, DownloadEvent } from '@ax-studio/core'
 import { useNavigate } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
@@ -90,7 +89,7 @@ export function GlobalEventHandler() {
       if (payload?.port) {
         const providerName = payload.provider ?? 'llamacpp'
         try {
-          await invoke('register_provider_config', {
+          await serviceHub.core().invoke('register_provider_config', {
             request: {
               provider: providerName,
               api_key: payload.api_key ?? null,
@@ -123,7 +122,7 @@ export function GlobalEventHandler() {
 
       const providerName = payload?.provider ?? 'llamacpp'
       try {
-        await invoke('unregister_provider_config', { provider: providerName })
+        await serviceHub.core().invoke('unregister_provider_config', { provider: providerName })
       } catch (err) {
         console.error(`[GlobalEventHandler] Failed to unregister local provider '${providerName}' from proxy:`, err)
       }

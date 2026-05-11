@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core'
+import { getServiceHub } from '@/hooks/useServiceHub'
 
 export function getDomain(url: string): string {
   try {
@@ -9,5 +9,5 @@ export function getDomain(url: string): string {
 }
 
 export function openUrl(url: string) {
-  invoke('plugin:opener|open_url', { url }).catch(console.warn)
+  getServiceHub().opener().openUrl(url)
 }

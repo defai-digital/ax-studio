@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core'
+import { getServiceHub } from '@/hooks/useServiceHub'
 import type { ResearchSource } from '@/hooks/research/useResearchPanel'
 import type { MCPToolCallResult, WikiSearchResult } from './research-types'
 
@@ -80,7 +80,7 @@ export async function exaSearch(
   let exaTimeoutId: ReturnType<typeof setTimeout> | undefined
   try {
     const result = await Promise.race([
-      invoke<MCPToolCallResult>('call_tool', {
+      getServiceHub().core().invoke<MCPToolCallResult>('call_tool', {
         toolName: 'web_search_exa',
         serverName: 'exa',
         arguments: { query: question, numResults },

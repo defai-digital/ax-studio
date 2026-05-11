@@ -118,13 +118,12 @@ async function saveBlobNative(blob: Blob, filename: string): Promise<void> {
     const ext = filename.split('.').pop()?.toLowerCase() ?? ''
 
     if ('__TAURI__' in window) {
-      const { invoke } = await import('@tauri-apps/api/core')
+      const { getServiceHub } = await import('@/hooks/useServiceHub')
+      const hub = getServiceHub()
 
-      const savePath = await invoke<string | null>('save_dialog', {
-        options: {
-          defaultPath: filename,
-          filters: getDialogFilters(ext),
-        },
+      const savePath = await hub.dialog().save({
+        defaultPath: filename,
+        filters: getDialogFilters(ext),
       })
 
       if (!savePath) return
@@ -134,10 +133,10 @@ async function saveBlobNative(blob: Blob, filename: string): Promise<void> {
         const base64Data = btoa(
           new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
         )
-        await invoke('write_binary_file', { path: savePath, base64Data })
+        await hub.core().invoke('write_binary_file', { path: savePath, base64Data })
       } else {
         const text = await blob.text()
-        await invoke('write_text_file', { path: savePath, content: text })
+        await hub.core().invoke('write_text_file', { path: savePath, content: text })
       }
 
       return

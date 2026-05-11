@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core'
+import { getServiceHub } from '@/hooks/useServiceHub'
 import { LOCAL_PROVIDER_IDS } from '@/constants/providers'
 import { withTimeout } from '@/lib/utils/async'
 
@@ -45,7 +45,7 @@ export function buildRemoteProviderRequests(
 
 async function listRegisteredProviderIds(): Promise<string[]> {
   const configs = await withTimeout(
-    invoke<RegisteredProviderConfigView[]>('list_provider_configs'),
+    getServiceHub().core().invoke<RegisteredProviderConfigView[]>('list_provider_configs'),
     PROVIDER_SYNC_TIMEOUT_MS,
     `Listing provider configs timed out after ${PROVIDER_SYNC_TIMEOUT_MS}ms`
   ).catch((error) => {
@@ -73,7 +73,7 @@ export async function syncRemoteProviders(providers: ModelProvider[]): Promise<v
     const results = await Promise.allSettled(
       staleRemoteProviderIds.map((provider) =>
         withTimeout(
-          invoke('unregister_provider_config', { provider }),
+          getServiceHub().core().invoke('unregister_provider_config', { provider }),
           PROVIDER_SYNC_TIMEOUT_MS,
           `Unregistering provider "${provider}" timed out after ${PROVIDER_SYNC_TIMEOUT_MS}ms`
         )
@@ -89,7 +89,7 @@ export async function syncRemoteProviders(providers: ModelProvider[]): Promise<v
   const requests = buildRemoteProviderRequests(providers)
   if (requests.length === 0) return
   await withTimeout(
-    invoke('register_provider_configs_batch', { requests }),
+    getServiceHub().core().invoke('register_provider_configs_batch', { requests }),
     PROVIDER_SYNC_TIMEOUT_MS,
     `Registering provider configs timed out after ${PROVIDER_SYNC_TIMEOUT_MS}ms`
   ).catch((error) => {

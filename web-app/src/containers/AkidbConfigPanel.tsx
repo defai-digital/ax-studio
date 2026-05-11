@@ -1,6 +1,6 @@
 import { Database, Folder, RefreshCw } from "lucide-react";
 import { useEffect, useState, useCallback } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { useServiceHub } from '@/hooks/useServiceHub'
 import { toast } from 'sonner'
 import { Card, CardItem } from '@/components/common/Card'
 import { Input } from '@/components/ui/input'
@@ -29,6 +29,7 @@ const EMBEDDING_MODEL_OPTIONS = [
 ]
 
 export default function AkidbConfigPanel() {
+  const serviceHub = useServiceHub()
   const { config, status, loading, saving, syncing, load, save, loadStatus, syncNow } =
     useAkidbConfig()
 
@@ -63,9 +64,7 @@ export default function AkidbConfigPanel() {
   // Open native folder picker via Tauri open_dialog command
   const handleBrowse = useCallback(async () => {
     try {
-      const result = await invoke<string | null>('open_dialog', {
-        options: { directory: true },
-      })
+      const result = await serviceHub.dialog().open({ directory: true })
       if (result) setDataFolder(result)
     } catch {
       toast.error('Folder picker is not available in this environment')
