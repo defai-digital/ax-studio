@@ -158,16 +158,9 @@ async fn validate_downloaded_file(
 }
 
 pub fn validate_proxy_config(config: &ProxyConfig) -> Result<(), String> {
-    // Validate proxy URL format
-    if let Err(e) = Url::parse(&config.url) {
-        return Err(format!("Invalid proxy URL '{}': {e}", config.url));
-    }
+    let url = Url::parse(&config.url)
+        .map_err(|e| format!("Invalid proxy URL '{}': {e}", config.url))?;
 
-    // Check if proxy URL has valid scheme
-    let url = match Url::parse(&config.url) {
-        Ok(url) => url,
-        Err(err) => return Err(format!("Invalid proxy URL '{}': {err}", config.url)),
-    };
     match url.scheme() {
         "http" | "https" | "socks4" | "socks5" => {}
         scheme => return Err(format!("Unsupported proxy scheme: {scheme}")),
