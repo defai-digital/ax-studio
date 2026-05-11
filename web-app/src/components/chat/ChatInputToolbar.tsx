@@ -4,7 +4,7 @@
  * Renders: attachment dropdown, capability toggles (tools, memory, reasoning),
  * token counter, and the send/stop button. Pure UI — no data fetching.
  */
-import { memo, type ComponentType } from 'react'
+import { memo, type ComponentType, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -21,7 +21,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu'
-import { ArrowUp, Atom, Brain, Database, ImagePlus, Loader2, Paperclip, PlusIcon, SearchIcon, Square, User, Wrench, Binary } from "lucide-react";
+import { ArrowUp, Atom, Binary, Brain, Database, ImagePlus, Loader2, Paperclip, PlusIcon, SearchIcon, Square, type LucideIcon, User, Wrench } from "lucide-react";
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { TokenCounter } from '@/components/TokenCounter'
 import { AvatarEmoji } from '@/components/common/AvatarEmoji'
@@ -34,6 +34,41 @@ const RESEARCH_PROMPTS = [
   { label: 'Standard', prompt: '/research:standard ', description: 'Balanced depth with page scraping' },
   { label: 'Deep',     prompt: '/research:deep ',     description: 'Thorough multi-level research'     },
 ] as const
+
+type ToolbarIconButtonProps = {
+  icon: LucideIcon
+  tooltip: ReactNode
+  iconClassName?: string
+  buttonClassName?: string
+  onClick?: () => void
+  children?: ReactNode
+}
+
+function ToolbarIconButton({
+  icon: Icon,
+  tooltip,
+  iconClassName,
+  buttonClassName,
+  onClick,
+  children,
+}: ToolbarIconButtonProps) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className={buttonClassName}
+          onClick={onClick}
+        >
+          <Icon size={18} className={iconClassName} />
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
+  )
+}
 
 type Props = {
   // Layout state
@@ -242,14 +277,11 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
             </DropdownMenu>
 
             {selectedModel?.capabilities?.includes('embeddings') && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon-xs">
-                    <Binary size={18} className="text-muted-foreground" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent><p>{t('embeddings')}</p></TooltipContent>
-              </Tooltip>
+              <ToolbarIconButton
+                icon={Binary}
+                iconClassName="text-muted-foreground"
+                tooltip={<p>{t('embeddings')}</p>}
+              />
             )}
 
             {hasActiveMCPServers && (
@@ -297,48 +329,33 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
               )
             )}
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon-xs" className="relative" onClick={() => toggleMemory()}>
-                  <Brain
-                    size={18}
-                    className={cn(isMemoryEnabled ? 'text-primary' : 'text-muted-foreground')}
-                  />
-                  {memoryCount > 0 && (
-                    <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-0.5 text-[10px] font-medium text-primary-foreground">
-                      {memoryCount}
-                    </span>
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{isMemoryEnabled ? `Memory (${memoryCount})` : 'Memory'}</p>
-              </TooltipContent>
-            </Tooltip>
+            <ToolbarIconButton
+              icon={Brain}
+              buttonClassName="relative"
+              iconClassName={cn(isMemoryEnabled ? 'text-primary' : 'text-muted-foreground')}
+              tooltip={<p>{isMemoryEnabled ? `Memory (${memoryCount})` : 'Memory'}</p>}
+              onClick={toggleMemory}
+            >
+              {memoryCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-0.5 text-[10px] font-medium text-primary-foreground">
+                  {memoryCount}
+                </span>
+              )}
+            </ToolbarIconButton>
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon-xs" onClick={() => toggleLocalKnowledge()}>
-                  <Database
-                    size={18}
-                    className={cn(isLocalKnowledgeEnabled ? 'text-primary' : 'text-muted-foreground')}
-                  />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Local Knowledge{isLocalKnowledgeEnabled ? ' (active)' : ''}</p>
-              </TooltipContent>
-            </Tooltip>
+            <ToolbarIconButton
+              icon={Database}
+              iconClassName={cn(isLocalKnowledgeEnabled ? 'text-primary' : 'text-muted-foreground')}
+              tooltip={<p>Local Knowledge{isLocalKnowledgeEnabled ? ' (active)' : ''}</p>}
+              onClick={toggleLocalKnowledge}
+            />
 
             {selectedModel?.capabilities?.includes('reasoning') && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon-xs">
-                    <Atom size={18} className="text-muted-foreground" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent><p>{t('reasoning')}</p></TooltipContent>
-              </Tooltip>
+              <ToolbarIconButton
+                icon={Atom}
+                iconClassName="text-muted-foreground"
+                tooltip={<p>{t('reasoning')}</p>}
+              />
             )}
           </div>
         </div>

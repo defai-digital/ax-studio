@@ -334,11 +334,7 @@ function Index() {
         {/* Input pinned at bottom */}
         <div className="shrink-0 px-3 pb-2 sm:pb-4">
           <div className="mx-auto w-full max-w-2xl">
-            <ChatInput
-              showSpeedToken={false}
-              model={selectedModel}
-              initialMessage={true}
-            />
+            <ChatInput model={selectedModel} initialMessage={true} />
           </div>
         </div>
       </div>

@@ -30,7 +30,7 @@
     "test:prepare": "yarn build:icon && yarn copy:assets:tauri && yarn build --no-bundle ",
     "dev:web": "yarn workspace @ax-studio/web-app dev",
     "dev:tauri": "yarn build:icon && yarn copy:assets:tauri && tauri dev",
-    "copy:assets:tauri": "rimraf \"src-tauri/resources/pre-install/*.tgz\" || true && cp pre-install/*.tgz src-tauri/resources/pre-install/ && cp LICENSE src-tauri/resources/ && cp NOTICE src-tauri/resources/",
+    "copy:assets:tauri": "mkdir -p src-tauri/resources/pre-install && rimraf \"src-tauri/resources/pre-install/*.tgz\" || true && cp pre-install/*.tgz src-tauri/resources/pre-install/ && cp LICENSE src-tauri/resources/ && cp NOTICE src-tauri/resources/",
     "download:lib": "node ./scripts/download-lib.mjs",
     "download:bin": "node ./scripts/download-bin.mjs",
     "build:tauri:win32": "yarn download:bin && yarn tauri build",

@@ -17,10 +17,84 @@ import { SourcesList } from './SourcesList'
 import { cn } from '@/lib/utils'
 
 type Tab = 'progress' | 'report' | 'sources'
+type ResearchStatus = 'running' | 'done' | 'cancelled' | 'error'
 
 interface ResearchPanelProps {
   threadId: string
   onClose: () => void
+}
+
+function getStatusMeta(status: ResearchStatus, sourceCount: number) {
+  switch (status) {
+    case 'running':
+      return { label: 'Researching…', color: 'text-blue-500' }
+    case 'done':
+      return {
+        label: `${sourceCount} sources`,
+        color: 'text-green-600 dark:text-green-400',
+      }
+    case 'cancelled':
+      return { label: 'Cancelled', color: 'text-destructive' }
+    case 'error':
+      return { label: 'Error', color: 'text-destructive' }
+  }
+}
+
+type TabButtonProps = {
+  active: boolean
+  icon: React.ComponentType<{ size?: number }>
+  label: string
+  onClick: () => void
+  badge?: number
+}
+
+function TabButton({ active, icon: Icon, label, onClick, badge }: TabButtonProps) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors',
+        active
+          ? 'text-foreground bg-background shadow-sm'
+          : 'text-muted-foreground hover:text-foreground hover:bg-muted/70'
+      )}
+      title={label}
+    >
+      <Icon size={12} />
+      {label}
+      {!!badge && (
+        <span className="ml-0.5 px-1 py-0.5 rounded-full bg-muted text-[9px] font-bold text-muted-foreground">
+          {badge}
+        </span>
+      )}
+    </button>
+  )
+}
+
+type ReportActionButtonProps = {
+  active: boolean
+  activeIcon: React.ComponentType<{ size?: number }>
+  idleIcon: React.ComponentType<{ size?: number }>
+  title: string
+  onClick: () => void
+}
+
+function ReportActionButton({
+  active,
+  activeIcon: ActiveIcon,
+  idleIcon: IdleIcon,
+  title,
+  onClick,
+}: ReportActionButtonProps) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className="flex items-center gap-1 px-2 py-1 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-muted/70 transition-colors"
+    >
+      {active ? <ActiveIcon size={12} /> : <IdleIcon size={12} />}
+    </button>
+  )
 }
 
 export function ResearchPanel({ threadId, onClose }: ResearchPanelProps) {
@@ -85,21 +159,8 @@ export function ResearchPanel({ threadId, onClose }: ResearchPanelProps) {
     setTimeout(() => setSaved(false), 1500)
   }
 
-  const statusLabel =
-    entry.status === 'running'
-      ? 'Researching…'
-      : entry.status === 'done'
-        ? `${entry.sources.length} sources`
-        : entry.status === 'cancelled'
-          ? 'Cancelled'
-          : 'Error'
-
-  const statusColor =
-    entry.status === 'running'
-      ? 'text-blue-500'
-      : entry.status === 'done'
-        ? 'text-green-600 dark:text-green-400'
-        : 'text-destructive'
+  const statusMeta = getStatusMeta(entry.status, entry.sources.length)
+  const hasReport = isDone && !!entry.reportMarkdown
 
   return (
     <div className="h-full flex flex-col bg-background border border-border rounded-md overflow-hidden">
@@ -115,74 +176,51 @@ export function ResearchPanel({ threadId, onClose }: ResearchPanelProps) {
         </div>
         <div className="flex items-center gap-0.5 shrink-0 ml-2">
           {/* Status badge */}
-          <span className={cn('text-[10px] font-medium px-1.5', statusColor)}>{statusLabel}</span>
+          <span className={cn('text-[10px] font-medium px-1.5', statusMeta.color)}>
+            {statusMeta.label}
+          </span>
 
           {/* Tab buttons — Report first so it's the leftmost tab */}
-          <button
+          <TabButton
+            active={activeTab === 'report'}
+            icon={FileTextIcon}
+            label="Report"
             onClick={() => pickTab('report')}
-            className={cn(
-              'flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors',
-              activeTab === 'report'
-                ? 'text-foreground bg-background shadow-sm'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/70'
-            )}
-            title="Report"
-          >
-            <FileTextIcon size={12} />
-            Report
-          </button>
-          <button
+          />
+          <TabButton
+            active={activeTab === 'progress'}
+            icon={ActivityIcon}
+            label="Progress"
             onClick={() => pickTab('progress')}
-            className={cn(
-              'flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors',
-              activeTab === 'progress'
-                ? 'text-foreground bg-background shadow-sm'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/70'
-            )}
-            title="Progress"
-          >
-            <ActivityIcon size={12} />
-            Progress
-          </button>
-          <button
+          />
+          <TabButton
+            active={activeTab === 'sources'}
+            icon={LinkIcon}
+            label="Sources"
+            badge={entry.sources.length}
             onClick={() => pickTab('sources')}
-            className={cn(
-              'flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors',
-              activeTab === 'sources'
-                ? 'text-foreground bg-background shadow-sm'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/70'
-            )}
-            title="Sources"
-          >
-            <LinkIcon size={12} />
-            Sources
-            {entry.sources.length > 0 && (
-              <span className="ml-0.5 px-1 py-0.5 rounded-full bg-muted text-[9px] font-bold text-muted-foreground">
-                {entry.sources.length}
-              </span>
-            )}
-          </button>
+          />
 
           {/* Copy report (when done) */}
-          {isDone && entry.reportMarkdown && (
-            <button
-              onClick={handleCopy}
+          {hasReport && (
+            <ReportActionButton
+              active={copied}
+              activeIcon={CheckIcon}
+              idleIcon={CopyIcon}
               title="Copy report"
-              className="flex items-center gap-1 px-2 py-1 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-muted/70 transition-colors"
-            >
-              {copied ? <CheckIcon size={12} /> : <CopyIcon size={12} />}
-            </button>
+              onClick={handleCopy}
+            />
           )}
 
           {/* Save report (when done) */}
-          {isDone && entry.reportMarkdown && (
-            <button
-              onClick={handleSave}
+          {hasReport && (
+            <ReportActionButton
+              active={saved}
+              activeIcon={CheckIcon}
+              idleIcon={DownloadIcon}
               title="Save report as Markdown"
-              className="flex items-center gap-1 px-2 py-1 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-muted/70 transition-colors"
-            >
-              {saved ? <CheckIcon size={12} /> : <DownloadIcon size={12} />}
-            </button>
+              onClick={handleSave}
+            />
           )}
 
           {/* Cancel (while running) */}

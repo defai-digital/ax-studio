@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { type DragEvent, useCallback, useEffect, useState } from 'react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { FileText, Loader2, Paperclip, UploadIcon, X } from "lucide-react";
 import { Button } from '@/components/ui/button'
@@ -29,6 +29,16 @@ type ProjectFile = {
   chunk_count: number
 }
 
+type UploadDropZoneProps = {
+  description: string
+  isDragging: boolean
+  className?: string
+  onClick: () => void
+  onDragOver: (event: DragEvent) => void
+  onDragLeave: (event: DragEvent) => void
+  onDrop: (event: DragEvent) => void
+}
+
 const SUPPORTED_EXTENSIONS = [
   'pdf',
   'docx',
@@ -42,6 +52,62 @@ const SUPPORTED_EXTENSIONS = [
   'html',
   'htm',
 ]
+
+function UploadDropZone({
+  description,
+  isDragging,
+  className,
+  onClick,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+}: UploadDropZoneProps) {
+  return (
+    <div
+      className={cn(
+        'flex flex-col items-center justify-center rounded-xl border-2 border-dashed cursor-pointer transition-all',
+        isDragging
+          ? 'border-primary bg-primary/5'
+          : 'border-border/50 hover:bg-muted/30',
+        className
+      )}
+      onClick={onClick}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
+      <FileText className="size-6 mx-auto mb-2 text-muted-foreground/30" />
+      <p className="text-[12px] text-muted-foreground/50 text-center">
+        {description}
+      </p>
+    </div>
+  )
+}
+
+function getPathFromDataTransferFile(file: File | null): string | null {
+  if (file && 'path' in file && typeof file.path === 'string') {
+    return file.path
+  }
+
+  return null
+}
+
+function collectDroppedFilePaths(dataTransfer: DataTransfer): string[] {
+  const paths: string[] = []
+
+  for (const item of Array.from(dataTransfer.items ?? [])) {
+    if (item.kind !== 'file') continue
+
+    const path = getPathFromDataTransferFile(item.getAsFile())
+    if (path) paths.push(path)
+  }
+
+  if (paths.length > 0) return paths
+
+  return Array.from(dataTransfer.files)
+    .map((file) => getPathFromDataTransferFile(file))
+    .filter((path): path is string => Boolean(path))
+}
 
 async function getFilesFromPaths(paths: string[]): Promise<string[]> {
   const files: string[] = []
@@ -100,6 +166,13 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+
+  const showAttachmentsDisabledToast = useCallback(() => {
+    toast.info(
+      t('common:toast.attachmentsDisabledInfo.title') ??
+        'Attachments are disabled in Settings'
+    )
+  }, [t])
 
   const loadProjectFiles = useCallback(async () => {
     setLoading(true)
@@ -240,10 +313,7 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
 
   const handleUpload = async () => {
     if (!attachmentsEnabled) {
-      toast.info(
-        t('common:toast.attachmentsDisabledInfo.title') ??
-          'Attachments are disabled in Settings'
-      )
+      showAttachmentsDisabledToast()
       return
     }
 
@@ -274,19 +344,19 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
     }
   }
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = (e: DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setIsDragging(true)
   }
 
-  const handleDragLeave = (e: React.DragEvent) => {
+  const handleDragLeave = (e: DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setIsDragging(false)
   }
 
-  const handleDrop = async (e: React.DragEvent) => {
+  const handleDrop = async (e: DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setIsDragging(false)
@@ -296,38 +366,11 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
     if (uploading) return
 
     if (!attachmentsEnabled) {
-      toast.info(
-        t('common:toast.attachmentsDisabledInfo.title') ??
-          'Attachments are disabled in Settings'
-      )
+      showAttachmentsDisabledToast()
       return
     }
 
-    // Get file paths from the drop event (Tauri provides paths directly)
-    const paths: string[] = []
-    const items = e.dataTransfer.items
-    if (items) {
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i]
-        if (item.kind === 'file') {
-          const file = item.getAsFile()
-          if (file && 'path' in file && typeof file.path === 'string') {
-            paths.push(file.path)
-          }
-        }
-      }
-    }
-
-    if (paths.length === 0) {
-      // Fallback for web: check dataTransfer.files
-      const dtFiles = e.dataTransfer.files
-      for (let i = 0; i < dtFiles.length; i++) {
-        const file = dtFiles[i]
-        if ('path' in file && typeof file.path === 'string') {
-          paths.push(file.path)
-        }
-      }
-    }
+    const paths = collectDroppedFilePaths(e.dataTransfer)
 
     if (paths.length > 0) {
       await processFilePaths(paths)
@@ -382,23 +425,15 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
         </div>
       ) : isEmpty ? (
-        <div
-          className={cn(
-            'flex flex-col items-center justify-center py-8 px-4 rounded-xl border-2 border-dashed cursor-pointer transition-all',
-            isDragging
-              ? 'border-primary bg-primary/5'
-              : 'border-border/50 hover:bg-muted/30'
-          )}
+        <UploadDropZone
+          className="py-8 px-4"
+          description={t('common:projects.filesDescription')}
+          isDragging={isDragging}
           onClick={handleUpload}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-        >
-          <FileText className="size-6 mx-auto mb-2 text-muted-foreground/30" />
-          <p className="text-[12px] text-muted-foreground/50 text-center">
-            {t('common:projects.filesDescription')}
-          </p>
-        </div>
+        />
       ) : (
         <div
           className={cn(
@@ -444,23 +479,15 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
             </div>
           ))}
 
-          <div
-          className={cn(
-            'flex mt-3 flex-col items-center justify-center p-6 rounded-xl border-2 border-dashed cursor-pointer transition-all',
-            isDragging
-              ? 'border-primary bg-primary/5'
-              : 'border-border/50 hover:bg-muted/30'
-          )}
-          onClick={handleUpload}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
-          <FileText className="size-6 mx-auto mb-2 text-muted-foreground/30" />
-          <p className="text-[12px] text-muted-foreground/50 text-center">
-            {t('common:projects.filesDescription')}
-          </p>
-        </div>
+          <UploadDropZone
+            className="mt-3 p-6"
+            description={t('common:projects.filesDescription')}
+            isDragging={isDragging}
+            onClick={handleUpload}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          />
         </div>
       )}
     </div>

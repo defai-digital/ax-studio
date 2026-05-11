@@ -37,7 +37,9 @@ async fn validate_external_transport_url(
     transport_url: &str,
 ) -> Result<(), String> {
     if transport_url.is_empty() {
-        return Err(format!("Missing MCP {transport_kind} URL for server {server_name}"));
+        return Err(format!(
+            "Missing MCP {transport_kind} URL for server {server_name}"
+        ));
     }
 
     if ax_studio_utils::is_internal_url(transport_url) {
@@ -48,16 +50,16 @@ async fn validate_external_transport_url(
 
     let parsed = reqwest::Url::parse(transport_url)
         .map_err(|e| format!("Invalid MCP {transport_kind} URL for server {server_name}: {e}"))?;
-    let host = parsed
-        .host_str()
-        .ok_or_else(|| format!("MCP {transport_kind} URL for server {server_name} is missing a host"))?;
-    let port = parsed
-        .port_or_known_default()
-        .ok_or_else(|| format!("MCP {transport_kind} URL for server {server_name} is missing a port"))?;
+    let host = parsed.host_str().ok_or_else(|| {
+        format!("MCP {transport_kind} URL for server {server_name} is missing a host")
+    })?;
+    let port = parsed.port_or_known_default().ok_or_else(|| {
+        format!("MCP {transport_kind} URL for server {server_name} is missing a port")
+    })?;
 
-    let addrs = lookup_host((host, port))
-        .await
-        .map_err(|e| format!("Failed to resolve MCP {transport_kind} URL for server {server_name}: {e}"))?;
+    let addrs = lookup_host((host, port)).await.map_err(|e| {
+        format!("Failed to resolve MCP {transport_kind} URL for server {server_name}: {e}")
+    })?;
 
     for addr in addrs {
         if ax_studio_utils::is_private_ip(addr.ip()) {

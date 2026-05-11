@@ -73,16 +73,14 @@ pub fn schedule_extension_install_if_needed(
     }
 
     log::info!("Scheduling bundled extension install. Force: {force}");
-    std::thread::spawn(move || match install_extensions_from_paths(
-        extensions_path,
-        pre_install_path,
-        force,
-    ) {
-        Ok(()) => {
-            log::info!("Bundled extension install finished");
-        }
-        Err(error) => {
-            log::error!("Failed to install bundled extensions in background: {error}");
+    std::thread::spawn(move || {
+        match install_extensions_from_paths(extensions_path, pre_install_path, force) {
+            Ok(()) => {
+                log::info!("Bundled extension install finished");
+            }
+            Err(error) => {
+                log::error!("Failed to install bundled extensions in background: {error}");
+            }
         }
     });
 }
@@ -353,8 +351,11 @@ fn install_extensions_from_paths(
             .map_err(|e| format!("Failed to promote staged extensions: {e}"))?;
     }
 
-    fs::write(extensions_path.join(".bundle-stamp"), bundled_extension_stamp())
-        .map_err(|e| format!("Failed to write bundled extension stamp: {e}"))?;
+    fs::write(
+        extensions_path.join(".bundle-stamp"),
+        bundled_extension_stamp(),
+    )
+    .map_err(|e| format!("Failed to write bundled extension stamp: {e}"))?;
 
     Ok(())
 }
@@ -514,8 +515,11 @@ mod tests {
             .expect("extensions manifest should be written");
         assert!(!bundled_extensions_ready(&extensions_path));
 
-        fs::write(extensions_path.join(".bundle-stamp"), bundled_extension_stamp())
-            .expect("bundle stamp should be written");
+        fs::write(
+            extensions_path.join(".bundle-stamp"),
+            bundled_extension_stamp(),
+        )
+        .expect("bundle stamp should be written");
         assert!(bundled_extensions_ready(&extensions_path));
 
         let _ = fs::remove_dir_all(&extensions_path);
@@ -702,9 +706,10 @@ pub fn extract_extension_manifest<R: Read>(
             .to_string();
 
         let path = Path::new(&path_str);
-        let is_manifest_path = path.components().all(|component| {
-            matches!(component, Component::Normal(_) | Component::CurDir)
-        }) && (path_str == "package/package.json" || path_str == "package.json");
+        let is_manifest_path = path
+            .components()
+            .all(|component| matches!(component, Component::Normal(_) | Component::CurDir))
+            && (path_str == "package/package.json" || path_str == "package.json");
 
         if is_manifest_path {
             let mut content = String::new();
@@ -863,7 +868,11 @@ pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_default();
     let app_version = app.config().version.clone().unwrap_or_default();
     let extensions_path = get_app_extensions_path(app.handle().clone());
-    let pre_install_path = app.path().resource_dir()?.join("resources").join("pre-install");
+    let pre_install_path = app
+        .path()
+        .resource_dir()?
+        .join("resources")
+        .join("pre-install");
     schedule_extension_install_if_needed(
         extensions_path,
         pre_install_path,

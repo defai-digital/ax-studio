@@ -513,6 +513,7 @@ pub async fn start_ax_serving<R: Runtime>(
     binary_path: &str,
     port: u16,
     timeout: u64,
+    env_overrides: Option<HashMap<String, String>>,
 ) -> ServerResult<SessionInfo> {
     let state: State<LlamacppState> = app_handle.state();
     let mut process_map = state.llama_server_process.lock().await;
@@ -537,8 +538,30 @@ pub async fn start_ax_serving<R: Runtime>(
     envs.insert("AXS_ALLOW_NO_AUTH".to_string(), "true".to_string());
     envs.insert("AXS_LOG".to_string(), "info".to_string());
     envs.insert("AXS_REQUEST_TIMEOUT_SECS".to_string(), timeout.to_string());
+    envs.insert("AX_SERVING_MODE".to_string(), "ngram".to_string());
+    for key in [
+        "AX_SERVING_MODE",
+        "AX_ENGINE_BIN",
+        "AX_SERVING_CHILD_TIMEOUT_S",
+        "AX_SERVING_MLX_LM_SERVER_URL",
+        "AX_SERVING_LLAMA_SERVER_URL",
+        "MAX_OUTPUT_TOKENS",
+    ] {
+        if let Ok(value) = std::env::var(key) {
+            envs.insert(key.to_string(), value);
+        }
+    }
+    if let Some(overrides) = env_overrides {
+        envs.extend(overrides);
+    }
 
     log::info!("ax-serving args: {:?}", args);
+    log::info!(
+        "ax-serving env overrides: {:?}",
+        envs.keys()
+            .filter(|key| key.starts_with("AX_SERVING_") || key.as_str() == "AX_ENGINE_BIN")
+            .collect::<Vec<_>>()
+    );
 
     let mut command = Command::new(&bin_path);
     command.args(&args);

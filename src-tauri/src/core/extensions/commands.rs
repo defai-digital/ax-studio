@@ -77,9 +77,9 @@ fn safe_relative_extension_url(ext: &serde_json::Value, extensions_path: &Path) 
         .as_str()
         .and_then(|value| Path::new(value).strip_prefix(extensions_path).ok())
         .and_then(|path| {
-            let is_safe_relative = path.components().all(|component| {
-                matches!(component, Component::Normal(_) | Component::CurDir)
-            });
+            let is_safe_relative = path
+                .components()
+                .all(|component| matches!(component, Component::Normal(_) | Component::CurDir));
 
             is_safe_relative.then(|| path.to_string_lossy().replace('\\', "/"))
         })

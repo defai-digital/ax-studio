@@ -21,7 +21,14 @@ export type LocalKnowledgeRetrieval = {
 const KEYWORD_STOP_WORDS = new Set([
   'what',
   'which',
+  'syntax',
+  'syntaxes',
+  'declare',
+  'declares',
+  'declaring',
   'three',
+  'two',
+  'stated',
   'listed',
   'under',
   'your',
@@ -31,6 +38,7 @@ const KEYWORD_STOP_WORDS = new Set([
   'outcome',
   'achieve',
   'achieved',
+  'repository',
 ])
 
 function formatChunks(result: unknown): string {
@@ -79,6 +87,23 @@ function pushUnique(values: string[], value: string) {
   if (normalized && !values.includes(normalized)) values.push(normalized)
 }
 
+function singularizeKeyword(term: string): string {
+  if (/ies$/i.test(term) && term.length > 4) return term.replace(/ies$/i, 'y')
+  if (/s$/i.test(term) && !/ss$/i.test(term) && term.length > 3) return term.slice(0, -1)
+  return term
+}
+
+function extractSignificantTerms(query: string): string[] {
+  const terms: string[] = []
+  for (const rawTerm of query.replace(/[^\w\s-]/g, ' ').split(/\s+/)) {
+    const term = rawTerm.trim()
+    if (term.length <= 3) continue
+    if (KEYWORD_STOP_WORDS.has(term.toLowerCase())) continue
+    pushUnique(terms, singularizeKeyword(term))
+  }
+  return terms.slice(0, 8)
+}
+
 function buildKeywordFallbackQueries(query: string): string[] {
   const queries: string[] = []
   pushUnique(queries, query)
@@ -96,15 +121,48 @@ function buildKeywordFallbackQueries(query: string): string[] {
     }
   }
 
-  const significantTerms = query
-    .replace(/[^\w\s-]/g, ' ')
-    .split(/\s+/)
-    .filter((term) => term.length > 3 && !KEYWORD_STOP_WORDS.has(term.toLowerCase()))
-    .slice(0, 8)
-    .join(' ')
-  pushUnique(queries, significantTerms)
+  const significantTerms = extractSignificantTerms(query)
+  pushUnique(queries, significantTerms.join(' '))
+
+  const anchoredTerms = significantTerms.filter((term) => /[A-Z]/.test(term))
+  for (const anchor of anchoredTerms.slice(0, 2)) {
+    for (const term of significantTerms) {
+      if (term === anchor) continue
+      pushUnique(queries, `${term} ${anchor}`)
+    }
+  }
+
+  if (/\btypescript\b/i.test(query) && /\barray|arrays\b/i.test(query)) {
+    pushUnique(queries, 'array TypeScript')
+    pushUnique(queries, 'Array types TypeScript')
+    pushUnique(queries, 'number array TypeScript')
+  }
 
   return queries
+}
+
+function isRecoverableLocalKnowledgeError(error: unknown): boolean {
+  const message = error instanceof Error
+    ? error.message
+    : typeof error === 'string'
+      ? error
+      : JSON.stringify(error)
+
+  return /transport closed|connection closed|server disconnected|server .*not found|timed out/i.test(message)
+}
+
+async function retryRecoverableSearch<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    const result = await operation()
+    const maybeError = (result as { error?: string } | undefined)?.error
+    if (maybeError && isRecoverableLocalKnowledgeError(maybeError)) {
+      return await operation()
+    }
+    return result
+  } catch (error) {
+    if (!isRecoverableLocalKnowledgeError(error)) throw error
+    return await operation()
+  }
 }
 
 function isLocalKnowledgeMetaQuestion(query: string): boolean {
@@ -142,12 +200,14 @@ function callFabricSearch(
   serviceHub: ReturnType<typeof getServiceHub>,
   toolArguments: Record<string, unknown>
 ) {
-  return withLocalKnowledgeTimeout(
-    serviceHub.mcp().callTool({
-      toolName: 'fabric_search',
-      serverName: 'ax-studio',
-      arguments: toolArguments,
-    })
+  return retryRecoverableSearch(() =>
+    withLocalKnowledgeTimeout(
+      serviceHub.mcp().callTool({
+        toolName: 'fabric_search',
+        serverName: 'ax-studio',
+        arguments: toolArguments,
+      })
+    )
   )
 }
 

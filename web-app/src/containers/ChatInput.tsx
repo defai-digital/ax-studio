@@ -23,12 +23,11 @@ import { ChatInputToolbar } from '@/components/chat/ChatInputToolbar'
 import { ChatInputAttachments } from '@/components/ChatInputAttachments'
 import { TokenCounter } from '@/components/TokenCounter'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { Atom, Code2, Globe, Wrench, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { resolveEffectiveSelectedModel } from '@/lib/chat/selected-model'
 
 type ChatInputProps = {
   className?: string
-  showSpeedToken?: boolean
   model?: ThreadModel
   initialMessage?: boolean
   projectId?: string
@@ -429,62 +428,6 @@ const ChatInput = memo(function ChatInput({
           <TokenCounter messages={threadMessages || []} model={selectedModel} />
         </div>
       )}
-
-      {/* Capability indicators + keyboard hints */}
-      <div className="flex items-center gap-0.5 px-2 pt-1.5 pb-0.5">
-        <button
-          type="button"
-          className={cn(
-            'flex items-center gap-1 px-2 py-1 rounded-md transition-colors text-[11px]',
-            hasActiveMCPServers
-              ? 'text-indigo-500 hover:bg-muted/60'
-              : 'text-muted-foreground/30 hover:text-muted-foreground/50'
-          )}
-        >
-          <Wrench className="size-3" />
-          <span className="hidden sm:inline">Tools{hasActiveMCPServers ? ` (${tools.length})` : ''}</span>
-        </button>
-        <button
-          type="button"
-          className={cn(
-            'flex items-center gap-1 px-2 py-1 rounded-md transition-colors text-[11px]',
-            selectedModel?.capabilities?.includes('web_search')
-              ? 'text-cyan-500 hover:bg-muted/60'
-              : 'text-muted-foreground/30 hover:text-muted-foreground/50'
-          )}
-        >
-          <Globe className="size-3" />
-          <span className="hidden sm:inline">Web</span>
-        </button>
-        <button
-          type="button"
-          className={cn(
-            'flex items-center gap-1 px-2 py-1 rounded-md transition-colors text-[11px]',
-            selectedModel?.capabilities?.includes('reasoning')
-              ? 'text-violet-500 hover:bg-muted/60'
-              : 'text-muted-foreground/30 hover:text-muted-foreground/50'
-          )}
-        >
-          <Atom className="size-3" />
-          <span className="hidden sm:inline">Reasoning</span>
-        </button>
-        <button
-          type="button"
-          className={cn(
-            'flex items-center gap-1 px-2 py-1 rounded-md transition-colors text-[11px]',
-            selectedModel
-              ? 'text-emerald-500 hover:bg-muted/60'
-              : 'text-muted-foreground/30 hover:text-muted-foreground/50'
-          )}
-        >
-          <Code2 className="size-3" />
-          <span className="hidden sm:inline">Code</span>
-        </button>
-        <div className="flex-1" />
-        <span className="text-[11px] text-muted-foreground/30">
-          ⏎ Send &nbsp;·&nbsp; ⇧⏎ Newline
-        </span>
-      </div>
     </div>
   )
 })

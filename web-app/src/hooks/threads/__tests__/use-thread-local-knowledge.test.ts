@@ -7,6 +7,29 @@ const mockServiceHub = vi.hoisted(() => ({
   callTool: vi.fn(),
 }))
 
+const searchResult = (results: Array<Record<string, unknown>>) => ({
+  error: '',
+  content: [
+    {
+      type: 'text',
+      text: JSON.stringify({
+        layer: 'raw',
+        results,
+      }),
+    },
+  ],
+})
+
+const extractResult = (text: string) => ({
+  error: '',
+  content: [
+    {
+      type: 'text',
+      text: JSON.stringify({ text }),
+    },
+  ],
+})
+
 vi.mock('@/hooks/useServiceHub', () => ({
   getServiceHub: () => ({
     mcp: () => ({
@@ -65,37 +88,18 @@ describe('useThreadLocalKnowledge', () => {
     })
 
     mockServiceHub.callTool
-      .mockResolvedValueOnce({
-        error: '',
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              layer: 'raw',
-              results: [
-                {
-                  chunkId: 'chunk-1',
-                  score: 1,
-                  source: '/Users/devop/Documents/akidb-testing/coding-interview-university.md',
-                  content:
-                    'After going through this study plan, I got hired as a Software Development Engineer at Amazon.',
-                },
-              ],
-            }),
-          },
-        ],
-      })
-      .mockResolvedValueOnce({
-        error: '',
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              text: 'After going through this study plan, I got hired as a Software Development Engineer at Amazon.',
-            }),
-          },
-        ],
-      })
+      .mockResolvedValueOnce(searchResult([
+        {
+          chunkId: 'chunk-1',
+          score: 1,
+          source: '/Users/devop/Documents/akidb-testing/coding-interview-university.md',
+          content:
+            'After going through this study plan, I got hired as a Software Development Engineer at Amazon.',
+        },
+      ]))
+      .mockResolvedValueOnce(extractResult(
+        'After going through this study plan, I got hired as a Software Development Engineer at Amazon.',
+      ))
 
     const { result } = renderHook(() => useThreadLocalKnowledge(threadId))
 
@@ -129,6 +133,93 @@ describe('useThreadLocalKnowledge', () => {
       searched: true,
       extracted: true,
       source: '/Users/devop/Documents/akidb-testing/coding-interview-university.md',
+    })
+  })
+
+  it('uses expanded keyword fallback queries when semantic search misses', async () => {
+    useLocalKnowledge.setState({
+      localKnowledgeEnabled: true,
+      localKnowledgeEnabledPerThread: { 'thread-1': true },
+    })
+
+    mockServiceHub.callTool.mockImplementation(async ({ toolName, arguments: args }) => {
+      if (toolName === 'fabric_extract') {
+        return extractResult('Array types can be written as number[] or Array<number>.')
+      }
+
+      if (args.query === 'array TypeScript') {
+        return searchResult([
+          {
+            chunkId: 'chunk-1',
+            score: 1,
+            source: '/Users/devop/Documents/akidb-testing/typescript-basics.md',
+            content: 'Array types can be written in one of two ways.',
+          },
+        ])
+      }
+
+      return searchResult([])
+    })
+
+    const { result } = renderHook(() => useThreadLocalKnowledge(threadId))
+
+    let knowledge: Awaited<ReturnType<typeof result.current.prepareLocalKnowledge>> = { context: '' }
+    await act(async () => {
+      knowledge = await result.current.prepareLocalKnowledge(
+        'What are the two syntaxes for declaring an array of numbers in TypeScript?'
+      )
+    })
+
+    expect(mockServiceHub.callTool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolName: 'fabric_search',
+        arguments: expect.objectContaining({
+          query: 'array TypeScript',
+          mode: 'keyword',
+          layer: 'raw',
+        }),
+      })
+    )
+    expect(knowledge.context).toContain('number[] or Array<number>')
+    expect(knowledge.retrieval).toMatchObject({
+      searched: true,
+      extracted: true,
+      source: '/Users/devop/Documents/akidb-testing/typescript-basics.md',
+    })
+  })
+
+  it('retries recoverable MCP transport errors before giving up', async () => {
+    useLocalKnowledge.setState({
+      localKnowledgeEnabled: true,
+      localKnowledgeEnabledPerThread: { 'thread-1': true },
+    })
+
+    mockServiceHub.callTool
+      .mockResolvedValueOnce({ error: 'Transport closed', content: [] })
+      .mockResolvedValueOnce(searchResult([
+        {
+          chunkId: 'chunk-1',
+          score: 1,
+          source: '/Users/devop/Documents/akidb-testing/system-design-primer.md',
+          content: 'Learn how to design large-scale systems.',
+        },
+      ]))
+      .mockResolvedValueOnce(extractResult('Learn how to design large-scale systems.'))
+
+    const { result } = renderHook(() => useThreadLocalKnowledge(threadId))
+
+    let knowledge: Awaited<ReturnType<typeof result.current.prepareLocalKnowledge>> = { context: '' }
+    await act(async () => {
+      knowledge = await result.current.prepareLocalKnowledge(
+        'What is the stated motivation of the System Design Primer repository?'
+      )
+    })
+
+    expect(mockServiceHub.callTool).toHaveBeenCalledTimes(3)
+    expect(knowledge.context).toContain('Learn how to design large-scale systems.')
+    expect(knowledge.retrieval).toMatchObject({
+      searched: true,
+      extracted: true,
     })
   })
 

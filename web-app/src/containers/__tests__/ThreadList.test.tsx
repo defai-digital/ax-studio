@@ -105,6 +105,12 @@ vi.mock('@/components/ui/button', () => ({
 }))
 
 vi.mock('@/lib/export/thread-export', () => ({
+  CHAT_EXPORT_OPTIONS: [
+    { format: 'json', label: 'JSON' },
+    { format: 'csv', label: 'CSV' },
+    { format: 'alpaca', label: 'JSON (Alpaca)' },
+    { format: 'openai-jsonl', label: 'JSONL (OpenAI)' },
+  ],
   exportThread: vi.fn(),
 }))
 

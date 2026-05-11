@@ -1,16 +1,9 @@
 //! Shared CORS constants used by proxy/security response handling and request validation.
 
-pub(crate) const CORS_ALLOWED_METHODS: [&str; 6] = [
-    "GET",
-    "POST",
-    "PUT",
-    "DELETE",
-    "OPTIONS",
-    "PATCH",
-];
+pub(crate) const CORS_ALLOWED_METHODS: [&str; 6] =
+    ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"];
 
-pub(crate) const CORS_ALLOWED_METHODS_HEADER: &str =
-    "GET, POST, PUT, DELETE, OPTIONS, PATCH";
+pub(crate) const CORS_ALLOWED_METHODS_HEADER: &str = "GET, POST, PUT, DELETE, OPTIONS, PATCH";
 
 pub(crate) const CORS_RESPONSE_ALLOWED_HEADERS_HEADER: &str =
     "Authorization, Content-Type, Host, Accept, Accept-Language, Cache-Control, Connection, DNT, If-Modified-Since, Keep-Alive, Origin, User-Agent, X-Requested-With, X-CSRF-Token, X-Forwarded-For, X-Forwarded-Proto, X-Forwarded-Host, authorization, content-type, x-api-key, x-ax-provider, x-ax-request-role";

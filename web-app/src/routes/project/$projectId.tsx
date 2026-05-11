@@ -175,11 +175,7 @@ function ProjectPageContent() {
       >
         <div className="max-w-3xl mx-auto space-y-8">
           {/* Chat Input */}
-          <ChatInput
-            showSpeedToken={false}
-            initialMessage={true}
-            projectId={projectId}
-          />
+          <ChatInput initialMessage={true} projectId={projectId} />
 
           {/* Conversations */}
           {projectThreads.length > 0 ? (

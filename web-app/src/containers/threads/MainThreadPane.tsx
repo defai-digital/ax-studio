@@ -7,6 +7,28 @@ import { MessageSquareText } from 'lucide-react'
 import ChatInput from '@/containers/ChatInput'
 import { MessagesArea } from '@/containers/threads/MessagesArea'
 
+function getPromptSourceLabel(source: string) {
+  switch (source) {
+    case 'thread':
+      return 'Using Thread Prompt'
+    case 'project':
+      return 'Inheriting from Project Prompt'
+    case 'global':
+      return 'Inheriting from Global Prompt'
+    default:
+      return 'Using Fallback Prompt'
+  }
+}
+
+function getFirstUserMessageText(messages: UIMessage[]) {
+  const firstUserMessage = messages.find((message) => message.role === 'user')
+  return firstUserMessage?.parts
+    .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+    .map((part) => part.text)
+    .join('')
+    .trim()
+}
+
 export type MainThreadPaneProps = {
   threadId: string
   thread: Thread | undefined
@@ -68,6 +90,8 @@ export function MainThreadPane({
   const inputCls = isSplitView || hasPanels ? 'p-2' : 'py-4 mx-auto w-full max-w-2xl px-4 sm:px-6'
 
   const title = thread?.title || (isSplitView ? 'Current Thread' : 'New Thread')
+  const firstUserMessageText = getFirstUserMessageText(chatMessages)
+  const showNormalTitle = !isSplitView && (!!threadLogo || title !== firstUserMessageText)
 
   return (
     <div className={containerCls}>
@@ -101,10 +125,7 @@ export function MainThreadPane({
       {isSplitView && showThreadPromptEditor && (
         <div className="border-b p-2 space-y-2">
           <p className="text-xs text-muted-foreground">
-            {promptResolution.source === 'thread' ? 'Using Thread Prompt'
-              : promptResolution.source === 'project' ? 'Inheriting from Project Prompt'
-              : promptResolution.source === 'global' ? 'Inheriting from Global Prompt'
-              : 'Using Fallback Prompt'}
+            {getPromptSourceLabel(promptResolution.source)}
           </p>
           <Textarea
             value={threadPromptDraft}
@@ -126,26 +147,16 @@ export function MainThreadPane({
       )}
 
       {/* Normal view: thread title header */}
-      {!isSplitView && (() => {
-        const firstUserMsg = chatMessages.find((m) => m.role === 'user')
-        const firstMsgText = firstUserMsg?.parts
-          .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-          .map((p) => p.text)
-          .join('')
-          .trim()
-        const titleMatchesFirst = firstMsgText && title === firstMsgText
-        if (titleMatchesFirst && !threadLogo) return null
-        return (
-          <div className="px-4 sm:px-6 pb-2 shrink-0">
-            <div className="mx-auto w-full max-w-2xl flex items-center gap-2 min-w-0">
-              {threadLogo && (
-                <img src={threadLogo} alt={title} className="size-5 rounded-sm object-cover shrink-0" />
-              )}
-              <h2 className="text-sm font-medium truncate">{title}</h2>
-            </div>
+      {showNormalTitle && (
+        <div className="px-4 sm:px-6 pb-2 shrink-0">
+          <div className="mx-auto w-full max-w-2xl flex items-center gap-2 min-w-0">
+            {threadLogo && (
+              <img src={threadLogo} alt={title} className="size-5 rounded-sm object-cover shrink-0" />
+            )}
+            <h2 className="text-sm font-medium truncate">{title}</h2>
           </div>
-        )
-      })()}
+        </div>
+      )}
 
       {/* Messages + Input */}
       <div className="flex-1 flex flex-col overflow-hidden">

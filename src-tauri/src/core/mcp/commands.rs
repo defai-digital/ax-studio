@@ -262,7 +262,11 @@ pub async fn get_tools<R: Runtime>(
             Ok(Ok(tools)) => tools,
             Ok(Err(e)) => {
                 let err_str = e.to_string();
-                log::warn!("MCP server {} failed to list tools: {}", server_name, err_str);
+                log::warn!(
+                    "MCP server {} failed to list tools: {}",
+                    server_name,
+                    err_str
+                );
                 if is_transport_error(&err_str) {
                     if let Some(restarted_service) =
                         restart_server_now(&app, &state, server_name).await
@@ -410,26 +414,32 @@ pub async fn call_tool<R: Runtime>(
                         if let Some(restarted_service) =
                             restart_server_now(&app, &state, srv_name).await
                         {
-                            let retry_tools =
-                                match timeout(timeout_duration, restarted_service.list_all_tools()).await {
-                                    Ok(Ok(tools)) => tools,
-                                    Ok(Err(retry_error)) => {
-                                        log::warn!(
+                            let retry_tools = match timeout(
+                                timeout_duration,
+                                restarted_service.list_all_tools(),
+                            )
+                            .await
+                            {
+                                Ok(Ok(tools)) => tools,
+                                Ok(Err(retry_error)) => {
+                                    log::warn!(
                                             "MCP server {srv_name} failed to list tools after restart: {retry_error}"
                                         );
-                                        continue;
-                                    }
-                                    Err(_) => {
-                                        log::warn!(
+                                    continue;
+                                }
+                                Err(_) => {
+                                    log::warn!(
                                             "Listing tools for {srv_name} timed out after restart after {} seconds",
                                             timeout_duration.as_secs()
                                         );
-                                        continue;
-                                    }
-                                };
+                                    continue;
+                                }
+                            };
 
                             if retry_tools.iter().any(|t| t.name == tool_name) {
-                                log::debug!("Found tool {tool_name} in restarted server {srv_name}");
+                                log::debug!(
+                                    "Found tool {tool_name} in restarted server {srv_name}"
+                                );
                                 target_service = Some(restarted_service);
                                 break;
                             }

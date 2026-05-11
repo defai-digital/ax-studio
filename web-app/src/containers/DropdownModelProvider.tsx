@@ -41,7 +41,7 @@ function formatContextWindow(model: Model): string | null {
   const tokens = [m.contextWindow, m.context_length, m.maxTokens].find(
     (value): value is number => typeof value === 'number'
   )
-  if (!tokens || typeof tokens !== 'number') return null
+  if (!tokens) return null
   if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(0)}M context`
   if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(0)}K context`
   return `${tokens} context`
@@ -73,6 +73,30 @@ const VIRTUALIZE_THRESHOLD = 80
 
 /** Maximum search results rendered — prevents DOM thrashing on broad queries. */
 const MAX_SEARCH_RESULTS = 100
+
+function isPredefinedProvider(providerName: string) {
+  return predefinedProviders.some((entry) =>
+    entry.provider.includes(providerName)
+  )
+}
+
+function providerCanShowChatModels(provider: ModelProvider) {
+  const hasApiKey = (provider.api_key?.length ?? 0) > 0
+  return (
+    hasApiKey ||
+    (!isPredefinedProvider(provider.provider) && provider.models.length > 0)
+  )
+}
+
+function compareProvidersForModelList(a: ModelProvider, b: ModelProvider) {
+  const aHasModelsAvailable = providerCanShowChatModels(a)
+  const bHasModelsAvailable = providerCanShowChatModels(b)
+
+  if (aHasModelsAvailable && !bHasModelsAvailable) return -1
+  if (!aHasModelsAvailable && bHasModelsAvailable) return 1
+
+  return a.provider.localeCompare(b.provider)
+}
 
 function estimateRowHeight(row: FlatRow) {
   switch (row.type) {
@@ -121,6 +145,7 @@ const ModelItem = memo(function ModelItem({
   onToggleFavorite,
 }: ModelItemProps) {
   const capabilities = searchableModel.model.capabilities || []
+  const contextWindow = formatContextWindow(searchableModel.model)
 
   return (
     <div
@@ -150,12 +175,11 @@ const ModelItem = memo(function ModelItem({
         >
           {getModelDisplayName(searchableModel.model)}
         </span>
-        {(() => {
-          const ctx = formatContextWindow(searchableModel.model)
-          return ctx ? (
-            <span className="text-[11px] text-muted-foreground/40">{ctx}</span>
-          ) : null
-        })()}
+        {contextWindow && (
+          <span className="text-[11px] text-muted-foreground/40">
+            {contextWindow}
+          </span>
+        )}
       </div>
 
       {/* Capability badges — compact (no Radix Tooltips) for performance */}
@@ -187,6 +211,116 @@ const ModelItem = memo(function ModelItem({
     </div>
   )
 })
+
+type ProviderHeaderProps = {
+  providerKey: string
+  providerInfo: ModelProvider
+  onSettings: (providerName: string) => void
+}
+
+function ProviderHeader({
+  providerKey,
+  providerInfo,
+  onSettings,
+}: ProviderHeaderProps) {
+  return (
+    <div className="flex items-center justify-between px-3 pt-2 pb-1">
+      <div className="flex items-center gap-1.5">
+        <div
+          className="size-3 rounded-sm shrink-0"
+          style={{ backgroundColor: getProviderColor(providerKey) }}
+        />
+        <span className="text-[10px] tracking-widest uppercase text-muted-foreground/40 font-semibold">
+          {getProviderTitle(providerInfo.provider)}
+        </span>
+      </div>
+      <button
+        type="button"
+        className="p-0.5 rounded hover:bg-muted text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors"
+        onClick={(event) => {
+          event.stopPropagation()
+          onSettings(providerInfo.provider)
+        }}
+      >
+        <Settings className="size-3" />
+      </button>
+    </div>
+  )
+}
+
+type AutoRouteOptionProps = {
+  isActive: boolean
+  onToggle: () => void
+}
+
+function AutoRouteOption({ isActive, onToggle }: AutoRouteOptionProps) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        'flex items-center gap-2.5 px-3 py-2.5 border-b border-border/50 transition-colors w-full text-left',
+        isActive
+          ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
+          : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+      )}
+      onClick={onToggle}
+    >
+      <div
+        className={cn(
+          'size-5 rounded-md shrink-0 flex items-center justify-center',
+          isActive ? 'bg-amber-500/20' : 'bg-muted'
+        )}
+      >
+        <Route className="size-3" />
+      </div>
+      <span style={{ fontSize: '13px', fontWeight: 500 }} className="flex-1">
+        Auto (LLM Router)
+      </span>
+      {isActive && (
+        <Check className="size-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+      )}
+    </button>
+  )
+}
+
+type SearchFieldProps = {
+  value: string
+  inputRef: React.RefObject<HTMLInputElement | null>
+  onChange: (value: string) => void
+  onClear: () => void
+  placeholder: string
+}
+
+function SearchField({
+  value,
+  inputRef,
+  onChange,
+  onClear,
+  placeholder,
+}: SearchFieldProps) {
+  return (
+    <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border/50">
+      <Search className="size-3.5 text-muted-foreground shrink-0" />
+      <input
+        ref={inputRef}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="flex-1 bg-transparent outline-none placeholder:text-muted-foreground/40"
+        style={{ fontSize: '13px' }}
+      />
+      {value && (
+        <button
+          type="button"
+          onClick={onClear}
+          className="text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+        >
+          <X className="size-3.5" />
+        </button>
+      )}
+    </div>
+  )
+}
 
 // ── Virtualized list (only mounted when row count > VIRTUALIZE_THRESHOLD) ─
 type VirtualizedListProps = {
@@ -317,6 +451,10 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
     () => new Set(favoriteModels.map((f) => f.id)),
     [favoriteModels]
   )
+  const providerByKey = useMemo(
+    () => new Map(providers.map((provider) => [provider.provider, provider])),
+    [providers]
+  )
 
   // Helper function to check if a model exists in providers
   const checkModelExists = useCallback(
@@ -416,15 +554,7 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
 
         // Skip models that require API key but don't have one
         // For custom providers, allow if they have at least one model loaded
-        const isPredefined = predefinedProviders.some((e) =>
-          e.provider.includes(provider.provider)
-        )
-        if (
-          provider &&
-          !provider.api_key?.length &&
-          (isPredefined || provider.models.length === 0)
-        )
-          return
+        if (!providerCanShowChatModels(provider)) return
 
         const capabilities = modelItem.capabilities || []
         const capabilitiesString = capabilities.join(' ')
@@ -489,30 +619,10 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
 
     if (!searchValue) {
       // When not searching, show all active providers (even without models)
-      // Sort: local first, then providers with API keys or custom with models, then others, alphabetically
+      // Sort usable providers first, then the remaining providers alphabetically.
       const activeProviders = providers
         .filter((p) => p.active)
-        .sort((a, b) => {
-          // Custom providers without API key but with models should be treated like "have API key"
-          const aIsPredefined = predefinedProviders.some((e) =>
-            e.provider.includes(a.provider)
-          )
-          const bIsPredefined = predefinedProviders.some((e) =>
-            e.provider.includes(b.provider)
-          )
-          const aHasApiKeyOrCustomModel =
-            (a.api_key?.length ?? 0) > 0 ||
-            (!aIsPredefined && a.models.length > 0)
-          const bHasApiKeyOrCustomModel =
-            (b.api_key?.length ?? 0) > 0 ||
-            (!bIsPredefined && b.models.length > 0)
-          // Providers with API keys or custom with models first
-          if (aHasApiKeyOrCustomModel && !bHasApiKeyOrCustomModel) return -1
-          if (!aHasApiKeyOrCustomModel && bHasApiKeyOrCustomModel) return 1
-
-          // Sort remaining by provider name
-          return a.provider.localeCompare(b.provider)
-        })
+        .sort(compareProvidersForModelList)
 
       activeProviders.forEach((provider) => {
         groups[provider.provider] = []
@@ -556,7 +666,7 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
 
     // Provider groups
     for (const [providerKey, models] of Object.entries(groupedItems)) {
-      const providerInfo = providers.find((p) => p.provider === providerKey)
+      const providerInfo = providerByKey.get(providerKey)
       if (!providerInfo) continue
       rows.push({ type: 'provider-header', providerKey, providerInfo })
       for (const item of models) {
@@ -565,7 +675,7 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
     }
 
     return rows
-  }, [groupedItems, favoriteItems, searchValue, providers])
+  }, [groupedItems, favoriteItems, searchValue, providerByKey])
 
   const handleAutoToggle = useCallback(() => {
     if (activeThreadId) {
@@ -573,6 +683,17 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
     }
     setOpen(false)
   }, [activeThreadId, isAutoActive, setThreadOverride])
+
+  const handleProviderSettings = useCallback(
+    (providerName: string) => {
+      navigate({
+        to: route.settings.providers,
+        params: { providerName },
+      })
+      setOpen(false)
+    },
+    [navigate]
+  )
 
   const handleSelect = useCallback(
     async (searchableModel: SearchableModel) => {
@@ -629,31 +750,11 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
 
       case 'provider-header':
         return (
-          <div className="flex items-center justify-between px-3 pt-2 pb-1">
-            <div className="flex items-center gap-1.5">
-              <div
-                className="size-3 rounded-sm shrink-0"
-                style={{ backgroundColor: getProviderColor(row.providerKey) }}
-              />
-              <span className="text-[10px] tracking-widest uppercase text-muted-foreground/40 font-semibold">
-                {getProviderTitle(row.providerInfo.provider)}
-              </span>
-            </div>
-            <button
-              type="button"
-              className="p-0.5 rounded hover:bg-muted text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors"
-              onClick={(e) => {
-                e.stopPropagation()
-                navigate({
-                  to: route.settings.providers,
-                  params: { providerName: row.providerInfo.provider },
-                })
-                setOpen(false)
-              }}
-            >
-              <Settings className="size-3" />
-            </button>
-          </div>
+          <ProviderHeader
+            providerKey={row.providerKey}
+            providerInfo={row.providerInfo}
+            onSettings={handleProviderSettings}
+          />
         )
 
       case 'model-item':
@@ -681,7 +782,15 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
           </div>
         )
     }
-  }, [selectedModel?.id, selectedProvider, favoriteIdSet, handleSelect, toggleFavorite, navigate, t])
+  }, [
+    selectedModel?.id,
+    selectedProvider,
+    favoriteIdSet,
+    handleSelect,
+    toggleFavorite,
+    handleProviderSettings,
+    t,
+  ])
 
   const currentModel = selectedModel?.id
     ? getModelBy(selectedModel?.id)
@@ -741,49 +850,19 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
         <div className="flex flex-col">
           {/* Auto (LLM Router) option — only shown when there is an active thread to override */}
           {isRouterConfigured && activeThreadId && (
-            <button
-              type="button"
-              className={cn(
-                'flex items-center gap-2.5 px-3 py-2.5 border-b border-border/50 transition-colors w-full text-left',
-                isAutoActive
-                  ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
-                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-              )}
-              onClick={handleAutoToggle}
-            >
-              <div className={cn(
-                'size-5 rounded-md shrink-0 flex items-center justify-center',
-                isAutoActive ? 'bg-amber-500/20' : 'bg-muted'
-              )}>
-                <Route className="size-3" />
-              </div>
-              <span style={{ fontSize: '13px', fontWeight: 500 }} className="flex-1">
-                Auto (LLM Router)
-              </span>
-              {isAutoActive && <Check className="size-3.5 text-amber-600 dark:text-amber-400 shrink-0" />}
-            </button>
+            <AutoRouteOption
+              isActive={isAutoActive}
+              onToggle={handleAutoToggle}
+            />
           )}
           {/* Search input */}
-          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border/50">
-            <Search className="size-3.5 text-muted-foreground shrink-0" />
-            <input
-              ref={searchInputRef}
-              value={searchValue}
-              onChange={(e) => setSearchValue(e.target.value)}
-              placeholder={t('common:searchModels')}
-              className="flex-1 bg-transparent outline-none placeholder:text-muted-foreground/40"
-              style={{ fontSize: '13px' }}
-            />
-            {searchValue && (
-              <button
-                type="button"
-                onClick={onClearSearch}
-                className="text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-              >
-                <X className="size-3.5" />
-              </button>
-            )}
-          </div>
+          <SearchField
+            value={searchValue}
+            inputRef={searchInputRef}
+            onChange={setSearchValue}
+            onClear={onClearSearch}
+            placeholder={t('common:searchModels')}
+          />
 
           {/* Model list — virtualized for large lists, plain for small */}
           {useVirtual ? (

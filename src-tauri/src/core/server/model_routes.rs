@@ -7,6 +7,7 @@ use hyper::{Body, Response, StatusCode};
 use reqwest::Client;
 use serde_json;
 use std::collections::HashMap;
+use std::time::Duration;
 use tauri::Manager;
 
 use super::provider_adapter::{
@@ -15,6 +16,9 @@ use super::provider_adapter::{
 use super::proxy::ProxyConfig;
 use super::security::add_cors_headers_with_host_and_origin;
 use crate::core::state::{AppState, ProviderConfig, ProviderCustomHeader, ProviderModelIndex};
+
+const MODEL_LOAD_RETRY_ATTEMPTS: usize = 10;
+const MODEL_LOAD_RETRY_DELAY: Duration = Duration::from_millis(500);
 
 /// Result of resolving a model route — all data needed to send the upstream request.
 pub(super) struct ProviderResolution {
@@ -79,6 +83,17 @@ fn error_response(
             log::error!("Failed to build error response: {e}");
             Response::new(Body::from("Internal server error"))
         })
+}
+
+fn is_transient_model_loading_error(
+    status: StatusCode,
+    destination_path: &str,
+    error_body: &str,
+) -> bool {
+    status == StatusCode::NOT_FOUND
+        && destination_path == "/chat/completions"
+        && error_body.contains("not loaded")
+        && error_body.contains("loaded=")
 }
 
 /// Strip non-standard fields from the request body that upstream providers may reject.
@@ -149,11 +164,9 @@ fn request_has_local_knowledge_context(json_body: &serde_json::Value) -> bool {
                         .and_then(|content| content.as_array())
                         .is_some_and(|parts| {
                             parts.iter().any(|part| {
-                                part.get("text")
-                                    .and_then(|text| text.as_str())
-                                    .is_some_and(|text| {
-                                        text.contains("Local Knowledge Base (ACTIVE)")
-                                    })
+                                part.get("text").and_then(|text| text.as_str()).is_some_and(
+                                    |text| text.contains("Local Knowledge Base (ACTIVE)"),
+                                )
                             })
                         })
             })
@@ -213,7 +226,9 @@ fn normalize_request_body(body_bytes: &Bytes, allow_chat_template_kwargs: bool) 
         if allow_chat_template_kwargs {
             log::debug!("Normalized request body before forwarding upstream");
         } else {
-            log::debug!("Stripped reasoning_content/reasoning from assistant messages in request body");
+            log::debug!(
+                "Stripped reasoning_content/reasoning from assistant messages in request body"
+            );
         }
         match serde_json::to_vec(&json_body) {
             Ok(bytes) => Bytes::from(bytes),
@@ -321,9 +336,7 @@ async fn resolve_active_ax_serving_fallback<R: tauri::Runtime>(
     let process_map = state.llama_server_process.lock().await;
     let session = process_map
         .values()
-        .find(|session| {
-            session.info.model_id == "__ax_serving__" && session.info.port > 0
-        })?;
+        .find(|session| session.info.model_id == "__ax_serving__" && session.info.port > 0)?;
     let base_url = format!("http://127.0.0.1:{}/v1", session.info.port);
 
     log::warn!(
@@ -332,11 +345,7 @@ async fn resolve_active_ax_serving_fallback<R: tauri::Runtime>(
     );
 
     Some(ResolvedProviderConfig {
-        target_base_url: build_upstream_url(
-            &base_url,
-            destination_path,
-            is_anthropic_messages,
-        ),
+        target_base_url: build_upstream_url(&base_url, destination_path, is_anthropic_messages),
         session_api_key: None,
         provider_custom_headers: Vec::new(),
     })
@@ -344,10 +353,10 @@ async fn resolve_active_ax_serving_fallback<R: tauri::Runtime>(
 
 fn should_skip_upstream_request_header(name: &hyper::header::HeaderName) -> bool {
     let lower = name.as_str().to_ascii_lowercase();
-    matches!(name, &hyper::header::HOST
-        | &hyper::header::AUTHORIZATION
-        | &hyper::header::CONTENT_LENGTH)
-        || lower == "x-api-key"
+    matches!(
+        name,
+        &hyper::header::HOST | &hyper::header::AUTHORIZATION | &hyper::header::CONTENT_LENGTH
+    ) || lower == "x-api-key"
         || lower == "x-ax-provider"
         || lower == "x-ax-request-role"
         || super::proxy::is_hop_by_hop_header(name)
@@ -355,11 +364,13 @@ fn should_skip_upstream_request_header(name: &hyper::header::HeaderName) -> bool
 
 fn should_skip_anthropic_fallback_header(name: &hyper::header::HeaderName) -> bool {
     let lower = name.as_str().to_ascii_lowercase();
-    matches!(name, &hyper::header::HOST
-        | &hyper::header::AUTHORIZATION
-        | &hyper::header::CONTENT_LENGTH
-        | &hyper::header::ACCEPT_ENCODING)
-        || lower == "content-type"
+    matches!(
+        name,
+        &hyper::header::HOST
+            | &hyper::header::AUTHORIZATION
+            | &hyper::header::CONTENT_LENGTH
+            | &hyper::header::ACCEPT_ENCODING
+    ) || lower == "content-type"
         || super::proxy::is_hop_by_hop_header(name)
 }
 
@@ -612,8 +623,7 @@ async fn try_anthropic_fallback(
     fallback_req = fallback_req.header("Accept-Encoding", "identity");
 
     for (name, value) in headers.iter() {
-        if !should_skip_anthropic_fallback_header(name)
-        {
+        if !should_skip_anthropic_fallback_header(name) {
             fallback_req = fallback_req.header(name, value);
         }
     }
@@ -838,144 +848,146 @@ pub(super) async fn dispatch_to_upstream(
         "Proxying request to model server at base URL {upstream_url}, path: {destination_path}"
     );
 
-    let mut outbound_req = client.post(upstream_url.clone());
-
-    for (name, value) in headers.iter() {
-        // Strip auth headers — the proxy injects the real provider key below.
-        // Also strip x-api-key so client dummy keys never reach the upstream API.
-        // Strip x-ax-* headers — internal routing/trace headers, not for upstream providers.
-        // Strip Content-Length — the body may have been modified by normalize_request_body
-        // (e.g., reasoning fields stripped), so reqwest must recalculate it from the actual body.
-        if !should_skip_upstream_request_header(name)
-        {
-            outbound_req = outbound_req.header(name, value);
-        }
-    }
-
-    let session_api_key_for_req = session_api_key.clone();
-    let buffered_body_for_req = buffered_body.clone();
-
-    if let Some(key) = session_api_key_for_req {
-        // Add key as both Authorization Bearer (OpenAI / Gemini / Groq / etc.)
-        // and x-api-key (Anthropic native format). Providers use whichever they support.
-        outbound_req = outbound_req.header("Authorization", format!("Bearer {key}"));
-        outbound_req = outbound_req.header("x-api-key", key.clone());
-    } else {
-        log::debug!("No session API key available for this request");
-    }
-
-    // Apply provider-specific custom headers from provider_configs
-    // (e.g., anthropic-version: 2023-06-01 for Anthropic's OpenAI-compatible endpoint)
-    // Skip reserved headers that could override auth or routing set above.
-    for ch in &provider_custom_headers {
-        let h = ch.header.to_ascii_lowercase();
-        if is_reserved_upstream_custom_header(&h) {
-            log::debug!("Skipping reserved custom header '{}'", ch.header);
-            continue;
-        }
-        if ch
-            .value
-            .chars()
-            .any(|c| matches!(c, '\0' | '\r' | '\n'))
-        {
-            log::debug!("Skipping unsafe custom header value for '{}'", ch.header);
-            continue;
-        }
-        let Ok(header_name) = reqwest::header::HeaderName::from_bytes(ch.header.as_bytes()) else {
-            log::debug!("Skipping invalid custom header name '{}'", ch.header);
-            continue;
-        };
-        let Ok(header_value) = reqwest::header::HeaderValue::from_str(ch.value.as_str()) else {
-            log::debug!("Skipping invalid custom header value for '{}'", ch.header);
-            continue;
-        };
-        outbound_req = outbound_req.header(header_name, header_value);
-    }
-
-    let outbound_req_with_body = outbound_req.body(buffered_body_for_req);
-
     // For Anthropic /messages, we need to track if we should transform the response
     let destination_path = destination_path.to_string();
+    let mut model_load_attempts = 0;
 
-    match outbound_req_with_body.send().await {
-        Ok(response) => {
-            let status = response.status();
+    loop {
+        let mut outbound_req = client.post(upstream_url.clone());
 
-            let is_error = !status.is_success();
+        for (name, value) in headers.iter() {
+            // Strip auth headers — the proxy injects the real provider key below.
+            // Also strip x-api-key so client dummy keys never reach the upstream API.
+            // Strip x-ax-* headers — internal routing/trace headers, not for upstream providers.
+            // Strip Content-Length — the body may have been modified by normalize_request_body
+            // (e.g., reasoning fields stripped), so reqwest must recalculate it from the actual body.
+            if !should_skip_upstream_request_header(name) {
+                outbound_req = outbound_req.header(name, value);
+            }
+        }
 
-            // For Anthropic /messages requests with errors, try /chat/completions
-            if is_error && is_anthropic_messages {
-                log::warn!("Request failed for /messages with status {status}, trying /chat/completions...");
+        if let Some(key) = session_api_key.clone() {
+            // Add key as both Authorization Bearer (OpenAI / Gemini / Groq / etc.)
+            // and x-api-key (Anthropic native format). Providers use whichever they support.
+            outbound_req = outbound_req.header("Authorization", format!("Bearer {key}"));
+            outbound_req = outbound_req.header("x-api-key", key.clone());
+        } else {
+            log::debug!("No session API key available for this request");
+        }
 
-                let error_body = response
-                    .text()
-                    .await
-                    .unwrap_or_else(|e| format!("Failed to read error body: {}", e));
+        // Apply provider-specific custom headers from provider_configs
+        // (e.g., anthropic-version: 2023-06-01 for Anthropic's OpenAI-compatible endpoint)
+        // Skip reserved headers that could override auth or routing set above.
+        for ch in &provider_custom_headers {
+            let h = ch.header.to_ascii_lowercase();
+            if is_reserved_upstream_custom_header(&h) {
+                log::debug!("Skipping reserved custom header '{}'", ch.header);
+                continue;
+            }
+            if ch.value.chars().any(|c| matches!(c, '\0' | '\r' | '\n')) {
+                log::debug!("Skipping unsafe custom header value for '{}'", ch.header);
+                continue;
+            }
+            let Ok(header_name) = reqwest::header::HeaderName::from_bytes(ch.header.as_bytes())
+            else {
+                log::debug!("Skipping invalid custom header name '{}'", ch.header);
+                continue;
+            };
+            let Ok(header_value) = reqwest::header::HeaderValue::from_str(ch.value.as_str()) else {
+                log::debug!("Skipping invalid custom header value for '{}'", ch.header);
+                continue;
+            };
+            outbound_req = outbound_req.header(header_name, header_value);
+        }
 
-                if let Some(result) = try_anthropic_fallback(
-                    &target_base_url,
-                    headers,
-                    &session_api_key,
-                    &buffered_body,
-                    &destination_path,
-                    host_header,
-                    origin_header,
-                    config,
-                    client,
-                )
-                .await
-                {
-                    return result;
+        let outbound_req_with_body = outbound_req.body(buffered_body.clone());
+
+        match outbound_req_with_body.send().await {
+            Ok(response) => {
+                let status = response.status();
+
+                if !status.is_success() {
+                    let error_body = response
+                        .text()
+                        .await
+                        .unwrap_or_else(|e| format!("Failed to read error body: {}", e));
+
+                    if is_transient_model_loading_error(status, &destination_path, &error_body)
+                        && model_load_attempts < MODEL_LOAD_RETRY_ATTEMPTS
+                    {
+                        model_load_attempts += 1;
+                        log::info!(
+                            "Upstream model is still loading for {destination_path}; retrying {model_load_attempts}/{MODEL_LOAD_RETRY_ATTEMPTS}"
+                        );
+                        tokio::time::sleep(MODEL_LOAD_RETRY_DELAY).await;
+                        continue;
+                    }
+
+                    // For Anthropic /messages requests with errors, try /chat/completions
+                    if is_anthropic_messages {
+                        log::warn!("Request failed for /messages with status {status}, trying /chat/completions...");
+
+                        if let Some(result) = try_anthropic_fallback(
+                            &target_base_url,
+                            headers,
+                            &session_api_key,
+                            &buffered_body,
+                            &destination_path,
+                            host_header,
+                            origin_header,
+                            config,
+                            client,
+                        )
+                        .await
+                        {
+                            return result;
+                        }
+
+                        return Ok(error_response(
+                            status,
+                            error_body,
+                            host_header,
+                            origin_header,
+                            config,
+                        ));
+                    }
+
+                    // Non-/messages error - return error response with body
+                    log::error!(
+                        "Upstream provider returned {status} for {destination_path}: {}",
+                        &error_body[..error_body.len().min(500)]
+                    );
+
+                    return Ok(error_response(
+                        status,
+                        error_body,
+                        host_header,
+                        origin_header,
+                        config,
+                    ));
                 }
 
-                return Ok(error_response(
+                // Success case - stream the response
+                return Ok(build_streaming_response(
+                    response,
                     status,
-                    error_body,
                     host_header,
                     origin_header,
                     config,
+                    &upstream_url,
                 ));
-            } else if is_error {
-                // Non-/messages error - return error response with body
-                let error_body = response
-                    .text()
-                    .await
-                    .unwrap_or_else(|e| format!("Failed to read error body: {}", e));
-
-                log::error!(
-                    "Upstream provider returned {status} for {destination_path}: {}",
-                    &error_body[..error_body.len().min(500)]
-                );
-
+            }
+            Err(e) => {
+                let error_msg = format!("Proxy request to model failed: {e}");
+                log::error!("{error_msg}");
                 return Ok(error_response(
-                    status,
-                    error_body,
+                    StatusCode::BAD_GATEWAY,
+                    error_msg,
                     host_header,
                     origin_header,
                     config,
                 ));
             }
-
-            // Success case - stream the response
-            return Ok(build_streaming_response(
-                response,
-                status,
-                host_header,
-                origin_header,
-                config,
-                &upstream_url,
-            ));
-        }
-        Err(e) => {
-            let error_msg = format!("Proxy request to model failed: {e}");
-            log::error!("{error_msg}");
-            Ok(error_response(
-                StatusCode::BAD_GATEWAY,
-                error_msg,
-                host_header,
-                origin_header,
-                config,
-            ))
         }
     }
 }
@@ -1306,5 +1318,33 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_slice(&result).unwrap();
 
         assert!(parsed.get("chat_template_kwargs").is_none());
+    }
+
+    #[test]
+    fn transient_model_loading_error_is_retryable_for_chat_completions() {
+        assert!(is_transient_model_loading_error(
+            StatusCode::NOT_FOUND,
+            "/chat/completions",
+            r#"{"detail":"model gemma-4-26b-a4b-it-4bit not loaded; loaded=[]"}"#,
+        ));
+        assert!(is_transient_model_loading_error(
+            StatusCode::NOT_FOUND,
+            "/chat/completions",
+            r#"{"detail":"model Qwen3.6-35B-A3B-4bit not loaded; loaded=['gemma-4-26b-a4b-it-4bit']"}"#,
+        ));
+    }
+
+    #[test]
+    fn transient_model_loading_error_does_not_retry_real_not_found() {
+        assert!(!is_transient_model_loading_error(
+            StatusCode::NOT_FOUND,
+            "/chat/completions",
+            r#"{"detail":"provider route not found"}"#,
+        ));
+        assert!(!is_transient_model_loading_error(
+            StatusCode::NOT_FOUND,
+            "/models",
+            r#"{"detail":"model test not loaded; loaded=[]"}"#,
+        ));
     }
 }

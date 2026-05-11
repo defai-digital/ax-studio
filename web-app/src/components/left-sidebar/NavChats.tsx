@@ -19,8 +19,20 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Download, GripVertical, MoreHorizontal, Pin, PinOff, Pencil, Trash2 } from 'lucide-react'
-import { exportThread, exportAllThreads } from '@/lib/export/thread-export'
-import { memo, useCallback, useMemo, useRef, useState } from 'react'
+import {
+  CHAT_EXPORT_OPTIONS,
+  exportAllThreads,
+  exportThread,
+} from '@/lib/export/thread-export'
+import {
+  type DragEvent,
+  type ReactNode,
+  memo,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useThreads } from '@/hooks/threads/useThreads'
 import ThreadList from '@/containers/ThreadList'
 import { DeleteAllThreadsDialog } from '@/containers/dialogs/thread/DeleteAllThreadsDialog'
@@ -87,18 +99,17 @@ export function NavChats() {
               <span>Export All Chats</span>
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="min-w-36">
-              <DropdownMenuItem onSelect={() => { setDropdownOpen(false); exportAllThreads('json') }}>
-                <span>JSON</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => { setDropdownOpen(false); exportAllThreads('csv') }}>
-                <span>CSV</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => { setDropdownOpen(false); exportAllThreads('alpaca') }}>
-                <span>JSON (Alpaca)</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => { setDropdownOpen(false); exportAllThreads('openai-jsonl') }}>
-                <span>JSONL (OpenAI)</span>
-              </DropdownMenuItem>
+              {CHAT_EXPORT_OPTIONS.map((option) => (
+                <DropdownMenuItem
+                  key={option.format}
+                  onSelect={() => {
+                    setDropdownOpen(false)
+                    exportAllThreads(option.format)
+                  }}
+                >
+                  <span>{option.label}</span>
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
@@ -192,18 +203,14 @@ const PinnedThreadItem = memo(function PinnedThreadItem({
               <span>Export Chat</span>
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="min-w-36">
-              <DropdownMenuItem onSelect={() => exportThread(thread, 'json')}>
-                <span>JSON</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => exportThread(thread, 'csv')}>
-                <span>CSV</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => exportThread(thread, 'alpaca')}>
-                <span>JSON (Alpaca)</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => exportThread(thread, 'openai-jsonl')}>
-                <span>JSONL (OpenAI)</span>
-              </DropdownMenuItem>
+              {CHAT_EXPORT_OPTIONS.map((option) => (
+                <DropdownMenuItem
+                  key={option.format}
+                  onSelect={() => exportThread(thread, option.format)}
+                >
+                  <span>{option.label}</span>
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
@@ -256,7 +263,7 @@ function DraggablePinnedList({
     dragItemRef.current = threadId
   }, [])
 
-  const handleDragOver = useCallback((e: React.DragEvent, threadId: string) => {
+  const handleDragOver = useCallback((e: DragEvent, threadId: string) => {
     e.preventDefault()
     dragOverRef.current = threadId
   }, [])
@@ -304,7 +311,7 @@ function DraggablePinnedList({
 function PinnedGroupSection({
   children,
 }: {
-  children: React.ReactNode
+  children: ReactNode
 }) {
   return (
     <div className="mb-4">
@@ -323,7 +330,7 @@ function DateGroupSection({
   children,
 }: {
   label: DateGroup
-  children: React.ReactNode
+  children: ReactNode
 }) {
   return (
     <div className="mb-4">

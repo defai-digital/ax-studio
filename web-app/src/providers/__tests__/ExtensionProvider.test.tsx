@@ -20,9 +20,17 @@ const mocks = vi.hoisted(() => {
     core,
     extensionManager,
     listen,
+    serviceHub: {
+      events: () => ({
+        listen,
+      }),
+    },
     ExtensionManager,
     EngineManager: vi.fn(),
     ModelManager: vi.fn(),
+    events: {
+      emit: vi.fn(),
+    },
   }
 })
 
@@ -35,16 +43,16 @@ vi.mock('@/lib/extension', () => ({
 }))
 
 vi.mock('@ax-studio/core', () => ({
+  AppEvent: {
+    onModelImported: 'onModelImported',
+  },
   EngineManager: mocks.EngineManager,
+  events: mocks.events,
   ModelManager: mocks.ModelManager,
 }))
 
 vi.mock('@/hooks/useServiceHub', () => ({
-  useServiceHub: () => ({
-    events: () => ({
-      listen: mocks.listen,
-    }),
-  }),
+  useServiceHub: () => mocks.serviceHub,
 }))
 
 describe('ExtensionProvider', () => {
@@ -72,7 +80,12 @@ describe('ExtensionProvider', () => {
   })
 
   it('renders children immediately while extensions load in the background', async () => {
-    mocks.extensionManager.registerActive.mockReturnValue(new Promise(() => {}))
+    let resolveRegister: (() => void) | undefined
+    mocks.extensionManager.registerActive.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveRegister = resolve
+      })
+    )
 
     render(
       <ExtensionProvider>
@@ -81,10 +94,17 @@ describe('ExtensionProvider', () => {
     )
 
     expect(screen.getByTestId('child')).toHaveTextContent('App shell')
-    expect(screen.queryByText('Loading Ax-Studio extensions…')).not.toBeInTheDocument()
 
     await waitFor(() => {
       expect(mocks.extensionManager.registerActive).toHaveBeenCalled()
+    })
+
+    resolveRegister?.()
+
+    await waitFor(() => {
+      expect(mocks.events.emit).toHaveBeenCalledWith('onModelImported', {
+        source: 'extensions-ready',
+      })
     })
   })
 
@@ -109,14 +129,14 @@ describe('ExtensionProvider', () => {
       </ExtensionProvider>
     )
 
-    expect(screen.getByTestId('child')).toBeInTheDocument()
-
     await waitFor(() => {
       expect(consoleErrorSpy).toHaveBeenCalledWith(
         'Extension setup failed, rendering app anyway:',
         expect.any(Error)
       )
     })
+
+    expect(screen.getByTestId('child')).toBeInTheDocument()
   })
 
   it('refreshes active extensions when background install completes', async () => {
@@ -140,6 +160,12 @@ describe('ExtensionProvider', () => {
 
     await waitFor(() => {
       expect(mocks.extensionManager.registerActive).toHaveBeenCalledTimes(2)
+    })
+
+    await waitFor(() => {
+      expect(mocks.events.emit).toHaveBeenCalledWith('onModelImported', {
+        source: 'extensions-updated',
+      })
     })
   })
 })

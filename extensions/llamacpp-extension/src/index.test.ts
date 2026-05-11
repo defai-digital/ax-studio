@@ -290,6 +290,40 @@ describe('AxStudioLlamacppExtension', () => {
     ).rejects.toThrow('Model path traversal detected')
   })
 
+  it('reconciles stale ax-serving sessions against health before reporting loaded models', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    ;(extension as any).axServingPid = 123
+    ;(extension as any).axServingPort = 456
+    ;(extension as any).axServingSessions.set('Qwen3.6-35B-A3B-4bit', {
+      pid: 123,
+      port: 456,
+      model_id: 'Qwen3.6-35B-A3B-4bit',
+      model_path: '/models/qwen',
+      is_embedding: false,
+      api_key: '',
+    })
+    ;(extension as any).axServingSessions.set('gemma-4-26b-a4b-it-4bit', {
+      pid: 123,
+      port: 456,
+      model_id: 'gemma-4-26b-a4b-it-4bit',
+      model_path: '/models/gemma',
+      is_embedding: false,
+      api_key: '',
+    })
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ loaded_models: ['gemma-4-26b-a4b-it-4bit'] }),
+    } as Response)
+
+    await expect(extension.getLoadedModels()).resolves.toEqual([
+      'gemma-4-26b-a4b-it-4bit',
+    ])
+
+    expect((extension as any).axServingSessions.has('Qwen3.6-35B-A3B-4bit')).toBe(false)
+    expect((extension as any).axServingSessions.has('gemma-4-26b-a4b-it-4bit')).toBe(true)
+    fetchSpy.mockRestore()
+  })
+
   it('canonicalizes local import paths before copy operations', () => {
     const extension = new AxStudioLlamacppExtension('', '')
 
@@ -400,6 +434,62 @@ describe('AxStudioLlamacppExtension', () => {
         providerId: 'llamacpp',
       },
     ])
+  })
+
+  it('lists downloaded models even when AX manifests are missing', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    ;(extension as any).config = { engine_type: 'ax-serving' }
+    mocks.dirState.add('/app-data/llamacpp/models/Qwen2.5-32B-Instruct-4bit')
+    mocks.dirState.add('/app-data/llamacpp/models/Qwen3.5-35B-A3B-4bit')
+    mocks.fsState.set(
+      '/app-data/llamacpp/models/Qwen2.5-32B-Instruct-4bit/model.yml',
+      [
+        'model_path: llamacpp/models/Qwen2.5-32B-Instruct-4bit',
+        'name: Qwen2.5-32B-Instruct-4bit',
+        'size_bytes: 123',
+        'embedding: false',
+      ].join('\n')
+    )
+    mocks.fsState.set(
+      '/app-data/llamacpp/models/Qwen3.5-35B-A3B-4bit/model.yml',
+      [
+        'model_path: llamacpp/models/Qwen3.5-35B-A3B-4bit',
+        'name: Qwen3.5-35B-A3B-4bit',
+        'size_bytes: 456',
+        'embedding: false',
+      ].join('\n')
+    )
+    mocks.fsState.set(
+      '/app-data/llamacpp/models/Qwen3.5-35B-A3B-4bit/model-manifest.json',
+      '{}'
+    )
+    vi.mocked((await import('@ax-studio/core')).fs.readdirSync).mockImplementation(
+      async (path: string) => {
+        if (path === '/app-data/llamacpp/models') {
+          return ['Qwen2.5-32B-Instruct-4bit', 'Qwen3.5-35B-A3B-4bit']
+        }
+        return []
+      }
+    )
+
+    await expect(extension.list()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'Qwen2.5-32B-Instruct-4bit',
+          name: 'Qwen2.5-32B-Instruct-4bit',
+          providerId: 'llamacpp',
+        }),
+        expect.objectContaining({
+          id: 'Qwen3.5-35B-A3B-4bit',
+          name: 'Qwen3.5-35B-A3B-4bit',
+          providerId: 'llamacpp',
+        }),
+      ])
+    )
+    await expect(extension.get('Qwen2.5-32B-Instruct-4bit')).resolves.toMatchObject({
+      id: 'Qwen2.5-32B-Instruct-4bit',
+      providerId: 'llamacpp',
+    })
   })
 
   it('fails import when the download extension is unavailable for remote files', async () => {

@@ -18,6 +18,8 @@ import { bootstrapLocalApi } from '@/lib/bootstrap/bootstrap-local-api'
 import { syncRemoteProviders as syncRemoteProviderConfigs } from '@/lib/providers/provider-sync'
 import { encodeHubRouteParam } from '@/lib/hub'
 
+const PROVIDER_STARTUP_REFRESH_DELAYS_MS = [500, 1500, 3500, 7000] as const
+
 export function DataProvider() {
   const { setProviders, providers } = useModelProvider()
   // Track whether the initial bootstrap sync has already registered providers.
@@ -84,6 +86,7 @@ export function DataProvider() {
     let cleanupDeepLink: () => void = () => {}
     let cleanupEvents: () => void = () => {}
     let cleanupUpdater: () => void = () => {}
+    const providerStartupRefreshTimers: ReturnType<typeof setTimeout>[] = []
 
     bootstrapProviders({
       serviceHub,
@@ -120,6 +123,24 @@ export function DataProvider() {
 
     cleanupEvents = bootstrapEvents({ serviceHub, setProviders })
 
+    const refreshStartupProviders = () => {
+      serviceHub
+        .providers()
+        .getProviders()
+        .then((providers) => {
+          if (!unmounted) {
+            setProviders(providers, serviceHub.path().sep())
+          }
+        })
+        .catch((error) => {
+          console.error('[DataProvider] startup provider refresh failed:', error)
+        })
+    }
+
+    for (const delayMs of PROVIDER_STARTUP_REFRESH_DELAYS_MS) {
+      providerStartupRefreshTimers.push(setTimeout(refreshStartupProviders, delayMs))
+    }
+
     bootstrapLocalApi({
       serviceHub,
       enabled: enableOnStartup,
@@ -143,6 +164,7 @@ export function DataProvider() {
       cleanupDeepLink()
       cleanupEvents()
       cleanupUpdater()
+      providerStartupRefreshTimers.forEach(clearTimeout)
     }
     // serviceHub is stable for the app lifetime; other deps are store actions
     // (stable Zustand references) or config values captured once at startup.

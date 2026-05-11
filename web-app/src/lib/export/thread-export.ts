@@ -21,6 +21,19 @@ const EXPORT_CONFIG: Record<
   'openai-jsonl': { label: 'JSONL (OpenAI)', extension: 'jsonl', fileSuffix: 'openai', mimeType: 'application/x-ndjson;charset=utf-8' },
 }
 
+export const CHAT_EXPORT_OPTIONS = [
+  { format: 'json', label: EXPORT_CONFIG.json.label },
+  { format: 'csv', label: EXPORT_CONFIG.csv.label },
+  { format: 'alpaca', label: EXPORT_CONFIG.alpaca.label },
+  {
+    format: 'openai-jsonl',
+    label: EXPORT_CONFIG['openai-jsonl'].label,
+  },
+] as const satisfies ReadonlyArray<{
+  format: WorkspaceChatExportFormat
+  label: string
+}>
+
 const toSafeFileName = (value: string): string =>
   value
     .toLowerCase()

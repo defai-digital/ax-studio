@@ -62,6 +62,23 @@ function LanguageSwitcher() {
   )
 }
 
+function ExternalTextLink({
+  href,
+  label,
+}: {
+  href: string
+  label: string
+}) {
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer">
+      <div className="flex items-center gap-1">
+        <span>{label}</span>
+        <ExternalLink size={14} />
+      </div>
+    </a>
+  )
+}
+
 export const Route = createFileRoute(route.settings.general)({
   component: General,
 })
@@ -371,28 +388,20 @@ function General() {
                   title={t('settings:general.documentation')}
                   description={t('settings:general.documentationDesc')}
                   actions={
-                    <a href="https://axstudio.ai/docs" target="_blank" rel="noopener noreferrer">
-                      <div className="flex items-center gap-1">
-                        <span>{t('settings:general.viewDocs')}</span>
-                        <ExternalLink size={14} />
-                      </div>
-                    </a>
+                    <ExternalTextLink
+                      href="https://axstudio.ai/docs"
+                      label={t('settings:general.viewDocs')}
+                    />
                   }
                 />
                 <CardItem
                   title={t('settings:general.releaseNotes')}
                   description={t('settings:general.releaseNotesDesc')}
                   actions={
-                    <a
+                    <ExternalTextLink
                       href="https://github.com/ax-studio/ax-studio/releases"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <div className="flex items-center gap-1">
-                        <span>{t('settings:general.viewReleases')}</span>
-                        <ExternalLink size={14} />
-                      </div>
-                    </a>
+                      label={t('settings:general.viewReleases')}
+                    />
                   }
                 />
               </Card>
@@ -433,12 +442,10 @@ function General() {
                   title={t('settings:general.reportAnIssue')}
                   description={t('settings:general.reportAnIssueDesc')}
                   actions={
-                    <a href="https://github.com/ax-studio/ax-studio/issues/new" target="_blank">
-                      <div className="flex items-center gap-1">
-                        <span>{t('settings:general.reportIssue')}</span>
-                        <ExternalLink size={14} />
-                      </div>
-                    </a>
+                    <ExternalTextLink
+                      href="https://github.com/ax-studio/ax-studio/issues/new"
+                      label={t('settings:general.reportIssue')}
+                    />
                   }
                 />
               </Card>

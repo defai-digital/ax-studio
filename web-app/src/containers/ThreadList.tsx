@@ -1,9 +1,9 @@
 import { Download, Folder, ImagePlus, MessageCircle, MoreHorizontal, Pencil, Pin, PinOff, Trash2, X } from 'lucide-react'
-import { exportThread } from '@/lib/export/thread-export'
+import { CHAT_EXPORT_OPTIONS, exportThread } from '@/lib/export/thread-export'
 import { useThreads } from '@/hooks/threads/useThreads'
 import { useMessages } from '@/hooks/chat/useMessages'
 import { useThreadManagement } from '@/hooks/threads/useThreadManagement'
-import { useCallback } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 
 import {
   DropdownMenu,
@@ -29,7 +29,6 @@ import {
 } from '@/components/ui/sidebar'
 import { useSidebar } from '@/components/ui/sidebar-context'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { memo, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { RenameThreadDialog, DeleteThreadDialog } from '@/containers/dialogs'
 import { toast } from 'sonner'
@@ -52,6 +51,45 @@ function formatRelativeTime(timestamp: number, t: (key: string, opts?: Record<st
   if (diff < 86400) return t('common:time.hoursAgo', { count: Math.floor(diff / 3600) })
   if (diff < 604800) return t('common:time.daysAgo', { count: Math.floor(diff / 86400) })
   return new Date(timestamp * 1000).toLocaleDateString()
+}
+
+function ChatLogoImage({
+  src,
+  alt,
+  className,
+}: {
+  src: string
+  alt: string
+  className?: string
+}) {
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={cn('size-4 rounded-sm object-cover', className)}
+      loading="lazy"
+    />
+  )
+}
+
+function PinActionContent({
+  isPinned,
+  iconClassName,
+}: {
+  isPinned?: boolean
+  iconClassName?: string
+}) {
+  return isPinned ? (
+    <>
+      <PinOff className={cn('size-4', iconClassName)} />
+      <span>Unpin</span>
+    </>
+  ) : (
+    <>
+      <Pin className={cn('size-4', iconClassName)} />
+      <span>Pin</span>
+    </>
+  )
 }
 
 const ThreadItem = memo(
@@ -78,6 +116,7 @@ const ThreadItem = memo(
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
     const [logoDialogOpen, setLogoDialogOpen] = useState(false)
     const [chatLogo, setChatLogo] = useState('')
+    const threadTitle = thread.title || t('common:newThread')
 
     // Read messages from store only if already loaded (no fetching in sidebar)
     const messages = useMessages((state) => state.messages[thread.id])
@@ -178,18 +217,17 @@ const ThreadItem = memo(
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   {currentChatLogo && (
-                    <img
+                    <ChatLogoImage
                       src={currentChatLogo}
-                      alt={thread.title || t('common:newThread')}
-                      className="size-4 rounded-sm object-cover shrink-0"
-                      loading="lazy"
+                      alt={threadTitle}
+                      className="shrink-0"
                     />
                   )}
                   <span
                     className="truncate"
                     style={{ fontSize: '14px', fontWeight: 500 }}
                   >
-                    {thread.title || t('common:newThread')}
+                    {threadTitle}
                   </span>
                 </div>
                 <span className="text-[11px] text-muted-foreground shrink-0">
@@ -207,14 +245,9 @@ const ThreadItem = memo(
           <SidebarMenuButton asChild>
             <Link to="/threads/$threadId" params={{ threadId: thread.id }}>
               {currentChatLogo && (
-                <img
-                  src={currentChatLogo}
-                  alt={thread.title || t('common:newThread')}
-                  className="size-4 rounded-sm object-cover"
-                  loading="lazy"
-                />
+                <ChatLogoImage src={currentChatLogo} alt={threadTitle} />
               )}
-              <span>{thread.title || t('common:newThread')}</span>
+              <span>{threadTitle}</span>
             </Link>
           </SidebarMenuButton>
         }
@@ -239,17 +272,7 @@ const ThreadItem = memo(
             </DropdownMenuItem>
             {onTogglePin && (
               <DropdownMenuItem onSelect={() => onTogglePin(thread.id)}>
-                {isPinned ? (
-                  <>
-                    <PinOff className="size-4" />
-                    <span>Unpin</span>
-                  </>
-                ) : (
-                  <>
-                    <Pin className="size-4" />
-                    <span>Pin</span>
-                  </>
-                )}
+                <PinActionContent isPinned={isPinned} />
               </DropdownMenuItem>
             )}
             <DropdownMenuItem
@@ -299,18 +322,14 @@ const ThreadItem = memo(
                 <span>Export Chat</span>
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="min-w-36">
-                <DropdownMenuItem onSelect={() => exportThread(thread, 'json')}>
-                  <span>JSON</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => exportThread(thread, 'csv')}>
-                  <span>CSV</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => exportThread(thread, 'alpaca')}>
-                  <span>JSON (Alpaca)</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => exportThread(thread, 'openai-jsonl')}>
-                  <span>JSONL (OpenAI)</span>
-                </DropdownMenuItem>
+                {CHAT_EXPORT_OPTIONS.map((option) => (
+                  <DropdownMenuItem
+                    key={option.format}
+                    onSelect={() => exportThread(thread, option.format)}
+                  >
+                    <span>{option.label}</span>
+                  </DropdownMenuItem>
+                ))}
               </DropdownMenuSubContent>
             </DropdownMenuSub>
             {thread.metadata?.project && (
@@ -391,7 +410,7 @@ const ThreadItem = memo(
               {chatLogo.trim() && (
                 <img
                   src={chatLogo.trim()}
-                  alt={thread.title || t('common:newThread')}
+                  alt={threadTitle}
                   className="size-10 rounded-md object-cover border"
                 />
               )}
@@ -423,17 +442,7 @@ const ThreadItem = memo(
           </ContextMenuItem>
           {onTogglePin && (
             <ContextMenuItem onSelect={() => onTogglePin(thread.id)}>
-              {isPinned ? (
-                <>
-                  <PinOff className="size-4 mr-2" />
-                  <span>Unpin</span>
-                </>
-              ) : (
-                <>
-                  <Pin className="size-4 mr-2" />
-                  <span>Pin</span>
-                </>
-              )}
+              <PinActionContent isPinned={isPinned} iconClassName="mr-2" />
             </ContextMenuItem>
           )}
           <ContextMenuSeparator />

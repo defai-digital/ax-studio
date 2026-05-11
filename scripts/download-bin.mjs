@@ -1,6 +1,6 @@
 // scripts/download.js
 import https from 'https'
-import fs, { copyFile, cpSync, mkdirSync } from 'fs'
+import fs, { copyFileSync, cpSync, mkdirSync } from 'fs'
 import os from 'os'
 import path from 'path'
 import unzipper from 'unzipper'
@@ -55,6 +55,13 @@ async function decompress(filePath, targetDir) {
   }
 }
 
+function ensureDirectory(dir) {
+  if (fs.existsSync(dir) && !fs.statSync(dir).isDirectory()) {
+    fs.rmSync(dir, { force: true })
+  }
+  mkdirSync(dir, { recursive: true })
+}
+
 function getPlatformArch() {
   const platform = os.platform() // 'darwin', 'linux', 'win32'
   const arch = os.arch() // 'x64', 'arm64', etc.
@@ -98,11 +105,8 @@ async function main() {
   if (platform === 'win32') {
     uvPath = `${tempBinDir}/uv-${uvPlatform}.zip`
   }
-  try {
-    mkdirSync('scripts/dist')
-  } catch (err) {
-    // Expect EEXIST error if the directory already exists
-  }
+  ensureDirectory(tempBinDir)
+  ensureDirectory(binDir)
 
   // Adjust these URLs based on latest releases
   const bunUrl = `https://github.com/oven-sh/bun/releases/latest/download/bun-${bunPlatform}.zip`
@@ -121,50 +125,26 @@ async function main() {
   try {
     cpSync(
       path.join(tempBinDir, `bun-${bunPlatform}`, 'bun'),
-      path.join(binDir)
+      path.join(binDir, 'bun')
     )
-    fs.chmod(path.join(binDir, 'bun'), 0o755, (err) => {
-      if (err) {
-        console.log('Add execution permission failed!', err)
-      }
-    })
+    fs.chmodSync(path.join(binDir, 'bun'), 0o755)
     if (platform === 'darwin') {
-      copyFile(
+      copyFileSync(
         path.join(binDir, 'bun'),
-        path.join(binDir, 'bun-x86_64-apple-darwin'),
-        (err) => {
-          if (err) {
-            console.log('Error Found:', err)
-          }
-        }
+        path.join(binDir, 'bun-x86_64-apple-darwin')
       )
-      copyFile(
+      copyFileSync(
         path.join(binDir, 'bun'),
-        path.join(binDir, 'bun-aarch64-apple-darwin'),
-        (err) => {
-          if (err) {
-            console.log('Error Found:', err)
-          }
-        }
+        path.join(binDir, 'bun-aarch64-apple-darwin')
       )
-      copyFile(
+      copyFileSync(
         path.join(binDir, 'bun'),
-        path.join(binDir, 'bun-universal-apple-darwin'),
-        (err) => {
-          if (err) {
-            console.log('Error Found:', err)
-          }
-        }
+        path.join(binDir, 'bun-universal-apple-darwin')
       )
     } else if (platform === 'linux') {
-      copyFile(
+      copyFileSync(
         path.join(binDir, 'bun'),
-        path.join(binDir, 'bun-x86_64-unknown-linux-gnu'),
-        (err) => {
-          if (err) {
-            console.log('Error Found:', err)
-          }
-        }
+        path.join(binDir, 'bun-x86_64-unknown-linux-gnu')
       )
     }
   } catch (err) {
@@ -173,17 +153,12 @@ async function main() {
   try {
     cpSync(
       path.join(tempBinDir, `bun-${bunPlatform}`, 'bun.exe'),
-      path.join(binDir)
+      path.join(binDir, 'bun.exe')
     )
     if (platform === 'win32') {
-      copyFile(
+      copyFileSync(
         path.join(binDir, 'bun.exe'),
-        path.join(binDir, 'bun-x86_64-pc-windows-msvc.exe'),
-        (err) => {
-          if (err) {
-            console.log('Error Found:', err)
-          }
-        }
+        path.join(binDir, 'bun-x86_64-pc-windows-msvc.exe')
       )
     }
   } catch (err) {
@@ -199,65 +174,36 @@ async function main() {
     await decompress(uvPath, tempBinDir)
   }
   try {
-    cpSync(path.join(tempBinDir, `uv-${uvPlatform}`, 'uv'), path.join(binDir))
-    fs.chmod(path.join(binDir, 'uv'), 0o755, (err) => {
-      if (err) {
-        console.log('Add execution permission failed!', err)
-      }
-    })
+    cpSync(path.join(tempBinDir, `uv-${uvPlatform}`, 'uv'), path.join(binDir, 'uv'))
+    fs.chmodSync(path.join(binDir, 'uv'), 0o755)
     if (platform === 'darwin') {
-      copyFile(
+      copyFileSync(
         path.join(binDir, 'uv'),
-        path.join(binDir, 'uv-x86_64-apple-darwin'),
-        (err) => {
-          if (err) {
-            console.log('Error Found:', err)
-          }
-        }
+        path.join(binDir, 'uv-x86_64-apple-darwin')
       )
-      copyFile(
+      copyFileSync(
         path.join(binDir, 'uv'),
-        path.join(binDir, 'uv-aarch64-apple-darwin'),
-        (err) => {
-          if (err) {
-            console.log('Error Found:', err)
-          }
-        }
+        path.join(binDir, 'uv-aarch64-apple-darwin')
       )
-      copyFile(
+      copyFileSync(
         path.join(binDir, 'uv'),
-        path.join(binDir, 'uv-universal-apple-darwin'),
-        (err) => {
-          if (err) {
-            console.log('Error Found:', err)
-          }
-        }
+        path.join(binDir, 'uv-universal-apple-darwin')
       )
     } else if (platform === 'linux') {
-      copyFile(
+      copyFileSync(
         path.join(binDir, 'uv'),
-        path.join(binDir, 'uv-x86_64-unknown-linux-gnu'),
-        (err) => {
-          if (err) {
-            console.log('Error Found:', err)
-          }
-        }
+        path.join(binDir, 'uv-x86_64-unknown-linux-gnu')
       )
     }
   } catch (err) {
     // Expect EEXIST error
   }
   try {
-    cpSync(path.join(tempBinDir, 'uv.exe'), path.join(binDir))
+    cpSync(path.join(tempBinDir, 'uv.exe'), path.join(binDir, 'uv.exe'))
     if (platform === 'win32') {
-      copyFile(
+      copyFileSync(
         path.join(binDir, 'uv.exe'),
-        path.join(binDir, 'uv-x86_64-pc-windows-msvc.exe'),
-        (err) => {
-          if (err) {
-            console.log('Error Found:', err)
-          }
-        }
+        path.join(binDir, 'uv-x86_64-pc-windows-msvc.exe')
       )
     }
   } catch (err) {

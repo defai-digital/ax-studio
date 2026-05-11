@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   addMessage: vi.fn(),
   setChatSessionsState: vi.fn(),
   prepareProviderForChat: vi.fn(),
+  isLocalProvider: vi.fn(),
   buildResearchModel: vi.fn(),
   exaSearch: vi.fn(),
   searchWikipedia: vi.fn(),
@@ -94,6 +95,7 @@ vi.mock('@/hooks/models/useModelProvider', () => ({
 }))
 
 vi.mock('@/lib/chat/model-session', () => ({
+  isLocalProvider: mocks.isLocalProvider,
   prepareProviderForChat: mocks.prepareProviderForChat,
 }))
 
@@ -223,6 +225,7 @@ describe('useResearch workflow', () => {
       chatSessionState = updater(chatSessionState)
     })
     mocks.prepareProviderForChat.mockResolvedValue(undefined)
+    mocks.isLocalProvider.mockReturnValue(false)
     mocks.buildResearchModel.mockResolvedValue({ modelId: 'research-model' })
     mocks.parsePlan.mockReturnValue(['What is AX Studio?'])
     mocks.parseDrillDown.mockReturnValue([])
@@ -271,6 +274,42 @@ describe('useResearch workflow', () => {
     expect(panelState.sources).toHaveLength(1)
     expect(panelState.steps.at(-1)).toMatchObject({ type: 'done' })
     expect(chatSessionState.sessions['thread-1'].chat.messages).toHaveLength(2)
+  })
+
+  it('shows startup progress while a local model is still loading', async () => {
+    vi.useFakeTimers()
+    mocks.isLocalProvider.mockReturnValueOnce(true)
+    mocks.prepareProviderForChat.mockReturnValueOnce(new Promise(() => {}))
+    const { result } = renderHook(() => useResearch('thread-1'))
+
+    const researchPromise = result.current.startResearch('slow local model', 2)
+
+    expect(panelState.steps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'planning',
+          message: 'Preparing research…',
+        }),
+        expect.objectContaining({
+          type: 'planning',
+          message: 'Preparing selected model…',
+        }),
+      ]),
+    )
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    await researchPromise
+
+    expect(panelState.steps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'planning',
+          message: 'Model is still loading; continuing through proxy…',
+        }),
+      ]),
+    )
+    expect(panelState.status).toBe('done')
+    vi.useRealTimers()
   })
 
   it('falls back to the original query when planning returns no subquestions', async () => {

@@ -174,7 +174,10 @@ fn validate_provider_url(provider: &str, url: &str) -> Result<(), String> {
         }
         Some(url::Host::Domain(domain)) => {
             let port = parsed.port_or_known_default().ok_or_else(|| {
-                format!("Provider URL is missing a port for scheme '{}'", parsed.scheme())
+                format!(
+                    "Provider URL is missing a port for scheme '{}'",
+                    parsed.scheme()
+                )
             })?;
             let addrs = (domain, port)
                 .to_socket_addrs()

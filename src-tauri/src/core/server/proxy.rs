@@ -250,7 +250,10 @@ fn handle_cors_preflight(req: &Request<Body>, config: &ProxyConfig) -> Option<Re
 
     let mut response = Response::builder()
         .status(StatusCode::OK)
-        .header("Access-Control-Allow-Methods", cors::CORS_ALLOWED_METHODS_HEADER)
+        .header(
+            "Access-Control-Allow-Methods",
+            cors::CORS_ALLOWED_METHODS_HEADER,
+        )
         .header(
             "Access-Control-Allow-Headers",
             cors::CORS_RESPONSE_ALLOWED_HEADERS_HEADER,

@@ -1,6 +1,6 @@
 import { ExtensionManager } from '@/lib/extension'
 import { ensureCoreBridge } from '@/lib/bootstrap/core-bridge'
-import { EngineManager, ModelManager } from '@ax-studio/core'
+import { AppEvent, EngineManager, events, ModelManager } from '@ax-studio/core'
 import { PropsWithChildren, useCallback, useEffect, useMemo, useState } from 'react'
 import { withTimeout } from '@/lib/utils/async'
 import { useServiceHub } from '@/hooks/useServiceHub'
@@ -9,6 +9,12 @@ const EXTENSION_START_TIMEOUT_MS = 8000
 const EXTENSIONS_UPDATED_EVENT = 'extensions-updated'
 const EXTENSION_START_RETRY_DELAYS_MS = [1500, 5000] as const
 let extensionSetupWork: Promise<void> | null = null
+
+function notifyProvidersChanged(source: string) {
+  window.setTimeout(() => {
+    events.emit(AppEvent.onModelImported, { source })
+  }, 0)
+}
 
 export function ExtensionProvider({ children }: PropsWithChildren) {
   const [initError, setInitError] = useState<string | null>(null)
@@ -66,11 +72,19 @@ export function ExtensionProvider({ children }: PropsWithChildren) {
     setInitError(null)
 
     void runSetup().then((ok) => {
-      if (cancelled || ok) return
+      if (cancelled) return
+      if (ok) {
+        notifyProvidersChanged('extensions-ready')
+      }
+      if (ok) return
       for (const delayMs of EXTENSION_START_RETRY_DELAYS_MS) {
         retryTimers.push(setTimeout(() => {
           if (cancelled) return
-          void runSetup()
+          void runSetup().then((retryOk) => {
+            if (!cancelled && retryOk) {
+              notifyProvidersChanged('extensions-ready')
+            }
+          })
         }, delayMs))
       }
     })
@@ -79,7 +93,11 @@ export function ExtensionProvider({ children }: PropsWithChildren) {
       .events()
       .listen(EXTENSIONS_UPDATED_EVENT, () => {
         console.info('[ExtensionProvider] Extensions updated; refreshing active extensions')
-        void runSetup()
+        void runSetup().then((ok) => {
+          if (ok) {
+            notifyProvidersChanged(EXTENSIONS_UPDATED_EVENT)
+          }
+        })
       })
       .then((cleanup) => {
         if (cancelled) {

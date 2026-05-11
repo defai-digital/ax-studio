@@ -246,6 +246,8 @@ const AX_SERVING_HEALTH_CHECK_TIMEOUT_MS = 5_000
 const AX_SERVING_UNLOAD_TIMEOUT_MS = 10_000
 const DEFAULT_UBATCH_SIZE = 512
 const AUTO_GPU_LAYERS_SENTINEL = 100
+const AX_MODEL_MANIFEST_FILENAME = 'model-manifest.json'
+const AX_SERVING_ARTIFACT_ERROR_PREFIX = 'AX Engine requires'
 
 // ─── Main Extension Class ─────────────────────────────────────────────────────
 
@@ -577,6 +579,15 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   private async _modelYmlPath(modelId: string): Promise<string> {
     const dir = await this._modelDir(modelId)
     return joinPath([dir, 'model.yml'])
+  }
+
+  private async _hasAxModelManifest(modelId: string): Promise<boolean> {
+    const dir = await this._modelDir(modelId)
+    return fs.existsSync(await joinPath([dir, AX_MODEL_MANIFEST_FILENAME]))
+  }
+
+  private _isAxServingArtifactError(error: unknown): boolean {
+    return formatError(error).startsWith(AX_SERVING_ARTIFACT_ERROR_PREFIX)
   }
 
   private _parseEnvAssignments(rawEnv: string): EnvMap {
@@ -1045,6 +1056,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         try {
           return await this._doLoadAxServing(modelId, cfg, embedding)
         } catch (axErr: unknown) {
+          if (this._isAxServingArtifactError(axErr)) throw axErr
           console.warn(
             `[llamacpp] ax-serving failed, falling back to llamacpp: ${formatError(axErr)}`
           )
@@ -1084,6 +1096,12 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
     if (!(await fs.existsSync(modelPath))) {
       throw new Error(`Model file not found: ${modelPath}`)
+    }
+
+    if (!(await this._hasAxModelManifest(modelId))) {
+      throw new Error(
+        `${AX_SERVING_ARTIFACT_ERROR_PREFIX} ${AX_MODEL_MANIFEST_FILENAME} for "${modelId}". Generate AX artifacts for this model or choose a supported AX model.`
+      )
     }
 
     // Resolve mmproj path for vision/multimodal models
@@ -1213,11 +1231,52 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   private async _startAxServingProcess(): Promise<void> {
     const binaryPath = await getAxServingBinaryPath()
     const port = await getRandomPort()
+    const envOverrides = this.config.llamacpp_env
+      ? this._parseEnvAssignments(String(this.config.llamacpp_env))
+      : undefined
 
-    const session = await startAxServing(binaryPath, port, this.timeout)
+    const session = await startAxServing(
+      binaryPath,
+      port,
+      this.timeout,
+      envOverrides
+    )
 
     this.axServingPort = session.port
     this.axServingPid = session.pid
+  }
+
+  private async _reconcileAxServingSessions(): Promise<string[]> {
+    if (this.axServingPid <= 0 || this.axServingPort <= 0) {
+      this.axServingSessions.clear()
+      return []
+    }
+
+    try {
+      const res = await fetch(`http://127.0.0.1:${this.axServingPort}/health`, {
+        signal: AbortSignal.timeout(AX_SERVING_PORT_CHECK_TIMEOUT_MS),
+      })
+      if (!res.ok) return Array.from(this.axServingSessions.keys())
+
+      const health = await res.json() as { loaded_models?: unknown }
+      if (!Array.isArray(health.loaded_models)) {
+        return Array.from(this.axServingSessions.keys())
+      }
+
+      const loaded = health.loaded_models.filter(
+        (modelId): modelId is string => typeof modelId === 'string'
+      )
+      const loadedSet = new Set(loaded)
+      for (const modelId of Array.from(this.axServingSessions.keys())) {
+        if (!loadedSet.has(modelId)) {
+          this.axServingSessions.delete(modelId)
+        }
+      }
+    } catch (error) {
+      console.debug('[llamacpp] Failed to reconcile ax-serving loaded models:', error)
+    }
+
+    return Array.from(this.axServingSessions.keys())
   }
 
   private async _syncLocalProviderRegistration(preferred?: {
@@ -1246,7 +1305,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       console.debug('[llamacpp] Failed to list llamacpp models during provider sync:', error)
       return [] as string[]
     })
-    const axServingModels = Array.from(this.axServingSessions.keys())
+    const axServingModels = await this._reconcileAxServingSessions()
     const firstAxServingSession = this.axServingSessions.values().next()
       .value as SessionInfo | undefined
     const loadedModels = [...new Set([...llamacppModels, ...axServingModels])]
@@ -1509,7 +1568,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         console.warn('[llamacpp] Failed to read loaded models:', error)
         return [] as string[]
       })
-      const axServingIds = Array.from(this.axServingSessions.keys())
+      const axServingIds = await this._reconcileAxServingSessions()
       const allIds = [...new Set([...llamacppIds, ...axServingIds])]
 
       for (const id of allIds) {
@@ -2120,16 +2179,17 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   async getLoadedModels(): Promise<string[]> {
     try {
       const llamacppModels = await getLoadedModels()
-      const axModels = Array.from(this.axServingSessions.keys())
+      const axModels = await this._reconcileAxServingSessions()
       // Deduplicate in case of overlap
       return [...new Set([...llamacppModels, ...axModels])]
     } catch (error) {
       console.debug('[llamacpp] Falling back to ax-serving model list after getLoadedModels failure:', error)
-      return Array.from(this.axServingSessions.keys())
+      return this._reconcileAxServingSessions()
     }
   }
 
   async syncModelRoute(modelId: string): Promise<void> {
+    await this._reconcileAxServingSessions()
     const axSession = this.axServingSessions.get(modelId)
     if (axSession) {
       await this._syncLocalProviderRegistration({

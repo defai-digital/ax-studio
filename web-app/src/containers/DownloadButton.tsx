@@ -171,12 +171,7 @@ export function DownloadButtonPlaceholder({
   }
 
   return (
-    <div
-      className={cn(
-        'flex items-center',
-        false && 'hub-download-button-step'
-      )}
-    >
+    <div className="flex items-center">
       {isDownloading && !isDownloaded && (
         <div className={cn('flex items-center gap-2')}>
           <Progress className="border w-20" value={downloadProgress * 100} />

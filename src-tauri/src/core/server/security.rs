@@ -70,7 +70,10 @@ pub fn add_cors_headers_with_host_and_origin(
     }
 
     builder = builder
-        .header("Access-Control-Allow-Methods", cors::CORS_ALLOWED_METHODS_HEADER)
+        .header(
+            "Access-Control-Allow-Methods",
+            cors::CORS_ALLOWED_METHODS_HEADER,
+        )
         .header(
             "Access-Control-Allow-Headers",
             cors::CORS_RESPONSE_ALLOWED_HEADERS_HEADER,
