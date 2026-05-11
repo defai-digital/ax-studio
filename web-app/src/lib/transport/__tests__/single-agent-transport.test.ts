@@ -9,8 +9,11 @@ import type { UIMessage } from '@ai-sdk/react'
 const mockStreamText = vi.hoisted(() => {
   const listeners: Record<string, (...args: unknown[]) => unknown> = {}
 
+  let capturedStreamOptions: Record<string, unknown> = {}
+
   const result = {
-    toUIMessageStream: vi.fn(() => {
+    toUIMessageStream: vi.fn((opts?: Record<string, unknown>) => {
+      if (opts) capturedStreamOptions = opts
       return new ReadableStream({
         start(controller) {
           controller.close()
@@ -19,7 +22,7 @@ const mockStreamText = vi.hoisted(() => {
     }),
   }
 
-  return { result, listeners }
+  return { result, listeners, getCapturedOptions: () => capturedStreamOptions }
 })
 
 vi.mock('ai', async (importOriginal) => {
@@ -29,6 +32,14 @@ vi.mock('ai', async (importOriginal) => {
     streamText: vi.fn(() => mockStreamText.result),
   }
 })
+
+vi.mock('@/hooks/settings/useAppState', () => ({
+  useAppState: {
+    getState: () => ({
+      setTokenSpeed: vi.fn(),
+    }),
+  },
+}))
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -114,6 +125,83 @@ describe('executeSingleAgentStream', () => {
     const call = (await import('ai')).streamText as ReturnType<typeof vi.fn>
     const args = call.mock.calls[0][0]
     expect(args.tools).toBeUndefined()
+  })
+
+  it('messageMetadata returns undefined for non-finish parts', async () => {
+    await executeSingleAgentStream(makeConfig())
+    const opts = mockStreamText.getCapturedOptions() as Record<string, unknown>
+    const messageMetadata = opts.messageMetadata as (p: { part: unknown }) => unknown
+
+    const result = messageMetadata({ part: { type: 'text-delta', text: '' } })
+    expect(result).toBeUndefined()
+  })
+
+  it('messageMetadata tracks text-delta and returns undefined until finish', async () => {
+    await executeSingleAgentStream(makeConfig())
+    const opts = mockStreamText.getCapturedOptions() as Record<string, unknown>
+    const messageMetadata = opts.messageMetadata as (p: { part: unknown }) => unknown
+
+    // text-delta should track chars, return undefined
+    expect(messageMetadata({ part: { type: 'text-delta', text: 'hello' } })).toBeUndefined()
+    // finish-step should update tokensPerSecond metadata, return undefined
+    expect(messageMetadata({ part: { type: 'finish-step', providerMetadata: {} } })).toBeUndefined()
+  })
+
+  it('messageMetadata returns usage metadata on finish', async () => {
+    await executeSingleAgentStream(makeConfig())
+    const opts = mockStreamText.getCapturedOptions() as Record<string, unknown>
+    const messageMetadata = opts.messageMetadata as (p: { part: unknown }) => unknown
+
+    const result = messageMetadata({
+      part: {
+        type: 'finish',
+        totalUsage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
+        finishReason: 'stop',
+      },
+    })
+    expect(result).toMatchObject({
+      usage: expect.objectContaining({ inputTokens: 10 }),
+      tokenSpeed: expect.objectContaining({ tokenCount: 20 }),
+    })
+  })
+
+  it('onError callback returns error message string', async () => {
+    await executeSingleAgentStream(makeConfig())
+    const opts = mockStreamText.getCapturedOptions() as Record<string, unknown>
+    const onError = opts.onError as (e: unknown) => string
+
+    const msg = onError(new Error('stream failed'))
+    expect(typeof msg).toBe('string')
+    expect(msg).toContain('stream failed')
+  })
+
+  it('onFinish callback calls onTokenUsage when usage is present', async () => {
+    const onTokenUsage = vi.fn()
+    await executeSingleAgentStream(makeConfig({ onTokenUsage }))
+    const opts = mockStreamText.getCapturedOptions() as Record<string, unknown>
+    const onFinish = opts.onFinish as (p: { responseMessage: unknown }) => void
+
+    onFinish({
+      responseMessage: {
+        id: 'msg-1',
+        metadata: {
+          usage: { inputTokens: 5, outputTokens: 10, totalTokens: 15 },
+        },
+      },
+    })
+
+    expect(onTokenUsage).toHaveBeenCalledWith(
+      { inputTokens: 5, outputTokens: 10, totalTokens: 15 },
+      'msg-1'
+    )
+  })
+
+  it('onFinish callback does not throw when responseMessage is null', async () => {
+    await executeSingleAgentStream(makeConfig())
+    const opts = mockStreamText.getCapturedOptions() as Record<string, unknown>
+    const onFinish = opts.onFinish as (p: { responseMessage: unknown }) => void
+
+    expect(() => onFinish({ responseMessage: null })).not.toThrow()
   })
 })
 
