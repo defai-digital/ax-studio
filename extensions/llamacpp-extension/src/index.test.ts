@@ -175,6 +175,7 @@ vi.mock('@ax-studio/core', () => ({
 
 import AxStudioLlamacppExtension from './index'
 import { configureBackends } from './backend'
+import { getLoadedModels, startAxServing } from '@ax-studio/tauri-plugin-llamacpp-api'
 
 describe('AxStudioLlamacppExtension', () => {
   let consoleDebugSpy: ReturnType<typeof vi.spyOn>
@@ -321,6 +322,78 @@ describe('AxStudioLlamacppExtension', () => {
 
     expect((extension as any).axServingSessions.has('Qwen3.6-35B-A3B-4bit')).toBe(false)
     expect((extension as any).axServingSessions.has('gemma-4-26b-a4b-it-4bit')).toBe(true)
+    fetchSpy.mockRestore()
+  })
+
+  it('does not expose the ax-serving service marker as a loaded chat model', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    vi.mocked(getLoadedModels).mockResolvedValueOnce([
+      '__ax_serving__',
+      'llama-model',
+    ])
+
+    await expect(extension.getLoadedModels()).resolves.toEqual(['llama-model'])
+  })
+
+  it('waits for engine switch cleanup before loading through ax-serving', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    ;(extension as any).config = {
+      engine_type: 'ax-serving',
+      n_gpu_layers: -1,
+      ctx_size: 0,
+    }
+    mocks.dirState.add('/app-data/llamacpp/models/ax-model')
+    mocks.fsState.set(
+      '/app-data/llamacpp/models/ax-model/model.yml',
+      [
+        'model_path: llamacpp/models/ax-model/model.gguf',
+        'name: ax-model',
+        'size_bytes: 123',
+        'embedding: false',
+      ].join('\n')
+    )
+    mocks.fsState.set('/app-data/llamacpp/models/ax-model/model.gguf', 'gguf')
+    mocks.fsState.set('/app-data/llamacpp/models/ax-model/model-manifest.json', '{}')
+
+    vi.mocked(getLoadedModels).mockResolvedValue([])
+    vi.mocked(startAxServing).mockResolvedValue({
+      pid: 321,
+      port: 6543,
+      model_id: '__ax_serving__',
+      model_path: '/backend/ax-serving',
+      is_embedding: false,
+      api_key: '',
+    })
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+      text: async () => '',
+    } as Response)
+
+    let releaseCleanup!: () => void
+    ;(extension as any).engineSwitchQueue = new Promise<void>((resolve) => {
+      releaseCleanup = resolve
+    })
+
+    const loadPromise = extension.load('ax-model', undefined, false, true)
+    await Promise.resolve()
+
+    expect(startAxServing).not.toHaveBeenCalled()
+
+    releaseCleanup()
+    await expect(loadPromise).resolves.toMatchObject({
+      model_id: 'ax-model',
+      port: 6543,
+    })
+    expect(startAxServing).toHaveBeenCalled()
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://127.0.0.1:6543/v1/models',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"model_id":"ax-model"'),
+      })
+    )
+
     fetchSpy.mockRestore()
   })
 

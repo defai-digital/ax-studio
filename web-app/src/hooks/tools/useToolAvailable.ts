@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
 import { createSafeJSONStorage } from '@/lib/storage/storage'
 import { MCPTool } from '@/types/mcp'
+import { appendUniqueString, uniqueStrings } from '@/lib/utils/array'
 
 // Helper function to create composite key for server+tool
 const createToolKey = (serverName: string, toolName: string) => {
@@ -79,7 +80,7 @@ export const useToolAvailable = create<ToolDisabledState>()(
             updatedTools = [...currentTools.filter((key) => key !== toolKey)]
           } else {
             // Disable tool
-            updatedTools = [...currentTools, toolKey]
+            updatedTools = appendUniqueString(currentTools, toolKey)
           }
 
           return {
@@ -111,7 +112,7 @@ export const useToolAvailable = create<ToolDisabledState>()(
       },
 
       setDefaultDisabledTools: (toolKeys: string[]) => {
-        set({ defaultDisabledTools: toolKeys })
+        set({ defaultDisabledTools: uniqueStrings(toolKeys) })
       },
 
       getDefaultDisabledTools: () => {
@@ -142,7 +143,7 @@ export const useToolAvailable = create<ToolDisabledState>()(
         set((currentState) => ({
           disabledTools: {
             ...currentState.disabledTools,
-            [threadId]: initialTools,
+            [threadId]: uniqueStrings(initialTools),
           },
         }))
       },

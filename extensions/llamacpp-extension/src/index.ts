@@ -246,8 +246,21 @@ const AX_SERVING_HEALTH_CHECK_TIMEOUT_MS = 5_000
 const AX_SERVING_UNLOAD_TIMEOUT_MS = 10_000
 const DEFAULT_UBATCH_SIZE = 512
 const AUTO_GPU_LAYERS_SENTINEL = 100
+const AX_SERVING_SERVICE_MODEL_ID = '__ax_serving__'
 const AX_MODEL_MANIFEST_FILENAME = 'model-manifest.json'
 const AX_SERVING_ARTIFACT_ERROR_PREFIX = 'AX Engine requires'
+
+function isChatModelId(modelId: string): boolean {
+  return modelId !== AX_SERVING_SERVICE_MODEL_ID
+}
+
+function chatModelIds(modelIds: string[]): string[] {
+  return modelIds.filter(isChatModelId)
+}
+
+function mergeModelIds(...modelIdGroups: string[][]): string[] {
+  return Array.from(new Set(modelIdGroups.flat()))
+}
 
 // ─── Main Extension Class ─────────────────────────────────────────────────────
 
@@ -1039,6 +1052,8 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     events.emit(ModelEvent.OnModelInit, { modelId })
 
     try {
+      await this._waitForEngineSwitchCleanup()
+
       // Auto-unload active text model when loading a new one
       if (this.autoUnload && !isEmbedding && !bypassAutoUnload) {
         await this._unloadActiveTextModels(modelId)
@@ -1279,6 +1294,12 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     return Array.from(this.axServingSessions.keys())
   }
 
+  private async _waitForEngineSwitchCleanup(): Promise<void> {
+    await this.engineSwitchQueue.catch((error) => {
+      console.debug('[llamacpp] Engine switch cleanup failed before model load:', error)
+    })
+  }
+
   private async _syncLocalProviderRegistration(preferred?: {
     port?: number
     apiKey?: string
@@ -1301,14 +1322,14 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       return
     }
 
-    const llamacppModels = await getLoadedModels().catch((error: unknown) => {
+    const llamacppModels = chatModelIds(await getLoadedModels().catch((error: unknown) => {
       console.debug('[llamacpp] Failed to list llamacpp models during provider sync:', error)
       return [] as string[]
-    })
+    }))
     const axServingModels = await this._reconcileAxServingSessions()
     const firstAxServingSession = this.axServingSessions.values().next()
       .value as SessionInfo | undefined
-    const loadedModels = [...new Set([...llamacppModels, ...axServingModels])]
+    const loadedModels = mergeModelIds(llamacppModels, axServingModels)
     const fallbackSession =
       llamacppModels.length > 0
         ? await findSessionByModel(llamacppModels[0]).catch((error: unknown) => {
@@ -1564,12 +1585,12 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   ): Promise<void> {
     try {
       // Collect all loaded model IDs from both engines
-      const llamacppIds = await getLoadedModels().catch((error) => {
+      const llamacppIds = chatModelIds(await getLoadedModels().catch((error) => {
         console.warn('[llamacpp] Failed to read loaded models:', error)
         return [] as string[]
-      })
+      }))
       const axServingIds = await this._reconcileAxServingSessions()
-      const allIds = [...new Set([...llamacppIds, ...axServingIds])]
+      const allIds = mergeModelIds(llamacppIds, axServingIds)
 
       for (const id of allIds) {
         if (id === excludeModelId) continue
@@ -2178,10 +2199,10 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
   async getLoadedModels(): Promise<string[]> {
     try {
-      const llamacppModels = await getLoadedModels()
+      const llamacppModels = chatModelIds(await getLoadedModels())
       const axModels = await this._reconcileAxServingSessions()
       // Deduplicate in case of overlap
-      return [...new Set([...llamacppModels, ...axModels])]
+      return mergeModelIds(llamacppModels, axModels)
     } catch (error) {
       console.debug('[llamacpp] Falling back to ax-serving model list after getLoadedModels failure:', error)
       return this._reconcileAxServingSessions()

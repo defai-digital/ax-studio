@@ -2,14 +2,14 @@ import { useCallback } from 'react'
 import { getServiceHub } from '@/hooks/useServiceHub'
 import { useLocalKnowledge } from '@/hooks/research/useLocalKnowledge'
 import { threadCollectionId } from '@/lib/file-registry'
+import {
+  fabricSearchHasResults,
+  formatFabricToolText,
+  parseFabricSearchResults,
+} from '@/lib/fabric-search'
 
 const LOCAL_KNOWLEDGE_TOP_K = 5
 const LOCAL_KNOWLEDGE_SEARCH_TIMEOUT_MS = 12_000
-
-type FabricSearchResult = {
-  source?: string
-  content?: string
-}
 
 export type LocalKnowledgeRetrieval = {
   searched: boolean
@@ -40,47 +40,6 @@ const KEYWORD_STOP_WORDS = new Set([
   'achieved',
   'repository',
 ])
-
-function formatChunks(result: unknown): string {
-  try {
-    const r = result as { content?: Array<{ type?: string; text?: string }> }
-    if (Array.isArray(r?.content)) {
-      return r.content
-        .filter((c) => c?.type === 'text' && c.text)
-        .map((c) => c.text!.trim())
-        .filter(Boolean)
-        .join('\n\n---\n\n')
-    }
-  } catch {
-    // fall through
-  }
-  return typeof result === 'string' ? result : ''
-}
-
-function hasSearchHits(result: unknown): boolean {
-  try {
-    const r = result as { content?: Array<{ type?: string; text?: string }> }
-    const text = r.content?.find((c) => c?.type === 'text' && c.text)?.text
-    if (!text) return false
-    const parsed = JSON.parse(text) as { results?: unknown[] }
-    return Array.isArray(parsed.results) && parsed.results.length > 0
-  } catch {
-    const text = formatChunks(result)
-    return Boolean(text) && !text.includes('"results":[]')
-  }
-}
-
-function parseFabricSearchResults(result: unknown): FabricSearchResult[] {
-  try {
-    const r = result as { content?: Array<{ type?: string; text?: string }> }
-    const text = r.content?.find((c) => c?.type === 'text' && c.text)?.text
-    if (!text) return []
-    const parsed = JSON.parse(text) as { results?: FabricSearchResult[] }
-    return Array.isArray(parsed.results) ? parsed.results : []
-  } catch {
-    return []
-  }
-}
 
 function pushUnique(values: string[], value: string) {
   const normalized = value.trim().replace(/\s+/g, ' ')
@@ -265,7 +224,7 @@ async function buildContextFromSearchResult(
     }
   }
 
-  const chunks = formatChunks(result)
+  const chunks = formatFabricToolText(result)
   return {
     context: chunks
       ? buildKnowledgeContext(chunks)
@@ -295,7 +254,7 @@ export function useThreadLocalKnowledge(threadId: string) {
           mode: 'hybrid',
         })
 
-        if (!result?.error && !hasSearchHits(result)) {
+        if (!result?.error && !fabricSearchHasResults(result)) {
           for (const fallbackQuery of buildKeywordFallbackQueries(query)) {
             const fallbackResult = await callFabricSearch(serviceHub, {
               query: fallbackQuery,
@@ -303,14 +262,14 @@ export function useThreadLocalKnowledge(threadId: string) {
               mode: 'keyword',
               layer: 'raw',
             })
-            if (!fallbackResult?.error && hasSearchHits(fallbackResult)) {
+            if (!fallbackResult?.error && fabricSearchHasResults(fallbackResult)) {
               result = fallbackResult
               break
             }
           }
         }
 
-        if (result?.error || !hasSearchHits(result)) {
+        if (result?.error || !fabricSearchHasResults(result)) {
           const threadResult = await callFabricSearch(serviceHub, {
             query,
             collection_id: threadCollectionId(threadId),
@@ -329,8 +288,8 @@ export function useThreadLocalKnowledge(threadId: string) {
             }
           }
 
-          const threadChunks = formatChunks(threadResult)
-          if (!hasSearchHits(threadResult) || !threadChunks) {
+          const threadChunks = formatFabricToolText(threadResult)
+          if (!fabricSearchHasResults(threadResult) || !threadChunks) {
             return {
               context: buildNoKnowledgeContext('No matching documents were found in the local knowledge base.'),
               retrieval: {

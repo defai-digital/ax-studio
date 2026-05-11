@@ -12,6 +12,10 @@ import { useServiceHub } from '@/hooks/useServiceHub'
 import { useToolApproval } from '@/hooks/tools/useToolApproval'
 import { useAppState } from '@/hooks/settings/useAppState'
 import { useChatSessions } from '@/stores/chat-session-store'
+import {
+  fabricSearchHasResults,
+  parseFabricSearchResults,
+} from '@/lib/fabric-search'
 
 export type AddToolOutputFn = (...args: unknown[]) => unknown
 
@@ -24,17 +28,6 @@ export type ThreadToolsResult = {
 }
 
 type ToolResultContent = Array<{ type?: string; text?: string }>
-
-function fabricSearchHasResults(result: { content?: ToolResultContent } | undefined): boolean {
-  const text = result?.content?.find((part) => part?.type === 'text' && part.text)?.text
-  if (!text) return false
-  try {
-    const parsed = JSON.parse(text) as { results?: unknown[] }
-    return Array.isArray(parsed.results) && parsed.results.length > 0
-  } catch {
-    return !text.includes('"results":[]')
-  }
-}
 
 function fabricSearchTermCoverage(
   result: { content?: ToolResultContent } | undefined,
@@ -57,28 +50,6 @@ function fabricSearchTermCoverage(
 
   const matched = terms.filter((term) => text.includes(term)).length
   return matched / terms.length
-}
-
-function parseFabricSearchResults(
-  result: { content?: ToolResultContent } | undefined
-): Array<{ source?: string | null; content?: string; score?: number }> {
-  const text = result?.content?.find((part) => part?.type === 'text' && part.text)?.text
-  if (!text) return []
-
-  try {
-    const parsed = JSON.parse(text) as { results?: unknown[] }
-    if (!Array.isArray(parsed.results)) return []
-    return parsed.results
-      .map((item) => item && typeof item === 'object' ? item as Record<string, unknown> : null)
-      .filter(Boolean)
-      .map((item) => ({
-        source: typeof item?.source === 'string' ? item.source : null,
-        content: typeof item?.content === 'string' ? item.content : '',
-        score: typeof item?.score === 'number' ? item.score : undefined,
-      }))
-  } catch {
-    return []
-  }
 }
 
 function normalizeLookupText(value: string): string {

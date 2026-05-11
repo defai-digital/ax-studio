@@ -98,7 +98,7 @@ describe('useToolAvailable', () => {
       expect(result.current.disabledTools['thread-3']).toEqual(['server-1::tool-c'])
     })
 
-    it('should add duplicate tools when disabling already disabled tool', () => {
+    it('should not duplicate tools when disabling an already disabled tool', () => {
       const { result } = renderHook(() => useToolAvailable())
 
       act(() => {
@@ -106,7 +106,7 @@ describe('useToolAvailable', () => {
         result.current.setToolDisabledForThread('thread-1', 'server-1', 'tool-a', false)
       })
 
-      expect(result.current.disabledTools['thread-1']).toEqual(['server-1::tool-a', 'server-1::tool-a'])
+      expect(result.current.disabledTools['thread-1']).toEqual(['server-1::tool-a'])
     })
 
     it('should handle enabling tool that was not disabled', () => {
@@ -259,6 +259,23 @@ describe('useToolAvailable', () => {
       })
 
       expect(result.current.defaultDisabledTools).toEqual([])
+    })
+
+    it('should remove duplicate default disabled tools while preserving order', () => {
+      const { result } = renderHook(() => useToolAvailable())
+
+      act(() => {
+        result.current.setDefaultDisabledTools([
+          'server-1::tool-1',
+          'server-1::tool-1',
+          'server-1::tool-2',
+        ])
+      })
+
+      expect(result.current.defaultDisabledTools).toEqual([
+        'server-1::tool-1',
+        'server-1::tool-2',
+      ])
     })
   })
 

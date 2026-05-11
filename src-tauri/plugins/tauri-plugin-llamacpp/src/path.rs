@@ -59,100 +59,94 @@ pub fn validate_binary_path(backend_path: &str) -> ServerResult<PathBuf> {
     Ok(server_path_buf)
 }
 
-/// Validate model path exists and update args with platform-appropriate path format
-pub fn validate_model_path(args: &mut Vec<String>) -> ServerResult<PathBuf> {
-    let model_path_index = args.iter().position(|arg| arg == "-m").ok_or_else(|| {
+fn path_arg(
+    args: &[String],
+    flag: &str,
+    missing_value_message: &str,
+) -> ServerResult<Option<(usize, PathBuf)>> {
+    let Some(flag_index) = args.iter().position(|arg| arg == flag) else {
+        return Ok(None);
+    };
+
+    let path = args.get(flag_index + 1).cloned().ok_or_else(|| {
         LlamacppError::new(
             ErrorCode::ModelLoadFailed,
-            "Model path argument '-m' is missing.".into(),
+            missing_value_message.into(),
             None,
         )
     })?;
 
-    let model_path = args.get(model_path_index + 1).cloned().ok_or_else(|| {
-        LlamacppError::new(
-            ErrorCode::ModelLoadFailed,
-            "Model path was not provided after '-m' flag.".into(),
-            None,
-        )
-    })?;
+    Ok(Some((flag_index, PathBuf::from(path))))
+}
 
-    let model_path_pb = PathBuf::from(&model_path);
-    if !model_path_pb.exists() {
-        let err_msg = format!(
-            "Invalid or inaccessible model path: {}",
-            model_path_pb.display()
-        );
+fn validate_existing_file(path: &PathBuf, label: &str, user_message: &str) -> ServerResult<()> {
+    if !path.exists() {
+        let err_msg = format!("Invalid or inaccessible {label} path: {}", path.display());
         log::error!("{}", &err_msg);
         return Err(LlamacppError::new(
             ErrorCode::ModelFileNotFound,
-            "The specified model file does not exist or is not accessible.".into(),
+            user_message.into(),
             Some(err_msg),
         )
         .into());
     }
 
-    // Update the path in args with appropriate format for the platform
+    Ok(())
+}
+
+fn update_path_arg(args: &mut [String], flag_index: usize, path: &PathBuf) {
     #[cfg(windows)]
     {
-        // use short path on Windows
-        if let Some(short) = get_short_path(&model_path_pb) {
-            args[model_path_index + 1] = short;
+        if let Some(short) = get_short_path(path) {
+            args[flag_index + 1] = short;
         } else {
-            args[model_path_index + 1] = model_path_pb.display().to_string();
+            args[flag_index + 1] = path.display().to_string();
         }
     }
     #[cfg(not(windows))]
     {
-        args[model_path_index + 1] = model_path_pb.display().to_string();
+        args[flag_index + 1] = path.display().to_string();
     }
+}
+
+/// Validate model path exists and update args with platform-appropriate path format
+pub fn validate_model_path(args: &mut Vec<String>) -> ServerResult<PathBuf> {
+    let (model_path_index, model_path_pb) =
+        path_arg(args, "-m", "Model path was not provided after '-m' flag.")?.ok_or_else(|| {
+            LlamacppError::new(
+                ErrorCode::ModelLoadFailed,
+                "Model path argument '-m' is missing.".into(),
+                None,
+            )
+        })?;
+
+    validate_existing_file(
+        &model_path_pb,
+        "model",
+        "The specified model file does not exist or is not accessible.",
+    )?;
+    update_path_arg(args, model_path_index, &model_path_pb);
 
     Ok(model_path_pb)
 }
 
 /// Validate mmproj path exists and update args with platform-appropriate path format
 pub fn validate_mmproj_path(args: &mut Vec<String>) -> ServerResult<Option<PathBuf>> {
-    let mmproj_path_index = match args.iter().position(|arg| arg == "--mmproj") {
-        Some(index) => index,
-        None => return Ok(None), // mmproj is optional
+    let Some((mmproj_path_index, mmproj_path_pb)) = path_arg(
+        args,
+        "--mmproj",
+        "Mmproj path was not provided after '--mmproj' flag.",
+    )?
+    else {
+        return Ok(None);
     };
 
-    let mmproj_path = args.get(mmproj_path_index + 1).cloned().ok_or_else(|| {
-        LlamacppError::new(
-            ErrorCode::ModelLoadFailed,
-            "Mmproj path was not provided after '--mmproj' flag.".into(),
-            None,
-        )
-    })?;
-
-    let mmproj_path_pb = PathBuf::from(&mmproj_path);
-    if !mmproj_path_pb.exists() {
-        let err_msg = format!(
-            "Invalid or inaccessible mmproj path: {}",
-            mmproj_path_pb.display()
-        );
-        log::error!("{}", &err_msg);
-        return Err(LlamacppError::new(
-            ErrorCode::ModelFileNotFound,
-            "The specified mmproj file does not exist or is not accessible.".into(),
-            Some(err_msg),
-        )
-        .into());
-    }
-
-    #[cfg(windows)]
-    {
-        // use short path on Windows
-        if let Some(short) = get_short_path(&mmproj_path_pb) {
-            args[mmproj_path_index + 1] = short;
-        } else {
-            args[mmproj_path_index + 1] = mmproj_path_pb.display().to_string();
-        }
-    }
-    #[cfg(not(windows))]
-    {
-        args[mmproj_path_index + 1] = mmproj_path_pb.display().to_string();
-    }
+    validate_existing_file(
+        &mmproj_path_pb,
+        "mmproj",
+        "The specified mmproj file does not exist or is not accessible.",
+    )?;
+    update_path_arg(args, mmproj_path_index, &mmproj_path_pb);
 
     Ok(Some(mmproj_path_pb))
 }
