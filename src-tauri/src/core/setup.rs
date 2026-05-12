@@ -27,11 +27,11 @@ use super::{
 const BUNDLED_EXTENSION_ARCHIVE_SHA256: &[(&str, &str)] = &[
     (
         "ax-studio-assistant-extension-1.0.2.tgz",
-        "e943addb08b86ba8001d0d0eee44519610095688d192637093c118b34991aef3",
+        "983642a1dec52727dcdc890afeae19a9dd62f111b76c4a20e0876d0f7875c276",
     ),
     (
         "ax-studio-conversational-extension-1.0.0.tgz",
-        "a50ffe1ec8b86cb88bec17defd8cdb04f4885e11651fffbb7f7a3856ee500374",
+        "3d95c2d4e2ea1b83b87ea8f9a27a2d22d6470d4f3879eabf8406e65081398719",
     ),
     (
         "ax-studio-download-extension-1.0.0.tgz",
@@ -39,7 +39,7 @@ const BUNDLED_EXTENSION_ARCHIVE_SHA256: &[(&str, &str)] = &[
     ),
     (
         "ax-studio-llamacpp-extension-1.0.4.tgz",
-        "de00656fb953b6c722a3de8371100b3e9f2340e74103e524b6823ec281991d7f",
+        "72aa27240e74a7e7ab54f395bf29eb0a4da33c116178db32a5fc5ff5139e0ef1",
     ),
 ];
 
@@ -523,6 +523,33 @@ mod tests {
         assert!(bundled_extensions_ready(&extensions_path));
 
         let _ = fs::remove_dir_all(&extensions_path);
+    }
+
+    #[test]
+    fn test_bundled_extension_hashes_match_checked_in_archives() {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let archive_dir = [
+            manifest_dir.join("resources").join("pre-install"),
+            manifest_dir.join("..").join("pre-install"),
+        ]
+        .into_iter()
+        .find(|path| path.is_dir())
+        .expect("bundled extension archives should exist in the repo");
+
+        for (archive_name, expected_hash) in BUNDLED_EXTENSION_ARCHIVE_SHA256 {
+            let archive_path = archive_dir.join(archive_name);
+            assert!(
+                archive_path.is_file(),
+                "missing bundled extension archive: {}",
+                archive_path.display()
+            );
+            let actual_hash =
+                compute_sha256(&archive_path).expect("bundled archive should be readable");
+            assert_eq!(
+                actual_hash, *expected_hash,
+                "hash mismatch for bundled archive {archive_name}"
+            );
+        }
     }
 
     #[test]

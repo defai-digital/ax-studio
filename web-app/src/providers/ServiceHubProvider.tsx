@@ -4,6 +4,8 @@ import { initializeServiceHubStore } from '@/hooks/useServiceHub'
 import { withTimeout } from '@/lib/utils/async'
 
 const SERVICE_HUB_INIT_TIMEOUT_MS = 12_000
+const LOADING_DETAIL_DELAY_MS = 900
+const SLOW_LOADING_DELAY_MS = 5_000
 
 interface ServiceHubProviderProps {
   children: React.ReactNode
@@ -13,19 +15,24 @@ export function ServiceHubProvider({ children }: ServiceHubProviderProps) {
   const [isReady, setIsReady] = useState(false)
   const [initError, setInitError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
-  const [elapsedMs, setElapsedMs] = useState(0)
+  const [loadingPhase, setLoadingPhase] = useState<'starting' | 'working' | 'slow'>('starting')
 
   useEffect(() => {
     let cancelled = false
     const startTime = Date.now()
-    const timerId = window.setInterval(() => {
+    const detailTimerId = window.setTimeout(() => {
       if (!cancelled) {
-        setElapsedMs(Date.now() - startTime)
+        setLoadingPhase('working')
       }
-    }, 250)
+    }, LOADING_DETAIL_DELAY_MS)
+    const slowTimerId = window.setTimeout(() => {
+      if (!cancelled) {
+        setLoadingPhase('slow')
+      }
+    }, SLOW_LOADING_DELAY_MS)
     setInitError(null)
     setIsReady(false)
-    setElapsedMs(0)
+    setLoadingPhase('starting')
 
     console.info('[ServiceHubProvider] Initializing service hub...')
     withTimeout(
@@ -51,9 +58,17 @@ export function ServiceHubProvider({ children }: ServiceHubProviderProps) {
 
     return () => {
       cancelled = true
-      clearInterval(timerId)
+      clearTimeout(detailTimerId)
+      clearTimeout(slowTimerId)
     }
   }, [attempt])
+
+  const loadingMessage =
+    loadingPhase === 'slow'
+      ? 'Still preparing local services...'
+      : loadingPhase === 'working'
+        ? 'Preparing local services...'
+        : 'Initializing Ax-Studio...'
 
   if (!isReady) {
     return (
@@ -67,10 +82,7 @@ export function ServiceHubProvider({ children }: ServiceHubProviderProps) {
           />
         </div>
         <div className="text-sm text-muted-foreground">
-          Initializing Ax-Studio...
-        </div>
-        <div className="text-xs text-muted-foreground/80">
-          {Math.max(1, Math.ceil(elapsedMs / 1000))}s elapsed
+          {loadingMessage}
         </div>
       </div>
     )
