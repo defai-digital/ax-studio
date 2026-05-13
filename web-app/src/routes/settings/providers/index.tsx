@@ -46,14 +46,16 @@ function ModelProviders() {
         base_url: 'https://api.openai.com/v1',
       }
       addProvider(newProvider)
-      setTimeout(() => {
-        navigate({
-          to: route.settings.providers,
-          params: {
-            providerName: name,
-          },
-        })
-      }, 0)
+      // Zustand's `addProvider` is synchronous, so the new provider is in the
+      // store before this navigate call resolves. The previous `setTimeout(0)`
+      // wrapper served no purpose (and leaked a timer if the user unmounted
+      // mid-tick).
+      navigate({
+        to: route.settings.providers,
+        params: {
+          providerName: name,
+        },
+      })
     },
     [providers, addProvider, t, navigate]
   )

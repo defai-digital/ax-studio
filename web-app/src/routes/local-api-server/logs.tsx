@@ -19,6 +19,17 @@ function LogsViewer() {
   const logsContainerRef = useRef<HTMLDivElement>(null)
   const serviceHub = useServiceHub()
 
+  // Keep the viewport scrolled to the bottom whenever new entries arrive.
+  // Runs after React commits the DOM update so `scrollHeight` reflects the
+  // newly-rendered rows. Replaces the previous `setTimeout(scrollToBottom, …)`
+  // pattern, which leaked a timer on unmount.
+  useEffect(() => {
+    const container = logsContainerRef.current
+    if (!container) return
+    const { scrollHeight, clientHeight } = container
+    container.scrollTop = scrollHeight - clientHeight
+  }, [logs.length])
+
   useEffect(() => {
     let isMounted = true
     let unsubscribe = () => {}
@@ -28,15 +39,10 @@ function LogsViewer() {
       .readLogs()
       .then((logData) => {
         if (!isMounted) return
-        const logs = logData
+        const filteredLogs = logData
           .filter((log) => log?.target === SERVER_LOG_TARGET)
           .filter(Boolean) as LogEntry[]
-        setLogs(logs)
-
-        // Scroll to bottom after initial logs are loaded
-        setTimeout(() => {
-          scrollToBottom()
-        }, 100)
+        setLogs(filteredLogs)
       })
       .catch((error) => {
         console.error('[local-api-server/logs] Failed to read logs:', error)
@@ -48,14 +54,7 @@ function LogsViewer() {
         const { message } = event.payload as { message: string }
         const log: LogEntry | undefined = serviceHub.app().parseLogLine(message)
         if (log?.target === SERVER_LOG_TARGET) {
-          setLogs((prevLogs) => {
-            const newLogs = [...prevLogs, log]
-            // Schedule scroll to bottom after state update
-            setTimeout(() => {
-              scrollToBottom()
-            }, 0)
-            return newLogs
-          })
+          setLogs((prevLogs) => [...prevLogs, log])
         }
       })
       .then((unsub) => {
@@ -74,14 +73,6 @@ function LogsViewer() {
       unsubscribe()
     }
   }, [serviceHub])
-
-  // Function to scroll to the bottom of the logs container
-  const scrollToBottom = () => {
-    if (logsContainerRef.current) {
-      const { scrollHeight, clientHeight } = logsContainerRef.current
-      logsContainerRef.current.scrollTop = scrollHeight - clientHeight
-    }
-  }
 
   // Function to get appropriate color for log level
   const getLogLevelColor = (level: string) => {

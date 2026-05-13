@@ -27,7 +27,13 @@ export function hideInitialLoader() {
   document.body.classList.add('loaded')
   const loader = document.getElementById('initial-loader')
   if (loader) {
-    setTimeout(() => loader.remove(), LOADER_REMOVE_DELAY_MS)
+    setTimeout(() => {
+      // Guard against test environments where the DOM may have been torn down
+      // before this timer fires, leaving `loader` in a state without `.remove`.
+      if (typeof loader.remove === 'function') {
+        loader.remove()
+      }
+    }, LOADER_REMOVE_DELAY_MS)
   }
 }
 
