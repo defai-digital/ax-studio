@@ -1,6 +1,6 @@
 //! Model provider routing: resolves provider config from model ID, builds outbound
 //! requests, and handles upstream responses including Anthropic /messages fallback.
-use ax_studio_utils::is_cors_header;
+use ax_studio_utils::{is_cors_header, is_private_ip};
 use futures_util::StreamExt;
 use hyper::body::Bytes;
 use hyper::{Body, Response, StatusCode};
@@ -19,6 +19,8 @@ use crate::core::state::{AppState, ProviderConfig, ProviderCustomHeader, Provide
 
 const MODEL_LOAD_RETRY_ATTEMPTS: usize = 10;
 const MODEL_LOAD_RETRY_DELAY: Duration = Duration::from_millis(500);
+/// Guard against unbounded memory from malformed SSE (missing newlines) in the passthrough stream.
+const MAX_SSE_LINE_BUFFER: usize = 1_048_576; // 1 MB
 
 /// Result of resolving a model route — all data needed to send the upstream request.
 pub(super) struct ProviderResolution {
@@ -697,6 +699,17 @@ async fn try_anthropic_fallback(
 /// Build a streaming response from a successful upstream response.
 /// Spawns a background task that forwards chunks, applying SSE line-patching
 /// for `text/event-stream` responses (e.g. removing private reasoning fields).
+/// (stream_id, Arc clone of active_streams) — passed so the spawn can remove the
+/// entry when streaming completes, preventing a slow leak of dead senders.
+type StreamsCleanup = Option<(
+    String,
+    std::sync::Arc<
+        tokio::sync::Mutex<
+            std::collections::HashMap<String, tokio::sync::oneshot::Sender<()>>,
+        >,
+    >,
+)>;
+
 fn build_streaming_response(
     response: reqwest::Response,
     status: StatusCode,
@@ -704,6 +717,8 @@ fn build_streaming_response(
     origin_header: &str,
     config: &ProxyConfig,
     upstream_url: &str,
+    abort_rx: Option<tokio::sync::oneshot::Receiver<()>>,
+    streams_cleanup: StreamsCleanup,
 ) -> Response<Body> {
     let mut builder = Response::builder().status(status);
 
@@ -744,7 +759,24 @@ fn build_streaming_response(
         let mut patched_lines_logged: usize = 0;
         let mut line_buffer = String::new();
 
-        while let Some(chunk_result) = stream.next().await {
+        let mut abort_rx = abort_rx;
+        loop {
+            let maybe_chunk = if let Some(ref mut rx) = abort_rx {
+                tokio::select! {
+                    biased;
+                    _ = rx => {
+                        log::debug!("Stream aborted via abort_remote_stream");
+                        break;
+                    }
+                    chunk = stream.next() => chunk,
+                }
+            } else {
+                stream.next().await
+            };
+            let chunk_result = match maybe_chunk {
+                Some(r) => r,
+                None => break,
+            };
             match chunk_result {
                 Ok(chunk) => {
                     chunk_count += 1;
@@ -768,6 +800,14 @@ fn build_streaming_response(
                         }
                     };
                     line_buffer.push_str(s);
+
+                    if line_buffer.len() > MAX_SSE_LINE_BUFFER {
+                        log::error!(
+                            "SSE line buffer exceeded {} bytes, aborting stream",
+                            MAX_SSE_LINE_BUFFER
+                        );
+                        break;
+                    }
 
                     let mut out = String::with_capacity(line_buffer.len());
                     while let Some(newline_idx) = line_buffer.find('\n') {
@@ -819,6 +859,12 @@ fn build_streaming_response(
                 "Streaming complete to client: {chunk_count} chunks, {total_bytes} bytes from {upstream_url_for_log}"
             );
         }
+
+        // Remove the abort-channel entry now that the stream is done so the
+        // sender does not linger in active_streams after the receiver is gone.
+        if let Some((sid, arc)) = streams_cleanup {
+            arc.lock().await.remove(&sid);
+        }
     });
 
     builder
@@ -826,9 +872,58 @@ fn build_streaming_response(
         .unwrap_or_else(|_| Response::new(Body::from("Internal server error")))
 }
 
+/// Per-request SSRF guard: re-resolves the upstream URL host and rejects private IPs.
+/// This defends against DNS rebinding attacks where a domain validated at registration
+/// time later resolves to an internal address.
+async fn check_upstream_not_ssrf(url: &str) -> Result<(), String> {
+    let parsed = match url::Url::parse(url) {
+        Ok(u) => u,
+        Err(_) => return Ok(()),
+    };
+    let port = parsed.port_or_known_default().unwrap_or(80);
+    match parsed.host() {
+        Some(url::Host::Ipv4(ip)) => {
+            let addr = std::net::IpAddr::V4(ip);
+            if !addr.is_loopback() && is_private_ip(addr) {
+                return Err(format!(
+                    "Upstream URL points to a private address ({ip}); request blocked"
+                ));
+            }
+        }
+        Some(url::Host::Ipv6(ip)) => {
+            let addr = std::net::IpAddr::V6(ip);
+            if !addr.is_loopback() && is_private_ip(addr) {
+                return Err(format!(
+                    "Upstream URL points to a private address ({ip}); request blocked"
+                ));
+            }
+        }
+        Some(url::Host::Domain(domain)) => {
+            if domain == "localhost" {
+                return Ok(());
+            }
+            let addrs = tokio::net::lookup_host((domain, port))
+                .await
+                .map_err(|e| format!("Failed to resolve upstream host '{domain}': {e}"))?;
+            for addr in addrs {
+                let ip = addr.ip();
+                if !ip.is_loopback() && is_private_ip(ip) {
+                    return Err(
+                        "Upstream URL resolves to an internal or private address; \
+                         request blocked (possible DNS rebinding)"
+                            .to_string(),
+                    );
+                }
+            }
+        }
+        None => {}
+    }
+    Ok(())
+}
+
 /// Send the buffered request to the upstream provider and return the response.
 /// Handles the Anthropic /messages → /chat/completions fallback on error.
-pub(super) async fn dispatch_to_upstream(
+pub(super) async fn dispatch_to_upstream<R: tauri::Runtime>(
     resolution: ProviderResolution,
     destination_path: &str,
     headers: &hyper::HeaderMap,
@@ -836,6 +931,7 @@ pub(super) async fn dispatch_to_upstream(
     origin_header: &str,
     config: &ProxyConfig,
     client: &Client,
+    app_handle: &tauri::AppHandle<R>,
 ) -> Result<Response<Body>, hyper::Error> {
     let upstream_url = resolution.target_base_url.clone();
     let is_anthropic_messages = resolution.is_anthropic_messages;
@@ -852,6 +948,37 @@ pub(super) async fn dispatch_to_upstream(
     let destination_path = destination_path.to_string();
     let mut model_load_attempts = 0;
 
+    // If the client sends X-Ax-Stream-Id, wire up an abort channel so
+    // abort_remote_stream() can terminate the upstream connection.
+    let stream_id = headers
+        .get("x-ax-stream-id")
+        .and_then(|v| v.to_str().ok())
+        .map(ToOwned::to_owned);
+    let mut abort_rx: Option<tokio::sync::oneshot::Receiver<()>> = if let Some(ref sid) = stream_id {
+        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+        let state = app_handle.state::<crate::core::state::AppState>();
+        let mut streams = state.active_streams.lock().await;
+        streams.insert(sid.clone(), tx);
+        Some(rx)
+    } else {
+        None
+    };
+
+    if let Err(e) = check_upstream_not_ssrf(&upstream_url).await {
+        log::warn!("Per-request SSRF check blocked upstream: {e}");
+        if let Some(ref sid) = stream_id {
+            let state = app_handle.state::<crate::core::state::AppState>();
+            state.active_streams.lock().await.remove(sid);
+        }
+        return Ok(error_response(
+            StatusCode::FORBIDDEN,
+            e,
+            host_header,
+            origin_header,
+            config,
+        ));
+    }
+
     loop {
         let mut outbound_req = client.post(upstream_url.clone());
 
@@ -867,10 +994,13 @@ pub(super) async fn dispatch_to_upstream(
         }
 
         if let Some(key) = session_api_key.clone() {
-            // Add key as both Authorization Bearer (OpenAI / Gemini / Groq / etc.)
-            // and x-api-key (Anthropic native format). Providers use whichever they support.
+            // Authorization Bearer covers OpenAI, Gemini, Groq, and most others.
             outbound_req = outbound_req.header("Authorization", format!("Bearer {key}"));
-            outbound_req = outbound_req.header("x-api-key", key.clone());
+            // x-api-key is Anthropic's native auth header; sending it to other providers
+            // can expose credentials in unexpected ways.
+            if is_anthropic_messages {
+                outbound_req = outbound_req.header("x-api-key", key.clone());
+            }
         } else {
             log::debug!("No session API key available for this request");
         }
@@ -940,9 +1070,17 @@ pub(super) async fn dispatch_to_upstream(
                         )
                         .await
                         {
+                            if let Some(ref sid) = stream_id {
+                                app_handle.state::<crate::core::state::AppState>()
+                                    .active_streams.lock().await.remove(sid);
+                            }
                             return result;
                         }
 
+                        if let Some(ref sid) = stream_id {
+                            app_handle.state::<crate::core::state::AppState>()
+                                .active_streams.lock().await.remove(sid);
+                        }
                         return Ok(error_response(
                             status,
                             error_body,
@@ -958,6 +1096,10 @@ pub(super) async fn dispatch_to_upstream(
                         &error_body[..error_body.len().min(500)]
                     );
 
+                    if let Some(ref sid) = stream_id {
+                        app_handle.state::<crate::core::state::AppState>()
+                            .active_streams.lock().await.remove(sid);
+                    }
                     return Ok(error_response(
                         status,
                         error_body,
@@ -968,6 +1110,10 @@ pub(super) async fn dispatch_to_upstream(
                 }
 
                 // Success case - stream the response
+                let streams_cleanup = stream_id.clone().map(|sid| {
+                    let state = app_handle.state::<crate::core::state::AppState>();
+                    (sid, state.active_streams.clone())
+                });
                 return Ok(build_streaming_response(
                     response,
                     status,
@@ -975,11 +1121,19 @@ pub(super) async fn dispatch_to_upstream(
                     origin_header,
                     config,
                     &upstream_url,
+                    abort_rx.take(),
+                    streams_cleanup,
                 ));
             }
             Err(e) => {
                 let error_msg = format!("Proxy request to model failed: {e}");
                 log::error!("{error_msg}");
+                // Clean up any unclaimed stream abort handle on network failure.
+                if let Some(ref sid) = stream_id {
+                    let state = app_handle.state::<crate::core::state::AppState>();
+                    let mut streams = state.active_streams.lock().await;
+                    streams.remove(sid);
+                }
                 return Ok(error_response(
                     StatusCode::BAD_GATEWAY,
                     error_msg,

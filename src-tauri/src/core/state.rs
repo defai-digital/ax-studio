@@ -109,6 +109,7 @@ pub struct AppState {
     /// One-time write targets approved via native save dialog
     pub approved_save_paths: Arc<Mutex<HashSet<PathBuf>>>,
     pub factory_reset_lock: Arc<Mutex<()>>,
+    pub active_streams: Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
 }
 
 pub fn build_provider_model_index(

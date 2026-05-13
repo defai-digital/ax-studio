@@ -12,6 +12,7 @@ const mockCore = {
     getTools: vi.fn(),
     getConnectedServers: vi.fn(),
     callTool: vi.fn(),
+    cancelToolCall: vi.fn(),
   },
 }
 

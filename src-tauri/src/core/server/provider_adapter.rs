@@ -472,6 +472,7 @@ pub(super) async fn transform_and_forward_stream<S>(
 {
     let mut is_first = true;
     let mut accumulated_content = String::new();
+    let mut input_tokens: u64 = 0;
 
     // Track active Anthropic content blocks
     let mut text_block_index: Option<usize> = None;
@@ -530,7 +531,7 @@ pub(super) async fn transform_and_forward_stream<S>(
                         } else {
                             "tool_use"
                         };
-                        let output_tokens = accumulated_content.split_whitespace().count() as u64;
+                        let output_tokens = (accumulated_content.chars().count() / 4) as u64;
 
                         let delta_event = serde_json::json!({
                             "type": "message_delta",
@@ -556,6 +557,18 @@ pub(super) async fn transform_and_forward_stream<S>(
                         Ok(v) => v,
                         Err(_) => continue,
                     };
+
+                    // Capture input tokens whenever the provider sends them (some providers
+                    // include usage in the first chunk, others in the final one).
+                    if let Some(pt) = json_chunk
+                        .get("usage")
+                        .and_then(|u| u.get("prompt_tokens"))
+                        .and_then(|t| t.as_u64())
+                    {
+                        if pt > 0 {
+                            input_tokens = pt;
+                        }
+                    }
 
                     let choice = json_chunk
                         .get("choices")
@@ -593,7 +606,7 @@ pub(super) async fn transform_and_forward_stream<S>(
                                 "model": model,
                                 "stop_reason": serde_json::Value::Null,
                                 "stop_sequence": serde_json::Value::Null,
-                                "usage": { "input_tokens": 0, "output_tokens": 0 }
+                                "usage": { "input_tokens": input_tokens, "output_tokens": 0 }
                             }
                         });
                         if sender.send_data(sse_event(&start_event)).await.is_err() {
@@ -734,7 +747,7 @@ pub(super) async fn transform_and_forward_stream<S>(
                             .and_then(|fr| fr.as_str())
                             .unwrap_or("end_turn");
                         let stop_reason = openai_finish_reason_to_anthropic_reason(reason);
-                        let output_tokens = accumulated_content.split_whitespace().count() as u64;
+                        let output_tokens = (accumulated_content.chars().count() / 4) as u64;
 
                         let delta_event = serde_json::json!({
                             "type": "message_delta",

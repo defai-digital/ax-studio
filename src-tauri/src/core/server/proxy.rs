@@ -495,6 +495,7 @@ pub(super) async fn proxy_request<R: tauri::Runtime>(
                 &origin_header,
                 &config,
                 &client,
+                &app_handle,
             )
             .await;
         }

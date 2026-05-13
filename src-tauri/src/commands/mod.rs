@@ -52,6 +52,7 @@ macro_rules! desktop_handlers {
             crate::core::server::remote_provider_commands::register_provider_configs_batch,
             crate::core::server::remote_provider_commands::unregister_provider_config,
             crate::core::server::remote_provider_commands::list_provider_configs,
+            crate::core::server::remote_provider_commands::abort_remote_stream,
             // MCP commands
             crate::core::mcp::commands::get_tools,
             crate::core::mcp::commands::call_tool,
@@ -81,7 +82,6 @@ macro_rules! desktop_handlers {
             crate::core::research::commands::scrape_url,
             // Custom updater commands (desktop only)
             crate::core::updater::commands::check_for_app_updates,
-            crate::core::updater::commands::is_update_available,
         ]
     };
 }

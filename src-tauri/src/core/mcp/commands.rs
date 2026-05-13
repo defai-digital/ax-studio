@@ -142,18 +142,18 @@ pub async fn deactivate_mcp_server<R: Runtime>(
         log::info!("Removed MCP server {name} from active servers list");
     }
 
-    // Clone the Arc reference first (without removing from map) so the server
-    // stays tracked if cancellation fails.
-    let servers = state.mcp_servers.clone();
+    // Remove from running servers map first so try_unwrap can succeed when
+    // no in-flight operations hold a reference.
     let service = {
-        let servers_map = servers.lock().await;
+        let mut servers_map = state.mcp_servers.lock().await;
         servers_map
-            .get(&name)
-            .cloned()
+            .remove(&name)
             .ok_or_else(|| format!("Server {name} not found"))?
     };
 
-    // Attempt cancellation while server is still in the map
+    // Attempt explicit cancellation — succeeds when no in-flight refs exist.
+    // If other refs exist (e.g., an active tool call), the service stops via
+    // Drop once those operations complete.
     match Arc::try_unwrap(service) {
         Ok(RunningServiceEnum::NoInit(service)) => {
             log::info!("Stopping server {name}...");
@@ -163,15 +163,12 @@ pub async fn deactivate_mcp_server<R: Runtime>(
             log::info!("Stopping server {name} with initialization...");
             service.cancel().await.map_err(|e| e.to_string())?;
         }
-        Err(_arc) => {
-            log::warn!("Server {name} still has active references, marking for removal");
+        Err(arc) => {
+            log::info!(
+                "Server {name} has active references; will stop when in-flight operations complete"
+            );
+            drop(arc);
         }
-    }
-
-    // Only remove from map after cancellation attempt succeeds
-    {
-        let mut servers_map = servers.lock().await;
-        servers_map.remove(&name);
     }
 
     {
@@ -574,14 +571,18 @@ pub async fn get_mcp_configs<R: Runtime>(app: AppHandle<R>) -> Result<String, St
     let mut path = get_app_data_folder_path(app.clone());
     path.push("mcp_config.json");
 
-    // Create default empty config if file doesn't exist
-    if !path.exists() {
-        log::info!("mcp_config.json not found, creating default empty config");
-        fs::write(&path, DEFAULT_MCP_CONFIG)
-            .map_err(|e| format!("Failed to create default MCP config: {e}"))?;
-    }
-
-    let config_string = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    // Create default empty config if file doesn't exist, then read it
+    let path_for_io = path.clone();
+    let config_string = tokio::task::spawn_blocking(move || -> Result<String, String> {
+        if !path_for_io.exists() {
+            log::info!("mcp_config.json not found, creating default empty config");
+            fs::write(&path_for_io, DEFAULT_MCP_CONFIG)
+                .map_err(|e| format!("Failed to create default MCP config: {e}"))?;
+        }
+        fs::read_to_string(&path_for_io).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("get_mcp_configs read task error: {e}"))??;
 
     let mut config_value: Value = if config_string.trim().is_empty() {
         json!({})
@@ -642,12 +643,15 @@ pub async fn get_mcp_configs<R: Runtime>(app: AppHandle<R>) -> Result<String, St
 
     // Persist any mutations back to disk
     if mutated {
-        fs::write(
-            &path,
-            serde_json::to_string_pretty(&config_value)
-                .map_err(|e| format!("Failed to serialize MCP config: {e}"))?,
-        )
-        .map_err(|e| format!("Failed to write MCP config: {e}"))?;
+        let serialized = serde_json::to_string_pretty(&config_value)
+            .map_err(|e| format!("Failed to serialize MCP config: {e}"))?;
+        let path_for_write = path.clone();
+        tokio::task::spawn_blocking(move || {
+            fs::write(&path_for_write, serialized)
+                .map_err(|e| format!("Failed to write MCP config: {e}"))
+        })
+        .await
+        .map_err(|e| format!("get_mcp_configs write task error: {e}"))??;
     }
 
     // Update in-memory state with latest settings
@@ -694,12 +698,11 @@ pub async fn save_mcp_configs<R: Runtime>(
         config_object.insert("mcpServers".to_string(), json!({}));
     }
 
-    fs::write(
-        &path,
-        serde_json::to_string_pretty(&config_value)
-            .map_err(|e| format!("Failed to serialize MCP config: {e}"))?,
-    )
-    .map_err(|e| e.to_string())?;
+    let serialized = serde_json::to_string_pretty(&config_value)
+        .map_err(|e| format!("Failed to serialize MCP config: {e}"))?;
+    tokio::task::spawn_blocking(move || fs::write(&path, serialized).map_err(|e| e.to_string()))
+        .await
+        .map_err(|e| format!("save_mcp_configs write task error: {e}"))??;
 
     {
         let state = app.state::<AppState>();

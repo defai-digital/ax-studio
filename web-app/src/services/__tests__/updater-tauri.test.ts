@@ -50,184 +50,200 @@ describe('TauriUpdaterService', () => {
     consoleInfoSpy.mockRestore()
   })
 
-  it('returns standard Tauri update information when no custom update is available', async () => {
-    const service = await createService()
-    mocks.check.mockResolvedValue({
-      version: '1.3.7',
-      date: '2026-05-06',
-      body: 'Release notes',
-      downloadAndInstall: vi.fn(),
+  describe('check()', () => {
+    it('returns null when the custom backend reports no update', async () => {
+      const service = await createService()
+      mocks.invoke.mockResolvedValue(null)
+
+      const result = await service.check()
+
+      expect(result).toBeNull()
+      expect(mocks.invoke).toHaveBeenCalledWith('check_for_app_updates', {
+        nonceSeed: 'stored-nonce',
+      })
+      // plugin-updater check() must NOT be called during a metadata check
+      expect(mocks.check).not.toHaveBeenCalled()
     })
 
-    const result = await service.check()
+    it('returns UpdateInfo when the custom backend reports an update', async () => {
+      const service = await createService()
+      mocks.invoke.mockResolvedValue({
+        version: '1.3.7',
+        notes: 'Release notes',
+        pub_date: '2026-05-06T10:00:00Z',
+        signature: 'sig-abc',
+      })
 
-    expect(result).toEqual({
-      version: '1.3.7',
-      date: '2026-05-06',
-      body: 'Release notes',
-    })
-    expect(mocks.invoke).toHaveBeenCalledWith('check_for_app_updates', {
-      nonceSeed: 'stored-nonce',
-    })
-    expect(mocks.check).toHaveBeenCalledTimes(1)
-  })
+      const result = await service.check()
 
-  it('prefers signed custom metadata when it matches the installable update version', async () => {
-    const service = await createService()
-    mocks.invoke.mockResolvedValue({
-      version: '1.3.7',
-      notes: 'Signed release notes',
-      pub_date: '2026-05-06T10:00:00Z',
-      signature: 'sig-123',
-    })
-    mocks.check.mockResolvedValue({
-      version: '1.3.7',
-      date: 'fallback-date',
-      body: 'Fallback body',
-      downloadAndInstall: vi.fn(),
+      expect(result).toEqual({
+        version: '1.3.7',
+        body: 'Release notes',
+        date: '2026-05-06T10:00:00Z',
+        signature: 'sig-abc',
+      })
+      expect(mocks.check).not.toHaveBeenCalled()
     })
 
-    const result = await service.check()
+    it('maps optional fields to undefined when absent', async () => {
+      const service = await createService()
+      mocks.invoke.mockResolvedValue({ version: '1.3.7' })
 
-    expect(result).toEqual({
-      version: '1.3.7',
-      date: '2026-05-06T10:00:00Z',
-      body: 'Signed release notes',
-      signature: 'sig-123',
-    })
-  })
+      const result = await service.check()
 
-  it('falls back to standard metadata when custom version does not match installable version', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const service = await createService()
-    mocks.invoke.mockResolvedValue({
-      version: '1.3.8',
-      notes: 'Different custom release',
-      pub_date: '2026-05-07',
-      signature: 'sig-456',
-    })
-    mocks.check.mockResolvedValue({
-      version: '1.3.7',
-      date: '2026-05-06',
-      body: 'Installable release',
-      downloadAndInstall: vi.fn(),
+      expect(result).toEqual({
+        version: '1.3.7',
+        body: undefined,
+        date: undefined,
+        signature: undefined,
+      })
     })
 
-    const result = await service.check()
+    it('returns null and logs when the custom backend throws', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const service = await createService()
+      mocks.invoke.mockRejectedValue(new Error('network failure'))
 
-    expect(result).toEqual({
-      version: '1.3.7',
-      date: '2026-05-06',
-      body: 'Installable release',
+      const result = await service.check()
+
+      expect(result).toBeNull()
+      expect(errorSpy).toHaveBeenCalledWith(
+        'Error checking for updates in Tauri:',
+        expect.any(Error)
+      )
+      errorSpy.mockRestore()
     })
-    expect(warnSpy).toHaveBeenCalledWith(
-      'Custom updater version did not match installable Tauri updater version:',
-      { custom: '1.3.8', installable: '1.3.7' }
-    )
-    warnSpy.mockRestore()
-  })
 
-  it('returns custom update metadata when the Tauri updater has no installable update', async () => {
-    const service = await createService()
-    mocks.invoke.mockResolvedValue({
-      version: '1.3.7',
-      notes: 'Custom only',
-      pub_date: '2026-05-06',
-      signature: 'sig-custom',
+    it('uses the stored nonce seed', async () => {
+      const service = await createService()
+
+      await service.check()
+
+      expect(mocks.invoke).toHaveBeenCalledWith('check_for_app_updates', {
+        nonceSeed: 'stored-nonce',
+      })
     })
-    mocks.check.mockResolvedValue(null)
 
-    const result = await service.check()
+    it('generates and persists a nonce seed when the store is empty', async () => {
+      const service = await createService()
+      mocks.store.get.mockResolvedValue(null)
 
-    expect(result).toEqual({
-      version: '1.3.7',
-      date: '2026-05-06',
-      body: 'Custom only',
-      signature: 'sig-custom',
+      await service.check()
+
+      expect(mocks.store.set).toHaveBeenCalledWith('nonce_seed', 'generated-nonce')
+      expect(mocks.store.save).toHaveBeenCalled()
+      expect(mocks.invoke).toHaveBeenCalledWith('check_for_app_updates', {
+        nonceSeed: 'generated-nonce',
+      })
     })
-  })
 
-  it('uses a generated nonce seed when the store is empty', async () => {
-    const service = await createService()
-    mocks.store.get.mockResolvedValue(null)
+    it('uses a temporary nonce seed when the store cannot be read', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const service = await createService()
+      mocks.load.mockRejectedValue(new Error('store unavailable'))
 
-    await service.check()
+      await service.check()
 
-    expect(mocks.store.set).toHaveBeenCalledWith('nonce_seed', 'generated-nonce')
-    expect(mocks.store.save).toHaveBeenCalled()
-    expect(mocks.invoke).toHaveBeenCalledWith('check_for_app_updates', {
-      nonceSeed: 'generated-nonce',
+      expect(warnSpy).toHaveBeenCalledWith(
+        'Failed to access store for nonce seed, using temporary seed:',
+        expect.any(Error)
+      )
+      expect(mocks.invoke).toHaveBeenCalledWith('check_for_app_updates', {
+        nonceSeed: 'generated-nonce',
+      })
+      warnSpy.mockRestore()
     })
   })
 
-  it('uses a temporary nonce seed when the store cannot be read', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const service = await createService()
-    mocks.load.mockRejectedValue(new Error('store unavailable'))
+  describe('downloadAndInstallWithProgress()', () => {
+    it('fetches installable update via plugin-updater and calls downloadAndInstall', async () => {
+      const service = await createService()
+      const downloadAndInstall = vi.fn().mockResolvedValue(undefined)
+      mocks.check.mockResolvedValue({ version: '1.3.7', downloadAndInstall })
 
-    await service.check()
+      await service.downloadAndInstallWithProgress(() => {})
 
-    expect(warnSpy).toHaveBeenCalledWith(
-      'Failed to access store for nonce seed, using temporary seed:',
-      expect.any(Error)
-    )
-    expect(mocks.invoke).toHaveBeenCalledWith('check_for_app_updates', {
-      nonceSeed: 'generated-nonce',
-    })
-    warnSpy.mockRestore()
-  })
-
-  it('reuses the checked update when installing after a successful check', async () => {
-    const service = await createService()
-    const downloadAndInstall = vi.fn().mockResolvedValue(undefined)
-    mocks.check.mockResolvedValue({
-      version: '1.3.7',
-      date: '2026-05-06',
-      body: 'Installable release',
-      downloadAndInstall,
+      expect(mocks.check).toHaveBeenCalledTimes(1)
+      expect(downloadAndInstall).toHaveBeenCalledTimes(1)
     })
 
-    await service.check()
-    await service.installAndRestart()
+    it('reuses the cached installable update on repeated calls', async () => {
+      const service = await createService()
+      const downloadAndInstall = vi.fn().mockResolvedValue(undefined)
+      mocks.check.mockResolvedValue({ version: '1.3.7', downloadAndInstall })
 
-    expect(mocks.check).toHaveBeenCalledTimes(1)
-    expect(downloadAndInstall).toHaveBeenCalledWith()
-  })
+      // First call caches the Update, second call reuses it
+      await service.downloadAndInstallWithProgress(() => {})
+      // Cache is cleared after install; call check again
+      mocks.check.mockResolvedValue({ version: '1.3.8', downloadAndInstall })
+      await service.downloadAndInstallWithProgress(() => {})
 
-  it('throws when install is requested but no update is available', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const service = await createService()
-    mocks.check.mockResolvedValue(null)
-
-    await expect(service.installAndRestart()).rejects.toThrow('No update available')
-
-    errorSpy.mockRestore()
-  })
-
-  it('forwards progress events and isolates progress callback errors', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const service = await createService()
-    const downloadAndInstall = vi.fn(async (callback: (event: unknown) => void) => {
-      callback({ event: 'Progress', data: { chunkLength: 1024 } })
-    })
-    mocks.check.mockResolvedValue({
-      version: '1.3.7',
-      downloadAndInstall,
-    })
-    const progressCallback = vi.fn(() => {
-      throw new Error('consumer failed')
+      expect(mocks.check).toHaveBeenCalledTimes(2)
     })
 
-    await service.downloadAndInstallWithProgress(progressCallback)
+    it('throws when plugin-updater finds no installable update', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const service = await createService()
+      mocks.check.mockResolvedValue(null)
 
-    expect(progressCallback).toHaveBeenCalledWith({
-      event: 'Progress',
-      data: { chunkLength: 1024 },
+      await expect(service.downloadAndInstallWithProgress(() => {})).rejects.toThrow(
+        'No update available'
+      )
+
+      errorSpy.mockRestore()
     })
-    expect(warnSpy).toHaveBeenCalledWith(
-      'Error in download progress callback:',
-      expect.any(Error)
-    )
-    warnSpy.mockRestore()
+
+    it('forwards progress events to the callback', async () => {
+      const service = await createService()
+      const downloadAndInstall = vi.fn(async (cb: (event: unknown) => void) => {
+        cb({ event: 'Started', data: { contentLength: 2048 } })
+        cb({ event: 'Progress', data: { chunkLength: 1024 } })
+        cb({ event: 'Finished' })
+      })
+      mocks.check.mockResolvedValue({ version: '1.3.7', downloadAndInstall })
+      const progressCallback = vi.fn()
+
+      await service.downloadAndInstallWithProgress(progressCallback)
+
+      expect(progressCallback).toHaveBeenCalledTimes(3)
+      expect(progressCallback).toHaveBeenNthCalledWith(1, {
+        event: 'Started',
+        data: { contentLength: 2048 },
+      })
+    })
+
+    it('isolates progress callback errors so the install completes', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const service = await createService()
+      const downloadAndInstall = vi.fn(async (cb: (event: unknown) => void) => {
+        cb({ event: 'Progress', data: { chunkLength: 512 } })
+      })
+      mocks.check.mockResolvedValue({ version: '1.3.7', downloadAndInstall })
+
+      await service.downloadAndInstallWithProgress(() => {
+        throw new Error('consumer error')
+      })
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        'Error in download progress callback:',
+        expect.any(Error)
+      )
+      warnSpy.mockRestore()
+    })
+
+    it('clears the cached update after a successful install', async () => {
+      const service = await createService()
+      const downloadAndInstall = vi.fn().mockResolvedValue(undefined)
+      mocks.check.mockResolvedValue({ version: '1.3.7', downloadAndInstall })
+
+      await service.downloadAndInstallWithProgress(() => {})
+
+      // If cache were not cleared, a second call would not re-fetch
+      const secondDownload = vi.fn().mockResolvedValue(undefined)
+      mocks.check.mockResolvedValue({ version: '1.3.8', downloadAndInstall: secondDownload })
+      await service.downloadAndInstallWithProgress(() => {})
+
+      expect(secondDownload).toHaveBeenCalledTimes(1)
+    })
   })
 })

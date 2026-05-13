@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::net::ToSocketAddrs;
 use tauri::State;
 
 use crate::core::state::{AppState, ProviderConfig, ProviderCustomHeader};
@@ -51,7 +50,7 @@ pub async fn register_provider_config(
     request: RegisterProviderRequest,
 ) -> Result<(), String> {
     if let Some(ref base_url) = request.base_url {
-        validate_provider_url(&request.provider, base_url)?;
+        validate_provider_url(&request.provider, base_url).await?;
     }
 
     let mut provider_state = state.provider_state.lock().await;
@@ -82,7 +81,7 @@ pub async fn register_provider_configs_batch(
 
     for request in requests {
         if let Some(ref base_url) = request.base_url {
-            validate_provider_url(&request.provider, base_url)?;
+            validate_provider_url(&request.provider, base_url).await?;
         }
         let provider_name = request.provider.clone();
         let config = ProviderConfig {
@@ -137,7 +136,23 @@ pub async fn list_provider_configs(
         .collect())
 }
 
-fn validate_provider_url(provider: &str, url: &str) -> Result<(), String> {
+/// Abort an active remote stream by sending a cancellation signal.
+#[tauri::command]
+pub async fn abort_remote_stream(
+    state: State<'_, AppState>,
+    stream_id: String,
+) -> Result<(), String> {
+    let mut streams = state.active_streams.lock().await;
+    if let Some(tx) = streams.remove(&stream_id) {
+        let _ = tx.send(());
+        log::info!("Stream {stream_id} abort signal sent");
+    } else {
+        log::debug!("abort_remote_stream: stream {stream_id} not found (may have already finished)");
+    }
+    Ok(())
+}
+
+async fn validate_provider_url(provider: &str, url: &str) -> Result<(), String> {
     let allow_internal = matches!(provider, "llamacpp" | "ollama" | "lmstudio");
     let parsed = url::Url::parse(url).map_err(|e| format!("Invalid provider URL '{url}': {e}"))?;
     if !matches!(parsed.scheme(), "http" | "https") {
@@ -179,8 +194,8 @@ fn validate_provider_url(provider: &str, url: &str) -> Result<(), String> {
                     parsed.scheme()
                 )
             })?;
-            let addrs = (domain, port)
-                .to_socket_addrs()
+            let addrs = tokio::net::lookup_host((domain, port))
+                .await
                 .map_err(|e| format!("Failed to resolve provider URL host '{domain}': {e}"))?;
             for addr in addrs {
                 if !allow_internal && ax_studio_utils::is_private_ip(addr.ip()) {

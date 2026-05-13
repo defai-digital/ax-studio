@@ -547,6 +547,7 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
               max_tokens: 1,
               stream: false,
             }),
+            signal: options.abortSignal,
           })
           if (!preflight.ok) {
             const body = await preflight.text().catch(() => '')
@@ -558,6 +559,9 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
             providerId: finalProviderId,
           })
         } catch (error) {
+          if (error instanceof DOMException && error.name === 'AbortError') {
+            throw error
+          }
           cachePreflightResult(finalModelId, finalProviderId, false)
           console.warn(
             `[LLM Router] Routed model "${finalModelId}" preflight failed, falling back to "${fallbackModelId}":`,

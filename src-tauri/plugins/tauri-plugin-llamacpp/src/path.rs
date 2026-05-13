@@ -1,3 +1,6 @@
+use std::ffi::OsString;
+#[cfg(windows)]
+use std::path::Path;
 use std::path::PathBuf;
 
 use crate::error::{ErrorCode, LlamacppError, ServerResult};
@@ -5,13 +8,63 @@ use crate::error::{ErrorCode, LlamacppError, ServerResult};
 #[cfg(windows)]
 use ax_studio_utils::path::get_short_path;
 
+fn command_has_path_separator(command: &str) -> bool {
+    command.contains(std::path::MAIN_SEPARATOR) || command.contains('/') || command.contains('\\')
+}
+
+#[cfg(windows)]
+fn executable_candidates(binary_name: &str) -> Vec<String> {
+    let path = Path::new(binary_name);
+    if path.extension().is_some() {
+        return vec![binary_name.to_string()];
+    }
+
+    let pathext = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_string());
+    pathext
+        .split(';')
+        .filter(|ext| !ext.is_empty())
+        .map(|ext| format!("{binary_name}{ext}"))
+        .chain(std::iter::once(binary_name.to_string()))
+        .collect()
+}
+
+#[cfg(not(windows))]
+fn executable_candidates(binary_name: &str) -> Vec<String> {
+    vec![binary_name.to_string()]
+}
+
+fn find_binary_on_path(binary_name: &str, path_env: Option<OsString>) -> Option<PathBuf> {
+    let path_env = path_env?;
+    for dir in std::env::split_paths(&path_env) {
+        for candidate in executable_candidates(binary_name) {
+            let full_path = dir.join(candidate);
+            if full_path.exists() {
+                return Some(full_path);
+            }
+        }
+    }
+    None
+}
+
+fn resolve_binary_path(backend_path: &str) -> Option<PathBuf> {
+    let server_path_buf = PathBuf::from(backend_path);
+    if server_path_buf.exists() {
+        return Some(server_path_buf);
+    }
+
+    if !command_has_path_separator(backend_path) {
+        return find_binary_on_path(backend_path, std::env::var_os("PATH"));
+    }
+
+    None
+}
+
 /// Validate that a binary path exists and is accessible.
 /// On macOS, also strips quarantine/provenance extended attributes that can
 /// prevent copied or downloaded binaries from executing properly.
 /// Only strips quarantine for binaries inside the app's own data directory.
 pub fn validate_binary_path(backend_path: &str) -> ServerResult<PathBuf> {
-    let server_path_buf = PathBuf::from(backend_path);
-    if !server_path_buf.exists() {
+    let Some(server_path_buf) = resolve_binary_path(backend_path) else {
         let err_msg = format!("Binary not found at {:?}", backend_path);
         log::error!(
             "Server binary not found at expected path: {:?}",
@@ -19,11 +72,11 @@ pub fn validate_binary_path(backend_path: &str) -> ServerResult<PathBuf> {
         );
         return Err(LlamacppError::new(
             ErrorCode::BinaryNotFound,
-            "The llama.cpp server binary could not be found.".into(),
+            "The inference backend binary could not be found. Install ax-serving or provide a valid backend binary path.".into(),
             Some(err_msg),
         )
         .into());
-    }
+    };
 
     #[cfg(target_os = "macos")]
     {
@@ -154,6 +207,8 @@ pub fn validate_mmproj_path(args: &mut Vec<String>) -> ServerResult<Option<PathB
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use tempfile::tempdir;
     use tempfile::NamedTempFile;
 
     #[test]
@@ -171,6 +226,16 @@ mod tests {
         let nonexistent_path = "/tmp/definitely_does_not_exist_123456789";
         let result = validate_binary_path(nonexistent_path);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_find_binary_on_path() {
+        let dir = tempdir().unwrap();
+        let binary_path = dir.path().join("ax-serving");
+        fs::write(&binary_path, "").unwrap();
+
+        let result = find_binary_on_path("ax-serving", Some(dir.path().as_os_str().to_os_string()));
+        assert_eq!(result, Some(binary_path));
     }
 
     #[test]

@@ -226,7 +226,6 @@ class PlatformServiceHub implements ServiceHub {
 
     this.updaterService = {
       check: async () => null,
-      installAndRestart: async () => {},
       downloadAndInstallWithProgress: async () => {},
     }
 

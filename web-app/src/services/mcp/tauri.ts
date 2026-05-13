@@ -138,24 +138,42 @@ export class TauriMCPService implements MCPService {
     serverName?: string
     arguments: object
     cancellationToken?: string
-  }): {
-    promise: Promise<{ error: string; content: { text: string }[] }>
-    cancel: () => Promise<void>
-    token: string
-  } {
-    // Generate a unique cancellation token if not provided
+  }): ToolCallWithCancellationResult {
     const token = args.cancellationToken ?? `tool_call_${crypto.randomUUID()}`
 
-    // Create the tool call promise with cancellation token
-    const promise: Promise<{ error: string; content: { text: string }[] }> =
-      getCoreApi().callTool({
-        ...args,
-        cancellationToken: token
-      }) ?? Promise.reject(new Error('MCP service unavailable'))
+    // IIFE so any synchronous throw from getCoreApi() becomes a rejected promise,
+    // and transport errors are recovered with the same restart+retry as callTool().
+    const promise = (async () => {
+      try {
+        const api = getCoreApi()
+        return (await api.callTool({ ...args, cancellationToken: token })) ?? {
+          error: 'MCP service unavailable',
+          content: [],
+        }
+      } catch (error) {
+        if (!isRecoverableMCPError(error)) {
+          return unavailableToolResult(error)
+        }
+        console.warn('MCP tool call failed, restarting MCP servers and retrying once:', error)
+        try {
+          const api = getCoreApi()
+          await api.restartMcpServers()
+          return (await api.callTool({ ...args, cancellationToken: token })) ?? {
+            error: 'MCP service unavailable after restart',
+            content: [],
+          }
+        } catch (retryError) {
+          return unavailableToolResult(retryError)
+        }
+      }
+    })()
 
-    // Create cancel function
-  const cancel = async () => {
-      await getCoreApi().cancelToolCall({ cancellationToken: token })
+    const cancel = async () => {
+      try {
+        await getCoreApi().cancelToolCall({ cancellationToken: token })
+      } catch {
+        // Token already consumed — tool completed or timed out before cancel arrived
+      }
     }
 
     return { promise, cancel, token }

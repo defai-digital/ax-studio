@@ -306,7 +306,6 @@ describe('ServiceHub Integration Tests', () => {
         serviceHub.opener().revealItemInDir('/tmp/file.txt')
       ).resolves.toBeUndefined()
       await expect(serviceHub.updater().check()).resolves.toBeNull()
-      await expect(serviceHub.updater().installAndRestart()).resolves.toBeUndefined()
       await expect(
         serviceHub.updater().downloadAndInstallWithProgress(vi.fn())
       ).resolves.toBeUndefined()

@@ -59,7 +59,7 @@ export const useAppUpdater = () => {
       abortRef.current = controller
 
       try {
-        if (resetRemindMeLater && !AUTO_UPDATER_DISABLED) {
+        if (resetRemindMeLater) {
           const newState = {
             remindMeLater: false,
           }
@@ -71,14 +71,14 @@ export const useAppUpdater = () => {
         }
 
         if (!isDev()) {
+          if (AUTO_UPDATER_DISABLED) {
+            return null
+          }
+
           const update = await serviceHub.updater().check()
           if (controller.signal.aborted) return null
 
           if (update) {
-            if (AUTO_UPDATER_DISABLED) {
-              return null
-            }
-
             const newState = {
               isUpdateAvailable: true,
               remindMeLater: false,
@@ -173,10 +173,16 @@ export const useAppUpdater = () => {
       let downloaded = 0
       let contentLength = 0
       await serviceHub.models().stopAllModels()
-      if (controller.signal.aborted) return
+      if (controller.signal.aborted) {
+        setUpdateState((prev) => ({ ...prev, isDownloading: false }))
+        return
+      }
       serviceHub.events().emit(SystemEvent.KILL_SIDECAR)
       await new Promise((resolve) => setTimeout(resolve, 1000))
-      if (controller.signal.aborted) return
+      if (controller.signal.aborted) {
+        setUpdateState((prev) => ({ ...prev, isDownloading: false }))
+        return
+      }
 
       await serviceHub.updater().downloadAndInstallWithProgress((event) => {
         if (controller.signal.aborted) return

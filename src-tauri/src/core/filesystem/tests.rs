@@ -31,6 +31,7 @@ fn test_app_state() -> AppState {
         provider_state: Arc::new(Mutex::new(ProviderState::default())),
         approved_save_paths: Arc::new(Mutex::new(HashSet::new())),
         factory_reset_lock: Arc::new(Mutex::new(())),
+        active_streams: Arc::new(Mutex::new(std::collections::HashMap::new())),
     }
 }
 

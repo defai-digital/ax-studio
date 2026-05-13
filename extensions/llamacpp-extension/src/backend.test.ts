@@ -80,6 +80,7 @@ import {
   configureBackends,
   downloadBackend,
   fetchRemoteBackends,
+  getAxServingBinaryPath,
 } from './backend'
 import { invoke } from '@tauri-apps/api/core'
 import {
@@ -208,6 +209,43 @@ describe('llamacpp backend helpers', () => {
       updateNeeded: false,
       newVersion: '',
     })
+  })
+
+  it('uses an existing app-managed ax-serving binary when present', async () => {
+    mocks.existsSync.mockImplementation(async (path: string) =>
+      path === '/app-data/ax-serving/ax-serving'
+    )
+
+    await expect(getAxServingBinaryPath()).resolves.toBe(
+      '/app-data/ax-serving/ax-serving'
+    )
+
+    expect(mocks.mkdir).not.toHaveBeenCalled()
+  })
+
+  it('uses an existing system ax-serving binary before falling back to PATH', async () => {
+    mocks.existsSync.mockImplementation(async (path: string) =>
+      path === '/opt/homebrew/bin/ax-serving'
+    )
+
+    await expect(getAxServingBinaryPath()).resolves.toBe(
+      '/opt/homebrew/bin/ax-serving'
+    )
+
+    expect(mocks.mkdir).not.toHaveBeenCalled()
+  })
+
+  it('falls back to ax-serving on PATH when known paths are missing', async () => {
+    mocks.existsSync.mockImplementation(async (path: string) => {
+      if (path.startsWith('/usr/local') || path.startsWith('/opt/homebrew')) {
+        throw new Error('outside app data')
+      }
+      return false
+    })
+
+    await expect(getAxServingBinaryPath()).resolves.toBe('ax-serving')
+
+    expect(mocks.mkdir).not.toHaveBeenCalled()
   })
 
   it('retries backend downloads with exponential backoff before succeeding', async () => {

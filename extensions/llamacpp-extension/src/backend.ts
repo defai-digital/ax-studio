@@ -137,23 +137,23 @@ export async function isBackendInstalled(version: string, backend: string): Prom
  * Searches:
  *  1. ~/.ax-studio/ax-serving/ax-serving (app data directory)
  *  2. /usr/local/bin/ax-serving (Homebrew / pkg install)
- *  3. ax-serving on PATH (fallback — will be resolved by the OS)
+ *  3. /opt/homebrew/bin/ax-serving (Apple Silicon Homebrew)
+ *  4. ax-serving on PATH (manual install fallback)
  */
 export async function getAxServingBinaryPath(): Promise<string> {
-  // Check app data directory
   const appData = await getAppDataFolderPath()
   const appDataPath = await joinPath([appData, 'ax-serving', 'ax-serving'])
   if (await fs.existsSync(appDataPath)) return appDataPath
 
-  // Check /usr/local/bin (Homebrew default)
-  const usrLocalPath = '/usr/local/bin/ax-serving'
-  if (await fs.existsSync(usrLocalPath)) return usrLocalPath
+  const knownSystemPaths = ['/usr/local/bin/ax-serving', '/opt/homebrew/bin/ax-serving']
+  for (const path of knownSystemPaths) {
+    try {
+      if (await fs.existsSync(path)) return path
+    } catch (error) {
+      console.debug(`[llamacpp] Unable to probe system ax-serving path ${path}:`, error)
+    }
+  }
 
-  // Check /opt/homebrew/bin (Apple Silicon Homebrew)
-  const optBrewPath = '/opt/homebrew/bin/ax-serving'
-  if (await fs.existsSync(optBrewPath)) return optBrewPath
-
-  // Fallback: assume it's on PATH
   return 'ax-serving'
 }
 

@@ -20,7 +20,6 @@ export interface UpdateProgressEvent {
 
 export interface UpdaterService {
   check(): Promise<UpdateInfo | null>
-  installAndRestart(): Promise<void>
   downloadAndInstallWithProgress(
     progressCallback: (event: UpdateProgressEvent) => void
   ): Promise<void>

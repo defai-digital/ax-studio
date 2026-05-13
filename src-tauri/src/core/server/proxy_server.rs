@@ -44,11 +44,11 @@ pub async fn start_server<R: tauri::Runtime>(
         host: host.clone(),
     };
 
-    // Use user-configured timeout for overall request, cap connect timeout at 30s
+    // Only set connect_timeout — no overall timeout, because streaming responses
+    // are long-lived and a global timeout would terminate them mid-stream.
     let connect_timeout_secs = proxy_timeout.min(30);
     let client = Client::builder()
         .connect_timeout(std::time::Duration::from_secs(connect_timeout_secs))
-        .timeout(std::time::Duration::from_secs(proxy_timeout))
         .pool_max_idle_per_host(10)
         .pool_idle_timeout(std::time::Duration::from_secs(30))
         .build()?;

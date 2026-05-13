@@ -2,7 +2,7 @@
   {
     "key": "engine_type",
     "title": "Inference Engine",
-    "description": "Select which inference engine to use. 'llamacpp' uses llama.cpp server. 'ax-serving' uses ax-serving (Apple Silicon only, requires ax-serving binary).",
+    "description": "Select which inference engine to use. 'llamacpp' uses llama.cpp server. 'ax-serving' uses the AX Engine service and requires ax-serving to be installed separately.",
     "controllerType": "dropdown",
     "controllerProps": {
       "value": "llamacpp",

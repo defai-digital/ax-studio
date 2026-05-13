@@ -229,9 +229,10 @@ pub fn should_bypass_proxy(url: &str, no_proxy: &[String]) -> bool {
             return true;
         }
 
-        // Simple wildcard matching
+        // Simple wildcard matching — require a dot before the domain so that
+        // "*.example.com" matches "foo.example.com" but NOT "example.com".
         if let Some(domain) = entry.strip_prefix("*.") {
-            if host.ends_with(domain) {
+            if host.ends_with(&format!(".{domain}")) {
                 return true;
             }
         } else if host == entry {
@@ -643,29 +644,54 @@ async fn download_single_file(
     let mut writer = tokio::io::BufWriter::new(file);
     let mut total_transferred = initial_progress;
 
-    // write chunk to file
-    while let Some(chunk) = stream.next().await {
-        if cancel_token.is_cancelled() {
-            if !should_resume {
-                tokio::fs::remove_file(&tmp_save_path).await.ok();
+    // Helper: clean up sidecar files on any early exit.
+    let cleanup = |keep_tmp: bool| {
+        let tmp = tmp_save_path.clone();
+        let url_f = url_save_path.clone();
+        async move {
+            if !keep_tmp {
+                tokio::fs::remove_file(&tmp).await.ok();
             }
-            log::info!("Download cancelled: {}", item.url);
-            return Err("Download cancelled".to_string());
+            tokio::fs::remove_file(&url_f).await.ok();
+        }
+    };
+
+    // Write chunks using select! so cancellation is immediate rather than
+    // waiting for the next chunk to arrive from a slow server.
+    loop {
+        let maybe_chunk = tokio::select! {
+            biased;
+            _ = cancel_token.cancelled() => {
+                cleanup(should_resume).await;  // keep .tmp only when resumable
+                log::info!("Download cancelled: {}", item.url);
+                return Err("Download cancelled".to_string());
+            }
+            chunk = stream.next() => chunk,
+        };
+
+        let chunk = match maybe_chunk {
+            None => break,
+            Some(Err(e)) => {
+                cleanup(true).await; // keep .tmp for potential resume
+                return Err(err_to_string(e));
+            }
+            Some(Ok(c)) => c,
+        };
+
+        if let Err(e) = writer.write_all(&chunk).await {
+            cleanup(true).await;
+            return Err(err_to_string(e));
         }
 
-        let chunk = chunk.map_err(err_to_string)?;
-        writer.write_all(&chunk).await.map_err(err_to_string)?;
         download_delta += chunk.len() as u64;
         total_transferred += chunk.len() as u64;
 
-        // Update progress every 1 MB (was 10 MB) for more responsive UI
+        // Update progress every 1 MB for responsive UI
         if download_delta >= 1024 * 1024 {
-            // Update individual file progress
             progress_tracker
                 .update_progress(&file_id, total_transferred)
                 .await;
 
-            // Emit combined progress event
             let (combined_transferred, combined_total) =
                 progress_tracker.get_total_progress().await;
             let evt = DownloadEvent {
@@ -678,7 +704,10 @@ async fn download_single_file(
         }
     }
 
-    writer.flush().await.map_err(err_to_string)?;
+    if let Err(e) = writer.flush().await {
+        cleanup(true).await;
+        return Err(err_to_string(e));
+    }
 
     // Final progress update for this file
     progress_tracker
@@ -697,9 +726,9 @@ async fn download_single_file(
     tokio::fs::rename(&tmp_save_path, &save_path)
         .await
         .map_err(err_to_string)?;
-    tokio::fs::remove_file(&url_save_path)
-        .await
-        .map_err(err_to_string)?;
+    if let Err(e) = tokio::fs::remove_file(&url_save_path).await {
+        log::warn!("Failed to remove .url sidecar after download: {e}");
+    }
 
     // Decode URL for better readability in logs
     let decoded_url = url::Url::parse(&item.url)
@@ -908,6 +937,20 @@ mod tests {
         assert!(!should_bypass_proxy(
             "https://external.com",
             &["localhost".to_string(), "*.internal.corp".to_string()]
+        ));
+    }
+
+    #[test]
+    fn test_should_bypass_proxy_wildcard_does_not_match_bare_domain() {
+        // "*.example.com" must NOT match "example.com" itself — only subdomains.
+        assert!(!should_bypass_proxy(
+            "https://example.com/path",
+            &["*.example.com".to_string()]
+        ));
+        // But it must still match a real subdomain.
+        assert!(should_bypass_proxy(
+            "https://api.example.com/v1",
+            &["*.example.com".to_string()]
         ));
     }
 

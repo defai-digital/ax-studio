@@ -64,20 +64,31 @@ pub fn read_messages_from_path(path: &Path) -> Result<Vec<MessageRecord>, String
     let reader = BufReader::new(file);
 
     let mut messages = Vec::new();
+    let mut skipped = 0u32;
     for line in reader.lines() {
         let line = line.map_err(|e| {
             log::error!("Error reading line from file {}: {}", path.display(), e);
             e.to_string()
         })?;
-        let message: MessageRecord = serde_json::from_str(&line).map_err(|e| {
-            log::error!(
-                "Error parsing JSON from line in file {}: {}",
-                path.display(),
-                e
-            );
-            e.to_string()
-        })?;
-        messages.push(message);
+        if line.trim().is_empty() {
+            continue;
+        }
+        match serde_json::from_str::<MessageRecord>(&line) {
+            Ok(message) => messages.push(message),
+            Err(e) => {
+                skipped += 1;
+                log::warn!(
+                    "Skipping malformed message record in {}: {e}",
+                    path.display()
+                );
+            }
+        }
+    }
+    if skipped > 0 {
+        log::warn!(
+            "{skipped} message(s) skipped due to malformed JSON in {}",
+            path.display()
+        );
     }
 
     Ok(messages)
