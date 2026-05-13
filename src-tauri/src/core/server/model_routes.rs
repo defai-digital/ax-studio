@@ -1167,18 +1167,58 @@ const DS_TOOL_CALL_BEGIN: &str = "<\u{ff5c}tool call begin\u{ff5c}>";
 const DS_TOOL_CALL_END: &str = "<\u{ff5c}tool call end\u{ff5c}>";
 const DS_TOOL_SEP: &str = "<\u{ff5c}tool sep\u{ff5c}>";
 
+// Hygiene-only: when DeepSeek-style models are fed tool results in OpenAI's
+// `{"role":"tool",...}` format instead of their native chat template, they
+// occasionally hallucinate the response-side markers (`<｜tool outputs begin｜>`)
+// in their own message text, with redundant/fabricated content between them.
+// We strip these markers AND the content between them on output — they should
+// never appear in legitimate assistant text.
+//
+// Two physical encodings are observed in the wild: ASCII spaces (the literal
+// token name) and U+2581 LOWER ONE EIGHTH BLOCK (SentencePiece's word-boundary
+// marker leaking through detokenization). We handle both.
+const DS_TOOL_OUTPUTS_MARKERS: &[(&str, &str)] = &[
+    // ASCII spaces — emitted when the tokenizer detokenizes cleanly.
+    (
+        "<\u{ff5c}tool outputs begin\u{ff5c}>",
+        "<\u{ff5c}tool outputs end\u{ff5c}>",
+    ),
+    // U+2581 word-boundary — emitted when SentencePiece markers leak through.
+    (
+        "<\u{ff5c}tool\u{2581}outputs\u{2581}begin\u{ff5c}>",
+        "<\u{ff5c}tool\u{2581}outputs\u{2581}end\u{ff5c}>",
+    ),
+];
+
 /// Per-stream state for patching SSE lines.
 ///
 /// Responsibilities:
 /// 1. Wrap `reasoning_content` / `reasoning` deltas in `<think>...</think>` so
 ///    the frontend's existing reasoning extractor can render them in a
 ///    collapsible block instead of leaking raw chain-of-thought as visible text.
-/// 2. Detect DeepSeek-style tool calls emitted as text (using fullwidth
+/// 2. Strip fabricated `<｜tool outputs begin｜>...<｜tool outputs end｜>` blocks
+///    that DeepSeek-family models occasionally hallucinate in their response
+///    text. Pure output hygiene — markers should never appear in legitimate
+///    assistant content.
+/// 3. Detect DeepSeek-style tool calls emitted as text (using fullwidth
 ///    `<｜tool calls begin｜>...<｜tool calls end｜>` markers), parse them, and
 ///    emit them as proper OpenAI-format `tool_calls` deltas that the Vercel AI
 ///    SDK can dispatch.
 ///
-/// Lines that don't match either pattern pass through unchanged.
+/// Lines that don't match these patterns pass through unchanged.
+///
+/// Design note on (3): this is the one place in the proxy where we translate
+/// a model-specific output format into OpenAI's. It is a deliberate, scoped
+/// exception to the rule that the proxy does not perform model-specific input
+/// or output translation. The exception is justified because (a) the marker
+/// tokens use U+FF5C fullwidth pipes and are globally unique — there is no
+/// false-positive risk; (b) the conversion is mechanical (find markers →
+/// extract name → extract JSON args), not semantic; (c) it fills a real gap
+/// that llamacpp's DeepSeek chat-template handling does not currently close.
+///
+/// Future requests to add similar per-model translators should be rejected
+/// unless they meet the same bar: globally unique markers, mechanical (not
+/// semantic) conversion, no realistic upstream fix, and concrete user impact.
 pub(super) struct SseStreamPatcher {
     /// True while we have emitted a `<think>` opener but not yet a closer.
     reasoning_active: bool,
@@ -1188,6 +1228,10 @@ pub(super) struct SseStreamPatcher {
     tool_calls_buffer: String,
     /// Index for assigning ids to parsed tool calls within this stream.
     next_tool_call_index: usize,
+    /// True while we are between `<｜tool outputs begin｜>` and `<｜tool outputs end｜>`.
+    /// Content during this span is fabricated tool-result mimicry and is
+    /// discarded entirely. See `DS_TOOL_OUTPUTS_MARKERS`.
+    in_tool_outputs: bool,
 }
 
 impl SseStreamPatcher {
@@ -1197,6 +1241,7 @@ impl SseStreamPatcher {
             in_tool_calls: false,
             tool_calls_buffer: String::new(),
             next_tool_call_index: 0,
+            in_tool_outputs: false,
         }
     }
 
@@ -1244,6 +1289,15 @@ impl SseStreamPatcher {
             // logic because reasoning is in a separate field and never contains
             // tool-call markers.
             if self.apply_reasoning_wrap(choice) {
+                changed = true;
+            }
+            // Strip any fabricated `<｜tool outputs begin｜>...<｜tool outputs end｜>`
+            // blocks from `content`. This is hygiene — these markers should never
+            // appear in legitimate assistant text, but DeepSeek-family models will
+            // occasionally hallucinate them when tool results are returned in
+            // OpenAI's `{"role":"tool",...}` format instead of the model's native
+            // chat-template format.
+            if self.apply_tool_output_stripping(choice) {
                 changed = true;
             }
             // Then: process the `content` field for DeepSeek tool-call markers
@@ -1350,6 +1404,75 @@ impl SseStreamPatcher {
             _ => {}
         }
         changed
+    }
+
+    /// Strip fabricated `<｜tool outputs begin｜>...<｜tool outputs end｜>` blocks
+    /// from the `content` field. State is held in `self.in_tool_outputs` so
+    /// blocks that span multiple deltas are handled correctly.
+    ///
+    /// Inside a stripped block the content is discarded entirely; the model is
+    /// hallucinating tool-result wire format and the content between markers is
+    /// junk regardless. Anything outside the markers passes through unchanged.
+    fn apply_tool_output_stripping(&mut self, choice: &mut serde_json::Value) -> bool {
+        let Some(delta) = choice.get_mut("delta").and_then(|d| d.as_object_mut()) else {
+            return false;
+        };
+        let Some(content) = delta
+            .get("content")
+            .and_then(|v| v.as_str())
+            .map(ToOwned::to_owned)
+        else {
+            return false;
+        };
+        if content.is_empty() && !self.in_tool_outputs {
+            return false;
+        }
+
+        let mut visible = String::new();
+        let mut remaining = content.as_str();
+        loop {
+            if self.in_tool_outputs {
+                // Look for ANY end marker variant.
+                let next_end = DS_TOOL_OUTPUTS_MARKERS
+                    .iter()
+                    .filter_map(|(_, end)| remaining.find(end).map(|i| (i, *end)))
+                    .min_by_key(|(i, _)| *i);
+                if let Some((idx, end_marker)) = next_end {
+                    // Discard everything up to and including the end marker.
+                    self.in_tool_outputs = false;
+                    remaining = &remaining[idx + end_marker.len()..];
+                    continue;
+                } else {
+                    // Still inside — discard all remaining content for this chunk.
+                    break;
+                }
+            } else {
+                // Look for ANY begin marker variant.
+                let next_begin = DS_TOOL_OUTPUTS_MARKERS
+                    .iter()
+                    .filter_map(|(begin, _)| remaining.find(begin).map(|i| (i, *begin)))
+                    .min_by_key(|(i, _)| *i);
+                if let Some((idx, begin_marker)) = next_begin {
+                    visible.push_str(&remaining[..idx]);
+                    self.in_tool_outputs = true;
+                    remaining = &remaining[idx + begin_marker.len()..];
+                    continue;
+                } else {
+                    visible.push_str(remaining);
+                    break;
+                }
+            }
+        }
+
+        if visible == content {
+            return false;
+        }
+        if visible.is_empty() {
+            delta.remove("content");
+        } else {
+            delta.insert("content".to_string(), serde_json::Value::String(visible));
+        }
+        true
     }
 
     /// Detect DeepSeek-format tool calls in the `content` field and convert them
@@ -2055,5 +2178,96 @@ mod tests {
             }]
         }));
         assert_eq!(p.patch_line(&line), line);
+    }
+
+    // --- tool_outputs stripping ----------------------------------------------
+
+    const DS_TOOL_OUTPUTS_BEGIN_ASCII: &str = "<\u{ff5c}tool outputs begin\u{ff5c}>";
+    const DS_TOOL_OUTPUTS_END_ASCII: &str = "<\u{ff5c}tool outputs end\u{ff5c}>";
+    const DS_TOOL_OUTPUTS_BEGIN_SP: &str = "<\u{ff5c}tool\u{2581}outputs\u{2581}begin\u{ff5c}>";
+    const DS_TOOL_OUTPUTS_END_SP: &str = "<\u{ff5c}tool\u{2581}outputs\u{2581}end\u{ff5c}>";
+
+    #[test]
+    fn patcher_strips_tool_outputs_block_ascii_variant() {
+        let mut p = SseStreamPatcher::new();
+        let body = format!(
+            "Real answer. {begin}fabricated stuff{end} More text.",
+            begin = DS_TOOL_OUTPUTS_BEGIN_ASCII,
+            end = DS_TOOL_OUTPUTS_END_ASCII,
+        );
+        let line = delta_with(serde_json::json!({ "content": body }));
+        let parsed = parse_data_line(&p.patch_line(&line));
+        assert_eq!(
+            parsed["choices"][0]["delta"]["content"],
+            "Real answer.  More text."
+        );
+    }
+
+    #[test]
+    fn patcher_strips_tool_outputs_block_sentencepiece_variant() {
+        // The SentencePiece (U+2581) word-boundary form leaks through when the
+        // detokenizer doesn't fully resolve special tokens.
+        let mut p = SseStreamPatcher::new();
+        let body = format!(
+            "Answer. {begin}junk{end}",
+            begin = DS_TOOL_OUTPUTS_BEGIN_SP,
+            end = DS_TOOL_OUTPUTS_END_SP,
+        );
+        let line = delta_with(serde_json::json!({ "content": body }));
+        let parsed = parse_data_line(&p.patch_line(&line));
+        assert_eq!(parsed["choices"][0]["delta"]["content"], "Answer. ");
+    }
+
+    #[test]
+    fn patcher_strips_tool_outputs_block_across_chunks() {
+        let mut p = SseStreamPatcher::new();
+
+        // Begin in chunk 1
+        let l1 = delta_with(serde_json::json!({
+            "content": format!("Real text. {}", DS_TOOL_OUTPUTS_BEGIN_ASCII)
+        }));
+        let p1 = parse_data_line(&p.patch_line(&l1));
+        assert_eq!(p1["choices"][0]["delta"]["content"], "Real text. ");
+
+        // Middle in chunk 2 — all suppressed
+        let l2 = delta_with(serde_json::json!({
+            "content": "fabricated result data"
+        }));
+        let p2 = parse_data_line(&p.patch_line(&l2));
+        assert_eq!(p2["choices"][0]["delta"].get("content"), None);
+
+        // End in chunk 3 with trailing real text
+        let l3 = delta_with(serde_json::json!({
+            "content": format!("{} Trailing.", DS_TOOL_OUTPUTS_END_ASCII)
+        }));
+        let p3 = parse_data_line(&p.patch_line(&l3));
+        assert_eq!(p3["choices"][0]["delta"]["content"], " Trailing.");
+    }
+
+    #[test]
+    fn patcher_drops_content_field_when_only_tool_outputs_block_present() {
+        let mut p = SseStreamPatcher::new();
+        let body = format!(
+            "{begin}junk{end}",
+            begin = DS_TOOL_OUTPUTS_BEGIN_ASCII,
+            end = DS_TOOL_OUTPUTS_END_ASCII,
+        );
+        let line = delta_with(serde_json::json!({ "content": body }));
+        let parsed = parse_data_line(&p.patch_line(&line));
+        // No content field at all — the chunk produced no visible text.
+        assert_eq!(parsed["choices"][0]["delta"].get("content"), None);
+    }
+
+    #[test]
+    fn patcher_handles_multiple_tool_output_blocks_in_one_delta() {
+        let mut p = SseStreamPatcher::new();
+        let body = format!(
+            "A{begin}x{end}B{begin}y{end}C",
+            begin = DS_TOOL_OUTPUTS_BEGIN_ASCII,
+            end = DS_TOOL_OUTPUTS_END_ASCII,
+        );
+        let line = delta_with(serde_json::json!({ "content": body }));
+        let parsed = parse_data_line(&p.patch_line(&line));
+        assert_eq!(parsed["choices"][0]["delta"]["content"], "ABC");
     }
 }

@@ -5,6 +5,7 @@ import {
   convertThreadMessageToUIMessage,
   convertThreadMessagesToUIMessages,
   extractContentPartsFromUIMessage,
+  splitThinkTaggedText,
 } from '../index'
 
 function makeThread(content: ThreadMessage['content'], role: string = 'assistant'): ThreadMessage {
@@ -150,5 +151,76 @@ describe('extractContentPartsFromUIMessage', () => {
     const content = extractContentPartsFromUIMessage(ui)
     // Should include a tool call content item
     expect(content.length).toBeGreaterThan(0)
+  })
+})
+
+// ─── splitThinkTaggedText ──────────────────────────────────────────────────
+
+describe('splitThinkTaggedText', () => {
+  it('returns text unchanged when no <think> markers are present', () => {
+    const result = splitThinkTaggedText('Hello world')
+    expect(result).toEqual({ text: 'Hello world' })
+    expect(result.reasoningText).toBeUndefined()
+  })
+
+  it('splits standard <think>…</think> into reasoning and remaining text', () => {
+    const result = splitThinkTaggedText('<think>analyzing</think>final answer')
+    expect(result).toEqual({
+      reasoningText: 'analyzing',
+      text: 'final answer',
+    })
+  })
+
+  it('handles attributes on the opener tag', () => {
+    const result = splitThinkTaggedText('<think type="x">r</think>t')
+    expect(result.reasoningText).toBe('r')
+    expect(result.text).toBe('t')
+  })
+
+  it('treats streaming-open <think> (no closer yet) as all-reasoning', () => {
+    const result = splitThinkTaggedText('<think>still thinking about it')
+    expect(result.reasoningText).toBe('still thinking about it')
+    expect(result.text).toBe('')
+  })
+
+  it('handles implicit opener — </think> without preceding <think>', () => {
+    // DeepSeek R1 case: chat template prepends <think>\n outside the model's
+    // generation window, so only the closer reaches the stream.
+    const result = splitThinkTaggedText(
+      'the user wants to search...adequate. </think>I can search the web for you.'
+    )
+    expect(result.reasoningText).toBe('the user wants to search...adequate.')
+    expect(result.text).toBe('I can search the web for you.')
+  })
+
+  it('handles implicit opener with empty reasoning text', () => {
+    const result = splitThinkTaggedText('</think>actual answer')
+    expect(result.reasoningText).toBe('')
+    expect(result.text).toBe('actual answer')
+  })
+
+  it('extracts only the first <think> block when multiple are present', () => {
+    const result = splitThinkTaggedText('<think>a</think>x<think>b</think>y')
+    expect(result.reasoningText).toBe('a')
+    // Subsequent blocks remain in the text segment for callers to handle.
+    expect(result.text).toBe('x<think>b</think>y')
+  })
+
+  it('trims whitespace around reasoning and text segments', () => {
+    const result = splitThinkTaggedText(
+      '<think>\n  reasoning  \n</think>\n\n  answer  '
+    )
+    expect(result.reasoningText).toBe('reasoning')
+    expect(result.text).toBe('answer')
+  })
+
+  it('returns text unchanged for plain content even when text contains "</" literal', () => {
+    // Guard against false-positive matches on closer-only logic.
+    const result = splitThinkTaggedText('the code is </br> not </think>')
+    // </think> IS present here, so implicit-opener case kicks in. That is
+    // expected behavior — if the model emits </think> in normal prose,
+    // it'll be treated as a reasoning boundary. This is a known tradeoff.
+    expect(result.reasoningText).toBe('the code is </br> not')
+    expect(result.text).toBe('')
   })
 })

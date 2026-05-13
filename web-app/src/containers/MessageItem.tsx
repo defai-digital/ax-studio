@@ -23,6 +23,7 @@ import { EditMessageDialog } from '@/containers/dialogs/message/EditMessageDialo
 import { DeleteMessageDialog } from '@/containers/dialogs/message/DeleteMessageDialog'
 import TokenSpeedIndicator from '@/containers/TokenSpeedIndicator'
 import { extractFilesFromPrompt, FileMetadata } from '@/lib/fileMetadata'
+import { splitThinkTaggedText } from '@/lib/messages'
 import { Button } from '@/components/ui/button'
 import { Database, GitBranch, Paperclip, RefreshCw, ThumbsDown, ThumbsUp, Zap } from "lucide-react";
 import { useMessages } from '@/hooks/chat/useMessages'
@@ -201,14 +202,17 @@ export const MessageItem = memo(
           ? extractFilesFromPrompt(part.text).cleanPrompt
           : part.text
 
-      const thinkMatch =
+      // Extract any reasoning block (<think>...</think>, streaming open, or
+      // chat-template-eaten opener) so it renders in the collapsible block
+      // rather than leaking as visible assistant text. See splitThinkTaggedText.
+      const reasoningSplit =
         message.role === 'assistant'
-          ? displayText.match(/<think[^>]*>([\s\S]*?)(?:<\/think>|$)([\s\S]*)/i)
+          ? splitThinkTaggedText(displayText)
           : null
 
-      if (thinkMatch) {
-        const reasoningText = thinkMatch[1]?.trim() ?? ''
-        const finalText = (thinkMatch[2] ?? '').trim()
+      if (reasoningSplit?.reasoningText !== undefined) {
+        const reasoningText = reasoningSplit.reasoningText
+        const finalText = reasoningSplit.text
 
         return (
           <div key={`${message.id}-${partIndex}`} className="w-full min-w-0 overflow-hidden">

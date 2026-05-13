@@ -101,17 +101,61 @@ const parseReasoning = (text: string) => {
   return { reasoningSegment: undefined, textSegment: text }
 }
 
-const splitThinkTaggedText = (text: string): {
+/**
+ * Split text into a reasoning segment and a final-answer segment, based on
+ * `<think>...</think>` markers in the content stream.
+ *
+ * Handles three cases observed across reasoning models:
+ *
+ *   1. Standard:     `<think>R</think>T`         -> reasoningText=R, text=T
+ *   2. Streaming:    `<think>R` (no closer yet)  -> reasoningText=R, text=""
+ *   3. Implicit:     `R</think>T` (no opener)    -> reasoningText=R, text=T
+ *
+ * Case 3 is required for models whose chat template prepends `<think>` as a
+ * fixed prefix before generation (e.g., DeepSeek R1's `<think>\n`). The
+ * generated stream then contains only the closing `</think>`, and the text
+ * preceding it is reasoning by construction.
+ *
+ * When no marker is present, `reasoningText` is `undefined` and `text` is
+ * returned unchanged.
+ */
+export const splitThinkTaggedText = (text: string): {
   reasoningText?: string
   text: string
 } => {
-  const match = text.match(/<think[^>]*>([\s\S]*?)(?:<\/think>|$)([\s\S]*)/i)
-  if (!match) return { text }
-
-  return {
-    reasoningText: match[1]?.trim(),
-    text: (match[2] ?? '').trim(),
+  // Case 1 — standard <think>...</think> block. Lazy `*?` so multiple blocks
+  // resolve to the first one being treated as reasoning.
+  const fullMatch = text.match(/<think[^>]*>([\s\S]*?)<\/think>([\s\S]*)/i)
+  if (fullMatch) {
+    return {
+      reasoningText: fullMatch[1]?.trim(),
+      text: (fullMatch[2] ?? '').trim(),
+    }
   }
+
+  // Case 2 — streaming: opener has arrived but the closer hasn't yet.
+  // Treat everything from the opener onward as reasoning so the UI keeps
+  // it inside the collapsible block during streaming.
+  const openMatch = text.match(/<think[^>]*>([\s\S]*)$/i)
+  if (openMatch) {
+    return {
+      reasoningText: openMatch[1]?.trim() ?? '',
+      text: '',
+    }
+  }
+
+  // Case 3 — implicit opener: `</think>` appears without a preceding `<think>`.
+  // This happens when the chat template prepends `<think>` outside of the
+  // model's generation window, so only the closer reaches us.
+  const closeMatch = text.match(/^([\s\S]*?)<\/think>([\s\S]*)/i)
+  if (closeMatch) {
+    return {
+      reasoningText: closeMatch[1]?.trim() ?? '',
+      text: (closeMatch[2] ?? '').trim(),
+    }
+  }
+
+  return { text }
 }
 
 /**
