@@ -2,7 +2,6 @@
 use crate::core::mcp::constants::CREATE_NO_WINDOW;
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
 use tauri::{AppHandle, Manager, Runtime};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -12,58 +11,6 @@ pub struct McpLockFile {
     pub server_name: String,
     pub created_at: String,
     pub hostname: String,
-}
-
-fn get_lock_file_path<R: Runtime>(
-    app: &AppHandle<R>,
-    port: u16,
-    server_name: Option<&str>,
-) -> Result<PathBuf, String> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
-    let file_name = match server_name {
-        Some(name) => {
-            let safe_name: String = name
-                .chars()
-                .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
-                .collect();
-            if safe_name.is_empty() {
-                format!("mcp_lock_{}.json", port)
-            } else {
-                format!("mcp_lock_{}_{}.json", port, safe_name)
-            }
-        }
-        None => format!("mcp_lock_{}.json", port),
-    };
-    Ok(app_data_dir.join(file_name))
-}
-
-pub fn read_lock_file<R: Runtime>(app: &AppHandle<R>, port: u16) -> Option<McpLockFile> {
-    let lock_path = get_lock_file_path(app, port, None).ok()?;
-
-    if !lock_path.exists() {
-        return None;
-    }
-
-    let lock_json = fs::read_to_string(&lock_path).ok()?;
-    serde_json::from_str(&lock_json).ok()
-}
-
-pub fn delete_lock_file<R: Runtime>(
-    app: &AppHandle<R>,
-    port: u16,
-    server_name: Option<&str>,
-) -> Result<(), String> {
-    let lock_path = get_lock_file_path(app, port, server_name)?;
-
-    if lock_path.exists() {
-        fs::remove_file(&lock_path).map_err(|e| format!("Failed to delete lock file: {}", e))?;
-        log::debug!("Deleted lock file for port {}", port);
-    }
-
-    Ok(())
 }
 
 pub fn is_process_alive(pid: u32) -> bool {
@@ -104,36 +51,6 @@ pub fn is_process_alive(pid: u32) -> bool {
     {
         false
     }
-}
-
-pub async fn check_and_cleanup_stale_lock<R: Runtime>(
-    app: &AppHandle<R>,
-    port: u16,
-) -> Result<bool, String> {
-    let lock = match read_lock_file(app, port) {
-        Some(l) => l,
-        None => return Ok(false),
-    };
-
-    log::debug!(
-        "Found lock file for port {}: PID={}, server={}",
-        port,
-        lock.pid,
-        lock.server_name
-    );
-
-    if !is_process_alive(lock.pid) {
-        log::info!(
-            "Lock file for port {} is stale (PID {} is dead), removing",
-            port,
-            lock.pid
-        );
-        delete_lock_file(app, port, None)?;
-        return Ok(true);
-    }
-
-    log::debug!("Process {} is still alive for port {}", lock.pid, port);
-    Ok(false)
 }
 
 pub async fn cleanup_all_stale_locks<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
@@ -231,9 +148,8 @@ mod tests {
 }
 
 pub fn cleanup_own_locks<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
-    // Consistent with `get_lock_file_path` in this same file — propagate
-    // instead of panicking so a missing/inaccessible app data dir bubbles
-    // up as a cleanup error the caller can log.
+    // Propagate instead of panicking so a missing/inaccessible app data dir
+    // bubbles up as a cleanup error the caller can log.
     let app_data_dir = app
         .path()
         .app_data_dir()
