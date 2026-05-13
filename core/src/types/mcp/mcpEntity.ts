@@ -4,13 +4,13 @@
 
 export interface MCPTool {
   name: string
-  description: string
+  description?: string  // MCP protocol does not require a description
   inputSchema: Record<string, unknown>
   server: string
 }
 
 export interface MCPToolCallResult {
-  error?: string
+  error: string  // Always present; empty string when no error occurred
   content: Array<{
     type?: string
     text: string

@@ -95,8 +95,8 @@ export class ExtensionManager {
   }
 
   /**
-   * Retrieves a extension by its type.
-   * @param type - The type of the extension to retrieve.
+   * Retrieves a registered extension by its name.
+   * @param name - The name of the extension to retrieve.
    * @returns The extension, if found.
    */
   getByName(name: string): BaseExtension | undefined {
@@ -104,9 +104,8 @@ export class ExtensionManager {
   }
 
   /**
-   * Retrieves a extension by its type.
-   * @param type - The type of the extension to retrieve.
-   * @returns The extension, if found.
+   * Returns all registered extensions.
+   * @returns An array of all registered extensions.
    */
   getAll(): BaseExtension[] {
     return Array.from(this.extensions.values())

@@ -4,7 +4,7 @@
  */
 export type MCPTool = {
   name: string
-  description: string
+  description?: string  // MCP protocol does not require a description
   inputSchema: Record<string, unknown>
   server: string
 }

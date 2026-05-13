@@ -37,6 +37,8 @@ macro_rules! desktop_handlers {
             crate::core::extensions::commands::get_app_extensions_path,
             crate::core::extensions::commands::install_extensions,
             crate::core::extensions::commands::get_active_extensions,
+            crate::core::extensions::commands::install_extension,
+            crate::core::extensions::commands::uninstall_extension,
             // System commands
             crate::core::system::commands::relaunch,
             crate::core::system::commands::canonicalize_path,

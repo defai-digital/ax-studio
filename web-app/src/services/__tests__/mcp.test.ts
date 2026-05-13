@@ -200,6 +200,7 @@ describe('TauriMCPService', () => {
             },
             required: ['path'],
           },
+          server: 'filesystem',
         },
         {
           name: 'file_write',
@@ -212,6 +213,7 @@ describe('TauriMCPService', () => {
             },
             required: ['path', 'content'],
           },
+          server: 'filesystem',
         },
       ]
 
@@ -440,6 +442,7 @@ describe('TauriMCPService', () => {
           name: 'read_file',
           description: 'Read file',
           inputSchema: { type: 'object' },
+          server: 'filesystem',
         },
       ]
       const servers = ['filesystem']
