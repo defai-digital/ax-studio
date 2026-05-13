@@ -189,7 +189,7 @@ export function convertThreadMessageToUIMessage(
       if (content.output != null) {
         parts.push({
           type: `tool-${content.tool_name}`,
-          toolCallId: content.tool_call_id,
+          toolCallId: content.tool_call_id ?? '',
           input: content.input,
           state: 'output-available',
           output: content.output,
@@ -197,7 +197,7 @@ export function convertThreadMessageToUIMessage(
       } else {
         parts.push({
           type: `tool-${content.tool_name}`,
-          toolCallId: content.tool_call_id,
+          toolCallId: content.tool_call_id ?? '',
           input: content.input,
           state: 'input-available',
         })
@@ -238,7 +238,7 @@ export function convertThreadMessageToUIMessage(
       if (result != null || tc.state === 'ready' || tc.state === 'completed' || tc.state === 'result') {
         parts.push({
           type: `tool-${toolName}`,
-          toolCallId,
+          toolCallId: toolCallId ?? '',
           input: toolInput,
           state: 'output-available',
           output: result,
@@ -246,7 +246,7 @@ export function convertThreadMessageToUIMessage(
       } else {
         parts.push({
           type: `tool-${toolName}`,
-          toolCallId,
+          toolCallId: toolCallId ?? '',
           input: toolInput,
           state: 'input-available',
         })
@@ -357,8 +357,8 @@ export function extractContentPartsFromUIMessage(message: UIMessage): ThreadCont
         type: 'tool_call' as ContentType.ToolCall,
         tool_call_id: toolCallId,
         tool_name: toolName,
-        input: input,
-        output: output,
+        input: input as Record<string, unknown> | undefined,
+        output: output as string | Record<string, unknown> | undefined,
       }
       content.push(toolCallContent)
     }

@@ -42,7 +42,7 @@ import { useLocalKnowledge } from '@/hooks/research/useLocalKnowledge'
 import { useThreadLocalKnowledge } from '@/hooks/threads/use-thread-local-knowledge'
 import { useThreadResearch } from '@/hooks/threads/use-thread-research'
 import { useThreadChat } from '@/hooks/threads/use-thread-chat'
-import { useThreadTools } from '@/hooks/threads/use-thread-tools'
+import { useThreadTools, type AddToolOutputFn } from '@/hooks/threads/use-thread-tools'
 import { useThreadSplit } from '@/hooks/threads/use-thread-split'
 import { useThreadConfig } from '@/hooks/threads/use-thread-config'
 import { useThreadEffects } from '@/hooks/threads/use-thread-effects'
@@ -210,7 +210,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
         processMemoryOnFinish(messageForPersistence, contentParts, setChatMessages)
         persistMessageOnFinishRef.current?.(messageForPersistence, contentParts)
       }
-      startToolExecution(addToolOutput)
+      startToolExecution(addToolOutput as unknown as AddToolOutputFn)
     },
     onToolCall,
     sendAutomaticallyWhen: followUpMessage,

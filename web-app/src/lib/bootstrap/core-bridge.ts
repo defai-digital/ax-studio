@@ -10,7 +10,7 @@ export function ensureCoreBridge(options: CoreBridgeOptions = {}): NonNullable<W
   const core = (window.core ||= {} as NonNullable<Window['core']>)
 
   if (options.withApi && !core.api) {
-    core.api = APIs
+    core.api = APIs as unknown as NonNullable<Window['core']>['api']
   }
 
   if (options.withEvents && !core.events) {

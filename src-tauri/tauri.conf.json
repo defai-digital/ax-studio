@@ -71,7 +71,7 @@
       "resolve": true
     },
     "updater": {
-      "pubkey": "",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY5MzcxMUFCQjdFQjAyRTQKUldUa0F1dTNxeEUzYWI4ZUIySW1zMkUvYnBoTHZ1RnZxZFJpWW95ME1HUGNwb1VycGdISnV1UUkK",
       "endpoints": [
         "https://updates.axstudio.ai/update-check",
         "https://github.com/ax-studio/ax-studio/releases/latest/download/latest.json"

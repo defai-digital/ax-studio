@@ -6,7 +6,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { MCPTool } from '@/types/mcp'
 import { DEFAULT_MCP_SETTINGS } from '@/hooks/tools/useMCPServers'
 import type { MCPServerConfig, MCPServers, MCPSettings } from '@/hooks/tools/useMCPServers'
-import type { MCPConfig, MCPService } from './types'
+import type { MCPConfig, MCPService, ToolCallWithCancellationResult } from './types'
 import { mcpServersSchema, mcpSettingsSchema } from '@/schemas/mcp.schema'
 import { extractErrorMessage, toError } from '@/lib/utils/error'
 
@@ -97,11 +97,11 @@ export class TauriMCPService implements MCPService {
   }
 
   async getTools(): Promise<MCPTool[]> {
-    return (await getCoreApi().getTools()) ?? []
+    return ((await getCoreApi().getTools()) as MCPTool[]) ?? []
   }
 
   async getConnectedServers(): Promise<string[]> {
-    return (await getCoreApi().getConnectedServers()) ?? []
+    return ((await getCoreApi().getConnectedServers()) as string[]) ?? []
   }
 
   async callTool(args: {
@@ -111,7 +111,7 @@ export class TauriMCPService implements MCPService {
   }): Promise<{ error: string; content: { text: string }[] }> {
     const api = getCoreApi()
     try {
-      return (await api.callTool(args)) ?? {
+      return ((await api.callTool(args)) as { error: string; content: { text: string }[] }) ?? {
         error: 'MCP service unavailable',
         content: [],
       }
@@ -123,7 +123,7 @@ export class TauriMCPService implements MCPService {
       console.warn('MCP tool call failed, restarting MCP servers and retrying once:', error)
       try {
         await api.restartMcpServers()
-        return (await api.callTool(args)) ?? {
+        return ((await api.callTool(args)) as { error: string; content: { text: string }[] }) ?? {
           error: 'MCP service unavailable after restart',
           content: [],
         }
@@ -146,7 +146,7 @@ export class TauriMCPService implements MCPService {
     const promise = (async () => {
       try {
         const api = getCoreApi()
-        return (await api.callTool({ ...args, cancellationToken: token })) ?? {
+        return ((await api.callTool({ ...args, cancellationToken: token })) as { error: string; content: { text: string }[] }) ?? {
           error: 'MCP service unavailable',
           content: [],
         }
@@ -158,7 +158,7 @@ export class TauriMCPService implements MCPService {
         try {
           const api = getCoreApi()
           await api.restartMcpServers()
-          return (await api.callTool({ ...args, cancellationToken: token })) ?? {
+          return ((await api.callTool({ ...args, cancellationToken: token })) as { error: string; content: { text: string }[] }) ?? {
             error: 'MCP service unavailable after restart',
             content: [],
           }
@@ -180,7 +180,7 @@ export class TauriMCPService implements MCPService {
   }
 
   async cancelToolCall(cancellationToken: string): Promise<void> {
-    return await getCoreApi().cancelToolCall({ cancellationToken })
+    await getCoreApi().cancelToolCall({ cancellationToken })
   }
 
   async activateMCPServer(name: string, config: MCPServerConfig): Promise<void> {

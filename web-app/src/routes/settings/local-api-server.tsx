@@ -265,7 +265,8 @@ function LocalAPIServerContent() {
             proxyTimeout: proxyTimeout,
           })
         })
-        .then((actualPort: number) => {
+        .then((rawPort: unknown) => {
+          const actualPort = rawPort as number
           if (actualPort && actualPort !== serverPort) {
             setServerPort(actualPort)
           }
@@ -321,8 +322,7 @@ function LocalAPIServerContent() {
         return
       }
 
-      api
-        .stopServer()
+      (api.stopServer() as Promise<void>)
         .then(() => {
           setServerStatus('stopped')
         })

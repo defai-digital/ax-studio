@@ -22,7 +22,7 @@ import { useChat } from '@/hooks/chat/use-chat'
 import { useThreadMemory } from '@/hooks/threads/use-thread-memory'
 import { useThreadConfig } from '@/hooks/threads/use-thread-config'
 import { useThreadChat } from '@/hooks/threads/use-thread-chat'
-import { useThreadTools } from '@/hooks/threads/use-thread-tools'
+import { useThreadTools, type AddToolOutputFn } from '@/hooks/threads/use-thread-tools'
 import { useThreadResearch } from '@/hooks/threads/use-thread-research'
 import { extractContentPartsFromUIMessage } from '@/lib/messages'
 import {
@@ -166,7 +166,7 @@ export function SplitThreadContainer({
         )
         persistMessageOnFinishRef.current?.(messageForPersistence, contentParts)
       }
-      startToolExecution(addToolOutput)
+      startToolExecution(addToolOutput as unknown as AddToolOutputFn)
     },
     onToolCall,
     sendAutomaticallyWhen: followUpMessage,

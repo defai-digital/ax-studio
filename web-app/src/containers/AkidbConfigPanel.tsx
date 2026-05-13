@@ -65,7 +65,7 @@ export default function AkidbConfigPanel() {
   const handleBrowse = useCallback(async () => {
     try {
       const result = await serviceHub.dialog().open({ directory: true })
-      if (result) setDataFolder(result)
+      if (typeof result === 'string') setDataFolder(result)
     } catch {
       toast.error('Folder picker is not available in this environment')
     }

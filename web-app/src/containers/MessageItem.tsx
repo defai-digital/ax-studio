@@ -424,7 +424,7 @@ export const MessageItem = memo(
             state={toolPart.state}
           />
           <ToolContent title={toolName}>
-            {toolPart.input && (
+            {Boolean(toolPart.input) && (
               <ToolInput
                 input={
                   typeof toolPart.input === 'string'
@@ -433,7 +433,7 @@ export const MessageItem = memo(
                 }
               />
             )}
-            {toolPart.output && (
+            {Boolean(toolPart.output) && (
               <ToolOutput
                 output={toolPart.output}
                 resolver={(input) => Promise.resolve(input)}

@@ -179,7 +179,7 @@ function RenderMarkdownComponent({
           rehypeKatex,
           axDefaultRehypePlugins.harden,
         ]}
-        components={mergedComponents}
+        components={mergedComponents as MarkdownComponents}
         plugins={{
           code: code as NonNullable<ComponentProps<typeof AXMarkdown>['plugins']>['code'],
           cjk: cjk,

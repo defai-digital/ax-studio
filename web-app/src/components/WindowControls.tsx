@@ -12,7 +12,7 @@ export const WindowControls = () => {
   })()
 
   const runWindowAction = async (
-    action: (() => Promise<void>) | undefined,
+    action: (() => Promise<void> | undefined) | undefined,
     label: string
   ) => {
     try {

@@ -142,7 +142,7 @@ export function MessagesArea({
       <Conversation className="absolute inset-0 text-start">
         {/* Branch/Fork banner */}
         <AnimatePresence>
-          {forkedFrom && !bannerDismissed && (
+          {Boolean(forkedFrom) && !bannerDismissed && (
             <BranchBanner forkedFrom={forkedFrom} onDismiss={dismissBanner} />
           )}
         </AnimatePresence>

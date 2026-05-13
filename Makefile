@@ -113,7 +113,7 @@ test-quality-blocking:
 
 # Build
 build: install-and-build install-rust-targets
-	yarn build
+	TAURI_SIGNING_PUBLIC_KEY=$(shell cat ~/.tauri/ax-studio.key.pub 2>/dev/null) yarn build
 
 clean:
 ifeq ($(OS),Windows_NT)

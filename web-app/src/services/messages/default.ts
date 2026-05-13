@@ -25,7 +25,7 @@ export class DefaultMessagesService implements MessagesService {
         [
           extension ? () => extension.listMessages(threadId) : undefined,
           nativeApi?.listMessages
-            ? () => nativeApi.listMessages!({ threadId })
+            ? () => nativeApi.listMessages!({ threadId }) as Promise<ThreadMessage[]>
             : undefined,
         ],
         'Conversational storage is not available',
@@ -51,7 +51,7 @@ export class DefaultMessagesService implements MessagesService {
           ? () => extension.createMessage(message)
           : undefined,
         nativeApi?.createMessage
-          ? () => nativeApi.createMessage!({ message })
+          ? () => nativeApi.createMessage!({ message }) as Promise<ThreadMessage>
           : undefined,
       ],
       'Conversational storage is not available',
@@ -73,7 +73,7 @@ export class DefaultMessagesService implements MessagesService {
           ? () => extension.modifyMessage(message)
           : undefined,
         nativeApi?.modifyMessage
-          ? () => nativeApi.modifyMessage!({ message })
+          ? () => nativeApi.modifyMessage!({ message }) as Promise<ThreadMessage>
           : undefined,
       ],
       'Conversational storage is not available',
@@ -95,7 +95,7 @@ export class DefaultMessagesService implements MessagesService {
           ? () => extension.deleteMessage(threadId, messageId)
           : undefined,
         nativeApi?.deleteMessage
-          ? () => nativeApi.deleteMessage!({ threadId, messageId })
+          ? () => nativeApi.deleteMessage!({ threadId, messageId }) as Promise<void>
           : undefined,
       ],
       'Conversational storage is not available',

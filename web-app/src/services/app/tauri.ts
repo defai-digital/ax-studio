@@ -43,8 +43,8 @@ export class TauriAppService implements AppService {
 
   async getAppDataFolder(): Promise<string | undefined> {
     try {
-      const appConfiguration: AppConfiguration | undefined =
-        await window.core?.api?.getAppConfigurations()
+      const appConfiguration =
+        (await window.core?.api?.getAppConfigurations()) as AppConfiguration | undefined
 
       return appConfiguration?.data_folder
     } catch (error) {

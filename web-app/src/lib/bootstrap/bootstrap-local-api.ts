@@ -81,8 +81,8 @@ export async function bootstrapLocalApi(
         proxyTimeout: config.proxyTimeout,
       })
 
-      if (actualPort && actualPort !== config.port) {
-        setServerPort(actualPort)
+      if (actualPort && (actualPort as number) !== config.port) {
+        setServerPort(actualPort as number)
       }
       setServerStatus('running')
       return ok()

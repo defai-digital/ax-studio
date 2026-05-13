@@ -183,10 +183,10 @@ class PlatformServiceHub implements ServiceHub {
       },
     }
 
-    const unavailableToolResult = {
+    const unavailableToolResult: Awaited<ReturnType<MCPService['callTool']>> = {
       content: [],
-      isError: true,
-    } as Awaited<ReturnType<MCPService['callTool']>>
+      error: '',
+    }
 
     this.mcpService = {
       updateMCPConfig: async () => {},

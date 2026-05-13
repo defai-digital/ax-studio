@@ -118,7 +118,7 @@ export class DefaultThreadsService implements ThreadsService {
       [
         extension ? () => extension.createThread(payload) : undefined,
         nativeApi?.createThread
-          ? () => nativeApi.createThread!({ thread: payload })
+          ? () => nativeApi.createThread!({ thread: payload }) as Promise<CoreThread>
           : undefined,
       ],
       'Conversational storage is not available',
@@ -187,7 +187,7 @@ export class DefaultThreadsService implements ThreadsService {
       [
         extension ? () => extension.modifyThread(payload) : undefined,
         nativeApi?.modifyThread
-          ? () => nativeApi.modifyThread!({ thread: payload })
+          ? () => nativeApi.modifyThread!({ thread: payload }) as Promise<void>
           : undefined,
       ],
       'Conversational storage is not available',
@@ -208,7 +208,7 @@ export class DefaultThreadsService implements ThreadsService {
       [
         extension ? () => extension.deleteThread(threadId) : undefined,
         nativeApi?.deleteThread
-          ? () => nativeApi.deleteThread!({ threadId })
+          ? () => nativeApi.deleteThread!({ threadId }) as Promise<void>
           : undefined,
       ],
       'Conversational storage is not available',
@@ -222,7 +222,7 @@ function getListThreads(): (() => Promise<CoreThread[]>) | undefined {
   const nativeApi = getNativeApi()
   const readers = [
     extension ? () => extension.listThreads() : undefined,
-    nativeApi?.listThreads ? () => nativeApi.listThreads!() : undefined,
+    nativeApi?.listThreads ? () => nativeApi.listThreads!() as Promise<CoreThread[]> : undefined,
   ]
 
   if (!readers.some(Boolean)) return undefined
