@@ -147,18 +147,18 @@ pub async fn cleanup_all_stale_locks<R: Runtime>(app: &AppHandle<R>) -> Result<(
 
     for entry in glob::glob(&pattern_str).map_err(|e| format!("Glob error: {}", e))? {
         if let Ok(path) = entry {
-            if let Some(file_name) = path.file_name() {
-                let file_name_str = file_name.to_string_lossy();
-                if let Some(port_str) = file_name_str
-                    .strip_prefix("mcp_lock_")
-                    .and_then(|s| s.strip_suffix(".json"))
-                {
-                    if let Ok(port) = port_str.parse::<u16>() {
-                        match check_and_cleanup_stale_lock(app, port).await {
-                            Ok(true) => log::info!("Cleaned up stale lock for port {}", port),
-                            Err(e) => log::warn!("Failed to cleanup lock for port {}: {}", port, e),
-                            _ => {}
-                        }
+            // Read the file directly — avoids fragile port-from-filename parsing
+            // and handles both "mcp_lock_{port}.json" and "mcp_lock_{port}_{name}.json".
+            if let Ok(content) = fs::read_to_string(&path) {
+                if let Ok(lock) = serde_json::from_str::<McpLockFile>(&content) {
+                    if !is_process_alive(lock.pid) {
+                        log::info!(
+                            "Removing stale MCP lock {:?} (server={}, PID={} is dead)",
+                            path,
+                            lock.server_name,
+                            lock.pid
+                        );
+                        fs::remove_file(&path).ok();
                     }
                 }
             }

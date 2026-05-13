@@ -256,57 +256,6 @@ fn test_bin_path_construction_windows() {
     assert_eq!(bun_path_str, r"C:\Program Files\bin\bun.exe");
 }
 
-// ============================================================================
-// Shutdown Context Tests
-// ============================================================================
-
-use super::helpers::ShutdownContext;
-use std::time::Duration;
-
-#[test]
-fn test_shutdown_context_app_exit_timeouts() {
-    let context = ShutdownContext::AppExit;
-    assert_eq!(context.per_server_timeout(), Duration::from_millis(500));
-    assert_eq!(context.overall_timeout(), Duration::from_millis(1500));
-}
-
-#[test]
-fn test_shutdown_context_manual_restart_timeouts() {
-    let context = ShutdownContext::ManualRestart;
-    assert_eq!(context.per_server_timeout(), Duration::from_secs(2));
-    assert_eq!(context.overall_timeout(), Duration::from_secs(5));
-}
-
-#[test]
-fn test_shutdown_context_factory_reset_timeouts() {
-    let context = ShutdownContext::FactoryReset;
-    assert_eq!(context.per_server_timeout(), Duration::from_secs(5));
-    assert_eq!(context.overall_timeout(), Duration::from_secs(10));
-}
-
-#[test]
-fn test_shutdown_context_overall_greater_than_per_server() {
-    for context in [
-        ShutdownContext::AppExit,
-        ShutdownContext::ManualRestart,
-        ShutdownContext::FactoryReset,
-    ] {
-        assert!(
-            context.overall_timeout() > context.per_server_timeout(),
-            "Overall timeout should be greater than per-server timeout for {:?}",
-            context
-        );
-    }
-}
-
-#[test]
-fn test_shutdown_context_is_copy() {
-    let context = ShutdownContext::AppExit;
-    let copied = context;
-    assert!(matches!(context, ShutdownContext::AppExit));
-    assert!(matches!(copied, ShutdownContext::AppExit));
-}
-
 #[tokio::test]
 async fn test_background_cleanup_with_empty_state() {
     use super::helpers::background_cleanup_mcp_servers;

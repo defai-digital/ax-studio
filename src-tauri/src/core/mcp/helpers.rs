@@ -616,29 +616,22 @@ pub fn extract_command_args(config: &Value) -> Option<McpServerConfig> {
     // Filter out dangerous environment variables
     envs.retain(|k, _| !DANGEROUS_ENV_KEYS.contains(&k.as_str()));
 
-    // Filter dangerous env VALUES that could override critical paths
-    const DANGEROUS_ENV_VALUE_PREFIXES: &[&str] = &[
-        "HOME=",
-        "PATH=",
-        "USER=",
-        "SHELL=",
-        "TMPDIR=",
-        "TEMP=",
-        "TMP=",
-        "APPDATA=",
-        "PROGRAMFILES=",
-        "SYSTEMROOT=",
-        "LD_PRELOAD=",
+    // Block env overrides for security-sensitive variables.  PATH is
+    // intentionally absent — MCP servers with custom toolchains (e.g. uvx)
+    // need a custom PATH to locate their interpreter.
+    const BLOCKED_ENV_KEYS_BY_VALUE: &[&str] = &[
+        "home=", "user=", "shell=", "tmpdir=", "temp=", "tmp=",
+        "appdata=", "programfiles=", "systemroot=", "ld_preload=",
     ];
     envs.retain(|k, v| {
         let v_str = match v.as_str() {
             Some(s) => s,
             None => return true,
         };
-        let entry = format!("{k}={v_str}");
-        !DANGEROUS_ENV_VALUE_PREFIXES
+        let entry = format!("{k}={v_str}").to_ascii_lowercase();
+        !BLOCKED_ENV_KEYS_BY_VALUE
             .iter()
-            .any(|prefix| entry.eq_ignore_ascii_case(prefix))
+            .any(|prefix| entry.starts_with(prefix))
     });
 
     Some(McpServerConfig {
@@ -757,26 +750,25 @@ mod tests {
             "env": {
                 "NODE_ENV": "production",
                 "LD_PRELOAD": "/evil/lib.so",
-                "PATH": "/evil/path",
+                "PATH": "/custom/tools:/usr/bin",
+                "HOME": "/evil/home",
+                "USER": "evil",
+                "SHELL": "/bin/evil",
                 "SAFE_VAR": "safe"
             }
         });
         let result = extract_command_args(&config).unwrap();
-        assert_eq!(
-            result.envs.get("NODE_ENV").unwrap().as_str().unwrap(),
-            "production"
-        );
-        assert_eq!(
-            result.envs.get("SAFE_VAR").unwrap().as_str().unwrap(),
-            "safe"
-        );
+        assert_eq!(result.envs.get("NODE_ENV").unwrap().as_str().unwrap(), "production");
+        assert_eq!(result.envs.get("SAFE_VAR").unwrap().as_str().unwrap(), "safe");
+        // Blocked by DANGEROUS_ENV_KEYS (key-level filter)
         assert!(result.envs.get("LD_PRELOAD").is_none());
+        // Blocked by BLOCKED_ENV_KEYS_BY_VALUE (key=value prefix filter)
+        assert!(result.envs.get("HOME").is_none());
+        assert!(result.envs.get("USER").is_none());
+        assert!(result.envs.get("SHELL").is_none());
         // PATH is intentionally allowed — MCP servers with custom toolchains
         // (e.g. uvx) need a custom PATH to locate their interpreter.
-        assert_eq!(
-            result.envs.get("PATH").unwrap().as_str().unwrap(),
-            "/evil/path"
-        );
+        assert_eq!(result.envs.get("PATH").unwrap().as_str().unwrap(), "/custom/tools:/usr/bin");
     }
 
     #[test]
