@@ -704,9 +704,7 @@ async fn try_anthropic_fallback(
 type StreamsCleanup = Option<(
     String,
     std::sync::Arc<
-        tokio::sync::Mutex<
-            std::collections::HashMap<String, tokio::sync::oneshot::Sender<()>>,
-        >,
+        tokio::sync::Mutex<std::collections::HashMap<String, tokio::sync::oneshot::Sender<()>>>,
     >,
 )>;
 
@@ -758,6 +756,10 @@ fn build_streaming_response(
         let mut chunk_count: usize = 0;
         let mut patched_lines_logged: usize = 0;
         let mut line_buffer = String::new();
+        // Per-stream patcher state: tracks whether we're inside a reasoning
+        // block (so we know when to emit </think>) and whether we're inside
+        // a DeepSeek tool-call body (so we can buffer until the end marker).
+        let mut patcher = SseStreamPatcher::new();
 
         let mut abort_rx = abort_rx;
         loop {
@@ -812,7 +814,7 @@ fn build_streaming_response(
                     let mut out = String::with_capacity(line_buffer.len());
                     while let Some(newline_idx) = line_buffer.find('\n') {
                         let line: String = line_buffer.drain(..=newline_idx).collect();
-                        let patched = patch_sse_line(&line);
+                        let patched = patcher.patch_line(&line);
                         if patched_lines_logged < 3
                             && patched != line
                             && patched.trim_start().starts_with("data:")
@@ -845,7 +847,7 @@ fn build_streaming_response(
         }
 
         if !line_buffer.is_empty() {
-            let tail = patch_sse_line(&line_buffer);
+            let tail = patcher.patch_line(&line_buffer);
             let _ = sender.send_data(hyper::body::Bytes::from(tail)).await;
         }
 
@@ -908,11 +910,9 @@ async fn check_upstream_not_ssrf(url: &str) -> Result<(), String> {
             for addr in addrs {
                 let ip = addr.ip();
                 if !ip.is_loopback() && is_private_ip(ip) {
-                    return Err(
-                        "Upstream URL resolves to an internal or private address; \
+                    return Err("Upstream URL resolves to an internal or private address; \
                          request blocked (possible DNS rebinding)"
-                            .to_string(),
-                    );
+                        .to_string());
                 }
             }
         }
@@ -954,7 +954,8 @@ pub(super) async fn dispatch_to_upstream<R: tauri::Runtime>(
         .get("x-ax-stream-id")
         .and_then(|v| v.to_str().ok())
         .map(ToOwned::to_owned);
-    let mut abort_rx: Option<tokio::sync::oneshot::Receiver<()>> = if let Some(ref sid) = stream_id {
+    let mut abort_rx: Option<tokio::sync::oneshot::Receiver<()>> = if let Some(ref sid) = stream_id
+    {
         let (tx, rx) = tokio::sync::oneshot::channel::<()>();
         let state = app_handle.state::<crate::core::state::AppState>();
         let mut streams = state.active_streams.lock().await;
@@ -1071,15 +1072,23 @@ pub(super) async fn dispatch_to_upstream<R: tauri::Runtime>(
                         .await
                         {
                             if let Some(ref sid) = stream_id {
-                                app_handle.state::<crate::core::state::AppState>()
-                                    .active_streams.lock().await.remove(sid);
+                                app_handle
+                                    .state::<crate::core::state::AppState>()
+                                    .active_streams
+                                    .lock()
+                                    .await
+                                    .remove(sid);
                             }
                             return result;
                         }
 
                         if let Some(ref sid) = stream_id {
-                            app_handle.state::<crate::core::state::AppState>()
-                                .active_streams.lock().await.remove(sid);
+                            app_handle
+                                .state::<crate::core::state::AppState>()
+                                .active_streams
+                                .lock()
+                                .await
+                                .remove(sid);
                         }
                         return Ok(error_response(
                             status,
@@ -1097,8 +1106,12 @@ pub(super) async fn dispatch_to_upstream<R: tauri::Runtime>(
                     );
 
                     if let Some(ref sid) = stream_id {
-                        app_handle.state::<crate::core::state::AppState>()
-                            .active_streams.lock().await.remove(sid);
+                        app_handle
+                            .state::<crate::core::state::AppState>()
+                            .active_streams
+                            .lock()
+                            .await
+                            .remove(sid);
                     }
                     return Ok(error_response(
                         status,
@@ -1146,79 +1159,379 @@ pub(super) async fn dispatch_to_upstream<R: tauri::Runtime>(
     }
 }
 
-/// Patch a single SSE line in-place before forwarding to the client.
-///
-/// Non-`data:` lines and malformed JSON pass through untouched.
-fn patch_sse_line(line: &str) -> String {
-    // Preserve non-data lines (event:, id:, retry:, blank lines) verbatim.
-    let trimmed = line.trim_start();
-    if !trimmed.starts_with("data:") {
-        return line.to_string();
-    }
-    let (prefix_ws_len, _) = line
-        .char_indices()
-        .find(|(_, c)| !c.is_whitespace())
-        .unwrap_or((0, ' '));
-    let prefix = &line[..prefix_ws_len];
+// DeepSeek-R1 (and other models using the same chat template) emit tool calls
+// as text using these special tokens. Each `｜` is U+FF5C FULLWIDTH VERTICAL LINE.
+const DS_TOOL_CALLS_BEGIN: &str = "<\u{ff5c}tool calls begin\u{ff5c}>";
+const DS_TOOL_CALLS_END: &str = "<\u{ff5c}tool calls end\u{ff5c}>";
+const DS_TOOL_CALL_BEGIN: &str = "<\u{ff5c}tool call begin\u{ff5c}>";
+const DS_TOOL_CALL_END: &str = "<\u{ff5c}tool call end\u{ff5c}>";
+const DS_TOOL_SEP: &str = "<\u{ff5c}tool sep\u{ff5c}>";
 
-    // Strip "data:" and any whitespace after it, but remember line ending.
-    let after_data = &trimmed[5..];
-    let (payload_str, trailing_newline) = match after_data.strip_suffix("\r\n") {
-        Some(s) => (s.trim_start(), "\r\n"),
-        None => match after_data.strip_suffix('\n') {
-            Some(s) => (s.trim_start(), "\n"),
-            None => (after_data.trim_start(), ""),
-        },
-    };
-    // Sentinel [DONE] passes through unchanged.
-    if payload_str == "[DONE]" {
-        return line.to_string();
+/// Per-stream state for patching SSE lines.
+///
+/// Responsibilities:
+/// 1. Wrap `reasoning_content` / `reasoning` deltas in `<think>...</think>` so
+///    the frontend's existing reasoning extractor can render them in a
+///    collapsible block instead of leaking raw chain-of-thought as visible text.
+/// 2. Detect DeepSeek-style tool calls emitted as text (using fullwidth
+///    `<｜tool calls begin｜>...<｜tool calls end｜>` markers), parse them, and
+///    emit them as proper OpenAI-format `tool_calls` deltas that the Vercel AI
+///    SDK can dispatch.
+///
+/// Lines that don't match either pattern pass through unchanged.
+pub(super) struct SseStreamPatcher {
+    /// True while we have emitted a `<think>` opener but not yet a closer.
+    reasoning_active: bool,
+    /// True while we are between `<｜tool calls begin｜>` and `<｜tool calls end｜>`.
+    in_tool_calls: bool,
+    /// Buffered tool-call body text (everything between begin and end markers).
+    tool_calls_buffer: String,
+    /// Index for assigning ids to parsed tool calls within this stream.
+    next_tool_call_index: usize,
+}
+
+impl SseStreamPatcher {
+    pub(super) fn new() -> Self {
+        Self {
+            reasoning_active: false,
+            in_tool_calls: false,
+            tool_calls_buffer: String::new(),
+            next_tool_call_index: 0,
+        }
     }
-    // Parse JSON; on failure, pass through.
-    let mut value: serde_json::Value = match serde_json::from_str(payload_str) {
-        Ok(v) => v,
-        Err(_) => return line.to_string(),
-    };
-    let choices = match value.get_mut("choices").and_then(|c| c.as_array_mut()) {
-        Some(c) => c,
-        None => return line.to_string(),
-    };
-    let mut changed = false;
-    for choice in choices.iter_mut() {
-        let delta = match choice.get_mut("delta").and_then(|d| d.as_object_mut()) {
-            Some(d) => d,
-            None => continue,
+
+    /// Patch a single SSE line in-place before forwarding to the client.
+    ///
+    /// Non-`data:` lines and malformed JSON pass through untouched.
+    pub(super) fn patch_line(&mut self, line: &str) -> String {
+        // Preserve non-data lines (event:, id:, retry:, blank lines) verbatim.
+        let trimmed = line.trim_start();
+        if !trimmed.starts_with("data:") {
+            return line.to_string();
+        }
+        let (prefix_ws_len, _) = line
+            .char_indices()
+            .find(|(_, c)| !c.is_whitespace())
+            .unwrap_or((0, ' '));
+        let prefix = &line[..prefix_ws_len];
+
+        // Strip "data:" and any whitespace after it, but remember line ending.
+        let after_data = &trimmed[5..];
+        let (payload_str, trailing_newline) = match after_data.strip_suffix("\r\n") {
+            Some(s) => (s.trim_start(), "\r\n"),
+            None => match after_data.strip_suffix('\n') {
+                Some(s) => (s.trim_start(), "\n"),
+                None => (after_data.trim_start(), ""),
+            },
         };
-        let has_visible_content = delta
-            .get("content")
-            .and_then(|content| content.as_str())
-            .is_some_and(|content| !content.is_empty());
-        if !has_visible_content {
-            let reasoning_fallback = delta
-                .get("reasoning_content")
-                .and_then(|content| content.as_str())
-                .or_else(|| delta.get("reasoning").and_then(|content| content.as_str()))
-                .filter(|content| !content.is_empty())
-                .map(ToOwned::to_owned);
-            if let Some(content) = reasoning_fallback {
-                delta.insert("content".to_string(), serde_json::Value::String(content));
+        // Sentinel [DONE] passes through unchanged.
+        if payload_str == "[DONE]" {
+            return line.to_string();
+        }
+        // Parse JSON; on failure, pass through.
+        let mut value: serde_json::Value = match serde_json::from_str(payload_str) {
+            Ok(v) => v,
+            Err(_) => return line.to_string(),
+        };
+        let choices = match value.get_mut("choices").and_then(|c| c.as_array_mut()) {
+            Some(c) => c,
+            None => return line.to_string(),
+        };
+        let mut changed = false;
+        for choice in choices.iter_mut() {
+            // First: extract any reasoning text and wrap it in <think> tags so
+            // the frontend extractor catches it. This must run before the tool-call
+            // logic because reasoning is in a separate field and never contains
+            // tool-call markers.
+            if self.apply_reasoning_wrap(choice) {
                 changed = true;
             }
+            // Then: process the `content` field for DeepSeek tool-call markers
+            // and convert them to structured `tool_calls`.
+            if self.apply_tool_call_parsing(choice) {
+                changed = true;
+            }
+            // If the stream is finishing (finish_reason set) and reasoning is
+            // still open, close it so the frontend regex matches the full block.
+            if self.reasoning_active
+                && choice
+                    .get("finish_reason")
+                    .map(|v| !v.is_null())
+                    .unwrap_or(false)
+            {
+                let delta = choice.get_mut("delta").and_then(|d| d.as_object_mut());
+                if let Some(delta) = delta {
+                    let existing = delta
+                        .get("content")
+                        .and_then(|c| c.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let closed = format!("{existing}</think>");
+                    delta.insert("content".to_string(), serde_json::Value::String(closed));
+                    self.reasoning_active = false;
+                    changed = true;
+                }
+            }
         }
+        if !changed {
+            return line.to_string();
+        }
+        let Ok(new_payload) = serde_json::to_string(&value) else {
+            return line.to_string();
+        };
+        format!("{prefix}data: {new_payload}{trailing_newline}")
+    }
+
+    /// Convert `reasoning_content` / `reasoning` deltas to inline `<think>` blocks
+    /// in the `content` field. Returns true if the delta was modified.
+    ///
+    /// State machine:
+    /// - First reasoning chunk: emit `<think>` + reasoning text, set active=true.
+    /// - Subsequent reasoning chunks: emit reasoning text plain (already inside think block).
+    /// - First content chunk after reasoning: prepend `</think>` to content, set active=false.
+    fn apply_reasoning_wrap(&mut self, choice: &mut serde_json::Value) -> bool {
+        let Some(delta) = choice.get_mut("delta").and_then(|d| d.as_object_mut()) else {
+            return false;
+        };
+        let mut changed = false;
+        let reasoning_text = delta
+            .get("reasoning_content")
+            .and_then(|v| v.as_str())
+            .or_else(|| delta.get("reasoning").and_then(|v| v.as_str()))
+            .filter(|s| !s.is_empty())
+            .map(ToOwned::to_owned);
+        let content_text = delta
+            .get("content")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(ToOwned::to_owned);
+
+        // Always strip the reasoning fields from the outgoing delta.
         if delta.remove("reasoning_content").is_some() {
             changed = true;
         }
         if delta.remove("reasoning").is_some() {
             changed = true;
         }
+
+        match (reasoning_text, content_text) {
+            (Some(r), None) => {
+                // Reasoning chunk with no visible content.
+                let wrapped = if self.reasoning_active {
+                    r
+                } else {
+                    self.reasoning_active = true;
+                    format!("<think>{r}")
+                };
+                delta.insert("content".to_string(), serde_json::Value::String(wrapped));
+                changed = true;
+            }
+            (Some(r), Some(c)) => {
+                // Reasoning + content in same delta (unusual but possible).
+                // Open think (if needed), then close before the content.
+                let opener = if self.reasoning_active {
+                    String::new()
+                } else {
+                    self.reasoning_active = true;
+                    "<think>".to_string()
+                };
+                self.reasoning_active = false;
+                let merged = format!("{opener}{r}</think>{c}");
+                delta.insert("content".to_string(), serde_json::Value::String(merged));
+                changed = true;
+            }
+            (None, Some(c)) if self.reasoning_active => {
+                // Transition from reasoning to visible content — close the block.
+                self.reasoning_active = false;
+                let closed = format!("</think>{c}");
+                delta.insert("content".to_string(), serde_json::Value::String(closed));
+                changed = true;
+            }
+            _ => {}
+        }
+        changed
     }
-    if !changed {
-        return line.to_string();
+
+    /// Detect DeepSeek-format tool calls in the `content` field and convert them
+    /// to OpenAI-format `tool_calls` deltas. Returns true if the delta was
+    /// modified.
+    ///
+    /// Spans multiple deltas: state is held in `self.in_tool_calls` and
+    /// `self.tool_calls_buffer`. When the closing marker arrives, the buffer is
+    /// parsed and emitted as a single `delta.tool_calls` array.
+    fn apply_tool_call_parsing(&mut self, choice: &mut serde_json::Value) -> bool {
+        let Some(delta) = choice.get_mut("delta").and_then(|d| d.as_object_mut()) else {
+            return false;
+        };
+        let Some(content) = delta
+            .get("content")
+            .and_then(|v| v.as_str())
+            .map(ToOwned::to_owned)
+        else {
+            return false;
+        };
+        if content.is_empty() && !self.in_tool_calls {
+            return false;
+        }
+
+        // Process the content text against the state machine. The remaining
+        // visible content is what should stay in delta.content; tool calls (if
+        // any) are returned separately.
+        let (visible, parsed_calls) = self.process_content_text(&content);
+
+        let mut changed = false;
+        if visible != content {
+            if visible.is_empty() {
+                // Suppress entirely rather than emitting an empty-content delta.
+                // Mid-stream chunks of a tool-call body should produce no visible
+                // content at all so the AI SDK doesn't misinterpret them as a
+                // pause in the assistant's text stream.
+                delta.remove("content");
+            } else {
+                delta.insert("content".to_string(), serde_json::Value::String(visible));
+            }
+            changed = true;
+        }
+        if !parsed_calls.is_empty() {
+            delta.insert(
+                "tool_calls".to_string(),
+                serde_json::Value::Array(parsed_calls),
+            );
+            changed = true;
+        }
+        changed
     }
-    let Ok(new_payload) = serde_json::to_string(&value) else {
-        return line.to_string();
+
+    /// Drive the content text through the tool-call state machine.
+    /// Returns (visible_content_to_emit, parsed_tool_calls).
+    fn process_content_text(&mut self, content: &str) -> (String, Vec<serde_json::Value>) {
+        let mut visible = String::new();
+        let mut parsed: Vec<serde_json::Value> = Vec::new();
+        let mut remaining = content;
+
+        loop {
+            if self.in_tool_calls {
+                // Look for end marker.
+                if let Some(end_idx) = remaining.find(DS_TOOL_CALLS_END) {
+                    self.tool_calls_buffer.push_str(&remaining[..end_idx]);
+                    let buffered = std::mem::take(&mut self.tool_calls_buffer);
+                    let calls =
+                        parse_deepseek_tool_call_body(&buffered, &mut self.next_tool_call_index);
+                    parsed.extend(calls);
+                    self.in_tool_calls = false;
+                    remaining = &remaining[end_idx + DS_TOOL_CALLS_END.len()..];
+                    continue;
+                } else {
+                    // No end marker yet; buffer everything and stop.
+                    self.tool_calls_buffer.push_str(remaining);
+                    break;
+                }
+            } else {
+                // Look for begin marker.
+                if let Some(begin_idx) = remaining.find(DS_TOOL_CALLS_BEGIN) {
+                    visible.push_str(&remaining[..begin_idx]);
+                    self.in_tool_calls = true;
+                    remaining = &remaining[begin_idx + DS_TOOL_CALLS_BEGIN.len()..];
+                    continue;
+                } else {
+                    visible.push_str(remaining);
+                    break;
+                }
+            }
+        }
+        (visible, parsed)
+    }
+}
+
+/// Parse the body between `<｜tool calls begin｜>` and `<｜tool calls end｜>` into
+/// OpenAI-format tool_call objects.
+///
+/// Each call is structured as:
+///   `<｜tool call begin｜>function<｜tool sep｜>{name}\n```json\n{args}\n```\n<｜tool call end｜>`
+///
+/// The parser is tolerant: missing fences are OK, missing `function` prefix is OK,
+/// and unparsable JSON args become a string passthrough so the AI SDK can still
+/// surface them rather than dropping the call entirely.
+fn parse_deepseek_tool_call_body(body: &str, next_index: &mut usize) -> Vec<serde_json::Value> {
+    let mut calls: Vec<serde_json::Value> = Vec::new();
+    let mut cursor = body;
+    while let Some(begin_pos) = cursor.find(DS_TOOL_CALL_BEGIN) {
+        let after_begin = &cursor[begin_pos + DS_TOOL_CALL_BEGIN.len()..];
+        let (call_text, rest) = match after_begin.find(DS_TOOL_CALL_END) {
+            Some(end_pos) => (
+                &after_begin[..end_pos],
+                &after_begin[end_pos + DS_TOOL_CALL_END.len()..],
+            ),
+            // Unterminated — take everything that's left and stop.
+            None => (after_begin, ""),
+        };
+
+        if let Some(call) = parse_single_deepseek_tool_call(call_text, *next_index) {
+            calls.push(call);
+            *next_index += 1;
+        }
+
+        cursor = rest;
+    }
+    calls
+}
+
+fn parse_single_deepseek_tool_call(text: &str, index: usize) -> Option<serde_json::Value> {
+    // Format: "function<｜tool sep｜>{name}\n[optional ```json ...```]\n{args}"
+    // Some models omit the "function" prefix; tolerate both.
+    let (name_and_args, _has_function_prefix) = match text.find(DS_TOOL_SEP) {
+        Some(sep) => (&text[sep + DS_TOOL_SEP.len()..], true),
+        None => (text, false),
     };
-    format!("{prefix}data: {new_payload}{trailing_newline}")
+    let trimmed = name_and_args.trim_start();
+    // Name runs up to first newline.
+    let (name, after_name) = match trimmed.find('\n') {
+        Some(idx) => (trimmed[..idx].trim(), &trimmed[idx + 1..]),
+        None => (trimmed.trim(), ""),
+    };
+    if name.is_empty() {
+        return None;
+    }
+    // Extract args: strip an optional ```json ... ``` fence and trim.
+    let args_text = extract_fenced_or_plain(after_name);
+    let args_string = if args_text.trim().is_empty() {
+        "{}".to_string()
+    } else {
+        // Try to parse as JSON; if it parses, re-serialize compactly so the
+        // arguments field is always a clean JSON string. If it doesn't,
+        // pass the raw string through so the AI SDK can attempt downstream.
+        match serde_json::from_str::<serde_json::Value>(args_text.trim()) {
+            Ok(v) => serde_json::to_string(&v).unwrap_or_else(|_| args_text.trim().to_string()),
+            Err(_) => args_text.trim().to_string(),
+        }
+    };
+
+    Some(serde_json::json!({
+        "index": index,
+        "id": format!("call_ds_{index}"),
+        "type": "function",
+        "function": {
+            "name": name,
+            "arguments": args_string,
+        }
+    }))
+}
+
+/// Pull JSON out of either a fenced code block (```json ... ``` or ``` ... ```)
+/// or return the raw text as-is.
+fn extract_fenced_or_plain(text: &str) -> &str {
+    let trimmed = text.trim_start();
+    if let Some(after_fence) = trimmed
+        .strip_prefix("```json")
+        .or_else(|| trimmed.strip_prefix("```"))
+    {
+        let after = after_fence.trim_start_matches('\n');
+        if let Some(end) = after.find("```") {
+            return &after[..end];
+        }
+        return after;
+    }
+    text
 }
 
 #[cfg(test)]
@@ -1500,5 +1813,247 @@ mod tests {
             "/models",
             r#"{"detail":"model test not loaded; loaded=[]"}"#,
         ));
+    }
+
+    // --- SseStreamPatcher tests ---------------------------------------------
+    //
+    // Helpers and constants kept local to the test module so they don't appear
+    // in the main API surface.
+
+    fn parse_data_line(line: &str) -> serde_json::Value {
+        let trimmed = line.trim_end_matches(|c: char| c == '\n' || c == '\r');
+        let after = trimmed
+            .trim_start()
+            .strip_prefix("data:")
+            .unwrap()
+            .trim_start();
+        serde_json::from_str(after).expect("valid JSON after data:")
+    }
+
+    fn data_line(content: &str) -> String {
+        format!("data: {content}\n")
+    }
+
+    fn delta_with(payload: serde_json::Value) -> String {
+        let body = serde_json::json!({
+            "choices": [{ "delta": payload }]
+        });
+        data_line(&body.to_string())
+    }
+
+    #[test]
+    fn patcher_non_data_lines_pass_through() {
+        let mut p = SseStreamPatcher::new();
+        assert_eq!(p.patch_line("event: ping\n"), "event: ping\n");
+        assert_eq!(p.patch_line(": comment\n"), ": comment\n");
+        assert_eq!(p.patch_line("\n"), "\n");
+    }
+
+    #[test]
+    fn patcher_done_sentinel_passes_through() {
+        let mut p = SseStreamPatcher::new();
+        assert_eq!(p.patch_line("data: [DONE]\n"), "data: [DONE]\n");
+    }
+
+    #[test]
+    fn patcher_plain_content_unchanged() {
+        let mut p = SseStreamPatcher::new();
+        let line = delta_with(serde_json::json!({ "content": "Hello world" }));
+        assert_eq!(p.patch_line(&line), line);
+    }
+
+    #[test]
+    fn patcher_wraps_reasoning_content_in_think_tags() {
+        let mut p = SseStreamPatcher::new();
+        // Chunk 1: reasoning only
+        let line1 = delta_with(serde_json::json!({ "reasoning_content": "Let me think." }));
+        let patched1 = p.patch_line(&line1);
+        let parsed1 = parse_data_line(&patched1);
+        assert_eq!(
+            parsed1["choices"][0]["delta"]["content"],
+            "<think>Let me think."
+        );
+        assert!(parsed1["choices"][0]["delta"]
+            .get("reasoning_content")
+            .is_none());
+
+        // Chunk 2: more reasoning (no opener)
+        let line2 = delta_with(serde_json::json!({ "reasoning_content": " More thinking." }));
+        let patched2 = p.patch_line(&line2);
+        let parsed2 = parse_data_line(&patched2);
+        assert_eq!(parsed2["choices"][0]["delta"]["content"], " More thinking.");
+
+        // Chunk 3: real content — should prepend </think>
+        let line3 = delta_with(serde_json::json!({ "content": "Hello!" }));
+        let patched3 = p.patch_line(&line3);
+        let parsed3 = parse_data_line(&patched3);
+        assert_eq!(parsed3["choices"][0]["delta"]["content"], "</think>Hello!");
+
+        // Chunk 4: more content — no extra closer.
+        let line4 = delta_with(serde_json::json!({ "content": " More text." }));
+        let patched4 = p.patch_line(&line4);
+        let parsed4 = parse_data_line(&patched4);
+        assert_eq!(parsed4["choices"][0]["delta"]["content"], " More text.");
+    }
+
+    #[test]
+    fn patcher_closes_reasoning_on_finish_reason() {
+        let mut p = SseStreamPatcher::new();
+        let r = delta_with(serde_json::json!({ "reasoning_content": "alone" }));
+        p.patch_line(&r);
+
+        let finish = data_line(r#"{"choices":[{"delta":{},"finish_reason":"stop"}]}"#);
+        let patched = p.patch_line(&finish);
+        let parsed = parse_data_line(&patched);
+        assert_eq!(parsed["choices"][0]["delta"]["content"], "</think>");
+        assert_eq!(parsed["choices"][0]["finish_reason"], "stop");
+    }
+
+    #[test]
+    fn patcher_strips_reasoning_field_alias() {
+        // Some providers use `reasoning` instead of `reasoning_content`.
+        let mut p = SseStreamPatcher::new();
+        let line = delta_with(serde_json::json!({ "reasoning": "alt field" }));
+        let patched = p.patch_line(&line);
+        let parsed = parse_data_line(&patched);
+        assert_eq!(parsed["choices"][0]["delta"]["content"], "<think>alt field");
+        assert!(parsed["choices"][0]["delta"].get("reasoning").is_none());
+    }
+
+    #[test]
+    fn patcher_detects_deepseek_tool_call_in_single_delta() {
+        let mut p = SseStreamPatcher::new();
+        let body = format!(
+            "Some prefix {begin}{call_begin}function{sep}web_search\n```json\n{{\"q\":\"hello\"}}\n```{call_end}{end} Some suffix",
+            begin = DS_TOOL_CALLS_BEGIN,
+            call_begin = DS_TOOL_CALL_BEGIN,
+            sep = DS_TOOL_SEP,
+            call_end = DS_TOOL_CALL_END,
+            end = DS_TOOL_CALLS_END,
+        );
+        let line = delta_with(serde_json::json!({ "content": body }));
+        let patched = p.patch_line(&line);
+        let parsed = parse_data_line(&patched);
+        let delta = &parsed["choices"][0]["delta"];
+        // Visible content preserves the prefix and suffix, drops the tool-call block.
+        assert_eq!(delta["content"], "Some prefix  Some suffix");
+        // tool_calls populated with structured function.
+        let calls = delta["tool_calls"].as_array().expect("tool_calls array");
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0]["type"], "function");
+        assert_eq!(calls[0]["function"]["name"], "web_search");
+        let args: serde_json::Value =
+            serde_json::from_str(calls[0]["function"]["arguments"].as_str().unwrap()).unwrap();
+        assert_eq!(args["q"], "hello");
+        assert!(calls[0]["id"].as_str().unwrap().starts_with("call_ds_"));
+    }
+
+    #[test]
+    fn patcher_handles_deepseek_tool_call_across_chunks() {
+        let mut p = SseStreamPatcher::new();
+        // Begin in chunk 1
+        let l1 = delta_with(serde_json::json!({
+            "content": format!("Thinking. {}", DS_TOOL_CALLS_BEGIN)
+        }));
+        let p1 = parse_data_line(&p.patch_line(&l1));
+        assert_eq!(p1["choices"][0]["delta"]["content"], "Thinking. ");
+        assert!(p1["choices"][0]["delta"].get("tool_calls").is_none());
+
+        // Body in chunk 2 (function name + args)
+        let l2 = delta_with(serde_json::json!({
+            "content": format!(
+                "{}function{}fabric_search\n",
+                DS_TOOL_CALL_BEGIN, DS_TOOL_SEP
+            )
+        }));
+        let p2 = parse_data_line(&p.patch_line(&l2));
+        // Content should be empty (suppressed) and no tool_calls yet.
+        assert_eq!(p2["choices"][0]["delta"].get("content"), None);
+        assert!(p2["choices"][0]["delta"].get("tool_calls").is_none());
+
+        // Body in chunk 3 (more args)
+        let l3 = delta_with(serde_json::json!({
+            "content": "```json\n{\"query\":\"x\"}\n```"
+        }));
+        let _ = p.patch_line(&l3);
+
+        // End in chunk 4
+        let l4 = delta_with(serde_json::json!({
+            "content": format!("{}{} Done.", DS_TOOL_CALL_END, DS_TOOL_CALLS_END)
+        }));
+        let p4 = parse_data_line(&p.patch_line(&l4));
+        assert_eq!(p4["choices"][0]["delta"]["content"], " Done.");
+        let calls = p4["choices"][0]["delta"]["tool_calls"]
+            .as_array()
+            .expect("tool_calls array");
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0]["function"]["name"], "fabric_search");
+        let args: serde_json::Value =
+            serde_json::from_str(calls[0]["function"]["arguments"].as_str().unwrap()).unwrap();
+        assert_eq!(args["query"], "x");
+    }
+
+    #[test]
+    fn patcher_handles_unfenced_args() {
+        // Some local llamacpp builds emit args without ```json fences.
+        let mut p = SseStreamPatcher::new();
+        let body = format!(
+            "{begin}{call_begin}function{sep}list_files\n{{\"path\":\"/\"}}\n{call_end}{end}",
+            begin = DS_TOOL_CALLS_BEGIN,
+            call_begin = DS_TOOL_CALL_BEGIN,
+            sep = DS_TOOL_SEP,
+            call_end = DS_TOOL_CALL_END,
+            end = DS_TOOL_CALLS_END,
+        );
+        let line = delta_with(serde_json::json!({ "content": body }));
+        let parsed = parse_data_line(&p.patch_line(&line));
+        let calls = parsed["choices"][0]["delta"]["tool_calls"]
+            .as_array()
+            .expect("tool_calls array");
+        assert_eq!(calls[0]["function"]["name"], "list_files");
+        let args: serde_json::Value =
+            serde_json::from_str(calls[0]["function"]["arguments"].as_str().unwrap()).unwrap();
+        assert_eq!(args["path"], "/");
+    }
+
+    #[test]
+    fn patcher_handles_multiple_tool_calls_in_one_block() {
+        let mut p = SseStreamPatcher::new();
+        let body = format!(
+            "{begin}\
+             {call_begin}function{sep}a\n{{\"x\":1}}\n{call_end}\
+             {call_begin}function{sep}b\n{{\"y\":2}}\n{call_end}\
+             {end}",
+            begin = DS_TOOL_CALLS_BEGIN,
+            call_begin = DS_TOOL_CALL_BEGIN,
+            sep = DS_TOOL_SEP,
+            call_end = DS_TOOL_CALL_END,
+            end = DS_TOOL_CALLS_END,
+        );
+        let line = delta_with(serde_json::json!({ "content": body }));
+        let parsed = parse_data_line(&p.patch_line(&line));
+        let calls = parsed["choices"][0]["delta"]["tool_calls"]
+            .as_array()
+            .expect("tool_calls array");
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[0]["function"]["name"], "a");
+        assert_eq!(calls[0]["index"], 0);
+        assert_eq!(calls[1]["function"]["name"], "b");
+        assert_eq!(calls[1]["index"], 1);
+    }
+
+    #[test]
+    fn patcher_passes_existing_openai_tool_calls_unchanged() {
+        // A delta that already has structured tool_calls should not be perturbed.
+        let mut p = SseStreamPatcher::new();
+        let line = delta_with(serde_json::json!({
+            "tool_calls": [{
+                "index": 0,
+                "id": "call_xyz",
+                "type": "function",
+                "function": { "name": "foo", "arguments": "{\"a\":1}" }
+            }]
+        }));
+        assert_eq!(p.patch_line(&line), line);
     }
 }
