@@ -3,6 +3,7 @@ pub mod downloads;
 pub mod extensions;
 pub mod filesystem;
 pub mod mcp;
+pub mod mlx;
 pub mod research;
 pub mod server;
 pub mod setup;

@@ -527,6 +527,28 @@ export class ModelFactory {
     const openAIParams = toOpenAIParams(parameters)
     const providerName = provider.provider.toLowerCase()
 
+    // The `mlx` provider runs MLX inference in-process via ax-engine-sdk —
+    // there's no HTTP server to POST to. Substitute the network fetch with a
+    // shim that dispatches each chat-completion request through Tauri IPC
+    // (`mlx_chat_stream` / `mlx_chat_completion`) and re-emits the result as
+    // OpenAI-compatible JSON / SSE. The upstream Vercel AI SDK is none the
+    // wiser. The proxy registry / Bearer-auth bookkeeping below is skipped
+    // because nothing leaves this process.
+    if (providerName === 'mlx') {
+      const { createMlxIpcFetch } = await import('./mlx-ipc-fetch')
+      const mlxFetch = createMlxIpcFetch()
+      const mlxModel = createOpenAICompatible({
+        name: providerName,
+        // baseURL is required by the SDK but unused — every request is
+        // intercepted by mlxFetch before it would be sent.
+        baseURL: 'tauri-ipc://mlx/v1',
+        headers: {},
+        includeUsage: true,
+        fetch: mlxFetch,
+      })
+      return mlxModel.languageModel(modelId)
+    }
+
     // Normalize non-standard streaming SSE responses from various providers.
     // Applied to all providers since the proxy passes streaming bytes through unchanged.
     const baseFetch = createStreamingPatchFetch(httpFetch)

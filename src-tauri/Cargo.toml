@@ -134,6 +134,19 @@ nix = { workspace = true }
 libc = { workspace = true }
 windows-sys = { version = "0.60.2", features = ["Win32_Storage_FileSystem"] }
 
+# ── In-process AX Engine SDK (macOS-only native MLX runtime) ─────────────────
+# Linking ax-engine-sdk with the `mlx-native` feature pulls in ax-engine-mlx
+# and mlx-sys, which require Apple's MLX C++ library and the Metal toolchain.
+# Currently a path dep on the developer's local ax-engine checkout; switch to
+# a git rev for CI/builds on other machines.
+[target.'cfg(target_os = "macos")'.dependencies]
+ax-engine-sdk = { path = "/Users/devop/code/ax-engine/crates/ax-engine-sdk", features = ["mlx-native", "tokenizer"] }
+# Direct `tokenizers` dep so we can decode generated token ids back to text —
+# EngineTokenizer (from ax-engine-sdk) only exposes `encode`. The SDK already
+# pulls this in transitively with matching features; declared here so we can
+# call it without going through the SDK wrapper.
+tokenizers = { version = "0.20", default-features = false, features = ["onig", "esaxx_fast"] }
+
 # Release profile optimizations for minimal binary size
 [profile.release]
 opt-level = "z"     # Optimize for size

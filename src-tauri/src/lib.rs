@@ -32,7 +32,7 @@ pub fn run() {
 
     let app_builder = app_builder.invoke_handler(commands::desktop_handlers!());
 
-    let app = app_builder
+    let app_builder = app_builder
         .manage(AppState {
             mcp_servers: Arc::new(Mutex::new(HashMap::new())),
             download_manager: Arc::new(Mutex::new(DownloadManagerState::default())),
@@ -49,7 +49,14 @@ pub fn run() {
             approved_save_paths: Arc::new(Mutex::new(std::collections::HashSet::new())),
             factory_reset_lock: Arc::new(Mutex::new(())),
             active_streams: Arc::new(Mutex::new(HashMap::new())),
-        })
+        });
+
+    // In-process MLX state (worker thread holding ax-engine-sdk EngineSessions).
+    // macOS-only — `ax-engine-mlx` doesn't build on other platforms.
+    #[cfg(target_os = "macos")]
+    let app_builder = app_builder.manage(crate::core::mlx::state::MlxState::new());
+
+    let app = app_builder
         .setup(|app| Ok(setup::app_setup(app)?))
         .build(tauri::generate_context!());
 

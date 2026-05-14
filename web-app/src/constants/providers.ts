@@ -279,40 +279,47 @@ export const predefinedProviders = [
         },
       },
     ],
+    // Model annotations track which entries currently round-trip cleanly
+    // through the in-process ax-engine-sdk path. All five live MLX models in
+    // the HF cache are exposed so the picker reflects what's installed; the
+    // descriptions tell the user which one to pick today vs. which ones are
+    // waiting on the upstream 4-bit slice fix (defai-digital/ax-engine#23).
     models: [
       {
-        id: 'mlx-community/Qwen3.5-9B-MLX-4bit',
-        name: 'Qwen3.5-9B MLX 4-bit',
+        id: 'mlx-community/Qwen3.6-35B-A3B-5bit',
+        name: 'Qwen3.6-35B-A3B MLX 5-bit (recommended)',
         version: '1.0',
-        description: 'Apple MLX 4-bit Qwen3.5-9B (in HF cache).',
+        description:
+          'Apple MLX 5-bit Qwen3.6-35B-A3B (in HF cache). Currently the only MLX model that round-trips through the in-process ax-engine SDK without hitting the upstream 4-bit slice bug — pick this one if you want native in-process MLX inference today.',
+        capabilities: ['completion', 'tools'],
+      },
+      {
+        id: 'mlx-community/Qwen3.5-9B-MLX-4bit',
+        name: 'Qwen3.5-9B MLX 4-bit (blocked: ax-engine#23)',
+        version: '1.0',
+        description:
+          'Apple MLX 4-bit Qwen3.5-9B dense + hybrid attention. Aborts the app process on prompts past ~20 tokens — defai-digital/ax-engine#23. Will start working as soon as the upstream slice fix lands; no code change needed here.',
         capabilities: ['completion', 'tools'],
       },
       {
         id: 'mlx-community/GLM-4.7-Flash-4bit',
-        name: 'GLM-4.7-Flash MLX 4-bit',
+        name: 'GLM-4.7-Flash MLX 4-bit (blocked: ax-engine#23)',
         version: '1.0',
-        description: 'Apple MLX 4-bit GLM-4.7-Flash MoE (in HF cache).',
+        description: 'Apple MLX 4-bit GLM-4.7-Flash MoE. Same 4-bit slice bug as Qwen3.5-9B above; blocked on ax-engine#23.',
         capabilities: ['completion', 'tools'],
       },
       {
         id: 'mlx-community/Qwen3.5-35B-A3B-4bit',
-        name: 'Qwen3.5-35B-A3B MLX 4-bit',
+        name: 'Qwen3.5-35B-A3B MLX 4-bit (degraded: empty output)',
         version: '1.0',
-        description: 'Apple MLX 4-bit Qwen3.5-35B-A3B (in HF cache).',
+        description: 'Apple MLX 4-bit Qwen3.5-35B-A3B MoE. Does not crash but generates empty / `|`-only responses; related upstream defect.',
         capabilities: ['completion', 'tools'],
       },
       {
         id: 'mlx-community/Qwen3.6-35B-A3B-4bit',
-        name: 'Qwen3.6-35B-A3B MLX 4-bit',
+        name: 'Qwen3.6-35B-A3B MLX 4-bit (blocked: ax-engine#23)',
         version: '1.0',
-        description: 'Apple MLX 4-bit Qwen3.6-35B-A3B (in HF cache).',
-        capabilities: ['completion', 'tools'],
-      },
-      {
-        id: 'mlx-community/Qwen3.6-35B-A3B-5bit',
-        name: 'Qwen3.6-35B-A3B MLX 5-bit',
-        version: '1.0',
-        description: 'Apple MLX 5-bit Qwen3.6-35B-A3B (in HF cache).',
+        description: 'Apple MLX 4-bit Qwen3.6-35B-A3B MoE. Crashes on the same 4-bit slice bug; will work post-upstream-fix.',
         capabilities: ['completion', 'tools'],
       },
     ],

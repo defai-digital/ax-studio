@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import ReactDOM from 'react-dom/client'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
+import { Channel, invoke } from '@tauri-apps/api/core'
 import {
   hideInitialLoader,
   patchBlobDownloads,
@@ -12,6 +13,16 @@ import { ensureCoreBridge } from '@/lib/bootstrap/core-bridge'
 import './index.css'
 
 ensureCoreBridge({ withEvents: true })
+
+// Dev convenience: expose the Tauri IPC primitives on `window.__ax` so dev
+// console snippets (and future debugging tools) can construct typed channels
+// and call commands without re-importing `@tauri-apps/api/core` from outside
+// the bundle. Bundle size cost is negligible — `Channel` and `invoke` are
+// already imported by the chat transport.
+;(window as unknown as { __ax?: { Channel: typeof Channel; invoke: typeof invoke } }).__ax = {
+  Channel,
+  invoke,
+}
 
 // Prevent files from opening when dropped
 const cleanupFileDropGuards = preventDefaultFileDrop()

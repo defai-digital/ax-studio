@@ -84,6 +84,19 @@ macro_rules! desktop_handlers {
             crate::core::research::commands::scrape_url,
             // Custom updater commands (desktop only)
             crate::core::updater::commands::check_for_app_updates,
+            // In-process MLX (ax-engine-sdk) — macOS only
+            #[cfg(target_os = "macos")]
+            crate::core::mlx::commands::mlx_runtime_probe,
+            #[cfg(target_os = "macos")]
+            crate::core::mlx::commands::mlx_load_model,
+            #[cfg(target_os = "macos")]
+            crate::core::mlx::commands::mlx_unload_model,
+            #[cfg(target_os = "macos")]
+            crate::core::mlx::commands::mlx_list_loaded,
+            #[cfg(target_os = "macos")]
+            crate::core::mlx::commands::mlx_chat_completion,
+            #[cfg(target_os = "macos")]
+            crate::core::mlx::commands::mlx_chat_stream,
         ]
     };
 }
