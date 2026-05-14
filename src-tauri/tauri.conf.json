@@ -31,10 +31,6 @@
         },
         "decorations": true,
         "titleBarStyle": "Overlay",
-        "windowEffects": {
-          "effects": ["fullScreenUI", "mica", "tabbed", "blur", "acrylic"],
-          "state": "active"
-        },
         "dragDropEnabled": false
       }
     ],
