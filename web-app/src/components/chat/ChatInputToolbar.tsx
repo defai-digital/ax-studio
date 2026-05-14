@@ -22,6 +22,7 @@ import {
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ArrowUp, Atom, Binary, Brain, Database, ImagePlus, Loader2, Paperclip, PlusIcon, SearchIcon, Square, type LucideIcon, User, Wrench } from "lucide-react";
+import { toast } from 'sonner'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { TokenCounter } from '@/components/TokenCounter'
 import { AvatarEmoji } from '@/components/common/AvatarEmoji'
@@ -153,6 +154,27 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
   const { t } = useTranslation()
   const selectedModelHasTools = selectedModel?.capabilities?.includes('tools') ?? false
 
+  // Show a hint when the user switches the active assistant in an existing
+  // thread. The current outgoing turn is not affected — only the next message
+  // will use the new instructions — so we tell the user that explicitly. Skips
+  // when (a) the selection didn't actually change or (b) the thread has no
+  // history yet (a fresh thread doesn't need a "next message" reminder).
+  const notifyAssistantSwitch = (next: Assistant | undefined) => {
+    const previousId =
+      currentThread?.assistants?.[0]?.id ?? selectedAssistant?.id
+    if (previousId === next?.id) return
+    if (threadMessages.length === 0) return
+    if (next) {
+      toast.info(
+        t('assistants:switchAppliesNextMessage', {
+          name: next.name || t('assistants:unnamedAssistant'),
+        })
+      )
+    } else {
+      toast.info(t('assistants:clearAppliesNextMessage'))
+    }
+  }
+
   const applyQuickPrompt = (value: string) => {
     setPrompt(value)
     setTimeout(() => {
@@ -209,6 +231,7 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                       <DropdownMenuItem
                         className={!selectedAssistant && !currentThread?.assistants?.length ? 'bg-accent' : ''}
                         onClick={() => {
+                          notifyAssistantSwitch(undefined)
                           setSelectedAssistant(undefined)
                           if (effectiveThreadId) updateCurrentThreadAssistant(undefined)
                         }}
@@ -231,6 +254,7 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                               key={assistant.id}
                               className={isSelected ? 'bg-accent' : ''}
                               onClick={() => {
+                                notifyAssistantSwitch(assistant)
                                 setSelectedAssistant(assistant)
                                 if (effectiveThreadId) updateCurrentThreadAssistant(assistant)
                               }}

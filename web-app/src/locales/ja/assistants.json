@@ -31,5 +31,8 @@
   "personality": "個性",
   "capabilities": "機能",
   "instructionsDateHint": "ヒント: {{current_date}} を使用して今日の日付を挿入します。",
-  "maxToolSteps": "最大ツールステップ数"
+  "maxToolSteps": "最大ツールステップ数",
+  "unnamedAssistant": "名前なしのアシスタント",
+  "switchAppliesNextMessage": "{{name}}に切り替えました。次のメッセージから適用されます。",
+  "clearAppliesNextMessage": "アシスタントを解除しました。次のメッセージから適用されます。"
 }

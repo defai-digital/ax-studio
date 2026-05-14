@@ -31,5 +31,8 @@
   "personality": "Personality",
   "capabilities": "Capabilities",
   "instructionsDateHint": "Tip: Use {{current_date}} to insert today’s date.",
-  "maxToolSteps": "Max tool steps"
+  "maxToolSteps": "Max tool steps",
+  "unnamedAssistant": "Unnamed Assistant",
+  "switchAppliesNextMessage": "Switched to {{name}}. Will apply on your next message.",
+  "clearAppliesNextMessage": "Assistant cleared. Will apply on your next message."
 }

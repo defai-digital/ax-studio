@@ -31,5 +31,8 @@
   "personality": "Personnalité",
   "capabilities": "Capacités",
   "instructionsDateHint": "Conseil : Utilisez {{current_date}} pour insérer la date d'aujourd'hui.",
-  "maxToolSteps": "Limite d’étapes de l’outil"
+  "maxToolSteps": "Limite d’étapes de l’outil",
+  "unnamedAssistant": "Assistant sans nom",
+  "switchAppliesNextMessage": "Basculé vers {{name}}. S'appliquera à votre prochain message.",
+  "clearAppliesNextMessage": "Assistant désélectionné. S'appliquera à votre prochain message."
 }

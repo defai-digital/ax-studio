@@ -31,5 +31,8 @@
   "personality": "个性",
   "capabilities": "能力",
   "instructionsDateHint": "提示：使用 {{current_date}} 插入今天的日期。",
-  "maxToolSteps": "最大工具步骤"
+  "maxToolSteps": "最大工具步骤",
+  "unnamedAssistant": "未命名助手",
+  "switchAppliesNextMessage": "已切换至 {{name}}。将在您的下一条消息中生效。",
+  "clearAppliesNextMessage": "已取消助手。将在您的下一条消息中生效。"
 }
