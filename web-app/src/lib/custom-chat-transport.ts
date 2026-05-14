@@ -455,11 +455,16 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
         ...(currentAssistant?.parameters ?? {}),
         ...(this.inferenceParameters ?? {}),
       }
-      if (
-        isLocalProvider(provider) &&
-        inferenceParams.max_output_tokens == null
-      ) {
-        inferenceParams.max_output_tokens = DEFAULT_LOCAL_MAX_OUTPUT_TOKENS
+      if (isLocalProvider(provider)) {
+        if (inferenceParams.max_output_tokens == null) {
+          inferenceParams.max_output_tokens = DEFAULT_LOCAL_MAX_OUTPUT_TOKENS
+        }
+        if (inferenceParams.temperature == null) {
+          inferenceParams.temperature = 0.6
+        }
+        if (inferenceParams.top_p == null) {
+          inferenceParams.top_p = 0.95
+        }
       }
 
       this.model = await ModelFactory.createModel(modelId, provider, inferenceParams, {
