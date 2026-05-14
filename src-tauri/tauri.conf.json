@@ -10,7 +10,7 @@
     "beforeBuildCommand": "IS_TAURI=true yarn build:web"
   },
   "app": {
-    "macOSPrivateApi": true,
+    "macOSPrivateApi": false,
     "windows": [
       {
         "label": "main",
@@ -24,7 +24,7 @@
         "zoomHotkeysEnabled": true,
         "center": true,
         "hiddenTitle": true,
-        "transparent": true,
+        "transparent": false,
         "trafficLightPosition": {
           "x": 20,
           "y": 32

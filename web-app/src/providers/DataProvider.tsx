@@ -128,9 +128,17 @@ export function DataProvider() {
         .providers()
         .getProviders()
         .then((providers) => {
-          if (!unmounted) {
-            setProviders(providers, serviceHub.path().sep())
-          }
+          if (unmounted) return
+          setProviders(providers, serviceHub.path().sep())
+          // Also push the latest provider list to the Rust proxy's registry so
+          // it knows base_url + api_key + model_id mapping for every active
+          // remote provider. Without this, providers added after the initial
+          // bootstrap (e.g. the built-in `mlx` provider, or providers the user
+          // edits in Settings) never get registered with the proxy and chat
+          // requests for them fail with "No remote provider configured".
+          void syncRemoteProviders(providers).catch((error) => {
+            console.error('[DataProvider] startup remote provider sync failed:', error)
+          })
         })
         .catch((error) => {
           console.error('[DataProvider] startup provider refresh failed:', error)

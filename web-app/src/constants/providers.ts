@@ -3,7 +3,11 @@ export const ANTHROPIC_VERSION_VALUE = '2023-06-01'
 export const ANTHROPIC_BROWSER_ACCESS_HEADER = 'anthropic-dangerous-direct-browser-access'
 export const ANTHROPIC_BROWSER_ACCESS_VALUE = 'true'
 
-export const LOCAL_PROVIDER_IDS = new Set(['llamacpp', 'mlx', 'ollama'])
+// 'mlx' is intentionally NOT here: the mlx provider is a regular remote HTTP
+// endpoint (ax-engine-server delegating to mlx_lm). Treating it as local would
+// route loads through the llamacpp extension's engine manager, which has no
+// 'mlx' engine registered, and fail with "Local engine 'mlx' is not available".
+export const LOCAL_PROVIDER_IDS = new Set(['llamacpp', 'ollama'])
 
 /** Default custom headers required for direct Anthropic API access from a browser. */
 export const ANTHROPIC_DEFAULT_HEADERS = [
@@ -234,5 +238,83 @@ export const predefinedProviders = [
       },
     ],
     models: [],
+  },
+  // ── MLX (via ax-engine-sdk → ax-engine-server → mlx_lm) ──────────────────
+  // Local OpenAI-compatible endpoint that runs Apple MLX models from the HF
+  // cache. Defaults match the launcher at
+  //   ~/Library/Application Support/Ax-Studio/data/ax-mlx-launch.sh
+  // Start that launcher (and the mlx_lm.server backend it spawns) before
+  // sending a chat. To switch which model is loaded, rerun the launcher with
+  // `MLX_MODEL=mlx-community/<name>`; mlx_lm.server loads one model per
+  // process.
+  {
+    active: true,
+    api_key: 'sk-local-mlx',
+    base_url: 'http://127.0.0.1:19997/v1',
+    explore_models_url: 'https://huggingface.co/mlx-community',
+    provider: 'mlx',
+    settings: [
+      {
+        key: 'base-url',
+        title: 'Base URL',
+        description:
+          'ax-engine-server OpenAI endpoint. Started by `ax-mlx-launch.sh`; delegates to mlx_lm.server which reads MLX safetensors from the HF cache.',
+        controller_type: 'input',
+        controller_props: {
+          placeholder: 'http://127.0.0.1:19997/v1',
+          value: 'http://127.0.0.1:19997/v1',
+        },
+      },
+      {
+        key: 'api-key',
+        title: 'API Key',
+        description:
+          'Local server; any non-empty value works. Stored only on this machine.',
+        controller_type: 'input',
+        controller_props: {
+          placeholder: 'sk-local-mlx',
+          value: 'sk-local-mlx',
+          type: 'password',
+          input_actions: ['unobscure', 'copy'],
+        },
+      },
+    ],
+    models: [
+      {
+        id: 'mlx-community/Qwen3.5-9B-MLX-4bit',
+        name: 'Qwen3.5-9B MLX 4-bit',
+        version: '1.0',
+        description: 'Apple MLX 4-bit Qwen3.5-9B (in HF cache).',
+        capabilities: ['completion', 'tools'],
+      },
+      {
+        id: 'mlx-community/GLM-4.7-Flash-4bit',
+        name: 'GLM-4.7-Flash MLX 4-bit',
+        version: '1.0',
+        description: 'Apple MLX 4-bit GLM-4.7-Flash MoE (in HF cache).',
+        capabilities: ['completion', 'tools'],
+      },
+      {
+        id: 'mlx-community/Qwen3.5-35B-A3B-4bit',
+        name: 'Qwen3.5-35B-A3B MLX 4-bit',
+        version: '1.0',
+        description: 'Apple MLX 4-bit Qwen3.5-35B-A3B (in HF cache).',
+        capabilities: ['completion', 'tools'],
+      },
+      {
+        id: 'mlx-community/Qwen3.6-35B-A3B-4bit',
+        name: 'Qwen3.6-35B-A3B MLX 4-bit',
+        version: '1.0',
+        description: 'Apple MLX 4-bit Qwen3.6-35B-A3B (in HF cache).',
+        capabilities: ['completion', 'tools'],
+      },
+      {
+        id: 'mlx-community/Qwen3.6-35B-A3B-5bit',
+        name: 'Qwen3.6-35B-A3B MLX 5-bit',
+        version: '1.0',
+        description: 'Apple MLX 5-bit Qwen3.6-35B-A3B (in HF cache).',
+        capabilities: ['completion', 'tools'],
+      },
+    ],
   },
 ]

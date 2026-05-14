@@ -13,17 +13,15 @@
         "zoomHotkeysEnabled": true,
         "center": true,
         "hiddenTitle": true,
-        "transparent": true,
+        "transparent": false,
         "trafficLightPosition": {
           "x": 20,
           "y": 32
         },
         "decorations": true,
         "titleBarStyle": "Overlay",
-        "windowEffects": {
-          "effects": ["fullScreenUI", "mica", "tabbed", "blur", "acrylic"],
-          "state": "active"
-        },
+        "acceptFirstMouse": true,
+        "focus": true,
         "dragDropEnabled": false
       }
     ]

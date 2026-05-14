@@ -153,7 +153,15 @@ pub async fn abort_remote_stream(
 }
 
 async fn validate_provider_url(provider: &str, url: &str) -> Result<(), String> {
-    let allow_internal = matches!(provider, "llamacpp" | "ollama" | "lmstudio");
+    // Providers that legitimately point to a loopback/internal URL. `mlx` lands
+    // here because the in-app provider talks to a local ax-engine-server (which
+    // itself delegates to mlx_lm.server) at http://127.0.0.1:<port>/v1. Without
+    // this entry, registration is silently rejected and chat fails with
+    // "No remote provider configured for model_id ...".
+    let allow_internal = matches!(
+        provider,
+        "llamacpp" | "ollama" | "lmstudio" | "mlx" | "ax-engine"
+    );
     let parsed = url::Url::parse(url).map_err(|e| format!("Invalid provider URL '{url}': {e}"))?;
     if !matches!(parsed.scheme(), "http" | "https") {
         return Err(format!(

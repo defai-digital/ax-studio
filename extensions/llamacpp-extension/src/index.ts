@@ -128,6 +128,13 @@ type AxServingLoadRequest = {
   mmproj_path?: string
   n_gpu_layers?: number
   context_length?: number
+  /**
+   * Explicit per-load backend override for ax-serving's routing layer.
+   * Valid values: 'native' (AX Engine / MLX), 'llama_cpp', 'lib_llama', 'auto'.
+   * Omit to let ax-serving's backends.yaml decide (default: llama_cpp).
+   * MUST be set to 'native' for MLX models (which have model-manifest.json).
+   */
+  backend?: 'native' | 'llama_cpp' | 'lib_llama' | 'auto'
 }
 
 type ChatRequestBody = chatCompletionRequest & {
@@ -1063,7 +1070,14 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       const cfg = await this._readModelConfig(modelId)
       if (!cfg) throw new Error(`Model not found: ${modelId}`)
 
-      const engineType = this.config.engine_type || 'llamacpp'
+      // Auto-detect engine per model: if the model dir contains an AX
+      // model-manifest.json (MLX/AX-Engine artifact), route to ax-serving
+      // regardless of the user's global `engine_type` setting. Falls back to
+      // the global setting (or 'llamacpp') for GGUF models without manifest.
+      const hasAxManifest = await this._hasAxModelManifest(modelId)
+      const engineType = hasAxManifest
+        ? 'ax-serving'
+        : (this.config.engine_type || 'llamacpp')
       const embedding = isEmbedding || Boolean(cfg.embedding)
 
       // ax-serving mode — handles text, vision, and embedding models
@@ -1133,10 +1147,16 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       }
     }
 
-    // Build load request with all supported fields
+    // Build load request with all supported fields.
+    // MLX models (with model-manifest.json) MUST be routed to ax-serving's
+    // 'native' backend (AX Engine). Without this override, ax-serving's
+    // backends.yaml routes everything through llama_cpp by default, which
+    // only accepts .gguf files and rejects MLX safetensors with:
+    //   "only .gguf models are supported"
     const loadBody: AxServingLoadRequest = {
       model_id: modelId,
       path: modelPath,
+      backend: 'native',
     }
     if (mmprojPath) {
       loadBody.mmproj_path = mmprojPath
