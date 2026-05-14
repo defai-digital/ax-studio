@@ -24,24 +24,9 @@ use super::{
     extensions::commands::get_app_extensions_path, mcp::helpers::run_mcp_commands, state::AppState,
 };
 
-const BUNDLED_EXTENSION_ARCHIVE_SHA256: &[(&str, &str)] = &[
-    (
-        "ax-studio-assistant-extension-1.0.2.tgz",
-        "983642a1dec52727dcdc890afeae19a9dd62f111b76c4a20e0876d0f7875c276",
-    ),
-    (
-        "ax-studio-conversational-extension-1.0.0.tgz",
-        "3d95c2d4e2ea1b83b87ea8f9a27a2d22d6470d4f3879eabf8406e65081398719",
-    ),
-    (
-        "ax-studio-download-extension-1.0.0.tgz",
-        "8f6bc8ff6bf382e80860962ea7b62713239254dba547acc23948ac090a138770",
-    ),
-    (
-        "ax-studio-llamacpp-extension-1.0.4.tgz",
-        "e4af585ef2c949a1983bc861a96b34d16714a13701aa925769dca7ee4e882148",
-    ),
-];
+// Hash table is generated at build time from the actual pre-install/ tgz files
+// by build.rs — no manual updates needed when extensions are rebuilt.
+include!(concat!(env!("OUT_DIR"), "/extension_hashes.rs"));
 
 fn bundled_extension_stamp() -> String {
     BUNDLED_EXTENSION_ARCHIVE_SHA256

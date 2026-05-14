@@ -62,6 +62,7 @@ test-tauri = [
 
 [build-dependencies]
 tauri-build = { version = "2.0.2", features = [] }
+sha2 = "0.10"
 
 [dependencies]
 dirs = "6.0.0"
