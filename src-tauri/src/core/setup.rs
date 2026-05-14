@@ -39,7 +39,7 @@ const BUNDLED_EXTENSION_ARCHIVE_SHA256: &[(&str, &str)] = &[
     ),
     (
         "ax-studio-llamacpp-extension-1.0.4.tgz",
-        "72aa27240e74a7e7ab54f395bf29eb0a4da33c116178db32a5fc5ff5139e0ef1",
+        "e4af585ef2c949a1983bc861a96b34d16714a13701aa925769dca7ee4e882148",
     ),
 ];
 
