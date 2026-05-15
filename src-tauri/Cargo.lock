@@ -297,7 +297,8 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
 name = "ax-engine-core"
-version = "4.8.0"
+version = "4.9.0"
+source = "git+https://github.com/defai-digital/ax-engine?rev=242178f9225cd2a85d685c089c60ddda04832aca#242178f9225cd2a85d685c089c60ddda04832aca"
 dependencies = [
  "metal",
  "objc",
@@ -310,18 +311,22 @@ dependencies = [
 
 [[package]]
 name = "ax-engine-mlx"
-version = "4.8.0"
+version = "4.9.0"
+source = "git+https://github.com/defai-digital/ax-engine?rev=242178f9225cd2a85d685c089c60ddda04832aca#242178f9225cd2a85d685c089c60ddda04832aca"
 dependencies = [
  "ax-engine-core",
+ "fs2",
  "mlx-sys",
  "serde_json",
+ "sha2",
  "thiserror 2.0.18",
  "tracing",
 ]
 
 [[package]]
 name = "ax-engine-sdk"
-version = "4.8.0"
+version = "4.9.0"
+source = "git+https://github.com/defai-digital/ax-engine?rev=242178f9225cd2a85d685c089c60ddda04832aca#242178f9225cd2a85d685c089c60ddda04832aca"
 dependencies = [
  "ax-engine-core",
  "ax-engine-mlx",
@@ -1737,6 +1742,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "fs2"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9564fc758e15025b46aa6643b1b77d047d1a56a1aea6e01002ac0c7026876213"
+dependencies = [
+ "libc",
+ "winapi",
 ]
 
 [[package]]
@@ -3203,7 +3218,8 @@ dependencies = [
 
 [[package]]
 name = "mlx-sys"
-version = "4.8.0"
+version = "4.9.0"
+source = "git+https://github.com/defai-digital/ax-engine?rev=242178f9225cd2a85d685c089c60ddda04832aca#242178f9225cd2a85d685c089c60ddda04832aca"
 dependencies = [
  "bindgen",
  "memmap2",
