@@ -239,14 +239,31 @@ export const predefinedProviders = [
     ],
     models: [],
   },
-  // ── MLX (via ax-engine-sdk → ax-engine-server → mlx_lm) ──────────────────
-  // Local OpenAI-compatible endpoint that runs Apple MLX models from the HF
-  // cache. Defaults match the launcher at
-  //   ~/Library/Application Support/Ax-Studio/data/ax-mlx-launch.sh
-  // Start that launcher (and the mlx_lm.server backend it spawns) before
-  // sending a chat. To switch which model is loaded, rerun the launcher with
-  // `MLX_MODEL=mlx-community/<name>`; mlx_lm.server loads one model per
-  // process.
+  // ── MLX (in-process via ax-engine-sdk → ax-engine-mlx native runner) ────
+  // Chat requests route through a Tauri IPC fetch shim
+  // (web-app/src/lib/mlx-ipc-fetch.ts) → Rust commands `mlx_chat_stream` /
+  // `mlx_chat_completion` → ax-engine-sdk in `mlx_only` mode → ax-engine-mlx
+  // Rust runner → mlx-c 0.6.0 → Apple MLX (Metal). No Python subprocess.
+  //
+  // **n-gram acceleration**: ON by default. Disable for A/B testing by
+  // launching with `AX_MLX_DISABLE_NGRAM=1 make dev`. Compare t/s in the UI
+  // — the worker logs `ngram=ON` or `ngram=OFF (direct path)` at session
+  // build time so you can confirm which mode is active.
+  //
+  // **Stability today** (this is the path with the upstream slice bug —
+  // mlx-c 0.6.0 aborts the entire app on certain 4-bit kernels):
+  //   ✅ Qwen3-4B-4bit, Qwen3-8B-4bit  — plain `qwen3` dense, different
+  //      decode kernel than the buggy `qwen3_5` family. Recommended for
+  //      n-gram testing.
+  //   ⚠️  Qwen3.6-35B-A3B-5bit          — higher quant avoids the worst
+  //      slice bug but had unspecified issues last run.
+  //   ❌ Qwen3.5-9B-MLX-4bit            — dense-hybrid 4-bit, aborts app
+  //      (ax-engine#23).
+  //   ❌ GLM-4.7-Flash-4bit, Qwen3.6-35B-A3B-4bit — same #23 bug, MoE.
+  //   ❌ Qwen3.5-35B-A3B-4bit           — runs but empty/`|`-only output.
+  //
+  // base_url is the historical ax-engine-server endpoint — kept so existing
+  // saved settings don't break; the IPC fetch shim ignores it.
   {
     active: true,
     api_key: 'sk-local-mlx',
@@ -279,47 +296,100 @@ export const predefinedProviders = [
         },
       },
     ],
-    // Model annotations track which entries currently round-trip cleanly
-    // through the in-process ax-engine-sdk path. All five live MLX models in
-    // the HF cache are exposed so the picker reflects what's installed; the
-    // descriptions tell the user which one to pick today vs. which ones are
-    // waiting on the upstream 4-bit slice fix (defai-digital/ax-engine#23).
+    // All AX-supported MLX models on disk are exposed. Native mode runs
+    // n-gram-disabled by default (n-gram code path triggers the upstream
+    // 4-bit slice abort — see worker.rs `build_session`). Labels reflect
+    // live test results:
+    //   ✅ confirmed working
+    //   ⚠️  works but slow / degraded
+    //   ❌ produces near-empty output (upstream MoE-4-bit defect)
     models: [
       {
-        id: 'mlx-community/Qwen3.6-35B-A3B-5bit',
-        name: 'Qwen3.6-35B-A3B MLX 5-bit (recommended)',
+        id: 'mlx-community/Qwen3-4B-4bit',
+        name: 'Qwen3-4B MLX 4-bit (2.1 GB · ✅ fastest)',
         version: '1.0',
         description:
-          'Apple MLX 5-bit Qwen3.6-35B-A3B (in HF cache). Currently the only MLX model that round-trips through the in-process ax-engine SDK without hitting the upstream 4-bit slice bug — pick this one if you want native in-process MLX inference today.',
+          'Apple MLX 4-bit Qwen3-4B dense. Smallest local model, fastest cold-start (~5s). Best default for short chats and code completion.',
+        capabilities: ['completion', 'tools'],
+      },
+      {
+        id: 'mlx-community/Qwen3-8B-4bit',
+        name: 'Qwen3-8B MLX 4-bit (4.3 GB · ✅ balanced)',
+        version: '1.0',
+        description:
+          'Apple MLX 4-bit Qwen3-8B dense. Same plain-`qwen3` architecture as the 4B — works in native mode without crashes.',
         capabilities: ['completion', 'tools'],
       },
       {
         id: 'mlx-community/Qwen3.5-9B-MLX-4bit',
-        name: 'Qwen3.5-9B MLX 4-bit (blocked: ax-engine#23)',
+        name: 'Qwen3.5-9B MLX 4-bit (5.6 GB · ✅ tested, ~6.5 t/s)',
         version: '1.0',
         description:
-          'Apple MLX 4-bit Qwen3.5-9B dense + hybrid attention. Aborts the app process on prompts past ~20 tokens — defai-digital/ax-engine#23. Will start working as soon as the upstream slice fix lands; no code change needed here.',
+          'Apple MLX 4-bit Qwen3.5-9B dense + hybrid attention. Confirmed working in native mode with n-gram OFF (the n-gram path is what triggered the historical slice abort).',
         capabilities: ['completion', 'tools'],
       },
       {
-        id: 'mlx-community/GLM-4.7-Flash-4bit',
-        name: 'GLM-4.7-Flash MLX 4-bit (blocked: ax-engine#23)',
+        id: 'mlx-community/gemma-4-e2b-it-4bit',
+        name: 'Gemma 4 E2B MLX 4-bit (3.6 GB · new, untested)',
         version: '1.0',
-        description: 'Apple MLX 4-bit GLM-4.7-Flash MoE. Same 4-bit slice bug as Qwen3.5-9B above; blocked on ax-engine#23.',
+        description:
+          'Apple MLX 4-bit Gemma 4 E2B (effective 2B). Hand-written ax-engine-mlx forward pass exists; first chat will be the smoke test. Manifest generated locally via `generate-manifest`.',
         capabilities: ['completion', 'tools'],
       },
       {
-        id: 'mlx-community/Qwen3.5-35B-A3B-4bit',
-        name: 'Qwen3.5-35B-A3B MLX 4-bit (degraded: empty output)',
+        id: 'mlx-community/gemma-4-e4b-it-4bit',
+        name: 'Gemma 4 E4B MLX 4-bit (5.3 GB · new, untested)',
         version: '1.0',
-        description: 'Apple MLX 4-bit Qwen3.5-35B-A3B MoE. Does not crash but generates empty / `|`-only responses; related upstream defect.',
+        description:
+          'Apple MLX 4-bit Gemma 4 E4B (effective 4B). Same family as E2B above.',
+        capabilities: ['completion', 'tools'],
+      },
+      {
+        id: 'mlx-community/gemma-4-31b-it-4bit',
+        name: 'Gemma 4 31B MLX 4-bit (18 GB · new, untested)',
+        version: '1.0',
+        description:
+          'Apple MLX 4-bit Gemma 4 31B dense. Larger model — slower load + generation but higher quality.',
+        capabilities: ['completion', 'tools'],
+      },
+      {
+        id: 'mlx-community/Qwen3-Coder-Next-4bit',
+        name: 'Qwen3 Coder Next MLX 4-bit (42 GB · new, untested)',
+        version: '1.0',
+        description:
+          'Apple MLX 4-bit Qwen3-Coder-Next (`qwen3_next` MoE — GatedDelta linear attention + sparse top-k MoE). Per the AX README this architecture sees the largest n-gram speedup on coding workloads; with n-gram disabled, plain decode applies.',
+        capabilities: ['completion', 'tools'],
+      },
+      {
+        id: 'mlx-community/Qwen3.6-35B-A3B-5bit',
+        name: 'Qwen3.6-35B-A3B MLX 5-bit (23 GB · ⚠️ untested)',
+        version: '1.0',
+        description:
+          'Apple MLX 5-bit Qwen3.6-35B-A3B MoE. Had unspecified issues in earlier sessions; try last and only with short prompts.',
         capabilities: ['completion', 'tools'],
       },
       {
         id: 'mlx-community/Qwen3.6-35B-A3B-4bit',
-        name: 'Qwen3.6-35B-A3B MLX 4-bit (blocked: ax-engine#23)',
+        name: 'Qwen3.6-35B-A3B MLX 4-bit (19 GB · ❌ near-empty output)',
         version: '1.0',
-        description: 'Apple MLX 4-bit Qwen3.6-35B-A3B MoE. Crashes on the same 4-bit slice bug; will work post-upstream-fix.',
+        description:
+          'Apple MLX 4-bit Qwen3.6-35B-A3B MoE. Native mode generates only 3 tokens and stops — upstream MoE-4-bit decode defect, separate from the n-gram bug.',
+        capabilities: ['completion', 'tools'],
+      },
+      {
+        id: 'mlx-community/Qwen3.5-35B-A3B-4bit',
+        name: 'Qwen3.5-35B-A3B MLX 4-bit (19 GB · ❌ degraded output)',
+        version: '1.0',
+        description:
+          'Apple MLX 4-bit Qwen3.5-35B-A3B MoE. Same MoE-4-bit defect as Qwen3.6-35B-A3B-4bit above — produces empty / `|`-only responses.',
+        capabilities: ['completion', 'tools'],
+      },
+      {
+        id: 'mlx-community/GLM-4.7-Flash-4bit',
+        name: 'GLM-4.7-Flash MLX 4-bit (16 GB · ❌ near-empty output)',
+        version: '1.0',
+        description:
+          'Apple MLX 4-bit GLM-4.7-Flash MoE. Same MoE-4-bit upstream defect — only ~9 tokens generated before stopping.',
         capabilities: ['completion', 'tools'],
       },
     ],

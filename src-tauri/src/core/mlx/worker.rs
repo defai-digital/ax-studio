@@ -64,11 +64,16 @@ pub enum StreamEvent {
     },
     /// One or more decoded output tokens since the previous Delta.
     Delta { text: String },
-    /// Final event with usage stats and stop reason.
+    /// Final event with usage stats and stop reason. `elapsed_ms` is the
+    /// wall-clock time spent inside `session.generate()` — the frontend uses
+    /// it to compute *real* tokens/sec, because the chat transport's own
+    /// math is based on first/last Delta-event timestamps which collapse to
+    /// ~0 in our stream-as-blocking workaround.
     Done {
         prompt_token_count: u32,
         output_token_count: u32,
         finish_reason: String,
+        elapsed_ms: u64,
     },
     /// Terminal error event. The Tauri command's Result also surfaces the
     /// error, but emitting it on the channel keeps the chat UI's incremental
@@ -216,10 +221,30 @@ struct LoadedModel {
 /// Build a fresh `EngineSession` pointed at the model dir. Called once per
 /// generate / generate_stream request (matches the SDK's
 /// `StatelessGenerateContext::generate_with_request_id` MLX path).
+///
+/// **n-gram acceleration: OFF by default.** ax-engine's library default is
+/// ON, but the n-gram code path triggers the mlx-c 0.6.0 4-bit slice abort
+/// on every 4-bit model on disk — confirmed against `Qwen3-4B-4bit` and
+/// `Qwen3.5-9B-MLX-4bit`. We default to the direct (no-speculation) path so
+/// `make dev` just works.
+///
+/// To deliberately enable n-gram for A/B testing (e.g. to demonstrate the
+/// crash, or once upstream fixes it), set env var `AX_MLX_NGRAM=1` when
+/// launching the app.
 fn build_session(model_dir: &PathBuf) -> Result<EngineSession, String> {
+    let enable_ngram = std::env::var("AX_MLX_NGRAM")
+        .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "True"))
+        .unwrap_or(false);
+    let disable_ngram = !enable_ngram;
     let mut config = EngineSessionConfig::default();
     config.mlx_model_artifacts_dir = Some(model_dir.clone());
     config.mlx_model_artifacts_source = Some(NativeModelArtifactsSource::ExplicitConfig);
+    config.mlx_disable_ngram_acceleration = disable_ngram;
+    log::info!(
+        "[mlx-worker] build_session model_dir={} ngram={}",
+        model_dir.display(),
+        if enable_ngram { "ON (set via AX_MLX_NGRAM=1 — expect crash on 4-bit)" } else { "OFF (default; direct path)" },
+    );
     EngineSession::new(config).map_err(|e| format!("EngineSession::new failed: {e:?}"))
 }
 
@@ -366,7 +391,7 @@ fn handle_generate(
     // format Qwen3.5 / Qwen3.6 / Qwen3-Coder / similar Qwen-architecture
     // models expect. Other model families (GLM, Gemma) use different
     // templates — extend this helper if/when those are loaded.
-    let prompt = format_chatml(&messages);
+    let prompt = format_prompt(&messages, model_id);
     let prompt_tokens = entry
         .tokenizer
         .encode(prompt.as_str(), false)
@@ -390,7 +415,7 @@ fn handle_generate(
         model_id: model_id.to_string(),
         input_tokens: prompt_tokens.clone(),
         input_text: None,
-        max_output_tokens: params.max_output_tokens.unwrap_or(512),
+        max_output_tokens: params.max_output_tokens.unwrap_or(2048),
         sampling,
         stop_sequences: params.stop.unwrap_or_default(),
         metadata: None,
@@ -459,7 +484,7 @@ fn handle_generate_stream(
         .get(model_id)
         .ok_or_else(|| format!("model not loaded: {model_id}"))?;
 
-    let prompt = format_chatml(&messages);
+    let prompt = format_prompt(&messages, model_id);
     let prompt_tokens = entry
         .tokenizer
         .encode(prompt.as_str(), false)
@@ -479,7 +504,7 @@ fn handle_generate_stream(
         seed: params.seed.unwrap_or(0),
         deterministic: None,
     };
-    let max_output_tokens = params.max_output_tokens.unwrap_or(512);
+    let max_output_tokens = params.max_output_tokens.unwrap_or(2048);
     let stop_sequences = params.stop.unwrap_or_default();
 
     let request = GenerateRequest {
@@ -504,9 +529,11 @@ fn handle_generate_stream(
 
     // Fresh session per call (see handle_generate for the upstream reason).
     let mut session = build_session(&entry.model_dir)?;
+    let started = std::time::Instant::now();
     let response = session
         .generate(request)
         .map_err(|e| format!("session.generate failed for {model_id}: {e:?}"))?;
+    let elapsed_ms = started.elapsed().as_millis() as u64;
 
     let full_text = entry
         .tokenizer
@@ -525,19 +552,89 @@ fn handle_generate_stream(
         .unwrap_or_else(|| response.output_tokens.len() as u32);
     let finish_reason = response_finish_reason(&response);
 
+    log::info!(
+        "[mlx-worker] generate done: {output_token_count} tokens in {elapsed_ms}ms = {:.1} t/s",
+        if elapsed_ms == 0 { 0.0 } else { output_token_count as f64 * 1000.0 / elapsed_ms as f64 },
+    );
+
     on_event(StreamEvent::Done {
         prompt_token_count,
         output_token_count,
         finish_reason,
+        elapsed_ms,
     });
 
     Ok(())
 }
 
+/// Dispatch prompt formatting to the right template based on the model
+/// family. Each family has its own turn-marker conventions and the model
+/// will produce garbage if fed the wrong format.
+fn format_prompt(messages: &[ChatMessage], model_id: &str) -> String {
+    if is_gemma_family(model_id) {
+        format_gemma(messages)
+    } else {
+        format_chatml(messages, model_id)
+    }
+}
+
+fn is_gemma_family(model_id: &str) -> bool {
+    let id_lower = model_id.to_lowercase();
+    id_lower.contains("gemma-4") || id_lower.contains("gemma-3") || id_lower.contains("gemma4")
+}
+
+/// Gemma turn-template: `<start_of_turn>{role}\n{content}<end_of_turn>\n`.
+/// Gemma's chat template doesn't have a separate `system` role — system
+/// messages are usually prepended to the first user turn. We do the same.
+fn format_gemma(messages: &[ChatMessage]) -> String {
+    let mut out = String::new();
+    let mut pending_system: Option<String> = None;
+    for m in messages {
+        match m.role.as_str() {
+            "system" => {
+                // Gemma has no system role; carry into the next user turn.
+                pending_system = Some(m.content.clone());
+            }
+            "user" => {
+                out.push_str("<start_of_turn>user\n");
+                if let Some(sys) = pending_system.take() {
+                    out.push_str(&sys);
+                    out.push_str("\n\n");
+                }
+                out.push_str(&m.content);
+                out.push_str("<end_of_turn>\n");
+            }
+            "assistant" | "tool" => {
+                out.push_str("<start_of_turn>model\n");
+                out.push_str(&m.content);
+                out.push_str("<end_of_turn>\n");
+            }
+            other => {
+                log::warn!("[mlx-worker] gemma: unknown role '{other}', treating as user");
+                out.push_str("<start_of_turn>user\n");
+                out.push_str(&m.content);
+                out.push_str("<end_of_turn>\n");
+            }
+        }
+    }
+    out.push_str("<start_of_turn>model\n");
+    out
+}
+
 /// Format chat messages into a single prompt string using the Qwen ChatML
-/// template. Trailing `<|im_start|>assistant\n` invites the model to begin
-/// the assistant turn.
-fn format_chatml(messages: &[ChatMessage]) -> String {
+/// template. For Qwen3 dense models we seed the assistant turn with an
+/// empty `<think></think>` block — that tells the model "reasoning already
+/// complete (empty), produce the answer directly." Without this Qwen3 emits
+/// a few hundred tokens of `<thinking>...</thinking>` before the visible
+/// answer (which native mode can't strip, since unlike the mlx_lm.server
+/// SSE path there's no `delta.reasoning` channel separation).
+///
+/// We *do not* apply the prefix for MoE Qwens (`A3B` in the model id) or
+/// GLM models — empirically those don't have thinking mode in this template
+/// dialect, and seeding the prefix appears to confuse their decode (output
+/// truncates to ~3–9 tokens). For non-thinking families we use the plain
+/// `<|im_start|>assistant\n` opener.
+fn format_chatml(messages: &[ChatMessage], model_id: &str) -> String {
     let mut out = String::new();
     for m in messages {
         let role = match m.role.as_str() {
@@ -553,8 +650,22 @@ fn format_chatml(messages: &[ChatMessage]) -> String {
         out.push_str(&m.content);
         out.push_str("<|im_end|>\n");
     }
-    out.push_str("<|im_start|>assistant\n");
+    if uses_qwen3_thinking_mode(model_id) {
+        out.push_str("<|im_start|>assistant\n<think>\n\n</think>\n\n");
+    } else {
+        out.push_str("<|im_start|>assistant\n");
+    }
     out
+}
+
+/// True for Qwen3 dense models that emit a `<thinking>` chain by default
+/// (`Qwen3-4B`, `Qwen3-8B`, `Qwen3.5-9B-MLX`, etc.). False for MoE Qwens
+/// (anything with `A3B` in the id) and for non-Qwen families like GLM.
+fn uses_qwen3_thinking_mode(model_id: &str) -> bool {
+    if model_id.contains("A3B") || model_id.contains("GLM") {
+        return false;
+    }
+    model_id.contains("Qwen3")
 }
 
 fn response_finish_reason(response: &ax_engine_sdk::GenerateResponse) -> String {

@@ -38,6 +38,7 @@
  */
 
 import { Channel, invoke } from '@tauri-apps/api/core'
+import { useAppState } from '@/hooks/settings/useAppState'
 
 interface OpenAIChatMessage {
   role: string
@@ -84,7 +85,20 @@ interface MlxChatCompletion {
 type StreamEvent =
   | { type: 'start'; model_id: string; prompt_token_count: number }
   | { type: 'delta'; text: string }
-  | { type: 'done'; prompt_token_count: number; output_token_count: number; finish_reason: string }
+  | {
+      type: 'done'
+      prompt_token_count: number
+      output_token_count: number
+      finish_reason: string
+      /**
+       * Wall-clock time (ms) the Rust worker spent inside `session.generate()`.
+       * The chat transport's own t/s math is computed from first/last Delta
+       * timestamps, which collapse to ~0 ms in our stream-as-blocking
+       * workaround (the whole response arrives as a single chunk). We use
+       * this Rust-measured duration to override the transport's bogus value.
+       */
+      elapsed_ms: number
+    }
   | { type: 'error'; message: string }
 
 const SSE_HEADERS = { 'Content-Type': 'text/event-stream; charset=utf-8' }
@@ -175,6 +189,26 @@ function streamingResponse(
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(final)}\n\n`))
             controller.enqueue(encoder.encode('data: [DONE]\n\n'))
             controller.close()
+
+            // Replace the chat transport's bogus first-to-last-delta
+            // calculation (microseconds → tens-of-thousands t/s) with the
+            // real number measured by the Rust worker. Delayed one tick so
+            // the transport's own setTokenSpeed call from its stream-close
+            // handler runs first and ours wins the final write.
+            if (evt.elapsed_ms > 0 && evt.output_token_count > 0) {
+              const realTps = Math.round(
+                (evt.output_token_count / (evt.elapsed_ms / 1000)) * 10
+              ) / 10
+              setTimeout(() => {
+                useAppState
+                  .getState()
+                  .setTokenSpeed(
+                    { id: 'streaming' } as never,
+                    realTps,
+                    evt.output_token_count
+                  )
+              }, 50)
+            }
           } else if (evt.type === 'error') {
             lastErr = evt.message
             // Don't close yet — the `done` event should still arrive from the
