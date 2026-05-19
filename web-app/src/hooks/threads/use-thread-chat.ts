@@ -50,10 +50,6 @@ export type ThreadChatParams = {
   chatMessages: UIMessage[]
   setChatMessages: (msgs: UIMessage[]) => void
 
-  // From useThreadMemory
-  handleRememberCommand: (text: string) => boolean
-  handleForgetCommand: (text: string) => boolean
-  lastUserInputRef: React.MutableRefObject<string>
   prepareLocalKnowledge?: (text: string) => Promise<{
     context: string
     retrieval?: {
@@ -84,9 +80,6 @@ export function useThreadChat({
   regenerate,
   chatMessages,
   setChatMessages,
-  handleRememberCommand,
-  handleForgetCommand,
-  lastUserInputRef,
   prepareLocalKnowledge,
 }: ThreadChatParams): ThreadChatResult {
   const serviceHub = useServiceHub()
@@ -177,11 +170,6 @@ export function useThreadChat({
   const processAndSendMessage = useCallback(
     async (text: string) => {
       const normalizedText = text.trim()
-      lastUserInputRef.current = normalizedText
-
-      // Handle /remember and /forget commands
-      if (handleRememberCommand(normalizedText)) return
-      if (handleForgetCommand(normalizedText)) return
 
       // Rename thread on first message if still using default title
       const currentThread = useThreads.getState().threads[threadId]
@@ -337,18 +325,11 @@ export function useThreadChat({
       sendMessage,
       chatMessages,
       setChatMessages,
-      handleRememberCommand,
-      handleForgetCommand,
-      lastUserInputRef,
       prepareLocalKnowledge,
     ]
   )
 
   // ─── Message persistence (called from onFinish) ─────────────────────────────
-  //
-  // Accepts the caller's already-extracted contentParts so we use the same
-  // array that processMemoryOnFinish mutated (stripped <memory_extract> tags).
-  // Re-extracting from `message` would re-introduce the raw tags.
 
   const persistMessageOnFinish = useCallback(
     (message: UIMessage, contentParts: ThreadMessage['content']) => {

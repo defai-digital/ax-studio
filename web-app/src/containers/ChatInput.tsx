@@ -8,7 +8,6 @@ import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useAppState } from '@/hooks/settings/useAppState'
 import type { ChatStatus } from 'ai'
 import { useAssistant } from '@/hooks/chat/useAssistant'
-import { useMemory } from '@/hooks/integrations/useMemory'
 import { useLocalKnowledge } from '@/hooks/research/useLocalKnowledge'
 import { useTools } from '@/hooks/tools/useTools'
 import { useMessages } from '@/hooks/chat/useMessages'
@@ -66,24 +65,6 @@ const ChatInput = memo(function ChatInput({
   const setGlobalPrompt = usePrompt((state) => state.setPrompt)
   const currentThreadId = useThreads((state) => state.currentThreadId)
   const effectiveThreadId = threadId ?? currentThreadId
-  const globalMemoryEnabled = useMemory((state) => state.memoryEnabled)
-  const toggleMemoryGlobal = useMemory((state) => state.toggleMemory)
-  const toggleMemoryForThread = useMemory((state) => state.toggleMemoryForThread)
-  const memoryEnabledPerThread = useMemory((state) => state.memoryEnabledPerThread)
-  const memoryCount = useMemory((state) => (state.memories['default'] || []).length)
-
-  const isMemoryEnabled = effectiveThreadId
-    ? (effectiveThreadId in memoryEnabledPerThread
-        ? memoryEnabledPerThread[effectiveThreadId]
-        : globalMemoryEnabled)
-    : globalMemoryEnabled
-  const toggleMemory = useCallback(() => {
-    if (effectiveThreadId) {
-      toggleMemoryForThread(effectiveThreadId)
-    } else {
-      toggleMemoryGlobal()
-    }
-  }, [effectiveThreadId, toggleMemoryForThread, toggleMemoryGlobal])
 
   const globalLocalKnowledgeEnabled = useLocalKnowledge((state) => state.localKnowledgeEnabled)
   const localKnowledgeEnabledPerThread = useLocalKnowledge((state) => state.localKnowledgeEnabledPerThread)
@@ -395,9 +376,6 @@ const ChatInput = memo(function ChatInput({
           setDropdownToolsAvailable={setDropdownToolsAvailable}
           tooltipToolsAvailable={tooltipToolsAvailable}
           setTooltipToolsAvailable={setTooltipToolsAvailable}
-          isMemoryEnabled={isMemoryEnabled}
-          toggleMemory={toggleMemory}
-          memoryCount={memoryCount}
           isLocalKnowledgeEnabled={isLocalKnowledgeEnabled}
           toggleLocalKnowledge={toggleLocalKnowledge}
           tokenCounterCompact={tokenCounterCompact}

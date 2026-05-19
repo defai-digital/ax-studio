@@ -14,7 +14,6 @@
   "modelProviders": "Model Providers",
   "interface": "Interface",
   "privacy": "Privacy",
-  "memory": "Memory",
   "llmRouter": "LLM Router",
   "keyboardShortcuts": "Shortcuts",
   "newChat": "New Chat",

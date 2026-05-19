@@ -78,9 +78,6 @@ const createProps = (overrides: Partial<Parameters<typeof ChatInputToolbar>[0]> 
   setDropdownToolsAvailable: vi.fn(),
   tooltipToolsAvailable: false,
   setTooltipToolsAvailable: vi.fn(),
-  isMemoryEnabled: false,
-  toggleMemory: vi.fn(),
-  memoryCount: 0,
   tokenCounterCompact: false,
   threadMessages: [],
   stopStreaming: vi.fn(),
@@ -147,19 +144,6 @@ describe('ChatInputToolbar — Phase 3 Manual Test Protocol', () => {
     if (stopButton) {
       fireEvent.click(stopButton)
       expect(stopStreaming).toHaveBeenCalledWith('thread-1')
-    }
-  })
-
-  // Protocol #9: Memory toggle
-  it('memory button calls toggleMemory when clicked', () => {
-    const toggleMemory = vi.fn()
-    render(<ChatInputToolbar {...createProps({ toggleMemory })} />)
-    // Memory button has Brain - find it via the button with onClick={toggleMemory}
-    const buttons = screen.getAllByRole('button')
-    const memoryButton = buttons.find(b => b.getAttribute('class')?.includes('relative'))
-    if (memoryButton) {
-      fireEvent.click(memoryButton)
-      expect(toggleMemory).toHaveBeenCalled()
     }
   })
 

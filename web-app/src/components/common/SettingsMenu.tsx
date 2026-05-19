@@ -18,7 +18,6 @@ import {
   Cog,
   Server,
   Globe,
-  Brain,
   Route,
   ShieldCheck,
   Puzzle,
@@ -139,13 +138,6 @@ const SettingsMenu = () => {
       group: 'Advanced',
     },
     // Other group
-    {
-      title: 'common:memory',
-      route: route.settings.memory,
-      isEnabled: true,
-      icon: <Brain className="size-3.5" />,
-      group: 'Other',
-    },
     {
       title: 'common:extensions',
       route: route.settings.extensions,

@@ -52,16 +52,6 @@ vi.mock('@/hooks/chat/useMessages', () => ({
   }),
 }))
 
-vi.mock('@/hooks/threads/use-thread-memory', () => ({
-  useThreadMemory: () => ({
-    memorySuffix: '',
-    lastUserInputRef: { current: '' },
-    processMemoryOnFinish: vi.fn(),
-    handleRememberCommand: vi.fn(),
-    handleForgetCommand: vi.fn(),
-  }),
-}))
-
 vi.mock('@/hooks/research/useLocalKnowledge', () => ({
   useLocalKnowledge: () => ({
     isLocalKnowledgeEnabledForThread: vi.fn().mockReturnValue(false),

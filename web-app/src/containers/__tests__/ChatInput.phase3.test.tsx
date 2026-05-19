@@ -81,20 +81,6 @@ vi.mock('@/hooks/chat/useAssistant', () => ({
   },
 }))
 
-vi.mock('@/hooks/integrations/useMemory', () => ({
-  useMemory: (selector?: any) => {
-    const state = {
-      memoryEnabled: false,
-      toggleMemory: vi.fn(),
-      isMemoryEnabledForThread: vi.fn().mockReturnValue(false),
-      toggleMemoryForThread: vi.fn(),
-      memoryEnabledPerThread: {},
-      memories: { default: [] },
-    }
-    return selector ? selector(state) : state
-  },
-}))
-
 vi.mock('@/hooks/tools/useTools', () => ({
   useTools: vi.fn(),
 }))

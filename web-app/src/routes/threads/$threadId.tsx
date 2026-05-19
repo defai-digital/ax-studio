@@ -37,7 +37,6 @@ import {
 } from '@/lib/prompts/system-prompt'
 import type { UIMessage } from '@ai-sdk/react'
 import type { ThreadMessage } from '@ax-studio/core'
-import { useThreadMemory } from '@/hooks/threads/use-thread-memory'
 import { useLocalKnowledge } from '@/hooks/research/useLocalKnowledge'
 import { useThreadLocalKnowledge } from '@/hooks/threads/use-thread-local-knowledge'
 import { useThreadResearch } from '@/hooks/threads/use-thread-research'
@@ -93,13 +92,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   )
 
   // ─── Domain hooks ─────────────────────────────────────────────────────────
-  const {
-    memorySuffix,
-    lastUserInputRef,
-    processMemoryOnFinish,
-    handleRememberCommand,
-    handleForgetCommand,
-  } = useThreadMemory(threadId)
   const localKnowledgeActive = useLocalKnowledge((state) =>
     state.isLocalKnowledgeEnabledForThread(threadId)
   )
@@ -161,7 +153,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
       (currentAssistant?.instructions && currentAssistant.id !== 'ax-studio'
         ? '\n\n' + currentAssistant.instructions
         : '') +
-      memorySuffix +
       CODE_EXECUTION_INSTRUCTION +
       (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : '') +
       (localKnowledgeActive || alwaysCiteSources ? CITATION_FORMAT_INSTRUCTION : ''),
@@ -207,7 +198,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
           )
         }
         const contentParts = extractContentPartsFromUIMessage(messageForPersistence)
-        processMemoryOnFinish(messageForPersistence, contentParts, setChatMessages)
         persistMessageOnFinishRef.current?.(messageForPersistence, contentParts)
       }
       startToolExecution(addToolOutput as unknown as AddToolOutputFn)
@@ -230,9 +220,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     regenerate,
     chatMessages,
     setChatMessages,
-    handleRememberCommand,
-    handleForgetCommand,
-    lastUserInputRef,
     prepareLocalKnowledge,
   })
 

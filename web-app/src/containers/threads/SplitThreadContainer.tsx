@@ -19,7 +19,6 @@ import { useMessages } from '@/hooks/chat/useMessages'
 import { useLocalKnowledge } from '@/hooks/research/useLocalKnowledge'
 import { type ThreadMessage } from '@ax-studio/core'
 import { useChat } from '@/hooks/chat/use-chat'
-import { useThreadMemory } from '@/hooks/threads/use-thread-memory'
 import { useThreadConfig } from '@/hooks/threads/use-thread-config'
 import { useThreadChat } from '@/hooks/threads/use-thread-chat'
 import { useThreadTools, type AddToolOutputFn } from '@/hooks/threads/use-thread-tools'
@@ -55,13 +54,6 @@ export function SplitThreadContainer({
 
   // ─── Domain hooks (same as $threadId.tsx) ─────────────────────────────────
   const projectId = thread?.metadata?.project?.id
-  const {
-    memorySuffix,
-    lastUserInputRef,
-    processMemoryOnFinish,
-    handleRememberCommand,
-    handleForgetCommand,
-  } = useThreadMemory(threadId)
   const { promptResolution, optimizedModelConfig } = useThreadConfig({
     thread,
     selectedModel,
@@ -107,7 +99,6 @@ export function SplitThreadContainer({
       (currentAssistant?.instructions && currentAssistant.id !== 'ax-studio'
         ? '\n\n' + currentAssistant.instructions
         : '') +
-      memorySuffix +
       CODE_EXECUTION_INSTRUCTION +
       (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : '') +
       (localKnowledgeActive ? CITATION_FORMAT_INSTRUCTION : ''),
@@ -159,11 +150,6 @@ export function SplitThreadContainer({
         }
         const contentParts =
           extractContentPartsFromUIMessage(messageForPersistence)
-        processMemoryOnFinish(
-          messageForPersistence,
-          contentParts,
-          setChatMessages,
-        )
         persistMessageOnFinishRef.current?.(messageForPersistence, contentParts)
       }
       startToolExecution(addToolOutput as unknown as AddToolOutputFn)
@@ -185,9 +171,6 @@ export function SplitThreadContainer({
     regenerate,
     chatMessages,
     setChatMessages,
-    handleRememberCommand,
-    handleForgetCommand,
-    lastUserInputRef,
   })
 
   persistMessageOnFinishRef.current = persistMessageOnFinish

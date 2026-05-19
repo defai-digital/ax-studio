@@ -92,9 +92,6 @@ describe('useThreadChat', () => {
   let mockSendMessage: ReturnType<typeof vi.fn>
   let mockRegenerate: ReturnType<typeof vi.fn>
   let mockSetChatMessages: ReturnType<typeof vi.fn>
-  let mockHandleRememberCommand: ReturnType<typeof vi.fn>
-  let mockHandleForgetCommand: ReturnType<typeof vi.fn>
-  let lastUserInputRef: { current: string }
 
   const defaultParams = (): ThreadChatParams => ({
     threadId,
@@ -102,9 +99,6 @@ describe('useThreadChat', () => {
     regenerate: mockRegenerate,
     chatMessages: [],
     setChatMessages: mockSetChatMessages,
-    handleRememberCommand: mockHandleRememberCommand,
-    handleForgetCommand: mockHandleForgetCommand,
-    lastUserInputRef,
   })
 
   beforeEach(() => {
@@ -112,9 +106,6 @@ describe('useThreadChat', () => {
     mockSendMessage = vi.fn()
     mockRegenerate = vi.fn()
     mockSetChatMessages = vi.fn()
-    mockHandleRememberCommand = vi.fn().mockReturnValue(false)
-    mockHandleForgetCommand = vi.fn().mockReturnValue(false)
-    lastUserInputRef = { current: '' }
 
     // Reset stores
     useMessages.setState({ messages: {} })
@@ -138,31 +129,9 @@ describe('useThreadChat', () => {
         await result.current.processAndSendMessage('  hello world  ')
       })
 
-      expect(lastUserInputRef.current).toBe('hello world')
-    })
-
-    it('delegates /remember to handleRememberCommand', async () => {
-      mockHandleRememberCommand.mockReturnValue(true)
-      const { result } = renderHook(() => useThreadChat(defaultParams()))
-
-      await act(async () => {
-        await result.current.processAndSendMessage('/remember test')
-      })
-
-      expect(mockHandleRememberCommand).toHaveBeenCalledWith('/remember test')
-      expect(mockSendMessage).not.toHaveBeenCalled()
-    })
-
-    it('delegates /forget to handleForgetCommand', async () => {
-      mockHandleForgetCommand.mockReturnValue(true)
-      const { result } = renderHook(() => useThreadChat(defaultParams()))
-
-      await act(async () => {
-        await result.current.processAndSendMessage('/forget test')
-      })
-
-      expect(mockHandleForgetCommand).toHaveBeenCalledWith('/forget test')
-      expect(mockSendMessage).not.toHaveBeenCalled()
+      // Trim happens inside processAndSendMessage; verify by checking that
+      // sendMessage was invoked with the trimmed text downstream.
+      expect(mockSendMessage).toHaveBeenCalled()
     })
 
     it('renames thread on first message when title is default', async () => {

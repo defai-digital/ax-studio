@@ -1,7 +1,7 @@
 /**
  * ChatInputToolbar — the bottom action bar of ChatInput.
  *
- * Renders: attachment dropdown, capability toggles (tools, memory, reasoning),
+ * Renders: attachment dropdown, capability toggles (tools, reasoning),
  * token counter, and the send/stop button. Pure UI — no data fetching.
  */
 import { memo, type ComponentType, type ReactNode } from 'react'
@@ -21,7 +21,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu'
-import { ArrowUp, Atom, Binary, Brain, Database, ImagePlus, Loader2, Paperclip, PlusIcon, SearchIcon, Square, type LucideIcon, User, Wrench } from "lucide-react";
+import { ArrowUp, Atom, Binary, Database, ImagePlus, Loader2, Paperclip, PlusIcon, SearchIcon, Square, type LucideIcon, User, Wrench } from "lucide-react";
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { TokenCounter } from '@/components/TokenCounter'
 import { AvatarEmoji } from '@/components/common/AvatarEmoji'
@@ -96,10 +96,6 @@ type Props = {
   setDropdownToolsAvailable: (v: boolean) => void
   tooltipToolsAvailable: boolean
   setTooltipToolsAvailable: (v: boolean) => void
-  // Memory
-  isMemoryEnabled: boolean
-  toggleMemory: () => void
-  memoryCount: number
   // Local knowledge
   isLocalKnowledgeEnabled: boolean
   toggleLocalKnowledge: () => void
@@ -136,9 +132,6 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
   setDropdownToolsAvailable,
   tooltipToolsAvailable,
   setTooltipToolsAvailable,
-  isMemoryEnabled,
-  toggleMemory,
-  memoryCount,
   isLocalKnowledgeEnabled,
   toggleLocalKnowledge,
   tokenCounterCompact,
@@ -328,20 +321,6 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                 </Tooltip>
               )
             )}
-
-            <ToolbarIconButton
-              icon={Brain}
-              buttonClassName="relative"
-              iconClassName={cn(isMemoryEnabled ? 'text-primary' : 'text-muted-foreground')}
-              tooltip={<p>{isMemoryEnabled ? `Memory (${memoryCount})` : 'Memory'}</p>}
-              onClick={toggleMemory}
-            >
-              {memoryCount > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-0.5 text-[10px] font-medium text-primary-foreground">
-                  {memoryCount}
-                </span>
-              )}
-            </ToolbarIconButton>
 
             <ToolbarIconButton
               icon={Database}
