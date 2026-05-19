@@ -15,7 +15,7 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 ## Highlights
 
 - **7 cloud + local providers** — OpenAI, Anthropic, Azure OpenAI, Google Gemini, Groq, OpenRouter, plus an Apple-MLX provider on macOS
-- **Two local-inference paths** — cross-platform `llama.cpp` for GGUF models and **in-process `ax-engine-sdk`** for Apple MLX
+- **Three local-inference paths** — cross-platform `llama.cpp` for GGUF, optional `ax-serving` subprocess, and **in-process `ax-engine-sdk`** for Apple MLX on macOS
 - **Local knowledge base** — AKIDB / fabric-ingest daemon for personal RAG over your own documents
 - **Persistent memory** — categorized memory entries that automatically inform conversations
 - **LLM Router** — autonomously picks the best model for each message
@@ -46,11 +46,28 @@ Configure each in **Settings → Providers → \<provider\>** with an API key an
 
 ### Local inference
 
-#### `llama.cpp` extension (macOS · Windows · Linux)
+The `llamacpp-extension` is the engine manager — it exposes a dropdown under **Settings → Engine Settings → Inference Engine** to pick the backend that the `llamacpp` provider proxies to:
 
-Cross-platform GGUF inference via a bundled `llama.cpp` build managed by `tauri-plugin-llamacpp`. Models can be downloaded inside the app (Hub) or pointed at a local path.
+- `llama.cpp (Default)` — bundled `llama.cpp` server, no extra setup
+- `AX Engine via ax-serving` — requires `ax-serving` to be installed separately on the machine
 
-#### MLX provider (macOS Apple Silicon)
+The MLX provider is a separate top-level provider entry (not managed by the llamacpp-extension).
+
+#### `llama.cpp` (macOS · Windows · Linux)
+
+Cross-platform GGUF inference via a bundled `llama.cpp` build managed by `tauri-plugin-llamacpp`. Models can be downloaded inside the app (Hub) or pointed at a local path. Auto-update of the engine binary is opt-in under Settings → Engine Settings.
+
+#### ax-serving (macOS · Windows · Linux, requires separate install)
+
+The same `llamacpp` provider can be re-pointed at an `ax-serving` subprocess instead of bundled llama.cpp. Useful when you want AX Engine's runtime features (KV-cache management, request scheduling, route-identity benchmarks) without linking the SDK in-process. **Not bundled** — install `ax-serving` from [defai-digital/ax-engine](https://github.com/defai-digital/ax-engine) per its README, then flip the engine dropdown.
+
+Why pick ax-serving over the in-process MLX provider:
+
+- You need cross-platform local inference with AX Engine semantics
+- You want the AX server's HTTP API surface for diagnostic / benchmark use
+- You're avoiding the in-process MLX path's current upstream-bug workarounds
+
+#### MLX provider (macOS Apple Silicon, in-process)
 
 In-process Apple MLX inference through the [`ax-engine-sdk`](https://github.com/defai-digital/ax-engine) Rust crate. No Python subprocess, no separate server — the SDK is linked directly into the Tauri backend and runs MLX models on Metal in the same process as the app.
 
