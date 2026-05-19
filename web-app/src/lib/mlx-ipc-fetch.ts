@@ -38,7 +38,6 @@
  */
 
 import { Channel, invoke } from '@tauri-apps/api/core'
-import { useAppState } from '@/hooks/settings/useAppState'
 
 interface OpenAIChatMessage {
   role: string
@@ -146,7 +145,34 @@ function streamingResponse(
     async start(controller) {
       const channel = new Channel<StreamEvent>()
 
-      const writeChunk = (delta: { role?: string; content?: string }, finish_reason: string | null) => {
+      let firstDeltaSent = false
+      let lastErr: string | null = null
+      let bufferedText = ''
+      let streamClosed = false
+
+      // Wrap controller writes so we silently no-op if the stream has been
+      // closed (e.g. the user navigated away mid-generation). Without this
+      // guard a pending setTimeout could call enqueue() on a closed
+      // controller and throw.
+      const safeEnqueue = (bytes: Uint8Array) => {
+        if (streamClosed) return
+        try {
+          controller.enqueue(bytes)
+        } catch {
+          streamClosed = true
+        }
+      }
+      const safeClose = () => {
+        if (streamClosed) return
+        streamClosed = true
+        try {
+          controller.close()
+        } catch {
+          /* already closed */
+        }
+      }
+
+      const enqueueChunk = (delta: { role?: string; content?: string }, finish_reason: string | null) => {
         const chunk = {
           id,
           object: 'chat.completion.chunk',
@@ -154,27 +180,42 @@ function streamingResponse(
           model: modelId,
           choices: [{ index: 0, delta, finish_reason }],
         }
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`))
+        safeEnqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`))
       }
-
-      let firstDeltaSent = false
-      let lastErr: string | null = null
 
       channel.onmessage = (evt) => {
         try {
           if (evt.type === 'start') {
             // Send a role-only opening chunk to match OpenAI's SSE shape.
-            writeChunk({ role: 'assistant' }, null)
+            enqueueChunk({ role: 'assistant' }, null)
             firstDeltaSent = true
           } else if (evt.type === 'delta') {
+            // Buffer rather than forward. The Rust worker uses a
+            // stream-as-blocking workaround for the upstream ax-engine slice
+            // abort (worker.rs:handle_generate_stream), so the entire
+            // response arrives in a single Delta event. Forwarding it as one
+            // chunk produces both UX problems (a blank screen for the full
+            // generation time, then everything appears at once) and t/s
+            // measurement problems (the chat transport divides token count
+            // by milliseconds because the deltas straddle no real elapsed
+            // time). Instead we wait for the `done` event — which carries
+            // the Rust-measured `elapsed_ms` — and then replay the buffered
+            // text as many small chunks spread evenly across that elapsed
+            // time. The chat transport then naturally measures a correct
+            // t/s and the UI feels like real token-by-token streaming.
+            //
+            // If a future ax-engine release re-enables real streaming
+            // (multiple Delta events arriving over time), this still works:
+            // we just concatenate them and replay against the total
+            // elapsed_ms reported on the terminal Done event.
+            bufferedText += evt.text
+          } else if (evt.type === 'done') {
             if (!firstDeltaSent) {
-              writeChunk({ role: 'assistant' }, null)
+              enqueueChunk({ role: 'assistant' }, null)
               firstDeltaSent = true
             }
-            writeChunk({ content: evt.text }, null)
-          } else if (evt.type === 'done') {
-            // Final chunk with finish_reason + usage on the same event.
-            const final = {
+
+            const finalChunk = {
               id,
               object: 'chat.completion.chunk',
               created,
@@ -186,36 +227,73 @@ function streamingResponse(
                 total_tokens: evt.prompt_token_count + evt.output_token_count,
               },
             }
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(final)}\n\n`))
-            controller.enqueue(encoder.encode('data: [DONE]\n\n'))
-            controller.close()
 
-            // Replace the chat transport's bogus first-to-last-delta
-            // calculation (microseconds → tens-of-thousands t/s) with the
-            // real number measured by the Rust worker. Delayed one tick so
-            // the transport's own setTokenSpeed call from its stream-close
-            // handler runs first and ours wins the final write.
-            if (evt.elapsed_ms > 0 && evt.output_token_count > 0) {
-              const realTps = Math.round(
-                (evt.output_token_count / (evt.elapsed_ms / 1000)) * 10
-              ) / 10
-              setTimeout(() => {
-                useAppState
-                  .getState()
-                  .setTokenSpeed(
-                    { id: 'streaming' } as never,
-                    realTps,
-                    evt.output_token_count
-                  )
-              }, 50)
+            // Compute simulated-streaming schedule. Number of chunks scales
+            // with the actual token count (so each "chunk" corresponds
+            // roughly to one model token visually) but is bounded to keep
+            // event volume sane.
+            const totalChars = bufferedText.length
+            const chunkCount = Math.max(
+              1,
+              Math.min(Math.max(evt.output_token_count, 10), 200),
+            )
+
+            // If we have no text (e.g. error/empty response), just close
+            // without simulated streaming.
+            if (totalChars === 0) {
+              safeEnqueue(encoder.encode(`data: ${JSON.stringify(finalChunk)}\n\n`))
+              safeEnqueue(encoder.encode('data: [DONE]\n\n'))
+              safeClose()
+              return
             }
+
+            // Slice text into `chunkCount` near-equal pieces (length-based,
+            // not boundary-aware — good enough for ChatML/Gemma output).
+            const chunks: string[] = []
+            const baseSize = Math.floor(totalChars / chunkCount)
+            const remainder = totalChars % chunkCount
+            let cursor = 0
+            for (let i = 0; i < chunkCount; i++) {
+              const size = baseSize + (i < remainder ? 1 : 0)
+              if (size === 0) continue
+              chunks.push(bufferedText.slice(cursor, cursor + size))
+              cursor += size
+            }
+
+            // Spread chunks across the real elapsed_ms. Floor each interval
+            // at 15ms so we don't fire dozens of writes in the same frame
+            // (the chat UI throttles renders anyway).
+            const interval = Math.max(15, evt.elapsed_ms / chunks.length)
+
+            chunks.forEach((text, i) => {
+              setTimeout(() => {
+                enqueueChunk({ content: text }, null)
+              }, Math.floor(i * interval))
+            })
+
+            // Emit the final chunk + [DONE] just after the last content
+            // chunk lands.
+            setTimeout(() => {
+              safeEnqueue(encoder.encode(`data: ${JSON.stringify(finalChunk)}\n\n`))
+              safeEnqueue(encoder.encode('data: [DONE]\n\n'))
+              safeClose()
+            }, Math.floor(chunks.length * interval) + 5)
+
+            // No longer need to override setTokenSpeed manually — the chat
+            // transport's first-to-last-delta math now sees deltas spread
+            // across the real elapsed_ms and produces an accurate t/s
+            // naturally. The bogus `204800 t/s` display was a side effect
+            // of all deltas landing in the same millisecond.
           } else if (evt.type === 'error') {
             lastErr = evt.message
             // Don't close yet — the `done` event should still arrive from the
             // worker. If it doesn't, the invoke() rejection below handles it.
           }
         } catch (e) {
-          controller.error(e)
+          if (!streamClosed) {
+            controller.error(e)
+            streamClosed = true
+          }
         }
       }
 
