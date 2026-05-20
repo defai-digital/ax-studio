@@ -415,3 +415,222 @@ fn test_write_yaml_accepts_typed_request() {
 
     let _ = fs::remove_file(get_app_data_folder_path(app.handle().clone()).join(path));
 }
+
+// ─── resolve_path URL branch (SSRF protection) ─────────────────────────────
+//
+// resolve_path accepts http/https URLs as a special case (used for model
+// download URLs that don't live in app_data). The implementation MUST reject
+// any URL pointing at the host's internal networks so a malicious config
+// can't trick the app into fetching from localhost / private LAN.
+
+#[test]
+fn test_resolve_path_accepts_clean_external_https_url() {
+    let app = mock_app();
+    let url = "https://huggingface.co/some/model.gguf";
+    let result = resolve_path(app.handle().clone(), url).unwrap();
+    // External URLs pass through unchanged (no canonicalize, no
+    // app_data prefix).
+    assert_eq!(result, PathBuf::from(url));
+}
+
+#[test]
+fn test_resolve_path_accepts_clean_external_http_url() {
+    let app = mock_app();
+    let url = "http://example.com/file.bin";
+    let result = resolve_path(app.handle().clone(), url).unwrap();
+    assert_eq!(result, PathBuf::from(url));
+}
+
+#[test]
+fn test_resolve_path_rejects_localhost_domain() {
+    let app = mock_app();
+    let result = resolve_path(app.handle().clone(), "http://localhost/foo");
+    assert!(result.is_err(), "localhost domain must be rejected");
+    let err = result.unwrap_err();
+    assert!(
+        err.contains("localhost"),
+        "error should mention localhost, got: {err}"
+    );
+}
+
+#[test]
+fn test_resolve_path_rejects_ipv4_loopback() {
+    let app = mock_app();
+    let result = resolve_path(app.handle().clone(), "http://127.0.0.1:9999/foo");
+    assert!(result.is_err(), "127.0.0.1 must be rejected");
+    assert!(result.unwrap_err().contains("internal networks"));
+}
+
+#[test]
+fn test_resolve_path_rejects_ipv4_private_10_dot() {
+    let app = mock_app();
+    let result = resolve_path(app.handle().clone(), "http://10.0.0.1/foo");
+    assert!(result.is_err(), "10.x private range must be rejected");
+}
+
+#[test]
+fn test_resolve_path_rejects_ipv4_private_192_168() {
+    let app = mock_app();
+    let result = resolve_path(app.handle().clone(), "http://192.168.1.1/foo");
+    assert!(result.is_err(), "192.168.x private range must be rejected");
+}
+
+#[test]
+fn test_resolve_path_rejects_ipv4_private_172_16() {
+    let app = mock_app();
+    let result = resolve_path(app.handle().clone(), "http://172.16.0.1/foo");
+    assert!(result.is_err(), "172.16/12 private range must be rejected");
+}
+
+#[test]
+fn test_resolve_path_rejects_unspecified_address() {
+    let app = mock_app();
+    let result = resolve_path(app.handle().clone(), "http://0.0.0.0/foo");
+    assert!(result.is_err(), "0.0.0.0 unspecified must be rejected");
+}
+
+#[test]
+fn test_resolve_path_rejects_invalid_url() {
+    let app = mock_app();
+    // Starts with "http://" so it takes the URL branch, but isn't a valid URL.
+    let result = resolve_path(app.handle().clone(), "http://");
+    assert!(result.is_err(), "malformed URL must be rejected");
+}
+
+// ─── decompress: tar.gz extraction safety ───────────────────────────────────
+//
+// The zip extraction path already has coverage in test_decompress_extracts_*
+// above. These tests fill the tar.gz gap: happy-path extraction and
+// path-traversal rejection. Symlink + hardlink handling are also part of
+// the tar code path but require more involved archive construction; not
+// covered here (flagged as a follow-up).
+
+/// Build an in-memory tar.gz archive with a single regular file entry.
+/// Used by the tar.gz happy-path test.
+fn make_tar_gz_with_file(entry_path: &str, contents: &[u8]) -> Vec<u8> {
+    let buffer: Vec<u8> = Vec::new();
+    let encoder = flate2::write::GzEncoder::new(buffer, flate2::Compression::default());
+    let mut builder = tar::Builder::new(encoder);
+
+    let mut header = tar::Header::new_gnu();
+    header.set_path(entry_path).unwrap();
+    header.set_size(contents.len() as u64);
+    header.set_mode(0o644);
+    header.set_cksum();
+    builder.append(&header, contents).unwrap();
+
+    let encoder = builder.into_inner().unwrap();
+    encoder.finish().unwrap()
+}
+
+#[test]
+fn test_decompress_extracts_targz_within_app_data_folder() {
+    let app = mock_app();
+    let app_data = get_app_data_folder_path(app.handle().clone());
+
+    // Place the archive inside the app data folder (decompress requires this).
+    let archive_rel = "test_targz_happy/archive.tar.gz";
+    let archive_abs = app_data.join(archive_rel);
+    fs::create_dir_all(archive_abs.parent().unwrap()).unwrap();
+
+    let archive_bytes = make_tar_gz_with_file("payload.txt", b"hello tar");
+    File::create(&archive_abs)
+        .unwrap()
+        .write_all(&archive_bytes)
+        .unwrap();
+
+    let output_rel = "test_targz_happy/out";
+    let request = DecompressRequest::Typed {
+        path: archive_rel.to_string(),
+        output_dir: output_rel.to_string(),
+    };
+    decompress(
+        app.handle().clone(),
+        None,
+        None,
+        None,
+        Some(request),
+    )
+    .unwrap();
+
+    let extracted = app_data.join(output_rel).join("payload.txt");
+    assert!(
+        extracted.exists(),
+        "tar.gz payload must be extracted to output dir"
+    );
+    let got = fs::read_to_string(&extracted).unwrap();
+    assert_eq!(got, "hello tar");
+
+    let _ = fs::remove_dir_all(app_data.join("test_targz_happy"));
+}
+
+// Note on tar.gz path-traversal coverage:
+//
+// The production code's tar extraction has a `path traversal blocked`
+// check at the entry level (commands.rs, decompress()), symmetric with
+// the zip check that's already covered by
+// `test_decompress_rejects_zip_path_traversal_entries`. We don't add an
+// equivalent tar-side test because constructing a malicious tar archive
+// in Rust requires bypassing the `tar` crate's own write-side safety
+// (it rejects entry paths containing `..` at archive-creation time).
+// Doing that cleanly needs raw byte manipulation of tar headers, which
+// is outside the scope of a unit test. The path-traversal LOGIC is
+// shared with the zip path and covered there.
+
+#[test]
+fn test_decompress_rejects_unsupported_format() {
+    let app = mock_app();
+    let app_data = get_app_data_folder_path(app.handle().clone());
+
+    let archive_rel = "test_bad_format/archive.7z";
+    let archive_abs = app_data.join(archive_rel);
+    fs::create_dir_all(archive_abs.parent().unwrap()).unwrap();
+    File::create(&archive_abs)
+        .unwrap()
+        .write_all(b"not a real 7z")
+        .unwrap();
+
+    let output_rel = "test_bad_format/out";
+    let request = DecompressRequest::Typed {
+        path: archive_rel.to_string(),
+        output_dir: output_rel.to_string(),
+    };
+    let result = decompress(
+        app.handle().clone(),
+        None,
+        None,
+        None,
+        Some(request),
+    );
+
+    assert!(result.is_err(), ".7z must be rejected as unsupported");
+    assert!(result
+        .unwrap_err()
+        .contains("Unsupported file format"));
+
+    let _ = fs::remove_dir_all(app_data.join("test_bad_format"));
+}
+
+#[test]
+fn test_decompress_rejects_archive_path_outside_app_data() {
+    let app = mock_app();
+
+    // Archive path resolves outside the app data folder via .. — must be blocked
+    // BEFORE the archive is even opened.
+    let request = DecompressRequest::Typed {
+        path: "../../etc/passwd.tar.gz".to_string(),
+        output_dir: "outdir".to_string(),
+    };
+    let result = decompress(
+        app.handle().clone(),
+        None,
+        None,
+        None,
+        Some(request),
+    );
+    assert!(result.is_err(), "archive path outside app_data must be rejected");
+    assert!(
+        result.unwrap_err().contains("not under app_data_folder"),
+        "error must mention app_data containment"
+    );
+}

@@ -702,11 +702,11 @@ pub async fn save_dialog(
     Ok(save_path)
 }
 
-/// Write binary data (hex-encoded) to a file path.
+/// Write binary data (base64-encoded) to a file path.
 /// Used by the diagram export flow on platforms where blob: anchor downloads
 /// do not work (macOS WKWebView, Tauri WebView2 on Windows).
 #[tauri::command]
-/// Write hex-encoded binary data to a path previously approved by `save_dialog`.
+/// Write base64-encoded binary data to a path previously approved by `save_dialog`.
 pub async fn write_binary_file(
     state: State<'_, AppState>,
     path: String,

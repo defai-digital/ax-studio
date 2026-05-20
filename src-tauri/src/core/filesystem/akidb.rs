@@ -404,6 +404,28 @@ struct FabricCliCommand {
     args: Vec<String>,
 }
 
+/// Validate that an MCP-config-supplied CLI command is on the allowlist.
+///
+/// The knowledge-base MCP config is user-editable JSON on disk. Without
+/// this gate, a tampered config could direct ax-studio to spawn an
+/// arbitrary binary as part of an "innocent" sync. The allowlist
+/// restricts us to well-known interpreters; absolute paths are also
+/// allowed on the assumption that an attacker who can write absolute
+/// paths into the config already has filesystem access equivalent to
+/// arbitrary code execution.
+fn validate_mcp_cli_command(raw_command: &str) -> Result<(), String> {
+    const ALLOWED: &[&str] = &["node", "npx", "bun", "python", "python3", "uvx"];
+    if !raw_command.contains('/')
+        && !raw_command.contains('\\')
+        && !ALLOWED.contains(&raw_command)
+    {
+        return Err(format!(
+            "Blocked disallowed command '{raw_command}' in knowledge-base MCP config"
+        ));
+    }
+    Ok(())
+}
+
 /// Resolve the fabric-ingest CLI command from the MCP config.
 /// Falls back to `npx -y @ax-fabric/fabric-ingest` if the config is missing.
 fn resolve_fabric_cli_command<R: Runtime>(
@@ -432,16 +454,7 @@ fn resolve_fabric_cli_command<R: Runtime>(
                         .unwrap_or("npx")
                         .to_string();
 
-                    let allowed = ["node", "npx", "bun", "python", "python3", "uvx"];
-                    if !raw_command.contains('/')
-                        && !raw_command.contains('\\')
-                        && !allowed.contains(&raw_command.as_str())
-                    {
-                        return Err(format!(
-                            "Blocked disallowed command '{raw_command}' in knowledge-base MCP config"
-                        ));
-                    }
-
+                    validate_mcp_cli_command(&raw_command)?;
                     let command = raw_command;
                     let args: Vec<String> = server
                         .get("args")
@@ -643,5 +656,282 @@ pub async fn cancel_akidb_sync(state: State<'_, AppState>) -> Result<bool, Strin
             .map(|_| true)
             .map_err(|_| "Knowledge-base sync was not running".to_string()),
         None => Ok(false),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! Tests for the AKIDB knowledge-base manager.
+    //!
+    //! These exercise the pure helpers that don't require an `AppHandle` —
+    //! the CLI allowlist (security-critical), config defaults + serde,
+    //! path resolvers, and legacy-file migration. The Tauri commands
+    //! themselves (`akidb_sync_now`, `cancel_akidb_sync`,
+    //! `read_akidb_config`, etc.) take an `AppHandle` or live `dirs::home_dir()`
+    //! and are intentionally not unit-tested here; covering them would
+    //! require mocking the home directory globally, which is fragile when
+    //! tests run in parallel.
+    //!
+    //! All tests are `#[cfg(test)]`-gated. The shipped binary is byte-for-byte
+    //! unaffected.
+
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_temp_dir(name: &str) -> TempPath {
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let count = COUNTER.fetch_add(1, Ordering::SeqCst);
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir()
+            .join(format!("ax_studio_akidb_test_{name}_{count}_{nanos}"));
+        fs::create_dir_all(&dir).unwrap();
+        TempPath { path: dir }
+    }
+
+    struct TempPath {
+        path: PathBuf,
+    }
+    impl TempPath {
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+    impl Drop for TempPath {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
+    // ── validate_mcp_cli_command: security-critical allowlist ─────────────
+
+    #[test]
+    fn cli_allowlist_accepts_npx() {
+        assert!(validate_mcp_cli_command("npx").is_ok());
+    }
+
+    #[test]
+    fn cli_allowlist_accepts_node() {
+        assert!(validate_mcp_cli_command("node").is_ok());
+    }
+
+    #[test]
+    fn cli_allowlist_accepts_python3() {
+        assert!(validate_mcp_cli_command("python3").is_ok());
+    }
+
+    #[test]
+    fn cli_allowlist_accepts_python() {
+        assert!(validate_mcp_cli_command("python").is_ok());
+    }
+
+    #[test]
+    fn cli_allowlist_accepts_bun() {
+        assert!(validate_mcp_cli_command("bun").is_ok());
+    }
+
+    #[test]
+    fn cli_allowlist_accepts_uvx() {
+        assert!(validate_mcp_cli_command("uvx").is_ok());
+    }
+
+    #[test]
+    fn cli_allowlist_rejects_arbitrary_bare_name() {
+        // Trying to inject a non-allowlisted bare command (no `/` or `\`)
+        // must be rejected. This is the load-bearing security check.
+        let err = validate_mcp_cli_command("curl").expect_err("curl must be rejected");
+        assert!(err.contains("Blocked disallowed command 'curl'"));
+    }
+
+    #[test]
+    fn cli_allowlist_rejects_sh_injection() {
+        let err = validate_mcp_cli_command("sh").expect_err("sh must be rejected");
+        assert!(err.contains("Blocked disallowed command"));
+    }
+
+    #[test]
+    fn cli_allowlist_rejects_bash_injection() {
+        assert!(validate_mcp_cli_command("bash").is_err());
+    }
+
+    #[test]
+    fn cli_allowlist_rejects_empty_string() {
+        // Empty string is bare (no '/' or '\\') and not in allowlist → rejected.
+        // Defensive: ensures we don't silently accept malformed configs.
+        assert!(validate_mcp_cli_command("").is_err());
+    }
+
+    #[test]
+    fn cli_allowlist_accepts_unix_absolute_path() {
+        // Absolute paths bypass the allowlist by design — the assumption is
+        // that whoever can write an absolute path into the MCP config already
+        // has filesystem access ≈ code execution. We just verify the bypass
+        // works so future code changes don't accidentally break power users
+        // who legitimately want to point at e.g. /opt/homebrew/bin/python.
+        assert!(validate_mcp_cli_command("/usr/bin/python3").is_ok());
+        assert!(validate_mcp_cli_command("/opt/homebrew/bin/node").is_ok());
+    }
+
+    #[test]
+    fn cli_allowlist_accepts_windows_path() {
+        // Same bypass via backslash for Windows.
+        assert!(validate_mcp_cli_command("C:\\Program Files\\nodejs\\node.exe").is_ok());
+    }
+
+    // ── path helpers ──────────────────────────────────────────────────────
+
+    #[test]
+    fn preferred_config_path_is_under_ax_studio_dir() {
+        let home = Path::new("/home/user");
+        let preferred = preferred_akidb_config_path(home);
+        assert_eq!(
+            preferred,
+            PathBuf::from("/home/user/.ax-studio/config.yaml")
+        );
+    }
+
+    #[test]
+    fn legacy_config_path_is_under_ax_fabric_dir() {
+        let home = Path::new("/home/user");
+        let legacy = legacy_akidb_config_path(home);
+        assert_eq!(legacy, PathBuf::from("/home/user/.ax-fabric/config.yaml"));
+    }
+
+    #[test]
+    fn legacy_status_path_is_under_ax_fabric_dir() {
+        let home = Path::new("/home/user");
+        let status = legacy_akidb_status_path(home);
+        assert_eq!(status, PathBuf::from("/home/user/.ax-fabric/status.json"));
+    }
+
+    // ── migrate_legacy_akidb_file ─────────────────────────────────────────
+
+    #[test]
+    fn migration_no_ops_when_legacy_file_does_not_exist() {
+        let tmp = unique_temp_dir("migrate_noop");
+        let legacy = tmp.path().join("legacy/config.yaml");
+        let preferred = tmp.path().join("preferred/config.yaml");
+        // Neither file exists; should silently succeed (no-op).
+        migrate_legacy_akidb_file(tmp.path(), &legacy, &preferred).unwrap();
+        assert!(!preferred.exists());
+    }
+
+    #[test]
+    fn migration_no_ops_when_preferred_already_exists() {
+        let tmp = unique_temp_dir("migrate_skip");
+        let legacy_dir = tmp.path().join("legacy");
+        let preferred_dir = tmp.path().join("preferred");
+        fs::create_dir_all(&legacy_dir).unwrap();
+        fs::create_dir_all(&preferred_dir).unwrap();
+        let legacy = legacy_dir.join("config.yaml");
+        let preferred = preferred_dir.join("config.yaml");
+        fs::write(&legacy, "legacy: true").unwrap();
+        fs::write(&preferred, "preferred: true").unwrap();
+
+        migrate_legacy_akidb_file(tmp.path(), &legacy, &preferred).unwrap();
+        // Preferred is NOT overwritten when it already exists.
+        let preferred_contents = fs::read_to_string(&preferred).unwrap();
+        assert_eq!(preferred_contents, "preferred: true");
+    }
+
+    #[test]
+    fn migration_copies_legacy_to_preferred_when_only_legacy_exists() {
+        let tmp = unique_temp_dir("migrate_copy");
+        let legacy_dir = tmp.path().join("legacy");
+        let preferred_dir = tmp.path().join("preferred");
+        fs::create_dir_all(&legacy_dir).unwrap();
+        // Don't create preferred_dir — migration should create the parent itself.
+        let legacy = legacy_dir.join("config.yaml");
+        let preferred = preferred_dir.join("config.yaml");
+        fs::write(&legacy, "fabric:\n  data_root: /tmp/data\n").unwrap();
+
+        migrate_legacy_akidb_file(tmp.path(), &legacy, &preferred).unwrap();
+        assert!(preferred.exists());
+        let copied = fs::read_to_string(&preferred).unwrap();
+        assert!(copied.contains("data_root: /tmp/data"));
+    }
+
+    // ── AkidbConfig defaults ──────────────────────────────────────────────
+
+    #[test]
+    fn fabric_section_defaults_are_sensible() {
+        let f = FabricSection::default();
+        assert_eq!(f.data_root, "~/.ax-studio/data");
+        assert_eq!(f.max_storage_gb, 50.0);
+    }
+
+    #[test]
+    fn akidb_section_defaults_are_sensible() {
+        let a = AkidbSection::default();
+        assert_eq!(a.root, "~/.ax-studio/data/akidb");
+        assert_eq!(a.collection, "default");
+        assert_eq!(a.metric, "cosine");
+        assert_eq!(a.dimension, 768);
+    }
+
+    #[test]
+    fn ingest_chunking_defaults_match_zod_schema() {
+        let c = IngestChunking::default();
+        assert_eq!(c.chunk_size, 2800);
+        assert_eq!(c.overlap, 0.15);
+    }
+
+    // ── AkidbConfig serde round-trip ──────────────────────────────────────
+
+    #[test]
+    fn akidb_config_round_trips_through_yaml() {
+        let yaml = r#"
+fabric:
+  data_root: "~/custom/data"
+  max_storage_gb: 100.0
+akidb:
+  root: "~/custom/akidb"
+  collection: "test-coll"
+  metric: "euclidean"
+  dimension: 1024
+ingest:
+  sources:
+    - path: "/path/to/docs"
+  chunking:
+    chunk_size: 1000
+    overlap: 0.2
+embedder:
+  type: "openai"
+  model_id: "text-embedding-3-small"
+  dimension: 1536
+  batch_size: 16
+"#;
+        let cfg: AkidbConfig = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(cfg.fabric.data_root, "~/custom/data");
+        assert_eq!(cfg.fabric.max_storage_gb, 100.0);
+        assert_eq!(cfg.akidb.collection, "test-coll");
+        assert_eq!(cfg.akidb.dimension, 1024);
+        assert_eq!(cfg.ingest.sources.len(), 1);
+        assert_eq!(cfg.ingest.sources[0].path, "/path/to/docs");
+        assert_eq!(cfg.ingest.chunking.chunk_size, 1000);
+        assert_eq!(cfg.embedder.embedder_type, "openai");
+        assert_eq!(cfg.embedder.batch_size, 16);
+    }
+
+    #[test]
+    fn akidb_config_uses_defaults_for_missing_sections() {
+        // Minimal config with only a single user-supplied source. All other
+        // fields should populate from the Default impls.
+        let yaml = r#"
+ingest:
+  sources:
+    - path: "/my/docs"
+"#;
+        let cfg: AkidbConfig = serde_yaml::from_str(yaml).unwrap();
+        // Defaults applied
+        assert_eq!(cfg.fabric.data_root, "~/.ax-studio/data");
+        assert_eq!(cfg.fabric.max_storage_gb, 50.0);
+        assert_eq!(cfg.akidb.dimension, 768);
+        assert_eq!(cfg.ingest.chunking.chunk_size, 2800);
+        // User value preserved
+        assert_eq!(cfg.ingest.sources[0].path, "/my/docs");
     }
 }
