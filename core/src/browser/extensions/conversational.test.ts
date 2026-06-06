@@ -200,45 +200,53 @@ describe('ConversationalExtension', () => {
 
   test('should create and get thread assistant', async () => {
     const thread = await extension.createThread({ name: 'Test Thread' })
-    
+
     const assistant: ThreadAssistantInfo = {
-      threadId: thread.id,
-      modelId: 'test-model'
+      id: 'test-assistant',
+      name: 'Test Assistant',
+      model: { id: 'test-model', name: 'Test Model', provider: 'test' },
+      tools: []
     }
     
     await extension.createThreadAssistant(thread.id, assistant)
     
     const retrievedAssistant = await extension.getThreadAssistant(thread.id)
-    expect(retrievedAssistant.modelId).toBe('test-model')
+    expect(retrievedAssistant.model.id).toBe('test-model')
   })
 
   test('should modify thread assistant', async () => {
     const thread = await extension.createThread({ name: 'Test Thread' })
-    
+
     const assistant: ThreadAssistantInfo = {
-      threadId: thread.id,
-      modelId: 'test-model'
+      id: 'test-assistant',
+      name: 'Test Assistant',
+      model: { id: 'test-model', name: 'Test Model', provider: 'test' },
+      tools: []
     }
-    
+
     await extension.createThreadAssistant(thread.id, assistant)
-    
+
     const modifiedAssistant: ThreadAssistantInfo = {
-      threadId: thread.id,
-      modelId: 'modified-model'
+      id: 'test-assistant',
+      name: 'Test Assistant',
+      model: { id: 'modified-model', name: 'Modified Model', provider: 'test' },
+      tools: []
     }
     
     await extension.modifyThreadAssistant(thread.id, modifiedAssistant)
     
     const retrievedAssistant = await extension.getThreadAssistant(thread.id)
-    expect(retrievedAssistant.modelId).toBe('modified-model')
+    expect(retrievedAssistant.model.id).toBe('modified-model')
   })
 
   test('should delete thread assistant when thread is deleted', async () => {
     const thread = await extension.createThread({ name: 'Test Thread' })
-    
+
     const assistant: ThreadAssistantInfo = {
-      threadId: thread.id,
-      modelId: 'test-model'
+      id: 'test-assistant',
+      name: 'Test Assistant',
+      model: { id: 'test-model', name: 'Test Model', provider: 'test' },
+      tools: []
     }
     
     await extension.createThreadAssistant(thread.id, assistant)

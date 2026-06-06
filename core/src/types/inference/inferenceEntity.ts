@@ -24,27 +24,58 @@ export type ChatCompletionMessage = {
   tool_call_id?: string
 }
 
-export type ChatCompletionMessageContent =
-  | string
-  | (ChatCompletionMessageContentText &
-      ChatCompletionMessageContentImage &
-      ChatCompletionMessageContentDoc)[]
-
 export enum ChatCompletionMessageContentType {
   Text = 'text',
   Image = 'image_url',
   Doc = 'doc_url',
 }
 
-export type ChatCompletionMessageContentText = {
-  type: ChatCompletionMessageContentType
-  text: string
+/**
+ * Discriminated union for message content items
+ * Ensures type safety by requiring correct properties for each type
+ */
+export type ChatCompletionMessageContentItem =
+  | { type: typeof ChatCompletionMessageContentType.Text; text: string }
+  | { type: typeof ChatCompletionMessageContentType.Image; image_url: { url: string } }
+  | { type: typeof ChatCompletionMessageContentType.Doc; doc_url: { url: string } }
+
+export type ChatCompletionMessageContent =
+  | string
+  | ChatCompletionMessageContentItem[]
+
+/**
+ * Type guard to check if an object is a valid ChatCompletionMessageContentItem
+ */
+export function isValidContentItem(item: any): item is ChatCompletionMessageContentItem {
+  if (!item || typeof item !== 'object') return false
+
+  switch (item.type) {
+    case ChatCompletionMessageContentType.Text:
+      return typeof item.text === 'string'
+    case ChatCompletionMessageContentType.Image:
+      return item.image_url &&
+             typeof item.image_url === 'object' &&
+             typeof item.image_url.url === 'string'
+    case ChatCompletionMessageContentType.Doc:
+      return item.doc_url &&
+             typeof item.doc_url === 'object' &&
+             typeof item.doc_url.url === 'string'
+    default:
+      return false
+  }
 }
-export type ChatCompletionMessageContentImage = {
-  type: ChatCompletionMessageContentType
-  image_url: { url: string }
-}
-export type ChatCompletionMessageContentDoc = {
-  type: ChatCompletionMessageContentType
-  doc_url: { url: string }
+
+/**
+ * Validates ChatCompletionMessageContent at runtime
+ */
+export function validateMessageContent(content: ChatCompletionMessageContent): boolean {
+  if (typeof content === 'string') {
+    return true
+  }
+
+  if (Array.isArray(content)) {
+    return content.every(isValidContentItem)
+  }
+
+  return false
 }

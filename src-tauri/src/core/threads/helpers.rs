@@ -22,6 +22,22 @@ pub fn should_use_sqlite() -> bool {
 pub async fn get_lock_for_thread(thread_id: &str) -> Arc<Mutex<()>> {
     let locks = MESSAGE_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
     let mut locks = locks.lock().await;
+
+    // Clean up entries where the Arc has no external references (strong_count == 1)
+    let keys_to_remove: Vec<String> = locks
+        .iter()
+        .filter_map(|(key, arc)| {
+            if Arc::strong_count(arc) == 1 {
+                Some(key.clone())
+            } else {
+                None
+            }
+        })
+        .collect();
+    for key in keys_to_remove {
+        locks.remove(&key);
+    }
+
     let lock = locks
         .entry(thread_id.to_string())
         .or_insert_with(|| Arc::new(Mutex::new(())))
@@ -100,6 +116,87 @@ pub fn update_thread_metadata<R: Runtime>(
     }
     fs::rename(&tmp_path, &path).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_test_dir(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir()
+            .join("ax_studio_test")
+            .join(name)
+            .join(format!("{}", std::process::id()));
+        let _ = fs::create_dir_all(&dir);
+        dir
+    }
+
+    fn cleanup_test_dir(dir: &std::path::Path) {
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn test_should_use_sqlite() {
+        let result = should_use_sqlite();
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        assert!(!result);
+        #[cfg(any(target_os = "android", target_os = "ios"))]
+        assert!(result);
+    }
+
+    #[test]
+    fn test_write_messages_to_file_basic() {
+        let dir = make_test_dir("write_basic");
+        let path = dir.join("messages.jsonl");
+
+        let messages = vec![
+            serde_json::json!({"role": "user", "content": "Hello"}),
+            serde_json::json!({"role": "assistant", "content": "Hi there"}),
+        ];
+
+        write_messages_to_file(&messages, &path).unwrap();
+
+        assert!(path.exists());
+        let content = fs::read_to_string(&path).unwrap();
+        let lines: Vec<&str> = content.trim().split('\n').collect();
+        assert_eq!(lines.len(), 2);
+
+        let msg0: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
+        assert_eq!(msg0["role"], "user");
+        let msg1: serde_json::Value = serde_json::from_str(lines[1]).unwrap();
+        assert_eq!(msg1["role"], "assistant");
+
+        cleanup_test_dir(&dir);
+    }
+
+    #[test]
+    fn test_write_messages_to_file_empty() {
+        let dir = make_test_dir("write_empty");
+        let path = dir.join("messages.jsonl");
+
+        write_messages_to_file(&[], &path).unwrap();
+
+        assert!(path.exists());
+        let content = fs::read_to_string(&path).unwrap();
+        assert!(content.is_empty());
+
+        cleanup_test_dir(&dir);
+    }
+
+    #[test]
+    fn test_write_messages_to_file_atomic_no_tmp_leftover() {
+        let dir = make_test_dir("write_atomic");
+        let path = dir.join("messages.jsonl");
+        let tmp_path = path.with_extension("jsonl.tmp");
+
+        let messages = vec![serde_json::json!({"msg": "test"})];
+        write_messages_to_file(&messages, &path).unwrap();
+
+        assert!(!tmp_path.exists());
+        assert!(path.exists());
+
+        cleanup_test_dir(&dir);
+    }
 }
 
 /// Remove the per-thread lock entry when a thread is deleted.

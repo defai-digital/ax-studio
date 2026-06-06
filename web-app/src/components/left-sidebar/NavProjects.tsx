@@ -24,7 +24,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { useThreadManagement } from "@/hooks/useThreadManagement"
+import { useThreadManagement } from "@/features/threads/hooks/useThreadManagement"
 import { Link, useNavigate } from "@tanstack/react-router"
 import { useTranslation } from "@/i18n/react-i18next-compat"
 

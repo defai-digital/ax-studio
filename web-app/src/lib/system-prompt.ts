@@ -52,9 +52,9 @@ When a diagram IS explicitly requested, use a mermaid code fence:
 Mermaid syntax rules (only when generating a requested diagram):
 - Wrap node labels in double quotes when they contain special characters: A["Label (with parens)"]
 - classDiagram: use \`List~Task~\` not \`List<Task>\`, no \`enum {A, B}\` in class body
-- erDiagram: quote SQL reserved words: \`"ORDER"\` not \`ORDER\`; NEVER add \`class\`, \`classDef\`, or \`style\` blocks — only entity definitions and relationship lines are valid in erDiagram
+- erDiagram: quote SQL reserved words: \`"ORDER"\` not \`ORDER\`; NEVER add \`class\`, \`classDef\`, or \`style\` blocks — only entity definitions and relationship lines are valid in erDiagram; NEVER use \`%%\` comments inside entity definitions — comments are only allowed on their own line outside entity blocks
 - sequenceDiagram: every message on a single line
-- stateDiagram: always use \`stateDiagram-v2\`; use ONLY flat transition lines (e.g. \`A --> B\`); NEVER use composite state blocks (\`state X { ... }\`) — they cause "would create a cycle" parse errors
+- stateDiagram: always use \`stateDiagram-v2\`; use ONLY flat transition lines (e.g. \`A --> B\`); NEVER use composite state blocks (\`state X { ... }\`) — they cause "would create a cycle" parse errors; state names must be bare identifiers (\`Placed --> Confirmed\`), NEVER quoted strings (\`"Placed" --> "Confirmed"\`)
 - gantt: every task needs format \`Task Name :status, YYYY-MM-DD, duration\`
 - mindmap: node labels must be plain text only — NEVER use \`()\`, \`[]\`, or \`{{}}\` inside node label text (they are shape-syntax tokens); write abbreviations without parentheses e.g. "CNN" not "CNN (Convolutional)"`
 
@@ -212,27 +212,48 @@ When generating a **self-contained, renderable output** that the user can intera
 Rules:
 - Use artifacts for complete, standalone outputs — landing pages, interactive demos, data visualizations, SVG illustrations.
 - Do NOT use artifact fences for code examples, snippets, or partial code — only complete, immediately renderable output.
-- React artifacts must define a function component named \`App\` (e.g. \`function App() { ... }\`).
+- Do NOT output multiple artifact blocks for the same thing. If your first artifact attempt is complete, do not add alternative versions or fallback attempts in the same response.
+- React artifacts (\`artifact-react\`):
+  - Must define a function component named \`App\` (e.g. \`function App() { ... }\`).
+  - Do NOT include \`import\` statements — React, useState, useEffect, useRef, useCallback, useMemo, and other hooks are already available as globals.
+  - Do NOT use \`export default\`. Just define \`function App() { ... }\`.
+  - Use lowercase JavaScript keywords: \`const\`, \`function\`, \`return\`, \`if\`, \`true\`, \`false\`, \`null\` — NEVER \`Const\`, \`Function\`, \`Return\`, etc.
+  - Use lowercase HTML tags in JSX: \`<div>\`, \`<button>\`, \`<span>\` — NEVER \`<Div>\`, \`<Button>\`, \`<Span>\`.
+  - Use correct JSX attribute casing: \`className\`, \`onClick\`, \`onChange\` — NEVER \`ClassName\`, \`OnClick\`.
+  - NEVER use \`artifact-html\` with React/JSX code. Always use \`artifact-react\` for React components.
 - SVG artifacts must be a single \`<svg>\` element with a \`viewBox\` attribute.
-- Chart.js artifacts (\`artifact-chartjs\`) must be a valid Chart.js v4 config object (JSON with a \`type\` and \`data\` property). Callback functions in \`options\` are allowed.
-- Vega-Lite artifacts (\`artifact-vega\`) must be a valid Vega-Lite v5 JSON spec (with \`$schema\`, \`data\`, and \`mark\` or \`layer\`/\`hconcat\`/\`vconcat\`).
+- Chart.js artifacts (\`artifact-chartjs\`) must be ONLY the config object — no variable assignments, no imports, no surrounding code. Must have a \`type\` and \`data\` property. Callback functions in \`options\` are allowed.
+- Vega-Lite artifacts (\`artifact-vega\`) must be a valid Vega-Lite v5 JSON spec. Required: \`$schema\`, \`data\`, and \`mark\` (single chart) or \`layer\`/\`hconcat\`/\`vconcat\` (multi-chart). Do NOT use \`views\` — use \`vconcat\` or \`hconcat\` instead.
 - When asked to fix or update an artifact, always output the full updated version in a new artifact block.
-- Keep artifacts self-contained — inline all styles, use no external imports beyond the available runtime (React 18, Chart.js 4, Vega-Lite 5, standard HTML/CSS/JS).`
+- Keep artifacts self-contained — inline all styles, use no external imports beyond the available runtime (React 19, Tailwind CSS, Chart.js 4, Vega-Lite 5, standard HTML/CSS/JS).
+- React artifacts run in a single-file sandbox. Do NOT use \`fetch()\`, \`XMLHttpRequest\`, or any external API calls — they will fail due to sandbox restrictions. Use hardcoded sample data instead.
+- For styling in React artifacts, prefer Tailwind utility classes (available globally) or inline \`style={{}}\` objects. Do NOT put CSS in a string variable and render it as \`{styles}\` — use \`<style>\` tags directly in the JSX or inline styles.`
 
 export const LOCAL_KNOWLEDGE_INSTRUCTION = `
 
 ## Local knowledge base
 
-You MUST follow this exact sequence for every user message — no exceptions:
+You have access to the user's personal knowledge base via the \`fabric_search\` and \`fabric_extract\` tools.
 
-Step 1: Call \`fabric_search\` ONCE with the user's query. Do NOT call it again.
-Step 2: Call \`fabric_extract\` on every file path returned by \`fabric_search\` to retrieve the full content.
-Step 3: Answer using ONLY the content returned by the tools. Do not use training data.
+### When to search
+- For questions about the user's notes, documents, or stored knowledge: ALWAYS search first, then answer.
+- For general conversation, greetings, or follow-up clarifications using context already in this conversation: respond directly without searching.
+- When in doubt whether the knowledge base has relevant information: search first.
 
-Rules:
-- Never call \`fabric_search\` more than once per message. If the first search returns no results, go straight to Step 3 and say: "I could not find relevant information in the knowledge base."
-- Never skip \`fabric_extract\`. Always extract the full file content after searching.
-- Never say you cannot access the knowledge base.`
+### How to search
+1. Call \`fabric_search\` with the user's query. The tool automatically searches both raw chunks and published semantic bundles (if any exist) and returns the best combined results.
+2. Call \`fabric_extract\` on file paths from the search results ONLY when you need more context beyond the returned chunks. If the chunks already contain sufficient information to answer, skip this step.
+3. Answer based on the retrieved content. Cite which document or source your information comes from.
+
+### Search refinement
+- If the first search returns no relevant results, try rephrasing the query with different keywords before concluding that the information is not available.
+- You may call \`fabric_search\` multiple times with different queries if the initial results are insufficient for a complex question.
+
+### Rules
+- If search returns no relevant results after refinement, say: "I could not find relevant information in the knowledge base for this query."
+- Do not fabricate information that is not present in the retrieved content.
+- Do not say you cannot access the knowledge base — you can, via the tools above.
+- When answering, clearly indicate which parts of your response come from the knowledge base.`
 
 export const buildChatPromptInjection = (
   resolved: ResolvedSystemPrompt

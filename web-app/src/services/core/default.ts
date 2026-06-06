@@ -24,15 +24,20 @@ export class DefaultCoreService implements CoreService {
     // No-op
   }
 
-  async installExtension(extensions: ExtensionManifest[]): Promise<ExtensionManifest[]> {
+  async installExtension(
+    extensions: ExtensionManifest[]
+  ): Promise<ExtensionManifest[]> {
     // No-op in default implementation
     return extensions
   }
 
-  async uninstallExtension(extensions: string[], reload = true): Promise<boolean> {
+  async uninstallExtension(
+    extensions: string[],
+    reload = true
+  ): Promise<boolean> {
     console.log('uninstallExtension called:', { extensions, reload })
     // No-op in default implementation
-    return Promise.resolve(false)
+    return false
   }
 
   async getAppToken(): Promise<string | null> {

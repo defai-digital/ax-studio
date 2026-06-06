@@ -1,8 +1,15 @@
 import { Input } from '@/components/ui/input'
 import { useLocalApiServer } from '@/hooks/useLocalApiServer'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { cn } from '@/lib/utils'
+
+const HOSTNAME_RE = /^(?:(?:\d{1,3}\.){3}\d{1,3}|(?:[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])(?:\.(?:[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]))*)(?::\d{1,5})?$/
+
+function isValidHost(host: string): boolean {
+  if (!host) return false
+  return HOSTNAME_RE.test(host)
+}
 
 export function TrustedHostsInput({
   isServerRunning,
@@ -23,16 +30,19 @@ export function TrustedHostsInput({
     setInputValue(value)
   }
 
-  const handleBlur = () => {
-    // Split by comma and clean up each host
+  const parseResult = useMemo(() => {
     const hosts = inputValue
       .split(',')
       .map((host) => host.trim())
       .filter((host) => host.length > 0)
+    const valid = hosts.filter(isValidHost)
+    return { valid }
+  }, [inputValue])
 
-    // Remove duplicates
-    const uniqueHosts = [...new Set(hosts)]
+  const handleBlur = () => {
+    const { valid } = parseResult
 
+    const uniqueHosts = [...new Set(valid)]
     setTrustedHosts(uniqueHosts)
     setInputValue(uniqueHosts.join(', '))
   }

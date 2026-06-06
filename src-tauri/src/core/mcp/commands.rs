@@ -9,7 +9,9 @@ use super::{
     helpers::{restart_active_mcp_servers, start_mcp_server},
 };
 use crate::core::{
-    app::commands::get_app_data_folder_path, mcp::models::McpSettings, state::AppState,
+    app::commands::get_app_data_folder_path,
+    mcp::models::McpSettings,
+    state::{AppState, McpState},
 };
 use crate::core::{
     mcp::models::ToolWithServer,
@@ -17,18 +19,18 @@ use crate::core::{
 };
 use std::{fs, sync::Arc, time::Duration};
 
-async fn tool_call_timeout(state: &State<'_, AppState>) -> Duration {
-    state.mcp_settings.lock().await.tool_call_timeout_duration()
+async fn tool_call_timeout(state: &State<'_, McpState>) -> Duration {
+    state.settings.lock().await.tool_call_timeout_duration()
 }
 
 #[tauri::command]
 pub async fn activate_mcp_server<R: Runtime>(
     app: tauri::AppHandle<R>,
-    state: State<'_, AppState>,
+    state: State<'_, McpState>,
     name: String,
     config: Value,
 ) -> Result<(), String> {
-    let servers: SharedMcpServers = state.mcp_servers.clone();
+    let servers: SharedMcpServers = state.servers.clone();
 
     // Use the modified start_mcp_server that returns first attempt result
     start_mcp_server(app, servers, name, config).await
@@ -37,7 +39,7 @@ pub async fn activate_mcp_server<R: Runtime>(
 #[tauri::command]
 pub async fn deactivate_mcp_server<R: Runtime>(
     app: AppHandle<R>,
-    state: State<'_, AppState>,
+    state: State<'_, McpState>,
     name: String,
 ) -> Result<(), String> {
     log::info!("Deactivating MCP server: {name}");
@@ -45,14 +47,14 @@ pub async fn deactivate_mcp_server<R: Runtime>(
     // First, mark server as manually deactivated
     // Remove from active servers list
     {
-        let mut active_servers = state.mcp_active_servers.lock().await;
+        let mut active_servers = state.active_servers.lock().await;
         active_servers.remove(&name);
         log::info!("Removed MCP server {name} from active servers list");
     }
 
     // Clone the Arc reference first (without removing from map) so the server
     // stays tracked if cancellation fails.
-    let servers = state.mcp_servers.clone();
+    let servers = state.servers.clone();
     let service = {
         let servers_map = servers.lock().await;
         servers_map
@@ -83,7 +85,7 @@ pub async fn deactivate_mcp_server<R: Runtime>(
     }
 
     {
-        let mut pids = state.mcp_server_pids.lock().await;
+        let mut pids = state.server_pids.lock().await;
         pids.remove(&name);
     }
     log::info!("Server {name} stopped successfully and marked as deactivated.");
@@ -104,11 +106,11 @@ pub async fn deactivate_mcp_server<R: Runtime>(
 #[tauri::command]
 pub async fn restart_mcp_servers<R: Runtime>(
     app: AppHandle<R>,
-    state: State<'_, AppState>,
+    state: State<'_, McpState>,
 ) -> Result<(), String> {
     use super::helpers::{stop_mcp_servers_with_context, ShutdownContext};
 
-    let servers = state.mcp_servers.clone();
+    let servers = state.servers.clone();
 
     stop_mcp_servers_with_context(&app, &state, ShutdownContext::ManualRestart).await?;
 
@@ -124,9 +126,9 @@ pub async fn restart_mcp_servers<R: Runtime>(
 #[tauri::command]
 pub async fn get_connected_servers(
     _app: AppHandle<impl Runtime>,
-    state: State<'_, AppState>,
+    state: State<'_, McpState>,
 ) -> Result<Vec<String>, String> {
-    let servers = state.mcp_servers.clone();
+    let servers = state.servers.clone();
     let servers_map = servers.lock().await;
     Ok(servers_map.keys().cloned().collect())
 }
@@ -147,13 +149,13 @@ pub async fn get_connected_servers(
 /// 5. Combines all tools into a single vector
 /// 6. Returns the combined list of all available tools with server information
 #[tauri::command]
-pub async fn get_tools(state: State<'_, AppState>) -> Result<Vec<ToolWithServer>, String> {
+pub async fn get_tools(state: State<'_, McpState>) -> Result<Vec<ToolWithServer>, String> {
     let timeout_duration = tool_call_timeout(&state).await;
     let mut all_tools: Vec<ToolWithServer> = Vec::new();
 
     // Collect server refs under lock, then drop lock before querying
     let server_refs: Vec<(String, Arc<crate::core::state::RunningServiceEnum>)> = {
-        let servers = state.mcp_servers.lock().await;
+        let servers = state.servers.lock().await;
         servers
             .iter()
             .map(|(name, svc)| (name.clone(), svc.clone()))
@@ -212,7 +214,8 @@ pub async fn get_tools(state: State<'_, AppState>) -> Result<Vec<ToolWithServer>
 /// 6. Returns error if no server has the requested tool or if specified server not found
 #[tauri::command]
 pub async fn call_tool(
-    state: State<'_, AppState>,
+    state: State<'_, McpState>,
+    app_state: State<'_, AppState>,
     tool_name: String,
     server_name: Option<String>,
     arguments: Option<Map<String, Value>>,
@@ -223,13 +226,13 @@ pub async fn call_tool(
     let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
 
     if let Some(token) = &cancellation_token {
-        let mut cancellations = state.tool_call_cancellations.lock().await;
+        let mut cancellations = app_state.tool_call_cancellations.lock().await;
         cancellations.insert(token.clone(), cancel_tx);
     }
 
     // Phase 1: Collect Arc refs under lock, then search without lock
     let (server_refs, server_not_found) = {
-        let servers = state.mcp_servers.lock().await;
+        let servers = state.servers.lock().await;
 
         let refs: Vec<(String, Arc<crate::core::state::RunningServiceEnum>)> =
             if let Some(ref server) = server_name {
@@ -254,7 +257,7 @@ pub async fn call_tool(
         if let Some(ref server) = server_name {
             // Clean up cancellation token before early return
             if let Some(token) = &cancellation_token {
-                let mut cancellations = state.tool_call_cancellations.lock().await;
+                let mut cancellations = app_state.tool_call_cancellations.lock().await;
                 cancellations.remove(token);
             }
             return Err(format!("Server '{server}' not found"));
@@ -281,7 +284,7 @@ pub async fn call_tool(
         None => {
             // Clean up cancellation token before early return
             if let Some(token) = &cancellation_token {
-                let mut cancellations = state.tool_call_cancellations.lock().await;
+                let mut cancellations = app_state.tool_call_cancellations.lock().await;
                 cancellations.remove(token);
             }
             return Err(format!("Tool {tool_name} not found"));
@@ -321,7 +324,7 @@ pub async fn call_tool(
 
     // Clean up cancellation token
     if let Some(token) = &cancellation_token {
-        let mut cancellations = state.tool_call_cancellations.lock().await;
+        let mut cancellations = app_state.tool_call_cancellations.lock().await;
         cancellations.remove(token);
     }
 
@@ -338,10 +341,10 @@ pub async fn call_tool(
 /// * `Result<(), String>` - Success if token found and cancelled, error otherwise
 #[tauri::command]
 pub async fn cancel_tool_call(
-    state: State<'_, AppState>,
+    app_state: State<'_, AppState>,
     cancellation_token: String,
 ) -> Result<(), String> {
-    let mut cancellations = state.tool_call_cancellations.lock().await;
+    let mut cancellations = app_state.tool_call_cancellations.lock().await;
 
     if let Some(cancel_tx) = cancellations.remove(&cancellation_token) {
         // Send cancellation signal - ignore if receiver is already dropped
@@ -412,7 +415,13 @@ pub async fn get_mcp_configs<R: Runtime>(app: AppHandle<R>) -> Result<String, St
         .ok_or("mcpServers is not an object")?;
 
     // Remove deprecated MCP servers if present (features removed)
-    for key in &["Ax-Studio Browser MCP", "browsermcp", "fetch", "serper", "integration-github"] {
+    for key in &[
+        "Ax-Studio Browser MCP",
+        "browsermcp",
+        "fetch",
+        "serper",
+        "integration-github",
+    ] {
         if mcp_servers.remove(*key).is_some() {
             mutated = true;
         }
@@ -430,8 +439,8 @@ pub async fn get_mcp_configs<R: Runtime>(app: AppHandle<R>) -> Result<String, St
 
     // Update in-memory state with latest settings
     {
-        let state = app.state::<AppState>();
-        let mut settings_guard = state.mcp_settings.lock().await;
+        let mcp_state = app.state::<McpState>();
+        let mut settings_guard = mcp_state.settings.lock().await;
         *settings_guard = settings.clone();
     }
 
@@ -480,8 +489,8 @@ pub async fn save_mcp_configs<R: Runtime>(
     .map_err(|e| e.to_string())?;
 
     {
-        let state = app.state::<AppState>();
-        let mut settings_guard = state.mcp_settings.lock().await;
+        let mcp_state = app.state::<McpState>();
+        let mut settings_guard = mcp_state.settings.lock().await;
         *settings_guard = settings;
     }
 

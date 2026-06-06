@@ -15,7 +15,7 @@ import {
 
 import { Switch } from '@/components/ui/switch'
 
-import { useThreads } from '@/hooks/useThreads'
+import { useThreads } from '@/features/threads/hooks/useThreads'
 import { useToolAvailable } from '@/hooks/useToolAvailable'
 
 import React from 'react'

@@ -66,6 +66,7 @@ mod tests {
             prefix: "/v1".to_string(),
             proxy_api_key: "test-key".to_string(),
             trusted_hosts: vec![vec!["localhost".to_string()]],
+            cors_enabled: false,
             host: "localhost".to_string(),
             port: 1337,
         };
@@ -82,6 +83,7 @@ mod tests {
             prefix: "".to_string(),
             proxy_api_key: "".to_string(),
             trusted_hosts: vec![],
+            cors_enabled: false,
             host: "127.0.0.1".to_string(),
             port: 8080,
         };

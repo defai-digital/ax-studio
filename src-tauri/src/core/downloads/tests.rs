@@ -214,7 +214,7 @@ fn test_client_creation_with_ssl_settings() {
         url: "https://example.com/file.zip".to_string(),
         save_path: "downloads/file.zip".to_string(),
         proxy: Some(proxy_config),
-        sha256: None,
+        sha256: Some("abc123".to_string()), // SHA256 now required when ignore_ssl=true
         size: None,
         model_id: None,
     };
@@ -222,8 +222,33 @@ fn test_client_creation_with_ssl_settings() {
     let header_map = HeaderMap::new();
     let result = _get_client_for_item(&download_item, &header_map);
 
-    // Should create client successfully even with SSL settings
+    // Should create client successfully with SSL disabled but SHA256 provided
     assert!(result.is_ok());
+}
+
+#[test]
+fn test_client_creation_with_ssl_settings_without_sha256() {
+    // Test that SSL settings without SHA256 are rejected
+    let mut proxy_config = create_test_proxy_config("https://proxy.example.com:8080");
+    proxy_config.ignore_ssl = Some(true);
+
+    let download_item = DownloadItem {
+        url: "https://example.com/file.zip".to_string(),
+        save_path: "downloads/file.zip".to_string(),
+        proxy: Some(proxy_config),
+        sha256: None, // No SHA256 provided
+        size: None,
+        model_id: None,
+    };
+
+    let header_map = HeaderMap::new();
+    let result = _get_client_for_item(&download_item, &header_map);
+
+    // Should fail when SSL is disabled but no SHA256 validation
+    assert!(result.is_err());
+    let err_msg = result.unwrap_err();
+    assert!(err_msg.contains("SHA256 hash validation is required"));
+    assert!(err_msg.contains("can be tampered with"));
 }
 
 #[test]

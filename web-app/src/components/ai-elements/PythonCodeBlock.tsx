@@ -1,6 +1,6 @@
 import { type ReactNode, memo, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { useCodeExecution, type ExecutionResult } from '@/hooks/useCodeExecution'
+import { useCodeExecution, type ExecutionResult } from '@/features/chat/hooks/useCodeExecution'
 import { Button } from '@/components/ui/button'
 import { PlayIcon, RotateCcwIcon, LoaderCircleIcon, DownloadIcon, SquareTerminalIcon } from 'lucide-react'
 

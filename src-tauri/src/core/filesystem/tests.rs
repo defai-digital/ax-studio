@@ -1,4 +1,7 @@
 use super::commands::*;
+use super::service::{
+    approve_save_target, consume_approved_save_target, normalize_save_target_path,
+};
 use crate::core::app::commands::get_app_data_folder_path;
 use std::collections::HashSet;
 use std::fs::{self, File};
@@ -102,7 +105,12 @@ fn test_consume_approved_save_target_allows_once() {
 
     let resolved =
         consume_approved_save_target(&mut approved, save_path.to_str().unwrap()).unwrap();
-    assert_eq!(resolved, save_path);
+    // On macOS /var → /private/var after canonicalize, so compare canonical forms
+    let expected = temp_dir
+        .canonicalize()
+        .unwrap_or(temp_dir.clone())
+        .join("figure.png");
+    assert_eq!(resolved, expected);
     assert!(consume_approved_save_target(&mut approved, save_path.to_str().unwrap()).is_err());
 }
 

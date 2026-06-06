@@ -7,7 +7,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { useAttachmentIngestionPrompt } from '@/hooks/useAttachmentIngestionPrompt'
+import { useAttachmentIngestionPrompt } from '@/features/chat/hooks/useAttachmentIngestionPrompt'
 import { useTranslation } from '@/i18n'
 
 const formatBytes = (bytes?: number) => {

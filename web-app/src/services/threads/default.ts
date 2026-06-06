@@ -144,6 +144,7 @@ export class DefaultThreadsService implements ThreadsService {
             id: e.id,
             name: e.name,
             instructions: e.instructions,
+            tools: e.tools ?? [],
           }
         }) ?? [
           {
@@ -153,6 +154,8 @@ export class DefaultThreadsService implements ThreadsService {
             },
             id: 'ax-studio',
             name: 'Ax-Studio',
+            instructions: '',
+            tools: [],
           },
         ],
         metadata: {

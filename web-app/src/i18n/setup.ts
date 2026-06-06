@@ -1,5 +1,14 @@
 import { localStorageKey } from '@/constants/localStorage'
 
+// Validation helper for stored settings structure
+const isValidStoredSettings = (parsed: unknown): parsed is { state: { currentLanguage: string } } => {
+  if (typeof parsed !== 'object' || parsed === null) return false
+  const obj = parsed as Record<string, unknown>
+  if (typeof obj.state !== 'object' || obj.state === null) return false
+  const state = obj.state as Record<string, unknown>
+  return typeof state.currentLanguage === 'string'
+}
+
 // Types for our i18n implementation
 export interface TranslationResources {
   [language: string]: {
@@ -52,11 +61,14 @@ Object.entries(localeFiles).forEach(([path, module]) => {
 })
 
 // Get stored language preference
-const getStoredLanguage = (): string => {
+export const getStoredLanguage = (): string => {
   try {
     const stored = localStorage.getItem(localStorageKey.settingGeneral)
     const parsed = stored ? JSON.parse(stored) : {}
-    return parsed?.state?.currentLanguage || 'en'
+    if (isValidStoredSettings(parsed)) {
+      return parsed.state.currentLanguage
+    }
+    return 'en'
   } catch {
     return 'en'
   }

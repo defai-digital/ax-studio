@@ -16,8 +16,8 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { useSidebarResize } from "@/hooks/use-sidebar-resize";
+import { useIsMobile } from "@/hooks/useMobile";
+import { useSidebarResize } from "@/hooks/useSidebarResize";
 import { mergeButtonRefs } from "@/lib/merge-button-refs";
 import { cn } from "@/lib/utils";
 

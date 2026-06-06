@@ -1,30 +1,60 @@
 import { Card, CardItem } from '@/containers/Card'
 import HeaderPage from '@/containers/HeaderPage'
 import SettingsMenu from '@/containers/SettingsMenu'
-import { useModelProvider } from '@/hooks/useModelProvider'
+import { useModelProvider } from '@/features/models/hooks/useModelProvider'
 import { cn, getProviderTitle, getProviderColor, getModelDisplayName } from '@/lib/utils'
 import { createFileRoute, Link, useParams } from '@tanstack/react-router'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import Capabilities from '@/containers/Capabilities'
 import { DynamicControllerSetting } from '@/containers/dynamicControllerSetting'
 import { RenderMarkdown } from '@/containers/RenderMarkdown'
-import { DialogEditModel } from '@/containers/dialogs/EditModel'
+import { DialogEditModel } from '@/features/models/components/EditModel'
 import { ModelSetting } from '@/containers/ModelSetting'
-import { DialogDeleteModel } from '@/containers/dialogs/DeleteModel'
+import { DialogDeleteModel } from '@/features/models/components/DeleteModel'
 import { FavoriteModelAction } from '@/containers/FavoriteModelAction'
 import { route } from '@/constants/routes'
-import DeleteProvider from '@/containers/dialogs/DeleteProvider'
+import DeleteProvider from '@/features/providers/components/DeleteProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { Button } from '@/components/ui/button'
 import {
   IconLoader,
 } from '@tabler/icons-react'
-import { RefreshCw, Search } from 'lucide-react'
+import { RefreshCw, Search, Plug, CheckCircle2, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { predefinedProviders } from '@/constants/providers'
-import { DialogAddModel } from '@/containers/dialogs/AddModel'
+import { DialogAddModel } from '@/features/models/components/AddModel'
+import { SelectModelGroups } from '@/features/models/components/SelectModelGroups'
+import { groupModelsByPrefix, type ModelGroup } from '@/lib/model-group-utils'
+import { getModelCapabilities } from '@/lib/models'
 import ProvidersAvatar from '@/containers/ProvidersAvatar'
+
+const URL_REGEX = /^https?:\/\/[^\s]+$/
+const XSS_PATTERN = /<[^>]*>|javascript:/i
+
+function validateSettingValue(
+  key: string,
+  value: string | boolean | number
+): string | null {
+  if (typeof value !== 'string') return null
+
+  if (key === 'api-key') {
+    if (value && /^\s|\s$/.test(value)) {
+      return 'API key must not contain leading or trailing whitespace.'
+    }
+    if (value && XSS_PATTERN.test(value)) {
+      return 'API key contains invalid characters.'
+    }
+  }
+
+  if (key === 'base-url') {
+    if (value && !URL_REGEX.test(value)) {
+      return 'Base URL must be a valid URL starting with http:// or https://'
+    }
+  }
+
+  return null
+}
 
 // as route.threadsDetail
 export const Route = createFileRoute('/settings/providers/$providerName')({
@@ -43,10 +73,25 @@ function ProviderDetail() {
   const [refreshingModels, setRefreshingModels] = useState(false)
   const [importingModel, setImportingModel] = useState<string | null>(null)
   const [modelSearch, setModelSearch] = useState('')
+  const [pendingGroups, setPendingGroups] = useState<ModelGroup[] | null>(null)
   const { providerName } = useParams({ from: Route.id })
   const { getProviderByName, updateProvider } = useModelProvider()
   const provider = getProviderByName(providerName)
   const providerColor = getProviderColor(providerName)
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
+  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle')
+  const [connectionMessage, setConnectionMessage] = useState('')
+  const lastValidValues = useRef<Record<string, string>>({})
+
+  useEffect(() => {
+    if (provider?.settings) {
+      provider.settings.forEach((setting) => {
+        if (!(setting.key in lastValidValues.current) && typeof setting.controller_props.value === 'string') {
+          lastValidValues.current[setting.key] = setting.controller_props.value
+        }
+      })
+    }
+  }, [provider?.settings])
 
   // Clear importing state when model appears in the provider's model list
   useEffect(() => {
@@ -71,8 +116,135 @@ function ProviderDetail() {
     }
   }, [importingModel])
 
+  const handleSettingBlur = (settingKey: string) => {
+    if (!provider) return
+    const currentValue = provider.settings.find((s) => s.key === settingKey)
+      ?.controller_props.value
+    const strValue = typeof currentValue === 'string' ? currentValue : ''
+
+    const error = validateSettingValue(settingKey, strValue)
+    if (error) {
+      setValidationErrors((prev) => ({ ...prev, [settingKey]: error }))
+      const lastGood = lastValidValues.current[settingKey]
+      if (lastGood !== undefined) {
+        const settingIndex = provider.settings.findIndex(
+          (s) => s.key === settingKey
+        )
+        if (settingIndex >= 0) {
+          const newSettings = [...provider.settings]
+          ;(
+            newSettings[settingIndex].controller_props as {
+              value: string | boolean | number
+            }
+          ).value = lastGood
+
+          const updateObj: Partial<ModelProvider> = { settings: newSettings }
+          if (settingKey === 'api-key') {
+            updateObj.api_key = lastGood
+          } else if (settingKey === 'base-url') {
+            updateObj.base_url = lastGood
+          }
+
+          serviceHub
+            .providers()
+            .updateSettings(providerName, updateObj.settings ?? [])
+          updateProvider(providerName, { ...provider, ...updateObj })
+        }
+      }
+    } else {
+      setValidationErrors((prev) => {
+        const next = { ...prev }
+        delete next[settingKey]
+        return next
+      })
+      if (strValue) {
+        lastValidValues.current[settingKey] = strValue
+      }
+    }
+  }
+
+  const handleTestConnection = async () => {
+    if (!provider || !provider.base_url) {
+      setConnectionStatus('error')
+      setConnectionMessage('Base URL is required to test connection.')
+      return
+    }
+
+    setConnectionStatus('testing')
+    setConnectionMessage('')
+
+    try {
+      const modelIds = await serviceHub
+        .providers()
+        .fetchModelsFromProvider(provider)
+
+      setConnectionStatus('success')
+      setConnectionMessage(
+        t('providers:refreshModelsSuccess', {
+          count: modelIds.length,
+          provider: provider.provider,
+          defaultValue: `Connection successful. Found ${modelIds.length} model(s).`,
+        })
+      )
+    } catch (error) {
+      setConnectionStatus('error')
+      setConnectionMessage(
+        error instanceof Error
+          ? error.message
+          : t('providers:refreshModelsFailed', {
+              provider: provider.provider,
+              defaultValue: `Failed to connect to ${provider.provider}.`,
+            })
+      )
+    }
+  }
+
   // Note: settingsChanged event is now handled globally in GlobalEventHandler
   // This ensures all screens receive the event intermediately
+
+  /** Import a list of model IDs into the provider, preserving existing model data. */
+  const importModelIds = useCallback(
+    (modelIds: string[]) => {
+      if (!provider) return
+      const selectedSet = new Set(modelIds)
+      const existingById = new Map(provider.models.map((m) => [m.id, m]))
+
+      const updatedModels: Model[] = []
+      let added = 0
+      for (const id of modelIds) {
+        if (existingById.has(id)) {
+          updatedModels.push(existingById.get(id)!)
+        } else {
+          updatedModels.push({
+            id,
+            model: id,
+            name: id,
+            capabilities: getModelCapabilities(provider.provider, id),
+            version: '1.0',
+          })
+          added++
+        }
+      }
+
+      const removed = provider.models.filter((m) => !selectedSet.has(m.id)).length
+
+      updateProvider(providerName, { ...provider, models: updatedModels })
+
+      const parts: string[] = []
+      if (added > 0) parts.push(`${added} added`)
+      if (removed > 0) parts.push(`${removed} removed`)
+      if (parts.length > 0) {
+        toast.success(t('providers:models'), {
+          description: `Models updated: ${parts.join(', ')}.`,
+        })
+      } else {
+        toast.success(t('providers:models'), {
+          description: t('providers:noNewModels'),
+        })
+      }
+    },
+    [provider, providerName, updateProvider, t],
+  )
 
   const handleRefreshModels = async () => {
     if (!provider || !provider.base_url) {
@@ -88,32 +260,33 @@ function ProviderDetail() {
         .providers()
         .fetchModelsFromProvider(provider)
 
-      // Create new models from the fetched IDs
-      const newModels: Model[] = modelIds.map((id) => ({
-        id,
-        model: id,
-        name: id,
-        capabilities: ['completion'], // Default capability
-        version: '1.0',
-      }))
+      // Detect multi-upstream gateway: if models have 2+ distinct prefixes,
+      // show a selection dialog so the user can pick which upstreams to import.
+      const groups = groupModelsByPrefix(modelIds)
+      if (groups.length > 1) {
+        setPendingGroups(groups)
+        return
+      }
 
-      // Filter out models that already exist
+      // Single-prefix provider: import directly (existing behavior)
       const existingModelIds = provider.models.map((m) => m.id)
-      const modelsToAdd = newModels.filter(
-        (model) => !existingModelIds.includes(model.id)
-      )
+      const newIds = modelIds.filter((id) => !existingModelIds.includes(id))
 
-      if (modelsToAdd.length > 0) {
-        // Update the provider with new models
-        const updatedModels = [...provider.models, ...modelsToAdd]
+      if (newIds.length > 0) {
+        const newModels: Model[] = newIds.map((id) => ({
+          id,
+          model: id,
+          name: id,
+          capabilities: getModelCapabilities(provider.provider, id),
+          version: '1.0',
+        }))
         updateProvider(providerName, {
           ...provider,
-          models: updatedModels,
+          models: [...provider.models, ...newModels],
         })
-
         toast.success(t('providers:models'), {
           description: t('providers:refreshModelsSuccess', {
-            count: modelsToAdd.length,
+            count: newIds.length,
             provider: provider.provider,
           }),
         })
@@ -183,13 +356,41 @@ function ProviderDetail() {
                 <Card>
                   {provider?.settings.map((setting, settingIndex) => {
                     const actionComponent = (
-                      <div className="mt-2">
+                      <div
+                        className="mt-2"
+                        onBlur={(e) => {
+                          if (
+                            !e.currentTarget.contains(
+                              e.relatedTarget as Node
+                            )
+                          ) {
+                            handleSettingBlur(setting.key)
+                          }
+                        }}
+                      >
                         <DynamicControllerSetting
                           controllerType={setting.controller_type}
                           controllerProps={setting.controller_props}
                           className={cn(setting.key === 'device' && 'hidden')}
                           onChange={(newValue) => {
                             if (provider) {
+                              const settingKey = setting.key
+                              const error = validateSettingValue(
+                                settingKey,
+                                newValue
+                              )
+                              setValidationErrors((prev) => {
+                                const next = { ...prev }
+                                if (error) {
+                                  next[settingKey] = error
+                                } else {
+                                  delete next[settingKey]
+                                }
+                                return next
+                              })
+
+                              if (error) return
+
                               const newSettings = [...provider.settings]
                               ;(
                                 newSettings[settingIndex].controller_props as {
@@ -200,17 +401,18 @@ function ProviderDetail() {
                               const updateObj: Partial<ModelProvider> = {
                                 settings: newSettings,
                               }
-                              const settingKey = setting.key
                               if (
                                 settingKey === 'api-key' &&
                                 typeof newValue === 'string'
                               ) {
                                 updateObj.api_key = newValue
+                                lastValidValues.current[settingKey] = newValue
                               } else if (
                                 settingKey === 'base-url' &&
                                 typeof newValue === 'string'
                               ) {
                                 updateObj.base_url = newValue
+                                lastValidValues.current[settingKey] = newValue
                               }
 
                               serviceHub
@@ -223,9 +425,19 @@ function ProviderDetail() {
                                 ...provider,
                                 ...updateObj,
                               })
+
+                              if (connectionStatus !== 'idle') {
+                                setConnectionStatus('idle')
+                                setConnectionMessage('')
+                              }
                             }
                           }}
                         />
+                        {validationErrors[setting.key] && (
+                          <p className="text-red-500 text-xs mt-1">
+                            {validationErrors[setting.key]}
+                          </p>
+                        )}
                       </div>
                     )
 
@@ -264,6 +476,47 @@ function ProviderDetail() {
                   })}
 
                   <DeleteProvider provider={provider} />
+
+                  <CardItem
+                    title={
+                      <div className="flex items-center gap-2">
+                        <Plug className="size-3.5 text-muted-foreground" />
+                        <span>{t('providers:testConnection')}</span>
+                      </div>
+                    }
+                    description={
+                      connectionStatus === 'success' ? (
+                        <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 className="size-3" />
+                          <span>{connectionMessage}</span>
+                        </div>
+                      ) : connectionStatus === 'error' ? (
+                        <div className="flex items-start gap-1 text-red-500">
+                          <XCircle className="size-3 mt-0.5 shrink-0" />
+                          <span>{connectionMessage}</span>
+                        </div>
+                      ) : null
+                    }
+                    actions={
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-lg h-8 text-[12px]"
+                        onClick={handleTestConnection}
+                        disabled={connectionStatus === 'testing' || !provider?.base_url}
+                      >
+                        {connectionStatus === 'testing' ? (
+                          <IconLoader
+                            size={14}
+                            className="text-muted-foreground animate-spin mr-1.5"
+                          />
+                        ) : null}
+                        {connectionStatus === 'testing'
+                          ? t('providers:refreshing')
+                          : t('providers:testConnection')}
+                      </Button>
+                    }
+                  />
                 </Card>
               </div>
 
@@ -417,6 +670,20 @@ function ProviderDetail() {
           </div>
         </div>
       </div>
+
+      {/* Model group selection dialog for multi-upstream gateways */}
+      {provider && pendingGroups && (
+        <SelectModelGroups
+          open={!!pendingGroups}
+          onOpenChange={(open) => { if (!open) setPendingGroups(null) }}
+          groups={pendingGroups}
+          existingModelIds={new Set(provider.models.map((m) => m.id))}
+          onConfirm={(selectedIds) => {
+            importModelIds(selectedIds)
+            setPendingGroups(null)
+          }}
+        />
+      )}
     </div>
   )
 }

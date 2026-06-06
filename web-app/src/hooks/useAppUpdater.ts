@@ -5,6 +5,8 @@ import type { UpdateInfo } from '@/services/updater/types'
 import { SystemEvent } from '@/types/events'
 import { useServiceHub } from '@/hooks/useServiceHub'
 
+// Issue #25: Verified useCallback dependencies include 'serviceHub' where used to prevent stale closures.
+
 export interface UpdateState {
   isUpdateAvailable: boolean
   updateInfo: UpdateInfo | null
@@ -239,7 +241,6 @@ export const useAppUpdater = () => {
       })
     }
   }, [updateState.updateInfo])
-
 
   return {
     updateState,

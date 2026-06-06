@@ -11,11 +11,18 @@ import { Input } from '@/components/ui/input'
 import { Card, CardItem } from '@/containers/Card'
 import { useMemory, MEMORY_LIMIT } from '@/hooks/useMemory'
 import type { MemoryEntry } from '@/hooks/useMemory'
-import { IconTrash, IconCheck, IconX, IconSearch, IconDownload, IconUpload, IconMessage } from '@tabler/icons-react'
+import {
+  IconTrash,
+  IconCheck,
+  IconX,
+  IconSearch,
+  IconDownload,
+  IconUpload,
+  IconMessage,
+} from '@tabler/icons-react'
 import { toast } from 'sonner'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const Route = createFileRoute(route.settings.memory as any)({
+export const Route = createFileRoute(route.settings.memory)({
   component: MemorySettings,
 })
 
@@ -142,7 +149,9 @@ function MemorySettings() {
   const navigate = useNavigate()
   const memoryEnabled = useMemory((state) => state.memoryEnabled)
   const toggleMemory = useMemory((state) => state.toggleMemory)
-  const memories = useMemory((state) => state.memories['default'] ?? EMPTY_MEMORIES)
+  const memories = useMemory(
+    (state) => state.memories['default'] ?? EMPTY_MEMORIES
+  )
   const updateMemory = useMemory((state) => state.updateMemory)
   const deleteMemory = useMemory((state) => state.deleteMemory)
   const clearMemories = useMemory((state) => state.clearMemories)
@@ -223,7 +232,9 @@ function MemorySettings() {
               typeof (entry as MemoryEntry).updatedAt === 'number'
           )
           if (!valid) {
-            toast.error('Invalid file: entries must have id, fact, createdAt, and updatedAt')
+            toast.error(
+              'Invalid file: entries must have id, fact, createdAt, and updatedAt'
+            )
             return
           }
           importMemories('default', parsed as MemoryEntry[])
@@ -251,122 +262,138 @@ function MemorySettings() {
       </HeaderPage>
       <div className="flex flex-1 min-h-0">
         <SettingsMenu />
-        <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+        <div
+          className="flex-1 overflow-y-auto"
+          style={{ scrollbarWidth: 'none' }}
+        >
           <div className="flex items-center gap-3 px-8 py-5 border-b border-border/40 bg-background sticky top-0 z-10">
-            <div className="size-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+            <div
+              className="size-7 rounded-lg flex items-center justify-center"
+              style={{
+                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+              }}
+            >
               <Brain className="size-3.5 text-white" strokeWidth={2.5} />
             </div>
-            <h1 className="text-foreground tracking-tight" style={{ fontSize: '16px', fontWeight: 600 }}>
+            <h1
+              className="text-foreground tracking-tight"
+              style={{ fontSize: '16px', fontWeight: 600 }}
+            >
               {t('common:memory')}
             </h1>
           </div>
           <div className="px-8 py-7">
             <div className="max-w-2xl space-y-6">
-            {/* Enable/Disable Toggle */}
-            <Card
-              header={
-                <div className="flex items-center justify-between mb-4">
-                  <h1 className="font-medium text-foreground text-base">
-                    Memory
-                  </h1>
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={memoryEnabled}
-                      onCheckedChange={() => toggleMemory()}
-                    />
-                  </div>
-                </div>
-              }
-            >
-              <CardItem
-                title="Automatic memory"
-                description="When enabled, personal facts shared in conversations are automatically remembered across chats."
-                align="start"
-              />
-            </Card>
-
-            {/* Stored Facts */}
-            <Card title={`Stored facts (${memories.length} / ${MEMORY_LIMIT})`}>
-              {memories.length === 0 ? (
-                <CardItem
-                  description="No memories yet. Enable memory and chat — personal facts will be remembered automatically."
-                />
-              ) : (
-                <>
-                  {/* Search bar */}
-                  <div className="relative mb-3">
-                    <IconSearch size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      placeholder="Search memories..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="h-8 pl-8 text-sm"
-                    />
-                  </div>
-                  {searchQuery && (
-                    <p className="text-xs text-muted-foreground mb-2">
-                      Showing {filteredMemories.length} of {memories.length}
-                    </p>
-                  )}
-                  <div className="max-h-[480px] overflow-y-auto -mx-1 mb-3">
-                    {filteredMemories.map((entry) => (
-                      <MemoryRow
-                        key={entry.id}
-                        entry={entry}
-                        onUpdate={handleUpdate}
-                        onDelete={handleDelete}
-                        onNavigateToThread={handleNavigateToThread}
+              {/* Enable/Disable Toggle */}
+              <Card
+                header={
+                  <div className="flex items-center justify-between mb-4">
+                    <h1 className="font-medium text-foreground text-base">
+                      Memory
+                    </h1>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={memoryEnabled}
+                        onCheckedChange={() => toggleMemory()}
                       />
-                    ))}
-                    {filteredMemories.length === 0 && searchQuery && (
-                      <p className="text-sm text-muted-foreground text-center py-4">
-                        No memories match your search.
+                    </div>
+                  </div>
+                }
+              >
+                <CardItem
+                  title="Automatic memory"
+                  description="When enabled, personal facts shared in conversations are automatically remembered across chats."
+                  align="start"
+                />
+              </Card>
+
+              {/* Stored Facts */}
+              <Card
+                title={`Stored facts (${memories.length} / ${MEMORY_LIMIT})`}
+              >
+                {memories.length === 0 ? (
+                  <CardItem description="No memories yet. Enable memory and chat — personal facts will be remembered automatically." />
+                ) : (
+                  <>
+                    {/* Search bar */}
+                    <div className="relative mb-3">
+                      <IconSearch
+                        size={14}
+                        className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+                      />
+                      <Input
+                        placeholder="Search memories..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="h-8 pl-8 text-sm"
+                      />
+                    </div>
+                    {searchQuery && (
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Showing {filteredMemories.length} of {memories.length}
                       </p>
                     )}
-                  </div>
-                  <div className="flex justify-end pt-2 border-t border-border/40">
-                    <Button variant="destructive" size="sm" onClick={handleClearAll}>
-                      Clear All
-                    </Button>
-                  </div>
-                </>
-              )}
-            </Card>
+                    <div className="max-h-[480px] overflow-y-auto -mx-1 mb-3">
+                      {filteredMemories.map((entry) => (
+                        <MemoryRow
+                          key={entry.id}
+                          entry={entry}
+                          onUpdate={handleUpdate}
+                          onDelete={handleDelete}
+                          onNavigateToThread={handleNavigateToThread}
+                        />
+                      ))}
+                      {filteredMemories.length === 0 && searchQuery && (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                          No memories match your search.
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex justify-end pt-2 border-t border-border/40">
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleClearAll}
+                      >
+                        Clear All
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </Card>
 
-            {/* Backup */}
-            <Card title="Backup">
-              <CardItem
-                description="Export your memories as a JSON file or import from a previous backup."
-              />
-              <div className="flex gap-2 mt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleExport}
-                  disabled={memories.length === 0}
-                >
-                  <IconDownload size={14} className="mr-1.5" />
-                  Export
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={!memoryEnabled}
-                >
-                  <IconUpload size={14} className="mr-1.5" />
-                  Import
-                </Button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".json"
-                  className="hidden"
-                  onChange={handleImport}
-                />
-              </div>
-            </Card>
-          </div>
+              {/* Backup */}
+              <Card title="Backup">
+                <CardItem description="Export your memories as a JSON file or import from a previous backup." />
+                <div className="flex gap-2 mt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExport}
+                    disabled={memories.length === 0}
+                  >
+                    <IconDownload size={14} className="mr-1.5" />
+                    Export
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={!memoryEnabled}
+                  >
+                    <IconUpload size={14} className="mr-1.5" />
+                    Import
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".json"
+                    className="hidden"
+                    onChange={handleImport}
+                  />
+                </div>
+              </Card>
+            </div>
           </div>
         </div>
       </div>

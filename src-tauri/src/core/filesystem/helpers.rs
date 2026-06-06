@@ -17,23 +17,21 @@ pub fn resolve_path<R: Runtime>(app_handle: tauri::AppHandle<R>, path: &str) -> 
         PathBuf::from(path)
     };
 
-    if path.starts_with("http://") || path.starts_with("https://") {
-        path
-    } else {
-        // Use normalize_path (resolves .. without requiring path to exist)
-        // then try canonicalize for symlink resolution if the path exists
-        let resolved = path
-            .canonicalize()
-            .unwrap_or_else(|_| normalize_path(&path));
-        // Security: ensure resolved path is within the app data folder
-        if !resolved.starts_with(&canonical_app_data) {
-            log::warn!(
-                "Path traversal blocked: {} is outside app data folder {}",
-                resolved.display(),
-                canonical_app_data.display()
-            );
-            return app_data_folder;
-        }
-        resolved
+    // Use normalize_path (resolves .. without requiring path to exist)
+    // then try canonicalize for symlink resolution if the path exists
+    let resolved = path
+        .canonicalize()
+        .unwrap_or_else(|_| normalize_path(&path));
+
+    // Security: ensure resolved path is within the app data folder
+    // This check must be done after canonicalize to close symlink TOCTOU
+    if !resolved.starts_with(&canonical_app_data) {
+        log::warn!(
+            "Path traversal blocked: {} is outside app data folder {}",
+            resolved.display(),
+            canonical_app_data.display()
+        );
+        return app_data_folder;
     }
+    resolved
 }

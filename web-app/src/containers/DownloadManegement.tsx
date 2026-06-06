@@ -4,7 +4,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { Progress } from '@/components/ui/progress'
-import { useDownloadStore } from '@/hooks/useDownloadStore'
+import { useDownloadStore } from '@/features/models/hooks/useDownloadStore'
 import { useLeftPanel } from '@/hooks/useLeftPanel'
 import { useAppUpdater } from '@/hooks/useAppUpdater'
 import { useServiceHub } from '@/hooks/useServiceHub'

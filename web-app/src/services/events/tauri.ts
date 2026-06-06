@@ -7,7 +7,7 @@ import type { EventOptions, UnlistenFn } from './types'
 import { DefaultEventsService } from './default'
 
 export class TauriEventsService extends DefaultEventsService {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   async emit<T>(event: string, payload?: T, _options?: EventOptions): Promise<void> {
     try {
       await emit(event, payload)
@@ -17,7 +17,7 @@ export class TauriEventsService extends DefaultEventsService {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   async listen<T>(event: string, handler: (event: { payload: T }) => void, _options?: EventOptions): Promise<UnlistenFn> {
     try {
       const unlisten = await listen<T>(event, handler)

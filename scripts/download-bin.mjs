@@ -4,7 +4,7 @@ import fs, { copyFile, mkdirSync } from 'fs'
 import os from 'os'
 import path from 'path'
 import unzipper from 'unzipper'
-import tar from 'tar'
+import { x as tarExtract } from 'tar'
 import { copySync } from 'cpx'
 
 function download(url, dest) {
@@ -47,7 +47,7 @@ async function decompress(filePath, targetDir) {
       .pipe(unzipper.Extract({ path: targetDir }))
       .promise()
   } else if (filePath.endsWith('.tar.gz')) {
-    await tar.x({
+    await tarExtract({
       file: filePath,
       cwd: targetDir,
     })

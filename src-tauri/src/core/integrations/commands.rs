@@ -18,6 +18,13 @@ pub async fn save_integration_token(
     integration: String,
     credentials: HashMap<String, String>,
 ) -> Result<(), String> {
+    // Security warning: Credentials are stored as plaintext JSON via tauri-plugin-store
+    log::warn!(
+        "⚠️ SECURITY: Credentials for '{}' stored as plaintext JSON via tauri-plugin-store. \
+        Consider migrating to tauri-plugin-keyring or OS keychain for encrypted storage.",
+        integration
+    );
+
     let store = app
         .store(STORE_NAME)
         .map_err(|e| format!("Failed to open store: {e}"))?;

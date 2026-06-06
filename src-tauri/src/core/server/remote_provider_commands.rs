@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-use crate::core::state::{AppState, ProviderConfig};
+use crate::core::state::{ProviderConfig, ServerState};
 
 /// Custom header for provider requests
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,7 +53,7 @@ pub struct RegisterProviderRequest {
 /// Register a remote provider configuration
 #[tauri::command]
 pub async fn register_provider_config(
-    state: State<'_, AppState>,
+    state: State<'_, ServerState>,
     request: RegisterProviderRequest,
 ) -> Result<(), String> {
     let provider_configs = state.provider_configs.clone();
@@ -83,7 +83,7 @@ pub async fn register_provider_config(
 /// Register multiple remote provider configurations in a single lock acquisition
 #[tauri::command]
 pub async fn register_provider_configs_batch(
-    state: State<'_, AppState>,
+    state: State<'_, ServerState>,
     requests: Vec<RegisterProviderRequest>,
 ) -> Result<(), String> {
     let provider_configs = state.provider_configs.clone();
@@ -114,7 +114,7 @@ pub async fn register_provider_configs_batch(
 /// Unregister a provider configuration
 #[tauri::command]
 pub async fn unregister_provider_config(
-    state: State<'_, AppState>,
+    state: State<'_, ServerState>,
     provider: String,
 ) -> Result<(), String> {
     let provider_configs = state.provider_configs.clone();
@@ -132,7 +132,7 @@ pub async fn unregister_provider_config(
 /// Get provider configuration by name
 #[tauri::command]
 pub async fn get_provider_config(
-    state: State<'_, AppState>,
+    state: State<'_, ServerState>,
     provider: String,
 ) -> Result<Option<ProviderConfigView>, String> {
     let provider_configs = state.provider_configs.clone();
@@ -144,14 +144,13 @@ pub async fn get_provider_config(
 /// List all registered provider configurations (without sensitive keys)
 #[tauri::command]
 pub async fn list_provider_configs(
-    state: State<'_, AppState>,
+    state: State<'_, ServerState>,
 ) -> Result<Vec<ProviderConfigView>, String> {
     let provider_configs = state.provider_configs.clone();
     let configs = provider_configs.lock().await;
 
     Ok(configs.values().map(redact_provider_config).collect())
 }
-
 
 #[cfg(test)]
 mod tests {

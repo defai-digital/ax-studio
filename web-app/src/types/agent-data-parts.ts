@@ -1,5 +1,5 @@
 import type { UIMessage } from '@ai-sdk/react'
-import type { RunLogData } from '@/lib/multi-agent/run-log'
+import type { RunLogData } from '@/features/multi-agent/lib/run-log'
 
 export type AgentStatusData = {
   agent_id: string

@@ -21,6 +21,7 @@ import {
   Brain,
   Users,
   Link as LinkIcon,
+  Route,
 } from 'lucide-react'
 
 type SettingsMenuItem = {
@@ -92,6 +93,13 @@ const SettingsMenu = () => {
       route: route.settings.mcp_servers,
       isEnabled: true,
       icon: <Wrench className="size-3.5" />,
+      group: 'AI',
+    },
+    {
+      title: 'common:llmRouter',
+      route: route.settings.llm_router,
+      isEnabled: true,
+      icon: <Route className="size-3.5" />,
       group: 'AI',
     },
     // Advanced group

@@ -11,6 +11,7 @@ let babelLoadPromise: Promise<void> | null = null
 
 function loadBabel(baseUrl: string): Promise<void> {
   // Already loaded
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if ((window as any).Babel) return (babelLoadPromise = Promise.resolve())
   // Already loading
   if (babelLoadPromise) return babelLoadPromise
@@ -31,9 +32,16 @@ function loadBabel(baseUrl: string): Promise<void> {
  */
 export async function transformJSX(source: string, baseUrl: string): Promise<string> {
   await loadBabel(baseUrl)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const Babel = (window as any).Babel
   const result = Babel.transform(source, {
-    presets: ['react'],
+    presets: [
+      'react',
+      // 'env' transforms modern JS (optional chaining, nullish coalescing, class fields, etc.)
+      // to ES5 so it runs in the sandboxed iframe without syntax errors.
+      // The bundled babel.min.js already includes preset-env — no bundle size increase.
+      ['env', { targets: { esmodules: true }, modules: false }],
+    ],
     filename: 'artifact.jsx',
   })
   return result.code as string

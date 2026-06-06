@@ -3,7 +3,7 @@ use crate::core::app::commands::get_app_data_folder_path;
 use crate::core::updater::hmac_client::SignedRequestHeaders;
 use crate::core::updater::session::get_session_id;
 use ax_studio_utils::normalize_path;
-use futures_util::StreamExt;
+use futures_util::{future::join_all, StreamExt};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use std::collections::HashMap;
 use std::path::Path;
@@ -42,12 +42,16 @@ fn get_mirror_prefix() -> &'static str {
 }
 
 /// Secret key for HMAC request authentication
-/// - In CI: Set AX_STUDIO_SIGNING_KEY environment variable at build time
-/// - In local dev: Falls back to a test key
+/// In release: Must be set via AX_STUDIO_SIGNING_KEY environment variable at build time
+/// In debug: Falls back to a debug key
+/// Must not be the default test key
+#[cfg(debug_assertions)]
 const SECRET_KEY: &str = match option_env!("AX_STUDIO_SIGNING_KEY") {
     Some(key) => key,
-    None => "local-dev-test-key-not-for-production",
+    None => "debug-mode-key",
 };
+#[cfg(not(debug_assertions))]
+const SECRET_KEY: &str = env!("AX_STUDIO_SIGNING_KEY");
 
 // ===== UTILITY FUNCTIONS =====
 
@@ -318,8 +322,21 @@ pub fn _get_client_for_item(
     if let Some(proxy_config) = &item.proxy {
         // Handle SSL verification settings
         if proxy_config.ignore_ssl.unwrap_or(false) {
+            // Security fix: Require SHA256 validation when SSL is disabled
+            if item.sha256.is_none() {
+                return Err(format!(
+                    "SSL certificate verification disabled for download from {}. \
+                    SHA256 hash validation is required for security but not provided. \
+                    Downloads without hash verification can be tampered with.",
+                    item.url
+                ));
+            }
             client_builder = client_builder.danger_accept_invalid_certs(true);
-            log::info!("SSL certificate verification disabled for URL {}", item.url);
+            log::warn!(
+                "⚠️ SSL certificate verification disabled for download from {}. \
+                Proceeding with SHA256 hash validation only.",
+                item.url
+            );
         }
 
         // Note: reqwest doesn't have fine-grained SSL verification controls
@@ -397,14 +414,27 @@ pub async fn _download_files_internal(
 
     let header_map = _convert_headers(headers).map_err(err_to_string)?;
 
-    // Calculate sizes for each file
+    // Calculate sizes for each file concurrently
+    let size_futures = items
+        .iter()
+        .map(|item| {
+            let item_url = item.url.clone();
+            let header_map = header_map.clone();
+            async move {
+                let client = _get_client_for_item(item, &header_map).map_err(err_to_string)?;
+                let size = _get_file_size(&client, &item_url)
+                    .await
+                    .map_err(err_to_string)?;
+                Ok::<_, String>((item_url, size))
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let size_results = join_all(size_futures).await;
     let mut file_sizes = HashMap::new();
-    for item in items.iter() {
-        let client = _get_client_for_item(item, &header_map).map_err(err_to_string)?;
-        let size = _get_file_size(&client, &item.url)
-            .await
-            .map_err(err_to_string)?;
-        file_sizes.insert(item.url.clone(), size);
+    for result in size_results {
+        let (url, size) = result?;
+        file_sizes.insert(url, size);
     }
 
     let total_size: u64 = file_sizes.values().sum();
@@ -785,6 +815,12 @@ async fn _get_maybe_resume_with_hmac(
     url: &str,
     start_bytes: u64,
 ) -> Result<reqwest::Response, String> {
+    // Ensure the signing key is not the default test key
+    assert!(
+        SECRET_KEY != "local-dev-test-key-not-for-production",
+        "AX_STUDIO_SIGNING_KEY must not be the default test key"
+    );
+
     // Generate HMAC headers for request authentication
     let nonce_seed = get_download_nonce_seed();
     let app_version = get_app_version();
@@ -867,6 +903,196 @@ async fn _get_maybe_resume_internal(
             ));
         }
         Ok(resp)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- err_to_string ---
+
+    #[test]
+    fn test_err_to_string() {
+        let result = err_to_string("something failed");
+        assert_eq!(result, "Error: something failed");
+    }
+
+    #[test]
+    fn test_err_to_string_with_io_error() {
+        let err = std::io::Error::new(std::io::ErrorKind::NotFound, "file missing");
+        let result = err_to_string(err);
+        assert!(result.starts_with("Error: "));
+        assert!(result.contains("file missing"));
+    }
+
+    // --- convert_to_mirror_url ---
+
+    #[test]
+    fn test_convert_to_mirror_url_no_mirror_domains() {
+        // MIRROR_DOMAINS is empty, so no URL should be mirrored
+        let result = convert_to_mirror_url("https://huggingface.co/models/test");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_convert_to_mirror_url_invalid_url() {
+        let result = convert_to_mirror_url("not a url");
+        assert!(result.is_none());
+    }
+
+    // --- validate_proxy_config ---
+
+    #[test]
+    fn test_validate_proxy_config_valid_http() {
+        let config = ProxyConfig {
+            url: "http://proxy.example.com:8080".to_string(),
+            username: None,
+            password: None,
+            no_proxy: None,
+            ignore_ssl: None,
+        };
+        assert!(validate_proxy_config(&config).is_ok());
+    }
+
+    #[test]
+    fn test_validate_proxy_config_valid_socks5() {
+        let config = ProxyConfig {
+            url: "socks5://proxy.example.com:1080".to_string(),
+            username: Some("user".to_string()),
+            password: Some("pass".to_string()),
+            no_proxy: None,
+            ignore_ssl: None,
+        };
+        assert!(validate_proxy_config(&config).is_ok());
+    }
+
+    #[test]
+    fn test_validate_proxy_config_invalid_url() {
+        let config = ProxyConfig {
+            url: "not-a-url".to_string(),
+            username: None,
+            password: None,
+            no_proxy: None,
+            ignore_ssl: None,
+        };
+        assert!(validate_proxy_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_proxy_config_unsupported_scheme() {
+        let config = ProxyConfig {
+            url: "ftp://proxy.example.com".to_string(),
+            username: None,
+            password: None,
+            no_proxy: None,
+            ignore_ssl: None,
+        };
+        let err = validate_proxy_config(&config).unwrap_err();
+        assert!(err.contains("Unsupported proxy scheme"));
+    }
+
+    #[test]
+    fn test_validate_proxy_config_username_without_password() {
+        let config = ProxyConfig {
+            url: "http://proxy.example.com:8080".to_string(),
+            username: Some("user".to_string()),
+            password: None,
+            no_proxy: None,
+            ignore_ssl: None,
+        };
+        let err = validate_proxy_config(&config).unwrap_err();
+        assert!(err.contains("Username provided without password"));
+    }
+
+    #[test]
+    fn test_validate_proxy_config_password_without_username() {
+        let config = ProxyConfig {
+            url: "http://proxy.example.com:8080".to_string(),
+            username: None,
+            password: Some("pass".to_string()),
+            no_proxy: None,
+            ignore_ssl: None,
+        };
+        let err = validate_proxy_config(&config).unwrap_err();
+        assert!(err.contains("Password provided without username"));
+    }
+
+    #[test]
+    fn test_validate_proxy_config_empty_no_proxy_entry() {
+        let config = ProxyConfig {
+            url: "http://proxy.example.com:8080".to_string(),
+            username: None,
+            password: None,
+            no_proxy: Some(vec!["".to_string()]),
+            ignore_ssl: None,
+        };
+        let err = validate_proxy_config(&config).unwrap_err();
+        assert!(err.contains("Empty no_proxy entry"));
+    }
+
+    // --- should_bypass_proxy ---
+
+    #[test]
+    fn test_should_bypass_proxy_empty_list() {
+        assert!(!should_bypass_proxy("https://example.com", &[]));
+    }
+
+    #[test]
+    fn test_should_bypass_proxy_wildcard() {
+        assert!(should_bypass_proxy(
+            "https://anything.com",
+            &["*".to_string()]
+        ));
+    }
+
+    #[test]
+    fn test_should_bypass_proxy_exact_match() {
+        assert!(should_bypass_proxy(
+            "https://localhost/api",
+            &["localhost".to_string()]
+        ));
+    }
+
+    #[test]
+    fn test_should_bypass_proxy_wildcard_domain() {
+        assert!(should_bypass_proxy(
+            "https://api.internal.corp",
+            &["*.internal.corp".to_string()]
+        ));
+    }
+
+    #[test]
+    fn test_should_bypass_proxy_no_match() {
+        assert!(!should_bypass_proxy(
+            "https://external.com",
+            &["localhost".to_string(), "*.internal.corp".to_string()]
+        ));
+    }
+
+    #[test]
+    fn test_should_bypass_proxy_invalid_url() {
+        assert!(!should_bypass_proxy("not a url", &["*".to_string()]));
+    }
+
+    // --- _convert_headers ---
+
+    #[test]
+    fn test_convert_headers_basic() {
+        let mut headers = HashMap::new();
+        headers.insert("Authorization".to_string(), "Bearer token".to_string());
+        headers.insert("Content-Type".to_string(), "application/json".to_string());
+
+        let result = _convert_headers(&headers).unwrap();
+        assert_eq!(result.get("authorization").unwrap(), "Bearer token");
+        assert_eq!(result.get("content-type").unwrap(), "application/json");
+    }
+
+    #[test]
+    fn test_convert_headers_empty() {
+        let headers = HashMap::new();
+        let result = _convert_headers(&headers).unwrap();
+        assert!(result.is_empty());
     }
 }
 

@@ -3,6 +3,29 @@
  * @stored
  */
 
+/**
+ * Inference parameters for controlling model behavior during text generation.
+ * These parameters control randomness, output length, and repetition penalties.
+ */
+export interface InferenceParameters {
+  /** Controls randomness in output. Higher values (0.8-1.0) make output more random, lower values (0.0-0.3) make it more deterministic. */
+  temperature?: number
+  /** Nucleus sampling parameter. Controls diversity by considering only the top-p probability mass. */
+  top_p?: number
+  /** Top-k sampling parameter. Limits sampling to the k most likely tokens. */
+  top_k?: number
+  /** Maximum number of tokens to generate in the response. */
+  max_output_tokens?: number
+  /** Penalty for repeating the same tokens. Higher values reduce repetition. */
+  repeat_penalty?: number
+  /** Penalty for introducing new tokens. Positive values encourage new topics. */
+  presence_penalty?: number
+  /** Penalty for frequent tokens. Reduces likelihood of common words. */
+  frequency_penalty?: number
+  /** Sequences where the model should stop generating text. */
+  stop_sequences?: string[]
+}
+
 export type AssistantTool = {
   type: string
   enabled: boolean
@@ -46,7 +69,7 @@ export type Assistant = {
   /** Represents the metadata of the object. */
   metadata?: Record<string, unknown>
   /** Inference parameters (temperature, top_p, etc.) */
-  parameters?: Record<string, unknown>
+  parameters?: InferenceParameters
   /** Whether this assistant is a plain assistant or an agent */
   type?: 'assistant' | 'agent'
   /** Short role label, e.g. "Researcher" */

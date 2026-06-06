@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { useHardware } from '@/hooks/useHardware'
@@ -10,7 +9,7 @@ import { useTranslation } from '@/i18n/react-i18next-compat'
 import { toNumber } from '@/utils/number'
 import { useServiceHub } from '@/hooks/useServiceHub'
 
-export const Route = createFileRoute(route.systemMonitor as any)({
+export const Route = createFileRoute(route.systemMonitor)({
   component: SystemMonitorContent,
 })
 
@@ -22,7 +21,9 @@ function SystemMonitorContent() {
   // Poll system usage every 5 seconds
   useEffect(() => {
     const intervalId = setInterval(() => {
-      serviceHub.hardware().getSystemUsage()
+      serviceHub
+        .hardware()
+        .getSystemUsage()
         .then((data) => {
           if (data) {
             updateSystemUsage(data)
@@ -135,7 +136,6 @@ function SystemMonitorContent() {
             </div>
           </div>
         </div>
-
       </div>
     </div>
   )

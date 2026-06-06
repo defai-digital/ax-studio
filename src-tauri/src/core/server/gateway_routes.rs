@@ -3,9 +3,9 @@ use hyper::{Body, Response, StatusCode};
 use serde_json;
 use tauri::Manager;
 
-use crate::core::state::AppState;
 use super::proxy::ProxyConfig;
 use super::security::add_cors_headers_with_host_and_origin;
+use crate::core::state::ServerState;
 
 /// Handle GET /models — aggregates all configured provider models.
 pub(super) async fn handle_models_route<R: tauri::Runtime>(
@@ -17,7 +17,7 @@ pub(super) async fn handle_models_route<R: tauri::Runtime>(
     log::debug!("Handling GET /v1/models request");
 
     // Get remote provider models
-    let state = app_handle.state::<AppState>();
+    let state = app_handle.state::<ServerState>();
     let provider_configs = state.provider_configs.lock().await;
     let remote_models: Vec<_> = provider_configs
         .values()
@@ -37,8 +37,7 @@ pub(super) async fn handle_models_route<R: tauri::Runtime>(
         "data": remote_models
     });
 
-    let body_str =
-        serde_json::to_string(&response_json).unwrap_or_else(|_| "{}".to_string());
+    let body_str = serde_json::to_string(&response_json).unwrap_or_else(|_| "{}".to_string());
 
     let mut response_builder = Response::builder()
         .status(StatusCode::OK)
@@ -49,6 +48,7 @@ pub(super) async fn handle_models_route<R: tauri::Runtime>(
         host_header,
         origin_header,
         &config.trusted_hosts,
+        config.cors_enabled,
     );
 
     log::debug!("Returning {} remote models", remote_models.len());
@@ -70,17 +70,15 @@ pub(super) fn handle_openapi_route(config: &ProxyConfig) -> Response<Body> {
                 for server in servers {
                     if let Some(server_obj) = server.as_object_mut() {
                         if let Some(url) = server_obj.get_mut("url") {
-                            let base_url = format!(
-                                "http://{}:{}{}",
-                                config.host, config.port, config.prefix
-                            );
+                            let base_url =
+                                format!("http://{}:{}{}", config.host, config.port, config.prefix);
                             *url = serde_json::Value::String(base_url);
                         }
                     }
                 }
             }
-            let body = serde_json::to_string(&openapi_spec)
-                .unwrap_or_else(|_| static_body.to_string());
+            let body =
+                serde_json::to_string(&openapi_spec).unwrap_or_else(|_| static_body.to_string());
             Response::builder()
                 .status(StatusCode::OK)
                 .header(hyper::header::CONTENT_TYPE, "application/json")
@@ -136,6 +134,7 @@ pub(super) fn handle_docs_root_route(
         host_header,
         origin_header,
         &config.trusted_hosts,
+        config.cors_enabled,
     );
 
     response_builder.body(Body::from(html)).unwrap()
@@ -178,6 +177,102 @@ pub(super) fn handle_static_asset(path: &str) -> Option<Response<Body>> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_config() -> ProxyConfig {
+        ProxyConfig {
+            prefix: "/v1".to_string(),
+            proxy_api_key: String::new(),
+            trusted_hosts: vec![],
+            cors_enabled: false,
+            host: "127.0.0.1".to_string(),
+            port: 1337,
+        }
+    }
+
+    #[test]
+    fn test_handle_static_asset_css() {
+        let resp = handle_static_asset("/docs/swagger-ui.css");
+        assert!(resp.is_some());
+        let resp = resp.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers()
+                .get(hyper::header::CONTENT_TYPE)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "text/css"
+        );
+    }
+
+    #[test]
+    fn test_handle_static_asset_js() {
+        let resp = handle_static_asset("/docs/swagger-ui-bundle.js");
+        assert!(resp.is_some());
+        let resp = resp.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers()
+                .get(hyper::header::CONTENT_TYPE)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "application/javascript"
+        );
+    }
+
+    #[test]
+    fn test_handle_static_asset_favicon() {
+        let resp = handle_static_asset("/favicon.ico");
+        assert!(resp.is_some());
+        assert_eq!(resp.unwrap().status(), StatusCode::OK);
+    }
+
+    #[test]
+    fn test_handle_static_asset_unknown_returns_none() {
+        assert!(handle_static_asset("/unknown/path").is_none());
+        assert!(handle_static_asset("/docs/other.js").is_none());
+    }
+
+    #[test]
+    fn test_handle_unknown_route_returns_404() {
+        let config = test_config();
+        let resp = handle_unknown_route(
+            "/nonexistent",
+            &hyper::Method::POST,
+            "localhost",
+            "",
+            &config,
+        );
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn test_handle_unknown_route_whitelisted_get_still_404() {
+        let config = test_config();
+        let resp = handle_unknown_route("/", &hyper::Method::GET, "localhost", "", &config);
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn test_handle_docs_root_route_returns_html() {
+        let config = test_config();
+        let resp = handle_docs_root_route("localhost", "", &config);
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers()
+                .get(hyper::header::CONTENT_TYPE)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "text/html"
+        );
+    }
+}
+
 /// Handle unrecognized routes — returns 404.
 pub(super) fn handle_unknown_route(
     destination_path: &str,
@@ -194,8 +289,8 @@ pub(super) fn handle_unknown_route(
         "/docs/swagger-ui-bundle.js",
         "/docs/swagger-ui-standalone-preset.js",
     ];
-    let is_explicitly_whitelisted_get = *method == hyper::Method::GET
-        && whitelisted_paths.contains(&destination_path);
+    let is_explicitly_whitelisted_get =
+        *method == hyper::Method::GET && whitelisted_paths.contains(&destination_path);
     if is_explicitly_whitelisted_get {
         log::debug!("Handled whitelisted GET path: {destination_path}");
         let mut error_response = Response::builder().status(StatusCode::NOT_FOUND);
@@ -204,18 +299,18 @@ pub(super) fn handle_unknown_route(
             host_header,
             origin_header,
             &config.trusted_hosts,
+            config.cors_enabled,
         );
         error_response.body(Body::from("Not Found")).unwrap()
     } else {
-        log::warn!(
-            "Unhandled method/path for dynamic routing: {method} {destination_path}"
-        );
+        log::warn!("Unhandled method/path for dynamic routing: {method} {destination_path}");
         let mut error_response = Response::builder().status(StatusCode::NOT_FOUND);
         error_response = add_cors_headers_with_host_and_origin(
             error_response,
             host_header,
             origin_header,
             &config.trusted_hosts,
+            config.cors_enabled,
         );
         error_response.body(Body::from("Not Found")).unwrap()
     }

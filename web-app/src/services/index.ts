@@ -5,7 +5,11 @@
  * then provides synchronous access to service instances throughout the app.
  */
 
-import { isPlatformTauri, isPlatformIOS, isPlatformAndroid } from '@/lib/platform/utils'
+import {
+  isPlatformTauri,
+  isPlatformIOS,
+  isPlatformAndroid,
+} from '@/lib/platform/utils'
 
 // Import default services
 import { DefaultThemeService } from './theme/default'
@@ -106,9 +110,13 @@ class PlatformServiceHub implements ServiceHub {
 
     console.log(
       'Initializing service hub for platform:',
-      isPlatformTauri() && !isPlatformIOS() && !isPlatformAndroid() ? 'Tauri' :
-      isPlatformIOS() ? 'iOS' :
-      isPlatformAndroid() ? 'Android' : 'Web'
+      isPlatformTauri() && !isPlatformIOS() && !isPlatformAndroid()
+        ? 'Tauri'
+        : isPlatformIOS()
+          ? 'iOS'
+          : isPlatformAndroid()
+            ? 'Android'
+            : 'Web'
     )
 
     try {
@@ -195,6 +203,17 @@ class PlatformServiceHub implements ServiceHub {
         this.pathService = new pathModule.TauriPathService()
         this.coreService = new coreModule.MobileCoreService() // Mobile service with pre-loaded extensions
         this.deepLinkService = new deepLinkModule.TauriDeepLinkService()
+      }
+
+      // Give RAG & Uploads services a back-reference so they can call
+      // mcp() for AkiDB operations.
+      if ('setMcpService' in this.ragService) {
+        const svc = this.ragService as { setMcpService: (mcp: MCPService) => void }
+        svc.setMcpService(this.mcpService)
+      }
+      if ('setMcpService' in this.uploadsService) {
+        const svc = this.uploadsService as { setMcpService: (mcp: MCPService) => void }
+        svc.setMcpService(this.mcpService)
       }
 
       this.initialized = true

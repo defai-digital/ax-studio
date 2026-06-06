@@ -56,6 +56,12 @@ export default class AxStudioAssistantExtension extends AssistantExtension {
   }
 
   async createAssistant(assistant: Assistant): Promise<void> {
+    // Validate assistant ID to prevent path traversal
+    if (!/^[a-zA-Z0-9\-_]+$/.test(assistant.id)) {
+      throw new Error(
+        `Invalid assistant ID: "${assistant.id}". Use only alphanumeric, hyphens, underscores.`
+      )
+    }
     const assistantPath = await joinPath([
       'file://assistants',
       assistant.id,
@@ -69,6 +75,12 @@ export default class AxStudioAssistantExtension extends AssistantExtension {
   }
 
   async deleteAssistant(assistant: Assistant): Promise<void> {
+    // Validate assistant ID to prevent path traversal
+    if (!/^[a-zA-Z0-9\-_]+$/.test(assistant.id)) {
+      throw new Error(
+        `Invalid assistant ID: "${assistant.id}". Use only alphanumeric, hyphens, underscores.`
+      )
+    }
     const assistantPath = await joinPath([
       'file://assistants',
       assistant.id,
@@ -87,7 +99,7 @@ export default class AxStudioAssistantExtension extends AssistantExtension {
     created_at: Date.now() / 1000,
     name: 'Ax-Studio',
     description:
-      'Ax-Studio is a helpful desktop assistant that can reason through complex tasks and use tools to complete them on the user\'s behalf.',
+      "Ax-Studio is a helpful desktop assistant that can reason through complex tasks and use tools to complete them on the user's behalf.",
     model: '*',
     instructions: `You are Ax-Studio, a helpful AI assistant who assists users with their requests.
 

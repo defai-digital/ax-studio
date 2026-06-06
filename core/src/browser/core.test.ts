@@ -18,6 +18,33 @@ describe('test core apis', () => {
     expect(result).toBe('opened')
   })
 
+  it('should accept https URLs', async () => {
+    const url = 'https://example.com'
+    globalThis.core = {
+      api: {
+        openExternalUrl: vi.fn().mockResolvedValue('opened'),
+      },
+    }
+    const result = await openExternalUrl(url)
+    expect(globalThis.core.api.openExternalUrl).toHaveBeenCalledWith(url)
+    expect(result).toBe('opened')
+  })
+
+  it('should reject unsafe protocols', () => {
+    const url = 'javascript:alert("xss")'
+    expect(() => openExternalUrl(url)).toThrow('Unsafe URL protocol: javascript:')
+  })
+
+  it('should reject file URLs', () => {
+    const url = 'file:///etc/passwd'
+    expect(() => openExternalUrl(url)).toThrow('Unsafe URL protocol: file:')
+  })
+
+  it('should reject invalid URL formats', () => {
+    const url = 'not-a-url'
+    expect(() => openExternalUrl(url)).toThrow('Invalid URL format: not-a-url')
+  })
+
   it('should join paths', async () => {
     const paths = ['/path/one', '/path/two']
     globalThis.core = {
