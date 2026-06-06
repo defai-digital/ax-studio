@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { generateText, streamText } from 'ai'
 import { useResearchPanel, type ResearchSource, type ResearchStep } from './useResearchPanel'
-import { useMessages } from './useMessages'
+import { useMessages } from '@/features/chat/hooks/useMessages'
 import { useChatSessions } from '@/features/chat/stores/chat-session-store'
 import { convertThreadMessageToUIMessage } from '@/lib/messages'
 import type { ThreadMessage } from '@ax-studio/core'

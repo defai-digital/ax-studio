@@ -1,7 +1,7 @@
 import { useCallback, useState, useRef, useEffect, useMemo } from 'react'
 import { ThreadMessage } from '@ax-studio/core'
-import { usePrompt } from './usePrompt'
-import { useModelProvider } from './useModelProvider'
+import { usePrompt } from '@/features/chat/hooks/usePrompt'
+import { useModelProvider } from '@/features/models/hooks/useModelProvider'
 import { useServiceStore } from './useServiceHub'
 // Simple token estimation for hosted models when backend token counting is unavailable
 // Rough approximation: ~4 characters per token for English text

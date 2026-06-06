@@ -26,17 +26,18 @@ vi.mock('@/features/chat/hooks/usePrompt', () => ({
   },
 }))
 
-vi.mock('@/features/threads/hooks/useThreads', () => ({
-  useThreads: (selector?: any) => {
-    const state = {
-      currentThreadId: 'thread-1',
-      threads: {},
-      getCurrentThread: () => undefined,
-      updateCurrentThreadAssistant: vi.fn(),
-    }
-    return selector ? selector(state) : state
-  },
-}))
+vi.mock('@/features/threads/hooks/useThreads', () => {
+  const state = {
+    currentThreadId: 'thread-1',
+    threads: {},
+    getCurrentThread: () => undefined,
+    updateCurrentThreadAssistant: vi.fn(),
+    updateThread: vi.fn(),
+  }
+  const useThreads = (selector?: any) => selector ? selector(state) : state
+  useThreads.getState = () => state
+  return { useThreads }
+})
 
 vi.mock('@/hooks/useGeneralSetting', () => ({
   useGeneralSetting: (selector?: any) => {
@@ -112,7 +113,7 @@ vi.mock('@/lib/extension', () => ({
   },
 }))
 
-vi.mock('@/hooks/use-chat-send-handler', () => ({
+vi.mock('@/features/chat/hooks/useChatSendHandler', () => ({
   useChatSendHandler: () => ({
     handleSendMessage: mockHandleSendMessage,
   }),

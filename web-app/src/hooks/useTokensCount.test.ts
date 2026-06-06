@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 
 // Mock dependencies
-vi.mock('./usePrompt', () => ({
+vi.mock('@/features/chat/hooks/usePrompt', () => ({
   usePrompt: vi.fn().mockReturnValue({ prompt: 'test prompt' }),
 }))
 
@@ -28,7 +28,7 @@ let mockUseModelProviderImpl = (selector: (s: unknown) => unknown) =>
     ],
   })
 
-vi.mock('./useModelProvider', () => ({
+vi.mock('@/features/models/hooks/useModelProvider', () => ({
   useModelProvider: vi.fn((selector) => mockUseModelProviderImpl(selector)),
 }))
 

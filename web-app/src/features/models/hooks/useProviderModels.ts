@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useServiceHub } from './useServiceHub'
+import { useServiceHub } from '@/hooks/useServiceHub'
 
 type UseProviderModelsState = {
   models: string[]

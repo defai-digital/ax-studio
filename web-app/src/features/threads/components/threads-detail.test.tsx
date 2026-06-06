@@ -19,7 +19,7 @@ vi.mock('@/hooks/useTools', () => ({
   useTools: vi.fn(),
 }))
 
-vi.mock('@/hooks/use-chat', () => ({
+vi.mock('@/features/chat/hooks/useChat', () => ({
   useChat: () => ({
     messages: [],
     status: 'ready',

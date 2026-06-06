@@ -31,7 +31,7 @@ describe('useIsMobile', () => {
       value: 1024,
     })
 
-    const { useIsMobile } = await import('./use-mobile')
+    const { useIsMobile } = await import('./useMobile')
     const { result } = renderHook(() => useIsMobile())
 
     expect(result.current).toBe(false)
@@ -43,7 +43,7 @@ describe('useIsMobile', () => {
       value: 500,
     })
 
-    const { useIsMobile } = await import('./use-mobile')
+    const { useIsMobile } = await import('./useMobile')
     const { result } = renderHook(() => useIsMobile())
 
     expect(result.current).toBe(true)
@@ -55,7 +55,7 @@ describe('useIsMobile', () => {
       value: 1024,
     })
 
-    const { useIsMobile } = await import('./use-mobile')
+    const { useIsMobile } = await import('./useMobile')
     renderHook(() => useIsMobile())
 
     expect(window.matchMedia).toHaveBeenCalledWith('(max-width: 767px)')
@@ -67,7 +67,7 @@ describe('useIsMobile', () => {
       value: 1024,
     })
 
-    const { useIsMobile } = await import('./use-mobile')
+    const { useIsMobile } = await import('./useMobile')
     const { result } = renderHook(() => useIsMobile())
 
     expect(result.current).toBe(false)
@@ -96,7 +96,7 @@ describe('useIsMobile', () => {
       value: 1024,
     })
 
-    const { useIsMobile } = await import('./use-mobile')
+    const { useIsMobile } = await import('./useMobile')
     const { result } = renderHook(() => useIsMobile())
 
     // The hook returns !!isMobile which coerces undefined to false
@@ -109,7 +109,7 @@ describe('useIsMobile', () => {
       value: 1024,
     })
 
-    const { useIsMobile } = await import('./use-mobile')
+    const { useIsMobile } = await import('./useMobile')
     const { unmount } = renderHook(() => useIsMobile())
 
     unmount()
@@ -126,7 +126,7 @@ describe('useIsMobile', () => {
       value: 768,
     })
 
-    const { useIsMobile } = await import('./use-mobile')
+    const { useIsMobile } = await import('./useMobile')
     const { result } = renderHook(() => useIsMobile())
 
     // 768 is NOT < 768, so not mobile
@@ -139,7 +139,7 @@ describe('useIsMobile', () => {
       value: 767,
     })
 
-    const { useIsMobile } = await import('./use-mobile')
+    const { useIsMobile } = await import('./useMobile')
     const { result } = renderHook(() => useIsMobile())
 
     expect(result.current).toBe(true)

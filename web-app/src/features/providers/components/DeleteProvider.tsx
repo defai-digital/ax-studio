@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dialog'
 
 import { toast } from 'sonner'
-import { CardItem } from '../Card'
+import { CardItem } from '@/containers/Card'
 import { EngineManager } from '@ax-studio/core'
 import { useModelProvider } from '@/features/models/hooks/useModelProvider'
 import { useRouter } from '@tanstack/react-router'

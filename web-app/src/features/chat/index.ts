@@ -13,8 +13,8 @@ export { useCodeExecution } from './hooks/useCodeExecution'
 // Lib
 export { createChatTransport } from './lib/chat-transport-factory'
 export {
-  createChatSession,
-  stopChatSession,
+  createSession as createChatSession,
+  destroySession as stopChatSession,
   isSessionBusy,
 } from './lib/chat-session-controller'
 export type { SessionData, ChatSession } from './lib/chat-session-types'
@@ -26,8 +26,8 @@ export type { SingleAgentConfig } from './transport/single-agent-transport'
 export { executeMultiAgentStream } from './transport/multi-agent-transport'
 export type { MultiAgentConfig } from './transport/multi-agent-transport'
 export { stripUnavailableToolParts } from './transport/transport-types'
+export type { ChatTransport } from 'ai'
 export type {
-  ChatTransport,
   TokenUsageCallback,
   OnFinishCallback,
   OnToolCallCallback,
