@@ -181,5 +181,23 @@ describe('useThreadConfig', () => {
 
       expect(result.current.optimizedModelConfig.modelId).toBe('gpt-4o')
     })
+
+    it('prefers thread modelId over stale selectedModel', () => {
+      const { result } = renderHook(() =>
+        useThreadConfig({
+          thread: makeThread({
+            model: { id: 'mlx-community/gemma-4-12B-it-4bit', provider: 'mlx' },
+          }),
+          selectedModel: makeModel({ id: 'mlx-community/Qwen3.6-27B-4bit' }),
+          globalDefaultPrompt: 'prompt',
+          autoTuningEnabled: false,
+          threadMessageCount: 0,
+        })
+      )
+
+      expect(result.current.optimizedModelConfig.modelId).toBe(
+        'mlx-community/gemma-4-12B-it-4bit'
+      )
+    })
   })
 })

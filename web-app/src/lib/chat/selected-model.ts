@@ -16,7 +16,7 @@ export function resolveEffectiveSelectedModel({
       providers
         .find((provider) => provider.provider === model.provider)
         ?.models.find((providerModel) => providerModel.id === model.id) ??
-      selectedModelFromStore
+      { id: model.id, provider: model.provider } as Model
     )
   }
 

@@ -26,6 +26,19 @@ describe('resolveEffectiveSelectedModel', () => {
     expect(selectedModel).toBe(threadModel)
   })
 
+  it('keeps the thread model when provider metadata is missing', () => {
+    const fallbackModel: Model = { id: 'global-qwen', capabilities: ['tools'] }
+
+    const selectedModel = resolveEffectiveSelectedModel({
+      model: { id: 'thread-gemma', provider: 'mlx' },
+      providers: [createProvider('mlx', [])],
+      selectedProvider: 'mlx',
+      selectedModelFromStore: fallbackModel,
+    })
+
+    expect(selectedModel).toEqual({ id: 'thread-gemma', provider: 'mlx' })
+  })
+
   it('prefers active provider metadata over stale selected model metadata', () => {
     const staleModel: Model = { id: 'Qwen3_5-9B-IQ4_XS', capabilities: [] }
     const providerModel: Model = {

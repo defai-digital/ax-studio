@@ -35,7 +35,7 @@ export function useThreadConfig({
       temperature: thread?.assistants?.[0]?.parameters?.temperature as number | undefined,
       top_p: thread?.assistants?.[0]?.parameters?.top_p as number | undefined,
       max_output_tokens: thread?.assistants?.[0]?.parameters?.max_output_tokens as number | undefined,
-      modelId: selectedModel?.id,
+      modelId: thread?.model?.id ?? selectedModel?.id,
     }
     if (!autoTuningEnabled) return baseConfig
     return getOptimizedModelConfig(
@@ -50,6 +50,7 @@ export function useThreadConfig({
   }, [
     autoTuningEnabled,
     promptResolution.resolvedPrompt.length,
+    thread?.model?.id,
     selectedModel?.id,
     selectedModel?.capabilities,
     thread?.assistants,
