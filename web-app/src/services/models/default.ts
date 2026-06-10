@@ -76,13 +76,6 @@ export class DefaultModelsService implements ModelsService {
     }
   }
 
-  private syncLoadedModelRouteInBackground(
-    engine: AIEngine,
-    model: string
-  ): void {
-    void this.syncLoadedModelRoute(engine, model)
-  }
-
   async getModel(modelId: string): Promise<modelInfo | undefined> {
     return this.getEngine()?.get(modelId)
   }
@@ -422,7 +415,7 @@ export class DefaultModelsService implements ModelsService {
 
     const loadedModels = (await engine.getLoadedModels()) ?? []
     if (loadedModels.includes(model)) {
-      this.syncLoadedModelRouteInBackground(engine, model)
+      await this.syncLoadedModelRoute(engine, model)
       return undefined
     }
 
@@ -469,7 +462,7 @@ export class DefaultModelsService implements ModelsService {
     return engine
       .load(model, settings, false, bypassAutoUnload)
       .then(async (session) => {
-        this.syncLoadedModelRouteInBackground(engine, model)
+        await this.syncLoadedModelRoute(engine, model)
         return session
       })
       .catch((error) => {

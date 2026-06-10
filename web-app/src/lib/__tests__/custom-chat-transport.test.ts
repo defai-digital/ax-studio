@@ -37,6 +37,13 @@ const mocks = vi.hoisted(() => {
       ],
       settings: [],
     },
+    {
+      provider: 'mlx',
+      models: [
+        { id: 'mlx-community/Qwen3.6-27B-4bit', capabilities: [] },
+      ],
+      settings: [],
+    },
   ]
 
   return {
@@ -525,7 +532,7 @@ describe('CustomChatTransport — LLM Router integration', () => {
     expect(ModelFactory.createModel).toHaveBeenCalledWith(
       'llama-3.2-3b-local.gguf',
       expect.objectContaining({ provider: 'llamacpp' }),
-      { max_output_tokens: 4096 },
+      expect.objectContaining({ max_output_tokens: 4096 }),
       { requestRole: 'final' }
     )
     expect(transport.lastRouterResult).toEqual(
@@ -572,7 +579,7 @@ describe('CustomChatTransport — LLM Router integration', () => {
     expect(ModelFactory.createModel).toHaveBeenCalledWith(
       'gemma-4-26b-a4b-it-4bit',
       expect.objectContaining({ provider: 'llamacpp' }),
-      { max_output_tokens: 4096 },
+      expect.objectContaining({ max_output_tokens: 4096 }),
       { requestRole: 'final' }
     )
   })
@@ -636,7 +643,65 @@ describe('CustomChatTransport — LLM Router integration', () => {
     expect(ModelFactory.createModel).toHaveBeenCalledWith(
       'gemma-4-26b-a4b-it-4bit',
       expect.objectContaining({ provider: 'llamacpp' }),
-      { max_output_tokens: 4096 },
+      expect.objectContaining({ max_output_tokens: 4096 }),
+      { requestRole: 'final' }
+    )
+  })
+
+  it('waits for MLX startup before proxy preflight', async () => {
+    mocks.selectedModel = {
+      id: 'mlx-community/Qwen3.6-27B-4bit',
+      capabilities: [],
+    }
+    mocks.selectedProvider = 'mlx'
+
+    let resolveStartup!: () => void
+    vi.mocked(prepareProviderForChat).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveStartup = resolve
+        })
+    )
+
+    const transport = makeTransport({ threadId: 'thread-1' })
+    const sendPromise = transport.sendMessages({
+      chatId: 'chat-1',
+      messages: [
+        {
+          id: 'message-1',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Use MLX' }],
+        } as UIMessage,
+      ],
+      abortSignal: undefined,
+      trigger: 'submit-message',
+      messageId: 'message-1',
+    })
+
+    await Promise.resolve()
+
+    expect(mocks.fetch).not.toHaveBeenCalled()
+    expect(ModelFactory.createModel).not.toHaveBeenCalled()
+
+    resolveStartup()
+    await sendPromise
+
+    expect(mocks.fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:1337/v1/chat/completions',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'X-Ax-Provider': 'mlx',
+          'X-Ax-Request-Role': 'preflight',
+        }),
+      })
+    )
+    expect(vi.mocked(prepareProviderForChat).mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.fetch.mock.invocationCallOrder[0]
+    )
+    expect(ModelFactory.createModel).toHaveBeenCalledWith(
+      'mlx-community/Qwen3.6-27B-4bit',
+      expect.objectContaining({ provider: 'mlx' }),
+      expect.objectContaining({ max_output_tokens: 4096 }),
       { requestRole: 'final' }
     )
   })
@@ -685,7 +750,7 @@ describe('CustomChatTransport — LLM Router integration', () => {
     expect(ModelFactory.createModel).toHaveBeenCalledWith(
       'bootstrap-late-local.gguf',
       expect.objectContaining({ provider: 'llamacpp' }),
-      { max_output_tokens: 4096 },
+      expect.objectContaining({ max_output_tokens: 4096 }),
       { requestRole: 'final' }
     )
   })

@@ -70,6 +70,10 @@ function isLocalProviderId(providerId: string | undefined): providerId is string
   return !!providerId && LOCAL_PROVIDER_IDS.has(providerId)
 }
 
+function shouldAwaitLocalStartup(provider: ProviderObject, modelId: string): boolean {
+  return provider.provider === 'mlx' || modelId.startsWith('mlx-community/')
+}
+
 function createFallbackLocalProvider(
   providerId: string,
   modelId: string
@@ -105,6 +109,11 @@ async function prepareProviderForFinalChat(
   modelId: string
 ): Promise<'ready' | 'continued'> {
   if (!isLocalProvider(provider)) {
+    await prepareProviderForChat(serviceHub, provider, modelId)
+    return 'ready'
+  }
+
+  if (shouldAwaitLocalStartup(provider, modelId)) {
     await prepareProviderForChat(serviceHub, provider, modelId)
     return 'ready'
   }
