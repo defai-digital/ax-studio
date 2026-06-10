@@ -15,8 +15,8 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::thread::{self, JoinHandle};
 
 use ax_engine_sdk::{
-    current_host_report, EngineSession, EngineSessionConfig, GenerateRequest, GenerateSampling,
-    GenerateStreamEvent as SdkGenerateStreamEvent, NativeModelArtifactsSource,
+    EngineSession, EngineSessionConfig, GenerateRequest, GenerateSampling,
+    GenerateStreamEvent as SdkGenerateStreamEvent, NativeModelArtifactsSource, current_host_report,
 };
 use serde::{Deserialize, Serialize};
 use tokenizers::Tokenizer;
@@ -436,13 +436,15 @@ fn handle_generate(
         ignore_eos: false,
     };
 
+    let stop_sequences = effective_stop_sequences(model_id, params.stop);
+
     let request = GenerateRequest {
         model_id: model_id.to_string(),
         input_tokens: prompt_tokens.clone(),
         input_text: None,
         max_output_tokens: params.max_output_tokens.unwrap_or(2048),
         sampling,
-        stop_sequences: params.stop.unwrap_or_default(),
+        stop_sequences,
         multimodal_inputs: Default::default(),
         metadata: None,
     };
@@ -522,7 +524,7 @@ fn handle_generate_stream(
         ignore_eos: false,
     };
     let max_output_tokens = params.max_output_tokens.unwrap_or(2048);
-    let stop_sequences = params.stop.unwrap_or_default();
+    let stop_sequences = effective_stop_sequences(model_id, params.stop);
 
     let request = GenerateRequest {
         model_id: model_id.to_string(),
@@ -549,6 +551,8 @@ fn handle_generate_stream(
     let mut prompt_token_count = prompt_token_count;
     let mut output_token_count = 0_u32;
     let mut finish_reason = "stop".to_string();
+    let mut accumulated_output_tokens = Vec::new();
+    let mut emitted_text = String::new();
     let mut strip_gemma4_thought_prefix = is_gemma4_family(model_id);
 
     while let Some(event_result) = stream.next() {
@@ -576,13 +580,19 @@ fn handle_generate_stream(
                     saw_start = true;
                 }
                 if !step_event.delta_tokens.is_empty() {
-                    let mut text = entry
+                    accumulated_output_tokens.extend(step_event.delta_tokens.iter().copied());
+                    let mut full_text = entry
                         .tokenizer
-                        .decode(&step_event.delta_tokens, true)
+                        .decode(&accumulated_output_tokens, true)
                         .map_err(|e| format!("tokenizer.decode failed for {model_id}: {e}"))?;
-                    if strip_gemma4_thought_prefix {
-                        text = strip_gemma4_stream_prefix(text, &mut strip_gemma4_thought_prefix);
+                    if is_gemma4_family(model_id) {
+                        full_text = strip_gemma4_leading_thought_label(&full_text);
+                        if !full_text.is_empty() {
+                            strip_gemma4_thought_prefix = false;
+                        }
                     }
+                    let text = decoded_text_delta(&emitted_text, &full_text);
+                    emitted_text = full_text;
                     if !text.is_empty() {
                         on_event(StreamEvent::Delta { text });
                     }
@@ -593,12 +603,27 @@ fn handle_generate_stream(
                         text
                     };
                     if !text.is_empty() {
+                        emitted_text.push_str(&text);
                         on_event(StreamEvent::Delta { text });
                     }
                 }
             }
             SdkGenerateStreamEvent::Response(response_event) => {
                 let response = response_event.response;
+                if !response.output_tokens.is_empty() {
+                    let mut final_text = entry
+                        .tokenizer
+                        .decode(&response.output_tokens, true)
+                        .map_err(|e| format!("tokenizer.decode failed for {model_id}: {e}"))?;
+                    if is_gemma4_family(model_id) {
+                        final_text = strip_gemma4_leading_thought_label(&final_text);
+                    }
+                    let text = decoded_text_delta(&emitted_text, &final_text);
+                    emitted_text = final_text;
+                    if !text.is_empty() {
+                        on_event(StreamEvent::Delta { text });
+                    }
+                }
                 prompt_token_count = response
                     .prompt_token_count
                     .unwrap_or_else(|| response.prompt_tokens.len() as u32);
@@ -645,6 +670,44 @@ fn format_prompt(messages: &[ChatMessage], model_id: &str) -> String {
     } else {
         format_chatml(messages, model_id)
     }
+}
+
+fn effective_stop_sequences(model_id: &str, requested: Option<Vec<String>>) -> Vec<String> {
+    let mut stops = requested.unwrap_or_default();
+    let family_stops: &[&str] = if is_gemma4_family(model_id) {
+        &["<turn|>", "<|turn>", "<|channel>", "<channel|>"]
+    } else if is_gemma_family(model_id) {
+        &["<end_of_turn>"]
+    } else if model_id.to_lowercase().contains("qwen") {
+        &["<|im_end|>"]
+    } else {
+        &[]
+    };
+
+    for stop in family_stops {
+        if !stops.iter().any(|existing| existing == stop) {
+            stops.push((*stop).to_string());
+        }
+    }
+    stops
+}
+
+fn decoded_text_delta(previous: &str, current: &str) -> String {
+    if let Some(suffix) = current.strip_prefix(previous) {
+        return suffix.to_string();
+    }
+
+    let mut previous_chars = previous.chars();
+    let mut common_byte_len = 0;
+    for (idx, current_ch) in current.char_indices() {
+        match previous_chars.next() {
+            Some(previous_ch) if previous_ch == current_ch => {
+                common_byte_len = idx + current_ch.len_utf8();
+            }
+            _ => break,
+        }
+    }
+    current[common_byte_len..].to_string()
 }
 
 fn is_gemma4_family(model_id: &str) -> bool {
@@ -893,5 +956,32 @@ mod tests {
             "The capital is Ottawa."
         );
         assert!(!stripping);
+    }
+
+    #[test]
+    fn gemma4_adds_control_token_stop_sequences() {
+        let stops = effective_stop_sequences(
+            "mlx-community/gemma-4-12B-it-4bit",
+            Some(vec!["custom-stop".to_string(), "<turn|>".to_string()]),
+        );
+
+        assert!(stops.contains(&"custom-stop".to_string()));
+        assert!(stops.contains(&"<turn|>".to_string()));
+        assert!(stops.contains(&"<|turn>".to_string()));
+        assert!(stops.contains(&"<|channel>".to_string()));
+        assert!(stops.contains(&"<channel|>".to_string()));
+        assert_eq!(
+            stops
+                .iter()
+                .filter(|stop| stop.as_str() == "<turn|>")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn cumulative_decode_delta_emits_only_new_text() {
+        assert_eq!(decoded_text_delta("Hello", "Hello world"), " world");
+        assert_eq!(decoded_text_delta("AGI", "AGI stands"), " stands");
     }
 }
