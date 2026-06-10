@@ -15,8 +15,8 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::thread::{self, JoinHandle};
 
 use ax_engine_sdk::{
-    EngineSession, EngineSessionConfig, GenerateRequest, GenerateSampling,
-    GenerateStreamEvent as SdkGenerateStreamEvent, NativeModelArtifactsSource, current_host_report,
+    current_host_report, EngineSession, EngineSessionConfig, GenerateRequest, GenerateSampling,
+    GenerateStreamEvent as SdkGenerateStreamEvent, NativeModelArtifactsSource,
 };
 use serde::{Deserialize, Serialize};
 use tokenizers::Tokenizer;
@@ -360,6 +360,14 @@ fn handle_load(
     if models.contains_key(model_id) {
         log::debug!("[mlx-worker] load: {model_id} already resident, no-op");
         return Ok(());
+    }
+
+    if !models.is_empty() {
+        let previous_models: Vec<String> = models.keys().cloned().collect();
+        for previous_model in &previous_models {
+            log::info!("[mlx-worker] unloading previous model before switch: {previous_model}");
+        }
+        models.clear();
     }
 
     if !model_dir.is_dir() {

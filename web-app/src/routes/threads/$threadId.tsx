@@ -47,6 +47,7 @@ import { useThreadConfig } from '@/hooks/threads/use-thread-config'
 import { useThreadEffects } from '@/hooks/threads/use-thread-effects'
 import { ThreadView } from '@/containers/threads/ThreadView'
 import { useGuardrails } from '@/hooks/settings/useGuardrails'
+import { resolveEffectiveSelectedModel } from '@/lib/chat/selected-model'
 import { toast } from 'sonner'
 
 export const Route = createFileRoute('/threads/$threadId')({
@@ -98,15 +99,16 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   const { prepareLocalKnowledge } = useThreadLocalKnowledge(threadId)
   const alwaysCiteSources = useGuardrails((s) => s.alwaysCiteSources)
   const projectId = thread?.metadata?.project?.id
-  const selectedModel = useMemo(() => {
-    if (!thread?.model) return selectedModelFromStore
-    return (
-      providers
-        .find((provider) => provider.provider === thread.model?.provider)
-        ?.models.find((model) => model.id === thread.model?.id) ??
-      selectedModelFromStore
-    )
-  }, [providers, selectedModelFromStore, thread?.model])
+  const selectedModel = useMemo(
+    () =>
+      resolveEffectiveSelectedModel({
+        model: thread?.model,
+        providers,
+        selectedProvider,
+        selectedModelFromStore,
+      }),
+    [providers, selectedModelFromStore, selectedProvider, thread?.model]
+  )
   const selectedProviderId = thread?.model?.provider ?? selectedProvider
   const { pinnedResearch, clearResearch, handleResearchCommand, cancelResearch } =
     useThreadResearch(threadId)
