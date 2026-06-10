@@ -17,7 +17,7 @@ const isValidStoredSettings = (parsed: unknown): parsed is { state: { currentLan
 export interface TranslationResources {
   [language: string]: {
     [namespace: string]: {
-      [key: string]: string
+      [key: string]: unknown
     }
   }
 }
@@ -64,6 +64,51 @@ Object.entries(localeFiles).forEach(([path, module]) => {
   }
 })
 
+function flattenTranslationKeys(
+  value: unknown,
+  prefix = ''
+): string[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return prefix ? [prefix] : []
+  }
+
+  return Object.entries(value as Record<string, unknown>).flatMap(
+    ([key, nestedValue]) => {
+      const nextPrefix = prefix ? `${prefix}.${key}` : key
+      return flattenTranslationKeys(nestedValue, nextPrefix)
+    }
+  )
+}
+
+export function getCompleteLanguages(minCoverage = 0.95): string[] {
+  const englishResources = resources.en
+  if (!englishResources) return ['en']
+
+  const expectedKeys = new Set(
+    Object.entries(englishResources).flatMap(([namespace, namespaceValues]) =>
+      flattenTranslationKeys(namespaceValues).map((key) => `${namespace}:${key}`)
+    )
+  )
+
+  if (expectedKeys.size === 0) return ['en']
+
+  return Object.entries(resources)
+    .filter(([language, languageResources]) => {
+      if (language === 'en') return true
+      const languageKeys = new Set(
+        Object.entries(languageResources).flatMap(([namespace, namespaceValues]) =>
+          flattenTranslationKeys(namespaceValues).map((key) => `${namespace}:${key}`)
+        )
+      )
+      let matched = 0
+      for (const key of expectedKeys) {
+        if (languageKeys.has(key)) matched += 1
+      }
+      return matched / expectedKeys.size >= minCoverage
+    })
+    .map(([language]) => language)
+}
+
 // Get stored language preference
 export const getStoredLanguage = (): string => {
   try {
@@ -74,7 +119,9 @@ export const getStoredLanguage = (): string => {
     )
     const parsed = stored ? JSON.parse(stored) : {}
     if (isValidStoredSettings(parsed)) {
-      return parsed.state.currentLanguage
+      return getCompleteLanguages().includes(parsed.state.currentLanguage)
+        ? parsed.state.currentLanguage
+        : 'en'
     }
     return 'en'
   } catch {
@@ -134,7 +181,7 @@ const translate = (key: string, options: Record<string, unknown> = {}): string =
 
 // Change language function
 const changeLanguage = (lng: string): void => {
-  if (i18nInstance && resources[lng]) {
+  if (i18nInstance && getCompleteLanguages().includes(lng)) {
     i18nInstance.language = lng
     
     // Update localStorage

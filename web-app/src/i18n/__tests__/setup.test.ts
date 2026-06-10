@@ -14,25 +14,39 @@ Object.defineProperty(window, 'localStorage', {
 })
 
 // Import after mocking
-import { getStoredLanguage } from '../setup'
+import { getCompleteLanguages, getStoredLanguage } from '../setup'
 
 describe('getStoredLanguage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('should return language from valid stored settings', () => {
+  it('should return complete language from valid stored settings', () => {
     const validData = {
       state: {
-        currentLanguage: 'id'
+        currentLanguage: 'en'
       }
     }
     mockLocalStorage.getItem.mockReturnValue(JSON.stringify(validData))
 
     const result = getStoredLanguage()
 
-    expect(result).toBe('id')
+    expect(result).toBe('en')
     expect(mockLocalStorage.getItem).toHaveBeenCalledWith(localStorageKey.settingGeneral)
+  })
+
+  it('should return "en" for stored languages that are incomplete or unsupported', () => {
+    mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
+      state: {
+        currentLanguage: 'ja',
+      },
+    }))
+
+    expect(getStoredLanguage()).toBe('en')
+  })
+
+  it('should expose only complete language packs', () => {
+    expect(getCompleteLanguages()).toEqual(['en'])
   })
 
   it('should return "en" when no stored value exists', () => {

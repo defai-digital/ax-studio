@@ -189,6 +189,7 @@ function ProviderDetail() {
         .providers()
         .fetchModelsFromProvider(provider)
 
+      updateProvider(providerName, { active: true })
       setConnectionStatus('success')
       setConnectionMessage(
         t('providers:refreshModelsSuccess', {
@@ -198,6 +199,7 @@ function ProviderDetail() {
         })
       )
     } catch (error) {
+      updateProvider(providerName, { active: false })
       setConnectionStatus('error')
       setConnectionMessage(
         error instanceof Error
@@ -293,6 +295,7 @@ function ProviderDetail() {
         }))
         updateProvider(providerName, {
           ...provider,
+          active: true,
           models: [...provider.models, ...newModels],
         })
         toast.success(t('providers:models'), {
@@ -302,6 +305,7 @@ function ProviderDetail() {
           }),
         })
       } else {
+        updateProvider(providerName, { active: true })
         toast.success(t('providers:models'), {
           description: t('providers:noNewModels'),
         })
@@ -316,6 +320,7 @@ function ProviderDetail() {
           provider: provider.provider,
         }),
       })
+      updateProvider(providerName, { active: false })
     } finally {
       setRefreshingModels(false)
     }

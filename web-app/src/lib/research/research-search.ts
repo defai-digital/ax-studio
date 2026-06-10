@@ -49,6 +49,53 @@ export function resetExaGate(): void {
 const EXA_TIMEOUT_MS = 15_000
 const WIKI_TIMEOUT_MS = 10_000
 
+async function raceWithAbort<T>(
+  promise: Promise<T>,
+  signal?: AbortSignal
+): Promise<T> {
+  if (!signal) return promise
+  let onAbort: (() => void) | undefined
+  const abortPromise = new Promise<never>((_, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException('Aborted', 'AbortError'))
+      return
+    }
+    onAbort = () => {
+      reject(new DOMException('Aborted', 'AbortError'))
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
+
+  try {
+    return await Promise.race([promise, abortPromise])
+  } finally {
+    if (onAbort) signal.removeEventListener('abort', onAbort)
+  }
+}
+
+async function delayWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let onAbort: (() => void) | undefined
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(new DOMException('Aborted', 'AbortError'))
+        return
+      }
+      timer = setTimeout(resolve, ms)
+      onAbort = () => {
+        if (timer) clearTimeout(timer)
+        reject(new DOMException('Aborted', 'AbortError'))
+      }
+      signal?.addEventListener('abort', onAbort, { once: true })
+    })
+  } finally {
+    if (timer) clearTimeout(timer)
+    if (signal && onAbort) signal.removeEventListener('abort', onAbort)
+  }
+}
+
 export async function exaSearch(
   question: string,
   numResults: number,
@@ -59,19 +106,14 @@ export async function exaSearch(
   let unlockNext!: () => void
   const mySlot = new Promise<void>((resolve) => { unlockNext = resolve })
   const waitForTurn = exaQueue
-  exaQueue = mySlot  // next caller will wait for this slot
+  exaQueue = waitForTurn.catch(() => undefined).then(() => mySlot)
 
-  await Promise.race([
-    waitForTurn,
-    new Promise<never>((_, reject) => {
-      if (signal?.aborted) reject(new DOMException('Aborted', 'AbortError'))
-      signal?.addEventListener(
-        'abort',
-        () => reject(new DOMException('Aborted', 'AbortError')),
-        { once: true }
-      )
-    }),
-  ])
+  try {
+    await raceWithAbort(waitForTurn, signal)
+  } catch (error) {
+    unlockNext()
+    throw error
+  }
   if (signal?.aborted) {
     unlockNext()
     throw new DOMException('Aborted', 'AbortError')
@@ -97,17 +139,7 @@ export async function exaSearch(
     throw err
   } finally {
     if (exaTimeoutId) clearTimeout(exaTimeoutId)
-    await new Promise<void>((resolve) => {
-      const gapTimer = setTimeout(resolve, 500)
-      signal?.addEventListener(
-        'abort',
-        () => {
-          clearTimeout(gapTimer)
-          resolve()
-        },
-        { once: true }
-      )
-    })
+    await delayWithAbort(500, signal).catch(() => undefined)
     unlockNext()  // release gate for the next caller
   }
 }

@@ -137,6 +137,44 @@ describe('useTokensCount', () => {
     expect(result.current.loading).toBe(false)
   })
 
+  it('recalculates when string message content changes', async () => {
+    const firstMessages = [
+      {
+        id: '1',
+        role: 'user',
+        content: 'Hello',
+      } as unknown as ThreadMessage,
+    ]
+    const nextMessages = [
+      {
+        id: '1',
+        role: 'user',
+        content: 'Hello with more words',
+      } as unknown as ThreadMessage,
+    ]
+
+    mockGetTokensCount.mockResolvedValueOnce(10).mockResolvedValueOnce(20)
+
+    const { result, rerender } = renderHook(
+      ({ msgs }) => useTokensCount(msgs),
+      { initialProps: { msgs: firstMessages } }
+    )
+
+    await act(async () => {
+      vi.advanceTimersByTime(300)
+    })
+
+    expect(result.current.tokenCount).toBe(10)
+
+    rerender({ msgs: nextMessages })
+
+    await act(async () => {
+      vi.advanceTimersByTime(300)
+    })
+
+    expect(result.current.tokenCount).toBe(20)
+  })
+
   it('should compute percentage and isNearLimit correctly', async () => {
     const messages: ThreadMessage[] = [
       {

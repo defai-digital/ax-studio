@@ -122,6 +122,33 @@ describe('TauriProvidersService', () => {
     )
   })
 
+  it('uses bearer auth for Gemini OpenAI-compatible model listing', async () => {
+    mocks.fetchTauri.mockResolvedValue(
+      response({ data: [{ id: 'gemini-2.5-flash' }] })
+    )
+
+    const result = await service.fetchModelsFromProvider(
+      provider({
+        provider: 'gemini',
+        base_url: 'https://generativelanguage.googleapis.com/v1beta/openai',
+        api_key: 'google-key',
+      })
+    )
+
+    expect(result).toEqual(['gemini-2.5-flash'])
+    expect(mocks.fetchTauri).toHaveBeenCalledWith(
+      'https://generativelanguage.googleapis.com/v1beta/openai/models',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer google-key',
+        }),
+      })
+    )
+    expect(
+      (mocks.fetchTauri.mock.calls[0][1] as RequestInit).headers
+    ).not.toHaveProperty('x-goog-api-key')
+  })
+
   it('fetches alternative model response shapes', async () => {
     mocks.fetchNative.mockResolvedValue(
       response({ models: ['llama3', { id: 'mistral' }] })

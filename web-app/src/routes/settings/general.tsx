@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useAppTranslation } from '@/i18n'
+import { getCompleteLanguages } from '@/i18n/setup'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,18 +24,30 @@ import {
 import { fallbackDefaultPrompt } from '@/lib/prompts/system-prompt'
 import { useGeneralSettingsPage } from '@/hooks/settings/useGeneralSettingsPage'
 import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
+import { useEffect } from 'react'
 
-const LANGUAGES = [
+const ALL_LANGUAGES = [
   { value: 'en', label: 'English' },
   { value: 'fr', label: 'Français' },
   { value: 'zh-CN', label: '简体中文' },
   { value: 'zh-TW', label: '繁體中文' },
   { value: 'ja', label: '日本語' },
 ]
+const COMPLETE_LANGUAGE_CODES = new Set(getCompleteLanguages())
+const LANGUAGES = ALL_LANGUAGES.filter((language) =>
+  COMPLETE_LANGUAGE_CODES.has(language.value)
+)
 
 function LanguageSwitcher() {
   const { i18n, t } = useAppTranslation()
   const { setCurrentLanguage, currentLanguage } = useGeneralSetting()
+  useEffect(() => {
+    if (!COMPLETE_LANGUAGE_CODES.has(currentLanguage)) {
+      i18n.changeLanguage('en')
+      setCurrentLanguage('en')
+    }
+  }, [currentLanguage, i18n, setCurrentLanguage])
+
   const changeLanguage = (lng: string) => {
     i18n.changeLanguage(lng)
     setCurrentLanguage(lng as Language)

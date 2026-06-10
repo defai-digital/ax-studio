@@ -49,6 +49,11 @@ function shouldUseTauriFetch(baseUrl: string): boolean {
   )
 }
 
+function usesOpenAICompatibleAuth(provider: ModelProvider, baseUrl: string): boolean {
+  if (provider.provider !== 'gemini') return true
+  return baseUrl.includes('/openai')
+}
+
 const HEADER_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
 const RESERVED_CUSTOM_HEADERS = new Set([
   'accept-encoding',
@@ -276,7 +281,7 @@ export class TauriProvidersService implements ProvidersService {
 
       // Only add authentication headers if API key is provided
       if (provider.api_key) {
-        if (provider.provider === 'gemini') {
+        if (!usesOpenAICompatibleAuth(provider, baseUrl)) {
           headers['x-goog-api-key'] = provider.api_key
         } else {
           headers['Authorization'] = `Bearer ${provider.api_key}`

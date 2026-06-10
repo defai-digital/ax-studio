@@ -314,6 +314,9 @@ describe('ProviderDetail', () => {
     await waitFor(() => {
       expect(screen.getByTestId('check-icon')).toBeInTheDocument()
     })
+    expect(mockUpdateProvider).toHaveBeenCalledWith('test-provider', {
+      active: true,
+    })
   })
 
   it('shows connection error after failed test', async () => {
@@ -332,6 +335,9 @@ describe('ProviderDetail', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('x-icon')).toBeInTheDocument()
+    })
+    expect(mockUpdateProvider).toHaveBeenCalledWith('test-provider', {
+      active: false,
     })
   })
 

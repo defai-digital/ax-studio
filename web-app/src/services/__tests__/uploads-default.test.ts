@@ -116,6 +116,29 @@ describe('DefaultUploadsService', () => {
       expect(result.chunkCount).toBe(12)
     })
 
+    it('accepts snake_case pipeline metric aliases from fabric_ingest_run', async () => {
+      const hub = makeServiceHub({
+        error: '',
+        content: [
+          {
+            text: JSON.stringify({
+              files_succeeded: '1',
+              total_chunks_generated: '8',
+              errors: [],
+            }),
+          },
+        ],
+      })
+      service.setMcpService(hub.mcp())
+
+      const result = await service.ingestFileAttachment(
+        't1',
+        makeDocAttachment()
+      )
+
+      expect(result.chunkCount).toBe(8)
+    })
+
     it('saves file to registry after successful ingestion', async () => {
       const metrics = {
         filesSucceeded: 1,

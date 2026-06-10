@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
+  exaSearch,
   ExaRateLimitError,
   getErrorMessage,
   isExaRateLimitMessage,
@@ -8,9 +9,16 @@ import {
   resetExaGate,
 } from '../research-search'
 
-// Mock @tauri-apps/api/core
-vi.mock('@tauri-apps/api/core', () => ({
+const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
+}))
+
+vi.mock('@/hooks/useServiceHub', () => ({
+  getServiceHub: () => ({
+    core: () => ({
+      invoke: mocks.invoke,
+    }),
+  }),
 }))
 
 describe('getErrorMessage', () => {
@@ -147,5 +155,49 @@ describe('normalizeUrl', () => {
 describe('resetExaGate', () => {
   it('should not throw', () => {
     expect(() => resetExaGate()).not.toThrow()
+  })
+})
+
+describe('exaSearch queue cleanup', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    resetExaGate()
+    mocks.invoke.mockReset()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('does not let a later search bypass an active search when a queued search aborts', async () => {
+    let resolveFirst!: (value: unknown) => void
+    mocks.invoke
+      .mockImplementationOnce(
+        () => new Promise((resolve) => { resolveFirst = resolve })
+      )
+      .mockResolvedValue({ error: '', content: [{ text: '[]' }] })
+
+    const first = exaSearch('first', 1)
+    const queuedAbort = new AbortController()
+    const second = exaSearch('second', 1, queuedAbort.signal)
+
+    await Promise.resolve()
+    queuedAbort.abort()
+
+    await expect(second).rejects.toThrow('Aborted')
+
+    const third = exaSearch('third', 1)
+    await Promise.resolve()
+    expect(mocks.invoke).toHaveBeenCalledTimes(1)
+
+    resolveFirst({ error: '', content: [{ text: '[]' }] })
+    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(500)
+    await first
+
+    expect(mocks.invoke).toHaveBeenCalledTimes(2)
+    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(500)
+    await third
   })
 })

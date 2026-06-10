@@ -13,6 +13,27 @@ const estimateTokensFromText = (text: string): number => {
   return Math.ceil(text.length / 4)
 }
 
+const messageContentText = (message: ThreadMessage): string => {
+  const { content } = message as ThreadMessage & { content?: unknown }
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+
+  return content
+    .map((item) => {
+      if (!item || typeof item !== 'object') return ''
+      const part = item as {
+        text?: { value?: string } | string
+        image_url?: { url?: string }
+      }
+      if (typeof part.text === 'string') return part.text
+      return part.text?.value ?? part.image_url?.url ?? ''
+    })
+    .join('')
+}
+
+const messagesText = (messages: ThreadMessage[]): string =>
+  messages.map(messageContentText).join(' ')
+
 // Check if a model provider is hosted (external API) rather than local
 const isHostedModel = (selectedModel: { id?: string } | null, providers: ModelProvider[]): boolean => {
   if (!selectedModel?.id) return false
@@ -83,12 +104,7 @@ export const useTokensCount = (
     if (messages.length === 0) return ''
     let totalLen = 0
     for (const m of messages) {
-      if (m.content) {
-        for (const item of m.content) {
-          totalLen += item.text?.value?.length ?? 0
-          totalLen += item.image_url?.url?.length ?? 0
-        }
-      }
+      totalLen += messageContentText(m).length
     }
     return `${messages.length}:${totalLen}:${messages[messages.length - 1].role}`
   }, [messages])
@@ -185,37 +201,14 @@ export const useTokensCount = (
       let tokenCount: number
 
       if (isHosted) {
-        const messageText = messages
-          .map(msg => {
-            let text = ''
-            if (msg.content) {
-              for (const item of msg.content) {
-                text += item.text?.value || ''
-              }
-            }
-            return text
-          })
-          .join(' ')
-
-        tokenCount = estimateTokensFromText(messageText)
+        tokenCount = estimateTokensFromText(messagesText(messages))
       } else {
         tokenCount = await serviceHub
           .models()
           .getTokensCount(selectedModel.id, messages)
         if (controller.signal.aborted) return
         if (tokenCount === 0 && messages.length > 0) {
-          const messageText = messages
-            .map(msg => {
-              let text = ''
-              if (msg.content) {
-                for (const item of msg.content) {
-                  text += item.text?.value || ''
-                }
-              }
-              return text
-            })
-            .join(' ')
-          tokenCount = estimateTokensFromText(messageText)
+          tokenCount = estimateTokensFromText(messagesText(messages))
         }
       }
 
