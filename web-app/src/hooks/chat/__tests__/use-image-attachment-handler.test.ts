@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
@@ -74,13 +74,23 @@ function createMockFile(
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('useImageAttachmentHandler', () => {
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
+
   beforeEach(() => {
     vi.clearAllMocks()
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     mockSetAttachments.mockImplementation((_key: string, updater: unknown) => {
       if (typeof updater === 'function') {
         updater([])
       }
     })
+  })
+
+  afterEach(() => {
+    consoleWarnSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
   })
 
   // ── Phase 1: Hook returns expected shape ─────────────────────────────────
@@ -233,7 +243,6 @@ describe('useImageAttachmentHandler', () => {
   })
 
   it('handleDrop warns when no dataTransfer is available', () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const params = defaultParams()
     const { result } = renderHook(() => useImageAttachmentHandler(params))
 
@@ -245,10 +254,9 @@ describe('useImageAttachmentHandler', () => {
       } as unknown as React.DragEvent)
     })
 
-    expect(warnSpy).toHaveBeenCalledWith(
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
       'No dataTransfer available in drop event'
     )
-    warnSpy.mockRestore()
   })
 
   // ── handlePaste guard ────────────────────────────────────────────────────

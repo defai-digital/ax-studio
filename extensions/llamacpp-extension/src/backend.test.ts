@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   storage: new Map<string, string>(),
@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => ({
   existsSync: vi.fn(async () => false),
   mkdir: vi.fn(async () => {}),
   rm: vi.fn(async () => {}),
+  tauriFetchMock: vi.fn((...args: Parameters<typeof fetch>) =>
+    (globalThis as any).fetch(...args)
+  ),
 }))
 
 function ensureLocalStorage() {
@@ -32,6 +35,12 @@ function ensureLocalStorage() {
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
+}))
+
+// Mock the Tauri HTTP plugin — the mock delegates to globalThis.fetch
+// so existing test assertions on `fetch` still work.
+vi.mock('@tauri-apps/plugin-http', () => ({
+  fetch: mocks.tauriFetchMock,
 }))
 
 vi.mock('@ax-studio/tauri-plugin-llamacpp-api', () => ({
@@ -71,6 +80,7 @@ import {
   configureBackends,
   downloadBackend,
   fetchRemoteBackends,
+  getAxServingBinaryPath,
 } from './backend'
 import { invoke } from '@tauri-apps/api/core'
 import {
@@ -82,8 +92,15 @@ import {
 } from '@ax-studio/tauri-plugin-llamacpp-api'
 
 describe('llamacpp backend helpers', () => {
+  let consoleDebugSpy: ReturnType<typeof vi.spyOn>
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+
   beforeEach(() => {
     vi.clearAllMocks()
+    consoleDebugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {})
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     mocks.storage.clear()
     mocks.existsSync.mockResolvedValue(false)
     clearRemoteBackendsCacheForTests()
@@ -111,6 +128,13 @@ describe('llamacpp backend helpers', () => {
       },
     }
     ;(globalThis as any).fetch = vi.fn()
+  })
+
+  afterEach(() => {
+    consoleDebugSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
+    consoleWarnSpy.mockRestore()
+    vi.useRealTimers()
   })
 
   it('parses matching backend assets from GitHub releases', async () => {
@@ -185,6 +209,43 @@ describe('llamacpp backend helpers', () => {
       updateNeeded: false,
       newVersion: '',
     })
+  })
+
+  it('uses an existing app-managed ax-serving binary when present', async () => {
+    mocks.existsSync.mockImplementation(async (path: string) =>
+      path === '/app-data/ax-serving/ax-serving'
+    )
+
+    await expect(getAxServingBinaryPath()).resolves.toBe(
+      '/app-data/ax-serving/ax-serving'
+    )
+
+    expect(mocks.mkdir).not.toHaveBeenCalled()
+  })
+
+  it('uses an existing system ax-serving binary before falling back to PATH', async () => {
+    mocks.existsSync.mockImplementation(async (path: string) =>
+      path === '/opt/homebrew/bin/ax-serving'
+    )
+
+    await expect(getAxServingBinaryPath()).resolves.toBe(
+      '/opt/homebrew/bin/ax-serving'
+    )
+
+    expect(mocks.mkdir).not.toHaveBeenCalled()
+  })
+
+  it('falls back to ax-serving on PATH when known paths are missing', async () => {
+    mocks.existsSync.mockImplementation(async (path: string) => {
+      if (path.startsWith('/usr/local') || path.startsWith('/opt/homebrew')) {
+        throw new Error('outside app data')
+      }
+      return false
+    })
+
+    await expect(getAxServingBinaryPath()).resolves.toBe('ax-serving')
+
+    expect(mocks.mkdir).not.toHaveBeenCalled()
   })
 
   it('retries backend downloads with exponential backoff before succeeding', async () => {

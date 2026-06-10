@@ -69,3 +69,15 @@ export function isDev() {
 export function sanitizeModelId(modelId: string): string {
   return modelId.replace(/[^a-zA-Z0-9/_\-.]/g, '').replace(/\./g, '_')
 }
+
+export function basename(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, '/')
+  return normalized.split('/').filter(Boolean).pop() ?? ''
+}
+
+export function fileExtension(filePath: string): string {
+  const base = basename(filePath)
+  const lastDot = base.lastIndexOf('.')
+  if (lastDot <= 0 || lastDot === base.length - 1) return ''
+  return base.slice(lastDot + 1).toLowerCase()
+}

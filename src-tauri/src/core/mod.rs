@@ -1,10 +1,9 @@
-pub mod agent_run_logs;
-pub mod agent_teams;
 pub mod app;
 pub mod downloads;
 pub mod extensions;
 pub mod filesystem;
 pub mod mcp;
+pub mod mlx;
 pub mod research;
 pub mod server;
 pub mod setup;

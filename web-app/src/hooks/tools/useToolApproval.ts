@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
-import { createSafeJSONStorage } from '@/lib/storage'
+import { createSafeJSONStorage } from '@/lib/storage/storage'
+import { appendUniqueString } from '@/lib/utils/array'
 
 export type ToolApprovalModalProps = {
   toolName: string
@@ -41,10 +42,10 @@ export const useToolApproval = create<ToolApprovalState>()(
         set((state) => ({
           approvedTools: {
             ...state.approvedTools,
-            [threadId]: [
-              ...(state.approvedTools[threadId] || []),
-              toolName,
-            ].filter((tool, index, arr) => arr.indexOf(tool) === index), // Remove duplicates
+            [threadId]: appendUniqueString(
+              state.approvedTools[threadId] || [],
+              toolName
+            ),
           },
         }))
       },

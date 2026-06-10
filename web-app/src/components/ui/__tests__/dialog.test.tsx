@@ -33,6 +33,7 @@ describe('Dialog Components', () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Dialog Title</DialogTitle>
+            <DialogDescription>Dialog description</DialogDescription>
           </DialogHeader>
         </DialogContent>
       </Dialog>
@@ -79,6 +80,7 @@ describe('Dialog Components', () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Dialog Title</DialogTitle>
+            <DialogDescription>Dialog description</DialogDescription>
           </DialogHeader>
         </DialogContent>
       </Dialog>
@@ -103,6 +105,7 @@ describe('Dialog Components', () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Dialog Title</DialogTitle>
+            <DialogDescription>Dialog description</DialogDescription>
           </DialogHeader>
         </DialogContent>
       </Dialog>
@@ -125,6 +128,7 @@ describe('Dialog Components', () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Dialog Title</DialogTitle>
+            <DialogDescription>Dialog description</DialogDescription>
           </DialogHeader>
         </DialogContent>
       </Dialog>
@@ -165,6 +169,7 @@ describe('Dialog Components', () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Dialog Title</DialogTitle>
+            <DialogDescription>Dialog description</DialogDescription>
           </DialogHeader>
         </DialogContent>
       </Dialog>
@@ -185,6 +190,7 @@ describe('Dialog Components', () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Dialog Title</DialogTitle>
+            <DialogDescription>Dialog description</DialogDescription>
           </DialogHeader>
         </DialogContent>
       </Dialog>
@@ -226,6 +232,7 @@ describe('Dialog Components', () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Dialog Title</DialogTitle>
+            <DialogDescription>Dialog description</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <button>Footer button</button>
@@ -249,8 +256,9 @@ describe('Dialog Components', () => {
           <DialogTrigger>Open Dialog</DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Dialog Title</DialogTitle>
-            </DialogHeader>
+            <DialogTitle>Dialog Title</DialogTitle>
+            <DialogDescription>Dialog description</DialogDescription>
+          </DialogHeader>
           </DialogContent>
         </Dialog>
       )
@@ -272,8 +280,9 @@ describe('Dialog Components', () => {
           <DialogTrigger>Open Dialog</DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Dialog Title</DialogTitle>
-            </DialogHeader>
+            <DialogTitle>Dialog Title</DialogTitle>
+            <DialogDescription>Dialog description</DialogDescription>
+          </DialogHeader>
           </DialogContent>
         </Dialog>
       </div>
@@ -295,6 +304,7 @@ describe('Dialog Components', () => {
         <DialogContent className="custom-dialog-class">
           <DialogHeader>
             <DialogTitle>Dialog Title</DialogTitle>
+            <DialogDescription>Dialog description</DialogDescription>
           </DialogHeader>
         </DialogContent>
       </Dialog>
@@ -316,6 +326,7 @@ describe('Dialog Components', () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Dialog Title</DialogTitle>
+            <DialogDescription>Dialog description</DialogDescription>
           </DialogHeader>
         </DialogContent>
       </Dialog>
@@ -335,6 +346,7 @@ describe('Dialog Components', () => {
         <DialogContent showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>Dialog Title</DialogTitle>
+            <DialogDescription>Dialog description</DialogDescription>
           </DialogHeader>
         </DialogContent>
       </Dialog>
@@ -354,6 +366,7 @@ describe('Dialog Components', () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Dialog Title</DialogTitle>
+            <DialogDescription>Dialog description</DialogDescription>
           </DialogHeader>
         </DialogContent>
       </Dialog>
@@ -373,6 +386,7 @@ describe('Dialog Components', () => {
         <DialogContent aria-describedby="custom-description">
           <DialogHeader>
             <DialogTitle>Dialog Title</DialogTitle>
+            <DialogDescription>Dialog description</DialogDescription>
           </DialogHeader>
           <p id="custom-description">Custom description text</p>
         </DialogContent>

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useLocalApiServer } from '../useLocalApiServer'
 
@@ -20,8 +20,11 @@ vi.mock('zustand/middleware', () => ({
 }))
 
 describe('useLocalApiServer', () => {
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+
   beforeEach(() => {
     vi.clearAllMocks()
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     // Reset store state to defaults
     const store = useLocalApiServer.getState()
     store.setEnableOnStartup(true)

@@ -1,5 +1,5 @@
 import { renderHook, act } from '@testing-library/react'
-import { useDownloadStore } from '../useDownloadStore'
+import { toDownloadProcesses, useDownloadStore } from '../useDownloadStore'
 
 describe('useDownloadStore', () => {
   beforeEach(() => {
@@ -258,5 +258,61 @@ describe('useDownloadStore', () => {
       expect(result.current.downloads['download-1']).toBeUndefined()
       expect(result.current.localDownloadingModels.has('model-1')).toBe(true)
     })
+  })
+})
+
+describe('toDownloadProcesses', () => {
+  it('maps stored downloads to display processes', () => {
+    expect(
+      toDownloadProcesses({
+        id1: {
+          id: 'id1',
+          name: 'model-a',
+          progress: 50,
+          current: 500,
+          total: 1000,
+        },
+      })
+    ).toEqual([
+      {
+        id: 'model-a',
+        name: 'model-a',
+        progress: 50,
+        current: 500,
+        total: 1000,
+      },
+    ])
+  })
+
+  it('adds local downloads that do not have progress yet', () => {
+    expect(
+      toDownloadProcesses(
+        {
+          'model-a': {
+            id: 'model-a',
+            name: 'model-a',
+            progress: 50,
+            current: 500,
+            total: 1000,
+          },
+        },
+        new Set(['model-a', 'model-b'])
+      )
+    ).toEqual([
+      {
+        id: 'model-a',
+        name: 'model-a',
+        progress: 50,
+        current: 500,
+        total: 1000,
+      },
+      {
+        id: 'model-b',
+        name: 'model-b',
+        progress: 0,
+        current: 0,
+        total: 0,
+      },
+    ])
   })
 })

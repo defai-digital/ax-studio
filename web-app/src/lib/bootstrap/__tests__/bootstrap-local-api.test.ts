@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
 import { bootstrapLocalApi } from '../bootstrap-local-api'
 import type { BootstrapLocalApiInput } from '../bootstrap-local-api'
 
@@ -9,6 +9,9 @@ const makeServiceHub = (isRunning = false, shouldFail = false) => ({
       : vi.fn().mockResolvedValue(isRunning),
   }),
 })
+
+let consoleErrorSpy: ReturnType<typeof vi.spyOn>
+let consoleInfoSpy: ReturnType<typeof vi.spyOn>
 
 const defaultConfig = {
   host: 'localhost',
@@ -31,8 +34,15 @@ const makeInput = (overrides: Partial<BootstrapLocalApiInput> = {}): BootstrapLo
 })
 
 beforeEach(() => {
+  consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
   // Reset window.core
   ;(globalThis as any).window = { core: { api: { startServer: vi.fn().mockResolvedValue(39291) } } }
+})
+
+afterEach(() => {
+  consoleErrorSpy.mockRestore()
+  consoleInfoSpy.mockRestore()
 })
 
 describe('bootstrapLocalApi', () => {

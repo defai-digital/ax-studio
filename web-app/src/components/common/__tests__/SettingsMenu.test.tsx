@@ -103,6 +103,36 @@ describe('SettingsMenu', () => {
     expect(interfaceLink?.className).not.toContain('bg-primary/10')
   })
 
+  // TDD: Extensions settings page exists at /settings/extensions but the menu
+  // entry was missing. These tests should fail until the entry is added.
+  it('renders extensions menu item label', () => {
+    render(<SettingsMenu />)
+    expect(screen.getByText('common:extensions')).toBeInTheDocument()
+  })
+
+  it('renders extensions link with correct href', () => {
+    render(<SettingsMenu />)
+    const links = screen.getAllByRole('link')
+    const hrefs = links.map((link) => link.getAttribute('href'))
+    expect(hrefs).toContain('/settings/extensions')
+  })
+
+  it('highlights extensions link when on extensions route', () => {
+    vi.mocked(useMatches).mockReturnValue([
+      {
+        routeId: '/settings/extensions',
+        pathname: '/settings/extensions',
+        params: {},
+      },
+    ])
+
+    render(<SettingsMenu />)
+
+    const extensionsLink = screen.getByText('common:extensions').closest('a')
+    expect(extensionsLink?.className).toContain('bg-primary/10')
+    expect(extensionsLink?.className).toContain('text-primary')
+  })
+
   it('highlights model providers when on provider sub-route', () => {
     vi.mocked(useMatches).mockReturnValue([
       {

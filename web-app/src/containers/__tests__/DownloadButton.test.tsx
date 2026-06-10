@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
 
 // --- Mocks ---
 
@@ -8,16 +8,31 @@ const {
   mockRemoveLocalDownloadingModel,
   mockPullModelWithMetadata,
   mockToastError,
-  mockGetProviderByName,
+  mockProviders,
 } = vi.hoisted(() => ({
   mockAddLocalDownloadingModel: vi.fn(),
   mockRemoveLocalDownloadingModel: vi.fn(),
   mockPullModelWithMetadata: vi.fn(),
   mockToastError: vi.fn(),
-  mockGetProviderByName: vi.fn(),
+  mockProviders: { current: [] as ModelProvider[] },
 }))
 
 vi.mock('@/hooks/models/useDownloadStore', () => ({
+  toDownloadProcesses: vi.fn(
+    (
+      downloads: Record<
+        string,
+        { name: string; progress: number; current: number; total: number }
+      >
+    ) =>
+      Object.values(downloads).map((download) => ({
+        id: download.name,
+        name: download.name,
+        progress: download.progress,
+        current: download.current,
+        total: download.total,
+      }))
+  ),
   useDownloadStore: vi.fn((selector) => {
     const state = {
       downloads: {},
@@ -37,7 +52,7 @@ vi.mock('@/hooks/settings/useGeneralSetting', () => ({
 
 vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: vi.fn((selector) =>
-    selector({ getProviderByName: mockGetProviderByName })
+    selector({ providers: mockProviders.current })
   ),
 }))
 
@@ -112,6 +127,7 @@ import { DownloadButtonPlaceholder } from '../DownloadButton'
 import { useDownloadStore } from '@/hooks/models/useDownloadStore'
 
 describe('DownloadButtonPlaceholder', () => {
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
   const baseModel = {
     model_name: 'test-model',
     description: 'A test model',
@@ -130,8 +146,13 @@ describe('DownloadButtonPlaceholder', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    mockGetProviderByName.mockReturnValue({ models: [] })
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mockProviders.current = []
     mockPullModelWithMetadata.mockResolvedValue(undefined)
+  })
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore()
   })
 
   it('renders HuggingFace link when model has no quants', () => {
@@ -172,9 +193,9 @@ describe('DownloadButtonPlaceholder', () => {
   })
 
   it('renders "New Chat" button when model is downloaded', () => {
-    mockGetProviderByName.mockReturnValue({
-      models: [{ id: 'test-model-q4_k_m' }],
-    })
+    mockProviders.current = [
+      { provider: 'llamacpp', models: [{ id: 'test-model-q4_k_m' }] } as ModelProvider,
+    ]
 
     render(
       <DownloadButtonPlaceholder
@@ -187,9 +208,9 @@ describe('DownloadButtonPlaceholder', () => {
   })
 
   it('calls handleUseModel with modelId when "New Chat" is clicked', () => {
-    mockGetProviderByName.mockReturnValue({
-      models: [{ id: 'test-model-q4_k_m' }],
-    })
+    mockProviders.current = [
+      { provider: 'llamacpp', models: [{ id: 'test-model-q4_k_m' }] } as ModelProvider,
+    ]
 
     render(
       <DownloadButtonPlaceholder
@@ -199,7 +220,10 @@ describe('DownloadButtonPlaceholder', () => {
     )
 
     fireEvent.click(screen.getByText('hub:newChat'))
-    expect(handleUseModel).toHaveBeenCalledWith('test-model-q4_k_m')
+    expect(handleUseModel).toHaveBeenCalledWith(
+      'test-model-q4_k_m',
+      'llamacpp'
+    )
   })
 
   it('starts download when download button is clicked', () => {

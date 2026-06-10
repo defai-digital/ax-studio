@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
 import { ANTHROPIC_DEFAULT_HEADERS } from '@/constants/providers'
 import { mergeProviders } from '@/lib/providers/model-provider-merge'
-import { createSafeJSONStorage } from '@/lib/storage'
+import { createSafeJSONStorage } from '@/lib/storage/storage'
 
 function syncSelectedModel(
   providers: ModelProvider[],
@@ -197,13 +197,13 @@ export const useModelProvider = create<ModelProviderState>()(
       partialize: (state) => ({
         providers: state.providers.map((provider) => ({
           ...provider,
-          models: provider.models.map((model) => ({
+          models: (provider.models ?? []).map((model) => ({
             id: model.id,
             model: model.model,
             name: model.name,
             capabilities: model.capabilities,
             embedding: model.embedding,
-            provider: model.provider,
+            provider: (model as Model & { provider?: string }).provider,
             settings: model.settings,
           })),
         })),
@@ -215,7 +215,7 @@ export const useModelProvider = create<ModelProviderState>()(
               name: state.selectedModel.name,
               capabilities: state.selectedModel.capabilities,
               embedding: state.selectedModel.embedding,
-              provider: state.selectedModel.provider,
+              provider: (state.selectedModel as Model & { provider?: string }).provider,
               settings: state.selectedModel.settings,
             }
           : null,
@@ -319,6 +319,34 @@ export const useModelProvider = create<ModelProviderState>()(
                   )
                 }
               })
+            }
+          })
+        }
+
+        if (version <= 8 && state?.providers) {
+          state.providers.forEach((provider) => {
+            if (provider.provider !== 'mistral') return
+
+            if (provider.base_url === 'https://api.mistral.ai') {
+              provider.base_url = 'https://api.mistral.ai/v1'
+            }
+
+            const baseUrlSetting = provider.settings?.find(
+              (setting) => setting.key === 'base-url'
+            )
+            if (
+              baseUrlSetting?.controller_props?.value ===
+              'https://api.mistral.ai'
+            ) {
+              baseUrlSetting.controller_props.value =
+                'https://api.mistral.ai/v1'
+            }
+            if (
+              baseUrlSetting?.controller_props?.placeholder ===
+              'https://api.mistral.ai'
+            ) {
+              baseUrlSetting.controller_props.placeholder =
+                'https://api.mistral.ai/v1'
             }
           })
         }

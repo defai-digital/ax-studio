@@ -10,6 +10,8 @@ import {
 import type { UIMessageChunk } from 'ai'
 import type { TokenUsageCallback } from './transport-types'
 import { stripUnavailableToolParts } from './transport-types'
+import { useAppState } from '@/hooks/settings/useAppState'
+import { extractErrorMessage } from '@/lib/utils/error'
 
 export interface SingleAgentConfig {
   model: LanguageModel
@@ -55,11 +57,27 @@ export async function executeSingleAgentStream(
     tools: shouldEnableTools ? tools : undefined,
     toolChoice: shouldEnableTools ? 'auto' : undefined,
     system: systemMessage,
-    stopWhen: shouldEnableTools ? stepCountIs(5) : stepCountIs(1),
+    stopWhen: shouldEnableTools ? stepCountIs(3) : stepCountIs(1),
   })
 
   let tokensPerSecond = 0
   let totalChars = 0
+  let lastSpeedUpdate = 0
+
+  const updateTokenSpeed = () => {
+    if (!streamStartTime) return
+    const durationMs = Date.now() - streamStartTime
+    const tokenCount = Math.ceil(totalChars / 4)
+    if (durationMs <= 0 || tokenCount <= 0) return
+
+    const durationSec = durationMs / 1000
+    const tokenSpeed = Math.round((tokenCount / durationSec) * 10) / 10
+    useAppState.getState().setTokenSpeed(
+      { id: 'streaming' } as never,
+      tokenSpeed,
+      tokenCount
+    )
+  }
 
   return result.toUIMessageStream({
     messageMetadata: ({ part }) => {
@@ -72,6 +90,11 @@ export async function executeSingleAgentStream(
           streamStartTime = Date.now()
         }
         totalChars += text.length
+        const now = Date.now()
+        if (now - lastSpeedUpdate > 500) {
+          lastSpeedUpdate = now
+          updateTokenSpeed()
+        }
       }
 
       if (part.type === 'finish-step') {
@@ -102,6 +125,11 @@ export async function executeSingleAgentStream(
         } else {
           tokenSpeed = 0
         }
+        useAppState.getState().setTokenSpeed(
+          { id: 'streaming' } as never,
+          Math.round(tokenSpeed * 10) / 10,
+          tokenCount
+        )
 
         return {
           usage: {
@@ -121,10 +149,7 @@ export async function executeSingleAgentStream(
     },
     onError: (error) => {
       console.error('[SingleAgentTransport] stream error:', error)
-      if (error == null) return 'Unknown error'
-      if (typeof error === 'string') return error
-      if (error instanceof Error) return error.message
-      return JSON.stringify(error)
+      return extractErrorMessage(error, 'Unknown error')
     },
     onFinish: ({ responseMessage }) => {
       if (responseMessage) {

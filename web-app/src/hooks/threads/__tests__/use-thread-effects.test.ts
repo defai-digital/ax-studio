@@ -1,19 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import { useThreadEffects, type ThreadEffectsInput } from '../use-thread-effects'
 import { defaultAssistant } from '@/hooks/chat/useAssistant'
 
-// Mock Tauri invoke (used for team token loading)
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn().mockResolvedValue([]),
-}))
-
-// Mock constants
 vi.mock('@/constants/chat', () => ({
   SESSION_STORAGE_KEY: {
     INITIAL_MESSAGE_TEMPORARY: 'initial-message-temporary',
     NEW_THREAD_PROMPT: 'new-thread-prompt',
-    NEW_THREAD_TEAM_ID: 'new-thread-team-id',
     SPLIT_VIEW_INFO: 'split-view-info',
   },
   SESSION_STORAGE_PREFIX: {
@@ -22,11 +15,13 @@ vi.mock('@/constants/chat', () => ({
 }))
 
 describe('useThreadEffects', () => {
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
   const threadId = 'thread-1'
   let defaultInput: ThreadEffectsInput
 
   beforeEach(() => {
     vi.clearAllMocks()
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     sessionStorage.clear()
 
     defaultInput = {
@@ -42,8 +37,6 @@ describe('useThreadEffects', () => {
       status: 'idle',
       assistants: [],
       selectedModel: undefined,
-      activeTeamId: undefined,
-      setTeamTokensUsed: vi.fn(),
       reasoningContainerRef: { current: null },
       setCurrentThreadId: vi.fn(),
       setCurrentAssistant: vi.fn(),
@@ -53,6 +46,10 @@ describe('useThreadEffects', () => {
       updateThread: vi.fn(),
       setThreadPromptDraft: vi.fn(),
     }
+  })
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore()
   })
 
   it('calls setCurrentThreadId with threadId on mount', () => {
@@ -86,12 +83,6 @@ describe('useThreadEffects', () => {
     expect(defaultInput.setThreadPromptDraft).toHaveBeenCalledWith('')
   })
 
-  it('resets team tokens to 0 when no activeTeamId', () => {
-    renderHook(() => useThreadEffects(defaultInput))
-
-    expect(defaultInput.setTeamTokensUsed).toHaveBeenCalledWith(0)
-  })
-
   it('sends initial message from sessionStorage', async () => {
     const initialMsg = JSON.stringify({ text: 'Hello from session' })
     sessionStorage.setItem(`initial-message-${threadId}`, initialMsg)
@@ -106,7 +97,7 @@ describe('useThreadEffects', () => {
     })
   })
 
-  it('removes initial message from sessionStorage after reading', () => {
+  it('removes initial message from sessionStorage after queuing it', async () => {
     sessionStorage.setItem(
       `initial-message-${threadId}`,
       JSON.stringify({ text: 'temp' })
@@ -114,7 +105,59 @@ describe('useThreadEffects', () => {
 
     renderHook(() => useThreadEffects(defaultInput))
 
-    expect(sessionStorage.getItem(`initial-message-${threadId}`)).toBeNull()
+    await vi.waitFor(() => {
+      expect(sessionStorage.getItem(`initial-message-${threadId}`)).toBeNull()
+    })
+  })
+
+  it('sends pending initial message from thread metadata when sessionStorage is empty', async () => {
+    defaultInput.thread = {
+      ...defaultInput.thread!,
+      metadata: {
+        pendingInitialMessage: 'Hello from metadata',
+        threadPrompt: 'Keep this prompt',
+      },
+    } as unknown as Thread
+
+    renderHook(() => useThreadEffects(defaultInput))
+
+    await vi.waitFor(() => {
+      expect(defaultInput.processAndSendMessage).toHaveBeenCalledWith(
+        'Hello from metadata'
+      )
+    })
+    expect(defaultInput.updateThread).toHaveBeenCalledWith(threadId, {
+      metadata: { threadPrompt: 'Keep this prompt' },
+    })
+  })
+
+  it('keeps initial message in sessionStorage when queuing fails', async () => {
+    const initialMsg = JSON.stringify({ text: 'retry me' })
+    defaultInput.processAndSendMessage = vi.fn().mockRejectedValue(new Error('not ready'))
+    sessionStorage.setItem(`initial-message-${threadId}`, initialMsg)
+
+    renderHook(() => useThreadEffects(defaultInput))
+
+    await vi.waitFor(() => {
+      expect(defaultInput.processAndSendMessage).toHaveBeenCalledWith('retry me')
+    })
+    expect(sessionStorage.getItem(`initial-message-${threadId}`)).toBe(initialMsg)
+  })
+
+  it('does not mark an initial message sent when StrictMode cleanup cancels the dispatch timer', async () => {
+    const initialMsg = JSON.stringify({ text: 'strict mode first message' })
+    sessionStorage.setItem(`initial-message-${threadId}`, initialMsg)
+
+    const { unmount } = renderHook(() => useThreadEffects(defaultInput))
+    unmount()
+
+    renderHook(() => useThreadEffects(defaultInput))
+
+    await vi.waitFor(() => {
+      expect(defaultInput.processAndSendMessage).toHaveBeenCalledWith(
+        'strict mode first message'
+      )
+    })
   })
 
   it('routes /research initial message through handleResearchCommand', async () => {
@@ -136,7 +179,7 @@ describe('useThreadEffects', () => {
     expect(defaultInput.processAndSendMessage).not.toHaveBeenCalled()
   })
 
-  it('cancels research started from the initial message on unmount', async () => {
+  it('does not cancel research started from the initial message on unmount', async () => {
     defaultInput.handleResearchCommand = vi.fn().mockReturnValue(true)
     sessionStorage.setItem(
       `initial-message-${threadId}`,
@@ -153,7 +196,7 @@ describe('useThreadEffects', () => {
 
     unmount()
 
-    expect(defaultInput.cancelResearch).toHaveBeenCalled()
+    expect(defaultInput.cancelResearch).not.toHaveBeenCalled()
   })
 
   it('applies thread prompt from sessionStorage', () => {
@@ -178,29 +221,6 @@ describe('useThreadEffects', () => {
     renderHook(() => useThreadEffects(defaultInput))
 
     expect(sessionStorage.getItem('new-thread-prompt')).toBeNull()
-  })
-
-  it('applies agent team from sessionStorage', () => {
-    sessionStorage.setItem('new-thread-team-id', 'team-1')
-
-    renderHook(() => useThreadEffects(defaultInput))
-
-    expect(defaultInput.updateThread).toHaveBeenCalledWith(
-      threadId,
-      expect.objectContaining({
-        metadata: expect.objectContaining({
-          agent_team_id: 'team-1',
-        }),
-      })
-    )
-  })
-
-  it('removes agent team from sessionStorage after applying', () => {
-    sessionStorage.setItem('new-thread-team-id', 'team-1')
-
-    renderHook(() => useThreadEffects(defaultInput))
-
-    expect(sessionStorage.getItem('new-thread-team-id')).toBeNull()
   })
 
   it('sets current assistant when matching assistant found', () => {

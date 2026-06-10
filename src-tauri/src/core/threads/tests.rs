@@ -158,7 +158,6 @@ async fn test_create_and_get_thread_assistant() {
 async fn test_desktop_storage_backend() {
     let (app, _data_dir) = mock_app_with_temp_data_dir();
     {
-
         // Create a thread
         let thread = ThreadRecord {
             object: "thread".to_string(),

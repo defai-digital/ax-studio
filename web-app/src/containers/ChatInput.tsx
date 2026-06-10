@@ -2,13 +2,12 @@ import TextareaAutosize from 'react-textarea-autosize'
 import { cn } from '@/lib/utils'
 import { usePrompt } from '@/hooks/ui/usePrompt'
 import { useThreads } from '@/hooks/threads/useThreads'
-import { useCallback, useEffect, useRef, useState, memo, useMemo } from 'react'
+import { useCallback, useEffect, useRef, useState, memo } from 'react'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useAppState } from '@/hooks/settings/useAppState'
 import type { ChatStatus } from 'ai'
 import { useAssistant } from '@/hooks/chat/useAssistant'
-import { useMemory } from '@/hooks/integrations/useMemory'
 import { useLocalKnowledge } from '@/hooks/research/useLocalKnowledge'
 import { useTools } from '@/hooks/tools/useTools'
 import { useMessages } from '@/hooks/chat/useMessages'
@@ -23,11 +22,11 @@ import { ChatInputToolbar } from '@/components/chat/ChatInputToolbar'
 import { ChatInputAttachments } from '@/components/ChatInputAttachments'
 import { TokenCounter } from '@/components/TokenCounter'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { Atom, Code2, Globe, Wrench, X } from "lucide-react";
+import { X } from 'lucide-react'
+import { resolveEffectiveSelectedModel } from '@/lib/chat/selected-model'
 
 type ChatInputProps = {
   className?: string
-  showSpeedToken?: boolean
   model?: ThreadModel
   initialMessage?: boolean
   projectId?: string
@@ -42,6 +41,7 @@ const ChatInput = memo(function ChatInput({
   initialMessage,
   projectId,
   threadId,
+  model,
   onSubmit,
   onStop,
   chatStatus,
@@ -65,24 +65,6 @@ const ChatInput = memo(function ChatInput({
   const setGlobalPrompt = usePrompt((state) => state.setPrompt)
   const currentThreadId = useThreads((state) => state.currentThreadId)
   const effectiveThreadId = threadId ?? currentThreadId
-  const globalMemoryEnabled = useMemory((state) => state.memoryEnabled)
-  const toggleMemoryGlobal = useMemory((state) => state.toggleMemory)
-  const toggleMemoryForThread = useMemory((state) => state.toggleMemoryForThread)
-  const memoryEnabledPerThread = useMemory((state) => state.memoryEnabledPerThread)
-  const memoryCount = useMemory((state) => (state.memories['default'] || []).length)
-
-  const isMemoryEnabled = effectiveThreadId
-    ? (effectiveThreadId in memoryEnabledPerThread
-        ? memoryEnabledPerThread[effectiveThreadId]
-        : globalMemoryEnabled)
-    : globalMemoryEnabled
-  const toggleMemory = useCallback(() => {
-    if (effectiveThreadId) {
-      toggleMemoryForThread(effectiveThreadId)
-    } else {
-      toggleMemoryGlobal()
-    }
-  }, [effectiveThreadId, toggleMemoryForThread, toggleMemoryGlobal])
 
   const globalLocalKnowledgeEnabled = useLocalKnowledge((state) => state.localKnowledgeEnabled)
   const localKnowledgeEnabledPerThread = useLocalKnowledge((state) => state.localKnowledgeEnabledPerThread)
@@ -139,7 +121,15 @@ const ChatInput = memo(function ChatInput({
     effectiveThreadId,
   })
 
-  const selectedModel = useModelProvider((state) => state.selectedModel) ?? undefined
+  const providers = useModelProvider((state) => state.providers)
+  const selectedProvider = useModelProvider((state) => state.selectedProvider)
+  const selectedModelFromStore = useModelProvider((state) => state.selectedModel) ?? undefined
+  const selectedModel = resolveEffectiveSelectedModel({
+    model,
+    providers,
+    selectedProvider,
+    selectedModelFromStore,
+  })
   const hasVisionSupport = selectedModel?.capabilities?.includes('vision') ?? false
   const {
     isDragOver,
@@ -229,12 +219,19 @@ const ChatInput = memo(function ChatInput({
   const { handleSendMessage } = useChatSendHandler({
     onSubmit,
     projectId,
+    selectedModel,
     assistants,
     selectedAssistant,
     setSelectedAssistant,
     setMessage,
     setPrompt,
   })
+
+  const submitCurrentPrompt = useCallback(() => {
+    const currentPrompt = textareaRef.current?.value ?? prompt
+    if (!currentPrompt.trim() || ingestingDocs) return
+    void handleSendMessage(currentPrompt)
+  }, [handleSendMessage, ingestingDocs, prompt])
 
   const stopStreaming = useCallback(
     (tid: string) => {
@@ -326,8 +323,8 @@ const ChatInput = memo(function ChatInput({
                 const isComposing = e.nativeEvent.isComposing || e.keyCode === 229
                 if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
                   e.preventDefault()
-                  if (!isStreaming && prompt.trim() && !ingestingDocs) {
-                    handleSendMessage(prompt)
+                  if (!isStreaming) {
+                    submitCurrentPrompt()
                   }
                 }
               }}
@@ -379,15 +376,13 @@ const ChatInput = memo(function ChatInput({
           setDropdownToolsAvailable={setDropdownToolsAvailable}
           tooltipToolsAvailable={tooltipToolsAvailable}
           setTooltipToolsAvailable={setTooltipToolsAvailable}
-          isMemoryEnabled={isMemoryEnabled}
-          toggleMemory={toggleMemory}
-          memoryCount={memoryCount}
           isLocalKnowledgeEnabled={isLocalKnowledgeEnabled}
           toggleLocalKnowledge={toggleLocalKnowledge}
           tokenCounterCompact={tokenCounterCompact}
           threadMessages={threadMessages || []}
           stopStreaming={stopStreaming}
           handleSendMessage={handleSendMessage}
+          submitCurrentPrompt={submitCurrentPrompt}
           onAttachDocuments={handleAttachDocsIngest}
           onAttachImages={handleImagePickerClick}
           ingestingDocs={ingestingDocs}
@@ -408,65 +403,9 @@ const ChatInput = memo(function ChatInput({
 
       {!tokenCounterCompact && !initialMessage && (threadMessages?.length > 0 || prompt.trim().length > 0) && (
         <div className="flex-1 w-full flex justify-start px-2">
-          <TokenCounter messages={threadMessages || []} />
+          <TokenCounter messages={threadMessages || []} model={selectedModel} />
         </div>
       )}
-
-      {/* Capability indicators + keyboard hints */}
-      <div className="flex items-center gap-0.5 px-2 pt-1.5 pb-0.5">
-        <button
-          type="button"
-          className={cn(
-            'flex items-center gap-1 px-2 py-1 rounded-md transition-colors text-[11px]',
-            hasActiveMCPServers
-              ? 'text-indigo-500 hover:bg-muted/60'
-              : 'text-muted-foreground/30 hover:text-muted-foreground/50'
-          )}
-        >
-          <Wrench className="size-3" />
-          <span className="hidden sm:inline">Tools{hasActiveMCPServers ? ` (${tools.length})` : ''}</span>
-        </button>
-        <button
-          type="button"
-          className={cn(
-            'flex items-center gap-1 px-2 py-1 rounded-md transition-colors text-[11px]',
-            selectedModel?.capabilities?.includes('web_search')
-              ? 'text-cyan-500 hover:bg-muted/60'
-              : 'text-muted-foreground/30 hover:text-muted-foreground/50'
-          )}
-        >
-          <Globe className="size-3" />
-          <span className="hidden sm:inline">Web</span>
-        </button>
-        <button
-          type="button"
-          className={cn(
-            'flex items-center gap-1 px-2 py-1 rounded-md transition-colors text-[11px]',
-            selectedModel?.capabilities?.includes('reasoning')
-              ? 'text-violet-500 hover:bg-muted/60'
-              : 'text-muted-foreground/30 hover:text-muted-foreground/50'
-          )}
-        >
-          <Atom className="size-3" />
-          <span className="hidden sm:inline">Reasoning</span>
-        </button>
-        <button
-          type="button"
-          className={cn(
-            'flex items-center gap-1 px-2 py-1 rounded-md transition-colors text-[11px]',
-            selectedModel
-              ? 'text-emerald-500 hover:bg-muted/60'
-              : 'text-muted-foreground/30 hover:text-muted-foreground/50'
-          )}
-        >
-          <Code2 className="size-3" />
-          <span className="hidden sm:inline">Code</span>
-        </button>
-        <div className="flex-1" />
-        <span className="text-[11px] text-muted-foreground/30">
-          ⏎ Send &nbsp;·&nbsp; ⇧⏎ Newline
-        </span>
-      </div>
     </div>
   )
 })

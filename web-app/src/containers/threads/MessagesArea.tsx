@@ -10,12 +10,86 @@ import {
 } from '@/components/ai-elements/conversation'
 import { PromptProgress } from '@/components/PromptProgress'
 import { Button } from '@/components/ui/button'
-import { OUT_OF_CONTEXT_SIZE } from '@/lib/utils/error'
-import { safeStorageGetItem, safeStorageSetItem } from '@/lib/storage'
+import { isContextSizeError } from '@/lib/utils/error'
+import { isStorageFlagEnabled, safeStorageSetItem } from '@/lib/storage/storage'
 import { motion, AnimatePresence } from 'motion/react'
-import { AlertCircle, GitBranch, X } from "lucide-react";
+import { AlertCircle, GitBranch, X } from 'lucide-react'
 
 const CHAT_STATUS = { SUBMITTED: 'submitted' } as const
+
+type BranchBannerProps = {
+  forkedFrom: unknown
+  onDismiss: () => void
+}
+
+function BranchBanner({ forkedFrom, onDismiss }: BranchBannerProps) {
+  const parentTitle =
+    typeof forkedFrom === 'string' ? forkedFrom : 'parent conversation'
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      className="flex items-center gap-3 px-4 py-2.5 bg-violet-500/5 border-b border-violet-500/15 text-[13px]"
+    >
+      <GitBranch className="size-3.5 text-violet-500 shrink-0" />
+      <span className="text-foreground/70">
+        Forked from:{' '}
+        <span className="text-foreground font-medium">
+          &quot;{parentTitle}&quot;
+        </span>
+      </span>
+      <button
+        onClick={onDismiss}
+        className="ml-auto p-1 rounded-md hover:bg-violet-500/10 text-muted-foreground hover:text-foreground"
+      >
+        <X className="size-3.5" />
+      </button>
+    </motion.div>
+  )
+}
+
+type ErrorMessageProps = {
+  error: Error
+  onContextSizeIncrease?: () => Promise<void>
+}
+
+function ErrorMessage({ error, onContextSizeIncrease }: ErrorMessageProps) {
+  const canIncreaseContext =
+    isContextSizeError(error.message) && !!onContextSizeIncrease
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="px-4 py-3 mx-4 my-2 rounded-xl border border-destructive/15 bg-destructive/5"
+    >
+      <div className="flex items-start gap-3">
+        <AlertCircle className="size-5 text-destructive shrink-0 mt-0.5" />
+        <div className="flex-1">
+          <p className="text-sm font-medium text-destructive mb-1">
+            Error generating response
+          </p>
+          <p className="text-[13px] text-muted-foreground leading-relaxed">
+            {error.message}
+          </p>
+          {canIncreaseContext && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              onClick={onContextSizeIncrease}
+            >
+              <AlertCircle className="size-4 mr-2" />
+              Increase Context Size
+            </Button>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  )
+}
 
 export type MessagesAreaProps = {
   chatMessages: UIMessage[]
@@ -44,18 +118,17 @@ export function MessagesArea({
   handleContextSizeIncrease,
   contentCls,
 }: MessagesAreaProps) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const metadata = thread?.metadata as Record<string, any> | undefined
-  const forkedFrom = metadata?.forkedFrom || metadata?.parentThreadId
+  const metadata = thread?.metadata as Record<string, unknown> | undefined
+  const forkedFrom = metadata?.forkedFrom ?? metadata?.parentThreadId
   const bannerKey = `branch-banner-dismissed-${threadId}`
   const [bannerDismissed, setBannerDismissed] = useState(() =>
-    safeStorageGetItem(sessionStorage, bannerKey, 'MessagesArea') === 'true'
+    isStorageFlagEnabled(sessionStorage, bannerKey, 'MessagesArea')
   )
 
   // Reset dismissal when thread changes
   useEffect(() => {
     setBannerDismissed(
-      safeStorageGetItem(sessionStorage, bannerKey, 'MessagesArea') === 'true'
+      isStorageFlagEnabled(sessionStorage, bannerKey, 'MessagesArea')
     )
   }, [bannerKey])
 
@@ -69,27 +142,8 @@ export function MessagesArea({
       <Conversation className="absolute inset-0 text-start">
         {/* Branch/Fork banner */}
         <AnimatePresence>
-          {forkedFrom && !bannerDismissed && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="flex items-center gap-3 px-4 py-2.5 bg-violet-500/5 border-b border-violet-500/15 text-[13px]"
-            >
-              <GitBranch className="size-3.5 text-violet-500 shrink-0" />
-              <span className="text-foreground/70">
-                Forked from:{' '}
-                <span className="text-foreground font-medium">
-                  &quot;{typeof forkedFrom === 'string' ? forkedFrom : 'parent conversation'}&quot;
-                </span>
-              </span>
-              <button
-                onClick={dismissBanner}
-                className="ml-auto p-1 rounded-md hover:bg-violet-500/10 text-muted-foreground hover:text-foreground"
-              >
-                <X className="size-3.5" />
-              </button>
-            </motion.div>
+          {Boolean(forkedFrom) && !bannerDismissed && (
+            <BranchBanner forkedFrom={forkedFrom} onDismiss={dismissBanner} />
           )}
         </AnimatePresence>
 
@@ -115,28 +169,10 @@ export function MessagesArea({
           ))}
           {status === CHAT_STATUS.SUBMITTED && <PromptProgress />}
           {error && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="px-4 py-3 mx-4 my-2 rounded-xl border border-destructive/15 bg-destructive/5"
-            >
-              <div className="flex items-start gap-3">
-                <AlertCircle className="size-5 text-destructive shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-destructive mb-1">Error generating response</p>
-                  <p className="text-[13px] text-muted-foreground leading-relaxed">{error.message}</p>
-                  {((error.message?.toLowerCase().includes('context') &&
-                    (error.message?.toLowerCase().includes('size') ||
-                      error.message?.toLowerCase().includes('length') ||
-                      error.message?.toLowerCase().includes('limit'))) ||
-                    error.message === OUT_OF_CONTEXT_SIZE) && handleContextSizeIncrease ? (
-                    <Button variant="outline" size="sm" className="mt-3" onClick={handleContextSizeIncrease}>
-                      <AlertCircle className="size-4 mr-2" />Increase Context Size
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-            </motion.div>
+            <ErrorMessage
+              error={error}
+              onContextSizeIncrease={handleContextSizeIncrease}
+            />
           )}
         </ConversationContent>
         <ConversationScrollButton />

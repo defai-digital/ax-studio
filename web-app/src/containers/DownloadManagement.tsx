@@ -5,7 +5,10 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { Progress } from '@/components/ui/progress'
-import { useDownloadStore } from '@/hooks/models/useDownloadStore'
+import {
+  toDownloadProcesses,
+  useDownloadStore,
+} from '@/hooks/models/useDownloadStore'
 import { useLeftPanel } from '@/hooks/ui/useLeftPanel'
 import { useAppUpdater } from '@/hooks/updater/useAppUpdater'
 import { useServiceHub } from '@/hooks/useServiceHub'
@@ -15,6 +18,58 @@ import { toast } from 'sonner'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useNavigate } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
+
+type DownloadProgressRowProps = {
+  name: string
+  progress: number
+  current: number
+  total: number
+  onCancel?: () => void
+}
+
+function formatGigabytes(bytes: number): string {
+  return (bytes / 1024 ** 3).toFixed(2)
+}
+
+function getProgressText({
+  progress,
+  current,
+  total,
+}: Pick<DownloadProgressRowProps, 'progress' | 'current' | 'total'>) {
+  if (total <= 0) return 'Initializing download...'
+
+  return `${formatGigabytes(current)} / ${formatGigabytes(total)} GB (${Math.round(progress * 100)}%)`
+}
+
+function DownloadProgressRow({
+  name,
+  progress,
+  current,
+  total,
+  onCancel,
+}: DownloadProgressRowProps) {
+  return (
+    <div className="rounded-md p-2">
+      <div className="flex items-center justify-between">
+        <p className="truncate">{name}</p>
+        {onCancel ? (
+          <div className="shrink-0 flex items-center space-x-0.5">
+            <X
+              size={16}
+              className="text-muted-foreground cursor-pointer"
+              aria-label="Cancel download"
+              onClick={onCancel}
+            />
+          </div>
+        ) : null}
+      </div>
+      <Progress value={progress * 100} className="my-2" />
+      <p className="text-muted-foreground text-xs">
+        {getProgressText({ progress, current, total })}
+      </p>
+    </div>
+  )
+}
 
 export function DownloadManagement() {
   const { t } = useTranslation()
@@ -103,34 +158,13 @@ export function DownloadManagement() {
   }, [t])
 
   const downloadProcesses = useMemo(() => {
-    // Get downloads with progress data
-    const downloadsWithProgress = Object.values(downloads).map((download) => ({
-      id: download.name,
-      name: download.name,
-      progress: download.progress,
-      current: download.current,
-      total: download.total,
-    }))
-
-    // Add local downloading models that don't have progress data yet
-    const localDownloadsWithoutProgress = Array.from(localDownloadingModels)
-      .filter((modelId) => !downloads[modelId]) // Only include models not in downloads
-      .map((modelId) => ({
-        id: modelId,
-        name: modelId,
-        progress: 0,
-        current: 0,
-        total: 0,
-      }))
-
-    return [...downloadsWithProgress, ...localDownloadsWithoutProgress]
+    return toDownloadProcesses(downloads, localDownloadingModels)
   }, [downloads, localDownloadingModels])
 
   const downloadCount = useMemo(() => {
     const modelDownloads = downloadProcesses.length
     const appUpdateDownload = appUpdateState.isDownloading ? 1 : 0
-    const total = modelDownloads + appUpdateDownload
-    return total
+    return modelDownloads + appUpdateDownload
   }, [downloadProcesses, appUpdateState.isDownloading])
 
   const overallProgress = useMemo(() => {
@@ -279,6 +313,35 @@ export function DownloadManagement() {
     [t, getDownloadId]
   )
 
+  const handleCancelDownload = useCallback(
+    (downloadName: string) => {
+      serviceHub
+        .models()
+        .abortDownload(downloadName)
+        .then(() => {
+          toast.info(t('common:toast.downloadCancelled.title'), {
+            id: 'cancel-download',
+            description: t('common:toast.downloadCancelled.description'),
+          })
+          if (downloadProcesses.length === 0) {
+            setIsPopoverOpen(false)
+          }
+        })
+        .catch((error) => {
+          console.error(
+            '[DownloadManagement] Failed to abort download:',
+            error
+          )
+          toast.error('Failed to cancel download', {
+            id: 'cancel-download',
+            description:
+              error instanceof Error ? error.message : 'Unknown error',
+          })
+        })
+    },
+    [downloadProcesses.length, serviceHub, t]
+  )
+
   useEffect(() => {
     events.on(DownloadEvent.onFileDownloadError, onFileDownloadError)
     events.on(DownloadEvent.onFileDownloadSuccess, onFileDownloadSuccess)
@@ -325,11 +388,6 @@ export function DownloadManagement() {
     onAppUpdateDownloadSuccess,
     onAppUpdateDownloadError,
   ])
-
-  function renderGB(bytes: number): string {
-    const gb = bytes / 1024 ** 3
-    return ((gb * 100) / 100).toFixed(2)
-  }
 
   return (
     <>
@@ -381,82 +439,22 @@ export function DownloadManagement() {
               </div>
               <div className="p-2 max-h-[300px] overflow-y-auto space-y-2">
                 {appUpdateState.isDownloading && (
-                  <div className="rounded-md p-2">
-                    <div className="flex items-center justify-between">
-                      <p className="truncate">
-                        App Update
-                      </p>
-                    </div>
-                    <Progress
-                      value={appUpdateState.downloadProgress * 100}
-                      className="my-2"
-                    />
-                    <p className="text-muted-foreground text-xs">
-                      {`${renderGB(appUpdateState.downloadedBytes)} / ${renderGB(appUpdateState.totalBytes)}`}{' '}
-                      GB ({Math.round(appUpdateState.downloadProgress * 100)}
-                      %)
-                    </p>
-                  </div>
+                  <DownloadProgressRow
+                    name="App Update"
+                    progress={appUpdateState.downloadProgress}
+                    current={appUpdateState.downloadedBytes}
+                    total={appUpdateState.totalBytes}
+                  />
                 )}
                 {downloadProcesses.map((download) => (
-                  <div
+                  <DownloadProgressRow
                     key={download.id}
-                    className="rounded-md p-2"
-                  >
-                    <div className="flex items-center justify-between">
-                      <p className="truncate">
-                        {download.name}
-                      </p>
-                      <div className="shrink-0 flex items-center space-x-0.5">
-                        <X
-                          size={16}
-                          className="text-muted-foreground cursor-pointer"
-                          title="Cancel download"
-                          onClick={() => {
-                            serviceHub
-                              .models()
-                              .abortDownload(download.name)
-                              .then(() => {
-                                toast.info(
-                                  t('common:toast.downloadCancelled.title'),
-                                  {
-                                    id: 'cancel-download',
-                                    description: t(
-                                      'common:toast.downloadCancelled.description'
-                                    ),
-                                  }
-                                )
-                                if (downloadProcesses.length === 0) {
-                                  setIsPopoverOpen(false)
-                                }
-                              })
-                              .catch((error) => {
-                                console.error(
-                                  '[DownloadManagement] Failed to abort download:',
-                                  error
-                                )
-                                toast.error('Failed to cancel download', {
-                                  id: 'cancel-download',
-                                  description:
-                                    error instanceof Error
-                                      ? error.message
-                                      : 'Unknown error',
-                                })
-                              })
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <Progress
-                      value={download.progress * 100}
-                      className="my-2"
-                    />
-                    <p className="text-muted-foreground text-xs">
-                      {download.total > 0
-                        ? `${renderGB(download.current)} / ${renderGB(download.total)} GB (${Math.round(download.progress * 100)}%)`
-                        : 'Initializing download...'}
-                    </p>
-                  </div>
+                    name={download.name}
+                    progress={download.progress}
+                    current={download.current}
+                    total={download.total}
+                    onCancel={() => handleCancelDownload(download.name)}
+                  />
                 ))}
               </div>
             </div>

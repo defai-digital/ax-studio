@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useChatAttachments } from '@/hooks/chat/useChatAttachments'
 
@@ -49,6 +49,7 @@ let mockSelectedModel: { id: string; settings?: Record<string, unknown> } | null
   id: 'model-1',
 }
 let mockSelectedProvider = 'openai'
+let mockActiveModels = ['model-1']
 
 vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: (selector: (s: Record<string, unknown>) => unknown) =>
@@ -62,7 +63,7 @@ vi.mock('@/hooks/models/useModelProvider', () => ({
 vi.mock('@/hooks/settings/useAppState', () => ({
   useAppState: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({
-      activeModels: ['model-1'],
+      activeModels: mockActiveModels,
       updateLoadingModel: vi.fn(),
       setActiveModels: vi.fn(),
     }),
@@ -84,14 +85,17 @@ vi.mock('@/hooks/threads/useThreads', () => {
 
 const mockDialogOpen = vi.fn()
 const mockMcpCallTool = vi.fn().mockResolvedValue({ error: '', content: [{ text: '{"results":[]}' }] })
+const mockStartModel = vi.fn().mockResolvedValue(undefined)
+const mockGetActiveModels = vi.fn().mockResolvedValue(['model-1'])
+const mockGetTokensCount = vi.fn().mockResolvedValue(100)
 
 vi.mock('@/hooks/useServiceHub', () => ({
   useServiceHub: () => ({
     dialog: () => ({ open: mockDialogOpen }),
     models: () => ({
-      startModel: vi.fn().mockResolvedValue(undefined),
-      getActiveModels: vi.fn().mockResolvedValue(['model-1']),
-      getTokensCount: vi.fn().mockResolvedValue(100),
+      startModel: mockStartModel,
+      getActiveModels: mockGetActiveModels,
+      getTokensCount: mockGetTokensCount,
     }),
     uploads: () => ({}),
     projects: () => ({}),
@@ -118,19 +122,32 @@ import { toast } from 'sonner'
 
 describe('useDocumentAttachmentHandler', () => {
   const ATTACHMENTS_KEY = 'test-thread-123'
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
     vi.clearAllMocks()
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     mockAttachmentsEnabled = true
     mockParsePreference = 'auto'
     mockMaxFileSizeMB = 50
     mockSelectedModel = { id: 'model-1' }
     mockSelectedProvider = 'openai'
+    mockActiveModels = ['model-1']
+    mockStartModel.mockResolvedValue(undefined)
+    mockGetActiveModels.mockResolvedValue(['model-1'])
+    mockGetTokensCount.mockResolvedValue(100)
     // Reset the Zustand stores
     act(() => {
       useChatAttachments.setState({ attachmentsByThread: {} })
       useFileRegistry.setState({ files: {} })
     })
+  })
+
+  afterEach(() => {
+    consoleWarnSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
   })
 
   // ── Phase 1: Hook returns correct shape ──────────────────────────────────
@@ -320,6 +337,35 @@ describe('useDocumentAttachmentHandler', () => {
     expect(processAttachmentsForSend).toHaveBeenCalledWith(
       expect.objectContaining({
         threadId: '__pending__',
+      })
+    )
+  })
+
+  it('does not block attachment processing on model readiness for embeddings choice', async () => {
+    mockActiveModels = []
+    mockStartModel.mockImplementation(() => new Promise(() => {}))
+    mockShowPrompt.mockResolvedValue('embeddings')
+
+    const { result } = renderHook(() =>
+      useDocumentAttachmentHandler({
+        attachmentsKey: ATTACHMENTS_KEY,
+        effectiveThreadId: 'thread-1',
+      })
+    )
+
+    const { processAttachmentsForSend } = await import('@/lib/attachmentProcessing')
+
+    await act(async () => {
+      await result.current.processNewDocumentAttachments([
+        { name: 'test.pdf', type: 'document', path: '/tmp/test.pdf' },
+      ])
+    })
+
+    expect(mockStartModel).not.toHaveBeenCalled()
+    expect(processAttachmentsForSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: 'thread-1',
+        perFileChoices: expect.any(Map),
       })
     )
   })

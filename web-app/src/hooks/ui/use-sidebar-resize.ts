@@ -120,7 +120,7 @@ function formatWidth(value: number, unit: "rem" | "px"): string {
 
 /**
  * A versatile hook for handling resizable sidebar (or inset) panels
- * Works for both sidebar (left side) and artifacts (right side) panels
+ * Works for both sidebar (left side) and research (right side) panels
  * Supports VS Code-like continuous drag to collapse/expand
  */
 export function useSidebarResize({

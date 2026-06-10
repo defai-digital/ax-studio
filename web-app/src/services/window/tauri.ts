@@ -5,7 +5,7 @@
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow'
 import type { WindowConfig, WebviewWindowInstance, WindowService } from './types'
 import { themeStorageSchema } from '@/schemas/window.schema'
-import { safeStorageGetItem } from '@/lib/storage'
+import { safeStorageGetItem } from '@/lib/storage/storage'
 
 export class TauriWindowService implements WindowService {
   async createWebviewWindow(

@@ -1,41 +1,124 @@
 import { ExtensionManager } from '@/lib/extension'
-import { APIs } from '@/lib/service'
-import { EventEmitter } from '@/services/events/EventEmitter'
-import { EngineManager, ModelManager } from '@ax-studio/core'
-import { PropsWithChildren, useCallback, useEffect, useState } from 'react'
+import { ensureCoreBridge } from '@/lib/bootstrap/core-bridge'
+import { AppEvent, EngineManager, events, ModelManager } from '@ax-studio/core'
+import { PropsWithChildren, useCallback, useEffect, useMemo, useState } from 'react'
+import { withTimeout } from '@/lib/utils/async'
+import { useServiceHub } from '@/hooks/useServiceHub'
+
+const EXTENSION_START_TIMEOUT_MS = 8000
+const EXTENSIONS_UPDATED_EVENT = 'extensions-updated'
+const EXTENSION_START_RETRY_DELAYS_MS = [1500, 5000] as const
+let extensionSetupWork: Promise<void> | null = null
+
+function notifyProvidersChanged(source: string) {
+  window.setTimeout(() => {
+    events.emit(AppEvent.onModelImported, { source })
+  }, 0)
+}
 
 export function ExtensionProvider({ children }: PropsWithChildren) {
-  const [finishedSetup, setFinishedSetup] = useState(false)
-  const setupExtensions = useCallback(async () => {
-    const core =
-      window.core ?? ({ api: APIs } as NonNullable<Window['core']>)
-    window.core = core
-    core.api = APIs
+  const [initError, setInitError] = useState<string | null>(null)
+  const serviceHub = useServiceHub()
 
-    core.events = new EventEmitter()
-    core.extensionManager = new ExtensionManager()
-    core.engineManager = new EngineManager()
-    core.modelManager = new ModelManager()
-
-    await ExtensionManager.getInstance()
-      .registerActive()
-      .then(() => ExtensionManager.getInstance().load())
+  useMemo(() => {
+    const core = ensureCoreBridge({ withApi: true, withEvents: true })
+    core.extensionManager ??= new ExtensionManager()
+    core.engineManager ??= new EngineManager()
+    core.modelManager ??= new ModelManager()
   }, [])
 
-  useEffect(() => {
-    let cancelled = false
-    setupExtensions().then(() => {
-      if (!cancelled) setFinishedSetup(true)
-    }).catch((err) => {
-      console.error('Extension setup failed, rendering app anyway:', err)
-      if (!cancelled) setFinishedSetup(true)
-    })
+  const setupExtensions = useCallback(async () => {
+    const extensionManager = ExtensionManager.getInstance()
+    extensionSetupWork ??= extensionManager
+      .registerActive()
+      .then(() => extensionManager.load())
+      .finally(() => {
+        extensionSetupWork = null
+      })
 
-    return () => {
-      cancelled = true
-      ExtensionManager.getInstance().unload()
+    await withTimeout(
+      extensionSetupWork,
+      EXTENSION_START_TIMEOUT_MS,
+      `Extension startup timed out after ${EXTENSION_START_TIMEOUT_MS}ms`
+    )
+  }, [])
+
+  const runSetup = useCallback(async () => {
+    try {
+      await setupExtensions()
+      console.info('[ExtensionProvider] Extension setup finished')
+      setInitError(null)
+      return true
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.error('Extension setup failed, rendering app anyway:', err)
+      setInitError(message)
+      return false
     }
   }, [setupExtensions])
 
-  return <>{finishedSetup && children}</>
+  useEffect(() => {
+    if (!initError) return
+    console.warn(
+      '[ExtensionProvider] Continuing after extension setup error:',
+      initError
+    )
+  }, [initError])
+
+  useEffect(() => {
+    let cancelled = false
+    let cleanupExtensionsUpdated: () => void = () => {}
+    const retryTimers: ReturnType<typeof setTimeout>[] = []
+    setInitError(null)
+
+    void runSetup().then((ok) => {
+      if (cancelled) return
+      if (ok) {
+        notifyProvidersChanged('extensions-ready')
+      }
+      if (ok) return
+      for (const delayMs of EXTENSION_START_RETRY_DELAYS_MS) {
+        retryTimers.push(setTimeout(() => {
+          if (cancelled) return
+          void runSetup().then((retryOk) => {
+            if (!cancelled && retryOk) {
+              notifyProvidersChanged('extensions-ready')
+            }
+          })
+        }, delayMs))
+      }
+    })
+
+    serviceHub
+      .events()
+      ?.listen(EXTENSIONS_UPDATED_EVENT, () => {
+        console.info('[ExtensionProvider] Extensions updated; refreshing active extensions')
+        void runSetup().then((ok) => {
+          if (ok) {
+            notifyProvidersChanged(EXTENSIONS_UPDATED_EVENT)
+          }
+        })
+      })
+      .then((cleanup) => {
+        if (cancelled) {
+          cleanup()
+        } else {
+          cleanupExtensionsUpdated = cleanup
+        }
+      })
+      .catch((error) => {
+        console.error('[ExtensionProvider] Failed to subscribe to extension updates:', error)
+      })
+
+    return () => {
+      cancelled = true
+      for (const retryTimer of retryTimers) {
+        clearTimeout(retryTimer)
+      }
+      cleanupExtensionsUpdated()
+      ExtensionManager.getInstance().unload()
+    }
+  }, [serviceHub, runSetup])
+
+  return <>{children}</>
 }

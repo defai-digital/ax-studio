@@ -1,12 +1,12 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
-import type { ApplyMode } from '@/lib/system-prompt'
+import type { ApplyMode } from '@/lib/prompts/system-prompt'
 import {
   safeStorageGetItem,
   safeStorageRemoveItem,
   safeStorageSetItem,
-} from '@/lib/storage'
+} from '@/lib/storage/storage'
 
 type GeneralSettingState = {
   currentLanguage: Language

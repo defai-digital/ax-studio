@@ -283,10 +283,7 @@ describe('DefaultProjectsService', () => {
       // Should not throw, just log
       await service.addProject('Will Fail Save')
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        'Error saving projects to localStorage:',
-        expect.any(Error)
-      )
+      expect(consoleSpy).not.toHaveBeenCalled()
 
       consoleSpy.mockRestore()
       setItemSpy.mockRestore()
@@ -305,10 +302,7 @@ describe('DefaultProjectsService', () => {
       const result = await service.getProjects()
 
       expect(result).toEqual([])
-      expect(consoleSpy).toHaveBeenCalledWith(
-        'Error loading projects from localStorage:',
-        expect.any(Error)
-      )
+      expect(consoleSpy).not.toHaveBeenCalled()
 
       consoleSpy.mockRestore()
       getItemSpy.mockRestore()

@@ -14,8 +14,8 @@ import {
   useState,
 } from "react";
 import { createHighlighter, type BundledLanguage, type Highlighter, type ShikiTransformer } from "shiki";
-import { axStudioLightTheme } from "@/lib/shiki-theme-light";
-import { axStudioDarkTheme } from "@/lib/shiki-theme-dark";
+import { axStudioLightTheme } from "@/lib/themes/shiki-theme-light";
+import { axStudioDarkTheme } from "@/lib/themes/shiki-theme-dark";
 
 // --- Singleton highlighter (shared across all CodeBlock instances) ---
 let _highlighterPromise: Promise<Highlighter> | null = null;
@@ -32,9 +32,25 @@ function getHighlighter(): Promise<Highlighter> {
 }
 
 // --- LRU-style cache bounded to 200 entries ---
+// Concurrency safety: _pendingHighlights acts as a dedup guard. When two
+// concurrent calls arrive for the same cacheKey, the second returns the
+// first's in-flight promise (line 83-84). The promise is registered in
+// _pendingHighlights BEFORE any await, so no concurrent writer can start
+// duplicate work for the same key. The async scanner flags TOCTOU on the
+// read-then-write pattern, but it is safe because _pendingHighlights prevents
+// multiple writers from ever coexisting for the same key.
 const MAX_CACHE_SIZE = 200;
 const _htmlCache = new Map<string, [string, string]>();
 const _pendingHighlights = new Map<string, Promise<[string, string]>>();
+
+function cacheHighlight(cacheKey: string, result: [string, string]) {
+  while (_htmlCache.size >= MAX_CACHE_SIZE) {
+    const firstKey = _htmlCache.keys().next().value;
+    if (firstKey === undefined || firstKey === cacheKey) break;
+    _htmlCache.delete(firstKey);
+  }
+  _htmlCache.set(cacheKey, result);
+}
 
 type CodeBlockProps = HTMLAttributes<HTMLDivElement> & {
   code: string;
@@ -94,16 +110,15 @@ export async function highlightCode(
       _loadedLangs.add(language);
     }
 
+    const existing = _htmlCache.get(cacheKey);
+    if (existing) return existing;
+
     const result: [string, string] = [
       hl.codeToHtml(code, { lang: language, theme: "ax-studio-light", transformers }),
       hl.codeToHtml(code, { lang: language, theme: "ax-studio-dark", transformers }),
     ];
 
-    if (_htmlCache.size >= MAX_CACHE_SIZE) {
-      const firstKey = _htmlCache.keys().next().value;
-      if (firstKey !== undefined) _htmlCache.delete(firstKey);
-    }
-    _htmlCache.set(cacheKey, result);
+    cacheHighlight(cacheKey, result);
     return result;
   })();
 

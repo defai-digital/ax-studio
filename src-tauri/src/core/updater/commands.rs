@@ -13,11 +13,18 @@ pub async fn check_for_app_updates(
     app: AppHandle,
     nonce_seed: String,
 ) -> Result<Option<UpdateInfo>, String> {
-    // Get endpoints from tauri config
+    if nonce_seed.is_empty() {
+        return Err("nonce_seed must not be empty".to_string());
+    }
+    if nonce_seed.len() > 256 {
+        return Err("nonce_seed exceeds maximum allowed length".to_string());
+    }
+
     let endpoints = get_updater_endpoints(&app);
 
     if endpoints.is_empty() {
-        return Err("No updater endpoints configured in tauri.conf.json".to_string());
+        log::warn!("No updater endpoints configured in tauri.conf.json; skipping update check");
+        return Ok(None);
     }
 
     let updater = CustomUpdater::new().map_err(|e| e.to_string())?;
@@ -72,12 +79,3 @@ fn get_updater_endpoints(app: &AppHandle) -> Vec<String> {
     Vec::new()
 }
 
-/// Check if update is available by comparing versions
-#[command]
-pub fn is_update_available(current_version: String, latest_version: String) -> bool {
-    let updater = match CustomUpdater::new() {
-        Ok(u) => u,
-        Err(_) => return false,
-    };
-    updater.is_update_available(&current_version, &latest_version)
-}

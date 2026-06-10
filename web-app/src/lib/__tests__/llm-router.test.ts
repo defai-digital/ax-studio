@@ -1,6 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { parseRouterResponse, getAvailableModelsForRouter } from '../llm-router'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import type { UIMessage } from '@ai-sdk/react'
+import { routeMessage, parseRouterResponse, getAvailableModelsForRouter } from '../llm-router'
 import { buildRouterPrompt } from '../llm-router-prompt'
+
+const routerMocks = vi.hoisted(() => ({
+  createModel: vi.fn(),
+  getProviderByName: vi.fn(),
+  streamText: vi.fn(),
+}))
 
 // Mock useFavoriteModel
 vi.mock('@/hooks/models/useFavoriteModel', () => ({
@@ -13,6 +20,7 @@ vi.mock('@/hooks/models/useFavoriteModel', () => ({
 
 // Mock predefinedProviders
 vi.mock('@/constants/providers', () => ({
+  LOCAL_PROVIDER_IDS: new Set(['llamacpp', 'mlx', 'ollama']),
   predefinedProviders: [
     { provider: 'anthropic' },
     { provider: 'openai' },
@@ -25,9 +33,19 @@ vi.mock('@/constants/providers', () => ({
 vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: {
     getState: () => ({
-      getProviderByName: () => undefined,
+      getProviderByName: routerMocks.getProviderByName,
     }),
   },
+}))
+
+vi.mock('../model-factory', () => ({
+  ModelFactory: {
+    createModel: routerMocks.createModel,
+  },
+}))
+
+vi.mock('ai', () => ({
+  streamText: routerMocks.streamText,
 }))
 
 const sampleModels: AvailableModelForRouter[] = [
@@ -38,6 +56,35 @@ const sampleModels: AvailableModelForRouter[] = [
   { id: 'deepseek-chat', provider: 'deepseek', displayName: 'DeepSeek V3' },
   { id: 'gemini-2.5-pro', provider: 'gemini', displayName: 'Gemini 2.5 Pro' },
 ]
+
+const userMessage = (text: string): UIMessage => ({
+  id: 'message-1',
+  role: 'user',
+  parts: [{ type: 'text', text }],
+})
+
+async function* streamParts(parts: Array<{ type: 'text-delta'; text: string }>) {
+  for (const part of parts) {
+    yield part
+  }
+}
+
+beforeEach(() => {
+  vi.useRealTimers()
+  routerMocks.createModel.mockReset()
+  routerMocks.getProviderByName.mockReset()
+  routerMocks.streamText.mockReset()
+  routerMocks.getProviderByName.mockReturnValue({
+    provider: 'router-provider',
+    models: [{ id: 'router-model' }],
+    settings: [],
+  })
+  routerMocks.createModel.mockResolvedValue({ id: 'router-model-instance' })
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 describe('parseRouterResponse', () => {
   it('parses valid JSON response with exact match', () => {
@@ -85,14 +132,10 @@ describe('parseRouterResponse', () => {
     })
   })
 
-  it('fuzzy matches when model ID is a substring', () => {
+  it('rejects loose substring matches below the confidence threshold', () => {
     const raw = '{"model": "sonnet-4-6", "provider": "anthropic", "reason": "coding"}'
     const result = parseRouterResponse(raw, sampleModels)
-    expect(result).toEqual({
-      modelId: 'claude-sonnet-4-6',
-      providerId: 'anthropic',
-      reason: 'coding',
-    })
+    expect(result).toBeNull()
   })
 
   it('returns null for invalid JSON', () => {
@@ -133,6 +176,144 @@ describe('parseRouterResponse', () => {
       providerId: 'openai',
       reason: 'routed',
     })
+  })
+})
+
+describe('routeMessage', () => {
+  it('asks the router model and returns the chosen model when JSON is valid', async () => {
+    routerMocks.streamText.mockReturnValue({
+      fullStream: streamParts([
+        {
+          type: 'text-delta',
+          text: '{"model":"claude-sonnet-4-6","provider":"anthropic","reason":"code generation"}',
+        },
+      ]),
+    })
+
+    const result = await routeMessage(
+      [userMessage('Write a Rust parser')],
+      'router-model',
+      'router-provider',
+      sampleModels,
+      'gpt-4o-mini',
+      'openai',
+      15000,
+    )
+
+    expect(routerMocks.createModel).toHaveBeenCalledWith(
+      'router-model',
+      expect.objectContaining({ provider: 'router-provider' }),
+      {},
+      { requestRole: 'router' },
+    )
+    expect(routerMocks.streamText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: [
+          expect.objectContaining({
+            content: expect.stringContaining('Write a Rust parser'),
+          }),
+        ],
+        maxOutputTokens: 1024,
+        temperature: 0,
+      }),
+    )
+    expect(result).toEqual(
+      expect.objectContaining({
+        modelId: 'claude-sonnet-4-6',
+        providerId: 'anthropic',
+        reason: 'code generation',
+        routed: true,
+      }),
+    )
+  })
+
+  it('routes production engineering directly to a strong remote model when available', async () => {
+    routerMocks.streamText.mockReturnValue({
+      fullStream: streamParts([
+        {
+          type: 'text-delta',
+          text: '{"model":"Qwen3_5-9B-IQ4_XS","provider":"llamacpp","reason":"local coding"}',
+        },
+      ]),
+    })
+
+    const result = await routeMessage(
+      [userMessage('Write production TypeScript with tests and edge cases')],
+      'glm-5.1',
+      'zai-coding',
+      [
+        { id: 'glm-5.1', provider: 'zai-coding', displayName: 'GLM 5.1' },
+        {
+          id: 'Qwen3_5-9B-IQ4_XS',
+          provider: 'llamacpp',
+          displayName: 'Qwen3.5 9B Local',
+        },
+      ],
+      'Qwen3_5-9B-IQ4_XS',
+      'llamacpp',
+      15000,
+    )
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        modelId: 'glm-5.1',
+        providerId: 'zai-coding',
+        reason: 'production coding',
+        routed: true,
+      }),
+    )
+    expect(routerMocks.streamText).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the selected model when the router times out', async () => {
+    vi.useFakeTimers()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    routerMocks.streamText.mockImplementation(
+      ({ abortSignal }: { abortSignal: AbortSignal }) => ({
+        fullStream: (async function* () {
+          await new Promise((_resolve, reject) => {
+            abortSignal.addEventListener(
+              'abort',
+              () => reject(new DOMException('Aborted', 'AbortError')),
+              { once: true },
+            )
+          })
+        })(),
+      }),
+    )
+
+    try {
+      const resultPromise = routeMessage(
+        [userMessage('Tell me a fun fact')],
+        'router-model',
+        'router-provider',
+        sampleModels,
+        'gpt-4o-mini',
+        'openai',
+        500,
+      )
+
+      await vi.advanceTimersByTimeAsync(2000)
+      const result = await resultPromise
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          modelId: 'gpt-4o-mini',
+          providerId: 'openai',
+          reason: 'fallback',
+          routed: false,
+          fallbackReason: 'router timed out',
+        }),
+      )
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[LLM Router] generateText error:',
+        expect.any(DOMException),
+        '| extracted message:',
+        'Aborted',
+      )
+    } finally {
+      warnSpy.mockRestore()
+    }
   })
 })
 
@@ -178,9 +359,56 @@ describe('getAvailableModelsForRouter', () => {
     expect(result.find((m) => m.id === 'inactive-model')).toBeUndefined()
   })
 
-  it('excludes the router model itself', () => {
+  it('keeps the router model eligible for final responses', () => {
     const result = getAvailableModelsForRouter(mockProviders, 'gpt-4o')
-    expect(result.find((m) => m.id === 'gpt-4o')).toBeUndefined()
+    expect(result.find((m) => m.id === 'gpt-4o')).toEqual({
+      id: 'gpt-4o',
+      provider: 'openai',
+      displayName: 'GPT-4o',
+    })
+  })
+
+  it('includes local providers with loaded models even when no API key is configured', () => {
+    const providers: ModelProvider[] = [
+      {
+        active: true,
+        provider: 'llamacpp',
+        api_key: '',
+        models: [
+          {
+            id: 'llama-3.2-3b-local.gguf',
+            name: 'Llama 3.2 3B Local',
+          },
+        ],
+        settings: [],
+      },
+      {
+        active: true,
+        provider: 'mlx',
+        models: [
+          {
+            id: 'qwen2.5-coder-7b-mlx',
+            displayName: 'Qwen Coder MLX',
+          },
+        ],
+        settings: [],
+      },
+    ]
+
+    const result = getAvailableModelsForRouter(providers, 'router-model')
+
+    expect(result).toEqual([
+      {
+        id: 'llama-3.2-3b-local.gguf',
+        provider: 'llamacpp',
+        displayName: 'Llama 3.2 3B Local',
+      },
+      {
+        id: 'qwen2.5-coder-7b-mlx',
+        provider: 'mlx',
+        displayName: 'Qwen Coder MLX',
+      },
+    ])
   })
 
   it('returns correct structure', () => {
@@ -241,5 +469,30 @@ describe('buildRouterPrompt', () => {
       expect(user).toContain(model.id)
       expect(user).toContain(model.provider)
     }
+  })
+
+  it('tells the router to prefer strong models for production engineering', () => {
+    const { system } = buildRouterPrompt('Write production TypeScript with tests', sampleModels)
+    expect(system).toContain('production code')
+    expect(system).toContain('TypeScript/JavaScript')
+    expect(system).toContain('best practices')
+    expect(system).toContain('edge cases')
+    expect(system).toContain('Do not choose a local model for production software engineering')
+  })
+
+  it('adds routing traits to model entries', () => {
+    const { user } = buildRouterPrompt('Production TypeScript prompt', [
+      { id: 'glm-5.1', provider: 'zai-coding', displayName: 'GLM 5.1' },
+      {
+        id: 'Qwen3_5-9B-IQ4_XS',
+        provider: 'llamacpp',
+        displayName: 'Qwen3.5 9B Local',
+      },
+    ])
+
+    expect(user).toContain('glm-5.1 (zai-coding)')
+    expect(user).toContain('[remote, strong coding/reasoning]')
+    expect(user).toContain('Qwen3_5-9B-IQ4_XS (llamacpp)')
+    expect(user).toContain('[local/free')
   })
 })

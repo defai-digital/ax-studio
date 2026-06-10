@@ -7,15 +7,32 @@ const {
   mockPullModelWithMetadata,
   mockNavigate,
   mockToastError,
+  mockProviders,
 } = vi.hoisted(() => ({
   mockAddLocalDownloadingModel: vi.fn(),
   mockRemoveLocalDownloadingModel: vi.fn(),
   mockPullModelWithMetadata: vi.fn(),
   mockNavigate: vi.fn(),
   mockToastError: vi.fn(),
+  mockProviders: { current: [] as ModelProvider[] },
 }))
 
 vi.mock('@/hooks/models/useDownloadStore', () => ({
+  toDownloadProcesses: vi.fn(
+    (
+      downloads: Record<
+        string,
+        { name: string; progress: number; current: number; total: number }
+      >
+    ) =>
+      Object.values(downloads).map((download) => ({
+        id: download.name,
+        name: download.name,
+        progress: download.progress,
+        current: download.current,
+        total: download.total,
+      }))
+  ),
   useDownloadStore: vi.fn(() => ({
     downloads: {},
     localDownloadingModels: new Set<string>(),
@@ -32,7 +49,7 @@ vi.mock('@/hooks/settings/useGeneralSetting', () => ({
 
 vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: vi.fn((selector) =>
-    selector({ getProviderByName: () => ({ models: [] }) })
+    selector({ providers: mockProviders.current })
   ),
 }))
 
@@ -97,6 +114,7 @@ vi.mock('lucide-react', () => ({
 import { ModelDownloadAction } from '../ModelDownloadAction'
 
 describe('ModelDownloadAction', () => {
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
   const variant = {
     model_id: 'model-q4',
     path: '/models/model-q4.gguf',
@@ -110,7 +128,13 @@ describe('ModelDownloadAction', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mockProviders.current = []
     mockPullModelWithMetadata.mockResolvedValue(undefined)
+  })
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore()
   })
 
   it('starts a model download when clicked', () => {

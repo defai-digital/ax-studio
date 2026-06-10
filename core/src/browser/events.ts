@@ -1,5 +1,38 @@
 export type EventHandler<T = unknown> = (payload: T) => void
 
+type CoreEventsBridge = {
+  on<T = unknown>(eventName: string, handler: EventHandler<T>): () => void
+  off<T = unknown>(eventName: string, handler: EventHandler<T>): void
+  emit<T = unknown>(eventName: string, object: T): void
+}
+
+const createFallbackEventsBridge = (): CoreEventsBridge => {
+  const handlers = new Map<string, Set<EventHandler>>()
+
+  return {
+    on: (eventName, handler) => {
+      const current = handlers.get(eventName) ?? new Set<EventHandler>()
+      current.add(handler as EventHandler)
+      handlers.set(eventName, current)
+      return () => {
+        current.delete(handler as EventHandler)
+      }
+    },
+    off: (eventName, handler) => {
+      handlers.get(eventName)?.delete(handler as EventHandler)
+    },
+    emit: (eventName, object) => {
+      handlers.get(eventName)?.forEach((handler) => handler(object))
+    },
+  }
+}
+
+const getEventsBridge = (): CoreEventsBridge => {
+  const core = (globalThis.core ??= {})
+  core.events ??= createFallbackEventsBridge()
+  return core.events as CoreEventsBridge
+}
+
 /**
  * Adds an observer for an event.
  *
@@ -7,10 +40,7 @@ export type EventHandler<T = unknown> = (payload: T) => void
  * @param handler The handler function to call when the event is observed.
  */
 const on = <T = unknown>(eventName: string, handler: EventHandler<T>): void => {
-  if (!globalThis.core?.events) {
-    throw new Error('Core events bridge is not available')
-  }
-  globalThis.core.events.on(eventName, handler)
+  getEventsBridge().on(eventName, handler as EventHandler)
 }
 
 /**
@@ -20,10 +50,7 @@ const on = <T = unknown>(eventName: string, handler: EventHandler<T>): void => {
  * @param handler The handler function to call when the event is observed.
  */
 const off = <T = unknown>(eventName: string, handler: EventHandler<T>): void => {
-  if (!globalThis.core?.events) {
-    throw new Error('Core events bridge is not available')
-  }
-  globalThis.core.events.off(eventName, handler)
+  getEventsBridge().off(eventName, handler as EventHandler)
 }
 
 /**
@@ -33,10 +60,7 @@ const off = <T = unknown>(eventName: string, handler: EventHandler<T>): void => 
  * @param object The object to pass to the event callback.
  */
 const emit = <T = unknown>(eventName: string, object: T): void => {
-  if (!globalThis.core?.events) {
-    throw new Error('Core events bridge is not available')
-  }
-  globalThis.core.events.emit(eventName, object)
+  getEventsBridge().emit(eventName, object)
 }
 
 export const events = {

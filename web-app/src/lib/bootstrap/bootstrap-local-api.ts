@@ -61,7 +61,7 @@ export async function bootstrapLocalApi(
     try {
       const isRunning = await serviceHub.app().getServerStatus()
       if (isRunning) {
-        console.log('Local API Server is already running')
+        console.info('Local API Server is already running')
         setServerStatus('running')
         return ok()
       }
@@ -81,8 +81,8 @@ export async function bootstrapLocalApi(
         proxyTimeout: config.proxyTimeout,
       })
 
-      if (actualPort && actualPort !== config.port) {
-        setServerPort(actualPort)
+      if (actualPort && (actualPort as number) !== config.port) {
+        setServerPort(actualPort as number)
       }
       setServerStatus('running')
       return ok()

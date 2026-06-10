@@ -118,16 +118,20 @@ describe('useAssistant', () => {
       result.current.setCurrentAssistant(assistant2)
     })
 
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     mockDeleteAssistant.mockRejectedValueOnce(new Error('disk full'))
 
-    act(() => {
+    await act(async () => {
       result.current.deleteAssistant('assistant-2')
+      await Promise.resolve()
     })
 
     await vi.waitFor(() => {
       expect(result.current.assistants).toContainEqual(assistant2)
       expect(result.current.currentAssistant).toEqual(assistant2)
     })
+
+    consoleErrorSpy.mockRestore()
   })
 
   it('should set current assistant', () => {

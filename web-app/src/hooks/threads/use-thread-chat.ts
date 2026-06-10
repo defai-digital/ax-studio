@@ -42,6 +42,7 @@ type RegenerateFn = (args?: { messageId?: string }) => void
 
 export type ThreadChatParams = {
   threadId: string
+  threadModel?: ThreadModel
 
   // From useChat
   sendMessage: SendMessageFn
@@ -49,10 +50,15 @@ export type ThreadChatParams = {
   chatMessages: UIMessage[]
   setChatMessages: (msgs: UIMessage[]) => void
 
-  // From useThreadMemory
-  handleRememberCommand: (text: string) => boolean
-  handleForgetCommand: (text: string) => boolean
-  lastUserInputRef: React.MutableRefObject<string>
+  prepareLocalKnowledge?: (text: string) => Promise<{
+    context: string
+    retrieval?: {
+      searched: boolean
+      extracted: boolean
+      source?: string
+      error?: string
+    }
+  }>
 }
 
 export type ThreadChatResult = {
@@ -69,13 +75,12 @@ export type ThreadChatResult = {
 
 export function useThreadChat({
   threadId,
+  threadModel,
   sendMessage,
   regenerate,
   chatMessages,
   setChatMessages,
-  handleRememberCommand,
-  handleForgetCommand,
-  lastUserInputRef,
+  prepareLocalKnowledge,
 }: ThreadChatParams): ThreadChatResult {
   const serviceHub = useServiceHub()
   const addMessage = useMessages((state) => state.addMessage)
@@ -83,6 +88,7 @@ export function useThreadChat({
   const deleteMessage = useMessages((state) => state.deleteMessage)
   const setMessages = useMessages((state) => state.setMessages)
   const renameThread = useThreads((state) => state.renameThread)
+  const updateThreadTimestamp = useThreads((state) => state.updateThreadTimestamp)
   const selectedProvider = useModelProvider((state) => state.selectedProvider)
   const selectedModel = useModelProvider((state) => state.selectedModel)
   const getProviderByName = useModelProvider((state) => state.getProviderByName)
@@ -164,11 +170,6 @@ export function useThreadChat({
   const processAndSendMessage = useCallback(
     async (text: string) => {
       const normalizedText = text.trim()
-      lastUserInputRef.current = normalizedText
-
-      // Handle /remember and /forget commands
-      if (handleRememberCommand(normalizedText)) return
-      if (handleForgetCommand(normalizedText)) return
 
       // Rename thread on first message if still using default title
       const currentThread = useThreads.getState().threads[threadId]
@@ -233,16 +234,38 @@ export function useThreadChat({
       const attachments =
         readyAttachments.length > 0 ? readyAttachments : undefined
 
+      const localKnowledge = prepareLocalKnowledge
+        ? await prepareLocalKnowledge(normalizedText)
+        : { context: '' }
+      const knowledgeContext = localKnowledge.context
+      const modelText = knowledgeContext
+        ? `${text}${knowledgeContext}`
+        : text
+
       const userMessage = newUserThreadContent(
         threadId,
         text,
         attachments,
         messageId
       )
+      if (localKnowledge.retrieval) {
+        userMessage.metadata = {
+          ...(userMessage.metadata as Record<string, unknown> | undefined),
+          localKnowledgeRetrieval: localKnowledge.retrieval,
+        } as ThreadMessage['metadata']
+      }
       addMessage(userMessage)
+      updateThreadTimestamp(threadId)
 
-      // Build parts: text + any image file parts
-      const parts: MessagePart[] = [
+      // Request parts include hidden local-knowledge context for the model.
+      // Visible parts keep the user's chat bubble clean.
+      const requestParts: MessagePart[] = [
+        {
+          type: 'text',
+          text: modelText,
+        },
+      ]
+      const visibleParts: MessagePart[] = [
         {
           type: 'text',
           text: userMessage.content[0].text?.value ?? text,
@@ -253,20 +276,41 @@ export function useThreadChat({
       if (attachments) {
         for (const att of attachments) {
           if (att.type === 'image' && att.base64 && att.mimeType) {
-            parts.push({
+            const filePart: MessagePart = {
               type: 'file',
               mediaType: att.mimeType,
               url: `data:${att.mimeType};base64,${att.base64}`,
-            })
+            }
+            requestParts.push(filePart)
+            visibleParts.push(filePart)
           }
         }
       }
 
       sendMessage({
-        parts,
+        parts: requestParts,
         id: messageId,
         metadata: userMessage.metadata,
       })
+
+      if (knowledgeContext) {
+        queueMicrotask(() => {
+          const liveMessages =
+            useChatSessions.getState().sessions[threadId]?.chat?.messages ??
+            chatMessages
+          setChatMessages(
+            liveMessages.map((message) =>
+              message.id === messageId
+                ? {
+                    ...message,
+                    metadata: userMessage.metadata as Record<string, unknown>,
+                    parts: visibleParts,
+                  }
+                : message
+            )
+          )
+        })
+      }
 
       // Clear attachments after sending
       if (pendingAttachments.length > 0) {
@@ -276,25 +320,22 @@ export function useThreadChat({
     [
       threadId,
       addMessage,
+      updateThreadTimestamp,
       renameThread,
       sendMessage,
-      handleRememberCommand,
-      handleForgetCommand,
-      lastUserInputRef,
+      chatMessages,
+      setChatMessages,
+      prepareLocalKnowledge,
     ]
   )
 
   // ─── Message persistence (called from onFinish) ─────────────────────────────
-  //
-  // Accepts the caller's already-extracted contentParts so we use the same
-  // array that processMemoryOnFinish mutated (stripped <memory_extract> tags).
-  // Re-extracting from `message` would re-introduce the raw tags.
 
   const persistMessageOnFinish = useCallback(
     (message: UIMessage, contentParts: ThreadMessage['content']) => {
       if (contentParts.length === 0) return
 
-      const assistantMessage: ThreadMessage = {
+      const assistantMessage = {
         type: 'text',
         role: ChatCompletionRole.Assistant,
         content: contentParts,
@@ -305,7 +346,7 @@ export function useThreadChat({
         created_at: Date.now(),
         completed_at: Date.now(),
         metadata: (message.metadata || {}) as Record<string, unknown>,
-      }
+      } as unknown as ThreadMessage
 
       const existingMessages = useMessages.getState().getMessages(threadId)
       const existingMessage = existingMessages.find((m) => m.id === message.id)
@@ -314,8 +355,9 @@ export function useThreadChat({
       } else {
         addMessage(assistantMessage)
       }
+      updateThreadTimestamp(threadId)
     },
-    [threadId, addMessage, updateMessage]
+    [threadId, addMessage, updateMessage, updateThreadTimestamp]
   )
 
   // ─── Regenerate ─────────────────────────────────────────────────────────────
@@ -442,14 +484,16 @@ export function useThreadChat({
   }, [])
 
   const handleContextSizeIncrease = useCallback(async () => {
-    if (!selectedModel) return
-
     const updateProvider = useModelProvider.getState().updateProvider
-    const provider = getProviderByName(selectedProvider)
+    const providerName = threadModel?.provider ?? selectedProvider
+    const modelId = threadModel?.id ?? selectedModel?.id
+    if (!modelId) return
+
+    const provider = getProviderByName(providerName)
     if (!provider) return
 
     const modelIndex = provider.models.findIndex(
-      (m) => m.id === selectedModel.id
+      (m) => m.id === modelId
     )
     if (modelIndex === -1) return
 
@@ -479,7 +523,7 @@ export function useThreadChat({
     const controller = new AbortController()
     contextIncreaseAbortRef.current = controller
 
-    await serviceHub.models().stopModel(selectedModel.id)
+    await serviceHub.models().stopModel(modelId, provider.provider)
     if (controller.signal.aborted) return
     if (contextIncreaseTimerRef.current) {
       clearTimeout(contextIncreaseTimerRef.current)
@@ -492,6 +536,7 @@ export function useThreadChat({
   }, [
     selectedModel,
     selectedProvider,
+    threadModel,
     getProviderByName,
     serviceHub,
     handleRegenerate,

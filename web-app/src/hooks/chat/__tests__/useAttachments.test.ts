@@ -73,13 +73,6 @@ describe('useAttachments', () => {
     expect(useAttachments.getState().settingsDefs).toEqual([])
   })
 
-  // --- loadSettingsDefs ---
-
-  it('should return false from loadSettingsDefs', async () => {
-    const result = await useAttachments.getState().loadSettingsDefs()
-    expect(result).toBe(false)
-  })
-
   // --- Setters: basic value updates ---
 
   it('should set enabled to false', () => {

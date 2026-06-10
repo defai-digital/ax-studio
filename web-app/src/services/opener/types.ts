@@ -5,4 +5,5 @@
 
 export interface OpenerService {
   revealItemInDir(path: string): Promise<void>
+  openUrl(url: string): Promise<void>
 }

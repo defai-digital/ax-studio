@@ -1,9 +1,10 @@
 //! Meta route handlers: /models and fallback 404.
+use ax_studio_utils::is_internal_url;
 use hyper::{Body, Response, StatusCode};
 use serde_json;
 use tauri::Manager;
 
-use super::proxy::ProxyConfig;
+use super::proxy::{finalize_response, ProxyConfig};
 use super::security::add_cors_headers_with_host_and_origin;
 use crate::core::state::AppState;
 
@@ -19,23 +20,38 @@ pub(super) async fn handle_models_route<R: tauri::Runtime>(
     // Get remote provider models
     let state = app_handle.state::<AppState>();
     let provider_state = state.provider_state.lock().await;
-    let remote_models: Vec<_> = provider_state
+    let models: Vec<_> = provider_state
         .configs
         .values()
-        .flat_map(|provider_cfg| provider_cfg.models.clone())
-        .map(|model_id| {
-            serde_json::json!({
-                "id": model_id,
-                "object": "model",
-                "created": 1,
-                "owned_by": "remote"
-            })
+        .flat_map(|provider_cfg| {
+            let owned_by = if provider_cfg
+                .base_url
+                .as_deref()
+                .map(is_internal_url)
+                .unwrap_or(false)
+            {
+                "local"
+            } else {
+                "remote"
+            };
+            provider_cfg
+                .models
+                .iter()
+                .map(|model_id| {
+                    serde_json::json!({
+                        "id": model_id,
+                        "object": "model",
+                        "created": 1,
+                        "owned_by": owned_by
+                    })
+                })
+                .collect::<Vec<_>>()
         })
         .collect();
 
     let response_json = serde_json::json!({
         "object": "list",
-        "data": remote_models
+        "data": models
     });
 
     let body_str = serde_json::to_string(&response_json).unwrap_or_else(|_| "{}".to_string());
@@ -52,25 +68,9 @@ pub(super) async fn handle_models_route<R: tauri::Runtime>(
         config.cors_enabled,
     );
 
-    log::debug!("Returning {} remote models", remote_models.len());
+    log::debug!("Returning {} remote models", models.len());
 
     finalize_response(response_builder, Body::from(body_str))
-}
-
-fn finalize_response(
-    builder: hyper::http::response::Builder,
-    body: Body,
-) -> Response<Body> {
-    match builder.body(body) {
-        Ok(resp) => resp,
-        Err(err) => {
-            log::error!("Failed to build HTTP response: {err}");
-            Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(Body::from("Internal proxy error"))
-                .unwrap_or_else(|_| Response::new(Body::from("Internal proxy error")))
-        }
-    }
 }
 
 /// Handle unrecognized routes — returns 404.

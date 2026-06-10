@@ -1,8 +1,9 @@
 use flate2::read::GzDecoder;
+use sha2::{Digest, Sha256};
 use std::{
     fs::{self, File},
     io::Read,
-    path::PathBuf,
+    path::{Component, Path, PathBuf},
     sync::Arc,
 };
 use tar::Archive;
@@ -23,6 +24,99 @@ use super::{
     extensions::commands::get_app_extensions_path, mcp::helpers::run_mcp_commands, state::AppState,
 };
 
+// Hash table is generated at build time from the actual pre-install/ tgz files
+// by build.rs — no manual updates needed when extensions are rebuilt.
+include!(concat!(env!("OUT_DIR"), "/extension_hashes.rs"));
+
+fn bundled_extension_stamp() -> String {
+    BUNDLED_EXTENSION_ARCHIVE_SHA256
+        .iter()
+        .map(|(name, hash)| format!("{name}:{hash}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn bundled_extensions_ready(extensions_path: &Path) -> bool {
+    if !extensions_path.join("extensions.json").is_file() {
+        return false;
+    }
+
+    let expected_stamp = bundled_extension_stamp();
+    let installed_stamp =
+        fs::read_to_string(extensions_path.join(".bundle-stamp")).unwrap_or_default();
+
+    installed_stamp == expected_stamp
+}
+
+pub fn schedule_extension_install_if_needed(
+    extensions_path: PathBuf,
+    pre_install_path: PathBuf,
+    force: bool,
+) {
+    if !force && bundled_extensions_ready(&extensions_path) {
+        return;
+    }
+
+    log::info!("Scheduling bundled extension install. Force: {force}");
+    std::thread::spawn(move || {
+        match install_extensions_from_paths(extensions_path, pre_install_path, force) {
+            Ok(()) => {
+                log::info!("Bundled extension install finished");
+            }
+            Err(error) => {
+                log::error!("Failed to install bundled extensions in background: {error}");
+            }
+        }
+    });
+}
+
+fn expected_extension_archive_hash(path: &Path) -> Option<&'static str> {
+    let filename = path.file_name()?.to_str()?;
+    BUNDLED_EXTENSION_ARCHIVE_SHA256
+        .iter()
+        .find_map(|(name, hash)| (*name == filename).then_some(*hash))
+}
+
+fn compute_sha256(path: &Path) -> Result<String, String> {
+    let mut file = File::open(path)
+        .map_err(|e| format!("Failed to open extension archive for hashing: {e}"))?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 8192];
+
+    loop {
+        let bytes_read = file
+            .read(&mut buffer)
+            .map_err(|e| format!("Failed to read extension archive for hashing: {e}"))?;
+        if bytes_read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..bytes_read]);
+    }
+
+    Ok(hex::encode(hasher.finalize()))
+}
+
+fn verify_extension_archive_integrity(path: &Path) -> Result<(), String> {
+    let expected_hash = expected_extension_archive_hash(path).ok_or_else(|| {
+        format!(
+            "No expected SHA-256 registered for bundled extension archive: {}",
+            path.display()
+        )
+    })?;
+    let actual_hash = compute_sha256(path)?;
+
+    if actual_hash != expected_hash {
+        return Err(format!(
+            "Extension archive integrity check failed for {}: expected {}, got {}",
+            path.display(),
+            expected_hash,
+            actual_hash
+        ));
+    }
+
+    Ok(())
+}
+
 pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> Result<(), String> {
     let extensions_path = get_app_extensions_path(app.clone());
     let pre_install_path = app
@@ -32,6 +126,14 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
         .join("resources")
         .join("pre-install");
 
+    install_extensions_from_paths(extensions_path, pre_install_path, force)
+}
+
+fn install_extensions_from_paths(
+    extensions_path: PathBuf,
+    pre_install_path: PathBuf,
+    force: bool,
+) -> Result<(), String> {
     let mut clean_up = force;
 
     // Check IS_CLEAN environment variable to optionally skip extension install
@@ -40,7 +142,15 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
     }
     log::info!("Installing extensions. Clean up: {clean_up}");
     if !clean_up && extensions_path.exists() {
-        return Ok(());
+        let stamp_path = extensions_path.join(".bundle-stamp");
+        let expected_stamp = bundled_extension_stamp();
+        let installed_stamp = fs::read_to_string(&stamp_path).unwrap_or_default();
+
+        if installed_stamp == expected_stamp {
+            return Ok(());
+        }
+
+        log::info!("Bundled extension archives changed. Reinstalling bundled extensions.");
     }
 
     let staging_path = extensions_path.with_extension("staging");
@@ -69,6 +179,8 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
         let path = entry.path();
 
         if path.extension().is_some_and(|ext| ext == "tgz") {
+            verify_extension_archive_integrity(&path)?;
+
             let tar_gz = File::open(&path).map_err(|e| e.to_string())?;
             let gz_decoder = GzDecoder::new(tar_gz);
             let mut archive = Archive::new(gz_decoder);
@@ -88,6 +200,16 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
 
             let extension_name = extension_name.ok_or("package.json not found in archive")?;
             let extension_dir = staging_path.join(extension_name.clone());
+            if !Path::new(&extension_name)
+                .components()
+                .all(|component| matches!(component, Component::Normal(_)))
+                || !extension_dir.starts_with(&staging_path)
+            {
+                return Err(format!(
+                    "Blocked unsafe extension package name: {}",
+                    extension_name
+                ));
+            }
             fs::create_dir_all(&extension_dir).map_err(|e| e.to_string())?;
 
             let tar_gz = File::open(&path).map_err(|e| e.to_string())?;
@@ -104,15 +226,33 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
                 if entry_type.is_symlink() || entry_type.is_hard_link() {
                     log::warn!(
                         "Rejecting symlink/hardlink entry in extension archive: {}",
-                        entry.path().map(|p| p.display().to_string()).unwrap_or_default()
+                        entry
+                            .path()
+                            .map(|p| p.display().to_string())
+                            .unwrap_or_default()
                     );
                     continue;
                 }
 
                 let file_path = entry.path().map_err(|e| e.to_string())?;
-                let components: Vec<_> = file_path.components().collect();
-                if components.len() > 1 {
-                    let relative_path: PathBuf = components[1..].iter().collect();
+                let mut components = file_path.components();
+                let _package_root = components.next();
+                let mut relative_path = PathBuf::new();
+
+                for component in components {
+                    match component {
+                        Component::Normal(part) => relative_path.push(part),
+                        Component::CurDir => {}
+                        _ => {
+                            return Err(format!(
+                                "Blocked extension archive path traversal: {}",
+                                file_path.display()
+                            ));
+                        }
+                    }
+                }
+
+                if !relative_path.as_os_str().is_empty() {
                     let target_path = extension_dir.join(relative_path);
                     if !target_path.starts_with(&extension_dir) {
                         return Err(format!(
@@ -163,6 +303,10 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
                     .unwrap_or(""),
             });
 
+            extensions_list.retain(|extension| {
+                extension.get("name").and_then(|name| name.as_str())
+                    != Some(extension_name.as_str())
+            });
             extensions_list.push(new_extension);
 
             log::info!("Installed extension to {extension_dir:?}");
@@ -191,6 +335,12 @@ pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> 
         fs::rename(&staging_path, &extensions_path)
             .map_err(|e| format!("Failed to promote staged extensions: {e}"))?;
     }
+
+    fs::write(
+        extensions_path.join(".bundle-stamp"),
+        bundled_extension_stamp(),
+    )
+    .map_err(|e| format!("Failed to write bundled extension stamp: {e}"))?;
 
     Ok(())
 }
@@ -262,7 +412,7 @@ pub fn migrate_mcp_servers(
     Ok(())
 }
 
-const AX_STUDIO_MCP_PACKAGE: &str = "@ax-studio/fabric-ingest";
+const AX_STUDIO_MCP_PACKAGE: &str = "@ax-fabric/fabric-ingest";
 
 /// Build the default MCP server config for ax-fabric.
 /// Uses npx as the default command which will work once the package is
@@ -286,7 +436,9 @@ mod tests {
     fn test_resolve_ax_fabric_mcp_config_structure() {
         let config = resolve_ax_fabric_mcp_config();
         assert_eq!(config["command"], "npx");
-        let args = config["args"].as_array().expect("'args' must be an array in test");
+        let args = config["args"]
+            .as_array()
+            .expect("'args' must be an array in test");
         assert_eq!(args.len(), 4);
         assert_eq!(args[0], "-y");
         assert_eq!(args[1], AX_STUDIO_MCP_PACKAGE);
@@ -301,14 +453,16 @@ mod tests {
         assert_eq!(config["active"], false);
         assert_eq!(config["official"], true);
         assert!(config["env"].is_object());
-        let args = config["args"].as_array().expect("'args' must be an array in test");
+        let args = config["args"]
+            .as_array()
+            .expect("'args' must be an array in test");
         assert!(args.contains(&serde_json::json!("-y")));
         assert!(args.contains(&serde_json::json!(AX_STUDIO_MCP_PACKAGE)));
     }
 
     #[test]
     fn test_ax_studio_mcp_package_constant() {
-        assert_eq!(AX_STUDIO_MCP_PACKAGE, "@ax-studio/fabric-ingest");
+        assert_eq!(AX_STUDIO_MCP_PACKAGE, "@ax-fabric/fabric-ingest");
     }
 
     #[test]
@@ -320,13 +474,75 @@ mod tests {
         let mut buf = Vec::new();
         {
             let mut builder = Builder::new(&mut buf);
-            builder.finish().expect("archive builder finish should not fail in test");
+            builder
+                .finish()
+                .expect("archive builder finish should not fail in test");
         }
 
         let cursor = Cursor::new(buf);
         let mut archive = tar::Archive::new(cursor);
         let result = extract_extension_manifest(&mut archive).unwrap();
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_bundled_extensions_ready_requires_manifest_and_current_stamp() {
+        let extensions_path = std::env::temp_dir().join(format!(
+            "ax-studio-extension-ready-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&extensions_path);
+        fs::create_dir_all(&extensions_path).expect("temp dir should be created");
+
+        assert!(!bundled_extensions_ready(&extensions_path));
+
+        fs::write(extensions_path.join("extensions.json"), "[]")
+            .expect("extensions manifest should be written");
+        assert!(!bundled_extensions_ready(&extensions_path));
+
+        fs::write(
+            extensions_path.join(".bundle-stamp"),
+            bundled_extension_stamp(),
+        )
+        .expect("bundle stamp should be written");
+        assert!(bundled_extensions_ready(&extensions_path));
+
+        let _ = fs::remove_dir_all(&extensions_path);
+    }
+
+    #[test]
+    fn test_bundled_extension_hashes_match_checked_in_archives() {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let archive_dir = [
+            manifest_dir.join("resources").join("pre-install"),
+            manifest_dir.join("..").join("pre-install"),
+        ]
+        .into_iter()
+        .find(|path| path.is_dir())
+        .expect("bundled extension archives should exist in the repo");
+
+        for (archive_name, expected_hash) in BUNDLED_EXTENSION_ARCHIVE_SHA256 {
+            let archive_path = archive_dir.join(archive_name);
+            assert!(
+                archive_path.is_file(),
+                "missing bundled extension archive: {}",
+                archive_path.display()
+            );
+            let actual_hash =
+                compute_sha256(&archive_path).expect("bundled archive should be readable");
+            assert_eq!(
+                actual_hash, *expected_hash,
+                "hash mismatch for bundled archive {archive_name}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_should_prevent_exit_only_for_tray_window_close() {
+        assert!(should_prevent_exit_for_tray(None, true));
+        assert!(!should_prevent_exit_for_tray(None, false));
+        assert!(!should_prevent_exit_for_tray(Some(0), true));
+        assert!(!should_prevent_exit_for_tray(Some(1), true));
     }
 }
 
@@ -493,28 +709,30 @@ fn migrate_exa_to_http(app_handle: tauri::AppHandle) -> Result<(), String> {
 pub fn extract_extension_manifest<R: Read>(
     archive: &mut Archive<R>,
 ) -> Result<Option<serde_json::Value>, String> {
-    let entry = archive
-        .entries()
-        .map_err(|e| e.to_string())?
-        .filter_map(|e| e.ok()) // Ignore errors in individual entries
-        .find(|entry| {
-            if let Ok(file_path) = entry.path() {
-                let path_str = file_path.to_string_lossy();
-                path_str == "package/package.json" || path_str == "package.json"
-            } else {
-                false
-            }
-        });
+    for entry in archive.entries().map_err(|e| e.to_string())? {
+        let mut entry = entry.map_err(|e| format!("Failed to read archive entry: {e}"))?;
+        let path_str = entry
+            .path()
+            .map_err(|e| format!("Failed to read archive entry path: {e}"))?
+            .to_string_lossy()
+            .to_string();
 
-    if let Some(mut entry) = entry {
-        let mut content = String::new();
-        entry
-            .read_to_string(&mut content)
-            .map_err(|e| e.to_string())?;
+        let path = Path::new(&path_str);
+        let is_manifest_path = path
+            .components()
+            .all(|component| matches!(component, Component::Normal(_) | Component::CurDir))
+            && (path_str == "package/package.json" || path_str == "package.json");
 
-        let package_json: serde_json::Value =
-            serde_json::from_str(&content).map_err(|e| e.to_string())?;
-        return Ok(Some(package_json));
+        if is_manifest_path {
+            let mut content = String::new();
+            entry
+                .read_to_string(&mut content)
+                .map_err(|e| format!("Failed to read package.json from extension archive: {e}"))?;
+
+            let package_json: serde_json::Value =
+                serde_json::from_str(&content).map_err(|e| e.to_string())?;
+            return Ok(Some(package_json));
+        }
     }
 
     Ok(None)
@@ -624,6 +842,14 @@ fn setup_window_theme_listener<R: Runtime>(
     });
 }
 
+fn tray_icon_enabled() -> bool {
+    option_env!("ENABLE_SYSTEM_TRAY_ICON").unwrap_or("false") == "true"
+}
+
+fn should_prevent_exit_for_tray(code: Option<i32>, tray_enabled: bool) -> bool {
+    code.is_none() && tray_enabled
+}
+
 /// Tauri `.setup()` callback — runs once after the app is built.
 pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     app.handle().plugin(
@@ -653,9 +879,17 @@ pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         .and_then(|v| v.as_str().map(String::from))
         .unwrap_or_default();
     let app_version = app.config().version.clone().unwrap_or_default();
-    if let Err(e) = install_extensions(app.handle().clone(), stored_version != app_version) {
-        log::error!("Failed to install extensions: {e}");
-    }
+    let extensions_path = get_app_extensions_path(app.handle().clone());
+    let pre_install_path = app
+        .path()
+        .resource_dir()?
+        .join("resources")
+        .join("pre-install");
+    schedule_extension_install_if_needed(
+        extensions_path,
+        pre_install_path,
+        stored_version != app_version,
+    );
     if let Err(e) = migrate_mcp_servers(app.handle().clone(), store.clone()) {
         log::error!("Failed to migrate MCP servers: {e}");
     }
@@ -694,58 +928,70 @@ pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
 
 /// Tauri `.run()` event handler — handles app lifecycle events.
 pub fn app_run_handler(app: &tauri::AppHandle, event: RunEvent) {
-    if let RunEvent::Exit = event {
-        let app_handle = app.clone();
-        if let Some(window) = app_handle.get_webview_window("main") {
-            let _ = window.emit("app-shutting-down", ());
-            let _ = window.hide();
-        }
-        let state = app_handle.state::<super::state::AppState>();
-        let cleanup_already_running = tokio::task::block_in_place(|| {
-            tauri::async_runtime::block_on(async {
-                let handle = state.background_cleanup_handle.lock().await;
-                handle.is_some()
-            })
-        });
-        if cleanup_already_running {
-            return;
-        }
-        tokio::task::block_in_place(|| {
-            tauri::async_runtime::block_on(async {
-                use crate::core::mcp::helpers::background_cleanup_mcp_servers;
-                let state = app_handle.state::<super::state::AppState>();
-                let mut cleanup_guard = state.background_cleanup_handle.lock().await;
-                if cleanup_guard.is_none() {
-                    let cleanup_app = app_handle.clone();
-                    let cleanup_task = tauri::async_runtime::spawn(async move {
-                        let state = cleanup_app.state::<super::state::AppState>();
-                        background_cleanup_mcp_servers(&cleanup_app, &state).await;
-                        let _ =
-                            tauri_plugin_llamacpp::cleanup_llama_processes(cleanup_app.clone())
-                                .await;
-                        log::info!("llama.cpp process cleanup completed");
-                    });
-                    *cleanup_guard = Some(cleanup_task);
+    match event {
+        RunEvent::ExitRequested { code, api, .. } => {
+            log::warn!("Tauri exit requested with code: {code:?}");
+            if should_prevent_exit_for_tray(code, tray_icon_enabled()) {
+                api.prevent_exit();
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.hide();
                 }
-                drop(cleanup_guard);
-
-                let cleanup_handle = {
-                    let mut cleanup_guard = state.background_cleanup_handle.lock().await;
-                    cleanup_guard.take()
-                };
-
-                match tokio::time::timeout(tokio::time::Duration::from_secs(10), async {
-                    if let Some(handle) = cleanup_handle {
-                        let _ = handle.await;
-                    }
+            }
+        }
+        RunEvent::Exit => {
+            let app_handle = app.clone();
+            if let Some(window) = app_handle.get_webview_window("main") {
+                let _ = window.emit("app-shutting-down", ());
+                let _ = window.hide();
+            }
+            let state = app_handle.state::<super::state::AppState>();
+            let cleanup_already_running = tokio::task::block_in_place(|| {
+                tauri::async_runtime::block_on(async {
+                    let handle = state.background_cleanup_handle.lock().await;
+                    handle.is_some()
                 })
-                .await
-                {
-                    Ok(_) => log::info!("MCP cleanup completed successfully"),
-                    Err(_) => log::warn!("MCP cleanup timed out after 10 seconds"),
-                }
-                log::info!("App cleanup completed");
             });
-        });
+            if cleanup_already_running {
+                return;
+            }
+            tokio::task::block_in_place(|| {
+                tauri::async_runtime::block_on(async {
+                    use crate::core::mcp::helpers::background_cleanup_mcp_servers;
+                    let state = app_handle.state::<super::state::AppState>();
+                    let mut cleanup_guard = state.background_cleanup_handle.lock().await;
+                    if cleanup_guard.is_none() {
+                        let cleanup_app = app_handle.clone();
+                        let cleanup_task = tauri::async_runtime::spawn(async move {
+                            let state = cleanup_app.state::<super::state::AppState>();
+                            background_cleanup_mcp_servers(&cleanup_app, &state).await;
+                            let _ =
+                                tauri_plugin_llamacpp::cleanup_llama_processes(cleanup_app.clone())
+                                    .await;
+                            log::info!("llama.cpp process cleanup completed");
+                        });
+                        *cleanup_guard = Some(cleanup_task);
+                    }
+                    drop(cleanup_guard);
+
+                    let cleanup_handle = {
+                        let mut cleanup_guard = state.background_cleanup_handle.lock().await;
+                        cleanup_guard.take()
+                    };
+
+                    match tokio::time::timeout(tokio::time::Duration::from_secs(10), async {
+                        if let Some(handle) = cleanup_handle {
+                            let _ = handle.await;
+                        }
+                    })
+                    .await
+                    {
+                        Ok(_) => log::info!("MCP cleanup completed successfully"),
+                        Err(_) => log::warn!("MCP cleanup timed out after 10 seconds"),
+                    }
+                    log::info!("App cleanup completed");
+                });
+            });
+        }
+        _ => {}
     }
 }

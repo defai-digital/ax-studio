@@ -7,7 +7,11 @@ import {
   safeStorageGetItem,
   safeStorageRemoveItem,
   safeStorageSetItem,
-} from '@/lib/storage'
+  safeStorageSetJSON,
+  isStorageFlagEnabled,
+} from '@/lib/storage/storage'
+import { extractErrorMessage } from '@/lib/utils/error'
+
 
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import SetupScreen from '@/containers/SetupScreen'
@@ -35,7 +39,7 @@ const homeSearchSchema = z.object({
 import { useThreads } from '@/hooks/threads/useThreads'
 import DropdownModelProvider from '@/containers/DropdownModelProvider'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
-import { resolveSystemPrompt } from '@/lib/system-prompt'
+import { resolveSystemPrompt } from '@/lib/prompts/system-prompt'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -46,7 +50,6 @@ import {
   Shield,
   Wrench,
   MessageSquareText,
-  Users,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -54,7 +57,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { useAgentTeamStore } from '@/stores/agent-team-store'
 import { usePrompt } from '@/hooks/ui/usePrompt'
 import { motion } from 'motion/react'
 import { WorkflowSelector } from '@/components/smart-start/WorkflowSelector'
@@ -97,27 +99,6 @@ function Index() {
       ) || ''
   )
 
-  // Agent Team selection for new threads
-  const agentTeams = useAgentTeamStore((state) => state.teams)
-  const agentTeamsLoaded = useAgentTeamStore((state) => state.isLoaded)
-  const loadTeams = useAgentTeamStore((state) => state.loadTeams)
-  const [selectedTeamId, setSelectedTeamId] = useState<string | undefined>(
-    () =>
-      safeStorageGetItem(
-        sessionStorage,
-        SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID,
-        'routes/index'
-      ) ||
-      undefined
-  )
-  const selectedTeam = agentTeams.find((t) => t.id === selectedTeamId)
-
-  useEffect(() => {
-    if (!agentTeamsLoaded) {
-      loadTeams()
-    }
-  }, [agentTeamsLoaded, loadTeams])
-
   const promptResolution = useMemo(
     () =>
       resolveSystemPrompt(threadPromptDraft.trim() || null, null, {
@@ -133,16 +114,12 @@ function Index() {
           id: selectedModel?.id ?? activeModel?.id ?? '*',
           provider: selectedModel?.provider ?? selectedProvider,
         }
-        // Create both a main thread and a split thread
-        const [mainThread, splitThread] = await Promise.all([
-          createThread(modelConfig, 'New Thread'),
-          createThread(modelConfig, 'New Thread'),
-        ])
-        // Store split info so $threadId picks it up on mount
-        const stored = safeStorageSetItem(
+        const mainThread = await createThread(modelConfig, 'New Thread')
+        const splitThread = await createThread(modelConfig, 'New Thread')
+        const stored = safeStorageSetJSON(
           sessionStorage,
           SESSION_STORAGE_KEY.SPLIT_VIEW_INFO,
-          JSON.stringify({ splitThreadId: splitThread.id, direction }),
+          { splitThreadId: splitThread.id, direction },
           'routes/index'
         )
         if (!stored) {
@@ -155,23 +132,20 @@ function Index() {
       } catch (error) {
         console.error('Failed to create split view:', error)
         toast.error('Failed to create split view', {
-          description:
-            error instanceof Error ? error.message : 'Please try again.',
+          description: extractErrorMessage(error, 'Please try again.'),
         })
       }
     },
     [createThread, selectedModel, activeModel?.id, selectedProvider, navigate]
   )
 
-  // Track setup completion in React state so the component re-renders when the
-  // user completes setup (navigating to the same route would not trigger a re-render).
   const [setupCompleted, setSetupCompleted] = useState(
     () =>
-      safeStorageGetItem(
+      isStorageFlagEnabled(
         localStorage,
         localStorageKey.setupCompleted,
         'routes/index'
-      ) === 'true'
+      )
   )
 
   const hasValidProviders =
@@ -182,7 +156,6 @@ function Index() {
     setCurrentThreadId(undefined)
   }, [setCurrentThreadId])
 
-  // Persist thread prompt draft to sessionStorage so it survives navigation to new thread
   useEffect(() => {
     const trimmed = threadPromptDraft.trim()
     if (trimmed) {
@@ -200,24 +173,6 @@ function Index() {
       )
     }
   }, [threadPromptDraft])
-
-  // Persist selected team ID to sessionStorage so the new thread picks it up
-  useEffect(() => {
-    if (selectedTeamId) {
-      safeStorageSetItem(
-        sessionStorage,
-        SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID,
-        selectedTeamId,
-        'routes/index'
-      )
-    } else {
-      safeStorageRemoveItem(
-        sessionStorage,
-        SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID,
-        'routes/index'
-      )
-    }
-  }, [selectedTeamId])
 
   if (!hasValidProviders) {
     return <SetupScreen onComplete={() => setSetupCompleted(true)} />
@@ -238,32 +193,6 @@ function Index() {
             >
               <MessageSquareText className="size-4" />
             </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant={selectedTeamId ? 'secondary' : 'ghost'}
-                  size="icon-sm"
-                  aria-label="Agent Team"
-                  title={selectedTeam ? selectedTeam.name : 'Agent Team'}
-                >
-                  <Users className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => setSelectedTeamId(undefined)}>
-                  No Team (single agent)
-                </DropdownMenuItem>
-                {agentTeams.map((team) => (
-                  <DropdownMenuItem
-                    key={team.id}
-                    onSelect={() => setSelectedTeamId(team.id)}
-                  >
-                    {team.name}
-                    {team.id === selectedTeamId && ' ✓'}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -402,14 +331,10 @@ function Index() {
             </motion.div>
           </div>
         </div>
-        {/* ChatInput pinned at bottom */}
+        {/* Input pinned at bottom */}
         <div className="shrink-0 px-3 pb-2 sm:pb-4">
           <div className="mx-auto w-full max-w-2xl">
-            <ChatInput
-              showSpeedToken={false}
-              model={selectedModel}
-              initialMessage={true}
-            />
+            <ChatInput model={selectedModel} initialMessage={true} />
           </div>
         </div>
       </div>

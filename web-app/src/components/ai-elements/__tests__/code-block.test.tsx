@@ -15,11 +15,11 @@ vi.mock('shiki', () => {
   }
 })
 
-vi.mock('@/lib/shiki-theme-light', () => ({
+vi.mock('@/lib/themes/shiki-theme-light', () => ({
   axStudioLightTheme: { name: 'ax-studio-light' },
 }))
 
-vi.mock('@/lib/shiki-theme-dark', () => ({
+vi.mock('@/lib/themes/shiki-theme-dark', () => ({
   axStudioDarkTheme: { name: 'ax-studio-dark' },
 }))
 

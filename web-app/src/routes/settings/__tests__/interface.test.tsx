@@ -42,7 +42,20 @@ vi.mock('@/containers/AccentColorPicker', () => ({
 }))
 
 vi.mock('@/hooks/settings/useInterfaceSettings', () => ({
+  ACCENT_COLORS: [
+    { name: 'Gray', value: 'gray', thumb: '#3F3F46' },
+    { name: 'Blue', value: 'blue', thumb: '#456BDE' },
+  ],
+  fontSizeOptions: [
+    { value: '14px', label: 'Small' },
+    { value: '16px', label: 'Medium' },
+    { value: '18px', label: 'Large' },
+  ],
   useInterfaceSettings: () => ({
+    fontSize: '16px',
+    accentColor: 'gray',
+    setFontSize: vi.fn(),
+    setAccentColor: vi.fn(),
     resetInterface: vi.fn(),
   }),
 }))
@@ -101,8 +114,8 @@ describe('Interface Settings Route', () => {
     render(<Component />)
 
     expect(screen.getByTestId('theme-switcher')).toBeInTheDocument()
-    expect(screen.getByTestId('font-size-switcher')).toBeInTheDocument()
-    expect(screen.getByTestId('accent-color-picker')).toBeInTheDocument()
+    expect(screen.getByTitle('common:adjustFontSize')).toBeInTheDocument()
+    expect(screen.getByTitle('Gray')).toBeInTheDocument()
   })
 
   it('should render reset interface button', () => {

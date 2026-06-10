@@ -10,7 +10,11 @@ import { toast } from 'sonner'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useChatAttachments } from '@/hooks/chat/useChatAttachments'
 import { createImageAttachment, type Attachment } from '@/types/attachment'
+import { SUPPORTED_IMAGE_EXTENSIONS } from '@/constants/attachments'
 import { isPlatformTauri } from '@/lib/platform/utils'
+import { partitionDuplicateAttachments } from '@/lib/attachments/dedupe'
+import { extractErrorMessage } from '@/lib/utils/error'
+import { basename, fileExtension } from '@/lib/utils'
 
 export type ImageAttachmentHandlerParams = {
   attachmentsKey: string
@@ -22,7 +26,7 @@ export type ImageAttachmentHandlerParams = {
 }
 
 function getFileTypeFromExtension(fileName: string): string {
-  const extension = fileName.toLowerCase().split('.').pop()
+  const extension = fileExtension(fileName)
   switch (extension) {
     case 'jpg':
     case 'jpeg':
@@ -32,6 +36,13 @@ function getFileTypeFromExtension(fileName: string): string {
     default:
       return ''
   }
+}
+
+function isSafeImagePath(path: string): boolean {
+  if (!path || path.length > 4096 || /[\0\r\n]/.test(path)) return false
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(path)) return false
+  if (path.split(/[\\/]/).includes('..')) return false
+  return getFileTypeFromExtension(path) !== ''
 }
 
 export function useImageAttachmentHandler({
@@ -132,18 +143,16 @@ export function useImageAttachmentHandler({
       let newFiles: Attachment[] = []
 
       setAttachmentsForThread(attachmentsKey, (currentAttachments) => {
-        const existingImageNames = new Set(
-          currentAttachments.filter((a) => a.type === 'image').map((a) => a.name)
-        )
-        duplicates = []
-        newFiles = []
-        for (const att of preparedFiles) {
-          if (existingImageNames.has(att.name)) {
-            duplicates.push(att.name)
-            continue
-          }
-          newFiles.push(att)
-        }
+        const result = partitionDuplicateAttachments({
+          existingItems: currentAttachments,
+          incomingItems: preparedFiles,
+          getExistingIdentity: (attachment) =>
+            attachment.type === 'image' ? attachment.name : undefined,
+          getIncomingIdentity: (attachment) => attachment.name,
+          getDuplicateLabel: (attachment) => attachment.name,
+        })
+        duplicates = result.duplicateLabels
+        newFiles = result.newItems
         return newFiles.length > 0
           ? [...currentAttachments, ...newFiles]
           : currentAttachments
@@ -186,8 +195,7 @@ export function useImageAttachmentHandler({
                 prev.filter((a) => !(a.name === img.name && a.type === 'image'))
               )
               toast.error(`Failed to ingest ${img.name}`, {
-                description:
-                  error instanceof Error ? error.message : String(error),
+                description: extractErrorMessage(error, String(error)),
               })
             }
           }
@@ -238,13 +246,16 @@ export function useImageAttachmentHandler({
       try {
         const selected = await serviceHub.dialog().open({
           multiple: true,
-          filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png'] }],
+          filters: [{ name: 'Images', extensions: SUPPORTED_IMAGE_EXTENSIONS }],
         })
         if (selected) {
           const paths = Array.isArray(selected) ? selected : [selected]
           const files: File[] = []
           for (const path of paths) {
             try {
+              if (!isSafeImagePath(path)) {
+                throw new Error('Selected file path is not a supported image path')
+              }
               const { convertFileSrc } = await import('@tauri-apps/api/core')
               const fileUrl = convertFileSrc(path)
               const response = await fetch(fileUrl)
@@ -252,21 +263,13 @@ export function useImageAttachmentHandler({
                 throw new Error(`Failed to fetch file: ${response.statusText}`)
               }
               const blob = await response.blob()
-              const fileName =
-                path.split(/[\\/]/).filter(Boolean).pop() || 'image'
-              const ext = fileName.toLowerCase().split('.').pop()
-              const mimeType =
-                ext === 'png'
-                  ? 'image/png'
-                  : ext === 'jpg' || ext === 'jpeg'
-                    ? 'image/jpeg'
-                    : 'image/jpeg'
+              const fileName = basename(path) || 'image'
+              const mimeType = getFileTypeFromExtension(fileName) || 'image/jpeg'
               files.push(new File([blob], fileName, { type: mimeType }))
             } catch (error) {
               console.error('Failed to read file:', error)
               toast.error('Failed to read file', {
-                description:
-                  error instanceof Error ? error.message : String(error),
+                description: extractErrorMessage(error, String(error)),
               })
             }
           }

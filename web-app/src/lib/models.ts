@@ -1,5 +1,6 @@
 import { models } from 'token.js'
 import { ModelCapabilities } from '@/types/models'
+import type { MMProjModel } from '@/services/models/types'
 
 export const defaultModel = (provider?: string) => {
   if (!provider || !Object.keys(models).includes(provider)) {
@@ -48,7 +49,7 @@ export const getModelCapabilities = (
  */
 export const extractDescription = (text?: string) => {
   if (!text) return text
-  const normalizedText = removeYamlFrontMatter(text)
+  const normalizedText = text.replace(/^---\n([\s\S]*?)\n---\n/, '')
   const overviewPattern = /(?:##\s*Overview\s*\n)([\s\S]*?)(?=\n\s*##|$)/
   const matches = normalizedText?.match(overviewPattern)
   let extractedText =
@@ -56,39 +57,14 @@ export const extractDescription = (text?: string) => {
       ? matches[1].trim()
       : normalizedText?.slice(0, 500).trim()
 
-  // Remove image markdown syntax ![alt text](image-url)
   extractedText = extractedText?.replace(/!\[.*?\]\(.*?\)/g, '')
-
-  // Remove <img> HTML tags
   extractedText = extractedText?.replace(/<img[^>]*>/g, '')
 
   return extractedText
 }
-/**
- * Remove YAML (HF metadata) front matter from content
- * @param content
- * @returns
- */
-export const removeYamlFrontMatter = (content: string): string => {
-  return content.replace(/^---\n([\s\S]*?)\n---\n/, '')
-}
 
-/**
- * Extract model name from repo path, e.g. cortexso/tinyllama -> tinyllama
- * @param modelId
- * @returns
- */
 export const extractModelName = (model?: string) => {
   return model?.split('/')[1] ?? model
-}
-
-/**
- * Extract model name from repo path, e.g. https://huggingface.co/cortexso/tinyllama -> cortexso/tinyllama
- * @param modelId
- * @returns
- */
-export const extractModelRepo = (model?: string) => {
-  return model?.replace('https://huggingface.co/', '')
 }
 
 export function getModelContextLength(model?: { settings?: Record<string, { controller_props?: { value?: unknown } }> }): number | undefined {
@@ -101,4 +77,14 @@ export function getModelContextLength(model?: { settings?: Record<string, { cont
     return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
   }
   return undefined
+}
+
+export function getPreferredMmprojPath(
+  mmprojModels?: MMProjModel[]
+): string | undefined {
+  return (
+    mmprojModels?.find(
+      (model) => model.model_id.toLowerCase() === 'mmproj-f16'
+    ) ?? mmprojModels?.[0]
+  )?.path
 }

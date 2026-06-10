@@ -1,10 +1,10 @@
 /**
  * ChatInputToolbar — the bottom action bar of ChatInput.
  *
- * Renders: attachment dropdown, capability toggles (tools, memory, reasoning),
+ * Renders: attachment dropdown, capability toggles (tools, reasoning),
  * token counter, and the send/stop button. Pure UI — no data fetching.
  */
-import { memo } from 'react'
+import { memo, type ComponentType, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -21,37 +21,54 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu'
-import { AppWindowIcon, ArrowUp, Atom, Brain, Database, GitFork, ImagePlus, Loader2, Paperclip, PlusIcon, SearchIcon, Square, User, Wrench, Binary } from "lucide-react";
+import { ArrowUp, Atom, Binary, Database, ImagePlus, Loader2, Paperclip, PlusIcon, SearchIcon, Square, type LucideIcon, User, Wrench } from "lucide-react";
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { TokenCounter } from '@/components/TokenCounter'
 import { AvatarEmoji } from '@/components/common/AvatarEmoji'
 import DropdownToolsAvailable from '@/containers/DropdownToolsAvailable'
 import { McpExtensionToolLoader } from '@/containers/McpExtensionToolLoader'
-import type { ThreadMessage } from '@ax-studio/core'
-import type { MCPTool } from '@/types/completion'
-
-const ARTIFACT_PROMPTS = [
-  { label: 'HTML Page',        prompt: 'Build an artifact-html page for '            },
-  { label: 'React Component',  prompt: 'Build an artifact-react component for '      },
-  { label: 'SVG Graphic',      prompt: 'Create an artifact-svg illustration of '     },
-  { label: 'Chart.js Chart',   prompt: 'Create an artifact-chartjs chart showing '   },
-  { label: 'Vega-Lite Chart',  prompt: 'Create an artifact-vega chart showing '      },
-] as const
-
-const DIAGRAM_PROMPTS = [
-  { label: 'Flowchart',        prompt: 'Draw a flowchart for '                        },
-  { label: 'Sequence Diagram', prompt: 'Draw a sequence diagram showing '             },
-  { label: 'Class Diagram',    prompt: 'Draw a class diagram for '                    },
-  { label: 'ER Diagram',       prompt: 'Draw an ER diagram for '                      },
-  { label: 'State Machine',    prompt: 'Draw a state diagram for '                    },
-  { label: 'Gantt Chart',      prompt: 'Create a Gantt chart for '                    },
-  { label: 'Mind Map',         prompt: 'Create a mind map for '                       },
-] as const
+import type { MCPToolComponentProps, ThreadMessage } from '@ax-studio/core'
+import type { MCPTool } from '@/types/mcp'
 
 const RESEARCH_PROMPTS = [
   { label: 'Standard', prompt: '/research:standard ', description: 'Balanced depth with page scraping' },
   { label: 'Deep',     prompt: '/research:deep ',     description: 'Thorough multi-level research'     },
 ] as const
+
+type ToolbarIconButtonProps = {
+  icon: LucideIcon
+  tooltip: ReactNode
+  iconClassName?: string
+  buttonClassName?: string
+  onClick?: () => void
+  children?: ReactNode
+}
+
+function ToolbarIconButton({
+  icon: Icon,
+  tooltip,
+  iconClassName,
+  buttonClassName,
+  onClick,
+  children,
+}: ToolbarIconButtonProps) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className={buttonClassName}
+          onClick={onClick}
+        >
+          <Icon size={18} className={iconClassName} />
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
+  )
+}
 
 type Props = {
   // Layout state
@@ -74,16 +91,11 @@ type Props = {
   // MCP tools
   tools: MCPTool[]
   hasActiveMCPServers: boolean
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  MCPToolComponent: any
+  MCPToolComponent?: ComponentType<MCPToolComponentProps> | null
   dropdownToolsAvailable: boolean
   setDropdownToolsAvailable: (v: boolean) => void
   tooltipToolsAvailable: boolean
   setTooltipToolsAvailable: (v: boolean) => void
-  // Memory
-  isMemoryEnabled: boolean
-  toggleMemory: () => void
-  memoryCount: number
   // Local knowledge
   isLocalKnowledgeEnabled: boolean
   toggleLocalKnowledge: () => void
@@ -93,6 +105,7 @@ type Props = {
   // Actions
   stopStreaming: (threadId: string) => void
   handleSendMessage: (prompt: string) => Promise<void>
+  submitCurrentPrompt?: () => void
   onAttachDocuments?: () => void
   onAttachImages?: () => void
   ingestingDocs?: boolean
@@ -119,20 +132,19 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
   setDropdownToolsAvailable,
   tooltipToolsAvailable,
   setTooltipToolsAvailable,
-  isMemoryEnabled,
-  toggleMemory,
-  memoryCount,
   isLocalKnowledgeEnabled,
   toggleLocalKnowledge,
   tokenCounterCompact,
   threadMessages,
   stopStreaming,
   handleSendMessage,
+  submitCurrentPrompt,
   onAttachDocuments,
   onAttachImages,
   ingestingDocs,
 }: Props) {
   const { t } = useTranslation()
+  const selectedModelHasTools = selectedModel?.capabilities?.includes('tools') ?? false
 
   const applyQuickPrompt = (value: string) => {
     setPrompt(value)
@@ -240,32 +252,6 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                 )}
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger>
-                    <AppWindowIcon size={18} className="text-muted-foreground" />
-                    <span>Generate Artifact</span>
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    {ARTIFACT_PROMPTS.map(({ label, prompt: p }) => (
-                      <DropdownMenuItem key={label} onClick={() => applyQuickPrompt(p)}>
-                        <span>{label}</span>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <GitFork size={18} className="text-muted-foreground" />
-                    <span>Generate Diagram</span>
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    {DIAGRAM_PROMPTS.map(({ label, prompt: p }) => (
-                      <DropdownMenuItem key={label} onClick={() => applyQuickPrompt(p)}>
-                        <span>{label}</span>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
                     <SearchIcon size={18} className="text-muted-foreground" />
                     <span>Deep Research</span>
                   </DropdownMenuSubTrigger>
@@ -284,22 +270,19 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
             </DropdownMenu>
 
             {selectedModel?.capabilities?.includes('embeddings') && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon-xs">
-                    <Binary size={18} className="text-muted-foreground" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent><p>{t('embeddings')}</p></TooltipContent>
-              </Tooltip>
+              <ToolbarIconButton
+                icon={Binary}
+                iconClassName="text-muted-foreground"
+                tooltip={<p>{t('embeddings')}</p>}
+              />
             )}
 
-            {selectedModel?.capabilities?.includes('tools') && hasActiveMCPServers && (
-              MCPToolComponent ? (
+            {hasActiveMCPServers && (
+              selectedModelHasTools && MCPToolComponent ? (
                 <McpExtensionToolLoader
                   tools={tools}
                   hasActiveMCPServers={hasActiveMCPServers}
-                  selectedModelHasTools={selectedModel?.capabilities?.includes('tools') ?? false}
+                  selectedModelHasTools={selectedModelHasTools}
                   initialMessage={initialMessage}
                   threadId={effectiveThreadId}
                   MCPToolComponent={MCPToolComponent}
@@ -328,53 +311,30 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                       </DropdownToolsAvailable>
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent><p>{t('tools')}</p></TooltipContent>
+                  <TooltipContent>
+                    <p>
+                      {selectedModelHasTools
+                        ? t('tools')
+                        : 'Tools available, but the selected model is not marked as tool-capable'}
+                    </p>
+                  </TooltipContent>
                 </Tooltip>
               )
             )}
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon-xs" className="relative" onClick={() => toggleMemory()}>
-                  <Brain
-                    size={18}
-                    className={cn(isMemoryEnabled ? 'text-primary' : 'text-muted-foreground')}
-                  />
-                  {memoryCount > 0 && (
-                    <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-0.5 text-[10px] font-medium text-primary-foreground">
-                      {memoryCount}
-                    </span>
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{isMemoryEnabled ? `Memory (${memoryCount})` : 'Memory'}</p>
-              </TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon-xs" onClick={() => toggleLocalKnowledge()}>
-                  <Database
-                    size={18}
-                    className={cn(isLocalKnowledgeEnabled ? 'text-primary' : 'text-muted-foreground')}
-                  />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Local Knowledge{isLocalKnowledgeEnabled ? ' (active)' : ''}</p>
-              </TooltipContent>
-            </Tooltip>
+            <ToolbarIconButton
+              icon={Database}
+              iconClassName={cn(isLocalKnowledgeEnabled ? 'text-primary' : 'text-muted-foreground')}
+              tooltip={<p>Local Knowledge{isLocalKnowledgeEnabled ? ' (active)' : ''}</p>}
+              onClick={toggleLocalKnowledge}
+            />
 
             {selectedModel?.capabilities?.includes('reasoning') && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon-xs">
-                    <Atom size={18} className="text-muted-foreground" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent><p>{t('reasoning')}</p></TooltipContent>
-              </Tooltip>
+              <ToolbarIconButton
+                icon={Atom}
+                iconClassName="text-muted-foreground"
+                tooltip={<p>{t('reasoning')}</p>}
+              />
             )}
           </div>
         </div>
@@ -405,9 +365,15 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
             <Button
               variant="default"
               size="icon-sm"
-              disabled={!prompt.trim() || ingestingDocs}
+              disabled={ingestingDocs}
               data-test-id="send-message-button"
-              onClick={() => handleSendMessage(prompt)}
+              onClick={() => {
+                if (submitCurrentPrompt) {
+                  submitCurrentPrompt()
+                } else {
+                  void handleSendMessage(prompt)
+                }
+              }}
               className="rounded-full mr-1 mb-1 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white border-0 shadow-sm"
             >
               <ArrowUp className="text-white" />

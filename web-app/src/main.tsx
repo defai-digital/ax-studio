@@ -1,14 +1,28 @@
 import { StrictMode } from 'react'
 import ReactDOM from 'react-dom/client'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
+import { Channel, invoke } from '@tauri-apps/api/core'
 import {
   hideInitialLoader,
   patchBlobDownloads,
   preventDefaultFileDrop,
   showStartupError,
 } from '@/lib/bootstrap/app-startup'
+import { ensureCoreBridge } from '@/lib/bootstrap/core-bridge'
 
 import './index.css'
+
+ensureCoreBridge({ withEvents: true })
+
+// Dev convenience: expose the Tauri IPC primitives on `window.__ax` so dev
+// console snippets (and future debugging tools) can construct typed channels
+// and call commands without re-importing `@tauri-apps/api/core` from outside
+// the bundle. Bundle size cost is negligible — `Channel` and `invoke` are
+// already imported by the chat transport.
+;(window as unknown as { __ax?: { Channel: typeof Channel; invoke: typeof invoke } }).__ax = {
+  Channel,
+  invoke,
+}
 
 // Prevent files from opening when dropped
 const cleanupFileDropGuards = preventDefaultFileDrop()
@@ -24,6 +38,7 @@ if (!rootElement) {
 
 const bootstrap = async () => {
   try {
+    console.info('[app] bootstrap started')
     // Ensure the window has input focus — on macOS 15 with transparent
     // Tauri windows the WebKit view can start without being the first responder.
     if ('__TAURI__' in window) {
@@ -35,19 +50,24 @@ const bootstrap = async () => {
       import('./routeTree.gen'),
       import('./i18n'),
     ])
+    console.info('[app] router and i18n ready')
     const router = createRouter({ routeTree })
-    if (!rootElement.innerHTML) {
-      const root = ReactDOM.createRoot(rootElement)
-      root.render(
-        <StrictMode>
-          <RouterProvider router={router} />
-        </StrictMode>
-      )
-    }
+    rootElement.innerHTML = ''
+    const root = ReactDOM.createRoot(rootElement)
+    requestAnimationFrame(() => {
+      hideInitialLoader()
+    })
+    root.render(
+      <StrictMode>
+        <RouterProvider router={router} />
+      </StrictMode>
+    )
+    console.info('[app] React root rendered')
   } catch (error) {
     console.error('Failed to initialize app:', error)
     showStartupError()
     hideInitialLoader()
+    console.error('[app] bootstrap failed:', error)
   }
 }
 

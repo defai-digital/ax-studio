@@ -1,20 +1,8 @@
-import { invoke } from '@tauri-apps/api/core'
 import type { ResearchSource } from '@/hooks/research/useResearchPanel'
+import { getDomain, openUrl } from '@/lib/utils/url'
 
 interface SourcesListProps {
   sources: ResearchSource[]
-}
-
-function getDomain(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '')
-  } catch {
-    return url
-  }
-}
-
-function openUrl(url: string) {
-  invoke('plugin:opener|open_url', { url }).catch(console.warn)
 }
 
 export function SourcesList({ sources }: SourcesListProps) {

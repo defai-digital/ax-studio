@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
-import { createSafeJSONStorage } from '@/lib/storage'
+import { createSafeJSONStorage } from '@/lib/storage/storage'
 
 interface RouterSettingsState {
   /** Global toggle */
@@ -63,8 +63,9 @@ export const useRouterSettings = create<RouterSettingsState>()(
 
       clearThreadOverride: (threadId) =>
         set((state) => {
-          const { [threadId]: _, ...rest } = state.threadOverrides
-          return { threadOverrides: rest }
+          const updated = { ...state.threadOverrides }
+          delete updated[threadId]
+          return { threadOverrides: updated }
         }),
 
       isAutoRouteEnabled: (threadId?: string) => {

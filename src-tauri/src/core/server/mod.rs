@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod cors;
 pub mod gateway_routes;
 pub mod model_routes;
 pub mod provider_adapter;

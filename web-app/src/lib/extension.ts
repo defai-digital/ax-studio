@@ -1,6 +1,7 @@
 import { AIEngine, BaseExtension, ExtensionTypeEnum } from '@ax-studio/core'
 
 import { getServiceHub } from '@/hooks/useServiceHub'
+import { ensureCoreBridge } from '@/lib/bootstrap/core-bridge'
 
 /**
  * Extension manifest object.
@@ -94,8 +95,8 @@ export class ExtensionManager {
   }
 
   /**
-   * Retrieves a extension by its type.
-   * @param type - The type of the extension to retrieve.
+   * Retrieves a registered extension by its name.
+   * @param name - The name of the extension to retrieve.
    * @returns The extension, if found.
    */
   getByName(name: string): BaseExtension | undefined {
@@ -103,9 +104,8 @@ export class ExtensionManager {
   }
 
   /**
-   * Retrieves a extension by its type.
-   * @param type - The type of the extension to retrieve.
-   * @returns The extension, if found.
+   * Returns all registered extensions.
+   * @returns An array of all registered extensions.
    */
   getAll(): BaseExtension[] {
     return Array.from(this.extensions.values())
@@ -185,8 +185,15 @@ export class ExtensionManager {
     }
     
     // Import class for Tauri extensions
-    const extensionUrl = extension.url
+    let extensionUrl = extension.url
     try {
+      if (!/^(?:[a-z]+:|\/|[A-Za-z]:[\\/])/.test(extensionUrl)) {
+        const extensionsPath = await getServiceHub()
+          .core()
+          .invoke<string>('get_app_extensions_path')
+        extensionUrl = `${extensionsPath}/${extensionUrl}`
+      }
+
       const extensionClass = await import(/* @vite-ignore */ getServiceHub().core().convertFileSrc(extensionUrl))
       // Register class if it has a default export
       if (
@@ -262,10 +269,7 @@ export class ExtensionManager {
    * Shared instance of ExtensionManager.
    */
   static getInstance() {
-    const core = window.core
-    if (!core) {
-      throw new Error('window.core is not initialized')
-    }
+    const core = ensureCoreBridge({ withApi: true, withEvents: true })
     if (!core.extensionManager) {
       core.extensionManager = new ExtensionManager()
     }

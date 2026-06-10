@@ -8,6 +8,7 @@ import { ShieldCheck, Globe, Cpu, Cloud } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { useGuardrails, type DataMode } from '@/hooks/settings/useGuardrails'
+import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { Badge } from '@/components/ui/badge'
 
@@ -73,27 +74,7 @@ function Guardrails() {
           className="flex-1 overflow-y-auto"
           style={{ scrollbarWidth: 'none' }}
         >
-          <div className="flex items-center gap-3 px-8 py-5 border-b border-border/40 bg-background sticky top-0 z-10">
-            <div
-              className="size-7 rounded-lg flex items-center justify-center"
-              style={{
-                background: 'linear-gradient(135deg, #059669, #10b981)',
-              }}
-            >
-              <ShieldCheck className="size-3.5 text-white" strokeWidth={2.5} />
-            </div>
-            <div>
-              <h1
-                className="text-foreground tracking-tight"
-                style={{ fontSize: '16px', fontWeight: 600 }}
-              >
-                Workspace Guardrails
-              </h1>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                Control what your AI can and cannot do
-              </p>
-            </div>
-          </div>
+          <SettingsPageLayout icon={ShieldCheck} title="Workspace Guardrails" subtitle="Control what your AI can and cannot do" gradient="linear-gradient(135deg, #059669, #10b981)" />
           <div className="px-8 py-7">
             <div className="max-w-2xl space-y-6">
               {/* Data Rules */}

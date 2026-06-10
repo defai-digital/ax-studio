@@ -10,12 +10,7 @@ use serde_json::Value;
 use std::{collections::HashMap, env, process::Stdio, sync::Arc, time::Duration};
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_http::reqwest;
-use tokio::{
-    io::AsyncReadExt,
-    process::Command,
-    sync::Mutex,
-    time::timeout,
-};
+use tokio::{io::AsyncReadExt, net::lookup_host, process::Command, sync::Mutex, time::timeout};
 
 #[cfg(windows)]
 use crate::core::mcp::constants::CREATE_NO_WINDOW;
@@ -36,21 +31,45 @@ const DANGEROUS_ENV_KEYS: &[&str] = &[
     "DYLD_LIBRARY_PATH",
 ];
 
-fn is_internal_url(url: &str) -> bool {
-    let parsed = match url::Url::parse(url) {
-        Ok(p) => p,
-        Err(_) => return true,
-    };
-    if !matches!(parsed.scheme(), "http" | "https") {
-        return true;
+async fn validate_external_transport_url(
+    server_name: &str,
+    transport_kind: &str,
+    transport_url: &str,
+) -> Result<(), String> {
+    if transport_url.is_empty() {
+        return Err(format!(
+            "Missing MCP {transport_kind} URL for server {server_name}"
+        ));
     }
-    match parsed.host() {
-        Some(url::Host::Domain("localhost")) => true,
-        Some(url::Host::Ipv4(ip)) => ip.is_loopback() || ip.is_private() || ip.is_link_local() || ip.is_unspecified(),
-        Some(url::Host::Ipv6(ip)) => ip.is_loopback() || ip.is_unspecified(),
-        Some(url::Host::Domain(_)) => false,
-        None => true,
+
+    if ax_studio_utils::is_internal_url(transport_url) {
+        return Err(format!(
+            "MCP {transport_kind} URL for server {server_name} points to an internal/private address, which is not allowed"
+        ));
     }
+
+    let parsed = reqwest::Url::parse(transport_url)
+        .map_err(|e| format!("Invalid MCP {transport_kind} URL for server {server_name}: {e}"))?;
+    let host = parsed.host_str().ok_or_else(|| {
+        format!("MCP {transport_kind} URL for server {server_name} is missing a host")
+    })?;
+    let port = parsed.port_or_known_default().ok_or_else(|| {
+        format!("MCP {transport_kind} URL for server {server_name} is missing a port")
+    })?;
+
+    let addrs = lookup_host((host, port)).await.map_err(|e| {
+        format!("Failed to resolve MCP {transport_kind} URL for server {server_name}: {e}")
+    })?;
+
+    for addr in addrs {
+        if ax_studio_utils::is_private_ip(addr.ip()) {
+            return Err(format!(
+                "MCP {transport_kind} URL for server {server_name} resolves to an internal/private address, which is not allowed"
+            ));
+        }
+    }
+
+    Ok(())
 }
 
 // Re-export ShutdownContext so existing `use super::helpers::ShutdownContext`
@@ -105,10 +124,7 @@ pub async fn run_mcp_commands<R: Runtime>(
     let app_path = get_app_data_folder_path(app.clone());
     let app_path_str = app_path.to_string_lossy().to_string();
     let config_path = app_path_str.clone() + "/mcp_config.json";
-    log::trace!(
-        "Load MCP configs from {}",
-        config_path
-    );
+    log::trace!("Load MCP configs from {}", config_path);
     let config_content = tokio::task::spawn_blocking(move || std::fs::read_to_string(config_path))
         .await
         .map_err(|e| format!("Failed to read MCP config: {e}"))?
@@ -257,16 +273,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
 
     if config_params.transport_type.as_deref() == Some("http") && config_params.url.is_some() {
         let transport_url = config_params.url.as_deref().unwrap_or("");
-        if transport_url.is_empty() {
-            return Err(format!(
-                "Missing MCP HTTP URL for server {name}"
-            ));
-        }
-        if is_internal_url(transport_url) {
-            return Err(format!(
-                "MCP HTTP URL for server {name} points to an internal/private address, which is not allowed"
-            ));
-        }
+        validate_external_transport_url(&name, "HTTP", transport_url).await?;
         let transport = StreamableHttpClientTransport::with_client(
             reqwest::Client::builder()
                 .default_headers({
@@ -331,14 +338,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
     } else if config_params.transport_type.as_deref() == Some("sse") && config_params.url.is_some()
     {
         let transport_url = config_params.url.as_deref().unwrap_or("");
-        if transport_url.is_empty() {
-            return Err(format!("Missing MCP SSE URL for server {name}"));
-        }
-        if is_internal_url(transport_url) {
-            return Err(format!(
-                "MCP SSE URL for server {name} points to an internal/private address, which is not allowed"
-            ));
-        }
+        validate_external_transport_url(&name, "SSE", transport_url).await?;
         let transport = SseClientTransport::start_with_client(
             reqwest::Client::builder()
                 .default_headers({
@@ -412,14 +412,13 @@ async fn schedule_mcp_start_task<R: Runtime>(
         // custom PATH) are applied.  This prevents an attacker-controlled
         // PATH from redirecting a whitelisted binary name to a malicious
         // executable.
-        let resolved_command = if config_params.command.contains('/')
-            || config_params.command.contains('\\')
-        {
-            config_params.command.clone()
-        } else {
-            resolve_command_from_default_path(&config_params.command)
-                .unwrap_or_else(|| config_params.command.clone())
-        };
+        let resolved_command =
+            if config_params.command.contains('/') || config_params.command.contains('\\') {
+                config_params.command.clone()
+            } else {
+                resolve_command_from_default_path(&config_params.command)
+                    .unwrap_or_else(|| config_params.command.clone())
+            };
         let mut cmd = Command::new(resolved_command);
         let bun_x_path = if cfg!(windows) {
             bin_path.join("bun.exe")
@@ -460,7 +459,15 @@ async fn schedule_mcp_start_task<R: Runtime>(
         // Expand ~ to the user's home directory in args (shells do this
         // automatically, but direct process spawning does not).
         let home = dirs::home_dir();
-        let dangerous_flags = ["-c", "-e", "--eval", "--command", "-i", "--interactive", "--exec"];
+        let dangerous_flags = [
+            "-c",
+            "-e",
+            "--eval",
+            "--command",
+            "-i",
+            "--interactive",
+            "--exec",
+        ];
         config_params
             .args
             .iter()
@@ -609,18 +616,22 @@ pub fn extract_command_args(config: &Value) -> Option<McpServerConfig> {
     // Filter out dangerous environment variables
     envs.retain(|k, _| !DANGEROUS_ENV_KEYS.contains(&k.as_str()));
 
-    // Filter dangerous env VALUES that could override critical paths
-    const DANGEROUS_ENV_VALUE_PREFIXES: &[&str] = &[
-        "HOME=", "PATH=", "USER=", "SHELL=", "TMPDIR=", "TEMP=", "TMP=",
-        "APPDATA=", "PROGRAMFILES=", "SYSTEMROOT=", "LD_PRELOAD=",
+    // Block env overrides for security-sensitive variables.  PATH is
+    // intentionally absent — MCP servers with custom toolchains (e.g. uvx)
+    // need a custom PATH to locate their interpreter.
+    const BLOCKED_ENV_KEYS_BY_VALUE: &[&str] = &[
+        "home=", "user=", "shell=", "tmpdir=", "temp=", "tmp=",
+        "appdata=", "programfiles=", "systemroot=", "ld_preload=",
     ];
     envs.retain(|k, v| {
         let v_str = match v.as_str() {
             Some(s) => s,
             None => return true,
         };
-        let entry = format!("{k}={v_str}");
-        !DANGEROUS_ENV_VALUE_PREFIXES.iter().any(|prefix| entry.eq_ignore_ascii_case(prefix))
+        let entry = format!("{k}={v_str}").to_ascii_lowercase();
+        !BLOCKED_ENV_KEYS_BY_VALUE
+            .iter()
+            .any(|prefix| entry.starts_with(prefix))
     });
 
     Some(McpServerConfig {
@@ -739,26 +750,25 @@ mod tests {
             "env": {
                 "NODE_ENV": "production",
                 "LD_PRELOAD": "/evil/lib.so",
-                "PATH": "/evil/path",
+                "PATH": "/custom/tools:/usr/bin",
+                "HOME": "/evil/home",
+                "USER": "evil",
+                "SHELL": "/bin/evil",
                 "SAFE_VAR": "safe"
             }
         });
         let result = extract_command_args(&config).unwrap();
-        assert_eq!(
-            result.envs.get("NODE_ENV").unwrap().as_str().unwrap(),
-            "production"
-        );
-        assert_eq!(
-            result.envs.get("SAFE_VAR").unwrap().as_str().unwrap(),
-            "safe"
-        );
+        assert_eq!(result.envs.get("NODE_ENV").unwrap().as_str().unwrap(), "production");
+        assert_eq!(result.envs.get("SAFE_VAR").unwrap().as_str().unwrap(), "safe");
+        // Blocked by DANGEROUS_ENV_KEYS (key-level filter)
         assert!(result.envs.get("LD_PRELOAD").is_none());
+        // Blocked by BLOCKED_ENV_KEYS_BY_VALUE (key=value prefix filter)
+        assert!(result.envs.get("HOME").is_none());
+        assert!(result.envs.get("USER").is_none());
+        assert!(result.envs.get("SHELL").is_none());
         // PATH is intentionally allowed — MCP servers with custom toolchains
         // (e.g. uvx) need a custom PATH to locate their interpreter.
-        assert_eq!(
-            result.envs.get("PATH").unwrap().as_str().unwrap(),
-            "/evil/path"
-        );
+        assert_eq!(result.envs.get("PATH").unwrap().as_str().unwrap(), "/custom/tools:/usr/bin");
     }
 
     #[test]
@@ -817,6 +827,75 @@ mod tests {
         let config = serde_json::json!(42);
         assert_eq!(extract_active_status(&config), None);
     }
+
+    // --- restart_active_mcp_servers: config parsing contract ---
+    //
+    // restart_active_mcp_servers spawns async tasks that call start_mcp_server.
+    // The full restart path requires a Tauri AppHandle and cannot be exercised as
+    // a synchronous unit test.  The tests below verify the pure helper contracts
+    // that the restart path depends on: config must be parseable and the server
+    // name must survive the clone into the spawned task.
+
+    #[test]
+    fn test_restart_config_must_have_command_or_url() {
+        // A config with no command and no url cannot start a server.
+        // extract_command_args returning None is what gates this.
+        let bad_config = serde_json::json!({ "args": [] });
+        assert!(
+            extract_command_args(&bad_config).is_none(),
+            "config without command or url must not produce a valid command spec"
+        );
+    }
+
+    #[test]
+    fn test_restart_server_name_clone_is_independent() {
+        // Verifies that cloning a server name for the spawned task log message
+        // produces an independent String (not a reference into the original).
+        let original = "my-mcp-server".to_string();
+        let cloned_for_task = original.clone();
+        let cloned_for_log = cloned_for_task.clone();
+        drop(cloned_for_task); // simulate name being moved into start_mcp_server
+        assert_eq!(
+            cloned_for_log, "my-mcp-server",
+            "name clone for error log must remain valid after task clone is consumed"
+        );
+    }
+
+    #[test]
+    fn test_restart_http_server_config_is_valid() {
+        // An HTTP MCP server config with empty command must still be accepted —
+        // restart must not silently skip HTTP servers.
+        let http_config = serde_json::json!({
+            "command": "",
+            "args": [],
+            "type": "http",
+            "url": "https://mcp.example.com/mcp"
+        });
+        let args = extract_command_args(&http_config);
+        assert!(
+            args.is_some(),
+            "HTTP server config must be parseable for restart"
+        );
+        let args = args.unwrap();
+        assert_eq!(args.transport_type.as_deref(), Some("http"));
+        assert!(args.url.is_some());
+    }
+
+    #[test]
+    fn test_restart_stdio_server_config_is_valid() {
+        // A stdio MCP server config must be parseable for restart.
+        let stdio_config = serde_json::json!({
+            "command": "node",
+            "args": ["server.js"],
+            "env": {}
+        });
+        let args = extract_command_args(&stdio_config);
+        assert!(
+            args.is_some(),
+            "stdio server config must be parseable for restart"
+        );
+        assert_eq!(args.unwrap().command, "node");
+    }
 }
 
 /// Restart only servers that were previously active (like cortex restart behavior)
@@ -842,7 +921,12 @@ pub async fn restart_active_mcp_servers<R: Runtime>(
         let config_clone = config.clone();
 
         tauri::async_runtime::spawn(async move {
-            let _ = start_mcp_server(app_clone, servers_clone, name_clone, config_clone).await;
+            let name_for_log = name_clone.clone();
+            if let Err(e) =
+                start_mcp_server(app_clone, servers_clone, name_clone, config_clone).await
+            {
+                log::error!("MCP server '{name_for_log}' failed to restart: {e}");
+            }
         });
     }
 

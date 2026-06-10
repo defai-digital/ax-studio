@@ -93,6 +93,7 @@ vi.mock('@/stores/chat-session-store', () => {
       getState: vi.fn(() => ({
         sessions: {},
         getSessionData: () => mockSessionData,
+        ensureSessionData: () => mockSessionData,
       })),
       setState: vi.fn(),
       subscribe: vi.fn(),
@@ -121,15 +122,7 @@ describe('useThreadTools', () => {
     expect(typeof result.current.followUpMessage).toBe('function')
     expect(typeof result.current.onToolCall).toBe('function')
     expect(typeof result.current.startToolExecution).toBe('function')
-    expect(typeof result.current.onCostApproval).toBe('function')
-    expect(result.current.costApprovalState).toBeNull()
-    expect(typeof result.current.setCostApprovalState).toBe('function')
-    expect(Array.isArray(result.current.agentTeams)).toBe(true)
-    expect(result.current.activeTeamId).toBeUndefined()
-    expect(result.current.activeTeam).toBeUndefined()
-    expect(typeof result.current.showVariablePrompt).toBe('boolean')
-    expect(typeof result.current.handleVariableSubmit).toBe('function')
-    expect(typeof result.current.handleTeamChange).toBe('function')
+    expect(typeof result.current.resetTurnState).toBe('function')
   })
 
   describe('followUpMessage', () => {
@@ -239,133 +232,6 @@ describe('useThreadTools', () => {
         })
       })
       // Should not throw
-    })
-  })
-
-  describe('onCostApproval', () => {
-    it('returns a promise and sets costApprovalState', async () => {
-      const { result } = renderHook(() =>
-        useThreadTools({ threadId, projectId: undefined })
-      )
-
-      let promise: Promise<boolean> | undefined
-
-      act(() => {
-        promise = result.current.onCostApproval({
-          totalCost: 0.5,
-          inputTokens: 1000,
-          outputTokens: 500,
-        } as any) // eslint-disable-line @typescript-eslint/no-explicit-any
-      })
-
-      expect(result.current.costApprovalState).not.toBeNull()
-      expect(result.current.costApprovalState!.estimate).toEqual({
-        totalCost: 0.5,
-        inputTokens: 1000,
-        outputTokens: 500,
-      })
-
-      // Resolve the approval
-      act(() => {
-        result.current.costApprovalState!.resolve(true)
-      })
-
-      const approved = await promise
-      expect(approved).toBe(true)
-    })
-  })
-
-  describe('agent team state', () => {
-    it('returns empty agentTeams array', () => {
-      const { result } = renderHook(() =>
-        useThreadTools({ threadId, projectId: undefined })
-      )
-
-      expect(result.current.agentTeams).toEqual([])
-    })
-
-    it('returns undefined activeTeamId when thread has no team', () => {
-      const { result } = renderHook(() =>
-        useThreadTools({ threadId, projectId: undefined })
-      )
-
-      expect(result.current.activeTeamId).toBeUndefined()
-    })
-
-    it('teamHasVariables is false when no active team', () => {
-      const { result } = renderHook(() =>
-        useThreadTools({ threadId, projectId: undefined })
-      )
-
-      expect(result.current.teamHasVariables).toBe(false)
-    })
-
-    it('variablesFilled is false when no thread metadata', () => {
-      const { result } = renderHook(() =>
-        useThreadTools({ threadId, projectId: undefined })
-      )
-
-      expect(result.current.variablesFilled).toBe(false)
-    })
-
-    it('showVariablePrompt defaults to false', () => {
-      const { result } = renderHook(() =>
-        useThreadTools({ threadId, projectId: undefined })
-      )
-
-      expect(result.current.showVariablePrompt).toBe(false)
-    })
-
-    it('setShowVariablePrompt updates state', () => {
-      const { result } = renderHook(() =>
-        useThreadTools({ threadId, projectId: undefined })
-      )
-
-      act(() => {
-        result.current.setShowVariablePrompt(true)
-      })
-
-      expect(result.current.showVariablePrompt).toBe(true)
-    })
-
-    it('teamTokensUsed defaults to 0', () => {
-      const { result } = renderHook(() =>
-        useThreadTools({ threadId, projectId: undefined })
-      )
-
-      expect(result.current.teamTokensUsed).toBe(0)
-    })
-
-    it('setTeamTokensUsed updates state', () => {
-      const { result } = renderHook(() =>
-        useThreadTools({ threadId, projectId: undefined })
-      )
-
-      act(() => {
-        result.current.setTeamTokensUsed(1500)
-      })
-
-      expect(result.current.teamTokensUsed).toBe(1500)
-    })
-  })
-
-  describe('handleTeamChange', () => {
-    it('is a function', () => {
-      const { result } = renderHook(() =>
-        useThreadTools({ threadId, projectId: undefined })
-      )
-
-      expect(typeof result.current.handleTeamChange).toBe('function')
-    })
-  })
-
-  describe('handleVariableSubmit', () => {
-    it('is a function', () => {
-      const { result } = renderHook(() =>
-        useThreadTools({ threadId, projectId: undefined })
-      )
-
-      expect(typeof result.current.handleVariableSubmit).toBe('function')
     })
   })
 

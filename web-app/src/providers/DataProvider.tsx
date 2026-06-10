@@ -16,6 +16,9 @@ import { bootstrapUpdater } from '@/lib/bootstrap/bootstrap-updater'
 import { bootstrapEvents } from '@/lib/bootstrap/bootstrap-events'
 import { bootstrapLocalApi } from '@/lib/bootstrap/bootstrap-local-api'
 import { syncRemoteProviders as syncRemoteProviderConfigs } from '@/lib/providers/provider-sync'
+import { encodeHubRouteParam } from '@/lib/hub'
+
+const PROVIDER_STARTUP_REFRESH_DELAYS_MS = [500, 1500, 3500, 7000] as const
 
 export function DataProvider() {
   const { setProviders, providers } = useModelProvider()
@@ -68,7 +71,7 @@ export function DataProvider() {
       // required, otherwise TanStack Router throws at runtime.
       navigate({
         to: route.hub.model,
-        params: { modelId: resource },
+        params: { modelId: encodeHubRouteParam(resource) },
         search: { repo: resource },
       })
     },
@@ -83,6 +86,7 @@ export function DataProvider() {
     let cleanupDeepLink: () => void = () => {}
     let cleanupEvents: () => void = () => {}
     let cleanupUpdater: () => void = () => {}
+    const providerStartupRefreshTimers: ReturnType<typeof setTimeout>[] = []
 
     bootstrapProviders({
       serviceHub,
@@ -119,6 +123,32 @@ export function DataProvider() {
 
     cleanupEvents = bootstrapEvents({ serviceHub, setProviders })
 
+    const refreshStartupProviders = () => {
+      serviceHub
+        .providers()
+        .getProviders()
+        .then((providers) => {
+          if (unmounted) return
+          setProviders(providers, serviceHub.path().sep())
+          // Also push the latest provider list to the Rust proxy's registry so
+          // it knows base_url + api_key + model_id mapping for every active
+          // remote provider. Without this, providers added after the initial
+          // bootstrap (e.g. the built-in `mlx` provider, or providers the user
+          // edits in Settings) never get registered with the proxy and chat
+          // requests for them fail with "No remote provider configured".
+          void syncRemoteProviders(providers).catch((error) => {
+            console.error('[DataProvider] startup remote provider sync failed:', error)
+          })
+        })
+        .catch((error) => {
+          console.error('[DataProvider] startup provider refresh failed:', error)
+        })
+    }
+
+    for (const delayMs of PROVIDER_STARTUP_REFRESH_DELAYS_MS) {
+      providerStartupRefreshTimers.push(setTimeout(refreshStartupProviders, delayMs))
+    }
+
     bootstrapLocalApi({
       serviceHub,
       enabled: enableOnStartup,
@@ -142,6 +172,7 @@ export function DataProvider() {
       cleanupDeepLink()
       cleanupEvents()
       cleanupUpdater()
+      providerStartupRefreshTimers.forEach(clearTimeout)
     }
     // serviceHub is stable for the app lifetime; other deps are store actions
     // (stable Zustand references) or config values captured once at startup.

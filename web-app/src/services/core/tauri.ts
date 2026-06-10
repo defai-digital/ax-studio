@@ -61,15 +61,4 @@ export class TauriCoreService implements CoreService {
       return false
     }
   }
-
-  // App token
-  async getAppToken(): Promise<string | null> {
-    try {
-      const result = await this.invoke<string | null>('app_token')
-      return result
-    } catch (error) {
-      console.error('Error getting app token in Tauri:', error)
-      return null
-    }
-  }
 }

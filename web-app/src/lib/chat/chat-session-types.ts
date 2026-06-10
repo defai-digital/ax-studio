@@ -3,13 +3,12 @@
  * Imported by the session store, session controller, and transport factory.
  * Must not import React or Zustand.
  */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Chat, UIMessage } from '@ai-sdk/react'
 import type { ChatStatus } from 'ai'
 import type { CustomChatTransport } from '@/lib/custom-chat-transport'
 
 export type SessionData = {
-  tools: any[]
+  tools: unknown[]
   messages: UIMessage[]
   idMap: Map<string, string>
 }

@@ -37,7 +37,6 @@ default = [
     "tauri/wry",
     "tauri/common-controls-v6",
     "tauri/protocol-asset",
-    "tauri/macos-private-api",
     "tauri/tray-icon",
     "tauri/test",
     "tauri/custom-protocol",
@@ -54,7 +53,6 @@ desktop = [
 test-tauri = [
     "tauri/wry",
     "tauri/protocol-asset",
-    "tauri/macos-private-api",
     "tauri/tray-icon",
     "tauri/test",
     "desktop",
@@ -62,13 +60,14 @@ test-tauri = [
 
 [build-dependencies]
 tauri-build = { version = "2.0.2", features = [] }
+sha2 = "0.10"
 
 [dependencies]
 dirs = "6.0.0"
 reqwest = { workspace = true, features = ["native-tls-vendored"] }
 tauri-plugin-updater = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
-fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs" }
+fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs", rev = "c4c45d503ea115a839aae718d02f79e7c7f0f673" }
 flate2 = "1.0"
 futures-util = "0.3.31"
 hex = "0.4"
@@ -92,7 +91,7 @@ serde_json = { workspace = true }
 serde_yaml = "0.9.34"
 sha2 = { workspace = true }
 tar = "0.4"
-zip = "0.6"
+zip = "2"
 tauri-plugin-deep-link = { version = "2", optional = true }
 tauri-plugin-hardware = { workspace = true, optional = true }
 tauri-plugin-llamacpp = { workspace = true, optional = true }
@@ -122,7 +121,7 @@ semver = "1"
 
 [dependencies.tauri]
 workspace = true
-features = ["protocol-asset", "macos-private-api", "test"]
+features = ["protocol-asset", "test"]
 
 [target.'cfg(windows)'.dev-dependencies]
 tempfile = "3.20.0"
@@ -135,15 +134,37 @@ nix = { workspace = true }
 libc = { workspace = true }
 windows-sys = { version = "0.60.2", features = ["Win32_Storage_FileSystem"] }
 
-# Release profile optimizations for minimal binary size
+# ── In-process AX Engine SDK (macOS-only native MLX runtime) ─────────────────
+# Linking ax-engine-sdk with the `mlx-native` feature pulls in ax-engine-mlx
+# and mlx-sys, which require Apple's MLX C++ library and the Metal toolchain.
+#
+# Pinned to a specific upstream commit SHA so every fresh clone builds the
+# exact same code we validated against. To pick up upstream fixes (e.g. when
+# defai-digital/ax-engine#23 / #24 land), update the `rev` deliberately —
+# do NOT use `branch = "main"`, which would silently auto-pull every new
+# commit and could break our integration without notice.
+[target.'cfg(target_os = "macos")'.dependencies]
+ax-engine-sdk = { git = "https://github.com/defai-digital/ax-engine", rev = "5ac0257bd18b3bea6efc3eb9a24f4ba7f8a08a0a", features = ["mlx-native", "tokenizer"] }
+# Direct `tokenizers` dep so we can decode generated token ids back to text —
+# EngineTokenizer (from ax-engine-sdk) only exposes `encode`. The SDK already
+# pulls this in transitively with matching features; declared here so we can
+# call it without going through the SDK wrapper.
+tokenizers = { version = "0.20", default-features = false, features = ["onig", "esaxx_fast"] }
+
+# Release profile optimized for inference throughput, not binary size.
+# Was `opt-level = "z"` (size) which adds ~3× decode latency on the MLX
+# compute path (matmul, attention, dequant). `opt-level = 3` matches the
+# ax-engine README benchmark setup ("production-build binaries, LTO,
+# codegen-units=1, panic=abort, stripped debuginfo") so AX Studio's
+# in-process ax-engine-mlx runs at the speed the upstream tables advertise.
 [profile.release]
-opt-level = "z"     # Optimize for size
-lto = "fat"         # Aggressive Link Time Optimization
-strip = "symbols"   # Strip debug symbols for smaller binary
-codegen-units = 1   # Reduce parallel codegen for better optimization
-panic = "abort"     # Don't unwind on panic, saves space
-overflow-checks = false  # Disable overflow checks for size
-debug = false       # No debug info
-debug-assertions = false  # No debug assertions
-incremental = false # Disable incremental compilation for release
-rpath = false       # Don't include rpath
+opt-level = 3       # Optimize for SPEED (compute-bound MLX kernels)
+lto = "fat"         # Whole-program optimization across crate boundaries
+strip = "symbols"   # Smaller binary, no perf impact
+codegen-units = 1   # Single codegen unit → better inlining
+panic = "abort"     # Matches ax-engine bench setup, no unwind overhead
+overflow-checks = false  # No bounds-check tax in tight loops
+debug = false
+debug-assertions = false
+incremental = false
+rpath = false

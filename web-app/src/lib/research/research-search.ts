@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core'
+import { getServiceHub } from '@/hooks/useServiceHub'
 import type { ResearchSource } from '@/hooks/research/useResearchPanel'
 import type { MCPToolCallResult, WikiSearchResult } from './research-types'
 
@@ -61,23 +61,33 @@ export async function exaSearch(
   const waitForTurn = exaQueue
   exaQueue = mySlot  // next caller will wait for this slot
 
-  await waitForTurn  // wait for our turn
+  await Promise.race([
+    waitForTurn,
+    new Promise<never>((_, reject) => {
+      if (signal?.aborted) reject(new DOMException('Aborted', 'AbortError'))
+      signal?.addEventListener(
+        'abort',
+        () => reject(new DOMException('Aborted', 'AbortError')),
+        { once: true }
+      )
+    }),
+  ])
   if (signal?.aborted) {
     unlockNext()
     throw new DOMException('Aborted', 'AbortError')
   }
 
+  let exaTimeoutId: ReturnType<typeof setTimeout> | undefined
   try {
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`Exa timed out after ${EXA_TIMEOUT_MS / 1000}s`)), EXA_TIMEOUT_MS)
-    )
     const result = await Promise.race([
-      invoke<MCPToolCallResult>('call_tool', {
+      getServiceHub().core().invoke<MCPToolCallResult>('call_tool', {
         toolName: 'web_search_exa',
         serverName: 'exa',
         arguments: { query: question, numResults },
       }),
-      timeoutPromise,
+      new Promise<never>((_, reject) => {
+        exaTimeoutId = setTimeout(() => reject(new Error(`Exa timed out after ${EXA_TIMEOUT_MS / 1000}s`)), EXA_TIMEOUT_MS)
+      }),
     ])
     return result
   } catch (err) {
@@ -86,7 +96,18 @@ export async function exaSearch(
     }
     throw err
   } finally {
-    await new Promise((r) => setTimeout(r, 500))
+    if (exaTimeoutId) clearTimeout(exaTimeoutId)
+    await new Promise<void>((resolve) => {
+      const gapTimer = setTimeout(resolve, 500)
+      signal?.addEventListener(
+        'abort',
+        () => {
+          clearTimeout(gapTimer)
+          resolve()
+        },
+        { once: true }
+      )
+    })
     unlockNext()  // release gate for the next caller
   }
 }

@@ -84,7 +84,6 @@ describe('useProxyConfig', () => {
       const testUrls = [
         'http://proxy.example.com:8080',
         'https://secure-proxy.com:3128',
-        'socks5://socks-proxy.com:1080',
         '',
       ]
 

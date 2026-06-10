@@ -16,7 +16,6 @@ import { Route as HubIndexRouteImport } from './routes/hub/index'
 import { Route as ThreadsThreadIdRouteImport } from './routes/threads/$threadId'
 import { Route as SettingsShortcutsRouteImport } from './routes/settings/shortcuts'
 import { Route as SettingsPrivacyRouteImport } from './routes/settings/privacy'
-import { Route as SettingsMemoryRouteImport } from './routes/settings/memory'
 import { Route as SettingsMcpServersRouteImport } from './routes/settings/mcp-servers'
 import { Route as SettingsLocalApiServerRouteImport } from './routes/settings/local-api-server'
 import { Route as SettingsLlmRouterRouteImport } from './routes/settings/llm-router'
@@ -29,7 +28,6 @@ import { Route as SettingsExtensionsRouteImport } from './routes/settings/extens
 import { Route as SettingsEngineSettingsRouteImport } from './routes/settings/engine-settings'
 import { Route as SettingsAttachmentsRouteImport } from './routes/settings/attachments'
 import { Route as SettingsAssistantRouteImport } from './routes/settings/assistant'
-import { Route as SettingsAgentTeamsRouteImport } from './routes/settings/agent-teams'
 import { Route as ProjectProjectIdRouteImport } from './routes/project/$projectId'
 import { Route as LocalApiServerLogsRouteImport } from './routes/local-api-server/logs'
 import { Route as HubModelIdRouteImport } from './routes/hub/$modelId'
@@ -69,11 +67,6 @@ const SettingsShortcutsRoute = SettingsShortcutsRouteImport.update({
 const SettingsPrivacyRoute = SettingsPrivacyRouteImport.update({
   id: '/settings/privacy',
   path: '/settings/privacy',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SettingsMemoryRoute = SettingsMemoryRouteImport.update({
-  id: '/settings/memory',
-  path: '/settings/memory',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsMcpServersRoute = SettingsMcpServersRouteImport.update({
@@ -136,11 +129,6 @@ const SettingsAssistantRoute = SettingsAssistantRouteImport.update({
   path: '/settings/assistant',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SettingsAgentTeamsRoute = SettingsAgentTeamsRouteImport.update({
-  id: '/settings/agent-teams',
-  path: '/settings/agent-teams',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ProjectProjectIdRoute = ProjectProjectIdRouteImport.update({
   id: '/project/$projectId',
   path: '/project/$projectId',
@@ -175,7 +163,6 @@ export interface FileRoutesByFullPath {
   '/hub/$modelId': typeof HubModelIdRoute
   '/local-api-server/logs': typeof LocalApiServerLogsRoute
   '/project/$projectId': typeof ProjectProjectIdRoute
-  '/settings/agent-teams': typeof SettingsAgentTeamsRoute
   '/settings/assistant': typeof SettingsAssistantRoute
   '/settings/attachments': typeof SettingsAttachmentsRoute
   '/settings/engine-settings': typeof SettingsEngineSettingsRoute
@@ -188,7 +175,6 @@ export interface FileRoutesByFullPath {
   '/settings/llm-router': typeof SettingsLlmRouterRoute
   '/settings/local-api-server': typeof SettingsLocalApiServerRoute
   '/settings/mcp-servers': typeof SettingsMcpServersRoute
-  '/settings/memory': typeof SettingsMemoryRoute
   '/settings/privacy': typeof SettingsPrivacyRoute
   '/settings/shortcuts': typeof SettingsShortcutsRoute
   '/threads/$threadId': typeof ThreadsThreadIdRoute
@@ -203,7 +189,6 @@ export interface FileRoutesByTo {
   '/hub/$modelId': typeof HubModelIdRoute
   '/local-api-server/logs': typeof LocalApiServerLogsRoute
   '/project/$projectId': typeof ProjectProjectIdRoute
-  '/settings/agent-teams': typeof SettingsAgentTeamsRoute
   '/settings/assistant': typeof SettingsAssistantRoute
   '/settings/attachments': typeof SettingsAttachmentsRoute
   '/settings/engine-settings': typeof SettingsEngineSettingsRoute
@@ -216,7 +201,6 @@ export interface FileRoutesByTo {
   '/settings/llm-router': typeof SettingsLlmRouterRoute
   '/settings/local-api-server': typeof SettingsLocalApiServerRoute
   '/settings/mcp-servers': typeof SettingsMcpServersRoute
-  '/settings/memory': typeof SettingsMemoryRoute
   '/settings/privacy': typeof SettingsPrivacyRoute
   '/settings/shortcuts': typeof SettingsShortcutsRoute
   '/threads/$threadId': typeof ThreadsThreadIdRoute
@@ -232,7 +216,6 @@ export interface FileRoutesById {
   '/hub/$modelId': typeof HubModelIdRoute
   '/local-api-server/logs': typeof LocalApiServerLogsRoute
   '/project/$projectId': typeof ProjectProjectIdRoute
-  '/settings/agent-teams': typeof SettingsAgentTeamsRoute
   '/settings/assistant': typeof SettingsAssistantRoute
   '/settings/attachments': typeof SettingsAttachmentsRoute
   '/settings/engine-settings': typeof SettingsEngineSettingsRoute
@@ -245,7 +228,6 @@ export interface FileRoutesById {
   '/settings/llm-router': typeof SettingsLlmRouterRoute
   '/settings/local-api-server': typeof SettingsLocalApiServerRoute
   '/settings/mcp-servers': typeof SettingsMcpServersRoute
-  '/settings/memory': typeof SettingsMemoryRoute
   '/settings/privacy': typeof SettingsPrivacyRoute
   '/settings/shortcuts': typeof SettingsShortcutsRoute
   '/threads/$threadId': typeof ThreadsThreadIdRoute
@@ -262,7 +244,6 @@ export interface FileRouteTypes {
     | '/hub/$modelId'
     | '/local-api-server/logs'
     | '/project/$projectId'
-    | '/settings/agent-teams'
     | '/settings/assistant'
     | '/settings/attachments'
     | '/settings/engine-settings'
@@ -275,7 +256,6 @@ export interface FileRouteTypes {
     | '/settings/llm-router'
     | '/settings/local-api-server'
     | '/settings/mcp-servers'
-    | '/settings/memory'
     | '/settings/privacy'
     | '/settings/shortcuts'
     | '/threads/$threadId'
@@ -290,7 +270,6 @@ export interface FileRouteTypes {
     | '/hub/$modelId'
     | '/local-api-server/logs'
     | '/project/$projectId'
-    | '/settings/agent-teams'
     | '/settings/assistant'
     | '/settings/attachments'
     | '/settings/engine-settings'
@@ -303,7 +282,6 @@ export interface FileRouteTypes {
     | '/settings/llm-router'
     | '/settings/local-api-server'
     | '/settings/mcp-servers'
-    | '/settings/memory'
     | '/settings/privacy'
     | '/settings/shortcuts'
     | '/threads/$threadId'
@@ -318,7 +296,6 @@ export interface FileRouteTypes {
     | '/hub/$modelId'
     | '/local-api-server/logs'
     | '/project/$projectId'
-    | '/settings/agent-teams'
     | '/settings/assistant'
     | '/settings/attachments'
     | '/settings/engine-settings'
@@ -331,7 +308,6 @@ export interface FileRouteTypes {
     | '/settings/llm-router'
     | '/settings/local-api-server'
     | '/settings/mcp-servers'
-    | '/settings/memory'
     | '/settings/privacy'
     | '/settings/shortcuts'
     | '/threads/$threadId'
@@ -347,7 +323,6 @@ export interface RootRouteChildren {
   HubModelIdRoute: typeof HubModelIdRoute
   LocalApiServerLogsRoute: typeof LocalApiServerLogsRoute
   ProjectProjectIdRoute: typeof ProjectProjectIdRoute
-  SettingsAgentTeamsRoute: typeof SettingsAgentTeamsRoute
   SettingsAssistantRoute: typeof SettingsAssistantRoute
   SettingsAttachmentsRoute: typeof SettingsAttachmentsRoute
   SettingsEngineSettingsRoute: typeof SettingsEngineSettingsRoute
@@ -360,7 +335,6 @@ export interface RootRouteChildren {
   SettingsLlmRouterRoute: typeof SettingsLlmRouterRoute
   SettingsLocalApiServerRoute: typeof SettingsLocalApiServerRoute
   SettingsMcpServersRoute: typeof SettingsMcpServersRoute
-  SettingsMemoryRoute: typeof SettingsMemoryRoute
   SettingsPrivacyRoute: typeof SettingsPrivacyRoute
   SettingsShortcutsRoute: typeof SettingsShortcutsRoute
   ThreadsThreadIdRoute: typeof ThreadsThreadIdRoute
@@ -418,13 +392,6 @@ declare module '@tanstack/react-router' {
       path: '/settings/privacy'
       fullPath: '/settings/privacy'
       preLoaderRoute: typeof SettingsPrivacyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings/memory': {
-      id: '/settings/memory'
-      path: '/settings/memory'
-      fullPath: '/settings/memory'
-      preLoaderRoute: typeof SettingsMemoryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings/mcp-servers': {
@@ -511,13 +478,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsAssistantRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/settings/agent-teams': {
-      id: '/settings/agent-teams'
-      path: '/settings/agent-teams'
-      fullPath: '/settings/agent-teams'
-      preLoaderRoute: typeof SettingsAgentTeamsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/project/$projectId': {
       id: '/project/$projectId'
       path: '/project/$projectId'
@@ -563,7 +523,6 @@ const rootRouteChildren: RootRouteChildren = {
   HubModelIdRoute: HubModelIdRoute,
   LocalApiServerLogsRoute: LocalApiServerLogsRoute,
   ProjectProjectIdRoute: ProjectProjectIdRoute,
-  SettingsAgentTeamsRoute: SettingsAgentTeamsRoute,
   SettingsAssistantRoute: SettingsAssistantRoute,
   SettingsAttachmentsRoute: SettingsAttachmentsRoute,
   SettingsEngineSettingsRoute: SettingsEngineSettingsRoute,
@@ -576,7 +535,6 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsLlmRouterRoute: SettingsLlmRouterRoute,
   SettingsLocalApiServerRoute: SettingsLocalApiServerRoute,
   SettingsMcpServersRoute: SettingsMcpServersRoute,
-  SettingsMemoryRoute: SettingsMemoryRoute,
   SettingsPrivacyRoute: SettingsPrivacyRoute,
   SettingsShortcutsRoute: SettingsShortcutsRoute,
   ThreadsThreadIdRoute: ThreadsThreadIdRoute,

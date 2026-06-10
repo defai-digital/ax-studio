@@ -22,7 +22,10 @@ interface ChatSessionState {
   ensureSession: (
     sessionId: string,
     transport: CustomChatTransport,
-    createChat: () => Chat<UIMessage>,
+    createChat: (
+      sessionId?: string,
+      transport?: CustomChatTransport
+    ) => Chat<UIMessage>,
     title?: string,
   ) => Chat<UIMessage>
   getSessionData: (sessionId: string) => SessionData | null

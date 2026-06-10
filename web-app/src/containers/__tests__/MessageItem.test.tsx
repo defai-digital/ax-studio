@@ -205,6 +205,31 @@ describe('MessageItem', () => {
       fireEvent.click(screen.getByTestId('delete-dialog'))
       expect(onDelete).toHaveBeenCalledWith('del-msg')
     })
+
+    it('shows local knowledge source status when a user message used retrieval', () => {
+      const msg = makeMessage({
+        role: 'user',
+        parts: [{ type: 'text', text: 'What real-world hiring outcome did the author achieve?' }],
+        metadata: {
+          localKnowledgeRetrieval: {
+            searched: true,
+            extracted: true,
+            source: '/Users/devop/Documents/akidb-testing/coding-interview-university.md',
+          },
+        },
+      } as never)
+
+      render(
+        <MessageItem
+          message={msg}
+          isLastMessage={false}
+          status="ready"
+        />
+      )
+
+      expect(screen.getByText(/Searched local knowledge and extracted source/i)).toBeInTheDocument()
+      expect(screen.getByText('coding-interview-university.md')).toBeInTheDocument()
+    })
   })
 
   describe('assistant messages', () => {
@@ -286,81 +311,6 @@ describe('MessageItem', () => {
         />
       )
       expect(screen.getByTestId('tool-header').textContent).toBe('web_search')
-    })
-
-    it('renders generate_diagram tool as inline mermaid', () => {
-      const msg = makeMessage({
-        role: 'assistant',
-        parts: [
-          {
-            type: 'tool-generate_diagram',
-            state: 'output-available',
-            output: {
-              source: 'graph TD; A-->B',
-              title: 'My Diagram',
-            },
-          } as never,
-        ],
-      })
-      render(
-        <MessageItem
-          message={msg}
-          isLastMessage={false}
-          status="ready"
-        />
-      )
-      // Should render through RenderMarkdown with mermaid fence
-      const md = screen.getByTestId('render-markdown')
-      expect(md.textContent).toContain('graph TD; A-->B')
-      // Title should be rendered
-      expect(screen.getByText('My Diagram')).toBeInTheDocument()
-    })
-
-    it('strips mermaid fence markers from generate_diagram source', () => {
-      const msg = makeMessage({
-        role: 'assistant',
-        parts: [
-          {
-            type: 'tool-generate_diagram',
-            state: 'output-available',
-            output: {
-              source: '```mermaid\ngraph LR; A-->B\n```',
-              title: '',
-            },
-          } as never,
-        ],
-      })
-      render(
-        <MessageItem
-          message={msg}
-          isLastMessage={false}
-          status="ready"
-        />
-      )
-      const md = screen.getByTestId('render-markdown')
-      // Should not have double fencing
-      expect(md.textContent).toContain('graph LR; A-->B')
-    })
-
-    it('renders nothing for generate_diagram with no source yet', () => {
-      const msg = makeMessage({
-        role: 'assistant',
-        parts: [
-          {
-            type: 'tool-generate_diagram',
-            state: 'input-streaming',
-            output: undefined,
-          } as never,
-        ],
-      })
-      const { container } = render(
-        <MessageItem
-          message={msg}
-          isLastMessage={false}
-          status="ready"
-        />
-      )
-      expect(screen.queryByTestId('render-markdown')).toBeNull()
     })
 
     it('renders assistant image file parts', () => {
@@ -538,8 +488,8 @@ describe('MessageItem', () => {
     })
   })
 
-  describe('agent status deduplication', () => {
-    it('only renders the latest status per agent_id', () => {
+  describe('agent status parts', () => {
+    it('ignores legacy data-agentStatus parts that are no longer rendered by MessageItem', () => {
       const msg = makeMessage({
         role: 'assistant',
         parts: [
@@ -568,9 +518,7 @@ describe('MessageItem', () => {
           status="ready"
         />
       )
-      // Only one agent card should render (the latest)
-      const cards = screen.getAllByTestId('agent-output-card')
-      expect(cards).toHaveLength(1)
+      expect(screen.queryByTestId('agent-output-card')).toBeNull()
     })
   })
 })

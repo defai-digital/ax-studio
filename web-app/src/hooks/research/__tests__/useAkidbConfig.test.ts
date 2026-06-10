@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockInvoke = vi.fn()
 
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: (...args: unknown[]) => mockInvoke(...args),
+vi.mock('@/hooks/useServiceHub', () => ({
+  getServiceHub: () => ({ core: () => ({ invoke: mockInvoke }) }),
 }))
 
 import { useAkidbConfig, createDefaultConfig } from '../useAkidbConfig'
@@ -17,13 +17,13 @@ describe('createDefaultConfig', () => {
     expect(config.fabric.max_storage_gb).toBe(50)
     expect(config.akidb.collection).toBe('default')
     expect(config.akidb.metric).toBe('cosine')
-    expect(config.akidb.dimension).toBe(1536)
+    expect(config.akidb.dimension).toBe(768)
     expect(config.ingest.sources).toEqual([])
     expect(config.ingest.chunking.chunk_size).toBe(2800)
     expect(config.ingest.chunking.overlap).toBe(0.15)
     expect(config.embedder.type).toBe('http')
-    expect(config.embedder.model_id).toBe('gte-qwen2-1.5b-instruct-q4_k_m')
-    expect(config.embedder.batch_size).toBe(4)
+    expect(config.embedder.model_id).toBe('nomic-embed-text-v1.5')
+    expect(config.embedder.batch_size).toBe(64)
     expect(config.schedule?.interval_minutes).toBe(60)
   })
 

@@ -1,11 +1,12 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { buildRemoteProviderRequests, syncRemoteProviders } from '../provider-sync'
 
 const invokeMock = vi.fn()
 
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: (...args: unknown[]) => invokeMock(...args),
+vi.mock('@/hooks/useServiceHub', () => ({
+  getServiceHub: () => ({ core: () => ({ invoke: invokeMock }) }),
 }))
+
+import { buildRemoteProviderRequests, syncRemoteProviders } from '../provider-sync'
 
 function makeProvider(
   provider: string,

@@ -9,25 +9,53 @@ import { ArrowLeft, Calendar, Download, ExternalLink, Eye, HardDrive, Wrench } f
 import { motion } from 'motion/react'
 import { route } from '@/constants/routes'
 import { useModelSources } from '@/hooks/models/useModelSources'
-import { extractModelName, extractDescription } from '@/lib/models'
+import {
+  extractModelName,
+  extractDescription,
+  getPreferredMmprojPath,
+} from '@/lib/models'
 import { RenderMarkdown } from '@/containers/RenderMarkdown'
 import { useEffect, useMemo, useCallback, useState, useRef } from 'react'
-import { useDownloadStore } from '@/hooks/models/useDownloadStore'
+import {
+  toDownloadProcesses,
+  useDownloadStore,
+} from '@/hooks/models/useDownloadStore'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import type { CatalogModel, ModelQuant } from '@/services/models/types'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
-import { sanitizeModelId } from '@/lib/utils'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { ModelInfoHoverCard } from '@/containers/ModelInfoHoverCard'
 import { DEFAULT_MODEL_QUANTIZATIONS } from '@/constants/models'
 import { useTranslation } from '@/i18n'
+import {
+  buildHuggingFaceRepoUrl,
+  decodeHubRouteParam,
+  normalizeHuggingFaceRepoId,
+} from '@/lib/hub'
 import { z } from 'zod/v4'
 import { toast } from 'sonner'
+import { findDownloadedLocalModel } from '@/lib/models/downloaded'
+import { extractErrorMessage } from '@/lib/utils/error'
 
 type SearchParams = {
   repo: string
+}
+
+function isTrustedHuggingFaceReadmeUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value)
+    const hostname = parsed.hostname.toLowerCase()
+    return (
+      parsed.protocol === 'https:' &&
+      !parsed.username &&
+      !parsed.password &&
+      (hostname === 'huggingface.co' || hostname.endsWith('.huggingface.co'))
+    )
+  } catch {
+    return false
+  }
 }
 
 const hubModelSearchSchema = z
@@ -52,8 +80,7 @@ function HubModelDetailContent() {
   const { sources, fetchSources } = useModelSources()
   const search = useSearch({ from: Route.id })
 
-  const getProviderByName = useModelProvider((state) => state.getProviderByName)
-  const llamaProvider = getProviderByName('llamacpp')
+  const providers = useModelProvider((state) => state.providers)
   const { downloads, localDownloadingModels, addLocalDownloadingModel } =
     useDownloadStore()
   const serviceHub = useServiceHub()
@@ -62,6 +89,8 @@ function HubModelDetailContent() {
   // State for README content
   const [readmeContent, setReadmeContent] = useState<string>('')
   const [isLoadingReadme, setIsLoadingReadme] = useState(false)
+
+  const modelId = useMemo(() => decodeHubRouteParam(rawModelId), [rawModelId])
 
   // State for model support status
   const [modelSupportStatus, setModelSupportStatus] = useState<
@@ -82,14 +111,14 @@ function HubModelDetailContent() {
   const fetchRepo = useCallback(async (signal?: AbortSignal) => {
     const repoInfo = await serviceHub
       .models()
-      .fetchHuggingFaceRepo(search.repo || rawModelId, huggingfaceToken, signal)
+      .fetchHuggingFaceRepo(search.repo || modelId, huggingfaceToken, signal)
     if (repoInfo) {
       const repoDetail = serviceHub
         .models()
         .convertHfRepoToCatalogModel(repoInfo)
       setRepoData(repoDetail || undefined)
     }
-  }, [serviceHub, rawModelId, search, huggingfaceToken])
+  }, [serviceHub, modelId, search, huggingfaceToken])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -101,11 +130,25 @@ function HubModelDetailContent() {
     return () => {
       controller.abort()
     }
-  }, [rawModelId, fetchRepo])
+  }, [modelId, fetchRepo])
   // Find the model data from sources
   const modelData = useMemo(() => {
-    return sources.find((model) => model.model_name === rawModelId) ?? repoData
-  }, [sources, rawModelId, repoData])
+    return sources.find((model) => model.model_name === modelId) ?? repoData
+  }, [sources, modelId, repoData])
+
+  const huggingFaceRepoId = useMemo(() => {
+    const fromRepo = normalizeHuggingFaceRepoId(search.repo)
+    if (fromRepo) return fromRepo
+    const fromReadme = normalizeHuggingFaceRepoId(modelData?.readme)
+    if (fromReadme) return fromReadme
+
+    return normalizeHuggingFaceRepoId(modelData?.model_name)
+  }, [search.repo, modelData?.model_name, modelData?.readme])
+
+  const huggingFaceUrl = useMemo(
+    () => buildHuggingFaceRepoUrl(huggingFaceRepoId),
+    [huggingFaceRepoId]
+  )
 
   // `readmeUrl` must be derived AFTER `modelData` — reading it before the
   // const declaration previously hit the Temporal Dead Zone and threw
@@ -114,27 +157,20 @@ function HubModelDetailContent() {
 
   // Download processes
   const downloadProcesses = useMemo(
-    () =>
-      Object.values(downloads).map((download) => ({
-        id: download.name,
-        name: download.name,
-        progress: download.progress,
-        current: download.current,
-        total: download.total,
-      })),
+    () => toDownloadProcesses(downloads),
     [downloads]
   )
 
   // Handle model use
   const handleUseModel = useCallback(
-    (modelId: string) => {
+    (modelId: string, provider = 'llamacpp') => {
       navigate({
         to: route.home,
         params: {},
         search: {
           model: {
             id: modelId,
-            provider: 'llamacpp',
+            provider,
           },
         },
       })
@@ -249,6 +285,12 @@ function HubModelDetailContent() {
     ;(async () => {
       setIsLoadingReadme(true)
       try {
+        if (!isTrustedHuggingFaceReadmeUrl(readmeUrl)) {
+          console.warn(`[hub] README URL rejected: ${readmeUrl}`)
+          setReadmeContent('')
+          return
+        }
+
         let response = await fetch(readmeUrl, { signal })
         if (!response.ok && huggingfaceToken) {
           response = await fetch(readmeUrl, {
@@ -412,15 +454,17 @@ function HubModelDetailContent() {
               </div>
 
               {/* HuggingFace link */}
-              <a
-                href={`https://huggingface.co/${modelData.model_name}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border/50 hover:border-border text-[13px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
-              >
-                <ExternalLink className="size-3.5" />
-                View on HuggingFace
-              </a>
+              {huggingFaceUrl && (
+                <a
+                  href={huggingFaceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border/50 hover:border-border text-[13px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                >
+                  <ExternalLink className="size-3.5" />
+                  View on HuggingFace
+                </a>
+              )}
             </div>
           </motion.div>
 
@@ -457,14 +501,12 @@ function HubModelDetailContent() {
                   const downloadProgress =
                     downloadProcesses.find((e) => e.id === variant.model_id)
                       ?.progress || 0
-                  // Check if model is already downloaded by looking
-                  // at the llamacpp provider's installed models list
-                  const isDownloaded = !!llamaProvider?.models?.some(
-                    (m: { id: string }) =>
-                      m.id === variant.model_id ||
-                      m.id ===
-                        `${modelData.developer}/${sanitizeModelId(variant.model_id.split('/').pop() || '')}`
+                  const downloadedModel = findDownloadedLocalModel(
+                    providers,
+                    variant.model_id,
+                    modelData.developer
                   )
+                  const isDownloaded = !!downloadedModel
 
                   // Extract format from model_id
                   const format = variant.model_id
@@ -530,7 +572,12 @@ function HubModelDetailContent() {
                                 variant="default"
                                 size="sm"
                                 className="rounded-lg"
-                                onClick={() => handleUseModel(variant.model_id)}
+                                onClick={() =>
+                                  handleUseModel(
+                                    downloadedModel?.modelId ?? variant.model_id,
+                                    downloadedModel?.providerId
+                                  )
+                                }
                               >
                                 {t('hub:newChat')}
                               </Button>
@@ -549,29 +596,14 @@ function HubModelDetailContent() {
                                     .pullModelWithMetadata(
                                       variant.model_id,
                                       variant.path,
-                                      (
-                                        modelData.mmproj_models?.find(
-                                          (e) =>
-                                            e.model_id.toLowerCase() ===
-                                            'mmproj-f16'
-                                        ) || modelData.mmproj_models?.[0]
-                                      )?.path,
+                                      getPreferredMmprojPath(
+                                        modelData.mmproj_models
+                                      ),
                                       huggingfaceToken
                                     )
                                 } catch (error) {
                                   console.error('Failed to start model download:', error)
-                                  const description =
-                                    error instanceof Error
-                                      ? error.message
-                                      : typeof error === 'string'
-                                        ? error
-                                        : (() => {
-                                            try {
-                                              return JSON.stringify(error)
-                                            } catch {
-                                              return String(error)
-                                            }
-                                          })()
+                                  const description = extractErrorMessage(error, '')
                                   toast.error('Failed to download model', {
                                     description: description || 'Unknown error (check DevTools console).',
                                   })

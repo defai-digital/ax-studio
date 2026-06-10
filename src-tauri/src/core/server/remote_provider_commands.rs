@@ -50,7 +50,7 @@ pub async fn register_provider_config(
     request: RegisterProviderRequest,
 ) -> Result<(), String> {
     if let Some(ref base_url) = request.base_url {
-        validate_provider_url(base_url)?;
+        validate_provider_url(&request.provider, base_url).await?;
     }
 
     let mut provider_state = state.provider_state.lock().await;
@@ -62,6 +62,7 @@ pub async fn register_provider_config(
         custom_headers: request.custom_headers,
         models: request.models,
     };
+    config.validate()?;
 
     let provider_name = request.provider.clone();
     provider_state.configs.insert(provider_name.clone(), config);
@@ -80,7 +81,7 @@ pub async fn register_provider_configs_batch(
 
     for request in requests {
         if let Some(ref base_url) = request.base_url {
-            validate_provider_url(base_url)?;
+            validate_provider_url(&request.provider, base_url).await?;
         }
         let provider_name = request.provider.clone();
         let config = ProviderConfig {
@@ -90,6 +91,7 @@ pub async fn register_provider_configs_batch(
             custom_headers: request.custom_headers,
             models: request.models,
         };
+        config.validate()?;
         log::info!(
             "Registered provider config (batch): {provider_name} base_url={:?} has_key={} models_count={}",
             config.base_url.as_deref().map(|u| if u.len() > 40 { &u[..40] } else { u }),
@@ -134,10 +136,41 @@ pub async fn list_provider_configs(
         .collect())
 }
 
-fn validate_provider_url(url: &str) -> Result<(), String> {
+/// Abort an active remote stream by sending a cancellation signal.
+#[tauri::command]
+pub async fn abort_remote_stream(
+    state: State<'_, AppState>,
+    stream_id: String,
+) -> Result<(), String> {
+    let mut streams = state.active_streams.lock().await;
+    if let Some(tx) = streams.remove(&stream_id) {
+        let _ = tx.send(());
+        log::info!("Stream {stream_id} abort signal sent");
+    } else {
+        log::debug!("abort_remote_stream: stream {stream_id} not found (may have already finished)");
+    }
+    Ok(())
+}
+
+async fn validate_provider_url(provider: &str, url: &str) -> Result<(), String> {
+    // Providers that legitimately point to a loopback/internal URL. `mlx` lands
+    // here because the in-app provider talks to a local ax-engine-server (which
+    // itself delegates to mlx_lm.server) at http://127.0.0.1:<port>/v1. Without
+    // this entry, registration is silently rejected and chat fails with
+    // "No remote provider configured for model_id ...".
+    let allow_internal = matches!(
+        provider,
+        "llamacpp" | "ollama" | "lmstudio" | "mlx" | "ax-engine"
+    );
     let parsed = url::Url::parse(url).map_err(|e| format!("Invalid provider URL '{url}': {e}"))?;
     if !matches!(parsed.scheme(), "http" | "https") {
-        return Err(format!("Provider URL scheme must be http or https, got '{}'", parsed.scheme()));
+        return Err(format!(
+            "Provider URL scheme must be http or https, got '{}'",
+            parsed.scheme()
+        ));
+    }
+    if !allow_internal && ax_studio_utils::is_internal_url(url) {
+        return Err("Provider URL must not point to an internal or private address".to_string());
     }
     match parsed.host() {
         Some(url::Host::Ipv4(ip)) => {
@@ -162,7 +195,25 @@ fn validate_provider_url(url: &str) -> Result<(), String> {
                 ));
             }
         }
-        Some(url::Host::Domain(_)) => {}
+        Some(url::Host::Domain(domain)) => {
+            let port = parsed.port_or_known_default().ok_or_else(|| {
+                format!(
+                    "Provider URL is missing a port for scheme '{}'",
+                    parsed.scheme()
+                )
+            })?;
+            let addrs = tokio::net::lookup_host((domain, port))
+                .await
+                .map_err(|e| format!("Failed to resolve provider URL host '{domain}': {e}"))?;
+            for addr in addrs {
+                if !allow_internal && ax_studio_utils::is_private_ip(addr.ip()) {
+                    return Err(
+                        "Provider URL must not resolve to an internal or private address"
+                            .to_string(),
+                    );
+                }
+            }
+        }
         None => return Err(format!("Provider URL has no host: {url}")),
     }
     Ok(())

@@ -1,9 +1,18 @@
-import { describe, it, expect, vi } from 'vitest'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import GlobalError from '../GlobalError'
 import '@testing-library/jest-dom'
 
 describe('GlobalError Component', () => {
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore()
+  })
   it('should render error message for Error instance', () => {
     const error = new Error('Test error message')
     render(<GlobalError error={error} />)
@@ -75,13 +84,11 @@ describe('GlobalError Component', () => {
   })
 
   it('should log error to console', () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const error = new Error('Test error')
 
     render(<GlobalError error={error} />)
 
-    expect(consoleSpy).toHaveBeenCalledWith('Error in root route:', error)
-    consoleSpy.mockRestore()
+    expect(consoleErrorSpy).toHaveBeenCalledWith('Error in root route:', error)
   })
 
   it('should render proper error structure with styling', () => {

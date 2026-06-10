@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
 import { DefaultThreadsService } from '../threads/default'
 import { ExtensionManager } from '@/lib/extension'
 import { ConversationalExtension, ExtensionTypeEnum } from '@ax-studio/core'
@@ -11,6 +11,8 @@ vi.mock('@/lib/extension', () => ({
 }))
 
 describe('DefaultThreadsService', () => {
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
   let threadsService: DefaultThreadsService
 
   const mockConversationalExtension = {
@@ -24,10 +26,26 @@ describe('DefaultThreadsService', () => {
     get: vi.fn().mockReturnValue(mockConversationalExtension),
   }
 
+  const mockNativeApi = {
+    listThreads: vi.fn(),
+    createThread: vi.fn(),
+    modifyThread: vi.fn(),
+    deleteThread: vi.fn(),
+  }
+
   beforeEach(() => {
     threadsService = new DefaultThreadsService()
     vi.clearAllMocks()
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // @ts-expect-error test-only core bridge
+    window.core = undefined
     ;(ExtensionManager.getInstance as any).mockReturnValue(mockExtensionManager)
+  })
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore()
+    consoleWarnSpy.mockRestore()
   })
 
   describe('fetchThreads', () => {
@@ -169,7 +187,7 @@ describe('DefaultThreadsService', () => {
       })
     })
 
-    it('should handle creation error and return original thread', async () => {
+    it('should throw creation errors', async () => {
       const inputThread = {
         id: '1',
         title: 'New Thread',
@@ -180,9 +198,9 @@ describe('DefaultThreadsService', () => {
         new Error('Creation failed')
       )
 
-      const result = await threadsService.createThread(inputThread as Thread)
-
-      expect(result).toEqual(inputThread)
+      await expect(threadsService.createThread(inputThread as Thread)).rejects.toThrow(
+        'Creation failed'
+      )
     })
   })
 
@@ -243,23 +261,35 @@ describe('DefaultThreadsService', () => {
       expect(result).toEqual([])
     })
 
-    it('should handle createThread when extension manager returns null', async () => {
+    it('should fall back to native createThread when extension manager returns null', async () => {
       ;(ExtensionManager.getInstance as any).mockReturnValue({
         get: vi.fn().mockReturnValue(null),
       })
+      // @ts-expect-error test-only core bridge
+      window.core = { api: mockNativeApi }
 
       const inputThread = {
         id: '1',
         title: 'Test Thread',
         model: { id: 'gpt-4', provider: 'openai' },
       }
+      mockNativeApi.createThread.mockResolvedValue({
+        ...inputThread,
+        assistants: [
+          {
+            model: { id: 'gpt-4', engine: 'openai' },
+          },
+        ],
+        metadata: {},
+      })
 
       const result = await threadsService.createThread(inputThread as Thread)
 
-      expect(result).toEqual(inputThread)
+      expect(mockNativeApi.createThread).toHaveBeenCalled()
+      expect(result.model).toEqual({ id: 'gpt-4', provider: 'openai' })
     })
 
-    it('should handle updateThread when extension manager returns null', async () => {
+    it('should throw on updateThread when storage is unavailable', async () => {
       ;(ExtensionManager.getInstance as any).mockReturnValue({
         get: vi.fn().mockReturnValue(null),
       })
@@ -270,19 +300,48 @@ describe('DefaultThreadsService', () => {
         model: { id: 'gpt-4', provider: 'openai' },
       }
 
-      const result = await threadsService.updateThread(thread as Thread)
-
-      expect(result).toBeUndefined()
+      await expect(threadsService.updateThread(thread as Thread)).rejects.toThrow(
+        'Conversational storage is not available'
+      )
     })
 
-    it('should handle deleteThread when extension manager returns null', async () => {
+    it('should throw on deleteThread when storage is unavailable', async () => {
       ;(ExtensionManager.getInstance as any).mockReturnValue({
         get: vi.fn().mockReturnValue(null),
       })
 
-      const result = await threadsService.deleteThread('test-id')
+      await expect(threadsService.deleteThread('test-id')).rejects.toThrow(
+        'Conversational storage is not available'
+      )
+    })
 
-      expect(result).toBeUndefined()
+    it('should fall back to native storage when extension update fails', async () => {
+      // @ts-expect-error test-only core bridge
+      window.core = { api: mockNativeApi }
+      const thread = {
+        id: '1',
+        title: 'Test Thread',
+        model: { id: 'gpt-4', provider: 'openai' },
+      }
+      mockConversationalExtension.modifyThread.mockRejectedValueOnce(new Error('Extension missing file'))
+      mockNativeApi.modifyThread.mockResolvedValue(thread)
+
+      await threadsService.updateThread(thread as Thread)
+
+      expect(mockConversationalExtension.modifyThread).toHaveBeenCalled()
+      expect(mockNativeApi.modifyThread).toHaveBeenCalled()
+    })
+
+    it('should fall back to native storage when extension delete fails', async () => {
+      // @ts-expect-error test-only core bridge
+      window.core = { api: mockNativeApi }
+      mockConversationalExtension.deleteThread.mockRejectedValueOnce(new Error('Extension missing file'))
+      mockNativeApi.deleteThread.mockResolvedValue(undefined)
+
+      await threadsService.deleteThread('test-id')
+
+      expect(mockConversationalExtension.deleteThread).toHaveBeenCalledWith('test-id')
+      expect(mockNativeApi.deleteThread).toHaveBeenCalledWith({ threadId: 'test-id' })
     })
 
     it('should handle fetchThreads with threads missing metadata', async () => {

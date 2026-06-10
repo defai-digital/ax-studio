@@ -87,7 +87,6 @@ mod tests {
     fn test_app_state() -> AppState {
         let mcp_servers: SharedMcpServers = Arc::new(Mutex::new(HashMap::new()));
         AppState {
-            app_token: None,
             mcp_servers,
             download_manager: Arc::new(Mutex::new(
                 crate::core::downloads::models::DownloadManagerState::default(),
@@ -104,6 +103,7 @@ mod tests {
             provider_state: Arc::new(Mutex::new(ProviderState::default())),
             approved_save_paths: Arc::new(Mutex::new(HashSet::new())),
             factory_reset_lock: Arc::new(Mutex::new(())),
+            active_streams: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 

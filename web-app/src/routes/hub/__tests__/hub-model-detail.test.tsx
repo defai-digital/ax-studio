@@ -34,6 +34,21 @@ vi.mock('@/hooks/useServiceHub', () => ({
 }))
 
 vi.mock('@/hooks/models/useDownloadStore', () => ({
+  toDownloadProcesses: vi.fn(
+    (
+      downloads: Record<
+        string,
+        { name: string; progress: number; current: number; total: number }
+      >
+    ) =>
+      Object.values(downloads).map((download) => ({
+        id: download.name,
+        name: download.name,
+        progress: download.progress,
+        current: download.current,
+        total: download.total,
+      }))
+  ),
   useDownloadStore: () => ({
     downloads: {},
     localDownloadingModels: new Set(),
@@ -125,6 +140,7 @@ vi.mock('lucide-react', () => ({
 vi.mock('@/lib/models', () => ({
   extractModelName: vi.fn(),
   extractDescription: vi.fn(),
+  getPreferredMmprojPath: vi.fn((models?: Array<{ path: string }>) => models?.[0]?.path),
 }))
 
 vi.mock('@/lib/utils', () => ({

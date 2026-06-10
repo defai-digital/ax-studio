@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { getLastUsedModel, getModelToStart } from '../getModelToStart'
 
 // Mock localStorage
@@ -41,9 +41,16 @@ function makeProvider(
 }
 
 describe('getLastUsedModel', () => {
+  let consoleDebugSpy: ReturnType<typeof vi.spyOn>
+
   beforeEach(() => {
     localStorageMock.clear()
     vi.clearAllMocks()
+    consoleDebugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleDebugSpy.mockRestore()
   })
 
   // ── A: Specification Tests ──
@@ -78,10 +85,9 @@ describe('getLastUsedModel', () => {
     expect(getLastUsedModel()).toBe(null)
   })
 
-  it('handles stored value that is a JSON array', () => {
+  it('returns null when stored value is a JSON array', () => {
     localStorageMock.setItem('last-used-model', '["not", "an", "object"]')
-    // JSON.parse succeeds, returns the array
-    expect(getLastUsedModel()).toEqual(['not', 'an', 'object'])
+    expect(getLastUsedModel()).toBe(null)
   })
 
   // ── C: Property Tests ──
@@ -96,9 +102,16 @@ describe('getLastUsedModel', () => {
 })
 
 describe('getModelToStart', () => {
+  let consoleDebugSpy: ReturnType<typeof vi.spyOn>
+
   beforeEach(() => {
     localStorageMock.clear()
     vi.clearAllMocks()
+    consoleDebugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleDebugSpy.mockRestore()
   })
 
   const openaiProvider = makeProvider('openai', ['gpt-4', 'gpt-3.5-turbo'])

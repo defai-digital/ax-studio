@@ -37,7 +37,7 @@ describe('ResearchReport', () => {
         sources={[]}
       />
     )
-    expect(screen.getByTestId('markdown').textContent).toContain('▌')
+    expect(screen.getByText('In progress ▌')).toBeInTheDocument()
   })
 
   it('does not append cursor when not streaming', () => {

@@ -31,7 +31,7 @@ export default class AxStudioConversationalExtension extends ConversationalExten
    * Called when the extension is loaded.
    */
   async onLoad(): Promise<void> {
-    // no-opt
+    // no-op
   }
 
   /**

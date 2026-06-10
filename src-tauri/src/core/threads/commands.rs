@@ -1,11 +1,11 @@
-use std::fs::{self, File};
+use std::fs;
 use std::io::Write;
 use tauri::Runtime;
 use tokio::task;
 use uuid::Uuid;
 
 use super::helpers::{
-    get_lock_for_thread, prune_unused_message_locks, read_messages_from_file,
+    get_lock_for_thread, prune_unused_message_locks, read_messages_from_path,
     remove_lock_for_thread, rewrite_messages_file, update_thread_metadata,
 };
 use super::models::{MessageRecord, ThreadRecord};
@@ -75,6 +75,7 @@ pub async fn create_thread<R: Runtime>(
     if thread.id.is_empty() {
         thread.id = Uuid::new_v4().to_string();
     }
+    thread.validate()?;
 
     ensure_data_dirs(app_handle.clone())?;
     let uuid = thread.id.clone();
@@ -103,6 +104,7 @@ pub async fn modify_thread<R: Runtime>(
     if thread_id.is_empty() {
         return Err("Missing thread id".to_string());
     }
+    thread.validate()?;
     let thread_dir = get_thread_dir(app_handle.clone(), thread_id);
     if !thread_dir.exists() {
         return Err("Thread directory does not exist".to_string());
@@ -157,13 +159,10 @@ pub async fn list_messages<R: Runtime>(
 ) -> Result<Vec<MessageRecord>, String> {
     let lock = get_lock_for_thread(&thread_id).await;
     let _guard = lock.lock().await;
-    let app_handle_clone = app_handle.clone();
-    let thread_id_clone = thread_id.clone();
-    let messages = tokio::task::spawn_blocking(move || {
-        read_messages_from_file(app_handle_clone, &thread_id_clone)
-    })
-    .await
-    .map_err(|e| format!("list_messages task error: {e}"))?;
+    let path = get_messages_path(app_handle.clone(), &thread_id);
+    let messages = tokio::task::spawn_blocking(move || read_messages_from_path(&path))
+        .await
+        .map_err(|e| format!("list_messages task error: {e}"))?;
     drop(_guard);
     drop(lock);
     prune_unused_message_locks().await;
@@ -179,6 +178,7 @@ pub async fn create_message<R: Runtime>(
     if message.id.is_empty() {
         message.id = Uuid::new_v4().to_string();
     }
+    message.validate()?;
 
     let thread_id = message.thread_id.clone();
     if thread_id.is_empty() {
@@ -190,18 +190,21 @@ pub async fn create_message<R: Runtime>(
         let lock = get_lock_for_thread(&thread_id).await;
         let _guard = lock.lock().await;
 
-        ensure_thread_dir_exists(app_handle.clone(), &thread_id)?;
-
-        let mut file: File = fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-            .map_err(|e| e.to_string())?;
-
         let data = serde_json::to_string(&message).map_err(|e| e.to_string())?;
-        writeln!(file, "{data}").map_err(|e| e.to_string())?;
-
-        file.flush().map_err(|e| e.to_string())?;
+        let app_for_blocking = app_handle.clone();
+        let thread_id_owned = thread_id.clone();
+        task::spawn_blocking(move || -> Result<(), String> {
+            ensure_thread_dir_exists(app_for_blocking, &thread_id_owned)?;
+            let mut file = fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path)
+                .map_err(|e| e.to_string())?;
+            writeln!(file, "{data}").map_err(|e| e.to_string())?;
+            file.flush().map_err(|e| e.to_string())
+        })
+        .await
+        .map_err(|e| format!("create_message task error: {e}"))??;
     }
 
     prune_unused_message_locks().await;
@@ -223,18 +226,27 @@ pub async fn modify_message<R: Runtime>(
     if message_id.is_empty() {
         return Err("Missing message id".to_string());
     }
+    message.validate()?;
 
     {
         let lock = get_lock_for_thread(thread_id).await;
         let _guard = lock.lock().await;
 
-        rewrite_messages_file(app_handle.clone(), thread_id, |existing| {
-            if existing.id == message_id {
-                Some(message.clone())
-            } else {
-                Some(existing)
-            }
-        })?;
+        let app_for_blocking = app_handle.clone();
+        let thread_id_owned = thread_id.to_string();
+        let message_id_owned = message_id.to_string();
+        let message_clone = message.clone();
+        task::spawn_blocking(move || {
+            rewrite_messages_file(app_for_blocking, &thread_id_owned, |existing| {
+                if existing.id == message_id_owned {
+                    Some(message_clone.clone())
+                } else {
+                    Some(existing)
+                }
+            })
+        })
+        .await
+        .map_err(|e| format!("modify_message task error: {e}"))??;
     }
     prune_unused_message_locks().await;
     Ok(message)
@@ -251,13 +263,17 @@ pub async fn delete_message<R: Runtime>(
         let lock = get_lock_for_thread(&thread_id).await;
         let _guard = lock.lock().await;
 
-        rewrite_messages_file(app_handle.clone(), &thread_id, |existing| {
-            if existing.id == message_id {
-                None
-            } else {
-                Some(existing)
-            }
-        })?;
+        task::spawn_blocking(move || {
+            rewrite_messages_file(app_handle, &thread_id, |existing| {
+                if existing.id == message_id {
+                    None
+                } else {
+                    Some(existing)
+                }
+            })
+        })
+        .await
+        .map_err(|e| format!("delete_message task error: {e}"))??;
     }
 
     prune_unused_message_locks().await;
@@ -275,13 +291,27 @@ pub async fn get_thread_assistant<R: Runtime>(
     if !path.exists() {
         return Err("Thread not found".to_string());
     }
-    let data = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    let thread: ThreadRecord = serde_json::from_str(&data).map_err(|e| e.to_string())?;
-    if let Some(first) = thread.assistants.first() {
-        Ok(first.clone())
-    } else {
-        Err("Assistant not found".to_string())
-    }
+
+    let lock = get_lock_for_thread(&thread_id).await;
+    let _guard = lock.lock().await;
+
+    let result = task::spawn_blocking(move || -> Result<serde_json::Value, String> {
+        let data = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        let thread: ThreadRecord = serde_json::from_str(&data).map_err(|e| e.to_string())?;
+        if let Some(first) = thread.assistants.first() {
+            Ok(first.clone())
+        } else {
+            Err("Assistant not found".to_string())
+        }
+    })
+    .await
+    .map_err(|e| format!("get_thread_assistant task error: {e}"))?;
+
+    drop(_guard);
+    drop(lock);
+    prune_unused_message_locks().await;
+
+    result
 }
 
 /// Adds a new assistant to a thread's metadata.
@@ -299,12 +329,19 @@ pub async fn create_thread_assistant<R: Runtime>(
     let lock = get_lock_for_thread(&thread_id).await;
     let _guard = lock.lock().await;
 
-    let mut thread: ThreadRecord = {
-        let data = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-        serde_json::from_str(&data).map_err(|e| e.to_string())?
-    };
+    let data = task::spawn_blocking(move || {
+        fs::read_to_string(&path).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("create_thread_assistant task error: {e}"))??;
+
+    let mut thread: ThreadRecord = serde_json::from_str(&data).map_err(|e| e.to_string())?;
     thread.assistants.push(assistant.clone());
-    update_thread_metadata(app_handle, &thread_id, &thread)?;
+
+    task::spawn_blocking(move || update_thread_metadata(app_handle, &thread_id, &thread))
+        .await
+        .map_err(|e| format!("create_thread_assistant task error: {e}"))??;
+
     drop(_guard);
     drop(lock);
     prune_unused_message_locks().await;
@@ -326,21 +363,27 @@ pub async fn modify_thread_assistant<R: Runtime>(
     let lock = get_lock_for_thread(&thread_id).await;
     let _guard = lock.lock().await;
 
-    let mut thread: ThreadRecord = {
-        let data = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-        serde_json::from_str(&data).map_err(|e| e.to_string())?
-    };
-    let assistant_id = assistant
+    let data = task::spawn_blocking(move || {
+        fs::read_to_string(&path).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("modify_thread_assistant task error: {e}"))??;
+
+    let mut thread: ThreadRecord = serde_json::from_str(&data).map_err(|e| e.to_string())?;
+    let assistant_id: String = assistant
         .get("id")
         .and_then(|v| v.as_str())
-        .ok_or("Missing id")?;
+        .ok_or("Missing id")?
+        .to_string();
     if let Some(index) = thread
         .assistants
         .iter()
-        .position(|a| a.get("id").and_then(|v| v.as_str()) == Some(assistant_id))
+        .position(|a| a.get("id").and_then(|v| v.as_str()) == Some(assistant_id.as_str()))
     {
         thread.assistants[index] = assistant.clone();
-        update_thread_metadata(app_handle, &thread_id, &thread)?;
+        task::spawn_blocking(move || update_thread_metadata(app_handle, &thread_id, &thread))
+            .await
+            .map_err(|e| format!("modify_thread_assistant task error: {e}"))??;
     }
     drop(_guard);
     drop(lock);

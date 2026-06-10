@@ -210,10 +210,11 @@ describe('useMessages', () => {
         })
       )
 
-      // Verify persistence was attempted
-      await vi.waitFor(() => {
-        expect(mockCreateMessage).toHaveBeenCalled()
+      // Wait for async persistence to settle so the test does not leak React updates.
+      await act(async () => {
+        await Promise.resolve()
       })
+      expect(result.current.messages['thread1']).toContainEqual(mockCreatedMessage)
     })
 
     it('should handle message without created_at', async () => {
@@ -237,8 +238,9 @@ describe('useMessages', () => {
         // no created_at provided
       } as ThreadMessage
 
-      act(() => {
+      await act(async () => {
         result.current.addMessage(messageToAdd)
+        await Promise.resolve()
       })
 
       expect(mockCreateMessage).toHaveBeenCalledWith(
@@ -246,6 +248,10 @@ describe('useMessages', () => {
           created_at: expect.any(Number),
         })
       )
+
+      await vi.waitFor(() => {
+        expect(result.current.messages['thread1']).toContainEqual(mockCreatedMessage)
+      })
     })
 
     it('should preserve existing metadata', async () => {
@@ -275,8 +281,9 @@ describe('useMessages', () => {
         },
       }
 
-      act(() => {
+      await act(async () => {
         result.current.addMessage(messageToAdd)
+        await Promise.resolve()
       })
 
       expect(mockCreateMessage).toHaveBeenCalledWith(
@@ -286,6 +293,10 @@ describe('useMessages', () => {
           }),
         })
       )
+
+      await vi.waitFor(() => {
+        expect(result.current.messages['thread1']).toContainEqual(mockCreatedMessage)
+      })
     })
   })
 
@@ -370,6 +381,7 @@ describe('useMessages', () => {
         created_at: Date.now(),
       } as ThreadMessage
 
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       let resolveFirstEdit: ((message: ThreadMessage) => void) | undefined
       mockModifyMessage
         .mockReturnValueOnce(
@@ -383,32 +395,39 @@ describe('useMessages', () => {
         result.current.setMessages('thread1', [originalMessage])
       })
 
-      act(() => {
+      await act(async () => {
         result.current.updateMessage({
           ...originalMessage,
           content: 'Edit A',
         } as ThreadMessage)
+        await Promise.resolve()
       })
 
-      act(() => {
+      await act(async () => {
         result.current.updateMessage({
           ...originalMessage,
           content: 'Edit B',
         } as ThreadMessage)
+        await Promise.resolve()
       })
 
       await vi.waitFor(() => {
         expect(result.current.messages['thread1'][0].content).toBe('Original')
       })
 
-      resolveFirstEdit?.({
-        ...originalMessage,
-        content: 'Edit A',
-      } as ThreadMessage)
+      await act(async () => {
+        resolveFirstEdit?.({
+          ...originalMessage,
+          content: 'Edit A',
+        } as ThreadMessage)
+        await Promise.resolve()
+      })
 
       await vi.waitFor(() => {
         expect(result.current.messages['thread1'][0].content).toBe('Edit A')
       })
+
+      consoleErrorSpy.mockRestore()
     })
   })
 

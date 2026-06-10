@@ -15,6 +15,7 @@ const {
     updateSystemMessage: vi.fn(),
     updateInferenceParameters: vi.fn(),
     updateModelOverrideId: vi.fn(),
+    updateModelOverrideProviderId: vi.fn(),
     updateActiveTeamId: vi.fn(),
     setCostApprovalCallback: vi.fn(),
     setOnTokenUsage: vi.fn(),
@@ -114,6 +115,7 @@ describe('useChat', () => {
       sessionId: 'session-1',
       inferenceParameters: {},
       modelOverrideId: undefined,
+      modelOverrideProviderId: undefined,
     })
   })
 
@@ -249,20 +251,6 @@ describe('useChat', () => {
       expect.objectContaining({
         resume: false,
         experimental_throttle: 100,
-      })
-    )
-  })
-
-  it('passes dataPartSchemas to useChatSDK', () => {
-    renderHook(() => useChat({ sessionId: 's1' }))
-
-    expect(mockUseChatSDK).toHaveBeenCalledWith(
-      expect.objectContaining({
-        dataPartSchemas: expect.objectContaining({
-          agentStatus: expect.anything(),
-          agentToolCall: expect.anything(),
-          runLog: expect.anything(),
-        }),
       })
     )
   })

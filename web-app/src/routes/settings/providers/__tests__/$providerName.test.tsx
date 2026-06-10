@@ -175,6 +175,7 @@ vi.mock('lucide-react', () => ({
   Plug: () => <span data-testid="plug-icon" />,
   CheckCircle2: () => <span data-testid="check-icon" />,
   XCircle: () => <span data-testid="x-icon" />,
+  Loader: () => <span data-testid="icon-loader" />,
 }))
 
 const mockProvider = {

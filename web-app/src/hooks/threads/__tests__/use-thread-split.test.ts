@@ -9,7 +9,6 @@ vi.mock('@/constants/chat', () => ({
     SPLIT_VIEW_INFO: 'split-view-info',
     INITIAL_MESSAGE_TEMPORARY: 'initial-message-temporary',
     NEW_THREAD_PROMPT: 'new-thread-prompt',
-    NEW_THREAD_TEAM_ID: 'new-thread-team-id',
   },
   SESSION_STORAGE_PREFIX: {
     INITIAL_MESSAGE: 'initial-message-',

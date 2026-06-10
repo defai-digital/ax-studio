@@ -51,7 +51,7 @@ export function LogViewer() {
 
     serviceHub
       .events()
-      .listen(LOG_EVENT_NAME, (event) => {
+      ?.listen(LOG_EVENT_NAME, (event) => {
         const { message } = event.payload as { message: string }
         const log: LogEntry | undefined = serviceHub.app().parseLogLine(message)
         if (log?.target === SERVER_LOG_TARGET) {

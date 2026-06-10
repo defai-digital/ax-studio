@@ -8,6 +8,33 @@ export interface DownloadProgressProps {
   total: number
 }
 
+export const toDownloadProcesses = (
+  downloads: Record<string, DownloadProgressProps>,
+  localDownloadingModels?: Set<string>
+): DownloadProgressProps[] => {
+  const downloadsWithProgress = Object.values(downloads).map((download) => ({
+    id: download.name,
+    name: download.name,
+    progress: download.progress,
+    current: download.current,
+    total: download.total,
+  }))
+
+  if (!localDownloadingModels) return downloadsWithProgress
+
+  const localDownloadsWithoutProgress = Array.from(localDownloadingModels)
+    .filter((modelId) => !downloads[modelId])
+    .map((modelId) => ({
+      id: modelId,
+      name: modelId,
+      progress: 0,
+      current: 0,
+      total: 0,
+    }))
+
+  return [...downloadsWithProgress, ...localDownloadsWithoutProgress]
+}
+
 // Zustand store for thinking block state
 export type DownloadState = {
   downloads: { [id: string]: DownloadProgressProps }

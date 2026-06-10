@@ -36,6 +36,36 @@ import type { CoreService } from './core/types'
 import type { DeepLinkService } from './deeplink/types'
 import type { ProjectsService } from './projects/types'
 
+class LazyTauriProvidersService implements ProvidersService {
+  private servicePromise: Promise<ProvidersService> | null = null
+
+  private async service(): Promise<ProvidersService> {
+    if (!this.servicePromise) {
+      this.servicePromise = import('./providers/tauri').then(
+        (module) => new module.TauriProvidersService()
+      )
+    }
+    return this.servicePromise
+  }
+
+  async getProviders(): Promise<ModelProvider[]> {
+    return (await this.service()).getProviders()
+  }
+
+  async fetchModelsFromProvider(provider: ModelProvider): Promise<string[]> {
+    return (await this.service()).fetchModelsFromProvider(provider)
+  }
+
+  async updateSettings(providerName: string, settings: ProviderSetting[]): Promise<void> {
+    return (await this.service()).updateSettings(providerName, settings)
+  }
+
+  fetch(): typeof fetch {
+    return ((input: RequestInfo | URL, init?: RequestInit) =>
+      this.service().then((service) => service.fetch()(input, init))) as typeof fetch
+  }
+}
+
 export interface ServiceHub {
   theme(): ThemeService
   window(): WindowService
@@ -82,6 +112,156 @@ class PlatformServiceHub implements ServiceHub {
   private uploadsService: UploadsService = new DefaultUploadsService()
   private initialized = false
 
+  private initializeWebFallbacks(): void {
+    const eventTarget = new EventTarget()
+    const unsupported = (service: string) =>
+      new Error(`${service} is not available in web mode`)
+
+    this.themeService = {
+      setTheme: async (theme) => {
+        if (typeof document !== 'undefined') {
+          document.documentElement.style.colorScheme = theme ?? ''
+        }
+      },
+      getCurrentWindow: () => ({
+        setTheme: (theme) => this.themeService.setTheme(theme),
+      }),
+    }
+
+    this.windowService = {
+      createWebviewWindow: async () => {
+        throw unsupported('Window service')
+      },
+      getWebviewWindowByLabel: async () => null,
+      openWindow: async ({ url }) => {
+        if (typeof window !== 'undefined') {
+          window.open(url, '_blank', 'noopener,noreferrer')
+        }
+      },
+      openLogsWindow: async () => {},
+      openSystemMonitorWindow: async () => {},
+      openLocalApiServerLogsWindow: async () => {},
+    }
+
+    this.eventsService = {
+      emit: async (event, payload) => {
+        eventTarget.dispatchEvent(new CustomEvent(event, { detail: payload }))
+      },
+      listen: async (event, handler) => {
+        const listener = (e: Event) => {
+          handler({ payload: (e as CustomEvent).detail })
+        }
+        eventTarget.addEventListener(event, listener)
+        return () => eventTarget.removeEventListener(event, listener)
+      },
+    }
+
+    this.hardwareService = {
+      getHardwareInfo: async () => null,
+      getSystemUsage: async () => null,
+      getLlamacppDevices: async () => [],
+    }
+
+    this.appService = {
+      factoryReset: async () => {
+        window.localStorage.clear()
+      },
+      readLogs: async () => [],
+      parseLogLine: (line) => ({
+        timestamp: Date.now(),
+        level: 'info',
+        target: 'web',
+        message: line ?? '',
+      }),
+      getAppDataFolder: async () => undefined,
+      relocateAppDataFolder: async () => {
+        throw unsupported('App data relocation')
+      },
+      getServerStatus: async () => false,
+      readYaml: async () => {
+        throw unsupported('YAML file access')
+      },
+    }
+
+    const unavailableToolResult: Awaited<ReturnType<MCPService['callTool']>> = {
+      content: [],
+      error: '',
+    }
+
+    this.mcpService = {
+      updateMCPConfig: async () => {},
+      restartMCPServers: async () => {},
+      getMCPConfig: async () => ({}),
+      getTools: async () => [],
+      getConnectedServers: async () => [],
+      callTool: async () => unavailableToolResult,
+      callToolWithCancellation: ({ cancellationToken }) => ({
+        promise: Promise.resolve(unavailableToolResult),
+        cancel: async () => {},
+        token: cancellationToken ?? crypto.randomUUID(),
+      }),
+      cancelToolCall: async () => {},
+      activateMCPServer: async () => {},
+      deactivateMCPServer: async () => {},
+    }
+
+    this.providersService = {
+      getProviders: async () => [],
+      fetchModelsFromProvider: async () => [],
+      updateSettings: async () => {},
+      fetch: () => fetch,
+    }
+
+    this.dialogService = {
+      open: async () => null,
+      save: async () => null,
+    }
+
+    this.openerService = {
+      revealItemInDir: async () => {},
+      openUrl: async (url) => {
+        if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer')
+      },
+    }
+
+    this.updaterService = {
+      check: async () => null,
+      downloadAndInstallWithProgress: async () => {},
+    }
+
+    this.pathService = {
+      sep: () => '/',
+      join: async (...segments) => segments.filter(Boolean).join('/').replace(/\/+/g, '/'),
+      dirname: async (path) => {
+        const normalized = path.replace(/\/+$/, '')
+        const index = normalized.lastIndexOf('/')
+        return index > 0 ? normalized.slice(0, index) : '/'
+      },
+      basename: async (path) => path.split('/').filter(Boolean).pop() ?? '',
+      extname: async (path) => {
+        const name = path.split('/').pop() ?? ''
+        const index = name.lastIndexOf('.')
+        return index > 0 ? name.slice(index) : ''
+      },
+    }
+
+    this.coreService = {
+      invoke: async (command) => {
+        throw unsupported(`Core command "${command}"`)
+      },
+      convertFileSrc: (filePath) => filePath,
+      getActiveExtensions: async () => [],
+      installExtensions: async () => {},
+      installExtension: async (extensions) => extensions,
+      uninstallExtension: async () => false,
+    }
+
+    this.deepLinkService = {
+      onOpenUrl: async () => () => {},
+      getCurrent: async () => [],
+    }
+  }
+
   async initialize(): Promise<void> {
     if (this.initialized) return
 
@@ -94,7 +274,6 @@ class PlatformServiceHub implements ServiceHub {
           hardwareModule,
           appModule,
           mcpModule,
-          providersModule,
           dialogModule,
           openerModule,
           updaterModule,
@@ -108,7 +287,6 @@ class PlatformServiceHub implements ServiceHub {
           import('./hardware/tauri'),
           import('./app/tauri'),
           import('./mcp/tauri'),
-          import('./providers/tauri'),
           import('./dialog/tauri'),
           import('./opener/tauri'),
           import('./updater/tauri'),
@@ -123,13 +301,15 @@ class PlatformServiceHub implements ServiceHub {
         this.hardwareService = new hardwareModule.TauriHardwareService()
         this.appService = new appModule.TauriAppService()
         this.mcpService = new mcpModule.TauriMCPService()
-        this.providersService = new providersModule.TauriProvidersService()
+        this.providersService = new LazyTauriProvidersService()
         this.dialogService = new dialogModule.TauriDialogService()
         this.openerService = new openerModule.TauriOpenerService()
         this.updaterService = new updaterModule.TauriUpdaterService()
         this.pathService = new pathModule.TauriPathService()
         this.coreService = new coreModule.TauriCoreService()
         this.deepLinkService = new deepLinkModule.TauriDeepLinkService()
+      } else {
+        this.initializeWebFallbacks()
       }
 
       if ('setMcpService' in this.ragService) {
@@ -257,8 +437,21 @@ class PlatformServiceHub implements ServiceHub {
   }
 }
 
+let serviceHubSingleton: ServiceHub | null = null
+let serviceHubSingletonPromise: Promise<ServiceHub> | null = null
+let serviceHubSingletonIsTauri: boolean | null = null
+
 export async function initializeServiceHub(): Promise<ServiceHub> {
-  const serviceHub = new PlatformServiceHub()
-  await serviceHub.initialize()
-  return serviceHub
+  const currentIsTauri = isPlatformTauri()
+  if (!serviceHubSingletonPromise || serviceHubSingletonIsTauri !== currentIsTauri) {
+    serviceHubSingleton = null
+    serviceHubSingletonIsTauri = currentIsTauri
+    serviceHubSingletonPromise = (async () => {
+      const serviceHub = new PlatformServiceHub()
+      await serviceHub.initialize()
+      serviceHubSingleton = serviceHub
+      return serviceHub
+    })()
+  }
+  return serviceHubSingleton ?? serviceHubSingletonPromise
 }

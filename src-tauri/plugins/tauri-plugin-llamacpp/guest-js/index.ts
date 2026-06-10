@@ -118,12 +118,14 @@ export async function unloadLlamaModel(pid: number): Promise<UnloadResult> {
 export async function startAxServing(
   binaryPath: string,
   port: number,
-  timeout: number = 120
+  timeout: number = 120,
+  envOverrides?: Record<string, string>
 ): Promise<SessionInfo> {
   return await invoke('plugin:llamacpp|start_ax_serving', {
     binaryPath,
     port,
     timeout,
+    envOverrides,
   })
 }
 

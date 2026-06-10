@@ -31,20 +31,17 @@ const isValidThreadId = (id: string): boolean => {
 
 import { extractContentPartsFromUIMessage } from '@/lib/messages'
 import {
-  DIAGRAM_FORMAT_INSTRUCTION,
   CODE_EXECUTION_INSTRUCTION,
-  ARTIFACT_FORMAT_INSTRUCTION,
   LOCAL_KNOWLEDGE_INSTRUCTION,
   CITATION_FORMAT_INSTRUCTION,
-} from '@/lib/system-prompt'
+} from '@/lib/prompts/system-prompt'
 import type { UIMessage } from '@ai-sdk/react'
 import type { ThreadMessage } from '@ax-studio/core'
-import { useThreadMemory } from '@/hooks/threads/use-thread-memory'
 import { useLocalKnowledge } from '@/hooks/research/useLocalKnowledge'
-import { useThreadArtifacts } from '@/hooks/threads/use-thread-artifacts'
+import { useThreadLocalKnowledge } from '@/hooks/threads/use-thread-local-knowledge'
 import { useThreadResearch } from '@/hooks/threads/use-thread-research'
 import { useThreadChat } from '@/hooks/threads/use-thread-chat'
-import { useThreadTools } from '@/hooks/threads/use-thread-tools'
+import { useThreadTools, type AddToolOutputFn } from '@/hooks/threads/use-thread-tools'
 import { useThreadSplit } from '@/hooks/threads/use-thread-split'
 import { useThreadConfig } from '@/hooks/threads/use-thread-config'
 import { useThreadEffects } from '@/hooks/threads/use-thread-effects'
@@ -85,7 +82,8 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   useTools()
 
   const thread = useThreads(useShallow((state) => state.threads[threadId]))
-  const selectedModel =
+  const providers = useModelProvider((state) => state.providers)
+  const selectedModelFromStore =
     useModelProvider((state) => state.selectedModel) ?? undefined
   const selectedProvider = useModelProvider((state) => state.selectedProvider)
   const { globalDefaultPrompt, autoTuningEnabled } = useGeneralSetting()
@@ -94,19 +92,22 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   )
 
   // ─── Domain hooks ─────────────────────────────────────────────────────────
-  const {
-    memorySuffix,
-    lastUserInputRef,
-    processMemoryOnFinish,
-    handleRememberCommand,
-    handleForgetCommand,
-  } = useThreadMemory(threadId)
   const localKnowledgeActive = useLocalKnowledge((state) =>
     state.isLocalKnowledgeEnabledForThread(threadId)
   )
+  const { prepareLocalKnowledge } = useThreadLocalKnowledge(threadId)
   const alwaysCiteSources = useGuardrails((s) => s.alwaysCiteSources)
   const projectId = thread?.metadata?.project?.id
-  const { pinnedArtifact, clearArtifact } = useThreadArtifacts(threadId)
+  const selectedModel = useMemo(() => {
+    if (!thread?.model) return selectedModelFromStore
+    return (
+      providers
+        .find((provider) => provider.provider === thread.model?.provider)
+        ?.models.find((model) => model.id === thread.model?.id) ??
+      selectedModelFromStore
+    )
+  }, [providers, selectedModelFromStore, thread?.model])
+  const selectedProviderId = thread?.model?.provider ?? selectedProvider
   const { pinnedResearch, clearResearch, handleResearchCommand, cancelResearch } =
     useThreadResearch(threadId)
   const { promptResolution, optimizedModelConfig } = useThreadConfig({
@@ -120,19 +121,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     followUpMessage,
     onToolCall,
     startToolExecution,
-    onCostApproval,
-    costApprovalState,
-    setCostApprovalState,
-    agentTeams,
-    activeTeamId,
-    activeTeam,
-    activeTeamSnapshot,
-    showVariablePrompt,
-    setShowVariablePrompt,
-    teamTokensUsed,
-    setTeamTokensUsed,
-    handleVariableSubmit,
-    handleTeamChange,
+    resetTurnState,
   } = useThreadTools({ threadId, projectId })
   const {
     splitPaneOrder,
@@ -140,7 +129,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     setSplitThreadId,
     setSplitDirection,
     handleSplit,
-  } = useThreadSplit({ thread, selectedModel, selectedProvider })
+  } = useThreadSplit({ thread, selectedModel, selectedProvider: selectedProviderId })
 
   // ─── UI state ─────────────────────────────────────────────────────────────
   const [threadPromptDraft, setThreadPromptDraft] = useState('')
@@ -164,15 +153,11 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
       (currentAssistant?.instructions && currentAssistant.id !== 'ax-studio'
         ? '\n\n' + currentAssistant.instructions
         : '') +
-      memorySuffix +
-      DIAGRAM_FORMAT_INSTRUCTION +
       CODE_EXECUTION_INSTRUCTION +
-      ARTIFACT_FORMAT_INSTRUCTION +
       (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : '') +
       (localKnowledgeActive || alwaysCiteSources ? CITATION_FORMAT_INSTRUCTION : ''),
     modelOverrideId: optimizedModelConfig.modelId,
-    activeTeamId,
-    onCostApproval,
+    modelOverrideProviderId: selectedProviderId,
     inferenceParameters: {
       temperature: optimizedModelConfig.temperature,
       top_p: optimizedModelConfig.top_p,
@@ -213,10 +198,9 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
           )
         }
         const contentParts = extractContentPartsFromUIMessage(messageForPersistence)
-        processMemoryOnFinish(messageForPersistence, contentParts, setChatMessages)
         persistMessageOnFinishRef.current?.(messageForPersistence, contentParts)
       }
-      startToolExecution(addToolOutput)
+      startToolExecution(addToolOutput as unknown as AddToolOutputFn)
     },
     onToolCall,
     sendAutomaticallyWhen: followUpMessage,
@@ -231,13 +215,12 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     handleContextSizeIncrease,
   } = useThreadChat({
     threadId,
+    threadModel: thread?.model,
     sendMessage,
     regenerate,
     chatMessages,
     setChatMessages,
-    handleRememberCommand,
-    handleForgetCommand,
-    lastUserInputRef,
+    prepareLocalKnowledge,
   })
 
   persistMessageOnFinishRef.current = persistMessageOnFinish
@@ -252,8 +235,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     status,
     assistants,
     selectedModel,
-    activeTeamId,
-    setTeamTokensUsed,
     reasoningContainerRef,
     setCurrentThreadId,
     setCurrentAssistant,
@@ -268,6 +249,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   const handleSubmit = useCallback(
     async (text: string) => {
       if (handleResearchCommand(text)) return
+      resetTurnState() // Reset fabric_search dedup tracker for new user message
       try {
         await processAndSendMessage(text)
       } catch (error) {
@@ -278,7 +260,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
         })
       }
     },
-    [processAndSendMessage, handleResearchCommand]
+    [processAndSendMessage, handleResearchCommand, resetTurnState]
   )
 
   const threadModel = useMemo(() => thread?.model, [thread])
@@ -311,8 +293,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
       handleDeleteMessage={handleDeleteMessage}
       handleContextSizeIncrease={handleContextSizeIncrease}
       reasoningContainerRef={reasoningContainerRef}
-      pinnedArtifact={pinnedArtifact}
-      clearArtifact={clearArtifact}
       pinnedResearch={pinnedResearch}
       clearResearch={clearResearch}
       splitPaneOrder={splitPaneOrder}
@@ -326,17 +306,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
       setThreadPromptDraft={setThreadPromptDraft}
       promptResolution={promptResolution}
       updateThread={updateThread}
-      activeTeam={activeTeam}
-      activeTeamId={activeTeamId}
-      activeTeamSnapshot={activeTeamSnapshot}
-      agentTeams={agentTeams}
-      handleTeamChange={handleTeamChange}
-      teamTokensUsed={teamTokensUsed}
-      costApprovalState={costApprovalState}
-      setCostApprovalState={setCostApprovalState}
-      showVariablePrompt={showVariablePrompt}
-      setShowVariablePrompt={setShowVariablePrompt}
-      handleVariableSubmit={handleVariableSubmit}
     />
   )
 }

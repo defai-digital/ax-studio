@@ -74,6 +74,98 @@ function toOpenAIParams(parameters: Record<string, unknown>): Record<string, unk
   return result
 }
 
+function hasToolConversationState(messages: unknown): boolean {
+  if (!Array.isArray(messages)) return false
+  return messages.some((message) => {
+    if (!message || typeof message !== 'object' || Array.isArray(message)) {
+      return false
+    }
+    const record = message as Record<string, unknown>
+    return record.role === 'tool' ||
+      (Array.isArray(record.tool_calls) && record.tool_calls.length > 0)
+  })
+}
+
+function textIncludes(value: unknown, needle: string): boolean {
+  if (typeof value === 'string') return value.includes(needle)
+  if (Array.isArray(value)) return value.some((item) => textIncludes(item, needle))
+  if (!value || typeof value !== 'object') return false
+  return Object.values(value as Record<string, unknown>).some((item) =>
+    textIncludes(item, needle)
+  )
+}
+
+function hasLocalKnowledgeToolResult(messages: unknown): boolean {
+  if (!Array.isArray(messages)) return false
+
+  // Only look at messages from the current turn (after the last user message).
+  // Tool results from previous turns must not suppress tools for the next question.
+  let lastUserIdx = -1
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i]
+    if (msg && typeof msg === 'object' && !Array.isArray(msg)) {
+      if ((msg as Record<string, unknown>).role === 'user') {
+        lastUserIdx = i
+        break
+      }
+    }
+  }
+  const currentTurnMessages = lastUserIdx >= 0 ? messages.slice(lastUserIdx + 1) : messages
+
+  return currentTurnMessages.some((message) => {
+    if (!message || typeof message !== 'object' || Array.isArray(message)) {
+      return false
+    }
+    const record = message as Record<string, unknown>
+    return record.role === 'tool' && (
+      textIncludes(record, 'LOCAL_KNOWLEDGE_RESULT_READY') ||
+      textIncludes(record, 'fabric_search') ||
+      textIncludes(record, 'Based on the search results above')
+    )
+  })
+}
+
+function disableThinkingForToolFollowUp(
+  body: Record<string, unknown>
+): Record<string, unknown> {
+  if (!hasToolConversationState(body.messages)) return body
+
+  const existing =
+    body.chat_template_kwargs &&
+    typeof body.chat_template_kwargs === 'object' &&
+    !Array.isArray(body.chat_template_kwargs)
+      ? body.chat_template_kwargs as Record<string, unknown>
+      : {}
+
+  return {
+    ...body,
+    chat_template_kwargs: {
+      ...existing,
+      enable_thinking: false,
+    },
+  }
+}
+
+function finalizeLocalKnowledgeFollowUp(
+  body: Record<string, unknown>
+): Record<string, unknown> {
+  if (!hasLocalKnowledgeToolResult(body.messages)) return body
+
+  const next = { ...body }
+  delete next.tools
+  delete next.tool_choice
+  delete next.toolChoice
+  delete next.parallel_tool_calls
+  delete next.parallelToolCalls
+  return next
+}
+
+function prepareOpenAIRequestBody(
+  body: Record<string, unknown>
+): Record<string, unknown> {
+  return finalizeLocalKnowledgeFollowUp(disableThinkingForToolFollowUp(body))
+}
+
 function toOpenAICompatibleString(value: unknown): string | null {
   if (typeof value === 'string') return value
   if (typeof value === 'number' || typeof value === 'boolean') {
@@ -178,17 +270,24 @@ function normalizeOpenAICompatiblePayload(
     }
   }
 
-  // Promote reasoning_content/reasoning to content for reasoning models
-  // (DeepSeek-R1, Cloudflare @cf/zai-org/glm-4.7-flash, etc.) whose output
-  // arrives in non-standard fields the Vercel AI SDK ignores.
+  const content = payload.content
+  const hasVisibleContent = typeof content === 'string' && content.length > 0
+  const reasoningFallback =
+    typeof payload.reasoning_content === 'string' && payload.reasoning_content.length > 0
+      ? payload.reasoning_content
+      : typeof payload.reasoning === 'string' && payload.reasoning.length > 0
+        ? payload.reasoning
+        : undefined
+
+  if (!hasVisibleContent && reasoningFallback) {
+    payload.content = reasoningFallback
+    changed = true
+  }
+
   for (const field of ['reasoning_content', 'reasoning'] as const) {
-    const value = payload[field]
-    if (typeof value === 'string' && value.length > 0) {
-      const existing = typeof payload.content === 'string' ? payload.content : ''
-      payload.content = existing + value
+    if (payload[field] != null) {
       delete payload[field]
       changed = true
-      break // only promote the first one found
     }
   }
 
@@ -308,16 +407,19 @@ function createStreamingPatchFetch(baseFetch: typeof httpFetch): typeof httpFetc
     // re-create a plain Response whose body the AI SDK can safely read.
     if (!response.ok) {
       let errorBody = ''
+      let errorTimeoutId: ReturnType<typeof setTimeout> | undefined
       try {
         // Read with a 5-second timeout to prevent hanging
         errorBody = await Promise.race([
           response.text(),
-          new Promise<string>((_, reject) =>
-            setTimeout(() => reject(new Error('Timeout reading error body')), 5000)
-          ),
+          new Promise<string>((_, reject) => {
+            errorTimeoutId = setTimeout(() => reject(new Error('Timeout reading error body')), 5000)
+          }),
         ])
       } catch {
         errorBody = `HTTP ${response.status} ${response.statusText || 'Error'}`
+      } finally {
+        if (errorTimeoutId) clearTimeout(errorTimeoutId)
       }
       console.error(`[StreamingPatch] proxy error ${response.status}: ${errorBody.slice(0, 300)}`)
       // Return a new Response with a plain-text body the SDK can parse
@@ -376,7 +478,7 @@ function createCustomFetch(
   parameters: Record<string, unknown>
 ): typeof httpFetch {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    if ((init?.method === 'POST' || !init?.method) && Object.keys(parameters).length > 0) {
+    if (init?.method === 'POST' || !init?.method) {
       if (typeof init?.body !== 'string') {
         // Body is Blob, ReadableStream, FormData, etc. — skip parameter injection
         return baseFetch(input, init)
@@ -388,7 +490,10 @@ function createCustomFetch(
         // body is not JSON, skip parameter injection
         return baseFetch(input, init)
       }
-      init = { ...init, body: JSON.stringify({ ...body, ...parameters }) }
+      init = {
+        ...init,
+        body: JSON.stringify(prepareOpenAIRequestBody({ ...body, ...parameters })),
+      }
     }
     return baseFetch(input, init)
   }
@@ -415,7 +520,8 @@ export class ModelFactory {
   static async createModel(
     modelId: string,
     provider: ProviderObject,
-    parameters: Record<string, unknown> = {}
+    parameters: Record<string, unknown> = {},
+    options: { requestRole?: 'router' | 'final' } = {}
   ): Promise<LanguageModel> {
     const proxyUrl = getProxyBaseUrl()
     const openAIParams = toOpenAIParams(parameters)
@@ -424,10 +530,7 @@ export class ModelFactory {
     // Normalize non-standard streaming SSE responses from various providers.
     // Applied to all providers since the proxy passes streaming bytes through unchanged.
     const baseFetch = createStreamingPatchFetch(httpFetch)
-    const fetchFn =
-      Object.keys(openAIParams).length > 0
-        ? createCustomFetch(baseFetch, openAIParams)
-        : baseFetch
+    const fetchFn = createCustomFetch(baseFetch, openAIParams)
 
     // All providers go through the proxy using the OpenAI-compatible format.
     // The proxy routes the request to the correct upstream based on model_id lookup
@@ -441,6 +544,9 @@ export class ModelFactory {
     const localProxyKey = useLocalApiServer.getState().apiKey
     const proxyHeaders: Record<string, string> = {
       'X-Ax-Provider': provider.provider,
+    }
+    if (options.requestRole) {
+      proxyHeaders['X-Ax-Request-Role'] = options.requestRole
     }
     if (localProxyKey && localProxyKey.trim().length > 0) {
       proxyHeaders.Authorization = `Bearer ${localProxyKey}`

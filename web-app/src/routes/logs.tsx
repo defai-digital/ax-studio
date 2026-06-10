@@ -19,11 +19,14 @@ function LogsViewer() {
 
   useEffect(() => {
     let lastLogsLength = 0
+    let mounted = true
+    let scrollTimer: ReturnType<typeof setTimeout> | undefined
     function updateLogs() {
       serviceHub
         .app()
         .readLogs()
         .then((logData) => {
+          if (!mounted) return
           let needScroll = false
           const filteredLogs = logData.filter(Boolean) as LogEntry[]
           if (filteredLogs.length > lastLogsLength) needScroll = true
@@ -32,7 +35,12 @@ function LogsViewer() {
           setLogs(filteredLogs)
 
           // Scroll to bottom after initial logs are loaded
-          if (needScroll) setTimeout(() => scrollToBottom(), 100)
+          if (needScroll) {
+            if (scrollTimer) clearTimeout(scrollTimer)
+            scrollTimer = setTimeout(() => {
+              if (mounted) scrollToBottom()
+            }, 100)
+          }
         })
         .catch((error) => {
           // Poll runs every 3s — swallow the error here but log it so
@@ -46,7 +54,9 @@ function LogsViewer() {
     const intervalId = setInterval(() => updateLogs(), 3000)
 
     return () => {
+      mounted = false
       clearInterval(intervalId)
+      if (scrollTimer) clearTimeout(scrollTimer)
     }
   }, [serviceHub])
 

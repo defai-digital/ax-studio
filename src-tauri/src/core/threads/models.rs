@@ -258,4 +258,78 @@ mod tests {
         assert_eq!(message.created_at, Some(1774958339354));
         assert_eq!(message.completed_at, Some(1774958340789));
     }
+
+    // --- ThreadRecord::validate() ---
+
+    #[test]
+    fn thread_record_validate_passes_with_valid_id() {
+        let thread = ThreadRecord {
+            id: "t1".to_string(),
+            ..Default::default()
+        };
+        assert!(thread.validate().is_ok());
+    }
+
+    #[test]
+    fn thread_record_validate_rejects_empty_id() {
+        let thread = ThreadRecord {
+            id: "".to_string(),
+            ..Default::default()
+        };
+        let err = thread.validate().unwrap_err();
+        assert!(err.contains("empty id"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn thread_record_validate_rejects_whitespace_only_id() {
+        let thread = ThreadRecord {
+            id: "   ".to_string(),
+            ..Default::default()
+        };
+        assert!(thread.validate().is_err());
+    }
+
+    // --- MessageRecord::validate() ---
+
+    #[test]
+    fn message_record_validate_passes_with_valid_fields() {
+        let message = MessageRecord {
+            id: "m1".to_string(),
+            thread_id: "t1".to_string(),
+            ..Default::default()
+        };
+        assert!(message.validate().is_ok());
+    }
+
+    #[test]
+    fn message_record_validate_rejects_empty_id() {
+        let message = MessageRecord {
+            id: "".to_string(),
+            thread_id: "t1".to_string(),
+            ..Default::default()
+        };
+        let err = message.validate().unwrap_err();
+        assert!(err.contains("empty id"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn message_record_validate_rejects_empty_thread_id() {
+        let message = MessageRecord {
+            id: "m1".to_string(),
+            thread_id: "".to_string(),
+            ..Default::default()
+        };
+        let err = message.validate().unwrap_err();
+        assert!(err.contains("empty thread_id"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn message_record_validate_rejects_whitespace_thread_id() {
+        let message = MessageRecord {
+            id: "m1".to_string(),
+            thread_id: "  ".to_string(),
+            ..Default::default()
+        };
+        assert!(message.validate().is_err());
+    }
 }

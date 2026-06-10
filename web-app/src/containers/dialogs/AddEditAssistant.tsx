@@ -34,6 +34,15 @@ interface AddEditAssistantProps {
   onSave: (assistant: Assistant) => void
 }
 
+type AssistantParameterType = 'string' | 'number' | 'boolean' | 'json'
+
+function getAssistantParameterType(value: unknown): AssistantParameterType {
+  if (typeof value === 'boolean') return 'boolean'
+  if (typeof value === 'number') return 'number'
+  if (typeof value === 'object') return 'json'
+  return 'string'
+}
+
 export default function AddEditAssistant({
   open,
   onOpenChange,
@@ -98,12 +107,7 @@ export default function AddEditAssistant({
       const values = Object.values(initialData.parameters || {})
 
       // Determine parameter types based on values
-      const types = values.map((value) => {
-        if (typeof value === 'boolean') return 'boolean'
-        if (typeof value === 'number') return 'number'
-        if (typeof value === 'object') return 'json'
-        return 'string'
-      })
+      const types = values.map(getAssistantParameterType)
 
       setParamsKeys(keys.length > 0 ? keys : [''])
       setParamsValues(values.length > 0 ? values : [''])
@@ -208,6 +212,36 @@ export default function AddEditAssistant({
     setParamsValues(newValues.length > 0 ? newValues : [''])
     setParamsTypes(newTypes.length > 0 ? newTypes : ['string'])
     setParamsIds(newIds.length > 0 ? newIds : [crypto.randomUUID()])
+  }
+
+  const handlePredefinedParameterSelect = (
+    key: string,
+    value: unknown
+  ) => {
+    if (paramsKeys.includes(key)) return
+
+    const newKeys = [...paramsKeys]
+    const newValues = [...paramsValues]
+    const newTypes = [...paramsTypes]
+    const newIds = [...paramsIds]
+    const targetIndex =
+      paramsKeys[paramsKeys.length - 1] === '' ? newKeys.length - 1 : -1
+
+    if (targetIndex >= 0) {
+      newKeys[targetIndex] = key
+      newValues[targetIndex] = value
+      newTypes[targetIndex] = getAssistantParameterType(value)
+    } else {
+      newKeys.push(key)
+      newValues.push(value)
+      newTypes.push(getAssistantParameterType(value))
+      newIds.push(crypto.randomUUID())
+    }
+
+    setParamsKeys(newKeys)
+    setParamsValues(newValues)
+    setParamsTypes(newTypes)
+    setParamsIds(newIds)
   }
 
   const handleSave = () => {
@@ -365,49 +399,12 @@ export default function AddEditAssistant({
               {Object.entries(paramsSettings).map(([key, setting]) => (
                 <div
                   key={key}
-                  onClick={() => {
-                    // Check if parameter already exists
-                    const existingIndex = paramsKeys.findIndex(
-                      (k) => k === setting.key
+                  onClick={() =>
+                    handlePredefinedParameterSelect(
+                      setting.key,
+                      setting.value
                     )
-                    if (existingIndex === -1) {
-                      // Add new parameter
-                      const newKeys = [...paramsKeys]
-                      const newValues = [...paramsValues]
-                      const newTypes = [...paramsTypes]
-                      const newIds = [...paramsIds]
-
-                      // If the last param is empty, replace it, otherwise add new
-                      if (paramsKeys[paramsKeys.length - 1] === '') {
-                        newKeys[newKeys.length - 1] = setting.key
-                        newValues[newValues.length - 1] = setting.value
-                        newTypes[newTypes.length - 1] =
-                          typeof setting.value === 'boolean'
-                            ? 'boolean'
-                            : typeof setting.value === 'number'
-                              ? 'number'
-                              : 'string'
-                        // `newIds` already has the right length here —
-                        // the placeholder id at the last slot stays.
-                      } else {
-                        newKeys.push(setting.key)
-                        newValues.push(setting.value)
-                        newTypes.push(
-                          typeof setting.value === 'boolean'
-                            ? 'boolean'
-                            : typeof setting.value === 'number'
-                              ? 'number'
-                              : 'string'
-                        )
-                        newIds.push(crypto.randomUUID())
-                      }
-
-                      setParamsKeys(newKeys)
-                      setParamsValues(newValues)
-                      setParamsTypes(newTypes)
-                      setParamsIds(newIds)
-                    }
-                  }}
+                  }
                   className={cn(
                     'text-xs bg-secondary-foreground/5 py-1 px-2 rounded-sm cursor-pointer',
                     paramsKeys.includes(setting.key) && 'opacity-50'

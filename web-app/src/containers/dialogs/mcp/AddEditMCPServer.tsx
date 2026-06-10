@@ -1,5 +1,5 @@
 import { Code, GripVertical, Plus, Trash2 } from "lucide-react";
-import { useState, useEffect } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -104,6 +104,13 @@ interface AddEditMCPServerProps {
   onSave: (name: string, config: MCPServerConfig) => void
 }
 
+type ArgEntry = { id: string; value: string }
+
+const makeArg = (value: string = ''): ArgEntry => ({
+  id: crypto.randomUUID(),
+  value,
+})
+
 export default function AddEditMCPServer({
   open,
   onOpenChange,
@@ -117,11 +124,6 @@ export default function AddEditMCPServer({
   // Each arg has a stable `id` so React keys / DndContext identities stay
   // stable across drag-reorders — using the array index as key unmounted
   // the focused input mid-drag and dropped typed values.
-  type ArgEntry = { id: string; value: string }
-  const makeArg = (value: string = ''): ArgEntry => ({
-    id: crypto.randomUUID(),
-    value,
-  })
   const [args, setArgs] = useState<ArgEntry[]>(() => [makeArg('')])
   const [envKeys, setEnvKeys] = useState<string[]>([''])
   const [envValues, setEnvValues] = useState<string[]>([''])
@@ -138,6 +140,22 @@ export default function AddEditMCPServer({
   const [isToggled, setIsToggled] = useState(false)
   const [jsonContent, setJsonContent] = useState('')
   const [error, setError] = useState<string | null>(null)
+
+  const resetForm = useCallback(() => {
+    setServerName('')
+    setCommand('')
+    setUrl('')
+    setTimeoutValue('')
+    setArgs([makeArg('')])
+    setEnvKeys([''])
+    setEnvValues([''])
+    setHeaderKeys([''])
+    setHeaderValues([''])
+    setTransportType('stdio')
+    setIsToggled(false)
+    setJsonContent('')
+    setError(null)
+  }, [])
 
   // Reset form when modal opens/closes or editing key changes
   useEffect(() => {
@@ -184,23 +202,7 @@ export default function AddEditMCPServer({
       // Add mode - reset form
       resetForm()
     }
-  }, [open, editingKey, initialData])
-
-  const resetForm = () => {
-    setServerName('')
-    setCommand('')
-    setUrl('')
-    setTimeoutValue('')
-    setArgs([makeArg('')])
-    setEnvKeys([''])
-    setEnvValues([''])
-    setHeaderKeys([''])
-    setHeaderValues([''])
-    setTransportType('stdio')
-    setIsToggled(false)
-    setJsonContent('')
-    setError(null)
-  }
+  }, [open, editingKey, initialData, resetForm])
 
   const handleAddArg = () => {
     setArgs([...args, makeArg('')])

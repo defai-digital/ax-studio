@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { act } from '@testing-library/react'
 import { useLlamacppDevices } from '../useLlamacppDevices'
 import { useModelProvider } from '../useModelProvider'
@@ -12,7 +12,6 @@ const mockHardwareService = {
   getHardwareInfo: vi.fn().mockResolvedValue(null),
   getSystemUsage: vi.fn().mockResolvedValue(null),
   getLlamacppDevices: mockGetLlamacppDevices,
-  setActiveGpus: vi.fn().mockResolvedValue(undefined),
   getGpuInfo: vi.fn().mockResolvedValue([]),
   getCpuInfo: vi.fn().mockResolvedValue({}),
   getMemoryInfo: vi.fn().mockResolvedValue({}),
@@ -45,8 +44,11 @@ vi.mock('@/hooks/useServiceHub', async () => {
 })
 
 describe('useLlamacppDevices', () => {
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
+
   beforeEach(() => {
     vi.clearAllMocks()
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     // Reset store
     act(() => {
@@ -63,6 +65,10 @@ describe('useLlamacppDevices', () => {
         providers: [],
       })
     })
+  })
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore()
   })
 
   // --- Default state ---
@@ -440,8 +446,9 @@ describe('useLlamacppDevices', () => {
       })
     ).resolves.not.toThrow()
 
-    // Optimistic update still applied
-    expect(useLlamacppDevices.getState().devices[0].activated).toBe(false)
+    // Failed persistence rolls back the optimistic update.
+    expect(useLlamacppDevices.getState().devices[0].activated).toBe(true)
+    expect(useLlamacppDevices.getState().error).toBe('persist failed')
   })
 
   it('should preserve non-device settings when persisting', async () => {

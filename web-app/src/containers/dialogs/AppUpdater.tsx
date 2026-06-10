@@ -98,7 +98,7 @@ const DialogAppUpdater = () => {
                         <h2 {...props} className="text-xl! mt-0!" />
                       ),
                     }}
-                    content={release?.body}
+                    content={String(release?.body ?? '')}
                   />
                 )}
               </div>

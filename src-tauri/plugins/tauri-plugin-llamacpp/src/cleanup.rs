@@ -30,7 +30,10 @@ pub async fn cleanup_processes<R: Runtime>(app_handle: &tauri::AppHandle<R>) {
                     let is_group_leader = pgid > 0 && pgid == raw_pid;
 
                     let signal_target = if is_group_leader {
-                        log::debug!("Sending SIGTERM to process group -{} during shutdown", raw_pid);
+                        log::debug!(
+                            "Sending SIGTERM to process group -{} during shutdown",
+                            raw_pid
+                        );
                         Pid::from_raw(-raw_pid)
                     } else {
                         log::debug!("Sending SIGTERM to PID {} during shutdown", raw_pid);

@@ -16,19 +16,6 @@ export type OnToolCallCallback = (params: {
   toolCall: { toolCallId: string; toolName: string; input: unknown }
 }) => void
 
-export type ServiceHub = {
-  mcp(): {
-    getTools(): Promise<
-      Array<{ name: string; description: string; inputSchema: unknown }>
-    >
-  }
-  rag(): {
-    getTools(): Promise<
-      Array<{ name: string; description: string; inputSchema: unknown }>
-    >
-  }
-}
-
 export type SendMessagesOptions = {
   chatId: string
   messages: UIMessage[]

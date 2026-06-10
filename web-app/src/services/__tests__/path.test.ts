@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { TauriPathService } from '../path/tauri'
 
 // Mock the @tauri-apps/api/path module
@@ -18,10 +18,16 @@ vi.mock('@tauri-apps/api/path', () => ({
 
 describe('TauriPathService', () => {
   let pathService: TauriPathService
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
     pathService = new TauriPathService()
     vi.clearAllMocks()
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore()
   })
 
   describe('sep', () => {

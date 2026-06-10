@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { invoke } from '@tauri-apps/api/core'
+import { getServiceHub } from '@/hooks/useServiceHub'
 
 // ─── Config types matching the Rust AkidbConfig struct ─────────────────────
 
@@ -76,7 +76,7 @@ export function createDefaultConfig(dataFolder?: string): AkidbConfig {
       root: '~/.ax-studio/data/akidb',
       collection: 'default',
       metric: 'cosine',
-      dimension: 1536,
+      dimension: 768,
     },
     ingest: {
       sources: dataFolder ? [{ path: dataFolder }] : [],
@@ -87,9 +87,9 @@ export function createDefaultConfig(dataFolder?: string): AkidbConfig {
     },
     embedder: {
       type: 'http',
-      model_id: 'gte-qwen2-1.5b-instruct-q4_k_m',
-      dimension: 1536,
-      batch_size: 4,
+      model_id: 'nomic-embed-text-v1.5',
+      dimension: 768,
+      batch_size: 64,
       timeout_ms: 120000,
       base_url: 'http://127.0.0.1:18080',
     },
@@ -139,7 +139,7 @@ export const useAkidbConfig = create<AkidbConfigStore>()((set, get) => ({
   load: async () => {
     set({ loading: true, error: null })
     try {
-      const config = await invoke<AkidbConfig | null>('read_akidb_config')
+      const config = await getServiceHub().core().invoke<AkidbConfig | null>('read_akidb_config')
       set({ config })
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e) })
@@ -151,7 +151,7 @@ export const useAkidbConfig = create<AkidbConfigStore>()((set, get) => ({
   save: async (config: AkidbConfig) => {
     set({ saving: true, error: null })
     try {
-      await invoke('write_akidb_config', { config })
+      await getServiceHub().core().invoke('write_akidb_config', { config })
       set({ config })
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e) })
@@ -163,7 +163,7 @@ export const useAkidbConfig = create<AkidbConfigStore>()((set, get) => ({
 
   loadStatus: async () => {
     try {
-      const status = await invoke<AkidbStatus | null>('read_akidb_status')
+      const status = await getServiceHub().core().invoke<AkidbStatus | null>('read_akidb_status')
       set({ status })
     } catch {
       set({ status: null })
@@ -173,7 +173,7 @@ export const useAkidbConfig = create<AkidbConfigStore>()((set, get) => ({
   syncNow: async () => {
     set({ syncing: true, error: null })
     try {
-      const result = await invoke<AkidbSyncResult>('akidb_sync_now')
+      const result = await getServiceHub().core().invoke<AkidbSyncResult>('akidb_sync_now')
       // Refresh status after sync completes
       await get().loadStatus()
       return result

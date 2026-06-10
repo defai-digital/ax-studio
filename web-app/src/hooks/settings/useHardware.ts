@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
-import { createSafeJSONStorage } from '@/lib/storage'
+import { createSafeJSONStorage } from '@/lib/storage/storage'
 
 // Hardware data types
 export interface CPU {

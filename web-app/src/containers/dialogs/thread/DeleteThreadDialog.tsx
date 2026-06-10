@@ -1,6 +1,6 @@
 import { Trash2 } from "lucide-react";
 import { useState, useRef } from 'react'
-import { useNavigate } from '@tanstack/react-router'
+import { useLocation, useNavigate } from '@tanstack/react-router'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import {
   Dialog,
@@ -38,6 +38,7 @@ export function DeleteThreadDialog({
 }: DeleteThreadDialogProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const location = useLocation()
   const [internalOpen, setInternalOpen] = useState(false)
   // Focus Cancel rather than the destructive button so Enter-to-dismiss
   // doesn't accidentally confirm the delete.
@@ -68,7 +69,10 @@ export function DeleteThreadDialog({
       id: 'delete-thread',
       description: t('common:toast.deleteThread.description'),
     })
-    if (variant !== 'project') {
+    const isDeletingVisibleThread =
+      location.pathname === `/threads/${encodeURIComponent(thread.id)}`
+
+    if (variant !== 'project' && isDeletingVisibleThread) {
       setTimeout(() => {
         navigate({ to: route.home })
       }, 0)

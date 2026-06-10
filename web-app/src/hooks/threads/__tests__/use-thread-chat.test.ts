@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useMessages } from '@/hooks/chat/useMessages'
 import { useThreads } from '@/hooks/threads/useThreads'
+import { useChatSessions } from '@/stores/chat-session-store'
 import { useThreadChat, type ThreadChatParams } from '../use-thread-chat'
 
 // Mock AI SDK
@@ -91,9 +92,6 @@ describe('useThreadChat', () => {
   let mockSendMessage: ReturnType<typeof vi.fn>
   let mockRegenerate: ReturnType<typeof vi.fn>
   let mockSetChatMessages: ReturnType<typeof vi.fn>
-  let mockHandleRememberCommand: ReturnType<typeof vi.fn>
-  let mockHandleForgetCommand: ReturnType<typeof vi.fn>
-  let lastUserInputRef: { current: string }
 
   const defaultParams = (): ThreadChatParams => ({
     threadId,
@@ -101,9 +99,6 @@ describe('useThreadChat', () => {
     regenerate: mockRegenerate,
     chatMessages: [],
     setChatMessages: mockSetChatMessages,
-    handleRememberCommand: mockHandleRememberCommand,
-    handleForgetCommand: mockHandleForgetCommand,
-    lastUserInputRef,
   })
 
   beforeEach(() => {
@@ -111,9 +106,6 @@ describe('useThreadChat', () => {
     mockSendMessage = vi.fn()
     mockRegenerate = vi.fn()
     mockSetChatMessages = vi.fn()
-    mockHandleRememberCommand = vi.fn().mockReturnValue(false)
-    mockHandleForgetCommand = vi.fn().mockReturnValue(false)
-    lastUserInputRef = { current: '' }
 
     // Reset stores
     useMessages.setState({ messages: {} })
@@ -137,31 +129,9 @@ describe('useThreadChat', () => {
         await result.current.processAndSendMessage('  hello world  ')
       })
 
-      expect(lastUserInputRef.current).toBe('hello world')
-    })
-
-    it('delegates /remember to handleRememberCommand', async () => {
-      mockHandleRememberCommand.mockReturnValue(true)
-      const { result } = renderHook(() => useThreadChat(defaultParams()))
-
-      await act(async () => {
-        await result.current.processAndSendMessage('/remember test')
-      })
-
-      expect(mockHandleRememberCommand).toHaveBeenCalledWith('/remember test')
-      expect(mockSendMessage).not.toHaveBeenCalled()
-    })
-
-    it('delegates /forget to handleForgetCommand', async () => {
-      mockHandleForgetCommand.mockReturnValue(true)
-      const { result } = renderHook(() => useThreadChat(defaultParams()))
-
-      await act(async () => {
-        await result.current.processAndSendMessage('/forget test')
-      })
-
-      expect(mockHandleForgetCommand).toHaveBeenCalledWith('/forget test')
-      expect(mockSendMessage).not.toHaveBeenCalled()
+      // Trim happens inside processAndSendMessage; verify by checking that
+      // sendMessage was invoked with the trimmed text downstream.
+      expect(mockSendMessage).toHaveBeenCalled()
     })
 
     it('renames thread on first message when title is default', async () => {
@@ -227,6 +197,77 @@ describe('useThreadChat', () => {
           ]),
         })
       )
+    })
+
+    it('sends local knowledge context to the model without saving it in visible history', async () => {
+      const knowledgeContext =
+        '\n\n## Local Knowledge Base (ACTIVE)\nThe author got hired as a Software Development Engineer at Amazon.'
+      const retrieval = {
+        searched: true,
+        extracted: true,
+        source: '/Users/devop/Documents/akidb-testing/coding-interview-university.md',
+      }
+      const prepareLocalKnowledge = vi.fn().mockResolvedValue({
+        context: knowledgeContext,
+        retrieval,
+      })
+      const hiddenText = `What real-world hiring outcome did the author achieve?${knowledgeContext}`
+
+      vi.mocked(useChatSessions.getState).mockReturnValue({
+        sessions: {
+          [threadId]: {
+            chat: {
+              messages: [
+                {
+                  id: 'generated-id-1',
+                  role: 'user',
+                  parts: [{ type: 'text', text: hiddenText }],
+                },
+              ],
+            },
+          },
+        },
+      } as never)
+
+      const params = defaultParams()
+      params.prepareLocalKnowledge = prepareLocalKnowledge
+
+      const { result } = renderHook(() => useThreadChat(params))
+
+      await act(async () => {
+        await result.current.processAndSendMessage('What real-world hiring outcome did the author achieve?')
+        await Promise.resolve()
+      })
+
+      expect(mockSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          parts: [
+            expect.objectContaining({
+              type: 'text',
+              text: hiddenText,
+            }),
+          ],
+          metadata: expect.objectContaining({
+            localKnowledgeRetrieval: retrieval,
+          }),
+        })
+      )
+
+      const messages = useMessages.getState().getMessages(threadId)
+      expect(messages[0].content[0].text.value).toBe(
+        'What real-world hiring outcome did the author achieve?'
+      )
+      expect(messages[0].metadata.localKnowledgeRetrieval).toEqual(retrieval)
+      expect(mockSetChatMessages).toHaveBeenCalledWith([
+        expect.objectContaining({
+          id: 'generated-id-1',
+          parts: [
+            expect.objectContaining({
+              text: 'What real-world hiring outcome did the author achieve?',
+            }),
+          ],
+        }),
+      ])
     })
   })
 

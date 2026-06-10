@@ -1,10 +1,9 @@
 use std::{fs, path::PathBuf};
-use tauri::{AppHandle, Manager, Runtime, State};
+use tauri::{AppHandle, Manager, Runtime};
 
 use super::{
     constants::CONFIGURATION_FILE_NAME, helpers::copy_dir_recursive, models::AppConfiguration,
 };
-use crate::core::state::AppState;
 
 #[tauri::command]
 pub fn get_app_configurations<R: Runtime>(app_handle: tauri::AppHandle<R>) -> AppConfiguration {
@@ -51,15 +50,13 @@ pub fn get_app_configurations<R: Runtime>(app_handle: tauri::AppHandle<R>) -> Ap
                     // silently returned the default config and left the
                     // corrupt file in place — the user's custom data
                     // folder path reverted to default with no UI signal.
-                    let quarantine_path = configuration_file.with_extension(
-                        format!(
-                            "corrupt-{}.json",
-                            std::time::SystemTime::now()
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .map(|d| d.as_secs())
-                                .unwrap_or(0)
-                        ),
-                    );
+                    let quarantine_path = configuration_file.with_extension(format!(
+                        "corrupt-{}.json",
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_secs())
+                            .unwrap_or(0)
+                    ));
                     match fs::rename(&configuration_file, &quarantine_path) {
                         Ok(()) => log::error!(
                             "Failed to parse app config; quarantined to {quarantine_path:?} and returning defaults. Parse error: {err}"
@@ -99,26 +96,27 @@ pub fn update_app_configuration<R: Runtime>(
 #[tauri::command]
 pub fn get_app_data_folder_path<R: Runtime>(app_handle: tauri::AppHandle<R>) -> PathBuf {
     if cfg!(test) {
-        use std::cell::RefCell;
-        thread_local! {
-            static TEST_DATA_DIR: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
-        }
+        use std::{
+            collections::HashMap,
+            sync::{Mutex, OnceLock},
+        };
+        static TEST_DATA_DIRS: OnceLock<Mutex<HashMap<String, PathBuf>>> = OnceLock::new();
 
-        return TEST_DATA_DIR.with(|dir| {
-            let mut dir = dir.borrow_mut();
-            if dir.is_none() {
-                let unique_id = std::thread::current().id();
+        let thread_id = format!("{:?}", std::thread::current().id());
+        let dirs = TEST_DATA_DIRS.get_or_init(|| Mutex::new(HashMap::new()));
+        let mut dirs = dirs.lock().expect("test data dir map lock poisoned");
+        let path = dirs
+            .entry(thread_id.clone())
+            .or_insert_with(|| {
                 let timestamp = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .map(|d| d.as_nanos())
                     .unwrap_or(0);
-                let path = std::env::temp_dir()
-                    .join(format!("ax-studio-test-data-{unique_id:?}-{timestamp}"));
-                let _ = fs::create_dir_all(&path);
-                *dir = Some(path);
-            }
-            dir.clone().unwrap()
-        });
+                std::env::temp_dir().join(format!("ax-studio-test-data-{thread_id}-{timestamp}"))
+            })
+            .clone();
+        let _ = fs::create_dir_all(&path);
+        return path;
     }
 
     let app_configurations = get_app_configurations(app_handle);
@@ -223,9 +221,4 @@ pub fn change_app_data_folder<R: Runtime>(
 
     // Save the updated configuration
     update_app_configuration(app_handle, configuration)
-}
-
-#[tauri::command]
-pub fn app_token(state: State<'_, AppState>) -> Option<String> {
-    state.app_token.clone()
 }

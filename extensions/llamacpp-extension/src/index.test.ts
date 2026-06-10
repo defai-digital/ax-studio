@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { invoke } from '@tauri-apps/api/core'
 
 const mocks = vi.hoisted(() => {
@@ -102,6 +102,9 @@ vi.mock('@ax-studio/core', () => ({
     getSettings = mocks.getSettings
     getSetting = mocks.getSetting
     updateSettings = mocks.updateSettings
+    onLoad() {
+      this.registerEngine()
+    }
   },
   getAppDataFolderPath: mocks.getAppDataFolderPath,
   joinPath: mocks.joinPath,
@@ -172,10 +175,20 @@ vi.mock('@ax-studio/core', () => ({
 
 import AxStudioLlamacppExtension from './index'
 import { configureBackends } from './backend'
+import { getLoadedModels, startAxServing } from '@ax-studio/tauri-plugin-llamacpp-api'
 
 describe('AxStudioLlamacppExtension', () => {
+  let consoleDebugSpy: ReturnType<typeof vi.spyOn>
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
+  let consoleInfoSpy: ReturnType<typeof vi.spyOn>
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+
   beforeEach(() => {
     vi.clearAllMocks()
+    consoleDebugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {})
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     mocks.storage.clear()
     mocks.fsState.clear()
     mocks.dirState.clear()
@@ -194,6 +207,13 @@ describe('AxStudioLlamacppExtension', () => {
       const path = (args as { path?: string } | undefined)?.path
       return path ?? ''
     })
+  })
+
+  afterEach(() => {
+    consoleDebugSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
+    consoleInfoSpy.mockRestore()
+    consoleWarnSpy.mockRestore()
   })
 
   it('shows a toast when background backend configuration fails during onLoad', async () => {
@@ -271,6 +291,112 @@ describe('AxStudioLlamacppExtension', () => {
     ).rejects.toThrow('Model path traversal detected')
   })
 
+  it('reconciles stale ax-serving sessions against health before reporting loaded models', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    ;(extension as any).axServingPid = 123
+    ;(extension as any).axServingPort = 456
+    ;(extension as any).axServingSessions.set('Qwen3.6-35B-A3B-4bit', {
+      pid: 123,
+      port: 456,
+      model_id: 'Qwen3.6-35B-A3B-4bit',
+      model_path: '/models/qwen',
+      is_embedding: false,
+      api_key: '',
+    })
+    ;(extension as any).axServingSessions.set('gemma-4-26b-a4b-it-4bit', {
+      pid: 123,
+      port: 456,
+      model_id: 'gemma-4-26b-a4b-it-4bit',
+      model_path: '/models/gemma',
+      is_embedding: false,
+      api_key: '',
+    })
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ loaded_models: ['gemma-4-26b-a4b-it-4bit'] }),
+    } as Response)
+
+    await expect(extension.getLoadedModels()).resolves.toEqual([
+      'gemma-4-26b-a4b-it-4bit',
+    ])
+
+    expect((extension as any).axServingSessions.has('Qwen3.6-35B-A3B-4bit')).toBe(false)
+    expect((extension as any).axServingSessions.has('gemma-4-26b-a4b-it-4bit')).toBe(true)
+    fetchSpy.mockRestore()
+  })
+
+  it('does not expose the ax-serving service marker as a loaded chat model', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    vi.mocked(getLoadedModels).mockResolvedValueOnce([
+      '__ax_serving__',
+      'llama-model',
+    ])
+
+    await expect(extension.getLoadedModels()).resolves.toEqual(['llama-model'])
+  })
+
+  it('waits for engine switch cleanup before loading through ax-serving', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    ;(extension as any).config = {
+      engine_type: 'ax-serving',
+      n_gpu_layers: -1,
+      ctx_size: 0,
+    }
+    mocks.dirState.add('/app-data/llamacpp/models/ax-model')
+    mocks.fsState.set(
+      '/app-data/llamacpp/models/ax-model/model.yml',
+      [
+        'model_path: llamacpp/models/ax-model/model.gguf',
+        'name: ax-model',
+        'size_bytes: 123',
+        'embedding: false',
+      ].join('\n')
+    )
+    mocks.fsState.set('/app-data/llamacpp/models/ax-model/model.gguf', 'gguf')
+    mocks.fsState.set('/app-data/llamacpp/models/ax-model/model-manifest.json', '{}')
+
+    vi.mocked(getLoadedModels).mockResolvedValue([])
+    vi.mocked(startAxServing).mockResolvedValue({
+      pid: 321,
+      port: 6543,
+      model_id: '__ax_serving__',
+      model_path: '/backend/ax-serving',
+      is_embedding: false,
+      api_key: '',
+    })
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+      text: async () => '',
+    } as Response)
+
+    let releaseCleanup!: () => void
+    ;(extension as any).engineSwitchQueue = new Promise<void>((resolve) => {
+      releaseCleanup = resolve
+    })
+
+    const loadPromise = extension.load('ax-model', undefined, false, true)
+    await Promise.resolve()
+
+    expect(startAxServing).not.toHaveBeenCalled()
+
+    releaseCleanup()
+    await expect(loadPromise).resolves.toMatchObject({
+      model_id: 'ax-model',
+      port: 6543,
+    })
+    expect(startAxServing).toHaveBeenCalled()
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://127.0.0.1:6543/v1/models',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"model_id":"ax-model"'),
+      })
+    )
+
+    fetchSpy.mockRestore()
+  })
+
   it('canonicalizes local import paths before copy operations', () => {
     const extension = new AxStudioLlamacppExtension('', '')
 
@@ -322,6 +448,120 @@ describe('AxStudioLlamacppExtension', () => {
       embedding: true,
       sha256: 'abc',
       mmproj_sha256: 'def',
+    })
+  })
+
+  it('lists local models when readdir returns relative names', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    mocks.dirState.add('/app-data/llamacpp/models/Qwen3-4B-Instruct-MLX')
+    mocks.fsState.set(
+      '/app-data/llamacpp/models/Qwen3-4B-Instruct-MLX/model.yml',
+      [
+        'model_path: llamacpp/models/Qwen3-4B-Instruct-MLX',
+        'name: Qwen3-4B-Instruct-MLX',
+        'size_bytes: 123',
+        'embedding: false',
+      ].join('\n')
+    )
+    vi.mocked((await import('@ax-studio/core')).fs.readdirSync).mockImplementation(
+      async (path: string) => {
+        if (path === '/app-data/llamacpp/models') return ['Qwen3-4B-Instruct-MLX']
+        return []
+      }
+    )
+
+    await expect(extension.list()).resolves.toMatchObject([
+      {
+        id: 'Qwen3-4B-Instruct-MLX',
+        name: 'Qwen3-4B-Instruct-MLX',
+        providerId: 'llamacpp',
+      },
+    ])
+  })
+
+  it('lists local models when readdir returns absolute paths', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    mocks.dirState.add('/app-data/llamacpp/models/gemma-4-26b-a4b-it-4bit')
+    mocks.fsState.set(
+      '/app-data/llamacpp/models/gemma-4-26b-a4b-it-4bit/model.yml',
+      [
+        'model_path: llamacpp/models/gemma-4-26b-a4b-it-4bit',
+        'name: gemma-4-26b-a4b-it-4bit',
+        'size_bytes: 456',
+        'embedding: false',
+      ].join('\n')
+    )
+    vi.mocked((await import('@ax-studio/core')).fs.readdirSync).mockImplementation(
+      async (path: string) => {
+        if (path === '/app-data/llamacpp/models') {
+          return ['/app-data/llamacpp/models/gemma-4-26b-a4b-it-4bit']
+        }
+        return []
+      }
+    )
+
+    await expect(extension.list()).resolves.toMatchObject([
+      {
+        id: 'gemma-4-26b-a4b-it-4bit',
+        name: 'gemma-4-26b-a4b-it-4bit',
+        providerId: 'llamacpp',
+      },
+    ])
+  })
+
+  it('lists downloaded models even when AX manifests are missing', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    ;(extension as any).config = { engine_type: 'ax-serving' }
+    mocks.dirState.add('/app-data/llamacpp/models/Qwen2.5-32B-Instruct-4bit')
+    mocks.dirState.add('/app-data/llamacpp/models/Qwen3.5-35B-A3B-4bit')
+    mocks.fsState.set(
+      '/app-data/llamacpp/models/Qwen2.5-32B-Instruct-4bit/model.yml',
+      [
+        'model_path: llamacpp/models/Qwen2.5-32B-Instruct-4bit',
+        'name: Qwen2.5-32B-Instruct-4bit',
+        'size_bytes: 123',
+        'embedding: false',
+      ].join('\n')
+    )
+    mocks.fsState.set(
+      '/app-data/llamacpp/models/Qwen3.5-35B-A3B-4bit/model.yml',
+      [
+        'model_path: llamacpp/models/Qwen3.5-35B-A3B-4bit',
+        'name: Qwen3.5-35B-A3B-4bit',
+        'size_bytes: 456',
+        'embedding: false',
+      ].join('\n')
+    )
+    mocks.fsState.set(
+      '/app-data/llamacpp/models/Qwen3.5-35B-A3B-4bit/model-manifest.json',
+      '{}'
+    )
+    vi.mocked((await import('@ax-studio/core')).fs.readdirSync).mockImplementation(
+      async (path: string) => {
+        if (path === '/app-data/llamacpp/models') {
+          return ['Qwen2.5-32B-Instruct-4bit', 'Qwen3.5-35B-A3B-4bit']
+        }
+        return []
+      }
+    )
+
+    await expect(extension.list()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'Qwen2.5-32B-Instruct-4bit',
+          name: 'Qwen2.5-32B-Instruct-4bit',
+          providerId: 'llamacpp',
+        }),
+        expect.objectContaining({
+          id: 'Qwen3.5-35B-A3B-4bit',
+          name: 'Qwen3.5-35B-A3B-4bit',
+          providerId: 'llamacpp',
+        }),
+      ])
+    )
+    await expect(extension.get('Qwen2.5-32B-Instruct-4bit')).resolves.toMatchObject({
+      id: 'Qwen2.5-32B-Instruct-4bit',
+      providerId: 'llamacpp',
     })
   })
 

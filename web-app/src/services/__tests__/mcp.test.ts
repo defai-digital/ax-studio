@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { TauriMCPService } from '../mcp/tauri'
-import { MCPTool } from '@/types/completion'
+import { MCPTool } from '@/types/mcp'
 import { DEFAULT_MCP_SETTINGS } from '@/hooks/tools/useMCPServers'
 
 // Mock the global window.core.api
@@ -12,6 +12,7 @@ const mockCore = {
     getTools: vi.fn(),
     getConnectedServers: vi.fn(),
     callTool: vi.fn(),
+    cancelToolCall: vi.fn(),
   },
 }
 
@@ -25,10 +26,20 @@ Object.defineProperty(global, 'window', {
 
 describe('TauriMCPService', () => {
   let mcpService: TauriMCPService
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
     mcpService = new TauriMCPService()
+    window.core = mockCore
     vi.clearAllMocks()
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleWarnSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
   })
 
   describe('updateMCPConfig', () => {
@@ -65,7 +76,7 @@ describe('TauriMCPService', () => {
       })
     })
 
-    it('should handle undefined window.core.api gracefully', async () => {
+    it('should reject when window.core.api is unavailable', async () => {
       // Temporarily set window.core to undefined
       const originalCore = window.core
       // @ts-ignore
@@ -73,7 +84,7 @@ describe('TauriMCPService', () => {
 
       const testConfig = '{"server1": {}}'
 
-      await expect(mcpService.updateMCPConfig(testConfig)).resolves.toBeUndefined()
+      await expect(mcpService.updateMCPConfig(testConfig)).rejects.toThrow('MCP API is unavailable')
 
       // Restore original core
       window.core = originalCore
@@ -97,12 +108,12 @@ describe('TauriMCPService', () => {
       expect(mockCore.api.restartMcpServers).toHaveBeenCalledWith()
     })
 
-    it('should handle undefined window.core.api gracefully', async () => {
+    it('should reject when window.core.api is unavailable', async () => {
       const originalCore = window.core
       // @ts-ignore
       window.core = undefined
 
-      await expect(mcpService.restartMCPServers()).resolves.toBeUndefined()
+      await expect(mcpService.restartMCPServers()).rejects.toThrow('MCP API is unavailable')
 
       window.core = originalCore
     })
@@ -189,6 +200,7 @@ describe('TauriMCPService', () => {
             },
             required: ['path'],
           },
+          server: 'filesystem',
         },
         {
           name: 'file_write',
@@ -201,6 +213,7 @@ describe('TauriMCPService', () => {
             },
             required: ['path', 'content'],
           },
+          server: 'filesystem',
         },
       ]
 
@@ -231,14 +244,12 @@ describe('TauriMCPService', () => {
       await expect(mcpService.getTools()).rejects.toThrow('Failed to get tools')
     })
 
-    it('should handle undefined window.core.api', async () => {
+    it('should reject when window.core.api is unavailable', async () => {
       const originalCore = window.core
       // @ts-ignore
       window.core = undefined
 
-      const result = await mcpService.getTools()
-
-      expect(result).toEqual([])
+      await expect(mcpService.getTools()).rejects.toThrow('MCP API is unavailable')
 
       window.core = originalCore
     })
@@ -272,14 +283,12 @@ describe('TauriMCPService', () => {
       await expect(mcpService.getConnectedServers()).rejects.toThrow('Failed to get connected servers')
     })
 
-    it('should handle undefined window.core.api', async () => {
+    it('should reject when window.core.api is unavailable', async () => {
       const originalCore = window.core
       // @ts-ignore
       window.core = undefined
 
-      const result = await mcpService.getConnectedServers()
-
-      expect(result).toEqual([])
+      await expect(mcpService.getConnectedServers()).rejects.toThrow('MCP API is unavailable')
 
       window.core = originalCore
     })
@@ -347,7 +356,7 @@ describe('TauriMCPService', () => {
       expect(result).toEqual(mockResult)
     })
 
-    it('should handle API rejection', async () => {
+    it('should return a structured error for non-recoverable API rejection', async () => {
       const toolArgs = {
         toolName: 'file_read',
         arguments: { path: '/path/to/file.txt' },
@@ -356,10 +365,41 @@ describe('TauriMCPService', () => {
       const mockError = new Error('Tool execution failed')
       mockCore.api.callTool.mockRejectedValue(mockError)
 
-      await expect(mcpService.callTool(toolArgs)).rejects.toThrow('Tool execution failed')
+      const result = await mcpService.callTool(toolArgs)
+
+      expect(result).toEqual({
+        error: 'Tool execution failed',
+        content: [],
+      })
+      expect(mockCore.api.restartMcpServers).not.toHaveBeenCalled()
     })
 
-    it('should handle undefined window.core.api', async () => {
+    it('should restart MCP servers and retry once for recoverable transport failures', async () => {
+      const toolArgs = {
+        serverName: 'ax-studio',
+        toolName: 'fabric_search',
+        arguments: { query: 'Coding Interview University' },
+      }
+
+      const mockResult = {
+        error: '',
+        content: [{ text: 'Search results' }],
+      }
+
+      mockCore.api.callTool
+        .mockRejectedValueOnce(new Error('Transport closed'))
+        .mockResolvedValueOnce(mockResult)
+      mockCore.api.restartMcpServers.mockResolvedValue(undefined)
+
+      const result = await mcpService.callTool(toolArgs)
+
+      expect(mockCore.api.restartMcpServers).toHaveBeenCalledTimes(1)
+      expect(mockCore.api.callTool).toHaveBeenCalledTimes(2)
+      expect(mockCore.api.callTool).toHaveBeenNthCalledWith(2, toolArgs)
+      expect(result).toEqual(mockResult)
+    })
+
+    it('should reject when window.core.api is unavailable', async () => {
       const originalCore = window.core
       // @ts-ignore
       window.core = undefined
@@ -369,9 +409,7 @@ describe('TauriMCPService', () => {
         arguments: {},
       }
 
-      const result = await mcpService.callTool(toolArgs)
-
-      expect(result).toEqual({ error: 'MCP service unavailable', content: [] })
+      await expect(mcpService.callTool(toolArgs)).rejects.toThrow('MCP API is unavailable')
 
       window.core = originalCore
     })
@@ -404,6 +442,7 @@ describe('TauriMCPService', () => {
           name: 'read_file',
           description: 'Read file',
           inputSchema: { type: 'object' },
+          server: 'filesystem',
         },
       ]
       const servers = ['filesystem']

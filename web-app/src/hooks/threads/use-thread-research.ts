@@ -16,7 +16,8 @@ export function useThreadResearch(threadId: string) {
   const { startResearch, cancelResearch } = useResearch(threadId)
 
   const handleResearchCommand = useCallback(
-    (text: string): boolean => {
+    (text?: string): boolean => {
+      if (typeof text !== 'string') return false
       const trimmed = text.trimStart()
       if (!trimmed.toLowerCase().startsWith('/research')) return false
       const afterCommand = trimmed.slice('/research'.length)

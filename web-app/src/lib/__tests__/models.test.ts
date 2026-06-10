@@ -2,10 +2,9 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   defaultModel,
   extractDescription,
-  removeYamlFrontMatter,
   extractModelName,
-  extractModelRepo,
   getModelCapabilities,
+  getPreferredMmprojPath,
 } from '../models'
 import { ModelCapabilities } from '@/types/models'
 
@@ -126,54 +125,6 @@ This is the overview at the end.`
   })
 })
 
-describe('removeYamlFrontMatter', () => {
-  it('removes YAML front matter from content', () => {
-    const contentWithYaml = `---
-title: Test
-author: John
----
-# Main Content
-This is the main content.`
-
-    const expected = `# Main Content
-This is the main content.`
-
-    expect(removeYamlFrontMatter(contentWithYaml)).toBe(expected)
-  })
-
-  it('returns content unchanged when no YAML front matter', () => {
-    const content = `# Main Content
-This is the main content.`
-
-    expect(removeYamlFrontMatter(content)).toBe(content)
-  })
-
-  it('handles empty content', () => {
-    expect(removeYamlFrontMatter('')).toBe('')
-  })
-
-  it('handles content with only YAML front matter', () => {
-    const yamlOnly = `---
-title: Test
-author: John
----
-`
-
-    expect(removeYamlFrontMatter(yamlOnly)).toBe('')
-  })
-
-  it('does not remove YAML-like content in middle of text', () => {
-    const content = `# Title
-Some content here.
----
-This is not front matter
----
-More content.`
-
-    expect(removeYamlFrontMatter(content)).toBe(content)
-  })
-})
-
 describe('extractModelName', () => {
   it('extracts model name from repo path', () => {
     expect(extractModelName('cortexso/tinyllama')).toBe('tinyllama')
@@ -200,38 +151,6 @@ describe('extractModelName', () => {
 
   it('handles multiple slashes', () => {
     expect(extractModelName('org/sub/model')).toBe('sub')
-  })
-})
-
-describe('extractModelRepo', () => {
-  it('extracts repo path from HuggingFace URL', () => {
-    expect(extractModelRepo('https://huggingface.co/cortexso/tinyllama')).toBe(
-      'cortexso/tinyllama'
-    )
-    expect(
-      extractModelRepo('https://huggingface.co/microsoft/DialoGPT-medium')
-    ).toBe('microsoft/DialoGPT-medium')
-  })
-
-  it('returns input unchanged when not a HuggingFace URL', () => {
-    expect(extractModelRepo('cortexso/tinyllama')).toBe('cortexso/tinyllama')
-    expect(extractModelRepo('https://github.com/user/repo')).toBe(
-      'https://github.com/user/repo'
-    )
-  })
-
-  it('handles undefined input', () => {
-    expect(extractModelRepo()).toBeUndefined()
-  })
-
-  it('handles empty string', () => {
-    expect(extractModelRepo('')).toBe('')
-  })
-
-  it('handles URLs with trailing slashes', () => {
-    expect(extractModelRepo('https://huggingface.co/cortexso/tinyllama/')).toBe(
-      'cortexso/tinyllama/'
-    )
   })
 })
 
@@ -303,5 +222,29 @@ describe('getModelCapabilities', () => {
     expect(capabilities).toContain(ModelCapabilities.COMPLETION)
     expect(capabilities).toContain(ModelCapabilities.TOOLS)
     expect(capabilities).not.toContain(ModelCapabilities.VISION)
+  })
+})
+
+describe('getPreferredMmprojPath', () => {
+  it('prefers the f16 mmproj model path', () => {
+    expect(
+      getPreferredMmprojPath([
+        { model_id: 'model.mmproj-q8', path: 'q8.gguf', file_size: '1 GB' },
+        { model_id: 'mmproj-f16', path: 'f16.gguf', file_size: '2 GB' },
+      ])
+    ).toBe('f16.gguf')
+  })
+
+  it('falls back to the first mmproj model path', () => {
+    expect(
+      getPreferredMmprojPath([
+        { model_id: 'model.mmproj-q8', path: 'q8.gguf', file_size: '1 GB' },
+      ])
+    ).toBe('q8.gguf')
+  })
+
+  it('returns undefined when no mmproj models are available', () => {
+    expect(getPreferredMmprojPath()).toBeUndefined()
+    expect(getPreferredMmprojPath([])).toBeUndefined()
   })
 })

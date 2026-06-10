@@ -17,19 +17,18 @@ import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { useMessages } from '@/hooks/chat/useMessages'
 import { useLocalKnowledge } from '@/hooks/research/useLocalKnowledge'
+import { type ThreadMessage } from '@ax-studio/core'
 import { useChat } from '@/hooks/chat/use-chat'
-import { useThreadMemory } from '@/hooks/threads/use-thread-memory'
 import { useThreadConfig } from '@/hooks/threads/use-thread-config'
 import { useThreadChat } from '@/hooks/threads/use-thread-chat'
-import { useThreadTools } from '@/hooks/threads/use-thread-tools'
+import { useThreadTools, type AddToolOutputFn } from '@/hooks/threads/use-thread-tools'
 import { useThreadResearch } from '@/hooks/threads/use-thread-research'
 import { extractContentPartsFromUIMessage } from '@/lib/messages'
 import {
-  DIAGRAM_FORMAT_INSTRUCTION,
   CODE_EXECUTION_INSTRUCTION,
-  ARTIFACT_FORMAT_INSTRUCTION,
   LOCAL_KNOWLEDGE_INSTRUCTION,
-} from '@/lib/system-prompt'
+  CITATION_FORMAT_INSTRUCTION,
+} from '@/lib/prompts/system-prompt'
 import { ResearchPanel } from '@/components/research/ResearchPanel'
 import { MainThreadPane } from '@/containers/threads/MainThreadPane'
 
@@ -55,13 +54,6 @@ export function SplitThreadContainer({
 
   // ─── Domain hooks (same as $threadId.tsx) ─────────────────────────────────
   const projectId = thread?.metadata?.project?.id
-  const {
-    memorySuffix,
-    lastUserInputRef,
-    processMemoryOnFinish,
-    handleRememberCommand,
-    handleForgetCommand,
-  } = useThreadMemory(threadId)
   const { promptResolution, optimizedModelConfig } = useThreadConfig({
     thread,
     selectedModel,
@@ -75,11 +67,7 @@ export function SplitThreadContainer({
     followUpMessage,
     onToolCall,
     startToolExecution,
-    onCostApproval,
-    agentTeams,
-    activeTeamId,
-    activeTeam,
-    handleTeamChange,
+    resetTurnState,
   } = useThreadTools({ threadId, projectId })
 
   // ─── UI state ─────────────────────────────────────────────────────────────
@@ -90,8 +78,7 @@ export function SplitThreadContainer({
   // ─── Chat session ─────────────────────────────────────────────────────────
   // Ref breaks the useChat <-> useThreadChat circular dependency (same pattern as $threadId.tsx)
   const persistMessageOnFinishRef = useRef<
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ((msg: UIMessage, parts: any[]) => void) | null
+    ((msg: UIMessage, parts: ThreadMessage['content']) => void) | null
   >(null)
 
   const {
@@ -112,14 +99,10 @@ export function SplitThreadContainer({
       (currentAssistant?.instructions && currentAssistant.id !== 'ax-studio'
         ? '\n\n' + currentAssistant.instructions
         : '') +
-      memorySuffix +
-      DIAGRAM_FORMAT_INSTRUCTION +
       CODE_EXECUTION_INSTRUCTION +
-      ARTIFACT_FORMAT_INSTRUCTION +
-      (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : ''),
+      (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : '') +
+      (localKnowledgeActive ? CITATION_FORMAT_INSTRUCTION : ''),
     modelOverrideId: optimizedModelConfig.modelId,
-    activeTeamId,
-    onCostApproval,
     inferenceParameters: {
       temperature: optimizedModelConfig.temperature,
       top_p: optimizedModelConfig.top_p,
@@ -167,14 +150,9 @@ export function SplitThreadContainer({
         }
         const contentParts =
           extractContentPartsFromUIMessage(messageForPersistence)
-        processMemoryOnFinish(
-          messageForPersistence,
-          contentParts,
-          setChatMessages,
-        )
         persistMessageOnFinishRef.current?.(messageForPersistence, contentParts)
       }
-      startToolExecution(addToolOutput)
+      startToolExecution(addToolOutput as unknown as AddToolOutputFn)
     },
     onToolCall,
     sendAutomaticallyWhen: followUpMessage,
@@ -193,9 +171,6 @@ export function SplitThreadContainer({
     regenerate,
     chatMessages,
     setChatMessages,
-    handleRememberCommand,
-    handleForgetCommand,
-    lastUserInputRef,
   })
 
   persistMessageOnFinishRef.current = persistMessageOnFinish
@@ -224,9 +199,10 @@ export function SplitThreadContainer({
   const handleSubmit = useCallback(
     async (text: string) => {
       if (handleResearchCommand(text)) return
+      resetTurnState()
       await processAndSendMessage(text)
     },
-    [processAndSendMessage, handleResearchCommand],
+    [processAndSendMessage, handleResearchCommand, resetTurnState],
   )
 
   // ─── Derived values ──────────────────────────────────────────────────────
@@ -278,10 +254,6 @@ export function SplitThreadContainer({
         updateThread={updateThread}
         isSplitView
         onSplitClose={onClose}
-        agentTeams={agentTeams}
-        activeTeamId={activeTeamId}
-        activeTeam={activeTeam}
-        handleTeamChange={handleTeamChange}
       />
     </div>
   )

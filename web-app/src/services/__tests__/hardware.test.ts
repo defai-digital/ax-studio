@@ -10,10 +10,19 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 describe('TauriHardwareService', () => {
   let hardwareService: TauriHardwareService
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
     hardwareService = new TauriHardwareService()
     vi.clearAllMocks()
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleWarnSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
   })
 
   describe('getHardwareInfo', () => {
@@ -63,8 +72,19 @@ describe('TauriHardwareService', () => {
       const mockError = new Error('Failed to get hardware info')
       vi.mocked(invoke).mockRejectedValue(mockError)
 
-      await expect(hardwareService.getHardwareInfo()).rejects.toThrow('Failed to get hardware info')
+      await expect(hardwareService.getHardwareInfo()).resolves.toBeNull()
       expect(vi.mocked(invoke)).toHaveBeenCalledWith('plugin:hardware|get_system_info')
+    })
+
+    it('should return null when hardware info has an unexpected shape', async () => {
+      vi.mocked(invoke).mockResolvedValue('not-an-object')
+
+      await expect(hardwareService.getHardwareInfo()).resolves.toBeNull()
+
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[TauriHardwareService] get_system_info returned unexpected shape:',
+        'not-an-object'
+      )
     })
 
     it('should return correct type from invoke', async () => {
@@ -123,8 +143,19 @@ describe('TauriHardwareService', () => {
       const mockError = new Error('Failed to get system usage')
       vi.mocked(invoke).mockRejectedValue(mockError)
 
-      await expect(hardwareService.getSystemUsage()).rejects.toThrow('Failed to get system usage')
+      await expect(hardwareService.getSystemUsage()).resolves.toBeNull()
       expect(vi.mocked(invoke)).toHaveBeenCalledWith('plugin:hardware|get_system_usage')
+    })
+
+    it('should return null when system usage has an unexpected shape', async () => {
+      vi.mocked(invoke).mockResolvedValue(null)
+
+      await expect(hardwareService.getSystemUsage()).resolves.toBeNull()
+
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[TauriHardwareService] get_system_usage returned unexpected shape:',
+        null
+      )
     })
 
     it('should return correct type from invoke', async () => {
@@ -175,53 +206,6 @@ describe('TauriHardwareService', () => {
     })
   })
 
-  describe('setActiveGpus', () => {
-    let consoleSpy: ReturnType<typeof vi.spyOn>
-
-    beforeEach(() => {
-      consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    })
-
-    afterEach(() => {
-      consoleSpy.mockRestore()
-    })
-
-    it('should log the provided GPU data', async () => {
-      const gpuData = { gpus: [0, 1, 2] }
-
-      await hardwareService.setActiveGpus(gpuData)
-      expect(consoleSpy).toHaveBeenCalledWith(gpuData)
-    })
-
-    it('should handle empty GPU array', async () => {
-      const gpuData = { gpus: [] }
-
-      await hardwareService.setActiveGpus(gpuData)
-
-      expect(consoleSpy).toHaveBeenCalledWith(gpuData)
-    })
-
-    it('should handle single GPU', async () => {
-      const gpuData = { gpus: [1] }
-
-      await hardwareService.setActiveGpus(gpuData)
-
-      expect(consoleSpy).toHaveBeenCalledWith(gpuData)
-    })
-
-    it('should complete successfully', async () => {
-      const gpuData = { gpus: [0, 1] }
-
-      await expect(hardwareService.setActiveGpus(gpuData)).resolves.toBeUndefined()
-    })
-
-    it('should not throw any errors', async () => {
-      const gpuData = { gpus: [0, 1, 2, 3] }
-
-      expect(() => hardwareService.setActiveGpus(gpuData)).not.toThrow()
-    })
-  })
-
   describe('integration tests', () => {
     it('should handle concurrent calls to getHardwareInfo and getSystemUsage', async () => {
       const mockHardwareData: HardwareData = {
@@ -259,6 +243,52 @@ describe('TauriHardwareService', () => {
       expect(vi.mocked(invoke)).toHaveBeenCalledTimes(2)
       expect(vi.mocked(invoke)).toHaveBeenNthCalledWith(1, 'plugin:hardware|get_system_info')
       expect(vi.mocked(invoke)).toHaveBeenNthCalledWith(2, 'plugin:hardware|get_system_usage')
+    })
+  })
+
+  describe('getLlamacppDevices', () => {
+    it('should return devices from the llama.cpp extension', async () => {
+      const devices = [{ id: 'gpu-1', name: 'GPU 1' }]
+      ;(window as any).core.extensionManager = {
+        getByName: vi.fn().mockReturnValue({
+          getDevices: vi.fn().mockResolvedValue(devices),
+        }),
+      }
+
+      await expect(hardwareService.getLlamacppDevices()).resolves.toEqual(devices)
+    })
+
+    it('should return an empty list when the llama.cpp extension is missing', async () => {
+      ;(window as any).core.extensionManager = {
+        getByName: vi.fn().mockReturnValue(undefined),
+      }
+
+      await expect(hardwareService.getLlamacppDevices()).resolves.toEqual([])
+    })
+
+    it('should return an empty list when the extension does not expose getDevices', async () => {
+      ;(window as any).core.extensionManager = {
+        getByName: vi.fn().mockReturnValue({ provider: 'llamacpp' }),
+      }
+
+      await expect(hardwareService.getLlamacppDevices()).resolves.toEqual([])
+    })
+
+    it('should return an empty list when the llama.cpp extension fails', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      ;(window as any).core.extensionManager = {
+        getByName: vi.fn().mockReturnValue({
+          getDevices: vi.fn().mockRejectedValue(new Error('device scan failed')),
+        }),
+      }
+
+      await expect(hardwareService.getLlamacppDevices()).resolves.toEqual([])
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        '[TauriHardwareService] getLlamacppDevices failed:',
+        expect.any(Error)
+      )
+      errorSpy.mockRestore()
     })
   })
 })

@@ -1,31 +1,48 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useLocalKnowledge } from '@/hooks/research/useLocalKnowledge'
 import { useThreadLocalKnowledge } from '../use-thread-local-knowledge'
 
-vi.mock('zustand/middleware', async () => {
-  const actual = await vi.importActual('zustand/middleware')
-  return {
-    ...actual,
-    persist: (fn: (...args: unknown[]) => unknown) => fn,
-    createJSONStorage: () => ({
-      getItem: vi.fn(),
-      setItem: vi.fn(),
-      removeItem: vi.fn(),
-    }),
-  }
+const mockServiceHub = vi.hoisted(() => ({
+  callTool: vi.fn(),
+}))
+
+const searchResult = (results: Array<Record<string, unknown>>) => ({
+  error: '',
+  content: [
+    {
+      type: 'text',
+      text: JSON.stringify({
+        layer: 'raw',
+        results,
+      }),
+    },
+  ],
 })
 
-vi.mock('@/constants/localStorage', () => ({
-  localStorageKey: {
-    localKnowledgeStore: 'local-knowledge-store',
-  },
+const extractResult = (text: string) => ({
+  error: '',
+  content: [
+    {
+      type: 'text',
+      text: JSON.stringify({ text }),
+    },
+  ],
+})
+
+vi.mock('@/hooks/useServiceHub', () => ({
+  getServiceHub: () => ({
+    mcp: () => ({
+      callTool: mockServiceHub.callTool,
+    }),
+  }),
 }))
 
 describe('useThreadLocalKnowledge', () => {
   const threadId = 'thread-1'
 
   beforeEach(() => {
+    vi.clearAllMocks()
     useLocalKnowledge.setState({
       localKnowledgeEnabled: false,
       localKnowledgeEnabledPerThread: {},
@@ -52,100 +69,175 @@ describe('useThreadLocalKnowledge', () => {
     expect(result.current.isEnabled).toBe(true)
   })
 
-  it('prepareLocalKnowledge returns empty string when disabled', async () => {
+  it('prepareLocalKnowledge returns empty context when disabled', async () => {
     const { result } = renderHook(() => useThreadLocalKnowledge(threadId))
 
-    let knowledge = ''
+    let knowledge: { context: string } = { context: 'initial' }
     await act(async () => {
       knowledge = await result.current.prepareLocalKnowledge('test query')
     })
 
-    expect(knowledge).toBe('')
+    expect(knowledge).toEqual({ context: '' })
+    expect(mockServiceHub.callTool).not.toHaveBeenCalled()
   })
 
-  it('prepareLocalKnowledge returns context string when enabled and results found', async () => {
+  it('searches and extracts local knowledge when enabled', async () => {
     useLocalKnowledge.setState({
       localKnowledgeEnabled: true,
       localKnowledgeEnabledPerThread: { 'thread-1': true },
     })
 
-    // The serviceHub.mcp().callTool is already mocked in setup.ts
-    // to return { error: '', content: [] }
-    // We need to mock it to return actual content for this test
-    const { useServiceHub } = await import('@/hooks/useServiceHub')
-    const hub = useServiceHub()
-    const callToolMock = vi.fn().mockResolvedValue({
-      content: [{ type: 'text', text: 'Relevant knowledge about the query' }],
-    })
-    vi.spyOn(hub, 'mcp').mockReturnValue({
-      ...hub.mcp(),
-      callTool: callToolMock,
-    })
+    mockServiceHub.callTool
+      .mockResolvedValueOnce(searchResult([
+        {
+          chunkId: 'chunk-1',
+          score: 1,
+          source: '/Users/devop/Documents/akidb-testing/coding-interview-university.md',
+          content:
+            'After going through this study plan, I got hired as a Software Development Engineer at Amazon.',
+        },
+      ]))
+      .mockResolvedValueOnce(extractResult(
+        'After going through this study plan, I got hired as a Software Development Engineer at Amazon.',
+      ))
 
     const { result } = renderHook(() => useThreadLocalKnowledge(threadId))
 
-    let knowledge = ''
+    let knowledge: Awaited<ReturnType<typeof result.current.prepareLocalKnowledge>> = { context: '' }
     await act(async () => {
-      knowledge = await result.current.prepareLocalKnowledge('test query')
+      knowledge = await result.current.prepareLocalKnowledge('What real-world hiring outcome did the author achieve?')
     })
 
-    expect(knowledge).toContain('Local Knowledge Mode (ACTIVE)')
-    expect(knowledge).toContain('Relevant knowledge about the query')
-    expect(callToolMock).toHaveBeenCalledWith({
-      toolName: 'fabric_search',
-      arguments: {
-        query: 'test query',
-        collection_id: 'thread_thread-1',
-        top_k: 3,
-        mode: 'hybrid',
-      },
+    expect(mockServiceHub.callTool).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        toolName: 'fabric_search',
+        arguments: expect.objectContaining({
+          mode: 'hybrid',
+          top_k: 5,
+        }),
+      })
+    )
+    expect(mockServiceHub.callTool).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        toolName: 'fabric_extract',
+        arguments: expect.objectContaining({
+          file_path: '/Users/devop/Documents/akidb-testing/coding-interview-university.md',
+        }),
+      })
+    )
+    expect(knowledge.context).toContain('Local Knowledge Base')
+    expect(knowledge.context).toContain('Software Development Engineer at Amazon')
+    expect(knowledge.retrieval).toMatchObject({
+      searched: true,
+      extracted: true,
+      source: '/Users/devop/Documents/akidb-testing/coding-interview-university.md',
     })
   })
 
-  it('prepareLocalKnowledge returns empty string when callTool returns error', async () => {
+  it('uses expanded keyword fallback queries when semantic search misses', async () => {
     useLocalKnowledge.setState({
       localKnowledgeEnabled: true,
       localKnowledgeEnabledPerThread: { 'thread-1': true },
     })
 
-    const { useServiceHub } = await import('@/hooks/useServiceHub')
-    const hub = useServiceHub()
-    vi.spyOn(hub, 'mcp').mockReturnValue({
-      ...hub.mcp(),
-      callTool: vi.fn().mockResolvedValue({ error: 'Not found' }),
+    mockServiceHub.callTool.mockImplementation(async ({ toolName, arguments: args }) => {
+      if (toolName === 'fabric_extract') {
+        return extractResult('Array types can be written as number[] or Array<number>.')
+      }
+
+      if (args.query === 'array TypeScript') {
+        return searchResult([
+          {
+            chunkId: 'chunk-1',
+            score: 1,
+            source: '/Users/devop/Documents/akidb-testing/typescript-basics.md',
+            content: 'Array types can be written in one of two ways.',
+          },
+        ])
+      }
+
+      return searchResult([])
     })
 
     const { result } = renderHook(() => useThreadLocalKnowledge(threadId))
 
-    let knowledge = ''
+    let knowledge: Awaited<ReturnType<typeof result.current.prepareLocalKnowledge>> = { context: '' }
     await act(async () => {
-      knowledge = await result.current.prepareLocalKnowledge('test query')
+      knowledge = await result.current.prepareLocalKnowledge(
+        'What are the two syntaxes for declaring an array of numbers in TypeScript?'
+      )
     })
 
-    expect(knowledge).toBe('')
+    expect(mockServiceHub.callTool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolName: 'fabric_search',
+        arguments: expect.objectContaining({
+          query: 'array TypeScript',
+          mode: 'keyword',
+          layer: 'raw',
+        }),
+      })
+    )
+    expect(knowledge.context).toContain('number[] or Array<number>')
+    expect(knowledge.retrieval).toMatchObject({
+      searched: true,
+      extracted: true,
+      source: '/Users/devop/Documents/akidb-testing/typescript-basics.md',
+    })
   })
 
-  it('prepareLocalKnowledge returns empty string when callTool throws', async () => {
+  it('retries recoverable MCP transport errors before giving up', async () => {
     useLocalKnowledge.setState({
       localKnowledgeEnabled: true,
       localKnowledgeEnabledPerThread: { 'thread-1': true },
     })
 
-    const { useServiceHub } = await import('@/hooks/useServiceHub')
-    const hub = useServiceHub()
-    vi.spyOn(hub, 'mcp').mockReturnValue({
-      ...hub.mcp(),
-      callTool: vi.fn().mockRejectedValue(new Error('Connection failed')),
+    mockServiceHub.callTool
+      .mockResolvedValueOnce({ error: 'Transport closed', content: [] })
+      .mockResolvedValueOnce(searchResult([
+        {
+          chunkId: 'chunk-1',
+          score: 1,
+          source: '/Users/devop/Documents/akidb-testing/system-design-primer.md',
+          content: 'Learn how to design large-scale systems.',
+        },
+      ]))
+      .mockResolvedValueOnce(extractResult('Learn how to design large-scale systems.'))
+
+    const { result } = renderHook(() => useThreadLocalKnowledge(threadId))
+
+    let knowledge: Awaited<ReturnType<typeof result.current.prepareLocalKnowledge>> = { context: '' }
+    await act(async () => {
+      knowledge = await result.current.prepareLocalKnowledge(
+        'What is the stated motivation of the System Design Primer repository?'
+      )
+    })
+
+    expect(mockServiceHub.callTool).toHaveBeenCalledTimes(3)
+    expect(knowledge.context).toContain('Learn how to design large-scale systems.')
+    expect(knowledge.retrieval).toMatchObject({
+      searched: true,
+      extracted: true,
+    })
+  })
+
+  it('skips search for local-knowledge meta questions', async () => {
+    useLocalKnowledge.setState({
+      localKnowledgeEnabled: true,
+      localKnowledgeEnabledPerThread: { 'thread-1': true },
     })
 
     const { result } = renderHook(() => useThreadLocalKnowledge(threadId))
 
-    let knowledge = ''
+    let knowledge: { context: string } = { context: 'initial' }
     await act(async () => {
-      knowledge = await result.current.prepareLocalKnowledge('test query')
+      knowledge = await result.current.prepareLocalKnowledge('Is this answer from local knowledge?')
     })
 
-    expect(knowledge).toBe('')
+    expect(knowledge).toEqual({ context: '' })
+    expect(mockServiceHub.callTool).not.toHaveBeenCalled()
   })
 
   it('returns prepareLocalKnowledge as a function', () => {

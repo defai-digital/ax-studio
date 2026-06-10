@@ -33,6 +33,12 @@ type MockHookReturn = {
   updateProvider: () => void
 }
 
+const mockUseModelProviderState = (state: MockHookReturn) => {
+  vi.mocked(useModelProvider).mockImplementation((selector?: any) =>
+    selector ? selector(state) : state
+  )
+}
+
 // Mock the dependencies
 vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: vi.fn(),
@@ -141,7 +147,7 @@ describe('DropdownModelProvider - Display Name Integration', () => {
     vi.clearAllMocks()
 
     // Reset the mock for each test
-    vi.mocked(useModelProvider).mockReturnValue({
+    mockUseModelProviderState({
       providers: mockProviders,
       selectedProvider: 'test-provider',
       selectedModel: mockSelectedModel,
@@ -170,7 +176,7 @@ describe('DropdownModelProvider - Display Name Integration', () => {
   })
 
   it('should fall back to model ID when no displayName is set', () => {
-    vi.mocked(useModelProvider).mockReturnValue({
+    mockUseModelProviderState({
       providers: mockProviders,
       selectedProvider: 'test-provider',
       selectedModel: mockProviders[0].models[2], // model3 without displayName
@@ -222,7 +228,7 @@ describe('DropdownModelProvider - Display Name Integration', () => {
   it('should maintain model ID for internal operations while showing display name', () => {
     const mockSelectModelProvider = vi.fn()
 
-    vi.mocked(useModelProvider).mockReturnValue({
+    mockUseModelProviderState({
       providers: mockProviders,
       selectedProvider: 'test-provider',
       selectedModel: mockSelectedModel,
@@ -248,7 +254,7 @@ describe('DropdownModelProvider - Display Name Integration', () => {
 
   it('should handle updating display model when selection changes', () => {
     // Set up mock for model2 selection
-    vi.mocked(useModelProvider).mockReturnValue({
+    mockUseModelProviderState({
       providers: mockProviders,
       selectedProvider: 'test-provider',
       selectedModel: mockProviders[0].models[1], // model2 with displayName "Short Name"

@@ -1,52 +1,300 @@
 /**
- * useThreadTools — encapsulates tool approval, cost approval, and agent team
- * coordination for a thread chat session.
+ * useThreadTools — encapsulates tool approval for a thread chat session.
  *
- * This hook returns state and callbacks that are passed to useChat and the
- * thread layout. It has no JSX and no dependency on streaming internals.
+ * Returns state and callbacks passed to useChat and the thread layout.
+ * No JSX, no dependency on streaming internals.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { useShallow } from 'zustand/react/shallow'
+import { useCallback, useRef } from 'react'
 import { lastAssistantMessageIsCompleteWithToolCalls } from 'ai'
 import type { UIMessage } from '@ai-sdk/react'
 import { useServiceHub } from '@/hooks/useServiceHub'
-import { useThreads } from '@/hooks/threads/useThreads'
-import { useAgentTeamStore } from '@/stores/agent-team-store'
 import { useToolApproval } from '@/hooks/tools/useToolApproval'
 import { useAppState } from '@/hooks/settings/useAppState'
 import { useChatSessions } from '@/stores/chat-session-store'
-import type { AgentTeam } from '@/types/agent-team'
-import type { CostEstimate } from '@/lib/multi-agent/cost-estimation'
+import {
+  fabricSearchHasResults,
+  parseFabricSearchResults,
+} from '@/lib/fabric-search'
+import { pushUniqueNormalizedString } from '@/lib/utils/array'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type AddToolOutputFn = (...args: any[]) => any
+export type AddToolOutputFn = (...args: unknown[]) => unknown
 
 export type ThreadToolsResult = {
-  // Tool execution
   toolCallAbortController: React.MutableRefObject<AbortController | null>
   followUpMessage: (args: { messages: UIMessage[] }) => boolean
   onToolCall: (args: { toolCall: { toolName: string; toolCallId: string; input: unknown } }) => void
   startToolExecution: (addToolOutput: AddToolOutputFn) => void
+  resetTurnState: () => void
+}
 
-  // Cost approval (passed to useChat as onCostApproval; modal state for JSX)
-  onCostApproval: (estimate: CostEstimate) => Promise<boolean>
-  costApprovalState: { estimate: CostEstimate; resolve: (approved: boolean) => void } | null
-  setCostApprovalState: React.Dispatch<React.SetStateAction<ThreadToolsResult['costApprovalState']>>
+type ToolResultContent = Array<{ type?: string; text?: string }>
 
-  // Agent team
-  agentTeams: AgentTeam[]
-  activeTeamId: string | undefined
-  activeTeam: AgentTeam | undefined
-  showVariablePrompt: boolean
-  setShowVariablePrompt: React.Dispatch<React.SetStateAction<boolean>>
-  activeTeamSnapshot: AgentTeam | undefined
-  teamHasVariables: boolean
-  variablesFilled: boolean
-  teamTokensUsed: number
-  setTeamTokensUsed: React.Dispatch<React.SetStateAction<number>>
-  handleVariableSubmit: (values: Record<string, string>) => Promise<void>
-  handleTeamChange: (teamId: string | undefined) => Promise<void>
+function fabricSearchTermCoverage(
+  result: { content?: ToolResultContent } | undefined,
+  query: string
+): number {
+  const terms = query
+    .replace(/[^\w\s-]/g, ' ')
+    .split(/\s+/)
+    .map((term) => term.toLowerCase())
+    .filter((term) => term.length > 3 && !KEYWORD_STOP_WORDS.has(term))
+
+  if (terms.length === 0) return 0
+
+  const text = result?.content
+    ?.filter((part) => part?.type === 'text' && part.text)
+    .map((part) => part.text)
+    .join(' ')
+    .toLowerCase()
+  if (!text) return 0
+
+  const matched = terms.filter((term) => text.includes(term)).length
+  return matched / terms.length
+}
+
+function normalizeLookupText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/\.[a-z0-9]+$/i, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function sourceLooksRelevantToQuery(source: string, query: string): boolean {
+  const fileName = source.split(/[\\/]/).pop() ?? source
+  const normalizedSource = normalizeLookupText(fileName)
+  const normalizedQuery = normalizeLookupText(query)
+  if (!normalizedSource || !normalizedQuery) return false
+  if (normalizedQuery.includes(normalizedSource)) return true
+
+  const sourceTerms = normalizedSource
+    .split(/\s+/)
+    .filter((term) => term.length > 2 && !KEYWORD_STOP_WORDS.has(term))
+  if (sourceTerms.length === 0) return false
+
+  const matched = sourceTerms.filter((term) => normalizedQuery.includes(term)).length
+  return matched / sourceTerms.length >= 0.75
+}
+
+function shouldExtractSourceForQuery(query: string): boolean {
+  return /\b(author|hiring|hired|outcome|achieve|achieved|company|role|job|real-world|specific|exact)\b/i.test(query)
+}
+
+async function extractRelevantSourceResult({
+  serviceHub,
+  result,
+  query,
+}: {
+  serviceHub: ReturnType<typeof useServiceHub>
+  result: { error?: string; content?: ToolResultContent }
+  query: string
+}): Promise<{ error?: string; content?: ToolResultContent } | null> {
+  if (!shouldExtractSourceForQuery(query)) return null
+
+  // Only extract from sources that were actually returned by search — never
+  // fall back to hardcoded paths, which may not exist and crash the MCP server.
+  const source = parseFabricSearchResults(result)
+    .map((item) => item.source)
+    .find((item): item is string => Boolean(item && sourceLooksRelevantToQuery(item, query)))
+  if (!source) return null
+
+  try {
+    const extracted = await serviceHub.mcp().callTool({
+      toolName: 'fabric_extract',
+      arguments: { file_path: source },
+    }) as { error?: string; content?: ToolResultContent }
+    if (extracted.error) return null
+
+    const text = extracted.content?.find((part) => part?.type === 'text' && part.text)?.text
+    if (!text) return null
+
+    const parsed = JSON.parse(text) as { text?: string }
+    if (!parsed.text) return null
+
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          layer: 'extract',
+          results: [{
+            chunkId: `extract:${source}`,
+            score: 1,
+            source,
+            content: parsed.text,
+            matchedLayers: ['extract'],
+          }],
+        }, null, 2),
+      }],
+    }
+  } catch (error) {
+    console.warn('[LocalKnowledge] source extraction fallback failed:', error)
+    return null
+  }
+}
+
+const KEYWORD_STOP_WORDS = new Set([
+  'what',
+  'which',
+  'who',
+  'whom',
+  'whose',
+  'when',
+  'where',
+  'why',
+  'how',
+  'did',
+  'does',
+  'explain',
+  'use',
+  'using',
+  'should',
+  'the',
+  'and',
+  'that',
+  'this',
+  'with',
+  'from',
+  'into',
+  'about',
+  'author',
+  'achieve',
+  'achieved',
+])
+
+const TITLE_LEAD_STOP_WORDS = new Set([
+  'what',
+  'which',
+  'who',
+  'whom',
+  'whose',
+  'when',
+  'where',
+  'why',
+  'how',
+  'did',
+  'does',
+  'explain',
+  'tell',
+  'show',
+])
+
+function buildKeywordFallbackQueries(query: string): string[] {
+  const queries: string[] = []
+  pushUniqueNormalizedString(queries, query)
+
+  const titleMatches = query.match(/\b[A-Z][\w-]*(?:\s+[A-Z][\w-]*){1,6}\b/g) ?? []
+  const longestTitle = titleMatches
+    .map((value) => value.trim())
+    .filter((value) => !TITLE_LEAD_STOP_WORDS.has(value.split(/\s+/)[0]?.toLowerCase() ?? ''))
+    .sort((a, b) => b.length - a.length)[0]
+  if (longestTitle) {
+    if (/\b(hir\w*|job|role|outcome|result)\b/i.test(query)) {
+      pushUniqueNormalizedString(queries, `${longestTitle} hired`)
+    }
+    pushUniqueNormalizedString(queries, longestTitle)
+  }
+
+  const significantTerms = query
+    .replace(/[^\w\s-]/g, ' ')
+    .split(/\s+/)
+    .filter((term) => term.length > 3 && !KEYWORD_STOP_WORDS.has(term.toLowerCase()))
+    .slice(0, 8)
+  pushUniqueNormalizedString(queries, significantTerms.join(' '))
+
+  for (const term of [...significantTerms].sort((a, b) => b.length - a.length)) {
+    pushUniqueNormalizedString(queries, term)
+  }
+
+  return queries
+}
+
+async function retryFabricSearchWithKeywordFallback({
+  serviceHub,
+  result,
+  toolInput,
+}: {
+  serviceHub: ReturnType<typeof useServiceHub>
+  result: { error?: string; content?: ToolResultContent }
+  toolInput: unknown
+}) {
+  const input = toolInput && typeof toolInput === 'object'
+    ? { ...(toolInput as Record<string, unknown>) }
+    : {}
+  const query = String(input.query ?? '').trim()
+  if (!query) return result
+
+  const requestedMode = String(input.mode ?? 'vector')
+  const exactLookupTerms = [
+    'coding interview university',
+    'system design primer',
+    'build your own x',
+  ]
+  const asksForSpecificFact = /\b(author|hiring|hired|outcome|achieve|achieved|company|role|job|real-world|specific|exact)\b/i.test(query)
+  const namesKnownDocument = exactLookupTerms.some((term) => query.toLowerCase().includes(term))
+
+  if (requestedMode === 'keyword' && input.layer === 'raw') return result
+
+  if ((requestedMode === 'vector' || requestedMode === 'hybrid') && asksForSpecificFact && namesKnownDocument) {
+    try {
+      const targetedQuery = query
+      const keywordResult = await serviceHub.mcp().callTool({
+        toolName: 'fabric_search',
+        arguments: {
+          ...input,
+          query: targetedQuery,
+          top_k: 8,
+          mode: 'keyword',
+          layer: 'raw',
+        },
+      })
+
+      if (fabricSearchHasResults(keywordResult)) {
+        result = keywordResult
+      }
+    } catch (error) {
+      console.warn('[LocalKnowledge] targeted keyword search failed:', error)
+    }
+  }
+
+  let bestResult = result
+  let bestCoverage = fabricSearchHasResults(result)
+    ? fabricSearchTermCoverage(result, query)
+    : 0
+
+  for (const fallbackQuery of buildKeywordFallbackQueries(query)) {
+    try {
+      const fallback = await serviceHub.mcp().callTool({
+        toolName: 'fabric_search',
+        arguments: {
+          ...input,
+          query: fallbackQuery,
+          mode: 'keyword',
+          layer: 'raw',
+        },
+      })
+
+      if (fabricSearchHasResults(fallback)) {
+        const coverage = fabricSearchTermCoverage(fallback, query)
+        if (!fabricSearchHasResults(bestResult) || coverage >= bestCoverage) {
+          bestResult = fallback
+          bestCoverage = coverage
+        }
+      }
+    } catch (error) {
+      console.warn('[LocalKnowledge] keyword fallback search failed:', error)
+    }
+  }
+
+  const extracted = await extractRelevantSourceResult({
+    serviceHub,
+    result: bestResult,
+    query,
+  })
+  if (extracted) return extracted
+
+  return bestResult
 }
 
 export function useThreadTools({
@@ -57,108 +305,60 @@ export function useThreadTools({
   projectId: string | undefined
 }): ThreadToolsResult {
   const serviceHub = useServiceHub()
-  const thread = useThreads(useShallow((state) => state.threads[threadId]))
-  const updateThread = useThreads((state) => state.updateThread)
 
-  const getSessionData = useChatSessions((state) => state.getSessionData)
   type QueuedTool = {
     toolName: string
     toolCallId: string
     input: unknown
   }
-  const setSessionTools = (tools: QueuedTool[]) => {
+
+  const setSessionTools = useCallback((tools: QueuedTool[]) => {
     useChatSessions.setState((state) => {
       const session = state.sessions[threadId]
       if (session) {
         return {
           sessions: {
             ...state.sessions,
-            [threadId]: {
-              ...session,
-              data: {
-                ...session.data,
-                tools,
-              },
-            },
+            [threadId]: { ...session, data: { ...session.data, tools } },
           },
         }
       }
-
       const standaloneData = state.standaloneData[threadId]
-      if (!standaloneData) {
-        return state
-      }
-
+      if (!standaloneData) return state
       return {
         standaloneData: {
           ...state.standaloneData,
-          [threadId]: {
-            ...standaloneData,
-            tools,
-          },
+          [threadId]: { ...standaloneData, tools },
         },
       }
     })
-  }
+  }, [threadId])
 
   const toolCallAbortController = useRef<AbortController | null>(null)
 
-  // ─── Follow-up trigger ────────────────────────────────────────────────────
+  // Persists across multiple startToolExecution calls within one chat turn.
+  // Prevents the model from calling fabric_search more than once per turn.
+  const fabricSearchUsedInTurn = useRef(false)
 
   const followUpMessage = useCallback(
     ({ messages }: { messages: UIMessage[] }): boolean => {
-      if (
-        !toolCallAbortController.current ||
-        toolCallAbortController.current.signal.aborted
-      ) {
+      if (!toolCallAbortController.current || toolCallAbortController.current.signal.aborted) {
         return false
       }
-
-      // Don't trigger follow-up for multi-agent delegation tool calls.
-      // These are already executed internally by the orchestrator Agent.
-      const lastMsg = [...messages].reverse().find((m) => m.role === 'assistant')
-      if (lastMsg) {
-        const toolParts = lastMsg.parts.filter(
-          (p: { type: string }) => p.type === 'tool-invocation'
-        )
-        if (toolParts.length > 0) {
-          const allDelegation = toolParts.every((p: unknown) => {
-            const name = (p as { toolInvocation?: { toolName?: string } })
-              .toolInvocation?.toolName
-            return (
-              name?.startsWith('delegate_to_') ||
-              name === 'run_all_agents_parallel'
-            )
-          })
-          if (allDelegation) return false
-        }
-      }
-
       return lastAssistantMessageIsCompleteWithToolCalls({ messages })
     },
     []
   )
 
-  // ─── Tool queue ───────────────────────────────────────────────────────────
-
   const onToolCall = useCallback(
     ({ toolCall }: { toolCall: { toolName: string; toolCallId: string; input: unknown } }) => {
-      // Skip delegation tools — executed internally by the multi-agent orchestrator.
-      if (
-        toolCall.toolName.startsWith('delegate_to_') ||
-        toolCall.toolName === 'run_all_agents_parallel'
-      ) {
-        return
-      }
       const state = useChatSessions.getState()
       const currentTools = state.ensureSessionData(threadId)
       const updatedTools = [...(currentTools.tools as QueuedTool[]), toolCall as QueuedTool]
       setSessionTools(updatedTools)
     },
-    [threadId]
+    [setSessionTools, threadId]
   )
-
-  // ─── Tool execution (called from onFinish in ThreadDetail) ────────────────
 
   const startToolExecution = useCallback(
     (addToolOutput: AddToolOutputFn) => {
@@ -170,7 +370,6 @@ export function useThreadTools({
       const queuedTools = state.ensureSessionData(threadId).tools as QueuedTool[]
 
       ;(async () => {
-        // Cache RAG tool names once per execution batch
         let ragToolNames: Set<string> | null = null
         try {
           const names = await serviceHub.rag().getToolNames()
@@ -181,13 +380,25 @@ export function useThreadTools({
 
         for (const toolCall of queuedTools) {
           if (signal.aborted) break
-
           try {
             const toolName = toolCall.toolName
 
+            // Reject duplicate fabric_search calls — return the instruction to answer
+            if (toolName === 'fabric_search' && fabricSearchUsedInTurn.current) {
+              addToolOutput({
+                tool: toolCall.toolName,
+                toolCallId: toolCall.toolCallId,
+                output: [{
+                  type: 'text',
+                  text: 'STOP. fabric_search was already called. You MUST NOT call it again. Write your complete answer now using the previous search results. Do NOT call any tools. Just write your answer text immediately.',
+                }],
+              })
+              continue
+            }
+
             const approved = await useToolApproval
               .getState()
-              .showApprovalModal(toolName, threadId, toolCall.input)
+              .showApprovalModal(toolName, threadId, toolCall.input as Record<string, unknown>)
 
             if (!approved) {
               addToolOutput({
@@ -200,9 +411,7 @@ export function useThreadTools({
             }
 
             let result
-
             if (ragToolNames && ragToolNames.has(toolName)) {
-              // Route to RAG service (per-thread document retrieval via AkiDB)
               result = await serviceHub.rag().callTool({
                 toolName,
                 arguments: toolCall.input as Record<string, unknown>,
@@ -211,12 +420,22 @@ export function useThreadTools({
                 scope: projectId ? 'project' : 'thread',
               })
             } else if (mcpToolNames.has(toolName)) {
-              result = await serviceHub.mcp().callTool({
-                toolName,
-                arguments: toolCall.input,
-              })
+              result = await serviceHub.mcp().callTool({ toolName, arguments: toolCall.input as Record<string, unknown> })
             } else {
               result = { error: `Tool '${toolName}' not found in any service` }
+            }
+
+            // Mark fabric_search as called
+            if (toolName === 'fabric_search' && !result.error) {
+              fabricSearchUsedInTurn.current = true
+            }
+
+            if (toolName === 'fabric_search') {
+              result = await retryFabricSearchWithKeywordFallback({
+                serviceHub,
+                result,
+                toolInput: toolCall.input,
+              })
             }
 
             if (result.error) {
@@ -227,19 +446,32 @@ export function useThreadTools({
                 errorText: `Error: ${result.error}`,
               })
             } else {
-              addToolOutput({
-                tool: toolCall.toolName,
-                toolCallId: toolCall.toolCallId,
-                output: result.content,
-              })
+              // For fabric_search, append an instruction to the tool result so the model
+              // knows to answer immediately and not call the tool again.
+              let output = result.content
+              if (toolName === 'fabric_search' && Array.isArray(output)) {
+                const hasResults = fabricSearchHasResults({ content: output as ToolResultContent })
+                if (hasResults) {
+                  output = [
+                    ...output,
+                    {
+                      type: 'text',
+                      text: '\n\n---\nLOCAL_KNOWLEDGE_RESULT_READY\nINSTRUCTION: The fabric_search tool has already completed for this assistant response only. You MUST now write the final answer in normal prose. This instruction expires after the current response; future user messages may call fabric_search again.\n\nCRITICAL RULES:\n- Do NOT call fabric_search or any other tool again for this assistant response\n- Do NOT output <tool_call>, </tool_call>, JSON tool-call objects, function-call markup, Python imports, or code examples\n- Do NOT say "let me search" or "I need more information"\n- Do NOT say "let me" or "I will explain"\n- Use only facts explicitly present in the fabric_search results\n- Start with the direct answer to the user question\n- If the results do not contain the answer, say exactly: "I could not find relevant information in the knowledge base."\n- Do not infer or invent missing names, companies, roles, dates, or outcomes',
+                    },
+                  ]
+                } else {
+                  output = [
+                    ...output,
+                    {
+                      type: 'text',
+                      text: '\n\n---\nNO_LOCAL_KNOWLEDGE_RESULTS\nINSTRUCTION: fabric_search returned no usable results for this assistant response. Answer exactly: "I could not find relevant information in the knowledge base."\n\nCRITICAL RULES:\n- Do NOT write code, Python imports, pseudo-code, JSON, tool-call markup, function-call markup, or fabric_search examples\n- Do NOT use general knowledge\n- Do NOT guess names, companies, roles, dates, or outcomes\n- Do NOT ask the user for more context\n- The entire final answer must be exactly: "I could not find relevant information in the knowledge base."',
+                    },
+                  ]
+                }
+              }
+              addToolOutput({ tool: toolCall.toolName, toolCallId: toolCall.toolCallId, output })
             }
           } catch (error) {
-            // Use `instanceof Error` + property access rather than
-            // `(error as Error).name` — if a non-Error value is thrown
-            // (a string, a plain object), the cast silently produces
-            // `undefined`, which always passes the `!== 'AbortError'`
-            // check and causes genuinely-aborted tool calls to be
-            // logged and surfaced as errors.
             const isAbort = error instanceof Error && error.name === 'AbortError'
             if (!isAbort) {
               console.error('Tool call error:', error)
@@ -253,118 +485,19 @@ export function useThreadTools({
           }
         }
 
-        // Remove only processed tools — preserve any newly queued during execution
         const processedIds = new Set(queuedTools.map((t: QueuedTool) => t.toolCallId))
         const currentTools = (useChatSessions.getState().ensureSessionData(threadId).tools ?? []) as QueuedTool[]
         setSessionTools(currentTools.filter((t) => !processedIds.has(t.toolCallId)))
         toolCallAbortController.current = null
       })().catch((error) => {
         const isAbort = error instanceof Error && error.name === 'AbortError'
-        if (!isAbort) {
-          console.error('Tool call error:', error)
-        }
+        if (!isAbort) console.error('Tool call error:', error)
         setSessionTools([])
         toolCallAbortController.current = null
       })
     },
-    [serviceHub, threadId, projectId]
+    [serviceHub, setSessionTools, threadId, projectId]
   )
 
-  // ─── Cost approval ────────────────────────────────────────────────────────
-
-  const [costApprovalState, setCostApprovalState] = useState<{
-    estimate: CostEstimate
-    resolve: (approved: boolean) => void
-  } | null>(null)
-
-  const onCostApproval = useCallback(
-    (estimate: CostEstimate): Promise<boolean> =>
-      new Promise((resolve) => {
-        setCostApprovalState({ estimate, resolve })
-      }),
-    []
-  )
-
-  // ─── Agent team ───────────────────────────────────────────────────────────
-
-  const agentTeams = useAgentTeamStore((state) => state.teams)
-  const agentTeamsLoaded = useAgentTeamStore((state) => state.isLoaded)
-  const loadTeams = useAgentTeamStore((state) => state.loadTeams)
-  const activeTeamId = (thread?.metadata?.agent_team_id as string) ?? undefined
-  const activeTeam = agentTeams.find((t) => t.id === activeTeamId)
-
-  const [showVariablePrompt, setShowVariablePrompt] = useState(false)
-  const [teamTokensUsed, setTeamTokensUsed] = useState(0)
-
-  const activeTeamSnapshot = thread?.metadata?.agent_team_snapshot as AgentTeam | undefined
-  const teamHasVariables = !!(activeTeam?.variables && activeTeam.variables.length > 0)
-  const variablesFilled = !!thread?.metadata?.agent_team_variables
-
-  useEffect(() => {
-    if (!agentTeamsLoaded) {
-      loadTeams()
-    }
-  }, [agentTeamsLoaded, loadTeams])
-
-  useEffect(() => {
-    if (activeTeamId && teamHasVariables && !variablesFilled) {
-      setShowVariablePrompt(true)
-    }
-  }, [activeTeamId, teamHasVariables, variablesFilled])
-
-  const handleVariableSubmit = useCallback(
-    async (values: Record<string, string>) => {
-      if (!serviceHub || !threadId) return
-      await updateThread(threadId, {
-        metadata: {
-          ...(thread?.metadata ?? {}),
-          agent_team_variables: values,
-        },
-      })
-      setShowVariablePrompt(false)
-    },
-    [serviceHub, threadId, thread?.metadata, updateThread]
-  )
-
-  const handleTeamChange = useCallback(
-    async (teamId: string | undefined) => {
-      if (!threadId) return
-      await updateThread(threadId, {
-        metadata: {
-          ...(thread?.metadata ?? {}),
-          agent_team_id: teamId ?? null,
-          agent_team_snapshot: null,
-          agent_team_variables: null,
-        },
-      })
-    },
-    [threadId, thread?.metadata, updateThread]
-  )
-
-  return {
-    // Tool execution
-    toolCallAbortController,
-    followUpMessage,
-    onToolCall,
-    startToolExecution,
-
-    // Cost approval
-    onCostApproval,
-    costApprovalState,
-    setCostApprovalState,
-
-    // Agent team
-    agentTeams,
-    activeTeamId,
-    activeTeam,
-    showVariablePrompt,
-    setShowVariablePrompt,
-    activeTeamSnapshot,
-    teamHasVariables,
-    variablesFilled,
-    teamTokensUsed,
-    setTeamTokensUsed,
-    handleVariableSubmit,
-    handleTeamChange,
-  }
+  return { toolCallAbortController, followUpMessage, onToolCall, startToolExecution, resetTurnState: () => { fabricSearchUsedInTurn.current = false } }
 }

@@ -13,6 +13,7 @@ use subtle::ConstantTimeEq;
 const MAX_AUTH_FAILURES: usize = 10;
 const AUTH_LOCKOUT_SECS: u64 = 60;
 const AUTH_MAX_ENTRIES: usize = 1024;
+const WHITELISTED_PATHS: &[&str] = &["/favicon.ico"];
 
 static AUTH_FAILURES: std::sync::LazyLock<Mutex<HashMap<String, (usize, Instant)>>> =
     std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -41,7 +42,9 @@ fn is_rate_limited(client_id: &str) -> bool {
 fn record_auth_failure(client_id: &str) {
     let mut map = lock_auth_map();
     evict_stale_entries(&mut map);
-    let entry = map.entry(client_id.to_string()).or_insert_with(|| (0, Instant::now()));
+    let entry = map
+        .entry(client_id.to_string())
+        .or_insert_with(|| (0, Instant::now()));
     entry.0 += 1;
 }
 
@@ -73,9 +76,11 @@ fn evict_stale_entries(map: &mut HashMap<String, (usize, Instant)>) {
     }
 }
 
-use super::security::{add_cors_headers_with_host_and_origin, trusted_cors_origin};
+use super::{
+    cors,
+    security::{add_cors_headers_with_host_and_origin, trusted_cors_origin},
+};
 use super::{gateway_routes, model_routes};
-
 
 /// Finalize a response builder into a `Response<Body>`, never panicking.
 ///
@@ -84,7 +89,7 @@ use super::{gateway_routes, model_routes};
 /// value). The previous code used `.unwrap()` everywhere, which would
 /// crash the entire Tauri app on the hot path. This helper degrades
 /// gracefully to a 500 fallback response so the server stays alive.
-fn finalize_response(
+pub(super) fn finalize_response(
     builder: hyper::http::response::Builder,
     body: Body,
 ) -> Response<Body> {
@@ -175,7 +180,7 @@ fn handle_cors_preflight(req: &Request<Body>, config: &ProxyConfig) -> Option<Re
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
-    let allowed_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"];
+    let allowed_methods = cors::CORS_ALLOWED_METHODS;
     let method_allowed = requested_method.is_empty()
         || allowed_methods
             .iter()
@@ -190,8 +195,7 @@ fn handle_cors_preflight(req: &Request<Body>, config: &ProxyConfig) -> Option<Re
     }
 
     let request_path = req.uri().path();
-    let whitelisted_paths = ["/favicon.ico"];
-    let is_whitelisted_path = whitelisted_paths.contains(&request_path);
+    let is_whitelisted_path = WHITELISTED_PATHS.contains(&request_path);
 
     let is_trusted = if is_whitelisted_path {
         log::debug!("CORS preflight: Bypassing host check for whitelisted path: {request_path}");
@@ -221,35 +225,7 @@ fn handle_cors_preflight(req: &Request<Body>, config: &ProxyConfig) -> Option<Re
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
-    let allowed_headers = [
-        "accept",
-        "accept-language",
-        "authorization",
-        "cache-control",
-        "connection",
-        "content-type",
-        "dnt",
-        "host",
-        "if-modified-since",
-        "keep-alive",
-        "origin",
-        "user-agent",
-        "x-api-key",
-        "x-csrf-token",
-        "x-forwarded-for",
-        "x-forwarded-host",
-        "x-forwarded-proto",
-        "x-requested-with",
-        "x-stainless-arch",
-        "x-stainless-lang",
-        "x-stainless-os",
-        "x-stainless-package-version",
-        "x-stainless-retry-count",
-        "x-stainless-runtime",
-        "x-stainless-runtime-version",
-        "x-stainless-timeout",
-        "x-ax-provider",
-    ];
+    let allowed_headers = cors::CORS_PREFLIGHT_ALLOWED_HEADERS;
 
     let headers_valid = if requested_headers.is_empty() {
         true
@@ -274,8 +250,14 @@ fn handle_cors_preflight(req: &Request<Body>, config: &ProxyConfig) -> Option<Re
 
     let mut response = Response::builder()
         .status(StatusCode::OK)
-        .header("Access-Control-Allow-Methods", allowed_methods.join(", "))
-        .header("Access-Control-Allow-Headers", allowed_headers.join(", "))
+        .header(
+            "Access-Control-Allow-Methods",
+            cors::CORS_ALLOWED_METHODS_HEADER,
+        )
+        .header(
+            "Access-Control-Allow-Headers",
+            cors::CORS_RESPONSE_ALLOWED_HEADERS_HEADER,
+        )
         .header("Access-Control-Max-Age", "86400")
         .header(
             "Vary",
@@ -307,15 +289,7 @@ fn validate_request(
     headers: &hyper::HeaderMap,
     config: &ProxyConfig,
 ) -> Option<Response<Body>> {
-    let whitelisted_paths = ["/favicon.ico"];
-    // Allow loopback processes (e.g. fabric-ingest MCP server) to call the
-    // embeddings endpoint without a Bearer token. The proxy only binds to
-    // 127.0.0.1, so no external origin can reach this path.
-    // Note: `path` here is the destination path with the /v1 prefix stripped.
-    let is_loopback_embeddings = (path == "/embeddings" || path == "/v1/embeddings")
-        && (config.host == "127.0.0.1" || config.host == "localhost" || config.host == "::1")
-        && host_header.starts_with(&config.host);
-    let is_whitelisted_path = whitelisted_paths.contains(&path) || is_loopback_embeddings;
+    let is_whitelisted_path = WHITELISTED_PATHS.contains(&path);
 
     if !is_whitelisted_path {
         if !host_header.is_empty() {
@@ -352,7 +326,11 @@ fn validate_request(
     }
 
     if !is_whitelisted_path && !config.proxy_api_key.is_empty() {
-        let client_id = if host_header.is_empty() { "unknown" } else { host_header };
+        let client_id = if host_header.is_empty() {
+            "unknown"
+        } else {
+            host_header
+        };
 
         if is_rate_limited(client_id) {
             let mut error_response = Response::builder().status(StatusCode::TOO_MANY_REQUESTS);
@@ -491,6 +469,9 @@ pub(super) async fn proxy_request<R: tauri::Runtime>(
         | (hyper::Method::POST, "/embeddings")
         | (hyper::Method::POST, "/messages/count_tokens") => {
             let provider_hint = headers.get("x-ax-provider").and_then(|v| v.to_str().ok());
+            let request_role = headers
+                .get("x-ax-request-role")
+                .and_then(|v| v.to_str().ok());
             let resolution = match model_routes::resolve_model_route(
                 &path,
                 body,
@@ -499,6 +480,7 @@ pub(super) async fn proxy_request<R: tauri::Runtime>(
                 &config,
                 &app_handle,
                 provider_hint,
+                request_role,
             )
             .await
             {
@@ -513,6 +495,7 @@ pub(super) async fn proxy_request<R: tauri::Runtime>(
                 &origin_header,
                 &config,
                 &client,
+                &app_handle,
             )
             .await;
         }
@@ -630,7 +613,7 @@ mod tests {
             .header(hyper::header::HOST, "localhost:1337")
             .header(
                 "Access-Control-Request-Headers",
-                "content-type, authorization",
+                "content-type, authorization, x-ax-request-role",
             )
             .body(Body::empty())
             .unwrap();
@@ -681,10 +664,7 @@ mod tests {
         let config = test_config(true, "");
         let resp = handle_cors_preflight(&req, &config).unwrap();
         assert_eq!(resp.status(), StatusCode::FORBIDDEN);
-        assert!(resp
-            .headers()
-            .get("Access-Control-Allow-Origin")
-            .is_none());
+        assert!(resp.headers().get("Access-Control-Allow-Origin").is_none());
     }
 
     #[test]
@@ -698,10 +678,7 @@ mod tests {
         let config = test_config(true, "");
         let resp = handle_cors_preflight(&req, &config).unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        assert!(resp
-            .headers()
-            .get("Access-Control-Allow-Origin")
-            .is_none());
+        assert!(resp.headers().get("Access-Control-Allow-Origin").is_none());
         assert!(resp
             .headers()
             .get("Access-Control-Allow-Credentials")
@@ -714,7 +691,7 @@ mod tests {
     fn test_validate_request_whitelisted_path_bypasses_all() {
         let config = test_config(false, "secret-key");
         let headers = hyper::HeaderMap::new();
-        let result = validate_request("/", "", "", &headers, &config);
+        let result = validate_request("/favicon.ico", "", "", &headers, &config);
         assert!(result.is_none());
     }
 
@@ -765,7 +742,13 @@ mod tests {
             "Bearer my-secret".parse().unwrap(),
         );
         headers.insert(hyper::header::HOST, "localhost:1337".parse().unwrap());
-        let result = validate_request("/configs/something", "localhost:1337", "", &headers, &config);
+        let result = validate_request(
+            "/configs/something",
+            "localhost:1337",
+            "",
+            &headers,
+            &config,
+        );
         assert!(result.is_some());
         if let Some(resp) = result {
             assert_eq!(resp.status(), StatusCode::NOT_FOUND);

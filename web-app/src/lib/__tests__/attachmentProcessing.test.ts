@@ -1,8 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-
-// We need to access the non-exported formatAttachmentError via processAttachmentsForSend,
-// but we can also test processAttachmentsForSend with mocks.
-// Since formatAttachmentError is not exported, we test it indirectly through error paths.
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // Mock sonner toast
 vi.mock('sonner', () => ({
@@ -36,8 +32,21 @@ function createMockServiceHub(overrides: Record<string, unknown> = {}) {
 }
 
 describe('processAttachmentsForSend', () => {
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
+  let consoleDebugSpy: ReturnType<typeof vi.spyOn>
+
   beforeEach(() => {
     vi.clearAllMocks()
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    consoleDebugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleWarnSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
+    consoleDebugSpy.mockRestore()
   })
 
   it('returns empty arrays when no attachments are provided', async () => {

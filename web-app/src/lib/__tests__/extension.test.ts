@@ -10,6 +10,9 @@ vi.mock('@ax-studio/core', () => ({
     Model: 'model',
     Assistant: 'assistant',
   },
+  CoreRoutes: [],
+  APIRoutes: [],
+  AppRoutes: [],
 }))
 
 vi.mock('@tauri-apps/api/core', () => ({

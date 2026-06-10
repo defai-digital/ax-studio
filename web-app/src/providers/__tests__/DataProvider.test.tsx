@@ -1,11 +1,31 @@
-import { render, screen } from '@testing-library/react'
+import { render } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { DataProvider } from '../DataProvider'
+
+const {
+  mockBootstrapProviders,
+  mockBootstrapThreads,
+  mockBootstrapUpdater,
+  mockBootstrapEvents,
+  mockBootstrapLocalApi,
+  mockSyncRemoteProviders,
+} = vi.hoisted(() => ({
+  mockBootstrapProviders: vi.fn(),
+  mockBootstrapThreads: vi.fn(),
+  mockBootstrapUpdater: vi.fn(),
+  mockBootstrapEvents: vi.fn(),
+  mockBootstrapLocalApi: vi.fn(),
+  mockSyncRemoteProviders: vi.fn(),
+}))
 
 // Mock Tauri deep link
 vi.mock('@tauri-apps/plugin-deep-link', () => ({
   onOpenUrl: vi.fn(),
   getCurrent: vi.fn().mockResolvedValue([]),
+}))
+
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => vi.fn(),
 }))
 
 // The services are handled by the global ServiceHub mock in test setup
@@ -42,36 +62,57 @@ vi.mock('@/hooks/updater/useAppUpdater', () => ({
 }))
 
 vi.mock('@/hooks/tools/useMCPServers', () => ({
+  DEFAULT_MCP_SETTINGS: {},
   useMCPServers: vi.fn(() => ({
     setServers: vi.fn(),
     setSettings: vi.fn(),
   })),
 }))
 
+vi.mock('@/lib/bootstrap/bootstrap-providers', () => ({
+  bootstrapProviders: mockBootstrapProviders,
+}))
+
+vi.mock('@/lib/bootstrap/bootstrap-threads', () => ({
+  bootstrapThreads: mockBootstrapThreads,
+}))
+
+vi.mock('@/lib/bootstrap/bootstrap-updater', () => ({
+  bootstrapUpdater: mockBootstrapUpdater,
+}))
+
+vi.mock('@/lib/bootstrap/bootstrap-events', () => ({
+  bootstrapEvents: mockBootstrapEvents,
+}))
+
+vi.mock('@/lib/bootstrap/bootstrap-local-api', () => ({
+  bootstrapLocalApi: mockBootstrapLocalApi,
+}))
+
+vi.mock('@/lib/providers/provider-sync', () => ({
+  syncRemoteProviders: mockSyncRemoteProviders,
+}))
+
 describe('DataProvider', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockBootstrapProviders.mockResolvedValue({ unsubscribeDeepLink: vi.fn() })
+    mockBootstrapThreads.mockResolvedValue(undefined)
+    mockBootstrapUpdater.mockReturnValue(vi.fn())
+    mockBootstrapEvents.mockReturnValue(vi.fn())
+    mockBootstrapLocalApi.mockReturnValue(undefined)
+    mockSyncRemoteProviders.mockResolvedValue(undefined)
   })
 
-  it('renders children when all data hooks are available', () => {
-    render(
-      <DataProvider>
-        <div data-testid="child">Test Child</div>
-      </DataProvider>
-    )
+  it('mounts startup data effects without rendering UI', () => {
+    const { container } = render(<DataProvider />)
 
-    expect(screen.getByTestId('child')).toBeInTheDocument()
+    expect(container.firstChild).toBeNull()
   })
 
-  it('handles multiple children correctly', () => {
-    render(
-      <DataProvider>
-        <div>Test Child 1</div>
-        <div>Test Child 2</div>
-      </DataProvider>
-    )
+  it('keeps the document tree unchanged while bootstrapping data', () => {
+    const { container } = render(<DataProvider />)
 
-    expect(screen.getByText('Test Child 1')).toBeInTheDocument()
-    expect(screen.getByText('Test Child 2')).toBeInTheDocument()
+    expect(container.textContent).toBe('')
   })
 })

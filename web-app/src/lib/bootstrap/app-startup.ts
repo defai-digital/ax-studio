@@ -93,7 +93,6 @@ function getDialogFilters(ext: string) {
   const map: Record<string, { name: string; extensions: string[] }> = {
     svg: { name: 'SVG Image', extensions: ['svg'] },
     png: { name: 'PNG Image', extensions: ['png'] },
-    mmd: { name: 'Mermaid Source', extensions: ['mmd'] },
   }
 
   return map[ext] ? [map[ext]] : []
@@ -109,10 +108,6 @@ function getFilePickerTypes(ext: string): FilePickerAcceptType[] {
       description: 'PNG Image',
       accept: { 'image/png': ['.png'] },
     },
-    mmd: {
-      description: 'Mermaid Source',
-      accept: { 'text/plain': ['.mmd'] },
-    },
   }
 
   return map[ext] ? [map[ext]] : []
@@ -123,13 +118,12 @@ async function saveBlobNative(blob: Blob, filename: string): Promise<void> {
     const ext = filename.split('.').pop()?.toLowerCase() ?? ''
 
     if ('__TAURI__' in window) {
-      const { invoke } = await import('@tauri-apps/api/core')
+      const { getServiceHub } = await import('@/hooks/useServiceHub')
+      const hub = getServiceHub()
 
-      const savePath = await invoke<string | null>('save_dialog', {
-        options: {
-          defaultPath: filename,
-          filters: getDialogFilters(ext),
-        },
+      const savePath = await hub.dialog().save({
+        defaultPath: filename,
+        filters: getDialogFilters(ext),
       })
 
       if (!savePath) return
@@ -139,10 +133,10 @@ async function saveBlobNative(blob: Blob, filename: string): Promise<void> {
         const base64Data = btoa(
           new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
         )
-        await invoke('write_binary_file', { path: savePath, base64Data })
+        await hub.core().invoke('write_binary_file', { path: savePath, base64Data })
       } else {
         const text = await blob.text()
-        await invoke('write_text_file', { path: savePath, content: text })
+        await hub.core().invoke('write_text_file', { path: savePath, content: text })
       }
 
       return
@@ -176,7 +170,7 @@ async function saveBlobNative(blob: Blob, filename: string): Promise<void> {
     })
   } catch (error) {
     if (!(error instanceof Error && error.name === 'AbortError')) {
-      console.error('[ax-studio] diagram save failed:', error)
+      console.error('[ax-studio] blob save failed:', error)
     }
   }
 }

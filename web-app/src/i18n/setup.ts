@@ -2,7 +2,7 @@ import { localStorageKey } from '@/constants/localStorage'
 import {
   safeStorageGetItem,
   safeStorageSetItem,
-} from '@/lib/storage'
+} from '@/lib/storage/storage'
 
 // Validation helper for stored settings structure
 const isValidStoredSettings = (parsed: unknown): parsed is { state: { currentLanguage: string } } => {
@@ -184,12 +184,6 @@ const initI18n = (): I18nInstance => {
   }
   
   return i18nInstance
-}
-
-// Load translations function (for compatibility with reference implementation)
-export const loadTranslations = (): void => {
-  // Translations are already loaded via import.meta.glob
-  // This function exists for compatibility but doesn't need to do anything
 }
 
 // Initialize and export the i18n instance

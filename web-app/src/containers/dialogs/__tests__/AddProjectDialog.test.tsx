@@ -29,6 +29,8 @@ vi.mock('@/hooks/chat/useAssistant', () => ({
 vi.mock('lucide-react', () => ({
   ChevronDown: () => <span />,
   Plus: () => <span />,
+  Smile: () => <span />,
+  Trash2: () => <span />,
 }))
 
 vi.mock('@/components/common/AvatarEmoji', () => ({

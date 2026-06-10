@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { ServiceHubProvider } from '../ServiceHubProvider'
 
 const mockInitializeServiceHub = vi.fn()
@@ -17,12 +17,25 @@ vi.mock('@/hooks/useServiceHub', () => ({
 }))
 
 describe('ServiceHubProvider', () => {
+  let consoleLogSpy: ReturnType<typeof vi.spyOn>
+  let consoleInfoSpy: ReturnType<typeof vi.spyOn>
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
+
   beforeEach(() => {
     vi.clearAllMocks()
+    mockInitializeServiceHub.mockResolvedValue({ test: true })
+    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
-  it('renders nothing while initializing', () => {
-    // Never resolve so it stays in loading state
+  afterEach(() => {
+    consoleLogSpy.mockRestore()
+    consoleInfoSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
+  })
+
+  it('renders loading UI while initializing', () => {
     mockInitializeServiceHub.mockReturnValue(new Promise(() => {}))
 
     const { container } = render(
@@ -31,7 +44,8 @@ describe('ServiceHubProvider', () => {
       </ServiceHubProvider>
     )
 
-    expect(container.innerHTML).toBe('')
+    expect(container).toHaveTextContent('Initializing Ax-Studio')
+    expect(screen.queryByTestId('child')).not.toBeInTheDocument()
   })
 
   it('renders children after successful initialization', async () => {
@@ -51,7 +65,7 @@ describe('ServiceHubProvider', () => {
     expect(mockInitializeServiceHubStore).toHaveBeenCalledWith(mockHub)
   })
 
-  it('renders error UI when initialization fails', async () => {
+  it('renders error UI when initialization rejects', async () => {
     mockInitializeServiceHub.mockRejectedValue(new Error('Connection failed'))
 
     render(
@@ -65,6 +79,24 @@ describe('ServiceHubProvider', () => {
     })
 
     expect(screen.getByText('Connection failed')).toBeInTheDocument()
+  })
+
+  it('renders error UI when initialization throws synchronously', async () => {
+    mockInitializeServiceHub.mockImplementation(() => {
+      throw new Error('sync boom')
+    })
+
+    render(
+      <ServiceHubProvider>
+        <div data-testid="child">Child Content</div>
+      </ServiceHubProvider>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('AX Studio failed to initialize')).toBeInTheDocument()
+    })
+
+    expect(screen.getByText('sync boom')).toBeInTheDocument()
   })
 
   it('renders error UI with generic message for non-Error rejections', async () => {
@@ -97,21 +129,5 @@ describe('ServiceHubProvider', () => {
     })
 
     expect(screen.queryByTestId('child')).not.toBeInTheDocument()
-  })
-
-  it('shows restart instructions in error state', async () => {
-    mockInitializeServiceHub.mockRejectedValue(new Error('timeout'))
-
-    render(
-      <ServiceHubProvider>
-        <div>child</div>
-      </ServiceHubProvider>
-    )
-
-    await waitFor(() => {
-      expect(
-        screen.getByText(/Service startup failed/)
-      ).toBeInTheDocument()
-    })
   })
 })

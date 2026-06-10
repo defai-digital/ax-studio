@@ -13,7 +13,7 @@
         "zoomHotkeysEnabled": true,
         "center": true,
         "hiddenTitle": true,
-        "transparent": true,
+        "transparent": false,
         "trafficLightPosition": {
           "x": 20,
           "y": 32
@@ -24,6 +24,8 @@
           "effects": ["fullScreenUI", "sidebar"],
           "state": "active"
         },
+        "acceptFirstMouse": true,
+        "focus": true,
         "dragDropEnabled": false
       }
     ]

@@ -59,7 +59,7 @@ describe('AddProviderDialog', () => {
       </AddProviderDialog>
     )
     expect(screen.getByTestId('dialog-title').textContent).toBe(
-      'provider:addOpenAIProvider'
+      'providers:addOpenAIProvider'
     )
   })
 

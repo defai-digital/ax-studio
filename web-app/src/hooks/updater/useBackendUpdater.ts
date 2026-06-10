@@ -17,6 +17,7 @@ interface ExtensionSetting {
 }
 
 interface LlamacppExtension {
+  type?(): unknown
   getSettings?(): Promise<ExtensionSetting[]>
   checkBackendForUpdates?(): Promise<BackendUpdateInfo>
   updateBackend?(
@@ -49,10 +50,10 @@ function getLlamacppExtension(): LlamacppExtension | null {
         .find(
           (e) =>
             e.constructor.name.toLowerCase().includes('llamacpp') ||
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ((e as any).type &&
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              (e as any).type()?.toString().toLowerCase().includes('inference'))
+            ((e as LlamacppExtension).type?.()
+              ?.toString()
+              .toLowerCase()
+              .includes('inference') ?? false)
         ) ?? undefined
   }
 

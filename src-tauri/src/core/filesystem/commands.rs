@@ -6,7 +6,7 @@ use crate::core::state::AppState;
 use base64::Engine;
 use rfd::AsyncFileDialog;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tauri::Runtime;
 use tauri::State;
 
@@ -243,17 +243,20 @@ pub fn mv<R: Runtime>(
     let (source_arg, destination_arg) = request.into_paths("mv")?;
 
     let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app_handle.clone());
+    let canonical_app_data = app_data_folder
+        .canonicalize()
+        .unwrap_or_else(|_| app_data_folder.clone());
     let source = resolve_path(app_handle.clone(), &source_arg)?;
     let destination = resolve_path(app_handle, &destination_arg)?;
 
-    if !source.starts_with(&app_data_folder) {
+    if !source.starts_with(&canonical_app_data) {
         return Err(format!(
             "mv error: source path {} is not under app data folder",
             source.display()
         ));
     }
 
-    if !destination.starts_with(&app_data_folder) {
+    if !destination.starts_with(&canonical_app_data) {
         return Err(format!(
             "mv error: destination path {} is not under app data folder",
             destination.display()
@@ -275,11 +278,13 @@ pub fn join_path<R: Runtime>(
 ) -> Result<String, String> {
     let args = request.into_parts()?;
     let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app_handle.clone());
+    let canonical_app_data = app_data_folder
+        .canonicalize()
+        .unwrap_or_else(|_| app_data_folder.clone());
     let path = resolve_path(app_handle, &args[0])?;
     let joined_path = args[1..].iter().fold(path, |acc, part| acc.join(part));
-    // Normalize to resolve any ".." segments from subsequent args
     let normalized = ax_studio_utils::normalize_path(&joined_path);
-    if !normalized.starts_with(&app_data_folder) {
+    if !normalized.starts_with(&canonical_app_data) {
         return Err(format!(
             "join_path error: result path {} is outside app data folder",
             normalized.display()
@@ -540,10 +545,7 @@ pub fn decompress<R: Runtime>(
             }
 
             if entry_type.is_hard_link() {
-                log::warn!(
-                    "Rejecting hardlink entry in tar: {}",
-                    entry_path_string
-                );
+                log::warn!("Rejecting hardlink entry in tar: {}", entry_path_string);
                 continue;
             }
 
@@ -700,11 +702,11 @@ pub async fn save_dialog(
     Ok(save_path)
 }
 
-/// Write binary data (hex-encoded) to a file path.
+/// Write binary data (base64-encoded) to a file path.
 /// Used by the diagram export flow on platforms where blob: anchor downloads
 /// do not work (macOS WKWebView, Tauri WebView2 on Windows).
 #[tauri::command]
-/// Write hex-encoded binary data to a path previously approved by `save_dialog`.
+/// Write base64-encoded binary data to a path previously approved by `save_dialog`.
 pub async fn write_binary_file(
     state: State<'_, AppState>,
     path: String,
@@ -739,4 +741,3 @@ pub async fn write_text_file(
         .map_err(|e| format!("write_text_file task join error: {e}"))?
         .map_err(|e| e.to_string())
 }
-

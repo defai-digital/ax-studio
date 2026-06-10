@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { ThreadMessage } from '@ax-studio/core'
-import { MCPTool } from '@/types/completion'
+import { MCPTool } from '@/types/mcp'
 import { ChatCompletionMessageToolCall } from 'openai/resources'
 
 export type PromptProgress = {
@@ -53,6 +53,13 @@ type AppState = {
   setErrorMessage: (error: AppErrorMessage | undefined) => void
   updatePromptProgress: (progress: PromptProgress | undefined) => void
   setActiveModels: (models: string[]) => void
+}
+
+type TokenSpeed = {
+  lastTimestamp: number
+  tokenSpeed: number
+  tokenCount: number
+  message?: string
 }
 
 export const useAppState = create<AppState>()((set) => ({

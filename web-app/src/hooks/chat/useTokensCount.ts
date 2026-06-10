@@ -4,6 +4,7 @@ import { usePrompt } from '@/hooks/ui/usePrompt'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceStore } from '@/hooks/useServiceHub'
 import { getModelContextLength } from '@/lib/models'
+import { extractErrorMessage } from '@/lib/utils/error'
 // Simple token estimation for hosted models when backend token counting is unavailable
 // Rough approximation: ~4 characters per token for English text
 const estimateTokensFromText = (text: string): number => {
@@ -54,11 +55,13 @@ export const useTokensCount = (
     size: number
     base64: string
     dataUrl: string
-  }>
+  }>,
+  modelOverride?: Model
 ) => {
   const serviceHub = useServiceStore((state) => state.serviceHub)
-  const selectedModel = useModelProvider((state) => state.selectedModel)
+  const selectedModelFromStore = useModelProvider((state) => state.selectedModel)
   const providers = useModelProvider((state) => state.providers)
+  const selectedModel = modelOverride ?? selectedModelFromStore
   const [tokenData, setTokenData] = useState<TokenCountData>({
     tokenCount: 0,
     loading: false,
@@ -89,9 +92,10 @@ export const useTokensCount = (
     }
     return `${messages.length}:${totalLen}:${messages[messages.length - 1].role}`
   }, [messages])
+  const modelSignature = `${selectedModel?.id ?? ''}:${(selectedModel as { provider?: string } | undefined)?.provider ?? ''}:${getModelContextLength(selectedModel ?? undefined) ?? ''}`
 
   const getMaxTokens = useCallback((): number | undefined => {
-    const ctxLength = getModelContextLength(selectedModel)
+    const ctxLength = getModelContextLength(selectedModel ?? undefined)
     if (ctxLength !== undefined) return ctxLength
 
     // For hosted models without explicit settings, provide defaults based on model ID
@@ -232,7 +236,7 @@ export const useTokensCount = (
     } catch (error) {
       if (requestId !== requestIdRef.current || controller.signal.aborted) return
 
-      const msg = error instanceof Error ? error.message : String(error)
+      const msg = extractErrorMessage(error, String(error))
 
       if (!isHosted) {
         if (msg.includes('404')) {
@@ -251,8 +255,7 @@ export const useTokensCount = (
         percentage: maxTokens ? 0 : undefined,
         loading: false,
         isNearLimit: false,
-        error:
-          error instanceof Error ? error.message : 'Failed to calculate tokens',
+        error: extractErrorMessage(error, 'Failed to calculate tokens'),
       })
     }
   }, [getMaxTokens, messages, selectedModel, providers, serviceHub])
@@ -276,7 +279,7 @@ export const useTokensCount = (
       }
       abortRef.current?.abort()
     }
-  }, [prompt, messageSignature, selectedModel?.id])
+  }, [prompt, messageSignature, modelSignature])
 
   // Manual calculation function (for click events)
   const calculateTokens = useCallback(async () => {

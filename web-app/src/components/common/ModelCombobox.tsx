@@ -139,10 +139,72 @@ const ModelsList = ({
   </>
 )
 
+type DropdownContentProps = {
+  dropdownRef: React.RefObject<HTMLDivElement | null>
+  dropdownPosition: { top: number; left: number; width: number }
+  error: string | null
+  filteredModels: string[]
+  highlightedIndex: number
+  inputValue: string
+  loading: boolean
+  t: (key: string, options?: Record<string, string>) => string
+  value: string
+  onHighlight: (index: number) => void
+  onModelSelect: (model: string) => void
+}
+
+function DropdownContent({
+  dropdownRef,
+  dropdownPosition,
+  error,
+  filteredModels,
+  highlightedIndex,
+  inputValue,
+  loading,
+  t,
+  value,
+  onHighlight,
+  onModelSelect,
+}: DropdownContentProps) {
+  return (
+    <div
+      ref={dropdownRef}
+      className="fixed z-9999 py-2 bg-background border rounded-md shadow-lg max-h-[300px] overflow-y-auto animate-in fade-in-0 zoom-in-95 duration-200 "
+      style={{
+        top: dropdownPosition.top,
+        left: dropdownPosition.left,
+        width: dropdownPosition.width,
+        minWidth: dropdownPosition.width,
+        maxWidth: dropdownPosition.width,
+        pointerEvents: 'auto',
+      }}
+      data-dropdown="model-combobox"
+      onPointerDown={(e) => e.stopPropagation()}
+      onWheel={(e) => e.stopPropagation()}
+    >
+      {error && <ErrorSection error={error} t={t} />}
+      {loading && <LoadingSection t={t} />}
+      {!loading &&
+        !error &&
+        (filteredModels.length === 0 ? (
+          <EmptySection inputValue={inputValue} t={t} />
+        ) : (
+          <ModelsList
+            filteredModels={filteredModels}
+            value={value}
+            highlightedIndex={highlightedIndex}
+            onModelSelect={onModelSelect}
+            onHighlight={onHighlight}
+          />
+        ))}
+    </div>
+  )
+}
+
 // Custom hook for keyboard navigation
 function useKeyboardNavigation(
   open: boolean,
-  setOpen: React.Dispatch<React.SetStateAction<boolean>>,
+  setDropdownOpen: (open: boolean) => void,
   models: string[],
   filteredModels: string[],
   highlightedIndex: number,
@@ -175,7 +237,7 @@ function useKeyboardNavigation(
       if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
         if (models.length > 0) {
           e.preventDefault()
-          setOpen(true)
+          setDropdownOpen(true)
           setHighlightedIndex(0)
         }
         return
@@ -216,8 +278,7 @@ function useKeyboardNavigation(
         case 'Escape':
           e.preventDefault()
           e.stopPropagation()
-          setOpen(false)
-          setHighlightedIndex(-1)
+          setDropdownOpen(false)
           break
         case 'PageUp':
           e.preventDefault()
@@ -231,7 +292,7 @@ function useKeyboardNavigation(
     },
     [
       open,
-      setOpen,
+      setDropdownOpen,
       models.length,
       filteredModels,
       highlightedIndex,
@@ -289,6 +350,13 @@ export function ModelCombobox({
   // Hook for the dropdown position
   const { dropdownPosition } = useDropdownPosition(open, containerRef)
 
+  const setDropdownOpen = useCallback((nextOpen: boolean) => {
+    setOpen(nextOpen)
+    if (!nextOpen) {
+      setHighlightedIndex(-1)
+    }
+  }, [])
+
   // Optimized model filtering
   const filteredModels = useMemo(() => {
     if (!inputValue.trim()) return models
@@ -311,8 +379,7 @@ export function ModelCombobox({
       const isInsideDropdown = dropdownRef.current?.contains(target)
 
       if (!isInsideContainer && !isInsideDropdown) {
-        setOpen(false)
-        setHighlightedIndex(-1)
+        setDropdownOpen(false)
       }
     }
 
@@ -331,15 +398,7 @@ export function ModelCombobox({
         })
       })
     }
-  }, [open])
-
-  // Cleanup: close the dropdown when the component is unmounted
-  useEffect(() => {
-    return () => {
-      setOpen(false)
-      setHighlightedIndex(-1)
-    }
-  }, [])
+  }, [open, setDropdownOpen])
 
   // Handler for the input change
   const handleInputChange = useCallback(
@@ -349,12 +408,12 @@ export function ModelCombobox({
 
       // Open the dropdown if the user types and there are models
       if (newValue.trim() && models.length > 0) {
-        setOpen(true)
+        setDropdownOpen(true)
       } else {
-        setOpen(false)
+        setDropdownOpen(false)
       }
     },
-    [onChange, models.length]
+    [onChange, models.length, setDropdownOpen]
   )
 
   // Handler for the model selection
@@ -362,17 +421,16 @@ export function ModelCombobox({
     (model: string) => {
       setInputValue(model)
       onChange(model)
-      setOpen(false)
-      setHighlightedIndex(-1)
+      setDropdownOpen(false)
       inputRef.current?.focus()
     },
-    [onChange]
+    [onChange, setDropdownOpen]
   )
 
   // Hook for the keyboard navigation
   const { handleKeyDown } = useKeyboardNavigation(
     open,
-    setOpen,
+    setDropdownOpen,
     models,
     filteredModels,
     highlightedIndex,
@@ -384,15 +442,15 @@ export function ModelCombobox({
   // Handler for the dropdown opening
   const handleDropdownToggle = useCallback(() => {
     inputRef.current?.focus()
-    setOpen(!open)
-  }, [open])
+    setDropdownOpen(!open)
+  }, [open, setDropdownOpen])
 
   // Handler for the input click
   const handleInputClick = useCallback(() => {
     if (models.length > 0) {
-      setOpen(true)
+      setDropdownOpen(true)
     }
-  }, [models.length])
+  }, [models.length, setDropdownOpen])
 
   return (
     <div className={cn('relative', className)} ref={containerRef}>
@@ -448,42 +506,19 @@ export function ModelCombobox({
         {open &&
           dropdownPosition.width > 0 &&
           createPortal(
-            <div
-              ref={dropdownRef}
-              className="fixed z-9999 py-2 bg-background border rounded-md shadow-lg max-h-[300px] overflow-y-auto animate-in fade-in-0 zoom-in-95 duration-200 "
-              style={{
-                top: dropdownPosition.top,
-                left: dropdownPosition.left,
-                width: dropdownPosition.width,
-                minWidth: dropdownPosition.width,
-                maxWidth: dropdownPosition.width,
-                pointerEvents: 'auto',
-              }}
-              data-dropdown="model-combobox"
-              onPointerDown={(e) => e.stopPropagation()}
-              onWheel={(e) => e.stopPropagation()}
-            >
-              {/* Error state */}
-              {error && <ErrorSection error={error} t={t} />}
-
-              {/* Loading state */}
-              {loading && <LoadingSection t={t} />}
-
-              {/* Models list */}
-              {!loading &&
-                !error &&
-                (filteredModels.length === 0 ? (
-                  <EmptySection inputValue={inputValue} t={t} />
-                ) : (
-                  <ModelsList
-                    filteredModels={filteredModels}
-                    value={value}
-                    highlightedIndex={highlightedIndex}
-                    onModelSelect={handleModelSelect}
-                    onHighlight={setHighlightedIndex}
-                  />
-                ))}
-            </div>,
+            <DropdownContent
+              dropdownRef={dropdownRef}
+              dropdownPosition={dropdownPosition}
+              error={error}
+              filteredModels={filteredModels}
+              highlightedIndex={highlightedIndex}
+              inputValue={inputValue}
+              loading={loading}
+              t={t}
+              value={value}
+              onHighlight={setHighlightedIndex}
+              onModelSelect={handleModelSelect}
+            />,
             document.body
           )}
       </div>

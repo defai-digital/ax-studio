@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ModelFactory, normalizeOpenAICompatibleEventData } from '../model-factory'
 import type { ProviderObject } from '@ax-studio/core'
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 
 // Mock the Tauri invoke function
 vi.mock('@tauri-apps/api/core', () => ({
@@ -50,7 +51,7 @@ describe('ModelFactory', () => {
       const output = JSON.parse(normalizeOpenAICompatibleEventData(input))
 
       expect(output.choices[0].delta.content).toBe('Hello')
-      expect(output.choices[0].delta.reasoning_content).toBe('Thinking')
+      expect(output.choices[0].delta.reasoning_content).toBeUndefined()
       expect(output.choices[0].delta.role).toBe('1')
     })
 
@@ -111,7 +112,28 @@ describe('ModelFactory', () => {
         ],
       })
 
-      expect(normalizeOpenAICompatibleEventData(input)).toBe(input)
+      const output = JSON.parse(normalizeOpenAICompatibleEventData(input))
+      expect(output.choices[0].delta.content).toBe('hello')
+      expect(output.choices[0].delta.reasoning_content).toBeUndefined()
+      expect(output.choices[0].delta.role).toBe('assistant')
+      expect(output.choices[0].finish_reason).toBe('stop')
+    })
+
+    it('uses reasoning text as visible content when a stream chunk has no content', () => {
+      const input = JSON.stringify({
+        choices: [
+          {
+            delta: {
+              reasoning_content: 'thinking-only text',
+            },
+            finish_reason: null,
+          },
+        ],
+      })
+
+      const output = JSON.parse(normalizeOpenAICompatibleEventData(input))
+      expect(output.choices[0].delta.content).toBe('thinking-only text')
+      expect(output.choices[0].delta.reasoning_content).toBeUndefined()
     })
   })
 
@@ -178,6 +200,29 @@ describe('ModelFactory', () => {
       expect(model).toBeDefined()
     })
 
+    it('routes mlx through the local proxy instead of the IPC fetch shim', async () => {
+      const provider: ProviderObject = {
+        provider: 'mlx',
+        api_key: '',
+        base_url: 'http://127.0.0.1:19997/v1',
+        models: [],
+        settings: [],
+        active: true,
+      }
+
+      await ModelFactory.createModel('mlx-community/Qwen3.6-27B-4bit', provider)
+
+      expect(createOpenAICompatible).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'mlx',
+          baseURL: expect.stringMatching(/^http:\/\/127\.0\.0\.1:/),
+          headers: expect.objectContaining({
+            'X-Ax-Provider': 'mlx',
+          }),
+        })
+      )
+    })
+
     it('should create an OpenAI-compatible model for groq provider', async () => {
       const provider: ProviderObject = {
         provider: 'groq',
@@ -209,6 +254,28 @@ describe('ModelFactory', () => {
       const model = await ModelFactory.createModel('custom-model', provider)
       expect(model).toBeDefined()
       expect(model.type).toBe('openai-compatible')
+    })
+
+    it('tags proxy requests with the optional request role', async () => {
+      const provider: ProviderObject = {
+        provider: 'zai-coding',
+        api_key: 'test-api-key',
+        base_url: 'https://api.z.ai/api/coding/paas/v4',
+        models: [],
+        settings: [],
+        active: true,
+      }
+
+      await ModelFactory.createModel('glm-5.1', provider, {}, { requestRole: 'router' })
+
+      expect(createOpenAICompatible).toHaveBeenCalledWith(
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'X-Ax-Provider': 'zai-coding',
+            'X-Ax-Request-Role': 'router',
+          }),
+        })
+      )
     })
   })
 })

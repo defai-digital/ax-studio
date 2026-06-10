@@ -58,33 +58,25 @@ vi.mock('@/hooks/models/useModelProvider', () => ({
 }))
 
 vi.mock('@/hooks/settings/useAppState', () => ({
-  useAppState: (selector?: any) => {
+  useAppState: Object.assign((selector?: any) => {
     const state = {
       abortControllers: { 'thread-1': { abort: mockAbort } },
       cancelToolCall: vi.fn(),
       tools: [],
     }
     return selector ? selector(state) : state
-  },
+  }, {
+    getState: () => ({
+      abortControllers: { 'thread-1': { abort: mockAbort } },
+      cancelToolCall: vi.fn(),
+      tools: [],
+    }),
+  }),
 }))
 
 vi.mock('@/hooks/chat/useAssistant', () => ({
   useAssistant: (selector?: any) => {
     const state = { assistants: [] }
-    return selector ? selector(state) : state
-  },
-}))
-
-vi.mock('@/hooks/integrations/useMemory', () => ({
-  useMemory: (selector?: any) => {
-    const state = {
-      memoryEnabled: false,
-      toggleMemory: vi.fn(),
-      isMemoryEnabledForThread: vi.fn().mockReturnValue(false),
-      toggleMemoryForThread: vi.fn(),
-      memoryEnabledPerThread: {},
-      memories: { default: [] },
-    }
     return selector ? selector(state) : state
   },
 }))
@@ -121,7 +113,7 @@ vi.mock('@/hooks/chat/use-chat-send-handler', () => ({
 }))
 
 vi.mock('@/components/chat/ChatInputToolbar', () => ({
-  ChatInputToolbar: ({ isStreaming, stopStreaming, handleSendMessage, prompt }: any) => (
+  ChatInputToolbar: ({ isStreaming, stopStreaming, handleSendMessage, submitCurrentPrompt, prompt }: any) => (
     <div data-testid="toolbar" data-streaming={isStreaming}>
       {isStreaming ? (
         <button data-testid="stop-btn" onClick={() => stopStreaming('thread-1')}>Stop</button>
@@ -129,7 +121,7 @@ vi.mock('@/components/chat/ChatInputToolbar', () => ({
         <button
           data-testid="send-btn"
           disabled={!prompt?.trim()}
-          onClick={() => handleSendMessage(prompt)}
+          onClick={() => submitCurrentPrompt ? submitCurrentPrompt() : handleSendMessage(prompt)}
         >
           Send
         </button>
@@ -156,6 +148,7 @@ vi.mock('@/lib/utils', async (importOriginal) => {
 // ── Import after mocks ──────────────────────────────
 
 import ChatInput from '../ChatInput'
+import { resolveEffectiveSelectedModel } from '@/lib/chat/selected-model'
 
 // ── Tests ───────────────────────────────────────────
 
@@ -176,6 +169,16 @@ describe('ChatInput — Phase 3 Manual Test Protocol', () => {
     fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
 
     expect(mockHandleSendMessage).toHaveBeenCalledWith('Hello world')
+  })
+
+  it('Enter key sends the live textarea value even before prompt state flushes', () => {
+    render(<ChatInput threadId="t1" />)
+    const textarea = screen.getByTestId('chat-input') as HTMLTextAreaElement
+
+    textarea.value = 'First message'
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+
+    expect(mockHandleSendMessage).toHaveBeenCalledWith('First message')
   })
 
   // Protocol #1: Enter does NOT send when input is empty
@@ -375,5 +378,53 @@ describe('ChatInput — Phase 3 Manual Test Protocol', () => {
     })
 
     expect(mockHandleSendMessage).not.toHaveBeenCalled()
+  })
+
+  it('resolves selected model from the active provider to avoid stale capability metadata', () => {
+    const staleModel: Model = { id: 'Qwen3_5-9B-IQ4_XS', capabilities: [] }
+    const currentProviderModel: Model = {
+      id: 'Qwen3_5-9B-IQ4_XS',
+      capabilities: ['tools', 'vision'],
+    }
+
+    const selectedModel = resolveEffectiveSelectedModel({
+      providers: [
+        {
+          active: true,
+          provider: 'llamacpp',
+          settings: [],
+          models: [currentProviderModel],
+        },
+      ],
+      selectedProvider: 'llamacpp',
+      selectedModelFromStore: staleModel,
+    })
+
+    expect(selectedModel).toBe(currentProviderModel)
+    expect(selectedModel?.capabilities).toContain('tools')
+  })
+
+  it('resolves thread model metadata from its provider before falling back to the store model', () => {
+    const fallbackModel: Model = { id: 'fallback-model', capabilities: ['tools'] }
+    const threadProviderModel: Model = {
+      id: 'thread-model',
+      capabilities: ['vision'],
+    }
+
+    const selectedModel = resolveEffectiveSelectedModel({
+      model: { id: 'thread-model', provider: 'zai-coding' },
+      providers: [
+        {
+          active: true,
+          provider: 'zai-coding',
+          settings: [],
+          models: [threadProviderModel],
+        },
+      ],
+      selectedProvider: 'llamacpp',
+      selectedModelFromStore: fallbackModel,
+    })
+
+    expect(selectedModel).toBe(threadProviderModel)
   })
 })

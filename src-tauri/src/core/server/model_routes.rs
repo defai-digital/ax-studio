@@ -1,12 +1,13 @@
 //! Model provider routing: resolves provider config from model ID, builds outbound
 //! requests, and handles upstream responses including Anthropic /messages fallback.
-use ax_studio_utils::is_cors_header;
+use ax_studio_utils::{is_cors_header, is_private_ip};
 use futures_util::StreamExt;
 use hyper::body::Bytes;
 use hyper::{Body, Response, StatusCode};
 use reqwest::Client;
 use serde_json;
 use std::collections::HashMap;
+use std::time::Duration;
 use tauri::Manager;
 
 use super::provider_adapter::{
@@ -15,6 +16,11 @@ use super::provider_adapter::{
 use super::proxy::ProxyConfig;
 use super::security::add_cors_headers_with_host_and_origin;
 use crate::core::state::{AppState, ProviderConfig, ProviderCustomHeader, ProviderModelIndex};
+
+const MODEL_LOAD_RETRY_ATTEMPTS: usize = 10;
+const MODEL_LOAD_RETRY_DELAY: Duration = Duration::from_millis(500);
+/// Guard against unbounded memory from malformed SSE (missing newlines) in the passthrough stream.
+const MAX_SSE_LINE_BUFFER: usize = 1_048_576; // 1 MB
 
 /// Result of resolving a model route — all data needed to send the upstream request.
 pub(super) struct ProviderResolution {
@@ -30,6 +36,32 @@ struct ResolvedProviderConfig {
     target_base_url: String,
     session_api_key: Option<String>,
     provider_custom_headers: Vec<ProviderCustomHeader>,
+}
+
+fn is_reserved_upstream_custom_header(name: &str) -> bool {
+    matches!(
+        name,
+        "accept-encoding"
+            | "authorization"
+            | "connection"
+            | "content-length"
+            | "cookie"
+            | "forwarded"
+            | "host"
+            | "origin"
+            | "proxy-authorization"
+            | "proxy-connection"
+            | "referer"
+            | "te"
+            | "trailer"
+            | "transfer-encoding"
+            | "upgrade"
+            | "x-api-key"
+            | "x-forwarded-for"
+            | "x-forwarded-host"
+            | "x-forwarded-proto"
+    ) || name.starts_with("proxy-")
+        || name.starts_with("sec-")
 }
 
 fn error_response(
@@ -55,6 +87,17 @@ fn error_response(
         })
 }
 
+fn is_transient_model_loading_error(
+    status: StatusCode,
+    destination_path: &str,
+    error_body: &str,
+) -> bool {
+    status == StatusCode::NOT_FOUND
+        && destination_path == "/chat/completions"
+        && error_body.contains("not loaded")
+        && error_body.contains("loaded=")
+}
+
 /// Strip non-standard fields from the request body that upstream providers may reject.
 ///
 /// Currently removes `reasoning_content` and `reasoning` from assistant messages.
@@ -64,38 +107,131 @@ fn error_response(
 ///
 /// Returns the original bytes unchanged if the body is not JSON, has no `messages`
 /// array, or no assistant messages carry these fields.
-fn normalize_request_body(body_bytes: &Bytes) -> Bytes {
+fn message_has_tool_state(msg: &serde_json::Value) -> bool {
+    if msg.get("role").and_then(|role| role.as_str()) == Some("tool") {
+        return true;
+    }
+    if msg
+        .get("tool_calls")
+        .and_then(|tool_calls| tool_calls.as_array())
+        .is_some_and(|tool_calls| !tool_calls.is_empty())
+    {
+        return true;
+    }
+    msg.get("content")
+        .and_then(|content| content.as_array())
+        .is_some_and(|content| {
+            content.iter().any(|part| {
+                matches!(
+                    part.get("type").and_then(|part_type| part_type.as_str()),
+                    Some("tool_result" | "tool_use")
+                )
+            })
+        })
+}
+
+fn request_has_tool_state(json_body: &serde_json::Value) -> bool {
+    if json_body
+        .get("tools")
+        .and_then(|tools| tools.as_array())
+        .is_some_and(|tools| !tools.is_empty())
+    {
+        return true;
+    }
+    json_body
+        .get("messages")
+        .and_then(|messages| messages.as_array())
+        .is_some_and(|messages| {
+            messages
+                .last()
+                .and_then(|message| message.get("role"))
+                .and_then(|role| role.as_str())
+                == Some("assistant")
+                || messages.iter().any(message_has_tool_state)
+        })
+}
+
+fn request_has_local_knowledge_context(json_body: &serde_json::Value) -> bool {
+    json_body
+        .get("messages")
+        .and_then(|messages| messages.as_array())
+        .is_some_and(|messages| {
+            messages.iter().any(|message| {
+                message
+                    .get("content")
+                    .and_then(|content| content.as_str())
+                    .is_some_and(|content| content.contains("Local Knowledge Base (ACTIVE)"))
+                    || message
+                        .get("content")
+                        .and_then(|content| content.as_array())
+                        .is_some_and(|parts| {
+                            parts.iter().any(|part| {
+                                part.get("text").and_then(|text| text.as_str()).is_some_and(
+                                    |text| text.contains("Local Knowledge Base (ACTIVE)"),
+                                )
+                            })
+                        })
+            })
+        })
+}
+
+fn disable_thinking_for_deterministic_answer(json_body: &mut serde_json::Value) -> bool {
+    if !request_has_tool_state(json_body) && !request_has_local_knowledge_context(json_body) {
+        return false;
+    }
+
+    if !json_body
+        .get("chat_template_kwargs")
+        .is_some_and(|value| value.is_object())
+    {
+        json_body["chat_template_kwargs"] = serde_json::json!({});
+    }
+
+    json_body["chat_template_kwargs"]["enable_thinking"] = serde_json::json!(false);
+    true
+}
+
+fn normalize_request_body(body_bytes: &Bytes, allow_chat_template_kwargs: bool) -> Bytes {
     let mut json_body: serde_json::Value = match serde_json::from_slice(body_bytes) {
         Ok(v) => v,
         Err(_) => return body_bytes.clone(),
     };
 
-    let messages = match json_body.get_mut("messages").and_then(|m| m.as_array_mut()) {
-        Some(msgs) => msgs,
-        None => return body_bytes.clone(),
-    };
-
     let mut modified = false;
-    for msg in messages.iter_mut() {
-        let is_assistant = msg
-            .get("role")
-            .and_then(|r| r.as_str())
-            .is_some_and(|r| r == "assistant");
-        if !is_assistant {
-            continue;
-        }
-        if let Some(obj) = msg.as_object_mut() {
-            if obj.remove("reasoning_content").is_some() {
-                modified = true;
+
+    if let Some(messages) = json_body.get_mut("messages").and_then(|m| m.as_array_mut()) {
+        for msg in messages.iter_mut() {
+            let is_assistant = msg
+                .get("role")
+                .and_then(|r| r.as_str())
+                .is_some_and(|r| r == "assistant");
+            if !is_assistant {
+                continue;
             }
-            if obj.remove("reasoning").is_some() {
-                modified = true;
+            if let Some(obj) = msg.as_object_mut() {
+                if obj.remove("reasoning_content").is_some() {
+                    modified = true;
+                }
+                if obj.remove("reasoning").is_some() {
+                    modified = true;
+                }
             }
         }
     }
 
+    if allow_chat_template_kwargs && disable_thinking_for_deterministic_answer(&mut json_body) {
+        log::debug!("Disabled chat-template thinking for tool/local-knowledge request");
+        modified = true;
+    }
+
     if modified {
-        log::debug!("Stripped reasoning_content/reasoning from assistant messages in request body");
+        if allow_chat_template_kwargs {
+            log::debug!("Normalized request body before forwarding upstream");
+        } else {
+            log::debug!(
+                "Stripped reasoning_content/reasoning from assistant messages in request body"
+            );
+        }
         match serde_json::to_vec(&json_body) {
             Ok(bytes) => Bytes::from(bytes),
             Err(_) => body_bytes.clone(),
@@ -142,18 +278,23 @@ fn build_upstream_url(
     destination_path: &str,
     is_anthropic_messages: bool,
 ) -> String {
-    let trimmed = base_url
-        .trim_end_matches('/')
-        .trim_end_matches("/messages")
-        .trim_end_matches("/chat/completions")
-        .trim_end_matches("/completions")
-        .trim_end_matches("/embeddings");
+    let trimmed = strip_provider_endpoint_suffix(base_url);
 
     if is_anthropic_messages {
         format!("{trimmed}/messages")
     } else {
         format!("{trimmed}{destination_path}")
     }
+}
+
+fn strip_provider_endpoint_suffix(base_url: &str) -> &str {
+    let trimmed = base_url
+        .trim_end_matches('/')
+        .trim_end_matches("/messages")
+        .trim_end_matches("/chat/completions")
+        .trim_end_matches("/completions")
+        .trim_end_matches("/embeddings");
+    trimmed
 }
 
 fn resolve_provider_config_from_map(
@@ -182,6 +323,59 @@ fn resolve_provider_config_from_map(
     }))
 }
 
+async fn resolve_active_ax_serving_fallback<R: tauri::Runtime>(
+    app_handle: &tauri::AppHandle<R>,
+    provider_hint: Option<&str>,
+    model_id: &str,
+    destination_path: &str,
+    is_anthropic_messages: bool,
+) -> Option<ResolvedProviderConfig> {
+    if provider_hint != Some("llamacpp") {
+        return None;
+    }
+
+    let state = app_handle.try_state::<tauri_plugin_llamacpp::state::LlamacppState>()?;
+    let process_map = state.llama_server_process.lock().await;
+    let session = process_map
+        .values()
+        .find(|session| session.info.model_id == "__ax_serving__" && session.info.port > 0)?;
+    let base_url = format!("http://127.0.0.1:{}/v1", session.info.port);
+
+    log::warn!(
+        "Provider 'llamacpp' was not registered for model '{model_id}'; \
+         falling back to active ax-serving route at {base_url}"
+    );
+
+    Some(ResolvedProviderConfig {
+        target_base_url: build_upstream_url(&base_url, destination_path, is_anthropic_messages),
+        session_api_key: None,
+        provider_custom_headers: Vec::new(),
+    })
+}
+
+fn should_skip_upstream_request_header(name: &hyper::header::HeaderName) -> bool {
+    let lower = name.as_str().to_ascii_lowercase();
+    matches!(
+        name,
+        &hyper::header::HOST | &hyper::header::AUTHORIZATION | &hyper::header::CONTENT_LENGTH
+    ) || lower == "x-api-key"
+        || lower == "x-ax-provider"
+        || lower == "x-ax-request-role"
+        || super::proxy::is_hop_by_hop_header(name)
+}
+
+fn should_skip_anthropic_fallback_header(name: &hyper::header::HeaderName) -> bool {
+    let lower = name.as_str().to_ascii_lowercase();
+    matches!(
+        name,
+        &hyper::header::HOST
+            | &hyper::header::AUTHORIZATION
+            | &hyper::header::CONTENT_LENGTH
+            | &hyper::header::ACCEPT_ENCODING
+    ) || lower == "content-type"
+        || super::proxy::is_hop_by_hop_header(name)
+}
+
 /// Resolve the provider for a POST model request (reads body, looks up provider config).
 /// Returns `Ok(ProviderResolution)` on success, `Err(Response)` to return an error immediately.
 pub(super) async fn resolve_model_route<R: tauri::Runtime>(
@@ -192,12 +386,19 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
     config: &ProxyConfig,
     app_handle: &tauri::AppHandle<R>,
     provider_hint: Option<&str>,
+    request_role: Option<&str>,
 ) -> Result<ProviderResolution, Response<Body>> {
     let is_anthropic_messages = destination_path == "/messages";
     if is_anthropic_messages {
-        log::info!("Handling POST request to /messages with chat/completions fallback on error");
+        log::info!(
+            "Handling POST request to /messages with chat/completions fallback on error role={}",
+            request_role.unwrap_or("unknown")
+        );
     } else {
-        log::info!("Handling POST request to {destination_path} requiring model lookup in body");
+        log::info!(
+            "Handling POST request to {destination_path} requiring model lookup in body role={}",
+            request_role.unwrap_or("unknown")
+        );
     }
 
     let body_bytes = hyper::body::to_bytes(body).await.map_err(|_| {
@@ -214,7 +415,10 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
     if body_bytes.len() > MAX_BODY_SIZE {
         return Err(error_response(
             StatusCode::PAYLOAD_TOO_LARGE,
-            &format!("Request body exceeds {} MB limit", MAX_BODY_SIZE / 1024 / 1024),
+            &format!(
+                "Request body exceeds {} MB limit",
+                MAX_BODY_SIZE / 1024 / 1024
+            ),
             host_header,
             origin_header,
             config,
@@ -236,7 +440,10 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
         )
     })?;
 
-    log::debug!("Extracted model_id: {model_id}");
+    log::debug!(
+        "Extracted model_id: {model_id} role={}",
+        request_role.unwrap_or("unknown")
+    );
 
     let state = app_handle.state::<AppState>();
     let resolved = {
@@ -254,9 +461,7 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
         if let Some(hint) = provider_hint {
             if let Some(cfg) = provider_configs.get(hint) {
                 log::debug!("Using provider hint from X-Ax-Provider header: {hint}");
-                if let Some(base_url) =
-                    cfg.base_url.as_deref().filter(|u| !u.is_empty())
-                {
+                if let Some(base_url) = cfg.base_url.as_deref().filter(|u| !u.is_empty()) {
                     Ok(Some(ResolvedProviderConfig {
                         target_base_url: build_upstream_url(
                             base_url,
@@ -270,7 +475,9 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
                     // Provider is registered but has no base_url — fall through to
                     // heuristic first (handles prefixed model IDs like "openai/gpt-4"),
                     // then return an actionable error if that also fails.
-                    log::debug!("Provider hint '{hint}' matched but has no base_url, trying heuristic");
+                    log::debug!(
+                        "Provider hint '{hint}' matched but has no base_url, trying heuristic"
+                    );
                     let heuristic = resolve_provider_config_from_map(
                         &provider_configs,
                         &provider_model_index,
@@ -314,8 +521,42 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
         }
     };
 
+    let resolved = match resolved {
+        Ok(Some(config)) => Ok(Some(config)),
+        Ok(None) => {
+            if let Some(config) = resolve_active_ax_serving_fallback(
+                app_handle,
+                provider_hint,
+                &model_id,
+                destination_path,
+                is_anthropic_messages,
+            )
+            .await
+            {
+                Ok(Some(config))
+            } else {
+                Ok(None)
+            }
+        }
+        Err(message) => {
+            if let Some(config) = resolve_active_ax_serving_fallback(
+                app_handle,
+                provider_hint,
+                &model_id,
+                destination_path,
+                is_anthropic_messages,
+            )
+            .await
+            {
+                Ok(Some(config))
+            } else {
+                Err(message)
+            }
+        }
+    };
+
     // Normalize the request body: strip non-standard fields that upstream providers reject.
-    let normalized_body = normalize_request_body(&body_bytes);
+    let normalized_body = normalize_request_body(&body_bytes, !is_anthropic_messages);
 
     match resolved {
         Ok(Some(resolved)) => Ok(ProviderResolution {
@@ -362,10 +603,7 @@ async fn try_anthropic_fallback(
     config: &ProxyConfig,
     client: &Client,
 ) -> Option<Result<Response<Body>, hyper::Error>> {
-    let fallback_url = target_base_url
-        .trim_end_matches("/messages")
-        .trim_end_matches('/')
-        .to_string();
+    let fallback_url = strip_provider_endpoint_suffix(&target_base_url).to_string();
 
     let json_body = match serde_json::from_slice::<serde_json::Value>(buffered_body) {
         Ok(v) => v,
@@ -387,13 +625,7 @@ async fn try_anthropic_fallback(
     fallback_req = fallback_req.header("Accept-Encoding", "identity");
 
     for (name, value) in headers.iter() {
-        if name != hyper::header::HOST
-            && name != hyper::header::AUTHORIZATION
-            && name != "content-type"
-            && name != hyper::header::CONTENT_LENGTH
-            && name != hyper::header::ACCEPT_ENCODING
-            && !super::proxy::is_hop_by_hop_header(name)
-        {
+        if !should_skip_anthropic_fallback_header(name) {
             fallback_req = fallback_req.header(name, value);
         }
     }
@@ -401,20 +633,17 @@ async fn try_anthropic_fallback(
         fallback_req = fallback_req.header("Authorization", format!("Bearer {key}"));
     }
 
-    let fallback_response = fallback_req
-        .body(openai_body.to_string())
-        .send()
-        .await;
+    let fallback_response = fallback_req.body(openai_body.to_string()).send().await;
 
     match fallback_response {
         Ok(res) => {
             let fallback_status = res.status();
 
             if !fallback_status.is_success() {
-                let fallback_error =
-                    res.text()
-                        .await
-                        .unwrap_or_else(|e| format!("Failed to read error: {}", e));
+                let fallback_error = res
+                    .text()
+                    .await
+                    .unwrap_or_else(|e| format!("Failed to read error: {}", e));
                 return Some(Ok(error_response(
                     fallback_status,
                     fallback_error,
@@ -426,9 +655,7 @@ async fn try_anthropic_fallback(
 
             let mut builder = Response::builder().status(fallback_status);
             for (name, value) in res.headers() {
-                if !is_cors_header(name.as_str())
-                    && name != hyper::header::CONTENT_LENGTH
-                {
+                if !is_cors_header(name.as_str()) && name != hyper::header::CONTENT_LENGTH {
                     builder = builder.header(name, value);
                 }
             }
@@ -458,9 +685,9 @@ async fn try_anthropic_fallback(
                 }
             });
 
-            Some(Ok(builder
-                .body(body)
-                .unwrap_or_else(|_| Response::new(Body::from("Internal server error")))))
+            Some(Ok(builder.body(body).unwrap_or_else(|_| {
+                Response::new(Body::from("Internal server error"))
+            })))
         }
         Err(ref err) => {
             log::error!("Chat completions fallback failed: {}", err);
@@ -471,7 +698,18 @@ async fn try_anthropic_fallback(
 
 /// Build a streaming response from a successful upstream response.
 /// Spawns a background task that forwards chunks, applying SSE line-patching
-/// for `text/event-stream` responses (e.g. promoting `reasoning_content` to `content`).
+/// for `text/event-stream` responses (e.g. removing private reasoning fields).
+/// (stream_id, Arc clone of active_streams) — passed so the spawn can remove the
+/// entry when streaming completes, preventing a slow leak of dead senders.
+type StreamsCleanup = Option<(
+    String,
+    std::sync::Arc<
+        tokio::sync::Mutex<
+            std::collections::HashMap<String, tokio::sync::oneshot::Sender<()>>,
+        >,
+    >,
+)>;
+
 fn build_streaming_response(
     response: reqwest::Response,
     status: StatusCode,
@@ -479,6 +717,8 @@ fn build_streaming_response(
     origin_header: &str,
     config: &ProxyConfig,
     upstream_url: &str,
+    abort_rx: Option<tokio::sync::oneshot::Receiver<()>>,
+    streams_cleanup: StreamsCleanup,
 ) -> Response<Body> {
     let mut builder = Response::builder().status(status);
 
@@ -519,7 +759,24 @@ fn build_streaming_response(
         let mut patched_lines_logged: usize = 0;
         let mut line_buffer = String::new();
 
-        while let Some(chunk_result) = stream.next().await {
+        let mut abort_rx = abort_rx;
+        loop {
+            let maybe_chunk = if let Some(ref mut rx) = abort_rx {
+                tokio::select! {
+                    biased;
+                    _ = rx => {
+                        log::debug!("Stream aborted via abort_remote_stream");
+                        break;
+                    }
+                    chunk = stream.next() => chunk,
+                }
+            } else {
+                stream.next().await
+            };
+            let chunk_result = match maybe_chunk {
+                Some(r) => r,
+                None => break,
+            };
             match chunk_result {
                 Ok(chunk) => {
                     chunk_count += 1;
@@ -536,11 +793,21 @@ fn build_streaming_response(
                     let s = match std::str::from_utf8(&chunk) {
                         Ok(v) => v,
                         Err(_) => {
-                            if sender.send_data(chunk).await.is_err() { break }
+                            if sender.send_data(chunk).await.is_err() {
+                                break;
+                            }
                             continue;
                         }
                     };
                     line_buffer.push_str(s);
+
+                    if line_buffer.len() > MAX_SSE_LINE_BUFFER {
+                        log::error!(
+                            "SSE line buffer exceeded {} bytes, aborting stream",
+                            MAX_SSE_LINE_BUFFER
+                        );
+                        break;
+                    }
 
                     let mut out = String::with_capacity(line_buffer.len());
                     while let Some(newline_idx) = line_buffer.find('\n') {
@@ -592,6 +859,12 @@ fn build_streaming_response(
                 "Streaming complete to client: {chunk_count} chunks, {total_bytes} bytes from {upstream_url_for_log}"
             );
         }
+
+        // Remove the abort-channel entry now that the stream is done so the
+        // sender does not linger in active_streams after the receiver is gone.
+        if let Some((sid, arc)) = streams_cleanup {
+            arc.lock().await.remove(&sid);
+        }
     });
 
     builder
@@ -599,9 +872,58 @@ fn build_streaming_response(
         .unwrap_or_else(|_| Response::new(Body::from("Internal server error")))
 }
 
+/// Per-request SSRF guard: re-resolves the upstream URL host and rejects private IPs.
+/// This defends against DNS rebinding attacks where a domain validated at registration
+/// time later resolves to an internal address.
+async fn check_upstream_not_ssrf(url: &str) -> Result<(), String> {
+    let parsed = match url::Url::parse(url) {
+        Ok(u) => u,
+        Err(_) => return Ok(()),
+    };
+    let port = parsed.port_or_known_default().unwrap_or(80);
+    match parsed.host() {
+        Some(url::Host::Ipv4(ip)) => {
+            let addr = std::net::IpAddr::V4(ip);
+            if !addr.is_loopback() && is_private_ip(addr) {
+                return Err(format!(
+                    "Upstream URL points to a private address ({ip}); request blocked"
+                ));
+            }
+        }
+        Some(url::Host::Ipv6(ip)) => {
+            let addr = std::net::IpAddr::V6(ip);
+            if !addr.is_loopback() && is_private_ip(addr) {
+                return Err(format!(
+                    "Upstream URL points to a private address ({ip}); request blocked"
+                ));
+            }
+        }
+        Some(url::Host::Domain(domain)) => {
+            if domain == "localhost" {
+                return Ok(());
+            }
+            let addrs = tokio::net::lookup_host((domain, port))
+                .await
+                .map_err(|e| format!("Failed to resolve upstream host '{domain}': {e}"))?;
+            for addr in addrs {
+                let ip = addr.ip();
+                if !ip.is_loopback() && is_private_ip(ip) {
+                    return Err(
+                        "Upstream URL resolves to an internal or private address; \
+                         request blocked (possible DNS rebinding)"
+                            .to_string(),
+                    );
+                }
+            }
+        }
+        None => {}
+    }
+    Ok(())
+}
+
 /// Send the buffered request to the upstream provider and return the response.
 /// Handles the Anthropic /messages → /chat/completions fallback on error.
-pub(super) async fn dispatch_to_upstream(
+pub(super) async fn dispatch_to_upstream<R: tauri::Runtime>(
     resolution: ProviderResolution,
     destination_path: &str,
     headers: &hyper::HeaderMap,
@@ -609,6 +931,7 @@ pub(super) async fn dispatch_to_upstream(
     origin_header: &str,
     config: &ProxyConfig,
     client: &Client,
+    app_handle: &tauri::AppHandle<R>,
 ) -> Result<Response<Body>, hyper::Error> {
     let upstream_url = resolution.target_base_url.clone();
     let is_anthropic_messages = resolution.is_anthropic_messages;
@@ -621,125 +944,209 @@ pub(super) async fn dispatch_to_upstream(
         "Proxying request to model server at base URL {upstream_url}, path: {destination_path}"
     );
 
-    let mut outbound_req = client.post(upstream_url.clone());
-
-    for (name, value) in headers.iter() {
-        // Strip auth headers — the proxy injects the real provider key below.
-        // Also strip x-api-key so client dummy keys never reach the upstream API.
-        // Strip x-ax-provider — internal routing header, not for upstream providers.
-        // Strip Content-Length — the body may have been modified by normalize_request_body
-        // (e.g., reasoning fields stripped), so reqwest must recalculate it from the actual body.
-        if name != hyper::header::HOST
-            && name != hyper::header::AUTHORIZATION
-            && name != hyper::header::CONTENT_LENGTH
-            && name.as_str() != "x-api-key"
-            && name.as_str() != "x-ax-provider"
-            && !super::proxy::is_hop_by_hop_header(name)
-        {
-            outbound_req = outbound_req.header(name, value);
-        }
-    }
-
-    let session_api_key_for_req = session_api_key.clone();
-    let buffered_body_for_req = buffered_body.clone();
-
-    if let Some(key) = session_api_key_for_req {
-        // Add key as both Authorization Bearer (OpenAI / Gemini / Groq / etc.)
-        // and x-api-key (Anthropic native format). Providers use whichever they support.
-        outbound_req = outbound_req.header("Authorization", format!("Bearer {key}"));
-        outbound_req = outbound_req.header("x-api-key", key.clone());
-    } else {
-        log::debug!("No session API key available for this request");
-    }
-
-    // Apply provider-specific custom headers from provider_configs
-    // (e.g., anthropic-version: 2023-06-01 for Anthropic's OpenAI-compatible endpoint)
-    // Skip reserved headers that could override auth or routing set above.
-    for ch in &provider_custom_headers {
-        let h = ch.header.to_ascii_lowercase();
-        if h == "host" || h == "authorization" || h == "x-api-key" {
-            log::debug!("Skipping reserved custom header '{}'", ch.header);
-            continue;
-        }
-        outbound_req = outbound_req.header(ch.header.as_str(), ch.value.as_str());
-    }
-
-    let outbound_req_with_body = outbound_req.body(buffered_body_for_req);
-
     // For Anthropic /messages, we need to track if we should transform the response
     let destination_path = destination_path.to_string();
+    let mut model_load_attempts = 0;
 
-    match outbound_req_with_body.send().await {
-        Ok(response) => {
-            let status = response.status();
+    // If the client sends X-Ax-Stream-Id, wire up an abort channel so
+    // abort_remote_stream() can terminate the upstream connection.
+    let stream_id = headers
+        .get("x-ax-stream-id")
+        .and_then(|v| v.to_str().ok())
+        .map(ToOwned::to_owned);
+    let mut abort_rx: Option<tokio::sync::oneshot::Receiver<()>> = if let Some(ref sid) = stream_id {
+        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+        let state = app_handle.state::<crate::core::state::AppState>();
+        let mut streams = state.active_streams.lock().await;
+        streams.insert(sid.clone(), tx);
+        Some(rx)
+    } else {
+        None
+    };
 
-            let is_error = !status.is_success();
+    if let Err(e) = check_upstream_not_ssrf(&upstream_url).await {
+        log::warn!("Per-request SSRF check blocked upstream: {e}");
+        if let Some(ref sid) = stream_id {
+            let state = app_handle.state::<crate::core::state::AppState>();
+            state.active_streams.lock().await.remove(sid);
+        }
+        return Ok(error_response(
+            StatusCode::FORBIDDEN,
+            e,
+            host_header,
+            origin_header,
+            config,
+        ));
+    }
 
-            // For Anthropic /messages requests with errors, try /chat/completions
-            if is_error && is_anthropic_messages {
-                log::warn!("Request failed for /messages with status {status}, trying /chat/completions...");
+    loop {
+        let mut outbound_req = client.post(upstream_url.clone());
 
-                let error_body = response
-                    .text()
-                    .await
-                    .unwrap_or_else(|e| format!("Failed to read error body: {}", e));
+        for (name, value) in headers.iter() {
+            // Strip auth headers — the proxy injects the real provider key below.
+            // Also strip x-api-key so client dummy keys never reach the upstream API.
+            // Strip x-ax-* headers — internal routing/trace headers, not for upstream providers.
+            // Strip Content-Length — the body may have been modified by normalize_request_body
+            // (e.g., reasoning fields stripped), so reqwest must recalculate it from the actual body.
+            if !should_skip_upstream_request_header(name) {
+                outbound_req = outbound_req.header(name, value);
+            }
+        }
 
-                if let Some(result) = try_anthropic_fallback(
-                    &target_base_url,
-                    headers,
-                    &session_api_key,
-                    &buffered_body,
-                    &destination_path,
+        if let Some(key) = session_api_key.clone() {
+            // Authorization Bearer covers OpenAI, Gemini, Groq, and most others.
+            outbound_req = outbound_req.header("Authorization", format!("Bearer {key}"));
+            // x-api-key is Anthropic's native auth header; sending it to other providers
+            // can expose credentials in unexpected ways.
+            if is_anthropic_messages {
+                outbound_req = outbound_req.header("x-api-key", key.clone());
+            }
+        } else {
+            log::debug!("No session API key available for this request");
+        }
+
+        // Apply provider-specific custom headers from provider_configs
+        // (e.g., anthropic-version: 2023-06-01 for Anthropic's OpenAI-compatible endpoint)
+        // Skip reserved headers that could override auth or routing set above.
+        for ch in &provider_custom_headers {
+            let h = ch.header.to_ascii_lowercase();
+            if is_reserved_upstream_custom_header(&h) {
+                log::debug!("Skipping reserved custom header '{}'", ch.header);
+                continue;
+            }
+            if ch.value.chars().any(|c| matches!(c, '\0' | '\r' | '\n')) {
+                log::debug!("Skipping unsafe custom header value for '{}'", ch.header);
+                continue;
+            }
+            let Ok(header_name) = reqwest::header::HeaderName::from_bytes(ch.header.as_bytes())
+            else {
+                log::debug!("Skipping invalid custom header name '{}'", ch.header);
+                continue;
+            };
+            let Ok(header_value) = reqwest::header::HeaderValue::from_str(ch.value.as_str()) else {
+                log::debug!("Skipping invalid custom header value for '{}'", ch.header);
+                continue;
+            };
+            outbound_req = outbound_req.header(header_name, header_value);
+        }
+
+        let outbound_req_with_body = outbound_req.body(buffered_body.clone());
+
+        match outbound_req_with_body.send().await {
+            Ok(response) => {
+                let status = response.status();
+
+                if !status.is_success() {
+                    let error_body = response
+                        .text()
+                        .await
+                        .unwrap_or_else(|e| format!("Failed to read error body: {}", e));
+
+                    if is_transient_model_loading_error(status, &destination_path, &error_body)
+                        && model_load_attempts < MODEL_LOAD_RETRY_ATTEMPTS
+                    {
+                        model_load_attempts += 1;
+                        log::info!(
+                            "Upstream model is still loading for {destination_path}; retrying {model_load_attempts}/{MODEL_LOAD_RETRY_ATTEMPTS}"
+                        );
+                        tokio::time::sleep(MODEL_LOAD_RETRY_DELAY).await;
+                        continue;
+                    }
+
+                    // For Anthropic /messages requests with errors, try /chat/completions
+                    if is_anthropic_messages {
+                        log::warn!("Request failed for /messages with status {status}, trying /chat/completions...");
+
+                        if let Some(result) = try_anthropic_fallback(
+                            &target_base_url,
+                            headers,
+                            &session_api_key,
+                            &buffered_body,
+                            &destination_path,
+                            host_header,
+                            origin_header,
+                            config,
+                            client,
+                        )
+                        .await
+                        {
+                            if let Some(ref sid) = stream_id {
+                                app_handle.state::<crate::core::state::AppState>()
+                                    .active_streams.lock().await.remove(sid);
+                            }
+                            return result;
+                        }
+
+                        if let Some(ref sid) = stream_id {
+                            app_handle.state::<crate::core::state::AppState>()
+                                .active_streams.lock().await.remove(sid);
+                        }
+                        return Ok(error_response(
+                            status,
+                            error_body,
+                            host_header,
+                            origin_header,
+                            config,
+                        ));
+                    }
+
+                    // Non-/messages error - return error response with body
+                    log::error!(
+                        "Upstream provider returned {status} for {destination_path}: {}",
+                        &error_body[..error_body.len().min(500)]
+                    );
+
+                    if let Some(ref sid) = stream_id {
+                        app_handle.state::<crate::core::state::AppState>()
+                            .active_streams.lock().await.remove(sid);
+                    }
+                    return Ok(error_response(
+                        status,
+                        error_body,
+                        host_header,
+                        origin_header,
+                        config,
+                    ));
+                }
+
+                // Success case - stream the response
+                let streams_cleanup = stream_id.clone().map(|sid| {
+                    let state = app_handle.state::<crate::core::state::AppState>();
+                    (sid, state.active_streams.clone())
+                });
+                return Ok(build_streaming_response(
+                    response,
+                    status,
                     host_header,
                     origin_header,
                     config,
-                    client,
-                ).await {
-                    return result;
-                }
-
-                return Ok(error_response(status, error_body, host_header, origin_header, config));
-            } else if is_error {
-                // Non-/messages error - return error response with body
-                let error_body = response
-                    .text()
-                    .await
-                    .unwrap_or_else(|e| format!("Failed to read error body: {}", e));
-
-                log::error!(
-                    "Upstream provider returned {status} for {destination_path}: {}",
-                    &error_body[..error_body.len().min(500)]
-                );
-
-                return Ok(error_response(status, error_body, host_header, origin_header, config));
+                    &upstream_url,
+                    abort_rx.take(),
+                    streams_cleanup,
+                ));
             }
-
-            // Success case - stream the response
-            return Ok(build_streaming_response(
-                response,
-                status,
-                host_header,
-                origin_header,
-                config,
-                &upstream_url,
-            ));
-        }
-        Err(e) => {
-            let error_msg = format!("Proxy request to model failed: {e}");
-            log::error!("{error_msg}");
-            Ok(error_response(StatusCode::BAD_GATEWAY, error_msg, host_header, origin_header, config))
+            Err(e) => {
+                let error_msg = format!("Proxy request to model failed: {e}");
+                log::error!("{error_msg}");
+                // Clean up any unclaimed stream abort handle on network failure.
+                if let Some(ref sid) = stream_id {
+                    let state = app_handle.state::<crate::core::state::AppState>();
+                    let mut streams = state.active_streams.lock().await;
+                    streams.remove(sid);
+                }
+                return Ok(error_response(
+                    StatusCode::BAD_GATEWAY,
+                    error_msg,
+                    host_header,
+                    origin_header,
+                    config,
+                ));
+            }
         }
     }
 }
 
 /// Patch a single SSE line in-place before forwarding to the client.
-///
-/// Reasoning models exposed over OpenAI-compatible endpoints (e.g.
-/// DeepSeek-R1, Cloudflare's `@cf/zai-org/glm-4.7-flash`) only emit their
-/// output under non-standard `delta.reasoning` / `delta.reasoning_content`
-/// fields. The Vercel AI SDK's OpenAI parser only reads `delta.content`,
-/// so without this promotion 100% of the tokens arrive but nothing renders
-/// in the chat UI — user sees the "thinking" indicator forever.
 ///
 /// Non-`data:` lines and malformed JSON pass through untouched.
 fn patch_sse_line(line: &str) -> String {
@@ -782,35 +1189,27 @@ fn patch_sse_line(line: &str) -> String {
             Some(d) => d,
             None => continue,
         };
-        // Take reasoning_content string if present & non-empty.
-        let reasoning = delta
-            .get("reasoning_content")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
-            .or_else(|| {
-                delta
-                    .get("reasoning")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-            });
-        if let Some(r) = reasoning {
-            if !r.is_empty() {
-                let existing = delta
-                    .get("content")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-                    .unwrap_or_default();
-                delta.insert(
-                    "content".to_string(),
-                    serde_json::Value::String(format!("{existing}{r}")),
-                );
-                // Remove reasoning fields so the client's OpenAI parser doesn't
-                // double-process them; AI SDK ignores unknown fields but we want
-                // the body as clean as possible.
-                delta.remove("reasoning_content");
-                delta.remove("reasoning");
+        let has_visible_content = delta
+            .get("content")
+            .and_then(|content| content.as_str())
+            .is_some_and(|content| !content.is_empty());
+        if !has_visible_content {
+            let reasoning_fallback = delta
+                .get("reasoning_content")
+                .and_then(|content| content.as_str())
+                .or_else(|| delta.get("reasoning").and_then(|content| content.as_str()))
+                .filter(|content| !content.is_empty())
+                .map(ToOwned::to_owned);
+            if let Some(content) = reasoning_fallback {
+                delta.insert("content".to_string(), serde_json::Value::String(content));
                 changed = true;
             }
+        }
+        if delta.remove("reasoning_content").is_some() {
+            changed = true;
+        }
+        if delta.remove("reasoning").is_some() {
+            changed = true;
         }
     }
     if !changed {
@@ -1001,7 +1400,7 @@ mod tests {
                 {"role":"user","content":"bye"}
             ]}"#,
         );
-        let result = normalize_request_body(&body);
+        let result = normalize_request_body(&body, false);
         let parsed: serde_json::Value = serde_json::from_slice(&result).unwrap();
         let assistant = &parsed["messages"][1];
         assert_eq!(assistant["content"], "hi");
@@ -1016,7 +1415,7 @@ mod tests {
                 {"role":"user","content":"hello","reasoning_content":"not stripped"}
             ]}"#,
         );
-        let result = normalize_request_body(&body);
+        let result = normalize_request_body(&body, false);
         let parsed: serde_json::Value = serde_json::from_slice(&result).unwrap();
         assert_eq!(parsed["messages"][0]["reasoning_content"], "not stripped");
     }
@@ -1024,7 +1423,7 @@ mod tests {
     #[test]
     fn normalize_request_body_returns_original_when_no_reasoning() {
         let body = Bytes::from(r#"{"model":"gpt-4","messages":[{"role":"user","content":"hi"}]}"#);
-        let result = normalize_request_body(&body);
+        let result = normalize_request_body(&body, false);
         // No modification needed — should return equivalent JSON
         let original: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let normalized: serde_json::Value = serde_json::from_slice(&result).unwrap();
@@ -1034,16 +1433,72 @@ mod tests {
     #[test]
     fn normalize_request_body_handles_non_json() {
         let body = Bytes::from("not json at all");
-        let result = normalize_request_body(&body);
+        let result = normalize_request_body(&body, false);
         assert_eq!(result, body);
     }
 
     #[test]
     fn normalize_request_body_handles_no_messages_field() {
         let body = Bytes::from(r#"{"model":"gpt-4","input":"embed this"}"#);
-        let result = normalize_request_body(&body);
+        let result = normalize_request_body(&body, false);
         let original: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let normalized: serde_json::Value = serde_json::from_slice(&result).unwrap();
         assert_eq!(original, normalized);
+    }
+
+    #[test]
+    fn normalize_request_body_disables_thinking_for_local_knowledge_context() {
+        let body = Bytes::from(
+            r#"{"model":"Qwen3_5-9B-IQ4_XS","messages":[
+                {"role":"user","content":"What real-world hiring outcome did the author achieve?\n\n## Local Knowledge Base (ACTIVE)\nAfter going through this study plan, I got hired as a Software Development Engineer at Amazon."}
+            ]}"#,
+        );
+
+        let result = normalize_request_body(&body, true);
+        let parsed: serde_json::Value = serde_json::from_slice(&result).unwrap();
+
+        assert_eq!(parsed["chat_template_kwargs"]["enable_thinking"], false);
+    }
+
+    #[test]
+    fn normalize_request_body_does_not_add_chat_template_kwargs_when_not_allowed() {
+        let body = Bytes::from(
+            r#"{"model":"gpt-4","messages":[
+                {"role":"user","content":"Question\n\n## Local Knowledge Base (ACTIVE)\nRetrieved context."}
+            ]}"#,
+        );
+
+        let result = normalize_request_body(&body, false);
+        let parsed: serde_json::Value = serde_json::from_slice(&result).unwrap();
+
+        assert!(parsed.get("chat_template_kwargs").is_none());
+    }
+
+    #[test]
+    fn transient_model_loading_error_is_retryable_for_chat_completions() {
+        assert!(is_transient_model_loading_error(
+            StatusCode::NOT_FOUND,
+            "/chat/completions",
+            r#"{"detail":"model gemma-4-26b-a4b-it-4bit not loaded; loaded=[]"}"#,
+        ));
+        assert!(is_transient_model_loading_error(
+            StatusCode::NOT_FOUND,
+            "/chat/completions",
+            r#"{"detail":"model Qwen3.6-35B-A3B-4bit not loaded; loaded=['gemma-4-26b-a4b-it-4bit']"}"#,
+        ));
+    }
+
+    #[test]
+    fn transient_model_loading_error_does_not_retry_real_not_found() {
+        assert!(!is_transient_model_loading_error(
+            StatusCode::NOT_FOUND,
+            "/chat/completions",
+            r#"{"detail":"provider route not found"}"#,
+        ));
+        assert!(!is_transient_model_loading_error(
+            StatusCode::NOT_FOUND,
+            "/models",
+            r#"{"detail":"model test not loaded; loaded=[]"}"#,
+        ));
     }
 }

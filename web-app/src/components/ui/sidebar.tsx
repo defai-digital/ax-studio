@@ -8,7 +8,12 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import {
+	Sheet,
+	SheetContent,
+	SheetDescription,
+	SheetTitle,
+} from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
 	Tooltip,
@@ -23,7 +28,7 @@ import {
 } from "@/components/ui/sidebar-context";
 import { useIsMobile } from "@/hooks/ui/use-mobile";
 import { useSidebarResize } from "@/hooks/ui/use-sidebar-resize";
-import { mergeButtonRefs } from "@/lib/merge-button-refs";
+import { mergeButtonRefs } from "@/lib/utils/merge-button-refs";
 import { cn } from "@/lib/utils";
 
 const SIDEBAR_COOKIE_NAME = "sidebar:state";
@@ -245,6 +250,8 @@ const Sidebar = React.forwardRef<
 						}
 						side={side}
 					>
+						<SheetTitle className="sr-only">Sidebar navigation</SheetTitle>
+						<SheetDescription className="sr-only">Primary application navigation.</SheetDescription>
 						<div className="flex h-full w-full flex-col">{children}</div>
 					</SheetContent>
 				</Sheet>

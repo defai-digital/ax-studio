@@ -3,11 +3,12 @@
  */
 
 import { invoke } from '@tauri-apps/api/core'
-import { MCPTool } from '@/types/completion'
+import { MCPTool } from '@/types/mcp'
 import { DEFAULT_MCP_SETTINGS } from '@/hooks/tools/useMCPServers'
 import type { MCPServerConfig, MCPServers, MCPSettings } from '@/hooks/tools/useMCPServers'
-import type { MCPConfig, MCPService } from './types'
+import type { MCPConfig, MCPService, ToolCallWithCancellationResult } from './types'
 import { mcpServersSchema, mcpSettingsSchema } from '@/schemas/mcp.schema'
+import { extractErrorMessage, toError } from '@/lib/utils/error'
 
 const getCoreApi = () => {
   if (!window.core?.api) {
@@ -16,6 +17,25 @@ const getCoreApi = () => {
 
   return window.core.api
 }
+
+function getErrorMessage(error: unknown): string {
+  return extractErrorMessage(error, String(error))
+}
+
+function isRecoverableMCPError(error: unknown): boolean {
+  const message = getErrorMessage(error).toLowerCase()
+  return (
+    message.includes('transport closed') ||
+    message.includes('connection closed') ||
+    message.includes('server disconnected') ||
+    message.includes('server') && message.includes('not found')
+  )
+}
+
+const unavailableToolResult = (error: unknown) => ({
+  error: getErrorMessage(error),
+  content: [],
+})
 
 export class TauriMCPService implements MCPService {
   async updateMCPConfig(configs: string): Promise<void> {
@@ -77,11 +97,11 @@ export class TauriMCPService implements MCPService {
   }
 
   async getTools(): Promise<MCPTool[]> {
-    return (await getCoreApi().getTools()) ?? []
+    return ((await getCoreApi().getTools()) as MCPTool[]) ?? []
   }
 
   async getConnectedServers(): Promise<string[]> {
-    return (await getCoreApi().getConnectedServers()) ?? []
+    return ((await getCoreApi().getConnectedServers()) as string[]) ?? []
   }
 
   async callTool(args: {
@@ -89,9 +109,27 @@ export class TauriMCPService implements MCPService {
     serverName?: string
     arguments: object
   }): Promise<{ error: string; content: { text: string }[] }> {
-    return (await getCoreApi().callTool(args)) ?? {
-      error: 'MCP service unavailable',
-      content: [],
+    const api = getCoreApi()
+    try {
+      return ((await api.callTool(args)) as { error: string; content: { text: string }[] }) ?? {
+        error: 'MCP service unavailable',
+        content: [],
+      }
+    } catch (error) {
+      if (!isRecoverableMCPError(error)) {
+        return unavailableToolResult(error)
+      }
+
+      console.warn('MCP tool call failed, restarting MCP servers and retrying once:', error)
+      try {
+        await api.restartMcpServers()
+        return ((await api.callTool(args)) as { error: string; content: { text: string }[] }) ?? {
+          error: 'MCP service unavailable after restart',
+          content: [],
+        }
+      } catch (retryError) {
+        return unavailableToolResult(retryError)
+      }
     }
   }
 
@@ -100,31 +138,49 @@ export class TauriMCPService implements MCPService {
     serverName?: string
     arguments: object
     cancellationToken?: string
-  }): {
-    promise: Promise<{ error: string; content: { text: string }[] }>
-    cancel: () => Promise<void>
-    token: string
-  } {
-    // Generate a unique cancellation token if not provided
+  }): ToolCallWithCancellationResult {
     const token = args.cancellationToken ?? `tool_call_${crypto.randomUUID()}`
 
-    // Create the tool call promise with cancellation token
-    const promise: Promise<{ error: string; content: { text: string }[] }> =
-      getCoreApi().callTool({
-        ...args,
-        cancellationToken: token
-      }) ?? Promise.reject(new Error('MCP service unavailable'))
+    // IIFE so any synchronous throw from getCoreApi() becomes a rejected promise,
+    // and transport errors are recovered with the same restart+retry as callTool().
+    const promise = (async () => {
+      try {
+        const api = getCoreApi()
+        return ((await api.callTool({ ...args, cancellationToken: token })) as { error: string; content: { text: string }[] }) ?? {
+          error: 'MCP service unavailable',
+          content: [],
+        }
+      } catch (error) {
+        if (!isRecoverableMCPError(error)) {
+          return unavailableToolResult(error)
+        }
+        console.warn('MCP tool call failed, restarting MCP servers and retrying once:', error)
+        try {
+          const api = getCoreApi()
+          await api.restartMcpServers()
+          return ((await api.callTool({ ...args, cancellationToken: token })) as { error: string; content: { text: string }[] }) ?? {
+            error: 'MCP service unavailable after restart',
+            content: [],
+          }
+        } catch (retryError) {
+          return unavailableToolResult(retryError)
+        }
+      }
+    })()
 
-    // Create cancel function
-  const cancel = async () => {
-      await getCoreApi().cancelToolCall({ cancellationToken: token })
+    const cancel = async () => {
+      try {
+        await getCoreApi().cancelToolCall({ cancellationToken: token })
+      } catch {
+        // Token already consumed — tool completed or timed out before cancel arrived
+      }
     }
 
     return { promise, cancel, token }
   }
 
   async cancelToolCall(cancellationToken: string): Promise<void> {
-    return await getCoreApi().cancelToolCall({ cancellationToken })
+    await getCoreApi().cancelToolCall({ cancellationToken })
   }
 
   async activateMCPServer(name: string, config: MCPServerConfig): Promise<void> {
@@ -132,9 +188,7 @@ export class TauriMCPService implements MCPService {
       await invoke('activate_mcp_server', { name, config })
     } catch (error) {
       console.error(`Failed to activate MCP server "${name}":`, error)
-      throw error instanceof Error
-        ? error
-        : new Error(`Failed to activate MCP server "${name}"`)
+      throw toError(error, `Failed to activate MCP server "${name}"`)
     }
   }
 
@@ -143,9 +197,7 @@ export class TauriMCPService implements MCPService {
       await invoke('deactivate_mcp_server', { name })
     } catch (error) {
       console.error(`Failed to deactivate MCP server "${name}":`, error)
-      throw error instanceof Error
-        ? error
-        : new Error(`Failed to deactivate MCP server "${name}"`)
+      throw toError(error, `Failed to deactivate MCP server "${name}"`)
     }
   }
 

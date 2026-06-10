@@ -1,21 +1,22 @@
-import { useState } from 'react'
-import * as React from 'react'
+import { type ChangeEvent, useEffect, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Textarea } from '@/components/ui/textarea'
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { SliderProps } from '@radix-ui/react-slider'
+import type { SliderProps } from '@radix-ui/react-slider'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { cn } from '@/lib/utils'
-import { Copy, CheckCheck, Eye, EyeOff, Minus, Plus, ChevronsUpDown } from 'lucide-react'
+import {
+  CheckCheck,
+  ChevronsUpDown,
+  Copy,
+  Eye,
+  EyeOff,
+  Minus,
+  Plus,
+} from 'lucide-react'
 
 // ─── InputControl ────────────────────────────────────────────────────────────
 
@@ -79,13 +80,23 @@ function InputControl({
           onChange={(e) => onChange(e.target.value)}
           className="h-8 w-16 font-mono text-center text-xs!"
         />
-        <Button variant="outline" size="icon-sm" type="button" aria-label="Decrement" className="rounded-none"
+        <Button
+          variant="outline"
+          size="icon-sm"
+          type="button"
+          aria-label="Decrement"
+          className="rounded-none"
           onClick={() => handleNumberAdjustment(-step)}
           disabled={min !== undefined && numericValue <= min}
         >
           <Minus className="size-3! text-muted-foreground" />
         </Button>
-        <Button variant="outline" size="icon-sm" type="button" aria-label="Increment" className="rounded-r-md"
+        <Button
+          variant="outline"
+          size="icon-sm"
+          type="button"
+          aria-label="Increment"
+          className="rounded-r-md"
           onClick={() => handleNumberAdjustment(step)}
           disabled={max !== undefined && numericValue >= max}
         >
@@ -106,12 +117,18 @@ function InputControl({
       />
       <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
         {hasInputActions && inputActions.includes('unobscure') && type === 'password' && (
-          <button onClick={() => setShowPassword(!showPassword)} className="p-1 rounded text-muted-foreground">
+          <button
+            onClick={() => setShowPassword(!showPassword)}
+            className="p-1 rounded text-muted-foreground"
+          >
             {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
         )}
         {hasInputActions && inputActions.includes('copy') && (
-          <button onClick={copyToClipboard} className="p-1 rounded text-muted-foreground">
+          <button
+            onClick={copyToClipboard}
+            className="p-1 rounded text-muted-foreground"
+          >
             {isCopied ? <CheckCheck className="text-primary" size={16} /> : <Copy size={16} />}
           </button>
         )}
@@ -134,12 +151,12 @@ interface SliderControlProps {
 
 function SliderControl({ value, sliderKey, title, min = 0, max = 100, step = 1, onChange }: SliderControlProps) {
   const initialValue = Array.isArray(value) && value[0] !== undefined ? value : [min]
-  const [currentValue, setCurrentValue] = React.useState<number[]>(initialValue)
-  const [inputValue, setInputValue] = React.useState<string>(initialValue[0].toString())
-  const [inputNumber, setInputNumber] = React.useState<number>(initialValue[0])
+  const [currentValue, setCurrentValue] = useState<number[]>(initialValue)
+  const [inputValue, setInputValue] = useState<string>(initialValue[0].toString())
+  const [inputNumber, setInputNumber] = useState<number>(initialValue[0])
   const isExceedingMax = inputNumber > max
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (Array.isArray(value) && value[0] !== undefined) {
       setCurrentValue(value)
       setInputValue(value[0].toString())
@@ -156,7 +173,7 @@ function SliderControl({ value, sliderKey, title, min = 0, max = 100, step = 1, 
     }
   }
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value
     setInputValue(val)
     const newValue = parseFloat(val)
@@ -171,7 +188,12 @@ function SliderControl({ value, sliderKey, title, min = 0, max = 100, step = 1, 
       <div className="flex flex-col gap-1">
         <div className="flex items-center justify-between gap-4">
           <div className="w-full space-y-2">
-            <Slider id={sliderKey} min={min} max={max} step={step} value={currentValue}
+            <Slider
+              id={sliderKey}
+              min={min}
+              max={max}
+              step={step}
+              value={currentValue}
               onValueChange={handleValueChange}
               className="**:[[role=slider]]:h-4 **:[[role=slider]]:w-4"
               aria-label={title}
@@ -189,7 +211,9 @@ function SliderControl({ value, sliderKey, title, min = 0, max = 100, step = 1, 
         </div>
       </div>
       {isExceedingMax && (
-        <p className="text-xs text-destructive">Maximum value allowed is <span className="font-medium">{max}</span></p>
+        <p className="text-xs text-destructive">
+          Maximum value allowed is <span className="font-medium">{max}</span>
+        </p>
       )}
     </div>
   )
@@ -220,6 +244,7 @@ type DynamicControllerProps = {
 }
 
 export function DynamicControllerSetting({
+  title,
   className,
   controllerType,
   controllerProps,
@@ -254,25 +279,27 @@ export function DynamicControllerSetting({
 
   if (controllerType === 'dropdown') {
     const options = controllerProps.options ?? []
-    const selected = options.find((o) => o.value === controllerProps.value)?.name || (controllerProps.value as string)
     return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="w-full justify-between">
-            {selected}
-            <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground ml-2" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="max-h-70">
+      <div className={cn('relative w-full', className)}>
+        <select
+          aria-label={title ?? controllerProps.placeholder ?? 'Select option'}
+          value={String(controllerProps.value ?? '')}
+          onChange={(event) => {
+            const selectedOption = options.find(
+              (option) => String(option.value) === event.target.value
+            )
+            onChange(selectedOption?.value ?? event.target.value)
+          }}
+          className="border-input bg-background ring-offset-background focus-visible:ring-ring h-8 w-full appearance-none rounded-md border px-3 pr-8 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50"
+        >
           {options.map((option, i) => (
-            <DropdownMenuItem key={i} onClick={() => onChange(option.value)}
-              className={cn('flex items-center justify-between my-1', selected === option.name ? 'bg-secondary/60 hover:bg-secondary/40' : '')}
-            >
+            <option key={i} value={String(option.value)}>
               {option.name}
-            </DropdownMenuItem>
+            </option>
           ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
+        </select>
+        <ChevronsUpDown className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      </div>
     )
   }
 
@@ -283,7 +310,7 @@ export function DynamicControllerSetting({
         value={(controllerProps.value as string) || ''}
         onChange={(e) => onChange(e.target.value)}
         rows={controllerProps.rows ?? 4}
-        className={cn('w-full resize-none')}
+        className="w-full resize-none"
         spellCheck={spellCheckChatInput}
         data-gramm={spellCheckChatInput}
         data-gramm_editor={spellCheckChatInput}

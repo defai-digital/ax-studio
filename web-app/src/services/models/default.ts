@@ -25,11 +25,33 @@ import type {
 } from './types'
 import { getBundledModelCatalog } from './catalog'
 import { huggingFaceRepoSchema } from '@/schemas/models.schema'
+import {
+  getCleanHuggingFaceRepoId,
+  getHuggingFaceApiModelUrl,
+  getHuggingFaceModelFileUrl,
+  getHuggingFaceModelUrl,
+} from '@/lib/huggingface'
 
 // Default provider for local inference
 const defaultProvider = 'llamacpp'
+const engineProviderFor = (provider?: string): string | undefined =>
+  provider === 'mlx' ? 'llamacpp' : provider
 
 export class DefaultModelsService implements ModelsService {
+  private parseHuggingFaceModelPath(
+    modelPath: string
+  ): { repoId: string; filename: string } | undefined {
+    const match = modelPath.match(
+      /^https:\/\/huggingface\.co\/([^/]+\/[^/]+)\/resolve\/main\/(.+)$/
+    )
+    if (!match) return undefined
+    const [, repoId, filename] = match
+    return {
+      repoId,
+      filename,
+    }
+  }
+
   private getEngine(provider: string = defaultProvider) {
     const engine = EngineManager.instance().get(provider) as AIEngine | undefined
     if (!engine) {
@@ -44,7 +66,21 @@ export class DefaultModelsService implements ModelsService {
     engine: AIEngine,
     model: string
   ): Promise<void> {
-    await engine.syncModelRoute(model)
+    try {
+      await engine.syncModelRoute(model)
+    } catch (error) {
+      console.warn(
+        `[ModelsService] Failed to sync local model route for "${model}":`,
+        error
+      )
+    }
+  }
+
+  private syncLoadedModelRouteInBackground(
+    engine: AIEngine,
+    model: string
+  ): void {
+    void this.syncLoadedModelRoute(engine, model)
   }
 
   async getModel(modelId: string): Promise<modelInfo | undefined> {
@@ -72,18 +108,14 @@ export class DefaultModelsService implements ModelsService {
   ): Promise<HuggingFaceRepo | null> {
     try {
       // Clean the repo ID to handle various input formats
-      const cleanRepoId = repoId
-        .replace(/^https?:\/\/huggingface\.co\//, '')
-        .replace(/^huggingface\.co\//, '')
-        .replace(/\/$/, '') // Remove trailing slash
-        .trim()
+      const cleanRepoId = getCleanHuggingFaceRepoId(repoId)
 
       if (!cleanRepoId || !cleanRepoId.includes('/')) {
         return null
       }
 
       const response = await fetch(
-        `https://huggingface.co/api/models/${encodeURIComponent(cleanRepoId)}?blobs=true&files_metadata=true`,
+        getHuggingFaceApiModelUrl(cleanRepoId),
         {
           signal,
           headers: hfToken
@@ -148,7 +180,7 @@ export class DefaultModelsService implements ModelsService {
 
       return {
         model_id: `${repo.author}/${sanitizeModelId(modelId)}`,
-        path: `https://huggingface.co/${encodeURIComponent(repo.modelId)}/resolve/main/${encodeURIComponent(file.rfilename)}`,
+        path: getHuggingFaceModelFileUrl(repo.modelId, file.rfilename),
         file_size: formatFileSize(file.size),
       }
     })
@@ -159,7 +191,7 @@ export class DefaultModelsService implements ModelsService {
 
       return {
         model_id: sanitizeModelId(modelId),
-        path: `https://huggingface.co/${encodeURIComponent(repo.modelId)}/resolve/main/${encodeURIComponent(file.rfilename)}`,
+        path: getHuggingFaceModelFileUrl(repo.modelId, file.rfilename),
         file_size: formatFileSize(file.size),
       }
     })
@@ -180,7 +212,7 @@ export class DefaultModelsService implements ModelsService {
 
       return {
         model_id: sanitizeModelId(modelId),
-        path: `https://huggingface.co/${encodeURIComponent(repo.modelId)}/resolve/main/${encodeURIComponent(file.rfilename)}`,
+        path: getHuggingFaceModelFileUrl(repo.modelId, file.rfilename),
         file_size: formatFileSize(file.size),
         sha256: file.lfs?.sha256,
       }
@@ -198,12 +230,12 @@ export class DefaultModelsService implements ModelsService {
       safetensors_files: safetensorsModels,
       num_safetensors: safetensorsModels.length,
       is_mlx: hasMlxFiles,
-      readme: `https://huggingface.co/${encodeURIComponent(repo.modelId)}/resolve/main/README.md`,
+      readme: `${getHuggingFaceModelUrl(repo.modelId)}/resolve/main/README.md`,
       description: `**Tags**: ${repo.tags?.join(', ')}`,
     }
   }
 
-  async updateModel(modelId: string, model: Partial<CoreModel>): Promise<void> {
+  async updateModel(_modelId: string, model: Partial<CoreModel>): Promise<void> {
     if (model.settings) {
       this.getEngine()?.updateSettings(
         model.settings as SettingComponentProps[]
@@ -253,12 +285,10 @@ export class DefaultModelsService implements ModelsService {
 
     // Extract repo ID from model URL
     // URL format: https://huggingface.co/{repo}/resolve/main/{filename}
-    const modelUrlMatch = modelPath.match(
-      /https:\/\/huggingface\.co\/([^/]+\/[^/]+)\/resolve\/main\/(.+)/
-    )
+    const parsedModelPath = this.parseHuggingFaceModelPath(modelPath)
 
-    if (modelUrlMatch && !skipVerification) {
-      const [, repoId, modelFilename] = modelUrlMatch
+    if (parsedModelPath && !skipVerification) {
+      const { repoId, filename: modelFilename } = parsedModelPath
 
       try {
         // Fetch real-time metadata from HuggingFace
@@ -276,11 +306,9 @@ export class DefaultModelsService implements ModelsService {
 
           // If mmproj path provided, extract its metadata too
           if (mmprojPath) {
-            const mmprojUrlMatch = mmprojPath.match(
-              /https:\/\/huggingface\.co\/[^/]+\/[^/]+\/resolve\/main\/(.+)/
-            )
-            if (mmprojUrlMatch) {
-              const [, mmprojFilename] = mmprojUrlMatch
+            const parsedMmprojPath = this.parseHuggingFaceModelPath(mmprojPath)
+            if (parsedMmprojPath) {
+              const { filename: mmprojFilename } = parsedMmprojPath
               const mmprojFile = repoInfo.siblings.find(
                 (file) => file.rfilename === mmprojFilename
               )
@@ -329,17 +357,18 @@ export class DefaultModelsService implements ModelsService {
   }
 
   async deleteModel(id: string, provider?: string): Promise<void> {
-    const engine = this.getEngine(provider)
+    const engineProvider = engineProviderFor(provider)
+    const engine = this.getEngine(engineProvider)
     if (!engine) {
       throw new Error(
-        `[ModelsService] Cannot delete model: engine "${provider ?? defaultProvider}" is not available.`
+        `[ModelsService] Cannot delete model: engine "${engineProvider ?? defaultProvider}" is not available.`
       )
     }
     return engine.delete(id)
   }
 
   async getActiveModels(provider?: string): Promise<string[]> {
-    const engine = this.getEngine(provider)
+    const engine = this.getEngine(engineProviderFor(provider))
     if (!engine) return []
     return engine.getLoadedModels() ?? []
   }
@@ -348,7 +377,7 @@ export class DefaultModelsService implements ModelsService {
     model: string,
     provider?: string
   ): Promise<UnloadResult | undefined> {
-    return this.getEngine(provider)?.unload(model)
+    return this.getEngine(engineProviderFor(provider))?.unload(model)
   }
 
   async stopAllModels(): Promise<void> {
@@ -382,12 +411,18 @@ export class DefaultModelsService implements ModelsService {
     model: string,
     bypassAutoUnload: boolean = false
   ): Promise<SessionInfo | undefined> {
-    const engine = this.getEngine(provider.provider)
-    if (!engine) return undefined
+    const engineProvider = engineProviderFor(provider.provider) ?? provider.provider
+    const engine = this.getEngine(engineProvider)
+    if (!engine) {
+      throw new Error(
+        `Local engine "${engineProvider}" is not available. ` +
+        `Try restarting the app — the engine may still be initializing.`
+      )
+    }
 
     const loadedModels = (await engine.getLoadedModels()) ?? []
     if (loadedModels.includes(model)) {
-      await this.syncLoadedModelRoute(engine, model)
+      this.syncLoadedModelRouteInBackground(engine, model)
       return undefined
     }
 
@@ -433,6 +468,10 @@ export class DefaultModelsService implements ModelsService {
 
     return engine
       .load(model, settings, false, bypassAutoUnload)
+      .then(async (session) => {
+        this.syncLoadedModelRouteInBackground(engine, model)
+        return session
+      })
       .catch((error) => {
         console.error(
           `Failed to start model ${model} for provider ${provider.provider}:`,

@@ -12,7 +12,6 @@ use tokio::sync::Mutex;
 /// Helper to construct an `AppState` with the given `mcp_servers` and defaults for all other fields.
 fn test_app_state(mcp_servers: SharedMcpServers) -> AppState {
     AppState {
-        app_token: None,
         mcp_servers,
         download_manager: Arc::new(Mutex::new(
             crate::core::downloads::models::DownloadManagerState::default(),
@@ -29,6 +28,7 @@ fn test_app_state(mcp_servers: SharedMcpServers) -> AppState {
         provider_state: Arc::new(Mutex::new(ProviderState::default())),
         approved_save_paths: Arc::new(Mutex::new(HashSet::new())),
         factory_reset_lock: Arc::new(Mutex::new(())),
+        active_streams: Arc::new(Mutex::new(HashMap::new())),
     }
 }
 
@@ -254,57 +254,6 @@ fn test_bin_path_construction_windows() {
 
     let bun_path_str = bun_path.display().to_string();
     assert_eq!(bun_path_str, r"C:\Program Files\bin\bun.exe");
-}
-
-// ============================================================================
-// Shutdown Context Tests
-// ============================================================================
-
-use super::helpers::ShutdownContext;
-use std::time::Duration;
-
-#[test]
-fn test_shutdown_context_app_exit_timeouts() {
-    let context = ShutdownContext::AppExit;
-    assert_eq!(context.per_server_timeout(), Duration::from_millis(500));
-    assert_eq!(context.overall_timeout(), Duration::from_millis(1500));
-}
-
-#[test]
-fn test_shutdown_context_manual_restart_timeouts() {
-    let context = ShutdownContext::ManualRestart;
-    assert_eq!(context.per_server_timeout(), Duration::from_secs(2));
-    assert_eq!(context.overall_timeout(), Duration::from_secs(5));
-}
-
-#[test]
-fn test_shutdown_context_factory_reset_timeouts() {
-    let context = ShutdownContext::FactoryReset;
-    assert_eq!(context.per_server_timeout(), Duration::from_secs(5));
-    assert_eq!(context.overall_timeout(), Duration::from_secs(10));
-}
-
-#[test]
-fn test_shutdown_context_overall_greater_than_per_server() {
-    for context in [
-        ShutdownContext::AppExit,
-        ShutdownContext::ManualRestart,
-        ShutdownContext::FactoryReset,
-    ] {
-        assert!(
-            context.overall_timeout() > context.per_server_timeout(),
-            "Overall timeout should be greater than per-server timeout for {:?}",
-            context
-        );
-    }
-}
-
-#[test]
-fn test_shutdown_context_is_copy() {
-    let context = ShutdownContext::AppExit;
-    let copied = context;
-    assert!(matches!(context, ShutdownContext::AppExit));
-    assert!(matches!(copied, ShutdownContext::AppExit));
 }
 
 #[tokio::test]

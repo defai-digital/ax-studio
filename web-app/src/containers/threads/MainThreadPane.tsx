@@ -1,17 +1,33 @@
-import type { RefObject } from 'react'
+import { type RefObject } from 'react'
 import type { UIMessage } from '@ai-sdk/react'
 import type { ChatStatus } from 'ai'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { MessageSquareText, Users } from 'lucide-react'
+import { MessageSquareText } from 'lucide-react'
 import ChatInput from '@/containers/ChatInput'
 import { MessagesArea } from '@/containers/threads/MessagesArea'
+
+function getPromptSourceLabel(source: string) {
+  switch (source) {
+    case 'thread':
+      return 'Using Thread Prompt'
+    case 'project':
+      return 'Inheriting from Project Prompt'
+    case 'global':
+      return 'Inheriting from Global Prompt'
+    default:
+      return 'Using Fallback Prompt'
+  }
+}
+
+function getFirstUserMessageText(messages: UIMessage[]) {
+  const firstUserMessage = messages.find((message) => message.role === 'user')
+  return firstUserMessage?.parts
+    .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+    .map((part) => part.text)
+    .join('')
+    .trim()
+}
 
 export type MainThreadPaneProps = {
   threadId: string
@@ -37,13 +53,6 @@ export type MainThreadPaneProps = {
   hasPanels?: boolean
   isSplitView?: boolean
   onSplitClose?: () => void
-  // Team selector (split view only)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  agentTeams?: any[]
-  activeTeamId?: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  activeTeam?: any
-  handleTeamChange?: (teamId: string | undefined) => void
 }
 
 export function MainThreadPane({
@@ -70,10 +79,6 @@ export function MainThreadPane({
   hasPanels = false,
   isSplitView = false,
   onSplitClose,
-  agentTeams = [],
-  activeTeamId,
-  activeTeam,
-  handleTeamChange,
 }: MainThreadPaneProps) {
   const containerCls = isSplitView
     ? 'h-full rounded-xl border bg-background overflow-hidden flex flex-col relative'
@@ -85,6 +90,8 @@ export function MainThreadPane({
   const inputCls = isSplitView || hasPanels ? 'p-2' : 'py-4 mx-auto w-full max-w-2xl px-4 sm:px-6'
 
   const title = thread?.title || (isSplitView ? 'Current Thread' : 'New Thread')
+  const firstUserMessageText = getFirstUserMessageText(chatMessages)
+  const showNormalTitle = !isSplitView && (!!threadLogo || title !== firstUserMessageText)
 
   return (
     <div className={containerCls}>
@@ -99,30 +106,6 @@ export function MainThreadPane({
               <span className="truncate">{title}</span>
             </div>
             <div className="flex items-center gap-0.5 shrink-0">
-              {handleTeamChange && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant={activeTeamId ? 'secondary' : 'ghost'}
-                      size="icon-xs"
-                      title={activeTeam ? activeTeam.name : 'Agent Team'}
-                    >
-                      <Users className="size-3.5" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => handleTeamChange(undefined)}>
-                      No Team (single agent)
-                    </DropdownMenuItem>
-                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                    {agentTeams.map((team: any) => (
-                      <DropdownMenuItem key={team.id} onSelect={() => handleTeamChange(team.id)}>
-                        {team.name}{team.id === activeTeamId && ' ✓'}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
               <Button
                 variant={showThreadPromptEditor ? 'secondary' : 'ghost'}
                 size="icon-xs"
@@ -142,10 +125,7 @@ export function MainThreadPane({
       {isSplitView && showThreadPromptEditor && (
         <div className="border-b p-2 space-y-2">
           <p className="text-xs text-muted-foreground">
-            {promptResolution.source === 'thread' ? 'Using Thread Prompt'
-              : promptResolution.source === 'project' ? 'Inheriting from Project Prompt'
-              : promptResolution.source === 'global' ? 'Inheriting from Global Prompt'
-              : 'Using Fallback Prompt'}
+            {getPromptSourceLabel(promptResolution.source)}
           </p>
           <Textarea
             value={threadPromptDraft}
@@ -167,26 +147,16 @@ export function MainThreadPane({
       )}
 
       {/* Normal view: thread title header */}
-      {!isSplitView && (() => {
-        const firstUserMsg = chatMessages.find((m) => m.role === 'user')
-        const firstMsgText = firstUserMsg?.parts
-          .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-          .map((p) => p.text)
-          .join('')
-          .trim()
-        const titleMatchesFirst = firstMsgText && title === firstMsgText
-        if (titleMatchesFirst && !threadLogo) return null
-        return (
-          <div className="px-4 sm:px-6 pb-2 shrink-0">
-            <div className="mx-auto w-full max-w-2xl flex items-center gap-2 min-w-0">
-              {threadLogo && (
-                <img src={threadLogo} alt={title} className="size-5 rounded-sm object-cover shrink-0" />
-              )}
-              <h2 className="text-sm font-medium truncate">{title}</h2>
-            </div>
+      {showNormalTitle && (
+        <div className="px-4 sm:px-6 pb-2 shrink-0">
+          <div className="mx-auto w-full max-w-2xl flex items-center gap-2 min-w-0">
+            {threadLogo && (
+              <img src={threadLogo} alt={title} className="size-5 rounded-sm object-cover shrink-0" />
+            )}
+            <h2 className="text-sm font-medium truncate">{title}</h2>
           </div>
-        )
-      })()}
+        </div>
+      )}
 
       {/* Messages + Input */}
       <div className="flex-1 flex flex-col overflow-hidden">

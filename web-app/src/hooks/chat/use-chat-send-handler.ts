@@ -19,15 +19,12 @@ import { useServiceHub } from '@/hooks/useServiceHub'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useThreads } from '@/hooks/threads/useThreads'
 import { useChatAttachments, NEW_THREAD_ATTACHMENT_KEY } from '@/hooks/chat/useChatAttachments'
-import {
-  safeStorageGetItem,
-  safeStorageRemoveItem,
-  safeStorageSetItem,
-} from '@/lib/storage'
+import { safeStorageSetItem } from '@/lib/storage/storage'
 
 type Input = {
   onSubmit?: (text: string) => void
   projectId?: string
+  selectedModel?: { id: string }
   assistants: Assistant[]
   selectedAssistant: Assistant | undefined
   setSelectedAssistant: (a: Assistant | undefined) => void
@@ -42,6 +39,7 @@ type Result = {
 export function useChatSendHandler({
   onSubmit,
   projectId,
+  selectedModel: resolvedSelectedModel,
   assistants,
   selectedAssistant,
   setSelectedAssistant,
@@ -49,7 +47,7 @@ export function useChatSendHandler({
   setPrompt,
 }: Input): Result {
   const serviceHub = useServiceHub()
-  const selectedModel = useModelProvider((s) => s.selectedModel)
+  const selectedModelFromStore = useModelProvider((s) => s.selectedModel)
   const selectedProvider = useModelProvider((s) => s.selectedProvider)
   const createThread = useThreads((s) => s.createThread)
   const router = useRouter()
@@ -61,7 +59,9 @@ export function useChatSendHandler({
   const handleSendMessage = useCallback(
     async (prompt: string) => {
       if (sendingRef.current) return
-      if (!selectedModel) {
+      const selectedModel = resolvedSelectedModel ?? selectedModelFromStore
+      const selectedModelId = selectedModel?.id ?? defaultModel(selectedProvider)
+      if (!selectedModelId) {
         setMessage('Please select a model to start chatting.')
         return
       }
@@ -152,7 +152,7 @@ export function useChatSendHandler({
 
           const newThread = await createThread(
             {
-              id: selectedModel?.id ?? defaultModel(selectedProvider),
+              id: selectedModelId,
               provider: selectedProvider,
             },
             prompt,
@@ -160,27 +160,18 @@ export function useChatSendHandler({
             projectMetadata
           )
 
+          useThreads.getState().updateThread(newThread.id, {
+            metadata: {
+              ...(newThread.metadata ?? {}),
+              pendingInitialMessage: prompt,
+            },
+          })
+
           // Transfer pending attachments from the home-page key to the real thread
           useChatAttachments.getState().transferAttachments(
             NEW_THREAD_ATTACHMENT_KEY,
             newThread.id
           )
-
-          const storedTeamId = safeStorageGetItem(
-            sessionStorage,
-            SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID,
-            'useChatSendHandler'
-          )
-          if (storedTeamId) {
-            safeStorageRemoveItem(
-              sessionStorage,
-              SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID,
-              'useChatSendHandler'
-            )
-            useThreads.getState().updateThread(newThread.id, {
-              metadata: { ...(newThread.metadata ?? {}), agent_team_id: storedTeamId },
-            })
-          }
 
           setSelectedAssistant(undefined)
 
@@ -222,7 +213,8 @@ export function useChatSendHandler({
       projectId,
       router,
       selectedAssistant,
-      selectedModel,
+      selectedModelFromStore,
+      resolvedSelectedModel,
       selectedProvider,
       serviceHub,
       setMessage,

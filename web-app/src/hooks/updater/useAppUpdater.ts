@@ -54,14 +54,12 @@ export const useAppUpdater = () => {
 
   const checkForUpdate = useCallback(
     async (resetRemindMeLater = false) => {
-      console.log('Checking for updates...')
-
       abortRef.current?.abort()
       const controller = new AbortController()
       abortRef.current = controller
 
       try {
-        if (resetRemindMeLater && !AUTO_UPDATER_DISABLED) {
+        if (resetRemindMeLater) {
           const newState = {
             remindMeLater: false,
           }
@@ -73,15 +71,14 @@ export const useAppUpdater = () => {
         }
 
         if (!isDev()) {
+          if (AUTO_UPDATER_DISABLED) {
+            return null
+          }
+
           const update = await serviceHub.updater().check()
           if (controller.signal.aborted) return null
 
           if (update) {
-            if (AUTO_UPDATER_DISABLED) {
-              console.log('Auto updater is disabled')
-              return null
-            }
-
             const newState = {
               isUpdateAvailable: true,
               remindMeLater: false,
@@ -93,7 +90,6 @@ export const useAppUpdater = () => {
             }))
             // Sync to other instances
             syncStateToOtherInstances(newState)
-            console.log('Update available:', update.version)
             return update
           } else {
             // No update available - reset state
@@ -159,7 +155,6 @@ export const useAppUpdater = () => {
 
   const downloadAndInstallUpdate = useCallback(async () => {
     if (AUTO_UPDATER_DISABLED) {
-      console.log('Auto updater is disabled')
       return
     }
 
@@ -178,10 +173,16 @@ export const useAppUpdater = () => {
       let downloaded = 0
       let contentLength = 0
       await serviceHub.models().stopAllModels()
-      if (controller.signal.aborted) return
+      if (controller.signal.aborted) {
+        setUpdateState((prev) => ({ ...prev, isDownloading: false }))
+        return
+      }
       serviceHub.events()?.emit(SystemEvent.KILL_SIDECAR)
       await new Promise((resolve) => setTimeout(resolve, 1000))
-      if (controller.signal.aborted) return
+      if (controller.signal.aborted) {
+        setUpdateState((prev) => ({ ...prev, isDownloading: false }))
+        return
+      }
 
       await serviceHub.updater().downloadAndInstallWithProgress((event) => {
         if (controller.signal.aborted) return
@@ -192,8 +193,6 @@ export const useAppUpdater = () => {
               ...prev,
               totalBytes: contentLength,
             }))
-            console.log(`Started downloading ${contentLength} bytes`)
-
             // Emit app update download started event
             events.emit(AppEvent.onAppUpdateDownloadUpdate, {
               progress: 0,
@@ -209,7 +208,6 @@ export const useAppUpdater = () => {
               downloadProgress: progress,
               downloadedBytes: downloaded,
             }))
-            console.log(`Downloaded ${downloaded} from ${contentLength}`)
 
             // Emit app update download progress event
             events.emit(AppEvent.onAppUpdateDownloadUpdate, {
@@ -220,7 +218,6 @@ export const useAppUpdater = () => {
             break
           }
           case 'Finished':
-            console.log('Download finished')
             setUpdateState((prev) => ({
               ...prev,
               isDownloading: false,
@@ -234,8 +231,6 @@ export const useAppUpdater = () => {
       })
 
       await window.core?.api?.relaunch()
-
-      console.log('Update installed')
     } catch (error) {
       console.error('Error downloading update:', error)
       setUpdateState((prev) => ({

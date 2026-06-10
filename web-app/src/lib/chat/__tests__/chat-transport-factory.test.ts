@@ -24,13 +24,15 @@ describe('createChatTransport', () => {
       params.systemMessage,
       params.sessionId,
       params.inferenceParameters,
-      params.modelOverrideId
+      params.modelOverrideId,
+      undefined
     )
   })
 
   it('passes undefined for missing options', () => {
     createChatTransport({})
     expect(CustomChatTransport).toHaveBeenCalledWith(
+      undefined,
       undefined,
       undefined,
       undefined,

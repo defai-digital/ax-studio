@@ -12,22 +12,23 @@ describe('events module', () => {
   })
 
   describe('bridge not available', () => {
-    it('emit throws when bridge is not available', () => {
-      expect(() => events.emit('test-event', { value: 1 })).toThrow(
-        'Core events bridge is not available'
-      )
+    it('emit no-ops safely when bridge is not available', () => {
+      expect(() => events.emit('test-event', { value: 1 })).not.toThrow()
     })
 
-    it('on throws when bridge is not available', () => {
-      expect(() => events.on('test-event', handler)).toThrow(
-        'Core events bridge is not available'
-      )
+    it('on registers against the fallback bridge when bridge is not available', () => {
+      events.on('test-event', handler)
+      events.emit('test-event', { value: 1 })
+
+      expect(handler).toHaveBeenCalledWith({ value: 1 })
     })
 
-    it('off throws when bridge is not available', () => {
-      expect(() => events.off('test-event', handler)).toThrow(
-        'Core events bridge is not available'
-      )
+    it('off unregisters from the fallback bridge when bridge is not available', () => {
+      events.on('test-event', handler)
+      events.off('test-event', handler)
+      events.emit('test-event', { value: 1 })
+
+      expect(handler).not.toHaveBeenCalled()
     })
   })
 

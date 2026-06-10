@@ -3,6 +3,7 @@ import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
 import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { cn } from '@/lib/utils'
+import { uniqueStrings } from '@/lib/utils/array'
 
 const HOSTNAME_RE = /^(?:(?:\d{1,3}\.){3}\d{1,3}|(?:[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])(?:\.(?:[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]))*)(?::\d{1,5})?$/
 
@@ -42,7 +43,7 @@ export function TrustedHostsInput({
   const handleBlur = () => {
     const { valid } = parseResult
 
-    const uniqueHosts = [...new Set(valid)]
+    const uniqueHosts = uniqueStrings(valid)
     setTrustedHosts(uniqueHosts)
     setInputValue(uniqueHosts.join(', '))
   }

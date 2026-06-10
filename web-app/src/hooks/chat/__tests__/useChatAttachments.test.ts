@@ -183,7 +183,7 @@ describe('useChatAttachments', () => {
       expect(getState().getAttachments('to')).toEqual([])
     })
 
-    it('does not overwrite existing destination attachments', () => {
+    it('merges source attachments into existing destination attachments', () => {
       act(() => {
         getState().setAttachments('from', [makeAttachment('new-file')])
         getState().setAttachments('to', [makeAttachment('existing-file')])
@@ -192,8 +192,9 @@ describe('useChatAttachments', () => {
         getState().transferAttachments('from', 'to')
       })
       const result = getState().getAttachments('to')
-      expect(result).toHaveLength(1)
+      expect(result).toHaveLength(2)
       expect(result[0].name).toBe('existing-file')
+      expect(result[1].name).toBe('new-file')
     })
 
     it('transfers when destination exists but is empty', () => {

@@ -219,16 +219,9 @@ describe('RenderMarkdown', () => {
       />
     )
     const markdownContainer = container.querySelector('.markdown')
-    const previewFrame = markdownContainer?.querySelector(
-      'iframe[title="Artifact Preview"]'
-    ) as HTMLIFrameElement | null
-
-    // IframePreview uses blob: URL (not srcdoc) for Tauri/WKWebView compatibility.
-    // The blob URL is set asynchronously via buildHarnessAsync which depends on
-    // browser APIs not available in happy-dom. Verify the iframe element renders
-    // correctly — the actual content loading is covered by manual/e2e tests.
-    expect(previewFrame).toBeTruthy()
-    expect(previewFrame?.title).toBe('Artifact Preview')
+    expect(markdownContainer).toBeTruthy()
+    const html = markdownContainer?.innerHTML ?? ''
+    expect(html).toContain('&lt;!DOCTYPE html&gt;')
   })
   describe('LaTeX normalization - display math', () => {
     it('converts \\[...\\] to $$ display math', () => {

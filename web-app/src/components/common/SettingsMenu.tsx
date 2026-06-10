@@ -18,10 +18,9 @@ import {
   Cog,
   Server,
   Globe,
-  Brain,
-  Users,
   Route,
   ShieldCheck,
+  Puzzle,
 } from 'lucide-react'
 
 type SettingsMenuItem = {
@@ -140,17 +139,10 @@ const SettingsMenu = () => {
     },
     // Other group
     {
-      title: 'common:memory',
-      route: route.settings.memory,
+      title: 'common:extensions',
+      route: route.settings.extensions,
       isEnabled: true,
-      icon: <Brain className="size-3.5" />,
-      group: 'Other',
-    },
-    {
-      title: 'common:agentTeams',
-      route: route.settings.agent_teams,
-      isEnabled: true,
-      icon: <Users className="size-3.5" />,
+      icon: <Puzzle className="size-3.5" />,
       group: 'Other',
     },
   ]

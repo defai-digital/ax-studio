@@ -1,19 +1,50 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { invoke } from '@tauri-apps/api/core'
-import { ConfidenceBadge } from './ConfidenceBadge'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { CitationData } from '@/types/citation-types'
+import { getDomain, openUrl } from '@/lib/utils/url'
 
-function getDomain(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '')
-  } catch {
-    return url
-  }
+const confidenceConfig: Record<
+  CitationData['confidence'],
+  { color: string; dotColor: string; label: string; tooltip: string }
+> = {
+  strong: {
+    color: 'text-green-700 dark:text-green-400',
+    dotColor: 'bg-green-500',
+    label: 'Well-supported',
+    tooltip: 'Multiple sources corroborate this response',
+  },
+  moderate: {
+    color: 'text-amber-700 dark:text-amber-400',
+    dotColor: 'bg-amber-500',
+    label: 'Partially supported',
+    tooltip: 'Some sources support this response',
+  },
+  uncertain: {
+    color: 'text-orange-700 dark:text-orange-400',
+    dotColor: 'bg-orange-500',
+    label: 'Limited sources',
+    tooltip: 'Few or no external sources available',
+  },
 }
 
-function openUrl(url: string) {
-  invoke('plugin:opener|open_url', { url }).catch(console.warn)
+function ConfidenceBadge({ confidence }: { confidence: CitationData['confidence'] }) {
+  const config = confidenceConfig[confidence]
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium ${config.color} cursor-default`}>
+            <span className={`size-1.5 rounded-full ${config.dotColor}`} />
+            {config.label}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="text-xs max-w-52">
+          {config.tooltip}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  )
 }
 
 interface SourcesFooterProps {
@@ -74,7 +105,7 @@ export function SourcesFooter({ citationData, showConfidence = true }: SourcesFo
                     alt=""
                     className="shrink-0 w-3.5 h-3.5 mt-0.5 rounded-sm"
                     onError={(e) => {
-                      ;(e.target as HTMLImageElement).style.display = 'none'
+                      e.currentTarget.style.display = 'none'
                     }}
                   />
                 ) : (

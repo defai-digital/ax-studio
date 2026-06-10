@@ -1,7 +1,5 @@
 use super::models::{DownloadEvent, DownloadItem, ProgressTracker, ProxyConfig};
 use crate::core::app::commands::get_app_data_folder_path;
-use crate::core::updater::hmac_client::SignedRequestHeaders;
-use crate::core::updater::session::get_session_id;
 use ax_studio_utils::normalize_path;
 use futures_util::{future::join_all, StreamExt};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
@@ -16,106 +14,16 @@ use url::Url;
 
 // ===== CONSTANTS =====
 
-/// Ax-Studio mirror prefix for HuggingFace downloads
-/// CDN mirrors are disabled until the domains are provisioned.
-/// Set these to valid URLs when cdn.axstudio.ai is available.
-const AX_STUDIO_MIRROR_PREFIX_STABLE: &str = "";
-const AX_STUDIO_MIRROR_PREFIX_NIGHTLY: &str = "";
-
-/// Domains that should use mirror download with fallback
-/// Empty list effectively disables mirror attempts.
-const MIRROR_DOMAINS: &[&str] = &[];
-
-/// Check if this is a nightly build based on package name
-fn is_nightly_build() -> bool {
-    let pkg_name = env!("CARGO_PKG_NAME");
-    pkg_name.to_lowercase().contains("nightly")
-}
-
-/// Get the appropriate mirror prefix based on build type
-fn get_mirror_prefix() -> &'static str {
-    if is_nightly_build() {
-        AX_STUDIO_MIRROR_PREFIX_NIGHTLY
-    } else {
-        AX_STUDIO_MIRROR_PREFIX_STABLE
-    }
-}
-
-/// Secret key for HMAC request authentication
-/// In release: Must be set via AX_STUDIO_SIGNING_KEY environment variable at build time
-/// In debug: Falls back to a debug key
-/// Must not be the default test key
-#[cfg(debug_assertions)]
-const SECRET_KEY: &str = match option_env!("AX_STUDIO_SIGNING_KEY") {
-    Some(key) => key,
-    None => "debug-mode-key",
-};
-#[cfg(not(debug_assertions))]
-const SECRET_KEY: &str = env!("AX_STUDIO_SIGNING_KEY");
-
 // ===== UTILITY FUNCTIONS =====
 
 pub fn err_to_string<E: std::fmt::Display>(e: E) -> String {
     format!("Error: {e}")
 }
 
-/// Converts a URL to Ax-Studio mirror URL if applicable
-/// e.g., https://huggingface.co/... -> https://cdn.axstudio.ai/huggingface.co/...
-/// or for nightly: https://huggingface.co/... -> https://cdn-nightly.axstudio.ai/huggingface.co/...
-pub fn convert_to_mirror_url(url: &str) -> Option<String> {
-    let parsed = Url::parse(url).ok()?;
-    let host = parsed.host_str()?;
-
-    // Check if the domain should use mirror
-    if MIRROR_DOMAINS
-        .iter()
-        .any(|domain| host == *domain || host.ends_with(&format!(".{}", domain)))
-    {
-        // Remove the scheme (https://) and any leading slashes to avoid // in path
-        let url_without_scheme = url
-            .strip_prefix("https://")
-            .or_else(|| url.strip_prefix("http://"))?
-            .trim_start_matches('/');
-
-        Some(format!("{}{}", get_mirror_prefix(), url_without_scheme))
-    } else {
-        None
-    }
-}
-
-/// Get session identifier for request signing
-fn get_download_nonce_seed() -> String {
-    get_session_id()
-}
-
-/// Get current app version from Cargo.toml
-fn get_app_version() -> &'static str {
-    env!("CARGO_PKG_VERSION")
-}
-
 // ===== VALIDATION FUNCTIONS =====
 
-fn is_internal_download_url(url: &str) -> bool {
-    let parsed = match Url::parse(url) {
-        Ok(p) => p,
-        Err(_) => return true,
-    };
-    if !matches!(parsed.scheme(), "http" | "https") {
-        return true;
-    }
-    match parsed.host() {
-        Some(url::Host::Domain("localhost")) => true,
-        Some(url::Host::Ipv4(ip)) => {
-            ip.is_loopback() || ip.is_private() || ip.is_link_local() || ip.is_unspecified()
-        }
-        Some(url::Host::Ipv6(ip)) => ip.is_loopback() || ip.is_unspecified(),
-        Some(url::Host::Domain(_)) => false,
-        None => true,
-    }
-}
-
 fn validate_download_url(url: &str) -> Result<(), String> {
-    if is_internal_download_url(url) {
+    if ax_studio_utils::is_internal_url(url) {
         return Err(format!(
             "Download URL '{}' points to an internal/private address",
             url
@@ -250,16 +158,9 @@ async fn validate_downloaded_file(
 }
 
 pub fn validate_proxy_config(config: &ProxyConfig) -> Result<(), String> {
-    // Validate proxy URL format
-    if let Err(e) = Url::parse(&config.url) {
-        return Err(format!("Invalid proxy URL '{}': {e}", config.url));
-    }
+    let url = Url::parse(&config.url)
+        .map_err(|e| format!("Invalid proxy URL '{}': {e}", config.url))?;
 
-    // Check if proxy URL has valid scheme
-    let url = match Url::parse(&config.url) {
-        Ok(url) => url,
-        Err(err) => return Err(format!("Invalid proxy URL '{}': {err}", config.url)),
-    };
     match url.scheme() {
         "http" | "https" | "socks4" | "socks5" => {}
         scheme => return Err(format!("Unsupported proxy scheme: {scheme}")),
@@ -328,9 +229,10 @@ pub fn should_bypass_proxy(url: &str, no_proxy: &[String]) -> bool {
             return true;
         }
 
-        // Simple wildcard matching
+        // Simple wildcard matching — require a dot before the domain so that
+        // "*.example.com" matches "foo.example.com" but NOT "example.com".
         if let Some(domain) = entry.strip_prefix("*.") {
-            if host.ends_with(domain) {
+            if host.ends_with(&format!(".{domain}")) {
                 return true;
             }
         } else if host == entry {
@@ -672,9 +574,9 @@ async fn download_single_file(
     let mut download_delta = 0u64;
     let mut initial_progress = 0u64;
 
-    let (resp, actual_url) = if should_resume {
+    let (resp, _actual_url) = if should_resume {
         let downloaded_size = tmp_save_path.metadata().map_err(err_to_string)?.len();
-        match _get_maybe_resume(&client, &item.url, downloaded_size).await {
+        match _get_maybe_resume_internal(&client, &item.url, downloaded_size).await {
             Ok(resp) => {
                 log::info!(
                     "Resume download: {}, already downloaded {} bytes",
@@ -725,11 +627,6 @@ async fn download_single_file(
         },
     );
 
-    // Log which URL is being used for download
-    if actual_url != item.url {
-        log::info!("Downloading via Ax-Studio mirror: {}", actual_url);
-    }
-
     let mut stream = resp.bytes_stream();
 
     let file = if should_resume {
@@ -747,29 +644,54 @@ async fn download_single_file(
     let mut writer = tokio::io::BufWriter::new(file);
     let mut total_transferred = initial_progress;
 
-    // write chunk to file
-    while let Some(chunk) = stream.next().await {
-        if cancel_token.is_cancelled() {
-            if !should_resume {
-                tokio::fs::remove_file(&tmp_save_path).await.ok();
+    // Helper: clean up sidecar files on any early exit.
+    let cleanup = |keep_tmp: bool| {
+        let tmp = tmp_save_path.clone();
+        let url_f = url_save_path.clone();
+        async move {
+            if !keep_tmp {
+                tokio::fs::remove_file(&tmp).await.ok();
             }
-            log::info!("Download cancelled: {}", item.url);
-            return Err("Download cancelled".to_string());
+            tokio::fs::remove_file(&url_f).await.ok();
+        }
+    };
+
+    // Write chunks using select! so cancellation is immediate rather than
+    // waiting for the next chunk to arrive from a slow server.
+    loop {
+        let maybe_chunk = tokio::select! {
+            biased;
+            _ = cancel_token.cancelled() => {
+                cleanup(should_resume).await;  // keep .tmp only when resumable
+                log::info!("Download cancelled: {}", item.url);
+                return Err("Download cancelled".to_string());
+            }
+            chunk = stream.next() => chunk,
+        };
+
+        let chunk = match maybe_chunk {
+            None => break,
+            Some(Err(e)) => {
+                cleanup(true).await; // keep .tmp for potential resume
+                return Err(err_to_string(e));
+            }
+            Some(Ok(c)) => c,
+        };
+
+        if let Err(e) = writer.write_all(&chunk).await {
+            cleanup(true).await;
+            return Err(err_to_string(e));
         }
 
-        let chunk = chunk.map_err(err_to_string)?;
-        writer.write_all(&chunk).await.map_err(err_to_string)?;
         download_delta += chunk.len() as u64;
         total_transferred += chunk.len() as u64;
 
-        // Update progress every 1 MB (was 10 MB) for more responsive UI
+        // Update progress every 1 MB for responsive UI
         if download_delta >= 1024 * 1024 {
-            // Update individual file progress
             progress_tracker
                 .update_progress(&file_id, total_transferred)
                 .await;
 
-            // Emit combined progress event
             let (combined_transferred, combined_total) =
                 progress_tracker.get_total_progress().await;
             let evt = DownloadEvent {
@@ -782,7 +704,10 @@ async fn download_single_file(
         }
     }
 
-    writer.flush().await.map_err(err_to_string)?;
+    if let Err(e) = writer.flush().await {
+        cleanup(true).await;
+        return Err(err_to_string(e));
+    }
 
     // Final progress update for this file
     progress_tracker
@@ -801,9 +726,9 @@ async fn download_single_file(
     tokio::fs::rename(&tmp_save_path, &save_path)
         .await
         .map_err(err_to_string)?;
-    tokio::fs::remove_file(&url_save_path)
-        .await
-        .map_err(err_to_string)?;
+    if let Err(e) = tokio::fs::remove_file(&url_save_path).await {
+        log::warn!("Failed to remove .url sidecar after download: {e}");
+    }
 
     // Decode URL for better readability in logs
     let decoded_url = url::Url::parse(&item.url)
@@ -815,100 +740,15 @@ async fn download_single_file(
 
 // ===== HTTP CLIENT HELPER FUNCTIONS =====
 
-/// Attempts to download from mirror URL first, falls back to original URL if mirror fails
-/// When using mirror URL, adds HMAC headers for request authentication
+/// Attempts download directly from the given URL with resume support
 pub async fn _get_maybe_resume_with_fallback(
     client: &reqwest::Client,
     url: &str,
     start_bytes: u64,
 ) -> Result<(reqwest::Response, String), String> {
-    // Try mirror URL first if applicable
-    if let Some(mirror_url) = convert_to_mirror_url(url) {
-        log::info!("Attempting download from Ax-Studio mirror: {}", mirror_url);
-        match _get_maybe_resume_with_hmac(client, &mirror_url, start_bytes).await {
-            Ok(resp) => {
-                log::info!("Successfully connected to Ax-Studio mirror");
-                return Ok((resp, mirror_url));
-            }
-            Err(e) => {
-                log::warn!(
-                    "Ax-Studio mirror download failed: {}. Falling back to original URL...",
-                    e
-                );
-            }
-        }
-    }
-
-    // Fallback to original URL (no HMAC headers needed)
-    log::info!("Downloading from original URL: {}", url);
+    log::info!("Downloading from URL: {}", url);
     let resp = _get_maybe_resume_internal(client, url, start_bytes).await?;
     Ok((resp, url.to_string()))
-}
-
-/// Download from URL with HMAC headers for Ax-Studio mirror authentication
-async fn _get_maybe_resume_with_hmac(
-    client: &reqwest::Client,
-    url: &str,
-    start_bytes: u64,
-) -> Result<reqwest::Response, String> {
-    // Ensure the signing key is not the default debug-mode key. Returning an
-    // error here (instead of panicking via `assert!`) lets the download path
-    // fall back to the unauthenticated original URL instead of crashing.
-    //
-    // NOTE: this previously checked `local-dev-test-key-not-for-production`
-    // which never matched the actual debug fallback (`debug-mode-key`), so
-    // the guard was a silent no-op.
-    if SECRET_KEY == "debug-mode-key" {
-        return Err(
-            "AX_STUDIO_SIGNING_KEY must be set at build time; \
-             the debug fallback key cannot be used for mirror downloads"
-                .to_string(),
-        );
-    }
-
-    // Generate HMAC headers for request authentication
-    let nonce_seed = get_download_nonce_seed();
-    let app_version = get_app_version();
-    let signed_headers = SignedRequestHeaders::new(SECRET_KEY, &nonce_seed, app_version);
-
-    let mut request = if start_bytes > 0 {
-        client
-            .get(url)
-            .header("Range", format!("bytes={start_bytes}-"))
-    } else {
-        client.get(url)
-    };
-
-    // Add HMAC headers
-    for (key, value) in signed_headers.to_header_pairs() {
-        request = request.header(key, value);
-    }
-
-    // Use a short timeout for mirror requests so that an unreachable CDN
-    // (e.g. cdn.axstudio.ai not yet live) fails fast and falls back to the
-    // original URL instead of blocking the download for 30+ seconds.
-    let resp = tokio::time::timeout(Duration::from_secs(15), request.send())
-        .await
-        .map_err(|_| "Mirror request timed out after 15s".to_string())?
-        .map_err(err_to_string)?;
-
-    if start_bytes > 0 {
-        if resp.status() != reqwest::StatusCode::PARTIAL_CONTENT {
-            return Err(format!(
-                "Failed to resume download: HTTP status {}, {}",
-                resp.status(),
-                resp.text().await.unwrap_or_default()
-            ));
-        }
-    } else if !resp.status().is_success() {
-        return Err(format!(
-            "Failed to download: HTTP status {}, {}",
-            resp.status(),
-            resp.text().await.unwrap_or_default()
-        ));
-    }
-
-    Ok(resp)
 }
 
 /// Internal function to attempt download from a single URL (without HMAC)
@@ -969,21 +809,6 @@ mod tests {
         let result = err_to_string(err);
         assert!(result.starts_with("Error: "));
         assert!(result.contains("file missing"));
-    }
-
-    // --- convert_to_mirror_url ---
-
-    #[test]
-    fn test_convert_to_mirror_url_no_mirror_domains() {
-        // MIRROR_DOMAINS is empty, so no URL should be mirrored
-        let result = convert_to_mirror_url("https://huggingface.co/models/test");
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_convert_to_mirror_url_invalid_url() {
-        let result = convert_to_mirror_url("not a url");
-        assert!(result.is_none());
     }
 
     // --- validate_proxy_config ---
@@ -1116,6 +941,20 @@ mod tests {
     }
 
     #[test]
+    fn test_should_bypass_proxy_wildcard_does_not_match_bare_domain() {
+        // "*.example.com" must NOT match "example.com" itself — only subdomains.
+        assert!(!should_bypass_proxy(
+            "https://example.com/path",
+            &["*.example.com".to_string()]
+        ));
+        // But it must still match a real subdomain.
+        assert!(should_bypass_proxy(
+            "https://api.example.com/v1",
+            &["*.example.com".to_string()]
+        ));
+    }
+
+    #[test]
     fn test_should_bypass_proxy_invalid_url() {
         assert!(!should_bypass_proxy("not a url", &["*".to_string()]));
     }
@@ -1138,44 +977,5 @@ mod tests {
         let headers = HashMap::new();
         let result = _convert_headers(&headers).unwrap();
         assert!(result.is_empty());
-    }
-}
-
-pub async fn _get_maybe_resume(
-    client: &reqwest::Client,
-    url: &str,
-    start_bytes: u64,
-) -> Result<reqwest::Response, String> {
-    let request = if start_bytes > 0 {
-        client
-            .get(url)
-            .header("Range", format!("bytes={start_bytes}-"))
-    } else {
-        client.get(url)
-    };
-
-    let resp = tokio::time::timeout(Duration::from_secs(30), request.send())
-        .await
-        .map_err(|_| "Request timed out after 30s".to_string())?
-        .map_err(err_to_string)?;
-
-    if start_bytes > 0 {
-        if resp.status() != reqwest::StatusCode::PARTIAL_CONTENT {
-            return Err(format!(
-                "Failed to resume download: HTTP status {}, {}",
-                resp.status(),
-                resp.text().await.unwrap_or_default()
-            ));
-        }
-        Ok(resp)
-    } else {
-        if !resp.status().is_success() {
-            return Err(format!(
-                "Failed to download: HTTP status {}, {}",
-                resp.status(),
-                resp.text().await.unwrap_or_default()
-            ));
-        }
-        Ok(resp)
     }
 }

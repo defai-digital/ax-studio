@@ -5,14 +5,15 @@
  * current-thread lifecycle, initial message dispatch, session-storage
  * thread-prompt and team-id application.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import type { UIMessage } from '@ai-sdk/react'
 import { SESSION_STORAGE_PREFIX, SESSION_STORAGE_KEY } from '@/constants/chat'
 import { defaultAssistant } from '@/hooks/chat/useAssistant'
 import {
   safeStorageGetItem,
+  safeStorageParseJSONAs,
   safeStorageRemoveItem,
-} from '@/lib/storage'
+} from '@/lib/storage/storage'
 
 export type ThreadEffectsInput = {
   threadId: string
@@ -21,8 +22,6 @@ export type ThreadEffectsInput = {
   status: string
   assistants: Assistant[]
   selectedModel: Model | undefined
-  activeTeamId: string | undefined
-  setTeamTokensUsed: (tokens: number) => void
   reasoningContainerRef: React.RefObject<HTMLDivElement | null>
   setCurrentThreadId: (id?: string) => void
   setCurrentAssistant: (assistant: Assistant) => void
@@ -40,14 +39,11 @@ export function useThreadEffects({
   status,
   assistants,
   selectedModel: _selectedModel,
-  activeTeamId,
-  setTeamTokensUsed,
   reasoningContainerRef,
   setCurrentThreadId,
   setCurrentAssistant,
   processAndSendMessage,
   handleResearchCommand,
-  cancelResearch,
   updateThread,
   setThreadPromptDraft,
 }: ThreadEffectsInput): void {
@@ -59,52 +55,6 @@ export function useThreadEffects({
         : ''
     )
   }, [thread?.metadata?.threadPrompt, setThreadPromptDraft])
-
-  // ─── Team token usage ─────────────────────────────────────────────────────
-  // Token totals only change when a run completes, so we refetch on:
-  //   1. thread / team change
-  //   2. a `streaming → ready` transition (run just finished)
-  //
-  // We detect the transition via a ref mutated INSIDE `useEffect` rather
-  // than during render — mutating a ref during render makes React Strict
-  // Mode (which runs function bodies twice) miss the transition on the
-  // second pass, breaking the refetch.
-  const prevStatusRef = useRef(status)
-  const [teamTokensRefreshKey, setTeamTokensRefreshKey] = useState(0)
-  useEffect(() => {
-    const prev = prevStatusRef.current
-    prevStatusRef.current = status
-    if (prev === 'streaming' && status === 'ready') {
-      setTeamTokensRefreshKey((k) => k + 1)
-    }
-  }, [status])
-
-  useEffect(() => {
-    if (!activeTeamId || !threadId) {
-      setTeamTokensUsed(0)
-      return
-    }
-    let cancelled = false
-    const loadUsage = async () => {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core')
-        const logs = await invoke<Array<{ total_tokens: number }>>(
-          'list_agent_run_logs',
-          { threadId }
-        )
-        if (!cancelled) {
-          const total = logs.reduce((sum, l) => sum + l.total_tokens, 0)
-          setTeamTokensUsed(total)
-        }
-      } catch {
-        // Silently ignore — web mode or no logs yet
-      }
-    }
-    loadUsage()
-    return () => {
-      cancelled = true
-    }
-  }, [activeTeamId, threadId, teamTokensRefreshKey, setTeamTokensUsed])
 
   // ─── Reasoning container auto-scroll ─────────────────────────────────────
   useEffect(() => {
@@ -154,64 +104,67 @@ export function useThreadEffects({
   handleResearchCommandRef.current = handleResearchCommand
   const processAndSendMessageRef = useRef(processAndSendMessage)
   processAndSendMessageRef.current = processAndSendMessage
+  const updateThreadRef = useRef(updateThread)
+  updateThreadRef.current = updateThread
 
   useEffect(() => {
     if (initialMessageSentForThreadRef.current === threadId) return
 
     const initialMessageKey = `${SESSION_STORAGE_PREFIX.INITIAL_MESSAGE}${threadId}`
-    const storedMessage = safeStorageGetItem(
+    const storedInitialMessage = safeStorageParseJSONAs(
       sessionStorage,
       initialMessageKey,
+      (value: unknown): value is { text: string } =>
+        typeof value === 'object' &&
+        value !== null &&
+        'text' in value &&
+        typeof (value as { text?: unknown }).text === 'string',
       'useThreadEffects'
     )
-    if (!storedMessage) return
+    const metadataInitialMessage =
+      typeof threadRef.current?.metadata?.pendingInitialMessage === 'string'
+        ? { text: threadRef.current.metadata.pendingInitialMessage }
+        : undefined
+    const parsedInitialMessage = storedInitialMessage ?? metadataInitialMessage
+    if (!parsedInitialMessage) return
 
-    let cancelled = false
+    const clearInitialMessage = () => {
+      safeStorageRemoveItem(sessionStorage, initialMessageKey, 'useThreadEffects')
+      const metadata = threadRef.current?.metadata
+      if (!metadata || typeof metadata.pendingInitialMessage !== 'string') return
+      const { pendingInitialMessage: _pendingInitialMessage, ...remainingMetadata } = metadata
+      updateThreadRef.current(threadId, { metadata: remainingMetadata })
+    }
 
-    safeStorageRemoveItem(sessionStorage, initialMessageKey, 'useThreadEffects')
-    initialMessageSentForThreadRef.current = threadId
+    const dispatchTimer = window.setTimeout(() => {
+      void (async () => {
+        if (initialMessageSentForThreadRef.current === threadId) return
+        initialMessageSentForThreadRef.current = threadId
 
-    ;(async () => {
-      try {
-        const parsed = JSON.parse(storedMessage)
-        const message = parsed && typeof parsed === 'object' && typeof parsed.text === 'string'
-          ? (parsed as { text: string })
-          : null
+        const message = parsedInitialMessage.text
         if (!message) {
           console.error('Invalid initial message payload in sessionStorage')
+          initialMessageSentForThreadRef.current = null
           return
         }
-        if (cancelled) return
-        if (handleResearchCommandRef.current(message.text)) {
-          // Research started — do NOT cancel on cleanup. Research runs independently
-          // of this effect's lifecycle and should only be cancelled by the user.
+        if (handleResearchCommandRef.current(message)) {
+          clearInitialMessage()
           return
         }
-        if (cancelled) return
-        await processAndSendMessageRef.current(message.text)
-      } catch (error) {
-        console.error('Failed to parse initial message:', error)
-      }
-    })()
+        await processAndSendMessageRef.current(message)
+        clearInitialMessage()
+      })().catch((error) => {
+        initialMessageSentForThreadRef.current = null
+        console.error('Failed to process initial message:', error)
+      })
+    }, 0)
 
     return () => {
-      // Only cancel in-progress chat streaming, not research.
-      // React StrictMode runs this cleanup on every mount cycle, so cancelling
-      // research here would abort it immediately on the first message.
-      cancelled = true
+      window.clearTimeout(dispatchTimer)
     }
-  }, [threadId])
+  }, [threadId, thread?.metadata?.pendingInitialMessage])
 
-  // ─── Apply thread prompt + agent team from sessionStorage ────────────────
-  // Merge both sessionStorage carries in a SINGLE updateThread call. The
-  // previous split-into-two-effects implementation raced: each effect
-  // spread `thread?.metadata` from the same render snapshot, so whichever
-  // ran second overwrote the other's metadata patch.
-  //
-  // Track the thread id rather than a boolean so the carry re-arms for
-  // every new thread (the removeItem below makes it a no-op on repeat
-  // effects within the same thread anyway, but keying by id is the
-  // honest signal).
+  // ─── Apply thread prompt from sessionStorage ──────────────────────────────
   const sessionCarryAppliedForThreadRef = useRef<string | null>(null)
   useEffect(() => {
     if (sessionCarryAppliedForThreadRef.current === threadId) return
@@ -220,37 +173,12 @@ export function useThreadEffects({
       SESSION_STORAGE_KEY.NEW_THREAD_PROMPT,
       'useThreadEffects'
     )
-    const storedTeamId = safeStorageGetItem(
-      sessionStorage,
-      SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID,
-      'useThreadEffects'
-    )
-    if (!storedPrompt && !storedTeamId) return
+    if (!storedPrompt) return
     sessionCarryAppliedForThreadRef.current = threadId
-
-    if (storedPrompt) {
-      safeStorageRemoveItem(
-        sessionStorage,
-        SESSION_STORAGE_KEY.NEW_THREAD_PROMPT,
-        'useThreadEffects'
-      )
-    }
-    if (storedTeamId) {
-      safeStorageRemoveItem(
-        sessionStorage,
-        SESSION_STORAGE_KEY.NEW_THREAD_TEAM_ID,
-        'useThreadEffects'
-      )
-    }
-
+    safeStorageRemoveItem(sessionStorage, SESSION_STORAGE_KEY.NEW_THREAD_PROMPT, 'useThreadEffects')
     updateThread(threadId, {
-      metadata: {
-        ...(thread?.metadata ?? {}),
-        ...(storedPrompt ? { threadPrompt: storedPrompt } : {}),
-        ...(storedTeamId ? { agent_team_id: storedTeamId } : {}),
-      },
+      metadata: { ...(thread?.metadata ?? {}), threadPrompt: storedPrompt },
     })
-
-    if (storedPrompt) setThreadPromptDraft(storedPrompt)
+    setThreadPromptDraft(storedPrompt)
   }, [threadId, thread?.metadata, updateThread, setThreadPromptDraft])
 }

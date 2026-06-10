@@ -77,7 +77,7 @@ describe('TauriAppService', () => {
       const result = appService.parseLogLine(logLine)
 
       expect(result).toEqual({
-        timestamp: '2024-01-01 10:00:00Z',
+        timestamp: Date.parse('2024-01-01T10:00:00Z'),
         level: 'info',
         target: 'target',
         message: 'Test message',

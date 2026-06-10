@@ -3,7 +3,7 @@ import { renderHook } from '@testing-library/react'
 import { useThreadConfig } from '../use-thread-config'
 
 // Mock system-prompt to isolate the hook logic
-vi.mock('@/lib/system-prompt', () => ({
+vi.mock('@/lib/prompts/system-prompt', () => ({
   resolveSystemPrompt: vi.fn(
     (threadPrompt: unknown, projectPrompt: unknown, settings: { globalDefaultPrompt: string }) => {
       if (typeof threadPrompt === 'string' && threadPrompt.trim()) {

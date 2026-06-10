@@ -362,17 +362,16 @@ describe('parsePlan', () => {
     expect(parsePlan('')).toEqual([])
   })
 
-  it('handles JSON array with non-string elements', () => {
-    // Returns whatever JSON.parse produces — numbers etc.
+  it('filters JSON array elements to strings', () => {
     const input = '[1, 2, 3]'
     const result = parsePlan(input)
-    expect(result).toEqual([1, 2, 3])
+    expect(result).toEqual([])
   })
 
-  it('handles nested JSON arrays — extracts outermost match', () => {
+  it('returns an empty array for nested JSON arrays', () => {
     const input = '[["nested"], "flat"]'
     const result = parsePlan(input)
-    expect(result).toEqual([['nested'], 'flat'])
+    expect(result).toEqual([])
   })
 
   it('strips leading numbers and punctuation from fallback lines', () => {
@@ -395,13 +394,9 @@ describe('parsePlan', () => {
     }
   })
 
-  // DISCOVERED BUG: parsePlan('{}') returns a plain object {} instead of string[].
-  // JSON.parse('{}') succeeds, the regex match for [...] fails, so it falls through
-  // to JSON.parse(trimmed) which returns {} — a non-array. The return type says
-  // string[] but the actual return is an object.
-  it('BUG: returns non-array for valid JSON objects like "{}"', () => {
+  it('returns an empty array for valid JSON objects like "{}"', () => {
     const result = parsePlan('{}')
-    expect(Array.isArray(result)).toBe(false)
+    expect(result).toEqual([])
   })
 
   it('fallback result length is always <= 5', () => {
@@ -461,10 +456,7 @@ describe('parseDrillDown', () => {
     }
   })
 
-  // DISCOVERED BUG: parsePlan('{}') returns a plain object via JSON.parse,
-  // then parseDrillDown calls .slice(0, 2) on it, which throws TypeError.
-  // parsePlan should validate that JSON.parse result is an array.
-  it('BUG: throws when parsePlan returns non-array JSON (e.g. "{}")', () => {
-    expect(() => parseDrillDown('{}')).toThrow(TypeError)
+  it('returns an empty array for non-array JSON objects', () => {
+    expect(parseDrillDown('{}')).toEqual([])
   })
 })

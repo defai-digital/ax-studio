@@ -11,7 +11,7 @@ import {
   SUMMARISE_PROMPT,
   DRILL_DOWN_PROMPT,
   WRITER_PROMPT,
-} from '@/lib/research-prompts'
+} from '@/lib/prompts/research-prompts'
 import { newUserThreadContent, newAssistantThreadContent } from '@/lib/completion'
 import {
   exaSearch,
@@ -25,9 +25,10 @@ import {
 import { parseExaResults, parsePlan, parseDrillDown } from '@/lib/research/research-parsers'
 import { scrapeWithTimeout } from '@/lib/research/research-scraper'
 import { buildResearchModel } from '@/lib/research/research-model'
-import { prepareProviderForChat } from '@/lib/chat/model-session'
+import { isLocalProvider, prepareProviderForChat } from '@/lib/chat/model-session'
 import { getServiceHub } from '@/hooks/useServiceHub'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
+import type { Chat, UIMessage } from '@ai-sdk/react'
 
 export { isExaRateLimitMessage, isExaRateLimitError }
 
@@ -35,6 +36,7 @@ export { isExaRateLimitMessage, isExaRateLimitError }
 export const __researchTestUtils = { isExaRateLimitMessage, isExaRateLimitError }
 
 const MAX_SOURCES = 40
+const LOCAL_RESEARCH_MODEL_START_UNBLOCK_MS = 2_000
 
 // Module-level map so cancelResearch() works from any hook instance
 const activeAbortControllers = new Map<string, AbortController>()
@@ -42,6 +44,37 @@ const activeAbortControllers = new Map<string, AbortController>()
 /** Cancel research for a thread without needing to mount the full useResearch hook. */
 export function cancelResearchForThread(threadId: string) {
   activeAbortControllers.get(threadId)?.abort()
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function prepareProviderForResearch(
+  provider: ProviderObject,
+  modelId: string
+): Promise<'ready' | 'continued'> {
+  if (!isLocalProvider(provider)) {
+    await prepareProviderForChat(getServiceHub(), provider, modelId)
+    return 'ready'
+  }
+
+  const startup = prepareProviderForChat(getServiceHub(), provider, modelId)
+  const result = await Promise.race([
+    startup.then(() => 'ready' as const),
+    delay(LOCAL_RESEARCH_MODEL_START_UNBLOCK_MS).then(() => 'continued' as const),
+  ])
+
+  if (result === 'continued') {
+    void startup.catch((error) => {
+      console.warn(
+        '[Deep Research] Local model startup finished after research moved on:',
+        error
+      )
+    })
+  }
+
+  return result
 }
 
 function saveMessageToChat(threadId: string, msg: ThreadMessage) {
@@ -63,7 +96,7 @@ function saveMessageToChat(threadId: string, msg: ThreadMessage) {
           chat: {
             ...session.chat,
             messages: [...session.chat.messages, uiMsg],
-          },
+          } as unknown as Chat<UIMessage>,
         },
       },
     }
@@ -88,6 +121,7 @@ export function useResearch(threadId: string) {
       const signal = ac.signal
 
       useResearchPanel.getState().openResearch(threadId, query, depth)
+      addStep({ type: 'planning', message: 'Preparing research…' })
 
       const depthLabel = depth === 3 ? 'Deep' : 'Standard'
       saveMessageToChat(threadId, {
@@ -116,8 +150,12 @@ export function useResearch(threadId: string) {
         const { selectedModel, selectedProvider, providers } = useModelProvider.getState()
         const providerObj = providers.find((p) => p.provider === selectedProvider)
         if (selectedModel && providerObj) {
+          addStep({ type: 'planning', message: 'Preparing selected model…' })
           try {
-            await prepareProviderForChat(getServiceHub(), providerObj, selectedModel.id)
+            const readiness = await prepareProviderForResearch(providerObj, selectedModel.id)
+            if (readiness === 'continued') {
+              addStep({ type: 'planning', message: 'Model is still loading; continuing through proxy…' })
+            }
           } catch {
             // Non-fatal: remote models don't need this; local model may already be loaded
           }
@@ -192,8 +230,10 @@ export function useResearch(threadId: string) {
                   }
                 })
                 const results = await Promise.all(scrapeTasks)
-                wikiSummaries.push(...results.filter(Boolean))
-                return wikiSummaries.filter(Boolean)
+                wikiSummaries.push(
+                  ...results.filter((result): result is string => Boolean(result))
+                )
+                return wikiSummaries
               }
             } catch (err) {
               if (err instanceof Error && err.name === 'AbortError') throw err
@@ -420,12 +460,8 @@ export function useResearch(threadId: string) {
 
         // Strip any leaked thinking/reasoning blocks that reasoning models
         // (e.g. Qwen3, Claude with extended thinking) may output as plain text.
-        // Also strip any mermaid code blocks — the model sometimes ignores the
-        // "no diagrams" instruction and outputs broken mermaid syntax that
-        // renders as "Syntax error in text" in the UI.
         report = report
           .replace(/^[\s\S]*?(##\s*Executive Summary)/m, '$1')
-          .replace(/```\s*mermaid[\s\S]*?```/gi, '')
           .trim()
 
         const sourceFooter = allSources.length > 0

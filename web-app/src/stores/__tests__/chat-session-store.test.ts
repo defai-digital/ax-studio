@@ -1,9 +1,11 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { useChatSessions, isSessionBusy } from '../chat-session-store'
 
 vi.mock('@/lib/custom-chat-transport', () => ({
   CustomChatTransport: vi.fn(),
 }))
+
+let consoleErrorSpy: ReturnType<typeof vi.spyOn>
 
 const makeChat = (status = 'idle') => ({
   status,
@@ -15,11 +17,16 @@ const makeChat = (status = 'idle') => ({
 const makeTransport = () => ({} as any)
 
 beforeEach(() => {
+  consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
   useChatSessions.setState({
     sessions: {},
     standaloneData: {},
     activeConversationId: undefined,
   })
+})
+
+afterEach(() => {
+  consoleErrorSpy.mockRestore()
 })
 
 describe('useChatSessions — initial state', () => {
@@ -56,8 +63,9 @@ describe('ensureSession', () => {
 
   it('returns the existing chat if session already exists', () => {
     const chat = makeChat()
-    const first = useChatSessions.getState().ensureSession('s1', makeTransport(), () => chat as any)
-    const second = useChatSessions.getState().ensureSession('s1', makeTransport(), () => makeChat() as any)
+    const transport = makeTransport()
+    const first = useChatSessions.getState().ensureSession('s1', transport, () => chat as any)
+    const second = useChatSessions.getState().ensureSession('s1', transport, () => makeChat() as any)
     expect(first).toBe(second)
   })
 
@@ -73,7 +81,7 @@ describe('ensureSession', () => {
   })
 
   it('promotes standalone data into the new session', () => {
-    const standaloneData = useChatSessions.getState().getSessionData('s1')
+    const standaloneData = useChatSessions.getState().ensureSessionData('s1')
     const chat = makeChat()
     useChatSessions.getState().ensureSession('s1', makeTransport(), () => chat as any)
     expect(useChatSessions.getState().sessions['s1'].data).toBe(standaloneData)
@@ -97,15 +105,15 @@ describe('getSessionData', () => {
     expect(data.idMap).toBeInstanceOf(Map)
   })
 
-  it('creates standalone data for an unknown session id', () => {
+  it('returns null for an unknown session id', () => {
     const data = useChatSessions.getState().getSessionData('unknown')
-    expect(data).toBeDefined()
-    expect(useChatSessions.getState().standaloneData['unknown']).toBe(data)
+    expect(data).toBeNull()
+    expect(useChatSessions.getState().standaloneData['unknown']).toBeUndefined()
   })
 
-  it('returns the same standalone data object on repeated calls', () => {
-    const d1 = useChatSessions.getState().getSessionData('s2')
-    const d2 = useChatSessions.getState().getSessionData('s2')
+  it('returns the same standalone data object on repeated ensure calls', () => {
+    const d1 = useChatSessions.getState().ensureSessionData('s2')
+    const d2 = useChatSessions.getState().ensureSessionData('s2')
     expect(d1).toBe(d2)
   })
 })
@@ -186,7 +194,7 @@ describe('removeSession', () => {
   })
 
   it('removes standalone data when no session exists', () => {
-    useChatSessions.getState().getSessionData('solo')
+    useChatSessions.getState().ensureSessionData('solo')
     useChatSessions.getState().removeSession('solo')
     expect(useChatSessions.getState().standaloneData['solo']).toBeUndefined()
   })

@@ -46,7 +46,9 @@ vi.mock('@/components/common/AvatarEmoji', () => ({
 }))
 
 vi.mock('@/containers/DropdownToolsAvailable', () => ({
-  default: ({ children }: any) => <div>{children?.(() => null)}</div>,
+  default: ({ children }: any) => (
+    <div data-testid="dropdown-tools-available">{children?.(false, 0)}</div>
+  ),
 }))
 
 vi.mock('@/containers/McpExtensionToolLoader', () => ({
@@ -76,9 +78,6 @@ const createProps = (overrides: Partial<Parameters<typeof ChatInputToolbar>[0]> 
   setDropdownToolsAvailable: vi.fn(),
   tooltipToolsAvailable: false,
   setTooltipToolsAvailable: vi.fn(),
-  isMemoryEnabled: false,
-  toggleMemory: vi.fn(),
-  memoryCount: 0,
   tokenCounterCompact: false,
   threadMessages: [],
   stopStreaming: vi.fn(),
@@ -94,11 +93,12 @@ describe('ChatInputToolbar — Phase 3 Manual Test Protocol', () => {
     vi.clearAllMocks()
   })
 
-  // Protocol #3: Send button disabled when empty
-  it('send button is disabled when prompt is empty', () => {
+  // Protocol #3: Send button remains clickable when empty so the textarea
+  // fallback can read the live DOM value if React state is one tick behind.
+  it('send button is enabled when prompt is empty', () => {
     render(<ChatInputToolbar {...createProps({ prompt: '' })} />)
     const sendButton = screen.getByText((_, el) => el?.getAttribute('data-test-id') === 'send-message-button')
-    expect(sendButton).toBeDisabled()
+    expect(sendButton).not.toBeDisabled()
   })
 
   // Protocol #3: Send button enabled when prompt has text
@@ -147,19 +147,6 @@ describe('ChatInputToolbar — Phase 3 Manual Test Protocol', () => {
     }
   })
 
-  // Protocol #9: Memory toggle
-  it('memory button calls toggleMemory when clicked', () => {
-    const toggleMemory = vi.fn()
-    render(<ChatInputToolbar {...createProps({ toggleMemory })} />)
-    // Memory button has Brain - find it via the button with onClick={toggleMemory}
-    const buttons = screen.getAllByRole('button')
-    const memoryButton = buttons.find(b => b.getAttribute('class')?.includes('relative'))
-    if (memoryButton) {
-      fireEvent.click(memoryButton)
-      expect(toggleMemory).toHaveBeenCalled()
-    }
-  })
-
   // Protocol #12: Token counter compact mode renders
   it('renders token counter in compact mode when enabled', () => {
     render(<ChatInputToolbar {...createProps({
@@ -167,6 +154,29 @@ describe('ChatInputToolbar — Phase 3 Manual Test Protocol', () => {
       prompt: 'hello',
     })} />)
     expect(screen.getByTestId('token-counter')).toBeInTheDocument()
+  })
+
+  it('shows the tools dropdown when MCP tools are connected even if model capability metadata is missing', () => {
+    render(<ChatInputToolbar {...createProps({
+      selectedModel: { id: 'custom-model', capabilities: ['completion'] } as Model,
+      tools: [{ name: 'fabric_search', server: 'ax-studio' }],
+      hasActiveMCPServers: true,
+      MCPToolComponent: null,
+    })} />)
+
+    expect(screen.getByTestId('dropdown-tools-available')).toBeInTheDocument()
+    expect(screen.queryByTestId('mcp-tool-loader')).not.toBeInTheDocument()
+  })
+
+  it('uses the MCP extension tool component when the selected model is tool-capable', () => {
+    render(<ChatInputToolbar {...createProps({
+      selectedModel: { id: 'tool-model', capabilities: ['completion', 'tools'] } as Model,
+      tools: [{ name: 'fabric_search', server: 'ax-studio' }],
+      hasActiveMCPServers: true,
+      MCPToolComponent: () => null,
+    })} />)
+
+    expect(screen.getByTestId('mcp-tool-loader')).toBeInTheDocument()
   })
 
   // Protocol #12: Token counter not shown on initial message
@@ -196,10 +206,8 @@ describe('ChatInputToolbar — Phase 3 Manual Test Protocol', () => {
   })
 
   // Quick prompt dropdown items
-  it('renders artifact and diagram quick prompt options', () => {
+  it('renders deep research quick prompt option', () => {
     render(<ChatInputToolbar {...createProps()} />)
-    expect(screen.getByText('Generate Artifact')).toBeInTheDocument()
-    expect(screen.getByText('Generate Diagram')).toBeInTheDocument()
     expect(screen.getByText('Deep Research')).toBeInTheDocument()
   })
 
