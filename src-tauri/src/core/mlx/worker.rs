@@ -461,10 +461,13 @@ fn handle_generate(
         .map_err(|e| format!("session.generate failed for {model_id}: {e:?}"))?;
     drop(session);
 
-    let output_text = entry
+    let mut output_text = entry
         .tokenizer
         .decode(&response.output_tokens, true)
         .map_err(|e| format!("tokenizer.decode failed for {model_id}: {e}"))?;
+    if is_gemma4_family(model_id) {
+        output_text = strip_gemma4_leading_thought_label(&output_text);
+    }
 
     let prompt_token_count = response
         .prompt_token_count
@@ -546,6 +549,7 @@ fn handle_generate_stream(
     let mut prompt_token_count = prompt_token_count;
     let mut output_token_count = 0_u32;
     let mut finish_reason = "stop".to_string();
+    let mut strip_gemma4_thought_prefix = is_gemma4_family(model_id);
 
     while let Some(event_result) = stream.next() {
         let event = event_result
@@ -572,14 +576,22 @@ fn handle_generate_stream(
                     saw_start = true;
                 }
                 if !step_event.delta_tokens.is_empty() {
-                    let text = entry
+                    let mut text = entry
                         .tokenizer
                         .decode(&step_event.delta_tokens, true)
                         .map_err(|e| format!("tokenizer.decode failed for {model_id}: {e}"))?;
+                    if strip_gemma4_thought_prefix {
+                        text = strip_gemma4_stream_prefix(text, &mut strip_gemma4_thought_prefix);
+                    }
                     if !text.is_empty() {
                         on_event(StreamEvent::Delta { text });
                     }
                 } else if let Some(text) = step_event.delta_text {
+                    let text = if strip_gemma4_thought_prefix {
+                        strip_gemma4_stream_prefix(text, &mut strip_gemma4_thought_prefix)
+                    } else {
+                        text
+                    };
                     if !text.is_empty() {
                         on_event(StreamEvent::Delta { text });
                     }
@@ -626,16 +638,108 @@ fn handle_generate_stream(
 /// family. Each family has its own turn-marker conventions and the model
 /// will produce garbage if fed the wrong format.
 fn format_prompt(messages: &[ChatMessage], model_id: &str) -> String {
-    if is_gemma_family(model_id) {
+    if is_gemma4_family(model_id) {
+        format_gemma4(messages)
+    } else if is_gemma_family(model_id) {
         format_gemma(messages)
     } else {
         format_chatml(messages, model_id)
     }
 }
 
+fn is_gemma4_family(model_id: &str) -> bool {
+    let id_lower = model_id.to_lowercase();
+    id_lower.contains("gemma-4") || id_lower.contains("gemma4")
+}
+
 fn is_gemma_family(model_id: &str) -> bool {
     let id_lower = model_id.to_lowercase();
     id_lower.contains("gemma-4") || id_lower.contains("gemma-3") || id_lower.contains("gemma4")
+}
+
+/// Gemma 4 unified chat-template dialect. The empty thought channel mirrors
+/// the model's tokenizer template when `enable_thinking=false`; without it,
+/// Gemma may expose `thought` as visible answer text.
+fn format_gemma4(messages: &[ChatMessage]) -> String {
+    let mut out = String::new();
+    let mut pending_system: Option<String> = None;
+    for m in messages {
+        match m.role.as_str() {
+            "system" | "developer" => {
+                pending_system = Some(m.content.clone());
+            }
+            "user" => {
+                out.push_str("<|turn>user\n");
+                if let Some(sys) = pending_system.take() {
+                    out.push_str(&sys);
+                    out.push_str("\n\n");
+                }
+                out.push_str(&m.content);
+                out.push_str("<turn|>\n");
+            }
+            "assistant" | "tool" => {
+                out.push_str("<|turn>model\n");
+                out.push_str(&strip_gemma4_leading_thought_label(&m.content));
+                out.push_str("<turn|>\n");
+            }
+            other => {
+                log::warn!("[mlx-worker] gemma4: unknown role '{other}', treating as user");
+                out.push_str("<|turn>user\n");
+                out.push_str(&m.content);
+                out.push_str("<turn|>\n");
+            }
+        }
+    }
+    out.push_str("<|turn>model\n<|channel>thought\n<channel|>");
+    out
+}
+
+fn strip_gemma4_leading_thought_label(text: &str) -> String {
+    let trimmed = text.trim_start();
+    if let Some(rest) = trimmed.strip_prefix("thought") {
+        if rest.is_empty()
+            || rest
+                .chars()
+                .next()
+                .is_some_and(|ch| ch.is_whitespace() || ch == ':' || ch == '\n')
+        {
+            return rest
+                .trim_start_matches(|ch: char| ch.is_whitespace() || ch == ':')
+                .to_string();
+        }
+    }
+    text.to_string()
+}
+
+fn strip_gemma4_stream_prefix(text: String, stripping: &mut bool) -> String {
+    if !*stripping {
+        return text;
+    }
+
+    let trimmed = text.trim_start();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    if let Some(rest) = trimmed.strip_prefix("thought") {
+        if rest.is_empty()
+            || rest
+                .chars()
+                .next()
+                .is_some_and(|ch| ch.is_whitespace() || ch == ':' || ch == '\n')
+        {
+            let cleaned = rest
+                .trim_start_matches(|ch: char| ch.is_whitespace() || ch == ':')
+                .to_string();
+            if !cleaned.is_empty() {
+                *stripping = false;
+            }
+            return cleaned;
+        }
+    }
+
+    *stripping = false;
+    trimmed.to_string()
 }
 
 /// Gemma turn-template: `<start_of_turn>{role}\n{content}<end_of_turn>\n`.
@@ -766,8 +870,28 @@ mod tests {
     fn gemma4_12b_it_uses_gemma_template() {
         let prompt = format_prompt(&[user_msg("Hello")], "mlx-community/gemma-4-12B-it-4bit");
 
-        assert!(prompt.contains("<start_of_turn>user\nHello<end_of_turn>\n"));
-        assert!(prompt.ends_with("<start_of_turn>model\n"));
-        assert!(!prompt.contains("<|im_start|>"));
+        assert!(prompt.contains("<|turn>user\nHello<turn|>\n"));
+        assert!(prompt.ends_with("<|turn>model\n<|channel>thought\n<channel|>"));
+        assert!(!prompt.contains("<start_of_turn>"));
+    }
+
+    #[test]
+    fn gemma4_strips_leading_thought_label_from_visible_output() {
+        assert_eq!(
+            strip_gemma4_leading_thought_label("thought The capital is Ottawa."),
+            "The capital is Ottawa."
+        );
+
+        let mut stripping = true;
+        assert_eq!(
+            strip_gemma4_stream_prefix("thought".to_string(), &mut stripping),
+            ""
+        );
+        assert!(stripping);
+        assert_eq!(
+            strip_gemma4_stream_prefix("\nThe capital is Ottawa.".to_string(), &mut stripping),
+            "The capital is Ottawa."
+        );
+        assert!(!stripping);
     }
 }
