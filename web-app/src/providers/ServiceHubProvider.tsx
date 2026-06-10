@@ -78,7 +78,7 @@ export function ServiceHubProvider({ children }: ServiceHubProviderProps) {
           <img
             src="/images/ax-studio-logo.png"
             alt="Ax-Studio"
-            className="h-14 w-14 animate-pulse rounded-2xl object-contain"
+            className="h-12 w-12 animate-pulse rounded-xl object-contain"
           />
         </div>
         <div className="text-sm text-muted-foreground">
