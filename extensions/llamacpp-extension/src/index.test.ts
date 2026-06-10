@@ -46,10 +46,6 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }))
 
-vi.mock('@tauri-apps/api/path', () => ({
-  homeDir: vi.fn(async () => '/home/devop'),
-}))
-
 vi.mock('./backend', () => ({
   configureBackends: vi.fn(async () => {}),
   downloadBackend: vi.fn(async () => {}),
@@ -413,17 +409,11 @@ describe('AxStudioLlamacppExtension', () => {
       '/home/devop/.cache/huggingface/hub/models--mlx-community--Qwen3.6-27B-4bit'
     const snapshotsDir = `${repoDir}/snapshots`
     const snapshotDir = `${snapshotsDir}/abc123`
-    mocks.dirState.add('/home')
-    mocks.dirState.add('/home/devop')
-    mocks.dirState.add('/home/devop/.cache')
-    mocks.dirState.add('/home/devop/.cache/huggingface')
-    mocks.dirState.add('/home/devop/.cache/huggingface/hub')
-    mocks.dirState.add(repoDir)
-    mocks.dirState.add(`${repoDir}/refs`)
-    mocks.dirState.add(snapshotsDir)
-    mocks.dirState.add(snapshotDir)
-    mocks.fsState.set(`${repoDir}/refs/main`, 'abc123')
-    mocks.fsState.set(`${snapshotDir}/model-manifest.json`, '{}')
+    vi.mocked(invoke).mockImplementation(async (command: string, args?: unknown) => {
+      if (command === 'mlx_resolve_model_dir') return snapshotDir
+      const path = (args as { path?: string } | undefined)?.path
+      return path ?? ''
+    })
 
     vi.mocked(getLoadedModels).mockResolvedValue([])
     vi.mocked(startAxServing).mockResolvedValue({

@@ -80,6 +80,35 @@ pub async fn mlx_load_model(
     state.worker.load(model_id, path).await
 }
 
+/// Resolve an MLX Hugging Face cache snapshot for ax-serving.
+///
+/// This keeps extension JS from reading `~/.cache/huggingface` through the
+/// app-data-scoped filesystem API while still validating that the resolved
+/// snapshot is an AX Engine artifact.
+#[tauri::command]
+pub fn mlx_resolve_model_dir(model_id: String) -> Result<String, String> {
+    if model_id.is_empty()
+        || model_id.contains("..")
+        || !model_id.contains('/')
+        || !model_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '-' | '_' | '.'))
+    {
+        return Err(format!("invalid MLX model id '{model_id}'"));
+    }
+
+    let path = resolve_hf_cache_dir(&model_id)
+        .ok_or_else(|| format!("could not resolve HF cache snapshot for '{model_id}'"))?;
+    let manifest_path = path.join("model-manifest.json");
+    if !manifest_path.is_file() {
+        return Err(format!(
+            "resolved HF cache snapshot for '{model_id}' is missing model-manifest.json"
+        ));
+    }
+
+    Ok(path.to_string_lossy().to_string())
+}
+
 /// Look up `~/.cache/huggingface/hub/models--<author>--<name>/snapshots/<commit>/`
 /// from a model id like `mlx-community/Qwen3.5-9B-MLX-4bit`. Returns the most
 /// recent snapshot if multiple exist. Returns None if the cache layout doesn't
@@ -109,10 +138,7 @@ pub(crate) fn resolve_hf_cache_dir(model_id: &str) -> Option<PathBuf> {
 }
 
 #[tauri::command]
-pub async fn mlx_unload_model(
-    state: State<'_, MlxState>,
-    model_id: String,
-) -> Result<(), String> {
+pub async fn mlx_unload_model(state: State<'_, MlxState>, model_id: String) -> Result<(), String> {
     state.worker.unload(model_id).await
 }
 
