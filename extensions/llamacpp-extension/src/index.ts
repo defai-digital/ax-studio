@@ -54,6 +54,7 @@ import {
 } from '@ax-studio/tauri-plugin-llamacpp-api'
 
 import { invoke } from '@tauri-apps/api/core'
+import { homeDir } from '@tauri-apps/api/path'
 
 import {
   configureBackends,
@@ -95,6 +96,12 @@ interface ModelConfig {
   embedding?: boolean
   sha256?: string
   mmproj_sha256?: string
+}
+
+type ResolvedLoadTarget = {
+  cfg: ModelConfig
+  modelPath: string
+  hasAxManifest: boolean
 }
 
 type EnvMap = Record<string, string>
@@ -601,9 +608,11 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     return joinPath([dir, 'model.yml'])
   }
 
-  private async _hasAxModelManifest(modelId: string): Promise<boolean> {
-    const dir = await this._modelDir(modelId)
-    return fs.existsSync(await joinPath([dir, AX_MODEL_MANIFEST_FILENAME]))
+  private async _hasAxModelManifestAtPath(modelPath: string): Promise<boolean> {
+    const manifestDir = modelPath.toLowerCase().endsWith('.gguf')
+      ? this._splitFilePath(modelPath, 'Model').parentPath
+      : modelPath
+    return fs.existsSync(await joinPath([manifestDir, AX_MODEL_MANIFEST_FILENAME]))
   }
 
   private _isAxServingArtifactError(error: unknown): boolean {
@@ -804,6 +813,147 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     ) {
       throw new Error(`${label} path traversal detected: ${targetPath}`)
     }
+  }
+
+  private _isCanonicalPathWithinBase(
+    targetPath: string,
+    basePath: string
+  ): boolean {
+    const separator = targetPath.includes('\\') ? '\\' : '/'
+    const baseWithSeparator = basePath.endsWith(separator)
+      ? basePath
+      : `${basePath}${separator}`
+    const comparableTarget = IS_WINDOWS
+      ? targetPath.toLowerCase()
+      : targetPath
+    const comparableBase = IS_WINDOWS ? basePath.toLowerCase() : basePath
+    const comparableBaseWithSeparator = IS_WINDOWS
+      ? baseWithSeparator.toLowerCase()
+      : baseWithSeparator
+
+    return (
+      comparableTarget === comparableBase ||
+      comparableTarget.startsWith(comparableBaseWithSeparator)
+    )
+  }
+
+  private async _resolveModelPathFromConfig(
+    cfg: ModelConfig
+  ): Promise<string> {
+    if (this._isAbsolutePath(cfg.model_path)) {
+      return this._canonicalizeExistingPath(cfg.model_path, 'Model')
+    }
+
+    const appData = await getAppDataFolderPath()
+    const modelPath = await joinPath([appData, cfg.model_path])
+    await this._validatePathWithinModelsDir(modelPath, 'Model')
+    return modelPath
+  }
+
+  private async _resolveHfCachedAxModel(
+    modelId: string
+  ): Promise<ResolvedLoadTarget | null> {
+    if (!modelId.includes('/')) return null
+
+    const home = await homeDir().catch(() => '')
+    if (!home) return null
+
+    const repoDirName = `models--${modelId.replace(/\//g, '--')}`
+    const repoDir = await joinPath([
+      home,
+      '.cache',
+      'huggingface',
+      'hub',
+      repoDirName,
+    ])
+    if (!(await fs.existsSync(repoDir))) return null
+
+    const snapshotsDir = await joinPath([repoDir, 'snapshots'])
+    if (!(await fs.existsSync(snapshotsDir))) return null
+
+    const canonicalRepoDir = await this._canonicalizeExistingPath(
+      repoDir,
+      'Hugging Face cache repo'
+    )
+    const canonicalSnapshotsDir = await this._canonicalizeExistingPath(
+      snapshotsDir,
+      'Hugging Face snapshots'
+    )
+    if (!this._isCanonicalPathWithinBase(canonicalSnapshotsDir, canonicalRepoDir)) {
+      throw new Error(`Hugging Face cache path traversal detected: ${repoDir}`)
+    }
+
+    const snapshotNames: string[] = []
+    const mainRefPath = await joinPath([repoDir, 'refs', 'main'])
+    try {
+      const mainRef = (await fs.readFileSync(mainRefPath))?.trim()
+      if (mainRef) snapshotNames.push(mainRef)
+    } catch {
+      // refs/main is optional; fall back to directory enumeration below.
+    }
+
+    try {
+      const entries: string[] = (await fs.readdirSync(snapshotsDir)) ?? []
+      for (const entry of entries) {
+        const name = entry.replace(/\\/g, '/').split('/').filter(Boolean).pop()
+        if (name) snapshotNames.push(name)
+      }
+    } catch {
+      return null
+    }
+
+    for (const snapshotName of [...new Set(snapshotNames)]) {
+      const snapshotPath = await joinPath([snapshotsDir, snapshotName])
+      if (!(await fs.existsSync(snapshotPath))) continue
+
+      const canonicalSnapshotPath = await this._canonicalizeExistingPath(
+        snapshotPath,
+        'Hugging Face snapshot'
+      )
+      if (
+        !this._isCanonicalPathWithinBase(
+          canonicalSnapshotPath,
+          canonicalSnapshotsDir
+        )
+      ) {
+        throw new Error(
+          `Hugging Face snapshot path traversal detected: ${snapshotPath}`
+        )
+      }
+
+      if (!(await this._hasAxModelManifestAtPath(canonicalSnapshotPath))) {
+        continue
+      }
+
+      return {
+        cfg: {
+          model_path: canonicalSnapshotPath,
+          name: modelId,
+          size_bytes: 0,
+          embedding: false,
+        },
+        modelPath: canonicalSnapshotPath,
+        hasAxManifest: true,
+      }
+    }
+
+    return null
+  }
+
+  private async _resolveLoadTarget(
+    modelId: string
+  ): Promise<ResolvedLoadTarget | null> {
+    const cfg = await this._readModelConfig(modelId)
+    if (cfg) {
+      const modelPath = await this._resolveModelPathFromConfig(cfg)
+      return {
+        cfg,
+        modelPath,
+        hasAxManifest: await this._hasAxModelManifestAtPath(modelPath),
+      }
+    }
+
+    return this._resolveHfCachedAxModel(modelId)
   }
 
   private _canonicalizeImportSourcePath(path: string, label: string): string {
@@ -1066,15 +1216,17 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         await this._unloadActiveTextModels(modelId)
       }
 
-      // Read model config
-      const cfg = await this._readModelConfig(modelId)
-      if (!cfg) throw new Error(`Model not found: ${modelId}`)
+      // Read model config. MLX/AX models may come from the Hugging Face cache
+      // directly, because mlx-community repos are directory snapshots rather
+      // than imported GGUF files with a local model.yml.
+      const target = await this._resolveLoadTarget(modelId)
+      if (!target) throw new Error(`Model not found: ${modelId}`)
+      const { cfg, modelPath, hasAxManifest } = target
 
       // Auto-detect engine per model: if the model dir contains an AX
       // model-manifest.json (MLX/AX-Engine artifact), route to ax-serving
       // regardless of the user's global `engine_type` setting. Falls back to
       // the global setting (or 'llamacpp') for GGUF models without manifest.
-      const hasAxManifest = await this._hasAxModelManifest(modelId)
       const engineType = hasAxManifest
         ? 'ax-serving'
         : (this.config.engine_type || 'llamacpp')
@@ -1083,7 +1235,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       // ax-serving mode — handles text, vision, and embedding models
       if (engineType === 'ax-serving') {
         try {
-          return await this._doLoadAxServing(modelId, cfg, embedding)
+          return await this._doLoadAxServing(modelId, cfg, embedding, modelPath)
         } catch (axErr: unknown) {
           if (this._isAxServingArtifactError(axErr)) throw axErr
           console.warn(
@@ -1113,21 +1265,21 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   private async _doLoadAxServing(
     modelId: string,
     cfg: ModelConfig,
-    isEmbedding = false
+    isEmbedding = false,
+    resolvedModelPath?: string
   ): Promise<SessionInfo> {
     // Ensure ax-serving process is running
     await this._ensureAxServingRunning()
 
     // Resolve absolute model path
-    const appData = await getAppDataFolderPath()
-    const modelPath = await joinPath([appData, cfg.model_path])
-    await this._validatePathWithinModelsDir(modelPath, 'Model')
+    const modelPath =
+      resolvedModelPath ?? (await this._resolveModelPathFromConfig(cfg))
 
     if (!(await fs.existsSync(modelPath))) {
-      throw new Error(`Model file not found: ${modelPath}`)
+      throw new Error(`Model path not found: ${modelPath}`)
     }
 
-    if (!(await this._hasAxModelManifest(modelId))) {
+    if (!(await this._hasAxModelManifestAtPath(modelPath))) {
       throw new Error(
         `${AX_SERVING_ARTIFACT_ERROR_PREFIX} ${AX_MODEL_MANIFEST_FILENAME} for "${modelId}". Generate AX artifacts for this model or choose a supported AX model.`
       )

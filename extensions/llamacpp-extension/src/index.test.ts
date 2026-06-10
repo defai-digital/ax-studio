@@ -46,6 +46,10 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }))
 
+vi.mock('@tauri-apps/api/path', () => ({
+  homeDir: vi.fn(async () => '/home/devop'),
+}))
+
 vi.mock('./backend', () => ({
   configureBackends: vi.fn(async () => {}),
   downloadBackend: vi.fn(async () => {}),
@@ -391,6 +395,70 @@ describe('AxStudioLlamacppExtension', () => {
       expect.objectContaining({
         method: 'POST',
         body: expect.stringContaining('"model_id":"ax-model"'),
+      })
+    )
+
+    fetchSpy.mockRestore()
+  })
+
+  it('loads cached Hugging Face MLX repos through ax-serving without a local model.yml', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    ;(extension as any).config = {
+      engine_type: 'llamacpp',
+      n_gpu_layers: -1,
+      ctx_size: 0,
+    }
+
+    const repoDir =
+      '/home/devop/.cache/huggingface/hub/models--mlx-community--Qwen3.6-27B-4bit'
+    const snapshotsDir = `${repoDir}/snapshots`
+    const snapshotDir = `${snapshotsDir}/abc123`
+    mocks.dirState.add('/home')
+    mocks.dirState.add('/home/devop')
+    mocks.dirState.add('/home/devop/.cache')
+    mocks.dirState.add('/home/devop/.cache/huggingface')
+    mocks.dirState.add('/home/devop/.cache/huggingface/hub')
+    mocks.dirState.add(repoDir)
+    mocks.dirState.add(`${repoDir}/refs`)
+    mocks.dirState.add(snapshotsDir)
+    mocks.dirState.add(snapshotDir)
+    mocks.fsState.set(`${repoDir}/refs/main`, 'abc123')
+    mocks.fsState.set(`${snapshotDir}/model-manifest.json`, '{}')
+
+    vi.mocked(getLoadedModels).mockResolvedValue([])
+    vi.mocked(startAxServing).mockResolvedValue({
+      pid: 321,
+      port: 6543,
+      model_id: '__ax_serving__',
+      model_path: '/backend/ax-serving',
+      is_embedding: false,
+      api_key: '',
+    })
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+      text: async () => '',
+    } as Response)
+
+    await expect(
+      extension.load('mlx-community/Qwen3.6-27B-4bit', undefined, false, true)
+    ).resolves.toMatchObject({
+      model_id: 'mlx-community/Qwen3.6-27B-4bit',
+      model_path: snapshotDir,
+      port: 6543,
+    })
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://127.0.0.1:6543/v1/models',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining(`"path":"${snapshotDir}"`),
+      })
+    )
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://127.0.0.1:6543/v1/models',
+      expect.objectContaining({
+        body: expect.stringContaining('"backend":"native"'),
       })
     )
 
