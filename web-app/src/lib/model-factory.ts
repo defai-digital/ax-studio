@@ -43,6 +43,14 @@ import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
 // so native fetch works without CORS issues.
 const httpFetch = globalThis.fetch
 
+function toAxServingModelId(modelId: string): string {
+  return modelId.replace(/[^a-zA-Z0-9_.-]/g, '_')
+}
+
+function modelIdForProxyRequest(modelId: string, providerId: string): string {
+  return providerId === 'mlx' ? toAxServingModelId(modelId) : modelId
+}
+
 /**
  * Returns the base URL of the local proxy server.
  * Reads live from the Zustand store so it always reflects the current settings.
@@ -563,6 +571,8 @@ export class ModelFactory {
       fetch: fetchFn,
     })
 
-    return proxyModel.languageModel(modelId)
+    return proxyModel.languageModel(
+      modelIdForProxyRequest(modelId, provider.provider)
+    )
   }
 }

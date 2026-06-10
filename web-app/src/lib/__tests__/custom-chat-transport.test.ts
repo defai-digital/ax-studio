@@ -693,6 +693,9 @@ describe('CustomChatTransport — LLM Router integration', () => {
           'X-Ax-Provider': 'mlx',
           'X-Ax-Request-Role': 'preflight',
         }),
+        body: expect.stringContaining(
+          '"model":"mlx-community_Qwen3.6-27B-4bit"'
+        ),
       })
     )
     expect(vi.mocked(prepareProviderForChat).mock.invocationCallOrder[0]).toBeLessThan(

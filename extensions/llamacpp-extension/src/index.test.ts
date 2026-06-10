@@ -448,6 +448,14 @@ describe('AxStudioLlamacppExtension', () => {
     expect(fetchSpy).toHaveBeenCalledWith(
       'http://127.0.0.1:6543/v1/models',
       expect.objectContaining({
+        body: expect.stringContaining(
+          '"model_id":"mlx-community_Qwen3.6-27B-4bit"'
+        ),
+      })
+    )
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://127.0.0.1:6543/v1/models',
+      expect.objectContaining({
         body: expect.stringContaining('"backend":"native"'),
       })
     )

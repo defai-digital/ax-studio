@@ -271,6 +271,10 @@ function chatModelIds(modelIds: string[]): string[] {
   return modelIds.filter(isChatModelId)
 }
 
+function toAxServingModelId(modelId: string): string {
+  return modelId.replace(/[^a-zA-Z0-9_.-]/g, '_')
+}
+
 function mergeModelIds(...modelIdGroups: string[][]): string[] {
   return Array.from(new Set(modelIdGroups.flat()))
 }
@@ -1220,8 +1224,9 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     // backends.yaml routes everything through llama_cpp by default, which
     // only accepts .gguf files and rejects MLX safetensors with:
     //   "only .gguf models are supported"
+    const axServingModelId = toAxServingModelId(modelId)
     const loadBody: AxServingLoadRequest = {
-      model_id: modelId,
+      model_id: axServingModelId,
       path: modelPath,
       backend: 'native',
     }
@@ -1273,11 +1278,11 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     await this._syncLocalProviderRegistration({
       port: this.axServingPort,
       apiKey: '',
-      models: [modelId],
+      models: [modelId, axServingModelId],
     })
     await this._syncMlxProviderRegistration({
       port: this.axServingPort,
-      models: [modelId],
+      models: [modelId, axServingModelId],
     })
 
     events.emit(ModelEvent.OnModelReady, {
@@ -1393,7 +1398,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       )
       const loadedSet = new Set(loaded)
       for (const modelId of Array.from(this.axServingSessions.keys())) {
-        if (!loadedSet.has(modelId)) {
+        if (!loadedSet.has(modelId) && !loadedSet.has(toAxServingModelId(modelId))) {
           this.axServingSessions.delete(modelId)
         }
       }
@@ -1779,7 +1784,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         events.emit(ModelEvent.OnModelStop, { modelId: sessionId })
         // Unload via ax-serving HTTP API
         try {
-          const encodedId = encodeURIComponent(sessionId)
+          const encodedId = encodeURIComponent(toAxServingModelId(sessionId))
           const res = await fetch(
             `http://127.0.0.1:${this.axServingPort}/v1/models/${encodedId}`,
             { method: 'DELETE', signal: AbortSignal.timeout(AX_SERVING_UNLOAD_TIMEOUT_MS) }
@@ -1973,7 +1978,8 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         // Check if our model is still loaded (may have been evicted by LRU/idle)
         if (
           Array.isArray(health.loaded_models) &&
-          !health.loaded_models.includes(modelId)
+          !health.loaded_models.includes(modelId) &&
+          !health.loaded_models.includes(toAxServingModelId(modelId))
         ) {
           this.axServingSessions.delete(modelId)
           await this._syncLocalProviderRegistration()

@@ -70,6 +70,14 @@ function isLocalProviderId(providerId: string | undefined): providerId is string
   return !!providerId && LOCAL_PROVIDER_IDS.has(providerId)
 }
 
+function toAxServingModelId(modelId: string): string {
+  return modelId.replace(/[^a-zA-Z0-9_.-]/g, '_')
+}
+
+function modelIdForProxyRequest(modelId: string, providerId: string): string {
+  return providerId === 'mlx' ? toAxServingModelId(modelId) : modelId
+}
+
 function shouldAwaitLocalStartup(provider: ProviderObject, modelId: string): boolean {
   return provider.provider === 'mlx' || modelId.startsWith('mlx-community/')
 }
@@ -180,7 +188,7 @@ async function preflightLocalModelThroughProxy(
         headers,
         signal: abortSignal,
         body: JSON.stringify({
-          model: modelId,
+          model: modelIdForProxyRequest(modelId, providerId),
           messages: [{ role: 'user', content: '.' }],
           max_tokens: 1,
           stream: false,
@@ -557,7 +565,7 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
             method: 'POST',
             headers: preflightHeaders,
             body: JSON.stringify({
-              model: finalModelId,
+              model: modelIdForProxyRequest(finalModelId, finalProviderId),
               messages: [{ role: 'user', content: '.' }],
               max_tokens: 1,
               stream: false,

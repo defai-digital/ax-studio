@@ -221,6 +221,11 @@ describe('ModelFactory', () => {
           }),
         })
       )
+      const openAICompatible = vi.mocked(createOpenAICompatible).mock.results[0]
+        ?.value as { languageModel: ReturnType<typeof vi.fn> }
+      expect(openAICompatible.languageModel).toHaveBeenCalledWith(
+        'mlx-community_Qwen3.6-27B-4bit'
+      )
     })
 
     it('should create an OpenAI-compatible model for groq provider', async () => {
