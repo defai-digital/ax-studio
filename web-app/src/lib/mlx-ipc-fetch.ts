@@ -23,18 +23,6 @@
  *  4. For non-streaming requests: invokes `mlx_chat_completion` and returns a
  *     plain JSON `Response`.
  *
- * Known limitation
- * ----------------
- * Until https://github.com/defai-digital/ax-engine/issues/23 is fixed, calls
- * that trigger the 4-bit MLX slice bug will abort the entire `ax-studio`
- * process (it's an MLX C++ `abort()`, not a Rust error — uncatchable). The
- * chat UI will appear to hang briefly and then the app closes. This is a
- * **deliberate trade-off**: routing through IPC lets us validate the
- * architecture today, so once upstream patches the slice op no frontend
- * changes are needed.
- *
- * Falling back to HTTP when in-process fails is not possible: by the time the
- * crash happens, the process is gone.
  */
 
 import { Channel, invoke } from '@tauri-apps/api/core'
@@ -90,11 +78,8 @@ type StreamEvent =
       output_token_count: number
       finish_reason: string
       /**
-       * Wall-clock time (ms) the Rust worker spent inside `session.generate()`.
-       * The chat transport's own t/s math is computed from first/last Delta
-       * timestamps, which collapse to ~0 ms in our stream-as-blocking
-       * workaround (the whole response arrives as a single chunk). We use
-       * this Rust-measured duration to override the transport's bogus value.
+       * Wall-clock time (ms) the Rust worker spent inside native streaming.
+       * Kept for diagnostics and possible speed display fallbacks.
        */
       elapsed_ms: number
     }
@@ -147,7 +132,6 @@ function streamingResponse(
 
       let firstDeltaSent = false
       let lastErr: string | null = null
-      let bufferedText = ''
       let streamClosed = false
 
       // Wrap controller writes so we silently no-op if the stream has been
@@ -190,25 +174,13 @@ function streamingResponse(
             enqueueChunk({ role: 'assistant' }, null)
             firstDeltaSent = true
           } else if (evt.type === 'delta') {
-            // Buffer rather than forward. The Rust worker uses a
-            // stream-as-blocking workaround for the upstream ax-engine slice
-            // abort (worker.rs:handle_generate_stream), so the entire
-            // response arrives in a single Delta event. Forwarding it as one
-            // chunk produces both UX problems (a blank screen for the full
-            // generation time, then everything appears at once) and t/s
-            // measurement problems (the chat transport divides token count
-            // by milliseconds because the deltas straddle no real elapsed
-            // time). Instead we wait for the `done` event — which carries
-            // the Rust-measured `elapsed_ms` — and then replay the buffered
-            // text as many small chunks spread evenly across that elapsed
-            // time. The chat transport then naturally measures a correct
-            // t/s and the UI feels like real token-by-token streaming.
-            //
-            // If a future ax-engine release re-enables real streaming
-            // (multiple Delta events arriving over time), this still works:
-            // we just concatenate them and replay against the total
-            // elapsed_ms reported on the terminal Done event.
-            bufferedText += evt.text
+            if (!firstDeltaSent) {
+              enqueueChunk({ role: 'assistant' }, null)
+              firstDeltaSent = true
+            }
+            if (evt.text.length > 0) {
+              enqueueChunk({ content: evt.text }, null)
+            }
           } else if (evt.type === 'done') {
             if (!firstDeltaSent) {
               enqueueChunk({ role: 'assistant' }, null)
@@ -228,62 +200,9 @@ function streamingResponse(
               },
             }
 
-            // Compute simulated-streaming schedule. Number of chunks scales
-            // with the actual token count (so each "chunk" corresponds
-            // roughly to one model token visually) but is bounded to keep
-            // event volume sane.
-            const totalChars = bufferedText.length
-            const chunkCount = Math.max(
-              1,
-              Math.min(Math.max(evt.output_token_count, 10), 200),
-            )
-
-            // If we have no text (e.g. error/empty response), just close
-            // without simulated streaming.
-            if (totalChars === 0) {
-              safeEnqueue(encoder.encode(`data: ${JSON.stringify(finalChunk)}\n\n`))
-              safeEnqueue(encoder.encode('data: [DONE]\n\n'))
-              safeClose()
-              return
-            }
-
-            // Slice text into `chunkCount` near-equal pieces (length-based,
-            // not boundary-aware — good enough for ChatML/Gemma output).
-            const chunks: string[] = []
-            const baseSize = Math.floor(totalChars / chunkCount)
-            const remainder = totalChars % chunkCount
-            let cursor = 0
-            for (let i = 0; i < chunkCount; i++) {
-              const size = baseSize + (i < remainder ? 1 : 0)
-              if (size === 0) continue
-              chunks.push(bufferedText.slice(cursor, cursor + size))
-              cursor += size
-            }
-
-            // Spread chunks across the real elapsed_ms. Floor each interval
-            // at 15ms so we don't fire dozens of writes in the same frame
-            // (the chat UI throttles renders anyway).
-            const interval = Math.max(15, evt.elapsed_ms / chunks.length)
-
-            chunks.forEach((text, i) => {
-              setTimeout(() => {
-                enqueueChunk({ content: text }, null)
-              }, Math.floor(i * interval))
-            })
-
-            // Emit the final chunk + [DONE] just after the last content
-            // chunk lands.
-            setTimeout(() => {
-              safeEnqueue(encoder.encode(`data: ${JSON.stringify(finalChunk)}\n\n`))
-              safeEnqueue(encoder.encode('data: [DONE]\n\n'))
-              safeClose()
-            }, Math.floor(chunks.length * interval) + 5)
-
-            // No longer need to override setTokenSpeed manually — the chat
-            // transport's first-to-last-delta math now sees deltas spread
-            // across the real elapsed_ms and produces an accurate t/s
-            // naturally. The bogus `204800 t/s` display was a side effect
-            // of all deltas landing in the same millisecond.
+            safeEnqueue(encoder.encode(`data: ${JSON.stringify(finalChunk)}\n\n`))
+            safeEnqueue(encoder.encode('data: [DONE]\n\n'))
+            safeClose()
           } else if (evt.type === 'error') {
             lastErr = evt.message
             // Don't close yet — the `done` event should still arrive from the

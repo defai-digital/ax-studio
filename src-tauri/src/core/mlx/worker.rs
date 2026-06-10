@@ -15,8 +15,8 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::thread::{self, JoinHandle};
 
 use ax_engine_sdk::{
-    EngineSession, EngineSessionConfig, GenerateRequest, GenerateSampling,
-    NativeModelArtifactsSource, current_host_report,
+    current_host_report, EngineSession, EngineSessionConfig, GenerateRequest, GenerateSampling,
+    GenerateStreamEvent as SdkGenerateStreamEvent, NativeModelArtifactsSource,
 };
 use serde::{Deserialize, Serialize};
 use tokenizers::Tokenizer;
@@ -65,10 +65,8 @@ pub enum StreamEvent {
     /// One or more decoded output tokens since the previous Delta.
     Delta { text: String },
     /// Final event with usage stats and stop reason. `elapsed_ms` is the
-    /// wall-clock time spent inside `session.generate()` — the frontend uses
-    /// it to compute *real* tokens/sec, because the chat transport's own
-    /// math is based on first/last Delta-event timestamps which collapse to
-    /// ~0 in our stream-as-blocking workaround.
+    /// wall-clock time spent inside native streaming, useful for diagnostics
+    /// and speed display fallbacks.
     Done {
         prompt_token_count: u32,
         output_token_count: u32,
@@ -243,7 +241,11 @@ fn build_session(model_dir: &PathBuf) -> Result<EngineSession, String> {
     log::info!(
         "[mlx-worker] build_session model_dir={} ngram={}",
         model_dir.display(),
-        if enable_ngram { "ON (set via AX_MLX_NGRAM=1 — expect crash on 4-bit)" } else { "OFF (default; direct path)" },
+        if enable_ngram {
+            "ON (set via AX_MLX_NGRAM=1 — expect crash on 4-bit)"
+        } else {
+            "OFF (default; direct path)"
+        },
     );
     EngineSession::new(config).map_err(|e| format!("EngineSession::new failed: {e:?}"))
 }
@@ -316,9 +318,7 @@ fn run_worker(rx: Receiver<MlxCommand>) {
                 let result =
                     handle_generate_stream(&mut models, &model_id, messages, params, &on_event);
                 if let Err(ref e) = result {
-                    on_event(StreamEvent::Error {
-                        message: e.clone(),
-                    });
+                    on_event(StreamEvent::Error { message: e.clone() });
                 }
                 let _ = reply.send(result);
             }
@@ -466,22 +466,6 @@ fn handle_generate_stream(
     params: GenerateParams,
     on_event: &(dyn Fn(StreamEvent) + Send),
 ) -> Result<(), String> {
-    // UPSTREAM BUG WORKAROUND
-    // ax-engine-mlx's native streaming path (`stream_generate_state` +
-    // `next_stream_event`) hits an MLX slice error and aborts the process:
-    //   "MLX error: [slice] Invalid number of indices or strides for array
-    //    with dimension 2. at mlx/c/ops.cpp:3145"
-    // Non-streaming `session.generate()` runs the same forward path without
-    // the crash, so for now we run the blocking generate() and synthesize a
-    // single Delta containing the whole response. UX-wise this means MLX
-    // models don't stream incrementally — they appear all at once after the
-    // full generation completes. The chat UI still sees the same event
-    // sequence (Start → Delta → Done) so no client code changes are needed
-    // when real streaming is restored.
-    //
-    // TODO(ax-engine): switch this back to the proper streaming loop once the
-    // native MLX stream slice bug is fixed. The original implementation lives
-    // in git history of this file.
     let entry = models
         .get(model_id)
         .ok_or_else(|| format!("model not loaded: {model_id}"))?;
@@ -521,44 +505,80 @@ fn handle_generate_stream(
         metadata: None,
     };
 
-    on_event(StreamEvent::Start {
-        model_id: model_id.to_string(),
-        prompt_token_count,
-    });
-
     log::info!(
-        "[mlx-worker] stream-as-blocking {model_id}: {prompt_token_count} prompt tokens, \
+        "[mlx-worker] stream {model_id}: {prompt_token_count} prompt tokens, \
          max_out={max_output_tokens}"
     );
 
-    // Fresh session per call (see handle_generate for the upstream reason).
     let mut session = build_session(&entry.model_dir)?;
     let started = std::time::Instant::now();
-    let response = session
-        .generate(request)
-        .map_err(|e| format!("session.generate failed for {model_id}: {e:?}"))?;
-    let elapsed_ms = started.elapsed().as_millis() as u64;
+    let mut stream = session
+        .stream_generate(request)
+        .map_err(|e| format!("session.stream_generate failed for {model_id}: {e:?}"))?;
+    let mut saw_start = false;
+    let mut prompt_token_count = prompt_token_count;
+    let mut output_token_count = 0_u32;
+    let mut finish_reason = "stop".to_string();
 
-    let full_text = entry
-        .tokenizer
-        .decode(&response.output_tokens, true)
-        .map_err(|e| format!("tokenizer.decode failed for {model_id}: {e}"))?;
+    while let Some(event_result) = stream.next() {
+        let event = event_result
+            .map_err(|e| format!("session.next_stream_event failed for {model_id}: {e:?}"))?;
 
-    if !full_text.is_empty() {
-        on_event(StreamEvent::Delta { text: full_text });
+        match event {
+            SdkGenerateStreamEvent::Request(request_event) => {
+                prompt_token_count = request_event
+                    .request
+                    .prompt_len
+                    .max(request_event.request.prompt_tokens.len() as u32);
+                on_event(StreamEvent::Start {
+                    model_id: model_id.to_string(),
+                    prompt_token_count,
+                });
+                saw_start = true;
+            }
+            SdkGenerateStreamEvent::Step(step_event) => {
+                if !saw_start {
+                    on_event(StreamEvent::Start {
+                        model_id: model_id.to_string(),
+                        prompt_token_count,
+                    });
+                    saw_start = true;
+                }
+                if !step_event.delta_tokens.is_empty() {
+                    let text = entry
+                        .tokenizer
+                        .decode(&step_event.delta_tokens, true)
+                        .map_err(|e| format!("tokenizer.decode failed for {model_id}: {e}"))?;
+                    if !text.is_empty() {
+                        on_event(StreamEvent::Delta { text });
+                    }
+                } else if let Some(text) = step_event.delta_text {
+                    if !text.is_empty() {
+                        on_event(StreamEvent::Delta { text });
+                    }
+                }
+            }
+            SdkGenerateStreamEvent::Response(response_event) => {
+                let response = response_event.response;
+                prompt_token_count = response
+                    .prompt_token_count
+                    .unwrap_or_else(|| response.prompt_tokens.len() as u32);
+                output_token_count = response
+                    .output_token_count
+                    .unwrap_or_else(|| response.output_tokens.len() as u32);
+                finish_reason = response_finish_reason(&response);
+            }
+        }
     }
 
-    let prompt_token_count = response
-        .prompt_token_count
-        .unwrap_or_else(|| response.prompt_tokens.len() as u32);
-    let output_token_count = response
-        .output_token_count
-        .unwrap_or_else(|| response.output_tokens.len() as u32);
-    let finish_reason = response_finish_reason(&response);
-
+    let elapsed_ms = started.elapsed().as_millis() as u64;
     log::info!(
-        "[mlx-worker] generate done: {output_token_count} tokens in {elapsed_ms}ms = {:.1} t/s",
-        if elapsed_ms == 0 { 0.0 } else { output_token_count as f64 * 1000.0 / elapsed_ms as f64 },
+        "[mlx-worker] stream done: {output_token_count} tokens in {elapsed_ms}ms = {:.1} t/s",
+        if elapsed_ms == 0 {
+            0.0
+        } else {
+            output_token_count as f64 * 1000.0 / elapsed_ms as f64
+        },
     );
 
     on_event(StreamEvent::Done {
