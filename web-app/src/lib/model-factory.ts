@@ -34,6 +34,7 @@ export interface ModelParameters {
 import { type LanguageModel } from 'ai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
+import { createMlxIpcFetch } from './mlx-ipc-fetch'
 
 // Use the webview's native fetch for AI requests to the local proxy.
 // Tauri's HTTP plugin (tauriFetch) bypasses CORS but its Response.body
@@ -42,14 +43,6 @@ import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
 // The Rust proxy accepts CORS preflight from tauri:// origins on loopback,
 // so native fetch works without CORS issues.
 const httpFetch = globalThis.fetch
-
-function toAxServingModelId(modelId: string): string {
-  return modelId.replace(/[^a-zA-Z0-9_.-]/g, '_')
-}
-
-function modelIdForProxyRequest(modelId: string, providerId: string): string {
-  return providerId === 'mlx' ? toAxServingModelId(modelId) : modelId
-}
 
 /**
  * Returns the base URL of the local proxy server.
@@ -535,9 +528,16 @@ export class ModelFactory {
     const openAIParams = toOpenAIParams(parameters)
     const providerName = provider.provider.toLowerCase()
 
+    // MLX runs in-process via ax-engine-sdk. Do not route it through the local
+    // proxy/ax-serving, because the installed ax-serving worker only preloads
+    // GGUF models in this build.
+    const isMlxProvider = provider.provider === 'mlx'
+
     // Normalize non-standard streaming SSE responses from various providers.
-    // Applied to all providers since the proxy passes streaming bytes through unchanged.
-    const baseFetch = createStreamingPatchFetch(httpFetch)
+    // Applied to proxy providers since the proxy passes streaming bytes through unchanged.
+    const baseFetch = isMlxProvider
+      ? createMlxIpcFetch()
+      : createStreamingPatchFetch(httpFetch)
     const fetchFn = createCustomFetch(baseFetch, openAIParams)
 
     // All providers go through the proxy using the OpenAI-compatible format.
@@ -571,8 +571,6 @@ export class ModelFactory {
       fetch: fetchFn,
     })
 
-    return proxyModel.languageModel(
-      modelIdForProxyRequest(modelId, provider.provider)
-    )
+    return proxyModel.languageModel(modelId)
   }
 }

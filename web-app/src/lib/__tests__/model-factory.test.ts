@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ModelFactory, normalizeOpenAICompatibleEventData } from '../model-factory'
 import type { ProviderObject } from '@ax-studio/core'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
+import { createMlxIpcFetch } from '../mlx-ipc-fetch'
 
 // Mock the Tauri invoke function
 vi.mock('@tauri-apps/api/core', () => ({
@@ -13,6 +14,10 @@ vi.mock('@ai-sdk/openai-compatible', () => ({
   createOpenAICompatible: vi.fn(() => ({
     languageModel: vi.fn(() => ({ type: 'openai-compatible' })),
   })),
+}))
+
+vi.mock('../mlx-ipc-fetch', () => ({
+  createMlxIpcFetch: vi.fn(() => vi.fn()),
 }))
 
 vi.mock('@ai-sdk/anthropic', () => ({
@@ -200,7 +205,7 @@ describe('ModelFactory', () => {
       expect(model).toBeDefined()
     })
 
-    it('routes mlx through the local proxy instead of the IPC fetch shim', async () => {
+    it('routes mlx through the in-process AX Engine IPC fetch shim', async () => {
       const provider: ProviderObject = {
         provider: 'mlx',
         api_key: '',
@@ -212,6 +217,7 @@ describe('ModelFactory', () => {
 
       await ModelFactory.createModel('mlx-community/Qwen3.6-27B-4bit', provider)
 
+      expect(createMlxIpcFetch).toHaveBeenCalledTimes(1)
       expect(createOpenAICompatible).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'mlx',
@@ -224,7 +230,7 @@ describe('ModelFactory', () => {
       const openAICompatible = vi.mocked(createOpenAICompatible).mock.results[0]
         ?.value as { languageModel: ReturnType<typeof vi.fn> }
       expect(openAICompatible.languageModel).toHaveBeenCalledWith(
-        'mlx-community_Qwen3.6-27B-4bit'
+        'mlx-community/Qwen3.6-27B-4bit'
       )
     })
 

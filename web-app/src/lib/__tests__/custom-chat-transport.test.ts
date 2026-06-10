@@ -544,6 +544,46 @@ describe('CustomChatTransport — LLM Router integration', () => {
     )
   })
 
+  it('routes MLX through IPC without proxy preflight when selected by the router', async () => {
+    mocks.autoRouteEnabled = true
+    mocks.routerModelId = 'router-model'
+    mocks.routerProviderId = 'test-provider'
+    ;(routeMessage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      modelId: 'mlx-community/Qwen3.6-27B-4bit',
+      providerId: 'mlx',
+      reason: 'local mlx model is best',
+      routed: true,
+      latencyMs: 10,
+    })
+    vi.mocked(prepareProviderForChat).mockImplementationOnce(
+      () => new Promise<void>(() => {})
+    )
+
+    const transport = makeTransport({ threadId: 'thread-1' })
+    await transport.sendMessages({
+      chatId: 'chat-1',
+      messages: [
+        {
+          id: 'message-1',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Use MLX' }],
+        } as UIMessage,
+      ],
+      abortSignal: undefined,
+      trigger: 'submit-message',
+      messageId: 'message-1',
+    })
+
+    expect(mocks.fetch).not.toHaveBeenCalled()
+    expect(prepareProviderForChat).not.toHaveBeenCalled()
+    expect(ModelFactory.createModel).toHaveBeenCalledWith(
+      'mlx-community/Qwen3.6-27B-4bit',
+      expect.objectContaining({ provider: 'mlx' }),
+      expect.objectContaining({ max_output_tokens: 4096 }),
+      { requestRole: 'final' }
+    )
+  })
+
   it('preflights a directly selected local model before final streaming', async () => {
     mocks.selectedModel = { id: 'gemma-4-26b-a4b-it-4bit', capabilities: [] }
     mocks.selectedProvider = 'llamacpp'
@@ -648,23 +688,19 @@ describe('CustomChatTransport — LLM Router integration', () => {
     )
   })
 
-  it('waits for MLX startup before proxy preflight', async () => {
+  it('uses MLX IPC without proxy preflight or extension startup', async () => {
     mocks.selectedModel = {
       id: 'mlx-community/Qwen3.6-27B-4bit',
       capabilities: [],
     }
     mocks.selectedProvider = 'mlx'
 
-    let resolveStartup!: () => void
     vi.mocked(prepareProviderForChat).mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveStartup = resolve
-        })
+      () => new Promise<void>(() => {})
     )
 
     const transport = makeTransport({ threadId: 'thread-1' })
-    const sendPromise = transport.sendMessages({
+    await transport.sendMessages({
       chatId: 'chat-1',
       messages: [
         {
@@ -678,29 +714,8 @@ describe('CustomChatTransport — LLM Router integration', () => {
       messageId: 'message-1',
     })
 
-    await Promise.resolve()
-
     expect(mocks.fetch).not.toHaveBeenCalled()
-    expect(ModelFactory.createModel).not.toHaveBeenCalled()
-
-    resolveStartup()
-    await sendPromise
-
-    expect(mocks.fetch).toHaveBeenCalledWith(
-      'http://127.0.0.1:1337/v1/chat/completions',
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          'X-Ax-Provider': 'mlx',
-          'X-Ax-Request-Role': 'preflight',
-        }),
-        body: expect.stringContaining(
-          '"model":"mlx-community_Qwen3.6-27B-4bit"'
-        ),
-      })
-    )
-    expect(vi.mocked(prepareProviderForChat).mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.fetch.mock.invocationCallOrder[0]
-    )
+    expect(prepareProviderForChat).not.toHaveBeenCalled()
     expect(ModelFactory.createModel).toHaveBeenCalledWith(
       'mlx-community/Qwen3.6-27B-4bit',
       expect.objectContaining({ provider: 'mlx' }),
