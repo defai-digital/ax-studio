@@ -1208,6 +1208,10 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       apiKey: '',
       models: [modelId],
     })
+    await this._syncMlxProviderRegistration({
+      port: this.axServingPort,
+      models: [modelId],
+    })
 
     events.emit(ModelEvent.OnModelReady, {
       modelId,
@@ -1216,6 +1220,25 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       provider: this.providerId,
     })
     return session
+  }
+
+  private async _syncMlxProviderRegistration(preferred: {
+    port: number
+    models: string[]
+  }) {
+    try {
+      await invoke('register_provider_config', {
+        request: {
+          provider: 'mlx',
+          base_url: `http://127.0.0.1:${preferred.port}/v1`,
+          api_key: '',
+          custom_headers: [],
+          models: preferred.models,
+        },
+      })
+    } catch (regErr) {
+      console.warn('[llamacpp] Failed to register mlx provider with proxy:', regErr)
+    }
   }
 
   /** Ensure the ax-serving process is running, start it if needed */

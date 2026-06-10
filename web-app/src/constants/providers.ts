@@ -3,11 +3,10 @@ export const ANTHROPIC_VERSION_VALUE = '2023-06-01'
 export const ANTHROPIC_BROWSER_ACCESS_HEADER = 'anthropic-dangerous-direct-browser-access'
 export const ANTHROPIC_BROWSER_ACCESS_VALUE = 'true'
 
-// 'mlx' is intentionally NOT here: the mlx provider is a regular remote HTTP
-// endpoint (ax-engine-server delegating to mlx_lm). Treating it as local would
-// route loads through the llamacpp extension's engine manager, which has no
-// 'mlx' engine registered, and fail with "Local engine 'mlx' is not available".
-export const LOCAL_PROVIDER_IDS = new Set(['llamacpp', 'ollama'])
+// `mlx` is local too: model loading is delegated to the app-managed
+// ax-serving path in the llamacpp extension, while chat routes through the
+// local proxy under the visible `mlx` provider id.
+export const LOCAL_PROVIDER_IDS = new Set(['llamacpp', 'ollama', 'mlx'])
 
 /** Default custom headers required for direct Anthropic API access from a browser. */
 export const ANTHROPIC_DEFAULT_HEADERS = [
@@ -242,13 +241,14 @@ export const predefinedProviders = [
   // ── MLX (in-process via ax-engine-sdk → ax-engine-mlx native runner) ────
   // Chat requests route through a Tauri IPC fetch shim
   // (web-app/src/lib/mlx-ipc-fetch.ts) → Rust commands `mlx_chat_stream` /
-  // `mlx_chat_completion` → ax-engine-sdk in `mlx_only` mode → ax-engine-mlx
-  // Rust runner → mlx-c 0.6.0 → Apple MLX (Metal). No Python subprocess.
+  // AX Studio local proxy → ax-serving → ax-engine-sdk native backend →
+  // ax-engine-mlx Rust runner → mlx-c → Apple MLX (Metal).
   //
-  // **n-gram acceleration**: ON by default. Disable for A/B testing by
-  // launching with `AX_MLX_DISABLE_NGRAM=1 make dev`. Compare t/s in the UI
-  // — the worker logs `ngram=ON` or `ngram=OFF (direct path)` at session
-  // build time so you can confirm which mode is active.
+  // **Direct mode / n-gram acceleration**: direct mode is ON by default
+  // (`ngram=OFF`) because the n-gram path has historically triggered MLX
+  // slice aborts on 4-bit models. To deliberately test n-gram, launch with
+  // `AX_MLX_NGRAM=1 make dev`. The worker logs `ngram=ON` or
+  // `ngram=OFF (default; direct path)` at session build time.
   //
   // **Stability today** (this is the path with the upstream slice bug —
   // mlx-c 0.6.0 aborts the entire app on certain 4-bit kernels):
@@ -329,6 +329,14 @@ export const predefinedProviders = [
         capabilities: ['completion', 'tools'],
       },
       {
+        id: 'mlx-community/Qwen3.6-27B-4bit',
+        name: 'Qwen3.6-27B MLX 4-bit (direct mode target)',
+        version: '1.0',
+        description:
+          'Apple MLX 4-bit Qwen3.6-27B dense model. Routed through AX Studio ax-serving with the native MLX direct path.',
+        capabilities: ['completion', 'tools'],
+      },
+      {
         id: 'mlx-community/gemma-4-e2b-it-4bit',
         name: 'Gemma 4 E2B MLX 4-bit (3.6 GB · new, untested)',
         version: '1.0',
@@ -342,6 +350,14 @@ export const predefinedProviders = [
         version: '1.0',
         description:
           'Apple MLX 4-bit Gemma 4 E4B (effective 4B). Same family as E2B above.',
+        capabilities: ['completion', 'tools'],
+      },
+      {
+        id: 'mlx-community/gemma-4-12B-it-4bit',
+        name: 'Gemma 4 12B IT MLX 4-bit (direct mode target)',
+        version: '1.0',
+        description:
+          'Apple MLX 4-bit Gemma 4 12B instruction-tuned model. Routed through AX Studio ax-serving with the native Gemma MLX path.',
         capabilities: ['completion', 'tools'],
       },
       {

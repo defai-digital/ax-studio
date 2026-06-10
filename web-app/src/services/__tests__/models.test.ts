@@ -136,7 +136,7 @@ describe('DefaultModelsService', () => {
       consoleSpy.mockRestore()
     })
 
-    it('should log a warning with correct provider name for getActiveModels with custom provider', async () => {
+    it('should map mlx active-model lookups to the ax-serving engine', async () => {
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       mockEngineManager.get.mockReturnValue(undefined)
 
@@ -144,7 +144,7 @@ describe('DefaultModelsService', () => {
 
       expect(result).toEqual([])
       expect(consoleSpy).toHaveBeenCalledWith(
-        '[ModelsService] Engine "mlx" is not available. The engine may not be initialized or registered.'
+        '[ModelsService] Engine "llamacpp" is not available. The engine may not be initialized or registered.'
       )
 
       consoleSpy.mockRestore()
@@ -319,7 +319,7 @@ describe('DefaultModelsService', () => {
       mockEngineManager.get.mockReturnValue(undefined)
 
       await expect(modelsService.deleteModel('model1', 'mlx')).rejects.toThrow(
-        '[ModelsService] Cannot delete model: engine "mlx" is not available.'
+        '[ModelsService] Cannot delete model: engine "llamacpp" is not available.'
       )
 
       consoleSpy.mockRestore()
@@ -500,6 +500,30 @@ describe('DefaultModelsService', () => {
         false,
         false
       )
+    })
+
+    it('should load mlx models through the ax-serving engine', async () => {
+      const provider = {
+        provider: 'mlx',
+        models: [{ id: 'model1', settings: {} }],
+      } as any
+      const mockSession = { id: 'session1' }
+
+      mockEngine.getLoadedModels.mockResolvedValue([])
+      mockEngine.load.mockResolvedValue(mockSession)
+
+      await expect(modelsService.startModel(provider, 'model1')).resolves.toEqual(
+        mockSession
+      )
+
+      expect(mockEngineManager.get).toHaveBeenCalledWith('llamacpp')
+      expect(mockEngine.load).toHaveBeenCalledWith(
+        'model1',
+        {},
+        false,
+        false
+      )
+      expect(mockEngine.syncModelRoute).toHaveBeenCalledWith('model1')
     })
 
     it('should throw a helpful error when the provider engine is unavailable', async () => {

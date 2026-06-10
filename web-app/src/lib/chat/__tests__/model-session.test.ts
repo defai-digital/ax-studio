@@ -23,6 +23,7 @@ function makeProvider(
 describe('model-session', () => {
   it('identifies local providers', () => {
     expect(isLocalProvider(makeProvider('llamacpp'))).toBe(true)
+    expect(isLocalProvider(makeProvider('mlx'))).toBe(true)
     expect(isLocalProvider(makeProvider('openai'))).toBe(false)
   })
 
@@ -34,6 +35,7 @@ describe('model-session', () => {
 
   it('allows local providers without an api key', () => {
     expect(() => assertProviderReadyForChat(makeProvider('llamacpp'))).not.toThrow()
+    expect(() => assertProviderReadyForChat(makeProvider('mlx'))).not.toThrow()
   })
 
   it('starts local providers before chat', async () => {

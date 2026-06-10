@@ -34,6 +34,8 @@ import {
 
 // Default provider for local inference
 const defaultProvider = 'llamacpp'
+const engineProviderFor = (provider?: string): string | undefined =>
+  provider === 'mlx' ? 'llamacpp' : provider
 
 export class DefaultModelsService implements ModelsService {
   private parseHuggingFaceModelPath(
@@ -355,17 +357,18 @@ export class DefaultModelsService implements ModelsService {
   }
 
   async deleteModel(id: string, provider?: string): Promise<void> {
-    const engine = this.getEngine(provider)
+    const engineProvider = engineProviderFor(provider)
+    const engine = this.getEngine(engineProvider)
     if (!engine) {
       throw new Error(
-        `[ModelsService] Cannot delete model: engine "${provider ?? defaultProvider}" is not available.`
+        `[ModelsService] Cannot delete model: engine "${engineProvider ?? defaultProvider}" is not available.`
       )
     }
     return engine.delete(id)
   }
 
   async getActiveModels(provider?: string): Promise<string[]> {
-    const engine = this.getEngine(provider)
+    const engine = this.getEngine(engineProviderFor(provider))
     if (!engine) return []
     return engine.getLoadedModels() ?? []
   }
@@ -374,7 +377,7 @@ export class DefaultModelsService implements ModelsService {
     model: string,
     provider?: string
   ): Promise<UnloadResult | undefined> {
-    return this.getEngine(provider)?.unload(model)
+    return this.getEngine(engineProviderFor(provider))?.unload(model)
   }
 
   async stopAllModels(): Promise<void> {
@@ -408,10 +411,11 @@ export class DefaultModelsService implements ModelsService {
     model: string,
     bypassAutoUnload: boolean = false
   ): Promise<SessionInfo | undefined> {
-    const engine = this.getEngine(provider.provider)
+    const engineProvider = engineProviderFor(provider.provider) ?? provider.provider
+    const engine = this.getEngine(engineProvider)
     if (!engine) {
       throw new Error(
-        `Local engine "${provider.provider}" is not available. ` +
+        `Local engine "${engineProvider}" is not available. ` +
         `Try restarting the app — the engine may still be initializing.`
       )
     }

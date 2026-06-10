@@ -200,6 +200,29 @@ describe('ModelFactory', () => {
       expect(model).toBeDefined()
     })
 
+    it('routes mlx through the local proxy instead of the IPC fetch shim', async () => {
+      const provider: ProviderObject = {
+        provider: 'mlx',
+        api_key: '',
+        base_url: 'http://127.0.0.1:19997/v1',
+        models: [],
+        settings: [],
+        active: true,
+      }
+
+      await ModelFactory.createModel('mlx-community/Qwen3.6-27B-4bit', provider)
+
+      expect(createOpenAICompatible).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'mlx',
+          baseURL: expect.stringMatching(/^http:\/\/127\.0\.0\.1:/),
+          headers: expect.objectContaining({
+            'X-Ax-Provider': 'mlx',
+          }),
+        })
+      )
+    })
+
     it('should create an OpenAI-compatible model for groq provider', async () => {
       const provider: ProviderObject = {
         provider: 'groq',

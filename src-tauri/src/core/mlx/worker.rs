@@ -409,6 +409,7 @@ fn handle_generate(
         repetition_context_size: None,
         seed: params.seed.unwrap_or(0),
         deterministic: None,
+        ignore_eos: false,
     };
 
     let request = GenerateRequest {
@@ -418,6 +419,7 @@ fn handle_generate(
         max_output_tokens: params.max_output_tokens.unwrap_or(2048),
         sampling,
         stop_sequences: params.stop.unwrap_or_default(),
+        multimodal_inputs: Default::default(),
         metadata: None,
     };
 
@@ -503,6 +505,7 @@ fn handle_generate_stream(
         repetition_context_size: None,
         seed: params.seed.unwrap_or(0),
         deterministic: None,
+        ignore_eos: false,
     };
     let max_output_tokens = params.max_output_tokens.unwrap_or(2048);
     let stop_sequences = params.stop.unwrap_or_default();
@@ -514,6 +517,7 @@ fn handle_generate_stream(
         max_output_tokens,
         sampling,
         stop_sequences,
+        multimodal_inputs: Default::default(),
         metadata: None,
     };
 
@@ -685,5 +689,34 @@ fn response_finish_reason(response: &ax_engine_sdk::GenerateResponse) -> String 
         GenerateStatus::Cancelled => "cancelled".to_string(),
         GenerateStatus::Failed => "error".to_string(),
         GenerateStatus::Pending => "incomplete".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn user_msg(content: &str) -> ChatMessage {
+        ChatMessage {
+            role: "user".to_string(),
+            content: content.to_string(),
+        }
+    }
+
+    #[test]
+    fn qwen36_27b_uses_qwen_direct_answer_prefix() {
+        let prompt = format_prompt(&[user_msg("Hello")], "mlx-community/Qwen3.6-27B-4bit");
+
+        assert!(prompt.contains("<|im_start|>user\nHello<|im_end|>\n"));
+        assert!(prompt.ends_with("<|im_start|>assistant\n<think>\n\n</think>\n\n"));
+    }
+
+    #[test]
+    fn gemma4_12b_it_uses_gemma_template() {
+        let prompt = format_prompt(&[user_msg("Hello")], "mlx-community/gemma-4-12B-it-4bit");
+
+        assert!(prompt.contains("<start_of_turn>user\nHello<end_of_turn>\n"));
+        assert!(prompt.ends_with("<start_of_turn>model\n"));
+        assert!(!prompt.contains("<|im_start|>"));
     }
 }
