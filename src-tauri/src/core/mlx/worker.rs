@@ -201,24 +201,23 @@ impl MlxWorker {
 
 /// Per-model resources owned by the worker thread.
 ///
-/// We deliberately do NOT cache an `EngineSession` here — on the native MLX
-/// backend the SDK's own `StatelessGenerateContext` rebuilds a fresh session
-/// per `generate` call (see ax-engine-sdk session.rs), because reusing an
-/// MLX session across calls produces MLX slice-rank crashes:
+/// We keep one prebuilt, unused `EngineSession` ready for the next request.
+/// Once a session has generated output we drop it instead of reusing it,
+/// because reused native MLX sessions previously triggered slice-rank crashes:
 ///   "MLX error: [slice] Invalid number of indices or strides for array
 ///    with dimension 2."
-/// What we DO cache:
-///   * `model_dir` — so build_session() can rebuild the session quickly
-///   * `tokenizer` — pure-Rust Tokenizer is cheap but reused for both encode
-///     and decode across requests
+/// This gives us the speed benefit of moving `EngineSession::new` out of the
+/// user-visible first-token path without depending on post-generation session
+/// reuse.
 struct LoadedModel {
     model_dir: PathBuf,
     tokenizer: Tokenizer,
+    warm_session: Option<EngineSession>,
 }
 
-/// Build a fresh `EngineSession` pointed at the model dir. Called once per
-/// generate / generate_stream request (matches the SDK's
-/// `StatelessGenerateContext::generate_with_request_id` MLX path).
+/// Build a fresh `EngineSession` pointed at the model dir. The worker keeps at
+/// most one unused session warm per loaded model and consumes it for the next
+/// generate / generate_stream request.
 ///
 /// **n-gram acceleration: OFF by default.** ax-engine's library default is
 /// ON, but the n-gram code path triggers the mlx-c 0.6.0 4-bit slice abort
@@ -248,6 +247,31 @@ fn build_session(model_dir: &PathBuf) -> Result<EngineSession, String> {
         },
     );
     EngineSession::new(config).map_err(|e| format!("EngineSession::new failed: {e:?}"))
+}
+
+fn take_warm_session(entry: &mut LoadedModel, model_id: &str) -> Result<EngineSession, String> {
+    if let Some(session) = entry.warm_session.take() {
+        log::info!("[mlx-worker] using prebuilt session for {model_id}");
+        Ok(session)
+    } else {
+        log::info!("[mlx-worker] no prebuilt session for {model_id}; building on demand");
+        build_session(&entry.model_dir)
+    }
+}
+
+fn prepare_next_session(entry: &mut LoadedModel, model_id: &str) {
+    let started = std::time::Instant::now();
+    match build_session(&entry.model_dir) {
+        Ok(session) => {
+            let elapsed_ms = started.elapsed().as_millis();
+            entry.warm_session = Some(session);
+            log::info!("[mlx-worker] prepared next session for {model_id} in {elapsed_ms}ms");
+        }
+        Err(e) => {
+            entry.warm_session = None;
+            log::warn!("[mlx-worker] failed to prepare next session for {model_id}: {e}");
+        }
+    }
 }
 
 fn run_worker(rx: Receiver<MlxCommand>) {
@@ -355,22 +379,22 @@ fn handle_load(
     let tokenizer = Tokenizer::from_file(&tokenizer_path)
         .map_err(|e| format!("Tokenizer::from_file failed for {model_id}: {e}"))?;
 
-    // Smoke-test that EngineSession::new works for this dir up-front, so the
-    // user gets a clear error here instead of on first generate. We drop the
-    // session immediately — generate() builds a fresh one each call.
+    // Build the first warm session up-front, so the user gets a clear error
+    // here instead of on first generate and the first request can skip
+    // EngineSession::new on the visible path.
     log::info!(
         "[mlx-worker] loading model {model_id} from {}",
         model_dir.display()
     );
-    let _smoke_test = build_session(model_dir)
+    let warm_session = build_session(model_dir)
         .map_err(|e| format!("EngineSession::new probe failed for {model_id}: {e}"))?;
-    drop(_smoke_test);
 
     models.insert(
         model_id.to_string(),
         LoadedModel {
             model_dir: model_dir.clone(),
             tokenizer,
+            warm_session: Some(warm_session),
         },
     );
     log::info!("[mlx-worker] loaded model {model_id}");
@@ -384,7 +408,7 @@ fn handle_generate(
     params: GenerateParams,
 ) -> Result<ChatCompletionResult, String> {
     let entry = models
-        .get(model_id)
+        .get_mut(model_id)
         .ok_or_else(|| format!("model not loaded: {model_id}"))?;
 
     // Build the prompt using ChatML (Qwen-family chat template). This is the
@@ -429,12 +453,13 @@ fn handle_generate(
         request.max_output_tokens
     );
 
-    // Fresh session per call — reusing MLX sessions across calls causes the
-    // upstream slice-rank crash documented in handle_generate_stream.
-    let mut session = build_session(&entry.model_dir)?;
+    // Consume one unused warm session per call. We intentionally do not reuse
+    // this session after generation.
+    let mut session = take_warm_session(entry, model_id)?;
     let response = session
         .generate(request)
         .map_err(|e| format!("session.generate failed for {model_id}: {e:?}"))?;
+    drop(session);
 
     let output_text = entry
         .tokenizer
@@ -450,6 +475,8 @@ fn handle_generate(
 
     // `GenerateResponse.status` carries finish_reason; map it to OpenAI-style.
     let finish_reason = response_finish_reason(&response);
+
+    prepare_next_session(entry, model_id);
 
     Ok(ChatCompletionResult {
         output_text,
@@ -467,7 +494,7 @@ fn handle_generate_stream(
     on_event: &(dyn Fn(StreamEvent) + Send),
 ) -> Result<(), String> {
     let entry = models
-        .get(model_id)
+        .get_mut(model_id)
         .ok_or_else(|| format!("model not loaded: {model_id}"))?;
 
     let prompt = format_prompt(&messages, model_id);
@@ -510,7 +537,7 @@ fn handle_generate_stream(
          max_out={max_output_tokens}"
     );
 
-    let mut session = build_session(&entry.model_dir)?;
+    let mut session = take_warm_session(entry, model_id)?;
     let started = std::time::Instant::now();
     let mut stream = session
         .stream_generate(request)
@@ -587,6 +614,10 @@ fn handle_generate_stream(
         finish_reason,
         elapsed_ms,
     });
+
+    drop(stream);
+    drop(session);
+    prepare_next_session(entry, model_id);
 
     Ok(())
 }
