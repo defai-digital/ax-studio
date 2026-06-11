@@ -31,6 +31,9 @@ Claude.md
 archive/
 .cache/
 
+# Internal review material, not for public GitHub.
+.internal/
+
 # Python
 __pycache__/
 *.pyc
