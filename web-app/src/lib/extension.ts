@@ -1,6 +1,7 @@
 import { AIEngine, BaseExtension, ExtensionTypeEnum } from '@ax-studio/core'
 
 import { getServiceHub } from '@/hooks/useServiceHub'
+import { ensureCoreBridge } from '@/lib/bootstrap/core-bridge'
 
 /**
  * Extension manifest object.
@@ -94,8 +95,8 @@ export class ExtensionManager {
   }
 
   /**
-   * Retrieves a extension by its type.
-   * @param type - The type of the extension to retrieve.
+   * Retrieves a registered extension by its name.
+   * @param name - The name of the extension to retrieve.
    * @returns The extension, if found.
    */
   getByName(name: string): BaseExtension | undefined {
@@ -103,9 +104,8 @@ export class ExtensionManager {
   }
 
   /**
-   * Retrieves a extension by its type.
-   * @param type - The type of the extension to retrieve.
-   * @returns The extension, if found.
+   * Returns all registered extensions.
+   * @returns An array of all registered extensions.
    */
   getAll(): BaseExtension[] {
     return Array.from(this.extensions.values())
@@ -124,7 +124,12 @@ export class ExtensionManager {
    * Loads all registered extension.
    */
   async load() {
-    await Promise.all(this.listExtensions().map((ext) => ext.onLoad()))
+    const results = await Promise.allSettled(this.listExtensions().map((ext) => ext.onLoad()))
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        console.error('Extension load failed:', result.reason)
+      }
+    }
   }
 
   /**
@@ -176,33 +181,40 @@ export class ExtensionManager {
     // Check if extension already has a pre-loaded instance (web extensions)
     if (extension.extensionInstance) {
       this.register(extension.name, extension.extensionInstance)
-      console.log(`Extension '${extension.name}' registered with pre-loaded instance`)
       return
     }
     
     // Import class for Tauri extensions
-    const extensionUrl = extension.url
-    await import(/* @vite-ignore */ getServiceHub().core().convertFileSrc(extensionUrl)).then(
-      (extensionClass) => {
-        // Register class if it has a default export
-        if (
-          typeof extensionClass.default === 'function' &&
-          extensionClass.default.prototype
-        ) {
-          this.register(
-            extension.name,
-            new extensionClass.default(
-              extension.url,
-              extension.name,
-              extension.productName,
-              extension.active,
-              extension.description,
-              extension.version
-            )
-          )
-        }
+    let extensionUrl = extension.url
+    try {
+      if (!/^(?:[a-z]+:|\/|[A-Za-z]:[\\/])/.test(extensionUrl)) {
+        const extensionsPath = await getServiceHub()
+          .core()
+          .invoke<string>('get_app_extensions_path')
+        extensionUrl = `${extensionsPath}/${extensionUrl}`
       }
-    )
+
+      const extensionClass = await import(/* @vite-ignore */ getServiceHub().core().convertFileSrc(extensionUrl))
+      // Register class if it has a default export
+      if (
+        typeof extensionClass.default === 'function' &&
+        extensionClass.default.prototype
+      ) {
+        this.register(
+          extension.name,
+          new extensionClass.default(
+            extension.url,
+            extension.name,
+            extension.productName,
+            extension.active,
+            extension.description,
+            extension.version
+          )
+        )
+      }
+    } catch (error) {
+      console.error(`Failed to import extension "${extension.name}":`, error)
+    }
   }
 
   /**
@@ -213,9 +225,14 @@ export class ExtensionManager {
     // Get active extensions
     const activeExtensions = (await this.getActive()) ?? []
     // Activate all
-    await Promise.all(
+    const results = await Promise.allSettled(
       activeExtensions.map((ext: Extension) => this.activateExtension(ext))
     )
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        console.error('Extension activation failed:', result.reason)
+      }
+    }
   }
 
   /**
@@ -228,11 +245,11 @@ export class ExtensionManager {
       return
     }
     const res = await getServiceHub().core().installExtension(extensions)
-    return res.map(async (ext: ExtensionManifest) => {
-      const extension = new Extension(ext.name, ext.url)
+    return Promise.all(res.map(async (ext: ExtensionManifest) => {
+      const extension = new Extension(ext.url, ext.name)
       await this.activateExtension(extension)
       return extension
-    })
+    }))
   }
 
   /**
@@ -252,8 +269,10 @@ export class ExtensionManager {
    * Shared instance of ExtensionManager.
    */
   static getInstance() {
-    if (!window.core.extensionManager)
-      window.core.extensionManager = new ExtensionManager()
-    return window.core.extensionManager as ExtensionManager
+    const core = ensureCoreBridge({ withApi: true, withEvents: true })
+    if (!core.extensionManager) {
+      core.extensionManager = new ExtensionManager()
+    }
+    return core.extensionManager
   }
 }

@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import DOMPurify from 'dompurify';
 import { CheckIcon, CopyIcon } from "lucide-react";
 import {
   type ComponentProps,
@@ -13,8 +14,8 @@ import {
   useState,
 } from "react";
 import { createHighlighter, type BundledLanguage, type Highlighter, type ShikiTransformer } from "shiki";
-import { axStudioLightTheme } from "@/lib/shiki-theme-light";
-import { axStudioDarkTheme } from "@/lib/shiki-theme-dark";
+import { axStudioLightTheme } from "@/lib/themes/shiki-theme-light";
+import { axStudioDarkTheme } from "@/lib/themes/shiki-theme-dark";
 
 // --- Singleton highlighter (shared across all CodeBlock instances) ---
 let _highlighterPromise: Promise<Highlighter> | null = null;
@@ -31,8 +32,25 @@ function getHighlighter(): Promise<Highlighter> {
 }
 
 // --- LRU-style cache bounded to 200 entries ---
+// Concurrency safety: _pendingHighlights acts as a dedup guard. When two
+// concurrent calls arrive for the same cacheKey, the second returns the
+// first's in-flight promise (line 83-84). The promise is registered in
+// _pendingHighlights BEFORE any await, so no concurrent writer can start
+// duplicate work for the same key. The async scanner flags TOCTOU on the
+// read-then-write pattern, but it is safe because _pendingHighlights prevents
+// multiple writers from ever coexisting for the same key.
 const MAX_CACHE_SIZE = 200;
 const _htmlCache = new Map<string, [string, string]>();
+const _pendingHighlights = new Map<string, Promise<[string, string]>>();
+
+function cacheHighlight(cacheKey: string, result: [string, string]) {
+  while (_htmlCache.size >= MAX_CACHE_SIZE) {
+    const firstKey = _htmlCache.keys().next().value;
+    if (firstKey === undefined || firstKey === cacheKey) break;
+    _htmlCache.delete(firstKey);
+  }
+  _htmlCache.set(cacheKey, result);
+}
 
 type CodeBlockProps = HTMLAttributes<HTMLDivElement> & {
   code: string;
@@ -77,27 +95,39 @@ export async function highlightCode(
   const cached = _htmlCache.get(cacheKey);
   if (cached) return cached;
 
-  const transformers: ShikiTransformer[] = showLineNumbers
-    ? [lineNumberTransformer]
-    : [];
+  // Deduplicate concurrent calls for the same cache key
+  const pending = _pendingHighlights.get(cacheKey);
+  if (pending) return pending;
 
-  const hl = await getHighlighter();
-  if (!_loadedLangs.has(language)) {
-    await hl.loadLanguage(language);
-    _loadedLangs.add(language);
+  const promise = (async (): Promise<[string, string]> => {
+    const transformers: ShikiTransformer[] = showLineNumbers
+      ? [lineNumberTransformer]
+      : [];
+
+    const hl = await getHighlighter();
+    if (!_loadedLangs.has(language)) {
+      await hl.loadLanguage(language);
+      _loadedLangs.add(language);
+    }
+
+    const existing = _htmlCache.get(cacheKey);
+    if (existing) return existing;
+
+    const result: [string, string] = [
+      hl.codeToHtml(code, { lang: language, theme: "ax-studio-light", transformers }),
+      hl.codeToHtml(code, { lang: language, theme: "ax-studio-dark", transformers }),
+    ];
+
+    cacheHighlight(cacheKey, result);
+    return result;
+  })();
+
+  _pendingHighlights.set(cacheKey, promise);
+  try {
+    return await promise;
+  } finally {
+    _pendingHighlights.delete(cacheKey);
   }
-
-  const result: [string, string] = [
-    hl.codeToHtml(code, { lang: language, theme: "ax-studio-light", transformers }),
-    hl.codeToHtml(code, { lang: language, theme: "ax-studio-dark", transformers }),
-  ];
-
-  if (_htmlCache.size >= MAX_CACHE_SIZE) {
-    const firstKey = _htmlCache.keys().next().value;
-    if (firstKey !== undefined) _htmlCache.delete(firstKey);
-  }
-  _htmlCache.set(cacheKey, result);
-  return result;
 }
 
 export const CodeBlock = ({
@@ -114,12 +144,23 @@ export const CodeBlock = ({
 
   useEffect(() => {
     cancelledRef.current = false;
-    highlightCode(code, language, showLineNumbers).then(([light, dark]) => {
-      if (!cancelledRef.current) {
-        setHtml(light);
-        setDarkHtml(dark);
-      }
-    });
+    highlightCode(code, language, showLineNumbers)
+      .then(([light, dark]) => {
+        if (!cancelledRef.current) {
+          setHtml(light);
+          setDarkHtml(dark);
+        }
+      })
+      .catch((error) => {
+        console.error("[CodeBlock] Failed to highlight code:", error);
+        // Fallback: show raw code when highlighting fails
+        if (!cancelledRef.current) {
+          const escaped = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          const fallback = `<pre><code>${escaped}</code></pre>`;
+          setHtml(fallback);
+          setDarkHtml(fallback);
+        }
+      });
 
     return () => {
       cancelledRef.current = true;
@@ -138,13 +179,13 @@ export const CodeBlock = ({
         <div className="relative">
           <div
             className="overflow-auto dark:hidden [&>pre]:m-0 [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
-            // biome-ignore lint/security/noDangerouslySetInnerHtml: "this is needed."
-            dangerouslySetInnerHTML={{ __html: html }}
+            // biome-ignore lint/security/noDangerouslySetInnerHtml: "sanitized via DOMPurify"
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }}
           />
           <div
             className="hidden overflow-auto dark:block [&>pre]:m-0 [&>pre]:bg-transparent! [&>pre]:p-4 [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
-            // biome-ignore lint/security/noDangerouslySetInnerHtml: "this is needed."
-            dangerouslySetInnerHTML={{ __html: darkHtml }}
+            // biome-ignore lint/security/noDangerouslySetInnerHtml: "sanitized via DOMPurify"
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(darkHtml) }}
           />
           {children && (
             <div className="absolute top-2 right-2 flex items-center gap-2">

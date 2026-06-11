@@ -115,6 +115,20 @@ export async function unloadLlamaModel(pid: number): Promise<UnloadResult> {
   return await invoke('plugin:llamacpp|unload_llama_model', { pid })
 }
 
+export async function startAxServing(
+  binaryPath: string,
+  port: number,
+  timeout: number = 120,
+  envOverrides?: Record<string, string>
+): Promise<SessionInfo> {
+  return await invoke('plugin:llamacpp|start_ax_serving', {
+    binaryPath,
+    port,
+    timeout,
+    envOverrides,
+  })
+}
+
 export async function getDevices(
   backendPath: string,
   libraryPath?: string
@@ -155,12 +169,6 @@ export async function getLoadedModels(): Promise<string[]> {
 
 export async function getAllSessions(): Promise<SessionInfo[]> {
   return await invoke('plugin:llamacpp|get_all_sessions')
-}
-
-export async function getSessionByModel(
-  modelId: string
-): Promise<SessionInfo | null> {
-  return await invoke('plugin:llamacpp|get_session_by_model', { modelId })
 }
 
 // GGUF commands

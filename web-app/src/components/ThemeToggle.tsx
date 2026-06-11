@@ -6,7 +6,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { useTheme } from '@/hooks/useTheme'
+import { useTheme } from '@/hooks/ui/useTheme'
 import { useState } from 'react'
 
 type ThemeId = 'light' | 'dark' | 'auto'

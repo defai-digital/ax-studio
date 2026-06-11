@@ -3,10 +3,9 @@
  */
 
 import { emit, listen } from '@tauri-apps/api/event'
-import type { EventOptions, UnlistenFn } from './types'
-import { DefaultEventsService } from './default'
+import type { EventOptions, UnlistenFn, EventsService } from './types'
 
-export class TauriEventsService extends DefaultEventsService {
+export class TauriEventsService implements EventsService {
    
   async emit<T>(event: string, payload?: T, _options?: EventOptions): Promise<void> {
     try {

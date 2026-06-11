@@ -12,6 +12,36 @@ export abstract class LocalOAIEngine extends OAIEngine {
   loadModelFunctionName: string = 'loadModel'
   unloadModelFunctionName: string = 'unloadModel'
 
+  // Idempotency guard for this subclass's own events. The base class has
+  // its own `loaded` flag for the OAIEngine events — this one exists so
+  // the ModelInit/ModelStop handlers also register exactly once across
+  // repeated `onLoad()` invocations (HMR, manager re-init).
+  private localLoaded = false
+
+  private readonly handleModelInit = (model: Model) => {
+    void Promise.resolve()
+      .then(() => this.loadModel(model))
+      .catch((error) => {
+        console.error('[LocalOAIEngine] Failed to load model:', error)
+        events.emit(ModelEvent.OnModelFail, {
+          modelId: model.id,
+          error: String(error?.message ?? error),
+        })
+      })
+  }
+
+  private readonly handleModelStop = (model: Model) => {
+    void Promise.resolve()
+      .then(() => this.unloadModel(model))
+      .catch((error) => {
+        console.error('[LocalOAIEngine] Failed to unload model:', error)
+        events.emit(ModelEvent.OnModelFail, {
+          modelId: model.id,
+          error: String(error?.message ?? error),
+        })
+      })
+  }
+
   /**
    * This class represents a base for local inference providers in the OpenAI architecture.
    * It extends the OAIEngine class and provides the implementation of loading and unloading models locally.
@@ -19,23 +49,25 @@ export abstract class LocalOAIEngine extends OAIEngine {
    * The unloadModel function subscribes to the ModelEvent.OnModelStop event, unloading models when stopped.
    */
   override onLoad() {
+    // Always call super — OAIEngine has its own idempotency guard.
     super.onLoad()
+    if (this.localLoaded) return
+    this.localLoaded = true
     // These events are applicable to local inference providers
-    events.on(ModelEvent.OnModelInit, (model: Model) => this.loadModel(model))
-    events.on(ModelEvent.OnModelStop, (model: Model) => this.unloadModel(model))
+    events.on(ModelEvent.OnModelInit, this.handleModelInit)
+    events.on(ModelEvent.OnModelStop, this.handleModelStop)
   }
 
-  /**
-   * Load the model.
-   */
-  async loadModel(model: Model & { file_path?: string }): Promise<void> {
-    // Implementation of loading the model
+  override onUnload() {
+    this.localLoaded = false
+    events.off(ModelEvent.OnModelInit, this.handleModelInit)
+    events.off(ModelEvent.OnModelStop, this.handleModelStop)
+    super.onUnload()
   }
 
-  /**
-   * Stops the model.
-   */
-  async unloadModel(model?: Model) {
-    // Implementation of unloading the model
-  }
+  /** Override in subclasses to perform engine-specific model loading. */
+  async loadModel(_model: Model & { file_path?: string }): Promise<void> {}
+
+  /** Override in subclasses to perform engine-specific model unloading. */
+  async unloadModel(_model?: Model) {}
 }

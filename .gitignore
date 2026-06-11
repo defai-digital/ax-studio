@@ -31,9 +31,6 @@ Claude.md
 archive/
 .cache/
 
-# Internal review material, not for public GitHub.
-.internal/
-
 # Python
 __pycache__/
 *.pyc
@@ -76,16 +73,23 @@ llm-docs
 .claude
 
 # Local AI tool configs
-.automatosx/
 .ax-grok/
 .gemini/
 opencode.json
-automatosx/
 agent-teams/
 .mcp.json
 
 # IDE
 .idea/
+
+# Generated reports
+report/
+
+# Local planning docs
+/ADRS/
+/BUGS/
+/PRDS/
+/TODOS/
 
 # Merge conflict artifacts
 *.orig

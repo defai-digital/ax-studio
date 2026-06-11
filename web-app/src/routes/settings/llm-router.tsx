@@ -1,13 +1,14 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 import { route } from '@/constants/routes'
-import SettingsMenu from '@/containers/SettingsMenu'
+import SettingsMenu from '@/components/common/SettingsMenu'
 import HeaderPage from '@/containers/HeaderPage'
 import { Route as RouteIcon, Info, Check, ChevronsUpDown } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
-import { Card, CardItem } from '@/containers/Card'
+import { Card, CardItem } from '@/components/common/Card'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
 import {
   Command,
   CommandEmpty,
@@ -16,11 +17,10 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command'
-import { useRouterSettings } from '@/hooks/useRouterSettings'
-import { useModelProvider } from '@/features/models/hooks/useModelProvider'
+import { useRouterSettings } from '@/hooks/settings/useRouterSettings'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const Route = createFileRoute(route.settings.llm_router as any)({
+export const Route = createFileRoute(route.settings.llm_router as '/settings/llm-router')({
   component: LLMRouterSettings,
 })
 
@@ -36,7 +36,7 @@ function LLMRouterSettings() {
   const providers = useModelProvider((s) => s.providers)
 
   // Build a flat list of all available models (non-embedding) for the router model dropdown.
-  // Only include providers with an API key configured so the router can actually reach them.
+  // Include keyed remote providers and local/custom providers that already have models loaded.
   const availableModels = useMemo(() => {
     const models: { id: string; provider: string; displayName: string }[] = []
     for (const provider of providers) {
@@ -101,20 +101,7 @@ function LLMRouterSettings() {
       <div className="flex flex-1 min-h-0">
         <SettingsMenu />
         <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
-          <div className="flex items-center gap-3 px-8 py-5 border-b border-border/40 bg-background sticky top-0 z-10">
-            <div
-              className="size-7 rounded-lg flex items-center justify-center"
-              style={{ background: 'linear-gradient(135deg, #f59e0b, #ef4444)' }}
-            >
-              <RouteIcon className="size-3.5 text-white" strokeWidth={2.5} />
-            </div>
-            <h1
-              className="text-foreground tracking-tight"
-              style={{ fontSize: '16px', fontWeight: 600 }}
-            >
-              LLM Router
-            </h1>
-          </div>
+          <SettingsPageLayout icon={RouteIcon} title="LLM Router" gradient="linear-gradient(135deg, #f59e0b, #ef4444)" />
           <div className="px-8 py-7">
             <div className="max-w-2xl space-y-6">
               {/* Enable/Disable */}

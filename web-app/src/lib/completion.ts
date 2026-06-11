@@ -1,9 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   ContentType,
   ChatCompletionRole,
   ThreadMessage,
   MessageStatus,
+  ThreadContent,
 } from '@ax-studio/core'
 import { ulid } from 'ulidx'
 import { Attachment } from '@/types/attachment'
@@ -45,7 +45,7 @@ export const newUserThreadContent = (
   const textWithFiles =
     docMetadata.length > 0 ? injectFilesIntoPrompt(content, docMetadata) : content
 
-  const contentParts = [
+  const contentParts: ThreadContent[] = [
     {
       type: ContentType.Text,
       text: {
@@ -64,7 +64,7 @@ export const newUserThreadContent = (
           url: `data:${img.mimeType};base64,${img.base64}`,
           detail: 'auto',
         },
-      } as any)
+      })
     }
   })
 
@@ -87,17 +87,9 @@ export const newUserThreadContent = (
             })),
           }
         : undefined,
-  }
+  } as unknown as ThreadMessage
 }
 
-/**
- * @fileoverview Helper functions for creating thread content.
- * These functions are used to create thread content objects
- * for different types of content, such as text and image.
- * The functions return objects that conform to the `ThreadContent` type.
- * @param content - The content of the thread
- * @returns
- */
 export const newAssistantThreadContent = (
   threadId: string,
   content: string,
@@ -122,20 +114,17 @@ export const newAssistantThreadContent = (
   created_at: 0,
   completed_at: 0,
   metadata,
-})
+} as unknown as ThreadMessage)
 
-/**
- * Empty thread content object.
- * @returns
- */
-export const emptyThreadContent: ThreadMessage = {
+export const emptyThreadContent = {
   type: 'text',
   role: ChatCompletionRole.Assistant,
+  content: [],
   id: ulid(),
   object: 'thread.message',
   thread_id: '',
-  content: [],
   status: MessageStatus.Ready,
   created_at: 0,
   completed_at: 0,
-}
+  metadata: {},
+} as unknown as ThreadMessage

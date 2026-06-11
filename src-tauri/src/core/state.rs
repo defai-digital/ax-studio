@@ -10,20 +10,44 @@ use rmcp::{
     service::RunningService,
     RoleClient, ServiceError,
 };
+use tokio::sync::watch;
 use tokio::sync::{oneshot, Mutex};
 
 /// Server handle type for managing the proxy server lifecycle
-pub type ServerHandle =
-    tauri::async_runtime::JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>>;
+pub struct ServerHandle {
+    pub task:
+        tauri::async_runtime::JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>>,
+    pub shutdown_tx: watch::Sender<bool>,
+}
+
+pub type ProviderModelIndex = HashMap<String, Vec<String>>;
 
 /// Provider configuration for remote model providers
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct ProviderConfig {
     pub provider: String,
+    #[serde(skip_serializing)]
     pub api_key: Option<String>,
     pub base_url: Option<String>,
     pub custom_headers: Vec<ProviderCustomHeader>,
     pub models: Vec<String>,
+}
+
+impl ProviderConfig {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.provider.trim().is_empty() {
+            return Err("Provider name must not be empty".to_string());
+        }
+        if let Some(ref url) = self.base_url {
+            if !url.trim().is_empty() && url::Url::parse(url).is_err() {
+                return Err(format!(
+                    "Invalid base_url for provider '{}': {}",
+                    self.provider, url
+                ));
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
@@ -32,40 +56,77 @@ pub struct ProviderCustomHeader {
     pub value: String,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct ProviderState {
+    pub configs: HashMap<String, ProviderConfig>,
+    pub model_index: ProviderModelIndex,
+}
+
+impl ProviderState {
+    pub fn sync_model_index(&mut self) {
+        self.model_index = build_provider_model_index(&self.configs);
+    }
+}
+
+impl RunningServiceEnum {
+    pub async fn list_all_tools(&self) -> Result<Vec<Tool>, ServiceError> {
+        match self {
+            Self::NoInit(s) => s.list_all_tools().await,
+            Self::WithInit(s) => s.list_all_tools().await,
+        }
+    }
+    pub async fn call_tool(
+        &self,
+        params: CallToolRequestParam,
+    ) -> Result<CallToolResult, ServiceError> {
+        match self {
+            Self::NoInit(s) => s.call_tool(params).await,
+            Self::WithInit(s) => s.call_tool(params).await,
+        }
+    }
+}
+
 pub enum RunningServiceEnum {
     NoInit(RunningService<RoleClient, ()>),
     WithInit(RunningService<RoleClient, InitializeRequestParam>),
 }
 pub type SharedMcpServers = Arc<Mutex<HashMap<String, Arc<RunningServiceEnum>>>>;
 
-/// MCP-related state
-pub struct McpState {
-    pub servers: SharedMcpServers,
-    pub active_servers: Arc<Mutex<HashMap<String, serde_json::Value>>>,
-    pub settings: Arc<Mutex<McpSettings>>,
-    pub shutdown_in_progress: Arc<Mutex<bool>>,
-    pub monitoring_tasks: Arc<Mutex<HashMap<String, tauri::async_runtime::JoinHandle<()>>>>,
-    pub server_pids: Arc<Mutex<HashMap<String, u32>>>,
-}
-
-/// Download-related state
-pub struct DownloadState {
-    pub manager: Arc<Mutex<DownloadManagerState>>,
-}
-
-/// Local API server state
-pub struct ServerState {
-    pub handle: Arc<Mutex<Option<ServerHandle>>>,
-    pub provider_configs: Arc<Mutex<HashMap<String, ProviderConfig>>>,
-}
-
-/// Remaining shared application state
 pub struct AppState {
-    pub app_token: Option<String>,
+    pub mcp_servers: SharedMcpServers,
+    pub download_manager: Arc<Mutex<DownloadManagerState>>,
+    pub mcp_active_servers: Arc<Mutex<HashMap<String, serde_json::Value>>>,
+    pub server_handle: Arc<Mutex<Option<ServerHandle>>>,
     pub tool_call_cancellations: Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
+    pub akidb_sync_cancellation: Arc<Mutex<Option<oneshot::Sender<()>>>>,
+    pub mcp_settings: Arc<Mutex<McpSettings>>,
+    pub mcp_shutdown_in_progress: Arc<Mutex<bool>>,
+    pub mcp_monitoring_tasks: Arc<Mutex<HashMap<String, tauri::async_runtime::JoinHandle<()>>>>,
     pub background_cleanup_handle: Arc<Mutex<Option<tauri::async_runtime::JoinHandle<()>>>>,
+    pub mcp_server_pids: Arc<Mutex<HashMap<String, u32>>>,
+    /// Remote provider configurations and model index are kept under one lock.
+    pub provider_state: Arc<Mutex<ProviderState>>,
     /// One-time write targets approved via native save dialog
     pub approved_save_paths: Arc<Mutex<HashSet<PathBuf>>>,
+    pub factory_reset_lock: Arc<Mutex<()>>,
+    pub active_streams: Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
+}
+
+pub fn build_provider_model_index(
+    provider_configs: &HashMap<String, ProviderConfig>,
+) -> ProviderModelIndex {
+    let mut index = HashMap::new();
+
+    for config in provider_configs.values() {
+        for model in &config.models {
+            index
+                .entry(model.clone())
+                .or_insert_with(Vec::new)
+                .push(config.provider.clone());
+        }
+    }
+
+    index
 }
 
 #[cfg(test)]
@@ -96,7 +157,10 @@ mod tests {
         };
         let json = serde_json::to_value(&config).unwrap();
         assert_eq!(json["provider"], "openai");
-        assert_eq!(json["api_key"], "sk-test-key");
+        assert!(
+            json.get("api_key").is_none(),
+            "api_key should not be serialized"
+        );
         assert_eq!(json["base_url"], "https://api.openai.com/v1");
         assert_eq!(json["custom_headers"][0]["header"], "X-Custom");
         assert_eq!(json["custom_headers"][0]["value"], "custom-value");
@@ -170,23 +234,5 @@ mod tests {
         assert_eq!(config.provider, cloned.provider);
         assert_eq!(config.api_key, cloned.api_key);
         assert_eq!(config.custom_headers.len(), cloned.custom_headers.len());
-    }
-}
-
-impl RunningServiceEnum {
-    pub async fn list_all_tools(&self) -> Result<Vec<Tool>, ServiceError> {
-        match self {
-            Self::NoInit(s) => s.list_all_tools().await,
-            Self::WithInit(s) => s.list_all_tools().await,
-        }
-    }
-    pub async fn call_tool(
-        &self,
-        params: CallToolRequestParam,
-    ) -> Result<CallToolResult, ServiceError> {
-        match self {
-            Self::NoInit(s) => s.call_tool(params).await,
-            Self::WithInit(s) => s.call_tool(params).await,
-        }
     }
 }

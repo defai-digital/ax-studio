@@ -1,14 +1,14 @@
-use std::fs::{self, File};
+use std::fs;
 use std::io::Write;
 use tauri::Runtime;
+use tokio::task;
 use uuid::Uuid;
 
-#[cfg(any(target_os = "android", target_os = "ios"))]
-use super::db;
 use super::helpers::{
-    get_lock_for_thread, read_messages_from_file, remove_lock_for_thread, should_use_sqlite,
-    update_thread_metadata, write_messages_to_file,
+    get_lock_for_thread, prune_unused_message_locks, read_messages_from_path,
+    remove_lock_for_thread, rewrite_messages_file, update_thread_metadata,
 };
+use super::models::{MessageRecord, ThreadRecord};
 use super::{
     constants::THREADS_FILE,
     utils::{
@@ -17,46 +17,52 @@ use super::{
     },
 };
 
-/// Lists all threads by reading their metadata from the threads directory or database.
+/// Lists all threads by reading their metadata from the threads directory.
 /// Returns a vector of thread metadata as JSON values.
 #[tauri::command]
 pub async fn list_threads<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
-) -> Result<Vec<serde_json::Value>, String> {
-    if should_use_sqlite() {
-        // Use SQLite on mobile platforms
-        #[cfg(any(target_os = "android", target_os = "ios"))]
-        return db::db_list_threads(app_handle).await;
-    }
-
-    // Use file-based storage on desktop
+) -> Result<Vec<ThreadRecord>, String> {
     ensure_data_dirs(app_handle.clone())?;
     let data_dir = get_data_dir(app_handle.clone());
-    let mut threads = Vec::new();
 
-    if !data_dir.exists() {
-        return Ok(threads);
-    }
+    task::spawn_blocking(move || -> Result<Vec<ThreadRecord>, String> {
+        let mut threads = Vec::new();
+        let mut skipped = 0u32;
+        if !data_dir.exists() {
+            return Ok(threads);
+        }
 
-    for entry in fs::read_dir(&data_dir).map_err(|e| e.to_string())? {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let path = entry.path();
-        if path.is_dir() {
-            let thread_metadata_path = path.join(THREADS_FILE);
-            if thread_metadata_path.exists() {
-                let data = fs::read_to_string(&thread_metadata_path).map_err(|e| e.to_string())?;
-                match serde_json::from_str(&data) {
-                    Ok(thread) => threads.push(thread),
-                    Err(e) => {
-                        println!("Failed to parse thread file: {e}");
-                        continue; // skip invalid thread files
+        for entry in fs::read_dir(&data_dir).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let path = entry.path();
+            if path.is_dir() {
+                let thread_metadata_path = path.join(THREADS_FILE);
+                if thread_metadata_path.exists() {
+                    let data =
+                        fs::read_to_string(&thread_metadata_path).map_err(|e| e.to_string())?;
+                    match serde_json::from_str(&data) {
+                        Ok(thread) => threads.push(thread),
+                        Err(e) => {
+                            skipped += 1;
+                            log::warn!(
+                                "Failed to parse thread metadata {}: {e}",
+                                thread_metadata_path.display()
+                            );
+                        }
                     }
                 }
             }
         }
-    }
 
-    Ok(threads)
+        if skipped > 0 {
+            log::warn!("{skipped} thread(s) skipped due to malformed metadata");
+        }
+
+        Ok(threads)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Creates a new thread, assigns it a unique ID, and persists its metadata.
@@ -64,24 +70,26 @@ pub async fn list_threads<R: Runtime>(
 #[tauri::command]
 pub async fn create_thread<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
-    mut thread: serde_json::Value,
-) -> Result<serde_json::Value, String> {
-    if should_use_sqlite() {
-        #[cfg(any(target_os = "android", target_os = "ios"))]
-        return db::db_create_thread(app_handle, thread).await;
+    mut thread: ThreadRecord,
+) -> Result<ThreadRecord, String> {
+    if thread.id.is_empty() {
+        thread.id = Uuid::new_v4().to_string();
     }
+    thread.validate()?;
 
-    // Use file-based storage on desktop
     ensure_data_dirs(app_handle.clone())?;
-    let uuid = Uuid::new_v4().to_string();
-    thread["id"] = serde_json::Value::String(uuid.clone());
+    let uuid = thread.id.clone();
     let thread_dir = get_thread_dir(app_handle.clone(), &uuid);
-    if !thread_dir.exists() {
-        fs::create_dir_all(&thread_dir).map_err(|e| e.to_string())?;
-    }
     let path = get_thread_metadata_path(app_handle.clone(), &uuid);
     let data = serde_json::to_string_pretty(&thread).map_err(|e| e.to_string())?;
-    fs::write(path, data).map_err(|e| e.to_string())?;
+    tokio::task::spawn_blocking(move || {
+        if !thread_dir.exists() {
+            fs::create_dir_all(&thread_dir).map_err(|e| e.to_string())?;
+        }
+        fs::write(path, data).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("create_thread task error: {e}"))??;
     Ok(thread)
 }
 
@@ -90,36 +98,34 @@ pub async fn create_thread<R: Runtime>(
 #[tauri::command]
 pub async fn modify_thread<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
-    thread: serde_json::Value,
+    thread: ThreadRecord,
 ) -> Result<(), String> {
-    if should_use_sqlite() {
-        #[cfg(any(target_os = "android", target_os = "ios"))]
-        return db::db_modify_thread(app_handle, thread).await;
+    let thread_id = thread.id.as_str();
+    if thread_id.is_empty() {
+        return Err("Missing thread id".to_string());
     }
-
-    // Use file-based storage on desktop
-    let thread_id = thread
-        .get("id")
-        .and_then(|id| id.as_str())
-        .ok_or("Missing thread id")?;
+    thread.validate()?;
     let thread_dir = get_thread_dir(app_handle.clone(), thread_id);
     if !thread_dir.exists() {
         return Err("Thread directory does not exist".to_string());
     }
 
-    // Acquire per-thread lock before writing
     let lock = get_lock_for_thread(thread_id).await;
     let _guard = lock.lock().await;
 
     let path = get_thread_metadata_path(app_handle.clone(), thread_id);
     let data = serde_json::to_string_pretty(&thread).map_err(|e| e.to_string())?;
     let tmp_path = path.with_extension("json.tmp");
-    fs::write(&tmp_path, &data).map_err(|e| e.to_string())?;
-    if let Err(e) = fs::rename(&tmp_path, &path) {
-        // Clean up orphaned tmp file on rename failure
-        let _ = fs::remove_file(&tmp_path);
-        return Err(e.to_string());
-    }
+    tokio::task::spawn_blocking(move || {
+        fs::write(&tmp_path, &data).map_err(|e| e.to_string())?;
+        if let Err(e) = fs::rename(&tmp_path, &path) {
+            let _ = fs::remove_file(&tmp_path);
+            return Err(e.to_string());
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("modify_thread task error: {e}"))??;
     Ok(())
 }
 
@@ -129,280 +135,258 @@ pub async fn delete_thread<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     thread_id: String,
 ) -> Result<(), String> {
-    if should_use_sqlite() {
-        #[cfg(any(target_os = "android", target_os = "ios"))]
-        return db::db_delete_thread(app_handle, &thread_id).await;
-    }
-
-    // Use file-based storage on desktop
-    // Acquire per-thread lock before deleting to prevent race with concurrent writes
     {
         let lock = get_lock_for_thread(&thread_id).await;
         let _guard = lock.lock().await;
 
         let thread_dir = get_thread_dir(app_handle.clone(), &thread_id);
         if thread_dir.exists() {
-            fs::remove_dir_all(&thread_dir)
+            tokio::task::spawn_blocking(move || fs::remove_dir_all(&thread_dir))
+                .await
+                .map_err(|e| format!("delete_thread task error: {e}"))?
                 .map_err(|e| format!("Failed to delete thread directory: {e}"))?;
         }
     }
-    // Clean up the per-thread lock entry after releasing the guard
     remove_lock_for_thread(&thread_id).await;
     Ok(())
 }
 
 /// Lists all messages for a given thread by reading and parsing its messages.jsonl file.
-/// Returns a vector of message JSON values.
 #[tauri::command]
 pub async fn list_messages<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     thread_id: String,
-) -> Result<Vec<serde_json::Value>, String> {
-    if should_use_sqlite() {
-        #[cfg(any(target_os = "android", target_os = "ios"))]
-        return db::db_list_messages(app_handle, &thread_id).await;
-    }
-
-    // Use file-based storage on desktop
-    // Acquire per-thread lock to prevent reading during writes
+) -> Result<Vec<MessageRecord>, String> {
     let lock = get_lock_for_thread(&thread_id).await;
     let _guard = lock.lock().await;
-    read_messages_from_file(app_handle, &thread_id)
+    let path = get_messages_path(app_handle.clone(), &thread_id);
+    let messages = tokio::task::spawn_blocking(move || read_messages_from_path(&path))
+        .await
+        .map_err(|e| format!("list_messages task error: {e}"))?;
+    drop(_guard);
+    drop(lock);
+    prune_unused_message_locks().await;
+    messages
 }
 
 /// Appends a new message to a thread's messages.jsonl file.
-/// Uses a per-thread async lock to prevent race conditions and ensure file consistency.
 #[tauri::command]
 pub async fn create_message<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
-    mut message: serde_json::Value,
-) -> Result<serde_json::Value, String> {
-    if should_use_sqlite() {
-        #[cfg(any(target_os = "android", target_os = "ios"))]
-        return db::db_create_message(app_handle, message).await;
+    mut message: MessageRecord,
+) -> Result<MessageRecord, String> {
+    if message.id.is_empty() {
+        message.id = Uuid::new_v4().to_string();
     }
+    message.validate()?;
 
-    // Use file-based storage on desktop
-    let thread_id = {
-        let id = message
-            .get("thread_id")
-            .and_then(|v| v.as_str())
-            .ok_or("Missing thread_id")?;
-        id.to_string()
-    };
+    let thread_id = message.thread_id.clone();
+    if thread_id.is_empty() {
+        return Err("Missing thread_id".to_string());
+    }
     let path = get_messages_path(app_handle.clone(), &thread_id);
 
-    if message.get("id").is_none() {
-        let uuid = Uuid::new_v4().to_string();
-        message["id"] = serde_json::Value::String(uuid);
-    }
-
-    // Acquire per-thread lock before writing
     {
         let lock = get_lock_for_thread(&thread_id).await;
         let _guard = lock.lock().await;
 
-        // Ensure directory exists right before file operations to handle race conditions
-        ensure_thread_dir_exists(app_handle.clone(), &thread_id)?;
-
-        let mut file: File = fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-            .map_err(|e| e.to_string())?;
-
         let data = serde_json::to_string(&message).map_err(|e| e.to_string())?;
-        writeln!(file, "{data}").map_err(|e| e.to_string())?;
-
-        // Explicitly flush to ensure data is written before returning
-        file.flush().map_err(|e| e.to_string())?;
+        let app_for_blocking = app_handle.clone();
+        let thread_id_owned = thread_id.clone();
+        task::spawn_blocking(move || -> Result<(), String> {
+            ensure_thread_dir_exists(app_for_blocking, &thread_id_owned)?;
+            let mut file = fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path)
+                .map_err(|e| e.to_string())?;
+            writeln!(file, "{data}").map_err(|e| e.to_string())?;
+            file.flush().map_err(|e| e.to_string())
+        })
+        .await
+        .map_err(|e| format!("create_message task error: {e}"))??;
     }
+
+    prune_unused_message_locks().await;
 
     Ok(message)
 }
 
 /// Modifies an existing message in a thread's messages.jsonl file.
-/// Uses a per-thread async lock to prevent race conditions and ensure file consistency.
-/// Rewrites the entire messages.jsonl file for the thread.
 #[tauri::command]
 pub async fn modify_message<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
-    message: serde_json::Value,
-) -> Result<serde_json::Value, String> {
-    if should_use_sqlite() {
-        #[cfg(any(target_os = "android", target_os = "ios"))]
-        return db::db_modify_message(app_handle, message).await;
+    message: MessageRecord,
+) -> Result<MessageRecord, String> {
+    let thread_id = message.thread_id.as_str();
+    if thread_id.is_empty() {
+        return Err("Missing thread_id".to_string());
     }
+    let message_id = message.id.as_str();
+    if message_id.is_empty() {
+        return Err("Missing message id".to_string());
+    }
+    message.validate()?;
 
-    // Use file-based storage on desktop
-    let thread_id = message
-        .get("thread_id")
-        .and_then(|v| v.as_str())
-        .ok_or("Missing thread_id")?;
-    let message_id = message
-        .get("id")
-        .and_then(|v| v.as_str())
-        .ok_or("Missing message id")?;
-
-    // Acquire per-thread lock before modifying
     {
         let lock = get_lock_for_thread(thread_id).await;
         let _guard = lock.lock().await;
 
-        let mut messages = read_messages_from_file(app_handle.clone(), thread_id)?;
-        if let Some(index) = messages
-            .iter()
-            .position(|m| m.get("id").and_then(|v| v.as_str()) == Some(message_id))
-        {
-            messages[index] = message.clone();
-
-            // Rewrite all messages
-            let path = get_messages_path(app_handle.clone(), thread_id);
-            write_messages_to_file(&messages, &path)?;
-        }
+        let app_for_blocking = app_handle.clone();
+        let thread_id_owned = thread_id.to_string();
+        let message_id_owned = message_id.to_string();
+        let message_clone = message.clone();
+        task::spawn_blocking(move || {
+            rewrite_messages_file(app_for_blocking, &thread_id_owned, |existing| {
+                if existing.id == message_id_owned {
+                    Some(message_clone.clone())
+                } else {
+                    Some(existing)
+                }
+            })
+        })
+        .await
+        .map_err(|e| format!("modify_message task error: {e}"))??;
     }
+    prune_unused_message_locks().await;
     Ok(message)
 }
 
 /// Deletes a message from a thread's messages.jsonl file by message ID.
-/// Rewrites the entire messages.jsonl file for the thread.
-/// Uses a per-thread async lock to prevent race conditions and ensure file consistency.
 #[tauri::command]
 pub async fn delete_message<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     thread_id: String,
     message_id: String,
 ) -> Result<(), String> {
-    if should_use_sqlite() {
-        #[cfg(any(target_os = "android", target_os = "ios"))]
-        return db::db_delete_message(app_handle, &thread_id, &message_id).await;
-    }
-
-    // Use file-based storage on desktop
-    // Acquire per-thread lock before modifying
     {
         let lock = get_lock_for_thread(&thread_id).await;
         let _guard = lock.lock().await;
 
-        let mut messages = read_messages_from_file(app_handle.clone(), &thread_id)?;
-        messages.retain(|m| m.get("id").and_then(|v| v.as_str()) != Some(message_id.as_str()));
-
-        // Rewrite remaining messages
-        let path = get_messages_path(app_handle.clone(), &thread_id);
-        write_messages_to_file(&messages, &path)?;
+        task::spawn_blocking(move || {
+            rewrite_messages_file(app_handle, &thread_id, |existing| {
+                if existing.id == message_id {
+                    None
+                } else {
+                    Some(existing)
+                }
+            })
+        })
+        .await
+        .map_err(|e| format!("delete_message task error: {e}"))??;
     }
+
+    prune_unused_message_locks().await;
 
     Ok(())
 }
 
 /// Retrieves the first assistant associated with a thread.
-/// Returns an error if the thread or assistant is not found.
 #[tauri::command]
 pub async fn get_thread_assistant<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     thread_id: String,
 ) -> Result<serde_json::Value, String> {
-    if should_use_sqlite() {
-        #[cfg(any(target_os = "android", target_os = "ios"))]
-        return db::db_get_thread_assistant(app_handle, &thread_id).await;
-    }
-
-    // Use file-based storage on desktop
     let path = get_thread_metadata_path(app_handle, &thread_id);
     if !path.exists() {
         return Err("Thread not found".to_string());
     }
-    let data = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    let thread: serde_json::Value = serde_json::from_str(&data).map_err(|e| e.to_string())?;
-    if let Some(assistants) = thread.get("assistants").and_then(|a| a.as_array()) {
-        if let Some(first) = assistants.first() {
+
+    let lock = get_lock_for_thread(&thread_id).await;
+    let _guard = lock.lock().await;
+
+    let result = task::spawn_blocking(move || -> Result<serde_json::Value, String> {
+        let data = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        let thread: ThreadRecord = serde_json::from_str(&data).map_err(|e| e.to_string())?;
+        if let Some(first) = thread.assistants.first() {
             Ok(first.clone())
         } else {
             Err("Assistant not found".to_string())
         }
-    } else {
-        Err("Assistant not found".to_string())
-    }
+    })
+    .await
+    .map_err(|e| format!("get_thread_assistant task error: {e}"))?;
+
+    drop(_guard);
+    drop(lock);
+    prune_unused_message_locks().await;
+
+    result
 }
 
 /// Adds a new assistant to a thread's metadata.
-/// Updates thread.json with the new assistant information.
 #[tauri::command]
 pub async fn create_thread_assistant<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     thread_id: String,
     assistant: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
-    if should_use_sqlite() {
-        #[cfg(any(target_os = "android", target_os = "ios"))]
-        return db::db_create_thread_assistant(app_handle, &thread_id, assistant).await;
-    }
-
-    // Use file-based storage on desktop
     let path = get_thread_metadata_path(app_handle.clone(), &thread_id);
     if !path.exists() {
         return Err("Thread not found".to_string());
     }
 
-    // Acquire per-thread lock before modifying
     let lock = get_lock_for_thread(&thread_id).await;
     let _guard = lock.lock().await;
 
-    let mut thread: serde_json::Value = {
-        let data = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-        serde_json::from_str(&data).map_err(|e| e.to_string())?
-    };
-    if let Some(assistants) = thread.get_mut("assistants").and_then(|a| a.as_array_mut()) {
-        assistants.push(assistant.clone());
-    } else {
-        thread["assistants"] = serde_json::Value::Array(vec![assistant.clone()]);
-    }
-    update_thread_metadata(app_handle, &thread_id, &thread)?;
+    let data = task::spawn_blocking(move || {
+        fs::read_to_string(&path).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("create_thread_assistant task error: {e}"))??;
+
+    let mut thread: ThreadRecord = serde_json::from_str(&data).map_err(|e| e.to_string())?;
+    thread.assistants.push(assistant.clone());
+
+    task::spawn_blocking(move || update_thread_metadata(app_handle, &thread_id, &thread))
+        .await
+        .map_err(|e| format!("create_thread_assistant task error: {e}"))??;
+
+    drop(_guard);
+    drop(lock);
+    prune_unused_message_locks().await;
     Ok(assistant)
 }
 
 /// Modifies an existing assistant's information in a thread's metadata.
-/// Updates thread.json with the modified assistant data.
 #[tauri::command]
 pub async fn modify_thread_assistant<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     thread_id: String,
     assistant: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
-    if should_use_sqlite() {
-        #[cfg(any(target_os = "android", target_os = "ios"))]
-        return db::db_modify_thread_assistant(app_handle, &thread_id, assistant).await;
-    }
-
-    // Use file-based storage on desktop
     let path = get_thread_metadata_path(app_handle.clone(), &thread_id);
     if !path.exists() {
         return Err("Thread not found".to_string());
     }
 
-    // Acquire per-thread lock before modifying
     let lock = get_lock_for_thread(&thread_id).await;
     let _guard = lock.lock().await;
 
-    let mut thread: serde_json::Value = {
-        let data = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-        serde_json::from_str(&data).map_err(|e| e.to_string())?
-    };
-    let assistant_id = assistant
+    let data = task::spawn_blocking(move || {
+        fs::read_to_string(&path).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("modify_thread_assistant task error: {e}"))??;
+
+    let mut thread: ThreadRecord = serde_json::from_str(&data).map_err(|e| e.to_string())?;
+    let assistant_id: String = assistant
         .get("id")
         .and_then(|v| v.as_str())
-        .ok_or("Missing id")?;
-    if let Some(assistants) = thread
-        .get_mut("assistants")
-        .and_then(|a: &mut serde_json::Value| a.as_array_mut())
+        .ok_or("Missing id")?
+        .to_string();
+    if let Some(index) = thread
+        .assistants
+        .iter()
+        .position(|a| a.get("id").and_then(|v| v.as_str()) == Some(assistant_id.as_str()))
     {
-        if let Some(index) = assistants
-            .iter()
-            .position(|a| a.get("id").and_then(|v| v.as_str()) == Some(assistant_id))
-        {
-            assistants[index] = assistant.clone();
-            update_thread_metadata(app_handle, &thread_id, &thread)?;
-        }
+        thread.assistants[index] = assistant.clone();
+        task::spawn_blocking(move || update_thread_metadata(app_handle, &thread_id, &thread))
+            .await
+            .map_err(|e| format!("modify_thread_assistant task error: {e}"))??;
     }
+    drop(_guard);
+    drop(lock);
+    prune_unused_message_locks().await;
     Ok(assistant)
 }

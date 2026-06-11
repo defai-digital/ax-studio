@@ -36,7 +36,7 @@ pub fn generate_nonce() -> String {
 pub fn get_timestamp() -> String {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards")
+        .unwrap_or_default()
         .as_secs()
         .to_string()
 }
@@ -52,7 +52,7 @@ pub fn generate_signature(
     let message = format!("{}:{}:{}", nonce_seed, timestamp, nonce);
 
     let mut mac =
-        HmacSha256::new_from_slice(secret_key.as_bytes()).expect("HMAC can take key of any size");
+        HmacSha256::new_from_slice(secret_key.as_bytes()).expect("HMAC accepts any key size");
     mac.update(message.as_bytes());
 
     hex::encode(mac.finalize().into_bytes())
@@ -111,6 +111,30 @@ mod tests {
         );
 
         // Signature should be 64 hex characters (SHA256)
+        assert_eq!(signature.len(), 64);
+    }
+
+    #[test]
+    fn test_signature_generation_is_deterministic() {
+        let sig_a = generate_signature("key", "seed", "1704067200", "nonce");
+        let sig_b = generate_signature("key", "seed", "1704067200", "nonce");
+        assert_eq!(sig_a, sig_b);
+        assert_eq!(sig_a.len(), 64);
+    }
+
+    #[test]
+    fn test_signature_differs_with_different_inputs() {
+        let sig_a = generate_signature("key", "seed", "1704067200", "nonce1");
+        let sig_b = generate_signature("key", "seed", "1704067200", "nonce2");
+        assert_ne!(sig_a, sig_b);
+    }
+
+    #[test]
+    fn test_generate_signature_accepts_empty_key() {
+        // RFC 2104: HMAC is defined for any key length including zero-length.
+        // generate_signature must not panic regardless of key content —
+        // the .expect() in the implementation is an infallible invariant.
+        let signature = generate_signature("", "seed", "1704067200", "nonce");
         assert_eq!(signature.len(), 64);
     }
 

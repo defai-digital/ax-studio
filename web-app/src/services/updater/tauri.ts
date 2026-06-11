@@ -1,40 +1,31 @@
 /**
  * Tauri Updater Service - Desktop implementation
  *
- * This service uses a custom update check with HMAC request signing:
- * 1. First tries primary endpoint (from tauri.conf.json) with signed request
- * 2. Falls back to other endpoints without signing if primary fails
- * 3. Uses Tauri's built-in updater for download/install (with signature verification)
+ * Two-phase update flow:
+ * 1. check() — asks the Rust backend to hit the primary endpoint with HMAC request signing,
+ *    falling back to unsigned fallback endpoints. One request, zero Tauri plugin involvement.
+ * 2. downloadAndInstallWithProgress() — lazily calls the Tauri plugin-updater check() to
+ *    obtain an installable Update object, then streams progress back to the caller.
+ *    The plugin request happens at install time only, not at notification time.
  */
 
 import { check, Update } from '@tauri-apps/plugin-updater'
 import { invoke } from '@tauri-apps/api/core'
 import { load } from '@tauri-apps/plugin-store'
-import type { UpdateInfo, UpdateProgressEvent } from './types'
-import { DefaultUpdaterService } from './default'
+import type { UpdateInfo, UpdateProgressEvent, UpdaterService } from './types'
 
-// Store key for nonce seed
 const STORE_NAME = 'updater.json'
 const NONCE_SEED_KEY = 'nonce_seed'
 
 // Cache nonce seed in memory to avoid repeated store reads
 let cachedNonceSeed: string | null = null
-// Promise to prevent race conditions when multiple calls happen simultaneously
+// Deduplicates concurrent getNonceSeed() calls
 let nonceSeedPromise: Promise<string> | null = null
 
-// Get or generate nonce seed for request signing (persisted in app data folder)
 async function getNonceSeed(): Promise<string> {
-  // Return cached value if available
-  if (cachedNonceSeed) {
-    return cachedNonceSeed
-  }
+  if (cachedNonceSeed) return cachedNonceSeed
+  if (nonceSeedPromise) return nonceSeedPromise
 
-  // Return existing promise if already loading
-  if (nonceSeedPromise) {
-    return nonceSeedPromise
-  }
-
-  // Create new promise and cache it
   nonceSeedPromise = (async () => {
     try {
       const store = await load(STORE_NAME, { autoSave: true, defaults: {} })
@@ -49,7 +40,6 @@ async function getNonceSeed(): Promise<string> {
       cachedNonceSeed = nonceSeed
       return nonceSeed
     } catch (error) {
-      // Fallback to random seed if store fails
       console.warn(
         'Failed to access store for nonce seed, using temporary seed:',
         error
@@ -58,7 +48,6 @@ async function getNonceSeed(): Promise<string> {
       cachedNonceSeed = tempSeed
       return tempSeed
     } finally {
-      // Clear promise after completion
       nonceSeedPromise = null
     }
   })()
@@ -66,52 +55,53 @@ async function getNonceSeed(): Promise<string> {
   return nonceSeedPromise
 }
 
-export class TauriUpdaterService extends DefaultUpdaterService {
+export class TauriUpdaterService implements UpdaterService {
+  private cachedInstallableUpdate: Update | null = null
+  private installableCheckPromise: Promise<Update | null> | null = null
+
   /**
-   * Check for updates using custom signed request for primary endpoint
-   * Falls back to standard Tauri updater if custom check fails
+   * Lazily fetch an installable Update via the Tauri plugin. Deduplicated so
+   * concurrent callers share the same in-flight request.
+   */
+  private async getInstallableUpdate(): Promise<Update> {
+    if (this.cachedInstallableUpdate) return this.cachedInstallableUpdate
+
+    if (!this.installableCheckPromise) {
+      this.installableCheckPromise = check()
+    }
+
+    const update = await this.installableCheckPromise
+    this.installableCheckPromise = null
+
+    if (!update) throw new Error('No update available')
+
+    this.cachedInstallableUpdate = update
+    return update
+  }
+
+  /**
+   * Check for updates via the signed custom endpoint (Rust backend).
+   * Makes a single HTTP request — no Tauri plugin-updater involvement here.
    */
   async check(): Promise<UpdateInfo | null> {
     try {
       const nonceSeed = await getNonceSeed()
-
-      // Try custom updater with request signing first
-      try {
-        const customUpdate = await invoke<{
-          version: string
-          notes?: string
-          pub_date?: string
-          url?: string
-          signature?: string
-        } | null>('check_for_app_updates', {
-          nonceSeed,
-        })
-
-        if (customUpdate) {
-          console.log('Update found via custom updater:', customUpdate.version)
-          return {
-            version: customUpdate.version,
-            date: customUpdate.pub_date,
-            body: customUpdate.notes,
-            signature: customUpdate.signature,
-          }
-        }
-      } catch (customError) {
-        console.warn(
-          'Custom updater check failed, falling back to standard Tauri updater:',
-          customError
-        )
-      }
-
-      // Fallback to standard Tauri updater (uses tauri.conf.json endpoints)
-      const update: Update | null = await check()
+      const update = await invoke<{
+        version: string
+        notes?: string
+        pub_date?: string
+        url?: string
+        signature?: string
+      } | null>('check_for_app_updates', { nonceSeed })
 
       if (!update) return null
 
+      console.info('Update found via custom updater:', update.version)
       return {
         version: update.version,
-        date: update.date,
-        body: update.body,
+        date: update.pub_date,
+        body: update.notes,
+        signature: update.signature,
       }
     } catch (error) {
       console.error('Error checking for updates in Tauri:', error)
@@ -119,38 +109,23 @@ export class TauriUpdaterService extends DefaultUpdaterService {
     }
   }
 
-  async installAndRestart(): Promise<void> {
-    try {
-      const update = await check()
-      if (update) {
-        await update.downloadAndInstall()
-        // Note: Auto-restart happens after installation
-      }
-    } catch (error) {
-      console.error('Error installing update in Tauri:', error)
-      throw error
-    }
-  }
-
   async downloadAndInstallWithProgress(
     progressCallback: (event: UpdateProgressEvent) => void
   ): Promise<void> {
     try {
-      const update = await check()
-      if (!update) {
-        throw new Error('No update available')
-      }
+      const update = await this.getInstallableUpdate()
 
-      // Use Tauri's downloadAndInstall with progress callback
       await update.downloadAndInstall((event) => {
         try {
-          // Forward the event to the callback
           progressCallback(event as UpdateProgressEvent)
         } catch (callbackError) {
           console.warn('Error in download progress callback:', callbackError)
         }
       })
+
+      this.cachedInstallableUpdate = null
     } catch (error) {
+      this.cachedInstallableUpdate = null
       console.error('Error downloading update with progress in Tauri:', error)
       throw error
     }

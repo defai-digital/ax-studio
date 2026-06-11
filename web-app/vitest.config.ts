@@ -10,7 +10,7 @@ export default defineConfig({
     globals: true,
     css: true,
     coverage: {
-      reporter: ['text', 'json', 'html', 'lcov'],
+      reporter: ['text', 'json', 'json-summary', 'html', 'lcov'],
       include: ['src/**/*.{ts,tsx}'],
       exclude: [
         'node_modules/',
@@ -22,7 +22,7 @@ export default defineConfig({
         'public/vendor/**',
       ],
       thresholds: {
-        // Global safety-net thresholds — per-module gates are in testing/module-thresholds.json
+        // Global safety-net thresholds — per-module gates are in scripts/testing/module-thresholds.json
         lines: 30,
         functions: 30,
         branches: 20,
@@ -41,9 +41,6 @@ export default defineConfig({
     IS_WEB_APP: JSON.stringify('false'),
     IS_MACOS: JSON.stringify('false'),
     IS_WINDOWS: JSON.stringify('false'),
-    IS_LINUX: JSON.stringify('false'),
-    IS_IOS: JSON.stringify('false'),
-    IS_ANDROID: JSON.stringify('false'),
     PLATFORM: JSON.stringify('web'),
     VERSION: JSON.stringify('test'),
     AUTO_UPDATER_DISABLED: JSON.stringify('false'),

@@ -1,13 +1,61 @@
 import { describe, it, test, expect, beforeEach } from 'vitest'
 import { EngineManager } from './EngineManager'
 import { AIEngine } from './AIEngine'
-import { InferenceEngine } from '../../../types'
 
-// @ts-ignore
-class MockAIEngine implements AIEngine {
-  provider: string
+class MockAIEngine extends AIEngine {
+  readonly provider: string
   constructor(provider: string) {
+    super('', provider, provider, true, 'mock engine', '1.0.0')
     this.provider = provider
+  }
+
+  onLoad(): void {}
+
+  onUnload(): void {}
+
+  async get(): Promise<undefined> {
+    return undefined
+  }
+
+  async list(): Promise<[]> {
+    return []
+  }
+
+  async load(): Promise<any> {
+    return {
+      pid: 1,
+      port: 8080,
+      model_id: 'mock-model',
+      model_path: '',
+      is_embedding: false,
+      api_key: '',
+    }
+  }
+
+  async unload(): Promise<{ success: boolean }> {
+    return { success: true }
+  }
+
+  async chat(): Promise<any> {
+    return {
+      id: 'mock-chat',
+      object: 'chat.completion',
+      created: Date.now(),
+      model: 'mock-model',
+      choices: [],
+    }
+  }
+
+  async delete(): Promise<void> {}
+
+  async update(): Promise<void> {}
+
+  async import(): Promise<void> {}
+
+  async abortImport(): Promise<void> {}
+
+  async getLoadedModels(): Promise<string[]> {
+    return []
   }
 }
 
@@ -20,66 +68,20 @@ describe('EngineManager', () => {
 
   test('should register an engine', () => {
     const engine = new MockAIEngine('testProvider')
-    // @ts-ignore
     engineManager.register(engine)
     expect(engineManager.engines.get('testProvider')).toBe(engine)
   })
 
   test('should retrieve a registered engine by provider', () => {
     const engine = new MockAIEngine('testProvider')
-    // @ts-ignore
     engineManager.register(engine)
-    // @ts-ignore
     const retrievedEngine = engineManager.get<MockAIEngine>('testProvider')
     expect(retrievedEngine).toBe(engine)
   })
 
   test('should return undefined for an unregistered provider', () => {
-    // @ts-ignore
     const retrievedEngine = engineManager.get<MockAIEngine>('nonExistentProvider')
     expect(retrievedEngine).toBeUndefined()
-  })
-
-  describe('cortex engine migration', () => {
-    test.skip('should map nitro to cortex engine', () => {
-      const cortexEngine = new MockAIEngine(InferenceEngine.cortex)
-      // @ts-ignore
-      engineManager.register(cortexEngine)
-
-      // @ts-ignore
-      const retrievedEngine = engineManager.get<MockAIEngine>(InferenceEngine.nitro)
-      expect(retrievedEngine).toBe(cortexEngine)
-    })
-
-    test.skip('should map cortex_llamacpp to cortex engine', () => {
-      const cortexEngine = new MockAIEngine(InferenceEngine.cortex)
-      // @ts-ignore
-      engineManager.register(cortexEngine)
-
-      // @ts-ignore
-      const retrievedEngine = engineManager.get<MockAIEngine>(InferenceEngine.cortex_llamacpp)
-      expect(retrievedEngine).toBe(cortexEngine)
-    })
-
-    test.skip('should map cortex_onnx to cortex engine', () => {
-      const cortexEngine = new MockAIEngine(InferenceEngine.cortex)
-      // @ts-ignore
-      engineManager.register(cortexEngine)
-
-      // @ts-ignore
-      const retrievedEngine = engineManager.get<MockAIEngine>(InferenceEngine.cortex_onnx)
-      expect(retrievedEngine).toBe(cortexEngine)
-    })
-
-    test.skip('should map cortex_tensorrtllm to cortex engine', () => {
-      const cortexEngine = new MockAIEngine(InferenceEngine.cortex)
-      // @ts-ignore
-      engineManager.register(cortexEngine)
-
-      // @ts-ignore
-      const retrievedEngine = engineManager.get<MockAIEngine>(InferenceEngine.cortex_tensorrtllm)
-      expect(retrievedEngine).toBe(cortexEngine)
-    })
   })
 
   describe('singleton instance', () => {

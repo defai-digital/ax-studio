@@ -3,16 +3,43 @@ use ax_studio_utils::{normalize_file_path, normalize_path};
 use std::path::PathBuf;
 use tauri::Runtime;
 
-pub fn resolve_path<R: Runtime>(app_handle: tauri::AppHandle<R>, path: &str) -> PathBuf {
+pub fn resolve_path<R: Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    path: &str,
+) -> Result<PathBuf, String> {
+    // Allow HTTP/HTTPS URLs to pass through unchanged. These are not local
+    // filesystem paths and shouldn't be subject to the path-traversal check
+    // that follows; otherwise model downloads from remote URLs are blocked.
+    if path.starts_with("http://") || path.starts_with("https://") {
+        let parsed = url::Url::parse(path).map_err(|e| format!("Invalid URL: {e}"))?;
+        if parsed.scheme() != "https" && parsed.scheme() != "http" {
+            return Err(format!(
+                "Only http/https URLs are allowed, got: {}",
+                parsed.scheme()
+            ));
+        }
+        match parsed.host() {
+            Some(url::Host::Ipv4(ip))
+                if ip.is_loopback() || ip.is_private() || ip.is_unspecified() =>
+            {
+                return Err(format!(
+                    "URLs pointing to internal networks are not allowed: {path}"
+                ));
+            }
+            Some(url::Host::Domain(d)) if d == "localhost" => {
+                return Err(
+                    "URLs pointing to localhost are not allowed in filesystem paths".to_string(),
+                );
+            }
+            _ => {}
+        }
+        return Ok(PathBuf::from(path));
+    }
+
     let app_data_folder = get_app_data_folder_path(app_handle.clone());
-    // The candidate path below is canonicalized when it exists (symlinks
-    // resolved, e.g. /var → /private/var on macOS) and lexically normalized
-    // when it doesn't, so the containment check must accept the app data
-    // folder in either form.
     let canonical_app_data = app_data_folder
         .canonicalize()
         .unwrap_or_else(|_| normalize_path(&app_data_folder));
-    let lexical_app_data = normalize_path(&app_data_folder);
     let path = if path.starts_with("file:/") || path.starts_with("file:\\") {
         let normalized = normalize_file_path(path);
         let relative_normalized = normalized
@@ -24,21 +51,30 @@ pub fn resolve_path<R: Runtime>(app_handle: tauri::AppHandle<R>, path: &str) -> 
         PathBuf::from(path)
     };
 
-    // Use normalize_path (resolves .. without requiring path to exist)
-    // then try canonicalize for symlink resolution if the path exists
-    let resolved = path
-        .canonicalize()
-        .unwrap_or_else(|_| normalize_path(&path));
+    // Prefer canonical paths when possible, but keep validation robust when path does not
+    // exist yet by normalizing parent components.
+    let resolved = path.canonicalize().unwrap_or_else(|_| {
+        if let Some(parent) = path.parent() {
+            if let Ok(canonical_parent) = parent.canonicalize() {
+                if let Some(file_name) = path.file_name() {
+                    return canonical_parent.join(file_name);
+                }
+            }
+        }
+        normalize_path(&path)
+    });
 
     // Security: ensure resolved path is within the app data folder
     // This check must be done after canonicalize to close symlink TOCTOU
-    if !resolved.starts_with(&canonical_app_data) && !resolved.starts_with(&lexical_app_data) {
-        log::warn!(
+    if !resolved.starts_with(&canonical_app_data) {
+        let message = format!(
             "Path traversal blocked: {} is outside app data folder {}",
             resolved.display(),
             canonical_app_data.display()
         );
-        return app_data_folder;
+        log::warn!("{message}");
+        return Err(message);
     }
-    resolved
+
+    Ok(resolved)
 }

@@ -9,9 +9,7 @@ use super::{
     helpers::{restart_active_mcp_servers, start_mcp_server},
 };
 use crate::core::{
-    app::commands::get_app_data_folder_path,
-    mcp::models::McpSettings,
-    state::{AppState, McpState},
+    app::commands::get_app_data_folder_path, mcp::models::McpSettings, state::AppState,
 };
 use crate::core::{
     mcp::models::ToolWithServer,
@@ -19,18 +17,109 @@ use crate::core::{
 };
 use std::{fs, sync::Arc, time::Duration};
 
-async fn tool_call_timeout(state: &State<'_, McpState>) -> Duration {
-    state.settings.lock().await.tool_call_timeout_duration()
+fn is_transport_error(err: &str) -> bool {
+    let lower = err.to_lowercase();
+    lower.contains("transport closed")
+        || lower.contains("broken pipe")
+        || lower.contains("connection reset")
+        || lower.contains("channel closed")
+        || (lower.contains("transport") && lower.contains("closed"))
+}
+
+async fn wait_for_server_service(
+    state: &State<'_, AppState>,
+    server_name: &str,
+    max_wait: Duration,
+) -> Option<Arc<RunningServiceEnum>> {
+    let started_at = std::time::Instant::now();
+    while started_at.elapsed() < max_wait {
+        {
+            let servers = state.mcp_servers.lock().await;
+            if let Some(service) = servers.get(server_name) {
+                return Some(service.clone());
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    None
+}
+
+async fn restart_server_now<R: Runtime>(
+    app: &AppHandle<R>,
+    state: &State<'_, AppState>,
+    server_name: &str,
+) -> Option<Arc<RunningServiceEnum>> {
+    let config = {
+        let active = state.mcp_active_servers.lock().await;
+        active.get(server_name).cloned()
+    };
+
+    let Some(config) = config else {
+        log::warn!("Cannot restart MCP server {server_name}: no config stored");
+        return None;
+    };
+
+    let removed = {
+        let mut servers = state.mcp_servers.lock().await;
+        servers.remove(server_name).is_some()
+    };
+
+    if !removed {
+        log::info!(
+            "MCP server {server_name} is already restarting; waiting for replacement service"
+        );
+        return wait_for_server_service(state, server_name, Duration::from_secs(5)).await;
+    }
+
+    log::info!("Transport closed for MCP server {server_name} — restarting immediately");
+    match start_mcp_server(
+        app.clone(),
+        state.mcp_servers.clone(),
+        server_name.to_string(),
+        config,
+    )
+    .await
+    {
+        Ok(_) => {
+            log::info!("MCP server {server_name} restarted successfully after transport error");
+            wait_for_server_service(state, server_name, Duration::from_secs(5)).await
+        }
+        Err(e) => {
+            log::error!("Failed to restart MCP server {server_name}: {e}");
+            None
+        }
+    }
+}
+
+fn is_valid_mcp_identifier(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.' | ':' | '/' | '@'))
+}
+
+fn validate_mcp_identifier(kind: &str, value: &str) -> Result<(), String> {
+    if is_valid_mcp_identifier(value) {
+        Ok(())
+    } else {
+        Err(format!("Invalid {kind}: {value}"))
+    }
+}
+
+async fn tool_call_timeout(state: &State<'_, AppState>) -> Duration {
+    state.mcp_settings.lock().await.tool_call_timeout_duration()
 }
 
 #[tauri::command]
 pub async fn activate_mcp_server<R: Runtime>(
     app: tauri::AppHandle<R>,
-    state: State<'_, McpState>,
+    state: State<'_, AppState>,
     name: String,
     config: Value,
 ) -> Result<(), String> {
-    let servers: SharedMcpServers = state.servers.clone();
+    validate_mcp_identifier("server name", &name)?;
+    let servers: SharedMcpServers = state.mcp_servers.clone();
 
     // Use the modified start_mcp_server that returns first attempt result
     start_mcp_server(app, servers, name, config).await
@@ -39,31 +128,32 @@ pub async fn activate_mcp_server<R: Runtime>(
 #[tauri::command]
 pub async fn deactivate_mcp_server<R: Runtime>(
     app: AppHandle<R>,
-    state: State<'_, McpState>,
+    state: State<'_, AppState>,
     name: String,
 ) -> Result<(), String> {
+    validate_mcp_identifier("server name", &name)?;
     log::info!("Deactivating MCP server: {name}");
 
     // First, mark server as manually deactivated
     // Remove from active servers list
     {
-        let mut active_servers = state.active_servers.lock().await;
+        let mut active_servers = state.mcp_active_servers.lock().await;
         active_servers.remove(&name);
         log::info!("Removed MCP server {name} from active servers list");
     }
 
-    // Clone the Arc reference first (without removing from map) so the server
-    // stays tracked if cancellation fails.
-    let servers = state.servers.clone();
+    // Remove from running servers map first so try_unwrap can succeed when
+    // no in-flight operations hold a reference.
     let service = {
-        let servers_map = servers.lock().await;
+        let mut servers_map = state.mcp_servers.lock().await;
         servers_map
-            .get(&name)
-            .cloned()
+            .remove(&name)
             .ok_or_else(|| format!("Server {name} not found"))?
     };
 
-    // Attempt cancellation while server is still in the map
+    // Attempt explicit cancellation — succeeds when no in-flight refs exist.
+    // If other refs exist (e.g., an active tool call), the service stops via
+    // Drop once those operations complete.
     match Arc::try_unwrap(service) {
         Ok(RunningServiceEnum::NoInit(service)) => {
             log::info!("Stopping server {name}...");
@@ -73,19 +163,16 @@ pub async fn deactivate_mcp_server<R: Runtime>(
             log::info!("Stopping server {name} with initialization...");
             service.cancel().await.map_err(|e| e.to_string())?;
         }
-        Err(_arc) => {
-            log::warn!("Server {name} still has active references, marking for removal");
+        Err(arc) => {
+            log::info!(
+                "Server {name} has active references; will stop when in-flight operations complete"
+            );
+            drop(arc);
         }
     }
 
-    // Only remove from map after cancellation attempt succeeds
     {
-        let mut servers_map = servers.lock().await;
-        servers_map.remove(&name);
-    }
-
-    {
-        let mut pids = state.server_pids.lock().await;
+        let mut pids = state.mcp_server_pids.lock().await;
         pids.remove(&name);
     }
     log::info!("Server {name} stopped successfully and marked as deactivated.");
@@ -106,11 +193,11 @@ pub async fn deactivate_mcp_server<R: Runtime>(
 #[tauri::command]
 pub async fn restart_mcp_servers<R: Runtime>(
     app: AppHandle<R>,
-    state: State<'_, McpState>,
+    state: State<'_, AppState>,
 ) -> Result<(), String> {
     use super::helpers::{stop_mcp_servers_with_context, ShutdownContext};
 
-    let servers = state.servers.clone();
+    let servers = state.mcp_servers.clone();
 
     stop_mcp_servers_with_context(&app, &state, ShutdownContext::ManualRestart).await?;
 
@@ -126,9 +213,9 @@ pub async fn restart_mcp_servers<R: Runtime>(
 #[tauri::command]
 pub async fn get_connected_servers(
     _app: AppHandle<impl Runtime>,
-    state: State<'_, McpState>,
+    state: State<'_, AppState>,
 ) -> Result<Vec<String>, String> {
-    let servers = state.servers.clone();
+    let servers = state.mcp_servers.clone();
     let servers_map = servers.lock().await;
     Ok(servers_map.keys().cloned().collect())
 }
@@ -149,13 +236,16 @@ pub async fn get_connected_servers(
 /// 5. Combines all tools into a single vector
 /// 6. Returns the combined list of all available tools with server information
 #[tauri::command]
-pub async fn get_tools(state: State<'_, McpState>) -> Result<Vec<ToolWithServer>, String> {
+pub async fn get_tools<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, AppState>,
+) -> Result<Vec<ToolWithServer>, String> {
     let timeout_duration = tool_call_timeout(&state).await;
     let mut all_tools: Vec<ToolWithServer> = Vec::new();
 
     // Collect server refs under lock, then drop lock before querying
     let server_refs: Vec<(String, Arc<crate::core::state::RunningServiceEnum>)> = {
-        let servers = state.servers.lock().await;
+        let servers = state.mcp_servers.lock().await;
         servers
             .iter()
             .map(|(name, svc)| (name.clone(), svc.clone()))
@@ -168,8 +258,41 @@ pub async fn get_tools(state: State<'_, McpState>) -> Result<Vec<ToolWithServer>
         let tools = match timeout(timeout_duration, tools_future).await {
             Ok(Ok(tools)) => tools,
             Ok(Err(e)) => {
-                log::warn!("MCP server {} failed to list tools: {}", server_name, e);
-                continue;
+                let err_str = e.to_string();
+                log::warn!(
+                    "MCP server {} failed to list tools: {}",
+                    server_name,
+                    err_str
+                );
+                if is_transport_error(&err_str) {
+                    if let Some(restarted_service) =
+                        restart_server_now(&app, &state, server_name).await
+                    {
+                        match timeout(timeout_duration, restarted_service.list_all_tools()).await {
+                            Ok(Ok(tools)) => tools,
+                            Ok(Err(retry_error)) => {
+                                log::warn!(
+                                    "MCP server {} failed to list tools after restart: {}",
+                                    server_name,
+                                    retry_error
+                                );
+                                continue;
+                            }
+                            Err(_) => {
+                                log::warn!(
+                                    "Listing tools for {} timed out after restart after {} seconds",
+                                    server_name,
+                                    timeout_duration.as_secs()
+                                );
+                                continue;
+                            }
+                        }
+                    } else {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
             }
             Err(_) => {
                 log::warn!(
@@ -213,26 +336,35 @@ pub async fn get_tools(state: State<'_, McpState>) -> Result<Vec<ToolWithServer>
 /// 5. Supports cancellation via cancellation_token
 /// 6. Returns error if no server has the requested tool or if specified server not found
 #[tauri::command]
-pub async fn call_tool(
-    state: State<'_, McpState>,
-    app_state: State<'_, AppState>,
+pub async fn call_tool<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, AppState>,
     tool_name: String,
     server_name: Option<String>,
     arguments: Option<Map<String, Value>>,
     cancellation_token: Option<String>,
 ) -> Result<CallToolResult, String> {
-    let timeout_duration = tool_call_timeout(&state).await;
-    // Set up cancellation if token is provided
-    let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
-
-    if let Some(token) = &cancellation_token {
-        let mut cancellations = app_state.tool_call_cancellations.lock().await;
-        cancellations.insert(token.clone(), cancel_tx);
+    validate_mcp_identifier("tool name", &tool_name)?;
+    if let Some(server_name) = server_name.as_deref() {
+        validate_mcp_identifier("server name", server_name)?;
     }
+    if let Some(token) = cancellation_token.as_deref() {
+        validate_mcp_identifier("cancellation token", token)?;
+    }
+    let timeout_duration = tool_call_timeout(&state).await;
+    // Set up cancellation only when requested so unused senders do not linger.
+    let cancel_rx = if let Some(token) = &cancellation_token {
+        let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
+        let mut cancellations = state.tool_call_cancellations.lock().await;
+        cancellations.insert(token.clone(), cancel_tx);
+        Some(cancel_rx)
+    } else {
+        None
+    };
 
     // Phase 1: Collect Arc refs under lock, then search without lock
     let (server_refs, server_not_found) = {
-        let servers = state.servers.lock().await;
+        let servers = state.mcp_servers.lock().await;
 
         let refs: Vec<(String, Arc<crate::core::state::RunningServiceEnum>)> =
             if let Some(ref server) = server_name {
@@ -255,38 +387,85 @@ pub async fn call_tool(
 
     if server_not_found {
         if let Some(ref server) = server_name {
-            // Clean up cancellation token before early return
-            if let Some(token) = &cancellation_token {
-                let mut cancellations = app_state.tool_call_cancellations.lock().await;
-                cancellations.remove(token);
-            }
+            remove_tool_cancellation_token(&state, cancellation_token.as_ref()).await;
             return Err(format!("Server '{server}' not found"));
         }
     }
 
-    // Search for tool without holding lock
-    let mut target_service = None;
-    for (srv_name, service) in server_refs.iter() {
-        let tools = match timeout(timeout_duration, service.list_all_tools()).await {
-            Ok(Ok(tools)) => tools,
-            _ => continue,
-        };
+    // If the caller names a server, call it directly. Listing tools first is
+    // fragile for stdio MCP servers because a stale transport can fail during
+    // discovery even when the requested tool name is already known by the UI.
+    let mut target_service = server_name
+        .as_ref()
+        .and_then(|_| server_refs.first().map(|(_, service)| service.clone()));
+    let mut target_server_name = server_name.clone();
 
-        if tools.iter().any(|t| t.name == tool_name) {
-            log::debug!("Found tool {tool_name} in server {srv_name}");
-            target_service = Some(service.clone());
-            break;
+    if target_service.is_none() {
+        for (srv_name, service) in server_refs.iter() {
+            let tools = match timeout(timeout_duration, service.list_all_tools()).await {
+                Ok(Ok(tools)) => tools,
+                Ok(Err(e)) => {
+                    let err_str = e.to_string();
+                    log::warn!("MCP server {srv_name} failed to list tools: {err_str}");
+                    if is_transport_error(&err_str) {
+                        if let Some(restarted_service) =
+                            restart_server_now(&app, &state, srv_name).await
+                        {
+                            let retry_tools = match timeout(
+                                timeout_duration,
+                                restarted_service.list_all_tools(),
+                            )
+                            .await
+                            {
+                                Ok(Ok(tools)) => tools,
+                                Ok(Err(retry_error)) => {
+                                    log::warn!(
+                                            "MCP server {srv_name} failed to list tools after restart: {retry_error}"
+                                        );
+                                    continue;
+                                }
+                                Err(_) => {
+                                    log::warn!(
+                                            "Listing tools for {srv_name} timed out after restart after {} seconds",
+                                            timeout_duration.as_secs()
+                                        );
+                                    continue;
+                                }
+                            };
+
+                            if retry_tools.iter().any(|t| t.name == tool_name) {
+                                log::debug!(
+                                    "Found tool {tool_name} in restarted server {srv_name}"
+                                );
+                                target_service = Some(restarted_service);
+                                break;
+                            }
+                        }
+                    }
+                    continue;
+                }
+                Err(_) => {
+                    log::warn!(
+                        "Listing tools for {srv_name} timed out after {} seconds",
+                        timeout_duration.as_secs()
+                    );
+                    continue;
+                }
+            };
+
+            if tools.iter().any(|t| t.name == tool_name) {
+                log::debug!("Found tool {tool_name} in server {srv_name}");
+                target_service = Some(service.clone());
+                target_server_name = Some(srv_name.clone());
+                break;
+            }
         }
     }
 
     let service = match target_service {
         Some(s) => s,
         None => {
-            // Clean up cancellation token before early return
-            if let Some(token) = &cancellation_token {
-                let mut cancellations = app_state.tool_call_cancellations.lock().await;
-                cancellations.remove(token);
-            }
+            remove_tool_cancellation_token(&state, cancellation_token.as_ref()).await;
             return Err(format!("Tool {tool_name} not found"));
         }
     };
@@ -294,10 +473,10 @@ pub async fn call_tool(
     // Phase 2: Call the tool without holding the servers lock
     let tool_call = service.call_tool(CallToolRequestParam {
         name: tool_name.clone().into(),
-        arguments,
+        arguments: arguments.clone(),
     });
 
-    let result = if cancellation_token.is_some() {
+    let mut result = if let Some(cancel_rx) = cancel_rx {
         tokio::select! {
             result = timeout(timeout_duration, tool_call) => {
                 match result {
@@ -322,11 +501,33 @@ pub async fn call_tool(
         }
     };
 
-    // Clean up cancellation token
-    if let Some(token) = &cancellation_token {
-        let mut cancellations = app_state.tool_call_cancellations.lock().await;
-        cancellations.remove(token);
+    if result
+        .as_ref()
+        .is_err_and(|error| is_transport_error(error))
+    {
+        if let Some(target_server_name) = target_server_name.as_deref() {
+            if let Some(restarted_service) =
+                restart_server_now(&app, &state, target_server_name).await
+            {
+                log::info!(
+                    "Retrying MCP tool call '{tool_name}' on restarted server {target_server_name}"
+                );
+                let retry_call = restarted_service.call_tool(CallToolRequestParam {
+                    name: tool_name.clone().into(),
+                    arguments,
+                });
+                result = match timeout(timeout_duration, retry_call).await {
+                    Ok(call_result) => call_result.map_err(|e| e.to_string()),
+                    Err(_) => Err(format!(
+                        "Tool call '{tool_name}' timed out after restart after {} seconds",
+                        timeout_duration.as_secs()
+                    )),
+                };
+            }
+        }
     }
+
+    remove_tool_cancellation_token(&state, cancellation_token.as_ref()).await;
 
     result
 }
@@ -341,10 +542,11 @@ pub async fn call_tool(
 /// * `Result<(), String>` - Success if token found and cancelled, error otherwise
 #[tauri::command]
 pub async fn cancel_tool_call(
-    app_state: State<'_, AppState>,
+    state: State<'_, AppState>,
     cancellation_token: String,
 ) -> Result<(), String> {
-    let mut cancellations = app_state.tool_call_cancellations.lock().await;
+    validate_mcp_identifier("cancellation token", &cancellation_token)?;
+    let mut cancellations = state.tool_call_cancellations.lock().await;
 
     if let Some(cancel_tx) = cancellations.remove(&cancellation_token) {
         // Send cancellation signal - ignore if receiver is already dropped
@@ -356,10 +558,12 @@ pub async fn cancel_tool_call(
     }
 }
 
-fn parse_mcp_settings(value: Option<&Value>) -> McpSettings {
-    value
-        .and_then(|v| serde_json::from_value::<McpSettings>(v.clone()).ok())
-        .unwrap_or_default()
+fn parse_mcp_settings(value: Option<&Value>) -> Result<McpSettings, String> {
+    match value {
+        Some(v) => serde_json::from_value::<McpSettings>(v.clone())
+            .map_err(|e| format!("Invalid MCP settings payload: {e}")),
+        None => Ok(McpSettings::default()),
+    }
 }
 
 #[tauri::command]
@@ -367,22 +571,38 @@ pub async fn get_mcp_configs<R: Runtime>(app: AppHandle<R>) -> Result<String, St
     let mut path = get_app_data_folder_path(app.clone());
     path.push("mcp_config.json");
 
-    // Create default empty config if file doesn't exist
-    if !path.exists() {
-        log::info!("mcp_config.json not found, creating default empty config");
-        fs::write(&path, DEFAULT_MCP_CONFIG)
-            .map_err(|e| format!("Failed to create default MCP config: {e}"))?;
-    }
-
-    let config_string = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    // Create default empty config if file doesn't exist, then read it
+    let path_for_io = path.clone();
+    let config_string = tokio::task::spawn_blocking(move || -> Result<String, String> {
+        if !path_for_io.exists() {
+            log::info!("mcp_config.json not found, creating default empty config");
+            fs::write(&path_for_io, DEFAULT_MCP_CONFIG)
+                .map_err(|e| format!("Failed to create default MCP config: {e}"))?;
+        }
+        fs::read_to_string(&path_for_io).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("get_mcp_configs read task error: {e}"))??;
 
     let mut config_value: Value = if config_string.trim().is_empty() {
         json!({})
     } else {
-        serde_json::from_str(&config_string).unwrap_or_else(|error| {
-            log::error!("Failed to parse existing MCP config, regenerating defaults: {error}");
-            json!({})
-        })
+        match serde_json::from_str(&config_string) {
+            Ok(v) => v,
+            Err(error) => {
+                let rename_src = path.clone();
+                let backup_path = path.with_extension("json.corrupt");
+                let backup_display = backup_path.display().to_string();
+                if let Err(e) =
+                    tokio::task::spawn_blocking(move || std::fs::rename(&rename_src, &backup_path))
+                        .await
+                {
+                    log::error!("Failed to quarantine corrupt MCP config: {e}");
+                }
+                log::error!("MCP config corrupted, quarantined to {backup_display}: {error}");
+                json!({})
+            }
+        }
     };
 
     if !config_value.is_object() {
@@ -394,7 +614,7 @@ pub async fn get_mcp_configs<R: Runtime>(app: AppHandle<R>) -> Result<String, St
         .as_object_mut()
         .ok_or("MCP config must be a JSON object")?;
 
-    let settings = parse_mcp_settings(config_object.get("mcpSettings"));
+    let settings = parse_mcp_settings(config_object.get("mcpSettings"))?;
     if !config_object.contains_key("mcpSettings") {
         config_object.insert(
             "mcpSettings".to_string(),
@@ -415,13 +635,7 @@ pub async fn get_mcp_configs<R: Runtime>(app: AppHandle<R>) -> Result<String, St
         .ok_or("mcpServers is not an object")?;
 
     // Remove deprecated MCP servers if present (features removed)
-    for key in &[
-        "Ax-Studio Browser MCP",
-        "browsermcp",
-        "fetch",
-        "serper",
-        "integration-github",
-    ] {
+    for key in &["Ax-Studio Browser MCP", "browsermcp", "fetch", "serper"] {
         if mcp_servers.remove(*key).is_some() {
             mutated = true;
         }
@@ -429,18 +643,21 @@ pub async fn get_mcp_configs<R: Runtime>(app: AppHandle<R>) -> Result<String, St
 
     // Persist any mutations back to disk
     if mutated {
-        fs::write(
-            &path,
-            serde_json::to_string_pretty(&config_value)
-                .map_err(|e| format!("Failed to serialize MCP config: {e}"))?,
-        )
-        .map_err(|e| format!("Failed to write MCP config: {e}"))?;
+        let serialized = serde_json::to_string_pretty(&config_value)
+            .map_err(|e| format!("Failed to serialize MCP config: {e}"))?;
+        let path_for_write = path.clone();
+        tokio::task::spawn_blocking(move || {
+            fs::write(&path_for_write, serialized)
+                .map_err(|e| format!("Failed to write MCP config: {e}"))
+        })
+        .await
+        .map_err(|e| format!("get_mcp_configs write task error: {e}"))??;
     }
 
     // Update in-memory state with latest settings
     {
-        let mcp_state = app.state::<McpState>();
-        let mut settings_guard = mcp_state.settings.lock().await;
+        let state = app.state::<AppState>();
+        let mut settings_guard = state.mcp_settings.lock().await;
         *settings_guard = settings.clone();
     }
 
@@ -467,7 +684,7 @@ pub async fn save_mcp_configs<R: Runtime>(
     let config_object = config_value
         .as_object_mut()
         .ok_or("MCP config must be a JSON object")?;
-    let settings = parse_mcp_settings(config_object.get("mcpSettings"));
+    let settings = parse_mcp_settings(config_object.get("mcpSettings"))?;
 
     if !config_object.contains_key("mcpSettings") {
         config_object.insert(
@@ -481,18 +698,26 @@ pub async fn save_mcp_configs<R: Runtime>(
         config_object.insert("mcpServers".to_string(), json!({}));
     }
 
-    fs::write(
-        &path,
-        serde_json::to_string_pretty(&config_value)
-            .map_err(|e| format!("Failed to serialize MCP config: {e}"))?,
-    )
-    .map_err(|e| e.to_string())?;
+    let serialized = serde_json::to_string_pretty(&config_value)
+        .map_err(|e| format!("Failed to serialize MCP config: {e}"))?;
+    tokio::task::spawn_blocking(move || fs::write(&path, serialized).map_err(|e| e.to_string()))
+        .await
+        .map_err(|e| format!("save_mcp_configs write task error: {e}"))??;
 
     {
-        let mcp_state = app.state::<McpState>();
-        let mut settings_guard = mcp_state.settings.lock().await;
+        let state = app.state::<AppState>();
+        let mut settings_guard = state.mcp_settings.lock().await;
         *settings_guard = settings;
     }
 
     Ok(())
+}
+async fn remove_tool_cancellation_token(
+    state: &State<'_, AppState>,
+    cancellation_token: Option<&String>,
+) {
+    if let Some(token) = cancellation_token {
+        let mut cancellations = state.tool_call_cancellations.lock().await;
+        cancellations.remove(token);
+    }
 }

@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::core::server::proxy;
+    use crate::core::server::{cors, proxy};
 
     #[test]
     fn test_get_destination_path_basic() {
@@ -34,27 +34,19 @@ mod tests {
 
     #[test]
     fn test_messages_in_cors_whitelist() {
-        let whitelisted_paths = ["/", "/openapi.json", "/favicon.ico", "/messages"];
+        let whitelisted_paths = ["/favicon.ico", "/messages"];
         assert!(whitelisted_paths.contains(&"/messages"));
     }
 
     #[test]
     fn test_messages_in_main_whitelist() {
-        let whitelisted_paths = [
-            "/",
-            "/openapi.json",
-            "/favicon.ico",
-            "/docs/swagger-ui.css",
-            "/docs/swagger-ui-bundle.js",
-            "/docs/swagger-ui-standalone-preset.js",
-            "/messages",
-        ];
+        let whitelisted_paths = ["/favicon.ico", "/messages"];
         assert!(whitelisted_paths.contains(&"/messages"));
     }
 
     #[test]
     fn test_messages_subpath_not_in_exact_whitelist() {
-        let whitelisted_paths = ["/", "/openapi.json", "/favicon.ico", "/messages"];
+        let whitelisted_paths = ["/favicon.ico", "/messages"];
         // Only exact match
         assert!(!whitelisted_paths.contains(&"/messages/threads"));
         assert!(!whitelisted_paths.contains(&"/messages/api"));
@@ -68,13 +60,11 @@ mod tests {
             trusted_hosts: vec![vec!["localhost".to_string()]],
             cors_enabled: false,
             host: "localhost".to_string(),
-            port: 1337,
         };
         assert_eq!(config.prefix, "/v1");
         assert_eq!(config.proxy_api_key, "test-key");
         assert_eq!(config.trusted_hosts.len(), 1);
         assert_eq!(config.host, "localhost");
-        assert_eq!(config.port, 1337);
     }
 
     #[test]
@@ -85,18 +75,16 @@ mod tests {
             trusted_hosts: vec![],
             cors_enabled: false,
             host: "127.0.0.1".to_string(),
-            port: 8080,
         };
         assert_eq!(config.prefix, "");
         assert_eq!(config.proxy_api_key, "");
         assert_eq!(config.trusted_hosts.len(), 0);
         assert_eq!(config.host, "127.0.0.1");
-        assert_eq!(config.port, 8080);
     }
 
     #[test]
     fn test_allowed_methods() {
-        let allowed_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"];
+        let allowed_methods = cors::CORS_ALLOWED_METHODS;
         assert!(allowed_methods.contains(&"POST"));
         assert!(allowed_methods.contains(&"GET"));
         assert!(allowed_methods.contains(&"OPTIONS"));
@@ -104,18 +92,11 @@ mod tests {
 
     #[test]
     fn test_allowed_headers() {
-        let allowed_headers = [
-            "accept",
-            "authorization",
-            "content-type",
-            "host",
-            "origin",
-            "user-agent",
-            "x-api-key",
-        ];
+        let allowed_headers = cors::CORS_RESPONSE_ALLOWED_HEADERS;
         assert!(allowed_headers.contains(&"authorization"));
         assert!(allowed_headers.contains(&"content-type"));
         assert!(allowed_headers.contains(&"x-api-key"));
+        assert!(allowed_headers.contains(&"x-ax-request-role"));
     }
 
     // Tests for X-Api-Key header authentication support
@@ -265,34 +246,8 @@ mod tests {
     #[test]
     fn test_x_api_key_in_cors_allowed_headers() {
         // Verify x-api-key is in the CORS allowed headers list used by the proxy
-        let allowed_headers = [
-            "accept",
-            "accept-language",
-            "authorization",
-            "cache-control",
-            "connection",
-            "content-type",
-            "dnt",
-            "host",
-            "if-modified-since",
-            "keep-alive",
-            "origin",
-            "user-agent",
-            "x-api-key",
-            "x-csrf-token",
-            "x-forwarded-for",
-            "x-forwarded-host",
-            "x-forwarded-proto",
-            "x-requested-with",
-            "x-stainless-arch",
-            "x-stainless-lang",
-            "x-stainless-os",
-            "x-stainless-package-version",
-            "x-stainless-retry-count",
-            "x-stainless-runtime",
-            "x-stainless-runtime-version",
-            "x-stainless-timeout",
-        ];
+        let allowed_headers = cors::CORS_PREFLIGHT_ALLOWED_HEADERS;
         assert!(allowed_headers.contains(&"x-api-key"));
+        assert!(allowed_headers.contains(&"x-ax-request-role"));
     }
 }

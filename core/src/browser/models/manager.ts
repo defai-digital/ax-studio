@@ -6,10 +6,15 @@ import { events } from '../events'
  */
 export class ModelManager {
   public models = new Map<string, Model>()
+  private static cachedInstance: ModelManager | undefined
+  private updateEventScheduled = false
 
   constructor() {
-    if (window) {
-      window.core.modelManager = this
+    if (typeof window !== 'undefined') {
+      if (!window.core?.modelManager) {
+        window.core ??= {}
+        window.core.modelManager = this
+      }
     }
   }
 
@@ -19,14 +24,31 @@ export class ModelManager {
    */
   register<T extends Model>(model: T) {
     if (this.models.has(model.id)) {
-      this.models.set(model.id, {
-        ...model,
-        ...this.models.get(model.id),
-      })
+      const existing = this.models.get(model.id)!
+      const merged = { ...existing }
+      for (const [key, value] of Object.entries(model)) {
+        if (value !== undefined) {
+          (merged as Record<string, unknown>)[key] = value
+        }
+      }
+      this.models.set(model.id, merged as Model)
     } else {
       this.models.set(model.id, model)
     }
-    events.emit(ModelEvent.OnModelsUpdate, {})
+    this.scheduleModelsUpdate()
+  }
+
+  private scheduleModelsUpdate() {
+    if (this.updateEventScheduled) return
+    this.updateEventScheduled = true
+    queueMicrotask(() => {
+      this.updateEventScheduled = false
+      try {
+        events.emit(ModelEvent.OnModelsUpdate, {})
+      } catch (error) {
+        console.error('[ModelManager] Failed to emit OnModelsUpdate:', error)
+      }
+    })
   }
 
   /**
@@ -38,13 +60,22 @@ export class ModelManager {
     return this.models.get(id) as T | undefined
   }
 
-  
   /**
    * Shared instance of ExtensionManager.
    */
   static instance() {
-    if (!window.core.modelManager)
-      window.core.modelManager = new ModelManager()
-    return window.core.modelManager as ModelManager
+    const windowManager =
+      typeof window !== 'undefined' ? window.core?.modelManager : undefined
+
+    if (windowManager) {
+      this.cachedInstance = windowManager as ModelManager
+      return windowManager as ModelManager
+    }
+
+    if (!this.cachedInstance) {
+      this.cachedInstance = new ModelManager()
+    }
+
+    return this.cachedInstance
   }
 }

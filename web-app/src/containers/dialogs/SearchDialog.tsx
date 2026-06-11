@@ -21,11 +21,16 @@ import {
   Blocks,
 } from 'lucide-react'
 import Fuse from 'fuse.js'
-import { useThreads } from '@/features/threads/hooks/useThreads'
-import { useProjectDialog } from '@/hooks/useProjectDialog'
+import { useThreads } from '@/hooks/threads/useThreads'
+import { useProjectDialog } from '@/hooks/ui/useProjectDialog'
 import { localStorageKey } from '@/constants/localStorage'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { cn } from '@/lib/utils'
+import {
+  safeStorageGetItem,
+  safeStorageRemoveItem,
+  safeStorageSetItem,
+} from '@/lib/storage/storage'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import { TEMPORARY_CHAT_ID } from '@/constants/chat'
 
@@ -214,11 +219,18 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
   const recentSearches = useMemo(() => {
     if (!open) return []
 
-    const stored = localStorage.getItem(localStorageKey.recentSearches)
+    const stored = safeStorageGetItem(
+      localStorage,
+      localStorageKey.recentSearches,
+      'SearchDialog'
+    )
     if (!stored) return []
 
     try {
-      const threadIds = JSON.parse(stored) as string[]
+      const parsed = JSON.parse(stored)
+      const threadIds = Array.isArray(parsed)
+        ? parsed.filter((id): id is string => typeof id === 'string')
+        : []
       return threadIds
         .map((id) => threads[id])
         .filter((thread): thread is Thread => thread !== undefined)
@@ -232,17 +244,28 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
   const handleClearRecent = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    localStorage.removeItem(localStorageKey.recentSearches)
+    safeStorageRemoveItem(
+      localStorage,
+      localStorageKey.recentSearches,
+      'SearchDialog'
+    )
     setRecentVersion((v) => v + 1)
   }
 
   const handleSelectThread = (threadId: string) => {
-    const stored = localStorage.getItem(localStorageKey.recentSearches)
+    const stored = safeStorageGetItem(
+      localStorage,
+      localStorageKey.recentSearches,
+      'SearchDialog'
+    )
     let threadIds: string[] = []
 
     if (stored) {
       try {
-        threadIds = JSON.parse(stored) as string[]
+        const parsed = JSON.parse(stored)
+        threadIds = Array.isArray(parsed)
+          ? parsed.filter((id): id is string => typeof id === 'string')
+          : []
       } catch {
         threadIds = []
       }
@@ -252,9 +275,11 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
     threadIds.unshift(threadId)
     threadIds = threadIds.slice(0, MAX_RECENT_SEARCHES)
 
-    localStorage.setItem(
+    safeStorageSetItem(
+      localStorage,
       localStorageKey.recentSearches,
       JSON.stringify(threadIds),
+      'SearchDialog'
     )
 
     handleClose()

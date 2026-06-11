@@ -1,12 +1,11 @@
 {
   "name": "@ax-studio/llamacpp-extension",
   "productName": "llama.cpp Inference Engine",
-  "version": "1.0.0",
+  "version": "1.0.4",
   "description": "This extension enables llama.cpp local inference for Ax-Studio",
   "main": "dist/index.js",
-  "module": "dist/module.js",
   "engine": "llamacpp",
-  "author": "DEFAI Private Limited <enquiry@defai.digital>",
+  "author": "Ax-Studio <service@axstudio.ai>",
   "license": "Apache-2.0",
   "homepage": "https://github.com/defai-digital/ax-studio",
   "repository": {
@@ -16,25 +15,22 @@
   },
   "scripts": {
     "build": "rolldown -c rolldown.config.mjs",
-    "build:publish": "rimraf *.tgz --glob || true && yarn build && npm pack && cpx *.tgz ../../pre-install",
+    "build:publish": "rimraf *.tgz --glob || true && yarn build && npm pack && cp *.tgz ../../pre-install",
     "test": "vitest",
     "test:run": "vitest run"
   },
   "devDependencies": {
-    "cpx": "1.5.0",
-    "rimraf": "3.0.2",
+    "rimraf": "6.0.1",
     "rolldown": "1.0.0-beta.1",
     "typescript": "5.9.2",
-    "vitest": "3.2.6"
+    "vitest": "3.2.4"
   },
   "dependencies": {
     "@ax-studio/core": "../../core/package.tgz",
     "@ax-studio/tauri-plugin-llamacpp-api": "link:../../src-tauri/plugins/tauri-plugin-llamacpp",
     "@tauri-apps/api": "2.8.0",
     "@tauri-apps/plugin-http": "2.5.0",
-    "@tauri-apps/plugin-log": "^2.6.0",
-    "fetch-retry": "^5.0.6",
-    "ulidx": "2.4.1"
+    "@tauri-apps/plugin-log": "^2.6.0"
   },
   "files": [
     "dist/*",
@@ -42,9 +38,7 @@
     "LICENSE",
     "NOTICE"
   ],
-  "bundleDependencies": [
-    "fetch-retry"
-  ],
+  "bundleDependencies": [],
   "installConfig": {
     "hoistingLimits": "workspaces"
   },

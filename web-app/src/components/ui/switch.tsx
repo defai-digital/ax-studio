@@ -1,8 +1,8 @@
+import { Loader2 } from "lucide-react";
 import * as React from 'react'
 import * as SwitchPrimitive from '@radix-ui/react-switch'
 
 import { cn } from '@/lib/utils'
-import { IconLoader2 } from '@tabler/icons-react'
 
 type SwitchProps = React.ComponentProps<typeof SwitchPrimitive.Root> & {
   loading?: boolean
@@ -21,7 +21,7 @@ function Switch({ loading, className, ...props }: SwitchProps) {
     >
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center z-10 size-3.5 top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2">
-          <IconLoader2 className="animate-spin text-muted-foreground" />
+          <Loader2 className="animate-spin text-muted-foreground" />
         </div>
       )}
       <SwitchPrimitive.Thumb

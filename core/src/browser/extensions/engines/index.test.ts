@@ -1,6 +1,9 @@
 import { it, expect } from 'vitest'
 import * as engines from './index'
 
-it('should re-export all exports from ./AIEngine', () => {
+it('re-exports all engine modules from the barrel', () => {
   expect(engines).toHaveProperty('AIEngine')
+  expect(engines).toHaveProperty('OAIEngine')
+  expect(engines).toHaveProperty('LocalOAIEngine')
+  expect(engines).toHaveProperty('EngineManager')
 })

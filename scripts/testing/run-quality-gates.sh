@@ -25,7 +25,7 @@ echo "--- Step 3: Coverage gate ---"
 MODE="${COVERAGE_GATE_MODE:-advisory}"
 node scripts/testing/module-coverage-gate.mjs \
   --audit report/testing/module-coverage-audit.json \
-  --thresholds testing/module-thresholds.json \
+  --thresholds scripts/testing/module-thresholds.json \
   --mode "$MODE"
 
 echo ""

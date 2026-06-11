@@ -1,26 +1,26 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
-import SettingsMenu from '@/containers/SettingsMenu'
+import SettingsMenu from '@/components/common/SettingsMenu'
 import HeaderPage from '@/containers/HeaderPage'
-import { Card, CardItem } from '@/containers/Card'
+import { Card, CardItem } from '@/components/common/Card'
 import { Switch } from '@/components/ui/switch'
 import { Progress } from '@/components/ui/progress'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { useHardware } from '@/hooks/useHardware'
-import { useLlamacppDevices } from '@/features/models/hooks/useLlamacppDevices'
-import { useBackendUpdater } from '@/hooks/useBackendUpdater'
+import { useHardware } from '@/hooks/settings/useHardware'
+import { useLlamacppDevices } from '@/hooks/models/useLlamacppDevices'
+import { useBackendUpdater } from '@/hooks/updater/useBackendUpdater'
 import { useEffect, useState } from 'react'
-import { IconDeviceDesktopAnalytics } from '@tabler/icons-react'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import type { HardwareData, SystemUsage } from '@/services/hardware/types'
-import { Cpu as CpuIcon } from 'lucide-react'
+import { Cpu as CpuIcon, Monitor } from "lucide-react";
 import { cn, formatMegaBytes } from '@/lib/utils'
-import { toNumber } from '@/utils/number'
+import { toNumber } from '@/lib/utils/number'
 import { Button } from '@/components/ui/button'
-import { useModelProvider } from '@/features/models/hooks/useModelProvider'
-import { useAppState } from '@/hooks/useAppState'
-import { PlatformFeatures, PlatformFeature } from '@/lib/platform'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
+import { useAppState } from '@/hooks/settings/useAppState'
+import { isPlatformTauri } from '@/lib/platform/utils'
 import { toast } from 'sonner'
+import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
 
 export const Route = createFileRoute(route.settings.hardware)({
   component: HardwareContent,
@@ -130,19 +130,25 @@ function HardwareContent() {
     if (pollingPaused) {
       return
     }
-    const intervalId = setInterval(() => {
+    let mounted = true
+    const pollUsage = () => {
       serviceHub
         .hardware()
         .getSystemUsage()
         .then((data: SystemUsage | null) => {
-          if (data) updateSystemUsage(data)
+          if (mounted && data) updateSystemUsage(data)
         })
         .catch((error: unknown) => {
           console.error('Failed to get system usage:', error)
         })
-    }, 5000)
+    }
 
-    return () => clearInterval(intervalId)
+    const intervalId = setInterval(pollUsage, 5000)
+
+    return () => {
+      mounted = false
+      clearInterval(intervalId)
+    }
   }, [serviceHub, updateSystemUsage, pollingPaused])
 
   const handleClickSystemMonitor = async () => {
@@ -171,7 +177,7 @@ function HardwareContent() {
             className="flex items-center gap-2 relative z-50"
             onClick={handleClickSystemMonitor}
           >
-            <IconDeviceDesktopAnalytics className="text-muted-foreground size-5" />
+            <Monitor className="text-muted-foreground size-5" />
             <p>{t('settings:hardware.systemMonitor')}</p>
           </Button>
         </div>
@@ -182,22 +188,7 @@ function HardwareContent() {
           className="flex-1 overflow-y-auto"
           style={{ scrollbarWidth: 'none' }}
         >
-          <div className="flex items-center gap-3 px-8 py-5 border-b border-border/40 bg-background sticky top-0 z-10">
-            <div
-              className="size-7 rounded-lg flex items-center justify-center"
-              style={{
-                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-              }}
-            >
-              <CpuIcon className="size-3.5 text-white" strokeWidth={2.5} />
-            </div>
-            <h1
-              className="text-foreground tracking-tight"
-              style={{ fontSize: '16px', fontWeight: 600 }}
-            >
-              {t('common:hardware')}
-            </h1>
-          </div>
+          <SettingsPageLayout icon={CpuIcon} title={t('common:hardware')} />
           <div className="px-8 py-7">
             <div className="max-w-2xl space-y-6">
               {isLoading ? (
@@ -358,8 +349,8 @@ function HardwareContent() {
                             }
                           />
                         ) : (
-                          llamacppDevices.map((device, index) => (
-                            <Card key={index}>
+                          llamacppDevices.map((device) => (
+                            <Card key={device.id || device.name}>
                               <CardItem
                                 title={device.name}
                                 actions={
@@ -406,7 +397,7 @@ function HardwareContent() {
                     )}
 
                   {/* Engine (llama.cpp) update section — desktop only */}
-                  {PlatformFeatures[PlatformFeature.LOCAL_INFERENCE] && (
+                  {isPlatformTauri() && (
                     <Card title={t('settings:hardware.engineUpdates')}>
                       <CardItem
                         title={t('settings:hardware.checkForBackendUpdates')}
@@ -428,7 +419,18 @@ function HardwareContent() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => checkForUpdate(true)}
+                              onClick={async () => {
+                                try {
+                                  const result = await checkForUpdate(true)
+                                  if (result) {
+                                    toast.info(t('settings:backendUpdater.updateAvailable'))
+                                  } else {
+                                    toast.success(t('settings:backendUpdater.upToDate'))
+                                  }
+                                } catch {
+                                  toast.error(t('settings:backendUpdater.checkError'))
+                                }
+                              }}
                             >
                               {t('settings:hardware.checkNow')}
                             </Button>

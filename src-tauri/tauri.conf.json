@@ -1,16 +1,39 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Ax-Studio",
-  "version": "1.3.4",
+  "version": "1.3.6",
   "identifier": "ai.axstudio.app",
   "build": {
     "frontendDist": "../web-app/dist",
     "devUrl": "http://localhost:1420",
-    "beforeDevCommand": "cross-env IS_TAURI=true IS_DEV=true yarn dev:web",
-    "beforeBuildCommand": "cross-env IS_TAURI=true yarn build:web"
+    "beforeDevCommand": "IS_TAURI=true IS_DEV=true yarn dev:web",
+    "beforeBuildCommand": "IS_TAURI=true yarn build:web"
   },
   "app": {
-    "macOSPrivateApi": true,
+    "macOSPrivateApi": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Ax-Studio",
+        "width": 1200,
+        "minWidth": 1024,
+        "height": 800,
+        "minHeight": 740,
+        "resizable": true,
+        "fullscreen": false,
+        "zoomHotkeysEnabled": true,
+        "center": true,
+        "hiddenTitle": true,
+        "transparent": false,
+        "trafficLightPosition": {
+          "x": 20,
+          "y": 32
+        },
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "dragDropEnabled": false
+      }
+    ],
     "security": {
       "capabilities": [
         "default",
@@ -20,14 +43,14 @@
       ],
       "csp": {
         "default-src": "'self' customprotocol: asset: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*",
-        "connect-src": "'self' asset: ipc: data: http://asset.localhost http://ipc.localhost http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* https: http:",
+        "connect-src": "'self' asset: ipc: data: http://asset.localhost http://ipc.localhost http://127.0.0.1:* http://localhost:* ws://localhost:* ws://127.0.0.1:* https://huggingface.co https://hf.co https://cdn-lfs*.huggingface.co https://*.axstudio.ai https://updates.axstudio.ai https://api.github.com https://api.z.ai https://objects.githubusercontent.com https://github-releases.githubusercontent.com",
         "font-src": [
           "https://fonts.gstatic.com blob: data: tauri://localhost http://tauri.localhost"
         ],
         "img-src": "'self' asset: http://asset.localhost blob: data: https:",
         "style-src": "'unsafe-inline' 'self' https://fonts.googleapis.com",
-        "script-src": "'self' 'unsafe-inline' 'unsafe-eval' asset: $APPDATA/**.* http://asset.localhost",
-        "frame-src": "'self' blob: data:"
+        "script-src": "'self' 'unsafe-inline' 'unsafe-eval' asset: http://asset.localhost",
+        "frame-src": "'self'"
       },
       "assetProtocol": {
         "enable": true,
@@ -44,10 +67,10 @@
       "resolve": true
     },
     "updater": {
-      "pubkey": "PLACEHOLDER_REPLACE_WITH_AX_STUDIO_SIGNING_KEY",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY5MzcxMUFCQjdFQjAyRTQKUldUa0F1dTNxeEUzYWI4ZUIySW1zMkUvYnBoTHZ1RnZxZFJpWW95ME1HUGNwb1VycGdISnV1UUkK",
       "endpoints": [
         "https://updates.axstudio.ai/update-check",
-        "https://github.com/defai-digital/ax-studio/releases/latest/download/latest.json"
+        "https://github.com/ax-studio/ax-studio/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"
@@ -58,13 +81,7 @@
     "publisher": "Ax-Studio",
     "active": true,
     "createUpdaterArtifacts": false,
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ],
+    "icon": ["icons/icon.png"],
     "resources": ["resources/LICENSE"]
   }
 }

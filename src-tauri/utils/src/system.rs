@@ -90,10 +90,6 @@ pub fn setup_library_path(library_path: Option<&Path>, command: &mut tokio::proc
     }
 }
 
-#[cfg_attr(
-    not(any(target_os = "windows", target_os = "linux")),
-    allow(unused_variables)
-)]
 pub fn binary_requires_cuda(bin_path: &Path) -> bool {
     #[cfg(target_os = "windows")]
     return binary_requires_cuda_windows(bin_path);
@@ -102,7 +98,10 @@ pub fn binary_requires_cuda(bin_path: &Path) -> bool {
     return binary_requires_cuda_linux(bin_path);
 
     #[cfg(not(any(target_os = "windows", target_os = "linux")))]
-    false
+    {
+        let _ = bin_path;
+        false
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -151,10 +150,6 @@ fn binary_requires_cuda_linux(bin_path: &Path) -> bool {
 }
 
 /// Adds CUDA paths to the command's environment based on the OS.
-#[cfg_attr(
-    not(any(target_os = "windows", target_os = "linux")),
-    allow(unused_variables)
-)]
 pub fn add_cuda_paths(command: &mut tokio::process::Command) -> bool {
     #[cfg(target_os = "windows")]
     return add_cuda_paths_windows(command);
@@ -164,6 +159,7 @@ pub fn add_cuda_paths(command: &mut tokio::process::Command) -> bool {
 
     #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     {
+        let _ = command;
         #[cfg(feature = "logging")]
         log::debug!("CUDA path detection not implemented for this OS");
         false

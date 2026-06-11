@@ -4,10 +4,9 @@
 
 import { invoke, convertFileSrc } from '@tauri-apps/api/core'
 import type { ExtensionManifest } from '@/lib/extension'
-import type { InvokeArgs } from './types'
-import { DefaultCoreService } from './default'
+import type { InvokeArgs, CoreService } from './types'
 
-export class TauriCoreService extends DefaultCoreService {
+export class TauriCoreService implements CoreService {
   async invoke<T = unknown>(command: string, args?: InvokeArgs): Promise<T> {
     try {
       return await invoke<T>(command, args)
@@ -60,17 +59,6 @@ export class TauriCoreService extends DefaultCoreService {
     } catch (error) {
       console.error('Error uninstalling extension in Tauri:', error)
       return false
-    }
-  }
-
-  // App token
-  async getAppToken(): Promise<string | null> {
-    try {
-      const result = await this.invoke<string | null>('app_token')
-      return result
-    } catch (error) {
-      console.error('Error getting app token in Tauri:', error)
-      return null
     }
   }
 }

@@ -1,0 +1,77 @@
+import { describe, expect, it, vi } from 'vitest'
+
+const mocks = vi.hoisted(() => ({
+  invoke: vi.fn(),
+}))
+
+vi.mock('@tauri-apps/api/core', () => ({
+  Channel: class MockChannel<T> {
+    onmessage?: (event: T) => void
+  },
+  invoke: mocks.invoke,
+}))
+
+import { createMlxIpcFetch } from '../mlx-ipc-fetch'
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
+describe('createMlxIpcFetch', () => {
+  it('forwards MLX stream deltas before the done event', async () => {
+    const done = deferred<void>()
+
+    mocks.invoke.mockImplementation(async (command: string, args: any) => {
+      if (command === 'mlx_load_model') return undefined
+      if (command === 'mlx_chat_stream') {
+        args.onEvent.onmessage({
+          type: 'start',
+          model_id: 'test-model',
+          prompt_token_count: 3,
+        })
+        args.onEvent.onmessage({ type: 'delta', text: 'hello' })
+        await done.promise
+        args.onEvent.onmessage({
+          type: 'done',
+          prompt_token_count: 3,
+          output_token_count: 1,
+          finish_reason: 'stop',
+          elapsed_ms: 25,
+        })
+        return undefined
+      }
+      throw new Error(`unexpected command ${command}`)
+    })
+
+    const fetchFn = createMlxIpcFetch()
+    const response = await fetchFn('http://localhost/v1/chat/completions', {
+      method: 'POST',
+      body: JSON.stringify({
+        model: 'test-model',
+        stream: true,
+        messages: [{ role: 'user', content: 'hi' }],
+      }),
+    })
+
+    const reader = response.body!.getReader()
+    const decoder = new TextDecoder()
+    let streamed = ''
+
+    for (let i = 0; i < 3 && !streamed.includes('hello'); i++) {
+      const read = await reader.read()
+      expect(read.done).toBe(false)
+      streamed += decoder.decode(read.value)
+    }
+
+    expect(streamed).toContain('hello')
+
+    done.resolve()
+    await reader.cancel()
+  })
+})

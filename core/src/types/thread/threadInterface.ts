@@ -16,10 +16,10 @@ export interface ThreadInterface {
   /**
    * Create a thread.
    * @abstract
-   * @param {Thread} thread - The thread to save.
-   * @returns {Promise<void>} A promise that resolves when the thread is saved.
+   * @param {Partial<Thread>} thread - The partial thread payload to save.
+   * @returns {Promise<Thread>} A promise that resolves to the saved thread.
    */
-  createThread(thread: Thread): Promise<Thread>
+  createThread(thread: Partial<Thread>): Promise<Thread>
 
   /**
    * modify a thread.

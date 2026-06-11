@@ -1,21 +1,13 @@
 ax-studio
-Copyright 2025-2026 DEFAI Private Limited
+Copyright 2025 DEFAI Private Limited
 
 AX Studio is maintained by DEFAI Private Limited.
-Contact: enquiry@defai.digital
-Website: http://defai.digital
 
-AX Studio is a substantially reworked fork and revamp of Jan
-(https://github.com/janhq/jan). The upstream Jan project is licensed under
-the Apache License, Version 2.0, and its license notice includes:
-"Jan Copyright 2025 Menlo Research".
+This project was originally derived from Jan (https://github.com/janhq/jan),
+which is licensed under the Apache License, Version 2.0. AX Studio has since
+been substantially modified, reworked, and operationally decoupled from Jan.ai.
 
-This repository is licensed under the Apache License, Version 2.0. Changes,
-new work, packaging, branding, release infrastructure, and product-specific
-modifications in AX Studio are copyright DEFAI Private Limited unless another
-notice says otherwise.
-
-This NOTICE is provided for attribution and provenance and does not modify the
-terms of the Apache License, Version 2.0. Third-party components may carry
-their own notices and licenses in package metadata, bundled notices, or source
-headers.
+This repository is licensed under the Apache License, Version 2.0. This notice
+is provided for attribution and provenance only and does not modify the terms
+of that license. Third-party components may carry their own notices and
+licenses where explicitly stated in their package metadata or bundled notices.

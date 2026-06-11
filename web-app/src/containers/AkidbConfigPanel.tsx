@@ -1,15 +1,15 @@
+import { Database, Folder, RefreshCw } from "lucide-react";
 import { useEffect, useState, useCallback } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { useServiceHub } from '@/hooks/useServiceHub'
 import { toast } from 'sonner'
-import { IconDatabase, IconFolder, IconRefresh } from '@tabler/icons-react'
-import { Card, CardItem } from '@/containers/Card'
+import { Card, CardItem } from '@/components/common/Card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import {
   useAkidbConfig,
   createDefaultConfig,
   type AkidbConfig,
-} from '@/hooks/useAkidbConfig'
+} from '@/hooks/research/useAkidbConfig'
 
 const FREQUENCY_OPTIONS = [
   { label: 'Every 10 minutes', value: 10 },
@@ -20,6 +20,7 @@ const FREQUENCY_OPTIONS = [
 ]
 
 const EMBEDDING_MODEL_OPTIONS = [
+  { label: 'nomic-embed-text-v1.5 (Local, 768d)', value: 'nomic-embed-text-v1.5', dimension: 768 },
   { label: 'gte-qwen2-1.5b-instruct-q4_k_m (Local, 1536d)', value: 'gte-qwen2-1.5b-instruct-q4_k_m', dimension: 1536 },
   { label: 'all-minilm-l6-v2-q4_k_m (Local, 384d)', value: 'all-minilm-l6-v2-q4_k_m', dimension: 384 },
   { label: 'text-embedding-3-small (OpenAI, 1536d)', value: 'text-embedding-3-small', dimension: 1536 },
@@ -28,13 +29,14 @@ const EMBEDDING_MODEL_OPTIONS = [
 ]
 
 export default function AkidbConfigPanel() {
+  const serviceHub = useServiceHub()
   const { config, status, loading, saving, syncing, load, save, loadStatus, syncNow } =
     useAkidbConfig()
 
   const [dataFolder, setDataFolder] = useState('')
   const [frequency, setFrequency] = useState(60)
-  const [embeddingModel, setEmbeddingModel] = useState('gte-qwen2-1.5b-instruct-q4_k_m')
-  const [embeddingDimension, setEmbeddingDimension] = useState(1536)
+  const [embeddingModel, setEmbeddingModel] = useState('nomic-embed-text-v1.5')
+  const [embeddingDimension, setEmbeddingDimension] = useState(768)
 
   // Load config from the AX Studio path, with legacy fallback handled by Rust.
   useEffect(() => {
@@ -62,10 +64,8 @@ export default function AkidbConfigPanel() {
   // Open native folder picker via Tauri open_dialog command
   const handleBrowse = useCallback(async () => {
     try {
-      const result = await invoke<string | null>('open_dialog', {
-        options: { directory: true },
-      })
-      if (result) setDataFolder(result)
+      const result = await serviceHub.dialog().open({ directory: true })
+      if (typeof result === 'string') setDataFolder(result)
     } catch {
       toast.error('Folder picker is not available in this environment')
     }
@@ -159,7 +159,7 @@ export default function AkidbConfigPanel() {
       <Card
         header={
           <div className="mb-3 flex w-full items-center gap-3">
-            <IconDatabase
+            <Database
               size={20}
               className="shrink-0 text-muted-foreground"
             />
@@ -178,7 +178,7 @@ export default function AkidbConfigPanel() {
     <Card
       header={
         <div className="mb-3 flex w-full items-center gap-3">
-          <IconDatabase
+          <Database
             size={20}
             className="shrink-0 text-muted-foreground"
           />
@@ -203,7 +203,7 @@ export default function AkidbConfigPanel() {
               placeholder="/Users/me/Documents/MyKnowledgeBase"
             />
             <Button variant="outline" size="sm" onClick={handleBrowse}>
-              <IconFolder size={14} className="mr-1" />
+              <Folder size={14} className="mr-1" />
               Browse
             </Button>
           </div>
@@ -259,7 +259,7 @@ export default function AkidbConfigPanel() {
           onClick={handleSyncNow}
           disabled={syncing || !dataFolder.trim()}
         >
-          <IconRefresh size={14} className={syncing ? 'mr-1 animate-spin' : 'mr-1'} />
+          <RefreshCw size={14} className={syncing ? 'mr-1 animate-spin' : 'mr-1'} />
           {syncing ? 'Syncing...' : 'Sync Now'}
         </Button>
       </div>
@@ -275,9 +275,9 @@ export default function AkidbConfigPanel() {
                 : 'Up to date'}
           </p>
           <p className="text-xs text-muted-foreground">
-            {status.indexed_files} indexed
-            {status.pending_files > 0 &&
-              ` · ${status.pending_files} pending`}
+            {status.indexed_files + status.pending_files} indexed
+            {status.indexed_files > 0 &&
+              ` (${status.indexed_files} new this sync)`}
             {status.error_files > 0 && ` · ${status.error_files} errors`}
             {' '}/{' '}
             {status.total_files} total

@@ -5,12 +5,54 @@
  * Returns an unsubscribe function for the deep-link event listener.
  */
 import type { ServiceHub } from '@/services/index'
-import type { MCPServerConfig, MCPSettings } from '@/features/mcp/hooks/useMCPServers'
+import type { MCPServerConfig, MCPSettings } from '@/hooks/tools/useMCPServers'
 import { deepLinkPayloadSchema } from '@/schemas/events.schema'
 import { assistantsSchema } from '@/schemas/assistants.schema'
 import { SystemEvent } from '@/types/events'
 import { type BootstrapResult, ok, fail } from './bootstrap-result'
 import { syncRemoteProviders } from '@/lib/providers/provider-sync'
+import { withTimeout } from '@/lib/utils/async'
+
+const PROVIDER_BOOTSTRAP_TIMEOUT_MS = 10_000
+const MCP_BOOTSTRAP_TIMEOUT_MS = 8_000
+const ASSISTANTS_BOOTSTRAP_TIMEOUT_MS = 8_000
+
+let providersWork: Promise<ModelProvider[]> | null = null
+let mcpConfigWork: Promise<{
+  mcpServers?: Record<string, MCPServerConfig>
+  mcpSettings?: MCPSettings | null
+}> | null = null
+let assistantsWork: Promise<unknown> | null = null
+
+function getProvidersOnce(serviceHub: ServiceHub): Promise<ModelProvider[]> {
+  providersWork ??= serviceHub
+    .providers()
+    .getProviders()
+    .finally(() => {
+      providersWork = null
+    })
+  return providersWork
+}
+
+function getMCPConfigOnce(serviceHub: ServiceHub) {
+  mcpConfigWork ??= serviceHub
+    .mcp()
+    .getMCPConfig()
+    .finally(() => {
+      mcpConfigWork = null
+    })
+  return mcpConfigWork
+}
+
+function getAssistantsOnce(serviceHub: ServiceHub): Promise<unknown> {
+  assistantsWork ??= serviceHub
+    .assistants()
+    .getAssistants()
+    .finally(() => {
+      assistantsWork = null
+    })
+  return assistantsWork
+}
 
 export type BootstrapProvidersInput = {
   serviceHub: ServiceHub
@@ -45,61 +87,73 @@ export async function bootstrapProviders(input: BootstrapProvidersInput): Promis
   let unsubscribeDeepLink: () => void = () => {}
 
   try {
-    // Load providers, MCP config, and assistants concurrently
+    // Load providers, MCP config, and assistants concurrently with bounded waits.
     await Promise.all([
-      serviceHub
-        .providers()
-        .getProviders()
-        .then((providers) => {
-          setProviders(providers, serviceHub.path().sep())
-          return syncRemoteProviders(providers).catch((err) =>
-            console.error('Failed to batch-register providers:', err)
-          )
-        })
-        .catch((error) => {
-          console.error('Failed to load providers:', error)
-        }),
-
-      serviceHub
-        .mcp()
-        .getMCPConfig()
-        .then((data) => {
-          setServers(data.mcpServers ?? {})
-          setSettings(data.mcpSettings ?? null)
-        })
-        .catch((error) => {
-          console.error('Failed to load MCP config:', error)
-        }),
-
-      serviceHub
-        .assistants()
-        .getAssistants()
-        .then((data) => {
-          const parsed = assistantsSchema.safeParse(data)
-          if (parsed.success && parsed.data.length > 0) {
-            setAssistants(parsed.data as Assistant[])
-            initializeWithLastUsed()
-          } else if (!parsed.success) {
-            console.warn(
-              'Assistants data did not match expected schema:',
-              parsed.error.message
+      withTimeout(
+        getProvidersOnce(serviceHub)
+          .then((providers) => {
+            setProviders(providers, serviceHub.path().sep())
+            return syncRemoteProviders(providers).catch((err) =>
+              console.error('Failed to batch-register providers:', err)
             )
-          }
-        })
-        .catch((error) => {
-          console.warn('Failed to load assistants, keeping default:', error)
-        }),
+          }),
+        PROVIDER_BOOTSTRAP_TIMEOUT_MS,
+        `Provider bootstrap timed out after ${PROVIDER_BOOTSTRAP_TIMEOUT_MS}ms`
+      ).catch((error) => {
+        console.error('[bootstrap-providers] Provider bootstrap failed:', error)
+      }),
+
+      withTimeout(
+        getMCPConfigOnce(serviceHub)
+          .then((data) => {
+            setServers(data.mcpServers ?? {})
+            setSettings(data.mcpSettings ?? null)
+          }),
+        MCP_BOOTSTRAP_TIMEOUT_MS,
+        `MCP bootstrap timed out after ${MCP_BOOTSTRAP_TIMEOUT_MS}ms`
+      ).catch((error) => {
+        console.error('[bootstrap-providers] MCP bootstrap failed:', error)
+      }),
+
+      withTimeout(
+        getAssistantsOnce(serviceHub)
+          .then((data) => {
+            if (data == null) {
+              setAssistants([])
+              return
+            }
+            const parsed = assistantsSchema.safeParse(data)
+            if (parsed.success && parsed.data.length > 0) {
+              setAssistants(parsed.data as Assistant[])
+              initializeWithLastUsed()
+            } else if (!parsed.success) {
+              console.warn(
+                'Assistants data did not match expected schema:',
+                parsed.error.message
+              )
+            }
+          }),
+        ASSISTANTS_BOOTSTRAP_TIMEOUT_MS,
+        `Assistants bootstrap timed out after ${ASSISTANTS_BOOTSTRAP_TIMEOUT_MS}ms`
+      ).catch((error) => {
+        console.warn('[bootstrap-providers] Assistants bootstrap failed:', error)
+      }),
     ])
 
     // Deep link: fetch current and register listener
     serviceHub.deeplink().getCurrent().then(onDeepLink).catch((error) => {
       console.error('Failed to get current deep link:', error)
     })
-    serviceHub.deeplink().onOpenUrl(onDeepLink)
+    let unsubscribeOnOpenUrl: (() => void) | undefined
+    serviceHub.deeplink().onOpenUrl(onDeepLink).then((unsub) => {
+      unsubscribeOnOpenUrl = unsub
+    }).catch((error) => {
+      console.error('Failed to register deep link listener:', error)
+    })
 
     serviceHub
       .events()
-      .listen(SystemEvent.DEEP_LINK, (event) => {
+      ?.listen(SystemEvent.DEEP_LINK, (event) => {
         const parsed = deepLinkPayloadSchema.safeParse(event.payload)
         if (!parsed.success) {
           console.error('Invalid deep link payload:', event.payload)
@@ -111,7 +165,11 @@ export async function bootstrapProviders(input: BootstrapProvidersInput): Promis
         unsubscribeDeepLink = unsub
       })
 
-    return { result: ok(), unsubscribeDeepLink }
+    const unsubscribeAll = () => {
+      unsubscribeDeepLink()
+      unsubscribeOnOpenUrl?.()
+    }
+    return { result: ok(), unsubscribeDeepLink: unsubscribeAll }
   } catch (error) {
     console.error('bootstrapProviders failed:', error)
     return { result: fail(error), unsubscribeDeepLink }

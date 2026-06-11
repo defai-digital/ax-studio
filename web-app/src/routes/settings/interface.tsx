@@ -1,16 +1,69 @@
 ﻿import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
-import SettingsMenu from '@/containers/SettingsMenu'
+import SettingsMenu from '@/components/common/SettingsMenu'
 import HeaderPage from '@/containers/HeaderPage'
-import { Card, CardItem } from '@/containers/Card'
+import { Card, CardItem } from '@/components/common/Card'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { ThemeSwitcher } from '@/containers/ThemeSwitcher'
-import { FontSizeSwitcher } from '@/containers/FontSizeSwitcher'
-import { AccentColorPicker } from '@/containers/AccentColorPicker'
-import { useInterfaceSettings } from '@/hooks/useInterfaceSettings'
+import { fontSizeOptions, useInterfaceSettings, ACCENT_COLORS, type FontSize } from '@/hooks/settings/useInterfaceSettings'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
-import { Palette } from 'lucide-react'
+import { Check, ChevronsUpDown, Palette } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
+
+function FontSizeSwitcher() {
+  const { fontSize, setFontSize } = useInterfaceSettings()
+  const { t } = useTranslation()
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="w-[120px] justify-between rounded-lg h-8 text-[12px]" title={t('common:adjustFontSize')}>
+          {fontSizeOptions.find((item) => item.value === fontSize)?.label || t('common:medium')}
+          <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground ml-1" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="rounded-xl">
+        {fontSizeOptions.map((item) => (
+          <DropdownMenuItem key={item.value}
+            className={cn('cursor-pointer my-0.5 text-[12px]', fontSize === item.value && 'bg-primary/10 text-primary')}
+            onClick={() => setFontSize(item.value as FontSize)}
+          >
+            {fontSize === item.value && <Check className="size-3 mr-1.5" />}
+            {item.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function AccentColorPicker() {
+  const { accentColor, setAccentColor } = useInterfaceSettings()
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      {ACCENT_COLORS.map((color) => {
+        const isSelected = color.value === accentColor
+        return (
+          <button key={color.value} title={color.name} onClick={() => setAccentColor(color.value)}
+            className={cn('size-6 rounded-full border-2 transition-all duration-200 cursor-pointer hover:scale-110 flex items-center justify-center',
+              isSelected ? 'ring-2 ring-offset-2 ring-primary border-transparent' : 'border-border/50'
+            )}
+            style={{ backgroundColor: color.thumb === '#3F3F46' ? 'var(--background)' : color.thumb }}
+          >
+            {isSelected && <Check className="size-3 text-white drop-shadow-sm" />}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 
 export const Route = createFileRoute(route.settings.interface)({
   component: InterfaceSettings,
@@ -35,22 +88,7 @@ function InterfaceSettings() {
           className="flex-1 overflow-y-auto"
           style={{ scrollbarWidth: 'none' }}
         >
-          <div className="flex items-center gap-3 px-8 py-5 border-b border-border/40 bg-background sticky top-0 z-10">
-            <div
-              className="size-7 rounded-lg flex items-center justify-center"
-              style={{
-                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-              }}
-            >
-              <Palette className="size-3.5 text-white" strokeWidth={2.5} />
-            </div>
-            <h1
-              className="text-foreground tracking-tight"
-              style={{ fontSize: '16px', fontWeight: 600 }}
-            >
-              {t('settings:interface.title')}
-            </h1>
-          </div>
+          <SettingsPageLayout icon={Palette} title={t('settings:interface.title')} />
           <div className="px-8 py-7">
             <div className="max-w-2xl space-y-6">
               <Card title={t('settings:interface.title')}>

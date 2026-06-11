@@ -1,6 +1,4 @@
-import { IconSettings } from '@tabler/icons-react'
-import debounce from 'lodash.debounce'
-
+import { Settings } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -10,12 +8,13 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
-import { DynamicControllerSetting } from '@/containers/dynamicControllerSetting'
-import { useModelProvider } from '@/features/models/hooks/useModelProvider'
+import { DynamicControllerSetting } from '@/containers/DynamicControllerSetting'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { cn, getModelDisplayName } from '@/lib/utils'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { useAppState } from '@/hooks/useAppState'
+import { useAppState } from '@/hooks/settings/useAppState'
+import { useCallback, useEffect, useRef } from 'react'
 
 type ModelSettingProps = {
   provider: ProviderObject
@@ -31,19 +30,36 @@ export function ModelSetting({
   const serviceHub = useServiceHub()
   const setActiveModels = useAppState((state) => state.setActiveModels)
 
-  // Create a debounced version of stopModel that waits 500ms after the last call
-  const debouncedStopModel = debounce((modelId: string) => {
-    serviceHub
-      .models()
-      .stopModel(modelId)
-      .then(() => {
-        // Refresh active models after stopping
+  const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const stopModelIdRef = useRef<string | null>(null)
+
+  const debouncedStopModel = useCallback(
+    (modelId: string) => {
+      if (stopTimerRef.current) clearTimeout(stopTimerRef.current)
+      stopModelIdRef.current = modelId
+      stopTimerRef.current = setTimeout(() => {
+        stopTimerRef.current = null
+        const targetId = stopModelIdRef.current
+        if (!targetId) return
         serviceHub
           .models()
-          .getActiveModels()
-          .then((models) => setActiveModels(models || []))
-      })
-  }, 500)
+          .stopModel(targetId)
+          .then(() =>
+            serviceHub.models().getActiveModels()
+              .then((models) => setActiveModels(models || []))
+              .catch((err) => console.error('Failed to refresh active models:', err))
+          )
+          .catch((err) => console.error('Failed to stop model:', err))
+      }, 500)
+    },
+    [serviceHub, setActiveModels]
+  )
+
+  useEffect(() => {
+    return () => {
+      if (stopTimerRef.current) clearTimeout(stopTimerRef.current)
+    }
+  }, [])
 
   const handleSettingChange = (
     key: string,
@@ -101,6 +117,7 @@ export function ModelSetting({
               debouncedStopModel(model.id)
             }
           })
+          .catch((err) => console.error('Failed to check active models:', err))
       }
     }
   }
@@ -109,7 +126,7 @@ export function ModelSetting({
     <Sheet>
       <SheetTrigger asChild>
         <Button variant="ghost" size="icon-xs">
-          <IconSettings size={18} className="text-muted-foreground" />
+          <Settings size={18} className="text-muted-foreground" />
         </Button>
       </SheetTrigger>
       <SheetContent className="overflow-y-auto">

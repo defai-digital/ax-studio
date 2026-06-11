@@ -4,23 +4,36 @@
 
 import { invoke } from '@tauri-apps/api/core'
 import { AppConfiguration } from '@ax-studio/core'
-import type { LogEntry } from './types'
-import { DefaultAppService } from './default'
+import type { LogEntry, AppService } from './types'
 
-export class TauriAppService extends DefaultAppService {
+export class TauriAppService implements AppService {
+  private resetInProgress = false
+
   async factoryReset(): Promise<void> {
-    // Kill background processes and remove data folder
-    // Note: We can't import stopAllModels directly to avoid circular dependency
-    // Instead we'll use the engine manager directly
-    const { EngineManager } = await import('@ax-studio/core')
-    for (const [, engine] of EngineManager.instance().engines) {
-      const activeModels = await engine.getLoadedModels()
-      if (activeModels) {
-        await Promise.all(activeModels.map((model: string) => engine.unload(model)))
-      }
+    if (this.resetInProgress) {
+      throw new Error('Factory reset already in progress')
     }
-    window.localStorage.clear()
-    await invoke('factory_reset')
+    this.resetInProgress = true
+    try {
+      const { EngineManager } = await import('@ax-studio/core')
+      for (const [, engine] of EngineManager.instance().engines) {
+        const activeModels = await engine.getLoadedModels()
+        if (activeModels) {
+          const unloadTasks = activeModels.map(async (model: string) => {
+            try {
+              await engine.unload(model)
+            } catch (error) {
+              console.error(`Failed to unload model during reset`, error)
+            }
+          })
+          await Promise.all(unloadTasks)
+        }
+      }
+      await invoke('factory_reset')
+      window.localStorage.clear()
+    } finally {
+      this.resetInProgress = false
+    }
   }
 
   async readLogs(): Promise<LogEntry[]> {
@@ -30,8 +43,8 @@ export class TauriAppService extends DefaultAppService {
 
   async getAppDataFolder(): Promise<string | undefined> {
     try {
-      const appConfiguration: AppConfiguration | undefined =
-        await window.core?.api?.getAppConfigurations()
+      const appConfiguration =
+        (await window.core?.api?.getAppConfigurations()) as AppConfiguration | undefined
 
       return appConfiguration?.data_folder
     } catch (error) {
@@ -41,7 +54,14 @@ export class TauriAppService extends DefaultAppService {
   }
 
   async relocateAppDataFolder(path: string): Promise<void> {
-    await window.core?.api?.changeAppDataFolder({ newDataFolder: path })
+    // Previously used optional chaining — when `window.core.api` wasn't
+    // available (service-hub not ready yet, wrong platform) this resolved
+    // to `undefined` and `await undefined` silently succeeded, leaving the
+    // user thinking the data folder was moved. Throw instead so the UI can
+    // show a real error and the user can retry.
+    const api = window.core?.api
+    if (!api) throw new Error('Core API not available')
+    await api.changeAppDataFolder({ newDataFolder: path })
   }
 
   parseLogLine(line: string): LogEntry {
@@ -61,7 +81,7 @@ export class TauriAppService extends DefaultAppService {
     const level = levelRaw.toLowerCase() as 'info' | 'warn' | 'error' | 'debug'
 
     return {
-      timestamp: `${date} ${time}`,
+      timestamp: new Date(`${date} ${time}`).getTime(),
       level,
       target,
       message,

@@ -3,24 +3,51 @@
  */
 
 import { invoke } from '@tauri-apps/api/core'
-import { MCPTool } from '@/types/completion'
-import { DEFAULT_MCP_SETTINGS } from '@/features/mcp/hooks/useMCPServers'
-import type { MCPServerConfig, MCPServers, MCPSettings } from '@/features/mcp/hooks/useMCPServers'
-import type { MCPConfig } from './types'
-import { DefaultMCPService } from './default'
+import { MCPTool } from '@/types/mcp'
+import { DEFAULT_MCP_SETTINGS } from '@/hooks/tools/useMCPServers'
+import type { MCPServerConfig, MCPServers, MCPSettings } from '@/hooks/tools/useMCPServers'
+import type { MCPConfig, MCPService, ToolCallWithCancellationResult } from './types'
 import { mcpServersSchema, mcpSettingsSchema } from '@/schemas/mcp.schema'
+import { extractErrorMessage, toError } from '@/lib/utils/error'
 
-export class TauriMCPService extends DefaultMCPService {
+const getCoreApi = () => {
+  if (!window.core?.api) {
+    throw new Error('MCP API is unavailable')
+  }
+
+  return window.core.api
+}
+
+function getErrorMessage(error: unknown): string {
+  return extractErrorMessage(error, String(error))
+}
+
+function isRecoverableMCPError(error: unknown): boolean {
+  const message = getErrorMessage(error).toLowerCase()
+  return (
+    message.includes('transport closed') ||
+    message.includes('connection closed') ||
+    message.includes('server disconnected') ||
+    message.includes('server') && message.includes('not found')
+  )
+}
+
+const unavailableToolResult = (error: unknown) => ({
+  error: getErrorMessage(error),
+  content: [],
+})
+
+export class TauriMCPService implements MCPService {
   async updateMCPConfig(configs: string): Promise<void> {
-    await window.core?.api?.saveMcpConfigs({ configs })
+    await getCoreApi().saveMcpConfigs({ configs })
   }
 
   async restartMCPServers(): Promise<void> {
-    await window.core?.api?.restartMcpServers()
+    await getCoreApi().restartMcpServers()
   }
 
   async getMCPConfig(): Promise<MCPConfig> {
-    const rawConfig = await window.core?.api?.getMcpConfigs()
+    const rawConfig = await getCoreApi().getMcpConfigs()
     const configString = typeof rawConfig === 'string' ? rawConfig.trim() : ''
 
     const defaultResponse = (): MCPConfig => ({
@@ -70,11 +97,11 @@ export class TauriMCPService extends DefaultMCPService {
   }
 
   async getTools(): Promise<MCPTool[]> {
-    return (await window.core?.api?.getTools()) ?? []
+    return ((await getCoreApi().getTools()) as MCPTool[]) ?? []
   }
 
   async getConnectedServers(): Promise<string[]> {
-    return (await window.core?.api?.getConnectedServers()) ?? []
+    return ((await getCoreApi().getConnectedServers()) as string[]) ?? []
   }
 
   async callTool(args: {
@@ -82,7 +109,28 @@ export class TauriMCPService extends DefaultMCPService {
     serverName?: string
     arguments: object
   }): Promise<{ error: string; content: { text: string }[] }> {
-    return (await window.core?.api?.callTool(args)) ?? { error: 'MCP service unavailable', content: [] }
+    const api = getCoreApi()
+    try {
+      return ((await api.callTool(args)) as { error: string; content: { text: string }[] }) ?? {
+        error: 'MCP service unavailable',
+        content: [],
+      }
+    } catch (error) {
+      if (!isRecoverableMCPError(error)) {
+        return unavailableToolResult(error)
+      }
+
+      console.warn('MCP tool call failed, restarting MCP servers and retrying once:', error)
+      try {
+        await api.restartMcpServers()
+        return ((await api.callTool(args)) as { error: string; content: { text: string }[] }) ?? {
+          error: 'MCP service unavailable after restart',
+          content: [],
+        }
+      } catch (retryError) {
+        return unavailableToolResult(retryError)
+      }
+    }
   }
 
   callToolWithCancellation(args: {
@@ -90,39 +138,67 @@ export class TauriMCPService extends DefaultMCPService {
     serverName?: string
     arguments: object
     cancellationToken?: string
-  }): {
-    promise: Promise<{ error: string; content: { text: string }[] }>
-    cancel: () => Promise<void>
-    token: string
-  } {
-    // Generate a unique cancellation token if not provided
-    const token = args.cancellationToken ?? `tool_call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  }): ToolCallWithCancellationResult {
+    const token = args.cancellationToken ?? `tool_call_${crypto.randomUUID()}`
 
-    // Create the tool call promise with cancellation token
-    const promise: Promise<{ error: string; content: { text: string }[] }> =
-      window.core?.api?.callTool({
-        ...args,
-        cancellationToken: token
-      }) ?? Promise.reject(new Error('MCP service unavailable'))
+    // IIFE so any synchronous throw from getCoreApi() becomes a rejected promise,
+    // and transport errors are recovered with the same restart+retry as callTool().
+    const promise = (async () => {
+      try {
+        const api = getCoreApi()
+        return ((await api.callTool({ ...args, cancellationToken: token })) as { error: string; content: { text: string }[] }) ?? {
+          error: 'MCP service unavailable',
+          content: [],
+        }
+      } catch (error) {
+        if (!isRecoverableMCPError(error)) {
+          return unavailableToolResult(error)
+        }
+        console.warn('MCP tool call failed, restarting MCP servers and retrying once:', error)
+        try {
+          const api = getCoreApi()
+          await api.restartMcpServers()
+          return ((await api.callTool({ ...args, cancellationToken: token })) as { error: string; content: { text: string }[] }) ?? {
+            error: 'MCP service unavailable after restart',
+            content: [],
+          }
+        } catch (retryError) {
+          return unavailableToolResult(retryError)
+        }
+      }
+    })()
 
-    // Create cancel function
     const cancel = async () => {
-      await window.core?.api?.cancelToolCall({ cancellationToken: token })
+      try {
+        await getCoreApi().cancelToolCall({ cancellationToken: token })
+      } catch {
+        // Token already consumed — tool completed or timed out before cancel arrived
+      }
     }
 
     return { promise, cancel, token }
   }
 
   async cancelToolCall(cancellationToken: string): Promise<void> {
-    return await window.core?.api?.cancelToolCall({ cancellationToken })
+    await getCoreApi().cancelToolCall({ cancellationToken })
   }
 
   async activateMCPServer(name: string, config: MCPServerConfig): Promise<void> {
-    return await invoke('activate_mcp_server', { name, config })
+    try {
+      await invoke('activate_mcp_server', { name, config })
+    } catch (error) {
+      console.error(`Failed to activate MCP server "${name}":`, error)
+      throw toError(error, `Failed to activate MCP server "${name}"`)
+    }
   }
 
   async deactivateMCPServer(name: string): Promise<void> {
-    return await invoke('deactivate_mcp_server', { name })
+    try {
+      await invoke('deactivate_mcp_server', { name })
+    } catch (error) {
+      console.error(`Failed to deactivate MCP server "${name}":`, error)
+      throw toError(error, `Failed to deactivate MCP server "${name}"`)
+    }
   }
 
 }

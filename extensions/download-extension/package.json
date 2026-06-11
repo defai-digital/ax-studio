@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "Download and manage files and AI models in Ax-Studio.",
   "main": "dist/index.js",
-  "author": "DEFAI Private Limited <enquiry@defai.digital>",
+  "author": "Ax-Studio",
   "license": "Apache-2.0",
   "homepage": "https://github.com/defai-digital/ax-studio",
   "repository": {
@@ -15,15 +15,13 @@
   "scripts": {
     "test": "vitest run",
     "build": "rolldown -c rolldown.config.mjs",
-    "build:publish": "rimraf *.tgz --glob || true && yarn build && npm pack && cpx *.tgz ../../pre-install"
+    "build:publish": "rimraf *.tgz --glob || true && yarn build && npm pack && cp *.tgz ../../pre-install"
   },
   "devDependencies": {
-    "cpx": "1.5.0",
     "rimraf": "6.0.1",
     "rolldown": "1.0.0-beta.1",
-    "run-script-os": "1.1.6",
     "typescript": "5.8.3",
-    "vitest": "3.2.6"
+    "vitest": "3.2.4"
   },
   "files": [
     "dist/*",

@@ -1,9 +1,9 @@
+import { Info } from "lucide-react";
 import {
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
 } from '@/components/ui/hover-card'
-import { IconInfoCircle } from '@tabler/icons-react'
 import { CatalogModel, ModelQuant } from '@/services/models/types'
 
 interface ModelInfoHoverCardProps {
@@ -103,7 +103,7 @@ export const ModelInfoHoverCard = ({
       <HoverCardTrigger asChild onMouseEnter={handleMouseEnter}>
         {children || (
           <div className="cursor-pointer">
-            <IconInfoCircle
+            <Info
               size={isDefaultVariant ? 20 : 14}
               className="mt-0.5 text-muted-foreground transition-colors"
             />

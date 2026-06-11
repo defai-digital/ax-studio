@@ -6,6 +6,7 @@ export type ModelInfo = {
   id: string
   settings?: ModelSettingParams
   parameters?: ModelRuntimeParams
+  /** @deprecated Use the `provider` field on the parent Thread/model config instead */
   engine?: string
 }
 
@@ -20,12 +21,6 @@ export type ModelArtifact = {
  * @stored
  */
 export type Model = {
-  /**
-   * The type of the object.
-   * Default: "model"
-   */
-  object: string
-
   /**
    * The version of the model.
    */
@@ -62,7 +57,7 @@ export type Model = {
   created: number
 
   /**
-   * Default: "A cool model from Huggingface"
+   * Default: "Model description"
    */
   description: string
 
@@ -81,7 +76,8 @@ export type Model = {
    */
   metadata: ModelMetadata
   /**
-   * The model engine.
+   * The model engine / provider identifier.
+   * @deprecated Use the `provider` field in associated ModelProvider config instead.
    */
   engine: string
 }
@@ -90,6 +86,7 @@ export type Model = {
 export type ModelMetadata = {
   author: string
   tags: string[]
+  /** Model size in bytes. */
   size: number
   cover?: string
   // These settings to preserve model settings across threads
@@ -120,7 +117,6 @@ export type ModelSettingParams = {
   cont_batching?: boolean
   vision_model?: boolean
   text_model?: boolean
-  engine?: boolean
   top_p?: number
   top_k?: number
   min_p?: number
@@ -137,6 +133,11 @@ export type ModelSettingParams = {
 export type ModelRuntimeParams = {
   temperature?: number
   max_temperature?: number
+  /**
+   * @deprecated Use `max_tokens` instead. Both fields are validated and normalised
+   * by `extractInferenceParams`; keeping two names for the same concept causes
+   * ambiguity about which one a given consumer reads.
+   */
   token_limit?: number
   top_k?: number
   top_p?: number
@@ -145,12 +146,8 @@ export type ModelRuntimeParams = {
   stop?: string[]
   frequency_penalty?: number
   presence_penalty?: number
+  /** @deprecated Use the `provider` field on the associated ModelProvider config instead */
   engine?: string
-}
-
-// Represents a model that failed to initialize, including the error
-export type ModelInitFailed = Model & {
-  error: Error
 }
 
 /**

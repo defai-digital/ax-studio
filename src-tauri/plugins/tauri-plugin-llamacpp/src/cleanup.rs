@@ -25,9 +25,9 @@ pub async fn cleanup_processes<R: Runtime>(app_handle: &tauri::AppHandle<R>) {
 
                     // Check if this process is a process group leader (pgid == pid).
                     // If so, send signals to the whole group (negative PID) to also
-                    // kill any child processes it may have spawned.
+                    // kill child processes like llama-server instances spawned by ax-serving.
                     let pgid = unsafe { libc::getpgid(raw_pid) };
-                    let is_group_leader = pgid == raw_pid;
+                    let is_group_leader = pgid > 0 && pgid == raw_pid;
 
                     let signal_target = if is_group_leader {
                         log::debug!(

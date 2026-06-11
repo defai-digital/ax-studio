@@ -93,21 +93,14 @@ export interface ModelValidationResult {
 }
 
 
-export type PreflightReason =
-  | 'AUTH_REQUIRED'
-  | 'LICENSE_NOT_ACCEPTED'
-  | 'NOT_FOUND'
-  | 'RATE_LIMITED'
-  | 'NETWORK'
-  | 'UNKNOWN'
-
 export interface ModelsService {
   getModel(modelId: string): Promise<modelInfo | undefined>
   fetchModels(): Promise<modelInfo[]>
   fetchModelCatalog(): Promise<ModelCatalog>
   fetchHuggingFaceRepo(
     repoId: string,
-    hfToken?: string
+    hfToken?: string,
+    signal?: AbortSignal
   ): Promise<HuggingFaceRepo | null>
   convertHfRepoToCatalogModel(repo: HuggingFaceRepo): CatalogModel
   updateModel(modelId: string, model: Partial<CoreModel>): Promise<void>
@@ -118,7 +111,8 @@ export interface ModelsService {
     modelSize?: number,
     mmprojPath?: string,
     mmprojSha256?: string,
-    mmprojSize?: number
+    mmprojSize?: number,
+    downloadHeaders?: Record<string, string>
   ): Promise<void>
   pullModelWithMetadata(
     id: string,

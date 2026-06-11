@@ -67,6 +67,9 @@ impl McpSettings {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolWithServer {
     pub name: String,
+    // MCP protocol does not require a description — omit the key entirely when
+    // absent so the TypeScript side sees `undefined` rather than `null`.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     #[serde(rename = "inputSchema")]
     pub input_schema: serde_json::Value,

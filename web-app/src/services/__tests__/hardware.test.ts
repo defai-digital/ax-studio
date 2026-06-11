@@ -1,0 +1,294 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { TauriHardwareService } from '../hardware/tauri'
+import { HardwareData, SystemUsage } from '@/hooks/settings/useHardware'
+import { invoke } from '@tauri-apps/api/core'
+
+// Mock @tauri-apps/api/core
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(),
+}))
+
+describe('TauriHardwareService', () => {
+  let hardwareService: TauriHardwareService
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    hardwareService = new TauriHardwareService()
+    vi.clearAllMocks()
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleWarnSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
+  })
+
+  describe('getHardwareInfo', () => {
+    it('should call invoke with correct command and return hardware data', async () => {
+      const mockHardwareData: HardwareData = {
+        cpu: {
+          arch: 'x86_64',
+          core_count: 8,
+          extensions: ['SSE', 'AVX'],
+          name: 'Intel Core i7',
+          usage: 0,
+        },
+        gpus: [
+          {
+            name: 'NVIDIA RTX 3080',
+            total_memory: 10240,
+            vendor: 'NVIDIA',
+            uuid: 'gpu-uuid-1',
+            driver_version: '472.12',
+            activated: false,
+            nvidia_info: {
+              index: 0,
+              compute_capability: '8.6',
+            },
+            vulkan_info: {
+              index: 0,
+              device_id: 123,
+              device_type: 'DiscreteGpu',
+              api_version: '1.2.0',
+            },
+          },
+        ],
+        os_type: 'Windows',
+        os_name: 'Windows 11',
+        total_memory: 16384,
+      }
+
+      vi.mocked(invoke).mockResolvedValue(mockHardwareData)
+
+      const result = await hardwareService.getHardwareInfo()
+
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith('plugin:hardware|get_system_info')
+      expect(result).toEqual(mockHardwareData)
+    })
+
+    it('should handle invoke rejection', async () => {
+      const mockError = new Error('Failed to get hardware info')
+      vi.mocked(invoke).mockRejectedValue(mockError)
+
+      await expect(hardwareService.getHardwareInfo()).resolves.toBeNull()
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith('plugin:hardware|get_system_info')
+    })
+
+    it('should return null when hardware info has an unexpected shape', async () => {
+      vi.mocked(invoke).mockResolvedValue('not-an-object')
+
+      await expect(hardwareService.getHardwareInfo()).resolves.toBeNull()
+
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[TauriHardwareService] get_system_info returned unexpected shape:',
+        'not-an-object'
+      )
+    })
+
+    it('should return correct type from invoke', async () => {
+      const mockHardwareData: HardwareData = {
+        cpu: {
+          arch: 'arm64',
+          core_count: 4,
+          extensions: [],
+          name: 'Apple M1',
+          usage: 0,
+        },
+        gpus: [],
+        os_type: 'macOS',
+        os_name: 'macOS Monterey',
+        total_memory: 8192,
+      }
+
+      vi.mocked(invoke).mockResolvedValue(mockHardwareData)
+
+      const result = await hardwareService.getHardwareInfo()
+
+      expect(result).toBeDefined()
+      expect(result.cpu).toBeDefined()
+      expect(result.gpus).toBeDefined()
+      expect(Array.isArray(result.gpus)).toBe(true)
+      expect(result.os_type).toBeDefined()
+      expect(result.os_name).toBeDefined()
+      expect(result.total_memory).toBeDefined()
+    })
+  })
+
+  describe('getSystemUsage', () => {
+    it('should call invoke with correct command and return system usage data', async () => {
+      const mockSystemUsage: SystemUsage = {
+        cpu: 45.5,
+        used_memory: 8192,
+        total_memory: 16384,
+        gpus: [
+          {
+            uuid: 'gpu-uuid-1',
+            used_memory: 2048,
+            total_memory: 10240,
+          },
+        ],
+      }
+
+      vi.mocked(invoke).mockResolvedValue(mockSystemUsage)
+
+      const result = await hardwareService.getSystemUsage()
+
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith('plugin:hardware|get_system_usage')
+      expect(result).toEqual(mockSystemUsage)
+    })
+
+    it('should handle invoke rejection', async () => {
+      const mockError = new Error('Failed to get system usage')
+      vi.mocked(invoke).mockRejectedValue(mockError)
+
+      await expect(hardwareService.getSystemUsage()).resolves.toBeNull()
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith('plugin:hardware|get_system_usage')
+    })
+
+    it('should return null when system usage has an unexpected shape', async () => {
+      vi.mocked(invoke).mockResolvedValue(null)
+
+      await expect(hardwareService.getSystemUsage()).resolves.toBeNull()
+
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[TauriHardwareService] get_system_usage returned unexpected shape:',
+        null
+      )
+    })
+
+    it('should return correct type from invoke', async () => {
+      const mockSystemUsage: SystemUsage = {
+        cpu: 25.0,
+        used_memory: 4096,
+        total_memory: 8192,
+        gpus: [],
+      }
+
+      vi.mocked(invoke).mockResolvedValue(mockSystemUsage)
+
+      const result = await hardwareService.getSystemUsage()
+
+      expect(result).toBeDefined()
+      expect(typeof result.cpu).toBe('number')
+      expect(typeof result.used_memory).toBe('number')
+      expect(typeof result.total_memory).toBe('number')
+      expect(Array.isArray(result.gpus)).toBe(true)
+    })
+
+    it('should handle system usage with multiple GPUs', async () => {
+      const mockSystemUsage: SystemUsage = {
+        cpu: 35.2,
+        used_memory: 12288,
+        total_memory: 32768,
+        gpus: [
+          {
+            uuid: 'gpu-uuid-1',
+            used_memory: 4096,
+            total_memory: 8192,
+          },
+          {
+            uuid: 'gpu-uuid-2',
+            used_memory: 6144,
+            total_memory: 12288,
+          },
+        ],
+      }
+
+      vi.mocked(invoke).mockResolvedValue(mockSystemUsage)
+
+      const result = await hardwareService.getSystemUsage()
+
+      expect(result.gpus).toHaveLength(2)
+      expect(result.gpus[0].uuid).toBe('gpu-uuid-1')
+      expect(result.gpus[1].uuid).toBe('gpu-uuid-2')
+    })
+  })
+
+  describe('integration tests', () => {
+    it('should handle concurrent calls to getHardwareInfo and getSystemUsage', async () => {
+      const mockHardwareData: HardwareData = {
+        cpu: {
+          arch: 'x86_64',
+          core_count: 16,
+          extensions: ['AVX2'],
+          name: 'AMD Ryzen 9',
+          usage: 0,
+        },
+        gpus: [],
+        os_type: 'Linux',
+        os_name: 'Ubuntu 22.04',
+        total_memory: 32768,
+      }
+
+      const mockSystemUsage: SystemUsage = {
+        cpu: 15.5,
+        used_memory: 16384,
+        total_memory: 32768,
+        gpus: [],
+      }
+
+      vi.mocked(invoke)
+        .mockResolvedValueOnce(mockHardwareData)
+        .mockResolvedValueOnce(mockSystemUsage)
+
+      const [hardwareResult, usageResult] = await Promise.all([
+        hardwareService.getHardwareInfo(),
+        hardwareService.getSystemUsage(),
+      ])
+
+      expect(hardwareResult).toEqual(mockHardwareData)
+      expect(usageResult).toEqual(mockSystemUsage)
+      expect(vi.mocked(invoke)).toHaveBeenCalledTimes(2)
+      expect(vi.mocked(invoke)).toHaveBeenNthCalledWith(1, 'plugin:hardware|get_system_info')
+      expect(vi.mocked(invoke)).toHaveBeenNthCalledWith(2, 'plugin:hardware|get_system_usage')
+    })
+  })
+
+  describe('getLlamacppDevices', () => {
+    it('should return devices from the llama.cpp extension', async () => {
+      const devices = [{ id: 'gpu-1', name: 'GPU 1' }]
+      ;(window as any).core.extensionManager = {
+        getByName: vi.fn().mockReturnValue({
+          getDevices: vi.fn().mockResolvedValue(devices),
+        }),
+      }
+
+      await expect(hardwareService.getLlamacppDevices()).resolves.toEqual(devices)
+    })
+
+    it('should return an empty list when the llama.cpp extension is missing', async () => {
+      ;(window as any).core.extensionManager = {
+        getByName: vi.fn().mockReturnValue(undefined),
+      }
+
+      await expect(hardwareService.getLlamacppDevices()).resolves.toEqual([])
+    })
+
+    it('should return an empty list when the extension does not expose getDevices', async () => {
+      ;(window as any).core.extensionManager = {
+        getByName: vi.fn().mockReturnValue({ provider: 'llamacpp' }),
+      }
+
+      await expect(hardwareService.getLlamacppDevices()).resolves.toEqual([])
+    })
+
+    it('should return an empty list when the llama.cpp extension fails', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      ;(window as any).core.extensionManager = {
+        getByName: vi.fn().mockReturnValue({
+          getDevices: vi.fn().mockRejectedValue(new Error('device scan failed')),
+        }),
+      }
+
+      await expect(hardwareService.getLlamacppDevices()).resolves.toEqual([])
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        '[TauriHardwareService] getLlamacppDevices failed:',
+        expect.any(Error)
+      )
+      errorSpy.mockRestore()
+    })
+  })
+})

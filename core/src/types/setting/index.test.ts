@@ -1,6 +1,7 @@
-import { it, expect } from 'vitest'
-import './index'
+import { expectTypeOf, it } from 'vitest'
+import type { SettingComponentProps as ReExportedSettingComponentProps } from './index'
+import type { SettingComponentProps as DirectSettingComponentProps } from './settingComponent'
 
-it('should not throw any errors', () => {
-  expect(true).toBe(true)
+it('re-exports SettingComponentProps from settingComponent', () => {
+  expectTypeOf<ReExportedSettingComponentProps>().toEqualTypeOf<DirectSettingComponentProps>()
 })

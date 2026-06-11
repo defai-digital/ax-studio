@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import * as React from "react";
 
@@ -22,7 +22,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "./dropdown-menu";
-import { useIsMobile } from "@/hooks/useMobile";
+import { useIsMobile } from "@/hooks/ui/use-mobile";
 import { cn } from "@/lib/utils";
 
 const DropDrawerContext = React.createContext<{ isMobile: boolean }>({
@@ -243,6 +243,10 @@ function DropDrawerContent({
       if (id) {
         setSubmenuContentCache((prev) => {
           const newCache = new Map(prev);
+          if (newCache.size > 50) {
+            const firstKey = newCache.keys().next().value
+            if (firstKey) newCache.delete(firstKey)
+          }
           newCache.set(id, submenuContent);
           return newCache;
         });

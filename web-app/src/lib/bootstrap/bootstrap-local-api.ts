@@ -22,44 +22,80 @@ export type BootstrapLocalApiInput = {
   config: LocalApiServerConfig
   setServerStatus: (status: 'pending' | 'running' | 'stopped') => void
   setServerPort: (port: number) => void
+  /** Persist the apiKey the server actually launched with so the chat client
+   *  can send the matching `Authorization: Bearer <key>` header. */
+  setApiKey?: (key: string) => void
 }
+
+let bootstrapLocalApiInFlight: Promise<BootstrapResult> | null = null
 
 export async function bootstrapLocalApi(
   input: BootstrapLocalApiInput
 ): Promise<BootstrapResult> {
-  const { serviceHub, enabled, config, setServerStatus, setServerPort } = input
+  const { serviceHub, enabled, config, setServerStatus, setServerPort, setApiKey } = input
 
   if (!enabled) return ok()
 
-  try {
-    const isRunning = await serviceHub.app().getServerStatus()
-    if (isRunning) {
-      console.log('Local API Server is already running')
-      setServerStatus('running')
-      return ok()
-    }
-
+  if (bootstrapLocalApiInFlight) {
     setServerStatus('pending')
 
-    const actualPort = await window.core?.api?.startServer({
-      host: config.host,
-      port: config.port,
-      prefix: config.prefix,
-      apiKey: config.apiKey,
-      trustedHosts: config.trustedHosts,
-      isCorsEnabled: config.corsEnabled,
-      isVerboseEnabled: config.verboseLogs,
-      proxyTimeout: config.proxyTimeout,
-    })
+    const result = await bootstrapLocalApiInFlight
+    setServerStatus(result.ok ? 'running' : 'stopped')
+    return result
+  }
 
-    if (actualPort && actualPort !== config.port) {
-      setServerPort(actualPort)
+  // Rust rejects empty API keys, so ensure we always send a non-empty one.
+  const effectiveApiKey =
+    config.apiKey && config.apiKey.trim().length > 0
+      ? config.apiKey
+      : 'ax-' + Array.from(crypto.getRandomValues(new Uint8Array(24)), (b) => b.toString(16).padStart(2, '0')).join('')
+
+  // Persist the effective key back to the Zustand store so that chat
+  // requests (model-factory.ts, custom-chat-transport.ts) read the SAME
+  // value and can attach it as a Bearer token.
+  if (effectiveApiKey !== config.apiKey && setApiKey) {
+    setApiKey(effectiveApiKey)
+  }
+
+  bootstrapLocalApiInFlight = (async () => {
+    try {
+      const isRunning = await serviceHub.app().getServerStatus()
+      if (isRunning) {
+        console.info('Local API Server is already running')
+        setServerStatus('running')
+        return ok()
+      }
+
+      setServerStatus('pending')
+
+      // CORS must be enabled so the webview can reach the proxy via native fetch.
+      // Force it on to survive users with persisted `false` from old defaults.
+      const actualPort = await window.core?.api?.startServer({
+        host: config.host,
+        port: config.port,
+        prefix: config.prefix,
+        apiKey: effectiveApiKey,
+        trustedHosts: config.trustedHosts,
+        isCorsEnabled: true,
+        isVerboseEnabled: config.verboseLogs,
+        proxyTimeout: config.proxyTimeout,
+      })
+
+      if (actualPort && (actualPort as number) !== config.port) {
+        setServerPort(actualPort as number)
+      }
+      setServerStatus('running')
+      return ok()
+    } catch (error) {
+      console.error('Failed to start Local API Server on startup:', error)
+      setServerStatus('stopped')
+      return fail(error)
     }
-    setServerStatus('running')
-    return ok()
-  } catch (error) {
-    console.error('Failed to start Local API Server on startup:', error)
-    setServerStatus('stopped')
-    return fail(error)
+  })()
+
+  try {
+    return await bootstrapLocalApiInFlight
+  } finally {
+    bootstrapLocalApiInFlight = null
   }
 }

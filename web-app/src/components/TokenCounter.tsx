@@ -6,7 +6,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { useTokensCount } from '@/hooks/useTokensCount'
+import { useTokensCount } from '@/hooks/chat/useTokensCount'
 import { ThreadMessage } from '@ax-studio/core'
 
 interface TokenCounterProps {
@@ -21,6 +21,7 @@ interface TokenCounterProps {
     base64: string
     dataUrl: string
   }>
+  model?: Model
 }
 
 export const TokenCounter = memo(function TokenCounter({
@@ -28,15 +29,17 @@ export const TokenCounter = memo(function TokenCounter({
   className,
   additionalTokens = 0,
   uploadedFiles = [],
+  model,
 }: TokenCounterProps) {
   const { calculateTokens, ...tokenData } = useTokensCount(
     messages,
-    uploadedFiles
+    uploadedFiles,
+    model
   )
 
   const [isAnimating, setIsAnimating] = useState(false)
-  const [prevTokenCount, setPrevTokenCount] = useState(0)
   const [isUpdating, setIsUpdating] = useState(false)
+  const prevTokenCountRef = useRef(0)
   const timersRef = useRef<{ update?: NodeJS.Timeout; anim?: NodeJS.Timeout }>(
     {}
   )
@@ -49,13 +52,14 @@ export const TokenCounter = memo(function TokenCounter({
   // Handle token count changes with proper debouncing and cleanup
   useEffect(() => {
     const currentTotal = tokenData.tokenCount + additionalTokens
+    const previousTotal = prevTokenCountRef.current
     const timers = timersRef.current
 
     // Clear any existing timers
     if (timers.update) clearTimeout(timers.update)
     if (timers.anim) clearTimeout(timers.anim)
 
-    if (currentTotal !== prevTokenCount) {
+    if (currentTotal !== previousTotal) {
       setIsUpdating(true)
 
       // Clear updating state after a longer delay for smoother transitions
@@ -64,8 +68,8 @@ export const TokenCounter = memo(function TokenCounter({
       }, 250)
 
       // Only animate for significant changes and avoid animating on initial load
-      if (prevTokenCount > 0) {
-        const difference = Math.abs(currentTotal - prevTokenCount)
+      if (previousTotal > 0) {
+        const difference = Math.abs(currentTotal - previousTotal)
         if (difference > 10) {
           // Increased threshold to reduce micro-animations
           setIsAnimating(true)
@@ -75,7 +79,7 @@ export const TokenCounter = memo(function TokenCounter({
         }
       }
 
-      setPrevTokenCount(currentTotal)
+      prevTokenCountRef.current = currentTotal
     }
 
     // Cleanup function
@@ -83,7 +87,7 @@ export const TokenCounter = memo(function TokenCounter({
       if (timers.update) clearTimeout(timers.update)
       if (timers.anim) clearTimeout(timers.anim)
     }
-  }, [tokenData.tokenCount, additionalTokens, prevTokenCount])
+  }, [tokenData.tokenCount, additionalTokens])
 
   const totalTokens = useMemo(() => {
     return tokenData.tokenCount + additionalTokens

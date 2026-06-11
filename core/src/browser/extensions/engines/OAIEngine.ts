@@ -1,4 +1,4 @@
-import { AIEngine } from './AIEngine'
+import { AIEngine, chatCompletionRequest, chatCompletionChunk } from './AIEngine'
 import {
   InferenceEvent,
   MessageEvent,
@@ -23,28 +23,79 @@ export abstract class OAIEngine extends AIEngine {
   loadedModel: Model | undefined
 
   // Transform the payload
-  transformPayload?: Function
+  transformPayload?: (payload: chatCompletionRequest) => chatCompletionRequest
 
   // Transform the response
-  transformResponse?: Function
+  transformResponse?: (response: chatCompletionChunk) => chatCompletionChunk
+
+  // Idempotency guard — see `onLoad`/`onUnload` below. Without this,
+  // re-entering `onLoad()` (extension manager re-initialization, HMR)
+  // registers another set of `OnMessageSent` / `OnInferenceStopped`
+  // listeners, so each chat message triggers N concurrent `inference()`
+  // calls.
+  private loaded = false
+
+  private inferencing = false
+
+  private readonly handleMessageSent = (data: MessageRequest) => {
+    if (!data || typeof data !== 'object') return
+    if (this.inferencing) return
+    this.resetInferenceController()
+    this.inferencing = true
+    void Promise.resolve()
+      .then(() => this.inference(data))
+      .catch((error) => {
+        console.error('[OAIEngine] Failed to run inference:', error)
+        events.emit(MessageEvent.OnMessageResponse, {
+          ...data,
+          status: 'error',
+          error: String(error?.message ?? error),
+        } as MessageRequest & { status: 'error'; error: string })
+      })
+      .finally(() => {
+        this.inferencing = false
+      })
+  }
+
+  private readonly handleInferenceStopped = () => {
+    this.stopInference()
+  }
+
+  /**
+   * Create a fresh AbortController and clear the cancelled flag.
+   * Subclass `inference()` implementations can also call this defensively
+   * if they enter inference through another code path (retries, fallbacks).
+   */
+  protected resetInferenceController() {
+    if (this.controller && !this.controller.signal.aborted) {
+      this.controller.abort()
+    }
+    this.controller = new AbortController()
+    this.isCancelled = false
+  }
 
   /**
    * On extension load, subscribe to events.
    */
   override onLoad() {
+    if (this.loaded) return
+    this.loaded = true
     super.onLoad()
-    events.on(MessageEvent.OnMessageSent, (data: MessageRequest) =>
-      this.inference(data)
-    )
-    events.on(InferenceEvent.OnInferenceStopped, () => this.stopInference())
+    events.on(MessageEvent.OnMessageSent, this.handleMessageSent)
+    events.on(InferenceEvent.OnInferenceStopped, this.handleInferenceStopped)
   }
 
   /**
    * On extension unload
    */
-  override onUnload(): void {}
+  override onUnload(): void {
+    this.loaded = false
+    events.off(MessageEvent.OnMessageSent, this.handleMessageSent)
+    events.off(InferenceEvent.OnInferenceStopped, this.handleInferenceStopped)
+  }
 
-  inference(data: MessageRequest) {}
+  /** Override in subclasses to handle inference requests; default is a no-op. */
+  inference(_data: MessageRequest): void | Promise<unknown> {}
 
   /**
    * Stops the inference.

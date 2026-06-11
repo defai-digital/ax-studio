@@ -1,9 +1,11 @@
 import { useEffect } from 'react'
 import { events, ModelEvent, AppEvent, DownloadEvent } from '@ax-studio/core'
-import { useModelProvider } from '@/features/models/hooks/useModelProvider'
+import { useNavigate } from '@tanstack/react-router'
+import { route } from '@/constants/routes'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
-import { useDownloadStore } from '@/features/models/hooks/useDownloadStore'
-import { useAppState } from '@/hooks/useAppState'
+import { useDownloadStore } from '@/hooks/models/useDownloadStore'
+import { useAppState } from '@/hooks/settings/useAppState'
 import { toast } from 'sonner'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 
@@ -27,6 +29,7 @@ const ERROR_CODE_MAP: Record<string, string> = {
 export function GlobalEventHandler() {
   const { setProviders } = useModelProvider()
   const serviceHub = useServiceHub()
+  const navigate = useNavigate()
   const { t } = useTranslation()
 
   // ─── Settings changes ───────────────────────────────────────────────────────
@@ -58,35 +61,79 @@ export function GlobalEventHandler() {
   const setActiveModels = useAppState((state) => state.setActiveModels)
 
   useEffect(() => {
+    // Sequence counter: if model-ready and model-stopped fire close together,
+    // both handlers call the async getActiveModels() concurrently. The resolve
+    // order isn't guaranteed to match the event order, so the later event's
+    // result can be overwritten by the earlier one's result. Dropping stale
+    // resolutions by sequence number keeps the active-models indicator
+    // consistent with the true event order.
+    let eventSeq = 0
+
     /**
      * OnModelReady — the llamacpp extension emits this after a model is loaded.
-     * The engine layer is responsible for proxy registration; the app only
-     * refreshes active-model state here.
+     * Register the local provider (llamacpp/mlx) with the proxy so it can inject
+     * the correct api_key when forwarding requests to the local server port.
+     * Without this, the proxy forwards no Authorization header and the local
+     * server responds with "Invalid API Key".
      */
-    const handleModelReady = async (_payload: {
+    const handleModelReady = async (payload: {
       modelId?: string
       port?: number
       api_key?: string
       provider?: string
     }) => {
-      // Update active models list
+      const seq = ++eventSeq
+
+      // Register the local provider in the proxy's AppState so it knows the
+      // base_url (localhost:<port>) and api_key to inject for this session.
+      if (payload?.port) {
+        const providerName = payload.provider ?? 'llamacpp'
+        try {
+          await serviceHub.core().invoke('register_provider_config', {
+            request: {
+              provider: providerName,
+              api_key: payload.api_key ?? null,
+              base_url: `http://127.0.0.1:${payload.port}/v1`,
+              custom_headers: [],
+              models: payload.modelId ? [payload.modelId] : [],
+            },
+          })
+        } catch (err) {
+          console.error(`[GlobalEventHandler] Failed to register local provider '${providerName}' with proxy:`, err)
+        }
+      }
+
       try {
         const active = await serviceHub.models().getActiveModels()
+        if (seq !== eventSeq) return
         setActiveModels(active || [])
-      } catch {
-        // ignore
+      } catch (error) {
+        if (seq !== eventSeq) return
+        console.error('[GlobalEventHandler] Failed to refresh active models after model ready:', error)
       }
     }
 
     /**
-     * OnModelStopped — update active models list when a model is unloaded.
+     * OnModelStopped — update active models list and unregister the local provider
+     * from the proxy so stale sessions don't linger.
      */
-    const handleModelStopped = async () => {
+    const handleModelStopped = async (payload?: { provider?: string }) => {
+      const seq = ++eventSeq
+
+      const providerName = payload?.provider ?? 'llamacpp'
+      try {
+        await serviceHub.core().invoke('unregister_provider_config', { provider: providerName })
+      } catch (err) {
+        console.error(`[GlobalEventHandler] Failed to unregister local provider '${providerName}' from proxy:`, err)
+      }
+
       try {
         const active = await serviceHub.models().getActiveModels()
+        if (seq !== eventSeq) return
         setActiveModels(active || [])
-      } catch {
-        // ignore
+      } catch (error) {
+        if (seq !== eventSeq) return
+        console.error('[GlobalEventHandler] Failed to refresh active models after model stopped:', error)
       }
     }
 
@@ -116,28 +163,21 @@ export function GlobalEventHandler() {
         ? ERROR_CODE_MAP[matchedCode]
         : 'modelLoadFailed'
 
+      const isOOM =
+        messageKey === 'outOfMemory' ||
+        error.toLowerCase().includes('out of memory') ||
+        error.toLowerCase().includes('oom') ||
+        error.toLowerCase().includes('failed to allocate')
+
       const userMessage = t(
-        `settings:llamacpp.errors.${messageKey}` as Parameters<typeof t>[0]
+        `settings:llamacpp.errors.${isOOM ? 'outOfMemory' : messageKey}` as Parameters<typeof t>[0]
       )
 
-      // Special human-friendly overrides for context-exceeded
       const isContextExceeded =
         error.includes('finish_reason') && error.includes('length')
       if (isContextExceeded) {
         toast.error(
           t('settings:llamacpp.errors.contextExceeded' as Parameters<typeof t>[0])
-        )
-        return
-      }
-
-      // OOM heuristic
-      const isOOM =
-        error.toLowerCase().includes('out of memory') ||
-        error.toLowerCase().includes('oom') ||
-        error.toLowerCase().includes('failed to allocate')
-      if (isOOM) {
-        toast.error(
-          t('settings:llamacpp.errors.outOfMemory' as Parameters<typeof t>[0])
         )
         return
       }
@@ -154,15 +194,11 @@ export function GlobalEventHandler() {
   // ─── Model import / validation events ──────────────────────────────────────
 
   useEffect(() => {
-    const handleModelImported = async () => {
-      // Refresh providers list to show the newly downloaded model
-      try {
-        const updatedProviders = await serviceHub.providers().getProviders()
-        setProviders(updatedProviders, serviceHub.path().sep())
-      } catch (error) {
-        console.error('Failed to refresh providers after import:', error)
-      }
-
+    // Provider refresh on model import is handled by bootstrapEvents()
+    // (see lib/bootstrap/bootstrap-events.ts) — registering it here too would
+    // trigger two concurrent getProviders()/setProviders() calls per import.
+    // We only own the user-visible toast notification here.
+    const handleModelImported = () => {
       toast.success(
         t('settings:llamacpp.errors.modelImported' as Parameters<typeof t>[0])
       )
@@ -181,13 +217,14 @@ export function GlobalEventHandler() {
       events.off(AppEvent.onModelImported, handleModelImported)
       events.off(DownloadEvent.onModelValidationFailed, handleModelValidationFailed)
     }
-  }, [t, serviceHub, setProviders])
+  }, [t])
 
   // ─── Download events ───────────────────────────────────────────────────────
 
   const { updateProgress, removeDownload, removeLocalDownloadingModel } = useDownloadStore()
 
   type DownloadState = {
+    downloadId?: string
     modelId: string
     percent?: number
     transferred?: number
@@ -196,28 +233,35 @@ export function GlobalEventHandler() {
   }
 
   useEffect(() => {
+    const getDownloadId = (state: DownloadState) =>
+      state.downloadId ?? state.modelId
+
     const onFileDownloadUpdate = (state: DownloadState) => {
-      const modelId = state.modelId
-      const percent = state.percent ?? (state.total ? (state.transferred ?? 0) / state.total : 0)
+      const downloadId = getDownloadId(state)
+      const rawPercent = state.percent ?? (state.total ? (state.transferred ?? 0) / state.total : 0)
+      const percent = Math.max(0, Math.min(100, rawPercent))
       const transferred = state.size?.transferred ?? state.transferred ?? 0
       const total = state.size?.total ?? state.total ?? 0
 
-      updateProgress(modelId, percent, modelId, transferred, total)
+      updateProgress(downloadId, percent, downloadId, transferred, total)
     }
 
     const onFileDownloadSuccess = (state: DownloadState) => {
-      removeDownload(state.modelId)
-      removeLocalDownloadingModel(state.modelId)
+      const downloadId = getDownloadId(state)
+      removeDownload(downloadId)
+      removeLocalDownloadingModel(downloadId)
     }
 
     const onFileDownloadError = (state: DownloadState) => {
-      removeDownload(state.modelId)
-      removeLocalDownloadingModel(state.modelId)
+      const downloadId = getDownloadId(state)
+      removeDownload(downloadId)
+      removeLocalDownloadingModel(downloadId)
     }
 
     const onFileDownloadStopped = (state: DownloadState) => {
-      removeDownload(state.modelId)
-      removeLocalDownloadingModel(state.modelId)
+      const downloadId = getDownloadId(state)
+      removeDownload(downloadId)
+      removeLocalDownloadingModel(downloadId)
     }
 
     events.on(DownloadEvent.onFileDownloadUpdate, onFileDownloadUpdate)
@@ -254,8 +298,10 @@ export function GlobalEventHandler() {
           action: {
             label: t('settings:hardware.updateNow' as Parameters<typeof t>[0]),
             onClick: () => {
-              // Navigate to hardware settings — user can click "Update Now" there
-              window.location.hash = '#/settings/hardware'
+              // Navigate via TanStack Router — the app is path-based, so
+              // setting `window.location.hash` only added a URL fragment
+              // and did nothing to the visible route.
+              navigate({ to: route.settings.hardware })
             },
           },
         }
@@ -266,7 +312,7 @@ export function GlobalEventHandler() {
     return () => {
       events.off('onBackendUpdateAvailable', handleBackendUpdateAvailable)
     }
-  }, [t])
+  }, [t, navigate])
 
   return null
 }

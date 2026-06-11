@@ -1,180 +1,104 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/naming-convention */
-import { ModelParams, ModelRuntimeParams, ModelSettingParams } from '../../types'
+type ValidationRule = (value: unknown) => boolean
 
-/**
- * Validation rules for model parameters
- */
-export const validationRules: { [key: string]: (value: any) => boolean } = {
-  temperature: (value: any) => typeof value === 'number' && value >= 0 && value <= 2,
-  token_limit: (value: any) => Number.isInteger(value) && value >= 0,
-  top_k: (value: any) => typeof value === 'number' && value >= 0,
-  top_p: (value: any) => typeof value === 'number' && value >= 0 && value <= 1,
-  stream: (value: any) => typeof value === 'boolean',
-  max_tokens: (value: any) => Number.isInteger(value) && value >= 0,
-  stop: (value: any) => Array.isArray(value) && value.every((v) => typeof v === 'string'),
-  frequency_penalty: (value: any) => typeof value === 'number' && value >= -2 && value <= 2,
-  presence_penalty: (value: any) => typeof value === 'number' && value >= -2 && value <= 2,
-  repeat_last_n: (value: any) => typeof value === 'number',
-  repeat_penalty: (value: any) => typeof value === 'number',
-  min_p: (value: any) => typeof value === 'number',
-
-  ctx_len: (value: any) => Number.isInteger(value) && value >= 0,
-  ngl: (value: any) => Number.isInteger(value) && value >= 0,
-  embedding: (value: any) => typeof value === 'boolean',
-  n_parallel: (value: any) => Number.isInteger(value) && value >= 0,
-  cpu_threads: (value: any) => Number.isInteger(value) && value >= 0,
-  prompt_template: (value: any) => typeof value === 'string',
-  llama_model_path: (value: any) => typeof value === 'string',
-  mmproj: (value: any) => typeof value === 'string',
-  vision_model: (value: any) => typeof value === 'boolean',
-  text_model: (value: any) => typeof value === 'boolean',
+export const validationRules: Record<string, ValidationRule> = {
+  temperature: (v) => typeof v === 'number' && v >= 0 && v <= 2,
+  token_limit: (v) => typeof v === 'number' && v >= 0,
+  top_k: (v) => typeof v === 'number' && v >= 0 && v <= 1.1,
+  top_p: (v) => typeof v === 'number' && v >= 0 && v <= 1,
+  stream: (v) => typeof v === 'boolean',
+  max_tokens: (v) => typeof v === 'number' && v >= 0,
+  stop: (v) => Array.isArray(v) && v.every((s) => typeof s === 'string'),
+  frequency_penalty: (v) => typeof v === 'number',
+  presence_penalty: (v) => typeof v === 'number',
+  ctx_len: (v) => typeof v === 'number' && v >= 0,
+  ngl: (v) => typeof v === 'number' && v >= 0,
+  embedding: (v) => typeof v === 'boolean',
+  n_parallel: (v) => typeof v === 'number' && v >= 0,
+  cpu_threads: (v) => typeof v === 'number' && v >= 0,
+  prompt_template: (v) => typeof v === 'string',
+  llama_model_path: (v) => typeof v === 'string',
+  mmproj: (v) => typeof v === 'string',
+  vision_model: (v) => typeof v === 'boolean',
+  text_model: (v) => typeof v === 'boolean',
+  repeat_last_n: (v) => typeof v === 'number',
+  repeat_penalty: (v) => typeof v === 'number',
+  min_p: (v) => typeof v === 'number',
 }
 
-/**
- * There are some parameters that need to be normalized before being sent to the server
- * E.g. ctx_len should be an integer, but it can be a float from the input field
- * @param key
- * @param value
- * @returns
- */
-export const normalizeValue = (key: string, value: any) => {
-  if (
-    key === 'token_limit' ||
-    key === 'max_tokens' ||
-    key === 'ctx_len' ||
-    key === 'ngl' ||
-    key === 'n_parallel' ||
-    key === 'cpu_threads'
-  ) {
-    // Convert to integer
-    return Math.floor(Number(value))
+const INTEGER_KEYS = new Set([
+  'ctx_len', 'token_limit', 'max_tokens', 'ngl', 'n_parallel', 'cpu_threads',
+])
+
+const FLOAT_KEYS = new Set([
+  'temperature', 'top_p', 'top_k', 'min_p', 'frequency_penalty',
+  'presence_penalty', 'repeat_penalty', 'repeat_last_n',
+])
+
+export function normalizeValue(key: string, value: unknown): unknown {
+  if (INTEGER_KEYS.has(key)) {
+    if (typeof value === 'string') return parseInt(value, 10)
+    if (typeof value === 'number') return Math.trunc(value)
+    if (value === null) return 0
+    if (value === undefined) return NaN
+    return value
   }
-  if (
-    key === 'temperature' ||
-    key === 'top_k' ||
-    key === 'top_p' ||
-    key === 'min_p' ||
-    key === 'repeat_penalty' ||
-    key === 'frequency_penalty' ||
-    key === 'presence_penalty' ||
-    key === 'repeat_last_n'
-  ) {
-    // Convert to float
-    const newValue = parseFloat(value)
-    if (newValue !== null && !isNaN(newValue)) {
-      return newValue
-    }
+  if (FLOAT_KEYS.has(key) && typeof value === 'string') {
+    return Number(value)
   }
   return value
 }
 
-/**
- * Extract inference parameters from flat model parameters
- * @param modelParams
- * @returns
- */
-export const extractInferenceParams = (
-  modelParams?: ModelParams,
-  originParams?: ModelParams
-): ModelRuntimeParams => {
+const INFERENCE_ALLOW = new Set([
+  'temperature', 'token_limit', 'top_k', 'top_p', 'stream', 'max_tokens',
+  'stop', 'frequency_penalty', 'presence_penalty', 'repeat_last_n', 'min_p',
+  'repeat_penalty', 'engine',
+])
+
+export function extractInferenceParams(
+  modelParams?: Record<string, unknown>,
+  originParams?: Record<string, unknown>,
+): Record<string, unknown> {
   if (!modelParams) return {}
-  const defaultModelParams: ModelRuntimeParams = {
-    temperature: undefined,
-    token_limit: undefined,
-    top_k: undefined,
-    top_p: undefined,
-    stream: undefined,
-    max_tokens: undefined,
-    stop: undefined,
-    frequency_penalty: undefined,
-    presence_penalty: undefined,
-    engine: undefined,
-  }
-
-  const runtimeParams: ModelRuntimeParams = {}
-
-  for (const [key, value] of Object.entries(modelParams)) {
-    if (key in defaultModelParams) {
-      const validate = validationRules[key]
-      if (validate && !validate(normalizeValue(key, value))) {
-        // Invalid value - fall back to origin value
-        if (originParams && key in originParams) {
-          Object.assign(runtimeParams, {
-            ...runtimeParams,
-            [key]: originParams[key as keyof typeof originParams],
-          })
-        }
-      } else {
-        Object.assign(runtimeParams, {
-          ...runtimeParams,
-          [key]: normalizeValue(key, value),
-        })
+  const result: Record<string, unknown> = {}
+  for (const [key, rawValue] of Object.entries(modelParams)) {
+    if (!INFERENCE_ALLOW.has(key) && !validationRules[key]) continue
+    const value = normalizeValue(key, rawValue)
+    if (validationRules[key]) {
+      if (validationRules[key](value)) {
+        result[key] = value
+      } else if (originParams && key in originParams) {
+        result[key] = originParams[key]
       }
+    } else {
+      result[key] = value
     }
   }
-
-  return runtimeParams
+  return result
 }
 
-/**
- * Extract model load parameters from flat model parameters
- * @param modelParams
- * @returns
- */
-export const extractModelLoadParams = (
-  modelParams?: ModelParams,
-  originParams?: ModelParams
-): ModelSettingParams => {
-  if (!modelParams) return {}
-  const defaultSettingParams: ModelSettingParams = {
-    ctx_len: undefined,
-    ngl: undefined,
-    embedding: undefined,
-    n_parallel: undefined,
-    cpu_threads: undefined,
-    pre_prompt: undefined,
-    system_prompt: undefined,
-    ai_prompt: undefined,
-    user_prompt: undefined,
-    prompt_template: undefined,
-    model_path: undefined,
-    llama_model_path: undefined,
-    mmproj: undefined,
-    cont_batching: undefined,
-    vision_model: undefined,
-    text_model: undefined,
-    engine: undefined,
-    top_p: undefined,
-    top_k: undefined,
-    min_p: undefined,
-    temperature: undefined,
-    repeat_penalty: undefined,
-    repeat_last_n: undefined,
-    presence_penalty: undefined,
-    frequency_penalty: undefined,
-  }
-  const settingParams: ModelSettingParams = {}
+const MODEL_LOAD_ALLOW = new Set([
+  'ctx_len', 'ngl', 'embedding', 'n_parallel', 'cpu_threads',
+  'prompt_template', 'llama_model_path', 'mmproj', 'vision_model', 'text_model',
+  'pre_prompt', 'system_prompt', 'model_path',
+])
 
-  for (const [key, value] of Object.entries(modelParams)) {
-    if (key in defaultSettingParams) {
-      const validate = validationRules[key]
-      if (validate && !validate(normalizeValue(key, value))) {
-        // Invalid value - fall back to origin value
-        if (originParams && key in originParams) {
-          Object.assign(modelParams, {
-            ...modelParams,
-            [key]: originParams[key as keyof typeof originParams],
-          })
-        }
-      } else {
-        Object.assign(settingParams, {
-          ...settingParams,
-          [key]: normalizeValue(key, value),
-        })
+export function extractModelLoadParams(
+  modelParams?: Record<string, unknown>,
+  originParams?: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!modelParams) return {}
+  const result: Record<string, unknown> = {}
+  for (const [key, rawValue] of Object.entries(modelParams)) {
+    const value = normalizeValue(key, rawValue)
+    if (validationRules[key]) {
+      if (validationRules[key](value)) {
+        result[key] = value
+      } else if (originParams && key in originParams) {
+        result[key] = originParams[key]
       }
+    } else if (MODEL_LOAD_ALLOW.has(key)) {
+      result[key] = value
     }
   }
-
-  return settingParams
+  return result
 }

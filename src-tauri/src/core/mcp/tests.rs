@@ -1,7 +1,7 @@
 use super::helpers::{add_server_config, add_server_config_with_path, run_mcp_commands};
 use crate::core::app::commands::get_app_data_folder_path;
-use crate::core::state::{McpState, SharedMcpServers};
-use std::collections::HashMap;
+use crate::core::state::{AppState, ProviderState, SharedMcpServers};
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
@@ -9,15 +9,26 @@ use std::sync::Arc;
 use tauri::{test::mock_app, Manager};
 use tokio::sync::Mutex;
 
-/// Helper to construct an `McpState` with the given `servers` and defaults for all other fields.
-fn test_mcp_state(servers: SharedMcpServers) -> McpState {
-    McpState {
-        servers,
-        active_servers: Arc::new(Mutex::new(HashMap::new())),
-        settings: Arc::new(Mutex::new(crate::core::mcp::models::McpSettings::default())),
-        shutdown_in_progress: Arc::new(Mutex::new(false)),
-        monitoring_tasks: Arc::new(Mutex::new(HashMap::new())),
-        server_pids: Arc::new(Mutex::new(HashMap::new())),
+/// Helper to construct an `AppState` with the given `mcp_servers` and defaults for all other fields.
+fn test_app_state(mcp_servers: SharedMcpServers) -> AppState {
+    AppState {
+        mcp_servers,
+        download_manager: Arc::new(Mutex::new(
+            crate::core::downloads::models::DownloadManagerState::default(),
+        )),
+        mcp_active_servers: Arc::new(Mutex::new(HashMap::new())),
+        server_handle: Arc::new(Mutex::new(None)),
+        tool_call_cancellations: Arc::new(Mutex::new(HashMap::new())),
+        akidb_sync_cancellation: Arc::new(Mutex::new(None)),
+        mcp_settings: Arc::new(Mutex::new(crate::core::mcp::models::McpSettings::default())),
+        mcp_shutdown_in_progress: Arc::new(Mutex::new(false)),
+        mcp_monitoring_tasks: Arc::new(Mutex::new(HashMap::new())),
+        background_cleanup_handle: Arc::new(Mutex::new(None)),
+        mcp_server_pids: Arc::new(Mutex::new(HashMap::new())),
+        provider_state: Arc::new(Mutex::new(ProviderState::default())),
+        approved_save_paths: Arc::new(Mutex::new(HashSet::new())),
+        factory_reset_lock: Arc::new(Mutex::new(())),
+        active_streams: Arc::new(Mutex::new(HashMap::new())),
     }
 }
 
@@ -25,9 +36,9 @@ fn test_mcp_state(servers: SharedMcpServers) -> McpState {
 async fn test_run_mcp_commands() {
     let app = mock_app();
 
-    // Register McpState so state::<McpState>() calls succeed
+    // Register AppState so state::<AppState>() calls succeed
     let servers_state: SharedMcpServers = Arc::new(Mutex::new(HashMap::new()));
-    app.manage(test_mcp_state(servers_state.clone()));
+    app.manage(test_app_state(servers_state.clone()));
 
     // Get the app path where the config should be created
     let app_path = get_app_data_folder_path(app.handle().clone());
@@ -245,72 +256,21 @@ fn test_bin_path_construction_windows() {
     assert_eq!(bun_path_str, r"C:\Program Files\bin\bun.exe");
 }
 
-// ============================================================================
-// Shutdown Context Tests
-// ============================================================================
-
-use super::helpers::ShutdownContext;
-use std::time::Duration;
-
-#[test]
-fn test_shutdown_context_app_exit_timeouts() {
-    let context = ShutdownContext::AppExit;
-    assert_eq!(context.per_server_timeout(), Duration::from_millis(500));
-    assert_eq!(context.overall_timeout(), Duration::from_millis(1500));
-}
-
-#[test]
-fn test_shutdown_context_manual_restart_timeouts() {
-    let context = ShutdownContext::ManualRestart;
-    assert_eq!(context.per_server_timeout(), Duration::from_secs(2));
-    assert_eq!(context.overall_timeout(), Duration::from_secs(5));
-}
-
-#[test]
-fn test_shutdown_context_factory_reset_timeouts() {
-    let context = ShutdownContext::FactoryReset;
-    assert_eq!(context.per_server_timeout(), Duration::from_secs(5));
-    assert_eq!(context.overall_timeout(), Duration::from_secs(10));
-}
-
-#[test]
-fn test_shutdown_context_overall_greater_than_per_server() {
-    for context in [
-        ShutdownContext::AppExit,
-        ShutdownContext::ManualRestart,
-        ShutdownContext::FactoryReset,
-    ] {
-        assert!(
-            context.overall_timeout() > context.per_server_timeout(),
-            "Overall timeout should be greater than per-server timeout for {:?}",
-            context
-        );
-    }
-}
-
-#[test]
-fn test_shutdown_context_is_copy() {
-    let context = ShutdownContext::AppExit;
-    let copied = context;
-    assert!(matches!(context, ShutdownContext::AppExit));
-    assert!(matches!(copied, ShutdownContext::AppExit));
-}
-
 #[tokio::test]
 async fn test_background_cleanup_with_empty_state() {
     use super::helpers::background_cleanup_mcp_servers;
 
     let app = mock_app();
     let servers_state: SharedMcpServers = Arc::new(Mutex::new(HashMap::new()));
-    app.manage(test_mcp_state(servers_state.clone()));
+    app.manage(test_app_state(servers_state.clone()));
 
-    let state = app.state::<McpState>();
+    let state = app.state::<AppState>();
     background_cleanup_mcp_servers(app.handle(), &state).await;
 
-    let servers = state.servers.lock().await;
+    let servers = state.mcp_servers.lock().await;
     assert!(servers.is_empty());
 
-    let active = state.active_servers.lock().await;
+    let active = state.mcp_active_servers.lock().await;
     assert!(active.is_empty());
 }
 
@@ -320,9 +280,9 @@ async fn test_stop_mcp_servers_with_context_empty_servers() {
 
     let app = mock_app();
     let servers_state: SharedMcpServers = Arc::new(Mutex::new(HashMap::new()));
-    app.manage(test_mcp_state(servers_state.clone()));
+    app.manage(test_app_state(servers_state.clone()));
 
-    let state = app.state::<McpState>();
+    let state = app.state::<AppState>();
     let result =
         stop_mcp_servers_with_context(app.handle(), &state, ShutdownContext::AppExit).await;
 
@@ -335,12 +295,12 @@ async fn test_stop_mcp_servers_prevents_concurrent_shutdown() {
 
     let app = mock_app();
     let servers_state: SharedMcpServers = Arc::new(Mutex::new(HashMap::new()));
-    app.manage(test_mcp_state(servers_state.clone()));
+    app.manage(test_app_state(servers_state.clone()));
 
-    let state = app.state::<McpState>();
+    let state = app.state::<AppState>();
 
     {
-        let mut shutdown_flag = state.shutdown_in_progress.lock().await;
+        let mut shutdown_flag = state.mcp_shutdown_in_progress.lock().await;
         *shutdown_flag = true;
     }
 
@@ -350,7 +310,7 @@ async fn test_stop_mcp_servers_prevents_concurrent_shutdown() {
     assert!(result.is_ok());
 
     {
-        let shutdown_flag = state.shutdown_in_progress.lock().await;
+        let shutdown_flag = state.mcp_shutdown_in_progress.lock().await;
         assert!(*shutdown_flag);
     }
 }

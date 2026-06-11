@@ -1,29 +1,33 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import HeaderPage from '@/containers/HeaderPage'
-import SettingsMenu from '@/containers/SettingsMenu'
-import { Card, CardItem } from '@/containers/Card'
+import SettingsMenu from '@/components/common/SettingsMenu'
+import { Card, CardItem } from '@/components/common/Card'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { ServerHostSwitcher } from '@/containers/ServerHostSwitcher'
-import { PortInput } from '@/containers/PortInput'
-import { ProxyTimeoutInput } from '@/containers/ProxyTimeoutInput'
-import { ApiPrefixInput } from '@/containers/ApiPrefixInput'
+import { Input } from '@/components/ui/input'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { ChevronsUpDown } from 'lucide-react'
 import { TrustedHostsInput } from '@/containers/TrustedHostsInput'
-import { useLocalApiServer } from '@/hooks/useLocalApiServer'
-import { useAppState } from '@/hooks/useAppState'
+import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
+import { useAppState } from '@/hooks/settings/useAppState'
 
-import { useModelProvider } from '@/features/models/hooks/useModelProvider'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
-import { IconSettings2 } from '@tabler/icons-react'
-import { Server } from 'lucide-react'
+import { Server, Wrench, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
+import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
 import { cn } from '@/lib/utils'
 import { ApiKeyInput } from '@/containers/ApiKeyInput'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { getModelToStart } from '@/utils/getModelToStart'
-import { LogViewer } from '@/features/multi-agent/components/LogViewer'
+import { getModelToStart } from '@/lib/utils/getModelToStart'
+import { LogViewer } from '@/components/LogViewer'
 
 import AkidbConfigPanel from '@/containers/AkidbConfigPanel'
 import {
@@ -36,11 +40,89 @@ import {
   CollapsibleTrigger,
   CollapsibleContent,
 } from '@/components/ui/collapsible'
-import {
-  IconChevronDown,
-  IconChevronUp,
-  IconExternalLink,
-} from '@tabler/icons-react'
+
+const PATH_TRAVERSAL_RE = /(?:\.\.|\/\.\.|\.(?=\/))/
+const VALID_PREFIX_RE = /^\/[a-zA-Z0-9_\-/]*$/
+
+function sanitizePrefix(raw: string): string {
+  let prefix = raw.trim().replace(/\\/g, '/')
+  if (!prefix.startsWith('/')) prefix = '/' + prefix
+  prefix = prefix.replace(/\/+/g, '/').replace(/\/+$/, '')
+  if (PATH_TRAVERSAL_RE.test(prefix) || !VALID_PREFIX_RE.test(prefix)) return ''
+  return prefix || '/'
+}
+
+function PortInput({ isServerRunning }: { isServerRunning?: boolean }) {
+  const { serverPort, setServerPort } = useLocalApiServer()
+  const [inputValue, setInputValue] = useState(serverPort.toString())
+  return (
+    <Input type="number" min={0} max={65535} value={inputValue}
+      onChange={(e) => setInputValue(e.target.value)}
+      onBlur={() => {
+        const port = parseInt(inputValue)
+        if (!isNaN(port) && port >= 0 && port <= 65535) setServerPort(port)
+        else setInputValue(serverPort.toString())
+      }}
+      className={cn('w-24 h-8 text-sm', isServerRunning && 'opacity-50 pointer-events-none')}
+    />
+  )
+}
+
+function ProxyTimeoutInput({ isServerRunning }: { isServerRunning?: boolean }) {
+  const { proxyTimeout, setProxyTimeout } = useLocalApiServer()
+  const [inputValue, setInputValue] = useState(proxyTimeout.toString())
+  return (
+    <Input type="number" min={0} max={86400} value={inputValue}
+      onChange={(e) => setInputValue(e.target.value)}
+      onBlur={() => {
+        const timeout = parseInt(inputValue)
+        if (!isNaN(timeout) && timeout >= 0 && timeout <= 86400) setProxyTimeout(timeout)
+        else setInputValue(proxyTimeout.toString())
+      }}
+      className={cn('w-24 h-8 text-sm', isServerRunning && 'opacity-50 pointer-events-none')}
+    />
+  )
+}
+
+const hostOptions = [{ value: '127.0.0.1', label: '127.0.0.1' }, { value: '0.0.0.0', label: '0.0.0.0' }]
+
+function ServerHostSwitcher({ isServerRunning }: { isServerRunning?: boolean }) {
+  const { serverHost, setServerHost } = useLocalApiServer()
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild className={cn(isServerRunning && 'opacity-50 pointer-events-none')}>
+        <Button variant="outline" size="sm" className="w-full justify-between" title="Edit Server Host">
+          {serverHost}
+          <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground ml-2" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-24">
+        {hostOptions.map((item) => (
+          <DropdownMenuItem key={item.value}
+            className={cn('cursor-pointer my-0.5', serverHost === item.value && 'bg-secondary')}
+            onClick={() => setServerHost(item.value as '127.0.0.1' | '0.0.0.0')}
+          >{item.label}</DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function ApiPrefixInput({ isServerRunning }: { isServerRunning?: boolean }) {
+  const { apiPrefix, setApiPrefix } = useLocalApiServer()
+  const [inputValue, setInputValue] = useState(apiPrefix)
+  return (
+    <Input type="text" value={inputValue} placeholder="/v1"
+      onChange={(e) => setInputValue(e.target.value)}
+      onBlur={() => {
+        const prefix = sanitizePrefix(inputValue)
+        if (prefix) { setApiPrefix(prefix); setInputValue(prefix) }
+        else setInputValue(apiPrefix)
+      }}
+      className={cn('w-24 h-8 text-sm', isServerRunning && 'opacity-50 pointer-events-none')}
+    />
+  )
+}
 
 export const Route = createFileRoute(route.settings.local_api_server)({
   component: LocalAPIServerContent,
@@ -75,7 +157,6 @@ function LocalAPIServerContent() {
     const checkServerStatus = async () => {
       try {
         const running = await serviceHub.app().getServerStatus()
-        console.log('Server status check:', running)
         if (running) {
           setServerStatus('running')
         }
@@ -97,7 +178,6 @@ function LocalAPIServerContent() {
   const toggleAPIServer = async () => {
     // Validate API key before starting server
     if (serverStatus === 'stopped') {
-      console.log('Starting server with port:', serverPort)
       toast.info('Starting server...', {
         description: `Attempting to start server on port ${serverPort}`,
       })
@@ -125,7 +205,6 @@ function LocalAPIServerContent() {
         .getActiveModels()
         .then((loadedModels) => {
           if (loadedModels && loadedModels.length > 0) {
-            console.log(`Using already loaded model: ${loadedModels[0]}`)
             // Model already loaded, just start the server
             return Promise.resolve()
           } else {
@@ -151,13 +230,18 @@ function LocalAPIServerContent() {
               .models()
               .startModel(modelToStart.provider, modelToStart.model, true)
               .then(() => {
-                console.log(`Model ${modelToStart.model} started successfully`)
                 setIsModelLoading(false) // Model loaded, stop loading state
                 // Refresh active models after starting
                 serviceHub
                   .models()
                   .getActiveModels()
                   .then((models) => setActiveModels(models || []))
+                  .catch((error) => {
+                    console.error(
+                      '[local-api-server] Failed to refresh active models after start:',
+                      error
+                    )
+                  })
                 // Add a small delay for the backend to update state
                 return new Promise((resolve) => setTimeout(resolve, 500))
               })
@@ -165,7 +249,12 @@ function LocalAPIServerContent() {
         })
         .then(() => {
           // Then start the server
-          return window.core?.api?.startServer({
+          const api = window.core?.api
+          if (!api) {
+            throw new Error('Core API not available')
+          }
+
+          return api.startServer({
             host: serverHost,
             port: serverPort,
             prefix: apiPrefix,
@@ -176,12 +265,16 @@ function LocalAPIServerContent() {
             proxyTimeout: proxyTimeout,
           })
         })
-        .then((actualPort: number) => {
-          // Store the actual port that was assigned (important for mobile with port 0)
+        .then((rawPort: unknown) => {
+          const actualPort = rawPort as number
           if (actualPort && actualPort !== serverPort) {
             setServerPort(actualPort)
           }
           setServerStatus('running')
+          toast.dismiss()
+          toast.success('Server started', {
+            description: `Local API server running on port ${actualPort || serverPort}`,
+          })
         })
         .catch((error: unknown) => {
           console.error('Error starting server or model:', error)
@@ -220,8 +313,16 @@ function LocalAPIServerContent() {
         })
     } else {
       setServerStatus('pending')
-      window.core?.api
-        ?.stopServer()
+      const api = window.core?.api
+      if (!api) {
+        setServerStatus('stopped')
+        toast.error('Failed to stop server', {
+          description: 'Core API not available',
+        })
+        return
+      }
+
+      (api.stopServer() as Promise<void>)
         .then(() => {
           setServerStatus('stopped')
         })
@@ -269,7 +370,7 @@ function LocalAPIServerContent() {
           <Popover>
             <PopoverTrigger asChild>
               <Button size="sm" variant="outline" className="relative z-50">
-                <IconSettings2 size={16} />
+                <Wrench size={16} />
                 Configuration
               </Button>
             </PopoverTrigger>
@@ -406,22 +507,7 @@ function LocalAPIServerContent() {
             className="flex-1 overflow-y-auto"
             style={{ scrollbarWidth: 'none' }}
           >
-            <div className="flex items-center gap-3 px-8 py-5 border-b border-border/40 bg-background sticky top-0 z-10">
-              <div
-                className="size-7 rounded-lg flex items-center justify-center"
-                style={{
-                  background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                }}
-              >
-                <Server className="size-3.5 text-white" strokeWidth={2.5} />
-              </div>
-              <h1
-                className="text-foreground tracking-tight"
-                style={{ fontSize: '16px', fontWeight: 600 }}
-              >
-                {t('common:local_api_server')}
-              </h1>
-            </div>
+            <SettingsPageLayout icon={Server} title={t('common:local_api_server')} />
             <div className="px-8 py-7">
               <div className="max-w-2xl space-y-6">
                 {/* General Settings */}
@@ -481,29 +567,6 @@ function LocalAPIServerContent() {
                     }
                   />
 
-                  <CardItem
-                    title={t('settings:localApiServer.swaggerDocs')}
-                    description={t('settings:localApiServer.swaggerDocsDesc')}
-                    actions={
-                      <a
-                        href={`http://${serverHost}:${serverPort}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={cn(
-                          isServerRunning ? '' : 'pointer-events-none'
-                        )}
-                      >
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={!isServerRunning}
-                          title={t('settings:localApiServer.swaggerDocs')}
-                        >
-                          <span>{t('settings:localApiServer.openDocs')}</span>
-                        </Button>
-                      </a>
-                    }
-                  />
                 </Card>
 
                 {/* AkiDB folder sync configuration */}
@@ -516,8 +579,8 @@ function LocalAPIServerContent() {
               <Collapsible defaultOpen={false}>
                 <div className="flex items-center justify-between">
                   <CollapsibleTrigger className="flex items-center gap-2 hover:no-underline data-[state=open]:[&>svg.chevron-down]:hidden data-[state=closed]:[&>svg.chevron-up]:hidden">
-                    <IconChevronDown size={16} className="chevron-down" />
-                    <IconChevronUp size={16} className="chevron-up" />
+                    <ChevronDown size={16} className="chevron-down" />
+                    <ChevronUp size={16} className="chevron-up" />
                     <span className="font-medium text-sm">Server Log</span>
                   </CollapsibleTrigger>
                   <Button
@@ -526,7 +589,7 @@ function LocalAPIServerContent() {
                     onClick={handleOpenLogs}
                     className="text-muted-foreground hover:text-foreground"
                   >
-                    <IconExternalLink size={14} className="mr-1" />
+                    <ExternalLink size={14} className="mr-1" />
                     Open in New Window
                   </Button>
                 </div>

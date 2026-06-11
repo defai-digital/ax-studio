@@ -1,38 +1,51 @@
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import { useDownloadStore } from '@/features/models/hooks/useDownloadStore'
-import { useGeneralSetting } from '@/hooks/useGeneralSetting'
-import { useModelProvider } from '@/features/models/hooks/useModelProvider'
+import {
+  toDownloadProcesses,
+  useDownloadStore,
+} from '@/hooks/models/useDownloadStore'
+import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useTranslation } from '@/i18n'
-import { cn, sanitizeModelId } from '@/lib/utils'
+import { cn } from '@/lib/utils'
+import { getHuggingFaceModelUrl } from '@/lib/huggingface'
+import { extractErrorMessage } from '@/lib/utils/error'
 import { CatalogModel } from '@/services/models/types'
 import { AppEvent, DownloadEvent, DownloadState, events } from '@ax-studio/core'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
+import { useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { DEFAULT_MODEL_QUANTIZATIONS } from '@/constants/models'
 import { ExternalLink, Download, Pause, Play } from 'lucide-react'
+import { findDownloadedLocalModel } from '@/lib/models/downloaded'
+import { getPreferredMmprojPath } from '@/lib/models'
 
 type ModelProps = {
   model: CatalogModel
-  handleUseModel: (modelId: string) => void
+  handleUseModel: (modelId: string, provider?: string) => void
 }
 
 export function DownloadButtonPlaceholder({
   model,
   handleUseModel,
 }: ModelProps) {
-  const { downloads, localDownloadingModels, addLocalDownloadingModel } =
+  const {
+    downloads,
+    localDownloadingModels,
+    addLocalDownloadingModel,
+    removeLocalDownloadingModel,
+  } =
     useDownloadStore(
       useShallow((state) => ({
         downloads: state.downloads,
         localDownloadingModels: state.localDownloadingModels,
         addLocalDownloadingModel: state.addLocalDownloadingModel,
+        removeLocalDownloadingModel: state.removeLocalDownloadingModel,
       }))
     )
   const { t } = useTranslation()
-  const getProviderByName = useModelProvider((state) => state.getProviderByName)
-  const llamaProvider = getProviderByName('llamacpp')
+  const providers = useModelProvider((state) => state.providers)
 
   const serviceHub = useServiceHub()
   const huggingfaceToken = useGeneralSetting((state) => state.huggingfaceToken)
@@ -49,37 +62,23 @@ export function DownloadButtonPlaceholder({
   const modelId = quant?.model_id || model.model_name
 
   const downloadProcesses = useMemo(
-    () =>
-      Object.values(downloads).map((download) => ({
-        id: download.name,
-        name: download.name,
-        progress: download.progress,
-        current: download.current,
-        total: download.total,
-      })),
+    () => toDownloadProcesses(downloads),
     [downloads]
   )
 
-  useEffect(() => {
-    const isDownloaded = llamaProvider?.models.some((m: { id: string }) => {
-      const parts = modelId.split('/')
-      const name = parts[parts.length - 1]
-      const sanitizedName = sanitizeModelId(name)
-      const author = parts.length > 1 ? parts.slice(0, -1).join('/') : ''
+  const downloadedModel = useMemo(
+    () => findDownloadedLocalModel(providers, modelId, model.developer),
+    [providers, modelId, model.developer]
+  )
 
-      return (
-        m.id === modelId ||
-        m.id === sanitizedName ||
-        (author && m.id === `${author}/${sanitizedName}`) ||
-        m.id === `${model.developer}/${sanitizedName}`
-      )
-    })
-    setDownloaded(!!isDownloaded)
-  }, [llamaProvider, modelId, model.developer])
+  useEffect(() => {
+    setDownloaded(!!downloadedModel)
+  }, [downloadedModel])
 
   useEffect(() => {
     const handleVerified = (state: DownloadState) => {
-      if (state.modelId === modelId) setDownloaded(true)
+      const downloadId = state.downloadId ?? state.modelId
+      if (downloadId === modelId) setDownloaded(true)
     }
     // Also listen for onModelImported — onFileDownloadAndVerificationSuccess
     // only fires when SHA256 verification is enabled (skipVerification=false).
@@ -101,14 +100,10 @@ export function DownloadButtonPlaceholder({
     }
   }, [modelId])
 
-  const isRecommendedModel = useCallback((_: string) => {
-    return false
-  }, [])
-
   if ((model.quants?.length ?? 0) === 0) {
     return (
       <a
-        href={`https://huggingface.co/${model.model_name}`}
+        href={getHuggingFaceModelUrl(model.model_name)}
         target="_blank"
         rel="noopener noreferrer"
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted hover:bg-accent text-foreground/70 hover:text-foreground text-[12px] font-medium transition-colors border border-border/50"
@@ -127,20 +122,22 @@ export function DownloadButtonPlaceholder({
   const downloadProgress =
     downloadProcesses.find((e) => e.id === modelId)?.progress || 0
 
-  const isRecommended = isRecommendedModel(model.model_name)
-
   const handleDownload = async () => {
     // Immediately set local downloading state and start download
     addLocalDownloadingModel(modelId)
     setIsPaused(false)
-    const mmprojPath = (
-      model.mmproj_models?.find(
-        (e) => e.model_id.toLowerCase() === 'mmproj-f16'
-      ) || model.mmproj_models?.[0]
-    )?.path
+    const mmprojPath = getPreferredMmprojPath(model.mmproj_models)
     serviceHub
       .models()
       .pullModelWithMetadata(modelId, modelUrl, mmprojPath, huggingfaceToken)
+      .catch((error) => {
+        console.error('Failed to start model download:', error)
+        removeLocalDownloadingModel(modelId)
+        const description = extractErrorMessage(error, '')
+        toast.error('Failed to start model download', {
+          description: description || 'Unknown error (check DevTools console).',
+        })
+      })
   }
 
   const handlePause = async () => {
@@ -157,12 +154,7 @@ export function DownloadButtonPlaceholder({
   }
 
   return (
-    <div
-      className={cn(
-        'flex items-center',
-        isRecommended && 'hub-download-button-step'
-      )}
-    >
+    <div className="flex items-center">
       {isDownloading && !isDownloaded && (
         <div className={cn('flex items-center gap-2')}>
           <Progress className="border w-20" value={downloadProgress * 100} />
@@ -193,7 +185,12 @@ export function DownloadButtonPlaceholder({
         <Button
           variant="default"
           size="sm"
-          onClick={() => handleUseModel(modelId)}
+          onClick={() =>
+            handleUseModel(
+              downloadedModel?.modelId ?? modelId,
+              downloadedModel?.providerId
+            )
+          }
           data-test-id={`hub-model-${modelId}`}
         >
           {t('hub:newChat')}

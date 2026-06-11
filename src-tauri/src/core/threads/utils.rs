@@ -10,8 +10,10 @@ pub fn get_data_dir<R: Runtime>(app_handle: tauri::AppHandle<R>) -> PathBuf {
 }
 
 pub fn get_thread_dir<R: Runtime>(app_handle: tauri::AppHandle<R>, thread_id: &str) -> PathBuf {
-    // Sanitize thread_id: reject path separators and traversal sequences
-    let sanitized = thread_id.replace(['/', '\\', '.'], "").replace("..", "");
+    let sanitized: String = thread_id
+        .chars()
+        .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
+        .collect();
     get_data_dir(app_handle).join(if sanitized.is_empty() {
         "invalid"
     } else {

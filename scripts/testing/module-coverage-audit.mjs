@@ -66,7 +66,12 @@ for (const [filePath, data] of Object.entries(summary)) {
   // Normalize path separators
   const normalized = filePath.replace(/\\/g, '/')
 
-  for (const [moduleName, pattern] of Object.entries(MODULE_PATTERNS)) {
+  // Sort by pattern length descending so more specific patterns match first
+  // (e.g. 'src/components/ui' before 'src/components')
+  const sortedPatterns = Object.entries(MODULE_PATTERNS)
+    .sort(([, a], [, b]) => b.length - a.length)
+
+  for (const [moduleName, pattern] of sortedPatterns) {
     if (normalized.includes(pattern)) {
       const acc = moduleAccum[moduleName]
 
@@ -120,7 +125,10 @@ fs.writeFileSync(outFile, JSON.stringify(audit, null, 2))
 console.log('\nModule Coverage Audit')
 console.log('─'.repeat(60))
 const col = (s, w) => String(s).padEnd(w)
-const pctCol = (n) => String(n.toFixed(1) + '%').padStart(8)
+const pctCol = (value) =>
+  typeof value === 'number'
+    ? `${value.toFixed(1)}%`.padStart(8)
+    : String(value).padStart(8)
 console.log(col('Module', 22) + pctCol('Lines') + pctCol('Funcs') + pctCol('Branches') + '  Files')
 console.log('─'.repeat(60))
 for (const [mod, data] of Object.entries(audit.modules)) {

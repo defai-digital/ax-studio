@@ -15,20 +15,22 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use thiserror::Error;
 
-/// Secret key for HMAC signature
-/// In release: Must be set via AX_STUDIO_SIGNING_KEY environment variable at build time
-/// In debug: Falls back to a debug key
-/// Must not be the default test key
-#[cfg(debug_assertions)]
-const SECRET_KEY: &str = match option_env!("AX_STUDIO_SIGNING_KEY") {
-    Some(key) => key,
-    None => "debug-mode-key",
-};
-#[cfg(not(debug_assertions))]
-const SECRET_KEY: &str = env!("AX_STUDIO_SIGNING_KEY");
-
 /// Timeout for HTTP requests
 const REQUEST_TIMEOUT_SECS: u64 = 30;
+
+/// Returns the HMAC signing key baked in at compile time, or None for dev/unsigned builds.
+/// The signed primary endpoint is skipped gracefully when this returns None — see callers.
+/// Set AX_STUDIO_SIGNING_KEY at build time for release; never hard-code a fallback value.
+fn signing_key() -> Option<&'static str> {
+    option_env!("AX_STUDIO_SIGNING_KEY").and_then(|key| {
+        let trimmed = key.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
+    })
+}
 
 #[derive(Debug, Error)]
 pub enum UpdateError {
@@ -46,6 +48,9 @@ pub enum UpdateError {
 
     #[error("No endpoints configured")]
     NoEndpointsConfigured,
+
+    #[error("AX_STUDIO_SIGNING_KEY is not configured")]
+    MissingSigningKey,
 }
 
 /// Update information returned by the update check endpoint
@@ -70,26 +75,24 @@ pub struct UpdateInfo {
 /// Custom updater client
 pub struct CustomUpdater {
     client: Client,
-    secret_key: String,
+    secret_key: Option<String>,
 }
 
 impl CustomUpdater {
     /// Create a new custom updater
     pub fn new() -> Result<Self, UpdateError> {
-        // Ensure the signing key is not the default test key
-        assert!(
-            SECRET_KEY != "local-dev-test-key-not-for-production",
-            "AX_STUDIO_SIGNING_KEY must not be the default test key"
-        );
-
         let client = Client::builder()
             .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
             .build()?;
 
-        Ok(Self {
-            client,
-            secret_key: SECRET_KEY.to_string(),
-        })
+        let secret_key = signing_key().map(str::to_string);
+        if secret_key.is_none() {
+            log::warn!(
+                "AX_STUDIO_SIGNING_KEY is not configured; signed updater endpoint will be skipped"
+            );
+        }
+
+        Ok(Self { client, secret_key })
     }
 
     /// Build User-Agent header: Ax-Studio/{version} ({os}; {arch})
@@ -123,6 +126,14 @@ impl CustomUpdater {
             let is_primary = index == 0;
 
             let result = if is_primary {
+                if self.secret_key.is_none() {
+                    log::warn!(
+                        "Skipping signed primary update endpoint because AX_STUDIO_SIGNING_KEY is not configured"
+                    );
+                    last_error = Some(UpdateError::MissingSigningKey);
+                    continue;
+                }
+
                 // First endpoint: use HMAC signing
                 log::info!("Trying primary endpoint with signing: {}", endpoint);
                 self.check_with_signing(endpoint, nonce_seed, current_version)
@@ -162,8 +173,12 @@ impl CustomUpdater {
         nonce_seed: &str,
         app_version: &str,
     ) -> Result<UpdateInfo, UpdateError> {
+        let Some(secret_key) = self.secret_key.as_deref() else {
+            return Err(UpdateError::MissingSigningKey);
+        };
+
         // Generate signed request headers
-        let headers = SignedRequestHeaders::new(&self.secret_key, nonce_seed, app_version);
+        let headers = SignedRequestHeaders::new(secret_key, nonce_seed, app_version);
 
         // Build request with security headers
         let mut request = self.client.get(endpoint);
@@ -194,6 +209,14 @@ impl CustomUpdater {
             .json()
             .await
             .map_err(|e| UpdateError::ParseError(e.to_string()))?;
+
+        if let Some(ref sig) = update_info.signature {
+            if sig.is_empty() {
+                log::warn!("Update endpoint returned an empty signature — update will be rejected by Tauri's verifier");
+            }
+        } else {
+            log::warn!("Update endpoint returned no signature field — update will be rejected by Tauri's verifier");
+        }
 
         Ok(update_info)
     }
@@ -226,35 +249,36 @@ impl CustomUpdater {
             .await
             .map_err(|e| UpdateError::ParseError(e.to_string()))?;
 
+        if let Some(ref sig) = update_info.signature {
+            if sig.is_empty() {
+                log::warn!("Fallback update endpoint returned an empty signature — update will be rejected by Tauri's verifier");
+            }
+        } else {
+            log::warn!("Fallback update endpoint returned no signature field — update will be rejected by Tauri's verifier");
+        }
+
         Ok(update_info)
     }
 
     /// Compare versions to check if update is available
     pub fn is_update_available(&self, current: &str, latest: &str) -> bool {
+        Self::is_newer_version(current, latest)
+    }
+
+    fn is_newer_version(current: &str, latest: &str) -> bool {
         let current = current.trim_start_matches('v');
         let latest = latest.trim_start_matches('v');
 
-        let current_parts: Vec<u32> = current.split('.').filter_map(|s| s.parse().ok()).collect();
-        let latest_parts: Vec<u32> = latest.split('.').filter_map(|s| s.parse().ok()).collect();
+        let Ok(current_ver) = semver::Version::parse(current) else {
+            log::warn!("Cannot parse current version '{current}', skipping update check");
+            return false;
+        };
+        let Ok(latest_ver) = semver::Version::parse(latest) else {
+            log::warn!("Cannot parse latest version '{latest}', skipping update check");
+            return false;
+        };
 
-        for i in 0..std::cmp::max(current_parts.len(), latest_parts.len()) {
-            let current_part = current_parts.get(i).unwrap_or(&0);
-            let latest_part = latest_parts.get(i).unwrap_or(&0);
-
-            if latest_part > current_part {
-                return true;
-            } else if latest_part < current_part {
-                return false;
-            }
-        }
-
-        false
-    }
-}
-
-impl Default for CustomUpdater {
-    fn default() -> Self {
-        Self::new().expect("Failed to create default CustomUpdater")
+        latest_ver > current_ver
     }
 }
 
@@ -264,13 +288,14 @@ mod tests {
 
     #[test]
     fn test_version_comparison() {
-        let updater = CustomUpdater::new().unwrap();
-
-        assert!(updater.is_update_available("1.0.0", "1.0.1"));
-        assert!(updater.is_update_available("1.0.0", "1.1.0"));
-        assert!(updater.is_update_available("1.0.0", "2.0.0"));
-        assert!(!updater.is_update_available("1.0.0", "1.0.0"));
-        assert!(!updater.is_update_available("1.0.1", "1.0.0"));
-        assert!(updater.is_update_available("v1.0.0", "v1.0.1"));
+        assert!(CustomUpdater::is_newer_version("1.0.0", "1.0.1"));
+        assert!(CustomUpdater::is_newer_version("1.0.0", "1.1.0"));
+        assert!(CustomUpdater::is_newer_version("1.0.0", "2.0.0"));
+        assert!(!CustomUpdater::is_newer_version("1.0.0", "1.0.0"));
+        assert!(!CustomUpdater::is_newer_version("1.0.1", "1.0.0"));
+        assert!(CustomUpdater::is_newer_version("v1.0.0", "v1.0.1"));
+        assert!(CustomUpdater::is_newer_version("1.0.0", "2.0.0-beta"));
+        assert!(CustomUpdater::is_newer_version("2.0.0-beta", "2.0.0"));
+        assert!(CustomUpdater::is_newer_version("1.9.0", "2.0.0-rc.1"));
     }
 }

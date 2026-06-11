@@ -1,14 +1,14 @@
-import { useModelProvider } from '@/features/models/hooks/useModelProvider'
-import { useAppUpdater } from '@/hooks/useAppUpdater'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
+import { useAppUpdater } from '@/hooks/updater/useAppUpdater'
 import { useServiceHub } from '@/hooks/useServiceHub'
-import { useEffect, useCallback } from 'react'
-import { useMCPServers, DEFAULT_MCP_SETTINGS } from '@/features/mcp/hooks/useMCPServers'
-import { useAssistant } from '@/features/assistants/hooks/useAssistant'
+import { useEffect, useCallback, useRef } from 'react'
+import { useMCPServers, DEFAULT_MCP_SETTINGS } from '@/hooks/tools/useMCPServers'
+import { useAssistant } from '@/hooks/chat/useAssistant'
 import { useNavigate } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
-import { useThreads } from '@/features/threads/hooks/useThreads'
-import { useLocalApiServer } from '@/hooks/useLocalApiServer'
-import { useAppState } from '@/hooks/useAppState'
+import { useThreads } from '@/hooks/threads/useThreads'
+import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
+import { useAppState } from '@/hooks/settings/useAppState'
 import { isDev } from '@/lib/utils'
 import { bootstrapProviders } from '@/lib/bootstrap/bootstrap-providers'
 import { bootstrapThreads } from '@/lib/bootstrap/bootstrap-threads'
@@ -16,9 +16,16 @@ import { bootstrapUpdater } from '@/lib/bootstrap/bootstrap-updater'
 import { bootstrapEvents } from '@/lib/bootstrap/bootstrap-events'
 import { bootstrapLocalApi } from '@/lib/bootstrap/bootstrap-local-api'
 import { syncRemoteProviders as syncRemoteProviderConfigs } from '@/lib/providers/provider-sync'
+import { encodeHubRouteParam } from '@/lib/hub'
+
+const PROVIDER_STARTUP_REFRESH_DELAYS_MS = [500, 1500, 3500, 7000] as const
 
 export function DataProvider() {
   const { setProviders, providers } = useModelProvider()
+  // Track whether the initial bootstrap sync has already registered providers.
+  // Effect 2 must skip the first fire (triggered by bootstrapProviders setting
+  // providers) to avoid registering every provider twice on startup.
+  const bootstrapSyncDone = useRef(false)
   const { checkForUpdate } = useAppUpdater()
   const { setServers, setSettings } = useMCPServers()
   const { setAssistants, initializeWithLastUsed } = useAssistant()
@@ -33,6 +40,7 @@ export function DataProvider() {
     setServerPort,
     apiPrefix,
     apiKey,
+    setApiKey,
     trustedHosts,
     corsEnabled,
     verboseLogs,
@@ -56,7 +64,16 @@ export function DataProvider() {
       const params = url.pathname.split('/').filter((s) => s.length > 0)
       if (params.length < 3) return
       const resource = params.slice(1).join('/')
-      navigate({ to: route.hub.model, search: { repo: resource } })
+        .replace(/\.\./g, '')
+        .replace(/\0/g, '')
+      if (!resource || resource.startsWith('/') || resource.includes('..')) return
+      // `route.hub.model` is `/hub/$modelId` — the `modelId` param is
+      // required, otherwise TanStack Router throws at runtime.
+      navigate({
+        to: route.hub.model,
+        params: { modelId: encodeHubRouteParam(resource) },
+        search: { repo: resource },
+      })
     },
     [navigate]
   )
@@ -69,29 +86,68 @@ export function DataProvider() {
     let cleanupDeepLink: () => void = () => {}
     let cleanupEvents: () => void = () => {}
     let cleanupUpdater: () => void = () => {}
+    const providerStartupRefreshTimers: ReturnType<typeof setTimeout>[] = []
 
     bootstrapProviders({
       serviceHub,
-      setProviders,
+      setProviders: (providers, pathSep) => {
+        setProviders(providers, pathSep)
+        // Mark that bootstrap has synced providers — Effect 2 should skip
+        // its first fire (which is caused by this setProviders call) to
+        // avoid registering all providers twice on startup.
+        bootstrapSyncDone.current = true
+      },
       setServers,
       setSettings: (s) => setSettings(s ?? DEFAULT_MCP_SETTINGS),
       setAssistants,
       initializeWithLastUsed,
       onDeepLink: handleDeepLink,
-    }).then(({ unsubscribeDeepLink }) => {
-      if (unmounted) {
-        // Component unmounted before bootstrap resolved — clean up immediately
-        unsubscribeDeepLink()
-      } else {
-        cleanupDeepLink = unsubscribeDeepLink
-      }
     })
+      .then(({ unsubscribeDeepLink }) => {
+        if (unmounted) {
+          // Component unmounted before bootstrap resolved — clean up immediately
+          unsubscribeDeepLink()
+        } else {
+          cleanupDeepLink = unsubscribeDeepLink
+        }
+      })
+      .catch((error) => {
+        console.error('[DataProvider] bootstrapProviders failed:', error)
+      })
 
-    bootstrapThreads({ serviceHub, setThreads })
+    bootstrapThreads({ serviceHub, setThreads }).catch((error) => {
+      console.error('[DataProvider] bootstrapThreads failed:', error)
+    })
 
     cleanupUpdater = bootstrapUpdater({ checkForUpdate, isDev: isDev() })
 
     cleanupEvents = bootstrapEvents({ serviceHub, setProviders })
+
+    const refreshStartupProviders = () => {
+      serviceHub
+        .providers()
+        .getProviders()
+        .then((providers) => {
+          if (unmounted) return
+          setProviders(providers, serviceHub.path().sep())
+          // Also push the latest provider list to the Rust proxy's registry so
+          // it knows base_url + api_key + model_id mapping for every active
+          // remote provider. Without this, providers added after the initial
+          // bootstrap (e.g. the built-in `mlx` provider, or providers the user
+          // edits in Settings) never get registered with the proxy and chat
+          // requests for them fail with "No remote provider configured".
+          void syncRemoteProviders(providers).catch((error) => {
+            console.error('[DataProvider] startup remote provider sync failed:', error)
+          })
+        })
+        .catch((error) => {
+          console.error('[DataProvider] startup provider refresh failed:', error)
+        })
+    }
+
+    for (const delayMs of PROVIDER_STARTUP_REFRESH_DELAYS_MS) {
+      providerStartupRefreshTimers.push(setTimeout(refreshStartupProviders, delayMs))
+    }
 
     bootstrapLocalApi({
       serviceHub,
@@ -108,6 +164,7 @@ export function DataProvider() {
       },
       setServerStatus,
       setServerPort,
+      setApiKey,
     })
 
     return () => {
@@ -115,6 +172,7 @@ export function DataProvider() {
       cleanupDeepLink()
       cleanupEvents()
       cleanupUpdater()
+      providerStartupRefreshTimers.forEach(clearTimeout)
     }
     // serviceHub is stable for the app lifetime; other deps are store actions
     // (stable Zustand references) or config values captured once at startup.
@@ -123,7 +181,11 @@ export function DataProvider() {
 
   // ─── Effect 2: Reactive remote provider sync ──────────────────────────────
   // Re-fires when providers change (e.g. user adds/removes a provider or key).
+  // Skips the first fire caused by bootstrapProviders — that sync already
+  // happened inside Effect 1, so running it again would double-register
+  // every provider (especially costly for providers with many models).
   useEffect(() => {
+    if (!bootstrapSyncDone.current) return
     void syncRemoteProviders(providers)
   }, [providers])
 

@@ -16,13 +16,11 @@ Use this file as the contributor entry point, then follow the package-specific g
 
 ## Start Here
 
-- [Quickstart](./QUICKSTART.md)
 - [Web App Guide](./web-app/CONTRIBUTING.md)
 - [Core SDK Guide](./core/CONTRIBUTING.md)
 - [Extensions Guide](./extensions/CONTRIBUTING.md)
 - [Tauri Backend Guide](./src-tauri/CONTRIBUTING.md)
 - [Tauri Plugins Guide](./src-tauri/plugins/CONTRIBUTING.md)
-- [Docs Index](./docs/README.md)
 
 ## Repository Overview
 

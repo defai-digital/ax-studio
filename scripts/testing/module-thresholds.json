@@ -1,0 +1,14 @@
+{
+  "comment": "Per-module coverage thresholds (lines %). Enforced by scripts/testing/module-coverage-gate.mjs",
+  "modules": {
+    "stores":        { "lines": 95, "functions": 95 },
+    "hooks":         { "lines": 75, "functions": 79 },
+    "services":      { "lines": 75, "functions": 84 },
+    "lib":           { "lines": 77, "functions": 79 },
+    "utils":         { "lines": 80, "functions": 80 },
+    "components/ui": { "lines": 73, "functions": 78 },
+    "containers":    { "lines": 41, "functions": 40 },
+    "providers":     { "lines": 65, "functions": 48 },
+    "routes":        { "lines": 50, "functions": 48 }
+  }
+}

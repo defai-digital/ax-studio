@@ -24,7 +24,7 @@ pub const DEFAULT_MCP_CONFIG: &str = r#"{
       "args": [
         "-y",
         "@modelcontextprotocol/server-filesystem",
-        "/path/to/other/allowed/dir"
+        "~/Desktop"
       ],
       "env": {},
       "active": false
@@ -36,8 +36,8 @@ pub const DEFAULT_MCP_CONFIG: &str = r#"{
       "active": false
     },
     "ax-studio": {
-      "command": "node",
-      "args": ["--experimental-sqlite", "/Users/zaag-mac-mini/Documents/Defai/ax/ax-fabric/packages/fabric-ingest/dist/cli.js", "mcp", "server"],
+      "command": "npx",
+      "args": ["-y", "@ax-fabric/fabric-ingest", "mcp", "server"],
       "env": {},
       "active": false,
       "official": true

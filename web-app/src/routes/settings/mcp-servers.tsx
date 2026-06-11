@@ -1,33 +1,28 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import HeaderPage from '@/containers/HeaderPage'
-import SettingsMenu from '@/containers/SettingsMenu'
-import { Card, CardItem } from '@/containers/Card'
-import {
-  IconPencil,
-  IconPlus,
-  IconTrash,
-  IconCodeCircle,
-} from '@tabler/icons-react'
-import { Wrench } from 'lucide-react'
+import SettingsMenu from '@/components/common/SettingsMenu'
+import { Card, CardItem } from '@/components/common/Card'
+import { Code, Pencil, Plus, Trash2, Wrench } from "lucide-react";
+import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
 import {
   useMCPServers,
   MCPServerConfig,
   MCPSettings,
   DEFAULT_MCP_SETTINGS,
-} from '@/features/mcp/hooks/useMCPServers'
+} from '@/hooks/tools/useMCPServers'
 import { Fragment, useEffect, useState } from 'react'
-import AddEditMCPServer from '@/features/mcp/components/AddEditMCPServer'
-import DeleteMCPServerConfirm from '@/features/mcp/components/DeleteMCPServerConfirm'
-import EditJsonMCPserver from '@/features/mcp/components/EditJsonMCPserver'
+import AddEditMCPServer from '@/containers/dialogs/mcp/AddEditMCPServer'
+import DeleteMCPServerConfirm from '@/containers/dialogs/mcp/DeleteMCPServerConfirm'
+import EditJsonMCPserver from '@/containers/dialogs/mcp/EditJsonMCPserver'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { twMerge } from 'tailwind-merge'
 import { useServiceHub } from '@/hooks/useServiceHub'
-import { useToolApproval } from '@/hooks/useToolApproval'
+import { useToolApproval } from '@/hooks/tools/useToolApproval'
 import { toast } from 'sonner'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { useAppState } from '@/hooks/useAppState'
+import { useAppState } from '@/hooks/settings/useAppState'
 import { listen } from '@tauri-apps/api/event'
 import { SystemEvent } from '@/types/events'
 import { Button } from '@/components/ui/button'
@@ -41,7 +36,7 @@ const OFFICIAL_SERVER_HINTS: Record<
   'ax-studio': {
     description:
       'Knowledge base powered by AkiDB. Provides semantic search, document ingestion, and RAG tools for your local files.',
-    hint: 'To use from source: set command to "node" and first arg to the path of your ax-studio cli.js, followed by "mcp" and "server". If installed via npm: set command to "npx" with args "-y @ax-studio/fabric-ingest mcp server".',
+    hint: 'To use from source: set command to "node" and first arg to the path of your ax-fabric cli.js, followed by "mcp" and "server". If installed via npm: set command to "npx" with args "-y @ax-fabric/fabric-ingest mcp server".',
     link: {
       label: 'AX Studio Documentation',
       url: 'https://github.com/defai-digital/ax-studio',
@@ -288,16 +283,25 @@ function MCPServersDesktop() {
         })
       }
 
+      // Capture original active states before clearing
+      const originalActiveStates: Record<string, boolean> = {}
+      Object.entries(mcpServers).forEach(([key, config]) => {
+        originalActiveStates[key] = config.active ?? false
+      })
+
       // Clear existing servers first
       Object.keys(mcpServers).forEach((serverKey) => {
         toggleServer(serverKey, false)
         deleteServer(serverKey)
       })
 
-      // Add all servers from the JSON
+      // Add all servers from the JSON, preserving original active state
+      // unless the user explicitly changed it in the JSON editor
       Object.entries(nextServers).forEach(([key, config]) => {
-        addServer(key, config)
-        toggleServer(key, config.active || false)
+        const wasActive = originalActiveStates[key] ?? false
+        const userSetActive = config.active ?? wasActive
+        addServer(key, { ...config, active: userSetActive })
+        toggleServer(key, userSetActive)
       })
 
       await syncServers()
@@ -327,7 +331,7 @@ function MCPServersDesktop() {
                 ? t('mcp-servers:serverStatusActive', { serverKey })
                 : t('mcp-servers:serverStatusInactive', { serverKey })
             )
-            serviceHub.mcp().getConnectedServers().then(setConnectedServers)
+            serviceHub.mcp().getConnectedServers().then(setConnectedServers).catch(console.error).catch(console.error)
           })
           .catch((error) => {
             editServer(serverKey, {
@@ -363,7 +367,7 @@ function MCPServersDesktop() {
           .mcp()
           .deactivateMCPServer(serverKey)
           .finally(() => {
-            serviceHub.mcp().getConnectedServers().then(setConnectedServers)
+            serviceHub.mcp().getConnectedServers().then(setConnectedServers).catch(console.error)
             setLoadingServers((prev) => ({ ...prev, [serverKey]: false }))
           })
       }
@@ -371,12 +375,12 @@ function MCPServersDesktop() {
   }
 
   useEffect(() => {
-    serviceHub.mcp().getConnectedServers().then(setConnectedServers)
+    serviceHub.mcp().getConnectedServers().then(setConnectedServers).catch(console.error)
 
     let unlisten: (() => void) | undefined
     const setupListener = async () => {
       unlisten = await listen(SystemEvent.MCP_UPDATE, () => {
-        serviceHub.mcp().getConnectedServers().then(setConnectedServers)
+        serviceHub.mcp().getConnectedServers().then(setConnectedServers).catch(console.error)
       })
     }
     setupListener()
@@ -405,7 +409,7 @@ function MCPServersDesktop() {
               onClick={() => handleOpenDialog()}
               className="relative z-50"
             >
-              <IconPlus size={18} className="text-muted-foreground" />
+              <Plus size={18} className="text-muted-foreground" />
               {t('mcp-servers:addServer')}
             </Button>
           </div>
@@ -416,22 +420,7 @@ function MCPServersDesktop() {
             className="flex-1 overflow-y-auto"
             style={{ scrollbarWidth: 'none' }}
           >
-            <div className="flex items-center gap-3 px-8 py-5 border-b border-border/40 bg-background sticky top-0 z-10">
-              <div
-                className="size-7 rounded-lg flex items-center justify-center"
-                style={{
-                  background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                }}
-              >
-                <Wrench className="size-3.5 text-white" strokeWidth={2.5} />
-              </div>
-              <h1
-                className="text-foreground tracking-tight"
-                style={{ fontSize: '16px', fontWeight: 600 }}
-              >
-                {t('common:mcp-servers')}
-              </h1>
-            </div>
+            <SettingsPageLayout icon={Wrench} title={t('common:mcp-servers')} />
             <div className="px-8 py-7">
               <div className="max-w-2xl space-y-6">
                 <Card
@@ -454,7 +443,7 @@ function MCPServersDesktop() {
                             size="icon-xs"
                             variant="ghost"
                           >
-                            <IconCodeCircle
+                            <Code
                               size={18}
                               className="text-muted-foreground"
                             />
@@ -626,7 +615,7 @@ function MCPServersDesktop() {
                                 serverName: key,
                               })}
                             >
-                              <IconCodeCircle
+                              <Code
                                 size={18}
                                 className="text-muted-foreground"
                               />
@@ -637,7 +626,7 @@ function MCPServersDesktop() {
                               onClick={() => handleEdit(key)}
                               title={t('mcp-servers:editServer')}
                             >
-                              <IconPencil
+                              <Pencil
                                 size={18}
                                 className="text-muted-foreground"
                               />
@@ -648,7 +637,7 @@ function MCPServersDesktop() {
                               onClick={() => handleDeleteClick(key)}
                               title={t('mcp-servers:deleteServer.title')}
                             >
-                              <IconTrash
+                              <Trash2
                                 size={18}
                                 className="text-muted-foreground"
                               />

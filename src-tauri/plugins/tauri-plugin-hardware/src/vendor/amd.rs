@@ -132,17 +132,25 @@ mod windows_impl {
     type AdlAdapterNumberofadaptersGet = unsafe extern "C" fn(*mut c_int) -> c_int;
     type AdlAdapterAdapterinfoGet = unsafe extern "C" fn(*mut AdapterInfo, c_int) -> c_int;
     type AdlAdapterActiveGet = unsafe extern "C" fn(c_int, *mut c_int) -> c_int;
-    type AdlGetDedicatedVramUsage =
-        unsafe extern "C" fn(*mut c_void, c_int, *mut c_int) -> c_int;
+    type AdlGetDedicatedVramUsage = unsafe extern "C" fn(*mut c_void, c_int, *mut c_int) -> c_int;
 
     // === ADL Memory Allocator ===
     unsafe extern "C" fn adl_malloc(i_size: i32) -> *mut c_void {
+        if i_size <= 0 {
+            return ptr::null_mut();
+        }
         libc::malloc(i_size as usize)
     }
 
     pub fn get_gpu_usage() -> Result<HashMap<String, i32>, Box<dyn std::error::Error>> {
         unsafe {
-            let lib = Library::new("atiadlxx.dll").or_else(|_| Library::new("atiadlxy.dll"))?;
+            let system_dir = std::env::var_os("SystemRoot")
+                .unwrap_or_else(|| std::ffi::OsString::from("C:\\Windows"));
+            let system32 = std::path::Path::new(&system_dir).join("System32");
+            let lib = Library::new(system32.join("atiadlxx.dll"))
+                .or_else(|_| Library::new(system32.join("atiadlxy.dll")))
+                .or_else(|_| Library::new("atiadlxx.dll"))
+                .or_else(|_| Library::new("atiadlxy.dll"))?;
 
             let adlmaincontrolcreate: Symbol<ADLMAINCONTROLCREATE> =
                 lib.get(b"AdlMainControlCreate")?;
@@ -166,33 +174,54 @@ mod windows_impl {
 
             let mut num_adapters: c_int = 0;
             if adl_adapter_number_of_adapters_get(&mut num_adapters as *mut _) != 0 {
+                adlmaincontroldestroy();
                 return Err("Cannot get number of adapters".into());
             }
 
             let mut vram_usages = HashMap::new();
 
             if num_adapters > 0 {
-                let mut adapter_info: Vec<AdapterInfo> =
-                    vec![MaybeUninit::zeroed().assume_init(); num_adapters as usize];
+                let mut adapter_info: Vec<MaybeUninit<AdapterInfo>> =
+                    vec![MaybeUninit::zeroed(); num_adapters as usize];
                 let ret = adl_adapter_adapter_info_get(
-                    adapter_info.as_mut_ptr(),
+                    adapter_info.as_mut_ptr() as *mut AdapterInfo,
                     mem::size_of::<AdapterInfo>() as i32 * num_adapters,
                 );
                 if ret != 0 {
+                    adlmaincontroldestroy();
                     return Err("Cannot get adapter info".into());
                 }
+                // SAFETY: adl_adapter_adapter_info_get filled the buffer on success
+                let adapter_info: Vec<AdapterInfo> =
+                    adapter_info.into_iter().map(|a| a.assume_init()).collect();
 
                 for adapter in adapter_info.iter() {
                     let mut is_active = 0;
-                    AdlAdapterActiveGet(adapter.iAdapterIndex, &mut is_active);
+                    let active_status = AdlAdapterActiveGet(adapter.iAdapterIndex, &mut is_active);
+                    if active_status != 0 {
+                        log::warn!(
+                            "ADL active-state query failed for adapter {} with code {}",
+                            adapter.iAdapterIndex,
+                            active_status
+                        );
+                        continue;
+                    }
 
                     if is_active != 0 {
                         let mut vram_mb = 0;
-                        let _ = AdlGetDedicatedVramUsage(
+                        let usage_status = AdlGetDedicatedVramUsage(
                             ptr::null_mut(),
                             adapter.iAdapterIndex,
                             &mut vram_mb,
                         );
+                        if usage_status != 0 {
+                            log::warn!(
+                                "ADL VRAM usage query failed for adapter {} with code {}",
+                                adapter.iAdapterIndex,
+                                usage_status
+                            );
+                            continue;
+                        }
                         // NOTE: adapter name might not be unique?
                         let name = CStr::from_ptr(adapter.strAdapterName.as_ptr())
                             .to_string_lossy()

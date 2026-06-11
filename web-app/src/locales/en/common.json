@@ -1,4 +1,5 @@
 {
+  "guardrails": "Guardrails",
   "assistants": "Assistants",
   "hardware": "Hardware",
   "engineSettings": "Engine Settings",
@@ -13,8 +14,6 @@
   "modelProviders": "Model Providers",
   "interface": "Interface",
   "privacy": "Privacy",
-  "memory": "Memory",
-  "agentTeams": "Agent Teams",
   "llmRouter": "LLM Router",
   "keyboardShortcuts": "Shortcuts",
   "newChat": "New Chat",
@@ -358,36 +357,6 @@
     "noProjectsFound": "No projects found",
     "tryDifferentSearch": "Try a different search term"
   },
-  "speech": {
-    "speechToText": "Speech to Text",
-    "textToSpeech": "Text to Speech",
-    "speechToTextTitle": "Speech-to-Text",
-    "speechToTextDescription": "Transcribe audio using your configured local/remote provider (e.g. Whisper-compatible endpoint).",
-    "textToSpeechTitle": "Text-to-Speech",
-    "textToSpeechDescription": "Convert text to speech using your configured provider.",
-    "provider": "Provider",
-    "model": "Model",
-    "voice": "Voice",
-    "audioFile": "Audio File",
-    "inputText": "Input Text",
-    "inputTextPlaceholder": "Enter text you want to convert to speech...",
-    "transcribe": "Transcribe",
-    "transcribing": "Transcribing...",
-    "transcript": "Transcript",
-    "transcriptPlaceholder": "Transcript will appear here...",
-    "noTranscriptReturned": "Provider returned no transcript text.",
-    "generateSpeech": "Generate Speech",
-    "generatingSpeech": "Generating Speech...",
-    "generatedAudio": "Generated Audio",
-    "providerMissing": "Please configure a provider with a base URL first.",
-    "audioFileRequired": "Please choose an audio file to transcribe.",
-    "textRequired": "Please enter text to generate speech.",
-    "transcriptionSuccess": "Transcription completed.",
-    "transcriptionTimeout": "Transcription timed out. Try a smaller file or retry.",
-    "transcriptionFailed": "Failed to transcribe audio.",
-    "speechSuccess": "Speech generated successfully.",
-    "speechFailed": "Failed to generate speech."
-  },
   "attachmentsIngestion": {
     "title": "Choose how to ingest attachments",
     "description": "Choose whether to include these files directly in the chat or index them as embeddings instead.",
@@ -512,5 +481,11 @@
     "chunksCount": "{{count}} chunks"
   },
   "modelsCount": "{{count}} models",
-  "manageProviders": "Manage providers →"
+  "manageProviders": "Manage providers →",
+  "time": {
+    "justNow": "Just now",
+    "minutesAgo": "{{count}}m ago",
+    "hoursAgo": "{{count}}h ago",
+    "daysAgo": "{{count}}d ago"
+  }
 }

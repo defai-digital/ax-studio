@@ -33,12 +33,16 @@ export interface ModelParameters {
 
 import { type LanguageModel } from 'ai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
-import { isPlatformTauri } from '@/lib/platform'
-import { useLocalApiServer } from '@/hooks/useLocalApiServer'
+import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
+import { createMlxIpcFetch } from './mlx-ipc-fetch'
 
-// Use Tauri's HTTP plugin on native; fall back to native fetch for web/browser.
-const httpFetch = isPlatformTauri() ? tauriFetch : globalThis.fetch
+// Use the webview's native fetch for AI requests to the local proxy.
+// Tauri's HTTP plugin (tauriFetch) bypasses CORS but its Response.body
+// ReadableStream doesn't support pipeThrough() — which the AI SDK v5
+// requires for SSE parsing (TextDecoderStream → EventSourceParserStream).
+// The Rust proxy accepts CORS preflight from tauri:// origins on loopback,
+// so native fetch works without CORS issues.
+const httpFetch = globalThis.fetch
 
 /**
  * Returns the base URL of the local proxy server.
@@ -71,6 +75,310 @@ function toOpenAIParams(parameters: Record<string, unknown>): Record<string, unk
   return result
 }
 
+function hasToolConversationState(messages: unknown): boolean {
+  if (!Array.isArray(messages)) return false
+  return messages.some((message) => {
+    if (!message || typeof message !== 'object' || Array.isArray(message)) {
+      return false
+    }
+    const record = message as Record<string, unknown>
+    return record.role === 'tool' ||
+      (Array.isArray(record.tool_calls) && record.tool_calls.length > 0)
+  })
+}
+
+function textIncludes(value: unknown, needle: string): boolean {
+  if (typeof value === 'string') return value.includes(needle)
+  if (Array.isArray(value)) return value.some((item) => textIncludes(item, needle))
+  if (!value || typeof value !== 'object') return false
+  return Object.values(value as Record<string, unknown>).some((item) =>
+    textIncludes(item, needle)
+  )
+}
+
+function hasLocalKnowledgeToolResult(messages: unknown): boolean {
+  if (!Array.isArray(messages)) return false
+
+  // Only look at messages from the current turn (after the last user message).
+  // Tool results from previous turns must not suppress tools for the next question.
+  let lastUserIdx = -1
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i]
+    if (msg && typeof msg === 'object' && !Array.isArray(msg)) {
+      if ((msg as Record<string, unknown>).role === 'user') {
+        lastUserIdx = i
+        break
+      }
+    }
+  }
+  const currentTurnMessages = lastUserIdx >= 0 ? messages.slice(lastUserIdx + 1) : messages
+
+  return currentTurnMessages.some((message) => {
+    if (!message || typeof message !== 'object' || Array.isArray(message)) {
+      return false
+    }
+    const record = message as Record<string, unknown>
+    return record.role === 'tool' && (
+      textIncludes(record, 'LOCAL_KNOWLEDGE_RESULT_READY') ||
+      textIncludes(record, 'fabric_search') ||
+      textIncludes(record, 'Based on the search results above')
+    )
+  })
+}
+
+function disableThinkingForToolFollowUp(
+  body: Record<string, unknown>
+): Record<string, unknown> {
+  if (!hasToolConversationState(body.messages)) return body
+
+  const existing =
+    body.chat_template_kwargs &&
+    typeof body.chat_template_kwargs === 'object' &&
+    !Array.isArray(body.chat_template_kwargs)
+      ? body.chat_template_kwargs as Record<string, unknown>
+      : {}
+
+  return {
+    ...body,
+    chat_template_kwargs: {
+      ...existing,
+      enable_thinking: false,
+    },
+  }
+}
+
+function finalizeLocalKnowledgeFollowUp(
+  body: Record<string, unknown>
+): Record<string, unknown> {
+  if (!hasLocalKnowledgeToolResult(body.messages)) return body
+
+  const next = { ...body }
+  delete next.tools
+  delete next.tool_choice
+  delete next.toolChoice
+  delete next.parallel_tool_calls
+  delete next.parallelToolCalls
+  return next
+}
+
+function prepareOpenAIRequestBody(
+  body: Record<string, unknown>
+): Record<string, unknown> {
+  return finalizeLocalKnowledgeFollowUp(disableThinkingForToolFollowUp(body))
+}
+
+function toOpenAICompatibleString(value: unknown): string | null {
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value)
+  }
+  if (Array.isArray(value)) {
+    const text = value
+      .map((item) => toOpenAICompatibleString(item))
+      .filter((item): item is string => item != null && item.length > 0)
+      .join('')
+
+    if (text.length > 0) return text
+
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return null
+    }
+  }
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+
+    if (typeof record.text === 'string') return record.text
+    if (typeof record.value === 'string') return record.value
+
+    if (Array.isArray(record.content)) {
+      return toOpenAICompatibleString(record.content)
+    }
+
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return null
+    }
+  }
+
+  return null
+}
+
+function normalizeOpenAICompatibleToolCall(
+  toolCall: unknown,
+  index: number,
+  requireIndex: boolean
+): { toolCall: unknown; changed: boolean } {
+  if (!toolCall || typeof toolCall !== 'object' || Array.isArray(toolCall)) {
+    return { toolCall, changed: false }
+  }
+
+  const normalized = { ...(toolCall as Record<string, unknown>) }
+  let changed = false
+
+  if (requireIndex && typeof normalized.index !== 'number') {
+    normalized.index = index
+    changed = true
+  }
+
+  if (normalized.id != null && typeof normalized.id !== 'string') {
+    normalized.id = String(normalized.id)
+    changed = true
+  }
+
+  if (
+    normalized.function &&
+    typeof normalized.function === 'object' &&
+    !Array.isArray(normalized.function)
+  ) {
+    const fn = { ...(normalized.function as Record<string, unknown>) }
+
+    if (fn.name != null && typeof fn.name !== 'string') {
+      fn.name = String(fn.name)
+      changed = true
+    }
+
+    if (fn.arguments != null && typeof fn.arguments !== 'string') {
+      const normalizedArguments = toOpenAICompatibleString(fn.arguments)
+      if (normalizedArguments != null) {
+        fn.arguments = normalizedArguments
+        changed = true
+      }
+    }
+
+    normalized.function = fn
+  }
+
+  return { toolCall: normalized, changed }
+}
+
+function normalizeOpenAICompatiblePayload(
+  payload: Record<string, unknown>,
+  requireToolCallIndex: boolean
+): boolean {
+  let changed = false
+
+  for (const field of ['content', 'reasoning_content', 'reasoning'] as const) {
+    const value = payload[field]
+    if (value != null && typeof value !== 'string') {
+      const normalizedValue = toOpenAICompatibleString(value)
+      if (normalizedValue != null) {
+        payload[field] = normalizedValue
+        changed = true
+      }
+    }
+  }
+
+  const content = payload.content
+  const hasVisibleContent = typeof content === 'string' && content.length > 0
+  const reasoningFallback =
+    typeof payload.reasoning_content === 'string' && payload.reasoning_content.length > 0
+      ? payload.reasoning_content
+      : typeof payload.reasoning === 'string' && payload.reasoning.length > 0
+        ? payload.reasoning
+        : undefined
+
+  if (!hasVisibleContent && reasoningFallback) {
+    payload.content = reasoningFallback
+    changed = true
+  }
+
+  for (const field of ['reasoning_content', 'reasoning'] as const) {
+    if (payload[field] != null) {
+      delete payload[field]
+      changed = true
+    }
+  }
+
+  if ('role' in payload && payload.role != null && typeof payload.role !== 'string') {
+    payload.role = String(payload.role)
+    changed = true
+  }
+
+  if (Array.isArray(payload.tool_calls)) {
+    payload.tool_calls = payload.tool_calls.map((toolCall, index) => {
+      const normalizedToolCall = normalizeOpenAICompatibleToolCall(
+        toolCall,
+        index,
+        requireToolCallIndex
+      )
+      changed ||= normalizedToolCall.changed
+      return normalizedToolCall.toolCall
+    })
+  }
+
+  return changed
+}
+
+export function normalizeOpenAICompatibleEventData(data: string): string {
+  try {
+    const parsed = JSON.parse(data) as Record<string, unknown>
+    if (!Array.isArray(parsed.choices)) return data
+
+    let changed = false
+
+    for (const choice of parsed.choices) {
+      if (!choice || typeof choice !== 'object' || Array.isArray(choice)) continue
+
+      const normalizedChoice = choice as Record<string, unknown>
+
+      if (
+        normalizedChoice.finish_reason != null &&
+        typeof normalizedChoice.finish_reason !== 'string'
+      ) {
+        normalizedChoice.finish_reason = String(normalizedChoice.finish_reason)
+        changed = true
+      }
+
+      if (
+        normalizedChoice.delta &&
+        typeof normalizedChoice.delta === 'object' &&
+        !Array.isArray(normalizedChoice.delta)
+      ) {
+        changed =
+          normalizeOpenAICompatiblePayload(
+            normalizedChoice.delta as Record<string, unknown>,
+            true
+          ) || changed
+      }
+
+      if (
+        normalizedChoice.message &&
+        typeof normalizedChoice.message === 'object' &&
+        !Array.isArray(normalizedChoice.message)
+      ) {
+        changed =
+          normalizeOpenAICompatiblePayload(
+            normalizedChoice.message as Record<string, unknown>,
+            false
+          ) || changed
+      }
+    }
+
+    return changed ? JSON.stringify(parsed) : data
+  } catch {
+    return data
+  }
+}
+
+function normalizeOpenAICompatibleSseLine(line: string): string {
+  const prefix = line.startsWith('data: ')
+    ? 'data: '
+    : line.startsWith('data:')
+      ? 'data:'
+      : null
+
+  if (!prefix) return line
+
+  const data = line.slice(prefix.length).trimStart()
+  if (data === '[DONE]') return line
+
+  const normalized = normalizeOpenAICompatibleEventData(data)
+  return normalized === data ? line : `${prefix}${normalized}`
+}
+
 /**
  * Creates a fetch wrapper that normalizes non-standard streaming SSE responses.
  *
@@ -81,9 +389,10 @@ function toOpenAIParams(parameters: Record<string, unknown>): Record<string, unk
  * 1. **Missing tool_call index** (Gemini): Gemini's OpenAI-compatible SSE omits the
  *    required `index` field on `choices[].delta.tool_calls[]` items.
  *
- * 2. **Numeric content** (Cloudflare Workers AI): Some models return
- *    `choices[].delta.content` as a number (e.g. `0`) instead of a string (`"0"`).
- *    This happens when the model outputs a digit token.
+ * 2. **Non-string content/reasoning/tool args** (Cloudflare Workers AI and others):
+ *    Some models return text-ish fields as numbers, arrays, or objects rather than
+ *    plain strings. This includes `content`, `reasoning_content`, `reasoning`, and
+ *    `tool_calls[].function.arguments`.
  *
  * 3. **Numeric role** (various): Some providers return `role` as a non-string value.
  *
@@ -93,86 +402,71 @@ function createStreamingPatchFetch(baseFetch: typeof httpFetch): typeof httpFetc
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const response = await baseFetch(input, init)
     const contentType = response.headers.get('content-type') ?? ''
+
+    // Tauri HTTP plugin's Response.text() can hang on error responses with
+    // empty or non-JSON content-type. Intercept non-200 responses here and
+    // re-create a plain Response whose body the AI SDK can safely read.
+    if (!response.ok) {
+      let errorBody = ''
+      let errorTimeoutId: ReturnType<typeof setTimeout> | undefined
+      try {
+        // Read with a 5-second timeout to prevent hanging
+        errorBody = await Promise.race([
+          response.text(),
+          new Promise<string>((_, reject) => {
+            errorTimeoutId = setTimeout(() => reject(new Error('Timeout reading error body')), 5000)
+          }),
+        ])
+      } catch {
+        errorBody = `HTTP ${response.status} ${response.statusText || 'Error'}`
+      } finally {
+        if (errorTimeoutId) clearTimeout(errorTimeoutId)
+      }
+      console.error(`[StreamingPatch] proxy error ${response.status}: ${errorBody.slice(0, 300)}`)
+      // Return a new Response with a plain-text body the SDK can parse
+      return new Response(errorBody, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: new Headers({ 'content-type': 'text/plain' }),
+      })
+    }
+
     if (!contentType.includes('text/event-stream') || !response.body) {
       return response
     }
 
-    const reader = response.body.getReader()
     const encoder = new TextEncoder()
     const decoder = new TextDecoder()
     let buffer = ''
 
-    const transformedBody = new ReadableStream({
-      async pull(controller) {
-        const { done, value } = await reader.read()
-        if (done) {
-          if (buffer.trim()) controller.enqueue(encoder.encode(buffer))
-          controller.close()
-          return
-        }
-
-        buffer += decoder.decode(value, { stream: true })
+    const transform = new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        buffer += decoder.decode(chunk, { stream: true })
         const lines = buffer.split('\n')
         buffer = lines.pop() ?? ''
 
-        const patched = lines.map((line) => {
-          if (!line.startsWith('data: ')) return line
-          const json = line.slice(6)
-          if (json === '[DONE]') return line
-          try {
-            const parsed = JSON.parse(json)
-            if (!Array.isArray(parsed.choices)) return line
-
-            let patched = false
-            for (const choice of parsed.choices) {
-              const delta = choice.delta
-              if (!delta) continue
-
-              // Fix 1: Coerce non-string `content` to string (Cloudflare Workers AI)
-              if ('content' in delta && delta.content != null && typeof delta.content !== 'string') {
-                delta.content = String(delta.content)
-                patched = true
-              }
-
-              // Fix 2: Inject missing `index` on tool_calls (Gemini)
-              if (Array.isArray(delta.tool_calls)) {
-                delta.tool_calls = delta.tool_calls.map(
-                  (tc: Record<string, unknown>, i: number) => {
-                    if (typeof tc.index !== 'number') {
-                      patched = true
-                      return { index: i, ...tc }
-                    }
-                    return tc
-                  }
-                )
-              }
-
-              // Fix 3: Coerce non-string `role` to string
-              if ('role' in delta && delta.role != null && typeof delta.role !== 'string') {
-                delta.role = String(delta.role)
-                patched = true
-              }
-            }
-
-            // Only re-serialize if we actually changed something (avoid unnecessary work)
-            return patched ? `data: ${JSON.stringify(parsed)}` : line
-          } catch {
-            return line
-          }
-        })
+        const patched = lines.map((line) => normalizeOpenAICompatibleSseLine(line))
 
         controller.enqueue(encoder.encode(patched.join('\n') + '\n'))
       },
-      cancel() {
-        reader.cancel()
+      flush(controller) {
+        if (buffer.trim()) {
+          controller.enqueue(encoder.encode(normalizeOpenAICompatibleSseLine(buffer)))
+        }
       },
     })
 
-    return new Response(transformedBody, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: response.headers,
-    })
+    try {
+      const patchedBody = response.body.pipeThrough(transform)
+      return new Response(patchedBody, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      })
+    } catch (e) {
+      console.warn('[StreamingPatch] pipeThrough failed, returning original:', e)
+      return response
+    }
   }
 }
 
@@ -185,7 +479,7 @@ function createCustomFetch(
   parameters: Record<string, unknown>
 ): typeof httpFetch {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    if ((init?.method === 'POST' || !init?.method) && Object.keys(parameters).length > 0) {
+    if (init?.method === 'POST' || !init?.method) {
       if (typeof init?.body !== 'string') {
         // Body is Blob, ReadableStream, FormData, etc. — skip parameter injection
         return baseFetch(input, init)
@@ -197,7 +491,10 @@ function createCustomFetch(
         // body is not JSON, skip parameter injection
         return baseFetch(input, init)
       }
-      init = { ...init, body: JSON.stringify({ ...body, ...parameters }) }
+      init = {
+        ...init,
+        body: JSON.stringify(prepareOpenAIRequestBody({ ...body, ...parameters })),
+      }
     }
     return baseFetch(input, init)
   }
@@ -214,7 +511,7 @@ function createCustomFetch(
  *   - Forwarding to the correct upstream URL (cloud or localhost)
  *
  * Supported via provider_configs registration:
- *   Cloud  : OpenAI, Anthropic, Gemini, Groq, Mistral, Azure, OpenRouter, HuggingFace, …
+ *   Cloud  : OpenAI, Anthropic, Gemini, Groq, Azure, OpenRouter, …
  *   Local  : Ollama (localhost:11434), LM Studio (localhost:1234), your FastAPI (port 8000)
  */
 export class ModelFactory {
@@ -224,31 +521,52 @@ export class ModelFactory {
   static async createModel(
     modelId: string,
     provider: ProviderObject,
-    parameters: Record<string, unknown> = {}
+    parameters: Record<string, unknown> = {},
+    options: { requestRole?: 'router' | 'final' } = {}
   ): Promise<LanguageModel> {
     const proxyUrl = getProxyBaseUrl()
     const openAIParams = toOpenAIParams(parameters)
     const providerName = provider.provider.toLowerCase()
 
+    // MLX runs in-process via ax-engine-sdk. Do not route it through the local
+    // proxy/ax-serving, because the installed ax-serving worker only preloads
+    // GGUF models in this build.
+    const isMlxProvider = provider.provider === 'mlx'
+
     // Normalize non-standard streaming SSE responses from various providers.
-    // Applied to all providers since the proxy passes streaming bytes through unchanged.
-    const baseFetch = createStreamingPatchFetch(httpFetch)
-    const fetchFn =
-      Object.keys(openAIParams).length > 0
-        ? createCustomFetch(baseFetch, openAIParams)
-        : baseFetch
+    // Applied to proxy providers since the proxy passes streaming bytes through unchanged.
+    const baseFetch = isMlxProvider
+      ? createMlxIpcFetch()
+      : createStreamingPatchFetch(httpFetch)
+    const fetchFn = createCustomFetch(baseFetch, openAIParams)
 
     // All providers go through the proxy using the OpenAI-compatible format.
     // The proxy routes the request to the correct upstream based on model_id lookup
     // in provider_configs, injects the real API key, and applies custom headers.
+    //
+    // Auth: the local proxy runs with its own `proxy_api_key` for access control
+    // (not the upstream provider key). The client must prove it's allowed to use
+    // this proxy; the proxy then swaps in the real provider key before forwarding.
+    // Previously no Authorization header was sent, so the proxy replied 401 and
+    // the UI hung on "thinking" forever waiting for a stream that never started.
+    const localProxyKey = useLocalApiServer.getState().apiKey
+    const proxyHeaders: Record<string, string> = {
+      'X-Ax-Provider': provider.provider,
+    }
+    if (options.requestRole) {
+      proxyHeaders['X-Ax-Request-Role'] = options.requestRole
+    }
+    if (localProxyKey && localProxyKey.trim().length > 0) {
+      proxyHeaders.Authorization = `Bearer ${localProxyKey}`
+    }
+
     const proxyModel = createOpenAICompatible({
       name: providerName,
       baseURL: proxyUrl,
-      // No Authorization header here — proxy injects the real key from provider_configs.
       // Passing a headers object prevents the SDK from looking up env vars.
       // X-Ax-Provider tells the proxy which registered provider to route to,
       // avoiding ambiguity when the same model ID exists in multiple providers.
-      headers: { 'X-Ax-Provider': provider.provider },
+      headers: proxyHeaders,
       includeUsage: true,
       fetch: fetchFn,
     })

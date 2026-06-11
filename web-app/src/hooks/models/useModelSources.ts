@@ -1,0 +1,60 @@
+import { create } from 'zustand'
+import { localStorageKey } from '@/constants/localStorage'
+import { persist } from 'zustand/middleware'
+import { getServiceHub } from '@/hooks/useServiceHub'
+import type { CatalogModel } from '@/services/models/types'
+import { sanitizeModelId } from '@/lib/utils'
+import { createSafeJSONStorage } from '@/lib/storage/storage'
+
+// Zustand store for model sources
+type ModelSourcesState = {
+  sources: CatalogModel[]
+  error: Error | null
+  loading: boolean
+  fetchSources: () => Promise<void>
+}
+
+export const useModelSources = create<ModelSourcesState>()(
+  persist(
+    (set, get) => ({
+      sources: [],
+      error: null,
+      loading: false,
+      fetchSources: async () => {
+        set({ loading: true, error: null })
+        try {
+          const newSources = await getServiceHub()
+            .models()
+            .fetchModelCatalog()
+            .then((catalogs) =>
+              catalogs.map((catalog) => ({
+                ...catalog,
+                quants: catalog.quants?.map((quant) => {
+                  const parts = quant.model_id.split('/')
+                  const author = parts.length > 1 ? parts.slice(0, -1).join('/') : ''
+                  const name = parts.length > 1 ? parts[parts.length - 1] : parts[0]
+                  const sanitizedName = sanitizeModelId(name)
+                  const newId = author ? `${author}/${sanitizedName}` : sanitizedName
+                  return {
+                    ...quant,
+                    model_id: newId,
+                  }
+                }),
+              }))
+            )
+
+          set({
+            sources: newSources.length ? newSources : get().sources,
+            loading: false,
+          })
+        } catch (error) {
+          set({ error: error as Error, loading: false })
+        }
+      },
+    }),
+    {
+      name: localStorageKey.modelSources,
+      storage: createSafeJSONStorage(() => localStorage, 'useModelSources'),
+    }
+  )
+)

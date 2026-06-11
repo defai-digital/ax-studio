@@ -13,22 +13,27 @@ import { type UIMessage } from '@ai-sdk/react'
 import { streamText } from 'ai'
 import { ModelFactory } from './model-factory'
 import { buildRouterPrompt } from './llm-router-prompt'
-import { useModelProvider } from '@/features/models/hooks/useModelProvider'
-import { useFavoriteModel } from '@/features/models/hooks/useFavoriteModel'
-import { predefinedProviders } from '@/constants/providers'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
+import { useFavoriteModel } from '@/hooks/models/useFavoriteModel'
+import { LOCAL_PROVIDER_IDS, predefinedProviders } from '@/constants/providers'
+import { z } from 'zod'
 
 const MAX_MODELS_IN_PROMPT = 30
 const MAX_USER_MESSAGE_LENGTH = 1000
 const MAX_CONTEXT_LENGTH = 500
+const HIGH_RISK_ENGINEERING_PATTERN =
+  /\b(production|typescript|javascript|code|coding|debug|bug|test|tests|edge case|edge cases|architecture|architectural|refactor|security|reliability|stability|best practice|best practices|pr|pull request|review)\b/i
+const STRONG_CODING_MODEL_PATTERN =
+  /\b(glm|zai|claude|sonnet|opus|gpt|o[1345]|gemini.*pro|deepseek|coder|coding|code)\b/i
 
 /**
  * Build a flat list of available models for the router prompt.
- * Filters out embedding models and the router model itself.
+ * Filters out embedding models.
  * Prioritizes favorites, then follows provider order.
  */
 export function getAvailableModelsForRouter(
   providers: ModelProvider[],
-  routerModelId: string,
+  _routerModelId: string,
 ): AvailableModelForRouter[] {
   const favoriteIds = new Set(
     useFavoriteModel.getState().favoriteModels.map((m) => m.id),
@@ -49,7 +54,6 @@ export function getAvailableModelsForRouter(
 
     for (const model of provider.models) {
       if (model.embedding) continue
-      if (model.id === routerModelId) continue
 
       allModels.push({
         id: model.id,
@@ -67,6 +71,80 @@ export function getAvailableModelsForRouter(
   })
 
   return allModels.slice(0, MAX_MODELS_IN_PROMPT)
+}
+
+function isLocalRouterCandidate(model: AvailableModelForRouter): boolean {
+  const provider = model.provider.toLowerCase()
+  return (
+    LOCAL_PROVIDER_IDS.has(provider) ||
+    provider === 'local' ||
+    /\b(local|llama\.?cpp|ollama|mlx|lmstudio)\b/i.test(
+      `${model.id} ${model.displayName}`,
+    )
+  )
+}
+
+function isStrongCodingCandidate(model: AvailableModelForRouter): boolean {
+  return STRONG_CODING_MODEL_PATTERN.test(
+    `${model.id} ${model.provider} ${model.displayName}`,
+  )
+}
+
+function scoreStrongCodingCandidate(model: AvailableModelForRouter): number {
+  const text = `${model.id} ${model.provider} ${model.displayName}`.toLowerCase()
+  let score = 0
+
+  if (isStrongCodingCandidate(model)) score += 100
+  if (/glm|zai/.test(text)) score += 40
+  if (/claude|sonnet|opus/.test(text)) score += 35
+  if (/gpt|o[1345]/.test(text)) score += 30
+  if (/deepseek|coder|coding|code/.test(text)) score += 25
+  if (/gemini.*pro/.test(text)) score += 20
+  if (/mini|small|lite|flash|haiku|3b|7b/.test(text)) score -= 20
+  if (/5\.1|4\.6|pro|opus|sonnet/.test(text)) score += 10
+
+  return score
+}
+
+function pickStrongRemoteCodingModel(
+  availableModels: AvailableModelForRouter[],
+): AvailableModelForRouter | null {
+  const candidates = availableModels
+    .map((model, index) => ({ model, index, score: scoreStrongCodingCandidate(model) }))
+    .filter(({ model, score }) => !isLocalRouterCandidate(model) && score >= 100)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+
+  return candidates[0]?.model ?? null
+}
+
+function pickDirectEngineeringRoute(
+  userMessage: string,
+  availableModels: AvailableModelForRouter[],
+): { modelId: string; providerId: string; reason: string } | null {
+  if (!HIGH_RISK_ENGINEERING_PATTERN.test(userMessage)) return null
+
+  const replacement = pickStrongRemoteCodingModel(availableModels)
+  if (!replacement) return null
+
+  return {
+    modelId: replacement.id,
+    providerId: replacement.provider,
+    reason: 'production coding',
+  }
+}
+
+function maybeOverrideLocalEngineeringChoice(
+  userMessage: string,
+  selected: { modelId: string; providerId: string; reason: string },
+  availableModels: AvailableModelForRouter[],
+): { modelId: string; providerId: string; reason: string } | null {
+  const selectedModel = availableModels.find(
+    (model) =>
+      model.id === selected.modelId && model.provider === selected.providerId,
+  )
+  if (!selectedModel || !isLocalRouterCandidate(selectedModel)) return null
+
+  return pickDirectEngineeringRoute(userMessage, availableModels)
 }
 
 /**
@@ -113,6 +191,12 @@ export function parseRouterResponse(
   rawText: string,
   availableModels: AvailableModelForRouter[],
 ): { modelId: string; providerId: string; reason: string } | null {
+  const RouterDecisionSchema = z.object({
+    model: z.string().min(1),
+    provider: z.string().min(1),
+    reason: z.string().optional(),
+  })
+
   try {
     // Strip thinking tags (e.g., Qwen 3 models wrap responses in <think>...</think>)
     let cleaned = rawText.trim()
@@ -124,9 +208,13 @@ export function parseRouterResponse(
     }
 
     const parsed = JSON.parse(cleaned)
-    const model = parsed.model as string
-    const provider = parsed.provider as string
-    const reason = (parsed.reason as string) || 'routed'
+    const parseResult = RouterDecisionSchema.safeParse(parsed)
+    if (!parseResult.success) {
+      return null
+    }
+
+    const { model, provider, reason: parsedReason } = parseResult.data
+    const reason = parsedReason || 'routed'
 
     if (!model || !provider) return null
     if (model === 'default' || provider === 'default') return null
@@ -163,10 +251,9 @@ export function parseRouterResponse(
       }
     }
 
-    // Fuzzy: substring match, but only if the match is substantial
-    // (min 4 chars and >50% of the longer string to avoid false positives)
+    // Fuzzy: substring match, min 6 chars and >75% overlap
     const modelLower = model.toLowerCase()
-    if (modelLower.length >= 4) {
+    if (modelLower.length >= 6) {
       const fuzzy = availableModels.find((m) => {
         const idLower = m.id.toLowerCase()
         const isSubstring =
@@ -174,7 +261,7 @@ export function parseRouterResponse(
         if (!isSubstring) return false
         const shorter = Math.min(idLower.length, modelLower.length)
         const longer = Math.max(idLower.length, modelLower.length)
-        return shorter / longer > 0.5
+        return shorter / longer > 0.75
       })
       if (fuzzy) {
         return { modelId: fuzzy.id, providerId: fuzzy.provider, reason }
@@ -248,6 +335,20 @@ export async function routeMessage(
     )
   }
 
+  const directEngineeringRoute = pickDirectEngineeringRoute(
+    userMessage,
+    availableModels,
+  )
+  if (directEngineeringRoute) {
+    return {
+      modelId: directEngineeringRoute.modelId,
+      providerId: directEngineeringRoute.providerId,
+      reason: directEngineeringRoute.reason,
+      routed: true,
+      latencyMs: performance.now() - startTime,
+    }
+  }
+
   const recentContext = getRecentContext(messages)
   const { system, user } = buildRouterPrompt(
     userMessage.slice(0, MAX_USER_MESSAGE_LENGTH),
@@ -274,13 +375,17 @@ export async function routeMessage(
       routerModelId,
       routerProvider,
       {},
+      { requestRole: 'router' },
     )
 
-    // Set up timeout via AbortController
+    // Set up timeout via AbortController.
+    // Floor at 2s so a misconfigured 0/very-low timeout doesn't cause
+    // every routing call to time out and silently fall back.
+    const effectiveTimeout = Math.max(timeout, 2000)
     const abortController = new AbortController()
     const timeoutId = globalThis.setTimeout(
       () => abortController.abort(),
-      timeout,
+      effectiveTimeout,
     )
 
     try {
@@ -299,6 +404,10 @@ export async function routeMessage(
         abortSignal: abortController.signal,
       })
 
+      // Invariant: this for-await loop is single-consumer. The `text` and
+      // `reasoning` accumulators are only mutated here — no concurrent writer
+      // can observe a stale value. The async scanner flags the non-atomic += as
+      // a race, but it is safe because this is the sole consumer of the stream.
       let text = ''
       let reasoning = ''
       for await (const part of stream.fullStream) {
@@ -317,7 +426,6 @@ export async function routeMessage(
       const latencyMs = performance.now() - startTime
 
       const parsed = parseRouterResponse(text, availableModels)
-      console.debug('[LLM Router] response:', text, '→ parsed:', parsed)
       if (!parsed) {
         return createFallbackResult(
           fallbackModelId,
@@ -327,10 +435,14 @@ export async function routeMessage(
         )
       }
 
+      const selected =
+        maybeOverrideLocalEngineeringChoice(userMessage, parsed, availableModels) ??
+        parsed
+
       return {
-        modelId: parsed.modelId,
-        providerId: parsed.providerId,
-        reason: parsed.reason,
+        modelId: selected.modelId,
+        providerId: selected.providerId,
+        reason: selected.reason,
         routed: true,
         latencyMs,
       }

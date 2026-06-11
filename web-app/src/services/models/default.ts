@@ -25,11 +25,33 @@ import type {
 } from './types'
 import { getBundledModelCatalog } from './catalog'
 import { huggingFaceRepoSchema } from '@/schemas/models.schema'
+import {
+  getCleanHuggingFaceRepoId,
+  getHuggingFaceApiModelUrl,
+  getHuggingFaceModelFileUrl,
+  getHuggingFaceModelUrl,
+} from '@/lib/huggingface'
 
 // Default provider for local inference
 const defaultProvider = 'llamacpp'
+const engineProviderFor = (provider?: string): string | undefined =>
+  provider === 'mlx' ? 'llamacpp' : provider
 
 export class DefaultModelsService implements ModelsService {
+  private parseHuggingFaceModelPath(
+    modelPath: string
+  ): { repoId: string; filename: string } | undefined {
+    const match = modelPath.match(
+      /^https:\/\/huggingface\.co\/([^/]+\/[^/]+)\/resolve\/main\/(.+)$/
+    )
+    if (!match) return undefined
+    const [, repoId, filename] = match
+    return {
+      repoId,
+      filename,
+    }
+  }
+
   private getEngine(provider: string = defaultProvider) {
     const engine = EngineManager.instance().get(provider) as AIEngine | undefined
     if (!engine) {
@@ -44,7 +66,14 @@ export class DefaultModelsService implements ModelsService {
     engine: AIEngine,
     model: string
   ): Promise<void> {
-    await engine.syncModelRoute(model)
+    try {
+      await engine.syncModelRoute(model)
+    } catch (error) {
+      console.warn(
+        `[ModelsService] Failed to sync local model route for "${model}":`,
+        error
+      )
+    }
   }
 
   async getModel(modelId: string): Promise<modelInfo | undefined> {
@@ -67,23 +96,21 @@ export class DefaultModelsService implements ModelsService {
 
   async fetchHuggingFaceRepo(
     repoId: string,
-    hfToken?: string
+    hfToken?: string,
+    signal?: AbortSignal
   ): Promise<HuggingFaceRepo | null> {
     try {
       // Clean the repo ID to handle various input formats
-      const cleanRepoId = repoId
-        .replace(/^https?:\/\/huggingface\.co\//, '')
-        .replace(/^huggingface\.co\//, '')
-        .replace(/\/$/, '') // Remove trailing slash
-        .trim()
+      const cleanRepoId = getCleanHuggingFaceRepoId(repoId)
 
       if (!cleanRepoId || !cleanRepoId.includes('/')) {
         return null
       }
 
       const response = await fetch(
-        `https://huggingface.co/api/models/${cleanRepoId}?blobs=true&files_metadata=true`,
+        getHuggingFaceApiModelUrl(cleanRepoId),
         {
+          signal,
           headers: hfToken
             ? {
                 Authorization: `Bearer ${hfToken}`,
@@ -109,6 +136,8 @@ export class DefaultModelsService implements ModelsService {
       }
       return parsed.data
     } catch (error) {
+      // Propagate abort errors so callers can distinguish cancellation from failure
+      if (error instanceof Error && error.name === 'AbortError') throw error
       console.error('Error fetching HuggingFace repository:', error)
       return null
     }
@@ -144,7 +173,7 @@ export class DefaultModelsService implements ModelsService {
 
       return {
         model_id: `${repo.author}/${sanitizeModelId(modelId)}`,
-        path: `https://huggingface.co/${repo.modelId}/resolve/main/${file.rfilename}`,
+        path: getHuggingFaceModelFileUrl(repo.modelId, file.rfilename),
         file_size: formatFileSize(file.size),
       }
     })
@@ -155,7 +184,7 @@ export class DefaultModelsService implements ModelsService {
 
       return {
         model_id: sanitizeModelId(modelId),
-        path: `https://huggingface.co/${repo.modelId}/resolve/main/${file.rfilename}`,
+        path: getHuggingFaceModelFileUrl(repo.modelId, file.rfilename),
         file_size: formatFileSize(file.size),
       }
     })
@@ -176,7 +205,7 @@ export class DefaultModelsService implements ModelsService {
 
       return {
         model_id: sanitizeModelId(modelId),
-        path: `https://huggingface.co/${repo.modelId}/resolve/main/${file.rfilename}`,
+        path: getHuggingFaceModelFileUrl(repo.modelId, file.rfilename),
         file_size: formatFileSize(file.size),
         sha256: file.lfs?.sha256,
       }
@@ -194,19 +223,18 @@ export class DefaultModelsService implements ModelsService {
       safetensors_files: safetensorsModels,
       num_safetensors: safetensorsModels.length,
       is_mlx: hasMlxFiles,
-      readme: `https://huggingface.co/${repo.modelId}/resolve/main/README.md`,
+      readme: `${getHuggingFaceModelUrl(repo.modelId)}/resolve/main/README.md`,
       description: `**Tags**: ${repo.tags?.join(', ')}`,
     }
   }
 
-  async updateModel(modelId: string, model: Partial<CoreModel>): Promise<void> {
+  async updateModel(_modelId: string, model: Partial<CoreModel>): Promise<void> {
     if (model.settings) {
       this.getEngine()?.updateSettings(
         model.settings as SettingComponentProps[]
       )
     }
     // Note: Model name/ID updates are handled at the provider level in the frontend
-    console.log('Model update request processed for modelId:', modelId)
   }
 
   async pullModel(
@@ -216,7 +244,8 @@ export class DefaultModelsService implements ModelsService {
     modelSize?: number,
     mmprojPath?: string,
     mmprojSha256?: string,
-    mmprojSize?: number
+    mmprojSize?: number,
+    downloadHeaders?: Record<string, string>
   ): Promise<void> {
     const engine = this.getEngine()
     if (!engine) {
@@ -231,6 +260,7 @@ export class DefaultModelsService implements ModelsService {
       modelSize,
       mmprojSha256,
       mmprojSize,
+      downloadHeaders,
     })
   }
 
@@ -248,12 +278,10 @@ export class DefaultModelsService implements ModelsService {
 
     // Extract repo ID from model URL
     // URL format: https://huggingface.co/{repo}/resolve/main/{filename}
-    const modelUrlMatch = modelPath.match(
-      /https:\/\/huggingface\.co\/([^/]+\/[^/]+)\/resolve\/main\/(.+)/
-    )
+    const parsedModelPath = this.parseHuggingFaceModelPath(modelPath)
 
-    if (modelUrlMatch && !skipVerification) {
-      const [, repoId, modelFilename] = modelUrlMatch
+    if (parsedModelPath && !skipVerification) {
+      const { repoId, filename: modelFilename } = parsedModelPath
 
       try {
         // Fetch real-time metadata from HuggingFace
@@ -271,11 +299,9 @@ export class DefaultModelsService implements ModelsService {
 
           // If mmproj path provided, extract its metadata too
           if (mmprojPath) {
-            const mmprojUrlMatch = mmprojPath.match(
-              /https:\/\/huggingface\.co\/[^/]+\/[^/]+\/resolve\/main\/(.+)/
-            )
-            if (mmprojUrlMatch) {
-              const [, mmprojFilename] = mmprojUrlMatch
+            const parsedMmprojPath = this.parseHuggingFaceModelPath(mmprojPath)
+            if (parsedMmprojPath) {
+              const { filename: mmprojFilename } = parsedMmprojPath
               const mmprojFile = repoInfo.siblings.find(
                 (file) => file.rfilename === mmprojFilename
               )
@@ -302,7 +328,8 @@ export class DefaultModelsService implements ModelsService {
       modelSize,
       mmprojPath,
       mmprojSha256,
-      mmprojSize
+      mmprojSize,
+      hfToken ? { Authorization: `Bearer ${hfToken}` } : undefined
     )
   }
 
@@ -323,11 +350,18 @@ export class DefaultModelsService implements ModelsService {
   }
 
   async deleteModel(id: string, provider?: string): Promise<void> {
-    return this.getEngine(provider)?.delete(id)
+    const engineProvider = engineProviderFor(provider)
+    const engine = this.getEngine(engineProvider)
+    if (!engine) {
+      throw new Error(
+        `[ModelsService] Cannot delete model: engine "${engineProvider ?? defaultProvider}" is not available.`
+      )
+    }
+    return engine.delete(id)
   }
 
   async getActiveModels(provider?: string): Promise<string[]> {
-    const engine = this.getEngine(provider)
+    const engine = this.getEngine(engineProviderFor(provider))
     if (!engine) return []
     return engine.getLoadedModels() ?? []
   }
@@ -336,18 +370,33 @@ export class DefaultModelsService implements ModelsService {
     model: string,
     provider?: string
   ): Promise<UnloadResult | undefined> {
-    return this.getEngine(provider)?.unload(model)
+    return this.getEngine(engineProviderFor(provider))?.unload(model)
   }
 
   async stopAllModels(): Promise<void> {
-    const llamaCppModels = await this.getActiveModels('llamacpp')
-    if (llamaCppModels)
-      await Promise.all(
-        llamaCppModels.map((model) => this.stopModel(model, 'llamacpp'))
-      )
-    const mlxModels = await this.getActiveModels('mlx')
-    if (mlxModels)
-      await Promise.all(mlxModels.map((model) => this.stopModel(model, 'mlx')))
+    // Fetch active model lists from both engines in parallel, then stop
+    // every model with `allSettled` so a single failing unload doesn't
+    // skip the rest. Previously, if one llamacpp unload failed, the
+    // subsequent `await Promise.all(...)` rejected and the mlx loop below
+    // never ran — leaving mlx models loaded on logout / factory reset.
+    const [llamaCppModels, mlxModels] = await Promise.all([
+      this.getActiveModels('llamacpp').catch(() => [] as string[]),
+      this.getActiveModels('mlx').catch(() => [] as string[]),
+    ])
+    const results = await Promise.allSettled([
+      ...(llamaCppModels ?? []).map((model) =>
+        this.stopModel(model, 'llamacpp')
+      ),
+      ...(mlxModels ?? []).map((model) => this.stopModel(model, 'mlx')),
+    ])
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        console.warn(
+          '[ModelsService] stopAllModels unload failed:',
+          result.reason
+        )
+      }
+    }
   }
 
   async startModel(
@@ -355,8 +404,14 @@ export class DefaultModelsService implements ModelsService {
     model: string,
     bypassAutoUnload: boolean = false
   ): Promise<SessionInfo | undefined> {
-    const engine = this.getEngine(provider.provider)
-    if (!engine) return undefined
+    const engineProvider = engineProviderFor(provider.provider) ?? provider.provider
+    const engine = this.getEngine(engineProvider)
+    if (!engine) {
+      throw new Error(
+        `Local engine "${engineProvider}" is not available. ` +
+        `Try restarting the app — the engine may still be initializing.`
+      )
+    }
 
     const loadedModels = (await engine.getLoadedModels()) ?? []
     if (loadedModels.includes(model)) {
@@ -376,17 +431,40 @@ export class DefaultModelsService implements ModelsService {
       return keyMappings[key] || key
     }
 
+    // Only keys in this set are load-time llama.cpp overrides. Everything
+    // else (temperature, top_p, top_k, frequency_penalty, …) is a per-request
+    // sampling parameter and must NOT be forwarded to engine.load() — the
+    // llamacpp extension used to hard-fail with "Unsupported load override
+    // setting: <name>" when mixed settings leaked through.
+    const LOAD_TIME_SETTING_KEYS = new Set<string>([
+      'fit', 'fit_target', 'fit_ctx',
+      'chat_template', 'n_gpu_layers', 'offload_mmproj',
+      'cpu_moe', 'n_cpu_moe', 'override_tensor_buffer_t',
+      'ctx_size', 'threads', 'threads_batch',
+      'n_predict', 'batch_size', 'ubatch_size',
+      'device', 'split_mode', 'main_gpu',
+      'flash_attn', 'cont_batching',
+      // common aliases that mapSettingKey normalizes to allowed keys
+      'ctx_len', 'ngl',
+    ])
+
     const settings = modelConfig?.settings
       ? Object.fromEntries(
-          Object.entries(modelConfig.settings).map(([key, value]) => [
-            mapSettingKey(key),
-            value.controller_props?.value,
-          ])
+          Object.entries(modelConfig.settings)
+            .filter(([key]) => LOAD_TIME_SETTING_KEYS.has(key))
+            .map(([key, value]) => [
+              mapSettingKey(key),
+              value.controller_props?.value,
+            ])
         )
       : undefined
 
     return engine
       .load(model, settings, false, bypassAutoUnload)
+      .then(async (session) => {
+        await this.syncLoadedModelRoute(engine, model)
+        return session
+      })
       .catch((error) => {
         console.error(
           `Failed to start model ${model} for provider ${provider.provider}:`,

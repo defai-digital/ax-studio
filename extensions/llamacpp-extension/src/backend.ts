@@ -7,6 +7,7 @@
 
 import { getAppDataFolderPath, joinPath, fs, events } from '@ax-studio/core'
 import { invoke } from '@tauri-apps/api/core'
+import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
 import {
   getLocalInstalledBackendsInternal,
   listSupportedBackendsFromRust,
@@ -17,19 +18,58 @@ import {
   findLatestVersionForBackend,
   BackendVersion,
   BestBackendResult,
+  GpuInfo,
   UpdateCheckResult,
 } from '@ax-studio/tauri-plugin-llamacpp-api'
 import { getProxyConfig, buildProxyArg } from './util'
-import {
-  axEngineAssetInfo,
-  parseSha256File,
-  pickNewestVersionDir,
-} from './ax-engine-release'
 
 // Build-time constants — see env.d.ts for declarations
 
+// Keep the release page small because we only need recent backend artifacts.
+const GITHUB_RELEASES_PAGE_SIZE = 10
+const GITHUB_API_TIMEOUT_MS = 5_000
+const REMOTE_BACKEND_CACHE_TTL_MS = 5 * 60 * 1000
+const BACKEND_DOWNLOAD_MAX_ATTEMPTS = 3
+const BACKEND_DOWNLOAD_RETRY_BASE_MS = 500
 const GITHUB_RELEASES_URL =
-  'https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=10'
+  `https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=${GITHUB_RELEASES_PAGE_SIZE}`
+
+let remoteBackendsCache:
+  | {
+      fetchedAt: number
+      backends: BackendVersion[]
+    }
+  | null = null
+
+interface GithubReleaseAsset {
+  name: string
+}
+
+interface GithubRelease {
+  tag_name: string
+  assets: GithubReleaseAsset[]
+}
+
+type HardwareGpuInfo = GpuInfo
+
+export const formatError = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error)
+
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms))
+
+async function removePathIfPresent(path: string, label: string): Promise<void> {
+  try {
+    await fs.rm(path)
+  } catch (error) {
+    console.warn(`[llamacpp] Failed to remove ${label}:`, error)
+  }
+}
+
+/** @internal Test-only: resets the remote backends cache between tests. */
+export function clearRemoteBackendsCacheForTests(): void {
+  remoteBackendsCache = null
+}
 
 // ─── Path helpers ───────────────────────────────────────────────────────────
 
@@ -84,186 +124,37 @@ export async function isBackendInstalled(version: string, backend: string): Prom
   try {
     const exePath = await getBackendExePath(version, backend)
     return Boolean(await fs.existsSync(exePath))
-  } catch {
+  } catch (error) {
+    console.debug('[llamacpp] Failed to check backend installation state:', error)
     return false
   }
 }
 
-// ─── ax-engine binary discovery & download ────────────────────────────────────
-
-const AX_ENGINE_LATEST_RELEASE_URL =
-  'https://api.github.com/repos/defai-digital/ax-engine/releases/latest'
-
-/** Root directory for auto-downloaded ax-engine releases */
-export async function getAxEngineDir(): Promise<string> {
-  const appData = await getAppDataFolderPath()
-  return joinPath([appData, 'ax-engine'])
-}
+// ─── ax-serving binary discovery ──────────────────────────────────────────────
 
 /**
- * Find an installed ax-engine-server binary, or null when none is found.
+ * Get the absolute path to the ax-serving binary.
  * Searches:
- *  1. ~/.ax-studio/ax-engine/<version>/ax-engine-server (auto-downloaded, newest)
- *  2. ~/.ax-studio/ax-engine/ax-engine-server (legacy manual install)
- *  3. /usr/local/bin/ax-engine-server (Homebrew / pkg install)
- *  4. /opt/homebrew/bin/ax-engine-server (Apple Silicon Homebrew)
+ *  1. ~/.ax-studio/ax-serving/ax-serving (app data directory)
+ *  2. /usr/local/bin/ax-serving (Homebrew / pkg install)
+ *  3. /opt/homebrew/bin/ax-serving (Apple Silicon Homebrew)
+ *  4. ax-serving on PATH (manual install fallback)
  */
-export async function findAxEngineBinary(): Promise<string | null> {
-  const axDir = await getAxEngineDir()
+export async function getAxServingBinaryPath(): Promise<string> {
+  const appData = await getAppDataFolderPath()
+  const appDataPath = await joinPath([appData, 'ax-serving', 'ax-serving'])
+  if (await fs.existsSync(appDataPath)) return appDataPath
 
-  // Auto-downloaded versioned installs — pick the newest
-  try {
-    if (await fs.existsSync(axDir)) {
-      const entries: string[] = (await fs.readdirSync(axDir)) ?? []
-      const names = entries.map(
-        (p) => p.replace(/\\/g, '/').split('/').pop() ?? ''
-      )
-      const newest = pickNewestVersionDir(names)
-      if (newest) {
-        const versionedPath = await joinPath([axDir, newest, 'ax-engine-server'])
-        if (await fs.existsSync(versionedPath)) return versionedPath
-      }
+  const knownSystemPaths = ['/usr/local/bin/ax-serving', '/opt/homebrew/bin/ax-serving']
+  for (const path of knownSystemPaths) {
+    try {
+      if (await fs.existsSync(path)) return path
+    } catch (error) {
+      console.debug(`[llamacpp] Unable to probe system ax-serving path ${path}:`, error)
     }
-  } catch {}
-
-  // Legacy manual install directly in the ax-engine dir
-  const legacyPath = await joinPath([axDir, 'ax-engine-server'])
-  if (await fs.existsSync(legacyPath)) return legacyPath
-
-  // System installs
-  const usrLocalPath = '/usr/local/bin/ax-engine-server'
-  if (await fs.existsSync(usrLocalPath)) return usrLocalPath
-
-  const optBrewPath = '/opt/homebrew/bin/ax-engine-server'
-  if (await fs.existsSync(optBrewPath)) return optBrewPath
-
-  return null
-}
-
-/**
- * Get a path/command for the ax-engine-server binary, falling back to PATH
- * resolution by the OS when no install is found.
- */
-export async function getAxEngineBinaryPath(): Promise<string> {
-  return (await findAxEngineBinary()) ?? 'ax-engine-server'
-}
-
-/** Coalesces concurrent ax-engine download attempts */
-let _axEngineDownload: Promise<string> | null = null
-
-/**
- * Ensure an ax-engine-server binary is available, auto-downloading the
- * latest GitHub release when none is installed. Returns the binary path.
- */
-export async function ensureAxEngineBinary(): Promise<string> {
-  const existing = await findAxEngineBinary()
-  if (existing) return existing
-
-  if (!IS_MACOS) {
-    throw new Error(
-      'ax-engine is only available on Apple Silicon macOS. ' +
-        'Use the llama.cpp engine on this platform.'
-    )
   }
 
-  if (!_axEngineDownload) {
-    _axEngineDownload = downloadAxEngine().finally(() => {
-      _axEngineDownload = null
-    })
-  }
-  return _axEngineDownload
-}
-
-/** Download and install the latest ax-engine release into the app data dir */
-async function downloadAxEngine(): Promise<string> {
-  const downloadExt = (window as any).core?.extensionManager?.getByName(
-    '@ax-studio/download-extension'
-  )
-  if (!downloadExt) {
-    throw new Error(
-      'ax-engine-server is not installed and the download extension is unavailable. ' +
-        'Install it manually (e.g. "brew install defai-digital/tap/ax-engine").'
-    )
-  }
-
-  // Resolve the latest release tag (api.github.com allows cross-origin reads)
-  const res = await fetch(AX_ENGINE_LATEST_RELEASE_URL, {
-    signal: AbortSignal.timeout(15000),
-  })
-  if (!res.ok) {
-    throw new Error(`Failed to resolve latest ax-engine release (${res.status})`)
-  }
-  const release = await res.json()
-  const tag = String(release.tag_name ?? '')
-  const asset = axEngineAssetInfo(tag)
-
-  const axDir = await getAxEngineDir()
-  const destDir = await joinPath([axDir, tag])
-  if (!(await fs.existsSync(axDir))) await fs.mkdir(axDir)
-  if (!(await fs.existsSync(destDir))) await fs.mkdir(destDir)
-
-  // Temp files INSIDE destDir so cancel cleanup only removes this version dir
-  const tempArchive = await joinPath([destDir, `_tmp_${asset.filename}`])
-  const tempSha = await joinPath([destDir, `_tmp_${asset.filename}.sha256`])
-  const proxyArg = buildProxyArg(getProxyConfig())
-  const taskId = `llamacpp-ax-engine-${tag}-${Date.now()}`
-
-  console.log(`[llamacpp] Downloading ax-engine ${tag} from ${asset.url}`)
-
-  try {
-    await downloadExt.downloadFile(asset.url, tempArchive, taskId, proxyArg)
-
-    // Verify the archive checksum when the release publishes one
-    let expectedSha: string | null = null
-    try {
-      await downloadExt.downloadFile(
-        asset.shaUrl,
-        tempSha,
-        `${taskId}-sha`,
-        proxyArg
-      )
-      const shaContent = await fs.readFileSync(tempSha)
-      expectedSha = parseSha256File(String(shaContent ?? ''), asset.filename)
-    } catch (e) {
-      console.warn('[llamacpp] ax-engine sha256 file unavailable:', e)
-    }
-    if (expectedSha) {
-      const valid = await (window as any).core?.api?.validateSha256?.(
-        tempArchive,
-        expectedSha
-      )
-      if (!valid) {
-        throw new Error(
-          `SHA256 mismatch for ${asset.filename}. Download may be corrupted.`
-        )
-      }
-    }
-
-    await invoke('decompress', { path: tempArchive, outputDir: destDir })
-  } catch (e) {
-    try {
-      await fs.rm(destDir)
-    } catch {}
-    throw new Error(`Failed to download ax-engine ${tag}: ${e}`)
-  } finally {
-    try {
-      await fs.rm(tempArchive)
-    } catch {}
-    try {
-      await fs.rm(tempSha)
-    } catch {}
-  }
-
-  const exePath = await joinPath([destDir, 'ax-engine-server'])
-  if (!(await fs.existsSync(exePath))) {
-    try {
-      await fs.rm(destDir)
-    } catch {}
-    throw new Error(`ax-engine-server missing after extraction: ${exePath}`)
-  }
-
-  console.log(`[llamacpp] ax-engine ${tag} installed at ${exePath}`)
-  return exePath
+  return 'ax-serving'
 }
 
 // ─── Local backend discovery ─────────────────────────────────────────────────
@@ -277,7 +168,8 @@ export async function getLocalInstalledBackends(): Promise<BackendVersion[]> {
     const exists = await fs.existsSync(backendsDir)
     if (!exists) return []
     return await getLocalInstalledBackendsInternal(backendsDir)
-  } catch {
+  } catch (error) {
+    console.debug('[llamacpp] Failed to list local backends:', error)
     return []
   }
 }
@@ -289,17 +181,33 @@ export async function getLocalInstalledBackends(): Promise<BackendVersion[]> {
  * Falls back to empty list if GitHub is unavailable.
  */
 export async function fetchRemoteBackends(): Promise<BackendVersion[]> {
+  if (
+    remoteBackendsCache &&
+    Date.now() - remoteBackendsCache.fetchedAt < REMOTE_BACKEND_CACHE_TTL_MS
+  ) {
+    return remoteBackendsCache.backends
+  }
+
   try {
-    const response = await fetch(GITHUB_RELEASES_URL, {
-      headers: { Accept: 'application/vnd.github.v3+json' },
-      signal: AbortSignal.timeout(5000),
-    })
+    // Try Tauri HTTP plugin first (bypasses CSP), fall back to global fetch.
+    // CSP connect-src also includes api.github.com as defense-in-depth.
+    const doFetch = typeof tauriFetch === 'function' ? tauriFetch : fetch
+    let ghTimeoutId: ReturnType<typeof setTimeout>
+    const response = await Promise.race([
+      doFetch(GITHUB_RELEASES_URL, {
+        headers: { Accept: 'application/vnd.github.v3+json' },
+      }),
+      new Promise<never>((_, reject) => {
+        ghTimeoutId = setTimeout(
+          () => reject(new Error('GitHub API timeout')),
+          GITHUB_API_TIMEOUT_MS
+        )
+      }),
+    ])
+    clearTimeout(ghTimeoutId)
     if (!response.ok) throw new Error(`GitHub API ${response.status}`)
 
-    const releases = (await response.json()) as Array<{
-      tag_name: string
-      assets: Array<{ name: string }>
-    }>
+    const releases = (await response.json()) as GithubRelease[]
 
     const backends: BackendVersion[] = []
     for (const release of releases) {
@@ -312,6 +220,7 @@ export async function fetchRemoteBackends(): Promise<BackendVersion[]> {
         }
       }
     }
+    remoteBackendsCache = { fetchedAt: Date.now(), backends }
     return backends
   } catch (e) {
     console.warn('[llamacpp] Failed to fetch remote backends from GitHub:', e)
@@ -325,7 +234,7 @@ interface HardwareInfo {
   osType: string
   arch: string
   cpuExtensions: string[]
-  gpus: Array<{ driver_version: string; nvidia_info?: any; vulkan_info?: any }>
+  gpus: HardwareGpuInfo[]
 }
 
 /**
@@ -348,7 +257,9 @@ async function getHardwareInfo(): Promise<HardwareInfo> {
         gpus: hw.gpus ?? [],
       }
     }
-  } catch {}
+  } catch (error) {
+    console.debug('[llamacpp] Hardware extension unavailable, using fallback info:', error)
+  }
   // Fallback: minimal info
   return {
     osType: isWindows ? 'windows' : isMac ? 'macOS' : 'linux',
@@ -398,36 +309,60 @@ export async function downloadBackend(
   const taskId = `llamacpp-backend-${version}-${backend}-${Date.now()}`
 
   try {
-    await downloadExt.downloadFile(
-      downloadUrl,
-      tempFile,
-      taskId,
-      proxyArg,
-      (transferred: number, total: number) => {
-        if (onProgress && total > 0) {
-          onProgress(Math.round((transferred / total) * 100))
-        }
+    let lastError: unknown = null
+
+    for (let attempt = 1; attempt <= BACKEND_DOWNLOAD_MAX_ATTEMPTS; attempt++) {
+      try {
+        await downloadExt.downloadFile(
+          downloadUrl,
+          tempFile,
+          `${taskId}-attempt-${attempt}`,
+          proxyArg,
+          undefined,
+          (transferred: number, total: number) => {
+            if (onProgress && total > 0) {
+              onProgress(Math.round((transferred / total) * 100))
+            }
+          }
+        )
+        lastError = null
+        break
+      } catch (error) {
+        lastError = error
+        if (attempt === BACKEND_DOWNLOAD_MAX_ATTEMPTS) break
+        const delayMs = BACKEND_DOWNLOAD_RETRY_BASE_MS * 2 ** (attempt - 1)
+        console.warn(
+          `[llamacpp] Backend download attempt ${attempt}/${BACKEND_DOWNLOAD_MAX_ATTEMPTS} failed for ${backend}; retrying in ${delayMs}ms:`,
+          error
+        )
+        await sleep(delayMs)
       }
-    )
+    }
+
+    if (lastError) {
+      throw lastError
+    }
   } catch (e) {
-    try { await fs.rm(tempFile) } catch {}
-    throw new Error(`Failed to download backend "${backend}" from ${downloadUrl}: ${e}`)
+    await removePathIfPresent(tempFile, 'backend temp archive')
+    throw new Error(
+      `Failed to download backend "${backend}" from ${downloadUrl}: ${formatError(e)}`
+    )
   }
 
   // Decompress using Tauri's decompress command
   try {
     await invoke('decompress', { path: tempFile, outputDir: destDir })
   } catch (e) {
-    try { await fs.rm(tempFile) } catch {}
-    try { await fs.rm(destDir) } catch {}
-    throw new Error(`Failed to decompress backend: ${e}`)
+    await removePathIfPresent(tempFile, 'backend temp archive')
+    await removePathIfPresent(destDir, 'backend destination directory')
+    throw new Error(`Failed to decompress backend: ${formatError(e)}`)
   }
-  try { await fs.rm(tempFile) } catch {}
+  await removePathIfPresent(tempFile, 'backend temp archive')
 
   // Verify binary
   const exePath = await getBackendExePath(version, backend)
   if (!(await fs.existsSync(exePath))) {
-    try { await fs.rm(destDir) } catch {}
+    await removePathIfPresent(destDir, 'backend destination directory')
     throw new Error(`Backend binary missing after extraction: ${exePath}`)
   }
 }
@@ -467,11 +402,41 @@ export async function checkForBackendUpdate(
   }
 }
 
+// ─── Default backend selection (JS fallback) ─────────────────────────────────
+
+/**
+ * Pick the best backend from a list purely in JS, without Rust IPC.
+ * Used when Rust ranking calls hang or fail.
+ */
+function pickDefaultBackend(osType: string, backends: BackendVersion[]): string | null {
+  if (backends.length === 0) return null
+  // Use the latest release version
+  const latest = backends.reduce((a, b) => (b.version > a.version ? b : a)).version
+  const candidates = backends.filter((b) => b.version === latest)
+
+  const keywords =
+    osType === 'macOS'
+      ? ['macos-arm64', 'macos-x64', 'macos', 'metal']
+      : osType === 'windows'
+        ? ['cuda', 'vulkan', 'avx2', 'avx']
+        : ['ubuntu', 'linux', 'avx2', 'avx']
+
+  for (const kw of keywords) {
+    const match = candidates.find((b) => b.backend.toLowerCase().includes(kw))
+    if (match) return `${match.version}/${match.backend}`
+  }
+  return `${candidates[0].version}/${candidates[0].backend}`
+}
+
 // ─── configureBackends ────────────────────────────────────────────────────────
 
-// Guard to prevent concurrent configureBackends executions
-// (React strict mode in dev can trigger onLoad twice)
-let _configureBackendsRunning = false
+// Share in-flight backend discovery so duplicate callers observe the same work.
+let configureBackendsPromise: Promise<void> | null = null
+
+// Resolves as soon as Phase 1 (backend selection) completes — before the
+// binary download starts.  _doLoadLlamacpp awaits this, not the full promise,
+// so model load is never blocked by a multi-minute download.
+let configureBackendsSelectionPromise: Promise<void> | null = null
 
 /**
  * Main entry point called on extension load.
@@ -481,62 +446,194 @@ let _configureBackendsRunning = false
 export async function configureBackends(
   currentVersionBackend: string,
   autoUpdate: boolean,
-  onSettingUpdate: (key: string, value: string) => void
+  onSettingUpdate: (key: string, value: string) => void | Promise<void>
 ): Promise<void> {
-  if (_configureBackendsRunning) {
-    console.log('[llamacpp] configureBackends already running, skipping duplicate call')
-    return
+  if (configureBackendsPromise) {
+    return configureBackendsPromise
   }
-  _configureBackendsRunning = true
-  try {
-    const [localBackends, remoteBackends, hw] = await Promise.all([
-      getLocalInstalledBackends(),
-      fetchRemoteBackends(),
-      getHardwareInfo(),
-    ])
 
-    // Report hardware to Rust so it can rank backends correctly
-    await getSupportedFeaturesFromRust(hw.osType, hw.cpuExtensions, hw.gpus)
+  let resolveSelection!: () => void
+  configureBackendsSelectionPromise = new Promise<void>((resolve) => {
+    resolveSelection = resolve
+  })
 
-    // Merge local + remote into a ranked list
-    const allBackends = await listSupportedBackendsFromRust(remoteBackends, localBackends)
+  configureBackendsPromise = (async () => {
+    try {
+      let targetVersionBackend = currentVersionBackend
 
-    let targetVersionBackend = currentVersionBackend
+      // Fetch remote backends and hardware info.
+      // The Rust IPC calls (getSupportedFeaturesFromRust, listSupportedBackendsFromRust,
+      // prioritizeBackends) are only needed when no backend is selected yet — on some
+      // machines these calls can hang indefinitely, so skip them when a backend is
+      // already configured.
+      // Timeout the entire discovery: getLocalInstalledBackends or
+      // fetchRemoteBackends can hang indefinitely on some machines
+      // (Tauri IPC deadlock, network issues).  12s is generous —
+      // fetchRemoteBackends already has a 5s per-request timeout.
+      let discoveryTimeoutId!: ReturnType<typeof setTimeout>
+      const discoveryResult = await Promise.race([
+        Promise.all([getLocalInstalledBackends(), fetchRemoteBackends()]),
+        new Promise<[BackendVersion[], BackendVersion[]]>((resolve) => {
+          discoveryTimeoutId = setTimeout(() => {
+            console.warn('[llamacpp] Backend discovery timed out after 12s, using empty lists')
+            resolve([[], []])
+          }, 12_000)
+        }),
+      ])
+      clearTimeout(discoveryTimeoutId)
+      const [localBackends, remoteBackends] = discoveryResult
+      console.debug(
+        `[llamacpp] configureBackends: currentVersionBackend="${currentVersionBackend}", ` +
+        `localBackends=${localBackends.length}, remoteBackends=${remoteBackends.length}`
+      )
 
-    // If no backend set (first run), pick the best for this hardware
-    if (!targetVersionBackend) {
-      const hasGpu = hw.gpus.length > 0
-      const best: BestBackendResult = await prioritizeBackends(allBackends, hasGpu)
-      if (best?.backend_string) {
-        targetVersionBackend = best.backend_string
-        onSettingUpdate('version_backend', best.backend_string)
-      }
-    }
+      if (!targetVersionBackend) {
+        const hw = await getHardwareInfo()
+        // Rust IPC calls can hang indefinitely on some machines.
+        // Give each 6 seconds then fall back to a JS heuristic.
+        const withFallback = <T>(p: Promise<T>, fallback: T): Promise<T> =>
+          Promise.race([p, new Promise<T>((r) => setTimeout(() => r(fallback), 6_000))])
 
-    // Emit update notification if auto-update is on
-    if (autoUpdate && targetVersionBackend && remoteBackends.length > 0) {
-      const updateInfo = await checkForBackendUpdate(targetVersionBackend, remoteBackends)
-      if (updateInfo.updateNeeded) {
-        events.emit('onBackendUpdateAvailable', updateInfo)
-      }
-    }
+        let picked: string | null = null
+        try {
+          await withFallback(getSupportedFeaturesFromRust(hw.osType, hw.cpuExtensions, hw.gpus), undefined)
+          const ranked = await withFallback(listSupportedBackendsFromRust(remoteBackends, localBackends), remoteBackends)
+          const best = await withFallback(prioritizeBackends(ranked, hw.gpus.length > 0), null)
+          if (best?.backend_string) picked = best.backend_string
+        } catch (e) {
+          console.warn('[llamacpp] Rust backend ranking failed, using JS fallback:', e)
+        }
 
-    // Ensure selected backend binary is on disk
-    if (targetVersionBackend) {
-      const [version, ...rest] = targetVersionBackend.split('/')
-      const backend = rest.join('/')
-      if (version && backend) {
-        const installed = await isBackendInstalled(version, backend)
-        if (!installed) {
-          console.log(`[llamacpp] Downloading backend: ${targetVersionBackend}`)
-          await downloadBackend(version, backend)
+        // JS fallback: pick from remote list by OS keyword
+        if (!picked && remoteBackends.length > 0) {
+          picked = pickDefaultBackend(hw.osType, remoteBackends)
+          console.debug(`[llamacpp] JS fallback picked: ${picked}`)
+        }
+
+        // Final fallback: if remote discovery failed (CSP, network, etc.)
+        // use the newest locally installed backend.  This ensures the engine
+        // can start even when GitHub is unreachable.
+        if (!picked && localBackends.length > 0) {
+          const latest = localBackends.reduce((a, b) =>
+            b.version > a.version ? b : a
+          )
+          picked = `${latest.version}/${latest.backend}`
+          console.debug(
+            `[llamacpp] Remote backends unavailable, using local backend: ${picked}`
+          )
+        }
+
+        if (picked) {
+          targetVersionBackend = picked
+          await onSettingUpdate('version_backend', picked)
+        } else {
+          console.warn(
+            `[llamacpp] No backend could be selected! ` +
+            `remoteBackends=${remoteBackends.length}, localBackends=${localBackends.length}, ` +
+            `hw.osType=${hw.osType}`
+          )
         }
       }
+
+      // Phase 1 (selection) is complete — unblock any concurrent model loads
+      // before starting the potentially long binary download.
+      resolveSelection()
+
+      // Emit update notification if auto-update is on
+      if (autoUpdate && targetVersionBackend && remoteBackends.length > 0) {
+        const updateInfo = await checkForBackendUpdate(targetVersionBackend, remoteBackends)
+        if (updateInfo.updateNeeded) {
+          events.emit('onBackendUpdateAvailable', updateInfo)
+        }
+      }
+
+      // Ensure selected backend binary is on disk (Phase 2 — may be slow)
+      if (targetVersionBackend) {
+        const [version, ...rest] = targetVersionBackend.split('/')
+        const backend = rest.join('/')
+        if (version && backend) {
+          const installed = await isBackendInstalled(version, backend)
+          if (!installed) {
+            await downloadBackend(version, backend)
+          }
+        }
+      }
+    } catch (e) {
+      resolveSelection?.()  // always unblock waiters even on error
+      console.error('[llamacpp] configureBackends failed:', e)
+      throw e
+    } finally {
+      configureBackendsPromise = null
+      configureBackendsSelectionPromise = null
     }
+  })()
+
+  return configureBackendsPromise
+}
+
+/** Resolves when Phase 1 (backend selection) of configureBackends completes, or immediately if not running. */
+export function awaitPendingBackendSelection(): Promise<void> {
+  return configureBackendsSelectionPromise ?? Promise.resolve()
+}
+
+/** Resolves when the full configureBackends call finishes (including download), or immediately if not running. */
+export function awaitPendingConfigureBackends(): Promise<void> {
+  return configureBackendsPromise ?? Promise.resolve()
+}
+
+// ─── Backend resolution (for model load path) ────────────────────────────────
+
+/** Timeout for local backend discovery via Rust IPC (ms). */
+const LOCAL_DISCOVERY_TIMEOUT_MS = 6_000
+
+/**
+ * Regex for a well-formed backend string: "{version}/{platform}".
+ * Rejects absolute paths, empty segments, and malformed values.
+ */
+const BACKEND_STRING_RE = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/
+
+/** Check whether a version_backend string is well-formed. */
+export function isValidBackendString(value: string): boolean {
+  return BACKEND_STRING_RE.test(value)
+}
+
+/**
+ * Try to discover a locally installed backend via Rust IPC, using the
+ * official API package (not raw invoke strings).  Returns a well-formed
+ * "{version}/{platform}" string, or empty string if nothing found.
+ *
+ * This is the single source of truth for local backend discovery outside
+ * of configureBackends().
+ */
+export async function resolveBackendVersion(): Promise<string> {
+  try {
+    const backendsDir = await getBackendsDir()
+    if (!(await fs.existsSync(backendsDir))) return ''
+
+    let localTimeoutId!: ReturnType<typeof setTimeout>
+    const localBackends = await Promise.race([
+      getLocalInstalledBackendsInternal(backendsDir),
+      new Promise<BackendVersion[]>((resolve) => {
+        localTimeoutId = setTimeout(() => {
+          console.warn('[llamacpp] Local backend discovery timed out')
+          resolve([])
+        }, LOCAL_DISCOVERY_TIMEOUT_MS)
+      }),
+    ])
+    clearTimeout(localTimeoutId)
+
+    if (localBackends.length === 0) return ''
+
+    // Pick the latest version
+    const latest = localBackends.reduce((a, b) =>
+      b.version > a.version ? b : a
+    )
+    const result = `${latest.version}/${latest.backend}`
+    console.debug(`[llamacpp] Resolved local backend: ${result}`)
+    return result
   } catch (e) {
-    console.error('[llamacpp] configureBackends failed:', e)
-  } finally {
-    _configureBackendsRunning = false
+    console.warn('[llamacpp] Local backend discovery failed:', e)
+    return ''
   }
 }
 
@@ -577,7 +674,7 @@ export async function updateBackend(
  * Filename must follow: llama-{version}-bin-{backend}.{ext}
  */
 export async function installBackendFromFile(filePath: string): Promise<void> {
-  const filename = filePath.split('/').pop() ?? filePath
+  const filename = filePath.split(/[\\/]/).pop() ?? filePath
   const match = filename.match(/^llama-([^_]+(?:_[^.]+)*)-bin-(.+?)\.(tar\.gz|zip)$/)
   if (!match) {
     throw new Error(
@@ -595,13 +692,13 @@ export async function installBackendFromFile(filePath: string): Promise<void> {
   try {
     await invoke('decompress', { path: filePath, outputDir: destDir })
   } catch (e) {
-    try { await fs.rm(destDir) } catch {}
-    throw new Error(`Failed to decompress backend file: ${e}`)
+    await removePathIfPresent(destDir, 'backend destination directory')
+    throw new Error(`Failed to decompress backend file: ${formatError(e)}`)
   }
 
   const exePath = await getBackendExePath(version, backend)
   if (!(await fs.existsSync(exePath))) {
-    try { await fs.rm(destDir) } catch {}
+    await removePathIfPresent(destDir, 'backend destination directory')
     throw new Error(`Backend binary missing after installation: ${exePath}`)
   }
 }

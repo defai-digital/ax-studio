@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
-import { useModelSources } from '@/features/models/hooks/useModelSources'
+import { useModelSources } from '@/hooks/models/useModelSources'
 import { cn } from '@/lib/utils'
 import {
   useState,
@@ -11,9 +11,8 @@ import {
   useRef,
   useTransition,
 } from 'react'
-import { CardItem } from '@/containers/Card'
+import { CardItem } from '@/components/common/Card'
 import { extractModelName, extractDescription } from '@/lib/models'
-import { IconDownload, IconFileCode } from '@tabler/icons-react'
 import { Switch } from '@/components/ui/switch'
 import { ModelInfoHoverCard } from '@/containers/ModelInfoHoverCard'
 import {
@@ -25,50 +24,48 @@ import {
 import { useServiceHub } from '@/hooks/useServiceHub'
 import type { CatalogModel } from '@/services/models/types'
 import HeaderPage from '@/containers/HeaderPage'
-import {
-  ChevronsUpDown,
-  Eye,
-  Loader,
-  Wrench,
-  Atom,
-  HardDrive,
-  Search,
-  X,
-  CheckCircle2,
-  MessageCircle,
-  RotateCcw,
-} from 'lucide-react'
+import { Atom, CheckCircle2, ChevronsUpDown, Download, Eye, FileCode, HardDrive, Loader, MessageCircle, RotateCcw, Search, Wrench, X } from "lucide-react";
 import { motion, AnimatePresence } from 'motion/react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import Fuse from 'fuse.js'
-import { useGeneralSetting } from '@/hooks/useGeneralSetting'
-import { useModelProvider } from '@/features/models/hooks/useModelProvider'
+import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { DownloadButtonPlaceholder } from '@/containers/DownloadButton'
 import { useShallow } from 'zustand/shallow'
 import { ModelDownloadAction } from '@/containers/ModelDownloadAction'
 import { DEFAULT_MODEL_QUANTIZATIONS } from '@/constants/models'
 import { Button } from '@/components/ui/button'
 import { RenderMarkdown } from '@/containers/RenderMarkdown'
-import { sanitizeModelId } from '@/lib/utils'
+import { encodeHubRouteParam } from '@/lib/hub'
+import { z } from 'zod/v4'
+import { isMlxCatalogModel } from './-hubFilters'
+import { findDownloadedCatalogModel } from '@/lib/models/downloaded'
 
-type FilterTag = 'all' | 'downloaded' | 'tools' | 'vision' | 'reasoning'
+type FilterTag = 'all' | 'downloaded' | 'mlx' | 'tools' | 'vision' | 'reasoning'
 
 type SearchParams = {
   repo: string
 }
 
+const hubSearchSchema = z
+  .object({
+    repo: z.string().optional(),
+  })
+  .transform((value) => ({
+    repo: value.repo ?? '',
+  }))
+
 export const Route = createFileRoute(route.hub.index)({
   component: HubContent,
-  validateSearch: (search: Record<string, unknown>): SearchParams => ({
-    repo: search.repo as SearchParams['repo'],
-  }),
+  validateSearch: (search: Record<string, unknown>): SearchParams =>
+    hubSearchSchema.parse(search),
 })
 
 function HubContent() {
   const [isPending, startTransition] = useTransition()
   const huggingfaceToken = useGeneralSetting((state) => state.huggingfaceToken)
   const serviceHub = useServiceHub()
-  const getProviderByName = useModelProvider((state) => state.getProviderByName)
+  const providers = useModelProvider((state) => state.providers)
 
   const { t } = useTranslation()
 
@@ -105,10 +102,20 @@ function HubContent() {
   const [modelSupportStatus, setModelSupportStatus] = useState<
     Record<string, 'RED' | 'YELLOW' | 'GREEN' | 'GREY' | 'LOADING'>
   >({})
+  // Mirror `modelSupportStatus` into a ref so `checkModelSupport` below can
+  // read the latest status without listing the state as a dep — doing so
+  // would recreate the callback on every set and cascade renders through
+  // every ModelInfoHoverCard in the list.
+  const modelSupportStatusRef =
+    useRef<Record<string, 'RED' | 'YELLOW' | 'GREEN' | 'GREY' | 'LOADING'>>(
+      {}
+    )
+  modelSupportStatusRef.current = modelSupportStatus
   const [isInitialLoad, setIsInitialLoad] = useState(true)
   const addModelSourceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   )
+  const huggingFaceRepoRequestRef = useRef<AbortController | null>(null)
 
   const filters: {
     id: FilterTag
@@ -120,6 +127,11 @@ function HubContent() {
       id: 'downloaded',
       label: t('hub:downloaded') || 'Downloaded',
       icon: <HardDrive className="size-3" />,
+    },
+    {
+      id: 'mlx',
+      label: 'MLX',
+      icon: <Atom className="size-3" />,
     },
     {
       id: 'tools',
@@ -167,23 +179,9 @@ function HubContent() {
   // Helper to check if a model is downloaded
   const isModelDownloaded = useCallback(
     (model: CatalogModel) => {
-      const llamaProvider = getProviderByName('llamacpp')
-      return !!model.quants?.some((quant) =>
-        llamaProvider?.models.some((m) => {
-          const parts = quant.model_id.split('/')
-          const name = parts.length > 1 ? parts[1] : parts[0]
-          const sanitizedName = sanitizeModelId(name)
-          const author = parts.length > 1 ? parts[0] : ''
-          return (
-            m.id === quant.model_id ||
-            m.id === sanitizedName ||
-            (author && m.id === `${author}/${sanitizedName}`) ||
-            (model.developer && m.id === `${model.developer}/${sanitizedName}`)
-          )
-        })
-      )
+      return !!findDownloadedCatalogModel(providers, model)
     },
-    [getProviderByName]
+    [providers]
   )
 
   const filteredModels = useMemo(() => {
@@ -200,6 +198,8 @@ function HubContent() {
     // Apply filter tags
     if (activeFilter === 'downloaded') {
       filtered = filtered.filter((model) => isModelDownloaded(model))
+    } else if (activeFilter === 'mlx') {
+      filtered = filtered.filter((model) => isMlxCatalogModel(model))
     } else if (activeFilter === 'tools') {
       filtered = filtered.filter((model) => model.tools)
     } else if (activeFilter === 'vision') {
@@ -256,11 +256,19 @@ function HubContent() {
       clearTimeout(addModelSourceTimeoutRef.current)
     }
 
+    if (huggingFaceRepoRequestRef.current) {
+      huggingFaceRepoRequestRef.current.abort()
+      huggingFaceRepoRequestRef.current = null
+    }
+
     addModelSourceTimeoutRef.current = setTimeout(async () => {
+      const controller = new AbortController()
+      huggingFaceRepoRequestRef.current = controller
+
       try {
         const repoInfo = await serviceHub
           .models()
-          .fetchHuggingFaceRepo(searchValue, huggingfaceToken)
+          .fetchHuggingFaceRepo(searchValue, huggingfaceToken, controller.signal)
         if (repoInfo) {
           const catalogModel = serviceHub
             .models()
@@ -277,12 +285,26 @@ function HubContent() {
           }
         }
       } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return
         console.error('Error fetching repository info:', error)
       } finally {
-        setIsSearching(false)
+        if (huggingFaceRepoRequestRef.current === controller) {
+          huggingFaceRepoRequestRef.current = null
+          setIsSearching(false)
+        }
       }
     }, 500)
   }
+
+  useEffect(() => {
+    return () => {
+      if (addModelSourceTimeoutRef.current) {
+        clearTimeout(addModelSourceTimeoutRef.current)
+      }
+      huggingFaceRepoRequestRef.current?.abort()
+      huggingFaceRepoRequestRef.current = null
+    }
+  }, [])
 
   const handleSearchChange = (e: ChangeEvent<HTMLInputElement>) => {
     setIsSearching(false)
@@ -296,19 +318,15 @@ function HubContent() {
 
   const navigate = useNavigate()
 
-  const isRecommendedModel = useCallback((_: string) => {
-    return false
-  }, [])
-
   const handleUseModel = useCallback(
-    (modelId: string) => {
+    (modelId: string, provider = 'llamacpp') => {
       navigate({
         to: route.home,
         params: {},
         search: {
           model: {
             id: modelId,
-            provider: 'llamacpp',
+            provider,
           },
         },
       })
@@ -320,7 +338,9 @@ function HubContent() {
     async (variant: { model_id: string; path: string }) => {
       const modelKey = variant.model_id
 
-      if (modelSupportStatus[modelKey]) {
+      // Read from the ref — listing `modelSupportStatus` as a dep below
+      // would cascade re-renders across every ModelInfoHoverCard on set.
+      if (modelSupportStatusRef.current[modelKey]) {
         return
       }
 
@@ -347,7 +367,7 @@ function HubContent() {
         }))
       }
     },
-    [modelSupportStatus, serviceHub]
+    [serviceHub]
   )
 
   const clearFilters = useCallback(() => {
@@ -556,7 +576,7 @@ function HubContent() {
               <div className="flex items-center gap-2 justify-end sm:hidden mb-3">
                 <div className="flex items-center gap-2">
                   <Switch
-                    checked={activeFilter === 'downloaded'}
+                    checked={activeFilter === 'downloaded' || activeFilter === 'mlx'}
                     onCheckedChange={(checked) => {
                       setIsInitialLoad(true)
                       setActiveFilter(checked ? 'downloaded' : 'all')
@@ -568,7 +588,7 @@ function HubContent() {
                     }}
                   />
                   <span className="text-xs text-foreground font-medium whitespace-nowrap">
-                    {t('hub:downloaded')}
+                    {activeFilter === 'mlx' ? 'MLX' : t('hub:downloaded')}
                   </span>
                 </div>
               </div>
@@ -588,7 +608,11 @@ function HubContent() {
                         )
                       ) ?? model.quants?.[0]
 
-                    const downloaded = isModelDownloaded(model)
+                    const downloadedModel = findDownloadedCatalogModel(
+                      providers,
+                      model
+                    )
+                    const downloaded = !!downloadedModel
 
                     // Get compatibility status from the default quant
                     const compatStatus = defaultQuant
@@ -622,7 +646,7 @@ function HubContent() {
                           navigate({
                             to: route.hub.model,
                             params: {
-                              modelId: model.model_name,
+                              modelId: encodeHubRouteParam(model.model_name),
                             },
                           })
                         }}
@@ -637,9 +661,6 @@ function HubContent() {
                               <h3
                                 className={cn(
                                   'font-semibold text-foreground group-hover:text-primary transition-colors truncate capitalize',
-                                  isRecommendedModel(model.model_name)
-                                    ? 'hub-model-card-step'
-                                    : ''
                                 )}
                                 style={{ fontSize: '14px' }}
                                 title={extractModelName(model.model_name) || ''}
@@ -725,7 +746,7 @@ function HubContent() {
                         <div className="flex items-center justify-between gap-3 pt-3 border-t border-border/40 mt-auto">
                           <div className="flex items-center gap-1 text-[11px] text-muted-foreground/50 min-w-0 overflow-hidden">
                             <span className="flex items-center gap-1 whitespace-nowrap">
-                              <IconDownload size={12} className="shrink-0" />
+                              <Download size={12} className="shrink-0" />
                               {model.downloads
                                 ? `${(model.downloads / 1000).toFixed(0)}k`
                                 : '0'}
@@ -734,7 +755,7 @@ function HubContent() {
                               &middot;
                             </span>
                             <span className="flex items-center gap-1 whitespace-nowrap">
-                              <IconFileCode size={12} className="shrink-0" />
+                              <FileCode size={12} className="shrink-0" />
                               {model.quants?.length || 0}
                             </span>
                           </div>
@@ -751,7 +772,11 @@ function HubContent() {
                                 <button
                                   onClick={() => {
                                     if (defaultQuant) {
-                                      handleUseModel(defaultQuant.model_id)
+                                      handleUseModel(
+                                        downloadedModel?.modelId ??
+                                          defaultQuant.model_id,
+                                        downloadedModel?.providerId
+                                      )
                                     }
                                   }}
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-[12px] font-medium shadow-sm transition-all hover:shadow-md"

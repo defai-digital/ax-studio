@@ -7,97 +7,64 @@ use crate::core::app::commands::{
 };
 use crate::core::app::models::AppConfiguration;
 use crate::core::mcp::helpers::{stop_mcp_servers_with_context, ShutdownContext};
-use crate::core::state::McpState;
+use crate::core::state::AppState;
 
-/// Detect the user's default shell and return the appropriate env file path.
-/// Returns (shell_name, env_file_path).
-fn detect_shell_env_file(home_dir: &str, is_macos: bool) -> (&'static str, String) {
-    let shell = std::env::var("SHELL").unwrap_or_default();
-    if shell.ends_with("/bash") {
-        // macOS uses login shells in Terminal, so ~/.bash_profile is sourced.
-        // Linux interactive shells source ~/.bashrc.
-        let file = if is_macos {
-            format!("{}/.bash_profile", home_dir)
-        } else {
-            format!("{}/.bashrc", home_dir)
-        };
-        ("bash", file)
+fn validate_open_path(path: &PathBuf) -> Result<PathBuf, String> {
+    if path.as_os_str().is_empty() {
+        return Err("Path must not be empty".to_string());
+    }
+
+    let canonical_path = fs::canonicalize(path).map_err(|e| format!("Invalid path: {e}"))?;
+    let home_dir = dirs::home_dir().ok_or("Cannot determine home directory")?;
+    let temp_dir = std::env::temp_dir();
+
+    if canonical_path.starts_with(&home_dir) || canonical_path.starts_with(&temp_dir) {
+        Ok(canonical_path)
     } else {
-        // Default to zsh (macOS default since Catalina)
-        ("zsh", format!("{}/.zshenv", home_dir))
+        Err(format!(
+            "Refusing to open path outside allowed user directories: {}",
+            canonical_path.display()
+        ))
     }
-}
-
-// Validate environment variable key format: must match ^[A-Z_][A-Z0-9_]*$
-fn is_valid_env_key(key: &str) -> bool {
-    if key.is_empty() {
-        return false;
-    }
-    let chars: Vec<char> = key.chars().collect();
-    if !chars[0].is_ascii_uppercase() && chars[0] != '_' {
-        return false;
-    }
-    for &ch in &chars[1..] {
-        if !ch.is_ascii_uppercase() && !ch.is_ascii_digit() && ch != '_' {
-            return false;
-        }
-    }
-    true
-}
-
-// Helper function to write env vars to a shell config file
-fn write_env_to_shell(env_file_path: &str, env_vars: &[(String, String)]) -> Result<(), String> {
-    let marker = "# Ax-Studio Local API Server - Claude Code Config";
-    let new_entries: String = env_vars
-        .iter()
-        .map(|(k, v)| {
-            // Escape single quotes to prevent shell injection
-            let escaped_v = v.replace('\'', "'\\''");
-            format!("export {}='{}'\n", k, escaped_v)
-        })
-        .collect();
-
-    let existing_content = std::fs::read_to_string(env_file_path).unwrap_or_default();
-    let cleaned: Vec<&str> = existing_content
-        .split('\n')
-        .filter(|line| {
-            // Remove Ax-Studio config markers and existing ANTHROPIC env vars to replace them
-            !line.starts_with(marker)
-                && !line.starts_with("# Ax-Studio Local API Server")
-                && !line.starts_with("export ANTHROPIC_")
-        })
-        .collect();
-
-    let new_content = format!("{}\n{}\n{}\n", marker, new_entries, marker);
-
-    let final_content = cleaned.join("\n") + &new_content;
-    std::fs::write(env_file_path, &final_content).map_err(|e| e.to_string())?;
-    Ok(())
 }
 
 #[tauri::command]
-pub fn factory_reset<R: Runtime>(app_handle: tauri::AppHandle<R>, state: State<'_, McpState>) {
-    // close window (not available on mobile platforms)
-    #[cfg(not(any(target_os = "ios", target_os = "android")))]
-    {
-        let windows = app_handle.webview_windows();
-        for (label, window) in windows.iter() {
-            window.close().unwrap_or_else(|_| {
-                log::warn!("Failed to close window: {label:?}");
-            });
+pub fn canonicalize_path(path: String) -> Result<String, String> {
+    let path = PathBuf::from(path);
+    let canonical = validate_open_path(&path)?;
+    let display = canonical.to_string_lossy().to_string();
+    if let Some(home) = dirs::home_dir() {
+        let home_str = home.to_string_lossy().to_string();
+        if display.starts_with(&home_str) {
+            return Ok(display.replacen(&home_str, "~", 1));
         }
+    }
+    Ok(display)
+}
+
+#[tauri::command]
+pub async fn factory_reset<R: Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let windows = app_handle.webview_windows();
+    for (label, window) in windows.iter() {
+        window.close().unwrap_or_else(|_| {
+            log::warn!("Failed to close window: {label:?}");
+        });
     }
     let data_folder = get_app_data_folder_path(app_handle.clone());
     log::info!("Factory reset, removing data folder: {data_folder:?}");
 
-    tauri::async_runtime::block_on(async {
-        let _ =
-            stop_mcp_servers_with_context(&app_handle, &state, ShutdownContext::FactoryReset).await;
+    let _ = stop_mcp_servers_with_context(&app_handle, &state, ShutdownContext::FactoryReset).await;
 
-        {
-            let mut active_servers = state.active_servers.lock().await;
-            active_servers.clear();
-        }
+    {
+        let mut active_servers = state.mcp_active_servers.lock().await;
+        active_servers.clear();
+    }
+
+    {
+        let _reset_guard = state.factory_reset_lock.lock().await;
 
         use crate::core::mcp::lockfile::cleanup_own_locks;
         if let Err(e) = cleanup_own_locks(&app_handle) {
@@ -105,21 +72,24 @@ pub fn factory_reset<R: Runtime>(app_handle: tauri::AppHandle<R>, state: State<'
         }
         if data_folder.exists() {
             if let Err(e) = fs::remove_dir_all(&data_folder) {
-                log::error!("Failed to remove data folder: {e}");
-                return;
+                let message = format!("Failed to remove data folder: {e}");
+                log::error!("{message}");
+                return Err(message);
             }
         }
 
-        // Recreate the data folder
-        let _ = fs::create_dir_all(&data_folder).map_err(|e| e.to_string());
+        fs::create_dir_all(&data_folder)
+            .map_err(|e| format!("Failed to recreate data folder: {e}"))?;
+    }
 
-        // Reset the configuration
-        let mut default_config = AppConfiguration::default();
-        default_config.data_folder = default_data_folder_path(app_handle.clone());
-        let _ = update_app_configuration(app_handle.clone(), default_config);
+    // Reset the configuration
+    let mut default_config = AppConfiguration::default();
+    default_config.data_folder = default_data_folder_path(app_handle.clone());
+    update_app_configuration(app_handle.clone(), default_config)?;
 
-        app_handle.restart();
-    });
+    app_handle.restart();
+    #[allow(unreachable_code)]
+    Ok(())
 }
 
 #[tauri::command]
@@ -128,30 +98,8 @@ pub fn relaunch<R: Runtime>(app: AppHandle<R>) {
 }
 
 #[tauri::command]
-pub fn open_app_directory<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
-    let app_path = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    if cfg!(target_os = "windows") {
-        std::process::Command::new("explorer")
-            .arg(app_path)
-            .status()
-            .map_err(|e| format!("Failed to open app directory: {e}"))?;
-    } else if cfg!(target_os = "macos") {
-        std::process::Command::new("open")
-            .arg(app_path)
-            .status()
-            .map_err(|e| format!("Failed to open app directory: {e}"))?;
-    } else {
-        std::process::Command::new("xdg-open")
-            .arg(app_path)
-            .status()
-            .map_err(|e| format!("Failed to open app directory: {e}"))?;
-    }
-    Ok(())
-}
-
-#[tauri::command]
 pub fn open_file_explorer(path: String) -> Result<(), String> {
-    let path = PathBuf::from(path);
+    let path = validate_open_path(&PathBuf::from(path))?;
     if cfg!(target_os = "windows") {
         std::process::Command::new("explorer")
             .arg(path)
@@ -159,11 +107,13 @@ pub fn open_file_explorer(path: String) -> Result<(), String> {
             .map_err(|e| format!("Failed to open file explorer: {e}"))?;
     } else if cfg!(target_os = "macos") {
         std::process::Command::new("open")
+            .arg("--")
             .arg(path)
             .status()
             .map_err(|e| format!("Failed to open file explorer: {e}"))?;
     } else {
         std::process::Command::new("xdg-open")
+            .arg("--")
             .arg(path)
             .status()
             .map_err(|e| format!("Failed to open file explorer: {e}"))?;
@@ -174,176 +124,52 @@ pub fn open_file_explorer(path: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn read_logs<R: Runtime>(app: AppHandle<R>) -> Result<String, String> {
     let log_path = get_app_data_folder_path(app).join("logs").join("app.log");
-    if log_path.exists() {
-        let content = fs::read_to_string(log_path).map_err(|e| e.to_string())?;
-        Ok(content)
-    } else {
-        Err("Log file not found".to_string())
+    if !log_path.exists() {
+        return Err("Log file not found".to_string());
     }
+    let content = tokio::task::spawn_blocking(move || fs::read_to_string(log_path))
+        .await
+        .map_err(|e| format!("read_logs task error: {e}"))?
+        .map_err(|e| e.to_string())?;
+    Ok(redact_sensitive_data(&content))
 }
 
-// check if a system library is available
-#[tauri::command]
-pub fn is_library_available(library: &str) -> bool {
-    // Security: Only allow known system libraries to prevent arbitrary library loading
-    const ALLOWED_LIBRARIES: &[&str] = &[
-        // Vulkan
-        "libvulkan.so.1",
-        "vulkan-1.dll",
-        // CUDA
-        "libcuda.so.1",
-        "nvcuda.dll",
-        // Metal
-        "Metal.framework/Metal",
-        // OpenGL (if needed)
-        "libGL.so.1",
-        "opengl32.dll",
-    ];
+/// Compiled regex patterns for sensitive data redaction.
+/// Uses `OnceLock` to compile once and never panic — avoids `.unwrap()` with `panic = "abort"`.
+static REDACT_PATTERNS: std::sync::OnceLock<Vec<(regex::Regex, &str)>> = std::sync::OnceLock::new();
 
-    if !ALLOWED_LIBRARIES.contains(&library) {
-        log::warn!("Library {library} is not in the allow-list");
-        return false;
+fn redact_sensitive_data(input: &str) -> String {
+    let patterns = REDACT_PATTERNS.get_or_init(|| {
+        vec![
+            (
+                regex::Regex::new(r"(api[_-]?key\s*[:=]\s*)[\w\-]{20,}")
+                    .expect("valid api_key regex"),
+                "$1[REDACTED]",
+            ),
+            (
+                regex::Regex::new(r"(Bearer\s+)[\w\-\.]{20,}").expect("valid bearer regex"),
+                "$1[REDACTED]",
+            ),
+            (
+                regex::Regex::new(r"(authorization\s*[:=]\s*)[\w\-\.]{20,}")
+                    .expect("valid auth regex"),
+                "$1[REDACTED]",
+            ),
+            (
+                regex::Regex::new(r"(sk-)[a-zA-Z0-9]{20,}").expect("valid sk- regex"),
+                "$1[REDACTED]",
+            ),
+            (
+                regex::Regex::new(r"(token\s*[:=]\s*)[\w\-\.]{20,}").expect("valid token regex"),
+                "$1[REDACTED]",
+            ),
+        ]
+    });
+    let mut result = input.to_string();
+    for (re, replacement) in patterns {
+        result = re.replace_all(&result, *replacement).to_string();
     }
-
-    match unsafe { libloading::Library::new(library) } {
-        Ok(_) => true,
-        Err(e) => {
-            log::info!("Library {library} is not available: {e}");
-            false
-        }
-    }
-}
-
-#[tauri::command]
-pub fn launch_claude_code_with_config(
-    api_url: String,
-    api_key: Option<String>,
-    big_model: Option<String>,
-    medium_model: Option<String>,
-    small_model: Option<String>,
-    custom_env_vars: Vec<serde_json::Value>,
-) -> Result<(), String> {
-    // Clone values for logging before moving
-    let api_url_log = api_url.clone();
-    let big_model_log = big_model.clone();
-    let medium_model_log = medium_model.clone();
-    let small_model_log = small_model.clone();
-
-    let mut env_vars: Vec<(String, String)> = Vec::with_capacity(8);
-    env_vars.push(("ANTHROPIC_BASE_URL".to_string(), api_url));
-
-    env_vars.push((
-        "ANTHROPIC_AUTH_TOKEN".to_string(),
-        api_key.unwrap_or_else(|| "ax-studio".to_string()),
-    ));
-
-    if let Some(model) = big_model {
-        env_vars.push(("ANTHROPIC_DEFAULT_OPUS_MODEL".to_string(), model));
-    }
-
-    if let Some(model) = medium_model {
-        env_vars.push(("ANTHROPIC_DEFAULT_SONNET_MODEL".to_string(), model));
-    }
-
-    if let Some(model) = small_model {
-        env_vars.push(("ANTHROPIC_DEFAULT_HAIKU_MODEL".to_string(), model));
-    }
-
-    // Add custom env vars from the custom CLI section
-    for env in &custom_env_vars {
-        if let (Some(key), Some(value)) = (
-            env.get("key").and_then(|v| v.as_str()),
-            env.get("value").and_then(|v| v.as_str()),
-        ) {
-            // Validate env var key format to prevent shell injection
-            if !is_valid_env_key(key) {
-                return Err(format!("Invalid environment variable key: {}", key));
-            }
-            env_vars.push((key.to_string(), value.to_string()));
-        }
-    }
-
-    log::info!(
-        "Launching Claude Code with API URL: {}, models: opus={:?}, sonnet={:?}, haiku={:?}, custom_envs={}",
-        api_url_log,
-        big_model_log,
-        medium_model_log,
-        small_model_log,
-        custom_env_vars.len()
-    );
-
-    // Build the command environment
-    // Export environment variables to the user's shell config file
-
-    if cfg!(target_os = "macos") {
-        let home_dir = std::env::var("HOME").map_err(|e| e.to_string())?;
-        let (shell_name, env_file_path) = detect_shell_env_file(&home_dir, true);
-        log::info!(
-            "Detected shell: {}, writing env to: {}",
-            shell_name,
-            env_file_path
-        );
-
-        // Try direct write first
-        match std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(false) // writability probe only; write_env_to_shell does the real write
-            .open(&env_file_path)
-        {
-            Ok(_) => {
-                write_env_to_shell(&env_file_path, &env_vars)?;
-                Ok(())
-            }
-            Err(e) => {
-                // Cannot write to shell config file - return error instead of escalating privileges
-                Err(format!("Cannot write to shell config file {}: {}. Please ensure write permissions or configure manually.", env_file_path, e))
-            }
-        }
-    } else if cfg!(target_os = "linux") {
-        let home_dir = std::env::var("HOME").map_err(|e| e.to_string())?;
-        let (shell_name, env_file_path) = detect_shell_env_file(&home_dir, false);
-        log::info!(
-            "Detected shell: {}, writing env to: {}",
-            shell_name,
-            env_file_path
-        );
-
-        match std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(false) // writability probe only; write_env_to_shell does the real write
-            .open(&env_file_path)
-        {
-            Ok(_) => {
-                write_env_to_shell(&env_file_path, &env_vars)?;
-                Ok(())
-            }
-            Err(_) => {
-                let ax_studio_config_dir = format!("{}/.config/ax-studio", home_dir);
-                let ext = if shell_name == "bash" { "bash" } else { "zsh" };
-                let env_file = format!("{}/claude-code-env.{}", ax_studio_config_dir, ext);
-                Err(format!("NEED_PERMISSION:{}", env_file))
-            }
-        }
-    } else {
-        // On Windows, set persistent user environment variables using setx
-        for (key, value) in &env_vars {
-            let output = std::process::Command::new("setx")
-                .arg(key)
-                .arg(value)
-                .output()
-                .map_err(|e| e.to_string())?;
-
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                return Err(format!("Failed to set env var {}: {}", key, stderr));
-            }
-        }
-
-        log::info!("Environment variables set permanently in Windows registry.");
-        Ok(())
-    }
+    result
 }
 
 #[cfg(test)]
@@ -351,24 +177,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_is_valid_env_key_valid_keys() {
-        assert!(is_valid_env_key("ANTHROPIC_AUTH_TOKEN"));
-        assert!(is_valid_env_key("MY_VAR"));
-        assert!(is_valid_env_key("_PRIVATE_VAR"));
-        assert!(is_valid_env_key("VAR1"));
-        assert!(is_valid_env_key("A"));
-    }
-
-    #[test]
-    fn test_is_valid_env_key_invalid_keys() {
-        assert!(!is_valid_env_key(""));
-        assert!(!is_valid_env_key("lowercase"));
-        assert!(!is_valid_env_key("VAR-NAME"));
-        assert!(!is_valid_env_key("VAR.NAME"));
-        assert!(!is_valid_env_key("VAR NAME"));
-        assert!(!is_valid_env_key("VAR$(rm -rf /)"));
-        assert!(!is_valid_env_key("VAR\n"));
-        assert!(!is_valid_env_key("1VAR"));
-        assert!(!is_valid_env_key("VAR="));
+    fn test_validate_open_path_rejects_empty() {
+        let result = validate_open_path(&PathBuf::from(""));
+        assert!(result.is_err());
     }
 }

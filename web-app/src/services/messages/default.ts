@@ -2,13 +2,13 @@
  * Default Messages Service - Web implementation
  */
 
-import { ExtensionManager } from '@/lib/extension'
-import {
-  ConversationalExtension,
-  ExtensionTypeEnum,
-  ThreadMessage,
-} from '@ax-studio/core'
+import { ThreadMessage } from '@ax-studio/core'
 import { TEMPORARY_CHAT_ID } from '@/constants/chat'
+import {
+  getConversationalExtension,
+  getNativeApi,
+  runFirstSuccessful,
+} from '../conversation-storage'
 import type { MessagesService } from './types'
 
 export class DefaultMessagesService implements MessagesService {
@@ -18,12 +18,23 @@ export class DefaultMessagesService implements MessagesService {
       return []
     }
 
-    return (
-      ExtensionManager.getInstance()
-        .get<ConversationalExtension>(ExtensionTypeEnum.Conversational)
-        ?.listMessages(threadId)
-        ?.catch(() => []) ?? []
-    )
+    const extension = getConversationalExtension()
+    const nativeApi = getNativeApi()
+    try {
+      const messages = await runFirstSuccessful(
+        [
+          extension ? () => extension.listMessages(threadId) : undefined,
+          nativeApi?.listMessages
+            ? () => nativeApi.listMessages!({ threadId }) as Promise<ThreadMessage[]>
+            : undefined,
+        ],
+        'Conversational storage is not available',
+        (error) => console.warn(`Failed to list messages for thread ${threadId}:`, error)
+      )
+      return Array.isArray(messages) ? messages : []
+    } catch {
+      return []
+    }
   }
 
   async createMessage(message: ThreadMessage): Promise<ThreadMessage> {
@@ -32,11 +43,19 @@ export class DefaultMessagesService implements MessagesService {
       return message
     }
 
-    return (
-      ExtensionManager.getInstance()
-        .get<ConversationalExtension>(ExtensionTypeEnum.Conversational)
-        ?.createMessage(message)
-        ?.catch(() => message) ?? message
+    const extension = getConversationalExtension()
+    const nativeApi = getNativeApi()
+    return runFirstSuccessful(
+      [
+        extension
+          ? () => extension.createMessage(message)
+          : undefined,
+        nativeApi?.createMessage
+          ? () => nativeApi.createMessage!({ message }) as Promise<ThreadMessage>
+          : undefined,
+      ],
+      'Conversational storage is not available',
+      (error) => console.warn(`Failed to create message for thread ${message.thread_id}:`, error)
     )
   }
 
@@ -46,11 +65,19 @@ export class DefaultMessagesService implements MessagesService {
       return message
     }
 
-    return (
-      ExtensionManager.getInstance()
-        .get<ConversationalExtension>(ExtensionTypeEnum.Conversational)
-        ?.modifyMessage(message)
-        ?.catch(() => message) ?? message
+    const extension = getConversationalExtension()
+    const nativeApi = getNativeApi()
+    return runFirstSuccessful(
+      [
+        extension
+          ? () => extension.modifyMessage(message)
+          : undefined,
+        nativeApi?.modifyMessage
+          ? () => nativeApi.modifyMessage!({ message }) as Promise<ThreadMessage>
+          : undefined,
+      ],
+      'Conversational storage is not available',
+      (error) => console.warn(`Failed to modify message ${message.id}:`, error)
     )
   }
 
@@ -60,8 +87,19 @@ export class DefaultMessagesService implements MessagesService {
       return
     }
 
-    await ExtensionManager.getInstance()
-      .get<ConversationalExtension>(ExtensionTypeEnum.Conversational)
-      ?.deleteMessage(threadId, messageId)
+    const extension = getConversationalExtension()
+    const nativeApi = getNativeApi()
+    await runFirstSuccessful(
+      [
+        extension
+          ? () => extension.deleteMessage(threadId, messageId)
+          : undefined,
+        nativeApi?.deleteMessage
+          ? () => nativeApi.deleteMessage!({ threadId, messageId }) as Promise<void>
+          : undefined,
+      ],
+      'Conversational storage is not available',
+      (error) => console.warn(`Failed to delete message ${messageId}:`, error)
+    )
   }
 }

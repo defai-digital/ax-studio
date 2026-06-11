@@ -372,5 +372,11 @@
       "title": "執行緒已移除",
       "description": "執行緒已成功從「{{projectName}}」中移除"
     }
+  },
+  "time": {
+    "justNow": "Just now",
+    "minutesAgo": "{{count}}m ago",
+    "hoursAgo": "{{count}}h ago",
+    "daysAgo": "{{count}}d ago"
   }
 }

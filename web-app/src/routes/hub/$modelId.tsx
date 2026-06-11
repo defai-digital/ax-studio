@@ -5,55 +5,82 @@ import {
   useNavigate,
   useSearch,
 } from '@tanstack/react-router'
-import { IconArrowLeft } from '@tabler/icons-react'
-import {
-  Eye,
-  Wrench,
-  Calendar,
-  Download,
-  ExternalLink,
-  HardDrive,
-} from 'lucide-react'
+import { ArrowLeft, Calendar, Download, ExternalLink, Eye, HardDrive, Wrench } from "lucide-react";
 import { motion } from 'motion/react'
 import { route } from '@/constants/routes'
-import { useModelSources } from '@/features/models/hooks/useModelSources'
-import { extractModelName, extractDescription } from '@/lib/models'
+import { useModelSources } from '@/hooks/models/useModelSources'
+import {
+  extractModelName,
+  extractDescription,
+  getPreferredMmprojPath,
+} from '@/lib/models'
 import { RenderMarkdown } from '@/containers/RenderMarkdown'
-import { useEffect, useMemo, useCallback, useState } from 'react'
-import { useDownloadStore } from '@/features/models/hooks/useDownloadStore'
+import { useEffect, useMemo, useCallback, useState, useRef } from 'react'
+import {
+  toDownloadProcesses,
+  useDownloadStore,
+} from '@/hooks/models/useDownloadStore'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import type { CatalogModel, ModelQuant } from '@/services/models/types'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
-import { sanitizeModelId } from '@/lib/utils'
-import { useGeneralSetting } from '@/hooks/useGeneralSetting'
-import { useModelProvider } from '@/features/models/hooks/useModelProvider'
+import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { ModelInfoHoverCard } from '@/containers/ModelInfoHoverCard'
 import { DEFAULT_MODEL_QUANTIZATIONS } from '@/constants/models'
 import { useTranslation } from '@/i18n'
+import {
+  buildHuggingFaceRepoUrl,
+  decodeHubRouteParam,
+  normalizeHuggingFaceRepoId,
+} from '@/lib/hub'
+import { z } from 'zod/v4'
+import { toast } from 'sonner'
+import { findDownloadedLocalModel } from '@/lib/models/downloaded'
+import { extractErrorMessage } from '@/lib/utils/error'
 
 type SearchParams = {
   repo: string
 }
 
+function isTrustedHuggingFaceReadmeUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value)
+    const hostname = parsed.hostname.toLowerCase()
+    return (
+      parsed.protocol === 'https:' &&
+      !parsed.username &&
+      !parsed.password &&
+      (hostname === 'huggingface.co' || hostname.endsWith('.huggingface.co'))
+    )
+  } catch {
+    return false
+  }
+}
+
+const hubModelSearchSchema = z
+  .object({
+    repo: z.string().optional(),
+  })
+  .transform((value) => ({
+    repo: value.repo ?? '',
+  }))
+
 export const Route = createFileRoute('/hub/$modelId')({
   component: HubModelDetailContent,
-  validateSearch: (search: Record<string, unknown>): SearchParams => ({
-    repo: search.repo as SearchParams['repo'],
-  }),
+  validateSearch: (search: Record<string, unknown>): SearchParams =>
+    hubModelSearchSchema.parse(search),
 })
 
 function HubModelDetailContent() {
   const { t } = useTranslation()
   const { modelId: rawModelId } = useParams({ from: Route.id })
-  const modelId = sanitizeModelId(rawModelId)
   const navigate = useNavigate()
   const { huggingfaceToken } = useGeneralSetting()
   const { sources, fetchSources } = useModelSources()
   const search = useSearch({ from: Route.id })
 
-  const getProviderByName = useModelProvider((state) => state.getProviderByName)
-  const llamaProvider = getProviderByName('llamacpp')
+  const providers = useModelProvider((state) => state.providers)
   const { downloads, localDownloadingModels, addLocalDownloadingModel } =
     useDownloadStore()
   const serviceHub = useServiceHub()
@@ -63,19 +90,28 @@ function HubModelDetailContent() {
   const [readmeContent, setReadmeContent] = useState<string>('')
   const [isLoadingReadme, setIsLoadingReadme] = useState(false)
 
+  const modelId = useMemo(() => decodeHubRouteParam(rawModelId), [rawModelId])
+
   // State for model support status
   const [modelSupportStatus, setModelSupportStatus] = useState<
     Record<string, 'RED' | 'YELLOW' | 'GREEN' | 'LOADING' | 'GREY'>
   >({})
+  const inFlightModelChecks = useRef(new Set<string>())
+  // Mirror `modelSupportStatus` into a ref so `checkModelSupport` can read
+  // the latest guard value without listing it as a dep (otherwise every
+  // status update recreates the callback and forces every
+  // ModelInfoHoverCard in the list to re-render).
+  const modelSupportStatusRef = useRef(modelSupportStatus)
+  modelSupportStatusRef.current = modelSupportStatus
 
   useEffect(() => {
     fetchSources()
   }, [fetchSources])
 
-  const fetchRepo = useCallback(async () => {
+  const fetchRepo = useCallback(async (signal?: AbortSignal) => {
     const repoInfo = await serviceHub
       .models()
-      .fetchHuggingFaceRepo(search.repo || modelId, huggingfaceToken)
+      .fetchHuggingFaceRepo(search.repo || modelId, huggingfaceToken, signal)
     if (repoInfo) {
       const repoDetail = serviceHub
         .models()
@@ -85,36 +121,56 @@ function HubModelDetailContent() {
   }, [serviceHub, modelId, search, huggingfaceToken])
 
   useEffect(() => {
-    fetchRepo()
+    const controller = new AbortController()
+    fetchRepo(controller.signal).catch((error) => {
+      if (error instanceof DOMException && error.name === 'AbortError') return
+      console.error('Failed to fetch Hugging Face repo:', error)
+    })
+
+    return () => {
+      controller.abort()
+    }
   }, [modelId, fetchRepo])
   // Find the model data from sources
   const modelData = useMemo(() => {
     return sources.find((model) => model.model_name === modelId) ?? repoData
   }, [sources, modelId, repoData])
 
+  const huggingFaceRepoId = useMemo(() => {
+    const fromRepo = normalizeHuggingFaceRepoId(search.repo)
+    if (fromRepo) return fromRepo
+    const fromReadme = normalizeHuggingFaceRepoId(modelData?.readme)
+    if (fromReadme) return fromReadme
+
+    return normalizeHuggingFaceRepoId(modelData?.model_name)
+  }, [search.repo, modelData?.model_name, modelData?.readme])
+
+  const huggingFaceUrl = useMemo(
+    () => buildHuggingFaceRepoUrl(huggingFaceRepoId),
+    [huggingFaceRepoId]
+  )
+
+  // `readmeUrl` must be derived AFTER `modelData` — reading it before the
+  // const declaration previously hit the Temporal Dead Zone and threw
+  // `ReferenceError: Cannot access 'modelData' before initialization`.
+  const readmeUrl = modelData?.readme
+
   // Download processes
   const downloadProcesses = useMemo(
-    () =>
-      Object.values(downloads).map((download) => ({
-        id: download.name,
-        name: download.name,
-        progress: download.progress,
-        current: download.current,
-        total: download.total,
-      })),
+    () => toDownloadProcesses(downloads),
     [downloads]
   )
 
   // Handle model use
   const handleUseModel = useCallback(
-    (modelId: string) => {
+    (modelId: string, provider = 'llamacpp') => {
       navigate({
         to: route.home,
         params: {},
         search: {
           model: {
             id: modelId,
-            provider: 'llamacpp',
+            provider,
           },
         },
       })
@@ -122,13 +178,18 @@ function HubModelDetailContent() {
     [navigate]
   )
 
-  // Format the date
+  // Format the date. Use `Math.floor` (not `ceil`) so a 1-hour-old
+  // release doesn't show "1 day ago", and special-case the 0/1 day
+  // buckets as "Today" / "Yesterday" instead of the ungrammatical
+  // "0 days ago".
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
     const now = new Date()
     const diffTime = Math.abs(now.getTime() - date.getTime())
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
 
+    if (diffDays === 0) return 'Today'
+    if (diffDays === 1) return 'Yesterday'
     if (diffDays < 7) {
       return `${diffDays} days ago`
     } else if (diffDays < 30) {
@@ -148,12 +209,19 @@ function HubModelDetailContent() {
     async (variant: ModelQuant) => {
       const modelKey = variant.model_id
 
-      // Don't check again if already checking or checked
-      if (modelSupportStatus[modelKey]) {
+      // Don't check again if already checking or checked. Read from the ref
+      // so this callback doesn't depend on `modelSupportStatus` — otherwise
+      // every status update would recreate the callback and cascade renders
+      // through every ModelInfoHoverCard on the page.
+      if (
+        inFlightModelChecks.current.has(modelKey) ||
+        modelSupportStatusRef.current[modelKey]
+      ) {
         return
       }
 
       // Set loading state
+      inFlightModelChecks.current.add(modelKey)
       setModelSupportStatus((prev) => ({
         ...prev,
         [modelKey]: 'LOADING',
@@ -175,9 +243,11 @@ function HubModelDetailContent() {
           ...prev,
           [modelKey]: 'RED',
         }))
+      } finally {
+        inFlightModelChecks.current.delete(modelKey)
       }
     },
-    [modelSupportStatus, serviceHub]
+    [serviceHub]
   )
 
   // Extract tags from quants (model variants)
@@ -203,33 +273,56 @@ function HubModelDetailContent() {
 
   // Fetch README content when modelData.readme is available
   useEffect(() => {
-    if (modelData?.readme) {
-      setIsLoadingReadme(true)
-      // Try fetching without headers first
-      // There is a weird issue where this HF link will return error when access public repo with auth header
-      fetch(modelData.readme)
-        .then((response) => {
-          if (!response.ok && huggingfaceToken && modelData?.readme) {
-            // Retry with Authorization header if first fetch failed
-            return fetch(modelData.readme, {
-              headers: {
-                Authorization: `Bearer ${huggingfaceToken}`,
-              },
-            })
-          }
-          return response
-        })
-        .then((response) => response.text())
-        .then((content) => {
-          setReadmeContent(content)
-          setIsLoadingReadme(false)
-        })
-        .catch((error) => {
-          console.error('Failed to fetch README:', error)
-          setIsLoadingReadme(false)
-        })
+    if (!readmeUrl) {
+      setReadmeContent('')
+      setIsLoadingReadme(false)
+      return
     }
-  }, [modelData?.readme, huggingfaceToken])
+
+    const controller = new AbortController()
+    const { signal } = controller
+
+    ;(async () => {
+      setIsLoadingReadme(true)
+      try {
+        if (!isTrustedHuggingFaceReadmeUrl(readmeUrl)) {
+          console.warn(`[hub] README URL rejected: ${readmeUrl}`)
+          setReadmeContent('')
+          return
+        }
+
+        let response = await fetch(readmeUrl, { signal })
+        if (!response.ok && huggingfaceToken) {
+          response = await fetch(readmeUrl, {
+            headers: { Authorization: `Bearer ${huggingfaceToken}` },
+            signal,
+          })
+        }
+
+        if (!response.ok) {
+          console.warn(`Failed to fetch README: ${response.status}`)
+          if (!signal.aborted) setReadmeContent('')
+          return
+        }
+
+        const content = await response.text()
+        if (!signal.aborted) {
+          setReadmeContent(content)
+        }
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return
+        console.error('Failed to fetch README:', error)
+      } finally {
+        if (!signal.aborted) {
+          setIsLoadingReadme(false)
+        }
+      }
+    })()
+
+    return () => {
+      controller.abort()
+    }
+  }, [readmeUrl, huggingfaceToken])
 
   if (!modelData) {
     return (
@@ -240,7 +333,7 @@ function HubModelDetailContent() {
             className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
             style={{ fontSize: '13px' }}
           >
-            <IconArrowLeft size={16} />
+            <ArrowLeft size={16} />
             Back to Hub
           </button>
         </HeaderPage>
@@ -260,7 +353,7 @@ function HubModelDetailContent() {
           className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
           style={{ fontSize: '13px' }}
         >
-          <IconArrowLeft size={16} />
+          <ArrowLeft size={16} />
           Back to Hub
         </button>
       </HeaderPage>
@@ -361,15 +454,17 @@ function HubModelDetailContent() {
               </div>
 
               {/* HuggingFace link */}
-              <a
-                href={`https://huggingface.co/${modelData.model_name}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border/50 hover:border-border text-[13px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
-              >
-                <ExternalLink className="size-3.5" />
-                View on HuggingFace
-              </a>
+              {huggingFaceUrl && (
+                <a
+                  href={huggingFaceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border/50 hover:border-border text-[13px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                >
+                  <ExternalLink className="size-3.5" />
+                  View on HuggingFace
+                </a>
+              )}
             </div>
           </motion.div>
 
@@ -406,14 +501,12 @@ function HubModelDetailContent() {
                   const downloadProgress =
                     downloadProcesses.find((e) => e.id === variant.model_id)
                       ?.progress || 0
-                  // Check if model is already downloaded by looking
-                  // at the llamacpp provider's installed models list
-                  const isDownloaded = !!llamaProvider?.models.some(
-                    (m: { id: string }) =>
-                      m.id === variant.model_id ||
-                      m.id ===
-                        `${modelData.developer}/${sanitizeModelId(variant.model_id.split('/').pop() || '')}`
+                  const downloadedModel = findDownloadedLocalModel(
+                    providers,
+                    variant.model_id,
+                    modelData.developer
                   )
+                  const isDownloaded = !!downloadedModel
 
                   // Extract format from model_id
                   const format = variant.model_id
@@ -479,7 +572,12 @@ function HubModelDetailContent() {
                                 variant="default"
                                 size="sm"
                                 className="rounded-lg"
-                                onClick={() => handleUseModel(variant.model_id)}
+                                onClick={() =>
+                                  handleUseModel(
+                                    downloadedModel?.modelId ?? variant.model_id,
+                                    downloadedModel?.providerId
+                                  )
+                                }
                               >
                                 {t('hub:newChat')}
                               </Button>
@@ -490,22 +588,26 @@ function HubModelDetailContent() {
                             <Button
                               size="sm"
                               className="rounded-lg"
-                              onClick={() => {
-                                addLocalDownloadingModel(variant.model_id)
-                                serviceHub
-                                  .models()
-                                  .pullModelWithMetadata(
-                                    variant.model_id,
-                                    variant.path,
-                                    (
-                                      modelData.mmproj_models?.find(
-                                        (e) =>
-                                          e.model_id.toLowerCase() ===
-                                          'mmproj-f16'
-                                      ) || modelData.mmproj_models?.[0]
-                                    )?.path,
-                                    huggingfaceToken
-                                  )
+                              onClick={async () => {
+                                try {
+                                  addLocalDownloadingModel(variant.model_id)
+                                  await serviceHub
+                                    .models()
+                                    .pullModelWithMetadata(
+                                      variant.model_id,
+                                      variant.path,
+                                      getPreferredMmprojPath(
+                                        modelData.mmproj_models
+                                      ),
+                                      huggingfaceToken
+                                    )
+                                } catch (error) {
+                                  console.error('Failed to start model download:', error)
+                                  const description = extractErrorMessage(error, '')
+                                  toast.error('Failed to download model', {
+                                    description: description || 'Unknown error (check DevTools console).',
+                                  })
+                                }
                               }}
                               variant="outline"
                             >

@@ -6,10 +6,10 @@ use tokio::sync::Mutex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionInfo {
-    pub pid: i32,  // opaque handle for unload/chat
-    pub port: i32, // llama-server output port
+    pub pid: i32,
+    pub port: i32,
     pub model_id: String,
-    pub model_path: String, // path of the loaded model
+    pub model_path: String,
     pub is_embedding: bool,
     pub api_key: String,
     #[serde(default)]

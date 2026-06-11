@@ -49,8 +49,8 @@ async function ensureAkidbAvailable(mcp: MCPService): Promise<void> {
  * JSON-encoded `PipelineMetrics` object from ax-fabric.
  */
 function parsePipelineMetrics(result: {
-  error: string
-  content: Array<{ text: string }>
+  error?: string
+  content?: Array<{ text?: string }>
 }): {
   filesSucceeded: number
   totalChunksGenerated: number
@@ -65,14 +65,64 @@ function parsePipelineMetrics(result: {
   }
   try {
     const metrics = JSON.parse(text)
+    const filesSucceeded = firstFiniteNumber(
+      metrics?.filesSucceeded,
+      metrics?.files_succeeded,
+      metrics?.succeeded,
+      metrics?.succeededFiles,
+      metrics?.processed_files,
+      metrics?.filesProcessed,
+      metrics?.successful_files,
+      metrics?.ok
+    )
+    const totalChunksGenerated = firstFiniteNumber(
+      metrics?.totalChunksGenerated,
+      metrics?.total_chunks_generated,
+      metrics?.chunksGenerated,
+      metrics?.chunks_generated,
+      metrics?.chunk_count,
+      metrics?.chunks,
+      metrics?.total_chunks
+    )
+
+    // Use `Number(...) || 0` instead of `?? 0` so a string-typed count
+    // from an older MCP server version (`"1"`) is coerced to a number
+    // rather than flowing through and breaking downstream arithmetic.
     return {
-      filesSucceeded: metrics.filesSucceeded ?? 0,
-      totalChunksGenerated: metrics.totalChunksGenerated ?? 0,
-      errors: Array.isArray(metrics.errors) ? metrics.errors : [],
+      filesSucceeded,
+      totalChunksGenerated,
+      errors: normalizePipelineErrors(metrics?.errors),
     }
   } catch {
     throw new Error(`Failed to parse pipeline metrics: ${text.slice(0, 200)}`)
   }
+}
+
+function firstFiniteNumber(...values: unknown[]): number {
+  for (const value of values) {
+    const num = Number(value)
+    if (Number.isFinite(num) && num > 0) return num
+  }
+  return 0
+}
+
+function normalizePipelineErrors(
+  errors: unknown
+): Array<{ path: string; message: string }> {
+  if (!Array.isArray(errors)) return []
+  return errors.map((error) => {
+    if (typeof error === 'string') {
+      return { path: '', message: error }
+    }
+    if (error && typeof error === 'object') {
+      const record = error as Record<string, unknown>
+      return {
+        path: String(record.path ?? record.file ?? record.source_path ?? ''),
+        message: String(record.message ?? record.error ?? record.reason ?? ''),
+      }
+    }
+    return { path: '', message: String(error) }
+  })
 }
 
 export class DefaultUploadsService implements UploadsService {
@@ -147,10 +197,6 @@ export class DefaultUploadsService implements UploadsService {
 
     await ensureAkidbAvailable(hub)
 
-    console.log('[Uploads] ingestDocument: calling fabric_ingest_run', {
-      path: attachment.path,
-      collectionId,
-    })
     const result = await hub.callTool({
       toolName: 'fabric_ingest_run',
       arguments: {
@@ -160,7 +206,6 @@ export class DefaultUploadsService implements UploadsService {
     })
 
     const metrics = parsePipelineMetrics(result)
-    console.log('[Uploads] fabric_ingest_run result:', metrics)
 
     if (metrics.filesSucceeded === 0) {
       const errorMsg =
@@ -171,10 +216,6 @@ export class DefaultUploadsService implements UploadsService {
     }
 
     const fileId = ulid()
-    console.log('[Uploads] ingestDocument success:', {
-      fileId,
-      chunkCount: metrics.totalChunksGenerated,
-    })
 
     useFileRegistry.getState().addFile(collectionId, {
       file_id: fileId,

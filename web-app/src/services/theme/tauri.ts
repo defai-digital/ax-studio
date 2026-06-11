@@ -4,10 +4,9 @@
 
 import { Theme } from '@tauri-apps/api/window'
 import { getAllWebviewWindows, type WebviewWindow } from '@tauri-apps/api/webviewWindow'
-import type { ThemeMode } from './types'
-import { DefaultThemeService } from './default'
+import type { ThemeMode, ThemeService } from './types'
 
-export class TauriThemeService extends DefaultThemeService {
+export class TauriThemeService implements ThemeService {
   async setTheme(theme: ThemeMode): Promise<void> {
     try {
       const tauriTheme = theme as Theme | null

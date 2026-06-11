@@ -1,0 +1,176 @@
+type FilePickerAcceptType = {
+  description: string
+  accept: Record<string, string[]>
+}
+
+type SaveFilePickerOptions = {
+  suggestedName: string
+  types: FilePickerAcceptType[]
+}
+
+type WritableFileHandle = {
+  write: (data: Blob) => Promise<void>
+  close: () => Promise<void>
+}
+
+type SaveFileHandle = {
+  createWritable: () => Promise<WritableFileHandle>
+}
+
+type SaveFilePickerWindow = Window & {
+  showSaveFilePicker?: (options: SaveFilePickerOptions) => Promise<SaveFileHandle>
+}
+
+const LOADER_REMOVE_DELAY_MS = 300
+
+export function hideInitialLoader() {
+  document.body.classList.add('loaded')
+  const loader = document.getElementById('initial-loader')
+  if (loader) {
+    setTimeout(() => loader.remove(), LOADER_REMOVE_DELAY_MS)
+  }
+}
+
+export function showStartupError() {
+  const root = document.getElementById('root')
+  if (!root || root.childElementCount > 0) return
+
+  root.innerHTML =
+    '<div style="height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;text-align:center;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#666;">Ax-Studio failed to initialize. Please restart the app.</div>'
+}
+
+export function preventDefaultFileDrop(): () => void {
+  const handleDragOver = (event: Event) => event.preventDefault()
+  const handleDrop = (event: Event) => event.preventDefault()
+
+  document.addEventListener('dragover', handleDragOver)
+  document.addEventListener('drop', handleDrop)
+
+  return () => {
+    document.removeEventListener('dragover', handleDragOver)
+    document.removeEventListener('drop', handleDrop)
+  }
+}
+
+export function patchBlobDownloads(): () => void {
+  const registry = new Map<string, Blob>()
+
+  const originalCreateObjectUrl = URL.createObjectURL.bind(URL)
+  URL.createObjectURL = (obj: Blob | MediaSource): string => {
+    const url = originalCreateObjectUrl(obj)
+    if (obj instanceof Blob) registry.set(url, obj)
+    return url
+  }
+
+  const originalRevokeObjectUrl = URL.revokeObjectURL.bind(URL)
+  URL.revokeObjectURL = (url: string): void => {
+    registry.delete(url)
+    originalRevokeObjectUrl(url)
+  }
+
+  const originalAnchorClick = HTMLAnchorElement.prototype.click
+  HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) {
+    if (this.download && this.href.startsWith('blob:')) {
+      const blob = registry.get(this.href)
+      if (blob) {
+        void saveBlobNative(blob, this.download)
+        return
+      }
+    }
+
+    originalAnchorClick.call(this)
+  }
+
+  return () => {
+    URL.createObjectURL = originalCreateObjectUrl
+    URL.revokeObjectURL = originalRevokeObjectUrl
+    HTMLAnchorElement.prototype.click = originalAnchorClick
+    registry.clear()
+  }
+}
+
+function getDialogFilters(ext: string) {
+  const map: Record<string, { name: string; extensions: string[] }> = {
+    svg: { name: 'SVG Image', extensions: ['svg'] },
+    png: { name: 'PNG Image', extensions: ['png'] },
+  }
+
+  return map[ext] ? [map[ext]] : []
+}
+
+function getFilePickerTypes(ext: string): FilePickerAcceptType[] {
+  const map: Record<string, FilePickerAcceptType> = {
+    svg: {
+      description: 'SVG Image',
+      accept: { 'image/svg+xml': ['.svg'] },
+    },
+    png: {
+      description: 'PNG Image',
+      accept: { 'image/png': ['.png'] },
+    },
+  }
+
+  return map[ext] ? [map[ext]] : []
+}
+
+async function saveBlobNative(blob: Blob, filename: string): Promise<void> {
+  try {
+    const ext = filename.split('.').pop()?.toLowerCase() ?? ''
+
+    if ('__TAURI__' in window) {
+      const { getServiceHub } = await import('@/hooks/useServiceHub')
+      const hub = getServiceHub()
+
+      const savePath = await hub.dialog().save({
+        defaultPath: filename,
+        filters: getDialogFilters(ext),
+      })
+
+      if (!savePath) return
+
+      if (ext === 'png') {
+        const buffer = await blob.arrayBuffer()
+        const base64Data = btoa(
+          new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+        )
+        await hub.core().invoke('write_binary_file', { path: savePath, base64Data })
+      } else {
+        const text = await blob.text()
+        await hub.core().invoke('write_text_file', { path: savePath, content: text })
+      }
+
+      return
+    }
+
+    const pickerWindow = window as SaveFilePickerWindow
+    if (pickerWindow.showSaveFilePicker) {
+      const handle = await pickerWindow.showSaveFilePicker({
+        suggestedName: filename,
+        types: getFilePickerTypes(ext),
+      })
+      const writable = await handle.createWritable()
+      await writable.write(blob)
+      await writable.close()
+      return
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const anchor = document.createElement('a')
+        anchor.href = reader.result as string
+        anchor.download = filename
+        document.body.appendChild(anchor)
+        anchor.dispatchEvent(new MouseEvent('click'))
+        document.body.removeChild(anchor)
+        resolve()
+      }
+      reader.onerror = () => reject(reader.error ?? new Error('Failed to read blob'))
+      reader.readAsDataURL(blob)
+    })
+  } catch (error) {
+    if (!(error instanceof Error && error.name === 'AbortError')) {
+      console.error('[ax-studio] blob save failed:', error)
+    }
+  }
+}

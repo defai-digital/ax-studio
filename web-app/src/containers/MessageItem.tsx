@@ -1,9 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { memo, useState, useCallback } from 'react'
+import { memo, type ComponentProps, useState, useCallback, useEffect, useMemo } from 'react'
 import type { UIMessage, ChatStatus } from 'ai'
 import { RenderMarkdown } from './RenderMarkdown'
 import { cn } from '@/lib/utils'
-import { twMerge } from 'tailwind-merge'
+import { SourcesFooter } from '@/components/citations/SourcesFooter'
+import { useCitations } from '@/hooks/citations/use-citations'
+import { useGuardrails } from '@/hooks/settings/useGuardrails'
 import {
   Reasoning,
   ReasoningContent,
@@ -16,21 +17,16 @@ import {
   ToolInput,
   ToolOutput,
 } from '@/components/ai-elements/tool'
-import { CopyButton } from './CopyButton'
-import { useModelProvider } from '@/features/models/hooks/useModelProvider'
-import { IconRefresh, IconPaperclip } from '@tabler/icons-react'
-import { EditMessageDialog } from '@/containers/dialogs/EditMessageDialog'
-import { DeleteMessageDialog } from '@/containers/dialogs/DeleteMessageDialog'
+import { CopyButton } from '@/components/common/CopyButton'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
+import { EditMessageDialog } from '@/containers/dialogs/message/EditMessageDialog'
+import { DeleteMessageDialog } from '@/containers/dialogs/message/DeleteMessageDialog'
 import TokenSpeedIndicator from '@/containers/TokenSpeedIndicator'
 import { extractFilesFromPrompt, FileMetadata } from '@/lib/fileMetadata'
-import { useMemo } from 'react'
 import { Button } from '@/components/ui/button'
-import { AgentOutputCard } from '@/features/multi-agent/components/AgentOutputCard'
-import { RunLogSummary } from '@/features/multi-agent/components/RunLogViewer'
-import type { AgentStatusData } from '@/types/agent-data-parts'
-import type { RunLogData } from '@/features/multi-agent/lib/run-log'
-import { Zap, GitBranch, ThumbsUp, ThumbsDown } from 'lucide-react'
-import { RoutingBadge } from '@/features/multi-agent/components/RoutingBadge'
+import { Database, GitBranch, Paperclip, RefreshCw, ThumbsDown, ThumbsUp, Zap } from "lucide-react";
+import { useMessages } from '@/hooks/chat/useMessages'
+import { RoutingBadge } from '@/components/RoutingBadge'
 
 const CHAT_STATUS = {
   STREAMING: 'streaming',
@@ -43,9 +39,25 @@ const CONTENT_TYPE = {
   REASONING: 'reasoning',
 } as const
 
+type FilePart = {
+  type: 'file'
+  filename?: string
+  url?: string
+  mediaType?: string
+}
+
+type ToolPart = {
+  type: 'dynamic-tool' | `tool-${string}`
+  state: ComponentProps<typeof Tool>['state']
+  toolName?: string
+  input?: unknown
+  output?: unknown
+  error?: string
+  errorText?: string
+}
+
 export type MessageItemProps = {
   message: UIMessage
-  isFirstMessage: boolean
   isLastMessage: boolean
   status: ChatStatus
   threadId?: string
@@ -54,7 +66,6 @@ export type MessageItemProps = {
   onEdit?: (messageId: string, newText: string) => void
   onDelete?: (messageId: string) => void
   assistant?: { avatar?: React.ReactNode; name?: string }
-  showAssistant?: boolean
 }
 
 export const MessageItem = memo(
@@ -69,11 +80,56 @@ export const MessageItem = memo(
     onDelete,
   }: MessageItemProps) => {
     const selectedModel = useModelProvider((state) => state.selectedModel)
+    const updateMessage = useMessages((state) => state.updateMessage)
+    const storedThreadMessage = useMessages((state) =>
+      threadId ? state.messages[threadId]?.find((m) => m.id === message.id) : undefined
+    )
     const [previewImage, setPreviewImage] = useState<{
       url: string
       filename?: string
     } | null>(null)
 
+    const meta = message.metadata as Record<string, unknown> | undefined
+    const currentRating = meta?.rating as 'up' | 'down' | undefined
+    const localKnowledgeRetrieval = meta?.localKnowledgeRetrieval as
+      | {
+          searched?: boolean
+          extracted?: boolean
+          source?: string
+          error?: string
+        }
+      | undefined
+
+    // Hydrate citation data from message metadata into the citation store.
+    // Only re-run when the message ID changes or citation data first appears.
+    // Avoid depending on `meta` directly — it's a new object reference on every
+    // render, which was causing "Maximum update depth exceeded" during streaming.
+    const hydrateCitations = useCitations((s) => s.hydrate)
+    const hasCitationData = !!meta?.citationData
+    useEffect(() => {
+      if (message.role === 'assistant' && hasCitationData) {
+        hydrateCitations(message.id, message.metadata as Record<string, unknown> | undefined)
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [message.id, message.role, hasCitationData])
+    const citationData = useCitations((s) => s.getCitations(message.id))
+    const flagLowConfidence = useGuardrails((s) => s.flagLowConfidence)
+
+    const handleRating = useCallback(
+      (rating: 'up' | 'down') => {
+        if (!threadId || !storedThreadMessage) return
+        const existingMeta = (message.metadata ?? {}) as Record<string, unknown>
+        const newRating = existingMeta.rating === rating ? undefined : rating
+        updateMessage({
+          ...storedThreadMessage,
+          metadata: {
+            ...existingMeta,
+            rating: newRating,
+          },
+        })
+      },
+      [message.metadata, storedThreadMessage, threadId, updateMessage]
+    )
 
     const handleRegenerate = useCallback(() => {
       onRegenerate?.(message.id)
@@ -145,6 +201,34 @@ export const MessageItem = memo(
           ? extractFilesFromPrompt(part.text).cleanPrompt
           : part.text
 
+      const thinkMatch =
+        message.role === 'assistant'
+          ? displayText.match(/<think[^>]*>([\s\S]*?)(?:<\/think>|$)([\s\S]*)/i)
+          : null
+
+      if (thinkMatch) {
+        const reasoningText = thinkMatch[1]?.trim() ?? ''
+        const finalText = (thinkMatch[2] ?? '').trim()
+
+        return (
+          <div key={`${message.id}-${partIndex}`} className="w-full min-w-0 overflow-hidden">
+            {reasoningText &&
+              renderReasoningPart(
+                { type: 'reasoning', text: reasoningText },
+                partIndex
+              )}
+            {finalText && (
+              <RenderMarkdown
+                content={finalText}
+                isStreaming={isStreaming && isLastPart}
+                messageId={message.id}
+                threadId={threadId}
+              />
+            )}
+          </div>
+        )
+      }
+
       if (
         !displayText.trim() &&
         message.role === 'user' &&
@@ -166,7 +250,7 @@ export const MessageItem = memo(
                         key={`file-${idx}-${file.id}`}
                         className="flex items-center gap-2 px-3 py-2 rounded-xl bg-muted border border-border/50 text-[12px]"
                       >
-                        <IconPaperclip
+                        <Paperclip
                           size={14}
                           className="text-muted-foreground"
                         />
@@ -186,6 +270,22 @@ export const MessageItem = memo(
                     style={{ background: 'linear-gradient(135deg, #6366f1, #7c3aed)', fontSize: '14px', lineHeight: '1.6' }}
                   >
                     {displayText}
+                  </div>
+                )}
+                {localKnowledgeRetrieval?.searched && (
+                  <div className="mt-2 flex justify-end">
+                    <div className="flex max-w-[80%] items-center gap-2 rounded-xl border border-border/60 bg-muted px-3 py-1.5 text-[11px] text-muted-foreground">
+                      <Database size={13} />
+                      <span>
+                        Searched local knowledge
+                        {localKnowledgeRetrieval.extracted ? ' and extracted source' : ''}
+                      </span>
+                      {localKnowledgeRetrieval.source && (
+                        <span className="truncate max-w-64 font-mono">
+                          {localKnowledgeRetrieval.source.split(/[\\/]/).pop()}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -214,8 +314,9 @@ export const MessageItem = memo(
       partIndex: number
     ) => {
       const isImage = part.mediaType?.startsWith('image/')
+      const isSafeUrl = part.url && /^https?:|^blob:|^data:/i.test(part.url)
 
-      if (message.role === 'user' && isImage && part.url) {
+      if (message.role === 'user' && isImage && isSafeUrl) {
         return (
           <div
             key={`${message.id}-${partIndex}`}
@@ -237,7 +338,7 @@ export const MessageItem = memo(
         )
       }
 
-      if (message.role === 'assistant' && isImage && part.url) {
+      if (message.role === 'assistant' && isImage && isSafeUrl) {
         return (
           <div key={`${message.id}-${partIndex}`} className="my-2">
             <img
@@ -276,7 +377,7 @@ export const MessageItem = memo(
             )}
             <div
               ref={isStreaming ? reasoningContainerRef : null}
-              className={twMerge(
+              className={cn(
                 'w-full overflow-auto relative',
                 isStreaming
                   ? 'max-h-32 opacity-70 mt-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden'
@@ -290,84 +391,59 @@ export const MessageItem = memo(
       )
     }
 
-    const renderToolPart = (part: any, partIndex: number) => {
+    const renderToolPart = (part: unknown, partIndex: number) => {
       // AI SDK v5 emits two shapes for tool parts:
       //   ToolUIPart      → type: 'tool-{name}'   (static/chat-level tools)
       //   DynamicToolUIPart → type: 'dynamic-tool', toolName: string  (streamText tools)
       // Both carry a `state` field; anything else is not a tool part.
-      const isDynamic = part.type === 'dynamic-tool'
-      const isStatic = typeof part.type === 'string' && part.type.startsWith('tool-')
-      if ((!isDynamic && !isStatic) || !('state' in part)) {
+      if (!part || typeof part !== 'object' || !('type' in part) || !('state' in part)) {
         return null
       }
 
+      const maybeToolPart = part as Partial<ToolPart>
+      const isDynamic = maybeToolPart.type === 'dynamic-tool'
+      const isStatic = typeof maybeToolPart.type === 'string' && maybeToolPart.type.startsWith('tool-')
+      if ((!isDynamic && !isStatic) || !maybeToolPart.state) {
+        return null
+      }
+
+      const toolPart = maybeToolPart as ToolPart
       const toolName: string = isDynamic
-        ? (part.toolName as string)
-        : part.type.split('-').slice(1).join('-')
-
-      // generate_diagram: render the diagram inline via the Mermaid pipeline
-      // instead of showing a JSON tool card
-      if (toolName === 'generate_diagram') {
-        // Strip fence markers if the model returned them inside the source field
-        // (double-fencing causes a parse error: ```mermaid\n```mermaid\n...\n```)
-        const rawSource: string = part.output?.source ?? ''
-        const source = rawSource
-          .replace(/^```mermaid\s*/i, '')
-          .replace(/```\s*$/, '')
-          .trim()
-        const title: string = part.output?.title ?? ''
-        if (source) {
-          return (
-            <div key={`${message.id}-${partIndex}`} className="mb-2">
-              {title && (
-                <p className="text-xs text-muted-foreground mb-1 font-medium">
-                  {title}
-                </p>
-              )}
-              <RenderMarkdown
-                content={`\`\`\`mermaid\n${source}\n\`\`\``}
-                messageId={message.id}
-              />
-            </div>
-          )
-        }
-        // Tool call in progress — source not yet available, render nothing.
-        // The diagram will appear as soon as the tool output resolves.
-        return null
-      }
+        ? (toolPart.toolName ?? 'dynamic-tool')
+        : toolPart.type.split('-').slice(1).join('-')
 
       return (
         <Tool
           key={`${message.id}-${partIndex}`}
-          state={part.state}
+          state={toolPart.state}
           className="mb-3"
         >
           <ToolHeader
             title={toolName}
             type={`tool-${toolName}` as `tool-${string}`}
-            state={part.state}
+            state={toolPart.state}
           />
           <ToolContent title={toolName}>
-            {part.input && (
+            {Boolean(toolPart.input) && (
               <ToolInput
                 input={
-                  typeof part.input === 'string'
-                    ? part.input
-                    : JSON.stringify(part.input)
+                  typeof toolPart.input === 'string'
+                    ? toolPart.input
+                    : JSON.stringify(toolPart.input)
                 }
               />
             )}
-            {part.output && (
+            {Boolean(toolPart.output) && (
               <ToolOutput
-                output={part.output}
+                output={toolPart.output}
                 resolver={(input) => Promise.resolve(input)}
                 errorText={undefined}
               />
             )}
-            {part.state === 'output-error' && (
+            {toolPart.state === 'output-error' && (
               <ToolOutput
                 output={undefined}
-                errorText={part.error || part.errorText || 'Tool execution failed'}
+                errorText={toolPart.error || toolPart.errorText || 'Tool execution failed'}
                 resolver={(input) => Promise.resolve(input)}
               />
             )}
@@ -375,19 +451,6 @@ export const MessageItem = memo(
         </Tool>
       )
     }
-
-    // Deduplicate agent status parts: only render the latest status per agent_id.
-    // Each agent emits 'running' then 'complete'/'error' — showing both would be confusing.
-    const latestAgentStatusIndex = useMemo(() => {
-      const lastIndex = new Map<string, number>()
-      message.parts.forEach((part, i) => {
-        if (part.type === 'data-agentStatus') {
-          const data = (part as any).data as AgentStatusData
-          lastIndex.set(data.agent_id, i)
-        }
-      })
-      return lastIndex
-    }, [message.parts])
 
     // User message layout
     if (message.role === 'user') {
@@ -399,7 +462,7 @@ export const MessageItem = memo(
               case CONTENT_TYPE.TEXT:
                 return renderTextPart(part as { type: 'text'; text: string }, i)
               case CONTENT_TYPE.FILE:
-                return renderFilePart(part as any, i)
+                return renderFilePart(part as FilePart, i)
               default:
                 return null
             }
@@ -468,37 +531,24 @@ export const MessageItem = memo(
                 case CONTENT_TYPE.TEXT:
                   return renderTextPart(part as { type: 'text'; text: string }, i)
                 case CONTENT_TYPE.FILE:
-                  return renderFilePart(part as any, i)
+                  return renderFilePart(part as FilePart, i)
                 case CONTENT_TYPE.REASONING:
                   return renderReasoningPart(
                     part as { type: 'reasoning'; text: string },
                     i
                   )
-                case 'data-agentStatus': {
-                  const data = (part as any).data as AgentStatusData
-                  // Skip superseded status parts (e.g., 'running' followed by 'complete')
-                  if (latestAgentStatusIndex.get(data.agent_id) !== i) return null
-                  return (
-                    <AgentOutputCard
-                      key={`agent-${data.agent_id}-${i}`}
-                      agentName={data.agent_name}
-                      agentRole={data.agent_role}
-                      status={data.status}
-                      tokensUsed={data.tokens_used}
-                      toolCalls={data.tool_calls}
-                      error={data.error}
-                      isCollapsed={data.status === 'complete' && !isLastMessage}
-                    />
-                  )
-                }
-                case 'data-runLog': {
-                  const data = (part as any).data as RunLogData
-                  return <RunLogSummary key={`runlog-${data.id}`} runLog={data} />
-                }
                 default:
                   return renderToolPart(part, i)
               }
             })}
+
+            {/* Sources footer — shown when citation data exists */}
+            {message.role === 'assistant' && citationData && (
+              <SourcesFooter
+                citationData={citationData}
+                showConfidence={flagLowConfidence}
+              />
+            )}
 
             {/* Action Bar */}
             <div className="flex items-center justify-between mt-2 opacity-0 group-hover/message:opacity-100 transition-opacity">
@@ -523,12 +573,11 @@ export const MessageItem = memo(
                     aria-label="Regenerate response"
                     className="text-muted-foreground/50 hover:text-foreground"
                   >
-                    <IconRefresh size={14} />
+                    <RefreshCw size={14} />
                   </Button>
                 )}
 
-                {/* Fork conversation — disabled until fork logic is implemented */}
-                {/* TODO: Wire to fork/branch logic when available */}
+                {/* Fork conversation — disabled until fork flow is implemented */}
                 <Button
                   variant="ghost"
                   size="icon-xs"
@@ -546,10 +595,11 @@ export const MessageItem = memo(
                   size="icon-xs"
                   title="Good response"
                   aria-label="Good response"
-                  className="text-muted-foreground/50 hover:text-emerald-500"
-                  onClick={() => {
-                    // TODO: Store rating in message metadata when rating infrastructure exists
-                  }}
+                  className={cn(
+                    'text-muted-foreground/50 hover:text-emerald-500',
+                    currentRating === 'up' && 'text-emerald-500'
+                  )}
+                  onClick={() => handleRating('up')}
                 >
                   <ThumbsUp className="size-3.5" />
                 </Button>
@@ -558,10 +608,11 @@ export const MessageItem = memo(
                   size="icon-xs"
                   title="Poor response"
                   aria-label="Poor response"
-                  className="text-muted-foreground/50 hover:text-rose-500"
-                  onClick={() => {
-                    // TODO: Store rating in message metadata when rating infrastructure exists
-                  }}
+                  className={cn(
+                    'text-muted-foreground/50 hover:text-rose-500',
+                    currentRating === 'down' && 'text-rose-500'
+                  )}
+                  onClick={() => handleRating('down')}
                 >
                   <ThumbsDown className="size-3.5" />
                 </Button>
@@ -602,10 +653,8 @@ export const MessageItem = memo(
 
     return (
       prevProps.message === nextProps.message &&
-      prevProps.isFirstMessage === nextProps.isFirstMessage &&
       prevProps.isLastMessage === nextProps.isLastMessage &&
-      prevProps.status === nextProps.status &&
-      prevProps.showAssistant === nextProps.showAssistant
+      prevProps.status === nextProps.status
     )
   }
 )

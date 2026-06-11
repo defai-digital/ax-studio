@@ -1,14 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-use crate::core::state::{ProviderConfig, ServerState};
-
-/// Custom header for provider requests
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProviderCustomHeader {
-    pub header: String,
-    pub value: String,
-}
+use crate::core::state::{AppState, ProviderConfig, ProviderCustomHeader};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ProviderHeaderView {
@@ -53,29 +46,27 @@ pub struct RegisterProviderRequest {
 /// Register a remote provider configuration
 #[tauri::command]
 pub async fn register_provider_config(
-    state: State<'_, ServerState>,
+    state: State<'_, AppState>,
     request: RegisterProviderRequest,
 ) -> Result<(), String> {
-    let provider_configs = state.provider_configs.clone();
-    let mut configs = provider_configs.lock().await;
+    if let Some(ref base_url) = request.base_url {
+        validate_provider_url(&request.provider, base_url).await?;
+    }
+
+    let mut provider_state = state.provider_state.lock().await;
 
     let config = ProviderConfig {
         provider: request.provider.clone(),
         api_key: request.api_key,
         base_url: request.base_url,
-        custom_headers: request
-            .custom_headers
-            .into_iter()
-            .map(|h| crate::core::state::ProviderCustomHeader {
-                header: h.header,
-                value: h.value,
-            })
-            .collect(),
-        models: request.models, // Models will be added when they are configured
+        custom_headers: request.custom_headers,
+        models: request.models,
     };
+    config.validate()?;
 
     let provider_name = request.provider.clone();
-    configs.insert(provider_name.clone(), config);
+    provider_state.configs.insert(provider_name.clone(), config);
+    provider_state.sync_model_index();
     log::info!("Registered provider config: {provider_name}");
     Ok(())
 }
@@ -83,44 +74,46 @@ pub async fn register_provider_config(
 /// Register multiple remote provider configurations in a single lock acquisition
 #[tauri::command]
 pub async fn register_provider_configs_batch(
-    state: State<'_, ServerState>,
+    state: State<'_, AppState>,
     requests: Vec<RegisterProviderRequest>,
 ) -> Result<(), String> {
-    let provider_configs = state.provider_configs.clone();
-    let mut configs = provider_configs.lock().await;
+    let mut provider_state = state.provider_state.lock().await;
 
     for request in requests {
+        if let Some(ref base_url) = request.base_url {
+            validate_provider_url(&request.provider, base_url).await?;
+        }
         let provider_name = request.provider.clone();
         let config = ProviderConfig {
             provider: request.provider,
             api_key: request.api_key,
             base_url: request.base_url,
-            custom_headers: request
-                .custom_headers
-                .into_iter()
-                .map(|h| crate::core::state::ProviderCustomHeader {
-                    header: h.header,
-                    value: h.value,
-                })
-                .collect(),
+            custom_headers: request.custom_headers,
             models: request.models,
         };
-        configs.insert(provider_name.clone(), config);
-        log::info!("Registered provider config (batch): {provider_name}");
+        config.validate()?;
+        log::info!(
+            "Registered provider config (batch): {provider_name} base_url={:?} has_key={} models_count={}",
+            config.base_url.as_deref().map(|u| if u.len() > 40 { &u[..40] } else { u }),
+            config.api_key.as_ref().is_some_and(|k| !k.is_empty()),
+            config.models.len(),
+        );
+        provider_state.configs.insert(provider_name.clone(), config);
     }
+    provider_state.sync_model_index();
     Ok(())
 }
 
 /// Unregister a provider configuration
 #[tauri::command]
 pub async fn unregister_provider_config(
-    state: State<'_, ServerState>,
+    state: State<'_, AppState>,
     provider: String,
 ) -> Result<(), String> {
-    let provider_configs = state.provider_configs.clone();
-    let mut configs = provider_configs.lock().await;
+    let mut provider_state = state.provider_state.lock().await;
 
-    if configs.remove(&provider).is_some() {
+    if provider_state.configs.remove(&provider).is_some() {
+        provider_state.sync_model_index();
         log::info!("Unregistered provider config: {provider}");
         Ok(())
     } else {
@@ -129,27 +122,101 @@ pub async fn unregister_provider_config(
     }
 }
 
-/// Get provider configuration by name
-#[tauri::command]
-pub async fn get_provider_config(
-    state: State<'_, ServerState>,
-    provider: String,
-) -> Result<Option<ProviderConfigView>, String> {
-    let provider_configs = state.provider_configs.clone();
-    let configs = provider_configs.lock().await;
-
-    Ok(configs.get(&provider).map(redact_provider_config))
-}
-
 /// List all registered provider configurations (without sensitive keys)
 #[tauri::command]
 pub async fn list_provider_configs(
-    state: State<'_, ServerState>,
+    state: State<'_, AppState>,
 ) -> Result<Vec<ProviderConfigView>, String> {
-    let provider_configs = state.provider_configs.clone();
-    let configs = provider_configs.lock().await;
+    let provider_state = state.provider_state.lock().await;
 
-    Ok(configs.values().map(redact_provider_config).collect())
+    Ok(provider_state
+        .configs
+        .values()
+        .map(redact_provider_config)
+        .collect())
+}
+
+/// Abort an active remote stream by sending a cancellation signal.
+#[tauri::command]
+pub async fn abort_remote_stream(
+    state: State<'_, AppState>,
+    stream_id: String,
+) -> Result<(), String> {
+    let mut streams = state.active_streams.lock().await;
+    if let Some(tx) = streams.remove(&stream_id) {
+        let _ = tx.send(());
+        log::info!("Stream {stream_id} abort signal sent");
+    } else {
+        log::debug!("abort_remote_stream: stream {stream_id} not found (may have already finished)");
+    }
+    Ok(())
+}
+
+async fn validate_provider_url(provider: &str, url: &str) -> Result<(), String> {
+    // Providers that legitimately point to a loopback/internal URL. `mlx` lands
+    // here because the in-app provider talks to a local ax-engine-server (which
+    // itself delegates to mlx_lm.server) at http://127.0.0.1:<port>/v1. Without
+    // this entry, registration is silently rejected and chat fails with
+    // "No remote provider configured for model_id ...".
+    let allow_internal = matches!(
+        provider,
+        "llamacpp" | "ollama" | "lmstudio" | "mlx" | "ax-engine"
+    );
+    let parsed = url::Url::parse(url).map_err(|e| format!("Invalid provider URL '{url}': {e}"))?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err(format!(
+            "Provider URL scheme must be http or https, got '{}'",
+            parsed.scheme()
+        ));
+    }
+    if !allow_internal && ax_studio_utils::is_internal_url(url) {
+        return Err("Provider URL must not point to an internal or private address".to_string());
+    }
+    match parsed.host() {
+        Some(url::Host::Ipv4(ip)) => {
+            if ip.is_unspecified() {
+                return Err(format!(
+                    "Provider URL must not point to an unspecified address (got {})",
+                    ip
+                ));
+            }
+            if ip.is_link_local() {
+                return Err(format!(
+                    "Provider URL must not point to a link-local address (got {})",
+                    ip
+                ));
+            }
+        }
+        Some(url::Host::Ipv6(ip)) => {
+            if ip.is_unspecified() {
+                return Err(format!(
+                    "Provider URL must not point to an unspecified address (got {})",
+                    ip
+                ));
+            }
+        }
+        Some(url::Host::Domain(domain)) => {
+            let port = parsed.port_or_known_default().ok_or_else(|| {
+                format!(
+                    "Provider URL is missing a port for scheme '{}'",
+                    parsed.scheme()
+                )
+            })?;
+            let addrs = tokio::net::lookup_host((domain, port))
+                .await
+                .map_err(|e| format!("Failed to resolve provider URL host '{domain}': {e}"))?;
+            for addr in addrs {
+                if !allow_internal && ax_studio_utils::is_private_ip(addr.ip()) {
+                    return Err(
+                        "Provider URL must not resolve to an internal or private address"
+                            .to_string(),
+                    );
+                }
+            }
+        }
+        None => return Err(format!("Provider URL has no host: {url}")),
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -162,7 +229,7 @@ mod tests {
             provider: "openai".to_string(),
             api_key: Some("secret-key".to_string()),
             base_url: Some("https://api.example.com".to_string()),
-            custom_headers: vec![crate::core::state::ProviderCustomHeader {
+            custom_headers: vec![ProviderCustomHeader {
                 header: "X-Custom".to_string(),
                 value: "top-secret".to_string(),
             }],

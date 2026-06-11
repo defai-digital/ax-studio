@@ -1,36 +1,51 @@
-import { Card, CardItem } from '@/containers/Card'
+import { Card, CardItem } from '@/components/common/Card'
 import HeaderPage from '@/containers/HeaderPage'
-import SettingsMenu from '@/containers/SettingsMenu'
-import { useModelProvider } from '@/features/models/hooks/useModelProvider'
+import SettingsMenu from '@/components/common/SettingsMenu'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { cn, getProviderTitle, getProviderColor, getModelDisplayName } from '@/lib/utils'
 import { createFileRoute, Link, useParams } from '@tanstack/react-router'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import Capabilities from '@/containers/Capabilities'
-import { DynamicControllerSetting } from '@/containers/dynamicControllerSetting'
+import Capabilities from '@/components/common/Capabilities'
+import { DynamicControllerSetting } from '@/containers/DynamicControllerSetting'
 import { RenderMarkdown } from '@/containers/RenderMarkdown'
-import { DialogEditModel } from '@/features/models/components/EditModel'
+import { DialogEditModel } from '@/containers/dialogs/model/EditModel'
 import { ModelSetting } from '@/containers/ModelSetting'
-import { DialogDeleteModel } from '@/features/models/components/DeleteModel'
-import { FavoriteModelAction } from '@/containers/FavoriteModelAction'
+import { DialogDeleteModel } from '@/containers/dialogs/model/DeleteModel'
 import { route } from '@/constants/routes'
-import DeleteProvider from '@/features/providers/components/DeleteProvider'
+import DeleteProvider from '@/containers/dialogs/DeleteProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { Button } from '@/components/ui/button'
-import {
-  IconLoader,
-} from '@tabler/icons-react'
-import { RefreshCw, Search, Plug, CheckCircle2, XCircle } from 'lucide-react'
+import { CheckCircle2, Loader, Plug, RefreshCw, Search, Star, XCircle } from "lucide-react";
+import { useFavoriteModel } from '@/hooks/models/useFavoriteModel'
 import { toast } from 'sonner'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { predefinedProviders } from '@/constants/providers'
-import { DialogAddModel } from '@/features/models/components/AddModel'
-import { SelectModelGroups } from '@/features/models/components/SelectModelGroups'
+import { DialogAddModel } from '@/containers/dialogs/model/AddModel'
+import { SelectModelGroups } from '@/containers/dialogs/model/SelectModelGroups'
 import { groupModelsByPrefix, type ModelGroup } from '@/lib/model-group-utils'
 import { getModelCapabilities } from '@/lib/models'
-import ProvidersAvatar from '@/containers/ProvidersAvatar'
+import ProvidersAvatar from '@/components/common/ProvidersAvatar'
+import { z } from 'zod/v4'
 
 const URL_REGEX = /^https?:\/\/[^\s]+$/
 const XSS_PATTERN = /<[^>]*>|javascript:/i
+const providerSearchSchema = z.object({
+  step: z.string().optional(),
+})
+
+function FavoriteModelAction({ model }: { model: Model }) {
+  const { isFavorite, toggleFavorite } = useFavoriteModel()
+  const isModelFavorite = isFavorite(model.id)
+  return (
+    <Button aria-label="Toggle favorite" variant="ghost" size="icon-xs" onClick={() => toggleFavorite(model)}>
+      {isModelFavorite ? (
+        <Star size={18} className="text-muted-foreground" fill="currentColor" />
+      ) : (
+        <Star size={18} className="text-muted-foreground" />
+      )}
+    </Button>
+  )
+}
 
 function validateSettingValue(
   key: string,
@@ -59,12 +74,8 @@ function validateSettingValue(
 // as route.threadsDetail
 export const Route = createFileRoute('/settings/providers/$providerName')({
   component: ProviderDetail,
-  validateSearch: (search: Record<string, unknown>): { step?: string } => {
-    // validate and parse the search params into a typed state
-    return {
-      step: String(search?.step),
-    }
-  },
+  validateSearch: (search: Record<string, unknown>): { step?: string } =>
+    providerSearchSchema.parse(search),
 })
 
 function ProviderDetail() {
@@ -178,6 +189,7 @@ function ProviderDetail() {
         .providers()
         .fetchModelsFromProvider(provider)
 
+      updateProvider(providerName, { active: true })
       setConnectionStatus('success')
       setConnectionMessage(
         t('providers:refreshModelsSuccess', {
@@ -187,6 +199,7 @@ function ProviderDetail() {
         })
       )
     } catch (error) {
+      updateProvider(providerName, { active: false })
       setConnectionStatus('error')
       setConnectionMessage(
         error instanceof Error
@@ -282,6 +295,7 @@ function ProviderDetail() {
         }))
         updateProvider(providerName, {
           ...provider,
+          active: true,
           models: [...provider.models, ...newModels],
         })
         toast.success(t('providers:models'), {
@@ -291,6 +305,7 @@ function ProviderDetail() {
           }),
         })
       } else {
+        updateProvider(providerName, { active: true })
         toast.success(t('providers:models'), {
           description: t('providers:noNewModels'),
         })
@@ -305,6 +320,7 @@ function ProviderDetail() {
           provider: provider.provider,
         }),
       })
+      updateProvider(providerName, { active: false })
     } finally {
       setRefreshingModels(false)
     }
@@ -506,7 +522,7 @@ function ProviderDetail() {
                         disabled={connectionStatus === 'testing' || !provider?.base_url}
                       >
                         {connectionStatus === 'testing' ? (
-                          <IconLoader
+                          <Loader
                             size={14}
                             className="text-muted-foreground animate-spin mr-1.5"
                           />
@@ -554,7 +570,7 @@ function ProviderDetail() {
                           disabled={refreshingModels}
                         >
                           {refreshingModels ? (
-                            <IconLoader
+                            <Loader
                               size={14}
                               className="text-muted-foreground animate-spin mr-1.5"
                             />
@@ -570,7 +586,7 @@ function ProviderDetail() {
                 </div>
 
                 <Card>
-                  {provider?.models.length ? (
+                  {provider?.models?.length ? (
                     provider?.models
                     .filter((model) => {
                       if (!modelSearch) return true
@@ -650,7 +666,7 @@ function ProviderDetail() {
                         <div className="flex items-center gap-2">
                           <div className="flex items-center gap-2 animate-pulse">
                             <div className="flex gap-2 px-2 py-1 rounded-full text-xs">
-                              <IconLoader
+                              <Loader
                                 size={16}
                                 className="animate-spin"
                               />

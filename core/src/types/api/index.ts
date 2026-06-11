@@ -1,38 +1,18 @@
-import { ChatCompletionMessage } from '../inference'
-
 /**
  * Native Route APIs
  * @description Enum of all the routes exposed by the app
  */
 export enum NativeRoute {
   openExternalUrl = 'openExternalUrl',
-  openAppDirectory = 'openAppDirectory',
-  openFileExplore = 'openFileExplorer',
+  openFileExplorer = 'openFileExplorer',
   selectDirectory = 'selectDirectory',
   selectFiles = 'selectFiles',
   relaunch = 'relaunch',
-  setNativeThemeLight = 'setNativeThemeLight',
-  setNativeThemeDark = 'setNativeThemeDark',
 
-  setMinimizeApp = 'setMinimizeApp',
-  setCloseApp = 'setCloseApp',
-  setMaximizeApp = 'setMaximizeApp',
-  showOpenMenu = 'showOpenMenu',
-
-  hideQuickAskWindow = 'hideQuickAskWindow',
-  sendQuickAskInput = 'sendQuickAskInput',
-
-  hideMainWindow = 'hideMainWindow',
-  showMainWindow = 'showMainWindow',
-
-  quickAskSizeUpdated = 'quickAskSizeUpdated',
-  ackDeepLink = 'ackDeepLink',
   factoryReset = 'factoryReset',
 
   startServer = 'startServer',
   stopServer = 'stopServer',
-
-  appUpdateDownload = 'appUpdateDownload',
 
   appToken = 'appToken',
 }
@@ -60,9 +40,6 @@ export enum AppEvent {
   onAppUpdateDownloadSuccess = 'onAppUpdateDownloadSuccess',
   onModelImported = 'onModelImported',
 
-  onUserSubmitQuickAsk = 'onUserSubmitQuickAsk',
-  onSelectedText = 'onSelectedText',
-
   onDeepLink = 'onDeepLink',
   onMainViewStateChange = 'onMainViewStateChange',
 }
@@ -78,11 +55,8 @@ export enum DownloadEvent {
   onFileDownloadAndVerificationSuccess = 'onFileDownloadAndVerificationSuccess',
 }
 export enum ExtensionRoute {
-  baseExtensions = 'baseExtensions',
   getActiveExtensions = 'getActiveExtensions',
   installExtension = 'installExtension',
-  invokeExtensionFunc = 'invokeExtensionFunc',
-  updateExtension = 'updateExtension',
   uninstallExtension = 'uninstallExtension',
 }
 export enum FileSystemRoute {
@@ -149,14 +123,6 @@ export const CoreRoutes = [
   ...Object.values(ExtensionRoute),
   ...Object.values(FileSystemRoute),
   ...Object.values(FileManagerRoute),
-  'launchClaudeCodeWithConfig',
-  'writeEnvFileToConfig',
 ]
 
 export const APIRoutes = [...CoreRoutes, ...Object.values(NativeRoute)]
-export const APIEvents = [...Object.values(AppEvent), ...Object.values(DownloadEvent)]
-export type PayloadType = {
-  messages: ChatCompletionMessage[]
-  model: string
-  stream: boolean
-}

@@ -7,11 +7,12 @@
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { localStorageKey } from '@/constants/localStorage'
 import { Button } from '@/components/ui/button'
+import { safeStorageSetItem } from '@/lib/storage/storage'
 import HeaderPage from './HeaderPage'
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { useTheme } from '@/hooks/useTheme'
-import { useModelProvider } from '@/features/models/hooks/useModelProvider'
+import { useTheme } from '@/hooks/ui/useTheme'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import {
   Zap,
   Cpu,
@@ -39,7 +40,12 @@ function SetupScreen({ onComplete }: SetupScreenProps) {
   const [direction, setDirection] = useState(1) // 1 = forward, -1 = backward
 
   const handleGetStarted = () => {
-    localStorage.setItem(localStorageKey.setupCompleted, 'true')
+    safeStorageSetItem(
+      localStorage,
+      localStorageKey.setupCompleted,
+      'true',
+      'SetupScreen'
+    )
     onComplete?.()
   }
 

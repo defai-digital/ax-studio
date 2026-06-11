@@ -1,10 +1,20 @@
+import type { EngineManager, ModelManager } from '@ax-studio/core'
+import type { ExtensionManager } from '@/lib/extension'
+
 export {}
 
-declare module 'react-syntax-highlighter-virtualized-renderer'
-
 type AppCore = {
-  api: APIs
-  extensionManager: ExtensionManager | undefined
+  api: Record<string, (...args: unknown[]) => unknown> & {
+    openExternalUrl: (url: string) => void
+  }
+  events?: {
+    on: (eventName: string, handler: (...args: unknown[]) => void) => (() => void) | void
+    off: (eventName: string, handler: (...args: unknown[]) => void) => void
+    emit: (eventName: string, args: unknown) => void
+  }
+  extensionManager?: ExtensionManager
+  engineManager?: EngineManager
+  modelManager?: ModelManager
 }
 
 declare global {
@@ -12,18 +22,11 @@ declare global {
   declare const IS_WEB_APP: boolean
   declare const IS_MACOS: boolean
   declare const IS_WINDOWS: boolean
-  declare const IS_LINUX: boolean
-  declare const IS_IOS: boolean
-  declare const IS_ANDROID: boolean
   declare const PLATFORM: string
   declare const VERSION: string
   declare const AUTO_UPDATER_DISABLED: boolean
   declare const UPDATE_CHECK_INTERVAL_MS: number
-  declare const GA_MEASUREMENT_ID: string
-  declare const IS_DEV: boolean
   interface Window {
     core: AppCore | undefined
-    gtag?: (...args: unknown[]) => void
-    dataLayer?: unknown[]
   }
 }

@@ -1,8 +1,3 @@
-import { ContentType, ContentValue } from '../message'
-
-/**
- * The role of the author of this message.
- */
 export enum ChatCompletionRole {
   System = 'system',
   Assistant = 'assistant',
@@ -10,14 +5,8 @@ export enum ChatCompletionRole {
   Tool = 'tool',
 }
 
-/**
- * The `MessageRequest` type defines the shape of a new message request object.
- * @data_transfer_object
- */
 export type ChatCompletionMessage = {
-  /** The contents of the message. **/
   content?: ChatCompletionMessageContent
-  /** The role of the author of this message. **/
   role: ChatCompletionRole
   type?: string
   output?: string
@@ -30,10 +19,6 @@ export enum ChatCompletionMessageContentType {
   Doc = 'doc_url',
 }
 
-/**
- * Discriminated union for message content items
- * Ensures type safety by requiring correct properties for each type
- */
 export type ChatCompletionMessageContentItem =
   | { type: typeof ChatCompletionMessageContentType.Text; text: string }
   | { type: typeof ChatCompletionMessageContentType.Image; image_url: { url: string } }
@@ -43,38 +28,33 @@ export type ChatCompletionMessageContent =
   | string
   | ChatCompletionMessageContentItem[]
 
-/**
- * Type guard to check if an object is a valid ChatCompletionMessageContentItem
- */
-export function isValidContentItem(item: any): item is ChatCompletionMessageContentItem {
+export function isValidContentItem(item: unknown): item is ChatCompletionMessageContentItem {
   if (!item || typeof item !== 'object') return false
 
-  switch (item.type) {
+  const obj = item as Record<string, unknown>
+  switch (obj.type) {
     case ChatCompletionMessageContentType.Text:
-      return typeof item.text === 'string'
+      return typeof obj.text === 'string'
     case ChatCompletionMessageContentType.Image:
-      return item.image_url &&
-             typeof item.image_url === 'object' &&
-             typeof item.image_url.url === 'string'
+      return !!obj.image_url &&
+             typeof obj.image_url === 'object' &&
+             typeof (obj.image_url as Record<string, unknown>).url === 'string'
     case ChatCompletionMessageContentType.Doc:
-      return item.doc_url &&
-             typeof item.doc_url === 'object' &&
-             typeof item.doc_url.url === 'string'
+      return !!obj.doc_url &&
+             typeof obj.doc_url === 'object' &&
+             typeof (obj.doc_url as Record<string, unknown>).url === 'string'
     default:
       return false
   }
 }
 
-/**
- * Validates ChatCompletionMessageContent at runtime
- */
 export function validateMessageContent(content: ChatCompletionMessageContent): boolean {
   if (typeof content === 'string') {
     return true
   }
 
   if (Array.isArray(content)) {
-    return content.every(isValidContentItem)
+    return content.length > 0 && content.every(isValidContentItem)
   }
 
   return false

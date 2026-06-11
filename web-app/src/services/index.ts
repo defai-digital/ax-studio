@@ -5,37 +5,18 @@
  * then provides synchronous access to service instances throughout the app.
  */
 
-import {
-  isPlatformTauri,
-  isPlatformIOS,
-  isPlatformAndroid,
-} from '@/lib/platform/utils'
+import { isPlatformTauri } from '@/lib/platform/utils'
 
-// Import default services
-import { DefaultThemeService } from './theme/default'
-import { DefaultWindowService } from './window/default'
-import { DefaultEventsService } from './events/default'
-import { DefaultHardwareService } from './hardware/default'
-import { DefaultAppService } from './app/default'
 import { DefaultMessagesService } from './messages/default'
-import { DefaultMCPService } from './mcp/default'
-import { DefaultThreadsService } from './threads/default'
-import { DefaultProvidersService } from './providers/default'
-import { DefaultModelsService } from './models/default'
 import { DefaultAssistantsService } from './assistants/default'
-import { DefaultDialogService } from './dialog/default'
-import { DefaultOpenerService } from './opener/default'
-import { DefaultUpdaterService } from './updater/default'
-import { DefaultPathService } from './path/default'
-import { DefaultCoreService } from './core/default'
-import { DefaultDeepLinkService } from './deeplink/default'
 import { DefaultProjectsService } from './projects/default'
+import { DefaultModelsService } from './models/default'
 import { DefaultRAGService } from './rag/default'
 import type { RAGService } from './rag/types'
 import { DefaultUploadsService } from './uploads/default'
 import type { UploadsService } from './uploads/types'
+import { DefaultThreadsService } from './threads/default'
 
-// Import service types
 import type { ThemeService } from './theme/types'
 import type { WindowService } from './window/types'
 import type { EventsService } from './events/types'
@@ -55,11 +36,40 @@ import type { CoreService } from './core/types'
 import type { DeepLinkService } from './deeplink/types'
 import type { ProjectsService } from './projects/types'
 
+class LazyTauriProvidersService implements ProvidersService {
+  private servicePromise: Promise<ProvidersService> | null = null
+
+  private async service(): Promise<ProvidersService> {
+    if (!this.servicePromise) {
+      this.servicePromise = import('./providers/tauri').then(
+        (module) => new module.TauriProvidersService()
+      )
+    }
+    return this.servicePromise
+  }
+
+  async getProviders(): Promise<ModelProvider[]> {
+    return (await this.service()).getProviders()
+  }
+
+  async fetchModelsFromProvider(provider: ModelProvider): Promise<string[]> {
+    return (await this.service()).fetchModelsFromProvider(provider)
+  }
+
+  async updateSettings(providerName: string, settings: ProviderSetting[]): Promise<void> {
+    return (await this.service()).updateSettings(providerName, settings)
+  }
+
+  fetch(): typeof fetch {
+    return ((input: RequestInfo | URL, init?: RequestInit) =>
+      this.service().then((service) => service.fetch()(input, init))) as typeof fetch
+  }
+}
+
 export interface ServiceHub {
-  // Service getters - all synchronous after initialization
   theme(): ThemeService
   window(): WindowService
-  events(): EventsService
+  events(): EventsService | undefined
   hardware(): HardwareService
   app(): AppService
   messages(): MessagesService
@@ -80,48 +90,183 @@ export interface ServiceHub {
 }
 
 class PlatformServiceHub implements ServiceHub {
-  private themeService: ThemeService = new DefaultThemeService()
-  private windowService: WindowService = new DefaultWindowService()
-  private eventsService: EventsService = new DefaultEventsService()
-  private hardwareService: HardwareService = new DefaultHardwareService()
-  private appService: AppService = new DefaultAppService()
+  private themeService!: ThemeService
+  private windowService!: WindowService
+  private eventsService!: EventsService
+  private hardwareService!: HardwareService
+  private appService!: AppService
   private messagesService: MessagesService = new DefaultMessagesService()
-  private mcpService: MCPService = new DefaultMCPService()
+  private mcpService!: MCPService
   private threadsService: ThreadsService = new DefaultThreadsService()
-  private providersService: ProvidersService = new DefaultProvidersService()
+  private providersService!: ProvidersService
   private modelsService: ModelsService = new DefaultModelsService()
   private assistantsService: AssistantsService = new DefaultAssistantsService()
-  private dialogService: DialogService = new DefaultDialogService()
-  private openerService: OpenerService = new DefaultOpenerService()
-  private updaterService: UpdaterService = new DefaultUpdaterService()
-  private pathService: PathService = new DefaultPathService()
-  private coreService: CoreService = new DefaultCoreService()
-  private deepLinkService: DeepLinkService = new DefaultDeepLinkService()
+  private dialogService!: DialogService
+  private openerService!: OpenerService
+  private updaterService!: UpdaterService
+  private pathService!: PathService
+  private coreService!: CoreService
+  private deepLinkService!: DeepLinkService
   private projectsService: ProjectsService = new DefaultProjectsService()
   private ragService: RAGService = new DefaultRAGService()
   private uploadsService: UploadsService = new DefaultUploadsService()
   private initialized = false
 
-  /**
-   * Initialize all platform services
-   */
+  private initializeWebFallbacks(): void {
+    const eventTarget = new EventTarget()
+    const unsupported = (service: string) =>
+      new Error(`${service} is not available in web mode`)
+
+    this.themeService = {
+      setTheme: async (theme) => {
+        if (typeof document !== 'undefined') {
+          document.documentElement.style.colorScheme = theme ?? ''
+        }
+      },
+      getCurrentWindow: () => ({
+        setTheme: (theme) => this.themeService.setTheme(theme),
+      }),
+    }
+
+    this.windowService = {
+      createWebviewWindow: async () => {
+        throw unsupported('Window service')
+      },
+      getWebviewWindowByLabel: async () => null,
+      openWindow: async ({ url }) => {
+        if (typeof window !== 'undefined') {
+          window.open(url, '_blank', 'noopener,noreferrer')
+        }
+      },
+      openLogsWindow: async () => {},
+      openSystemMonitorWindow: async () => {},
+      openLocalApiServerLogsWindow: async () => {},
+    }
+
+    this.eventsService = {
+      emit: async (event, payload) => {
+        eventTarget.dispatchEvent(new CustomEvent(event, { detail: payload }))
+      },
+      listen: async (event, handler) => {
+        const listener = (e: Event) => {
+          handler({ payload: (e as CustomEvent).detail })
+        }
+        eventTarget.addEventListener(event, listener)
+        return () => eventTarget.removeEventListener(event, listener)
+      },
+    }
+
+    this.hardwareService = {
+      getHardwareInfo: async () => null,
+      getSystemUsage: async () => null,
+      getLlamacppDevices: async () => [],
+    }
+
+    this.appService = {
+      factoryReset: async () => {
+        window.localStorage.clear()
+      },
+      readLogs: async () => [],
+      parseLogLine: (line) => ({
+        timestamp: Date.now(),
+        level: 'info',
+        target: 'web',
+        message: line ?? '',
+      }),
+      getAppDataFolder: async () => undefined,
+      relocateAppDataFolder: async () => {
+        throw unsupported('App data relocation')
+      },
+      getServerStatus: async () => false,
+      readYaml: async () => {
+        throw unsupported('YAML file access')
+      },
+    }
+
+    const unavailableToolResult: Awaited<ReturnType<MCPService['callTool']>> = {
+      content: [],
+      error: '',
+    }
+
+    this.mcpService = {
+      updateMCPConfig: async () => {},
+      restartMCPServers: async () => {},
+      getMCPConfig: async () => ({}),
+      getTools: async () => [],
+      getConnectedServers: async () => [],
+      callTool: async () => unavailableToolResult,
+      callToolWithCancellation: ({ cancellationToken }) => ({
+        promise: Promise.resolve(unavailableToolResult),
+        cancel: async () => {},
+        token: cancellationToken ?? crypto.randomUUID(),
+      }),
+      cancelToolCall: async () => {},
+      activateMCPServer: async () => {},
+      deactivateMCPServer: async () => {},
+    }
+
+    this.providersService = {
+      getProviders: async () => [],
+      fetchModelsFromProvider: async () => [],
+      updateSettings: async () => {},
+      fetch: () => fetch,
+    }
+
+    this.dialogService = {
+      open: async () => null,
+      save: async () => null,
+    }
+
+    this.openerService = {
+      revealItemInDir: async () => {},
+      openUrl: async (url) => {
+        if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer')
+      },
+    }
+
+    this.updaterService = {
+      check: async () => null,
+      downloadAndInstallWithProgress: async () => {},
+    }
+
+    this.pathService = {
+      sep: () => '/',
+      join: async (...segments) => segments.filter(Boolean).join('/').replace(/\/+/g, '/'),
+      dirname: async (path) => {
+        const normalized = path.replace(/\/+$/, '')
+        const index = normalized.lastIndexOf('/')
+        return index > 0 ? normalized.slice(0, index) : '/'
+      },
+      basename: async (path) => path.split('/').filter(Boolean).pop() ?? '',
+      extname: async (path) => {
+        const name = path.split('/').pop() ?? ''
+        const index = name.lastIndexOf('.')
+        return index > 0 ? name.slice(index) : ''
+      },
+    }
+
+    this.coreService = {
+      invoke: async (command) => {
+        throw unsupported(`Core command "${command}"`)
+      },
+      convertFileSrc: (filePath) => filePath,
+      getActiveExtensions: async () => [],
+      installExtensions: async () => {},
+      installExtension: async (extensions) => extensions,
+      uninstallExtension: async () => false,
+    }
+
+    this.deepLinkService = {
+      onOpenUrl: async () => () => {},
+      getCurrent: async () => [],
+    }
+  }
+
   async initialize(): Promise<void> {
     if (this.initialized) return
 
-    console.log(
-      'Initializing service hub for platform:',
-      isPlatformTauri() && !isPlatformIOS() && !isPlatformAndroid()
-        ? 'Tauri'
-        : isPlatformIOS()
-          ? 'iOS'
-          : isPlatformAndroid()
-            ? 'Android'
-            : 'Web'
-    )
-
     try {
-      if (isPlatformTauri() && !isPlatformIOS() && !isPlatformAndroid()) {
-        // Desktop Tauri
+      if (isPlatformTauri()) {
         const [
           themeModule,
           windowModule,
@@ -129,7 +274,6 @@ class PlatformServiceHub implements ServiceHub {
           hardwareModule,
           appModule,
           mcpModule,
-          providersModule,
           dialogModule,
           openerModule,
           updaterModule,
@@ -143,7 +287,6 @@ class PlatformServiceHub implements ServiceHub {
           import('./hardware/tauri'),
           import('./app/tauri'),
           import('./mcp/tauri'),
-          import('./providers/tauri'),
           import('./dialog/tauri'),
           import('./opener/tauri'),
           import('./updater/tauri'),
@@ -158,55 +301,17 @@ class PlatformServiceHub implements ServiceHub {
         this.hardwareService = new hardwareModule.TauriHardwareService()
         this.appService = new appModule.TauriAppService()
         this.mcpService = new mcpModule.TauriMCPService()
-        this.providersService = new providersModule.TauriProvidersService()
+        this.providersService = new LazyTauriProvidersService()
         this.dialogService = new dialogModule.TauriDialogService()
         this.openerService = new openerModule.TauriOpenerService()
         this.updaterService = new updaterModule.TauriUpdaterService()
         this.pathService = new pathModule.TauriPathService()
         this.coreService = new coreModule.TauriCoreService()
         this.deepLinkService = new deepLinkModule.TauriDeepLinkService()
-      } else if (isPlatformIOS() || isPlatformAndroid()) {
-        const [
-          themeModule,
-          windowModule,
-          eventsModule,
-          appModule,
-          mcpModule,
-          providersModule,
-          dialogModule,
-          openerModule,
-          pathModule,
-          coreModule,
-          deepLinkModule,
-        ] = await Promise.all([
-          import('./theme/tauri'),
-          import('./window/tauri'),
-          import('./events/tauri'),
-          import('./app/tauri'),
-          import('./mcp/tauri'),
-          import('./providers/tauri'),
-          import('./dialog/tauri'),
-          import('./opener/tauri'),
-          import('./path/tauri'),
-          import('./core/mobile'), // Use mobile-specific core service
-          import('./deeplink/tauri'),
-        ])
-
-        this.themeService = new themeModule.TauriThemeService()
-        this.windowService = new windowModule.TauriWindowService()
-        this.eventsService = new eventsModule.TauriEventsService()
-        this.appService = new appModule.TauriAppService()
-        this.mcpService = new mcpModule.TauriMCPService()
-        this.providersService = new providersModule.TauriProvidersService()
-        this.dialogService = new dialogModule.TauriDialogService()
-        this.openerService = new openerModule.TauriOpenerService()
-        this.pathService = new pathModule.TauriPathService()
-        this.coreService = new coreModule.MobileCoreService() // Mobile service with pre-loaded extensions
-        this.deepLinkService = new deepLinkModule.TauriDeepLinkService()
+      } else {
+        this.initializeWebFallbacks()
       }
 
-      // Give RAG & Uploads services a back-reference so they can call
-      // mcp() for AkiDB operations.
       if ('setMcpService' in this.ragService) {
         const svc = this.ragService as { setMcpService: (mcp: MCPService) => void }
         svc.setMcpService(this.mcpService)
@@ -217,10 +322,8 @@ class PlatformServiceHub implements ServiceHub {
       }
 
       this.initialized = true
-      console.log('Service hub initialized successfully')
     } catch (error) {
       console.error('Failed to initialize service hub:', error)
-      this.initialized = true
       throw error
     }
   }
@@ -233,7 +336,6 @@ class PlatformServiceHub implements ServiceHub {
     }
   }
 
-  // Service getters - all synchronous after initialization
   theme(): ThemeService {
     this.ensureInitialized()
     return this.themeService
@@ -244,7 +346,7 @@ class PlatformServiceHub implements ServiceHub {
     return this.windowService
   }
 
-  events(): EventsService {
+  events(): EventsService | undefined {
     this.ensureInitialized()
     return this.eventsService
   }
@@ -335,8 +437,21 @@ class PlatformServiceHub implements ServiceHub {
   }
 }
 
+let serviceHubSingleton: ServiceHub | null = null
+let serviceHubSingletonPromise: Promise<ServiceHub> | null = null
+let serviceHubSingletonIsTauri: boolean | null = null
+
 export async function initializeServiceHub(): Promise<ServiceHub> {
-  const serviceHub = new PlatformServiceHub()
-  await serviceHub.initialize()
-  return serviceHub
+  const currentIsTauri = isPlatformTauri()
+  if (!serviceHubSingletonPromise || serviceHubSingletonIsTauri !== currentIsTauri) {
+    serviceHubSingleton = null
+    serviceHubSingletonIsTauri = currentIsTauri
+    serviceHubSingletonPromise = (async () => {
+      const serviceHub = new PlatformServiceHub()
+      await serviceHub.initialize()
+      serviceHubSingleton = serviceHub
+      return serviceHub
+    })()
+  }
+  return serviceHubSingleton ?? serviceHubSingletonPromise
 }

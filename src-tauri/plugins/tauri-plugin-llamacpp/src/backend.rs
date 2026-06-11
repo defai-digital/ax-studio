@@ -71,17 +71,11 @@ pub fn map_old_backend_to_new(old_backend: String) -> String {
     old_backend
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct InstalledBackend {
-    version: String,
-    backend: String,
-}
-
 #[tauri::command]
 pub async fn get_local_installed_backends(
     backends_dir: String,
-) -> Result<Vec<InstalledBackend>, String> {
-    let mut local: Vec<InstalledBackend> = Vec::new();
+) -> Result<Vec<BackendInfo>, String> {
+    let mut local: Vec<BackendInfo> = Vec::new();
     let backends_path = PathBuf::from(&backends_dir);
 
     // Check if backends directory exists
@@ -131,7 +125,7 @@ pub async fn get_local_installed_backends(
 
             // Check if backend is actually installed
             if is_backend_installed(&backend_path) {
-                local.push(InstalledBackend {
+                local.push(BackendInfo {
                     version: version_name.clone(),
                     backend: backend_name,
                 });
@@ -162,6 +156,21 @@ fn is_backend_installed(backend_dir: &PathBuf) -> bool {
         return true;
     }
 
+    // Check ggml-org structure: llama-{version}/llama-server
+    // The version directory name follows the pattern: llama-{parent_dir_name}
+    if let Some(version_name) = backend_dir
+        .parent()
+        .and_then(|p| p.file_name())
+        .map(|n| n.to_string_lossy().to_string())
+    {
+        let ggml_path = backend_dir
+            .join(format!("llama-{version_name}"))
+            .join(exe_name);
+        if ggml_path.exists() {
+            return true;
+        }
+    }
+
     // Otherwise check root directory (llama-server)
     let root_path = backend_dir.join(exe_name);
     root_path.exists()
@@ -179,13 +188,6 @@ pub struct SystemFeatures {
     cuda12: bool,
     cuda13: bool,
     vulkan: bool,
-}
-
-#[derive(Serialize)]
-#[allow(dead_code)] // response shape kept for API parity with the TS side
-pub struct SupportedBackendsResult {
-    supported_backend_names: Vec<String>,
-    merged_backends: Vec<BackendInfo>,
 }
 
 #[tauri::command]
@@ -302,14 +304,14 @@ pub struct GpuInfo {
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 pub struct NvidiaInfo {
-    #[allow(dead_code)] // part of the deserialized hardware payload
     compute_capability: String,
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 pub struct VulkanInfo {
-    #[allow(dead_code)] // part of the deserialized hardware payload
     api_version: String,
 }
 
@@ -342,13 +344,13 @@ pub fn get_supported_features(
 
         // Check CUDA support
         if gpu_info.nvidia_info.is_some() {
-            if compare_versions(driver_version, min_cuda11_driver) >= 0 {
+            if compare_versions(driver_version, min_cuda11_driver) != std::cmp::Ordering::Less {
                 features.cuda11 = true;
             }
-            if compare_versions(driver_version, min_cuda12_driver) >= 0 {
+            if compare_versions(driver_version, min_cuda12_driver) != std::cmp::Ordering::Less {
                 features.cuda12 = true;
             }
-            if compare_versions(driver_version, min_cuda13_driver) >= 0 {
+            if compare_versions(driver_version, min_cuda13_driver) != std::cmp::Ordering::Less {
                 features.cuda13 = true;
             }
         }
@@ -362,9 +364,7 @@ pub fn get_supported_features(
     Ok(features)
 }
 
-/// Compare version strings
-/// Returns: -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
-fn compare_versions(v1: &str, v2: &str) -> i32 {
+fn compare_versions(v1: &str, v2: &str) -> std::cmp::Ordering {
     let parts1: Vec<&str> = v1.split('.').collect();
     let parts2: Vec<&str> = v2.split('.').collect();
 
@@ -381,13 +381,13 @@ fn compare_versions(v1: &str, v2: &str) -> i32 {
             .unwrap_or(0);
 
         match num1.cmp(&num2) {
-            std::cmp::Ordering::Less => return -1,
-            std::cmp::Ordering::Greater => return 1,
+            ord @ std::cmp::Ordering::Less => return ord,
+            ord @ std::cmp::Ordering::Greater => return ord,
             std::cmp::Ordering::Equal => continue,
         }
     }
 
-    0
+    std::cmp::Ordering::Equal
 }
 
 #[tauri::command]
@@ -468,15 +468,6 @@ pub struct UpdateCheckResult {
     pub update_needed: bool,
     pub new_version: String,
     pub target_backend: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[allow(dead_code)] // response shape kept for API parity with the TS side
-pub struct BackendConfigResult {
-    pub best_available: String,
-    pub effective_backend: String,
-    pub backend_downloaded: bool,
-    pub settings_updated: bool,
 }
 
 #[tauri::command]
@@ -651,19 +642,20 @@ pub async fn check_backend_for_updates(
     let target_backend_string =
         find_latest_version_for_backend(version_backends, current_effective_backend_type.clone());
 
-    if target_backend_string.is_none() {
-        log::warn!(
-            "No available versions found for current backend type: {}",
-            current_effective_backend_type
-        );
-        return Ok(UpdateCheckResult {
-            update_needed: false,
-            new_version: "0".to_string(),
-            target_backend: None,
-        });
-    }
-
-    let target_backend_string = target_backend_string.unwrap();
+    let target_backend_string = match target_backend_string {
+        Some(s) => s,
+        None => {
+            log::warn!(
+                "No available versions found for current backend type: {}",
+                current_effective_backend_type
+            );
+            return Ok(UpdateCheckResult {
+                update_needed: false,
+                new_version: "0".to_string(),
+                target_backend: None,
+            });
+        }
+    };
     let target_parts: Vec<&str> = target_backend_string.split('/').collect();
     let latest_version = target_parts[0];
 
@@ -940,13 +932,17 @@ mod tests {
 
     #[test]
     fn test_compare_versions() {
-        assert_eq!(compare_versions("1.0", "2.0"), -1);
-        assert_eq!(compare_versions("2.0", "1.0"), 1);
-        assert_eq!(compare_versions("1.0", "1.0"), 0);
-        assert_eq!(compare_versions("1.0.1", "1.0"), 1);
-        assert_eq!(compare_versions("450.80.02", "450.80.02"), 0);
-        assert_eq!(compare_versions("525.60.13", "450.80.02"), 1);
-        assert_eq!(compare_versions("10", "2"), 1); // Numeric check, not string
+        use std::cmp::Ordering;
+        assert_eq!(compare_versions("1.0", "2.0"), Ordering::Less);
+        assert_eq!(compare_versions("2.0", "1.0"), Ordering::Greater);
+        assert_eq!(compare_versions("1.0", "1.0"), Ordering::Equal);
+        assert_eq!(compare_versions("1.0.1", "1.0"), Ordering::Greater);
+        assert_eq!(compare_versions("450.80.02", "450.80.02"), Ordering::Equal);
+        assert_eq!(
+            compare_versions("525.60.13", "450.80.02"),
+            Ordering::Greater
+        );
+        assert_eq!(compare_versions("10", "2"), Ordering::Greater);
     }
 
     // --- Tests for get_supported_features ---

@@ -1,0 +1,133 @@
+import { render, screen, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { ServiceHubProvider } from '../ServiceHubProvider'
+
+const mockInitializeServiceHub = vi.fn()
+const mockInitializeServiceHubStore = vi.fn()
+
+vi.mock('@/services', () => ({
+  initializeServiceHub: (...args: unknown[]) => mockInitializeServiceHub(...args),
+}))
+
+vi.mock('@/hooks/useServiceHub', () => ({
+  useServiceHub: vi.fn(),
+  getServiceHub: vi.fn(),
+  initializeServiceHubStore: (...args: unknown[]) => mockInitializeServiceHubStore(...args),
+  isServiceHubInitialized: () => true,
+}))
+
+describe('ServiceHubProvider', () => {
+  let consoleLogSpy: ReturnType<typeof vi.spyOn>
+  let consoleInfoSpy: ReturnType<typeof vi.spyOn>
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockInitializeServiceHub.mockResolvedValue({ test: true })
+    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleLogSpy.mockRestore()
+    consoleInfoSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
+  })
+
+  it('renders loading UI while initializing', () => {
+    mockInitializeServiceHub.mockReturnValue(new Promise(() => {}))
+
+    const { container } = render(
+      <ServiceHubProvider>
+        <div data-testid="child">Child Content</div>
+      </ServiceHubProvider>
+    )
+
+    expect(container).toHaveTextContent('Initializing Ax-Studio')
+    expect(screen.queryByTestId('child')).not.toBeInTheDocument()
+  })
+
+  it('renders children after successful initialization', async () => {
+    const mockHub = { test: true }
+    mockInitializeServiceHub.mockResolvedValue(mockHub)
+
+    render(
+      <ServiceHubProvider>
+        <div data-testid="child">Child Content</div>
+      </ServiceHubProvider>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('child')).toBeInTheDocument()
+    })
+
+    expect(mockInitializeServiceHubStore).toHaveBeenCalledWith(mockHub)
+  })
+
+  it('renders error UI when initialization rejects', async () => {
+    mockInitializeServiceHub.mockRejectedValue(new Error('Connection failed'))
+
+    render(
+      <ServiceHubProvider>
+        <div data-testid="child">Child Content</div>
+      </ServiceHubProvider>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('AX Studio failed to initialize')).toBeInTheDocument()
+    })
+
+    expect(screen.getByText('Connection failed')).toBeInTheDocument()
+  })
+
+  it('renders error UI when initialization throws synchronously', async () => {
+    mockInitializeServiceHub.mockImplementation(() => {
+      throw new Error('sync boom')
+    })
+
+    render(
+      <ServiceHubProvider>
+        <div data-testid="child">Child Content</div>
+      </ServiceHubProvider>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('AX Studio failed to initialize')).toBeInTheDocument()
+    })
+
+    expect(screen.getByText('sync boom')).toBeInTheDocument()
+  })
+
+  it('renders error UI with generic message for non-Error rejections', async () => {
+    mockInitializeServiceHub.mockRejectedValue('some string error')
+
+    render(
+      <ServiceHubProvider>
+        <div data-testid="child">Child Content</div>
+      </ServiceHubProvider>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('AX Studio failed to initialize')).toBeInTheDocument()
+    })
+
+    expect(screen.getByText('Unknown error')).toBeInTheDocument()
+  })
+
+  it('does not render children when initialization fails', async () => {
+    mockInitializeServiceHub.mockRejectedValue(new Error('fail'))
+
+    render(
+      <ServiceHubProvider>
+        <div data-testid="child">Child Content</div>
+      </ServiceHubProvider>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('AX Studio failed to initialize')).toBeInTheDocument()
+    })
+
+    expect(screen.queryByTestId('child')).not.toBeInTheDocument()
+  })
+})

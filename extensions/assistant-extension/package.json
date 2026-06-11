@@ -5,7 +5,7 @@
   "description": "Powers the default AI assistant that works with all your installed models.",
   "main": "dist/index.js",
   "node": "dist/node/index.js",
-  "author": "DEFAI Private Limited <enquiry@defai.digital>",
+  "author": "Ax-Studio",
   "license": "Apache-2.0",
   "homepage": "https://github.com/defai-digital/ax-studio",
   "repository": {
@@ -15,18 +15,17 @@
   },
   "scripts": {
     "build": "rolldown -c rolldown.config.mjs",
-    "build:publish": "rimraf *.tgz --glob || true && yarn build && npm pack && cpx *.tgz ../../pre-install"
+    "build:publish": "rimraf *.tgz --glob || true && yarn build && npm pack && cp *.tgz ../../pre-install",
+    "test": "vitest run"
   },
   "devDependencies": {
-    "cpx": "1.5.0",
     "rimraf": "6.0.1",
     "rolldown": "1.0.0-beta.1",
-    "run-script-os": "1.1.6",
-    "typescript": "5.9.2"
+    "typescript": "5.9.2",
+    "vitest": "3.2.4"
   },
   "dependencies": {
-    "@ax-studio/core": "../../core/package.tgz",
-    "ts-loader": "^9.5.0"
+    "@ax-studio/core": "../../core/package.tgz"
   },
   "files": [
     "dist/*",

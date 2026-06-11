@@ -363,5 +363,11 @@
       "title": "スレッドが削除されました",
       "description": "スレッドは「{{projectName}}」から正常に削除されました"
     }
+  },
+  "time": {
+    "justNow": "Just now",
+    "minutesAgo": "{{count}}m ago",
+    "hoursAgo": "{{count}}h ago",
+    "daysAgo": "{{count}}d ago"
   }
 }

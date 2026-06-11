@@ -1,5 +1,5 @@
 import { Input } from '@/components/ui/input'
-import { useLocalApiServer } from '@/hooks/useLocalApiServer'
+import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
 import { useState, useEffect, useCallback } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { useTranslation } from '@/i18n/react-i18next-compat'

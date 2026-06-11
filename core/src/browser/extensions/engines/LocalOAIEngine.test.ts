@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest'
 import { LocalOAIEngine } from './LocalOAIEngine'
 import { events } from '../../events'
 import { Model, ModelEvent } from '../../../types'
@@ -25,8 +25,9 @@ class TestLocalOAIEngine extends LocalOAIEngine {
 
 describe('LocalOAIEngine', () => {
   let engine: TestLocalOAIEngine
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
   const mockModel: Model & { file_path?: string } = {
-    object: 'model',
     version: '1.0.0',
     format: 'gguf',
     sources: [],
@@ -42,6 +43,13 @@ describe('LocalOAIEngine', () => {
   beforeEach(() => {
     engine = new TestLocalOAIEngine('', '')
     vi.clearAllMocks()
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleWarnSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
   })
 
   describe('onLoad', () => {
@@ -61,36 +69,90 @@ describe('LocalOAIEngine', () => {
       )
     })
 
-    it('should load model when OnModelInit event is triggered', () => {
+    it('should load model when OnModelInit event is triggered', async () => {
       const loadModelSpy = vi.spyOn(engine, 'loadModel')
       engine.onLoad()
 
-      // Get the event handler for OnModelInit
       const onModelInitCall = (events.on as Mock).mock.calls.find(
         call => call[0] === ModelEvent.OnModelInit
       )
       const onModelInitHandler = onModelInitCall[1]
 
-      // Trigger the event handler
       onModelInitHandler(mockModel)
 
-      expect(loadModelSpy).toHaveBeenCalledWith(mockModel)
+      await vi.waitFor(() => {
+        expect(loadModelSpy).toHaveBeenCalledWith(mockModel)
+      })
     })
 
-    it('should unload model when OnModelStop event is triggered', () => {
+    it('should unload model when OnModelStop event is triggered', async () => {
       const unloadModelSpy = vi.spyOn(engine, 'unloadModel')
       engine.onLoad()
 
-      // Get the event handler for OnModelStop
       const onModelStopCall = (events.on as Mock).mock.calls.find(
         call => call[0] === ModelEvent.OnModelStop
       )
       const onModelStopHandler = onModelStopCall[1]
 
-      // Trigger the event handler
       onModelStopHandler(mockModel)
 
-      expect(unloadModelSpy).toHaveBeenCalledWith(mockModel)
+      await vi.waitFor(() => {
+        expect(unloadModelSpy).toHaveBeenCalledWith(mockModel)
+      })
+    })
+
+    it('should emit OnModelFail when loadModel throws', async () => {
+      vi.spyOn(engine, 'loadModel').mockRejectedValue(new Error('load failed'))
+      engine.onLoad()
+
+      const onModelInitCall = (events.on as Mock).mock.calls.find(
+        call => call[0] === ModelEvent.OnModelInit
+      )
+      const onModelInitHandler = onModelInitCall[1]
+
+      onModelInitHandler(mockModel)
+
+      await vi.waitFor(() => {
+        expect(events.emit).toHaveBeenCalledWith(
+          ModelEvent.OnModelFail,
+          expect.objectContaining({ modelId: mockModel.id, error: 'load failed' })
+        )
+      })
+    })
+
+    it('should emit OnModelFail when unloadModel throws', async () => {
+      vi.spyOn(engine, 'unloadModel').mockRejectedValue(new Error('unload failed'))
+      engine.onLoad()
+
+      const onModelStopCall = (events.on as Mock).mock.calls.find(
+        call => call[0] === ModelEvent.OnModelStop
+      )
+      const onModelStopHandler = onModelStopCall[1]
+
+      onModelStopHandler(mockModel)
+
+      await vi.waitFor(() => {
+        expect(events.emit).toHaveBeenCalledWith(
+          ModelEvent.OnModelFail,
+          expect.objectContaining({ modelId: mockModel.id, error: 'unload failed' })
+        )
+      })
+    })
+  })
+
+  describe('onUnload', () => {
+    it('should remove local model event listeners', () => {
+      engine.onLoad()
+      engine.onUnload()
+
+      expect(events.off).toHaveBeenCalledWith(
+        ModelEvent.OnModelInit,
+        expect.any(Function)
+      )
+      expect(events.off).toHaveBeenCalledWith(
+        ModelEvent.OnModelStop,
+        expect.any(Function)
+      )
     })
   })
 

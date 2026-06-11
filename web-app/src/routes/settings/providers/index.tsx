@@ -1,10 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
-import SettingsMenu from '@/containers/SettingsMenu'
+import SettingsMenu from '@/components/common/SettingsMenu'
 import HeaderPage from '@/containers/HeaderPage'
 import { Button } from '@/components/ui/button'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { useModelProvider } from '@/features/models/hooks/useModelProvider'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useNavigate } from '@tanstack/react-router'
 import {
   cn,
@@ -12,12 +12,11 @@ import {
   getProviderColor,
   getProviderDescription,
 } from '@/lib/utils'
-import ProvidersAvatar from '@/containers/ProvidersAvatar'
-import { AddProviderDialog } from '@/features/providers/components/AddProviderDialog'
+import ProvidersAvatar from '@/components/common/ProvidersAvatar'
+import { AddProviderDialog } from '@/containers/dialogs'
 import { Switch } from '@/components/ui/switch'
 import { useCallback } from 'react'
 import { openAIProviderSettings } from '@/constants/providers'
-import cloneDeep from 'lodash/cloneDeep'
 import { toast } from 'sonner'
 import { Plug, Plus, ChevronRight } from 'lucide-react'
 
@@ -42,7 +41,7 @@ function ModelProviders() {
         provider: name,
         active: true,
         models: [],
-        settings: cloneDeep(openAIProviderSettings) as ProviderSetting[],
+        settings: structuredClone(openAIProviderSettings) as ProviderSetting[],
         api_key: '',
         base_url: 'https://api.openai.com/v1',
       }
@@ -110,7 +109,7 @@ function ModelProviders() {
                     className="text-muted-foreground"
                     style={{ fontSize: '13px' }}
                   >
-                    {t('provider:connectDescription', {
+                    {t('providers:connectDescription', {
                       defaultValue:
                         'Connect external APIs and local model engines.',
                     })}
@@ -123,7 +122,7 @@ function ModelProviders() {
                   >
                     <Button className="rounded-lg h-8 text-[12px]">
                       <Plus className="size-3 mr-1.5" />
-                      {t('provider:addProvider')}
+                      {t('providers:addProvider')}
                     </Button>
                   </AddProviderDialog>
                 </div>

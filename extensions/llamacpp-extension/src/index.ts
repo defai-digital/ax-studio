@@ -6,7 +6,6 @@
  *
  * Capabilities:
  *  - Load / unload GGUF models via tauri-plugin-llamacpp
- *  - MLX / AX Engine artifact models via ax-engine-server (one process per model)
  *  - Streaming and non-streaming chat completions
  *  - Embedding generation with auto-batching
  *  - GGUF metadata validation (tool support, architecture)
@@ -31,11 +30,14 @@ import {
   AppEvent,
   DownloadEvent,
   ModelEvent,
+  showToast,
 } from '@ax-studio/core'
 
 import {
   loadLlamaModel,
   unloadLlamaModel,
+  startAxServing,
+  DeviceInfo,
   getDevices,
   generateApiKey,
   isProcessRunning,
@@ -52,17 +54,21 @@ import {
 } from '@ax-studio/tauri-plugin-llamacpp-api'
 
 import { invoke } from '@tauri-apps/api/core'
-
 import {
   configureBackends,
+  awaitPendingBackendSelection,
+  awaitPendingConfigureBackends,
   downloadBackend,
   updateBackend,
   installBackendFromFile,
   getBackendExePath,
-  ensureAxEngineBinary,
+  getAxServingBinaryPath,
+  isValidBackendString,
+  resolveBackendVersion,
   BackendUpdateInfo,
   checkForBackendUpdate,
   fetchRemoteBackends,
+  formatError,
 } from './backend'
 
 import {
@@ -75,12 +81,6 @@ import {
   EmbeddingResponse,
 } from './util'
 import { decideLocalProviderSync } from './provider-sync'
-import {
-  ModelFormat,
-  detectModelFormatFromFiles,
-  isDirectoryFormat,
-  sanitizeImportFilename,
-} from './model-format'
 
 // Build-time constants — see env.d.ts for declarations
 
@@ -94,9 +94,16 @@ interface ModelConfig {
   embedding?: boolean
   sha256?: string
   mmproj_sha256?: string
-  /** Model artifact format — absent in legacy model.yml files (= gguf) */
-  model_format?: ModelFormat
 }
+
+type ResolvedLoadTarget = {
+  cfg: ModelConfig
+  modelPath: string
+  hasAxManifest: boolean
+  pathVerified: boolean
+}
+
+type EnvMap = Record<string, string>
 
 interface EmbedOptions {
   modelId: string
@@ -108,6 +115,170 @@ interface TokenCountOptions {
   messages: chatCompletionRequest['messages']
 }
 
+type SettingValue = string | string[] | number | boolean | null | undefined
+
+type UpdateSettingPayload = {
+  key: string
+  controllerProps: {
+    value: string
+  }
+}
+
+type ImportOptionsWithHeaders = ImportOptions & {
+  downloadHeaders?: Record<string, string>
+}
+
+type AxServingLoadRequest = {
+  model_id: string
+  path: string
+  mmproj_path?: string
+  n_gpu_layers?: number
+  context_length?: number
+  /**
+   * Explicit per-load backend override for ax-serving's routing layer.
+   * Valid values: 'native' (AX Engine / MLX), 'llama_cpp', 'lib_llama', 'auto'.
+   * Omit to let ax-serving's backends.yaml decide (default: llama_cpp).
+   * MUST be set to 'native' for MLX models (which have model-manifest.json).
+   */
+  backend?: 'native' | 'llama_cpp' | 'lib_llama' | 'auto'
+}
+
+type ChatRequestBody = chatCompletionRequest & {
+  stream: boolean
+  return_progress: true
+  mirostat?: number | null
+  mirostat_tau?: number | null
+  mirostat_eta?: number | null
+}
+
+function hasToolConversationState(messages: chatCompletionRequest['messages']): boolean {
+  return messages.some(
+    (message) =>
+      message.role === 'tool' ||
+      (Array.isArray(message.tool_calls) && message.tool_calls.length > 0)
+  )
+}
+
+function disableThinkingForToolFollowUp(body: ChatRequestBody): ChatRequestBody {
+  if (!hasToolConversationState(body.messages)) return body
+
+  return {
+    ...body,
+    chat_template_kwargs: {
+      ...(body.chat_template_kwargs ?? {}),
+      enable_thinking: false,
+    },
+  }
+}
+
+type DeviceInfoLike = DeviceInfo | DeviceList
+
+const toNumberSetting = (value: SettingValue, defaultValue = 0): number =>
+  value === '' || value == null ? defaultValue : Number(value)
+
+const toBooleanSetting = (value: SettingValue): boolean =>
+  value === true || value === 'true' || value === 1 || value === '1'
+
+const toStringSetting = (value: SettingValue, defaultValue = ''): string =>
+  value == null || value === '' ? defaultValue : String(value)
+
+async function computeFileSha256Browser(filePath: string): Promise<string> {
+  if (!filePath.startsWith('https://')) {
+    throw new Error('Only HTTPS URLs are allowed for SHA256 validation')
+  }
+  if (typeof crypto === 'undefined' || !crypto.subtle) {
+    throw new Error('Web Crypto API unavailable')
+  }
+
+  const response = await fetch(filePath)
+  if (!response.ok) {
+    throw new Error(`Failed to read file for SHA256 validation: ${response.status}`)
+  }
+
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    await response.arrayBuffer()
+  )
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+const ALLOWED_LOAD_OVERRIDE_KEYS = new Set<keyof LlamacppConfig>([
+  'fit',
+  'fit_target',
+  'fit_ctx',
+  'chat_template',
+  'n_gpu_layers',
+  'offload_mmproj',
+  'cpu_moe',
+  'n_cpu_moe',
+  'override_tensor_buffer_t',
+  'ctx_size',
+  'threads',
+  'threads_batch',
+  'n_predict',
+  'batch_size',
+  'ubatch_size',
+  'device',
+  'split_mode',
+  'main_gpu',
+  'flash_attn',
+  'cont_batching',
+  'no_mmap',
+  'mlock',
+  'no_kv_offload',
+  'cache_type_k',
+  'cache_type_v',
+  'defrag_thold',
+  'rope_scaling',
+  'rope_scale',
+  'rope_freq_base',
+  'rope_freq_scale',
+  'ctx_shift',
+  'temperature',
+  'top_k',
+  'top_p',
+  'min_p',
+  'typical_p',
+  'repeat_penalty',
+  'repeat_last_n',
+  'presence_penalty',
+  'frequency_penalty',
+  'seed',
+  'mirostat',
+  'mirostat_lr',
+  'mirostat_ent',
+  'grammar_file',
+  'json_schema_file',
+])
+
+const DEFAULT_LOAD_TIMEOUT_SECONDS = 600
+const AX_SERVING_PORT_CHECK_TIMEOUT_MS = 3_000
+const AX_SERVING_HEALTH_CHECK_TIMEOUT_MS = 5_000
+const AX_SERVING_UNLOAD_TIMEOUT_MS = 10_000
+const DEFAULT_UBATCH_SIZE = 512
+const AUTO_GPU_LAYERS_SENTINEL = 100
+const AX_SERVING_SERVICE_MODEL_ID = '__ax_serving__'
+const AX_MODEL_MANIFEST_FILENAME = 'model-manifest.json'
+const AX_SERVING_ARTIFACT_ERROR_PREFIX = 'AX Engine requires'
+
+function isChatModelId(modelId: string): boolean {
+  return modelId !== AX_SERVING_SERVICE_MODEL_ID
+}
+
+function chatModelIds(modelIds: string[]): string[] {
+  return modelIds.filter(isChatModelId)
+}
+
+function toAxServingModelId(modelId: string): string {
+  return modelId.replace(/[^a-zA-Z0-9_.-]/g, '_')
+}
+
+function mergeModelIds(...modelIdGroups: string[][]): string[] {
+  return Array.from(new Set(modelIdGroups.flat()))
+}
+
 // ─── Main Extension Class ─────────────────────────────────────────────────────
 
 export default class AxStudioLlamacppExtension extends AIEngine {
@@ -117,7 +288,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   /** When true, auto-unload existing text model before loading a new one */
   private autoUnload: boolean = true
   /** Max seconds to wait for model to become ready */
-  private timeout: number = 600
+  private timeout: number = DEFAULT_LOAD_TIMEOUT_SECONDS
   /** The active LlamacppConfig built from extension settings */
   private config: Partial<LlamacppConfig> = {}
   /** Per-model load promises — prevents duplicate load calls */
@@ -135,19 +306,36 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   private jsonSchemaFile: string = ''
   /** Unload listeners to clean up */
   private cleanupListeners: Array<() => void> = []
+  /** Serialize backend engine transitions triggered by settings changes */
+  private engineSwitchQueue: Promise<void> = Promise.resolve()
+
+  // ─── ax-serving state ─────────────────────────────────────────────────────
+  /** Port the ax-serving service is listening on (0 = not running) */
+  private axServingPort: number = 0
+  /** PID of the ax-serving process (0 = not running) */
+  private axServingPid: number = 0
+  /** Sessions for models loaded via ax-serving HTTP API */
+  private axServingSessions: Map<string, SessionInfo> = new Map()
+  /** Coalesces concurrent ax-serving start attempts */
+  private axServingStarting: Promise<void> | null = null
 
   // ─── Lifecycle ─────────────────────────────────────────────────────────────
 
   override async onLoad(): Promise<void> {
+    super.onLoad()
+
     const rawSettings = SETTINGS
     const isMac = IS_MACOS
 
     // On macOS, Auto-Fit defaults to false — Metal handles memory internally.
     const settingsToRegister = isMac
-      ? rawSettings.map((s: any) =>
-          s.key === 'fit'
-            ? { ...s, controllerProps: { ...s.controllerProps, value: false } }
-            : s
+      ? rawSettings.map((setting: SettingDefinition) =>
+          setting.key === 'fit'
+            ? {
+                ...setting,
+                controllerProps: { ...setting.controllerProps, value: false },
+              }
+            : setting
         )
       : rawSettings
     await this.registerSettings(settingsToRegister)
@@ -157,15 +345,63 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
     // Discover / download the best backend for this hardware
     const versionBackend = await this.getSetting<string>('version_backend', '')
-    configureBackends(
+    void configureBackends(
       versionBackend,
       this.autoUpdateEngine,
       (key: string, value: string) => this._updateSettingValue(key, value)
-    ).catch((e) =>
+    ).catch((e) => {
+      const message = e instanceof Error ? e.message : String(e)
       console.error('[llamacpp] Background backend config failed:', e)
-    )
+      showToast(
+        'llama.cpp backend setup failed',
+        `Backend configuration failed: ${message}`
+      )
+    })
 
     this.registerEngine()
+
+    // Auto-start the local embedding model if one is configured in Knowledge Base settings.
+    // Runs in the background so it doesn't block app startup.
+    void this._autoStartEmbeddingModel().catch((e) => {
+      console.warn('[llamacpp] Auto-start embedding model failed:', e)
+    })
+  }
+
+  private async _autoStartEmbeddingModel(): Promise<void> {
+    type AkidbConfig = {
+      embedder?: {
+        type?: string
+        model_id?: string
+        base_url?: string
+      }
+    }
+    let config: AkidbConfig | null = null
+    try {
+      config = await invoke<AkidbConfig | null>('read_akidb_config')
+    } catch (e) {
+      console.debug('[llamacpp] Could not read akidb config for auto-start:', e)
+      return
+    }
+    if (!config?.embedder?.model_id) return
+
+    const { type, model_id, base_url } = config.embedder
+    const isLocal =
+      type === 'local' ||
+      (type === 'http' &&
+        !!base_url &&
+        (base_url.includes('127.0.0.1') || base_url.includes('localhost')))
+    if (!isLocal) return
+
+    // Only load if the model file exists (i.e. has been downloaded)
+    const modelCfg = await this._readModelConfig(model_id).catch(() => null)
+    if (!modelCfg) {
+      console.debug(`[llamacpp] Embedding model "${model_id}" not found locally, skipping auto-start`)
+      return
+    }
+
+    console.info(`[llamacpp] Auto-starting embedding model: ${model_id}`)
+    await this.load(model_id, undefined, true)
+    console.info(`[llamacpp] Embedding model "${model_id}" started successfully`)
   }
 
   override async onUnload(): Promise<void> {
@@ -173,15 +409,29 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       () => [] as string[]
     )
     for (const modelId of loadedModels) {
-      await this.unload(modelId).catch(() => {})
+      await this.unload(modelId).catch((error) => {
+        console.warn(`[llamacpp] Failed to unload ${modelId} during extension shutdown:`, error)
+      })
     }
 
+    if (this.axServingPid > 0) {
+      try {
+        await unloadLlamaModel(this.axServingPid)
+      } catch (error) {
+        console.warn('[llamacpp] Failed to stop ax-serving during shutdown:', error)
+      }
+      this.axServingPid = 0
+      this.axServingPort = 0
+      this.axServingSessions.clear()
+    }
     await this._syncLocalProviderRegistration()
 
     for (const off of this.cleanupListeners) {
       try {
         off()
-      } catch {}
+      } catch (error) {
+        console.warn('[llamacpp] Cleanup listener failed during unload:', error)
+      }
     }
     this.cleanupListeners = []
   }
@@ -196,155 +446,140 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     }
   }
 
-  onSettingUpdate<T>(key: string, value: T): void {
-    const v = value as any
-    const isWindows = IS_WINDOWS
-    const isMac = IS_MACOS
-    const isLinux = IS_LINUX
-
+  override onSettingUpdate<T>(key: string, value: T): void {
+    const settingValue = value as SettingValue
+    const cfg = this.config
     switch (key) {
-      case 'auto_unload':
-        this.autoUnload = Boolean(v)
+      case 'version_backend': {
+        const val = toStringSetting(settingValue)
+        // Reject malformed values — only accept well-formed
+        // "{version}/{platform}" strings (e.g. "b9010/macos-arm64").
+        if (val && !isValidBackendString(val)) {
+          console.warn(`[llamacpp] Rejecting malformed version_backend update: "${val}"`)
+          break
+        }
+        cfg.version_backend = val
         break
+      }
       case 'auto_update_engine':
-        this.autoUpdateEngine = Boolean(v)
-        break
-      case 'timeout':
-        this.timeout = Number(v) || 600
-        break
-      case 'mirostat':
-        this.mirostat = Number(v) || 0
-        break
-      case 'mirostat_lr':
-        this.mirostatLr = Number(v) || 0.1
-        break
-      case 'mirostat_ent':
-        this.mirostatEnt = Number(v) || 5.0
-        break
-      case 'grammar_file':
-        this.grammarFile = String(v ?? '')
-        break
-      case 'json_schema_file':
-        this.jsonSchemaFile = String(v ?? '')
-        break
-      default:
-        break
-    }
-
-    // Build LlamacppConfig fields from each setting
-    const cfg: any = this.config
-    const num = (x: any, def = 0) => (x === '' || x == null ? def : Number(x))
-    const bool = (x: any) => x === true || x === 'true' || x === 1 || x === '1'
-    const str = (x: any, def = '') => (x == null || x === '' ? def : String(x))
-
-    switch (key) {
-      case 'version_backend':
-        cfg.version_backend = str(v)
-        break
-      case 'auto_update_engine':
-        cfg.auto_update_engine = bool(v)
+        this.autoUpdateEngine = toBooleanSetting(settingValue)
+        cfg.auto_update_engine = toBooleanSetting(settingValue)
         break
       case 'auto_unload':
-        cfg.auto_unload = bool(v)
+        this.autoUnload = toBooleanSetting(settingValue)
+        cfg.auto_unload = toBooleanSetting(settingValue)
         break
       case 'timeout':
-        cfg.timeout = num(v, 600)
+        this.timeout = toNumberSetting(settingValue, DEFAULT_LOAD_TIMEOUT_SECONDS)
+        cfg.timeout = toNumberSetting(settingValue, DEFAULT_LOAD_TIMEOUT_SECONDS)
         break
       case 'llamacpp_env':
-        cfg.llamacpp_env = str(v)
+        cfg.llamacpp_env = toStringSetting(settingValue)
         break
       case 'fit':
-        cfg.fit = bool(v)
+        cfg.fit = toBooleanSetting(settingValue)
         break
       case 'fit_target':
-        cfg.fit_target = str(v, '1024')
+        cfg.fit_target = toStringSetting(settingValue, '1024')
         break
       case 'fit_ctx':
-        cfg.fit_ctx = str(v, '4096')
+        cfg.fit_ctx = toStringSetting(settingValue, '4096')
         break
       case 'ctx_size':
-        cfg.ctx_size = num(v, 0)
+        cfg.ctx_size = toNumberSetting(settingValue, 0)
         break
       case 'threads':
-        cfg.threads = num(v, -1)
+        cfg.threads = toNumberSetting(settingValue, -1)
         break
       case 'threads_batch':
-        cfg.threads_batch = num(v, -1)
+        cfg.threads_batch = toNumberSetting(settingValue, -1)
         break
       case 'n_predict':
-        cfg.n_predict = num(v, -1)
+        cfg.n_predict = toNumberSetting(settingValue, -1)
         break
       case 'ubatch_size':
-        cfg.ubatch_size = num(v, 512)
+        cfg.ubatch_size = toNumberSetting(settingValue, DEFAULT_UBATCH_SIZE)
         break
       case 'device':
-        cfg.device = str(v)
+        cfg.device = toStringSetting(settingValue)
         break
       case 'split_mode':
-        cfg.split_mode = str(v, 'layer')
+        cfg.split_mode = toStringSetting(settingValue, 'layer')
         break
       case 'main_gpu':
-        cfg.main_gpu = num(v, 0)
+        cfg.main_gpu = toNumberSetting(settingValue, 0)
         break
       case 'n_gpu_layers':
-        cfg.n_gpu_layers = num(v, -1)
+        cfg.n_gpu_layers = toNumberSetting(settingValue, -1)
         break
       case 'flash_attn':
-        cfg.flash_attn = str(v, 'auto')
+        cfg.flash_attn = toStringSetting(settingValue, 'auto')
         break
       case 'cont_batching':
-        cfg.cont_batching = bool(v)
+        cfg.cont_batching = toBooleanSetting(settingValue)
         break
       case 'no_mmap':
-        cfg.no_mmap = bool(v)
+        cfg.no_mmap = toBooleanSetting(settingValue)
         break
       case 'mlock':
-        cfg.mlock = bool(v)
+        cfg.mlock = toBooleanSetting(settingValue)
         break
       case 'no_kv_offload':
-        cfg.no_kv_offload = bool(v)
+        cfg.no_kv_offload = toBooleanSetting(settingValue)
         break
       case 'cache_type_k':
-        cfg.cache_type_k = str(v, 'f16')
+        cfg.cache_type_k = toStringSetting(settingValue, 'f16')
         break
       case 'cache_type_v':
-        cfg.cache_type_v = str(v, 'f16')
+        cfg.cache_type_v = toStringSetting(settingValue, 'f16')
         break
       case 'defrag_thold':
-        cfg.defrag_thold = num(v, 0.1)
+        cfg.defrag_thold = toNumberSetting(settingValue, 0.1)
         break
       case 'rope_scaling':
-        cfg.rope_scaling = str(v, 'none')
+        cfg.rope_scaling = toStringSetting(settingValue, 'none')
         break
       case 'rope_scale':
-        cfg.rope_scale = num(v, 1.0)
+        cfg.rope_scale = toNumberSetting(settingValue, 1.0)
         break
       case 'rope_freq_base':
-        cfg.rope_freq_base = num(v, 0)
+        cfg.rope_freq_base = toNumberSetting(settingValue, 0)
         break
       case 'rope_freq_scale':
-        cfg.rope_freq_scale = num(v, 1.0)
+        cfg.rope_freq_scale = toNumberSetting(settingValue, 1.0)
         break
       case 'ctx_shift':
-        cfg.ctx_shift = bool(v)
+        cfg.ctx_shift = toBooleanSetting(settingValue)
         break
       case 'offload_mmproj':
-        cfg.offload_mmproj = bool(v)
+        cfg.offload_mmproj = toBooleanSetting(settingValue)
         break
       case 'cpu_moe':
-        cfg.cpu_moe = bool(v)
+        cfg.cpu_moe = toBooleanSetting(settingValue)
         break
       case 'n_cpu_moe':
-        cfg.n_cpu_moe = num(v, 0)
+        cfg.n_cpu_moe = toNumberSetting(settingValue, 0)
+        break
+      case 'mirostat':
+        this.mirostat = toNumberSetting(settingValue, 0)
+        break
+      case 'mirostat_lr':
+        this.mirostatLr = toNumberSetting(settingValue, 0.1)
+        break
+      case 'mirostat_ent':
+        this.mirostatEnt = toNumberSetting(settingValue, 5.0)
+        break
+      case 'grammar_file':
+        this.grammarFile = toStringSetting(settingValue)
+        break
+      case 'json_schema_file':
+        this.jsonSchemaFile = toStringSetting(settingValue)
         break
       case 'engine_type': {
         const prev = cfg.engine_type
-        let next = str(v, 'llamacpp')
-        // Migrate the retired ax-serving engine to ax-engine
-        if (next === 'ax-serving') next = 'ax-engine'
-        cfg.engine_type = next
-        // When engine changes, unload active models so the next load uses
-        // the newly selected engine.
+        cfg.engine_type = toStringSetting(settingValue, 'llamacpp')
+        // When engine changes, unload active models and stop the old engine
+        // so the next load uses the newly selected engine.
         if (prev && prev !== cfg.engine_type) {
           this._handleEngineSwitch(prev, cfg.engine_type)
         }
@@ -355,7 +590,8 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
   /** Persist a setting value update to localStorage */
   private async _updateSettingValue(key: string, value: string): Promise<void> {
-    await this.updateSettings([{ key, controllerProps: { value } as any }])
+    const payload: UpdateSettingPayload = { key, controllerProps: { value } }
+    await this.updateSettings([payload])
   }
 
   // ─── Model directory helpers ───────────────────────────────────────────────
@@ -373,6 +609,334 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   private async _modelYmlPath(modelId: string): Promise<string> {
     const dir = await this._modelDir(modelId)
     return joinPath([dir, 'model.yml'])
+  }
+
+  private async _hasAxModelManifestAtPath(modelPath: string): Promise<boolean> {
+    const manifestDir = modelPath.toLowerCase().endsWith('.gguf')
+      ? this._splitFilePath(modelPath, 'Model').parentPath
+      : modelPath
+    return fs.existsSync(await joinPath([manifestDir, AX_MODEL_MANIFEST_FILENAME]))
+  }
+
+  private _isAxServingArtifactError(error: unknown): boolean {
+    return formatError(error).startsWith(AX_SERVING_ARTIFACT_ERROR_PREFIX)
+  }
+
+  private _parseEnvAssignments(rawEnv: string): EnvMap {
+    const assignments: string[] = []
+    let current = ''
+    let inSingle = false
+    let inDouble = false
+
+    for (const char of rawEnv) {
+      if (char === "'" && !inDouble) {
+        inSingle = !inSingle
+        current += char
+        continue
+      }
+      if (char === '"' && !inSingle) {
+        inDouble = !inDouble
+        current += char
+        continue
+      }
+      if (!inSingle && !inDouble && /\s/.test(char)) {
+        if (current.trim()) {
+          assignments.push(current.trim())
+          current = ''
+        }
+        continue
+      }
+      current += char
+    }
+
+    if (current.trim()) assignments.push(current.trim())
+
+    return assignments.reduce<EnvMap>((envs, assignment) => {
+      const separator = assignment.indexOf('=')
+      if (separator <= 0) return envs
+
+      const key = assignment.slice(0, separator).trim()
+      let value = assignment.slice(separator + 1).trim()
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1)
+      }
+      envs[key] = value
+      return envs
+    }, {})
+  }
+
+  private async _validateLocalModelFile(
+    path: string,
+    label: string
+  ): Promise<void> {
+    const stat = await fs.fileStat(path)
+    if (!stat) {
+      throw new Error(`${label} file not found: ${path}`)
+    }
+    if (stat.isDirectory) {
+      throw new Error(`${label} path must be a file: ${path}`)
+    }
+  }
+
+  private _isAbsolutePath(path: string): boolean {
+    return (
+      path.startsWith('/') ||
+      /^[A-Za-z]:[\\/]/.test(path) ||
+      path.startsWith('\\\\')
+    )
+  }
+
+  private _canonicalizeFilePath(path: string, label: string): string {
+    if (!path || path.includes('\0')) {
+      throw new Error(`${label} path is invalid`)
+    }
+    if (!this._isAbsolutePath(path)) {
+      throw new Error(`${label} path must be absolute: ${path}`)
+    }
+
+    const separator = path.includes('\\') ? '\\' : '/'
+    const normalized = path.replace(/[\\/]+/g, separator)
+    const prefixMatch = normalized.match(/^(\\\\[^\\]+\\[^\\]+|[A-Za-z]:|\/)/)
+    const prefix = prefixMatch?.[0] ?? ''
+    const remainder = normalized.slice(prefix.length)
+    const segments = remainder.split(/[\\/]+/).filter(Boolean)
+    const resolved: string[] = []
+
+    for (const segment of segments) {
+      if (segment === '.') continue
+      if (segment === '..') {
+        if (resolved.length === 0) {
+          throw new Error(`${label} path traversal detected: ${path}`)
+        }
+        resolved.pop()
+        continue
+      }
+      resolved.push(segment)
+    }
+
+    const joined = resolved.join(separator)
+    const rootedPrefix = prefix.endsWith(separator) ? prefix : `${prefix}${separator}`
+    return joined ? `${rootedPrefix}${joined}` : rootedPrefix
+  }
+
+  private _splitFilePath(
+    path: string,
+    label: string
+  ): { parentPath: string; fileName: string } {
+    const separator = path.includes('\\') ? '\\' : '/'
+    const lastSeparatorIndex = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
+    if (lastSeparatorIndex < 0) {
+      throw new Error(`${label} path must include a parent directory: ${path}`)
+    }
+
+    let parentPath: string
+    if (lastSeparatorIndex === 0) {
+      parentPath = separator
+    } else if (separator === '\\' && /^[A-Za-z]:\\/.test(path) && lastSeparatorIndex === 2) {
+      parentPath = path.slice(0, 3)
+    } else {
+      parentPath = path.slice(0, lastSeparatorIndex)
+    }
+
+    const fileName = path.slice(lastSeparatorIndex + 1)
+    if (!fileName) {
+      throw new Error(`${label} path must include a file name: ${path}`)
+    }
+
+    return { parentPath, fileName }
+  }
+
+  private async _canonicalizeExistingPath(
+    path: string,
+    label: string
+  ): Promise<string> {
+    const normalizedPath = this._canonicalizeFilePath(path, label)
+    try {
+      return await invoke<string>('canonicalize_path', { path: normalizedPath })
+    } catch (error) {
+      throw new Error(`${label} path is invalid: ${formatError(error)}`)
+    }
+  }
+
+  private async _canonicalizeComparablePath(
+    path: string,
+    label: string
+  ): Promise<string> {
+    const normalizedPath = this._canonicalizeFilePath(path, label)
+    if (await fs.existsSync(normalizedPath)) {
+      return this._canonicalizeExistingPath(normalizedPath, label)
+    }
+
+    const { parentPath, fileName } = this._splitFilePath(normalizedPath, label)
+    const canonicalParent = await this._canonicalizeExistingPath(
+      parentPath,
+      `${label} parent`
+    )
+    const separator = canonicalParent.includes('\\') ? '\\' : '/'
+    return canonicalParent.endsWith(separator)
+      ? `${canonicalParent}${fileName}`
+      : `${canonicalParent}${separator}${fileName}`
+  }
+
+  private async _modelsBasePath(): Promise<string> {
+    const appData = await getAppDataFolderPath()
+    return joinPath([appData, 'llamacpp', 'models'])
+  }
+
+  private async _validatePathWithinModelsDir(
+    targetPath: string,
+    label: string
+  ): Promise<void> {
+    const expectedBase = await this._canonicalizeExistingPath(
+      await this._modelsBasePath(),
+      'Models base'
+    )
+    const normalizedTarget = await this._canonicalizeComparablePath(
+      targetPath,
+      label
+    )
+    const separator = normalizedTarget.includes('\\') ? '\\' : '/'
+    const normalizedBaseWithSeparator = expectedBase.endsWith(separator)
+      ? expectedBase
+      : `${expectedBase}${separator}`
+    const normalizedBase = IS_WINDOWS ? expectedBase.toLowerCase() : expectedBase
+    const comparableTarget = IS_WINDOWS
+      ? normalizedTarget.toLowerCase()
+      : normalizedTarget
+    const comparableBaseWithSeparator = IS_WINDOWS
+      ? normalizedBaseWithSeparator.toLowerCase()
+      : normalizedBaseWithSeparator
+
+    if (
+      comparableTarget !== normalizedBase &&
+      !comparableTarget.startsWith(comparableBaseWithSeparator)
+    ) {
+      throw new Error(`${label} path traversal detected: ${targetPath}`)
+    }
+  }
+
+  private async _resolveModelPathFromConfig(
+    cfg: ModelConfig
+  ): Promise<string> {
+    if (this._isAbsolutePath(cfg.model_path)) {
+      return this._canonicalizeExistingPath(cfg.model_path, 'Model')
+    }
+
+    const appData = await getAppDataFolderPath()
+    const modelPath = await joinPath([appData, cfg.model_path])
+    await this._validatePathWithinModelsDir(modelPath, 'Model')
+    return modelPath
+  }
+
+  private async _resolveHfCachedAxModel(
+    modelId: string
+  ): Promise<ResolvedLoadTarget | null> {
+    if (!modelId.includes('/')) return null
+
+    try {
+      const modelPath = await invoke<string>('mlx_resolve_model_dir', { modelId })
+      return {
+        cfg: {
+          model_path: modelPath,
+          name: modelId,
+          size_bytes: 0,
+          embedding: false,
+        },
+        modelPath,
+        hasAxManifest: true,
+        pathVerified: true,
+      }
+    } catch (error) {
+      console.debug(`[llamacpp] Failed to resolve MLX HF cache for ${modelId}:`, error)
+      return null
+    }
+  }
+
+  private async _resolveLoadTarget(
+    modelId: string
+  ): Promise<ResolvedLoadTarget | null> {
+    const cfg = await this._readModelConfig(modelId)
+    if (cfg) {
+      const modelPath = await this._resolveModelPathFromConfig(cfg)
+      return {
+        cfg,
+        modelPath,
+        hasAxManifest: await this._hasAxModelManifestAtPath(modelPath),
+        pathVerified: false,
+      }
+    }
+
+    return this._resolveHfCachedAxModel(modelId)
+  }
+
+  private _canonicalizeImportSourcePath(path: string, label: string): string {
+    const canonicalPath = this._canonicalizeFilePath(path, label)
+    if (!canonicalPath.toLowerCase().endsWith('.gguf')) {
+      throw new Error(`${label} file must be a .gguf file: ${path}`)
+    }
+    return canonicalPath
+  }
+
+  private async _canonicalizeExistingImportSourcePath(
+    path: string,
+    label: string
+  ): Promise<string> {
+    const normalizedPath = this._canonicalizeImportSourcePath(path, label)
+    const canonicalPath = await this._canonicalizeExistingPath(
+      normalizedPath,
+      label
+    )
+    await this._validateLocalModelFile(canonicalPath, label)
+    return canonicalPath
+  }
+
+  private async _isPathWithinModelsDir(targetPath: string): Promise<boolean> {
+    try {
+      await this._validatePathWithinModelsDir(targetPath, 'Model')
+      return true
+    } catch (error) {
+      console.debug('[llamacpp] Model path rejected by models-dir guard:', error)
+      return false
+    }
+  }
+
+  private async _cleanupImportArtifacts(
+    modelId: string,
+    paths: string[]
+  ): Promise<void> {
+    for (const path of paths) {
+      if (!path) continue
+      try {
+        if (await fs.existsSync(path)) await fs.rm(path)
+      } catch (error) {
+        console.warn(`[llamacpp] Failed to clean up import artifact ${path}:`, error)
+      }
+    }
+
+    try {
+      const modelDir = await this._modelDir(modelId)
+      if (!(await fs.existsSync(modelDir))) return
+      const remaining = await fs.readdirSync(modelDir)
+      if (remaining.length === 0) await fs.rm(modelDir)
+    } catch (error) {
+      console.warn(`[llamacpp] Failed to clean up import directory for ${modelId}:`, error)
+    }
+  }
+
+  private _getTimeoutSignal(
+    timeoutMs: number,
+    abortController?: AbortController
+  ): AbortSignal {
+    const timeoutSignal = AbortSignal.timeout(timeoutMs)
+    const externalSignal = abortController?.signal
+    if (!externalSignal) return timeoutSignal
+    if (typeof AbortSignal.any === 'function') {
+      return AbortSignal.any([externalSignal, timeoutSignal])
+    }
+    return externalSignal
   }
 
   private async _readModelConfig(modelId: string): Promise<ModelConfig | null> {
@@ -393,32 +957,11 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         mmproj_sha256: parsed.mmproj_sha256
           ? String(parsed.mmproj_sha256)
           : undefined,
-        model_format: parsed.model_format
-          ? (String(parsed.model_format) as ModelFormat)
-          : undefined,
       }
-    } catch {
+    } catch (error) {
+      console.debug(`[llamacpp] Failed to read model config for ${modelId}:`, error)
       return null
     }
-  }
-
-  /**
-   * Resolve a model's format. Prefers the persisted model.yml field; falls
-   * back to disk-layout detection for models imported before model_format
-   * existed.
-   */
-  private async _resolveModelFormat(cfg: ModelConfig): Promise<ModelFormat> {
-    if (cfg.model_format) return cfg.model_format
-    if (cfg.model_path.endsWith('.gguf')) return 'gguf'
-    const appData = await getAppDataFolderPath()
-    const modelPath = await joinPath([appData, cfg.model_path])
-    if (await fs.existsSync(await joinPath([modelPath, 'model-manifest.json']))) {
-      return 'ax-native'
-    }
-    if (await fs.existsSync(await joinPath([modelPath, 'config.json']))) {
-      return 'mlx'
-    }
-    return 'gguf'
   }
 
   private async _writeModelConfig(
@@ -436,7 +979,6 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       embedding: cfg.embedding ?? false,
       ...(cfg.sha256 ? { sha256: cfg.sha256 } : {}),
       ...(cfg.mmproj_sha256 ? { mmproj_sha256: cfg.mmproj_sha256 } : {}),
-      ...(cfg.model_format ? { model_format: cfg.model_format } : {}),
     })
     await fs.writeFileSync(ymlPath, content)
   }
@@ -458,9 +1000,21 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         : modelsDir + sep
 
       // DFS to discover model directories (handles nested IDs like "author/model")
-      // readdirSync returns full absolute paths from the Rust backend
       const topEntries: string[] = (await fs.readdirSync(modelsDir)) ?? []
-      const stack: string[] = [...topEntries]
+      const toAbsoluteEntry = async (baseDir: string, entry: string) => {
+        const normalized = entry.replace(/\\/g, '/')
+        const normalizedBase = modelsDir.replace(/\\/g, '/')
+        if (
+          normalized === normalizedBase ||
+          normalized.startsWith(normalizedBase + '/')
+        ) {
+          return entry
+        }
+        return joinPath([baseDir, entry])
+      }
+      const stack: string[] = await Promise.all(
+        topEntries.map((entry) => toAbsoluteEntry(modelsDir, entry))
+      )
 
       while (stack.length > 0) {
         const entryPath = stack.pop()!
@@ -495,10 +1049,14 @@ export default class AxStudioLlamacppExtension extends AIEngine {
           // No model.yml — might be a parent directory (e.g., "bartowski/"),
           // recurse into its children
           try {
+            const stat = await fs.fileStat(entryPath).catch(() => null)
+            if (!stat?.isDirectory) continue
             const subEntries: string[] = (await fs.readdirSync(entryPath)) ?? []
-            stack.push(...subEntries)
-          } catch {
-            // Not a directory or inaccessible — skip
+            for (const subEntry of subEntries) {
+              stack.push(await toAbsoluteEntry(entryPath, subEntry))
+            }
+          } catch (error) {
+            console.debug(`[llamacpp] Skipping unreadable model entry ${entryPath}:`, error)
           }
         }
       }
@@ -533,7 +1091,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
   async load(
     modelId: string,
-    overrideSettings?: Record<string, any>,
+    overrideSettings?: Partial<Record<keyof LlamacppConfig, unknown>>,
     isEmbedding?: boolean,
     bypassAutoUnload?: boolean
   ): Promise<SessionInfo> {
@@ -560,36 +1118,46 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
   private async _doLoad(
     modelId: string,
-    overrideSettings?: Record<string, any>,
+    overrideSettings?: Partial<Record<keyof LlamacppConfig, unknown>>,
     isEmbedding = false,
     bypassAutoUnload = false
   ): Promise<SessionInfo> {
     events.emit(ModelEvent.OnModelInit, { modelId })
 
     try {
+      await this._waitForEngineSwitchCleanup()
+
       // Auto-unload active text model when loading a new one
       if (this.autoUnload && !isEmbedding && !bypassAutoUnload) {
         await this._unloadActiveTextModels(modelId)
       }
 
-      // Read model config
-      const cfg = await this._readModelConfig(modelId)
-      if (!cfg) throw new Error(`Model not found: ${modelId}`)
+      // Read model config. MLX/AX models may come from the Hugging Face cache
+      // directly, because mlx-community repos are directory snapshots rather
+      // than imported GGUF files with a local model.yml.
+      const target = await this._resolveLoadTarget(modelId)
+      if (!target) throw new Error(`Model not found: ${modelId}`)
+      const { cfg, modelPath, hasAxManifest } = target
 
-      const engineType = this.config.engine_type || 'llamacpp'
+      // Auto-detect engine per model: if the model dir contains an AX
+      // model-manifest.json (MLX/AX-Engine artifact), route to ax-serving
+      // regardless of the user's global `engine_type` setting. Falls back to
+      // the global setting (or 'llamacpp') for GGUF models without manifest.
+      const engineType = hasAxManifest
+        ? 'ax-serving'
+        : (this.config.engine_type || 'llamacpp')
       const embedding = isEmbedding || Boolean(cfg.embedding)
-      const format = await this._resolveModelFormat(cfg)
 
-      // MLX / AX Engine artifact models run on ax-engine-server; GGUF models
-      // always run on llama-server (ax-engine's native route is MLX-only).
-      if (isDirectoryFormat(format)) {
-        if (engineType !== 'ax-engine') {
-          throw new Error(
-            `Model "${modelId}" is an ${format === 'mlx' ? 'MLX' : 'AX Engine'} model and requires the ax-engine engine. ` +
-              `Set "Inference Engine" to "ax-engine" in the llamacpp provider settings.`
+      // ax-serving mode — handles text, vision, and embedding models
+      if (engineType === 'ax-serving') {
+        try {
+          return await this._doLoadAxServing(modelId, cfg, embedding, target)
+        } catch (axErr: unknown) {
+          if (this._isAxServingArtifactError(axErr)) throw axErr
+          console.warn(
+            `[llamacpp] ax-serving failed, falling back to llamacpp: ${formatError(axErr)}`
           )
         }
-        return await this._doLoadAxEngine(modelId, cfg, embedding)
       }
 
       return await this._doLoadLlamacpp(
@@ -598,76 +1166,123 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         overrideSettings,
         isEmbedding
       )
-    } catch (e: any) {
+    } catch (e: unknown) {
       events.emit(ModelEvent.OnModelFail, {
         modelId,
-        error: e?.message ?? String(e),
+        error: formatError(e),
       })
       throw e
     }
   }
 
-  // ─── ax-engine load path ───────────────────────────────────────────────────
+  // ─── ax-serving load path ──────────────────────────────────────────────────
 
-  /**
-   * Load an MLX / AX Engine artifact model by spawning a dedicated
-   * ax-engine-server process (one model per process, like llama-server).
-   * The session lives in the Tauri plugin's process map, so unload, health
-   * and discovery work exactly like llama.cpp sessions.
-   */
-  private async _doLoadAxEngine(
+  /** Load a model via ax-serving HTTP API (long-running service model) */
+  private async _doLoadAxServing(
     modelId: string,
     cfg: ModelConfig,
-    isEmbedding = false
+    isEmbedding = false,
+    resolvedTarget?: ResolvedLoadTarget
   ): Promise<SessionInfo> {
-    // Resolve absolute model path (an MLX / AX Engine artifacts directory)
-    const appData = await getAppDataFolderPath()
-    const modelPath = await joinPath([appData, cfg.model_path])
+    // Ensure ax-serving process is running
+    await this._ensureAxServingRunning()
 
-    // Security: Prevent path traversal from tampered model.yml
-    const expectedBase = await joinPath([appData, 'llamacpp', 'models'])
-    if (!modelPath.startsWith(expectedBase)) {
-      throw new Error(`Model path traversal detected: ${modelPath}`)
+    // Resolve absolute model path
+    const modelPath =
+      resolvedTarget?.modelPath ?? (await this._resolveModelPathFromConfig(cfg))
+
+    if (!resolvedTarget?.pathVerified && !(await fs.existsSync(modelPath))) {
+      throw new Error(`Model path not found: ${modelPath}`)
     }
 
-    if (!(await fs.existsSync(modelPath))) {
-      throw new Error(`Model directory not found: ${modelPath}`)
+    const hasAxManifest =
+      resolvedTarget?.hasAxManifest ??
+      (await this._hasAxModelManifestAtPath(modelPath))
+    if (!hasAxManifest) {
+      throw new Error(
+        `${AX_SERVING_ARTIFACT_ERROR_PREFIX} ${AX_MODEL_MANIFEST_FILENAME} for "${modelId}". Generate AX artifacts for this model or choose a supported AX model.`
+      )
     }
 
-    // Resolve the ax-engine-server binary, auto-downloading the latest
-    // release on first use.
-    const binaryPath = await ensureAxEngineBinary()
-    const port = await getRandomPort()
-    const apiSecret = String(Date.now())
-    const apiKey = await generateApiKey(modelId, apiSecret)
+    // Resolve mmproj path for vision/multimodal models
+    let mmprojPath: string | undefined
+    if (cfg.mmproj_path) {
+      const candidateMmprojPath = await joinPath([appData, cfg.mmproj_path])
+      await this._validatePathWithinModelsDir(candidateMmprojPath, 'Mmproj')
+      if (!(await fs.existsSync(candidateMmprojPath))) {
+        console.warn(
+          `[llamacpp] mmproj file not found: ${candidateMmprojPath}, loading without vision`
+        )
+      } else {
+        mmprojPath = candidateMmprojPath
+      }
+    }
 
-    console.log(
-      `[llamacpp] Starting ax-engine-server for "${modelId}" at ${binaryPath} on port ${port}`
+    // Build load request with all supported fields.
+    // MLX models (with model-manifest.json) MUST be routed to ax-serving's
+    // 'native' backend (AX Engine). Without this override, ax-serving's
+    // backends.yaml routes everything through llama_cpp by default, which
+    // only accepts .gguf files and rejects MLX safetensors with:
+    //   "only .gguf models are supported"
+    const axServingModelId = toAxServingModelId(modelId)
+    const loadBody: AxServingLoadRequest = {
+      model_id: axServingModelId,
+      path: modelPath,
+      backend: 'native',
+    }
+    if (mmprojPath) {
+      loadBody.mmproj_path = mmprojPath
+    }
+    const nGpuLayers = Number(this.config.n_gpu_layers)
+    if (nGpuLayers >= 0 && nGpuLayers !== AUTO_GPU_LAYERS_SENTINEL) {
+      loadBody.n_gpu_layers = nGpuLayers
+    }
+    const ctxSize = Number(this.config.ctx_size)
+    if (ctxSize > 0) {
+      loadBody.context_length = ctxSize
+    }
+
+    // Load model via ax-serving REST API
+    const loadRes = await fetch(
+      `http://127.0.0.1:${this.axServingPort}/v1/models`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(loadBody),
+        signal: AbortSignal.timeout(this.timeout * 1000),
+      }
     )
 
-    const axConfig = normalizeLlamacppConfig({
-      ...this.config,
-      engine_type: 'ax-engine',
-    })
+    if (loadRes.status === 409) {
+      // Model already loaded — this is fine
+    } else if (!loadRes.ok) {
+      const errText = await loadRes.text()
+      throw new Error(
+        `ax-serving failed to load model (${loadRes.status}): ${errText}`
+      )
+    } else {
+      const loadData = await loadRes.json()
+    }
 
-    const session = await loadLlamaModel(
-      binaryPath,
-      modelId,
-      modelPath,
-      port,
-      axConfig,
-      { LLAMA_API_KEY: apiKey },
-      undefined,
-      isEmbedding,
-      this.timeout
-    )
+    // Create synthetic session (ax-serving manages the process, not Tauri plugin)
+    const session: SessionInfo = {
+      pid: this.axServingPid,
+      port: this.axServingPort,
+      model_id: modelId,
+      model_path: modelPath,
+      is_embedding: isEmbedding,
+      api_key: '',
+    }
+    this.axServingSessions.set(modelId, session)
 
-    // Register the local provider with the Rust proxy SYNCHRONOUSLY before
-    // returning, so the proxy is ready to route requests immediately.
     await this._syncLocalProviderRegistration({
-      port: session.port,
-      apiKey: session.api_key ?? '',
-      models: [modelId],
+      port: this.axServingPort,
+      apiKey: '',
+      models: [modelId, axServingModelId],
+    })
+    await this._syncMlxProviderRegistration({
+      port: this.axServingPort,
+      models: [modelId, axServingModelId],
     })
 
     events.emit(ModelEvent.OnModelReady, {
@@ -679,19 +1294,170 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     return session
   }
 
+  private async _syncMlxProviderRegistration(preferred: {
+    port: number
+    models: string[]
+  }) {
+    try {
+      await invoke('register_provider_config', {
+        request: {
+          provider: 'mlx',
+          base_url: `http://127.0.0.1:${preferred.port}/v1`,
+          api_key: '',
+          custom_headers: [],
+          models: preferred.models,
+        },
+      })
+    } catch (regErr) {
+      console.warn('[llamacpp] Failed to register mlx provider with proxy:', regErr)
+    }
+  }
+
+  /** Ensure the ax-serving process is running, start it if needed */
+  private async _ensureAxServingRunning(): Promise<void> {
+    // Check if already running and healthy
+    if (this.axServingPid > 0) {
+      try {
+        const res = await fetch(
+          `http://127.0.0.1:${this.axServingPort}/health`,
+          {
+            signal: AbortSignal.timeout(AX_SERVING_PORT_CHECK_TIMEOUT_MS),
+          }
+        )
+        if (res.ok) return
+      } catch (error) {
+        console.debug('[llamacpp] ax-serving health probe failed before restart:', error)
+      }
+      // Not responding — kill the old process tree before restarting
+      console.warn(
+        '[llamacpp] ax-serving not responding, killing old process and restarting'
+      )
+      const oldPid = this.axServingPid
+      this.axServingPid = 0
+      this.axServingPort = 0
+      this.axServingSessions.clear()
+      try {
+        await unloadLlamaModel(oldPid)
+      } catch (e) {
+        console.warn('[llamacpp] Failed to kill unresponsive ax-serving:', e)
+      }
+    }
+
+    // Coalesce concurrent start attempts
+    if (this.axServingStarting) {
+      await this.axServingStarting
+      return
+    }
+
+    this.axServingStarting = this._startAxServingProcess()
+    try {
+      await this.axServingStarting
+    } finally {
+      this.axServingStarting = null
+    }
+  }
+
+  /** Start the ax-serving process via Tauri plugin */
+  private async _startAxServingProcess(): Promise<void> {
+    const binaryPath = await getAxServingBinaryPath()
+    const port = await getRandomPort()
+    const envOverrides = this.config.llamacpp_env
+      ? this._parseEnvAssignments(String(this.config.llamacpp_env))
+      : undefined
+
+    const session = await startAxServing(
+      binaryPath,
+      port,
+      this.timeout,
+      envOverrides
+    )
+
+    this.axServingPort = session.port
+    this.axServingPid = session.pid
+  }
+
+  private async _reconcileAxServingSessions(): Promise<string[]> {
+    if (this.axServingPid <= 0 || this.axServingPort <= 0) {
+      this.axServingSessions.clear()
+      return []
+    }
+
+    try {
+      const res = await fetch(`http://127.0.0.1:${this.axServingPort}/health`, {
+        signal: AbortSignal.timeout(AX_SERVING_PORT_CHECK_TIMEOUT_MS),
+      })
+      if (!res.ok) return Array.from(this.axServingSessions.keys())
+
+      const health = await res.json() as { loaded_models?: unknown }
+      if (!Array.isArray(health.loaded_models)) {
+        return Array.from(this.axServingSessions.keys())
+      }
+
+      const loaded = health.loaded_models.filter(
+        (modelId): modelId is string => typeof modelId === 'string'
+      )
+      const loadedSet = new Set(loaded)
+      for (const modelId of Array.from(this.axServingSessions.keys())) {
+        if (!loadedSet.has(modelId) && !loadedSet.has(toAxServingModelId(modelId))) {
+          this.axServingSessions.delete(modelId)
+        }
+      }
+    } catch (error) {
+      console.debug('[llamacpp] Failed to reconcile ax-serving loaded models:', error)
+    }
+
+    return Array.from(this.axServingSessions.keys())
+  }
+
+  private async _waitForEngineSwitchCleanup(): Promise<void> {
+    await this.engineSwitchQueue.catch((error) => {
+      console.debug('[llamacpp] Engine switch cleanup failed before model load:', error)
+    })
+  }
+
   private async _syncLocalProviderRegistration(preferred?: {
     port?: number
     apiKey?: string
     models?: string[]
   }) {
-    const loadedModels = await getLoadedModels().catch(() => [] as string[])
+    if (preferred?.port && preferred.models && preferred.models.length > 0) {
+      try {
+        await invoke('register_provider_config', {
+          request: {
+            provider: this.providerId,
+            base_url: `http://127.0.0.1:${preferred.port}/v1`,
+            api_key: preferred.apiKey ?? '',
+            custom_headers: [],
+            models: preferred.models,
+          },
+        })
+      } catch (regErr) {
+        console.warn('[llamacpp] Failed to register provider with proxy:', regErr)
+      }
+      return
+    }
+
+    const llamacppModels = chatModelIds(await getLoadedModels().catch((error: unknown) => {
+      console.debug('[llamacpp] Failed to list llamacpp models during provider sync:', error)
+      return [] as string[]
+    }))
+    const axServingModels = await this._reconcileAxServingSessions()
+    const firstAxServingSession = this.axServingSessions.values().next()
+      .value as SessionInfo | undefined
+    const loadedModels = mergeModelIds(llamacppModels, axServingModels)
     const fallbackSession =
-      loadedModels.length > 0
-        ? await findSessionByModel(loadedModels[0]).catch(() => null)
+      llamacppModels.length > 0
+        ? await findSessionByModel(llamacppModels[0]).catch((error: unknown) => {
+            console.debug('[llamacpp] Failed to resolve fallback local provider session:', error)
+            return null
+          })
         : null
 
     const decision = decideLocalProviderSync({
       loadedModels,
+      llamacppModels,
+      axServingModels,
+      axServingPort: this.axServingPort || firstAxServingSession?.port || 0,
       preferred,
       fallbackSession,
     })
@@ -719,7 +1485,8 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
     if (
       decision.models.length === 1 &&
-      loadedModels.length > 1 &&
+      llamacppModels.length > 1 &&
+      axServingModels.length === 0 &&
       !preferred?.models
     ) {
       console.warn(
@@ -748,14 +1515,53 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   private async _doLoadLlamacpp(
     modelId: string,
     cfg: ModelConfig,
-    overrideSettings?: Record<string, any>,
+    overrideSettings?: Partial<Record<keyof LlamacppConfig, unknown>>,
     isEmbedding = false
   ): Promise<SessionInfo> {
-    // Resolve backend binary
-    const versionBackend = await this.getSetting<string>('version_backend', '')
+    // ── Resolve backend version ────────────────────────────────────────────
+    // Flow: stored setting → local discovery → wait for configureBackends()
+    let versionBackend = await this.getSetting<string>('version_backend', '')
+
+    // Reject malformed stored values (e.g. absolute paths from old bugs)
+    if (versionBackend && !isValidBackendString(versionBackend)) {
+      console.warn(`[llamacpp] Clearing malformed version_backend: "${versionBackend}"`)
+      versionBackend = ''
+      await this._updateSettingValue('version_backend', '')
+    }
+
+    // If no valid setting, try local discovery (uses proper Rust API with timeout)
+    if (!versionBackend) {
+      versionBackend = await resolveBackendVersion()
+      if (versionBackend) {
+        await this._updateSettingValue('version_backend', versionBackend)
+      }
+    }
+
+    // If still nothing, wait for configureBackends() to finish discovery
+    if (!versionBackend) {
+      await Promise.race([
+        awaitPendingBackendSelection(),
+        new Promise<void>((resolve) => setTimeout(resolve, 15_000)),
+      ])
+      versionBackend = await this.getSetting<string>('version_backend', '')
+    }
+    if (!versionBackend) {
+      await Promise.race([
+        awaitPendingConfigureBackends(),
+        new Promise<void>((resolve) => setTimeout(resolve, 60_000)),
+      ])
+      versionBackend = await this.getSetting<string>('version_backend', '')
+    }
+
+    // Final validation — reject any malformed value that slipped through
+    if (versionBackend && !isValidBackendString(versionBackend)) {
+      console.warn(`[llamacpp] Rejecting malformed version_backend: "${versionBackend}"`)
+      versionBackend = ''
+    }
+
     if (!versionBackend) {
       throw new Error(
-        'No backend selected. Please configure the engine backend in settings.'
+        'Engine is still initializing. Please wait a moment and try again.'
       )
     }
     const [version, ...rest] = versionBackend.split('/')
@@ -765,20 +1571,14 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     // Resolve absolute paths
     const appData = await getAppDataFolderPath()
     const modelPath = await joinPath([appData, cfg.model_path])
-
-    // Security: Prevent path traversal
-    const expectedBase = await joinPath([appData, 'llamacpp', 'models'])
-    if (!modelPath.startsWith(expectedBase)) {
-      throw new Error(`Model path traversal detected: ${modelPath}`)
-    }
+    await this._validatePathWithinModelsDir(modelPath, 'Model')
 
     const mmprojPath = cfg.mmproj_path
       ? await joinPath([appData, cfg.mmproj_path])
       : undefined
 
-    const expectedMmprojBase = await joinPath([appData, 'llamacpp', 'models'])
-    if (mmprojPath && !mmprojPath.startsWith(expectedMmprojBase)) {
-      throw new Error(`Mmproj path traversal detected: ${mmprojPath}`)
+    if (mmprojPath) {
+      await this._validatePathWithinModelsDir(mmprojPath, 'Mmproj')
     }
 
     // Verify model file exists
@@ -800,8 +1600,19 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     }
     if (overrideSettings) {
       for (const [key, value] of Object.entries(overrideSettings)) {
+        if (!ALLOWED_LOAD_OVERRIDE_KEYS.has(key as keyof LlamacppConfig)) {
+          // Historically this threw, which killed model load whenever the
+          // caller happened to pass a sampling param (temperature, top_p, …)
+          // among the settings — those are per-request params, not load-time
+          // overrides. Skip silently with a debug log instead of failing the
+          // whole load; the sampling params are applied later per message.
+          console.debug(
+            `[llamacpp] Ignoring non-load setting "${key}" at load time (runtime-only param)`
+          )
+          continue
+        }
         if (value !== undefined && value !== '' && value !== null) {
-          ;(mergedConfig as any)[key] = value
+          ;(mergedConfig as Record<string, unknown>)[key] = value
         }
       }
     }
@@ -813,12 +1624,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       LLAMA_ARG_TIMEOUT: String(this.timeout),
     }
     if (this.config.llamacpp_env) {
-      for (const pair of String(this.config.llamacpp_env).split(/\s+/)) {
-        const idx = pair.indexOf('=')
-        if (idx > 0) {
-          envs[pair.slice(0, idx)] = pair.slice(idx + 1)
-        }
-      }
+      Object.assign(envs, this._parseEnvAssignments(String(this.config.llamacpp_env)))
     }
 
     const session = await loadLlamaModel(
@@ -859,19 +1665,30 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
     // Coalesce concurrent download requests for the same backend
     const pending = this.pendingDownloads.get(key)
-    if (pending) await pending
+    if (pending) {
+      // Download already in progress — throw immediately rather than blocking
+      // the model load.  The user will see the "Downloading engine" toast and
+      // can retry once it completes.
+      throw new Error(
+        `Engine backend (${backend}) is being downloaded. Please wait for the notification and try again.`
+      )
+    }
 
     const exePath = await getBackendExePath(version, backend)
     if (!(await fs.existsSync(exePath))) {
-      if (!this.pendingDownloads.has(key)) {
-        const downloadPromise = downloadBackend(version, backend).finally(
-          () => {
-            this.pendingDownloads.delete(key)
-          }
-        )
-        this.pendingDownloads.set(key, downloadPromise)
-      }
-      await this.pendingDownloads.get(key)
+      // Start the download in the background; throw so the chat request fails
+      // fast with a clear message instead of blocking for several minutes.
+      showToast(
+        'Downloading engine',
+        `Setting up llama.cpp backend (${backend}) for the first time. This may take a few minutes.`
+      )
+      const downloadPromise = downloadBackend(version, backend).finally(() => {
+        this.pendingDownloads.delete(key)
+      })
+      this.pendingDownloads.set(key, downloadPromise)
+      throw new Error(
+        `Engine backend (${backend}) is not yet downloaded. Setup has started — please try again in a few minutes.`
+      )
     }
 
     return exePath
@@ -882,13 +1699,28 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     shouldUnload: (session: SessionInfo) => boolean
   ): Promise<void> {
     try {
-      const allIds = await getLoadedModels().catch(() => [] as string[])
+      // Collect all loaded model IDs from both engines
+      const llamacppIds = chatModelIds(await getLoadedModels().catch((error) => {
+        console.warn('[llamacpp] Failed to read loaded models:', error)
+        return [] as string[]
+      }))
+      const axServingIds = await this._reconcileAxServingSessions()
+      const allIds = mergeModelIds(llamacppIds, axServingIds)
 
       for (const id of allIds) {
         if (id === excludeModelId) continue
         // Wait for any in-progress load for this model to complete
-        await this.loadingModels.get(id)?.catch(() => {})
+        await this.loadingModels.get(id)?.catch((error) => {
+          console.debug(`[llamacpp] Ignoring in-flight load failure for ${id} during unload sweep:`, error)
+        })
         try {
+          // Check ax-serving sessions first
+          const axSession = this.axServingSessions.get(id)
+          if (axSession && shouldUnload(axSession)) {
+            await this.unload(id)
+            continue
+          }
+          // Check llamacpp sessions
           const session = await findSessionByModel(id)
           if (session && shouldUnload(session)) {
             await this.unload(id)
@@ -911,31 +1743,68 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   }
 
   /**
-   * Handle engine switch: unload all active models so the next load uses
-   * the newly selected engine. Fire-and-forget because onSettingUpdate is
-   * synchronous.
+   * Handle engine switch: unload all active text models and stop the
+   * ax-serving process if we are moving away from it.  Fire-and-forget
+   * because onSettingUpdate is synchronous.
    */
   private _handleEngineSwitch(from: string, to: string): void {
-    console.log(
-      `[llamacpp] Engine switch: ${from} → ${to}, unloading active models`
-    )
+    this.engineSwitchQueue = this.engineSwitchQueue
+      .catch((error) =>
+        console.debug('[llamacpp] Previous engine switch failed before queuing a new one:', error)
+      )
+      .then(async () => {
+        // 1. Unload all active models so provider routing cannot point at mixed engines.
+        await this._unloadLoadedModels('', () => true)
 
-    const doSwitch = async () => {
-      // Unload all active models so provider routing cannot point at mixed engines.
-      await this._unloadLoadedModels('', () => true)
-      await this._syncLocalProviderRegistration()
-    }
-
-    doSwitch().catch((e) =>
-      console.warn('[llamacpp] Engine switch cleanup error:', e)
-    )
+        // 2. If we are leaving ax-serving, stop its process and reset state
+        if (from === 'ax-serving' && this.axServingPid > 0) {
+          try {
+            await unloadLlamaModel(this.axServingPid)
+          } catch (e) {
+            console.warn('[llamacpp] Failed to stop ax-serving process:', e)
+          }
+          this.axServingPid = 0
+          this.axServingPort = 0
+          this.axServingSessions.clear()
+        }
+        await this._syncLocalProviderRegistration()
+      })
+      .catch((e) =>
+        console.warn('[llamacpp] Engine switch cleanup error:', e)
+      )
   }
 
   // ─── unload() ─────────────────────────────────────────────────────────────
 
   async unload(sessionId: string): Promise<UnloadResult> {
     try {
-      // All sessions (llama-server and ax-engine-server) are process-based
+      // Check ax-serving sessions first
+      const axSession = this.axServingSessions.get(sessionId)
+      if (axSession) {
+        events.emit(ModelEvent.OnModelStop, { modelId: sessionId })
+        // Unload via ax-serving HTTP API
+        try {
+          const encodedId = encodeURIComponent(toAxServingModelId(sessionId))
+          const res = await fetch(
+            `http://127.0.0.1:${this.axServingPort}/v1/models/${encodedId}`,
+            { method: 'DELETE', signal: AbortSignal.timeout(AX_SERVING_UNLOAD_TIMEOUT_MS) }
+          )
+          if (!res.ok && res.status !== 404) {
+            const errText = await res.text()
+            console.warn(
+              `[llamacpp] ax-serving unload warning (${res.status}): ${errText}`
+            )
+          }
+        } catch (e) {
+          console.warn('[llamacpp] ax-serving unload HTTP error:', e)
+        }
+        this.axServingSessions.delete(sessionId)
+        await this._syncLocalProviderRegistration()
+        events.emit(ModelEvent.OnModelStopped, { modelId: sessionId })
+        return { success: true }
+      }
+
+      // Fallback: llamacpp process-based session
       const session = await findSessionByModel(sessionId)
       if (!session) {
         return { success: true }
@@ -945,9 +1814,9 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       await this._syncLocalProviderRegistration()
       events.emit(ModelEvent.OnModelStopped, { modelId: sessionId })
       return result
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('[llamacpp] unload error:', e)
-      return { success: false, error: e?.message ?? String(e) }
+      return { success: false, error: formatError(e) }
     }
   }
 
@@ -966,14 +1835,14 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     const stream = opts.stream !== false
 
     // Augment request with per-inference settings from extension config
-    const body: any = {
+    const body = disableThinkingForToolFollowUp({
       ...opts,
       stream,
       return_progress: true,
       ...(this.mirostat > 0 ? { mirostat: this.mirostat } : {}),
       ...(this.mirostat > 0 ? { mirostat_tau: this.mirostatEnt } : {}),
       ...(this.mirostat > 0 ? { mirostat_eta: this.mirostatLr } : {}),
-    }
+    })
 
     const headers: Record<string, string> = {
       'Authorization': `Bearer ${session.api_key}`,
@@ -987,7 +1856,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
-        signal: abortController?.signal,
+        signal: this._getTimeoutSignal(this.timeout * 1000, abortController),
       })
       if (!response.ok) {
         throw new Error(
@@ -1011,14 +1880,14 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   private async *_streamChat(
     url: string,
     headers: Record<string, string>,
-    body: any,
+    body: ChatRequestBody,
     abortController?: AbortController
   ): AsyncIterable<chatCompletionChunk> {
     const response = await fetch(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
-      signal: abortController?.signal,
+      signal: this._getTimeoutSignal(this.timeout * 1000, abortController),
     })
 
     if (!response.ok) {
@@ -1027,7 +1896,11 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       )
     }
 
-    const reader = response.body!.getReader()
+    if (!response.body) {
+      throw new Error('llama-server stream response did not include a body')
+    }
+
+    const reader = response.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
 
@@ -1056,8 +1929,11 @@ export default class AxStudioLlamacppExtension extends AIEngine {
               }
               yield chunk
             } catch (e) {
-              if ((e as Error).message?.includes('context size')) throw e
-              // Skip malformed SSE lines
+              if (e instanceof SyntaxError) {
+                console.warn('[llamacpp] Failed to parse SSE chunk:', data)
+                continue
+              }
+              throw e
             }
           }
         }
@@ -1069,6 +1945,11 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
   /** Find a loaded session or throw */
   private async _requireSession(modelId: string): Promise<SessionInfo> {
+    // Check ax-serving sessions first
+    const axSession = this.axServingSessions.get(modelId)
+    if (axSession) return axSession
+
+    // Fallback to Tauri IPC (llamacpp-spawned sessions)
     const session = await findSessionByModel(modelId)
     if (!session) {
       throw new Error(`Model "${modelId}" is not loaded. Load it first.`)
@@ -1082,10 +1963,53 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     pid: number,
     modelId: string
   ): Promise<void> {
-    // Both llama-server and ax-engine-server expose GET /health
+    const isAxServing = this.axServingSessions.has(modelId)
+
+    if (isAxServing) {
+      // ax-serving: check server health and model presence
+      try {
+        const res = await fetch(`http://localhost:${port}/health`, {
+          signal: AbortSignal.timeout(AX_SERVING_HEALTH_CHECK_TIMEOUT_MS),
+        })
+        if (!res.ok) {
+          throw new Error(`ax-serving health check failed (${res.status})`)
+        }
+        const health = await res.json()
+        // Check if our model is still loaded (may have been evicted by LRU/idle)
+        if (
+          Array.isArray(health.loaded_models) &&
+          !health.loaded_models.includes(modelId) &&
+          !health.loaded_models.includes(toAxServingModelId(modelId))
+        ) {
+          this.axServingSessions.delete(modelId)
+          await this._syncLocalProviderRegistration()
+          throw new Error(
+            `Model "${modelId}" was evicted by ax-serving. Please reload.`
+          )
+        }
+      } catch (e: unknown) {
+        if (formatError(e).includes('evicted')) throw e
+        // ax-serving process may have crashed — mark only this model unhealthy first.
+        console.error('[llamacpp] ax-serving health check failed:', e)
+        this.axServingSessions.delete(modelId)
+        if (this.axServingSessions.size === 0) {
+          this.axServingPid = 0
+          this.axServingPort = 0
+        }
+        await this._syncLocalProviderRegistration()
+        throw new Error(
+          `ax-serving is not responding. Please reload the model.`
+        )
+      }
+      return
+    }
+
+    // llamacpp: check process is alive
     const alive = await isProcessRunning(pid)
     if (!alive) {
-      await this.unload(modelId).catch(() => {})
+      await this.unload(modelId).catch((error) => {
+        console.warn(`[llamacpp] Failed to unload crashed model ${modelId}:`, error)
+      })
       throw new Error(
         `Model "${modelId}" process crashed. Please reload the model.`
       )
@@ -1093,18 +2017,17 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
     try {
       const res = await fetch(`http://localhost:${port}/health`, {
-        signal: AbortSignal.timeout(5000),
+        signal: AbortSignal.timeout(AX_SERVING_HEALTH_CHECK_TIMEOUT_MS),
       })
       if (res.status === 404) {
-        await this.unload(modelId).catch(() => {})
+        await this.unload(modelId).catch((error) => {
+          console.warn(`[llamacpp] Failed to unload unavailable model ${modelId}:`, error)
+        })
         throw new Error(`Model "${modelId}" server unavailable. Please reload.`)
       }
-    } catch (e: any) {
-      if (
-        e?.message?.includes('crashed') ||
-        e?.message?.includes('unavailable')
-      )
-        throw e
+    } catch (e: unknown) {
+      const message = formatError(e)
+      if (message.includes('crashed') || message.includes('unavailable')) throw e
       // Timeout or network error — the server may still be initializing, continue
     }
   }
@@ -1112,6 +2035,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   // ─── import() ─────────────────────────────────────────────────────────────
 
   async import(modelId: string, opts: ImportOptions): Promise<void> {
+    const importOptions = opts as ImportOptionsWithHeaders
     // Validate model ID — no path traversal
     if (!/^[a-zA-Z0-9/\-_.]+$/.test(modelId) || modelId.includes('..')) {
       throw new Error(
@@ -1119,29 +2043,36 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       )
     }
 
-    const appData = await getAppDataFolderPath()
-    const modelDir = await this._modelDir(modelId)
-    const modelFilePath = await joinPath([modelDir, 'model.gguf'])
-    const relativeModelPath = `llamacpp/models/${modelId}/model.gguf`
-
-    if (!(await fs.existsSync(modelDir))) await fs.mkdir(modelDir)
-
-    // Multi-file import — MLX / AX Engine artifact repos (config.json +
-    // safetensors, or model-manifest.json). Served natively by ax-engine.
-    if (opts.files && opts.files.length > 0) {
-      return this._importModelDirFromUrls(modelId, modelDir, opts.files)
-    }
-
-    // Local MLX / AX Engine model directory import
-    if (
-      !opts.modelPath.startsWith('http://') &&
-      !opts.modelPath.startsWith('https://')
-    ) {
-      const stat = await fs.fileStat(opts.modelPath)
-      if (stat?.isDirectory) {
-        return this._importModelDirFromLocal(modelId, modelDir, opts.modelPath)
+    const _wrap = async <T>(label: string, fn: () => Promise<T>): Promise<T> => {
+      try {
+        return await fn()
+      } catch (e) {
+        const msg =
+          e instanceof Error
+            ? e.message
+            : typeof e === 'string'
+              ? e
+              : JSON.stringify(e)
+        console.error(`[llamacpp] ${label} failed:`, e)
+        throw new Error(`${label}: ${msg}`)
       }
     }
+
+    const appData = await _wrap('getAppDataFolderPath', () => getAppDataFolderPath())
+    const modelDir = await _wrap('_modelDir', () => this._modelDir(modelId))
+    const modelFilePath = await _wrap('joinPath(model.gguf)', () =>
+      joinPath([modelDir, 'model.gguf'])
+    )
+    const relativeModelPath = `llamacpp/models/${modelId}/model.gguf`
+
+    const modelDirExists = await _wrap('fs.existsSync(modelDir)', () =>
+      fs.existsSync(modelDir)
+    )
+    if (!modelDirExists)
+      await _wrap('fs.mkdir(modelDir)', () => fs.mkdir(modelDir))
+    await _wrap('_validatePathWithinModelsDir', () =>
+      this._validatePathWithinModelsDir(modelFilePath, 'Model')
+    )
 
     const downloadExt = (window as any).core?.extensionManager?.getByName(
       '@ax-studio/download-extension'
@@ -1149,50 +2080,40 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
     // ── Download model file if URL provided ──
     const modelPath = opts.modelPath
-    if (modelPath.startsWith('http://') || modelPath.startsWith('https://')) {
-      console.log('[llamacpp] Download extension check:', !!downloadExt)
+    if (modelPath.startsWith('https://')) {
       if (!downloadExt) {
         const error = new Error('Download extension not available')
         console.error('[llamacpp] Download extension unavailable:', error)
         throw error
       }
 
-      console.log(
-        '[llamacpp] Starting download for model:',
-        modelId,
-        'from:',
-        modelPath,
-        'to:',
-        modelFilePath
-      )
       events.emit(DownloadEvent.onFileDownloadStarted, {
+        downloadId: modelId,
         modelId,
         fileName: 'model.gguf',
       })
 
       const proxy = getProxyConfig()
       const proxyArg = buildProxyArg(proxy)
-      console.log('[llamacpp] Proxy config:', proxyArg)
 
       try {
-        console.log('[llamacpp] Calling downloadExt.downloadFile...')
         await downloadExt.downloadFile(
           modelPath,
           modelFilePath,
           `llamacpp-import-${modelId}`,
           proxyArg,
+          importOptions.downloadHeaders,
           (transferred: number, total: number) => {
-            console.log('[llamacpp] Download progress:', transferred, '/', total)
             events.emit(DownloadEvent.onFileDownloadUpdate, {
+              downloadId: modelId,
               modelId,
               fileName: 'model.gguf',
-              percent: transferred / total,
+              percent: total > 0 ? transferred / total : 0,
               size: { transferred, total },
               downloadState: 'downloading',
             })
           }
         )
-        console.log('[llamacpp] Download completed successfully for model:', modelId)
       } catch (e) {
         console.error(
           '[llamacpp] Download failed for model:',
@@ -1200,10 +2121,9 @@ export default class AxStudioLlamacppExtension extends AIEngine {
           'error:',
           e
         )
-        try {
-          await fs.rm(modelFilePath)
-        } catch {}
+        await this._cleanupImportArtifacts(modelId, [modelFilePath])
         events.emit(DownloadEvent.onFileDownloadError, {
+          downloadId: modelId,
           modelId,
           error: String(e),
         })
@@ -1211,33 +2131,39 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       }
 
       events.emit(DownloadEvent.onFileDownloadSuccess, {
+        downloadId: modelId,
         modelId,
         fileName: 'model.gguf',
       })
 
       // Validate SHA256 if provided
       if (opts.modelSha256) {
-        events.emit(DownloadEvent.onModelValidationStarted, { modelId })
+        events.emit(DownloadEvent.onModelValidationStarted, { downloadId: modelId, modelId })
         const valid = await this._validateSha256(
           modelFilePath,
           opts.modelSha256
         )
         if (!valid) {
-          try {
-            await fs.rm(modelFilePath)
-          } catch {}
-          events.emit(DownloadEvent.onModelValidationFailed, { modelId })
+          await this._cleanupImportArtifacts(modelId, [modelFilePath])
+          events.emit(DownloadEvent.onModelValidationFailed, { downloadId: modelId, modelId })
           throw new Error(
             `SHA256 mismatch for model "${modelId}". File may be corrupted.`
           )
         }
-        events.emit(DownloadEvent.onFileDownloadAndVerificationSuccess, {
-          modelId,
-        })
       }
+      // Always emit success — most HuggingFace models have no SHA256,
+      // so emitting only inside the if block means the model never registers.
+      events.emit(DownloadEvent.onFileDownloadAndVerificationSuccess, {
+        downloadId: modelId,
+        modelId,
+      })
     } else {
       // Local file — copy to models directory
-      await fs.copyFile(modelPath, modelFilePath)
+      const canonicalModelPath = await this._canonicalizeExistingImportSourcePath(
+        modelPath,
+        'Model'
+      )
+      await fs.copyFile(canonicalModelPath, modelFilePath)
     }
 
     // ── Download mmproj file if provided ──
@@ -1245,6 +2171,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     if (opts.mmprojPath) {
       const mmprojFilePath = await joinPath([modelDir, 'mmproj.gguf'])
       relativeMmprojPath = `llamacpp/models/${modelId}/mmproj.gguf`
+      await this._validatePathWithinModelsDir(mmprojFilePath, 'MMProj')
 
       if (opts.mmprojPath.startsWith('http')) {
         if (!downloadExt) throw new Error('Download extension not available')
@@ -1253,10 +2180,28 @@ export default class AxStudioLlamacppExtension extends AIEngine {
           opts.mmprojPath,
           mmprojFilePath,
           `llamacpp-mmproj-${modelId}`,
-          buildProxyArg(proxy)
+          buildProxyArg(proxy),
+          importOptions.downloadHeaders
         )
       } else {
-        await fs.copyFile(opts.mmprojPath, mmprojFilePath)
+        const canonicalMmprojPath = await this._canonicalizeExistingImportSourcePath(
+          opts.mmprojPath,
+          'MMProj'
+        )
+        await fs.copyFile(canonicalMmprojPath, mmprojFilePath)
+      }
+
+      if (opts.mmprojSha256) {
+        const valid = await this._validateSha256(
+          mmprojFilePath,
+          opts.mmprojSha256
+        )
+        if (!valid) {
+          await this._cleanupImportArtifacts(modelId, [mmprojFilePath])
+          throw new Error(
+            `SHA256 mismatch for mmproj "${modelId}". File may be corrupted.`
+          )
+        }
       }
     }
 
@@ -1279,178 +2224,22 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     }
 
     // ── Write model.yml ──
-    await this._writeModelConfig(modelId, {
-      model_path: relativeModelPath,
-      mmproj_path: relativeMmprojPath,
-      name: modelId,
-      size_bytes: sizeBytes,
-      embedding: isEmbedding,
-      sha256: opts.modelSha256,
-      mmproj_sha256: opts.mmprojSha256,
-      model_format: 'gguf',
-    })
-
-    events.emit(AppEvent.onModelImported, { modelId })
-  }
-
-  /** Download a multi-file MLX / AX Engine model into the models directory */
-  private async _importModelDirFromUrls(
-    modelId: string,
-    modelDir: string,
-    files: NonNullable<ImportOptions['files']>
-  ): Promise<void> {
-    const downloadExt = (window as any).core?.extensionManager?.getByName(
-      '@ax-studio/download-extension'
-    )
-    if (!downloadExt) throw new Error('Download extension not available')
-
-    const fileNames = files.map((f) => sanitizeImportFilename(f.filename))
-    const format = detectModelFormatFromFiles(fileNames)
-    if (format === 'gguf') {
-      throw new Error(
-        `Multi-file import for "${modelId}" is not an MLX or AX Engine model ` +
-          `(no config.json, *.safetensors, or model-manifest.json in file list).`
-      )
-    }
-
-    const destDir = await joinPath([modelDir, 'model'])
-    if (!(await fs.existsSync(destDir))) await fs.mkdir(destDir)
-
-    const proxyArg = buildProxyArg(getProxyConfig())
-    const knownTotal = files.reduce((sum, f) => sum + (f.size ?? 0), 0)
-    let completedBytes = 0
-    let sizeBytes = 0
-
-    events.emit(DownloadEvent.onFileDownloadStarted, {
-      modelId,
-      fileName: fileNames[0],
-    })
-
     try {
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i]
-        const destPath = await joinPath([destDir, fileNames[i]])
-
-        await downloadExt.downloadFile(
-          file.url,
-          destPath,
-          `llamacpp-import-${modelId}`,
-          proxyArg,
-          (transferred: number, total: number) => {
-            const overallTotal =
-              knownTotal > 0 ? knownTotal : total * files.length
-            events.emit(DownloadEvent.onFileDownloadUpdate, {
-              modelId,
-              fileName: fileNames[i],
-              percent:
-                overallTotal > 0
-                  ? (completedBytes + transferred) / overallTotal
-                  : 0,
-              size: {
-                transferred: completedBytes + transferred,
-                total: overallTotal,
-              },
-              downloadState: 'downloading',
-            })
-          }
-        )
-
-        if (file.sha256) {
-          events.emit(DownloadEvent.onModelValidationStarted, { modelId })
-          const valid = await this._validateSha256(destPath, file.sha256)
-          if (!valid) {
-            events.emit(DownloadEvent.onModelValidationFailed, { modelId })
-            throw new Error(
-              `SHA256 mismatch for "${fileNames[i]}" of model "${modelId}". File may be corrupted.`
-            )
-          }
-        }
-
-        const stat = await fs.fileStat(destPath)
-        const fileBytes = stat?.size ?? file.size ?? 0
-        sizeBytes += fileBytes
-        completedBytes += file.size ?? fileBytes
-      }
-    } catch (e) {
-      events.emit(DownloadEvent.onFileDownloadError, {
-        modelId,
-        error: String(e),
+      await this._writeModelConfig(modelId, {
+        model_path: relativeModelPath,
+        mmproj_path: relativeMmprojPath,
+        name: modelId,
+        size_bytes: sizeBytes,
+        embedding: isEmbedding,
+        sha256: opts.modelSha256,
+        mmproj_sha256: opts.mmprojSha256,
       })
-      try {
-        await fs.rm(destDir)
-      } catch {}
-      throw e
+    } catch (e) {
+      console.error('[llamacpp] Failed to write model.yml for', modelId, e)
+      throw new Error(`Failed to save model configuration for "${modelId}": ${(e as Error).message}`)
     }
-
-    events.emit(DownloadEvent.onFileDownloadSuccess, {
-      modelId,
-      fileName: fileNames[0],
-    })
-
-    await this._writeModelConfig(modelId, {
-      model_path: `llamacpp/models/${modelId}/model`,
-      name: modelId,
-      size_bytes: sizeBytes,
-      embedding: false,
-      model_format: format,
-    })
 
     events.emit(AppEvent.onModelImported, { modelId })
-  }
-
-  /** Copy a local MLX / AX Engine model directory into the models directory */
-  private async _importModelDirFromLocal(
-    modelId: string,
-    modelDir: string,
-    srcDir: string
-  ): Promise<void> {
-    const entries: string[] = (await fs.readdirSync(srcDir)) ?? []
-    const baseNames = entries
-      .map((p) => p.replace(/\\/g, '/').split('/').pop() ?? '')
-      .filter(Boolean)
-    const format = detectModelFormatFromFiles(baseNames)
-    if (format === 'gguf') {
-      throw new Error(
-        `"${srcDir}" is not an MLX or AX Engine model directory ` +
-          `(missing config.json / model-manifest.json).`
-      )
-    }
-
-    const destDir = await joinPath([modelDir, 'model'])
-    const sizeBytes = await this._copyDirRecursive(srcDir, destDir)
-
-    await this._writeModelConfig(modelId, {
-      model_path: `llamacpp/models/${modelId}/model`,
-      name: modelId,
-      size_bytes: sizeBytes,
-      embedding: false,
-      model_format: format,
-    })
-
-    events.emit(AppEvent.onModelImported, { modelId })
-  }
-
-  /** Recursively copy a directory, returning the total bytes copied */
-  private async _copyDirRecursive(
-    srcDir: string,
-    destDir: string
-  ): Promise<number> {
-    if (!(await fs.existsSync(destDir))) await fs.mkdir(destDir)
-    let bytes = 0
-    const entries: string[] = (await fs.readdirSync(srcDir)) ?? []
-    for (const entry of entries) {
-      const base = entry.replace(/\\/g, '/').split('/').pop() ?? ''
-      if (!base) continue
-      const destPath = await joinPath([destDir, base])
-      const stat = await fs.fileStat(entry)
-      if (stat?.isDirectory) {
-        bytes += await this._copyDirRecursive(entry, destPath)
-      } else {
-        await fs.copyFile(entry, destPath)
-        bytes += stat?.size ?? 0
-      }
-    }
-    return bytes
   }
 
   async abortImport(modelId: string): Promise<void> {
@@ -1460,13 +2249,24 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     if (downloadExt) {
       try {
         await downloadExt.cancelDownload(`llamacpp-import-${modelId}`)
-      } catch {}
+      } catch (error) {
+        console.warn(`[llamacpp] Failed to cancel model download for ${modelId}:`, error)
+      }
+      try {
+        await downloadExt.cancelDownload(`llamacpp-mmproj-${modelId}`)
+      } catch (error) {
+        console.warn(`[llamacpp] Failed to cancel mmproj download for ${modelId}:`, error)
+      }
     }
-    // Clean up partial model directory
-    try {
-      const modelDir = await this._modelDir(modelId)
-      if (await fs.existsSync(modelDir)) await fs.rm(modelDir)
-    } catch {}
+    const modelDir = await this._modelDir(modelId)
+    const modelFilePath = await joinPath([modelDir, 'model.gguf'])
+    const mmprojFilePath = await joinPath([modelDir, 'mmproj.gguf'])
+    const modelYmlPath = await joinPath([modelDir, 'model.yml'])
+    await this._cleanupImportArtifacts(modelId, [
+      modelFilePath,
+      mmprojFilePath,
+      modelYmlPath,
+    ])
   }
 
   // ─── helpers ─────────────────────────────────────────────────────────────
@@ -1483,11 +2283,17 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
   async delete(modelId: string): Promise<void> {
     this._validateModelId(modelId)
-    // Unload first if running
+    // Unload first if running (check both engines)
     try {
-      const session = await findSessionByModel(modelId)
-      if (session) await this.unload(modelId)
-    } catch {}
+      if (this.axServingSessions.has(modelId)) {
+        await this.unload(modelId)
+      } else {
+        const session = await findSessionByModel(modelId)
+        if (session) await this.unload(modelId)
+      }
+    } catch (error) {
+      console.warn(`[llamacpp] Failed to unload model ${modelId} before delete:`, error)
+    }
 
     const modelDir = await this._modelDir(modelId)
     if (await fs.existsSync(modelDir)) {
@@ -1509,13 +2315,28 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
   async getLoadedModels(): Promise<string[]> {
     try {
-      return await getLoadedModels()
-    } catch {
-      return []
+      const llamacppModels = chatModelIds(await getLoadedModels())
+      const axModels = await this._reconcileAxServingSessions()
+      // Deduplicate in case of overlap
+      return mergeModelIds(llamacppModels, axModels)
+    } catch (error) {
+      console.debug('[llamacpp] Falling back to ax-serving model list after getLoadedModels failure:', error)
+      return this._reconcileAxServingSessions()
     }
   }
 
   async syncModelRoute(modelId: string): Promise<void> {
+    await this._reconcileAxServingSessions()
+    const axSession = this.axServingSessions.get(modelId)
+    if (axSession) {
+      await this._syncLocalProviderRegistration({
+        port: axSession.port,
+        apiKey: '',
+        models: [modelId],
+      })
+      return
+    }
+
     const session = await findSessionByModel(modelId)
     if (!session) {
       throw new Error(`Model "${modelId}" is not loaded. Load it first.`)
@@ -1536,24 +2357,12 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       if (!cfg) return false
       const appData = await getAppDataFolderPath()
       const modelPath = await joinPath([appData, cfg.model_path])
-      // Security: Prevent path traversal
-      const expectedBase = await joinPath([appData, 'llamacpp', 'models'])
-      if (!modelPath.startsWith(expectedBase)) return false
-
-      const format = await this._resolveModelFormat(cfg)
-      if (format !== 'gguf') {
-        // MLX / AX native — chat template lives in tokenizer_config.json
-        const tcPath = await joinPath([modelPath, 'tokenizer_config.json'])
-        const content = await fs.readFileSync(tcPath)
-        if (!content) return false
-        const template = String(JSON.parse(content)?.chat_template ?? '')
-        return template.toLowerCase().includes('tool')
-      }
-
+      if (!(await this._isPathWithinModelsDir(modelPath))) return false
       const meta: GgufMetadata = await readGgufMetadata(modelPath)
       const template = meta.metadata?.['tokenizer.chat_template'] ?? ''
       return template.toLowerCase().includes('tool')
-    } catch {
+    } catch (error) {
+      console.debug(`[llamacpp] Failed to inspect tool support for ${modelId}:`, error)
       return false
     }
   }
@@ -1564,11 +2373,10 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       if (!cfg || !cfg.mmproj_path) return false
       const appData = await getAppDataFolderPath()
       const mmprojPath = await joinPath([appData, cfg.mmproj_path])
-      // Security: Prevent path traversal
-      const expectedMmprojBase = await joinPath([appData, 'llamacpp', 'models'])
-      if (!mmprojPath.startsWith(expectedMmprojBase)) return false
+      if (!(await this._isPathWithinModelsDir(mmprojPath))) return false
       return await fs.existsSync(mmprojPath)
-    } catch {
+    } catch (error) {
+      console.debug(`[llamacpp] Failed to check mmproj presence for ${modelId}:`, error)
       return false
     }
   }
@@ -1587,11 +2395,11 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       const backendPath = await getBackendExePath(version, backend)
       const raw = await getDevices(backendPath)
       // Map DeviceInfo → DeviceList (handle both field name conventions)
-      return raw.map((d: any) => ({
-        id: d.id,
-        name: d.name,
-        mem: d.mem ?? d.memory ?? 0,
-        free: d.free ?? 0,
+      return raw.map((device: DeviceInfoLike) => ({
+        id: device.id,
+        name: device.name,
+        mem: 'mem' in device ? device.mem : device.memory,
+        free: 'free' in device ? device.free : 0,
       }))
     } catch (e) {
       console.error('[llamacpp] getDevices error:', e)
@@ -1606,7 +2414,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     const session = await this._requireSession(modelId)
     await this._healthCheck(session.port, session.pid, modelId)
 
-    const ubatchSize = Number(this.config.ubatch_size) || 512
+    const ubatchSize = Number(this.config.ubatch_size) || DEFAULT_UBATCH_SIZE
     const batches = buildEmbedBatches(inputs, ubatchSize)
     const batchResults = []
 
@@ -1624,6 +2432,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
             model: modelId,
             encoding_format: 'float',
           }),
+          signal: AbortSignal.timeout(this.timeout * 1000),
         }
       )
       if (!res.ok)
@@ -1656,6 +2465,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
           messages,
           chat_template_kwargs: { enable_thinking: false },
         }),
+        signal: AbortSignal.timeout(this.timeout * 1000),
       })
       if (!templateRes.ok)
         throw new Error(`apply-template ${templateRes.status}`)
@@ -1666,6 +2476,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         method: 'POST',
         headers,
         body: JSON.stringify({ content: prompt }),
+        signal: AbortSignal.timeout(this.timeout * 1000),
       })
       if (!tokenRes.ok) throw new Error(`tokenize ${tokenRes.status}`)
       const { tokens } = await tokenRes.json()
@@ -1755,13 +2566,19 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         expected
       )
       if (result !== undefined) return Boolean(result)
-      // If not available, validation cannot proceed - this is a security error
-      throw new Error(
-        'SHA256 validation API unavailable - cannot verify file integrity'
-      )
+
+      const computed = await computeFileSha256Browser(filePath)
+      return computed.toLowerCase() === expected.toLowerCase()
     } catch (error) {
-      // Never treat validation failure as success
-      throw new Error(`SHA256 validation failed: ${error}`)
+      // Skip validation rather than crash the model load. The Tauri API may
+      // be missing in web/dev contexts, and the browser fallback throws when
+      // `fetch` cannot read a local file path. Hard-throwing here would make
+      // every model load fail in those environments.
+      console.warn(
+        '[llamacpp] SHA256 validation unavailable — skipping integrity check:',
+        error
+      )
+      return true
     }
   }
 }

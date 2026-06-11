@@ -3,9 +3,9 @@
  */
 
 import { sep as getSep, join, dirname, basename, extname } from '@tauri-apps/api/path'
-import { DefaultPathService } from './default'
+import type { PathService } from './types'
 
-export class TauriPathService extends DefaultPathService {
+export class TauriPathService implements PathService {
   sep(): string {
     try {
       // Note: sep() is synchronous in Tauri v2 (unlike other path functions)

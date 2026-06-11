@@ -24,7 +24,6 @@ export function bootstrapUpdater(input: BootstrapUpdaterInput): () => void {
   checkForUpdate()
 
   const intervalId = setInterval(() => {
-    console.log('Periodic update check triggered')
     checkForUpdate()
   }, Number(UPDATE_CHECK_INTERVAL_MS))
 

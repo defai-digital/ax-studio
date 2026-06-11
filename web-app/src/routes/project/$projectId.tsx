@@ -1,16 +1,17 @@
 import { createFileRoute, useParams } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 
-import { useThreadManagement } from '@/features/threads/hooks/useThreadManagement'
-import { useThreads } from '@/features/threads/hooks/useThreads'
-import { useAssistant } from '@/features/assistants/hooks/useAssistant'
+import { useThreadManagement } from '@/hooks/threads/useThreadManagement'
+import { useThreads } from '@/hooks/threads/useThreads'
+import { useAssistant } from '@/hooks/chat/useAssistant'
 import { useTranslation } from '@/i18n/react-i18next-compat'
+import { toast } from 'sonner'
 
-import ChatInput from '@/features/chat/components/ChatInput'
+import ChatInput from '@/containers/ChatInput'
 import HeaderPage from '@/containers/HeaderPage'
 import ThreadList from '@/containers/ThreadList'
 import ProjectFiles from '@/containers/ProjectFiles'
-import { AvatarEmoji } from '@/containers/AvatarEmoji'
+import { AvatarEmoji } from '@/components/common/AvatarEmoji'
 
 import {
   FolderOpen,
@@ -31,7 +32,7 @@ import {
 import { Button } from '@/components/ui/button'
 import AddProjectDialog from '@/containers/dialogs/AddProjectDialog'
 import { DeleteProjectDialog } from '@/containers/dialogs/DeleteProjectDialog'
-import { DeleteAllThreadsInProjectDialog } from '@/containers/dialogs/DeleteAllThreadsInProjectDialog'
+import { DeleteAllThreadsInProjectDialog } from '@/containers/dialogs/thread/DeleteAllThreadsInProjectDialog'
 import { SidebarMenu } from '@/components/ui/sidebar'
 
 export const Route = createFileRoute('/project/$projectId')({
@@ -75,8 +76,15 @@ function ProjectPageContent() {
     projectPrompt?: string | null,
   ) => {
     if (project) {
-      await updateFolder(project.id, name, assistantId, logo, projectPrompt)
-      setEditDialogOpen(false)
+      try {
+        await updateFolder(project.id, name, assistantId, logo, projectPrompt)
+        setEditDialogOpen(false)
+      } catch (error) {
+        console.error('Failed to update project:', error)
+        toast.error(
+          error instanceof Error ? error.message : 'Failed to update project'
+        )
+      }
     }
   }
 
@@ -167,11 +175,7 @@ function ProjectPageContent() {
       >
         <div className="max-w-3xl mx-auto space-y-8">
           {/* Chat Input */}
-          <ChatInput
-            showSpeedToken={false}
-            initialMessage={true}
-            projectId={projectId}
-          />
+          <ChatInput initialMessage={true} projectId={projectId} />
 
           {/* Conversations */}
           {projectThreads.length > 0 ? (

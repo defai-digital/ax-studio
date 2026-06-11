@@ -2,18 +2,18 @@ import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import { useState } from 'react'
 
-import { useAssistant } from '@/features/assistants/hooks/useAssistant'
+import { useAssistant } from '@/hooks/chat/useAssistant'
 
 import HeaderPage from '@/containers/HeaderPage'
-import { IconCirclePlus, IconPencil, IconTrash } from '@tabler/icons-react'
-import AddEditAssistant from '@/features/assistants/components/AddEditAssistant'
-import { DeleteAssistantDialog } from '@/features/assistants/components/DeleteAssistantDialog'
-import { AvatarEmoji } from '@/containers/AvatarEmoji'
+import AddEditAssistant from '@/containers/dialogs/AddEditAssistant'
+import { DeleteAssistantDialog } from '@/containers/dialogs'
+import { AvatarEmoji } from '@/components/common/AvatarEmoji'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { Button } from '@/components/ui/button'
-import SettingsMenu from '@/containers/SettingsMenu'
+import SettingsMenu from '@/components/common/SettingsMenu'
 import { cn } from '@/lib/utils'
-import { Bot } from 'lucide-react'
+import { Bot, Pencil, PlusCircle, Trash2 } from "lucide-react";
+import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
 
 export const Route = createFileRoute(route.settings.assistant)({
   component: AssistantContent,
@@ -72,7 +72,7 @@ function AssistantContent() {
             variant="outline"
             className="relative z-50"
           >
-            <IconCirclePlus size={16} />
+            <PlusCircle size={16} />
             {t('assistants:addAssistant')}
           </Button>
         </div>
@@ -83,22 +83,7 @@ function AssistantContent() {
           className="flex-1 overflow-y-auto"
           style={{ scrollbarWidth: 'none' }}
         >
-          <div className="flex items-center gap-3 px-8 py-5 border-b border-border/40 bg-background sticky top-0 z-10">
-            <div
-              className="size-7 rounded-lg flex items-center justify-center"
-              style={{
-                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-              }}
-            >
-              <Bot className="size-3.5 text-white" strokeWidth={2.5} />
-            </div>
-            <h1
-              className="text-foreground tracking-tight"
-              style={{ fontSize: '16px', fontWeight: 600 }}
-            >
-              {t('common:assistants')}
-            </h1>
-          </div>
+          <SettingsPageLayout icon={Bot} title={t('common:assistants')} />
           <div className="px-8 py-7">
             <div className="max-w-2xl space-y-6">
               {assistants
@@ -138,7 +123,7 @@ function AssistantContent() {
                           setOpen(true)
                         }}
                       >
-                        <IconPencil className="text-muted-foreground size-4" />
+                        <Pencil className="text-muted-foreground size-4" />
                       </Button>
                       <Button
                         variant="ghost"
@@ -146,7 +131,7 @@ function AssistantContent() {
                         title={t('assistants:deleteAssistant')}
                         onClick={() => handleDelete(assistant.id)}
                       >
-                        <IconTrash className="text-destructive size-4" />
+                        <Trash2 className="text-destructive size-4" />
                       </Button>
                     </div>
                   </div>

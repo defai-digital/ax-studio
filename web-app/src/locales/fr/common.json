@@ -376,5 +376,11 @@
   "attachmentInjectedIndicator": "Injecté dans la discussion",
   "attachmentEmbeddedIndicator": "Intégré pour RAG",
   "viewInjectedContent": "Voir le contenu injecté",
-  "injectedContentTitle": "Contenu du fichier injecté"
+  "injectedContentTitle": "Contenu du fichier injecté",
+  "time": {
+    "justNow": "Just now",
+    "minutesAgo": "{{count}}m ago",
+    "hoursAgo": "{{count}}h ago",
+    "daysAgo": "{{count}}d ago"
+  }
 }

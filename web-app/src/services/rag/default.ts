@@ -126,7 +126,7 @@ export class DefaultRAGService implements RAGService {
       case 'retrieve':
         return this.handleRetrieve(args)
       case 'list_attachments':
-        return this.handleListAttachments(args)
+        return await this.handleListAttachments(args)
       case 'get_chunks':
         return this.handleGetChunks(args)
       default:
@@ -143,7 +143,6 @@ export class DefaultRAGService implements RAGService {
       return ''
     }
 
-    console.log('[RAG] parseDocument: calling fabric_extract for', path)
     try {
       const result = await hub.callTool({
         toolName: 'fabric_extract',
@@ -164,14 +163,8 @@ export class DefaultRAGService implements RAGService {
       try {
         const parsed = JSON.parse(text)
         const content = typeof parsed.text === 'string' ? parsed.text : ''
-        console.log('[RAG] parseDocument success:', content.length, 'chars')
         return content
       } catch {
-        console.log(
-          '[RAG] parseDocument success (plain text):',
-          text.length,
-          'chars'
-        )
         return text
       }
     } catch (err) {
@@ -245,7 +238,8 @@ export class DefaultRAGService implements RAGService {
       let searchResponse: { results?: Array<Record<string, unknown>> }
       try {
         searchResponse = JSON.parse(text)
-      } catch {
+      } catch (err) {
+        console.warn('[RAG] Failed to parse search response:', err)
         return ok({
           thread_id: args.threadId,
           project_id: args.projectId,
@@ -279,11 +273,11 @@ export class DefaultRAGService implements RAGService {
     }
   }
 
-  private handleListAttachments(args: {
+  private async handleListAttachments(args: {
     threadId?: string
     projectId?: string
     scope: 'project' | 'thread'
-  }): MCPToolCallResult {
+  }): Promise<MCPToolCallResult> {
     const collectionId = this.resolveCollectionId(args)
     if (!collectionId) return fail('No thread or project context')
 
@@ -342,7 +336,8 @@ export class DefaultRAGService implements RAGService {
       let parsed: { results?: Array<Record<string, unknown>> }
       try {
         parsed = JSON.parse(text)
-      } catch {
+      } catch (err) {
+        console.warn('[RAG] Failed to parse chunks response:', err)
         return ok({
           thread_id: args.threadId,
           scope: args.scope,

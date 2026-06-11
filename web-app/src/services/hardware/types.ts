@@ -2,7 +2,7 @@
  * Hardware Service Types
  */
 
-import type { HardwareData, SystemUsage } from '@/hooks/useHardware'
+import type { HardwareData, SystemUsage } from '@/hooks/settings/useHardware'
 
 // Device list interface for llamacpp extension
 export interface DeviceList {
@@ -17,7 +17,6 @@ export interface HardwareService {
   getHardwareInfo(): Promise<HardwareData | null>
   getSystemUsage(): Promise<SystemUsage | null>
   getLlamacppDevices(): Promise<DeviceList[]>
-  setActiveGpus(data: { gpus: number[] }): Promise<void>
 }
 
 // Re-export hardware types for convenience

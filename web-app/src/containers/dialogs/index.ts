@@ -1,19 +1,15 @@
-export { default as AddEditCustomCliDialog } from './AddEditCustomCliDialog'
-export { default as DialogAppUpdater } from './AppUpdater'
-export { default as AttachmentIngestionDialog } from './AttachmentIngestionDialog'
-export { default as ChangeDataFolderLocation } from './ChangeDataFolderLocation'
-export { DeleteAllThreadsDialog } from './DeleteAllThreadsDialog'
-export { DeleteAllThreadsInProjectDialog } from './DeleteAllThreadsInProjectDialog'
-export { DeleteMessageDialog } from './DeleteMessageDialog'
-export { DeleteProjectDialog } from './DeleteProjectDialog'
-export { DeleteThreadDialog } from './DeleteThreadDialog'
-export { EditMessageDialog } from './EditMessageDialog'
+// Thread dialogs
+export { RenameThreadDialog } from './thread/RenameThreadDialog'
+export { DeleteThreadDialog } from './thread/DeleteThreadDialog'
+export { DeleteAllThreadsDialog } from './thread/DeleteAllThreadsDialog'
+
+// Message dialogs
+export { EditMessageDialog } from './message/EditMessageDialog'
+export { DeleteMessageDialog } from './message/DeleteMessageDialog'
+
+// System / app-level dialogs (still top-level)
 export { FactoryResetDialog } from './FactoryResetDialog'
-export { default as ImageModal } from './ImageModal'
-export { MessageMetadataDialog } from './MessageMetadataDialog'
-export { default as OutOfContextPromiseModal } from './OutOfContextDialog'
-export { RenameThreadDialog } from './RenameThreadDialog'
+export { DeleteAssistantDialog } from './DeleteAssistantDialog'
+export { DeleteProjectDialog } from './DeleteProjectDialog'
+export { AddProviderDialog } from './AddProviderDialog'
 export { SearchDialog } from './SearchDialog'
-export { default as SpeechToTextDialog } from './SpeechToTextDialog'
-export { default as TextToSpeechDialog } from './TextToSpeechDialog'
-export { default as ToolApproval } from './ToolApproval'

@@ -1,11 +1,13 @@
 {
   "compilerOptions": {
-    "target": "es2018",
+    "target": "es2020",
     "module": "ES6",
+    "moduleResolution": "node",
+    "lib": ["es2020", "dom"],
     "outDir": "./dist",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "strict": false,
+    "strict": true,
     "skipLibCheck": true,
     "rootDir": "./src"
   },

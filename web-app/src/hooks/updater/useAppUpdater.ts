@@ -1,0 +1,254 @@
+import { isDev } from '@/lib/utils'
+import { useState, useCallback, useEffect, useRef } from 'react'
+import { events, AppEvent } from '@ax-studio/core'
+import type { UpdateInfo } from '@/services/updater/types'
+import { SystemEvent } from '@/types/events'
+import { useServiceHub } from '@/hooks/useServiceHub'
+
+export interface UpdateState {
+  isUpdateAvailable: boolean
+  updateInfo: UpdateInfo | null
+  isDownloading: boolean
+  downloadProgress: number
+  downloadedBytes: number
+  totalBytes: number
+  remindMeLater: boolean
+}
+
+export const useAppUpdater = () => {
+  const serviceHub = useServiceHub()
+  const abortRef = useRef<AbortController | null>(null)
+  const [updateState, setUpdateState] = useState<UpdateState>({
+    isUpdateAvailable: false,
+    updateInfo: null,
+    isDownloading: false,
+    downloadProgress: 0,
+    downloadedBytes: 0,
+    totalBytes: 0,
+    remindMeLater: false,
+  })
+
+  // Listen for app update state sync events
+  useEffect(() => {
+    const handleUpdateStateSync = (newState: Partial<UpdateState>) => {
+      setUpdateState((prev) => ({
+        ...prev,
+        ...newState,
+      }))
+    }
+
+    events.on('onAppUpdateStateSync', handleUpdateStateSync)
+
+    return () => {
+      events.off('onAppUpdateStateSync', handleUpdateStateSync)
+    }
+  }, [])
+
+  const syncStateToOtherInstances = useCallback(
+    (partialState: Partial<UpdateState>) => {
+      // Emit event to sync state across all useAppUpdater instances
+      events.emit('onAppUpdateStateSync', partialState)
+    },
+    []
+  )
+
+  const checkForUpdate = useCallback(
+    async (resetRemindMeLater = false) => {
+      abortRef.current?.abort()
+      const controller = new AbortController()
+      abortRef.current = controller
+
+      try {
+        if (resetRemindMeLater) {
+          const newState = {
+            remindMeLater: false,
+          }
+          setUpdateState((prev) => ({
+            ...prev,
+            ...newState,
+          }))
+          syncStateToOtherInstances(newState)
+        }
+
+        if (!isDev()) {
+          if (AUTO_UPDATER_DISABLED) {
+            return null
+          }
+
+          const update = await serviceHub.updater().check()
+          if (controller.signal.aborted) return null
+
+          if (update) {
+            const newState = {
+              isUpdateAvailable: true,
+              remindMeLater: false,
+              updateInfo: update,
+            }
+            setUpdateState((prev) => ({
+              ...prev,
+              ...newState,
+            }))
+            // Sync to other instances
+            syncStateToOtherInstances(newState)
+            return update
+          } else {
+            // No update available - reset state
+            const newState = {
+              isUpdateAvailable: false,
+              updateInfo: null,
+            }
+            setUpdateState((prev) => ({
+              ...prev,
+              ...newState,
+            }))
+            // Sync to other instances
+            syncStateToOtherInstances(newState)
+            return null
+          }
+        } else {
+          const newState = {
+            isUpdateAvailable: false,
+            updateInfo: null,
+            ...(resetRemindMeLater && { remindMeLater: false }),
+          }
+          setUpdateState((prev) => ({
+            ...prev,
+            ...newState,
+          }))
+          // Sync to other instances
+          syncStateToOtherInstances(newState)
+          return null
+        }
+      } catch (error) {
+        console.error('Error checking for updates:', error)
+        // Reset state on error
+        const newState = {
+          isUpdateAvailable: false,
+          updateInfo: null,
+        }
+        setUpdateState((prev) => ({
+          ...prev,
+          ...newState,
+        }))
+        // Sync to other instances
+        syncStateToOtherInstances(newState)
+        return null
+      }
+    },
+    [serviceHub, syncStateToOtherInstances]
+  )
+
+  const setRemindMeLater = useCallback(
+    (remind: boolean) => {
+      const newState = {
+        remindMeLater: remind,
+      }
+      setUpdateState((prev) => ({
+        ...prev,
+        ...newState,
+      }))
+      // Sync to other instances
+      syncStateToOtherInstances(newState)
+    },
+    [syncStateToOtherInstances]
+  )
+
+  const downloadAndInstallUpdate = useCallback(async () => {
+    if (AUTO_UPDATER_DISABLED) {
+      return
+    }
+
+    if (!updateState.updateInfo) return
+
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
+    try {
+      setUpdateState((prev) => ({
+        ...prev,
+        isDownloading: true,
+      }))
+
+      let downloaded = 0
+      let contentLength = 0
+      await serviceHub.models().stopAllModels()
+      if (controller.signal.aborted) {
+        setUpdateState((prev) => ({ ...prev, isDownloading: false }))
+        return
+      }
+      serviceHub.events()?.emit(SystemEvent.KILL_SIDECAR)
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      if (controller.signal.aborted) {
+        setUpdateState((prev) => ({ ...prev, isDownloading: false }))
+        return
+      }
+
+      await serviceHub.updater().downloadAndInstallWithProgress((event) => {
+        if (controller.signal.aborted) return
+        switch (event.event) {
+          case 'Started':
+            contentLength = event.data?.contentLength || 0
+            setUpdateState((prev) => ({
+              ...prev,
+              totalBytes: contentLength,
+            }))
+            // Emit app update download started event
+            events.emit(AppEvent.onAppUpdateDownloadUpdate, {
+              progress: 0,
+              downloadedBytes: 0,
+              totalBytes: contentLength,
+            })
+            break
+          case 'Progress': {
+            downloaded += event.data?.chunkLength || 0
+            const progress = contentLength > 0 ? downloaded / contentLength : 0
+            setUpdateState((prev) => ({
+              ...prev,
+              downloadProgress: progress,
+              downloadedBytes: downloaded,
+            }))
+
+            // Emit app update download progress event
+            events.emit(AppEvent.onAppUpdateDownloadUpdate, {
+              progress: progress,
+              downloadedBytes: downloaded,
+              totalBytes: contentLength,
+            })
+            break
+          }
+          case 'Finished':
+            setUpdateState((prev) => ({
+              ...prev,
+              isDownloading: false,
+              downloadProgress: 1,
+            }))
+
+            // Emit app update download success event
+            events.emit(AppEvent.onAppUpdateDownloadSuccess, {})
+            break
+        }
+      })
+
+      await window.core?.api?.relaunch()
+    } catch (error) {
+      console.error('Error downloading update:', error)
+      setUpdateState((prev) => ({
+        ...prev,
+        isDownloading: false,
+      }))
+
+      // Emit app update download error event
+      events.emit(AppEvent.onAppUpdateDownloadError, {
+        message: error instanceof Error ? error.message : 'Unknown error',
+      })
+    }
+  }, [serviceHub, updateState.updateInfo])
+
+  return {
+    updateState,
+    checkForUpdate,
+    downloadAndInstallUpdate,
+    setRemindMeLater,
+  }
+}

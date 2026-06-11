@@ -1,40 +1,54 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createFileRoute, useNavigate, useParams } from '@tanstack/react-router'
-import { useThreads } from '@/features/threads/hooks/useThreads'
+import { useThreads } from '@/hooks/threads/useThreads'
 import { useShallow } from 'zustand/react/shallow'
-import { useAssistant } from '@/features/assistants/hooks/useAssistant'
-import { useTools } from '@/hooks/useTools'
-import { useChat } from '@/features/chat/hooks/useChat'
-import { useModelProvider } from '@/features/models/hooks/useModelProvider'
-import { useGeneralSetting } from '@/hooks/useGeneralSetting'
-import { useMessages } from '@/features/chat/hooks/useMessages'
+import { useAssistant } from '@/hooks/chat/useAssistant'
+import { useTools } from '@/hooks/tools/useTools'
+import { useChat } from '@/hooks/chat/use-chat'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
+import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
+import { useMessages } from '@/hooks/chat/useMessages'
 
-// Validation helper for threadId
+// Validation helper for threadId. Accepts:
+//   - ULID (26 char Crockford base32) — what `createThread` generates via ulid()
+//   - UUID (8-4-4-4-12 hex) — legacy thread IDs from before the ulid migration
+//   - `temporary-chat` — the reserved TEMPORARY_CHAT_ID constant
+// Anything else is rejected to prevent route-param injection (slashes, dots,
+// query strings, etc.) from reaching the threads store.
 const isValidThreadId = (id: string): boolean => {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-    id
-  )
+  // ULID: 26 chars, Crockford base32 (excludes I, L, O, U)
+  if (/^[0-9A-HJKMNP-TV-Z]{26}$/i.test(id)) return true
+  // UUID
+  if (
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+  ) {
+    return true
+  }
+  // Reserved temporary-chat ID
+  if (id === 'temporary-chat') return true
+  return false
 }
 
 import { extractContentPartsFromUIMessage } from '@/lib/messages'
 import {
-  DIAGRAM_FORMAT_INSTRUCTION,
   CODE_EXECUTION_INSTRUCTION,
-  ARTIFACT_FORMAT_INSTRUCTION,
   LOCAL_KNOWLEDGE_INSTRUCTION,
-} from '@/lib/system-prompt'
+  CITATION_FORMAT_INSTRUCTION,
+} from '@/lib/prompts/system-prompt'
 import type { UIMessage } from '@ai-sdk/react'
 import type { ThreadMessage } from '@ax-studio/core'
-import { useThreadMemory } from '@/features/threads/hooks/thread/use-thread-memory'
-import { useLocalKnowledge } from '@/hooks/useLocalKnowledge'
-import { useThreadArtifacts } from '@/features/threads/hooks/thread/use-thread-artifacts'
-import { useThreadResearch } from '@/features/threads/hooks/thread/use-thread-research'
-import { useThreadChat } from '@/features/threads/hooks/thread/use-thread-chat'
-import { useThreadTools } from '@/features/threads/hooks/thread/use-thread-tools'
-import { useThreadSplit } from '@/features/threads/hooks/thread/use-thread-split'
-import { useThreadConfig } from '@/features/threads/hooks/thread/use-thread-config'
-import { useThreadEffects } from '@/features/threads/hooks/thread/use-thread-effects'
-import { ThreadView } from '@/features/threads/components/ThreadView'
+import { useLocalKnowledge } from '@/hooks/research/useLocalKnowledge'
+import { useThreadLocalKnowledge } from '@/hooks/threads/use-thread-local-knowledge'
+import { useThreadResearch } from '@/hooks/threads/use-thread-research'
+import { useThreadChat } from '@/hooks/threads/use-thread-chat'
+import { useThreadTools, type AddToolOutputFn } from '@/hooks/threads/use-thread-tools'
+import { useThreadSplit } from '@/hooks/threads/use-thread-split'
+import { useThreadConfig } from '@/hooks/threads/use-thread-config'
+import { useThreadEffects } from '@/hooks/threads/use-thread-effects'
+import { ThreadView } from '@/containers/threads/ThreadView'
+import { useGuardrails } from '@/hooks/settings/useGuardrails'
+import { resolveEffectiveSelectedModel } from '@/lib/chat/selected-model'
+import { toast } from 'sonner'
 
 export const Route = createFileRoute('/threads/$threadId')({
   component: ThreadDetail,
@@ -69,7 +83,8 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   useTools()
 
   const thread = useThreads(useShallow((state) => state.threads[threadId]))
-  const selectedModel =
+  const providers = useModelProvider((state) => state.providers)
+  const selectedModelFromStore =
     useModelProvider((state) => state.selectedModel) ?? undefined
   const selectedProvider = useModelProvider((state) => state.selectedProvider)
   const { globalDefaultPrompt, autoTuningEnabled } = useGeneralSetting()
@@ -78,19 +93,24 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   )
 
   // ─── Domain hooks ─────────────────────────────────────────────────────────
-  const {
-    memorySuffix,
-    lastUserInputRef,
-    processMemoryOnFinish,
-    handleRememberCommand,
-    handleForgetCommand,
-  } = useThreadMemory(threadId)
   const localKnowledgeActive = useLocalKnowledge((state) =>
     state.isLocalKnowledgeEnabledForThread(threadId)
   )
+  const { prepareLocalKnowledge } = useThreadLocalKnowledge(threadId)
+  const alwaysCiteSources = useGuardrails((s) => s.alwaysCiteSources)
   const projectId = thread?.metadata?.project?.id
-  const { pinnedArtifact, clearArtifact } = useThreadArtifacts(threadId)
-  const { pinnedResearch, clearResearch, handleResearchCommand } =
+  const selectedModel = useMemo(
+    () =>
+      resolveEffectiveSelectedModel({
+        model: thread?.model,
+        providers,
+        selectedProvider,
+        selectedModelFromStore,
+      }),
+    [providers, selectedModelFromStore, selectedProvider, thread?.model]
+  )
+  const selectedProviderId = thread?.model?.provider ?? selectedProvider
+  const { pinnedResearch, clearResearch, handleResearchCommand, cancelResearch } =
     useThreadResearch(threadId)
   const { promptResolution, optimizedModelConfig } = useThreadConfig({
     thread,
@@ -103,19 +123,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     followUpMessage,
     onToolCall,
     startToolExecution,
-    onCostApproval,
-    costApprovalState,
-    setCostApprovalState,
-    agentTeams,
-    activeTeamId,
-    activeTeam,
-    activeTeamSnapshot,
-    showVariablePrompt,
-    setShowVariablePrompt,
-    teamTokensUsed,
-    setTeamTokensUsed,
-    handleVariableSubmit,
-    handleTeamChange,
+    resetTurnState,
   } = useThreadTools({ threadId, projectId })
   const {
     splitPaneOrder,
@@ -123,7 +131,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     setSplitThreadId,
     setSplitDirection,
     handleSplit,
-  } = useThreadSplit({ thread, selectedModel, selectedProvider })
+  } = useThreadSplit({ thread, selectedModel, selectedProvider: selectedProviderId })
 
   // ─── UI state ─────────────────────────────────────────────────────────────
   const [threadPromptDraft, setThreadPromptDraft] = useState('')
@@ -147,14 +155,11 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
       (currentAssistant?.instructions && currentAssistant.id !== 'ax-studio'
         ? '\n\n' + currentAssistant.instructions
         : '') +
-      memorySuffix +
-      DIAGRAM_FORMAT_INSTRUCTION +
       CODE_EXECUTION_INSTRUCTION +
-      ARTIFACT_FORMAT_INSTRUCTION +
-      (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : ''),
+      (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : '') +
+      (localKnowledgeActive || alwaysCiteSources ? CITATION_FORMAT_INSTRUCTION : ''),
     modelOverrideId: optimizedModelConfig.modelId,
-    activeTeamId,
-    onCostApproval,
+    modelOverrideProviderId: selectedProviderId,
     inferenceParameters: {
       temperature: optimizedModelConfig.temperature,
       top_p: optimizedModelConfig.top_p,
@@ -163,9 +168,13 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     experimental_throttle: 50,
     onFinish: ({ message, isAbort }) => {
       if (!isAbort && message.role === 'assistant') {
-        // Attach routing metadata if the router made a decision
+        // Attach routing metadata if the router made a decision. We build an
+        // immutable enriched copy (`messageForPersistence`) instead of mutating
+        // the AI SDK's message object, then use that copy for both the React
+        // state update and the on-disk persistence so the routing badge
+        // survives reloads.
         const routerResult = getLastRouterResult()
-        if (import.meta.env.DEV && routerResult?.routed) console.log('[LLM Router] onFinish routerResult:', JSON.stringify(routerResult))
+        let messageForPersistence = message
         if (routerResult?.routed) {
           const routingMeta = {
             modelId: routerResult.modelId,
@@ -174,13 +183,13 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
             routed: true,
             latencyMs: routerResult.latencyMs,
           }
-          // Update the message object for persistence
-          Object.assign(message, {
+          messageForPersistence = {
+            ...message,
             metadata: {
               ...((message.metadata ?? {}) as Record<string, unknown>),
               routing: routingMeta,
             },
-          })
+          }
           // Update chat state so the UI re-renders with the routing badge
           setChatMessages((prev) =>
             prev.map((m) =>
@@ -190,11 +199,10 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
             ),
           )
         }
-        const contentParts = extractContentPartsFromUIMessage(message)
-        processMemoryOnFinish(message, contentParts, setChatMessages)
-        persistMessageOnFinishRef.current?.(message, contentParts)
+        const contentParts = extractContentPartsFromUIMessage(messageForPersistence)
+        persistMessageOnFinishRef.current?.(messageForPersistence, contentParts)
       }
-      startToolExecution(addToolOutput)
+      startToolExecution(addToolOutput as unknown as AddToolOutputFn)
     },
     onToolCall,
     sendAutomaticallyWhen: followUpMessage,
@@ -209,13 +217,12 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     handleContextSizeIncrease,
   } = useThreadChat({
     threadId,
+    threadModel: thread?.model,
     sendMessage,
     regenerate,
     chatMessages,
     setChatMessages,
-    handleRememberCommand,
-    handleForgetCommand,
-    lastUserInputRef,
+    prepareLocalKnowledge,
   })
 
   persistMessageOnFinishRef.current = persistMessageOnFinish
@@ -230,13 +237,12 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     status,
     assistants,
     selectedModel,
-    activeTeamId,
-    setTeamTokensUsed,
     reasoningContainerRef,
     setCurrentThreadId,
     setCurrentAssistant,
     processAndSendMessage,
     handleResearchCommand,
+    cancelResearch,
     updateThread,
     setThreadPromptDraft,
   })
@@ -245,9 +251,18 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   const handleSubmit = useCallback(
     async (text: string) => {
       if (handleResearchCommand(text)) return
-      await processAndSendMessage(text)
+      resetTurnState() // Reset fabric_search dedup tracker for new user message
+      try {
+        await processAndSendMessage(text)
+      } catch (error) {
+        console.error('Failed to submit thread message:', error)
+        toast.error('Failed to send message', {
+          description:
+            error instanceof Error ? error.message : 'Please try again.',
+        })
+      }
     },
-    [processAndSendMessage, handleResearchCommand]
+    [processAndSendMessage, handleResearchCommand, resetTurnState]
   )
 
   const threadModel = useMemo(() => thread?.model, [thread])
@@ -280,8 +295,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
       handleDeleteMessage={handleDeleteMessage}
       handleContextSizeIncrease={handleContextSizeIncrease}
       reasoningContainerRef={reasoningContainerRef}
-      pinnedArtifact={pinnedArtifact}
-      clearArtifact={clearArtifact}
       pinnedResearch={pinnedResearch}
       clearResearch={clearResearch}
       splitPaneOrder={splitPaneOrder}
@@ -295,17 +308,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
       setThreadPromptDraft={setThreadPromptDraft}
       promptResolution={promptResolution}
       updateThread={updateThread}
-      activeTeam={activeTeam}
-      activeTeamId={activeTeamId}
-      activeTeamSnapshot={activeTeamSnapshot}
-      agentTeams={agentTeams}
-      handleTeamChange={handleTeamChange}
-      teamTokensUsed={teamTokensUsed}
-      costApprovalState={costApprovalState}
-      setCostApprovalState={setCostApprovalState}
-      showVariablePrompt={showVariablePrompt}
-      setShowVariablePrompt={setShowVariablePrompt}
-      handleVariableSubmit={handleVariableSubmit}
     />
   )
 }

@@ -8,46 +8,231 @@ import {
   jsonSchema,
 } from 'ai'
 import { useServiceStore, getServiceHub } from '@/hooks/useServiceHub'
-import { useToolAvailable } from '@/hooks/useToolAvailable'
-import { useLocalKnowledge } from '@/hooks/useLocalKnowledge'
+import { useToolAvailable } from '@/hooks/tools/useToolAvailable'
+import { useLocalKnowledge } from '@/hooks/research/useLocalKnowledge'
 import { ModelFactory } from './model-factory'
-import { useModelProvider } from '@/features/models/hooks/useModelProvider'
-import { useAssistant } from '@/features/assistants/hooks/useAssistant'
-import { useThreads } from '@/features/threads/hooks/useThreads'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
+import { useAssistant } from '@/hooks/chat/useAssistant'
+import { useThreads } from '@/hooks/threads/useThreads'
 import { useFileRegistry, threadCollectionId, projectCollectionId } from '@/lib/file-registry'
-import { useRouterSettings } from '@/hooks/useRouterSettings'
+import { useRouterSettings } from '@/hooks/settings/useRouterSettings'
 import { routeMessage, getAvailableModelsForRouter } from './llm-router'
-import type { CostEstimate } from '@/features/multi-agent/lib/cost-estimation'
-import { executeSingleAgentStream } from '@/features/chat/transport/single-agent-transport'
-import { executeMultiAgentStream } from '@/features/chat/transport/multi-agent-transport'
-import type { TokenUsageCallback, ServiceHub, SendMessagesOptions } from '@/features/chat/transport/transport-types'
-import { prepareProviderForChat } from '@/features/chat/lib/model-session'
-import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
-import { isPlatformTauri } from '@/lib/platform'
-import { useLocalApiServer } from '@/hooks/useLocalApiServer'
+import { executeSingleAgentStream } from './transport/single-agent-transport'
+import type { TokenUsageCallback } from './transport/transport-types'
+import type { ServiceHub } from '@/services'
+import { isLocalProvider, prepareProviderForChat } from './chat/model-session'
+import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
+import { syncRemoteProviders } from './providers/provider-sync'
+import { LOCAL_PROVIDER_IDS } from '@/constants/providers'
+import { extractErrorMessage } from '@/lib/utils/error'
 
-const httpFetch = isPlatformTauri() ? tauriFetch : globalThis.fetch
+// Use native fetch — same reason as model-factory.ts (Tauri plugin ReadableStream
+// incompatibility). Proxy accepts CORS from tauri:// origins on loopback.
+const httpFetch = globalThis.fetch
 
 // Cache preflight results so each model is only validated once.
-// Failed models are remembered permanently (until page reload).
 // Successful models are cached for 10 minutes.
+// Failed models are cached for 2 minutes (to allow retry after transient errors).
 const PREFLIGHT_TTL_MS = 10 * 60 * 1000
+const PREFLIGHT_FAIL_TTL_MS = 2 * 60 * 1000
+const LOCAL_PREFLIGHT_ATTEMPTS = 60
+const LOCAL_PREFLIGHT_RETRY_MS = 500
+const LOCAL_START_MODEL_UNBLOCK_MS = 2_000
+const DEFAULT_LOCAL_MAX_OUTPUT_TOKENS = 4096
 const preflightCache = new Map<string, { ok: boolean; ts: number }>()
 
+function modelProviderKey(modelId: string, providerId: string): string {
+  return `${providerId}::${modelId}`
+}
+
 function isModelPreflightCached(modelId: string, providerId: string): boolean | null {
-  const key = `${providerId}::${modelId}`
+  const key = modelProviderKey(modelId, providerId)
   const entry = preflightCache.get(key)
   if (!entry) return null
-  if (!entry.ok) return false // failed models stay rejected
-  if (Date.now() - entry.ts > PREFLIGHT_TTL_MS) {
+  const ttl = entry.ok ? PREFLIGHT_TTL_MS : PREFLIGHT_FAIL_TTL_MS
+  if (Date.now() - entry.ts > ttl) {
     preflightCache.delete(key)
     return null
   }
+  if (!entry.ok) return false
   return true
 }
 
 function cachePreflightResult(modelId: string, providerId: string, ok: boolean) {
-  preflightCache.set(`${providerId}::${modelId}`, { ok, ts: Date.now() })
+  preflightCache.set(modelProviderKey(modelId, providerId), { ok, ts: Date.now() })
+}
+
+function logRouterTrace(message: string, details?: Record<string, unknown>) {
+  console.info(`[LLM Router] ${message}`, details ?? {})
+}
+
+function isLocalProviderId(providerId: string | undefined): providerId is string {
+  return !!providerId && LOCAL_PROVIDER_IDS.has(providerId)
+}
+
+function shouldAwaitLocalStartup(provider: ProviderObject, modelId: string): boolean {
+  return provider.provider === 'mlx' || modelId.startsWith('mlx-community/')
+}
+
+function usesMlxIpc(providerId: string): boolean {
+  return providerId === 'mlx'
+}
+
+function createFallbackLocalProvider(
+  providerId: string,
+  modelId: string
+): ProviderObject {
+  return {
+    active: true,
+    provider: providerId,
+    settings: [],
+    models: [{ id: modelId, capabilities: [] }],
+    persist: false,
+  }
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function shouldRetryLocalPreflight(status: number): boolean {
+  return (
+    status === 404 ||
+    status === 409 ||
+    status === 425 ||
+    status === 500 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504
+  )
+}
+
+async function prepareProviderForFinalChat(
+  serviceHub: ServiceHub,
+  provider: ProviderObject,
+  modelId: string
+): Promise<'ready' | 'continued'> {
+  if (usesMlxIpc(provider.provider)) {
+    return 'ready'
+  }
+
+  if (!isLocalProvider(provider)) {
+    await prepareProviderForChat(serviceHub, provider, modelId)
+    return 'ready'
+  }
+
+  if (shouldAwaitLocalStartup(provider, modelId)) {
+    await prepareProviderForChat(serviceHub, provider, modelId)
+    return 'ready'
+  }
+
+  const startup = prepareProviderForChat(serviceHub, provider, modelId)
+  const startupResult = await Promise.race([
+    startup.then(() => 'ready' as const),
+    delay(LOCAL_START_MODEL_UNBLOCK_MS).then(() => 'continued' as const),
+  ])
+
+  if (startupResult === 'continued') {
+    void startup.catch((error) => {
+      console.warn(
+        '[LLM Router] Local model startup finished after chat readiness moved to proxy preflight:',
+        error
+      )
+    })
+  }
+
+  return startupResult
+}
+
+async function preflightLocalModelThroughProxy(
+  modelId: string,
+  providerId: string,
+  abortSignal?: AbortSignal,
+  force = false
+) {
+  if (!force) {
+    const cached = isModelPreflightCached(modelId, providerId)
+    if (cached === true) return
+    if (cached === false) {
+      throw new Error(
+        `Local model "${modelId}" previously failed readiness preflight`
+      )
+    }
+  }
+
+  const { serverHost, serverPort, apiPrefix, apiKey: localProxyKey } =
+    useLocalApiServer.getState()
+  const proxyUrl = `http://${serverHost}:${serverPort}${apiPrefix}`
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Ax-Provider': providerId,
+    'X-Ax-Request-Role': 'preflight',
+  }
+  if (localProxyKey && localProxyKey.trim().length > 0) {
+    headers.Authorization = `Bearer ${localProxyKey}`
+  }
+
+  logRouterTrace('waiting for local model readiness', {
+    modelId,
+    providerId,
+    proxyUrl,
+  })
+
+  let lastError = ''
+  for (let attempt = 1; attempt <= LOCAL_PREFLIGHT_ATTEMPTS; attempt += 1) {
+    if (abortSignal?.aborted) throw new DOMException('Aborted', 'AbortError')
+
+    try {
+      const preflight = await httpFetch(`${proxyUrl}/chat/completions`, {
+        method: 'POST',
+        headers,
+        signal: abortSignal,
+        body: JSON.stringify({
+          model: modelId,
+          messages: [{ role: 'user', content: '.' }],
+          max_tokens: 1,
+          stream: false,
+        }),
+      })
+      if (preflight.ok) {
+        cachePreflightResult(modelId, providerId, true)
+        logRouterTrace('local model readiness passed', {
+          modelId,
+          providerId,
+          attempt,
+        })
+        return
+      }
+
+      const body = await preflight.text().catch(() => '')
+      lastError = `${preflight.status}: ${body.slice(0, 200)}`
+      if (!shouldRetryLocalPreflight(preflight.status)) break
+    } catch (error) {
+      lastError = extractErrorMessage(error, String(error))
+    }
+
+    if (attempt < LOCAL_PREFLIGHT_ATTEMPTS) {
+      await delay(LOCAL_PREFLIGHT_RETRY_MS)
+    }
+  }
+
+  cachePreflightResult(modelId, providerId, false)
+  logRouterTrace('local model readiness failed', {
+    modelId,
+    providerId,
+    lastError,
+  })
+  throw new Error(
+    `Local model "${modelId}" is not ready through Ax Studio proxy: ${lastError}`
+  )
+}
+
+async function syncProvidersForRouting(providers: ModelProvider[]) {
+  try {
+    await syncRemoteProviders(providers)
+  } catch (error) {
+    console.warn('[LLM Router] Provider sync before routing failed:', error)
+  }
 }
 
 export type { TokenUsageCallback }
@@ -63,30 +248,28 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
   private threadId?: string
   private inferenceParameters: Record<string, unknown>
   private modelOverrideId?: string
-  private activeTeamId?: string
-  private costApprovalCallback?: (estimate: CostEstimate) => Promise<boolean>
+  private modelOverrideProviderId?: string
 
   constructor(
     systemMessage?: string,
     threadId?: string,
     inferenceParameters: Record<string, unknown> = {},
-    modelOverrideId?: string
+    modelOverrideId?: string,
+    modelOverrideProviderId?: string
   ) {
     this.systemMessage = systemMessage
     this.threadId = threadId
     this.inferenceParameters = { ...inferenceParameters }
     this.modelOverrideId = modelOverrideId
+    this.modelOverrideProviderId = modelOverrideProviderId
     this.serviceHub = useServiceStore.getState().serviceHub
   }
 
   updateSystemMessage(systemMessage: string | undefined) { this.systemMessage = systemMessage }
   updateInferenceParameters(parameters: Record<string, unknown>) { this.inferenceParameters = { ...parameters } }
   updateModelOverrideId(modelId: string | undefined) { this.modelOverrideId = modelId }
+  updateModelOverrideProviderId(providerId: string | undefined) { this.modelOverrideProviderId = providerId }
   setOnTokenUsage(callback: TokenUsageCallback | undefined) { this.onTokenUsage = callback }
-  updateActiveTeamId(teamId: string | undefined) { this.activeTeamId = teamId }
-  setCostApprovalCallback(callback: ((estimate: CostEstimate) => Promise<boolean>) | undefined) {
-    this.costApprovalCallback = callback
-  }
 
   private getThreadMetadata(): Record<string, unknown> | null {
     if (!this.threadId) return null
@@ -111,8 +294,16 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
       disabledToolKeys.includes(`${serverName}::${toolName}`)
 
     if (this.serviceHub) {
+      const providerId =
+        this.modelOverrideProviderId ?? useModelProvider.getState().selectedProvider
+      const modelId =
+        this.modelOverrideId ?? useModelProvider.getState().selectedModel?.id
+      const provider = providerId
+        ? useModelProvider.getState().getProviderByName(providerId)
+        : undefined
+      const model = provider?.models.find((entry) => entry.id === modelId)
       const modelSupportsTools = overrideModelSupportsTools
-        ?? useModelProvider.getState().selectedModel?.capabilities?.includes('tools')
+        ?? model?.capabilities?.includes('tools')
         ?? this.modelSupportsTools
 
       if (modelSupportsTools) {
@@ -126,7 +317,7 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
             mcpTools.forEach((tool) => {
               const serverName = (tool as { server?: string }).server || 'unknown'
               if (!isToolDisabled(serverName, tool.name)) {
-                if (serverName === 'ax-studio' && !localKnowledgeEnabled) return
+                if ((serverName === 'ax-studio' || serverName === 'ax-fabric') && !localKnowledgeEnabled) return
                 toolsRecord[tool.name] = {
                   description: tool.description,
                   inputSchema: jsonSchema(tool.inputSchema as Record<string, unknown>),
@@ -187,36 +378,14 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
       & { trigger: 'submit-message' | 'regenerate-message'; messageId: string | undefined }
       & ChatRequestOptions
   ): Promise<ReadableStream<UIMessageChunk>> {
-    if (this.activeTeamId) {
-      return executeMultiAgentStream(options as SendMessagesOptions, {
-        teamId: this.activeTeamId,
-        model: this.model!,
-        tools: this.tools,
-        systemMessage: this.systemMessage,
-        threadId: this.threadId,
-        inferenceParameters: this.inferenceParameters,
-        modelOverrideId: this.modelOverrideId,
-        onTokenUsage: this.onTokenUsage,
-        costApprovalCallback: this.costApprovalCallback,
-        getThreadMetadata: () => this.getThreadMetadata(),
-        mapUserInlineAttachments: (msgs) => this.mapUserInlineAttachments(msgs),
-        refreshTools: () => this.refreshTools(),
-        onFallbackToSingleAgent: (opts) => {
-          const savedTeamId = this.activeTeamId
-          this.activeTeamId = undefined
-          return this.sendMessages(opts as Parameters<typeof this.sendMessages>[0])
-            .finally(() => { this.activeTeamId = savedTeamId })
-        },
-      })
-    }
-
     const selectedModelId = useModelProvider.getState().selectedModel?.id
     const selectedProviderId = useModelProvider.getState().selectedProvider
 
     const fallbackModelId = this.modelOverrideId ?? selectedModelId ?? ''
-    const fallbackProviderId = selectedProviderId
+    const fallbackProviderId = this.modelOverrideProviderId ?? selectedProviderId
     let finalModelId = fallbackModelId
     let finalProviderId = fallbackProviderId
+    let preparedForPreflightKey: string | null = null
     this.lastRouterResult = null
 
     // LLM Router: when auto-routing is enabled, the router takes priority.
@@ -227,8 +396,10 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
       routerSettings.routerModelId &&
       routerSettings.routerProviderId
     ) {
+      await syncProvidersForRouting(useModelProvider.getState().providers)
+      const providers = useModelProvider.getState().providers
       const availableModels = getAvailableModelsForRouter(
-        useModelProvider.getState().providers,
+        providers,
         routerSettings.routerModelId,
       )
       this.lastRouterResult = await routeMessage(
@@ -240,23 +411,83 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
         fallbackProviderId,
         routerSettings.timeout,
       )
+      logRouterTrace('decision complete', {
+        routerModelId: routerSettings.routerModelId,
+        routerProviderId: routerSettings.routerProviderId,
+        selectedModelId: this.lastRouterResult.modelId,
+        selectedProviderId: this.lastRouterResult.providerId,
+        routed: this.lastRouterResult.routed,
+        reason: this.lastRouterResult.reason,
+        fallbackReason: this.lastRouterResult.fallbackReason,
+        latencyMs: Math.round(this.lastRouterResult.latencyMs),
+      })
       finalModelId = this.lastRouterResult.modelId
       finalProviderId = this.lastRouterResult.providerId
     }
 
     // Helper: prepare a model and execute the stream
     const executeWithModel = async (modelId: string, providerId: string) => {
-      const provider = useModelProvider.getState().getProviderByName(providerId)
-      if (!this.serviceHub || !modelId || !provider) {
+      logRouterTrace('executing final model', {
+        modelId,
+        providerId,
+        routed: this.lastRouterResult?.routed ?? false,
+        fallbackReason: this.lastRouterResult?.fallbackReason,
+      })
+      const provider =
+        useModelProvider.getState().getProviderByName(providerId) ??
+        (isLocalProviderId(providerId) && modelId
+          ? createFallbackLocalProvider(providerId, modelId)
+          : undefined)
+      const serviceHub = this.serviceHub ?? getServiceHub()
+      if (!serviceHub || !modelId || !provider) {
         throw new Error('ServiceHub not initialized or model/provider missing.')
       }
 
-      await prepareProviderForChat(getServiceHub(), provider, modelId)
+      let forceLocalPreflight = false
+      if (preparedForPreflightKey !== modelProviderKey(modelId, providerId)) {
+        const startupState = await prepareProviderForFinalChat(
+          serviceHub,
+          provider,
+          modelId
+        )
+        if (startupState === 'continued') {
+          forceLocalPreflight = true
+        }
+      }
+      if (
+        isLocalProvider(provider) &&
+        !usesMlxIpc(providerId) &&
+        preparedForPreflightKey !== modelProviderKey(modelId, providerId)
+      ) {
+        await preflightLocalModelThroughProxy(
+          modelId,
+          providerId,
+          options.abortSignal,
+          forceLocalPreflight
+        )
+        preparedForPreflightKey = modelProviderKey(modelId, providerId)
+      }
 
       const currentAssistant = useAssistant.getState().currentAssistant
-      const inferenceParams = { ...(currentAssistant?.parameters ?? {}), ...(this.inferenceParameters ?? {}) }
+      const inferenceParams = {
+        ...(currentAssistant?.parameters ?? {}),
+        ...(this.inferenceParameters ?? {}),
+      }
+      if (isLocalProvider(provider)) {
+        if (inferenceParams.max_output_tokens == null) {
+          inferenceParams.max_output_tokens = DEFAULT_LOCAL_MAX_OUTPUT_TOKENS
+        }
+        if (inferenceParams.temperature == null) {
+          inferenceParams.temperature = 0.6
+        }
+        if (inferenceParams.top_p == null) {
+          inferenceParams.top_p = 0.95
+        }
+      }
 
-      this.model = await ModelFactory.createModel(modelId, provider, inferenceParams)
+      this.model = await ModelFactory.createModel(modelId, provider, inferenceParams, {
+        requestRole: 'final',
+      })
 
       // Determine tool support for this model
       const providerModels = provider.models ?? []
@@ -305,38 +536,75 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
         // Not cached — run preflight
         const routerResult = this.lastRouterResult
         try {
-          const { serverHost, serverPort, apiPrefix } = useLocalApiServer.getState()
+          const routedProvider = useModelProvider.getState().getProviderByName(finalProviderId)
+          if (!routedProvider) {
+            throw new Error(`Provider "${finalProviderId}" is not configured`)
+          }
+          if (usesMlxIpc(finalProviderId)) {
+            cachePreflightResult(finalModelId, finalProviderId, true)
+            logRouterTrace('skipping proxy preflight for MLX IPC model', {
+              modelId: finalModelId,
+              providerId: finalProviderId,
+            })
+            return executeWithModel(finalModelId, finalProviderId)
+          }
+          if (isLocalProvider(routedProvider) && !usesMlxIpc(finalProviderId)) {
+            // Local routed models need to be started first so their localhost
+            // provider is registered with the proxy before preflight runs.
+            logRouterTrace('starting local routed model before preflight', {
+              modelId: finalModelId,
+              providerId: finalProviderId,
+            })
+            await prepareProviderForFinalChat(getServiceHub(), routedProvider, finalModelId)
+            preparedForPreflightKey = modelProviderKey(finalModelId, finalProviderId)
+          }
+
+          const { serverHost, serverPort, apiPrefix, apiKey: localProxyKey } =
+            useLocalApiServer.getState()
           const proxyUrl = `http://${serverHost}:${serverPort}${apiPrefix}`
+          const preflightHeaders: Record<string, string> = {
+            'Content-Type': 'application/json',
+            'X-Ax-Provider': finalProviderId,
+            'X-Ax-Request-Role': 'preflight',
+          }
+          if (localProxyKey && localProxyKey.trim().length > 0) {
+            preflightHeaders.Authorization = `Bearer ${localProxyKey}`
+          }
           const preflight = await httpFetch(`${proxyUrl}/chat/completions`, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Ax-Provider': finalProviderId,
-            },
+            headers: preflightHeaders,
             body: JSON.stringify({
               model: finalModelId,
               messages: [{ role: 'user', content: '.' }],
               max_tokens: 1,
               stream: false,
             }),
+            signal: options.abortSignal,
           })
           if (!preflight.ok) {
             const body = await preflight.text().catch(() => '')
             throw new Error(`${preflight.status}: ${body.slice(0, 200)}`)
           }
           cachePreflightResult(finalModelId, finalProviderId, true)
+          logRouterTrace('preflight passed', {
+            modelId: finalModelId,
+            providerId: finalProviderId,
+          })
         } catch (error) {
+          if (error instanceof DOMException && error.name === 'AbortError') {
+            throw error
+          }
           cachePreflightResult(finalModelId, finalProviderId, false)
           console.warn(
             `[LLM Router] Routed model "${finalModelId}" preflight failed, falling back to "${fallbackModelId}":`,
-            error instanceof Error ? error.message : error,
+            extractErrorMessage(error, String(error)),
           )
           this.lastRouterResult = {
             modelId: fallbackModelId,
             providerId: fallbackProviderId,
             reason: 'fallback',
             routed: false,
-            fallbackReason: `routed model failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+            fallbackReason: `routed model failed: ${extractErrorMessage(error, 'unknown error')}`,
             latencyMs: routerResult.latencyMs,
           }
           return executeWithModel(fallbackModelId, fallbackProviderId)

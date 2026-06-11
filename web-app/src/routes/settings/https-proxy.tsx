@@ -1,14 +1,15 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import HeaderPage from '@/containers/HeaderPage'
-import SettingsMenu from '@/containers/SettingsMenu'
-import { Card, CardItem } from '@/containers/Card'
+import SettingsMenu from '@/components/common/SettingsMenu'
+import { Card, CardItem } from '@/components/common/Card'
 import { Switch } from '@/components/ui/switch'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { Input } from '@/components/ui/input'
 import { EyeOff, Eye, Globe } from 'lucide-react'
 import { useCallback, useState } from 'react'
-import { useProxyConfig } from '@/hooks/useProxyConfig'
+import { useProxyConfig } from '@/hooks/settings/useProxyConfig'
+import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
 
 export const Route = createFileRoute(route.settings.https_proxy)({
   component: HTTPSProxyContent,
@@ -54,22 +55,7 @@ function HTTPSProxyContent() {
           className="flex-1 overflow-y-auto"
           style={{ scrollbarWidth: 'none' }}
         >
-          <div className="flex items-center gap-3 px-8 py-5 border-b border-border/40 bg-background sticky top-0 z-10">
-            <div
-              className="size-7 rounded-lg flex items-center justify-center"
-              style={{
-                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-              }}
-            >
-              <Globe className="size-3.5 text-white" strokeWidth={2.5} />
-            </div>
-            <h1
-              className="text-foreground tracking-tight"
-              style={{ fontSize: '16px', fontWeight: 600 }}
-            >
-              {t('common:https_proxy')}
-            </h1>
-          </div>
+          <SettingsPageLayout icon={Globe} title={t('common:https_proxy')} />
           <div className="px-8 py-7">
             <div className="max-w-2xl space-y-6">
               {/* Proxy Configuration */}

@@ -5,51 +5,18 @@ import * as matchers from '@testing-library/jest-dom/matchers'
 // extends Vitest's expect method with methods from react-testing-library
 expect.extend(matchers)
 
-// Node 22+ ships a global `localStorage` getter that returns undefined unless
-// the process is started with --localstorage-file, and it shadows jsdom's
-// Storage implementation in the Vitest environment. Install an in-memory
-// replacement — exposed as the global `Storage` class so tests can spy on
-// `Storage.prototype` — and back both localStorage and sessionStorage with it.
-if (globalThis.localStorage == null) {
-  const stores = new WeakMap<MemoryStorage, Map<string, string>>()
-
-  class MemoryStorage {
-    constructor() {
-      stores.set(this, new Map())
-    }
-    get length(): number {
-      return stores.get(this)!.size
-    }
-    clear(): void {
-      stores.get(this)!.clear()
-    }
-    getItem(key: string): string | null {
-      const store = stores.get(this)!
-      return store.has(key) ? store.get(key)! : null
-    }
-    key(index: number): string | null {
-      return Array.from(stores.get(this)!.keys())[index] ?? null
-    }
-    removeItem(key: string): void {
-      stores.get(this)!.delete(key)
-    }
-    setItem(key: string, value: string): void {
-      stores.get(this)!.set(key, String(value))
-    }
-  }
-
-  for (const [name, value] of [
-    ['Storage', MemoryStorage],
-    ['localStorage', new MemoryStorage()],
-    ['sessionStorage', new MemoryStorage()],
-  ] as const) {
-    Object.defineProperty(globalThis, name, {
-      value,
-      writable: true,
-      configurable: true,
-    })
-  }
+// Ensure localStorage is properly mocked for jsdom
+// Some test environments override localStorage with incomplete mocks
+const localStorageStore: Record<string, string> = {}
+const mockLocalStorage = {
+  getItem: vi.fn((key: string) => localStorageStore[key] ?? null),
+  setItem: vi.fn((key: string, value: string) => { localStorageStore[key] = String(value) }),
+  removeItem: vi.fn((key: string) => { delete localStorageStore[key] }),
+  clear: vi.fn(() => { Object.keys(localStorageStore).forEach(k => delete localStorageStore[k]) }),
+  get length() { return Object.keys(localStorageStore).length },
+  key: vi.fn((index: number) => Object.keys(localStorageStore)[index] ?? null),
 }
+Object.defineProperty(window, 'localStorage', { value: mockLocalStorage })
 
 // Create a mock ServiceHub
 const mockServiceHub = {
@@ -73,7 +40,6 @@ const mockServiceHub = {
     getHardwareInfo: vi.fn().mockResolvedValue(null),
     getSystemUsage: vi.fn().mockResolvedValue(null),
     getLlamacppDevices: vi.fn().mockResolvedValue([]), // cspell: disable-line
-    setActiveGpus: vi.fn().mockResolvedValue(undefined),
     // Legacy methods for backward compatibility
     getGpuInfo: vi.fn().mockResolvedValue([]),
     getCpuInfo: vi.fn().mockResolvedValue({}),
@@ -210,7 +176,19 @@ Object.defineProperty(window, 'matchMedia', {
     getAppDataFolderPath: vi.fn().mockResolvedValue('/mock/app/data'),
     openFileExplorer: vi.fn().mockResolvedValue(undefined),
     joinPath: vi.fn((...paths: string[]) => paths.join('/')),
-  }
+    saveMcpConfigs: vi.fn().mockResolvedValue(undefined),
+    restartMcpServers: vi.fn().mockResolvedValue(undefined),
+    getMcpConfigs: vi.fn().mockResolvedValue(''),
+    getTools: vi.fn().mockResolvedValue([]),
+    getConnectedServers: vi.fn().mockResolvedValue([]),
+    callTool: vi.fn().mockResolvedValue({ error: '', content: [] }),
+    cancelToolCall: vi.fn().mockResolvedValue(undefined),
+  },
+  events: {
+    on: vi.fn(),
+    off: vi.fn(),
+    emit: vi.fn(),
+  },
 }
 
 // Mock globalThis.fs for @ax-studio/core fs functions // cspell: disable-line

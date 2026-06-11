@@ -3,19 +3,38 @@ import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
 import { Button } from '@/components/ui/button'
 
 export const WindowControls = () => {
-  const appWindow = getCurrentWebviewWindow()
+  const appWindow = (() => {
+    try {
+      return getCurrentWebviewWindow()
+    } catch {
+      return null
+    }
+  })()
 
-  const handleMinimize = async () => {
-    await appWindow.minimize()
+  const runWindowAction = async (
+    action: (() => Promise<void> | undefined) | undefined,
+    label: string
+  ) => {
+    try {
+      await action?.()
+    } catch (error) {
+      console.error(`[WindowControls] Failed to ${label}:`, error)
+    }
   }
 
-  const handleMaximize = async () => {
-    await appWindow.toggleMaximize()
+  const handleMinimize = () => {
+    void runWindowAction(() => appWindow?.minimize(), 'minimize window')
   }
 
-  const handleClose = async () => {
-    await appWindow.close()
+  const handleMaximize = () => {
+    void runWindowAction(() => appWindow?.toggleMaximize(), 'toggle maximize')
   }
+
+  const handleClose = () => {
+    void runWindowAction(() => appWindow?.close(), 'close window')
+  }
+
+  if (!appWindow) return null
 
   return (
     <div className="absolute top-0 z-50 right-4 h-15">
