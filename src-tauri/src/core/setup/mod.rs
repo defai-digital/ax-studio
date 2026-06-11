@@ -12,7 +12,7 @@ pub use store_migration::migrate_mcp_servers;
 #[cfg(desktop)]
 pub use tray::setup_tray;
 
-use tauri::{App, Manager};
+use tauri::App;
 use tauri_plugin_store::StoreExt;
 
 use crate::core::app::commands::get_app_data_folder_path;

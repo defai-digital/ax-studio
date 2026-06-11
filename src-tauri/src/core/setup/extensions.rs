@@ -5,7 +5,7 @@ use std::{
     path::PathBuf,
 };
 use tar::Archive;
-use tauri::Runtime;
+use tauri::{Manager, Runtime};
 
 use crate::core::extensions::commands::get_app_extensions_path;
 
