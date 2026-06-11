@@ -56,14 +56,17 @@ model tools, research utilities, and artifact viewers.
 AX Studio currently supports **macOS Apple Silicon only** for public desktop
 distribution.
 
-Install with Homebrew:
+The Homebrew tap is reserved for the public macOS Apple Silicon release, but
+installation is not available until the signed `.dmg` asset is published.
+
+Once the release asset is published, install with Homebrew:
 
 ```bash
 brew tap defai-digital/ax-studio
 brew install --cask ax-studio
 ```
 
-You can also download the signed `.dmg` from
+You can also download the signed `.dmg` from the published
 [GitHub Releases](https://github.com/defai-digital/ax-studio/releases).
 
 Current release automation targets:
