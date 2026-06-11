@@ -27,11 +27,33 @@ jobs:
 
   # Job create Update app version based on latest release tag with build number and save to output
   get-update-version:
-    uses: ./.github/workflows/template-get-update-version.yml
     needs: preflight
-    secrets: inherit
-    with:
-      version: ${{ github.event.inputs.version || '' }}
+    runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.version.outputs.new_version }}
+    steps:
+      - name: Resolve release version
+        id: version
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version || '' }}
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then
+            version="${INPUT_VERSION#v}"
+          elif [ "$GITHUB_EVENT_NAME" = "push" ] && [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF#refs/tags/v}"
+          else
+            echo "::error::Release version is required for non-tag events."
+            exit 1
+          fi
+
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version must look like 1.3.3, got: $version"
+            exit 1
+          fi
+
+          echo "new_version=$version" >> "$GITHUB_OUTPUT"
 
   validate-release-tag:
     runs-on: ubuntu-latest
