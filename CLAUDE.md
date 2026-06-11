@@ -14,13 +14,14 @@ AX Studio is a cross-platform AI workspace built with a React 19 frontend (Vite 
 - `yarn dev:web` — Start just the Vite dev server (requires core already built)
 - `yarn build:core` — Build the shared core SDK (run from root)
 - `yarn build:extensions` — Build all bundled extensions
+- `make dev-ios` / `make dev-android` — Mobile dev builds (Tauri mobile, `--features mobile`)
 
 ### Testing
 - `yarn test` — Run all Vitest tests (core, web-app, llamacpp-extension)
 - `yarn test -- --run web-app/src/path/to/file.test.ts` — Run a single test file
 - `yarn test:watch` — Run tests in watch mode
 - `yarn test:coverage` — Run tests with v8 coverage
-- `make test` — Full test suite: lint + Vitest + Rust cargo tests
+- `make test` — Full test suite: lint + Vitest + Rust cargo tests (src-tauri, tauri-plugin-hardware, src-tauri/utils)
 - `cargo test --manifest-path src-tauri/Cargo.toml --no-default-features --features test-tauri -- --test-threads=1` — Rust backend tests only
 
 ### Linting & Formatting
@@ -43,12 +44,16 @@ AX Studio is a cross-platform AI workspace built with a React 19 frontend (Vite 
 | `extensions/` | Bundled feature extensions (assistant, conversational, download, llamacpp) |
 | `src-tauri/` | Rust Tauri backend — IPC commands, native capabilities, MCP, downloads |
 | `src-tauri/plugins/` | Rust plugins for specialized native integrations (hardware, llamacpp) |
+| `packages/` | Vendored forks (`remend`, `streamdown`) consumed by the web-app |
+| `agent-teams/` | Bundled agent team JSON definitions |
 | `autoqa/` | Python-based E2E test framework |
 | `scripts/` | Build, test, and release utilities |
 
+**Nested workspaces gotcha**: The root Yarn workspace only covers `core` and `web-app`. `extensions/` and `src-tauri/plugins/` are *separate* Yarn workspaces with their own `yarn.lock` — a root `yarn install` does not install their dependencies (the `make` targets and `yarn build:extensions` handle this).
+
 ### How the Pieces Connect
 
-- **Frontend ↔ Backend**: Communication happens through Tauri IPC. The web-app invokes Tauri commands defined in `src-tauri/src/commands/`.
+- **Frontend ↔ Backend**: Communication happens through Tauri IPC. Command handlers live in `src-tauri/src/core/<module>/commands.rs`; `src-tauri/src/commands/mod.rs` is just the `handlers!` macro that registers them (shared commands for mobile, plus desktop-only extras).
 - **Core SDK**: Provides shared TypeScript types, contracts, and extension-facing APIs consumed by both `web-app/` and `extensions/`.
 - **Extensions**: Packaged feature modules loaded by the app at runtime. Each extension is a separate workspace package under `extensions/` with its own build.
 - **Build order matters**: `core` must be built before `web-app` or `extensions` (the `make` targets handle this).
@@ -83,11 +88,17 @@ The frontend uses a **feature-first** organization. Domain-specific code lives i
 
 ### Rust Backend Structure (`src-tauri/src/`)
 
-- `commands/` — Tauri IPC command handlers
+Organized as domain modules under `core/`, each exposing its Tauri commands from a `commands.rs`:
+
 - `core/mcp/` — MCP server orchestration
 - `core/downloads/` — Binary and model download management
-- `core/state/` — Application state management
-- `core/providers/` — Provider integrations
+- `core/threads/` — Thread/conversation persistence
+- `core/agent_teams/`, `core/agent_run_logs/` — Multi-agent team definitions and run logs
+- `core/research/` — Research workflow backend
+- `core/code_execution/` — Code execution sandbox
+- `core/server/` — Local API server and remote provider proxying
+- `core/extensions/`, `core/app/`, `core/filesystem/`, `core/system/`, `core/integrations/`, `core/updater/` — Extension loading, app config, FS access, system info, integrations, auto-update
+- `commands/` — `handlers!` macro registering all commands (desktop vs mobile variants)
 
 ## Code Style
 

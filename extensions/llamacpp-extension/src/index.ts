@@ -75,6 +75,12 @@ import {
   EmbeddingResponse,
 } from './util'
 import { decideLocalProviderSync } from './provider-sync'
+import {
+  ModelFormat,
+  detectModelFormatFromFiles,
+  buildAxServingLoadBody,
+  sanitizeImportFilename,
+} from './model-format'
 
 // Build-time constants — see env.d.ts for declarations
 
@@ -88,6 +94,8 @@ interface ModelConfig {
   embedding?: boolean
   sha256?: string
   mmproj_sha256?: string
+  /** Model artifact format — absent in legacy model.yml files (= gguf) */
+  model_format?: ModelFormat
 }
 
 interface EmbedOptions {
@@ -400,10 +408,32 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         mmproj_sha256: parsed.mmproj_sha256
           ? String(parsed.mmproj_sha256)
           : undefined,
+        model_format: parsed.model_format
+          ? (String(parsed.model_format) as ModelFormat)
+          : undefined,
       }
     } catch {
       return null
     }
+  }
+
+  /**
+   * Resolve a model's format. Prefers the persisted model.yml field; falls
+   * back to disk-layout detection for models imported before model_format
+   * existed.
+   */
+  private async _resolveModelFormat(cfg: ModelConfig): Promise<ModelFormat> {
+    if (cfg.model_format) return cfg.model_format
+    if (cfg.model_path.endsWith('.gguf')) return 'gguf'
+    const appData = await getAppDataFolderPath()
+    const modelPath = await joinPath([appData, cfg.model_path])
+    if (await fs.existsSync(await joinPath([modelPath, 'model-manifest.json']))) {
+      return 'ax-native'
+    }
+    if (await fs.existsSync(await joinPath([modelPath, 'config.json']))) {
+      return 'mlx'
+    }
+    return 'gguf'
   }
 
   private async _writeModelConfig(
@@ -421,6 +451,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       embedding: cfg.embedding ?? false,
       ...(cfg.sha256 ? { sha256: cfg.sha256 } : {}),
       ...(cfg.mmproj_sha256 ? { mmproj_sha256: cfg.mmproj_sha256 } : {}),
+      ...(cfg.model_format ? { model_format: cfg.model_format } : {}),
     })
     await fs.writeFileSync(ymlPath, content)
   }
@@ -562,16 +593,26 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
       const engineType = this.config.engine_type || 'llamacpp'
       const embedding = isEmbedding || Boolean(cfg.embedding)
+      const format = await this._resolveModelFormat(cfg)
 
       // ax-serving mode — handles text, vision, and embedding models
       if (engineType === 'ax-serving') {
         try {
-          return await this._doLoadAxServing(modelId, cfg, embedding)
+          return await this._doLoadAxServing(modelId, cfg, embedding, format)
         } catch (axErr: any) {
+          // llama.cpp cannot run MLX/native artifacts — no fallback possible
+          if (format !== 'gguf') throw axErr
           console.warn(
             `[llamacpp] ax-serving failed, falling back to llamacpp: ${axErr?.message ?? axErr}`
           )
         }
+      }
+
+      if (format !== 'gguf') {
+        throw new Error(
+          `Model "${modelId}" is an ${format === 'mlx' ? 'MLX' : 'AX Engine'} model and requires the ax-serving engine. ` +
+            `Set "Inference Engine" to "ax-serving" in the llamacpp provider settings.`
+        )
       }
 
       return await this._doLoadLlamacpp(
@@ -595,12 +636,13 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   private async _doLoadAxServing(
     modelId: string,
     cfg: ModelConfig,
-    isEmbedding = false
+    isEmbedding = false,
+    format: ModelFormat = 'gguf'
   ): Promise<SessionInfo> {
     // Ensure ax-serving process is running
     await this._ensureAxServingRunning()
 
-    // Resolve absolute model path
+    // Resolve absolute model path (a .gguf file, or a directory for MLX/native)
     const appData = await getAppDataFolderPath()
     const modelPath = await joinPath([appData, cfg.model_path])
 
@@ -614,9 +656,9 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       throw new Error(`Model file not found: ${modelPath}`)
     }
 
-    // Resolve mmproj path for vision/multimodal models
+    // Resolve mmproj path for vision/multimodal models (GGUF only)
     let mmprojPath: string | undefined
-    if (cfg.mmproj_path) {
+    if (format === 'gguf' && cfg.mmproj_path) {
       mmprojPath = await joinPath([appData, cfg.mmproj_path])
       // Security: Prevent path traversal
       const expectedMmprojBase = await joinPath([appData, 'llamacpp', 'models'])
@@ -631,22 +673,15 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       }
     }
 
-    // Build load request with all supported fields
-    const loadBody: Record<string, any> = {
-      model_id: modelId,
-      path: modelPath,
-    }
-    if (mmprojPath) {
-      loadBody.mmproj_path = mmprojPath
-    }
-    const nGpuLayers = Number(this.config.n_gpu_layers)
-    if (nGpuLayers >= 0 && nGpuLayers !== 100) {
-      loadBody.n_gpu_layers = nGpuLayers
-    }
-    const ctxSize = Number(this.config.ctx_size)
-    if (ctxSize > 0) {
-      loadBody.context_length = ctxSize
-    }
+    // Build load request — backend hint routes MLX/native models to ax-engine
+    const loadBody = buildAxServingLoadBody({
+      modelId,
+      modelPath,
+      format,
+      mmprojPath,
+      nGpuLayers: Number(this.config.n_gpu_layers),
+      ctxSize: Number(this.config.ctx_size),
+    })
 
     // Load model via ax-serving REST API
     const loadRes = await fetch(
@@ -1308,6 +1343,23 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
     if (!(await fs.existsSync(modelDir))) await fs.mkdir(modelDir)
 
+    // Multi-file import — MLX / AX Engine artifact repos (config.json +
+    // safetensors, or model-manifest.json). Routed to ax-engine via ax-serving.
+    if (opts.files && opts.files.length > 0) {
+      return this._importModelDirFromUrls(modelId, modelDir, opts.files)
+    }
+
+    // Local MLX / AX Engine model directory import
+    if (
+      !opts.modelPath.startsWith('http://') &&
+      !opts.modelPath.startsWith('https://')
+    ) {
+      const stat = await fs.fileStat(opts.modelPath)
+      if (stat?.isDirectory) {
+        return this._importModelDirFromLocal(modelId, modelDir, opts.modelPath)
+      }
+    }
+
     const downloadExt = (window as any).core?.extensionManager?.getByName(
       '@ax-studio/download-extension'
     )
@@ -1452,9 +1504,170 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       embedding: isEmbedding,
       sha256: opts.modelSha256,
       mmproj_sha256: opts.mmprojSha256,
+      model_format: 'gguf',
     })
 
     events.emit(AppEvent.onModelImported, { modelId })
+  }
+
+  /** Download a multi-file MLX / AX Engine model into the models directory */
+  private async _importModelDirFromUrls(
+    modelId: string,
+    modelDir: string,
+    files: NonNullable<ImportOptions['files']>
+  ): Promise<void> {
+    const downloadExt = (window as any).core?.extensionManager?.getByName(
+      '@ax-studio/download-extension'
+    )
+    if (!downloadExt) throw new Error('Download extension not available')
+
+    const fileNames = files.map((f) => sanitizeImportFilename(f.filename))
+    const format = detectModelFormatFromFiles(fileNames)
+    if (format === 'gguf') {
+      throw new Error(
+        `Multi-file import for "${modelId}" is not an MLX or AX Engine model ` +
+          `(no config.json, *.safetensors, or model-manifest.json in file list).`
+      )
+    }
+
+    const destDir = await joinPath([modelDir, 'model'])
+    if (!(await fs.existsSync(destDir))) await fs.mkdir(destDir)
+
+    const proxyArg = buildProxyArg(getProxyConfig())
+    const knownTotal = files.reduce((sum, f) => sum + (f.size ?? 0), 0)
+    let completedBytes = 0
+    let sizeBytes = 0
+
+    events.emit(DownloadEvent.onFileDownloadStarted, {
+      modelId,
+      fileName: fileNames[0],
+    })
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        const destPath = await joinPath([destDir, fileNames[i]])
+
+        await downloadExt.downloadFile(
+          file.url,
+          destPath,
+          `llamacpp-import-${modelId}`,
+          proxyArg,
+          (transferred: number, total: number) => {
+            const overallTotal =
+              knownTotal > 0 ? knownTotal : total * files.length
+            events.emit(DownloadEvent.onFileDownloadUpdate, {
+              modelId,
+              fileName: fileNames[i],
+              percent:
+                overallTotal > 0
+                  ? (completedBytes + transferred) / overallTotal
+                  : 0,
+              size: {
+                transferred: completedBytes + transferred,
+                total: overallTotal,
+              },
+              downloadState: 'downloading',
+            })
+          }
+        )
+
+        if (file.sha256) {
+          events.emit(DownloadEvent.onModelValidationStarted, { modelId })
+          const valid = await this._validateSha256(destPath, file.sha256)
+          if (!valid) {
+            events.emit(DownloadEvent.onModelValidationFailed, { modelId })
+            throw new Error(
+              `SHA256 mismatch for "${fileNames[i]}" of model "${modelId}". File may be corrupted.`
+            )
+          }
+        }
+
+        const stat = await fs.fileStat(destPath)
+        const fileBytes = stat?.size ?? file.size ?? 0
+        sizeBytes += fileBytes
+        completedBytes += file.size ?? fileBytes
+      }
+    } catch (e) {
+      events.emit(DownloadEvent.onFileDownloadError, {
+        modelId,
+        error: String(e),
+      })
+      try {
+        await fs.rm(destDir)
+      } catch {}
+      throw e
+    }
+
+    events.emit(DownloadEvent.onFileDownloadSuccess, {
+      modelId,
+      fileName: fileNames[0],
+    })
+
+    await this._writeModelConfig(modelId, {
+      model_path: `llamacpp/models/${modelId}/model`,
+      name: modelId,
+      size_bytes: sizeBytes,
+      embedding: false,
+      model_format: format,
+    })
+
+    events.emit(AppEvent.onModelImported, { modelId })
+  }
+
+  /** Copy a local MLX / AX Engine model directory into the models directory */
+  private async _importModelDirFromLocal(
+    modelId: string,
+    modelDir: string,
+    srcDir: string
+  ): Promise<void> {
+    const entries: string[] = (await fs.readdirSync(srcDir)) ?? []
+    const baseNames = entries
+      .map((p) => p.replace(/\\/g, '/').split('/').pop() ?? '')
+      .filter(Boolean)
+    const format = detectModelFormatFromFiles(baseNames)
+    if (format === 'gguf') {
+      throw new Error(
+        `"${srcDir}" is not an MLX or AX Engine model directory ` +
+          `(missing config.json / model-manifest.json).`
+      )
+    }
+
+    const destDir = await joinPath([modelDir, 'model'])
+    const sizeBytes = await this._copyDirRecursive(srcDir, destDir)
+
+    await this._writeModelConfig(modelId, {
+      model_path: `llamacpp/models/${modelId}/model`,
+      name: modelId,
+      size_bytes: sizeBytes,
+      embedding: false,
+      model_format: format,
+    })
+
+    events.emit(AppEvent.onModelImported, { modelId })
+  }
+
+  /** Recursively copy a directory, returning the total bytes copied */
+  private async _copyDirRecursive(
+    srcDir: string,
+    destDir: string
+  ): Promise<number> {
+    if (!(await fs.existsSync(destDir))) await fs.mkdir(destDir)
+    let bytes = 0
+    const entries: string[] = (await fs.readdirSync(srcDir)) ?? []
+    for (const entry of entries) {
+      const base = entry.replace(/\\/g, '/').split('/').pop() ?? ''
+      if (!base) continue
+      const destPath = await joinPath([destDir, base])
+      const stat = await fs.fileStat(entry)
+      if (stat?.isDirectory) {
+        bytes += await this._copyDirRecursive(entry, destPath)
+      } else {
+        await fs.copyFile(entry, destPath)
+        bytes += stat?.size ?? 0
+      }
+    }
+    return bytes
   }
 
   async abortImport(modelId: string): Promise<void> {
@@ -1560,6 +1773,17 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       // Security: Prevent path traversal
       const expectedBase = await joinPath([appData, 'llamacpp', 'models'])
       if (!modelPath.startsWith(expectedBase)) return false
+
+      const format = await this._resolveModelFormat(cfg)
+      if (format !== 'gguf') {
+        // MLX / AX native — chat template lives in tokenizer_config.json
+        const tcPath = await joinPath([modelPath, 'tokenizer_config.json'])
+        const content = await fs.readFileSync(tcPath)
+        if (!content) return false
+        const template = String(JSON.parse(content)?.chat_template ?? '')
+        return template.toLowerCase().includes('tool')
+      }
+
       const meta: GgufMetadata = await readGgufMetadata(modelPath)
       const template = meta.metadata?.['tokenizer.chat_template'] ?? ''
       return template.toLowerCase().includes('tool')
