@@ -191,16 +191,22 @@ jobs:
 
       - name: Build app
         run: |
-          [ "$HAS_SIGN_CERTS" = "true" ] && export APPLE_API_KEY_PATH=/tmp/notary-key.p8
+          if [ "$HAS_SIGN_CERTS" = "true" ]; then
+            export APPLE_API_KEY_PATH=/tmp/notary-key.p8
+            export APPLE_CERTIFICATE="$_APPLE_CERTIFICATE"
+            export APPLE_CERTIFICATE_PASSWORD="$_APPLE_CERTIFICATE_PASSWORD"
+            export APPLE_API_ISSUER="$_APPLE_API_ISSUER"
+            export APPLE_API_KEY="$_APPLE_API_KEY"
+          fi
           make build
         env:
           NODE_OPTIONS: "--max-old-space-size=4196"
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APP_PATH: '.'
-          APPLE_CERTIFICATE: ${{ secrets.CODE_SIGN_P12_BASE64 }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.CODE_SIGN_P12_PASSWORD }}
-          APPLE_API_ISSUER: ${{ secrets.NOTARY_ISSUER }}
-          APPLE_API_KEY: ${{ secrets.NOTARY_KEY_ID }}
+          _APPLE_CERTIFICATE: ${{ secrets.CODE_SIGN_P12_BASE64 }}
+          _APPLE_CERTIFICATE_PASSWORD: ${{ secrets.CODE_SIGN_P12_PASSWORD }}
+          _APPLE_API_ISSUER: ${{ secrets.NOTARY_ISSUER }}
+          _APPLE_API_KEY: ${{ secrets.NOTARY_KEY_ID }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           AX_STUDIO_SIGNING_KEY: ${{ secrets.AX_STUDIO_SIGNING_KEY }}
