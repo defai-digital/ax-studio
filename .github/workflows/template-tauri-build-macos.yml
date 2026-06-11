@@ -70,8 +70,6 @@ on:
 jobs:
   build-macos:
     runs-on: macos-latest
-    env:
-      HAS_CODE_SIGN_CERT: ${{ secrets.CODE_SIGN_P12_BASE64 != '' && secrets.CODE_SIGN_P12_PASSWORD != '' }}
     outputs:
       MAC_UNIVERSAL_SIG: ${{ steps.metadata.outputs.MAC_UNIVERSAL_SIG }}
       FILE_NAME: ${{ steps.metadata.outputs.FILE_NAME }}
@@ -212,7 +210,7 @@ jobs:
           NOTARIZE_P8_BASE64: ${{ secrets.NOTARIZE_P8_BASE64 }}
 
       - uses: apple-actions/import-codesign-certs@v2
-        if: inputs.channel == 'stable' || env.HAS_CODE_SIGN_CERT == 'true'
+        if: inputs.channel == 'stable'
         with:
           p12-file-base64: ${{ secrets.CODE_SIGN_P12_BASE64 }}
           p12-password: ${{ secrets.CODE_SIGN_P12_PASSWORD }}
