@@ -176,14 +176,6 @@ vi.mock('lucide-react', () => ({
   CheckCircle2: () => <span data-testid="check-icon" />,
   XCircle: () => <span data-testid="x-icon" />,
   Loader: () => <span data-testid="icon-loader" />,
-  Star: () => <span data-testid="star-icon" />,
-  Eye: () => <span data-testid="eye-icon" />,
-  EyeOff: () => <span data-testid="eye-off-icon" />,
-  CheckCheck: () => <span data-testid="copy-check-icon" />,
-  Copy: () => <span data-testid="copy-icon" />,
-  ChevronsUpDown: () => <span data-testid="chevrons-icon" />,
-  Minus: () => <span data-testid="minus-icon" />,
-  Plus: () => <span data-testid="plus-icon" />,
 }))
 
 const mockProvider = {

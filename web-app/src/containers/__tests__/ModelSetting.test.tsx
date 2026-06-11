@@ -75,13 +75,6 @@ vi.mock('@/containers/DynamicControllerSetting', () => ({
 
 vi.mock('lucide-react', () => ({
   Settings: () => <span data-testid="settings-icon" />,
-  Eye: () => <span data-testid="eye-icon" />,
-  EyeOff: () => <span data-testid="eye-off-icon" />,
-  CheckCheck: () => <span data-testid="check-icon" />,
-  Copy: () => <span data-testid="copy-icon" />,
-  ChevronsUpDown: () => <span data-testid="chevrons-icon" />,
-  Minus: () => <span data-testid="minus-icon" />,
-  Plus: () => <span data-testid="plus-icon" />,
 }))
 
 import { ModelSetting } from '../ModelSetting'

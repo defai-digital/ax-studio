@@ -271,7 +271,7 @@ describe('ServiceHub Integration Tests', () => {
       await expect(serviceHub.mcp().getConnectedServers()).resolves.toEqual([])
       await expect(
         serviceHub.mcp().callTool({ server: 'missing', name: 'noop', arguments: {} })
-      ).resolves.toEqual({ content: [], error: '' })
+      ).resolves.toEqual({ content: [], isError: true })
 
       const cancellable = serviceHub.mcp().callToolWithCancellation({
         server: 'missing',
@@ -281,7 +281,7 @@ describe('ServiceHub Integration Tests', () => {
       })
       await expect(cancellable.promise).resolves.toEqual({
         content: [],
-        error: '',
+        isError: true,
       })
       await expect(cancellable.cancel()).resolves.toBeUndefined()
       expect(cancellable.token).toBe('token-1')
