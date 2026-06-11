@@ -254,35 +254,14 @@ jobs:
           AWS_DEFAULT_REGION: ${{ secrets.DELTA_AWS_REGION }}
           AWS_EC2_METADATA_DISABLED: 'true'
 
-      - name: Upload release assert if public provider is github
+      - name: Upload release artifacts to GitHub release
         if: inputs.public_provider == 'github'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        uses: actions/upload-release-asset@v1.0.1
-        with:
-          upload_url: ${{ inputs.upload_url }}
-          asset_path: ./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/${{ steps.metadata.outputs.FILE_NAME }}
-          asset_name: ${{ steps.metadata.outputs.FILE_NAME }}
-          asset_content_type: application/gzip
-
-      - name: Upload release assert if public provider is github
-        if: inputs.public_provider == 'github'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        uses: actions/upload-release-asset@v1.0.1
-        with:
-          upload_url: ${{ inputs.upload_url }}
-          asset_path: ./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/${{ steps.metadata.outputs.DMG_NAME }}
-          asset_name: ${{ steps.metadata.outputs.DMG_NAME }}
-          asset_content_type: application/octet-stream
-
-      - name: Upload release assert if public provider is github
-        if: inputs.public_provider == 'github'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        uses: actions/upload-release-asset@v1.0.1
-        with:
-          upload_url: ${{ inputs.upload_url }}
-          asset_path: ./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/${{ steps.metadata.outputs.TAR_NAME }}
-          asset_name: ${{ steps.metadata.outputs.TAR_NAME }}
-          asset_content_type: application/gzip
+        run: |
+          gh release upload "${{ github.ref_name }}" \
+            "./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/${{ steps.metadata.outputs.FILE_NAME }}" \
+            "./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/${{ steps.metadata.outputs.DMG_NAME }}" \
+            "./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/${{ steps.metadata.outputs.TAR_NAME }}" \
+            --clobber \
+            --repo "$GITHUB_REPOSITORY"

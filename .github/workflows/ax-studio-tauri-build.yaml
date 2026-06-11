@@ -93,15 +93,14 @@ jobs:
             src-tauri/latest.json.template > latest.json
             cat latest.json
 
-      - name: Upload release assert if public provider is github
+      - name: Upload latest.json to GitHub release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        uses: actions/upload-release-asset@v1.0.1
-        with:
-          upload_url: ${{ needs.create-draft-release.outputs.upload_url }}
-          asset_path: ./latest.json
-          asset_name: latest.json
-          asset_content_type: text/json
+        run: |
+          gh release upload "${{ github.ref_name }}" \
+            ./latest.json \
+            --clobber \
+            --repo "$GITHUB_REPOSITORY"
 
   publish-release:
     needs: [create-draft-release, sync-temp-to-latest]

@@ -64,7 +64,7 @@ jobs:
       contents: write
     steps:
       - name: Getting the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
 
@@ -89,7 +89,7 @@ jobs:
           cp .github/scripts/icon-${{ inputs.channel }}.png src-tauri/icons/icon.png
 
       - name: Installing node
-        uses: actions/setup-node@v1
+        uses: actions/setup-node@v4
         with:
           node-version: 20
 
@@ -254,24 +254,13 @@ jobs:
           AWS_DEFAULT_REGION: ${{ secrets.DELTA_AWS_REGION }}
           AWS_EC2_METADATA_DISABLED: 'true'
 
-      - name: Upload release assert if public provider is github
+      - name: Upload release artifacts to GitHub release
         if: inputs.public_provider == 'github'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        uses: actions/upload-release-asset@v1.0.1
-        with:
-          upload_url: ${{ inputs.upload_url }}
-          asset_path: ./src-tauri/target/release/bundle/appimage/${{ steps.packageinfo.outputs.APPIMAGE_FILE_NAME }}
-          asset_name: ${{ steps.packageinfo.outputs.APPIMAGE_FILE_NAME }}
-          asset_content_type: application/octet-stream
-
-      - name: Upload release assert if public provider is github
-        if: inputs.public_provider == 'github'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        uses: actions/upload-release-asset@v1.0.1
-        with:
-          upload_url: ${{ inputs.upload_url }}
-          asset_path: ./src-tauri/target/release/bundle/deb/${{ steps.packageinfo.outputs.DEB_FILE_NAME }}
-          asset_name: ${{ steps.packageinfo.outputs.DEB_FILE_NAME }}
-          asset_content_type: application/octet-stream
+        run: |
+          gh release upload "${{ github.ref_name }}" \
+            "./src-tauri/target/release/bundle/appimage/${{ steps.packageinfo.outputs.APPIMAGE_FILE_NAME }}" \
+            "./src-tauri/target/release/bundle/deb/${{ steps.packageinfo.outputs.DEB_FILE_NAME }}" \
+            --clobber \
+            --repo "$GITHUB_REPOSITORY"
