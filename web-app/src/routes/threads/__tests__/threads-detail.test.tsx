@@ -33,9 +33,9 @@ vi.mock('@/hooks/chat/use-chat', () => ({
 }))
 
 vi.mock('@/hooks/models/useModelProvider', () => ({
-  useModelProvider: () => ({
-    selectedModel: null,
-    selectedProvider: null,
+  useModelProvider: vi.fn().mockImplementation((selector?: (s: any) => any) => {
+    const state = { providers: [], selectedModel: null, selectedProvider: null }
+    return typeof selector === 'function' ? selector(state) : state
   }),
 }))
 
