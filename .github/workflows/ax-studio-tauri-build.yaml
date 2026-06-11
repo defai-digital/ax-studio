@@ -93,15 +93,149 @@ jobs:
           fi
 
   build-macos:
-    uses: ./.github/workflows/template-tauri-build-macos.yml
-    secrets: inherit
+    runs-on: macos-latest
     needs: [get-update-version, validate-release-tag, create-draft-release]
-    with:
-      ref: refs/tags/v${{ needs.get-update-version.outputs.new_version }}
-      public_provider: github
-      channel: stable
-      new_version: ${{ needs.get-update-version.outputs.new_version }}
-      upload_url: ''
+    outputs:
+      MAC_UNIVERSAL_SIG: ${{ steps.metadata.outputs.MAC_UNIVERSAL_SIG }}
+      FILE_NAME: ${{ steps.metadata.outputs.FILE_NAME }}
+      DMG_NAME: ${{ steps.metadata.outputs.DMG_NAME }}
+      TAR_NAME: ${{ steps.metadata.outputs.TAR_NAME }}
+    permissions:
+      contents: write
+    steps:
+      - name: Getting the repo
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/v${{ needs.get-update-version.outputs.new_version }}
+
+      - name: Installing node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install jq
+        uses: dcarbone/install-jq-action@v2.0.1
+
+      - name: Install ctoml
+        run: cargo install ctoml
+
+      - name: Set up Xcode version
+        run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
+
+      - name: Validate stable signing secrets
+        env:
+          CODE_SIGN_P12_BASE64: ${{ secrets.CODE_SIGN_P12_BASE64 }}
+          CODE_SIGN_P12_PASSWORD: ${{ secrets.CODE_SIGN_P12_PASSWORD }}
+          NOTARIZE_P8_BASE64: ${{ secrets.NOTARIZE_P8_BASE64 }}
+          NOTARY_ISSUER: ${{ secrets.NOTARY_ISSUER }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+          AX_STUDIO_SIGNING_KEY: ${{ secrets.AX_STUDIO_SIGNING_KEY }}
+        run: |
+          missing=0
+          for name in \
+            CODE_SIGN_P12_BASE64 \
+            CODE_SIGN_P12_PASSWORD \
+            NOTARIZE_P8_BASE64 \
+            NOTARY_ISSUER \
+            NOTARY_KEY_ID \
+            TAURI_SIGNING_PRIVATE_KEY \
+            TAURI_SIGNING_PRIVATE_KEY_PASSWORD \
+            TAURI_UPDATER_PUBKEY \
+            AX_STUDIO_SIGNING_KEY
+          do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is required for stable macOS release"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Update app version from release tag
+        env:
+          VERSION: ${{ needs.get-update-version.outputs.new_version }}
+          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+        run: |
+          jq --arg version "$VERSION" \
+            --arg pubkey "$TAURI_UPDATER_PUBKEY" \
+            '.version = $version | .bundle.createUpdaterArtifacts = true | .plugins.updater.pubkey = $pubkey' \
+            ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
+          mv /tmp/tauri.conf.json ./src-tauri/tauri.conf.json
+
+          jq --arg version "$VERSION" '.version = $version' web-app/package.json > /tmp/package.json
+          mv /tmp/package.json web-app/package.json
+
+          jq --arg version "$VERSION" '.version = $version' ./src-tauri/plugins/tauri-plugin-hardware/package.json > /tmp/package.json
+          mv /tmp/package.json ./src-tauri/plugins/tauri-plugin-hardware/package.json
+
+          jq --arg version "$VERSION" '.version = $version' ./src-tauri/plugins/tauri-plugin-llamacpp/package.json > /tmp/package.json
+          mv /tmp/package.json ./src-tauri/plugins/tauri-plugin-llamacpp/package.json
+
+          ctoml ./src-tauri/plugins/tauri-plugin-hardware/Cargo.toml package.version "$VERSION"
+          ctoml ./src-tauri/plugins/tauri-plugin-llamacpp/Cargo.toml package.version "$VERSION"
+          ctoml ./src-tauri/Cargo.toml package.version "$VERSION"
+          ctoml ./src-tauri/Cargo.toml dependencies.tauri.features[] "devtools"
+
+      - name: Get key for notarize
+        run: base64 -d <<< "$NOTARIZE_P8_BASE64" > /tmp/notary-key.p8
+        shell: bash
+        env:
+          NOTARIZE_P8_BASE64: ${{ secrets.NOTARIZE_P8_BASE64 }}
+
+      - uses: apple-actions/import-codesign-certs@v2
+        with:
+          p12-file-base64: ${{ secrets.CODE_SIGN_P12_BASE64 }}
+          p12-password: ${{ secrets.CODE_SIGN_P12_PASSWORD }}
+
+      - name: Config Yarn
+        run: |
+          corepack enable
+          corepack prepare yarn@4.5.3 --activate
+          yarn --version
+          yarn config set -H enableImmutableInstalls false
+
+      - name: Build app
+        run: make build
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4196"
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APP_PATH: '.'
+          APPLE_CERTIFICATE: ${{ secrets.CODE_SIGN_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.CODE_SIGN_P12_PASSWORD }}
+          APPLE_API_ISSUER: ${{ secrets.NOTARY_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.NOTARY_KEY_ID }}
+          APPLE_API_KEY_PATH: /tmp/notary-key.p8
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          AX_STUDIO_SIGNING_KEY: ${{ secrets.AX_STUDIO_SIGNING_KEY }}
+
+      - name: Set output filename for mac
+        id: metadata
+        env:
+          VERSION: ${{ needs.get-update-version.outputs.new_version }}
+        run: |
+          cd ./src-tauri/target/aarch64-apple-darwin/release/bundle/macos
+          zip -r "ax-studio-mac-arm64-${VERSION}.zip" Ax-Studio.app
+          {
+            echo "MAC_UNIVERSAL_SIG=$(cat Ax-Studio.app.tar.gz.sig)"
+            echo "FILE_NAME=ax-studio-mac-arm64-${VERSION}.zip"
+            echo "DMG_NAME=Ax-Studio_${VERSION}_aarch64.dmg"
+            echo "TAR_NAME=Ax-Studio.app.tar.gz"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload release artifacts to GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.get-update-version.outputs.new_version }}
+        run: |
+          gh release upload "v${VERSION}" \
+            "./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/${{ steps.metadata.outputs.FILE_NAME }}" \
+            "./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/${{ steps.metadata.outputs.DMG_NAME }}" \
+            "./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/${{ steps.metadata.outputs.TAR_NAME }}" \
+            --clobber \
+            --repo "$GITHUB_REPOSITORY"
 
   sync-temp-to-latest:
     needs: [create-draft-release, get-update-version, build-macos]
