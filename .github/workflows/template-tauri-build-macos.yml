@@ -5,16 +5,13 @@ on:
       ref:
         required: true
         type: string
-        default: 'refs/heads/main'
       public_provider:
         required: true
         type: string
-        default: none
         description: 'none: build only, github: build and publish to github, aws s3: build and publish to aws s3'
       new_version:
         required: true
         type: string
-        default: ''
       cortex_api_port:
         required: false
         type: string
@@ -26,7 +23,6 @@ on:
       channel:
         required: true
         type: string
-        default: 'nightly'
         description: 'The channel to use for this job'
     secrets:
       DELTA_AWS_S3_BUCKET_NAME:
@@ -48,6 +44,8 @@ on:
       TAURI_SIGNING_PRIVATE_KEY:
         required: false
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD:
+        required: false
+      TAURI_UPDATER_PUBKEY:
         required: false
       AX_STUDIO_SIGNING_KEY:
         required: false
@@ -72,6 +70,8 @@ on:
 jobs:
   build-macos:
     runs-on: macos-latest
+    env:
+      HAS_CODE_SIGN_CERT: ${{ secrets.CODE_SIGN_P12_BASE64 != '' && secrets.CODE_SIGN_P12_PASSWORD != '' }}
     outputs:
       MAC_UNIVERSAL_SIG: ${{ steps.metadata.outputs.MAC_UNIVERSAL_SIG }}
       FILE_NAME: ${{ steps.metadata.outputs.FILE_NAME }}
@@ -105,11 +105,48 @@ jobs:
       - name: Set up Xcode version
         run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
 
+      - name: Validate stable signing secrets
+        if: inputs.channel == 'stable' && inputs.public_provider == 'github'
+        env:
+          CODE_SIGN_P12_BASE64: ${{ secrets.CODE_SIGN_P12_BASE64 }}
+          CODE_SIGN_P12_PASSWORD: ${{ secrets.CODE_SIGN_P12_PASSWORD }}
+          NOTARIZE_P8_BASE64: ${{ secrets.NOTARIZE_P8_BASE64 }}
+          NOTARY_ISSUER: ${{ secrets.NOTARY_ISSUER }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+          AX_STUDIO_SIGNING_KEY: ${{ secrets.AX_STUDIO_SIGNING_KEY }}
+        run: |
+          missing=0
+          for name in \
+            CODE_SIGN_P12_BASE64 \
+            CODE_SIGN_P12_PASSWORD \
+            NOTARIZE_P8_BASE64 \
+            NOTARY_ISSUER \
+            NOTARY_KEY_ID \
+            TAURI_SIGNING_PRIVATE_KEY \
+            TAURI_SIGNING_PRIVATE_KEY_PASSWORD \
+            TAURI_UPDATER_PUBKEY \
+            AX_STUDIO_SIGNING_KEY
+          do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is required for stable macOS release"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
       - name: Update app version based on latest release tag with build number
+        env:
+          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
         run: |
           echo "Version: ${{ inputs.new_version }}"
           # Update tauri.conf.json
-          jq --arg version "${{ inputs.new_version }}" '.version = $version | .bundle.createUpdaterArtifacts = true' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
+          jq --arg version "${{ inputs.new_version }}" \
+            --arg pubkey "$TAURI_UPDATER_PUBKEY" \
+            '.version = $version | .bundle.createUpdaterArtifacts = true | if $pubkey != "" then .plugins.updater.pubkey = $pubkey else . end' \
+            ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
           mv /tmp/tauri.conf.json ./src-tauri/tauri.conf.json
           jq --arg version "${{ inputs.new_version }}" '.version = $version' web-app/package.json > /tmp/package.json
           mv /tmp/package.json web-app/package.json
@@ -175,7 +212,7 @@ jobs:
           NOTARIZE_P8_BASE64: ${{ secrets.NOTARIZE_P8_BASE64 }}
 
       - uses: apple-actions/import-codesign-certs@v2
-        continue-on-error: true
+        if: inputs.channel == 'stable' || env.HAS_CODE_SIGN_CERT == 'true'
         with:
           p12-file-base64: ${{ secrets.CODE_SIGN_P12_BASE64 }}
           p12-password: ${{ secrets.CODE_SIGN_P12_PASSWORD }}
@@ -232,10 +269,12 @@ jobs:
             TAR_NAME=Ax-Studio.app.tar.gz
           fi
 
-          echo "MAC_UNIVERSAL_SIG=${MAC_UNIVERSAL_SIG}" >> "$GITHUB_OUTPUT"
-          echo "FILE_NAME=${FILE_NAME}" >> "$GITHUB_OUTPUT"
-          echo "DMG_NAME=${DMG_NAME}" >> "$GITHUB_OUTPUT"
-          echo "TAR_NAME=${TAR_NAME}" >> "$GITHUB_OUTPUT"
+          {
+            echo "MAC_UNIVERSAL_SIG=${MAC_UNIVERSAL_SIG}"
+            echo "FILE_NAME=${FILE_NAME}"
+            echo "DMG_NAME=${DMG_NAME}"
+            echo "TAR_NAME=${TAR_NAME}"
+          } >> "$GITHUB_OUTPUT"
         id: metadata
 
       ## Upload to s3 for nightly and beta

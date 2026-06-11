@@ -3,10 +3,6 @@
   "notes": "",
   "pub_date": "",
   "platforms": {
-    "windows-x86_64": {
-      "signature": "",
-      "url": ""
-    },
     "darwin-aarch64": {
       "signature": "",
       "url": ""

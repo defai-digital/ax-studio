@@ -27,6 +27,11 @@
     "test:module:audit": "node scripts/testing/module-coverage-audit.mjs --out-dir report/testing",
     "test:module:gate": "node scripts/testing/module-coverage-gate.mjs --audit report/testing/module-coverage-audit.json --thresholds testing/module-thresholds.json --mode advisory",
     "test:quality:gates": "bash scripts/testing/run-quality-gates.sh",
+    "release:check": "node scripts/release/validate-release-config.mjs",
+    "release:minisign": "node scripts/release/minisign-artifacts.mjs",
+    "release:verify-assets": "node scripts/release/verify-release-assets.mjs",
+    "release:verify-latest": "node scripts/release/verify-latest-json.mjs",
+    "release:write-homebrew-cask": "node scripts/release/write-homebrew-cask.mjs",
     "test:prepare": "yarn build:icon && yarn copy:assets:tauri && yarn build --no-bundle ",
     "dev:web": "yarn workspace @ax-studio/web-app dev",
     "dev:tauri": "yarn build:icon && yarn copy:assets:tauri && cross-env IS_CLEAN=true tauri dev",
@@ -75,5 +80,6 @@
     "@types/react": "19.1.2",
     "@types/react-dom": "19.1.2"
   },
-  "packageManager": "yarn@4.5.3"
+  "packageManager": "yarn@4.5.3",
+  "author": "DEFAI Private Limited <enquiry@defai.digital>"
 }

@@ -5,13 +5,28 @@ on:
     tags: ["v[0-9]+.[0-9]+.[0-9]+"]
 
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Getting the repo
+        uses: actions/checkout@v4
+
+      - name: Installing node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Validate release config
+        run: node scripts/release/validate-release-config.mjs
+
   # Job create Update app version based on latest release tag with build number and save to output
   get-update-version:
     uses: ./.github/workflows/template-get-update-version.yml
+    needs: preflight
 
   create-draft-release:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: preflight
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
       version: ${{ steps.get_version.outputs.version }}
@@ -48,19 +63,8 @@ jobs:
       new_version: ${{ needs.get-update-version.outputs.new_version }}
       upload_url: ${{ needs.create-draft-release.outputs.upload_url }}
 
-  build-windows-x64:
-    uses: ./.github/workflows/template-tauri-build-windows-x64.yml
-    secrets: inherit
-    needs: [get-update-version, create-draft-release]
-    with:
-      ref: ${{ github.ref }}
-      public_provider: github
-      channel: stable
-      new_version: ${{ needs.get-update-version.outputs.new_version }}
-      upload_url: ${{ needs.create-draft-release.outputs.upload_url }}
-
   sync-temp-to-latest:
-    needs: [create-draft-release, get-update-version, build-macos, build-windows-x64]
+    needs: [create-draft-release, get-update-version, build-macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -70,28 +74,17 @@ jobs:
 
       - name: create latest.json file
         run: |
-
           VERSION=${{ needs.get-update-version.outputs.new_version }}
-          PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")
-          WINDOWS_SIGNATURE="${{ needs.build-windows-x64.outputs.WIN_SIG }}"
-          WINDOWS_URL="https://github.com/defai-digital/ax-studio/releases/download/v${{ needs.get-update-version.outputs.new_version }}/${{ needs.build-windows-x64.outputs.FILE_NAME }}"
           DARWIN_SIGNATURE="${{ needs.build-macos.outputs.MAC_UNIVERSAL_SIG }}"
           DARWIN_URL="https://github.com/defai-digital/ax-studio/releases/download/v${{ needs.get-update-version.outputs.new_version }}/${{ needs.build-macos.outputs.TAR_NAME }}"
 
-          jq --arg version "$VERSION" \
-            --arg pub_date "$PUB_DATE" \
-            --arg windows_signature "$WINDOWS_SIGNATURE" \
-            --arg windows_url "$WINDOWS_URL" \
-            --arg darwin_arm_signature "$DARWIN_SIGNATURE" \
-            --arg darwin_arm_url "$DARWIN_URL" \
-            '.version = $version
-              | .pub_date = $pub_date
-              | .platforms["windows-x86_64"].signature = $windows_signature
-              | .platforms["windows-x86_64"].url = $windows_url
-              | .platforms["darwin-aarch64"].signature = $darwin_arm_signature
-              | .platforms["darwin-aarch64"].url = $darwin_arm_url' \
-            src-tauri/latest.json.template > latest.json
-            cat latest.json
+          node scripts/release/create-latest-json.mjs \
+            --version "$VERSION" \
+            --darwin-signature "$DARWIN_SIGNATURE" \
+            --darwin-url "$DARWIN_URL" \
+            --out latest.json
+          node scripts/release/verify-latest-json.mjs --file latest.json --version "$VERSION"
+          cat latest.json
 
       - name: Upload latest.json to GitHub release
         env:
@@ -102,8 +95,89 @@ jobs:
             --clobber \
             --repo "$GITHUB_REPOSITORY"
 
+  sign-release-assets:
+    needs: [get-update-version, sync-temp-to-latest]
+    runs-on: ubuntu-latest
+    env:
+      HAS_MINISIGN_KEY: ${{ secrets.AX_STUDIO_MINISIGN_SECRET_KEY_B64 != '' && secrets.AX_STUDIO_MINISIGN_PUBLIC_KEY != '' }}
+    permissions:
+      contents: write
+    steps:
+      - name: Getting the repo
+        uses: actions/checkout@v4
+
+      - name: Skip if minisign secrets are not configured
+        if: ${{ env.HAS_MINISIGN_KEY != 'true' }}
+        run: echo "::notice::AX_STUDIO_MINISIGN_SECRET_KEY_B64 or AX_STUDIO_MINISIGN_PUBLIC_KEY not configured — skipping detached minisign signatures."
+
+      - name: Install minisign
+        if: ${{ env.HAS_MINISIGN_KEY == 'true' }}
+        run: sudo apt-get update && sudo apt-get install -y minisign
+
+      - name: Download release assets
+        if: ${{ env.HAS_MINISIGN_KEY == 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p artifacts signkey
+          gh release download "${{ github.ref_name }}" \
+            --dir artifacts \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "Ax-Studio_${{ needs.get-update-version.outputs.new_version }}_aarch64.dmg" \
+            --pattern "Ax-Studio.app.tar.gz" \
+            --pattern "ax-studio-mac-arm64-${{ needs.get-update-version.outputs.new_version }}.zip" \
+            --pattern "latest.json"
+
+      - name: Sign release assets with minisign
+        if: ${{ env.HAS_MINISIGN_KEY == 'true' }}
+        env:
+          MINISIGN_PASSWORD: ${{ secrets.AX_STUDIO_MINISIGN_PASSWORD }}
+          AX_STUDIO_MINISIGN_SECRET_KEY_B64: ${{ secrets.AX_STUDIO_MINISIGN_SECRET_KEY_B64 }}
+          AX_STUDIO_MINISIGN_PUBLIC_KEY: ${{ secrets.AX_STUDIO_MINISIGN_PUBLIC_KEY }}
+        run: |
+          printf '%s' "$AX_STUDIO_MINISIGN_SECRET_KEY_B64" | base64 --decode > signkey/ax-studio.minisign.key
+          printf '%s\n' "$AX_STUDIO_MINISIGN_PUBLIC_KEY" > signkey/ax-studio.minisign.pub
+          node scripts/release/minisign-artifacts.mjs \
+            --key-dir signkey \
+            artifacts/Ax-Studio_${{ needs.get-update-version.outputs.new_version }}_aarch64.dmg \
+            artifacts/Ax-Studio.app.tar.gz \
+            artifacts/ax-studio-mac-arm64-${{ needs.get-update-version.outputs.new_version }}.zip \
+            artifacts/latest.json
+
+      - name: Upload minisign signatures
+        if: ${{ env.HAS_MINISIGN_KEY == 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" artifacts/*.minisig --clobber --repo "$GITHUB_REPOSITORY"
+
+  verify-release-assets:
+    needs: [get-update-version, sign-release-assets]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Getting the repo
+        uses: actions/checkout@v4
+
+      - name: Verify GitHub release assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node scripts/release/verify-release-assets.mjs \
+            --repo "$GITHUB_REPOSITORY" \
+            --tag "${{ github.ref_name }}" \
+            --version "${{ needs.get-update-version.outputs.new_version }}"
+          gh release download "${{ github.ref_name }}" \
+            --dir artifacts \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "latest.json"
+          node scripts/release/verify-latest-json.mjs \
+            --file artifacts/latest.json \
+            --version "${{ needs.get-update-version.outputs.new_version }}"
+
   publish-release:
-    needs: [create-draft-release, sync-temp-to-latest]
+    needs: [create-draft-release, verify-release-assets]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -115,7 +189,7 @@ jobs:
         run: gh release edit "$TAG" --draft=false --repo "$GITHUB_REPOSITORY"
 
   update-homebrew-tap:
-    needs: [create-draft-release, get-update-version, publish-release]
+    needs: [get-update-version, publish-release]
     runs-on: ubuntu-latest
     env:
       HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
@@ -140,37 +214,12 @@ jobs:
           VERSION: ${{ needs.get-update-version.outputs.new_version }}
         run: |
           git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/defai-digital/homebrew-ax-studio.git" homebrew-tap
+          node scripts/release/write-homebrew-cask.mjs \
+            --version "$VERSION" \
+            --sha256 "$DMG_SHA256" \
+            --out homebrew-tap/Casks/ax-studio.rb
+          ruby -c homebrew-tap/Casks/ax-studio.rb
           cd homebrew-tap
-          mkdir -p Casks
-          {
-            echo 'cask "ax-studio" do'
-            echo "  version \"${VERSION}\""
-            echo "  sha256 \"${DMG_SHA256}\""
-            echo ''
-            echo '  url "https://github.com/defai-digital/ax-studio/releases/download/v#{version}/Ax-Studio_#{version}_aarch64.dmg"'
-            echo '  name "AX Studio"'
-            echo '  desc "AI workspace for cloud models, local inference, tools, artifacts, and research workflows"'
-            echo '  homepage "https://github.com/defai-digital/ax-studio"'
-            echo ''
-            echo '  depends_on arch: :arm64'
-            echo '  depends_on macos: ">= :ventura"'
-            echo ''
-            echo '  app "Ax-Studio.app"'
-            echo ''
-            echo '  postflight do'
-            echo '    system_command "/usr/bin/xattr",'
-            echo '      args: ["-cr", "#{appdir}/Ax-Studio.app"]'
-            echo '  end'
-            echo ''
-            echo '  zap trash: ['
-            echo '    "~/Library/Application Support/Ax-Studio",'
-            echo '    "~/Library/Caches/ai.axstudio.app",'
-            echo '    "~/Library/Logs/Ax-Studio",'
-            echo '    "~/Library/Preferences/ai.axstudio.app.plist",'
-            echo '    "~/Library/Saved Application State/ai.axstudio.app.savedState",'
-            echo '  ]'
-            echo 'end'
-          } > Casks/ax-studio.rb
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Casks/ax-studio.rb
