@@ -51,6 +51,14 @@ on:
         required: false
       AX_STUDIO_SIGNING_KEY:
         required: false
+      NOTARIZE_P8_BASE64:
+        required: false
+      NOTARY_ISSUER:
+        required: false
+      NOTARY_KEY_ID:
+        required: false
+      DELTA_AWS_REGION:
+        required: false
     outputs:
       MAC_UNIVERSAL_SIG:
         value: ${{ jobs.build-macos.outputs.MAC_UNIVERSAL_SIG }}
@@ -73,7 +81,7 @@ jobs:
       contents: write
     steps:
       - name: Getting the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
       - name: Replace Icons for Beta Build
@@ -83,7 +91,7 @@ jobs:
           cp .github/scripts/icon-${{ inputs.channel }}.png src-tauri/icons/icon.png
 
       - name: Installing node
-        uses: actions/setup-node@v1
+        uses: actions/setup-node@v4
         with:
           node-version: 20
 
@@ -224,10 +232,10 @@ jobs:
             TAR_NAME=Ax-Studio.app.tar.gz
           fi
 
-          echo "::set-output name=MAC_UNIVERSAL_SIG::$MAC_UNIVERSAL_SIG"
-          echo "::set-output name=FILE_NAME::$FILE_NAME"
-          echo "::set-output name=DMG_NAME::$DMG_NAME"
-          echo "::set-output name=TAR_NAME::$TAR_NAME"
+          echo "MAC_UNIVERSAL_SIG=${MAC_UNIVERSAL_SIG}" >> "$GITHUB_OUTPUT"
+          echo "FILE_NAME=${FILE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "DMG_NAME=${DMG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "TAR_NAME=${TAR_NAME}" >> "$GITHUB_OUTPUT"
         id: metadata
 
       ## Upload to s3 for nightly and beta

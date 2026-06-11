@@ -51,6 +51,8 @@ on:
         required: false
       AX_STUDIO_SIGNING_KEY:
         required: false
+      DELTA_AWS_REGION:
+        required: false
     outputs:
       WIN_SIG:
         value: ${{ jobs.build-windows-x64.outputs.WIN_SIG }}
@@ -73,7 +75,7 @@ jobs:
       contents: write
     steps:
       - name: Getting the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
 
@@ -84,7 +86,7 @@ jobs:
           cp .github/scripts/icon-${{ inputs.channel }}.png src-tauri/icons/icon.png
 
       - name: Installing node
-        uses: actions/setup-node@v1
+        uses: actions/setup-node@v4
         with:
           node-version: 20
 
@@ -293,10 +295,10 @@ jobs:
           cp "$PORTABLE_SRC" "$PORTABLE_FILE_NAME"
           echo "Portable exe: $PORTABLE_SRC -> $PORTABLE_FILE_NAME"
 
-          echo "::set-output name=WIN_SIG::$WIN_SIG"
-          echo "::set-output name=FILE_NAME::$FILE_NAME"
-          echo "::set-output name=MSI_FILE_NAME::$MSI_FILE"
-          echo "::set-output name=PORTABLE_FILE_NAME::$PORTABLE_FILE_NAME"
+          echo "WIN_SIG=${WIN_SIG}" >> "$GITHUB_OUTPUT"
+          echo "FILE_NAME=${FILE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "MSI_FILE_NAME=${MSI_FILE}" >> "$GITHUB_OUTPUT"
+          echo "PORTABLE_FILE_NAME=${PORTABLE_FILE_NAME}" >> "$GITHUB_OUTPUT"
         id: metadata
 
       ## Upload to s3 for nightly and beta

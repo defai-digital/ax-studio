@@ -50,13 +50,13 @@ jobs:
             sanitized_tag="${{ steps.tag.outputs.tag }}"
             # Remove the 'v' prefix if it exists
             sanitized_tag="${sanitized_tag#v}"
-            echo "::set-output name=new_version::$sanitized_tag"
+            echo "new_version=${sanitized_tag}" >> "$GITHUB_OUTPUT"
           else
             # Get the latest release tag from GitHub API
             LATEST_TAG=$(get_latest_tag)
-            
+
             # Remove the 'v' and append the build number to the version
             new_version="${LATEST_TAG#v}-${GITHUB_RUN_NUMBER}"
             echo "New version: $new_version"
-            echo "::set-output name=new_version::$new_version"
+            echo "new_version=${new_version}" >> "$GITHUB_OUTPUT"
           fi
