@@ -144,6 +144,11 @@ jobs:
       - name: Set up Xcode version
         run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
 
+      - name: Install MLX native dependencies
+        run: |
+          brew list mlx >/dev/null 2>&1 || brew install mlx
+          brew list mlx-c >/dev/null 2>&1 || brew install mlx-c
+
       - name: Check signing configuration
         run: |
           if [ "$HAS_SIGN_CERTS" = "true" ]; then

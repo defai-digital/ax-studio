@@ -103,6 +103,11 @@ jobs:
       - name: Set up Xcode version
         run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
 
+      - name: Install MLX native dependencies
+        run: |
+          brew list mlx >/dev/null 2>&1 || brew install mlx
+          brew list mlx-c >/dev/null 2>&1 || brew install mlx-c
+
       - name: Validate stable signing secrets
         if: inputs.channel == 'stable' && inputs.public_provider == 'github'
         env:
