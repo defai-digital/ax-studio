@@ -6,9 +6,6 @@ describe('decideLocalProviderSync', () => {
     expect(
       decideLocalProviderSync({
         loadedModels: [],
-        llamacppModels: [],
-        axServingModels: [],
-        axServingPort: 0,
       })
     ).toEqual({ action: 'unregister' })
   })
@@ -17,9 +14,6 @@ describe('decideLocalProviderSync', () => {
     expect(
       decideLocalProviderSync({
         loadedModels: ['model-a'],
-        llamacppModels: ['model-a'],
-        axServingModels: [],
-        axServingPort: 0,
         preferred: { port: 8080, apiKey: 'secret', models: ['model-a'] },
       })
     ).toEqual({
@@ -30,111 +24,68 @@ describe('decideLocalProviderSync', () => {
     })
   })
 
-  it('falls back to ax-serving when active', () => {
+  it('defaults preferred models to all loaded models', () => {
     expect(
       decideLocalProviderSync({
-        loadedModels: ['model-a', 'model-b'],
-        llamacppModels: ['model-a'],
-        axServingModels: ['model-b'],
-        axServingPort: 1337,
+        loadedModels: ['model-b', 'model-a'],
+        preferred: { port: 9000 },
       })
     ).toEqual({
       action: 'register',
-      port: 1337,
+      port: 9000,
       apiKey: '',
-      models: ['model-b'],
+      models: ['model-a', 'model-b'],
     })
   })
 
-  it('uses a fallback llama.cpp session when available', () => {
+  it('registers the single loaded model via the fallback session', () => {
     expect(
       decideLocalProviderSync({
         loadedModels: ['model-a'],
-        llamacppModels: ['model-a'],
-        axServingModels: [],
-        axServingPort: 0,
-        fallbackSession: { port: 8081, api_key: 'llama-key' },
+        fallbackSession: { port: 7777, api_key: 'key-a' },
       })
     ).toEqual({
       action: 'register',
-      port: 8081,
-      apiKey: 'llama-key',
+      port: 7777,
+      apiKey: 'key-a',
       models: ['model-a'],
     })
   })
 
-  it('limits process-based llama.cpp registration to one reachable model by default', () => {
+  it('unregisters when multiple models are loaded without a preference', () => {
     expect(
       decideLocalProviderSync({
         loadedModels: ['model-a', 'model-b'],
-        llamacppModels: ['model-a', 'model-b'],
-        axServingModels: [],
-        axServingPort: 0,
-        fallbackSession: { port: 8081, api_key: 'llama-key' },
+        fallbackSession: { port: 7777, api_key: 'key-a' },
       })
     ).toEqual({ action: 'unregister' })
   })
 
-  it('skips when models exist but no active port can be determined', () => {
+  it('skips when models are loaded but no port is known', () => {
     expect(
       decideLocalProviderSync({
         loadedModels: ['model-a'],
-        llamacppModels: ['model-a'],
-        axServingModels: [],
-        axServingPort: 0,
+      })
+    ).toEqual({ action: 'skip' })
+
+    expect(
+      decideLocalProviderSync({
+        loadedModels: ['model-a'],
         fallbackSession: null,
       })
     ).toEqual({ action: 'skip' })
   })
 
-  it('keeps preferred models scoped to the selected engine', () => {
+  it('deduplicates and sorts model ids', () => {
     expect(
       decideLocalProviderSync({
-        loadedModels: ['llama-model', 'ax-model'],
-        llamacppModels: ['llama-model'],
-        axServingModels: ['ax-model'],
-        axServingPort: 1337,
-        preferred: { port: 8080, apiKey: 'secret', models: ['llama-model'] },
+        loadedModels: ['model-b', 'model-a', 'model-b'],
+        preferred: { port: 8080, models: ['model-b', 'model-b', 'model-a'] },
       })
     ).toEqual({
       action: 'register',
       port: 8080,
-      apiKey: 'secret',
-      models: ['llama-model'],
-    })
-  })
-
-  it('keeps a single reachable process model registered when it is the only option', () => {
-    expect(
-      decideLocalProviderSync({
-        loadedModels: ['model-a'],
-        llamacppModels: ['model-a'],
-        axServingModels: [],
-        axServingPort: 0,
-        fallbackSession: { port: 8081, api_key: 'llama-key' },
-      })
-    ).toEqual({
-      action: 'register',
-      port: 8081,
-      apiKey: 'llama-key',
-      models: ['model-a'],
-    })
-  })
-
-  it('normalizes model ids to a stable sorted unique list', () => {
-    expect(
-      decideLocalProviderSync({
-        loadedModels: ['model-b', 'model-a', 'model-a'],
-        llamacppModels: ['model-b', 'model-a', 'model-a'],
-        axServingModels: [],
-        axServingPort: 0,
-        preferred: { port: 8080, apiKey: 'secret' },
-        fallbackSession: { port: 8081, api_key: 'ignored' },
-      })
-    ).toEqual({
-      action: 'register',
-      port: 8080,
-      apiKey: 'secret',
+      apiKey: '',
       models: ['model-a', 'model-b'],
     })
   })

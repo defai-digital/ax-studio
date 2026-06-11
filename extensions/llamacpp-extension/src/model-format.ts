@@ -1,14 +1,9 @@
 /**
- * Model format detection and ax-serving load-request construction.
+ * Model artifact format detection.
  *
- * ax-serving routes a load request to a backend based on the model path and
- * an optional explicit `backend` hint:
- *  - `.gguf` files          → llama.cpp (default route)
- *  - MLX model directories  → mlx (`config.json` + `*.safetensors`), hint "mlx"
- *  - AX Engine artifact dirs → native ax-engine (`model-manifest.json`), hint "native"
- *
- * Without the hint, GGUF always wins, so MLX/native models must send it
- * explicitly to actually reach the ax-engine runtime.
+ *  - `.gguf` files           → llama-server
+ *  - MLX model directories   → ax-engine-server (`config.json` + `*.safetensors`)
+ *  - AX Engine artifact dirs → ax-engine-server (`model-manifest.json`)
  */
 
 export type ModelFormat = 'gguf' | 'mlx' | 'ax-native'
@@ -34,44 +29,6 @@ export function detectModelFormatFromFiles(fileNames: string[]): ModelFormat {
 /** Formats whose model_path is a directory rather than a single .gguf file */
 export function isDirectoryFormat(format: ModelFormat): boolean {
   return format === 'mlx' || format === 'ax-native'
-}
-
-/** Map a model format to the ax-serving `backend` hint (undefined = auto) */
-export function axServingBackendHint(format: ModelFormat): string | undefined {
-  if (format === 'mlx') return 'mlx'
-  if (format === 'ax-native') return 'native'
-  return undefined
-}
-
-/** Build the POST /v1/models request body for ax-serving */
-export function buildAxServingLoadBody(args: {
-  modelId: string
-  modelPath: string
-  format: ModelFormat
-  mmprojPath?: string
-  nGpuLayers?: number
-  ctxSize?: number
-}): Record<string, unknown> {
-  const { modelId, modelPath, format, mmprojPath, nGpuLayers, ctxSize } = args
-  const body: Record<string, unknown> = {
-    model_id: modelId,
-    path: modelPath,
-  }
-
-  const backend = axServingBackendHint(format)
-  if (backend) body.backend = backend
-
-  if (ctxSize != null && ctxSize > 0) body.context_length = ctxSize
-
-  // GGUF-only llama.cpp options — MLX/native backends do not understand them
-  if (format === 'gguf') {
-    if (mmprojPath) body.mmproj_path = mmprojPath
-    if (nGpuLayers != null && nGpuLayers >= 0 && nGpuLayers !== 100) {
-      body.n_gpu_layers = nGpuLayers
-    }
-  }
-
-  return body
 }
 
 /**

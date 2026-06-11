@@ -25,12 +25,15 @@ pub async fn cleanup_processes<R: Runtime>(app_handle: &tauri::AppHandle<R>) {
 
                     // Check if this process is a process group leader (pgid == pid).
                     // If so, send signals to the whole group (negative PID) to also
-                    // kill child processes like llama-server instances spawned by ax-serving.
+                    // kill any child processes it may have spawned.
                     let pgid = unsafe { libc::getpgid(raw_pid) };
                     let is_group_leader = pgid == raw_pid;
 
                     let signal_target = if is_group_leader {
-                        log::debug!("Sending SIGTERM to process group -{} during shutdown", raw_pid);
+                        log::debug!(
+                            "Sending SIGTERM to process group -{} during shutdown",
+                            raw_pid
+                        );
                         Pid::from_raw(-raw_pid)
                     } else {
                         log::debug!("Sending SIGTERM to PID {} during shutdown", raw_pid);

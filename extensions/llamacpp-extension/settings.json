@@ -2,13 +2,13 @@
   {
     "key": "engine_type",
     "title": "Inference Engine",
-    "description": "Select which inference engine to use. 'llamacpp' uses llama.cpp server. 'ax-serving' uses ax-serving (Apple Silicon only, requires ax-serving binary) and is required for MLX / AX Engine models.",
+    "description": "Select which inference engine to use. 'llamacpp' uses llama.cpp server for GGUF models. 'ax-engine' additionally runs MLX / AX Engine artifact models natively via ax-engine-server (Apple Silicon only, requires ax-engine-server binary).",
     "controllerType": "dropdown",
     "controllerProps": {
       "value": "llamacpp",
       "options": [
         { "name": "llama.cpp (Default)", "value": "llamacpp" },
-        { "name": "ax-serving", "value": "ax-serving" }
+        { "name": "AX Engine (MLX)", "value": "ax-engine" }
       ]
     }
   },

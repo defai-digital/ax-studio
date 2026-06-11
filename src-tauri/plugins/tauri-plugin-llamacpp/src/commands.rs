@@ -10,7 +10,7 @@ use tokio::process::Command;
 use tokio::sync::mpsc;
 use tokio::time::Instant;
 
-use crate::args::{ArgumentBuilder, AxServingArgumentBuilder, LlamacppConfig};
+use crate::args::{ArgumentBuilder, AxEngineArgumentBuilder, LlamacppConfig};
 use crate::device::{get_devices_from_backend, DeviceInfo};
 use crate::error::{ErrorCode, LlamacppError, ServerError, ServerResult};
 use crate::path::{validate_binary_path, validate_mmproj_path, validate_model_path};
@@ -54,11 +54,15 @@ pub async fn load_llama_model<R: Runtime>(
     let state: State<LlamacppState> = app_handle.state();
     let mut process_map = state.llama_server_process.lock().await;
 
-    let is_ax_serving = config.engine_type == "ax-serving";
+    let is_ax_engine = config.engine_type == "ax-engine";
 
     log::info!(
         "Attempting to launch {} server at path: {:?}",
-        if is_ax_serving { "ax-serving" } else { "llama.cpp" },
+        if is_ax_engine {
+            "ax-engine"
+        } else {
+            "llama.cpp"
+        },
         backend_path
     );
     log::info!("Using configuration: {:?}", config);
@@ -66,9 +70,9 @@ pub async fn load_llama_model<R: Runtime>(
     let bin_path = validate_binary_path(backend_path)?;
 
     // Build arguments and env vars depending on engine type
-    let (mut args, mut merged_envs, api_key) = if is_ax_serving {
-        let ax_builder = AxServingArgumentBuilder::new(config.clone(), is_embedding);
-        let ax_args = ax_builder.build(&model_id, &model_path, port, mmproj_path.clone());
+    let (mut args, mut merged_envs, api_key) = if is_ax_engine {
+        let ax_builder = AxEngineArgumentBuilder::new();
+        let ax_args = ax_builder.build(&model_id, &model_path, port);
 
         let api_key: String = envs
             .get("LLAMA_API_KEY")
@@ -103,9 +107,9 @@ pub async fn load_llama_model<R: Runtime>(
 
     log::info!("Generated arguments: {:?}", args);
 
-    // Validate paths (only for llamacpp — ax-serving takes raw paths)
-    let (model_path_pb, mmproj_path_string) = if is_ax_serving {
-        // For ax-serving, the model path is passed directly; no --mmproj support yet
+    // Validate paths (only for llamacpp — ax-engine takes an artifacts directory)
+    let (model_path_pb, mmproj_path_string) = if is_ax_engine {
+        // For ax-engine, the model path is an MLX artifacts dir; no --mmproj support
         let pb = std::path::PathBuf::from(&model_path);
         (pb, None)
     } else {
@@ -140,7 +144,7 @@ pub async fn load_llama_model<R: Runtime>(
     command.stderr(Stdio::piped());
     setup_windows_process_flags(&mut command);
 
-    if !is_ax_serving {
+    if !is_ax_engine {
         // CUDA paths only apply to llama-server
         let cuda_found = add_cuda_paths(&mut command);
         if !cuda_found && binary_requires_cuda(&bin_path) {
@@ -161,9 +165,13 @@ pub async fn load_llama_model<R: Runtime>(
     let (ready_tx, mut ready_rx) = mpsc::channel::<bool>(1);
 
     // Clone engine flag for the spawned tasks
-    let is_ax_serving_stdout = is_ax_serving;
-    let is_ax_serving_stderr = is_ax_serving;
-    let engine_label = if is_ax_serving { "ax-serving" } else { "llamacpp" };
+    let is_ax_engine_stdout = is_ax_engine;
+    let is_ax_engine_stderr = is_ax_engine;
+    let engine_label = if is_ax_engine {
+        "ax-engine"
+    } else {
+        "llamacpp"
+    };
 
     // Spawn task to monitor stdout for readiness
     let stdout_ready_tx = ready_tx.clone();
@@ -185,9 +193,10 @@ pub async fn load_llama_model<R: Runtime>(
 
                     // Check for readiness indicators
                     let line_lower = line.to_lowercase();
-                    let is_ready = if is_ax_serving_stdout {
-                        line_lower.contains("rest server listening")
-                            || line_lower.contains("server listening on")
+                    let is_ready = if is_ax_engine_stdout {
+                        // ax-engine-server logs "ax-engine-server preview listening"
+                        line_lower.contains("preview listening")
+                            || line_lower.contains("listening on http")
                     } else {
                         line_lower.contains("http server listening")
                             || line_lower.contains("all slots are idle")
@@ -228,11 +237,10 @@ pub async fn load_llama_model<R: Runtime>(
 
                         // Check for readiness indicator
                         let line_lower = line.to_string().to_lowercase();
-                        let is_ready = if is_ax_serving_stderr {
-                            // ax-serving prints to stderr via eprintln!/tracing
-                            line_lower.contains("rest server listening")
-                                || line_lower.contains("worker starting on")
-                                || line_lower.contains("preloaded")
+                        let is_ready = if is_ax_engine_stderr {
+                            // ax-engine-server prints to stderr via eprintln!/tracing
+                            line_lower.contains("preview listening")
+                                || line_lower.contains("listening on http")
                         } else {
                             line_lower.contains("server is listening on")
                                 || line_lower.contains("starting the main loop")
@@ -434,228 +442,4 @@ pub async fn get_session_by_model<R: Runtime>(
     model_id: String,
 ) -> Result<Option<SessionInfo>, String> {
     find_session_by_model_id(app_handle, &model_id).await
-}
-
-/// Start ax-serving as a long-running service (no model pre-loaded).
-/// Models are loaded/unloaded at runtime via ax-serving's HTTP API.
-#[tauri::command]
-pub async fn start_ax_serving<R: Runtime>(
-    app_handle: tauri::AppHandle<R>,
-    binary_path: &str,
-    port: u16,
-    timeout: u64,
-) -> ServerResult<SessionInfo> {
-    let state: State<LlamacppState> = app_handle.state();
-    let mut process_map = state.llama_server_process.lock().await;
-
-    log::info!(
-        "Starting ax-serving service at: {:?}, port: {}",
-        binary_path,
-        port
-    );
-
-    let bin_path = validate_binary_path(binary_path)?;
-
-    let args = vec![
-        "serve".to_string(),
-        "--port".to_string(),
-        port.to_string(),
-        "--host".to_string(),
-        "127.0.0.1".to_string(),
-    ];
-
-    let mut envs: HashMap<String, String> = HashMap::new();
-    envs.insert("AXS_ALLOW_NO_AUTH".to_string(), "true".to_string());
-    envs.insert("AXS_LOG".to_string(), "info".to_string());
-    envs.insert("AXS_REQUEST_TIMEOUT_SECS".to_string(), timeout.to_string());
-
-    log::info!("ax-serving args: {:?}", args);
-
-    let mut command = Command::new(&bin_path);
-    command.args(&args);
-    command.envs(&envs);
-    command.stdout(Stdio::piped());
-    command.stderr(Stdio::piped());
-    setup_windows_process_flags(&mut command);
-
-    // Make ax-serving a process group leader so that killing the group
-    // also terminates any child llama-server processes it spawns.
-    #[cfg(unix)]
-    unsafe {
-        command.pre_exec(|| {
-            libc::setpgid(0, 0);
-            Ok(())
-        });
-    }
-
-    let mut child = command.spawn().map_err(ServerError::Io)?;
-
-    let stderr = child.stderr.take().expect("stderr was piped");
-    let stdout = child.stdout.take().expect("stdout was piped");
-
-    let (ready_tx, mut ready_rx) = mpsc::channel::<bool>(1);
-
-    // Monitor stdout for readiness
-    let stdout_ready_tx = ready_tx.clone();
-    let _stdout_task = tokio::spawn(async move {
-        let mut reader = BufReader::new(stdout);
-        let mut byte_buffer = Vec::new();
-        loop {
-            byte_buffer.clear();
-            match reader.read_until(b'\n', &mut byte_buffer).await {
-                Ok(0) => break,
-                Ok(_) => {
-                    let line = String::from_utf8_lossy(&byte_buffer);
-                    let line = line.trim_end();
-                    if !line.is_empty() {
-                        log::info!("[ax-serving stdout] {}", line);
-                    }
-                    let line_lower = line.to_lowercase();
-                    if line_lower.contains("rest server listening")
-                        || line_lower.contains("server listening on")
-                    {
-                        log::info!("ax-serving ready (stdout): '{}'", line);
-                        let _ = stdout_ready_tx.send(true).await;
-                    }
-                }
-                Err(e) => {
-                    log::error!("Error reading ax-serving stdout: {}", e);
-                    break;
-                }
-            }
-        }
-    });
-
-    // Monitor stderr for readiness
-    let stderr_task = tokio::spawn(async move {
-        let mut reader = BufReader::new(stderr);
-        let mut byte_buffer = Vec::new();
-        let mut stderr_buffer = String::new();
-        loop {
-            byte_buffer.clear();
-            match reader.read_until(b'\n', &mut byte_buffer).await {
-                Ok(0) => break,
-                Ok(_) => {
-                    let line = String::from_utf8_lossy(&byte_buffer);
-                    let line = line.trim_end();
-                    if !line.is_empty() {
-                        stderr_buffer.push_str(line);
-                        stderr_buffer.push('\n');
-                        log::info!("[ax-serving] {}", line);
-                        let line_lower = line.to_lowercase();
-                        if line_lower.contains("rest server listening")
-                            || line_lower.contains("worker starting on")
-                            || line_lower.contains("preloaded")
-                        {
-                            log::info!("ax-serving ready (stderr): '{}'", line);
-                            let _ = ready_tx.send(true).await;
-                        }
-                    }
-                }
-                Err(e) => {
-                    log::error!("Error reading ax-serving stderr: {}", e);
-                    break;
-                }
-            }
-        }
-        stderr_buffer
-    });
-
-    // Check for early exit
-    if let Some(status) = child.try_wait()? {
-        if !status.success() {
-            let stderr_output = stderr_task.await.unwrap_or_default();
-            log::error!("ax-serving exited early: {:?}", status);
-            return Err(LlamacppError::from_stderr(&stderr_output).into());
-        }
-    }
-
-    // Wait for server readiness or timeout
-    let timeout_duration = Duration::from_secs(timeout);
-    let start_time = Instant::now();
-    log::info!("Waiting for ax-serving to become ready...");
-
-    loop {
-        tokio::select! {
-            Some(true) = ready_rx.recv() => {
-                log::info!("ax-serving service is ready on port {}", port);
-                break;
-            }
-            _ = tokio::time::sleep(Duration::from_millis(50)) => {
-                if let Some(status) = child.try_wait()? {
-                    let stderr_output = stderr_task.await.unwrap_or_default();
-                    if !status.success() {
-                        log::error!("ax-serving exited with error: {:?}", status);
-                        return Err(LlamacppError::from_stderr(&stderr_output).into());
-                    } else {
-                        return Err(LlamacppError::from_stderr(&stderr_output).into());
-                    }
-                }
-                if start_time.elapsed() > timeout_duration {
-                    log::error!("Timeout waiting for ax-serving to start");
-                    let _ = child.kill().await;
-                    let stderr_output = stderr_task.await.unwrap_or_default();
-                    return Err(LlamacppError::new(
-                        ErrorCode::ModelLoadTimedOut,
-                        "ax-serving took too long to start.".into(),
-                        Some(format!(
-                            "Timeout: {}s\n\nStderr:\n{}",
-                            timeout, stderr_output
-                        )),
-                    )
-                    .into());
-                }
-            }
-        }
-    }
-
-    // Verify HTTP server is actually accepting connections before returning
-    let health_url = format!("http://127.0.0.1:{}/health", port);
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(5))
-        .build()
-        .unwrap_or_default();
-    let mut http_ready = false;
-    for attempt in 1..=20 {
-        tokio::time::sleep(Duration::from_millis(250)).await;
-        match client.get(&health_url).send().await {
-            Ok(resp) if resp.status().is_success() => {
-                log::info!("ax-serving HTTP health check passed on attempt {}", attempt);
-                http_ready = true;
-                break;
-            }
-            Ok(resp) => {
-                log::debug!("ax-serving health check attempt {}: status {}", attempt, resp.status());
-            }
-            Err(e) => {
-                log::debug!("ax-serving health check attempt {}: {}", attempt, e);
-            }
-        }
-    }
-    if !http_ready {
-        log::warn!("ax-serving health check did not pass after retries, proceeding anyway");
-    }
-
-    let pid = child.id().map(|id| id as i32).unwrap_or(-1);
-    log::info!("ax-serving started with PID: {}", pid);
-
-    let session_info = SessionInfo {
-        pid,
-        port: port as i32,
-        model_id: "__ax_serving__".to_string(),
-        model_path: bin_path.display().to_string(),
-        is_embedding: false,
-        api_key: String::new(),
-        mmproj_path: None,
-    };
-
-    process_map.insert(
-        pid,
-        LLamaBackendSession {
-            child,
-            info: session_info.clone(),
-        },
-    );
-
-    Ok(session_info)
 }

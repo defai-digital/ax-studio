@@ -20,6 +20,11 @@ import {
   UpdateCheckResult,
 } from '@ax-studio/tauri-plugin-llamacpp-api'
 import { getProxyConfig, buildProxyArg } from './util'
+import {
+  axEngineAssetInfo,
+  parseSha256File,
+  pickNewestVersionDir,
+} from './ax-engine-release'
 
 // Build-time constants — see env.d.ts for declarations
 
@@ -84,31 +89,181 @@ export async function isBackendInstalled(version: string, backend: string): Prom
   }
 }
 
-// ─── ax-serving binary discovery ──────────────────────────────────────────────
+// ─── ax-engine binary discovery & download ────────────────────────────────────
+
+const AX_ENGINE_LATEST_RELEASE_URL =
+  'https://api.github.com/repos/defai-digital/ax-engine/releases/latest'
+
+/** Root directory for auto-downloaded ax-engine releases */
+export async function getAxEngineDir(): Promise<string> {
+  const appData = await getAppDataFolderPath()
+  return joinPath([appData, 'ax-engine'])
+}
 
 /**
- * Get the absolute path to the ax-serving binary.
+ * Find an installed ax-engine-server binary, or null when none is found.
  * Searches:
- *  1. ~/.ax-studio/ax-serving/ax-serving (app data directory)
- *  2. /usr/local/bin/ax-serving (Homebrew / pkg install)
- *  3. ax-serving on PATH (fallback — will be resolved by the OS)
+ *  1. ~/.ax-studio/ax-engine/<version>/ax-engine-server (auto-downloaded, newest)
+ *  2. ~/.ax-studio/ax-engine/ax-engine-server (legacy manual install)
+ *  3. /usr/local/bin/ax-engine-server (Homebrew / pkg install)
+ *  4. /opt/homebrew/bin/ax-engine-server (Apple Silicon Homebrew)
  */
-export async function getAxServingBinaryPath(): Promise<string> {
-  // Check app data directory
-  const appData = await getAppDataFolderPath()
-  const appDataPath = await joinPath([appData, 'ax-serving', 'ax-serving'])
-  if (await fs.existsSync(appDataPath)) return appDataPath
+export async function findAxEngineBinary(): Promise<string | null> {
+  const axDir = await getAxEngineDir()
 
-  // Check /usr/local/bin (Homebrew default)
-  const usrLocalPath = '/usr/local/bin/ax-serving'
+  // Auto-downloaded versioned installs — pick the newest
+  try {
+    if (await fs.existsSync(axDir)) {
+      const entries: string[] = (await fs.readdirSync(axDir)) ?? []
+      const names = entries.map(
+        (p) => p.replace(/\\/g, '/').split('/').pop() ?? ''
+      )
+      const newest = pickNewestVersionDir(names)
+      if (newest) {
+        const versionedPath = await joinPath([axDir, newest, 'ax-engine-server'])
+        if (await fs.existsSync(versionedPath)) return versionedPath
+      }
+    }
+  } catch {}
+
+  // Legacy manual install directly in the ax-engine dir
+  const legacyPath = await joinPath([axDir, 'ax-engine-server'])
+  if (await fs.existsSync(legacyPath)) return legacyPath
+
+  // System installs
+  const usrLocalPath = '/usr/local/bin/ax-engine-server'
   if (await fs.existsSync(usrLocalPath)) return usrLocalPath
 
-  // Check /opt/homebrew/bin (Apple Silicon Homebrew)
-  const optBrewPath = '/opt/homebrew/bin/ax-serving'
+  const optBrewPath = '/opt/homebrew/bin/ax-engine-server'
   if (await fs.existsSync(optBrewPath)) return optBrewPath
 
-  // Fallback: assume it's on PATH
-  return 'ax-serving'
+  return null
+}
+
+/**
+ * Get a path/command for the ax-engine-server binary, falling back to PATH
+ * resolution by the OS when no install is found.
+ */
+export async function getAxEngineBinaryPath(): Promise<string> {
+  return (await findAxEngineBinary()) ?? 'ax-engine-server'
+}
+
+/** Coalesces concurrent ax-engine download attempts */
+let _axEngineDownload: Promise<string> | null = null
+
+/**
+ * Ensure an ax-engine-server binary is available, auto-downloading the
+ * latest GitHub release when none is installed. Returns the binary path.
+ */
+export async function ensureAxEngineBinary(): Promise<string> {
+  const existing = await findAxEngineBinary()
+  if (existing) return existing
+
+  if (!IS_MACOS) {
+    throw new Error(
+      'ax-engine is only available on Apple Silicon macOS. ' +
+        'Use the llama.cpp engine on this platform.'
+    )
+  }
+
+  if (!_axEngineDownload) {
+    _axEngineDownload = downloadAxEngine().finally(() => {
+      _axEngineDownload = null
+    })
+  }
+  return _axEngineDownload
+}
+
+/** Download and install the latest ax-engine release into the app data dir */
+async function downloadAxEngine(): Promise<string> {
+  const downloadExt = (window as any).core?.extensionManager?.getByName(
+    '@ax-studio/download-extension'
+  )
+  if (!downloadExt) {
+    throw new Error(
+      'ax-engine-server is not installed and the download extension is unavailable. ' +
+        'Install it manually (e.g. "brew install defai-digital/tap/ax-engine").'
+    )
+  }
+
+  // Resolve the latest release tag (api.github.com allows cross-origin reads)
+  const res = await fetch(AX_ENGINE_LATEST_RELEASE_URL, {
+    signal: AbortSignal.timeout(15000),
+  })
+  if (!res.ok) {
+    throw new Error(`Failed to resolve latest ax-engine release (${res.status})`)
+  }
+  const release = await res.json()
+  const tag = String(release.tag_name ?? '')
+  const asset = axEngineAssetInfo(tag)
+
+  const axDir = await getAxEngineDir()
+  const destDir = await joinPath([axDir, tag])
+  if (!(await fs.existsSync(axDir))) await fs.mkdir(axDir)
+  if (!(await fs.existsSync(destDir))) await fs.mkdir(destDir)
+
+  // Temp files INSIDE destDir so cancel cleanup only removes this version dir
+  const tempArchive = await joinPath([destDir, `_tmp_${asset.filename}`])
+  const tempSha = await joinPath([destDir, `_tmp_${asset.filename}.sha256`])
+  const proxyArg = buildProxyArg(getProxyConfig())
+  const taskId = `llamacpp-ax-engine-${tag}-${Date.now()}`
+
+  console.log(`[llamacpp] Downloading ax-engine ${tag} from ${asset.url}`)
+
+  try {
+    await downloadExt.downloadFile(asset.url, tempArchive, taskId, proxyArg)
+
+    // Verify the archive checksum when the release publishes one
+    let expectedSha: string | null = null
+    try {
+      await downloadExt.downloadFile(
+        asset.shaUrl,
+        tempSha,
+        `${taskId}-sha`,
+        proxyArg
+      )
+      const shaContent = await fs.readFileSync(tempSha)
+      expectedSha = parseSha256File(String(shaContent ?? ''), asset.filename)
+    } catch (e) {
+      console.warn('[llamacpp] ax-engine sha256 file unavailable:', e)
+    }
+    if (expectedSha) {
+      const valid = await (window as any).core?.api?.validateSha256?.(
+        tempArchive,
+        expectedSha
+      )
+      if (!valid) {
+        throw new Error(
+          `SHA256 mismatch for ${asset.filename}. Download may be corrupted.`
+        )
+      }
+    }
+
+    await invoke('decompress', { path: tempArchive, outputDir: destDir })
+  } catch (e) {
+    try {
+      await fs.rm(destDir)
+    } catch {}
+    throw new Error(`Failed to download ax-engine ${tag}: ${e}`)
+  } finally {
+    try {
+      await fs.rm(tempArchive)
+    } catch {}
+    try {
+      await fs.rm(tempSha)
+    } catch {}
+  }
+
+  const exePath = await joinPath([destDir, 'ax-engine-server'])
+  if (!(await fs.existsSync(exePath))) {
+    try {
+      await fs.rm(destDir)
+    } catch {}
+    throw new Error(`ax-engine-server missing after extraction: ${exePath}`)
+  }
+
+  console.log(`[llamacpp] ax-engine ${tag} installed at ${exePath}`)
+  return exePath
 }
 
 // ─── Local backend discovery ─────────────────────────────────────────────────

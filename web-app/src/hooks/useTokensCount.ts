@@ -228,8 +228,10 @@ export const useTokensCount = (
 
       // For hosted models, 404 is expected - don't back off since we use local estimation
       if (!isHosted) {
-        // 404 means the endpoint doesn't exist on this backend (e.g. ax-serving).
-        // Back off for 1 hour immediately — retrying will never succeed.
+        // 404 means the tokenize endpoint doesn't exist on this backend
+        // (llama-server and ax-engine-server both support it; older or
+        // third-party backends may not). Back off for 1 hour immediately —
+        // retrying will never succeed.
         if (msg.includes('404')) {
           backoffUntilRef.current = Date.now() + 60 * 60 * 1000
         } else {

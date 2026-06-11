@@ -92,7 +92,7 @@ export async function executeSingleAgentStream(
         const inputTokens = usage?.inputTokens
 
         // Fall back to character-count estimate (~4 chars per token) when the
-        // server does not return usage statistics (e.g. ax-serving without
+        // server does not return usage statistics (backends without
         // stream_options.include_usage support).
         const tokenCount = outputTokens > 0 ? outputTokens : Math.ceil(totalChars / 4)
 

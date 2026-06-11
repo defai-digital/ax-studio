@@ -115,18 +115,6 @@ export async function unloadLlamaModel(pid: number): Promise<UnloadResult> {
   return await invoke('plugin:llamacpp|unload_llama_model', { pid })
 }
 
-export async function startAxServing(
-  binaryPath: string,
-  port: number,
-  timeout: number = 120
-): Promise<SessionInfo> {
-  return await invoke('plugin:llamacpp|start_ax_serving', {
-    binaryPath,
-    port,
-    timeout,
-  })
-}
-
 export async function getDevices(
   backendPath: string,
   libraryPath?: string

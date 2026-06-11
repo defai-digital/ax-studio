@@ -141,43 +141,36 @@ jobs:
         run: |
           git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/defai-digital/homebrew-ax-studio.git" homebrew-tap
           cd homebrew-tap
-          node - <<'NODE'
-          const fs = require('fs');
-          const version = process.env.VERSION;
-          const sha256 = process.env.DMG_SHA256;
-          const cask = [
-            'cask "ax-studio" do',
-            `  version "${version}"`,
-            `  sha256 "${sha256}"`,
-            '',
-            '  url "https://github.com/defai-digital/ax-studio/releases/download/v#{version}/Ax-Studio_#{version}_aarch64.dmg"',
-            '  name "AX Studio"',
-            '  desc "AI workspace for cloud models, local inference, tools, artifacts, and research workflows"',
-            '  homepage "https://github.com/defai-digital/ax-studio"',
-            '',
-            '  depends_on arch: :arm64',
-            '  depends_on macos: ">= :ventura"',
-            '',
-            '  app "Ax-Studio.app"',
-            '',
-            '  postflight do',
-            '    system_command "/usr/bin/xattr",',
-            '      args: ["-cr", "#{appdir}/Ax-Studio.app"]',
-            '  end',
-            '',
-            '  zap trash: [',
-            '    "~/Library/Application Support/Ax-Studio",',
-            '    "~/Library/Caches/ai.axstudio.app",',
-            '    "~/Library/Logs/Ax-Studio",',
-            '    "~/Library/Preferences/ai.axstudio.app.plist",',
-            '    "~/Library/Saved Application State/ai.axstudio.app.savedState",',
-            '  ]',
-            'end',
-            '',
-          ].join('\n');
-          fs.mkdirSync('Casks', { recursive: true });
-          fs.writeFileSync('Casks/ax-studio.rb', cask);
-          NODE
+          mkdir -p Casks
+          {
+            echo 'cask "ax-studio" do'
+            echo "  version \"${VERSION}\""
+            echo "  sha256 \"${DMG_SHA256}\""
+            echo ''
+            echo '  url "https://github.com/defai-digital/ax-studio/releases/download/v#{version}/Ax-Studio_#{version}_aarch64.dmg"'
+            echo '  name "AX Studio"'
+            echo '  desc "AI workspace for cloud models, local inference, tools, artifacts, and research workflows"'
+            echo '  homepage "https://github.com/defai-digital/ax-studio"'
+            echo ''
+            echo '  depends_on arch: :arm64'
+            echo '  depends_on macos: ">= :ventura"'
+            echo ''
+            echo '  app "Ax-Studio.app"'
+            echo ''
+            echo '  postflight do'
+            echo '    system_command "/usr/bin/xattr",'
+            echo '      args: ["-cr", "#{appdir}/Ax-Studio.app"]'
+            echo '  end'
+            echo ''
+            echo '  zap trash: ['
+            echo '    "~/Library/Application Support/Ax-Studio",'
+            echo '    "~/Library/Caches/ai.axstudio.app",'
+            echo '    "~/Library/Logs/Ax-Studio",'
+            echo '    "~/Library/Preferences/ai.axstudio.app.plist",'
+            echo '    "~/Library/Saved Application State/ai.axstudio.app.savedState",'
+            echo '  ]'
+            echo 'end'
+          } > Casks/ax-studio.rb
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Casks/ax-studio.rb

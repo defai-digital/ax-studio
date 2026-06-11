@@ -38,7 +38,7 @@ pub struct LlamacppConfig {
     pub rope_freq_base: f32,
     pub rope_freq_scale: f32,
     pub ctx_shift: bool,
-    /// Which inference engine to use: "llamacpp" (default) or "ax-serving"
+    /// Which inference engine to use: "llamacpp" (default) or "ax-engine"
     #[serde(default = "default_engine_type")]
     pub engine_type: String,
 }
@@ -345,71 +345,41 @@ impl ArgumentBuilder {
         }
     }
 }
-/// Builds CLI arguments for ax-serving binary instead of llama-server.
-/// ax-serving uses: `ax-serving serve -m <model> --port <port> --model-id <id> [--host 127.0.0.1]`
-pub struct AxServingArgumentBuilder {
-    config: LlamacppConfig,
-    is_embedding: bool,
-}
+/// Builds CLI arguments for ax-engine-server (one model per process, like
+/// llama-server). Serves MLX / AX Engine artifact directories natively:
+/// `ax-engine-server --mlx --mlx-model-artifacts-dir <dir> --model-id <id>
+///  --port <port> --host 127.0.0.1`
+pub struct AxEngineArgumentBuilder;
 
-impl AxServingArgumentBuilder {
-    pub fn new(config: LlamacppConfig, is_embedding: bool) -> Self {
-        Self {
-            config,
-            is_embedding,
-        }
+impl AxEngineArgumentBuilder {
+    pub fn new() -> Self {
+        Self
     }
 
-    /// Build ax-serving CLI arguments.
-    /// Returns (subcommand_args, env_vars) where subcommand_args starts with "serve".
-    pub fn build(
-        &self,
-        model_id: &str,
-        model_path: &str,
-        port: u16,
-        _mmproj_path: Option<String>,
-    ) -> Vec<String> {
-        let mut args = Vec::new();
-
-        // Subcommand
-        args.push("serve".to_string());
-
-        // Model path
-        args.push("-m".to_string());
-        args.push(model_path.to_string());
-
-        // Model ID
-        args.push("--model-id".to_string());
-        args.push(model_id.to_string());
-
-        // Port and host
-        args.push("--port".to_string());
-        args.push(port.to_string());
-        args.push("--host".to_string());
-        args.push("127.0.0.1".to_string());
-
-        args
+    /// Build ax-engine-server CLI arguments. `model_path` must be an MLX /
+    /// AX Engine artifacts directory (GGUF models use llama-server instead).
+    pub fn build(&self, model_id: &str, model_path: &str, port: u16) -> Vec<String> {
+        vec![
+            "--mlx".to_string(),
+            "--mlx-model-artifacts-dir".to_string(),
+            model_path.to_string(),
+            "--model-id".to_string(),
+            model_id.to_string(),
+            "--port".to_string(),
+            port.to_string(),
+            "--host".to_string(),
+            "127.0.0.1".to_string(),
+        ]
     }
 
-    /// Build environment variables for ax-serving.
+    /// Build environment variables for ax-engine-server.
+    /// The API key goes via env rather than `--api-key` so it never shows up
+    /// in the process list.
     pub fn build_envs(&self, api_key: &str) -> std::collections::HashMap<String, String> {
         let mut envs = std::collections::HashMap::new();
-
-        // Auth: if API key is provided, set it so ax-serving requires Bearer auth
         if !api_key.is_empty() {
-            envs.insert("AXS_API_KEY".to_string(), api_key.to_string());
-        } else {
-            // Allow running without auth for local use
-            envs.insert("AXS_ALLOW_NO_AUTH".to_string(), "true".to_string());
+            envs.insert("AX_ENGINE_API_KEY".to_string(), api_key.to_string());
         }
-
-        // GPU layers: ax-serving doesn't take this as CLI arg for serve mode,
-        // but its internal llama-server subprocess uses default behavior.
-        // For native backend, GPU is automatic on Metal.
-
-        // Logging
-        envs.insert("AXS_LOG".to_string(), "info".to_string());
-
         envs
     }
 }
@@ -1065,5 +1035,31 @@ mod tests {
         assert_arg_pair(&args, "--rope-scaling", "linear");
         assert_arg_pair(&args, "--rope-scale", "2");
         assert_arg_pair(&args, "--port", "9000");
+    }
+
+    #[test]
+    fn test_ax_engine_args() {
+        let builder = AxEngineArgumentBuilder::new();
+        let args = builder.build("my-model", "/models/my-model/model", 9123);
+
+        assert_has_flag(&args, "--mlx");
+        assert_arg_pair(&args, "--mlx-model-artifacts-dir", "/models/my-model/model");
+        assert_arg_pair(&args, "--model-id", "my-model");
+        assert_arg_pair(&args, "--port", "9123");
+        assert_arg_pair(&args, "--host", "127.0.0.1");
+    }
+
+    #[test]
+    fn test_ax_engine_envs() {
+        let builder = AxEngineArgumentBuilder::new();
+
+        let envs = builder.build_envs("secret-key");
+        assert_eq!(
+            envs.get("AX_ENGINE_API_KEY").map(String::as_str),
+            Some("secret-key")
+        );
+
+        let envs = builder.build_envs("");
+        assert!(!envs.contains_key("AX_ENGINE_API_KEY"));
     }
 }

@@ -51,9 +51,9 @@ pub async fn get_random_available_port<R: Runtime>(
 
 /// Gracefully terminate a process on Unix systems.
 ///
-/// If the process is a process group leader (e.g. ax-serving started with
-/// `setpgid(0,0)`), signals are sent to the entire process group so that
-/// child processes (like llama-server instances) are also terminated.
+/// If the process is a process group leader (started with `setpgid(0,0)`),
+/// signals are sent to the entire process group so that any child processes
+/// are also terminated.
 #[cfg(unix)]
 pub async fn graceful_terminate_process(child: &mut tokio::process::Child) {
     use nix::sys::signal::{kill, Signal};
@@ -66,7 +66,7 @@ pub async fn graceful_terminate_process(child: &mut tokio::process::Child) {
 
         // Check if this process is a process group leader (pgid == pid).
         // If so, send signals to the whole group (negative PID) to also
-        // kill child processes like llama-server instances spawned by ax-serving.
+        // kill any child processes it may have spawned.
         let pgid = unsafe { libc::getpgid(raw_pid) };
         let is_group_leader = pgid == raw_pid;
 

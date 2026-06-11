@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   detectModelFormatFromFiles,
   isDirectoryFormat,
-  axServingBackendHint,
-  buildAxServingLoadBody,
   sanitizeImportFilename,
 } from './model-format'
 
@@ -55,95 +53,6 @@ describe('isDirectoryFormat', () => {
     expect(isDirectoryFormat('mlx')).toBe(true)
     expect(isDirectoryFormat('ax-native')).toBe(true)
     expect(isDirectoryFormat('gguf')).toBe(false)
-  })
-})
-
-describe('axServingBackendHint', () => {
-  it('maps formats to ax-serving backend hints', () => {
-    expect(axServingBackendHint('mlx')).toBe('mlx')
-    expect(axServingBackendHint('ax-native')).toBe('native')
-    expect(axServingBackendHint('gguf')).toBeUndefined()
-  })
-})
-
-describe('buildAxServingLoadBody', () => {
-  it('builds a gguf body with llama.cpp options and no backend hint', () => {
-    expect(
-      buildAxServingLoadBody({
-        modelId: 'm1',
-        modelPath: '/models/m1/model.gguf',
-        format: 'gguf',
-        mmprojPath: '/models/m1/mmproj.gguf',
-        nGpuLayers: 50,
-        ctxSize: 8192,
-      })
-    ).toEqual({
-      model_id: 'm1',
-      path: '/models/m1/model.gguf',
-      mmproj_path: '/models/m1/mmproj.gguf',
-      n_gpu_layers: 50,
-      context_length: 8192,
-    })
-  })
-
-  it('omits n_gpu_layers when negative or the 100 default', () => {
-    const base = {
-      modelId: 'm1',
-      modelPath: '/p',
-      format: 'gguf' as const,
-    }
-    expect(
-      buildAxServingLoadBody({ ...base, nGpuLayers: -1 })
-    ).not.toHaveProperty('n_gpu_layers')
-    expect(
-      buildAxServingLoadBody({ ...base, nGpuLayers: 100 })
-    ).not.toHaveProperty('n_gpu_layers')
-    expect(
-      buildAxServingLoadBody({ ...base, nGpuLayers: NaN })
-    ).not.toHaveProperty('n_gpu_layers')
-  })
-
-  it('sends the mlx backend hint and drops llama.cpp-only options', () => {
-    expect(
-      buildAxServingLoadBody({
-        modelId: 'mlx-model',
-        modelPath: '/models/mlx-model/model',
-        format: 'mlx',
-        mmprojPath: '/models/mlx-model/mmproj.gguf',
-        nGpuLayers: 50,
-        ctxSize: 4096,
-      })
-    ).toEqual({
-      model_id: 'mlx-model',
-      path: '/models/mlx-model/model',
-      backend: 'mlx',
-      context_length: 4096,
-    })
-  })
-
-  it('sends the native backend hint for AX Engine artifacts', () => {
-    expect(
-      buildAxServingLoadBody({
-        modelId: 'ax-model',
-        modelPath: '/models/ax-model/model',
-        format: 'ax-native',
-      })
-    ).toEqual({
-      model_id: 'ax-model',
-      path: '/models/ax-model/model',
-      backend: 'native',
-    })
-  })
-
-  it('omits context_length when zero or unset', () => {
-    expect(
-      buildAxServingLoadBody({
-        modelId: 'm1',
-        modelPath: '/p',
-        format: 'mlx',
-        ctxSize: 0,
-      })
-    ).not.toHaveProperty('context_length')
   })
 })
 
