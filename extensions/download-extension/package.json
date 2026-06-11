@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "Download and manage files and AI models in Ax-Studio.",
   "main": "dist/index.js",
-  "author": "Ax-Studio",
+  "author": "DEFAI Private Limited <enquiry@defai.digital>",
   "license": "Apache-2.0",
   "homepage": "https://github.com/defai-digital/ax-studio",
   "repository": {

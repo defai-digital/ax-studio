@@ -5,7 +5,7 @@
   "description": "Powers the default AI assistant that works with all your installed models.",
   "main": "dist/index.js",
   "node": "dist/node/index.js",
-  "author": "Ax-Studio",
+  "author": "DEFAI Private Limited <enquiry@defai.digital>",
   "license": "Apache-2.0",
   "homepage": "https://github.com/defai-digital/ax-studio",
   "repository": {

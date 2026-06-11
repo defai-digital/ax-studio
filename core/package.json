@@ -22,7 +22,7 @@
     "LICENSE",
     "NOTICE"
   ],
-  "author": "Ax-Studio",
+  "author": "DEFAI Private Limited <enquiry@defai.digital>",
   "scripts": {
     "lint": "tslint --project tsconfig.json -t codeFrame 'src/**/*.ts' 'test/**/*.ts'",
     "test": "vitest run",

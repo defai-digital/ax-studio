@@ -1,7 +1,7 @@
 [package]
 name = "tauri-plugin-llamacpp"
 version = "0.6.599"
-authors = ["Ax-Studio <service@axstudio.ai>"]
+authors = ["DEFAI Private Limited <enquiry@defai.digital>"]
 description = "Tauri plugin for managing Ax-Studio LlamaCpp server processes and model loading"
 license = "Apache-2.0"
 homepage = "https://github.com/defai-digital/ax-studio"

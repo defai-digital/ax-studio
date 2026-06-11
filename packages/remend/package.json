@@ -20,5 +20,7 @@
     "THIRD_PARTY_NOTICES.md"
   ],
   "license": "Apache-2.0",
-  "description": "AX Studio vendored incomplete-markdown normalizer derived from the upstream Remend project."
+  "description": "AX Studio vendored incomplete-markdown normalizer derived from the upstream Remend project.",
+  "author": "DEFAI Private Limited <enquiry@defai.digital>",
+  "homepage": "https://github.com/defai-digital/ax-studio"
 }

@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "module": "dist/module.js",
   "engine": "llamacpp",
-  "author": "Ax-Studio <service@axstudio.ai>",
+  "author": "DEFAI Private Limited <enquiry@defai.digital>",
   "license": "Apache-2.0",
   "homepage": "https://github.com/defai-digital/ax-studio",
   "repository": {
