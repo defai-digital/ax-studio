@@ -29,7 +29,7 @@ function required(name) {
 }
 
 const version = required('version')
-const darwinSignature = required('darwin-signature')
+const darwinSignature = args.get('darwin-signature') ?? ''
 const darwinUrl = required('darwin-url')
 const outPath = path.resolve(repoRoot, required('out'))
 const templatePath = path.join(repoRoot, 'src-tauri/latest.json.template')

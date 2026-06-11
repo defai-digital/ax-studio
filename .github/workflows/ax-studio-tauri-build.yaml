@@ -255,7 +255,14 @@ jobs:
         run: |
           VERSION=${{ needs.get-update-version.outputs.new_version }}
           DARWIN_SIGNATURE="${{ needs.build-macos.outputs.MAC_UNIVERSAL_SIG }}"
-          DARWIN_URL="https://github.com/defai-digital/ax-studio/releases/download/v${{ needs.get-update-version.outputs.new_version }}/${{ needs.build-macos.outputs.TAR_NAME }}"
+          TAR_NAME="${{ needs.build-macos.outputs.TAR_NAME }}"
+          DMG_NAME="${{ needs.build-macos.outputs.DMG_NAME }}"
+          # Use tar URL when signature is present (updater), DMG URL otherwise
+          if [ -n "$DARWIN_SIGNATURE" ]; then
+            DARWIN_URL="https://github.com/defai-digital/ax-studio/releases/download/v${VERSION}/${TAR_NAME}"
+          else
+            DARWIN_URL="https://github.com/defai-digital/ax-studio/releases/download/v${VERSION}/${DMG_NAME}"
+          fi
 
           node scripts/release/create-latest-json.mjs \
             --version "$VERSION" \

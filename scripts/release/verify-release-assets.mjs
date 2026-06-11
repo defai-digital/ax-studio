@@ -40,10 +40,11 @@ const assets = output
 
 const requiredAssets = [
   `Ax-Studio_${version}_aarch64.dmg`,
-  'Ax-Studio.app.tar.gz',
   `ax-studio-mac-arm64-${version}.zip`,
   'latest.json',
 ]
+// Only present when TAURI_SIGNING_PRIVATE_KEY is configured
+const optionalAssets = ['Ax-Studio.app.tar.gz']
 
 function fail(message) {
   console.error(`release asset error: ${message}`)
@@ -56,13 +57,19 @@ for (const asset of requiredAssets) {
   }
 }
 
+for (const asset of optionalAssets) {
+  if (!assets.includes(asset)) {
+    console.warn(`warning: optional asset not present (requires updater signing): ${asset}`)
+  }
+}
+
 for (const asset of assets) {
   if (/windows|win|x64|linux|amd64|appimage|\.deb|\.msi|setup\.exe/i.test(asset)) {
     fail(`unsupported platform asset in macOS-only release: ${asset}`)
   }
 }
 
-const signableAssets = requiredAssets.filter((asset) => asset !== 'latest.json')
+const signableAssets = [...requiredAssets, ...optionalAssets].filter((asset) => asset !== 'latest.json' && assets.includes(asset))
 for (const asset of signableAssets) {
   const signature = `${asset}.minisig`
   if (assets.includes(signature)) {
