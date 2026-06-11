@@ -366,11 +366,11 @@ jobs:
     needs: [get-update-version, publish-release]
     runs-on: ubuntu-latest
     env:
-      HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+      HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' || secrets.TAP_TOKEN != '' }}
     steps:
       - name: Skip if no tap token configured
         if: ${{ env.HAS_TAP_TOKEN != 'true' }}
-        run: echo "::notice::HOMEBREW_TAP_TOKEN not configured — skipping Homebrew tap update."
+        run: echo "::notice::HOMEBREW_TAP_TOKEN or TAP_TOKEN not configured — skipping Homebrew tap update."
 
       - name: Download release DMG and compute SHA256
         if: ${{ env.HAS_TAP_TOKEN == 'true' }}
@@ -384,7 +384,7 @@ jobs:
       - name: Push updated cask to homebrew tap
         if: ${{ env.HAS_TAP_TOKEN == 'true' }}
         env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN || secrets.TAP_TOKEN }}
           VERSION: ${{ needs.get-update-version.outputs.new_version }}
         run: |
           git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/defai-digital/homebrew-ax-studio.git" homebrew-tap

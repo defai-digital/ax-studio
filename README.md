@@ -75,6 +75,8 @@ Current release automation targets:
 Windows, Linux, and mobile builds are not part of the public release support
 matrix.
 
+Release operator setup is documented in [docs/release.md](docs/release.md).
+
 ## Build From Source
 
 ### Requirements
