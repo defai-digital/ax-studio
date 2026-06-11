@@ -3,6 +3,12 @@ name: Tauri Builder - Tag
 on:
   push:
     tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Existing release version to build, for example 1.3.0"
+        required: true
+        type: string
 
 jobs:
   preflight:
@@ -23,45 +29,56 @@ jobs:
   get-update-version:
     uses: ./.github/workflows/template-get-update-version.yml
     needs: preflight
+    with:
+      version: ${{ inputs.version || '' }}
+
+  validate-release-tag:
+    runs-on: ubuntu-latest
+    needs: get-update-version
+    steps:
+      - name: Getting the repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate release tag exists
+        env:
+          VERSION: ${{ needs.get-update-version.outputs.new_version }}
+        run: |
+          test -n "$VERSION"
+          git fetch origin "refs/tags/v${VERSION}:refs/tags/v${VERSION}"
+          git rev-parse --verify "refs/tags/v${VERSION}"
 
   create-draft-release:
     runs-on: ubuntu-latest
-    needs: preflight
+    needs: [get-update-version, validate-release-tag]
     outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-      version: ${{ steps.get_version.outputs.version }}
+      version: ${{ needs.get-update-version.outputs.new_version }}
     permissions:
       contents: write
     steps:
-      - name: Extract tag name without v prefix
-        id: get_version
-        run: |
-          VERSION="${GITHUB_REF#refs/tags/v}"
-          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+      - name: Create or draft release
         env:
-          GITHUB_REF: ${{ github.ref }}
-      - name: Create Draft Release
-        id: create_release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          name: "${{ env.VERSION }}"
-          draft: true
-          prerelease: false
-          generate_release_notes: true
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.get-update-version.outputs.new_version }}
+          TAG: v${{ needs.get-update-version.outputs.new_version }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$TAG" --draft=true --prerelease=false --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" --title "$VERSION" --draft --generate-notes --repo "$GITHUB_REPOSITORY"
+          fi
 
   build-macos:
     uses: ./.github/workflows/template-tauri-build-macos.yml
     secrets: inherit
-    needs: [get-update-version, create-draft-release]
+    needs: [get-update-version, validate-release-tag, create-draft-release]
     with:
-      ref: ${{ github.ref }}
+      ref: refs/tags/v${{ needs.get-update-version.outputs.new_version }}
       public_provider: github
       channel: stable
       new_version: ${{ needs.get-update-version.outputs.new_version }}
-      upload_url: ${{ needs.create-draft-release.outputs.upload_url }}
+      upload_url: ''
 
   sync-temp-to-latest:
     needs: [create-draft-release, get-update-version, build-macos]
@@ -90,7 +107,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ github.ref_name }}" \
+          gh release upload "v${{ needs.get-update-version.outputs.new_version }}" \
             ./latest.json \
             --clobber \
             --repo "$GITHUB_REPOSITORY"
@@ -120,7 +137,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p artifacts signkey
-          gh release download "${{ github.ref_name }}" \
+          gh release download "v${{ needs.get-update-version.outputs.new_version }}" \
             --dir artifacts \
             --repo "$GITHUB_REPOSITORY" \
             --pattern "Ax-Studio_${{ needs.get-update-version.outputs.new_version }}_aarch64.dmg" \
@@ -149,7 +166,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ github.ref_name }}" artifacts/*.minisig --clobber --repo "$GITHUB_REPOSITORY"
+          gh release upload "v${{ needs.get-update-version.outputs.new_version }}" artifacts/*.minisig --clobber --repo "$GITHUB_REPOSITORY"
 
   verify-release-assets:
     needs: [get-update-version, sign-release-assets]
@@ -166,9 +183,9 @@ jobs:
         run: |
           node scripts/release/verify-release-assets.mjs \
             --repo "$GITHUB_REPOSITORY" \
-            --tag "${{ github.ref_name }}" \
+            --tag "v${{ needs.get-update-version.outputs.new_version }}" \
             --version "${{ needs.get-update-version.outputs.new_version }}"
-          gh release download "${{ github.ref_name }}" \
+          gh release download "v${{ needs.get-update-version.outputs.new_version }}" \
             --dir artifacts \
             --repo "$GITHUB_REPOSITORY" \
             --pattern "latest.json"
@@ -177,7 +194,7 @@ jobs:
             --version "${{ needs.get-update-version.outputs.new_version }}"
 
   publish-release:
-    needs: [create-draft-release, verify-release-assets]
+    needs: [create-draft-release, get-update-version, verify-release-assets]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -185,7 +202,7 @@ jobs:
       - name: Publish draft release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.ref_name }}
+          TAG: v${{ needs.get-update-version.outputs.new_version }}
         run: gh release edit "$TAG" --draft=false --repo "$GITHUB_REPOSITORY"
 
   update-homebrew-tap:

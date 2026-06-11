@@ -1,6 +1,11 @@
 name: get-update-version
 on:
   workflow_call:
+    inputs:
+      version:
+        required: false
+        type: string
+        default: ''
     outputs:
       new_version:
         description: 'The new version of the app'
@@ -24,6 +29,7 @@ jobs:
         id: version_update
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
           # Function to get the latest release tag
           get_latest_tag() {
@@ -33,10 +39,10 @@ jobs:
             while [ $retries -lt $max_retries ]; do
               tag=$(curl -H "Authorization: token ${GITHUB_TOKEN}" -s https://api.github.com/repos/defai-digital/ax-studio/releases/latest | jq -r .tag_name)
               if [ -n "$tag" ] && [ "$tag" != "null" ]; then
-                echo $tag
+                echo "$tag"
                 return
               else
-                let retries++
+                ((retries += 1))
                 echo "Retrying... ($retries/$max_retries)"
                 sleep 2
               fi
@@ -45,7 +51,11 @@ jobs:
             exit 1
           }
 
-            if ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}; then
+          if [ -n "$INPUT_VERSION" ]; then
+            sanitized_tag="${INPUT_VERSION#v}"
+            echo "Manual version requested: $sanitized_tag"
+            echo "new_version=${sanitized_tag}" >> "$GITHUB_OUTPUT"
+          elif ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}; then
             echo "Tag detected, set output follow tag"
             sanitized_tag="${{ steps.tag.outputs.tag }}"
             # Remove the 'v' prefix if it exists
