@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createChatTransport } from './chat-transport-factory'
 
 vi.mock('@/lib/custom-chat-transport', () => ({
-  CustomChatTransport: vi.fn().mockImplementation((...args: unknown[]) => ({ args })),
+  CustomChatTransport: vi.fn().mockImplementation(function (...args: unknown[]) {
+    return { args }
+  }),
 }))
 
 import { CustomChatTransport } from '@/lib/custom-chat-transport'

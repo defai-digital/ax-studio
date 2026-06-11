@@ -36,104 +36,148 @@ vi.mock('@/lib/extension', () => ({
 
 // Mock dynamic imports for web services
 vi.mock('./theme/web', () => ({
-  WebThemeService: vi.fn().mockImplementation(() => ({
-    setTheme: vi.fn(),
-    getCurrentWindow: vi.fn()
-  }))
+  WebThemeService: vi.fn().mockImplementation(function () {
+    return {
+      setTheme: vi.fn(),
+      getCurrentWindow: vi.fn()
+    }
+  })
 }))
 
 vi.mock('./app/web', () => ({
-  WebAppService: vi.fn().mockImplementation(() => ({}))
+  WebAppService: vi.fn().mockImplementation(function () {
+    return {}
+  })
 }))
 
 vi.mock('./path/web', () => ({
-  WebPathService: vi.fn().mockImplementation(() => ({}))
+  WebPathService: vi.fn().mockImplementation(function () {
+    return {}
+  })
 }))
 
 vi.mock('./core/web', () => ({
-  WebCoreService: vi.fn().mockImplementation(() => ({}))
+  WebCoreService: vi.fn().mockImplementation(function () {
+    return {}
+  })
 }))
 
 vi.mock('./dialog/web', () => ({
-  WebDialogService: vi.fn().mockImplementation(() => ({}))
+  WebDialogService: vi.fn().mockImplementation(function () {
+    return {}
+  })
 }))
 
 vi.mock('./events/web', () => ({
-  WebEventsService: vi.fn().mockImplementation(() => ({
-    emit: vi.fn(),
-    listen: vi.fn()
-  }))
+  WebEventsService: vi.fn().mockImplementation(function () {
+    return {
+      emit: vi.fn(),
+      listen: vi.fn()
+    }
+  })
 }))
 
 vi.mock('./window/web', () => ({
-  WebWindowService: vi.fn().mockImplementation(() => ({}))
+  WebWindowService: vi.fn().mockImplementation(function () {
+    return {}
+  })
 }))
 
 vi.mock('./deeplink/web', () => ({
-  WebDeepLinkService: vi.fn().mockImplementation(() => ({}))
+  WebDeepLinkService: vi.fn().mockImplementation(function () {
+    return {}
+  })
 }))
 
 vi.mock('./providers/web', () => ({
-  WebProvidersService: vi.fn().mockImplementation(() => ({}))
+  WebProvidersService: vi.fn().mockImplementation(function () {
+    return {}
+  })
 }))
 
 // Mock dynamic imports for Tauri services
 vi.mock('./theme/tauri', () => ({
-  TauriThemeService: vi.fn().mockImplementation(() => ({
-    setTheme: vi.fn(),
-    getCurrentWindow: vi.fn()
-  }))
+  TauriThemeService: vi.fn().mockImplementation(function () {
+    return {
+      setTheme: vi.fn(),
+      getCurrentWindow: vi.fn()
+    }
+  })
 }))
 
 vi.mock('./window/tauri', () => ({
-  TauriWindowService: vi.fn().mockImplementation(() => ({}))
+  TauriWindowService: vi.fn().mockImplementation(function () {
+    return {}
+  })
 }))
 
 vi.mock('./events/tauri', () => ({
-  TauriEventsService: vi.fn().mockImplementation(() => ({
-    emit: vi.fn(),
-    listen: vi.fn()
-  }))
+  TauriEventsService: vi.fn().mockImplementation(function () {
+    return {
+      emit: vi.fn(),
+      listen: vi.fn()
+    }
+  })
 }))
 
 vi.mock('./hardware/tauri', () => ({
-  TauriHardwareService: vi.fn().mockImplementation(() => ({}))
+  TauriHardwareService: vi.fn().mockImplementation(function () {
+    return {}
+  })
 }))
 
 vi.mock('./app/tauri', () => ({
-  TauriAppService: vi.fn().mockImplementation(() => ({}))
+  TauriAppService: vi.fn().mockImplementation(function () {
+    return {}
+  })
 }))
 
 vi.mock('./mcp/tauri', () => ({
-  TauriMCPService: vi.fn().mockImplementation(() => ({}))
+  TauriMCPService: vi.fn().mockImplementation(function () {
+    return {}
+  })
 }))
 
 vi.mock('./providers/tauri', () => ({
-  TauriProvidersService: vi.fn().mockImplementation(() => ({}))
+  TauriProvidersService: vi.fn().mockImplementation(function () {
+    return {}
+  })
 }))
 
 vi.mock('./dialog/tauri', () => ({
-  TauriDialogService: vi.fn().mockImplementation(() => ({}))
+  TauriDialogService: vi.fn().mockImplementation(function () {
+    return {}
+  })
 }))
 
 vi.mock('./opener/tauri', () => ({
-  TauriOpenerService: vi.fn().mockImplementation(() => ({}))
+  TauriOpenerService: vi.fn().mockImplementation(function () {
+    return {}
+  })
 }))
 
 vi.mock('./updater/tauri', () => ({
-  TauriUpdaterService: vi.fn().mockImplementation(() => ({}))
+  TauriUpdaterService: vi.fn().mockImplementation(function () {
+    return {}
+  })
 }))
 
 vi.mock('./path/tauri', () => ({
-  TauriPathService: vi.fn().mockImplementation(() => ({}))
+  TauriPathService: vi.fn().mockImplementation(function () {
+    return {}
+  })
 }))
 
 vi.mock('./core/tauri', () => ({
-  TauriCoreService: vi.fn().mockImplementation(() => ({}))
+  TauriCoreService: vi.fn().mockImplementation(function () {
+    return {}
+  })
 }))
 
 vi.mock('./deeplink/tauri', () => ({
-  TauriDeepLinkService: vi.fn().mockImplementation(() => ({}))
+  TauriDeepLinkService: vi.fn().mockImplementation(function () {
+    return {}
+  })
 }))
 
 // Mock console to avoid noise in tests

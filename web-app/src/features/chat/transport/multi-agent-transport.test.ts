@@ -74,17 +74,23 @@ vi.mock('@/lib/model-factory', () => ({
 }))
 
 vi.mock('@/features/multi-agent/lib', () => ({
-  TokenUsageTracker: vi.fn().mockImplementation(() => ({
-    budgetExhausted: vi.fn().mockReturnValue('budget-stop'),
-  })),
-  AgentHealthMonitor: vi.fn().mockImplementation(() => ({})),
-  MultiAgentRunLog: vi.fn().mockImplementation(() => ({
-    setOrchestratorTokens: vi.fn(),
-    getData: vi.fn().mockReturnValue({ steps: [] }),
-    complete: vi.fn(),
-    getUsage: vi.fn().mockReturnValue({ consumed: 100 }),
-    fail: vi.fn(),
-  })),
+  TokenUsageTracker: vi.fn().mockImplementation(function () {
+    return {
+      budgetExhausted: vi.fn().mockReturnValue('budget-stop'),
+    }
+  }),
+  AgentHealthMonitor: vi.fn().mockImplementation(function () {
+    return {}
+  }),
+  MultiAgentRunLog: vi.fn().mockImplementation(function () {
+    return {
+      setOrchestratorTokens: vi.fn(),
+      getData: vi.fn().mockReturnValue({ steps: [] }),
+      complete: vi.fn(),
+      getUsage: vi.fn().mockReturnValue({ consumed: 100 }),
+      fail: vi.fn(),
+    }
+  }),
   persistRunLog: (...args: unknown[]) => mockPersistRunLog(...args),
   validateTeamAgentNames: (...args: unknown[]) => mockValidateTeamAgentNames(...args),
   estimateTeamRunCost: (...args: unknown[]) => mockEstimateTeamRunCost(...args),

@@ -13,22 +13,24 @@ vi.mock('ai', async () => {
   const actual = await vi.importActual('ai')
   return {
     ...actual,
-    Experimental_Agent: vi.fn().mockImplementation(() => ({
-      generate: vi.fn().mockImplementation(async () => {
-        generateCallCount++
-        const responses: Record<number, string> = {
-          1: 'Initial draft of the article.',
-          2: 'Score: 3/5. Needs more detail in section 2.',
-          3: 'Revised draft with expanded section 2.',
-          4: 'APPROVED. Score: 5/5. Well done.',
-        }
-        return {
-          text: responses[generateCallCount] ?? 'done',
-          usage: { totalTokens: 150 },
-          steps: [],
-        }
-      }),
-    })),
+    Experimental_Agent: vi.fn().mockImplementation(function () {
+      return {
+        generate: vi.fn().mockImplementation(async () => {
+          generateCallCount++
+          const responses: Record<number, string> = {
+            1: 'Initial draft of the article.',
+            2: 'Score: 3/5. Needs more detail in section 2.',
+            3: 'Revised draft with expanded section 2.',
+            4: 'APPROVED. Score: 5/5. Well done.',
+          }
+          return {
+            text: responses[generateCallCount] ?? 'done',
+            usage: { totalTokens: 150 },
+            steps: [],
+          }
+        }),
+      }
+    }),
   }
 })
 
@@ -150,21 +152,19 @@ describe('E2E: Evaluator-Optimizer mode', () => {
   it('worker failure returns error, evaluator can still run', async () => {
     let callIdx = 0
     const { Experimental_Agent } = await import('ai')
-    vi.mocked(Experimental_Agent).mockImplementation(
-      () =>
-        ({
-          generate: vi.fn().mockImplementation(async () => {
-            callIdx++
-            if (callIdx === 1)
-              throw new Error('Worker LLM overloaded')
-            return {
-              text: 'Evaluator says: no input to evaluate',
-              usage: { totalTokens: 75 },
-              steps: [],
-            }
-          }),
-        }) as any
-    )
+    vi.mocked(Experimental_Agent).mockImplementation(function () {
+      return {
+        generate: vi.fn().mockImplementation(async () => {
+          callIdx++
+          if (callIdx === 1) throw new Error('Worker LLM overloaded')
+          return {
+            text: 'Evaluator says: no input to evaluate',
+            usage: { totalTokens: 75 },
+            steps: [],
+          }
+        }),
+      } as any
+    })
 
     const options = makeOptions()
     const tools = buildDelegationTools(agents, options)

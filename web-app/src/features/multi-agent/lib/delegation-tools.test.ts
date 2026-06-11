@@ -9,14 +9,16 @@ vi.mock('ai', async () => {
   const actual = await vi.importActual('ai')
   return {
     ...actual,
-    Experimental_Agent: vi.fn().mockImplementation(({ model }) => ({
-      generate: vi.fn().mockResolvedValue({
-        text: 'Mock agent response',
-        usage: { totalTokens: 500 },
-        steps: [],
-      }),
-      model,
-    })),
+    Experimental_Agent: vi.fn().mockImplementation(function ({ model }) {
+      return {
+        generate: vi.fn().mockResolvedValue({
+          text: 'Mock agent response',
+          usage: { totalTokens: 500 },
+          steps: [],
+        }),
+        model,
+      }
+    }),
   }
 })
 

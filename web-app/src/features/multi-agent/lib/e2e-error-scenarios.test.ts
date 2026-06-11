@@ -12,13 +12,15 @@ vi.mock('ai', async () => {
   const actual = await vi.importActual('ai')
   return {
     ...actual,
-    Experimental_Agent: vi.fn().mockImplementation(() => ({
-      generate: vi.fn().mockResolvedValue({
-        text: 'default response',
-        usage: { totalTokens: 75 },
-        steps: [],
-      }),
-    })),
+    Experimental_Agent: vi.fn().mockImplementation(function () {
+      return {
+        generate: vi.fn().mockResolvedValue({
+          text: 'default response',
+          usage: { totalTokens: 75 },
+          steps: [],
+        }),
+      }
+    }),
   }
 })
 
@@ -65,17 +67,13 @@ describe('E2E: Error scenarios', () => {
   describe('Abort mid-run', () => {
     it('abort error is re-thrown from delegation tool', async () => {
       const { Experimental_Agent } = await import('ai')
-      vi.mocked(Experimental_Agent).mockImplementation(
-        () =>
-          ({
-            generate: vi.fn().mockImplementation(async () => {
-              throw new DOMException(
-                'The operation was aborted',
-                'AbortError'
-              )
-            }),
-          }) as any
-      )
+      vi.mocked(Experimental_Agent).mockImplementation(function () {
+        return {
+          generate: vi.fn().mockImplementation(async () => {
+            throw new DOMException('The operation was aborted', 'AbortError')
+          }),
+        } as any
+      })
 
       const options = makeDelegationOptions()
       const tools = buildDelegationTools(agents.slice(0, 1), options)
@@ -136,14 +134,13 @@ describe('E2E: Error scenarios', () => {
   describe('All agents fail', () => {
     it('delegation tools return errors for all agents', async () => {
       const { Experimental_Agent } = await import('ai')
-      vi.mocked(Experimental_Agent).mockImplementation(
-        () =>
-          ({
-            generate: vi.fn().mockImplementation(async () => {
-              throw new Error('LLM service unavailable')
-            }),
-          }) as any
-      )
+      vi.mocked(Experimental_Agent).mockImplementation(function () {
+        return {
+          generate: vi.fn().mockImplementation(async () => {
+            throw new Error('LLM service unavailable')
+          }),
+        } as any
+      })
 
       const emitDataPart = vi.fn()
       const options = makeDelegationOptions({ emitDataPart })
@@ -170,14 +167,13 @@ describe('E2E: Error scenarios', () => {
 
     it('parallel mode handles all agents failing', async () => {
       const { Experimental_Agent } = await import('ai')
-      vi.mocked(Experimental_Agent).mockImplementation(
-        () =>
-          ({
-            generate: vi.fn().mockImplementation(async () => {
-              throw new Error('All models down')
-            }),
-          }) as any
-      )
+      vi.mocked(Experimental_Agent).mockImplementation(function () {
+        return {
+          generate: vi.fn().mockImplementation(async () => {
+            throw new Error('All models down')
+          }),
+        } as any
+      })
 
       const team: AgentTeam = {
         id: 't',
@@ -204,14 +200,13 @@ describe('E2E: Error scenarios', () => {
   describe('Circuit breaker integration', () => {
     it('circuit opens after repeated failures and blocks subsequent calls', async () => {
       const { Experimental_Agent } = await import('ai')
-      vi.mocked(Experimental_Agent).mockImplementation(
-        () =>
-          ({
-            generate: vi.fn().mockImplementation(async () => {
-              throw new Error('Server error')
-            }),
-          }) as any
-      )
+      vi.mocked(Experimental_Agent).mockImplementation(function () {
+        return {
+          generate: vi.fn().mockImplementation(async () => {
+            throw new Error('Server error')
+          }),
+        } as any
+      })
 
       const healthMonitor = new AgentHealthMonitor()
       const options = makeDelegationOptions({ healthMonitor })
@@ -247,16 +242,15 @@ describe('E2E: Error scenarios', () => {
     it('run log captures all state correctly', async () => {
       // Ensure mock returns known token count
       const { Experimental_Agent } = await import('ai')
-      vi.mocked(Experimental_Agent).mockImplementation(
-        () =>
-          ({
-            generate: vi.fn().mockResolvedValue({
-              text: 'done',
-              usage: { totalTokens: 75 },
-              steps: [],
-            }),
-          }) as any
-      )
+      vi.mocked(Experimental_Agent).mockImplementation(function () {
+        return {
+          generate: vi.fn().mockResolvedValue({
+            text: 'done',
+            usage: { totalTokens: 75 },
+            steps: [],
+          }),
+        } as any
+      })
 
       const runLog = new MultiAgentRunLog('team-1', 'thread-1', 50000)
       const options = makeDelegationOptions({ runLog })

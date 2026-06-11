@@ -27,13 +27,15 @@ const {
 }))
 
 vi.mock('@/services/integrations/tauri', () => ({
-  TauriIntegrationService: vi.fn().mockImplementation(() => ({
-    saveToken: mockSaveToken,
-    deleteToken: mockDeleteToken,
-    getAllStatuses: mockGetAllStatuses,
-    validateToken: mockValidateToken,
-    startOAuthFlow: mockStartOAuthFlow,
-  })),
+  TauriIntegrationService: vi.fn().mockImplementation(function () {
+    return {
+      saveToken: mockSaveToken,
+      deleteToken: mockDeleteToken,
+      getAllStatuses: mockGetAllStatuses,
+      validateToken: mockValidateToken,
+      startOAuthFlow: mockStartOAuthFlow,
+    }
+  }),
 }))
 
 vi.mock('@/lib/integrations-registry', () => ({

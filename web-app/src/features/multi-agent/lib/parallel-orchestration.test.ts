@@ -7,13 +7,15 @@ import type { AgentTeam } from '@/types/agent-team'
 
 // Mock AI SDK
 vi.mock('ai', () => ({
-  Experimental_Agent: vi.fn().mockImplementation(() => ({
-    generate: vi.fn().mockResolvedValue({
-      text: 'Agent response',
-      usage: { totalTokens: 100 },
-      steps: [],
-    }),
-  })),
+  Experimental_Agent: vi.fn().mockImplementation(function () {
+    return {
+      generate: vi.fn().mockResolvedValue({
+        text: 'Agent response',
+        usage: { totalTokens: 100 },
+        steps: [],
+      }),
+    }
+  }),
   stepCountIs: vi.fn().mockReturnValue(() => false),
   jsonSchema: vi.fn().mockImplementation((schema: unknown) => schema),
 }))
@@ -129,22 +131,21 @@ describe('buildParallelOrchestration', () => {
     const { Experimental_Agent } = await import('ai')
     const mockAgent = vi.mocked(Experimental_Agent)
     let callCount = 0
-    mockAgent.mockImplementation(
-      () =>
-        ({
-          generate: vi.fn().mockImplementation(() => {
-            callCount++
-            if (callCount === 1) {
-              return Promise.resolve({
-                text: 'Success output',
-                usage: { totalTokens: 50 },
-                steps: [],
-              })
-            }
-            return Promise.reject(new Error('Rate limit exceeded'))
-          }),
-        }) as never
-    )
+    mockAgent.mockImplementation(function () {
+      return {
+        generate: vi.fn().mockImplementation(() => {
+          callCount++
+          if (callCount === 1) {
+            return Promise.resolve({
+              text: 'Success output',
+              usage: { totalTokens: 50 },
+              steps: [],
+            })
+          }
+          return Promise.reject(new Error('Rate limit exceeded'))
+        }),
+      } as never
+    })
 
     const options = makeOptions()
     const { tools } = buildParallelOrchestration(

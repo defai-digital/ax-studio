@@ -13,16 +13,18 @@ vi.mock('ai', async () => {
   const actual = await vi.importActual('ai')
   return {
     ...actual,
-    Experimental_Agent: vi.fn().mockImplementation(() => ({
-      generate: vi.fn().mockImplementation(async () => {
-        generateCallCount++
-        return {
-          text: `Review ${generateCallCount}`,
-          usage: { totalTokens: 150 },
-          steps: [],
-        }
-      }),
-    })),
+    Experimental_Agent: vi.fn().mockImplementation(function () {
+      return {
+        generate: vi.fn().mockImplementation(async () => {
+          generateCallCount++
+          return {
+            text: `Review ${generateCallCount}`,
+            usage: { totalTokens: 150 },
+            steps: [],
+          }
+        }),
+      }
+    }),
   }
 })
 
@@ -92,20 +94,19 @@ describe('E2E: Parallel mode', () => {
   it('handles partial failure with Promise.allSettled', async () => {
     let idx = 0
     const { Experimental_Agent } = await import('ai')
-    vi.mocked(Experimental_Agent).mockImplementation(
-      () =>
-        ({
-          generate: vi.fn().mockImplementation(async () => {
-            idx++
-            if (idx === 2) throw new Error('Security agent crashed')
-            return {
-              text: `Result ${idx}`,
-              usage: { totalTokens: 150 },
-              steps: [],
-            }
-          }),
-        }) as any
-    )
+    vi.mocked(Experimental_Agent).mockImplementation(function () {
+      return {
+        generate: vi.fn().mockImplementation(async () => {
+          idx++
+          if (idx === 2) throw new Error('Security agent crashed')
+          return {
+            text: `Result ${idx}`,
+            usage: { totalTokens: 150 },
+            steps: [],
+          }
+        }),
+      } as any
+    })
 
     const emitDataPart = vi.fn()
     const options = makeOptions({ emitDataPart })
@@ -128,19 +129,18 @@ describe('E2E: Parallel mode', () => {
   it('respects stagger delay', async () => {
     const startTimes: number[] = []
     const { Experimental_Agent } = await import('ai')
-    vi.mocked(Experimental_Agent).mockImplementation(
-      () =>
-        ({
-          generate: vi.fn().mockImplementation(async () => {
-            startTimes.push(Date.now())
-            return {
-              text: 'ok',
-              usage: { totalTokens: 15 },
-              steps: [],
-            }
-          }),
-        }) as any
-    )
+    vi.mocked(Experimental_Agent).mockImplementation(function () {
+      return {
+        generate: vi.fn().mockImplementation(async () => {
+          startTimes.push(Date.now())
+          return {
+            text: 'ok',
+            usage: { totalTokens: 15 },
+            steps: [],
+          }
+        }),
+      } as any
+    })
 
     const staggerTeam = { ...team, parallel_stagger_ms: 50 }
     const options = makeOptions()
@@ -162,16 +162,15 @@ describe('E2E: Parallel mode', () => {
   it('token tracker accumulates from all agents', async () => {
     // Ensure mock returns known token count (prior tests may override)
     const { Experimental_Agent } = await import('ai')
-    vi.mocked(Experimental_Agent).mockImplementation(
-      () =>
-        ({
-          generate: vi.fn().mockResolvedValue({
-            text: 'result',
-            usage: { totalTokens: 150 },
-            steps: [],
-          }),
-        }) as any
-    )
+    vi.mocked(Experimental_Agent).mockImplementation(function () {
+      return {
+        generate: vi.fn().mockResolvedValue({
+          text: 'result',
+          usage: { totalTokens: 150 },
+          steps: [],
+        }),
+      } as any
+    })
 
     const tokenTracker = new TokenUsageTracker(100000)
     const options = makeOptions({ tokenTracker })

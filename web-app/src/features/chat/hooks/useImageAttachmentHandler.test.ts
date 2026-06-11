@@ -167,9 +167,9 @@ describe('useImageAttachmentHandler', () => {
         if (this.onload) this.onload()
       }),
     }
-    globalThis.FileReader = vi.fn(
-      () => mockReaderInstance
-    ) as unknown as typeof FileReader
+    globalThis.FileReader = vi.fn(function () {
+      return mockReaderInstance
+    }) as unknown as typeof FileReader
 
     const params = defaultParams()
     const { result } = renderHook(() => useImageAttachmentHandler(params))

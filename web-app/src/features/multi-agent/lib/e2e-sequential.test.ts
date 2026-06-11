@@ -13,16 +13,18 @@ vi.mock('ai', async () => {
   const actual = await vi.importActual('ai')
   return {
     ...actual,
-    Experimental_Agent: vi.fn().mockImplementation(() => ({
-      generate: vi.fn().mockImplementation(async () => {
-        generateCallCount++
-        return {
-          text: `Output from agent ${generateCallCount}`,
-          usage: { totalTokens: 150 },
-          steps: [],
-        }
-      }),
-    })),
+    Experimental_Agent: vi.fn().mockImplementation(function () {
+      return {
+        generate: vi.fn().mockImplementation(async () => {
+          generateCallCount++
+          return {
+            text: `Output from agent ${generateCallCount}`,
+            usage: { totalTokens: 150 },
+            steps: [],
+          }
+        }),
+      }
+    }),
   }
 })
 
@@ -112,22 +114,21 @@ describe('E2E: Sequential mode', () => {
   it('continues with remaining agents when one fails', async () => {
     let callIndex = 0
     const { Experimental_Agent } = await import('ai')
-    vi.mocked(Experimental_Agent).mockImplementation(
-      () =>
-        ({
-          generate: vi.fn().mockImplementation(async () => {
-            callIndex++
-            if (callIndex === 2) {
-              throw new Error('Agent 2 rate limited')
-            }
-            return {
-              text: `Result ${callIndex}`,
-              usage: { totalTokens: 150 },
-              steps: [],
-            }
-          }),
-        }) as any
-    )
+    vi.mocked(Experimental_Agent).mockImplementation(function () {
+      return {
+        generate: vi.fn().mockImplementation(async () => {
+          callIndex++
+          if (callIndex === 2) {
+            throw new Error('Agent 2 rate limited')
+          }
+          return {
+            text: `Result ${callIndex}`,
+            usage: { totalTokens: 150 },
+            steps: [],
+          }
+        }),
+      } as any
+    })
 
     const emitDataPart = vi.fn()
     const options = makeOptions({ emitDataPart })
@@ -157,20 +158,19 @@ describe('E2E: Sequential mode', () => {
   it('run log tracks all steps including errors', async () => {
     let callIdx = 0
     const { Experimental_Agent } = await import('ai')
-    vi.mocked(Experimental_Agent).mockImplementation(
-      () =>
-        ({
-          generate: vi.fn().mockImplementation(async () => {
-            callIdx++
-            if (callIdx === 2) throw new Error('fail')
-            return {
-              text: 'ok',
-              usage: { totalTokens: 75 },
-              steps: [],
-            }
-          }),
-        }) as any
-    )
+    vi.mocked(Experimental_Agent).mockImplementation(function () {
+      return {
+        generate: vi.fn().mockImplementation(async () => {
+          callIdx++
+          if (callIdx === 2) throw new Error('fail')
+          return {
+            text: 'ok',
+            usage: { totalTokens: 75 },
+            steps: [],
+          }
+        }),
+      } as any
+    })
 
     const runLog = new MultiAgentRunLog('team-seq', 'thread-1', 100000)
     const options = makeOptions({ runLog })
