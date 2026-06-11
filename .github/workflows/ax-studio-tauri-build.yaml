@@ -232,12 +232,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.get-update-version.outputs.new_version }}
         run: |
-          gh release upload "v${VERSION}" \
-            "./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/${{ steps.metadata.outputs.FILE_NAME }}" \
-            "./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/${{ steps.metadata.outputs.DMG_NAME }}" \
-            "./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/${{ steps.metadata.outputs.TAR_NAME }}" \
-            --clobber \
-            --repo "$GITHUB_REPOSITORY"
+          BUNDLE_MACOS="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos"
+          BUNDLE_DMG="./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg"
+          FILES=(
+            "$BUNDLE_MACOS/${{ steps.metadata.outputs.FILE_NAME }}"
+            "$BUNDLE_DMG/${{ steps.metadata.outputs.DMG_NAME }}"
+          )
+          TAR="$BUNDLE_MACOS/${{ steps.metadata.outputs.TAR_NAME }}"
+          [ -f "$TAR" ] && FILES+=("$TAR")
+          gh release upload "v${VERSION}" "${FILES[@]}" --clobber --repo "$GITHUB_REPOSITORY"
 
   sync-temp-to-latest:
     needs: [create-draft-release, get-update-version, build-macos]
