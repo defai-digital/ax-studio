@@ -62,19 +62,24 @@ fn generate_extension_hashes() {
 }
 
 fn main() {
-    // Release builds must have a real updater signing public key.
-    // Generate a key pair with: tauri signer generate -w ~/.tauri/ax-studio.key
-    // Set TAURI_SIGNING_PUBLIC_KEY (the public key) in CI before running `tauri build`.
-    // The private key (TAURI_SIGNING_PRIVATE_KEY) is only needed when signing update bundles.
+    // When createUpdaterArtifacts is enabled in tauri.conf.json, a signing public key is required
+    // so the app can verify update bundle signatures. The CI only enables this when the key is
+    // available (see ax-studio-tauri-build.yaml), so this check is a safety guard for that path.
     if std::env::var("PROFILE").unwrap_or_default() == "release" {
-        let pubkey = std::env::var("TAURI_SIGNING_PUBLIC_KEY").unwrap_or_default();
-        if pubkey.trim().is_empty() {
-            panic!(
-                "\n\n[SECURITY] TAURI_SIGNING_PUBLIC_KEY is not set.\n\
-                 Release builds require a valid Ed25519 public key so the app can\n\
-                 verify update bundle signatures before installing them.\n\
-                 Set TAURI_SIGNING_PUBLIC_KEY in your CI environment and retry.\n"
-            );
+        let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+        let conf_path = manifest_dir.join("tauri.conf.json");
+        println!("cargo:rerun-if-changed={}", conf_path.display());
+        let conf_content = fs::read_to_string(&conf_path).unwrap_or_default();
+        let updater_enabled = conf_content.contains("\"createUpdaterArtifacts\": true");
+        if updater_enabled {
+            let pubkey = std::env::var("TAURI_SIGNING_PUBLIC_KEY").unwrap_or_default();
+            if pubkey.trim().is_empty() {
+                panic!(
+                    "\n\n[SECURITY] TAURI_SIGNING_PUBLIC_KEY is not set.\n\
+                     Release builds with createUpdaterArtifacts=true require a valid Ed25519 public key.\n\
+                     Set TAURI_SIGNING_PUBLIC_KEY in your CI environment and retry.\n"
+                );
+            }
         }
     }
 
