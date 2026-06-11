@@ -10,6 +10,16 @@ on:
         required: true
         type: string
 
+# Never run two release pipelines for the same version at once: interleaved
+# asset uploads + publish would assemble a half-built release.
+concurrency:
+  group: tauri-release-${{ github.event.inputs.version || github.ref_name }}
+  cancel-in-progress: false
+
+# Least privilege by default; jobs that touch the release opt into write.
+permissions:
+  contents: read
+
 jobs:
   preflight:
     runs-on: ubuntu-latest
@@ -86,8 +96,17 @@ jobs:
           VERSION: ${{ needs.get-update-version.outputs.new_version }}
           TAG: v${{ needs.get-update-version.outputs.new_version }}
         run: |
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release edit "$TAG" --draft=true --prerelease=false --repo "$GITHUB_REPOSITORY"
+          if is_draft=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null); then
+            if [ "$is_draft" = "true" ]; then
+              gh release edit "$TAG" --draft=true --prerelease=false --repo "$GITHUB_REPOSITORY"
+            else
+              # Re-drafting a published release takes every download URL
+              # (Homebrew, updater latest.json, docs links) offline for all
+              # users. Ship a new patch version instead of rebuilding over a
+              # live release; delete the release manually to force a rebuild.
+              echo "::error::Release $TAG is already published. Refusing to re-draft a live release."
+              exit 1
+            fi
           else
             gh release create "$TAG" --title "$VERSION" --draft --generate-notes --repo "$GITHUB_REPOSITORY"
           fi
@@ -323,12 +342,17 @@ jobs:
         run: |
           printf '%s' "$AX_STUDIO_MINISIGN_SECRET_KEY_B64" | base64 --decode > signkey/ax-studio.minisign.key
           printf '%s\n' "$AX_STUDIO_MINISIGN_PUBLIC_KEY" > signkey/ax-studio.minisign.pub
-          node scripts/release/minisign-artifacts.mjs \
-            --key-dir signkey \
-            artifacts/Ax-Studio_${{ needs.get-update-version.outputs.new_version }}_aarch64.dmg \
-            artifacts/Ax-Studio.app.tar.gz \
-            artifacts/ax-studio-mac-arm64-${{ needs.get-update-version.outputs.new_version }}.zip \
-            artifacts/latest.json
+          # Sign whatever the download step actually fetched: optional assets
+          # (e.g. Ax-Studio.app.tar.gz without an updater key) may be absent,
+          # and a hard-coded list would fail the whole release on them.
+          files=()
+          for f in artifacts/*; do
+            case "$f" in
+              *.minisig) ;;
+              *) files+=("$f") ;;
+            esac
+          done
+          node scripts/release/minisign-artifacts.mjs --key-dir signkey "${files[@]}"
 
       - name: Upload minisign signatures
         if: ${{ env.HAS_MINISIGN_KEY == 'true' }}
@@ -380,6 +404,8 @@ jobs:
   update-homebrew-tap:
     needs: [get-update-version, publish-release]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read # pushes via HOMEBREW_TAP_TOKEN, never GITHUB_TOKEN
     env:
       HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' || secrets.TAP_TOKEN != '' }}
     steps:
@@ -392,7 +418,9 @@ jobs:
         env:
           VERSION: ${{ needs.get-update-version.outputs.new_version }}
         run: |
-          curl -fsSL -o release.dmg \
+          # Assets can take a moment to propagate right after publish; retry
+          # instead of stranding Homebrew users on the previous version.
+          curl -fSL --retry 6 --retry-all-errors --retry-delay 10 -o release.dmg \
             "https://github.com/defai-digital/ax-studio/releases/download/v${VERSION}/Ax-Studio_${VERSION}_aarch64.dmg"
           echo "DMG_SHA256=$(sha256sum release.dmg | awk '{print $1}')" >> "$GITHUB_ENV"
 
