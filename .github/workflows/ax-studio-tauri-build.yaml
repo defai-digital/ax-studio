@@ -29,8 +29,9 @@ jobs:
   get-update-version:
     uses: ./.github/workflows/template-get-update-version.yml
     needs: preflight
+    secrets: inherit
     with:
-      version: ${{ inputs.version || '' }}
+      version: ${{ github.event.inputs.version || '' }}
 
   validate-release-tag:
     runs-on: ubuntu-latest
