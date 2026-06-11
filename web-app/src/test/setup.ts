@@ -92,6 +92,8 @@ const mockServiceHub = {
     updateProvider: vi.fn().mockResolvedValue(undefined),
     getProvider: vi.fn().mockResolvedValue(null),
     fetchModelsFromProvider: vi.fn().mockResolvedValue([]),
+    updateSettings: vi.fn().mockResolvedValue(undefined),
+    fetch: () => fetch,
   }),
   models: () => ({
     getModels: vi.fn().mockResolvedValue([]),
@@ -123,6 +125,7 @@ const mockServiceHub = {
     revealItemInDir: vi.fn().mockResolvedValue(undefined),
   }),
   updater: () => ({
+    check: vi.fn().mockResolvedValue(null),
     checkForUpdates: vi.fn().mockResolvedValue(null),
     installUpdate: vi.fn().mockResolvedValue(undefined),
     downloadAndInstallWithProgress: vi.fn().mockResolvedValue(undefined),
@@ -133,8 +136,19 @@ const mockServiceHub = {
     resolve: vi.fn((path) => path),
     dirname: vi.fn((path) => path.split('/').slice(0, -1).join('/')),
     basename: vi.fn((path) => path.split('/').pop()),
+    extname: vi.fn((path) => {
+      const basename = path.split('/').pop() ?? ''
+      const index = basename.lastIndexOf('.')
+      return index > 0 ? basename.slice(index) : ''
+    }),
   }),
   core: () => ({
+    invoke: vi.fn().mockRejectedValue(new Error('Core command is not available in web mode')),
+    convertFileSrc: vi.fn((path) => path),
+    getActiveExtensions: vi.fn().mockResolvedValue([]),
+    installExtensions: vi.fn().mockResolvedValue(undefined),
+    installExtension: vi.fn().mockImplementation((extensions) => Promise.resolve(extensions)),
+    uninstallExtension: vi.fn().mockResolvedValue(false),
     startCore: vi.fn().mockResolvedValue(undefined),
     stopCore: vi.fn().mockResolvedValue(undefined),
     getCoreStatus: vi.fn().mockResolvedValue('stopped'),
@@ -142,8 +156,8 @@ const mockServiceHub = {
   deeplink: () => ({ // cspell: disable-line
     register: vi.fn().mockResolvedValue(undefined),
     handle: vi.fn().mockResolvedValue(undefined),
-    getCurrent: vi.fn().mockResolvedValue(null),
-    onOpenUrl: vi.fn().mockResolvedValue(undefined),
+    getCurrent: vi.fn().mockResolvedValue([]),
+    onOpenUrl: vi.fn().mockResolvedValue(() => {}),
   }),
 }
 

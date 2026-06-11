@@ -12,8 +12,8 @@ use super::models::{MessageRecord, ThreadRecord};
 use super::{
     constants::THREADS_FILE,
     utils::{
-        ensure_data_dirs, ensure_thread_dir_exists, get_data_dir, get_messages_path,
-        get_thread_dir, get_thread_metadata_path,
+        ensure_data_dirs, get_data_dir, get_messages_path, get_thread_dir,
+        get_thread_metadata_path,
     },
 };
 
@@ -185,16 +185,17 @@ pub async fn create_message<R: Runtime>(
         return Err("Missing thread_id".to_string());
     }
     let path = get_messages_path(app_handle.clone(), &thread_id);
+    let thread_dir = get_thread_dir(app_handle.clone(), &thread_id);
 
     {
         let lock = get_lock_for_thread(&thread_id).await;
         let _guard = lock.lock().await;
 
         let data = serde_json::to_string(&message).map_err(|e| e.to_string())?;
-        let app_for_blocking = app_handle.clone();
-        let thread_id_owned = thread_id.clone();
         task::spawn_blocking(move || -> Result<(), String> {
-            ensure_thread_dir_exists(app_for_blocking, &thread_id_owned)?;
+            if !thread_dir.exists() {
+                fs::create_dir_all(&thread_dir).map_err(|e| e.to_string())?;
+            }
             let mut file = fs::OpenOptions::new()
                 .create(true)
                 .append(true)
@@ -232,12 +233,11 @@ pub async fn modify_message<R: Runtime>(
         let lock = get_lock_for_thread(thread_id).await;
         let _guard = lock.lock().await;
 
-        let app_for_blocking = app_handle.clone();
-        let thread_id_owned = thread_id.to_string();
+        let path = get_messages_path(app_handle.clone(), thread_id);
         let message_id_owned = message_id.to_string();
         let message_clone = message.clone();
         task::spawn_blocking(move || {
-            rewrite_messages_file(app_for_blocking, &thread_id_owned, |existing| {
+            rewrite_messages_file(&path, |existing| {
                 if existing.id == message_id_owned {
                     Some(message_clone.clone())
                 } else {
@@ -263,8 +263,9 @@ pub async fn delete_message<R: Runtime>(
         let lock = get_lock_for_thread(&thread_id).await;
         let _guard = lock.lock().await;
 
+        let path = get_messages_path(app_handle, &thread_id);
         task::spawn_blocking(move || {
-            rewrite_messages_file(app_handle, &thread_id, |existing| {
+            rewrite_messages_file(&path, |existing| {
                 if existing.id == message_id {
                     None
                 } else {
@@ -337,8 +338,9 @@ pub async fn create_thread_assistant<R: Runtime>(
 
     let mut thread: ThreadRecord = serde_json::from_str(&data).map_err(|e| e.to_string())?;
     thread.assistants.push(assistant.clone());
+    let metadata_path = get_thread_metadata_path(app_handle, &thread_id);
 
-    task::spawn_blocking(move || update_thread_metadata(app_handle, &thread_id, &thread))
+    task::spawn_blocking(move || update_thread_metadata(&metadata_path, &thread))
         .await
         .map_err(|e| format!("create_thread_assistant task error: {e}"))??;
 
@@ -381,7 +383,8 @@ pub async fn modify_thread_assistant<R: Runtime>(
         .position(|a| a.get("id").and_then(|v| v.as_str()) == Some(assistant_id.as_str()))
     {
         thread.assistants[index] = assistant.clone();
-        task::spawn_blocking(move || update_thread_metadata(app_handle, &thread_id, &thread))
+        let metadata_path = get_thread_metadata_path(app_handle, &thread_id);
+        task::spawn_blocking(move || update_thread_metadata(&metadata_path, &thread))
             .await
             .map_err(|e| format!("modify_thread_assistant task error: {e}"))??;
     }

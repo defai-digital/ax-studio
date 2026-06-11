@@ -63,6 +63,10 @@ vi.mock('@/hooks/settings/useGeneralSetting', () => ({
     setSpellCheckChatInput: vi.fn(),
     huggingfaceToken: 'test-token',
     setHuggingfaceToken: vi.fn(),
+    globalDefaultPrompt: '',
+    setGlobalDefaultPrompt: vi.fn(),
+    currentLanguage: 'en',
+    setCurrentLanguage: vi.fn(),
     autoTuningEnabled: false,
     setAutoTuningEnabled: vi.fn(),
     applyMode: 'all_chats',
@@ -82,6 +86,15 @@ vi.mock('@/hooks/updater/useAppUpdater', () => ({
 vi.mock('@/i18n/react-i18next-compat', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
+  }),
+}))
+
+vi.mock('@/i18n', () => ({
+  useAppTranslation: () => ({
+    t: (key: string) => key,
+    i18n: {
+      changeLanguage: vi.fn(),
+    },
   }),
 }))
 
@@ -168,6 +181,54 @@ vi.mock('@/components/ui/dialog', () => ({
   ),
   DialogTrigger: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="dialog-trigger">{children}</div>
+  ),
+}))
+
+vi.mock('@/components/ui/dropdown-menu', () => ({
+  DropdownMenu: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="dropdown-menu">{children}</div>
+  ),
+  DropdownMenuContent: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="dropdown-menu-content">{children}</div>
+  ),
+  DropdownMenuItem: ({
+    children,
+    onClick,
+  }: {
+    children: React.ReactNode
+    onClick?: () => void
+  }) => (
+    <button data-testid="dropdown-menu-item" onClick={onClick}>
+      {children}
+    </button>
+  ),
+  DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="dropdown-menu-trigger">{children}</div>
+  ),
+}))
+
+vi.mock('@/components/ui/textarea', () => ({
+  Textarea: ({
+    value,
+    onChange,
+    placeholder,
+  }: {
+    value?: string
+    onChange?: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
+    placeholder?: string
+  }) => (
+    <textarea
+      data-testid="textarea"
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+    />
+  ),
+}))
+
+vi.mock('@/components/settings/SettingsPageLayout', () => ({
+  default: ({ title }: { title: string }) => (
+    <div data-testid="settings-page-layout">{title}</div>
   ),
 }))
 

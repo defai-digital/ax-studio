@@ -39,15 +39,3 @@ pub fn ensure_data_dirs<R: Runtime>(app_handle: tauri::AppHandle<R>) -> Result<(
     }
     Ok(())
 }
-
-pub fn ensure_thread_dir_exists<R: Runtime>(
-    app_handle: tauri::AppHandle<R>,
-    thread_id: &str,
-) -> Result<(), String> {
-    ensure_data_dirs(app_handle.clone())?;
-    let thread_dir = get_thread_dir(app_handle, thread_id);
-    if !thread_dir.exists() {
-        fs::create_dir_all(&thread_dir).map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
