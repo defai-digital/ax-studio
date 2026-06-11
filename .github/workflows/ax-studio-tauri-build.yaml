@@ -341,7 +341,10 @@ jobs:
     needs: [get-update-version, sign-release-assets]
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      # The release is still a draft at this point, and draft releases are
+      # only visible to tokens with write access — a read-only GITHUB_TOKEN
+      # gets "release not found" from gh. This job never writes.
+      contents: write
     steps:
       - name: Getting the repo
         uses: actions/checkout@v4
