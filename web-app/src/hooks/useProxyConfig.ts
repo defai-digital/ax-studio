@@ -9,12 +9,17 @@ const encryptedStorage = {
   getItem: (name: string) => {
     const item = localStorage.getItem(name)
     if (!item) return null
-    const parsed = JSON.parse(item)
-    return {
-      ...parsed,
-      proxyPassword: AES.decrypt(parsed.proxyPassword, ENCRYPTION_KEY).toString(
-        enc.Utf8
-      ),
+    try {
+      const parsed = JSON.parse(item)
+      return {
+        ...parsed,
+        proxyPassword: AES.decrypt(
+          parsed.proxyPassword,
+          ENCRYPTION_KEY
+        ).toString(enc.Utf8),
+      }
+    } catch {
+      return null
     }
   },
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
