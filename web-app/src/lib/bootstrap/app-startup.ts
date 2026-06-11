@@ -27,13 +27,7 @@ export function hideInitialLoader() {
   document.body.classList.add('loaded')
   const loader = document.getElementById('initial-loader')
   if (loader) {
-    setTimeout(() => {
-      if (typeof loader.remove === 'function') {
-        loader.remove()
-      } else {
-        loader.parentNode?.removeChild(loader)
-      }
-    }, LOADER_REMOVE_DELAY_MS)
+    setTimeout(() => loader.remove(), LOADER_REMOVE_DELAY_MS)
   }
 }
 

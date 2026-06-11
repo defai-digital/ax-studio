@@ -1,6 +1,7 @@
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
+use tauri::Runtime;
 
 // For async file write serialization
 use std::collections::HashMap;
@@ -9,6 +10,7 @@ use std::sync::OnceLock;
 use tokio::sync::Mutex;
 
 use super::models::{MessageRecord, ThreadRecord};
+use super::utils::{get_messages_path, get_thread_metadata_path};
 
 // Global per-thread locks for message file writes
 pub static MESSAGE_LOCKS: OnceLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> = OnceLock::new();
@@ -93,8 +95,9 @@ pub fn read_messages_from_path(path: &Path) -> Result<Vec<MessageRecord>, String
 }
 
 /// Update thread metadata by writing to thread.json (atomic: write to .tmp then rename)
-pub fn update_thread_metadata(
-    path: &Path,
+pub fn update_thread_metadata<R: Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    thread_id: &str,
     thread: &ThreadRecord,
 ) -> Result<(), String> {
     let tmp_path = path.with_extension("json.tmp");
@@ -108,13 +111,16 @@ pub fn update_thread_metadata(
     Ok(())
 }
 
-pub fn rewrite_messages_file<F>(
-    path: &Path,
+pub fn rewrite_messages_file<R, F>(
+    app_handle: tauri::AppHandle<R>,
+    thread_id: &str,
     mut transform: F,
 ) -> Result<bool, String>
 where
+    R: Runtime,
     F: FnMut(MessageRecord) -> Option<MessageRecord>,
 {
+    let path = get_messages_path(app_handle, thread_id);
     if !path.exists() {
         return Ok(false);
     }

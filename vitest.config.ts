@@ -9,12 +9,18 @@ export default defineConfig({
       // Web-app package - use its own vitest config
       './web-app',
 
-      // llama.cpp extension - unit tests for local engine lifecycle helpers
+      // Bundled extensions - keep runtime extension contracts in the root lane
+      './extensions/assistant-extension',
+      './extensions/conversational-extension',
+      './extensions/download-extension',
       './extensions/llamacpp-extension',
+
+      // Test infrastructure guardrails
+      './scripts/testing',
     ],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html', 'lcov'],
+      reporter: ['text', 'json', 'json-summary', 'html', 'lcov'],
       exclude: [
         'docs',
         '**/*/dist',

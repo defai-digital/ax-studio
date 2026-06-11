@@ -11,22 +11,20 @@ export function resolveEffectiveSelectedModel({
   selectedProvider,
   selectedModelFromStore,
 }: ResolveSelectedModelOptions): Model | undefined {
-  const providerList = Array.isArray(providers) ? providers : []
-
   if (model) {
     return (
-      providerList
+      providers
         .find((provider) => provider.provider === model.provider)
-        ?.models?.find((providerModel) => providerModel.id === model.id) ??
+        ?.models.find((providerModel) => providerModel.id === model.id) ??
       { id: model.id, provider: model.provider } as Model
     )
   }
 
   if (selectedProvider) {
     return (
-      providerList
+      providers
         .find((provider) => provider.provider === selectedProvider)
-        ?.models?.find((providerModel) => providerModel.id === selectedModelFromStore?.id) ??
+        ?.models.find((providerModel) => providerModel.id === selectedModelFromStore?.id) ??
       selectedModelFromStore
     )
   }
