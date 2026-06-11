@@ -22,6 +22,7 @@ fn get_lock_file_path<R: Runtime>(app: &AppHandle<R>, port: u16) -> Result<PathB
     Ok(app_data_dir.join(format!("mcp_lock_{}.json", port)))
 }
 
+#[allow(dead_code)] // kept alongside the read/cleanup half of the lock-file protocol
 pub fn create_lock_file<R: Runtime>(
     app: &AppHandle<R>,
     port: u16,
@@ -167,20 +168,21 @@ pub async fn cleanup_all_stale_locks<R: Runtime>(app: &AppHandle<R>) -> Result<(
     let pattern = app_data_dir.join("mcp_lock_*.json");
     let pattern_str = pattern.to_string_lossy();
 
-    for entry in glob::glob(&pattern_str).map_err(|e| format!("Glob error: {}", e))? {
-        if let Ok(path) = entry {
-            if let Some(file_name) = path.file_name() {
-                let file_name_str = file_name.to_string_lossy();
-                if let Some(port_str) = file_name_str
-                    .strip_prefix("mcp_lock_")
-                    .and_then(|s| s.strip_suffix(".json"))
-                {
-                    if let Ok(port) = port_str.parse::<u16>() {
-                        match check_and_cleanup_stale_lock(app, port).await {
-                            Ok(true) => log::info!("Cleaned up stale lock for port {}", port),
-                            Err(e) => log::warn!("Failed to cleanup lock for port {}: {}", port, e),
-                            _ => {}
-                        }
+    for path in glob::glob(&pattern_str)
+        .map_err(|e| format!("Glob error: {}", e))?
+        .flatten()
+    {
+        if let Some(file_name) = path.file_name() {
+            let file_name_str = file_name.to_string_lossy();
+            if let Some(port_str) = file_name_str
+                .strip_prefix("mcp_lock_")
+                .and_then(|s| s.strip_suffix(".json"))
+            {
+                if let Ok(port) = port_str.parse::<u16>() {
+                    match check_and_cleanup_stale_lock(app, port).await {
+                        Ok(true) => log::info!("Cleaned up stale lock for port {}", port),
+                        Err(e) => log::warn!("Failed to cleanup lock for port {}: {}", port, e),
+                        _ => {}
                     }
                 }
             }
@@ -262,14 +264,15 @@ pub fn cleanup_own_locks<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     let pattern_str = pattern.to_string_lossy();
     let current_pid = std::process::id();
 
-    for entry in glob::glob(&pattern_str).map_err(|e| format!("Glob error: {}", e))? {
-        if let Ok(path) = entry {
-            if let Ok(content) = fs::read_to_string(&path) {
-                if let Ok(lock) = serde_json::from_str::<McpLockFile>(&content) {
-                    if lock.pid == current_pid {
-                        fs::remove_file(&path).ok();
-                        log::debug!("Removed own lock file: {:?}", path);
-                    }
+    for path in glob::glob(&pattern_str)
+        .map_err(|e| format!("Glob error: {}", e))?
+        .flatten()
+    {
+        if let Ok(content) = fs::read_to_string(&path) {
+            if let Ok(lock) = serde_json::from_str::<McpLockFile>(&content) {
+                if lock.pid == current_pid {
+                    fs::remove_file(&path).ok();
+                    log::debug!("Removed own lock file: {:?}", path);
                 }
             }
         }

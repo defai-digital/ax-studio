@@ -41,6 +41,7 @@ pub async fn start_server<R: tauri::Runtime>(
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn start_server_internal<R: tauri::Runtime>(
     server_handle: Arc<Mutex<Option<ServerHandle>>>,
     host: String,

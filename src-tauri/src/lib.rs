@@ -77,7 +77,7 @@ pub fn run() {
             background_cleanup_handle: Arc::new(Mutex::new(None)),
             approved_save_paths: Arc::new(Mutex::new(std::collections::HashSet::new())),
         })
-        .setup(|app| Ok(setup::app_setup(app)?))
+        .setup(|app| setup::app_setup(app))
         .build(tauri::generate_context!())
         .expect("error while running tauri application");
 

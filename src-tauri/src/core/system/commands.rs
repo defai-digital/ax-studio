@@ -288,15 +288,16 @@ pub fn launch_claude_code_with_config(
         match std::fs::OpenOptions::new()
             .write(true)
             .create(true)
+            .truncate(false) // writability probe only; write_env_to_shell does the real write
             .open(&env_file_path)
         {
             Ok(_) => {
                 write_env_to_shell(&env_file_path, &env_vars)?;
-                return Ok(());
+                Ok(())
             }
             Err(e) => {
                 // Cannot write to shell config file - return error instead of escalating privileges
-                return Err(format!("Cannot write to shell config file {}: {}. Please ensure write permissions or configure manually.", env_file_path, e));
+                Err(format!("Cannot write to shell config file {}: {}. Please ensure write permissions or configure manually.", env_file_path, e))
             }
         }
     } else if cfg!(target_os = "linux") {
@@ -311,17 +312,18 @@ pub fn launch_claude_code_with_config(
         match std::fs::OpenOptions::new()
             .write(true)
             .create(true)
+            .truncate(false) // writability probe only; write_env_to_shell does the real write
             .open(&env_file_path)
         {
             Ok(_) => {
                 write_env_to_shell(&env_file_path, &env_vars)?;
-                return Ok(());
+                Ok(())
             }
             Err(_) => {
                 let ax_studio_config_dir = format!("{}/.config/ax-studio", home_dir);
                 let ext = if shell_name == "bash" { "bash" } else { "zsh" };
                 let env_file = format!("{}/claude-code-env.{}", ax_studio_config_dir, ext);
-                return Err(format!("NEED_PERMISSION:{}", env_file));
+                Err(format!("NEED_PERMISSION:{}", env_file))
             }
         }
     } else {
@@ -340,7 +342,7 @@ pub fn launch_claude_code_with_config(
         }
 
         log::info!("Environment variables set permanently in Windows registry.");
-        return Ok(());
+        Ok(())
     }
 }
 

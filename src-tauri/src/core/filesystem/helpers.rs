@@ -5,7 +5,14 @@ use tauri::Runtime;
 
 pub fn resolve_path<R: Runtime>(app_handle: tauri::AppHandle<R>, path: &str) -> PathBuf {
     let app_data_folder = get_app_data_folder_path(app_handle.clone());
-    let canonical_app_data = normalize_path(&app_data_folder);
+    // The candidate path below is canonicalized when it exists (symlinks
+    // resolved, e.g. /var → /private/var on macOS) and lexically normalized
+    // when it doesn't, so the containment check must accept the app data
+    // folder in either form.
+    let canonical_app_data = app_data_folder
+        .canonicalize()
+        .unwrap_or_else(|_| normalize_path(&app_data_folder));
+    let lexical_app_data = normalize_path(&app_data_folder);
     let path = if path.starts_with("file:/") || path.starts_with("file:\\") {
         let normalized = normalize_file_path(path);
         let relative_normalized = normalized
@@ -25,7 +32,7 @@ pub fn resolve_path<R: Runtime>(app_handle: tauri::AppHandle<R>, path: &str) -> 
 
     // Security: ensure resolved path is within the app data folder
     // This check must be done after canonicalize to close symlink TOCTOU
-    if !resolved.starts_with(&canonical_app_data) {
+    if !resolved.starts_with(&canonical_app_data) && !resolved.starts_with(&lexical_app_data) {
         log::warn!(
             "Path traversal blocked: {} is outside app data folder {}",
             resolved.display(),

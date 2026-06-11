@@ -35,11 +35,7 @@ fn legacy_akidb_status_path(home: &Path) -> PathBuf {
     legacy_config_dir(home).join("status.json")
 }
 
-fn migrate_legacy_akidb_file(
-    home: &Path,
-    legacy_path: &Path,
-    preferred_path: &Path,
-) -> Result<(), String> {
+fn migrate_legacy_akidb_file(legacy_path: &Path, preferred_path: &Path) -> Result<(), String> {
     if preferred_path.exists() || !legacy_path.exists() {
         return Ok(());
     }
@@ -368,7 +364,7 @@ pub fn read_akidb_config() -> Result<Option<AkidbConfig>, String> {
     let config_path = preferred_akidb_config_path(&home);
     let legacy_path = legacy_akidb_config_path(&home);
 
-    migrate_legacy_akidb_file(&home, &legacy_path, &config_path)?;
+    migrate_legacy_akidb_file(&legacy_path, &config_path)?;
 
     let path_to_read = if config_path.exists() {
         config_path

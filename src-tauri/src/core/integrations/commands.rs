@@ -28,7 +28,7 @@ pub async fn save_integration_token(
     let store = app
         .store(STORE_NAME)
         .map_err(|e| format!("Failed to open store: {e}"))?;
-    store.set(&cred_key(&integration), serde_json::json!(credentials));
+    store.set(cred_key(&integration), serde_json::json!(credentials));
     Ok(())
 }
 
@@ -38,7 +38,7 @@ pub async fn delete_integration_token(app: AppHandle, integration: String) -> Re
     let store = app
         .store(STORE_NAME)
         .map_err(|e| format!("Failed to open store: {e}"))?;
-    store.delete(&cred_key(&integration));
+    store.delete(cred_key(&integration));
 
     // Clean up config files for OAuth integrations
     if integration == "google-workspace" {
@@ -56,7 +56,7 @@ pub async fn get_integration_status(app: AppHandle, integration: String) -> Resu
     let store = app
         .store(STORE_NAME)
         .map_err(|e| format!("Failed to open store: {e}"))?;
-    Ok(store.get(&cred_key(&integration)).is_some())
+    Ok(store.get(cred_key(&integration)).is_some())
 }
 
 /// Return a map of integration_id → has_credentials for all known integrations.
@@ -69,7 +69,7 @@ pub async fn get_all_integration_statuses(app: AppHandle) -> Result<HashMap<Stri
 
     let mut statuses = HashMap::new();
     for integration in env_keys.keys() {
-        let has_creds = store.get(&cred_key(integration)).is_some();
+        let has_creds = store.get(cred_key(integration)).is_some();
         statuses.insert(integration.to_string(), has_creds);
     }
     Ok(statuses)
@@ -85,7 +85,7 @@ pub fn read_credentials<R: Runtime>(
         .map_err(|e| format!("Failed to open store: {e}"))?;
 
     let value = store
-        .get(&cred_key(integration))
+        .get(cred_key(integration))
         .ok_or_else(|| format!("No credentials stored for {integration}"))?;
 
     let creds: HashMap<String, String> = serde_json::from_value(value)
@@ -122,7 +122,7 @@ pub async fn start_oauth_flow(
             let store = app
                 .store(STORE_NAME)
                 .map_err(|e| format!("Failed to open store: {e}"))?;
-            store.delete(&cred_key("google-workspace"));
+            store.delete(cred_key("google-workspace"));
 
             Ok("Google Workspace authorized successfully".to_string())
         }

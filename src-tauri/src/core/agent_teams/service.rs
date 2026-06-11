@@ -25,7 +25,7 @@ pub fn list_agent_teams(app: &AppHandle) -> Result<Vec<AgentTeam>, String> {
         for entry in entries {
             match entry {
                 Ok(entry) => {
-                    if entry.path().extension().map_or(false, |e| e == "json") {
+                    if entry.path().extension().is_some_and(|e| e == "json") {
                         match fs::read_to_string(entry.path()) {
                             Ok(content) => match serde_json::from_str::<AgentTeam>(&content) {
                                 Ok(team) => teams.push(team),
@@ -45,7 +45,7 @@ pub fn list_agent_teams(app: &AppHandle) -> Result<Vec<AgentTeam>, String> {
             }
         }
     }
-    teams.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    teams.sort_by_key(|t| std::cmp::Reverse(t.updated_at));
     Ok(teams)
 }
 

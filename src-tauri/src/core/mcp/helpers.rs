@@ -173,6 +173,7 @@ pub async fn run_mcp_commands<R: Runtime>(
 }
 
 /// Monitor MCP server health without removing it from the HashMap
+#[allow(dead_code)] // health-monitor variant kept for parity with the restart flow
 pub async fn monitor_mcp_server_handle(
     servers_state: SharedMcpServers,
     name: String,
@@ -312,7 +313,10 @@ async fn schedule_mcp_start_task<R: Runtime>(
     let config_params = extract_command_args(&config)
         .ok_or_else(|| format!("Failed to extract command args from config for {name}"))?;
 
-    if config_params.transport_type.as_deref() == Some("http") && config_params.url.is_some() {
+    let http_url = (config_params.transport_type.as_deref() == Some("http"))
+        .then(|| config_params.url.clone())
+        .flatten();
+    if let Some(http_url) = http_url {
         let transport = StreamableHttpClientTransport::with_client(
             reqwest::Client::builder()
                 .default_headers({
@@ -339,7 +343,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
                 .build()
                 .map_err(|e| format!("Failed to build HTTP client for {name}: {e}"))?,
             StreamableHttpClientTransportConfig {
-                uri: config_params.url.unwrap().into(),
+                uri: http_url.into(),
                 ..Default::default()
             },
         );
@@ -374,7 +378,9 @@ async fn schedule_mcp_start_task<R: Runtime>(
                 return Err(format!("Failed to connect to server: {e}"));
             }
         }
-    } else if config_params.transport_type.as_deref() == Some("sse") && config_params.url.is_some()
+    } else if let Some(sse_url) = (config_params.transport_type.as_deref() == Some("sse"))
+        .then(|| config_params.url.clone())
+        .flatten()
     {
         let transport = SseClientTransport::start_with_client(
             reqwest::Client::builder()
@@ -402,7 +408,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
                 .build()
                 .map_err(|e| format!("Failed to build SSE client for {name}: {e}"))?,
             rmcp::transport::sse_client::SseClientConfig {
-                sse_endpoint: config_params.url.unwrap().into(),
+                sse_endpoint: sse_url.into(),
                 ..Default::default()
             },
         )
@@ -597,7 +603,10 @@ async fn schedule_mcp_start_task<R: Runtime>(
                 return Err(format!("MCP server {name} quit immediately after starting"));
             }
             Some(svc) => {
-                if let Err(_) = timeout(Duration::from_secs(3), svc.list_all_tools()).await {
+                if timeout(Duration::from_secs(3), svc.list_all_tools())
+                    .await
+                    .is_err()
+                {
                     log::warn!(
                         "MCP server {name} started but failed initial health check (timed out)"
                     );
@@ -911,6 +920,7 @@ pub async fn restart_active_mcp_servers<R: Runtime>(
     Ok(())
 }
 
+#[allow(dead_code)] // lock-file based orphan cleanup, kept with create_lock_file
 pub async fn kill_orphaned_mcp_process_with_app<R: Runtime>(
     app: &AppHandle<R>,
     port: u16,
@@ -1091,7 +1101,7 @@ impl Drop for ShutdownGuard {
 }
 
 pub async fn stop_mcp_servers_with_context<R: Runtime>(
-    app: &AppHandle<R>,
+    _app: &AppHandle<R>,
     state: &State<'_, McpState>,
     context: ShutdownContext,
 ) -> Result<(), String> {

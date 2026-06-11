@@ -114,17 +114,13 @@ async fn validate_downloaded_file(
 
     // Use model_id from item if available, otherwise extract from save path
 
-    let model_id = item
-        .model_id
-        .as_ref()
-        .map(|s| s.as_str())
-        .unwrap_or_else(|| {
-            save_path
-                .parent() // get parent directory (modelId folder)
-                .and_then(|p| p.file_name())
-                .and_then(|n| n.to_str())
-                .unwrap_or("unknown")
-        });
+    let model_id = item.model_id.as_deref().unwrap_or_else(|| {
+        save_path
+            .parent() // get parent directory (modelId folder)
+            .and_then(|p| p.file_name())
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown")
+    });
 
     if emit_event {
         app.emit(

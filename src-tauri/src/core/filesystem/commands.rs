@@ -350,21 +350,12 @@ fn default_dimension() -> u32 {
     1536
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Default)]
 pub struct IngestSection {
     #[serde(default)]
     pub sources: Vec<IngestSource>,
     #[serde(default)]
     pub chunking: IngestChunking,
-}
-
-impl Default for IngestSection {
-    fn default() -> Self {
-        Self {
-            sources: vec![],
-            chunking: IngestChunking::default(),
-        }
-    }
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]

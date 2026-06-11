@@ -4,7 +4,7 @@ mod mcp_bootstrap;
 mod store_migration;
 mod tray;
 
-pub use extensions::{extract_extension_manifest, install_extensions};
+pub use extensions::install_extensions;
 pub use lifecycle::{app_run_handler, setup_theme_listener};
 pub use mcp_bootstrap::setup_mcp;
 pub use store_migration::migrate_mcp_servers;

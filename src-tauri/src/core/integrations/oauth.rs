@@ -177,10 +177,13 @@ pub async fn initiate_google_oauth(
     .await
 }
 
+/// Shared one-shot channel used to hand the OAuth result back to the waiting flow.
+type OAuthResultSender = Arc<tokio::sync::Mutex<Option<oneshot::Sender<Result<String, String>>>>>;
+
 /// Handle the OAuth callback request from Google.
 async fn handle_oauth_callback(
     req: Request<Body>,
-    tx: Arc<tokio::sync::Mutex<Option<oneshot::Sender<Result<String, String>>>>>,
+    tx: OAuthResultSender,
     expected_state: String,
 ) -> Result<Response<Body>, hyper::Error> {
     let uri = req.uri().to_string();
@@ -466,27 +469,9 @@ pub fn cleanup_google_workspace_config() -> Result<(), String> {
     Ok(())
 }
 
-pub fn is_allowed_sandbox_url(url: &str) -> bool {
-    let parsed = match url::Url::parse(url) {
-        Ok(parsed) => parsed,
-        Err(_) => return false,
-    };
-
-    if !matches!(parsed.scheme(), "http" | "https") {
-        return false;
-    }
-
-    match parsed.host() {
-        Some(url::Host::Domain("localhost")) => true,
-        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
-        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
-        _ => false,
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{extract_oauth_result, is_allowed_sandbox_url};
+    use super::extract_oauth_result;
     use std::collections::HashMap;
 
     #[test]
@@ -519,20 +504,11 @@ mod tests {
         assert_eq!(result.unwrap_err(), "OAuth state mismatch");
     }
 
-    #[test]
-    fn test_is_allowed_sandbox_url_only_accepts_loopback_hosts() {
-        assert!(is_allowed_sandbox_url("http://127.0.0.1:8080"));
-        assert!(is_allowed_sandbox_url("https://localhost:8443"));
-        assert!(is_allowed_sandbox_url("http://[::1]:8080"));
-        assert!(!is_allowed_sandbox_url("http://example.com:8080"));
-        assert!(!is_allowed_sandbox_url("file:///tmp/test"));
-    }
-
     #[tokio::test]
     async fn test_find_available_port_returns_bound_listener() {
         let (listener, port) = super::find_available_port().await.unwrap();
         // The port should be ephemeral (high number, not in 12300-12400 range)
-        assert!(port >= 1024 && port <= 65535);
+        assert!(port >= 1024);
         assert_ne!(port, 0);
         // Listener should be bound to 127.0.0.1:port
         let addr = listener.local_addr().unwrap();

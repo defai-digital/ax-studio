@@ -45,7 +45,7 @@ pub fn list_agent_run_logs(
         for entry in entries {
             match entry {
                 Ok(entry) => {
-                    if entry.path().extension().map_or(false, |e| e == "json") {
+                    if entry.path().extension().is_some_and(|e| e == "json") {
                         match fs::read_to_string(entry.path()) {
                             Ok(content) => match serde_json::from_str::<AgentRunLog>(&content) {
                                 Ok(log) => summaries.push(AgentRunLogSummary {
@@ -70,7 +70,7 @@ pub fn list_agent_run_logs(
             }
         }
     }
-    summaries.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+    summaries.sort_by_key(|s| std::cmp::Reverse(s.started_at));
     Ok(summaries)
 }
 
