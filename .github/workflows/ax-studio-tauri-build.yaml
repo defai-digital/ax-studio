@@ -71,9 +71,9 @@ jobs:
           VERSION=${{ needs.get-update-version.outputs.new_version }}
           PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")
           WINDOWS_SIGNATURE="${{ needs.build-windows-x64.outputs.WIN_SIG }}"
-          WINDOWS_URL="https://github.com/ax-studio/ax-studio/releases/download/v${{ needs.get-update-version.outputs.new_version }}/${{ needs.build-windows-x64.outputs.FILE_NAME }}"
+          WINDOWS_URL="https://github.com/defai-digital/ax-studio/releases/download/v${{ needs.get-update-version.outputs.new_version }}/${{ needs.build-windows-x64.outputs.FILE_NAME }}"
           DARWIN_SIGNATURE="${{ needs.build-macos.outputs.MAC_UNIVERSAL_SIG }}"
-          DARWIN_URL="https://github.com/ax-studio/ax-studio/releases/download/v${{ needs.get-update-version.outputs.new_version }}/${{ needs.build-macos.outputs.TAR_NAME }}"
+          DARWIN_URL="https://github.com/defai-digital/ax-studio/releases/download/v${{ needs.get-update-version.outputs.new_version }}/${{ needs.build-macos.outputs.TAR_NAME }}"
 
           jq --arg version "$VERSION" \
             --arg pub_date "$PUB_DATE" \
@@ -99,3 +99,86 @@ jobs:
           asset_path: ./latest.json
           asset_name: latest.json
           asset_content_type: text/json
+
+  publish-release:
+    needs: [create-draft-release, sync-temp-to-latest]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish draft release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: gh release edit "$TAG" --draft=false --repo "$GITHUB_REPOSITORY"
+
+  update-homebrew-tap:
+    needs: [create-draft-release, get-update-version, publish-release]
+    runs-on: ubuntu-latest
+    env:
+      HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+    steps:
+      - name: Skip if no tap token configured
+        if: ${{ env.HAS_TAP_TOKEN != 'true' }}
+        run: echo "::notice::HOMEBREW_TAP_TOKEN not configured — skipping Homebrew tap update."
+
+      - name: Download release DMG and compute SHA256
+        if: ${{ env.HAS_TAP_TOKEN == 'true' }}
+        env:
+          VERSION: ${{ needs.get-update-version.outputs.new_version }}
+        run: |
+          curl -fsSL -o release.dmg \
+            "https://github.com/defai-digital/ax-studio/releases/download/v${VERSION}/Ax-Studio_${VERSION}_aarch64.dmg"
+          echo "DMG_SHA256=$(sha256sum release.dmg | awk '{print $1}')" >> "$GITHUB_ENV"
+
+      - name: Push updated cask to homebrew tap
+        if: ${{ env.HAS_TAP_TOKEN == 'true' }}
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ needs.get-update-version.outputs.new_version }}
+        run: |
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/defai-digital/homebrew-ax-studio.git" homebrew-tap
+          cd homebrew-tap
+          node - <<'NODE'
+          const fs = require('fs');
+          const version = process.env.VERSION;
+          const sha256 = process.env.DMG_SHA256;
+          const cask = [
+            'cask "ax-studio" do',
+            `  version "${version}"`,
+            `  sha256 "${sha256}"`,
+            '',
+            '  url "https://github.com/defai-digital/ax-studio/releases/download/v#{version}/Ax-Studio_#{version}_aarch64.dmg"',
+            '  name "AX Studio"',
+            '  desc "AI workspace for cloud models, local inference, tools, artifacts, and research workflows"',
+            '  homepage "https://github.com/defai-digital/ax-studio"',
+            '',
+            '  depends_on arch: :arm64',
+            '  depends_on macos: ">= :ventura"',
+            '',
+            '  app "Ax-Studio.app"',
+            '',
+            '  postflight do',
+            '    system_command "/usr/bin/xattr",',
+            '      args: ["-cr", "#{appdir}/Ax-Studio.app"]',
+            '  end',
+            '',
+            '  zap trash: [',
+            '    "~/Library/Application Support/Ax-Studio",',
+            '    "~/Library/Caches/ai.axstudio.app",',
+            '    "~/Library/Logs/Ax-Studio",',
+            '    "~/Library/Preferences/ai.axstudio.app.plist",',
+            '    "~/Library/Saved Application State/ai.axstudio.app.savedState",',
+            '  ]',
+            'end',
+            '',
+          ].join('\n');
+          fs.mkdirSync('Casks', { recursive: true });
+          fs.writeFileSync('Casks/ax-studio.rb', cask);
+          NODE
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/ax-studio.rb
+          git diff --cached --quiet && echo "No cask changes to commit." && exit 0
+          git commit -m "Update ax-studio cask to ${VERSION}"
+          git push

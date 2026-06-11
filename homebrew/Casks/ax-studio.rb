@@ -1,6 +1,6 @@
 cask "ax-studio" do
-  version "1.2.0"
-  sha256 :no_check # TODO: replace with actual SHA256 once the .dmg is published
+  version "1.3.3"
+  sha256 :no_check # replaced automatically by CI during release
 
   url "https://github.com/defai-digital/ax-studio/releases/download/v#{version}/Ax-Studio_#{version}_aarch64.dmg"
   name "AX Studio"
@@ -11,6 +11,11 @@ cask "ax-studio" do
   depends_on macos: ">= :ventura"
 
   app "Ax-Studio.app"
+
+  postflight do
+    system_command "/usr/bin/xattr",
+      args: ["-cr", "#{appdir}/Ax-Studio.app"]
+  end
 
   zap trash: [
     "~/Library/Application Support/Ax-Studio",
