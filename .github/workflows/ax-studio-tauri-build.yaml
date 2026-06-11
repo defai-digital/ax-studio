@@ -413,6 +413,10 @@ jobs:
         if: ${{ env.HAS_TAP_TOKEN != 'true' }}
         run: echo "::notice::HOMEBREW_TAP_TOKEN or TAP_TOKEN not configured — skipping Homebrew tap update."
 
+      - name: Getting the repo
+        if: ${{ env.HAS_TAP_TOKEN == 'true' }}
+        uses: actions/checkout@v3
+
       - name: Download release DMG and compute SHA256
         if: ${{ env.HAS_TAP_TOKEN == 'true' }}
         env:
