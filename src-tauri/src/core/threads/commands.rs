@@ -192,10 +192,10 @@ pub async fn create_message<R: Runtime>(
         let _guard = lock.lock().await;
 
         let data = serde_json::to_string(&message).map_err(|e| e.to_string())?;
-        let app_for_blocking = app_handle.clone();
-        let thread_id_owned = thread_id.clone();
         task::spawn_blocking(move || -> Result<(), String> {
-            ensure_thread_dir_exists(app_for_blocking, &thread_id_owned)?;
+            if !thread_dir.exists() {
+                fs::create_dir_all(&thread_dir).map_err(|e| e.to_string())?;
+            }
             let mut file = fs::OpenOptions::new()
                 .create(true)
                 .append(true)

@@ -100,6 +100,7 @@ pub fn update_thread_metadata<R: Runtime>(
     thread_id: &str,
     thread: &ThreadRecord,
 ) -> Result<(), String> {
+    let path = get_thread_metadata_path(app_handle, thread_id);
     let tmp_path = path.with_extension("json.tmp");
     let data = serde_json::to_string_pretty(thread).map_err(|e| e.to_string())?;
     fs::write(&tmp_path, &data).map_err(|e| e.to_string())?;

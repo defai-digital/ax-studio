@@ -39,3 +39,4 @@ pub fn ensure_data_dirs<R: Runtime>(app_handle: tauri::AppHandle<R>) -> Result<(
     }
     Ok(())
 }
+
