@@ -91,14 +91,14 @@ macro_rules! handlers {
             // Research commands
             crate::core::research::commands::scrape_url,
             // Agent teams
-            crate::core::agent_teams::list_agent_teams,
-            crate::core::agent_teams::get_agent_team,
-            crate::core::agent_teams::save_agent_team,
-            crate::core::agent_teams::delete_agent_team,
+            crate::core::agent_teams::commands::list_agent_teams,
+            crate::core::agent_teams::commands::get_agent_team,
+            crate::core::agent_teams::commands::save_agent_team,
+            crate::core::agent_teams::commands::delete_agent_team,
             // Agent run logs
-            crate::core::agent_run_logs::save_agent_run_log,
-            crate::core::agent_run_logs::list_agent_run_logs,
-            crate::core::agent_run_logs::get_agent_run_log,
+            crate::core::agent_run_logs::commands::save_agent_run_log,
+            crate::core::agent_run_logs::commands::list_agent_run_logs,
+            crate::core::agent_run_logs::commands::get_agent_run_log,
             // Integration commands
             crate::core::integrations::commands::save_integration_token,
             crate::core::integrations::commands::delete_integration_token,
