@@ -13,6 +13,8 @@ on:
       - 'yarn.lock'
       - 'core/**'
       - 'extensions/**'
+      - 'src-tauri/**'
+      - 'web-app/**'
       - '!README.md'
       - 'Makefile'
 
