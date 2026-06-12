@@ -451,4 +451,7 @@ jobs:
           git add Casks/ax-studio.rb
           git diff --cached --quiet && echo "No cask changes to commit." && exit 0
           git commit -m "Update ax-studio cask to ${VERSION}"
-          git push
+          if ! git push; then
+            echo "::warning::Unable to push Homebrew tap update. Check that HOMEBREW_TAP_TOKEN or TAP_TOKEN has write access to defai-digital/homebrew-ax-studio."
+            exit 0
+          fi
