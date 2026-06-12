@@ -20,13 +20,12 @@ install-and-build:
 	yarn build:core
 	yarn build:extensions
 
-# Install required Rust targets for macOS universal builds
+# Install required Rust target for macOS arm64 builds (MLX is ARM-only)
 install-rust-targets:
 ifeq ($(shell uname -s),Darwin)
-	@echo "Detected macOS, installing universal build targets..."
-	rustup target add x86_64-apple-darwin
+	@echo "Detected macOS, installing arm64 build target..."
 	rustup target add aarch64-apple-darwin
-	@echo "Rust targets installed successfully!"
+	@echo "Rust target installed successfully!"
 else
 	@echo "Not macOS; skipping Rust target installation."
 endif

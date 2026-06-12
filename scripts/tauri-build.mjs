@@ -6,10 +6,13 @@ import { fileURLToPath } from 'node:url'
 const args = ['tauri', 'build']
 
 if (process.platform === 'darwin') {
-  args.push('--target', 'universal-apple-darwin')
-  // hdiutil create is broken on macOS 26 (Tahoe) — skip DMG bundling by
-  // default. Set BUILD_DMG=1 on a stable macOS host for a distributable .dmg.
-  if (process.env.BUILD_DMG !== '1') {
+  // MLX (Apple Silicon only) cannot link for x86_64, so we build arm64 only.
+  // The CI artifact pipeline expects aarch64-apple-darwin bundles.
+  args.push('--target', 'aarch64-apple-darwin')
+  // hdiutil create is broken on macOS 26 (Tahoe) for local dev — skip DMG
+  // bundling unless explicitly requested or running in CI (where the runner
+  // is on a stable macOS version with a working hdiutil).
+  if (process.env.BUILD_DMG !== '1' && !process.env.GITHUB_ACTIONS) {
     args.push('--bundles', 'app')
   }
 }
@@ -52,7 +55,7 @@ if (process.platform === 'darwin') {
   const appPath = join(
     tauriDir,
     'target',
-    'universal-apple-darwin',
+    'aarch64-apple-darwin',
     'release',
     'bundle',
     'macos',
