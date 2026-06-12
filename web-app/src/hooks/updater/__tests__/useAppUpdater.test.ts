@@ -340,6 +340,54 @@ describe('useAppUpdater', () => {
       consoleErrorSpy.mockRestore()
     })
 
+    it('should not report success when install fails after download finishes', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const mockUpdate = {
+        version: '1.2.0',
+        downloadAndInstall: vi.fn(),
+      }
+
+      mockUpdaterCheck.mockResolvedValue(mockUpdate)
+
+      const { result } = renderHook(() => useAppUpdater())
+
+      await act(async () => {
+        await result.current.checkForUpdate()
+      })
+
+      mockUpdaterDownloadAndInstallWithProgress.mockImplementation(
+        async (progressCallback) => {
+          progressCallback({
+            event: 'Started',
+            data: { contentLength: 1000 },
+          })
+          progressCallback({
+            event: 'Progress',
+            data: { chunkLength: 1000 },
+          })
+          progressCallback({
+            event: 'Finished',
+          })
+          throw new Error('Failed to move the new app into place')
+        }
+      )
+
+      await act(async () => {
+        await result.current.downloadAndInstallUpdate()
+      })
+
+      expect(mockEvents.emit).not.toHaveBeenCalledWith(
+        'onAppUpdateDownloadSuccess',
+        {}
+      )
+      expect(mockEvents.emit).toHaveBeenCalledWith('onAppUpdateDownloadError', {
+        message: 'Failed to move the new app into place',
+      })
+      expect(mockRelaunch).not.toHaveBeenCalled()
+
+      consoleErrorSpy.mockRestore()
+    })
+
     it('should not download if no update info is available', async () => {
       const { result } = renderHook(() => useAppUpdater())
 

@@ -220,16 +220,20 @@ export const useAppUpdater = () => {
           case 'Finished':
             setUpdateState((prev) => ({
               ...prev,
-              isDownloading: false,
               downloadProgress: 1,
             }))
-
-            // Emit app update download success event
-            events.emit(AppEvent.onAppUpdateDownloadSuccess, {})
             break
         }
       })
 
+      setUpdateState((prev) => ({
+        ...prev,
+        isDownloading: false,
+        downloadProgress: 1,
+        isUpdateAvailable: false,
+        updateInfo: null,
+      }))
+      events.emit(AppEvent.onAppUpdateDownloadSuccess, {})
       await window.core?.api?.relaunch()
     } catch (error) {
       console.error('Error downloading update:', error)

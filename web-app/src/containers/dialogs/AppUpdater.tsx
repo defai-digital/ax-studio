@@ -18,7 +18,6 @@ const DialogAppUpdater = () => {
 
   const handleUpdate = () => {
     downloadAndInstallUpdate()
-    setRemindMeLater(true)
   }
 
   const { release, fetchLatestRelease } = useReleaseNotes()

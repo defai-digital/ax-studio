@@ -147,13 +147,14 @@ export function DownloadManagement() {
     })
   }, [t])
 
-  const onAppUpdateDownloadError = useCallback(() => {
+  const onAppUpdateDownloadError = useCallback((data?: { message?: string }) => {
     setAppUpdateState((prev) => ({
       ...prev,
       isDownloading: false,
     }))
     toast.error(t('common:toast.appUpdateDownloadFailed.title'), {
-      description: t('common:toast.appUpdateDownloadFailed.description'),
+      description:
+        data?.message || t('common:toast.appUpdateDownloadFailed.description'),
     })
   }, [t])
 
