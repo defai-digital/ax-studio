@@ -116,7 +116,7 @@ jobs:
     needs: [get-update-version, validate-release-tag, create-draft-release]
     env:
       HAS_SIGN_CERTS: ${{ secrets.CODE_SIGN_P12_BASE64 != '' && secrets.CODE_SIGN_P12_PASSWORD != '' && secrets.NOTARIZE_P8_BASE64 != '' && secrets.NOTARY_ISSUER != '' && secrets.NOTARY_KEY_ID != '' }}
-      HAS_UPDATER_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+      HAS_UPDATER_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && secrets.TAURI_UPDATER_PUBKEY != '' }}
     outputs:
       MAC_UNIVERSAL_SIG: ${{ steps.metadata.outputs.MAC_UNIVERSAL_SIG }}
       FILE_NAME: ${{ steps.metadata.outputs.FILE_NAME }}
@@ -233,6 +233,7 @@ jobs:
           _APPLE_API_KEY: ${{ secrets.NOTARY_KEY_ID }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_SIGNING_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
           AX_STUDIO_SIGNING_KEY: ${{ secrets.AX_STUDIO_SIGNING_KEY }}
 
       - name: Set output filename for mac
