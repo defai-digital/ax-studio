@@ -72,7 +72,7 @@ function Guardrails() {
         <SettingsMenu />
         <div
           className="flex-1 overflow-y-auto"
-          style={{ scrollbarWidth: 'none' }}
+          style={{ scrollbarWidth: 'thin' }}
         >
           <SettingsPageLayout icon={ShieldCheck} title="Workspace Guardrails" subtitle="Control what your AI can and cannot do" gradient="linear-gradient(135deg, #059669, #10b981)" />
           <div className="px-8 py-7">

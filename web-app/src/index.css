@@ -235,10 +235,10 @@
     stroke-width: 2;
   }
 
-  /* Scrollbar styles — 4px slim */
+  /* Scrollbar styles — visible enough to drag with a mouse */
   ::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
+    width: 8px;
+    height: 8px;
   }
 
   ::-webkit-scrollbar-track {
@@ -246,12 +246,12 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: rgba(128, 128, 128, 0.2);
-    border-radius: 2px;
+    background: rgba(128, 128, 128, 0.28);
+    border-radius: 999px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(128, 128, 128, 0.35);
+    background: rgba(128, 128, 128, 0.45);
   }
 
   /* Firefox scrollbar */

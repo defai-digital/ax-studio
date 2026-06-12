@@ -147,7 +147,7 @@ function General() {
         <SettingsMenu />
         <div
           className="flex-1 overflow-y-auto"
-          style={{ scrollbarWidth: 'none' }}
+          style={{ scrollbarWidth: 'thin' }}
         >
           <SettingsPageLayout icon={Settings} title={t('common:general')} />
           <div className="px-8 py-7">

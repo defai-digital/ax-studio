@@ -53,7 +53,7 @@ function HTTPSProxyContent() {
         <SettingsMenu />
         <div
           className="flex-1 overflow-y-auto"
-          style={{ scrollbarWidth: 'none' }}
+          style={{ scrollbarWidth: 'thin' }}
         >
           <SettingsPageLayout icon={Globe} title={t('common:https_proxy')} />
           <div className="px-8 py-7">

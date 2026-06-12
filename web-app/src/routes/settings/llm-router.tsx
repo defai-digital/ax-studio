@@ -100,7 +100,7 @@ function LLMRouterSettings() {
       </HeaderPage>
       <div className="flex flex-1 min-h-0">
         <SettingsMenu />
-        <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+        <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
           <SettingsPageLayout icon={RouteIcon} title="LLM Router" gradient="linear-gradient(135deg, #f59e0b, #ef4444)" />
           <div className="px-8 py-7">
             <div className="max-w-2xl space-y-6">

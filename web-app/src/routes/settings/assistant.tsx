@@ -81,7 +81,7 @@ function AssistantContent() {
         <SettingsMenu />
         <div
           className="flex-1 overflow-y-auto"
-          style={{ scrollbarWidth: 'none' }}
+          style={{ scrollbarWidth: 'thin' }}
         >
           <SettingsPageLayout icon={Bot} title={t('common:assistants')} />
           <div className="px-8 py-7">

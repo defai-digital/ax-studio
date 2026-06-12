@@ -157,7 +157,7 @@ const SettingsMenu = () => {
   return (
     <div
       className="w-56 shrink-0 border-r border-border/40 py-5 px-3 flex flex-col overflow-y-auto bg-muted/10"
-      style={{ scrollbarWidth: 'none' }}
+      style={{ scrollbarWidth: 'thin' }}
     >
       {groups.map((group, groupIndex) => {
         const groupItems = menuSettings.filter(

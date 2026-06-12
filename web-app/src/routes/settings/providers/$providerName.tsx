@@ -337,7 +337,7 @@ function ProviderDetail() {
       </HeaderPage>
       <div className="flex flex-1 min-h-0">
         <SettingsMenu />
-        <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+        <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
           {/* Sticky header with provider avatar */}
           <div className="flex items-center gap-3 px-8 py-5 border-b border-border/40 bg-background sticky top-0 z-10">
             <div

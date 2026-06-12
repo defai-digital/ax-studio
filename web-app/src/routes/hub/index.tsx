@@ -508,7 +508,7 @@ function HubContent() {
       {/* Model Grid */}
       <div
         className="flex-1 overflow-y-auto px-6 py-5 first-step-setup-local-provider"
-        style={{ scrollbarWidth: 'none' }}
+        style={{ scrollbarWidth: 'thin' }}
       >
         <div className="max-w-5xl mx-auto">
           {isInitialLoad || (loading && !filteredModels.length) ? (

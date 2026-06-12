@@ -76,7 +76,7 @@ function ModelProviders() {
         <SettingsMenu />
         <div
           className="flex-1 overflow-y-auto"
-          style={{ scrollbarWidth: 'none' }}
+          style={{ scrollbarWidth: 'thin' }}
         >
           <div className="flex items-center gap-3 px-8 py-5 border-b border-border/40 bg-background sticky top-0 z-10">
             <div

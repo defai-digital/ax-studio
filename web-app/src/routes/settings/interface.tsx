@@ -86,7 +86,7 @@ function InterfaceSettings() {
         <SettingsMenu />
         <div
           className="flex-1 overflow-y-auto"
-          style={{ scrollbarWidth: 'none' }}
+          style={{ scrollbarWidth: 'thin' }}
         >
           <SettingsPageLayout icon={Palette} title={t('settings:interface.title')} />
           <div className="px-8 py-7">

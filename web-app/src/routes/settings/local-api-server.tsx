@@ -505,7 +505,7 @@ function LocalAPIServerContent() {
         <div className="flex-1 flex flex-col min-h-0">
           <div
             className="flex-1 overflow-y-auto"
-            style={{ scrollbarWidth: 'none' }}
+            style={{ scrollbarWidth: 'thin' }}
           >
             <SettingsPageLayout icon={Server} title={t('common:local_api_server')} />
             <div className="px-8 py-7">

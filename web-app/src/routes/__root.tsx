@@ -68,9 +68,7 @@ const AppLayout = () => {
         onWidthChange={setLeftPanelWidth}
       >
         <KeyboardShortcutsProvider />
-        {/* Fake absolute panel top to enable window drag */}
         {!IS_MACOS && <WindowControls />}
-        {IS_MACOS && <div className="fixed w-64 h-10 z-20 top-0 left-0 pointer-events-none" data-tauri-drag-region />}
         <DialogAppUpdater />
         <LeftSidebar />
         <SidebarInset>
