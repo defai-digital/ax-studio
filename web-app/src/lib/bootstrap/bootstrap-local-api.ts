@@ -29,6 +29,53 @@ export type BootstrapLocalApiInput = {
 
 let bootstrapLocalApiInFlight: Promise<BootstrapResult> | null = null
 
+function getProxyUrl(config: LocalApiServerConfig) {
+  return `http://${config.host}:${config.port}${config.prefix}`
+}
+
+async function isProxyAuthorized(
+  config: LocalApiServerConfig,
+  apiKey: string
+): Promise<boolean | null> {
+  try {
+    const headers: Record<string, string> = {}
+    if (apiKey.trim().length > 0) {
+      headers.Authorization = `Bearer ${apiKey}`
+    }
+
+    const response = await fetch(`${getProxyUrl(config)}/models`, {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+    })
+
+    if (response.status === 401 || response.status === 403) {
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.warn('Unable to verify Local API Server auth state:', error)
+    return null
+  }
+}
+
+async function startLocalApiServer(
+  config: LocalApiServerConfig,
+  apiKey: string
+): Promise<unknown> {
+  return window.core?.api?.startServer({
+    host: config.host,
+    port: config.port,
+    prefix: config.prefix,
+    apiKey,
+    trustedHosts: config.trustedHosts,
+    isCorsEnabled: true,
+    isVerboseEnabled: config.verboseLogs,
+    proxyTimeout: config.proxyTimeout,
+  })
+}
+
 export async function bootstrapLocalApi(
   input: BootstrapLocalApiInput
 ): Promise<BootstrapResult> {
@@ -61,25 +108,25 @@ export async function bootstrapLocalApi(
     try {
       const isRunning = await serviceHub.app().getServerStatus()
       if (isRunning) {
-        console.info('Local API Server is already running')
-        setServerStatus('running')
-        return ok()
+        const authState = await isProxyAuthorized(config, effectiveApiKey)
+        if (authState === false) {
+          console.warn('Local API Server token is stale; restarting with current key')
+          setServerStatus('pending')
+          await window.core?.api?.stopServer()
+        } else {
+          console.info('Local API Server is already running')
+          setServerStatus('running')
+          return ok()
+        }
       }
 
-      setServerStatus('pending')
+      if (!isRunning) {
+        setServerStatus('pending')
+      }
 
       // CORS must be enabled so the webview can reach the proxy via native fetch.
       // Force it on to survive users with persisted `false` from old defaults.
-      const actualPort = await window.core?.api?.startServer({
-        host: config.host,
-        port: config.port,
-        prefix: config.prefix,
-        apiKey: effectiveApiKey,
-        trustedHosts: config.trustedHosts,
-        isCorsEnabled: true,
-        isVerboseEnabled: config.verboseLogs,
-        proxyTimeout: config.proxyTimeout,
-      })
+      const actualPort = await startLocalApiServer(config, effectiveApiKey)
 
       if (actualPort && (actualPort as number) !== config.port) {
         setServerPort(actualPort as number)

@@ -37,12 +37,24 @@ beforeEach(() => {
   consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
   consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
   // Reset window.core
-  ;(globalThis as any).window = { core: { api: { startServer: vi.fn().mockResolvedValue(39291) } } }
+  ;(globalThis as any).window = {
+    core: {
+      api: {
+        startServer: vi.fn().mockResolvedValue(39291),
+        stopServer: vi.fn().mockResolvedValue(undefined),
+      },
+    },
+  }
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({ status: 200 })
+  )
 })
 
 afterEach(() => {
   consoleErrorSpy.mockRestore()
   consoleInfoSpy.mockRestore()
+  vi.unstubAllGlobals()
 })
 
 describe('bootstrapLocalApi', () => {
@@ -58,6 +70,29 @@ describe('bootstrapLocalApi', () => {
     const result = await bootstrapLocalApi(input)
     expect(result).toEqual({ ok: true })
     expect(input.setServerStatus).toHaveBeenCalledWith('running')
+    expect((globalThis as any).fetch).toHaveBeenCalledWith(
+      'http://localhost:39291/api/models',
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer test-key' },
+        method: 'GET',
+      })
+    )
+    expect((globalThis as any).window.core.api.startServer).not.toHaveBeenCalled()
+  })
+
+  it('restarts an already-running server when its token is stale', async () => {
+    ;(globalThis as any).fetch = vi.fn().mockResolvedValue({ status: 401 })
+    const input = makeInput({ serviceHub: makeServiceHub(true) as any })
+
+    const result = await bootstrapLocalApi(input)
+
+    expect(result).toEqual({ ok: true })
+    expect((globalThis as any).window.core.api.stopServer).toHaveBeenCalledTimes(1)
+    expect((globalThis as any).window.core.api.startServer).toHaveBeenCalledWith(
+      expect.objectContaining({ apiKey: 'test-key' })
+    )
+    expect(input.setServerStatus).toHaveBeenCalledWith('pending')
+    expect(input.setServerStatus).toHaveBeenLastCalledWith('running')
   })
 
   it('starts server and sets status to running when not already running', async () => {
