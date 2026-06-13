@@ -360,9 +360,9 @@ pub async fn _download_files_internal(
             let header_map = header_map.clone();
             async move {
                 let client = _get_client_for_item(item, &header_map).map_err(err_to_string)?;
-                let size = _get_file_size(&client, &item_url)
-                    .await
-                    .map_err(err_to_string)?;
+                // HEAD size is only an estimate the GET path later refines; a failed or
+                // slow HEAD (common on HuggingFace CDN) must not abort the whole batch.
+                let size = _get_file_size(&client, &item_url).await.unwrap_or(0);
                 Ok::<_, String>((item_url, size))
             }
         })

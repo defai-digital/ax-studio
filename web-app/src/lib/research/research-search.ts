@@ -168,8 +168,8 @@ export async function searchWikipedia(
   try {
     const res = await fetch(`https://en.wikipedia.org/w/api.php?${params}`, { signal: combinedSignal })
     if (!res.ok) throw new Error(`Wikipedia API error: ${res.status}`)
-    const data = await res.json() as { query: { search: WikiSearchResult[] } }
-    return data.query.search.map((r) => ({
+    const data = await res.json() as { query?: { search?: WikiSearchResult[] } }
+    return (data.query?.search ?? []).map((r) => ({
       url: `https://en.wikipedia.org/wiki/${encodeURIComponent(r.title.replace(/ /g, '_'))}`,
       title: r.title,
       snippet: r.snippet.replace(/<[^>]*>/g, '').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#039;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim(),

@@ -270,7 +270,10 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
         }
 
         if (hasEmbeddedDocuments && effectiveThreadId) {
-          useThreads.getState().updateThread(effectiveThreadId, { metadata: { hasDocuments: true } })
+          const current = useThreads.getState().threads[effectiveThreadId]
+          useThreads.getState().updateThread(effectiveThreadId, {
+            metadata: { ...(current?.metadata ?? {}), hasDocuments: true },
+          })
         }
       } catch (e) {
         console.error('Failed to process attachments:', e)
@@ -472,8 +475,9 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
 
         // If no files left, clear the hasDocuments flag on the thread
         if (!useFileRegistry.getState().hasFiles(colId)) {
+          const current = useThreads.getState().threads[effectiveThreadId]
           useThreads.getState().updateThread(effectiveThreadId, {
-            metadata: { hasDocuments: false },
+            metadata: { ...(current?.metadata ?? {}), hasDocuments: false },
           })
         }
       }

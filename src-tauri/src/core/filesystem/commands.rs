@@ -335,7 +335,12 @@ pub fn write_file_sync<R: Runtime>(
 ) -> Result<(), String> {
     let (path_arg, content) = request.into_paths("write_file_sync")?;
     let path = resolve_path(app_handle, &path_arg)?;
-    let tmp_path = path.with_extension("tmp");
+    // Append (not replace) the temp suffix so files sharing a stem but differing
+    // only by extension (e.g. settings.json / settings.yaml) don't collide on one
+    // shared temp path and race their fs::write / fs::rename.
+    let mut tmp = path.clone().into_os_string();
+    tmp.push(format!(".{}.tmp", std::process::id()));
+    let tmp_path = std::path::PathBuf::from(tmp);
     fs::write(&tmp_path, content).map_err(|e| e.to_string())?;
     fs::rename(&tmp_path, &path).map_err(|e| e.to_string())
 }

@@ -3,7 +3,7 @@ type ValidationRule = (value: unknown) => boolean
 export const validationRules: Record<string, ValidationRule> = {
   temperature: (v) => typeof v === 'number' && v >= 0 && v <= 2,
   token_limit: (v) => typeof v === 'number' && v >= 0,
-  top_k: (v) => typeof v === 'number' && v >= 0 && v <= 1.1,
+  top_k: (v) => typeof v === 'number' && v >= 0,
   top_p: (v) => typeof v === 'number' && v >= 0 && v <= 1,
   stream: (v) => typeof v === 'boolean',
   max_tokens: (v) => typeof v === 'number' && v >= 0,

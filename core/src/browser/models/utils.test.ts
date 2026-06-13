@@ -31,6 +31,9 @@ describe('validationRules', () => {
     expect(validationRules.top_k(0)).toBe(true)
     expect(validationRules.top_k(-0.1)).toBe(false)
     expect(validationRules.top_k(1.1)).toBe(true)
+    // top_k is an integer token-count param (typically 20-100), not a probability
+    expect(validationRules.top_k(40)).toBe(true)
+    expect(validationRules.top_k(100)).toBe(true)
     expect(validationRules.top_k('0.5')).toBe(false)
   })
 

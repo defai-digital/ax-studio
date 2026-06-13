@@ -818,11 +818,8 @@ fn build_streaming_response(
                             && patched.trim_start().starts_with("data:")
                         {
                             patched_lines_logged += 1;
-                            let preview_len = patched.len().min(400);
-                            log::info!(
-                                "Patched SSE line #{patched_lines_logged}: {}",
-                                &patched[..preview_len]
-                            );
+                            let preview: String = patched.chars().take(400).collect();
+                            log::info!("Patched SSE line #{patched_lines_logged}: {preview}");
                         }
                         out.push_str(&patched);
                     }
@@ -1091,9 +1088,9 @@ pub(super) async fn dispatch_to_upstream<R: tauri::Runtime>(
                     }
 
                     // Non-/messages error - return error response with body
+                    let error_preview: String = error_body.chars().take(500).collect();
                     log::error!(
-                        "Upstream provider returned {status} for {destination_path}: {}",
-                        &error_body[..error_body.len().min(500)]
+                        "Upstream provider returned {status} for {destination_path}: {error_preview}"
                     );
 
                     if let Some(ref sid) = stream_id {
