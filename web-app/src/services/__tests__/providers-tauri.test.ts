@@ -355,6 +355,48 @@ describe('TauriProvidersService', () => {
     warnSpy.mockRestore()
   })
 
+  it('uses runtime model providerId so MLX downloads appear under the MLX provider', async () => {
+    const runtimeEngine = {
+      provider: 'llamacpp',
+      inferenceUrl: 'http://localhost:11434/v1/chat/completions',
+      list: vi.fn().mockResolvedValue([
+        {
+          id: 'local.gguf',
+          name: 'Local GGUF',
+          providerId: 'llamacpp',
+          capabilities: [],
+        },
+        {
+          id: 'mlx-community/Qwen3.5-4B-4bit',
+          name: 'mlx-community/Qwen3.5-4B-4bit',
+          providerId: 'mlx',
+          capabilities: [],
+        },
+      ]),
+      getSettings: vi.fn().mockResolvedValue([]),
+      isToolSupported: vi.fn().mockResolvedValue(false),
+    }
+    EngineManager.instance().engines.set('llamacpp', runtimeEngine as never)
+
+    const result = await service.getProviders()
+    const llamaProvider = result.find((p) => p.provider === 'llamacpp')
+    const mlxProvider = result.find((p) => p.provider === 'mlx')
+
+    expect(result.filter((p) => p.provider === 'mlx')).toHaveLength(1)
+    expect(llamaProvider?.models).toEqual([
+      expect.objectContaining({ id: 'local.gguf', provider: 'llamacpp' }),
+    ])
+    expect(mlxProvider?.models).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'mlx-community/Qwen3.5-4B-4bit',
+          provider: 'mlx',
+        }),
+      ])
+    )
+    expect(mlxProvider?.base_url).toBe('http://127.0.0.1:19997/v1')
+  })
+
   it('skips a failing runtime engine without hiding built-in providers', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     EngineManager.instance().engines.set('broken', {

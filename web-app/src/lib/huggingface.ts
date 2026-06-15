@@ -8,8 +8,16 @@ export function getHuggingFaceModelUrl(modelName: string): string {
   return `https://huggingface.co/${path}`
 }
 
+function encodeHuggingFacePath(path: string): string {
+  return path
+    .split('/')
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join('/')
+}
+
 export function getHuggingFaceApiModelUrl(cleanRepoId: string): string {
-  return `https://huggingface.co/api/models/${encodeURIComponent(
+  return `https://huggingface.co/api/models/${encodeHuggingFacePath(
     cleanRepoId
   )}?blobs=true&files_metadata=true`
 }
@@ -30,7 +38,7 @@ export function getHuggingFaceModelFileUrl(
   repoId: string,
   fileName: string
 ): string {
-  return `${getHuggingFaceModelUrl(repoId)}/resolve/main/${encodeURIComponent(
+  return `${getHuggingFaceModelUrl(repoId)}/resolve/main/${encodeHuggingFacePath(
     fileName
   )}`
 }

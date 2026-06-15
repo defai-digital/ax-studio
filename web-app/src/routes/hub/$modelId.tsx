@@ -5,7 +5,15 @@ import {
   useNavigate,
   useSearch,
 } from '@tanstack/react-router'
-import { ArrowLeft, Calendar, Download, ExternalLink, Eye, HardDrive, Wrench } from "lucide-react";
+import {
+  ArrowLeft,
+  Calendar,
+  Download,
+  ExternalLink,
+  Eye,
+  HardDrive,
+  Wrench,
+} from 'lucide-react'
 import { motion } from 'motion/react'
 import { route } from '@/constants/routes'
 import { useModelSources } from '@/hooks/models/useModelSources'
@@ -81,8 +89,7 @@ function HubModelDetailContent() {
   const search = useSearch({ from: Route.id })
 
   const providers = useModelProvider((state) => state.providers)
-  const { downloads, localDownloadingModels, addLocalDownloadingModel } =
-    useDownloadStore()
+  const { downloads, localDownloadingModels } = useDownloadStore()
   const serviceHub = useServiceHub()
   const [repoData, setRepoData] = useState<CatalogModel | undefined>()
 
@@ -133,7 +140,15 @@ function HubModelDetailContent() {
   }, [modelId, fetchRepo])
   // Find the model data from sources
   const modelData = useMemo(() => {
-    return sources.find((model) => model.model_name === modelId) ?? repoData
+    const sourceModel = sources.find((model) => model.model_name === modelId)
+    if (
+      repoData &&
+      (!sourceModel ||
+        (repoData.quants?.length ?? 0) > (sourceModel.quants?.length ?? 0))
+    ) {
+      return repoData
+    }
+    return sourceModel ?? repoData
   }, [sources, modelId, repoData])
 
   const huggingFaceRepoId = useMemo(() => {
@@ -509,12 +524,11 @@ function HubModelDetailContent() {
                   const isDownloaded = !!downloadedModel
 
                   // Extract format from model_id
-                  const format = variant.model_id
-                    .toLowerCase()
-                    .includes('tensorrt')
-                    ? 'TensorRT'
-                    : 'GGUF'
-
+                  const format = modelData.is_mlx || variant.path.startsWith('hf://')
+                    ? 'MLX'
+                    : variant.model_id.toLowerCase().includes('tensorrt')
+                      ? 'TensorRT'
+                      : 'GGUF'
                   // Extract version name (remove format suffix)
                   const versionName = variant.model_id
                     .replace(/_GGUF$/i, '')
@@ -590,7 +604,6 @@ function HubModelDetailContent() {
                               className="rounded-lg"
                               onClick={async () => {
                                 try {
-                                  addLocalDownloadingModel(variant.model_id)
                                   await serviceHub
                                     .models()
                                     .pullModelWithMetadata(

@@ -31,10 +31,11 @@ import {
   getHuggingFaceModelFileUrl,
   getHuggingFaceModelUrl,
 } from '@/lib/huggingface'
+import { invoke } from '@tauri-apps/api/core'
 
 // Default provider for local inference
 const defaultProvider = 'llamacpp'
-const engineProviderFor = (provider?: string): string | undefined =>
+const storageEngineProviderFor = (provider?: string): string | undefined =>
   provider === 'mlx' ? 'llamacpp' : provider
 
 export class DefaultModelsService implements ModelsService {
@@ -211,13 +212,35 @@ export class DefaultModelsService implements ModelsService {
       }
     })
 
+    // MLX repos are directory snapshots, not a single GGUF file. Expose one
+    // synthetic "quant" so the llamacpp extension downloads the full HF repo
+    // and asks ax-engine to generate/validate model-manifest.json locally.
+    const mlxRepoQuants =
+      hasMlxFiles && quants.length === 0 && safetensorsFiles.length > 0
+        ? [
+            {
+              model_id: repo.modelId,
+              path: `hf://${repo.modelId}`,
+              file_size: formatFileSize(
+                safetensorsFiles.reduce(
+                  (total, file) => total + (file.lfs?.size ?? file.size ?? 0),
+                  0
+                )
+              ),
+              supports_in_app_download: true,
+            },
+          ]
+        : []
+
+    const downloadableQuants = quants.length > 0 ? quants : mlxRepoQuants
+
     return {
       model_name: repo.modelId,
       developer: repo.author,
       downloads: repo.downloads || 0,
       created_at: repo.createdAt,
-      num_quants: quants.length,
-      quants: quants,
+      num_quants: downloadableQuants.length,
+      quants: downloadableQuants,
       num_mmproj: mmprojModels.length,
       mmproj_models: mmprojModels,
       safetensors_files: safetensorsModels,
@@ -245,7 +268,8 @@ export class DefaultModelsService implements ModelsService {
     mmprojPath?: string,
     mmprojSha256?: string,
     mmprojSize?: number,
-    downloadHeaders?: Record<string, string>
+    downloadHeaders?: Record<string, string>,
+    hfRepoFiles?: HuggingFaceRepo['siblings']
   ): Promise<void> {
     const engine = this.getEngine()
     if (!engine) {
@@ -253,7 +277,7 @@ export class DefaultModelsService implements ModelsService {
         `Engine "${defaultProvider}" is not available. Cannot pull model "${id}".`
       )
     }
-    return engine.import(id, {
+    const importOptions = {
       modelPath,
       mmprojPath,
       modelSha256,
@@ -261,7 +285,10 @@ export class DefaultModelsService implements ModelsService {
       mmprojSha256,
       mmprojSize,
       downloadHeaders,
-    })
+      ...(hfRepoFiles?.length ? { hfRepoFiles } : {}),
+    }
+
+    return engine.import(id, importOptions)
   }
 
   async pullModelWithMetadata(
@@ -279,6 +306,17 @@ export class DefaultModelsService implements ModelsService {
     // Extract repo ID from model URL
     // URL format: https://huggingface.co/{repo}/resolve/main/{filename}
     const parsedModelPath = this.parseHuggingFaceModelPath(modelPath)
+    const isHfRepoImport = modelPath.startsWith('hf://')
+    let hfRepoFiles: HuggingFaceRepo['siblings'] | undefined
+
+    if (isHfRepoImport) {
+      const repoId = modelPath.slice('hf://'.length).trim()
+      const repoInfo = await this.fetchHuggingFaceRepo(repoId, hfToken)
+      hfRepoFiles = repoInfo?.siblings
+      if (!hfRepoFiles?.length) {
+        throw new Error(`Failed to resolve Hugging Face files for ${repoId}`)
+      }
+    }
 
     if (parsedModelPath && !skipVerification) {
       const { repoId, filename: modelFilename } = parsedModelPath
@@ -329,7 +367,8 @@ export class DefaultModelsService implements ModelsService {
       mmprojPath,
       mmprojSha256,
       mmprojSize,
-      hfToken ? { Authorization: `Bearer ${hfToken}` } : undefined
+      hfToken ? { Authorization: `Bearer ${hfToken}` } : undefined,
+      hfRepoFiles
     )
   }
 
@@ -350,7 +389,7 @@ export class DefaultModelsService implements ModelsService {
   }
 
   async deleteModel(id: string, provider?: string): Promise<void> {
-    const engineProvider = engineProviderFor(provider)
+    const engineProvider = storageEngineProviderFor(provider)
     const engine = this.getEngine(engineProvider)
     if (!engine) {
       throw new Error(
@@ -361,7 +400,11 @@ export class DefaultModelsService implements ModelsService {
   }
 
   async getActiveModels(provider?: string): Promise<string[]> {
-    const engine = this.getEngine(engineProviderFor(provider))
+    if (provider === 'mlx') {
+      return invoke<string[]>('mlx_list_loaded')
+    }
+
+    const engine = this.getEngine(provider)
     if (!engine) return []
     return engine.getLoadedModels() ?? []
   }
@@ -370,7 +413,19 @@ export class DefaultModelsService implements ModelsService {
     model: string,
     provider?: string
   ): Promise<UnloadResult | undefined> {
-    return this.getEngine(engineProviderFor(provider))?.unload(model)
+    if (provider === 'mlx') {
+      try {
+        await invoke('mlx_unload_model', { modelId: model })
+        return { success: true }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    }
+
+    return this.getEngine(provider)?.unload(model)
   }
 
   async stopAllModels(): Promise<void> {
@@ -404,7 +459,19 @@ export class DefaultModelsService implements ModelsService {
     model: string,
     bypassAutoUnload: boolean = false
   ): Promise<SessionInfo | undefined> {
-    const engineProvider = engineProviderFor(provider.provider) ?? provider.provider
+    if (provider.provider === 'mlx') {
+      await invoke('mlx_load_model', { modelId: model })
+      return {
+        pid: 0,
+        port: 0,
+        model_id: model,
+        model_path: model,
+        is_embedding: false,
+        api_key: '',
+      }
+    }
+
+    const engineProvider = provider.provider
     const engine = this.getEngine(engineProvider)
     if (!engine) {
       throw new Error(

@@ -78,8 +78,13 @@ vi.mock('sonner', () => ({
 
 vi.mock('@ax-studio/core', () => ({
   DownloadEvent: {
+    onFileDownloadUpdate: 'onFileDownloadUpdate',
     onFileDownloadAndVerificationSuccess:
       'onFileDownloadAndVerificationSuccess',
+    onFileDownloadSuccess: 'onFileDownloadSuccess',
+    onFileDownloadError: 'onFileDownloadError',
+    onFileDownloadStopped: 'onFileDownloadStopped',
+    onFileDownloadStarted: 'onFileDownloadStarted',
   },
   AppEvent: {
     onModelImported: 'onModelImported',
@@ -121,6 +126,7 @@ vi.mock('lucide-react', () => ({
   Download: () => <span data-testid="download-icon" />,
   Pause: () => <span data-testid="pause-icon" />,
   Play: () => <span data-testid="play-icon" />,
+  Loader2: () => <span data-testid="loader-icon" />,
 }))
 
 import { DownloadButtonPlaceholder } from '../DownloadButton'
@@ -190,6 +196,40 @@ describe('DownloadButtonPlaceholder', () => {
     )
 
     expect(screen.getByText('hub:download')).toBeInTheDocument()
+  })
+
+  it('starts full-repo download for MLX Hugging Face repo quants', () => {
+    const mlxModel = {
+      ...baseModel,
+      model_name: 'mlx-community/Qwen3.5-9B-MLX-4bit',
+      developer: 'mlx-community',
+      is_mlx: true,
+      quants: [
+        {
+          model_id: 'mlx-community/Qwen3.5-9B-MLX-4bit',
+          path: 'hf://mlx-community/Qwen3.5-9B-MLX-4bit',
+          file_size: '6GB',
+        },
+      ],
+    }
+
+    render(
+      <DownloadButtonPlaceholder
+        model={mlxModel}
+        handleUseModel={handleUseModel}
+      />
+    )
+
+    fireEvent.click(screen.getByText('hub:download'))
+    expect(mockAddLocalDownloadingModel).toHaveBeenCalledWith(
+      'mlx-community/Qwen3.5-9B-MLX-4bit'
+    )
+    expect(mockPullModelWithMetadata).toHaveBeenCalledWith(
+      'mlx-community/Qwen3.5-9B-MLX-4bit',
+      'hf://mlx-community/Qwen3.5-9B-MLX-4bit',
+      undefined,
+      'hf-test-token'
+    )
   })
 
   it('renders "New Chat" button when model is downloaded', () => {
@@ -315,8 +355,11 @@ describe('DownloadButtonPlaceholder', () => {
 
     fireEvent.click(screen.getByText('hub:download'))
     // Should match q4_k_m from DEFAULT_MODEL_QUANTIZATIONS
-    expect(mockAddLocalDownloadingModel).toHaveBeenCalledWith(
-      'test-model-q4_k_m'
+    expect(mockPullModelWithMetadata).toHaveBeenCalledWith(
+      'test-model-q4_k_m',
+      '/path/q4',
+      undefined,
+      'hf-test-token'
     )
   })
 
@@ -336,7 +379,12 @@ describe('DownloadButtonPlaceholder', () => {
     )
 
     fireEvent.click(screen.getByText('hub:download'))
-    expect(mockAddLocalDownloadingModel).toHaveBeenCalledWith('test-model-fp16')
+    expect(mockPullModelWithMetadata).toHaveBeenCalledWith(
+      'test-model-fp16',
+      '/path/fp16',
+      undefined,
+      'hf-test-token'
+    )
   })
 
   it('removes local downloading state and shows an error when the download fails to start', async () => {

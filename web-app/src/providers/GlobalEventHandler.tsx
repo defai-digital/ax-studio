@@ -246,6 +246,11 @@ export function GlobalEventHandler() {
       updateProgress(downloadId, percent, downloadId, transferred, total)
     }
 
+    const onFileDownloadStarted = (state: DownloadState) => {
+      const downloadId = getDownloadId(state)
+      updateProgress(downloadId, 0, downloadId, 0, 0)
+    }
+
     const onFileDownloadSuccess = (state: DownloadState) => {
       const downloadId = getDownloadId(state)
       removeDownload(downloadId)
@@ -264,6 +269,7 @@ export function GlobalEventHandler() {
       removeLocalDownloadingModel(downloadId)
     }
 
+    events.on(DownloadEvent.onFileDownloadStarted, onFileDownloadStarted)
     events.on(DownloadEvent.onFileDownloadUpdate, onFileDownloadUpdate)
     events.on(DownloadEvent.onFileDownloadSuccess, onFileDownloadSuccess)
     events.on(DownloadEvent.onFileDownloadError, onFileDownloadError)
@@ -271,6 +277,7 @@ export function GlobalEventHandler() {
     events.on(DownloadEvent.onFileDownloadAndVerificationSuccess, onFileDownloadSuccess)
 
     return () => {
+      events.off(DownloadEvent.onFileDownloadStarted, onFileDownloadStarted)
       events.off(DownloadEvent.onFileDownloadUpdate, onFileDownloadUpdate)
       events.off(DownloadEvent.onFileDownloadSuccess, onFileDownloadSuccess)
       events.off(DownloadEvent.onFileDownloadError, onFileDownloadError)

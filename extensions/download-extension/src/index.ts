@@ -29,12 +29,14 @@ export default class AxStudioDownloadManager extends BaseExtension {
 
   /**
    * Sanitize a task ID so it is safe to use in Tauri event names.
-   * Tauri 2 only allows alphanumeric, `-`, `/`, `:`, and `_` characters.
+   * Keep task IDs to simple token characters before using them in Tauri event
+   * names. Model IDs often contain `/`; replacing it avoids path-like event
+   * names that can be fragile across webview bridges.
    * Dots and other characters in model IDs (e.g. "Qwen3.5-27B") would
    * cause listen() to throw "invalid args `event`".
    */
   private _sanitizeTaskId(taskId: string): string {
-    return taskId.replace(/[^a-zA-Z0-9\-/_:]/g, '_')
+    return taskId.replace(/[^a-zA-Z0-9\-_]/g, '_')
   }
 
   private _isAbsolutePath(path: string): boolean {

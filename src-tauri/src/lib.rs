@@ -32,24 +32,23 @@ pub fn run() {
 
     let app_builder = app_builder.invoke_handler(commands::desktop_handlers!());
 
-    let app_builder = app_builder
-        .manage(AppState {
-            mcp_servers: Arc::new(Mutex::new(HashMap::new())),
-            download_manager: Arc::new(Mutex::new(DownloadManagerState::default())),
-            mcp_active_servers: Arc::new(Mutex::new(HashMap::new())),
-            server_handle: Arc::new(Mutex::new(None)),
-            tool_call_cancellations: Arc::new(Mutex::new(HashMap::new())),
-            akidb_sync_cancellation: Arc::new(Mutex::new(None)),
-            mcp_settings: Arc::new(Mutex::new(McpSettings::default())),
-            mcp_shutdown_in_progress: Arc::new(Mutex::new(false)),
-            mcp_monitoring_tasks: Arc::new(Mutex::new(HashMap::new())),
-            background_cleanup_handle: Arc::new(Mutex::new(None)),
-            mcp_server_pids: Arc::new(Mutex::new(HashMap::new())),
-            provider_state: Arc::new(Mutex::new(crate::core::state::ProviderState::default())),
-            approved_save_paths: Arc::new(Mutex::new(std::collections::HashSet::new())),
-            factory_reset_lock: Arc::new(Mutex::new(())),
-            active_streams: Arc::new(Mutex::new(HashMap::new())),
-        });
+    let app_builder = app_builder.manage(AppState {
+        mcp_servers: Arc::new(Mutex::new(HashMap::new())),
+        download_manager: Arc::new(Mutex::new(DownloadManagerState::default())),
+        mcp_active_servers: Arc::new(Mutex::new(HashMap::new())),
+        server_handle: Arc::new(Mutex::new(None)),
+        tool_call_cancellations: Arc::new(Mutex::new(HashMap::new())),
+        akidb_sync_cancellation: Arc::new(Mutex::new(None)),
+        mcp_settings: Arc::new(Mutex::new(McpSettings::default())),
+        mcp_shutdown_in_progress: Arc::new(Mutex::new(false)),
+        mcp_monitoring_tasks: Arc::new(Mutex::new(HashMap::new())),
+        background_cleanup_handle: Arc::new(Mutex::new(None)),
+        mcp_server_pids: Arc::new(Mutex::new(HashMap::new())),
+        provider_state: Arc::new(Mutex::new(crate::core::state::ProviderState::default())),
+        approved_save_paths: Arc::new(Mutex::new(std::collections::HashSet::new())),
+        factory_reset_lock: Arc::new(Mutex::new(())),
+        active_streams: Arc::new(Mutex::new(HashMap::new())),
+    });
 
     // In-process MLX state (worker thread holding ax-engine-sdk EngineSessions).
     // macOS-only — `ax-engine-mlx` doesn't build on other platforms.

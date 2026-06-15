@@ -11,17 +11,15 @@ fn read_manifest(path: &Path) -> Result<Vec<serde_json::Value>, String> {
     if !path.exists() {
         return Ok(vec![]);
     }
-    let data = fs::read_to_string(path)
-        .map_err(|e| format!("Failed to read extensions.json: {e}"))?;
-    serde_json::from_str(&data)
-        .map_err(|e| format!("Failed to parse extensions.json: {e}"))
+    let data =
+        fs::read_to_string(path).map_err(|e| format!("Failed to read extensions.json: {e}"))?;
+    serde_json::from_str(&data).map_err(|e| format!("Failed to parse extensions.json: {e}"))
 }
 
 fn write_manifest(path: &Path, manifests: &[serde_json::Value]) -> Result<(), String> {
     let serialized = serde_json::to_string_pretty(manifests)
         .map_err(|e| format!("Failed to serialize extensions.json: {e}"))?;
-    fs::write(path, serialized)
-        .map_err(|e| format!("Failed to write extensions.json: {e}"))
+    fs::write(path, serialized).map_err(|e| format!("Failed to write extensions.json: {e}"))
 }
 
 #[tauri::command]
@@ -217,8 +215,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let dir = std::env::temp_dir()
-            .join(format!("ax_studio_ext_test_{name}_{count}_{nanos}"));
+        let dir = std::env::temp_dir().join(format!("ax_studio_ext_test_{name}_{count}_{nanos}"));
         fs::create_dir_all(&dir).unwrap();
         TempPath { path: dir }
     }
@@ -246,7 +243,11 @@ mod tests {
     fn safe_url_returns_relative_path_for_valid_url_inside_dir() {
         let tmp = unique_temp_dir("safe_valid");
         let ext_dir = tmp.path();
-        let url = ext_dir.join("foo").join("index.js").to_string_lossy().to_string();
+        let url = ext_dir
+            .join("foo")
+            .join("index.js")
+            .to_string_lossy()
+            .to_string();
         let ext = json!({ "url": url });
         assert_eq!(safe_relative_extension_url(&ext, ext_dir), "foo/index.js");
     }
@@ -394,7 +395,11 @@ mod tests {
         let tmp = unique_temp_dir("active_shape");
         let ext_dir = tmp.path();
         let path = ext_dir.join("extensions.json");
-        let url_in = ext_dir.join("foo").join("index.js").to_string_lossy().to_string();
+        let url_in = ext_dir
+            .join("foo")
+            .join("index.js")
+            .to_string_lossy()
+            .to_string();
         let manifest = json!([{
             "name": "foo-ext",
             "productName": "Foo Extension",
@@ -434,8 +439,8 @@ mod tests {
         let ext_dir = tmp.path();
         let path = ext_dir.join("extensions.json");
         fs::write(&path, "definitely not json").unwrap();
-        let err = read_active_extension_manifests(&path, ext_dir)
-            .expect_err("malformed JSON must error");
+        let err =
+            read_active_extension_manifests(&path, ext_dir).expect_err("malformed JSON must error");
         assert!(err.contains("Failed to parse"));
     }
 

@@ -620,8 +620,16 @@ pub fn extract_command_args(config: &Value) -> Option<McpServerConfig> {
     // intentionally absent — MCP servers with custom toolchains (e.g. uvx)
     // need a custom PATH to locate their interpreter.
     const BLOCKED_ENV_KEYS_BY_VALUE: &[&str] = &[
-        "home=", "user=", "shell=", "tmpdir=", "temp=", "tmp=",
-        "appdata=", "programfiles=", "systemroot=", "ld_preload=",
+        "home=",
+        "user=",
+        "shell=",
+        "tmpdir=",
+        "temp=",
+        "tmp=",
+        "appdata=",
+        "programfiles=",
+        "systemroot=",
+        "ld_preload=",
     ];
     envs.retain(|k, v| {
         let v_str = match v.as_str() {
@@ -758,8 +766,14 @@ mod tests {
             }
         });
         let result = extract_command_args(&config).unwrap();
-        assert_eq!(result.envs.get("NODE_ENV").unwrap().as_str().unwrap(), "production");
-        assert_eq!(result.envs.get("SAFE_VAR").unwrap().as_str().unwrap(), "safe");
+        assert_eq!(
+            result.envs.get("NODE_ENV").unwrap().as_str().unwrap(),
+            "production"
+        );
+        assert_eq!(
+            result.envs.get("SAFE_VAR").unwrap().as_str().unwrap(),
+            "safe"
+        );
         // Blocked by DANGEROUS_ENV_KEYS (key-level filter)
         assert!(result.envs.get("LD_PRELOAD").is_none());
         // Blocked by BLOCKED_ENV_KEYS_BY_VALUE (key=value prefix filter)
@@ -768,7 +782,10 @@ mod tests {
         assert!(result.envs.get("SHELL").is_none());
         // PATH is intentionally allowed — MCP servers with custom toolchains
         // (e.g. uvx) need a custom PATH to locate their interpreter.
-        assert_eq!(result.envs.get("PATH").unwrap().as_str().unwrap(), "/custom/tools:/usr/bin");
+        assert_eq!(
+            result.envs.get("PATH").unwrap().as_str().unwrap(),
+            "/custom/tools:/usr/bin"
+        );
     }
 
     #[test]

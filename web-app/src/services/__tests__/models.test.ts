@@ -4,13 +4,14 @@ import type { HuggingFaceRepo, CatalogModel } from '../models/types'
 import { EngineManager, events, DownloadEvent, ContentType } from '@ax-studio/core'
 import bundledModelCatalog from '@/data/model-catalog.json'
 
-const { mockEvents, mockDownloadEvent } = vi.hoisted(() => ({
+const { mockEvents, mockDownloadEvent, mockInvoke } = vi.hoisted(() => ({
   mockEvents: {
     emit: vi.fn(),
   },
   mockDownloadEvent: {
     onFileDownloadStopped: 'onFileDownloadStopped',
   } as Record<string, string>,
+  mockInvoke: vi.fn(),
 }))
 
 // Mock EngineManager and events
@@ -24,6 +25,10 @@ vi.mock('@ax-studio/core', () => ({
     Text: 'text',
     Image: 'image',
   },
+}))
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: mockInvoke,
 }))
 
 // Mock fetch
@@ -61,6 +66,7 @@ describe('DefaultModelsService', () => {
     mockEngineManager.get.mockReturnValue(mockEngine)
     ;(EngineManager.instance as any).mockReturnValue(mockEngineManager)
     mockEvents.emit.mockClear()
+    mockInvoke.mockReset()
   })
 
   describe('fetchModels', () => {
@@ -136,16 +142,16 @@ describe('DefaultModelsService', () => {
       consoleSpy.mockRestore()
     })
 
-    it('should map mlx active-model lookups to the ax-serving engine', async () => {
+    it('should use the MLX SDK command for mlx active-model lookups', async () => {
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-      mockEngineManager.get.mockReturnValue(undefined)
+      mockInvoke.mockResolvedValue([])
 
       const result = await modelsService.getActiveModels('mlx')
 
       expect(result).toEqual([])
-      expect(consoleSpy).toHaveBeenCalledWith(
-        '[ModelsService] Engine "llamacpp" is not available. The engine may not be initialized or registered.'
-      )
+      expect(mockInvoke).toHaveBeenCalledWith('mlx_list_loaded')
+      expect(mockEngineManager.get).not.toHaveBeenCalled()
+      expect(consoleSpy).not.toHaveBeenCalled()
 
       consoleSpy.mockRestore()
     })
@@ -338,33 +344,50 @@ describe('DefaultModelsService', () => {
     })
   })
 
-  describe('stopModel', () => {
-    it('should stop model successfully', async () => {
-      const model = 'model1'
-      const provider = 'openai'
+	  describe('stopModel', () => {
+	    it('should stop model successfully', async () => {
+	      const model = 'model1'
+	      const provider = 'openai'
 
       await modelsService.stopModel(model, provider)
+	
+	      expect(mockEngine.unload).toHaveBeenCalledWith(model)
+	    })
 
-      expect(mockEngine.unload).toHaveBeenCalledWith(model)
-    })
-  })
+	    it('should stop mlx models through the MLX SDK command', async () => {
+	      mockInvoke.mockResolvedValue(undefined)
 
-  describe('stopAllModels', () => {
-    it('should stop all active models from all providers', async () => {
-      const mockActiveModels = ['model1', 'model2']
-      mockEngine.getLoadedModels.mockResolvedValue(mockActiveModels)
+	      await expect(modelsService.stopModel('model1', 'mlx')).resolves.toEqual({
+	        success: true,
+	      })
 
-      await modelsService.stopAllModels()
+	      expect(mockInvoke).toHaveBeenCalledWith('mlx_unload_model', { modelId: 'model1' })
+	      expect(mockEngine.unload).not.toHaveBeenCalled()
+	    })
+	  })
 
-      expect(mockEngine.unload).toHaveBeenCalledTimes(4)
-      expect(mockEngine.unload).toHaveBeenCalledWith('model1')
-      expect(mockEngine.unload).toHaveBeenCalledWith('model2')
-    })
-
-    it('should handle empty active models', async () => {
-      mockEngine.getLoadedModels.mockResolvedValue(null)
-
-      await modelsService.stopAllModels()
+	  describe('stopAllModels', () => {
+	    it('should stop all active models from all providers', async () => {
+	      const mockActiveModels = ['model1', 'model2']
+	      mockEngine.getLoadedModels.mockResolvedValue(mockActiveModels)
+	      mockInvoke
+	        .mockResolvedValueOnce(['mlx-model'])
+	        .mockResolvedValueOnce(undefined)
+	
+	      await modelsService.stopAllModels()
+	
+	      expect(mockEngine.unload).toHaveBeenCalledTimes(2)
+	      expect(mockEngine.unload).toHaveBeenCalledWith('model1')
+	      expect(mockEngine.unload).toHaveBeenCalledWith('model2')
+	      expect(mockInvoke).toHaveBeenCalledWith('mlx_list_loaded')
+	      expect(mockInvoke).toHaveBeenCalledWith('mlx_unload_model', { modelId: 'mlx-model' })
+	    })
+	
+	    it('should handle empty active models', async () => {
+	      mockEngine.getLoadedModels.mockResolvedValue(null)
+	      mockInvoke.mockResolvedValue([])
+	
+	      await modelsService.stopAllModels()
 
       expect(mockEngine.unload).not.toHaveBeenCalled()
     })
@@ -372,13 +395,14 @@ describe('DefaultModelsService', () => {
     it('should continue stopping models when one unload rejects', async () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       mockEngine.getLoadedModels.mockResolvedValue(['model1', 'model2'])
+      mockInvoke.mockResolvedValue([])
       mockEngine.unload
         .mockRejectedValueOnce(new Error('unload failed'))
         .mockResolvedValue(undefined)
 
       await modelsService.stopAllModels()
 
-      expect(mockEngine.unload).toHaveBeenCalledTimes(4)
+      expect(mockEngine.unload).toHaveBeenCalledTimes(2)
       expect(warnSpy).toHaveBeenCalledWith(
         '[ModelsService] stopAllModels unload failed:',
         expect.any(Error)
@@ -502,28 +526,25 @@ describe('DefaultModelsService', () => {
       )
     })
 
-    it('should load mlx models through the ax-serving engine', async () => {
+    it('should load mlx models through the MLX SDK command', async () => {
       const provider = {
         provider: 'mlx',
         models: [{ id: 'model1', settings: {} }],
       } as any
-      const mockSession = { id: 'session1' }
+      mockInvoke.mockResolvedValue(undefined)
 
-      mockEngine.getLoadedModels.mockResolvedValue([])
-      mockEngine.load.mockResolvedValue(mockSession)
+      await expect(modelsService.startModel(provider, 'model1')).resolves.toEqual({
+        pid: 0,
+        port: 0,
+        model_id: 'model1',
+        model_path: 'model1',
+        is_embedding: false,
+        api_key: '',
+      })
 
-      await expect(modelsService.startModel(provider, 'model1')).resolves.toEqual(
-        mockSession
-      )
-
-      expect(mockEngineManager.get).toHaveBeenCalledWith('llamacpp')
-      expect(mockEngine.load).toHaveBeenCalledWith(
-        'model1',
-        {},
-        false,
-        false
-      )
-      expect(mockEngine.syncModelRoute).toHaveBeenCalledWith('model1')
+      expect(mockInvoke).toHaveBeenCalledWith('mlx_load_model', { modelId: 'model1' })
+      expect(mockEngineManager.get).not.toHaveBeenCalled()
+      expect(mockEngine.load).not.toHaveBeenCalled()
     })
 
     it('should throw a helpful error when the provider engine is unavailable', async () => {
@@ -624,7 +645,7 @@ describe('DefaultModelsService', () => {
 
       expect(result).toEqual(mockRepoData)
       expect(fetch).toHaveBeenCalledWith(
-        'https://huggingface.co/api/models/microsoft%2FDialoGPT-medium?blobs=true&files_metadata=true',
+        'https://huggingface.co/api/models/microsoft/DialoGPT-medium?blobs=true&files_metadata=true',
         {
           headers: {},
           signal: undefined,
@@ -657,7 +678,7 @@ describe('DefaultModelsService', () => {
         'https://huggingface.co/microsoft/DialoGPT-medium'
       )
       expect(fetch).toHaveBeenCalledWith(
-        'https://huggingface.co/api/models/microsoft%2FDialoGPT-medium?blobs=true&files_metadata=true',
+        'https://huggingface.co/api/models/microsoft/DialoGPT-medium?blobs=true&files_metadata=true',
         {
           headers: {},
           signal: undefined,
@@ -669,7 +690,7 @@ describe('DefaultModelsService', () => {
         'huggingface.co/microsoft/DialoGPT-medium'
       )
       expect(fetch).toHaveBeenCalledWith(
-        'https://huggingface.co/api/models/microsoft%2FDialoGPT-medium?blobs=true&files_metadata=true',
+        'https://huggingface.co/api/models/microsoft/DialoGPT-medium?blobs=true&files_metadata=true',
         {
           headers: {},
           signal: undefined,
@@ -679,7 +700,7 @@ describe('DefaultModelsService', () => {
       // Test with trailing slash
       await modelsService.fetchHuggingFaceRepo('microsoft/DialoGPT-medium/')
       expect(fetch).toHaveBeenCalledWith(
-        'https://huggingface.co/api/models/microsoft%2FDialoGPT-medium?blobs=true&files_metadata=true',
+        'https://huggingface.co/api/models/microsoft/DialoGPT-medium?blobs=true&files_metadata=true',
         {
           headers: {},
           signal: undefined,
@@ -712,7 +733,7 @@ describe('DefaultModelsService', () => {
 
       expect(result).toBeNull()
       expect(fetch).toHaveBeenCalledWith(
-        'https://huggingface.co/api/models/nonexistent%2Fmodel?blobs=true&files_metadata=true',
+        'https://huggingface.co/api/models/nonexistent/model?blobs=true&files_metadata=true',
         {
           headers: {},
           signal: undefined,
@@ -948,6 +969,49 @@ describe('DefaultModelsService', () => {
         })
       )
     })
+
+    it('should pass Hugging Face sibling metadata for MLX repo downloads', async () => {
+      const repoResponse: HuggingFaceRepo = {
+        id: 'mlx-community/Qwen3.5-4B-4bit',
+        modelId: 'mlx-community/Qwen3.5-4B-4bit',
+        sha: 'sha',
+        downloads: 0,
+        likes: 0,
+        tags: ['mlx'],
+        createdAt: '2026-01-01T00:00:00.000Z',
+        private: false,
+        disabled: false,
+        gated: false,
+        author: 'mlx-community',
+        siblings: [
+          {
+            rfilename: 'model.safetensors',
+            lfs: { sha256: 'model-sha', size: 123, pointerSize: 123 },
+          },
+          {
+            rfilename: 'tokenizer.json',
+            size: 456,
+          },
+        ],
+      }
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue(repoResponse),
+      } as unknown as Response)
+
+      await modelsService.pullModelWithMetadata(
+        'mlx-community/Qwen3.5-4B-4bit',
+        'hf://mlx-community/Qwen3.5-4B-4bit'
+      )
+
+      expect(mockEngine.import).toHaveBeenCalledWith(
+        'mlx-community/Qwen3.5-4B-4bit',
+        expect.objectContaining({
+          modelPath: 'hf://mlx-community/Qwen3.5-4B-4bit',
+          hfRepoFiles: repoResponse.siblings,
+        })
+      )
+    })
   })
 
   describe('convertHfRepoToCatalogModel', () => {
@@ -1041,6 +1105,96 @@ describe('DefaultModelsService', () => {
 
       expect(result.num_quants).toBe(0)
       expect(result.quants).toEqual([])
+    })
+
+    it('should expose MLX safetensors repos as downloadable Hub models', () => {
+      const mlxRepo: HuggingFaceRepo = {
+        ...mockHuggingFaceRepo,
+        modelId: 'mlx-community/gemma-4-12B-it-4bit',
+        author: 'mlx-community',
+        tags: ['mlx'],
+        library_name: 'mlx',
+        siblings: [
+          {
+            rfilename: 'model-manifest.json',
+            size: 1024,
+          },
+          {
+            rfilename: 'model-00001-of-00002.safetensors',
+            size: 5 * 1024 * 1024 * 1024,
+            lfs: {
+              sha256: 'abc',
+              size: 5 * 1024 * 1024 * 1024,
+              pointerSize: 133,
+            },
+          },
+          {
+            rfilename: 'model-00002-of-00002.safetensors',
+            size: 6 * 1024 * 1024 * 1024,
+            lfs: {
+              sha256: 'def',
+              size: 6 * 1024 * 1024 * 1024,
+              pointerSize: 133,
+            },
+          },
+          {
+            rfilename: 'tokenizer.json',
+            size: 1024 * 1024,
+          },
+        ],
+      }
+
+      const result = modelsService.convertHfRepoToCatalogModel(mlxRepo)
+
+      expect(result.is_mlx).toBe(true)
+      expect(result.num_quants).toBe(1)
+      expect(result.quants).toEqual([
+        {
+          model_id: 'mlx-community/gemma-4-12B-it-4bit',
+          path: 'hf://mlx-community/gemma-4-12B-it-4bit',
+          file_size: '11.0 GB',
+          supports_in_app_download: true,
+        },
+      ])
+    })
+
+    it('should expose safetensors-only MLX repos for generated-manifest download', () => {
+      const mlxRepo: HuggingFaceRepo = {
+        ...mockHuggingFaceRepo,
+        modelId: 'mlx-community/Qwen3.5-9B-MLX-4bit',
+        author: 'mlx-community',
+        tags: ['mlx'],
+        library_name: 'mlx',
+        siblings: [
+          {
+            rfilename: 'model-00001-of-00002.safetensors',
+            size: 5 * 1024 * 1024 * 1024,
+            lfs: {
+              sha256: 'abc',
+              size: 5 * 1024 * 1024 * 1024,
+              pointerSize: 133,
+            },
+          },
+          {
+            rfilename: 'tokenizer.json',
+            size: 1024 * 1024,
+          },
+        ],
+      }
+
+      const result = modelsService.convertHfRepoToCatalogModel(mlxRepo)
+
+      expect(result.is_mlx).toBe(true)
+      expect(result.num_quants).toBe(1)
+      expect(result.quants).toEqual([
+        {
+          model_id: 'mlx-community/Qwen3.5-9B-MLX-4bit',
+          path: 'hf://mlx-community/Qwen3.5-9B-MLX-4bit',
+          file_size: '5.0 GB',
+          supports_in_app_download: true,
+        },
+      ])
+      expect(result.num_safetensors).toBe(1)
     })
 
     it('should handle repository with no siblings', () => {

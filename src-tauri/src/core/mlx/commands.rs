@@ -5,13 +5,18 @@
 //! * `mlx_unload_model` — drop a loaded model
 //! * `mlx_list_loaded` — list currently-loaded model ids
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use ax_engine_core::{
+    convert::{convert_hf_model_dir, write_manifest},
+    NativeModelArtifacts, AX_NATIVE_MODEL_MANIFEST_FILE,
+};
 use ax_engine_sdk::{current_host_report, current_metal_toolchain_report};
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, Runtime, State};
 
+use crate::core::app::commands::get_app_data_folder_path;
 use crate::core::mlx::state::MlxState;
 use crate::core::mlx::worker::{ChatMessage, GenerateParams, StreamEvent};
 
@@ -62,20 +67,27 @@ pub fn mlx_runtime_probe() -> Result<MlxRuntimeProbe, String> {
 }
 
 /// Load an MLX model into the in-process worker. If `model_dir` is omitted,
-/// resolves `model_id` against the HuggingFace cache
+/// resolves `model_id` against Ax Studio's app-data downloads first, then the
+/// HuggingFace cache
 /// (`mlx-community/X-4bit` → `~/.cache/huggingface/hub/models--mlx-community--X-4bit/snapshots/<commit>/`)
 /// so the chat frontend can load by HF model id without knowing FS paths.
 /// Idempotent: a no-op when the model is already loaded.
 #[tauri::command]
-pub async fn mlx_load_model(
+pub async fn mlx_load_model<R: Runtime>(
     state: State<'_, MlxState>,
+    app_handle: AppHandle<R>,
     model_id: String,
     model_dir: Option<String>,
 ) -> Result<(), String> {
     let path = match model_dir {
         Some(p) => PathBuf::from(p),
-        None => resolve_hf_cache_dir(&model_id)
-            .ok_or_else(|| format!("could not resolve HF cache snapshot for '{model_id}'"))?,
+        None => {
+            resolve_downloaded_or_cached_model_dir(&app_handle, &model_id).ok_or_else(|| {
+                format!(
+                    "could not resolve Ax Studio download or HF cache snapshot for '{model_id}'"
+                )
+            })?
+        }
     };
     state.worker.load(model_id, path).await
 }
@@ -86,7 +98,10 @@ pub async fn mlx_load_model(
 /// app-data-scoped filesystem API while still validating that the resolved
 /// snapshot is an AX Engine artifact.
 #[tauri::command]
-pub fn mlx_resolve_model_dir(model_id: String) -> Result<String, String> {
+pub fn mlx_resolve_model_dir<R: Runtime>(
+    app_handle: AppHandle<R>,
+    model_id: String,
+) -> Result<String, String> {
     if model_id.is_empty()
         || model_id.contains("..")
         || !model_id.contains('/')
@@ -97,16 +112,46 @@ pub fn mlx_resolve_model_dir(model_id: String) -> Result<String, String> {
         return Err(format!("invalid MLX model id '{model_id}'"));
     }
 
-    let path = resolve_hf_cache_dir(&model_id)
-        .ok_or_else(|| format!("could not resolve HF cache snapshot for '{model_id}'"))?;
-    let manifest_path = path.join("model-manifest.json");
-    if !manifest_path.is_file() {
+    let path = resolve_downloaded_or_cached_model_dir(&app_handle, &model_id).ok_or_else(|| {
+        format!("could not resolve Ax Studio download or HF cache snapshot for '{model_id}'")
+    })?;
+
+    Ok(path.to_string_lossy().to_string())
+}
+
+/// Generate or validate AX Engine's native manifest for a downloaded MLX
+/// Hugging Face snapshot.
+#[tauri::command]
+pub async fn mlx_generate_model_manifest(model_dir: String) -> Result<(), String> {
+    let path = PathBuf::from(&model_dir);
+    if !path.is_dir() {
+        return Err(format!("MLX model directory does not exist: {model_dir}"));
+    }
+    if !dir_contains_safetensors(&path) {
         return Err(format!(
-            "resolved HF cache snapshot for '{model_id}' is missing model-manifest.json"
+            "MLX model directory does not contain safetensors: {model_dir}"
         ));
     }
 
-    Ok(path.to_string_lossy().to_string())
+    let manifest_path = path.join(AX_NATIVE_MODEL_MANIFEST_FILE);
+    if manifest_path.is_file() {
+        NativeModelArtifacts::from_dir(&path)
+            .map_err(|error| format!("existing AX manifest is invalid: {error}"))?;
+        return Ok(());
+    }
+
+    let path_for_task = path.clone();
+    tokio::task::spawn_blocking(move || {
+        let manifest = convert_hf_model_dir(&path_for_task)
+            .map_err(|error| format!("failed to generate AX manifest: {error}"))?;
+        write_manifest(&path_for_task, &manifest)
+            .map_err(|error| format!("failed to write AX manifest: {error}"))?;
+        NativeModelArtifacts::from_dir(&path_for_task)
+            .map_err(|error| format!("generated AX manifest is invalid: {error}"))?;
+        Ok::<(), String>(())
+    })
+    .await
+    .map_err(|error| format!("AX manifest generation task failed: {error}"))?
 }
 
 /// Look up `~/.cache/huggingface/hub/models--<author>--<name>/snapshots/<commit>/`
@@ -135,6 +180,55 @@ pub(crate) fn resolve_hf_cache_dir(model_id: &str) -> Option<PathBuf> {
         }
     }
     best.map(|(_, p)| p)
+}
+
+fn resolve_downloaded_or_cached_model_dir<R: Runtime>(
+    app_handle: &AppHandle<R>,
+    model_id: &str,
+) -> Option<PathBuf> {
+    resolve_app_data_model_dir(app_handle, model_id)
+        .or_else(|| resolve_hf_cache_dir(model_id).filter(|path| is_ax_native_model_dir(path)))
+}
+
+fn resolve_app_data_model_dir<R: Runtime>(
+    app_handle: &AppHandle<R>,
+    model_id: &str,
+) -> Option<PathBuf> {
+    if model_id.is_empty()
+        || model_id.contains("..")
+        || model_id
+            .split('/')
+            .any(|part| part.is_empty() || part == "." || part == "..")
+    {
+        return None;
+    }
+
+    let path = get_app_data_folder_path(app_handle.clone())
+        .join("llamacpp")
+        .join("models")
+        .join(model_id);
+
+    is_ax_native_model_dir(&path).then_some(path)
+}
+
+fn is_ax_native_model_dir(path: &Path) -> bool {
+    path.is_dir() && path.join(AX_NATIVE_MODEL_MANIFEST_FILE).is_file()
+}
+
+fn dir_contains_safetensors(path: &Path) -> bool {
+    let Ok(entries) = std::fs::read_dir(path) else {
+        return false;
+    };
+
+    entries.flatten().any(|entry| {
+        let path = entry.path();
+        if path.is_dir() {
+            return dir_contains_safetensors(&path);
+        }
+        path.extension()
+            .and_then(|ext| ext.to_str())
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("safetensors"))
+    })
 }
 
 #[tauri::command]

@@ -78,4 +78,3 @@ fn get_updater_endpoints(app: &AppHandle) -> Vec<String> {
     // Return empty if no endpoints found
     Vec::new()
 }
-

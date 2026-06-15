@@ -90,6 +90,8 @@ macro_rules! desktop_handlers {
             #[cfg(target_os = "macos")]
             crate::core::mlx::commands::mlx_resolve_model_dir,
             #[cfg(target_os = "macos")]
+            crate::core::mlx::commands::mlx_generate_model_manifest,
+            #[cfg(target_os = "macos")]
             crate::core::mlx::commands::mlx_load_model,
             #[cfg(target_os = "macos")]
             crate::core::mlx::commands::mlx_unload_model,

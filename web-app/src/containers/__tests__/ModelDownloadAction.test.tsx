@@ -79,8 +79,13 @@ vi.mock('@tanstack/react-router', () => ({
 
 vi.mock('@ax-studio/core', () => ({
   DownloadEvent: {
+    onFileDownloadUpdate: 'onFileDownloadUpdate',
     onFileDownloadAndVerificationSuccess:
       'onFileDownloadAndVerificationSuccess',
+    onFileDownloadSuccess: 'onFileDownloadSuccess',
+    onFileDownloadError: 'onFileDownloadError',
+    onFileDownloadStopped: 'onFileDownloadStopped',
+    onFileDownloadStarted: 'onFileDownloadStarted',
   },
   AppEvent: {
     onModelImported: 'onModelImported',
@@ -109,6 +114,8 @@ vi.mock('@/components/ui/progress', () => ({
 
 vi.mock('lucide-react', () => ({
   Download: () => <span data-testid="download-icon" />,
+  ExternalLink: () => <span data-testid="external-link-icon" />,
+  Loader2: () => <span data-testid="loader-icon" />,
 }))
 
 import { ModelDownloadAction } from '../ModelDownloadAction'
@@ -146,6 +153,62 @@ describe('ModelDownloadAction', () => {
     expect(mockPullModelWithMetadata).toHaveBeenCalledWith(
       'model-q4',
       '/models/model-q4.gguf',
+      undefined,
+      'hf-test-token'
+    )
+  })
+
+  it('starts full-repo download for MLX Hugging Face repo variants', () => {
+    const mlxVariant = {
+      model_id: 'mlx-community/Qwen3.5-9B-MLX-4bit',
+      path: 'hf://mlx-community/Qwen3.5-9B-MLX-4bit',
+    }
+    const mlxModel = {
+      ...model,
+      model_name: 'mlx-community/Qwen3.5-9B-MLX-4bit',
+      is_mlx: true,
+    }
+
+    render(
+      <ModelDownloadAction
+        variant={mlxVariant}
+        model={mlxModel as never}
+      />
+    )
+
+    fireEvent.click(screen.getByTitle('hub:downloadModel'))
+    expect(mockAddLocalDownloadingModel).toHaveBeenCalledWith(
+      'mlx-community/Qwen3.5-9B-MLX-4bit'
+    )
+    expect(mockPullModelWithMetadata).toHaveBeenCalledWith(
+      'mlx-community/Qwen3.5-9B-MLX-4bit',
+      'hf://mlx-community/Qwen3.5-9B-MLX-4bit',
+      undefined,
+      'hf-test-token'
+    )
+  })
+
+  it('tracks GGUF downloads with the sanitized runtime model id', () => {
+    const ggufVariant = {
+      model_id: 'mradermacher/Qwen3.5-9B-heretic.Q4_K_M',
+      path: 'https://huggingface.co/mradermacher/Qwen3.5-9B-heretic-GGUF/resolve/main/Qwen3.5-9B-heretic.Q4_K_M.gguf',
+    }
+
+    render(
+      <ModelDownloadAction variant={ggufVariant} model={model as never} />
+    )
+
+    fireEvent.click(screen.getByTitle('hub:downloadModel'))
+
+    expect(mockAddLocalDownloadingModel).toHaveBeenCalledWith(
+      'mradermacher/Qwen3.5-9B-heretic.Q4_K_M'
+    )
+    expect(mockAddLocalDownloadingModel).toHaveBeenCalledWith(
+      'Qwen3_5-9B-heretic_Q4_K_M'
+    )
+    expect(mockPullModelWithMetadata).toHaveBeenCalledWith(
+      'Qwen3_5-9B-heretic_Q4_K_M',
+      ggufVariant.path,
       undefined,
       'hf-test-token'
     )

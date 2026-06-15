@@ -10,6 +10,7 @@ export interface ModelQuant {
   model_id: string
   path: string
   file_size: string
+  supports_in_app_download?: boolean
 }
 
 export interface MMProjModel {
@@ -112,7 +113,8 @@ export interface ModelsService {
     mmprojPath?: string,
     mmprojSha256?: string,
     mmprojSize?: number,
-    downloadHeaders?: Record<string, string>
+    downloadHeaders?: Record<string, string>,
+    hfRepoFiles?: HuggingFaceRepo['siblings']
   ): Promise<void>
   pullModelWithMetadata(
     id: string,

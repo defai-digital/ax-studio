@@ -463,6 +463,174 @@ describe('AxStudioLlamacppExtension', () => {
     fetchSpy.mockRestore()
   })
 
+  it('imports Hugging Face MLX repos into the Ax-Studio model directory', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    const downloadFiles = vi.fn(
+      async (
+        items: Array<{ save_path: string }>,
+        _taskId: string,
+        _headers?: Record<string, string>,
+        onProgress?: (transferred: number, total: number) => void
+      ) => {
+        onProgress?.(512, 1024)
+        for (const item of items) {
+          mocks.fsState.set(item.save_path, 'downloaded')
+          mocks.fsState.set(`/app-data/${item.save_path}`, 'downloaded')
+        }
+      }
+    )
+    ;((globalThis as any).core.extensionManager.getByName as any).mockReturnValue({
+      downloadFiles,
+    })
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        siblings: [
+          {
+            rfilename: 'model-manifest.json',
+            size: 64,
+          },
+          {
+            rfilename: 'model-00001-of-00001.safetensors',
+            lfs: {
+              sha256: 'abc',
+              size: 1024,
+            },
+          },
+          {
+            rfilename: 'tokenizer.json',
+            size: 128,
+          },
+        ],
+      }),
+      text: async () => '',
+    } as Response)
+
+    await extension.import('mlx-community/gemma-4-12B-it-4bit', {
+      modelPath: 'hf://mlx-community/gemma-4-12B-it-4bit',
+      downloadHeaders: { Authorization: 'Bearer hf_token' },
+    } as any)
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://huggingface.co/api/models/mlx-community/gemma-4-12B-it-4bit?blobs=true&files_metadata=true',
+      {
+        headers: { Authorization: 'Bearer hf_token' },
+        signal: expect.any(AbortSignal),
+      }
+    )
+    expect(downloadFiles).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          url: 'https://huggingface.co/mlx-community/gemma-4-12B-it-4bit/resolve/main/model-manifest.json',
+          save_path:
+            'llamacpp/models/mlx-community/gemma-4-12B-it-4bit/model-manifest.json',
+        }),
+        expect.objectContaining({
+          url: 'https://huggingface.co/mlx-community/gemma-4-12B-it-4bit/resolve/main/model-00001-of-00001.safetensors',
+          save_path:
+            'llamacpp/models/mlx-community/gemma-4-12B-it-4bit/model-00001-of-00001.safetensors',
+          sha256: 'abc',
+          size: 1024,
+        }),
+      ]),
+      'mlx-import-mlx-community/gemma-4-12B-it-4bit',
+      { Authorization: 'Bearer hf_token' },
+      expect.any(Function)
+    )
+    expect(
+      mocks.fsState.get(
+        '/app-data/llamacpp/models/mlx-community/gemma-4-12B-it-4bit/model.yml'
+      )
+    ).toContain(
+      'model_path: "llamacpp/models/mlx-community/gemma-4-12B-it-4bit"'
+    )
+    expect(mocks.emit).toHaveBeenCalledWith('onModelImported', {
+      modelId: 'mlx-community/gemma-4-12B-it-4bit',
+    })
+
+    fetchSpy.mockRestore()
+  })
+
+  it('generates AX manifest after importing Hugging Face MLX repos without one', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    const downloadFiles = vi.fn(
+      async (
+        items: Array<{ save_path: string }>,
+        _taskId: string,
+        _headers?: Record<string, string>,
+        onProgress?: (transferred: number, total: number) => void
+      ) => {
+        onProgress?.(2048, 2048)
+        for (const item of items) {
+          mocks.fsState.set(item.save_path, 'downloaded')
+          mocks.fsState.set(`/app-data/${item.save_path}`, 'downloaded')
+        }
+      }
+    )
+    ;((globalThis as any).core.extensionManager.getByName as any).mockReturnValue({
+      downloadFiles,
+    })
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        siblings: [
+          {
+            rfilename: 'model-00001-of-00001.safetensors',
+            lfs: {
+              sha256: 'abc',
+              size: 2048,
+            },
+          },
+          {
+            rfilename: 'config.json',
+            size: 128,
+          },
+        ],
+      }),
+      text: async () => '',
+    } as Response)
+
+    await extension.import('mlx-community/Qwen3.5-9B-MLX-4bit', {
+      modelPath: 'hf://mlx-community/Qwen3.5-9B-MLX-4bit',
+    } as any)
+
+    expect(mocks.dirState.has('/app-data/llamacpp')).toBe(true)
+    expect(mocks.dirState.has('/app-data/llamacpp/models')).toBe(true)
+    expect(mocks.dirState.has('/app-data/llamacpp/models/mlx-community')).toBe(
+      true
+    )
+    expect(
+      mocks.dirState.has(
+        '/app-data/llamacpp/models/mlx-community/Qwen3.5-9B-MLX-4bit'
+      )
+    ).toBe(true)
+    expect(downloadFiles).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          url: 'https://huggingface.co/mlx-community/Qwen3.5-9B-MLX-4bit/resolve/main/model-00001-of-00001.safetensors',
+          save_path:
+            'llamacpp/models/mlx-community/Qwen3.5-9B-MLX-4bit/model-00001-of-00001.safetensors',
+        }),
+      ]),
+      'mlx-import-mlx-community/Qwen3.5-9B-MLX-4bit',
+      undefined,
+      expect.any(Function)
+    )
+    expect(invoke).toHaveBeenCalledWith('mlx_generate_model_manifest', {
+      modelDir:
+        '/app-data/llamacpp/models/mlx-community/Qwen3.5-9B-MLX-4bit',
+    })
+    expect(
+      mocks.fsState.get(
+        '/app-data/llamacpp/models/mlx-community/Qwen3.5-9B-MLX-4bit/model.yml'
+      )
+    ).toContain(
+      'model_path: "llamacpp/models/mlx-community/Qwen3.5-9B-MLX-4bit"'
+    )
+
+    fetchSpy.mockRestore()
+  })
+
   it('canonicalizes local import paths before copy operations', () => {
     const extension = new AxStudioLlamacppExtension('', '')
 
@@ -575,7 +743,43 @@ describe('AxStudioLlamacppExtension', () => {
     ])
   })
 
-  it('lists downloaded models even when AX manifests are missing', async () => {
+  it('lists downloaded nested Hugging Face MLX model directories', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    const modelDir = '/app-data/llamacpp/models/mlx-community/Qwen3.5-4B-4bit'
+    mocks.fsState.set(
+      `${modelDir}/model.yml`,
+      [
+        'model_path: llamacpp/models/mlx-community/Qwen3.5-4B-4bit',
+        'name: mlx-community/Qwen3.5-4B-4bit',
+        'size_bytes: 3061130647',
+        'embedding: false',
+      ].join('\n')
+    )
+    mocks.fsState.set(`${modelDir}/model-manifest.json`, '{}')
+
+    vi.mocked((await import('@ax-studio/core')).fs.readdirSync).mockImplementation(
+      async (path: string) => {
+        if (path === '/app-data/llamacpp/models') return ['mlx-community']
+        if (path === '/app-data/llamacpp/models/mlx-community') {
+          return ['Qwen3.5-4B-4bit']
+        }
+        return []
+      }
+    )
+
+    await expect(extension.list()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+	          id: 'mlx-community/Qwen3.5-4B-4bit',
+	          name: 'mlx-community/Qwen3.5-4B-4bit',
+	          providerId: 'mlx',
+	          path: 'llamacpp/models/mlx-community/Qwen3.5-4B-4bit',
+	        }),
+      ])
+    )
+  })
+
+  it('lists AX manifest models under mlx and plain models under llamacpp', async () => {
     const extension = new AxStudioLlamacppExtension('', '')
     ;(extension as any).config = { engine_type: 'ax-serving' }
     mocks.dirState.add('/app-data/llamacpp/models/Qwen2.5-32B-Instruct-4bit')
@@ -618,18 +822,22 @@ describe('AxStudioLlamacppExtension', () => {
           name: 'Qwen2.5-32B-Instruct-4bit',
           providerId: 'llamacpp',
         }),
-        expect.objectContaining({
-          id: 'Qwen3.5-35B-A3B-4bit',
-          name: 'Qwen3.5-35B-A3B-4bit',
-          providerId: 'llamacpp',
-        }),
+	        expect.objectContaining({
+	          id: 'Qwen3.5-35B-A3B-4bit',
+	          name: 'Qwen3.5-35B-A3B-4bit',
+	          providerId: 'mlx',
+	        }),
       ])
     )
-    await expect(extension.get('Qwen2.5-32B-Instruct-4bit')).resolves.toMatchObject({
-      id: 'Qwen2.5-32B-Instruct-4bit',
-      providerId: 'llamacpp',
-    })
-  })
+	    await expect(extension.get('Qwen2.5-32B-Instruct-4bit')).resolves.toMatchObject({
+	      id: 'Qwen2.5-32B-Instruct-4bit',
+	      providerId: 'llamacpp',
+	    })
+	    await expect(extension.get('Qwen3.5-35B-A3B-4bit')).resolves.toMatchObject({
+	      id: 'Qwen3.5-35B-A3B-4bit',
+	      providerId: 'mlx',
+	    })
+	  })
 
   it('fails import when the download extension is unavailable for remote files', async () => {
     const extension = new AxStudioLlamacppExtension('', '')

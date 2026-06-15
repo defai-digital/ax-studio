@@ -57,9 +57,9 @@ describe('AxStudioDownloadManager', () => {
       expect(result).toBe('Qwen3_5-27B')
     })
 
-    it('preserves valid characters', () => {
+    it('replaces path-like separators', () => {
       const result = (manager as any)._sanitizeTaskId('my-model/v1:latest_tag')
-      expect(result).toBe('my-model/v1:latest_tag')
+      expect(result).toBe('my-model_v1_latest_tag')
     })
 
     it('replaces multiple invalid characters', () => {

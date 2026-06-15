@@ -52,6 +52,7 @@ vi.mock('@ax-studio/core', () => ({
     onFileDownloadSuccess: 'onFileDownloadSuccess',
     onFileDownloadError: 'onFileDownloadError',
     onFileDownloadStopped: 'onFileDownloadStopped',
+    onFileDownloadStarted: 'onFileDownloadStarted',
     onFileDownloadAndVerificationSuccess: 'onFileDownloadAndVerificationSuccess',
   },
 }))

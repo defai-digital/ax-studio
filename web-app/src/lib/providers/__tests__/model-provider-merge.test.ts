@@ -40,6 +40,22 @@ describe('mergeProviders', () => {
     expect(modelIds).toContain('gpt-3')
   })
 
+  it('keeps re-downloaded local models even when the id is in deletedModels', () => {
+    const incoming = [
+      makeProvider('llamacpp', [
+        { id: 'mlx-community/Qwen3.5-4B-4bit' },
+      ]),
+    ]
+    const result = mergeProviders(
+      incoming,
+      [],
+      ['mlx-community/Qwen3.5-4B-4bit'],
+      '/'
+    )
+    const modelIds = result[0].models.map((m) => m.id)
+    expect(modelIds).toContain('mlx-community/Qwen3.5-4B-4bit')
+  })
+
   it('preserves providers in existing that are not in incoming', () => {
     const existing = [makeProvider('anthropic', [{ id: 'claude-3' }])]
     const incoming = [makeProvider('openai', [{ id: 'gpt-4' }])]
@@ -82,5 +98,20 @@ describe('mergeProviders', () => {
     const incoming = [makeProvider('openai', [{ id: 'gpt-4' }])]
     const result = mergeProviders(incoming, existing, [], '/')
     expect(result[0].active).toBe(false)
+  })
+
+  it('removes legacy bundled MLX models from cached provider state', () => {
+    const existing = [
+      makeProvider('mlx', [
+        { id: 'mlx-community/Qwen3.6-27B-4bit' },
+        { id: 'user/imported-mlx-model' },
+      ]),
+    ]
+    const incoming = [makeProvider('mlx', [])]
+    const result = mergeProviders(incoming, existing, [], '/')
+    const modelIds = result[0].models.map((model) => model.id)
+
+    expect(modelIds).not.toContain('mlx-community/Qwen3.6-27B-4bit')
+    expect(modelIds).toContain('user/imported-mlx-model')
   })
 })

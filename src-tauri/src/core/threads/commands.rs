@@ -12,8 +12,7 @@ use super::models::{MessageRecord, ThreadRecord};
 use super::{
     constants::THREADS_FILE,
     utils::{
-        ensure_data_dirs, get_data_dir, get_messages_path, get_thread_dir,
-        get_thread_metadata_path,
+        ensure_data_dirs, get_data_dir, get_messages_path, get_thread_dir, get_thread_metadata_path,
     },
 };
 
@@ -331,11 +330,10 @@ pub async fn create_thread_assistant<R: Runtime>(
     let _guard = lock.lock().await;
 
     let read_path = path.clone();
-    let data = task::spawn_blocking(move || {
-        fs::read_to_string(&read_path).map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| format!("create_thread_assistant task error: {e}"))??;
+    let data =
+        task::spawn_blocking(move || fs::read_to_string(&read_path).map_err(|e| e.to_string()))
+            .await
+            .map_err(|e| format!("create_thread_assistant task error: {e}"))??;
 
     let mut thread: ThreadRecord = serde_json::from_str(&data).map_err(|e| e.to_string())?;
     thread.assistants.push(assistant.clone());
@@ -366,11 +364,10 @@ pub async fn modify_thread_assistant<R: Runtime>(
     let _guard = lock.lock().await;
 
     let read_path = path.clone();
-    let data = task::spawn_blocking(move || {
-        fs::read_to_string(&read_path).map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| format!("modify_thread_assistant task error: {e}"))??;
+    let data =
+        task::spawn_blocking(move || fs::read_to_string(&read_path).map_err(|e| e.to_string()))
+            .await
+            .map_err(|e| format!("modify_thread_assistant task error: {e}"))??;
 
     let mut thread: ThreadRecord = serde_json::from_str(&data).map_err(|e| e.to_string())?;
     let assistant_id: String = assistant

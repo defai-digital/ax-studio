@@ -9,6 +9,11 @@
  *   matching model IDs that encode the separator. Pass `serviceHub.path().sep()`
  *   at the call site — never call the service hub inside a store action.
  */
+import {
+  LEGACY_BUNDLED_MLX_MODEL_IDS,
+  LOCAL_PROVIDER_IDS,
+} from '@/constants/providers'
+
 export function mergeProviders(
   incomingProviders: ModelProvider[],
   existingProviders: ModelProvider[],
@@ -26,14 +31,18 @@ export function mergeProviders(
     const existingProvider = validExistingProviders.find(
       (x) => x.provider === provider.provider
     )
-    const existingModels = filterValidModels(existingProvider?.models ?? [])
+    const existingModels = filterLegacyBundledMlxModels(
+      provider.provider,
+      filterValidModels(existingProvider?.models ?? [])
+    )
 
     const mergedModels = [
       ...(provider.models ?? []).filter(
         (e) =>
           isValidModel(e) &&
           !existingModels.some((m) => m.id === e.id) &&
-          !safeDeletedModels.includes(e.id)
+          (LOCAL_PROVIDER_IDS.has(provider.provider) ||
+            !safeDeletedModels.includes(e.id))
       ),
       ...existingModels,
     ]
@@ -101,4 +110,15 @@ function filterValidModels<T extends { id?: string; model?: string }>(
   models: T[]
 ): T[] {
   return models.filter(isValidModel)
+}
+
+function filterLegacyBundledMlxModels<T extends { id?: string; model?: string }>(
+  provider: string,
+  models: T[]
+): T[] {
+  if (provider !== 'mlx') return models
+
+  return models.filter(
+    (model) => !LEGACY_BUNDLED_MLX_MODEL_IDS.has(model.id ?? model.model ?? '')
+  )
 }

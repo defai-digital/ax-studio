@@ -613,6 +613,10 @@ function HubContent() {
                       model
                     )
                     const downloaded = !!downloadedModel
+                    const defaultFormat =
+                      model.is_mlx || defaultQuant?.path.startsWith('hf://')
+                        ? 'MLX'
+                        : 'GGUF'
 
                     // Get compatibility status from the default quant
                     const compatStatus = defaultQuant
@@ -674,7 +678,7 @@ function HubContent() {
                               </p>
                               {!defaultQuant?.file_size && (
                                 <span className="text-[10px] text-muted-foreground/40">
-                                  GGUF
+                                  {defaultFormat}
                                 </span>
                               )}
                             </div>
@@ -685,7 +689,7 @@ function HubContent() {
                                 {defaultQuant.file_size}
                               </span>
                               <span className="text-[10px] text-muted-foreground/40">
-                                GGUF
+                                {defaultFormat}
                               </span>
                             </div>
                           )}

@@ -19,6 +19,64 @@ const PROVIDER_LIST_TIMEOUT_MS = 8_000
 const PROVIDER_SETTINGS_TIMEOUT_MS = 8_000
 const PROVIDER_TOOL_CHECK_TIMEOUT_MS = 3_000
 
+function mapRuntimeSettings(settings: SettingComponentProps[]): ProviderSetting[] {
+  return settings.map((setting) => {
+    return {
+      key: setting.key,
+      title: setting.title,
+      description: setting.description,
+      controller_type: setting.controllerType as unknown,
+      controller_props: setting.controllerProps as unknown,
+    }
+  }) as ProviderSetting[]
+}
+
+function runtimeBaseUrl(value: unknown): string {
+  if (value && typeof value === 'object' && 'inferenceUrl' in value) {
+    return String((value as { inferenceUrl: string }).inferenceUrl).replace(
+      '/chat/completions',
+      ''
+    )
+  }
+  return ''
+}
+
+function combineProviderLists(
+  runtimeProviders: ModelProvider[],
+  builtinProviders: ModelProvider[]
+): ModelProvider[] {
+  const providers = runtimeProviders.map((provider) => ({
+    ...provider,
+    models: [...(provider.models ?? [])],
+  }))
+
+  for (const builtinProvider of builtinProviders) {
+    const existing = providers.find(
+      (provider) => provider.provider === builtinProvider.provider
+    )
+    if (!existing) {
+      providers.push(builtinProvider)
+      continue
+    }
+
+    const existingModelIds = new Set((existing.models ?? []).map((model) => model.id))
+    existing.models = [
+      ...(existing.models ?? []),
+      ...(builtinProvider.models ?? []).filter((model) => !existingModelIds.has(model.id)),
+    ]
+    existing.settings =
+      existing.settings && existing.settings.length > 0
+        ? existing.settings
+        : builtinProvider.settings
+    existing.base_url = existing.base_url || builtinProvider.base_url
+    existing.api_key = existing.api_key || builtinProvider.api_key
+    existing.explore_models_url =
+      existing.explore_models_url || builtinProvider.explore_models_url
+  }
+
+  return providers
+}
+
 async function withProviderTimeout<T>(
   provider: string,
   label: string,
@@ -159,6 +217,7 @@ export class TauriProvidersService implements ProvidersService {
 
       const modelEntries = await Promise.allSettled(
         models.map(async (model) => {
+          const runtimeProviderName = model.providerId || providerName
           let capabilities: string[] = []
           if ('capabilities' in model && Array.isArray(model.capabilities)) {
             capabilities = [...(model.capabilities as string[])]
@@ -189,7 +248,7 @@ export class TauriProvidersService implements ProvidersService {
             description: model.description,
             capabilities,
             embedding: model.embedding,
-            provider: providerName,
+            provider: runtimeProviderName,
             settings: Object.values(modelSettings).reduce(
               (acc, setting) => {
                 let value = setting.controller_props.value
@@ -224,36 +283,43 @@ export class TauriProvidersService implements ProvidersService {
         )
         .map((entry) => entry.value)
 
-      if (resolvedModels.length === 0) {
+      const groupedModels = resolvedModels.reduce<Map<string, Model[]>>(
+        (groups, model) => {
+          const group = groups.get(model.provider) ?? []
+          group.push(model)
+          groups.set(model.provider, group)
+          return groups
+        },
+        new Map()
+      )
+
+      if (groupedModels.size === 0) {
         return null
       }
 
-      return {
-        active: true,
-        persist: true,
-        provider: providerName,
-        base_url:
-          'inferenceUrl' in value
-            ? (value.inferenceUrl as string).replace('/chat/completions', '')
-            : '',
-        settings: settings.map((setting) => {
-          return {
-            key: setting.key,
-            title: setting.title,
-            description: setting.description,
-            controller_type: setting.controllerType as unknown,
-            controller_props: setting.controllerProps as unknown,
-          }
-        }) as ProviderSetting[],
-        models: resolvedModels,
-      } as ModelProvider
+      const mappedSettings = mapRuntimeSettings(settings)
+      return Array.from(groupedModels.entries()).map(
+        ([runtimeProviderName, models]) =>
+          ({
+            active: true,
+            persist: true,
+            provider: runtimeProviderName,
+            base_url:
+              runtimeProviderName === providerName ? runtimeBaseUrl(value) : '',
+            settings:
+              runtimeProviderName === providerName ? mappedSettings : [],
+            models,
+          }) as ModelProvider
+      )
     })
 
     const runtimeProviders = (
       await Promise.all(runtimeProviderPromises)
-    ).filter((provider): provider is ModelProvider => provider !== null)
+    )
+      .flatMap((provider) => provider ?? [])
+      .filter((provider): provider is ModelProvider => provider !== null)
 
-    return runtimeProviders.concat(builtinProviders)
+    return combineProviderLists(runtimeProviders, builtinProviders)
   }
 
   async fetchModelsFromProvider(provider: ModelProvider): Promise<string[]> {

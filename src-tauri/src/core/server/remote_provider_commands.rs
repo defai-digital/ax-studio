@@ -147,7 +147,9 @@ pub async fn abort_remote_stream(
         let _ = tx.send(());
         log::info!("Stream {stream_id} abort signal sent");
     } else {
-        log::debug!("abort_remote_stream: stream {stream_id} not found (may have already finished)");
+        log::debug!(
+            "abort_remote_stream: stream {stream_id} not found (may have already finished)"
+        );
     }
     Ok(())
 }

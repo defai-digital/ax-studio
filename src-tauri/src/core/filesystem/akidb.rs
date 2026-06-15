@@ -415,9 +415,7 @@ struct FabricCliCommand {
 /// arbitrary code execution.
 fn validate_mcp_cli_command(raw_command: &str) -> Result<(), String> {
     const ALLOWED: &[&str] = &["node", "npx", "bun", "python", "python3", "uvx"];
-    if !raw_command.contains('/')
-        && !raw_command.contains('\\')
-        && !ALLOWED.contains(&raw_command)
+    if !raw_command.contains('/') && !raw_command.contains('\\') && !ALLOWED.contains(&raw_command)
     {
         return Err(format!(
             "Blocked disallowed command '{raw_command}' in knowledge-base MCP config"
@@ -686,8 +684,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let dir = std::env::temp_dir()
-            .join(format!("ax_studio_akidb_test_{name}_{count}_{nanos}"));
+        let dir = std::env::temp_dir().join(format!("ax_studio_akidb_test_{name}_{count}_{nanos}"));
         fs::create_dir_all(&dir).unwrap();
         TempPath { path: dir }
     }

@@ -544,14 +544,7 @@ fn test_decompress_extracts_targz_within_app_data_folder() {
         path: archive_rel.to_string(),
         output_dir: output_rel.to_string(),
     };
-    decompress(
-        app.handle().clone(),
-        None,
-        None,
-        None,
-        Some(request),
-    )
-    .unwrap();
+    decompress(app.handle().clone(), None, None, None, Some(request)).unwrap();
 
     let extracted = app_data.join(output_rel).join("payload.txt");
     assert!(
@@ -595,18 +588,10 @@ fn test_decompress_rejects_unsupported_format() {
         path: archive_rel.to_string(),
         output_dir: output_rel.to_string(),
     };
-    let result = decompress(
-        app.handle().clone(),
-        None,
-        None,
-        None,
-        Some(request),
-    );
+    let result = decompress(app.handle().clone(), None, None, None, Some(request));
 
     assert!(result.is_err(), ".7z must be rejected as unsupported");
-    assert!(result
-        .unwrap_err()
-        .contains("Unsupported file format"));
+    assert!(result.unwrap_err().contains("Unsupported file format"));
 
     let _ = fs::remove_dir_all(app_data.join("test_bad_format"));
 }
@@ -621,14 +606,11 @@ fn test_decompress_rejects_archive_path_outside_app_data() {
         path: "../../etc/passwd.tar.gz".to_string(),
         output_dir: "outdir".to_string(),
     };
-    let result = decompress(
-        app.handle().clone(),
-        None,
-        None,
-        None,
-        Some(request),
+    let result = decompress(app.handle().clone(), None, None, None, Some(request));
+    assert!(
+        result.is_err(),
+        "archive path outside app_data must be rejected"
     );
-    assert!(result.is_err(), "archive path outside app_data must be rejected");
     assert!(
         result.unwrap_err().contains("not under app_data_folder"),
         "error must mention app_data containment"

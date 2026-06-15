@@ -107,10 +107,7 @@ pub fn update_thread_metadata(path: &Path, thread: &ThreadRecord) -> Result<(), 
 }
 
 /// `path` must be pre-computed on the calling async thread to avoid cross-thread path divergence.
-pub fn rewrite_messages_file<F>(
-    path: &Path,
-    mut transform: F,
-) -> Result<bool, String>
+pub fn rewrite_messages_file<F>(path: &Path, mut transform: F) -> Result<bool, String>
 where
     F: FnMut(MessageRecord) -> Option<MessageRecord>,
 {

@@ -704,9 +704,7 @@ async fn try_anthropic_fallback(
 type StreamsCleanup = Option<(
     String,
     std::sync::Arc<
-        tokio::sync::Mutex<
-            std::collections::HashMap<String, tokio::sync::oneshot::Sender<()>>,
-        >,
+        tokio::sync::Mutex<std::collections::HashMap<String, tokio::sync::oneshot::Sender<()>>>,
     >,
 )>;
 
@@ -905,11 +903,9 @@ async fn check_upstream_not_ssrf(url: &str) -> Result<(), String> {
             for addr in addrs {
                 let ip = addr.ip();
                 if !ip.is_loopback() && is_private_ip(ip) {
-                    return Err(
-                        "Upstream URL resolves to an internal or private address; \
+                    return Err("Upstream URL resolves to an internal or private address; \
                          request blocked (possible DNS rebinding)"
-                            .to_string(),
-                    );
+                        .to_string());
                 }
             }
         }
@@ -951,7 +947,8 @@ pub(super) async fn dispatch_to_upstream<R: tauri::Runtime>(
         .get("x-ax-stream-id")
         .and_then(|v| v.to_str().ok())
         .map(ToOwned::to_owned);
-    let mut abort_rx: Option<tokio::sync::oneshot::Receiver<()>> = if let Some(ref sid) = stream_id {
+    let mut abort_rx: Option<tokio::sync::oneshot::Receiver<()>> = if let Some(ref sid) = stream_id
+    {
         let (tx, rx) = tokio::sync::oneshot::channel::<()>();
         let state = app_handle.state::<crate::core::state::AppState>();
         let mut streams = state.active_streams.lock().await;
@@ -1068,15 +1065,23 @@ pub(super) async fn dispatch_to_upstream<R: tauri::Runtime>(
                         .await
                         {
                             if let Some(ref sid) = stream_id {
-                                app_handle.state::<crate::core::state::AppState>()
-                                    .active_streams.lock().await.remove(sid);
+                                app_handle
+                                    .state::<crate::core::state::AppState>()
+                                    .active_streams
+                                    .lock()
+                                    .await
+                                    .remove(sid);
                             }
                             return result;
                         }
 
                         if let Some(ref sid) = stream_id {
-                            app_handle.state::<crate::core::state::AppState>()
-                                .active_streams.lock().await.remove(sid);
+                            app_handle
+                                .state::<crate::core::state::AppState>()
+                                .active_streams
+                                .lock()
+                                .await
+                                .remove(sid);
                         }
                         return Ok(error_response(
                             status,
@@ -1094,8 +1099,12 @@ pub(super) async fn dispatch_to_upstream<R: tauri::Runtime>(
                     );
 
                     if let Some(ref sid) = stream_id {
-                        app_handle.state::<crate::core::state::AppState>()
-                            .active_streams.lock().await.remove(sid);
+                        app_handle
+                            .state::<crate::core::state::AppState>()
+                            .active_streams
+                            .lock()
+                            .await
+                            .remove(sid);
                     }
                     return Ok(error_response(
                         status,

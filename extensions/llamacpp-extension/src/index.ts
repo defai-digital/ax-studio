@@ -103,6 +103,19 @@ type ResolvedLoadTarget = {
   pathVerified: boolean
 }
 
+type HfRepoSibling = {
+  rfilename: string
+  size?: number
+  lfs?: {
+    sha256?: string
+    size?: number
+  }
+}
+
+type HfRepoResponse = {
+  siblings?: HfRepoSibling[]
+}
+
 type EnvMap = Record<string, string>
 
 interface EmbedOptions {
@@ -126,6 +139,7 @@ type UpdateSettingPayload = {
 
 type ImportOptionsWithHeaders = ImportOptions & {
   downloadHeaders?: Record<string, string>
+  hfRepoFiles?: HfRepoSibling[]
 }
 
 type AxServingLoadRequest = {
@@ -611,11 +625,258 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     return joinPath([dir, 'model.yml'])
   }
 
+  private async _ensureDir(dir: string): Promise<void> {
+    if (await fs.existsSync(dir)) return
+
+    const appData = await getAppDataFolderPath()
+    const normalizePath = (value: string) =>
+      value.replace(/\\/g, '/').replace(/\/+$/g, '')
+    const normalizedAppData = normalizePath(appData)
+    const normalizedDir = normalizePath(dir)
+
+    if (
+      normalizedDir !== normalizedAppData &&
+      !normalizedDir.startsWith(`${normalizedAppData}/`)
+    ) {
+      throw new Error(`Refusing to create directory outside app data: ${dir}`)
+    }
+
+    const relativeParts = normalizedDir
+      .slice(normalizedAppData.length)
+      .split('/')
+      .filter(Boolean)
+
+    let current = appData
+    for (const part of relativeParts) {
+      if (part === '.' || part === '..') {
+        throw new Error(`Invalid directory segment: ${part}`)
+      }
+      current = await joinPath([current, part])
+      if (!(await fs.existsSync(current))) await fs.mkdir(current)
+    }
+  }
+
+  private _isHfRepoImportPath(modelPath: string): boolean {
+    return modelPath.startsWith('hf://')
+  }
+
+  private _repoIdFromHfImportPath(modelPath: string): string {
+    const repoId = modelPath.slice('hf://'.length).trim()
+    if (
+      !repoId ||
+      repoId.includes('..') ||
+      !repoId.includes('/') ||
+      !/^[a-zA-Z0-9][a-zA-Z0-9._-]*\/[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(repoId)
+    ) {
+      throw new Error(`Invalid Hugging Face repo id: ${repoId || modelPath}`)
+    }
+    return repoId
+  }
+
+  private _validateHfRepoFilePath(filePath: string): string[] {
+    if (
+      typeof filePath !== 'string' ||
+      !filePath.trim() ||
+      filePath.startsWith('/') ||
+      filePath.includes('\\') ||
+      /[\0\x00-\x1F\x7F-\x9F]/.test(filePath)
+    ) {
+      throw new Error(`Invalid Hugging Face file path: ${filePath}`)
+    }
+
+    const parts = filePath.split('/')
+    if (parts.some((part) => !part || part === '.' || part === '..')) {
+      throw new Error(`Invalid Hugging Face file path: ${filePath}`)
+    }
+    return parts
+  }
+
+  private _huggingFaceResolveUrl(repoId: string, filePath: string): string {
+    return `https://huggingface.co/${repoId}/resolve/main/${this._validateHfRepoFilePath(filePath)
+      .map((part) => encodeURIComponent(part))
+      .join('/')}`
+  }
+
+  private _huggingFaceApiModelUrl(repoId: string): string {
+    return `https://huggingface.co/api/models/${repoId
+      .split('/')
+      .map((part) => encodeURIComponent(part))
+      .join('/')}?blobs=true&files_metadata=true`
+  }
+
+  private async _fetchHfRepoFiles(
+    repoId: string,
+    requestHeaders?: Record<string, string>
+  ): Promise<HfRepoSibling[]> {
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 30_000)
+    let response: Response
+    try {
+      response = await fetch(this._huggingFaceApiModelUrl(repoId), {
+        ...(requestHeaders ? { headers: requestHeaders } : {}),
+        signal: controller.signal,
+      })
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new Error(`Timed out fetching Hugging Face repo ${repoId}`)
+      }
+      throw error
+    } finally {
+      window.clearTimeout(timeout)
+    }
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '')
+      throw new Error(
+        `Failed to fetch Hugging Face repo ${repoId}: ${response.status} ${body.slice(0, 200)}`
+      )
+    }
+
+    const repo = (await response.json()) as HfRepoResponse
+    return (repo.siblings ?? []).filter((file) => {
+      this._validateHfRepoFilePath(file.rfilename)
+      return true
+    })
+  }
+
+  private async _importHfMlxRepo(
+    modelId: string,
+    repoImportPath: string,
+    requestHeaders?: Record<string, string>,
+    repoFiles?: HfRepoSibling[]
+  ): Promise<void> {
+    const repoId = this._repoIdFromHfImportPath(repoImportPath)
+    const modelDir = await this._modelDir(modelId)
+    const relativeModelDir = `llamacpp/models/${modelId}`
+    await this._ensureDir(modelDir)
+
+    const downloadExt = (window as any).core?.extensionManager?.getByName(
+      '@ax-studio/download-extension'
+    )
+    if (!downloadExt) {
+      throw new Error('Download extension not available')
+    }
+
+    const downloadedPaths: string[] = []
+
+    events.emit(DownloadEvent.onFileDownloadStarted, {
+      downloadId: modelId,
+      modelId,
+      fileName: repoId,
+    })
+    events.emit(DownloadEvent.onFileDownloadUpdate, {
+      downloadId: modelId,
+      modelId,
+      fileName: repoId,
+      percent: 0,
+      size: { transferred: 0, total: 0 },
+      downloadState: 'downloading',
+    })
+
+    try {
+      const files = repoFiles?.length
+        ? repoFiles.filter((file) => {
+            this._validateHfRepoFilePath(file.rfilename)
+            return true
+          })
+        : await this._fetchHfRepoFiles(repoId, requestHeaders)
+      if (
+        !files.some((file) =>
+          file.rfilename.toLowerCase().endsWith('.safetensors')
+        )
+      ) {
+        throw new Error(
+          `MLX repo "${repoId}" does not contain safetensors weights.`
+        )
+      }
+
+      const items = await Promise.all(
+        files.map(async (file) => {
+          const fileParts = this._validateHfRepoFilePath(file.rfilename)
+          const savePath = `${relativeModelDir}/${fileParts.join('/')}`
+          const absoluteSavePath = await joinPath([modelDir, ...fileParts])
+          downloadedPaths.push(absoluteSavePath)
+          return {
+            url: this._huggingFaceResolveUrl(repoId, file.rfilename),
+            save_path: savePath,
+            size: file.lfs?.size ?? file.size,
+            sha256: file.lfs?.sha256,
+            model_id: modelId,
+          }
+        })
+      )
+
+      await downloadExt.downloadFiles(
+        items,
+        `mlx-import-${modelId}`,
+        requestHeaders,
+        (transferred: number, total: number) => {
+          events.emit(DownloadEvent.onFileDownloadUpdate, {
+            downloadId: modelId,
+            modelId,
+            fileName: repoId,
+            percent: total > 0 ? transferred / total : 0,
+            size: { transferred, total },
+            downloadState: 'downloading',
+          })
+        }
+      )
+
+      const manifestPath = await joinPath([modelDir, AX_MODEL_MANIFEST_FILENAME])
+      if (!(await fs.existsSync(manifestPath))) {
+        events.emit(DownloadEvent.onFileDownloadUpdate, {
+          downloadId: modelId,
+          modelId,
+          fileName: repoId,
+          percent: 1,
+          size: { transferred: 1, total: 1 },
+          downloadState: 'verifying',
+        })
+        await invoke('mlx_generate_model_manifest', { modelDir })
+        downloadedPaths.push(manifestPath)
+      }
+
+      const sizeBytes = files.reduce(
+        (total, file) => total + (file.lfs?.size ?? file.size ?? 0),
+        0
+      )
+      await this._writeModelConfig(modelId, {
+        model_path: `llamacpp/models/${modelId}`,
+        name: modelId,
+        size_bytes: sizeBytes,
+        embedding: false,
+      })
+    } catch (error) {
+      await this._cleanupImportArtifacts(modelId, downloadedPaths)
+      events.emit(DownloadEvent.onFileDownloadError, {
+        downloadId: modelId,
+        modelId,
+        error: String(error),
+      })
+      throw error
+    }
+
+    events.emit(DownloadEvent.onFileDownloadSuccess, {
+      downloadId: modelId,
+      modelId,
+      fileName: repoId,
+    })
+    events.emit(DownloadEvent.onFileDownloadAndVerificationSuccess, {
+      downloadId: modelId,
+      modelId,
+    })
+    events.emit(AppEvent.onModelImported, { modelId })
+  }
+
   private async _hasAxModelManifestAtPath(modelPath: string): Promise<boolean> {
     const manifestDir = modelPath.toLowerCase().endsWith('.gguf')
       ? this._splitFilePath(modelPath, 'Model').parentPath
       : modelPath
     return fs.existsSync(await joinPath([manifestDir, AX_MODEL_MANIFEST_FILENAME]))
+  }
+
+  private async _providerIdForModelPath(modelPath: string): Promise<string> {
+    return (await this._hasAxModelManifestAtPath(modelPath)) ? 'mlx' : this.providerId
   }
 
   private _isAxServingArtifactError(error: unknown): boolean {
@@ -969,7 +1230,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     cfg: ModelConfig
   ): Promise<void> {
     const dir = await this._modelDir(modelId)
-    if (!(await fs.existsSync(dir))) await fs.mkdir(dir)
+    await this._ensureDir(dir)
     const ymlPath = await this._modelYmlPath(modelId)
     const content = toSimpleYaml({
       model_path: cfg.model_path,
@@ -1034,10 +1295,11 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
           const cfg = await this._readModelConfig(modelId)
           if (cfg) {
+            const providerId = await this._providerIdForModelPath(entryPath)
             results.push({
               id: modelId,
               name: cfg.name || modelId,
-              providerId: this.providerId,
+              providerId,
               port: 0,
               sizeBytes: cfg.size_bytes ?? 0,
               embedding: Boolean(cfg.embedding),
@@ -1046,11 +1308,10 @@ export default class AxStudioLlamacppExtension extends AIEngine {
             })
           }
         } else {
-          // No model.yml — might be a parent directory (e.g., "bartowski/"),
-          // recurse into its children
+          // No model.yml — might be a parent directory (e.g., "mlx-community/").
+          // Prefer probing children directly so nested Hugging Face IDs are
+          // discovered even if a filesystem bridge omits directory metadata.
           try {
-            const stat = await fs.fileStat(entryPath).catch(() => null)
-            if (!stat?.isDirectory) continue
             const subEntries: string[] = (await fs.readdirSync(entryPath)) ?? []
             for (const subEntry of subEntries) {
               stack.push(await toAbsoluteEntry(entryPath, subEntry))
@@ -1075,10 +1336,11 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     const cfg = await this._readModelConfig(modelId)
     if (!cfg) return undefined
     const engineName = ENGINE
+    const modelPath = await this._resolveModelPathFromConfig(cfg)
     return {
       id: modelId,
       name: cfg.name || modelId,
-      providerId: this.providerId,
+      providerId: await this._providerIdForModelPath(modelPath),
       port: 0,
       sizeBytes: cfg.size_bytes ?? 0,
       embedding: Boolean(cfg.embedding),
@@ -2064,12 +2326,13 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       joinPath([modelDir, 'model.gguf'])
     )
     const relativeModelPath = `llamacpp/models/${modelId}/model.gguf`
+    const modelPath = opts.modelPath
 
     const modelDirExists = await _wrap('fs.existsSync(modelDir)', () =>
       fs.existsSync(modelDir)
     )
     if (!modelDirExists)
-      await _wrap('fs.mkdir(modelDir)', () => fs.mkdir(modelDir))
+      await _wrap('_ensureDir(modelDir)', () => this._ensureDir(modelDir))
     await _wrap('_validatePathWithinModelsDir', () =>
       this._validatePathWithinModelsDir(modelFilePath, 'Model')
     )
@@ -2078,8 +2341,19 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       '@ax-studio/download-extension'
     )
 
+    if (this._isHfRepoImportPath(modelPath)) {
+      await _wrap('import Hugging Face MLX repo', () =>
+        this._importHfMlxRepo(
+          modelId,
+          modelPath,
+          importOptions.downloadHeaders,
+          importOptions.hfRepoFiles
+        )
+      )
+      return
+    }
+
     // ── Download model file if URL provided ──
-    const modelPath = opts.modelPath
     if (modelPath.startsWith('https://')) {
       if (!downloadExt) {
         const error = new Error('Download extension not available')
@@ -2247,6 +2521,11 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       '@ax-studio/download-extension'
     )
     if (downloadExt) {
+      try {
+        await downloadExt.cancelDownload(`mlx-import-${modelId}`)
+      } catch (error) {
+        console.warn(`[llamacpp] Failed to cancel MLX model download for ${modelId}:`, error)
+      }
       try {
         await downloadExt.cancelDownload(`llamacpp-import-${modelId}`)
       } catch (error) {

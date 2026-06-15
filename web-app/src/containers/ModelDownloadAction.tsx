@@ -1,4 +1,4 @@
-import { Download } from "lucide-react";
+import { Download, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { route } from '@/constants/routes'
@@ -15,10 +15,13 @@ import { sanitizeModelId } from '@/lib/utils'
 import { extractErrorMessage } from '@/lib/utils/error'
 import { AppEvent, DownloadEvent, DownloadState, events } from '@ax-studio/core'
 import { useNavigate } from '@tanstack/react-router'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { findDownloadedLocalModel } from '@/lib/models/downloaded'
 import { getPreferredMmprojPath } from '@/lib/models'
+
+const DOWNLOAD_START_TIMEOUT_MS = 15_000
+const DOWNLOAD_PROGRESS_TIMEOUT_MS = 45_000
 
 export const ModelDownloadAction = ({
   variant,
@@ -36,10 +39,19 @@ export const ModelDownloadAction = ({
     downloads,
     localDownloadingModels,
     addLocalDownloadingModel,
+    removeDownload,
     removeLocalDownloadingModel,
   } =
     useDownloadStore()
   const [isDownloaded, setDownloaded] = useState<boolean>(false)
+  const [isStarting, setStarting] = useState<boolean>(false)
+  const isStartingRef = useRef(false)
+  const hasRealProgressRef = useRef(false)
+
+  const setStartingState = useCallback((value: boolean) => {
+    isStartingRef.current = value
+    setStarting(value)
+  }, [])
 
   const downloadProcesses = useMemo(
     () => toDownloadProcesses(downloads),
@@ -59,26 +71,74 @@ export const ModelDownloadAction = ({
 
   useEffect(() => {
     const sid = sanitizeModelId(variant.model_id.split('/').pop() || variant.model_id)
+    const removeDownloadingAliases = () => {
+      removeLocalDownloadingModel(variant.model_id)
+      removeLocalDownloadingModel(sid)
+    }
     const handleVerified = (state: DownloadState) => {
       const downloadId = state.downloadId ?? state.modelId
-      if (downloadId === variant.model_id || downloadId === sid) setDownloaded(true)
+      if (downloadId === variant.model_id || downloadId === sid) {
+        hasRealProgressRef.current = true
+        removeDownloadingAliases()
+        setStartingState(false)
+        setDownloaded(true)
+      }
+    }
+    const handleFinished = (state: DownloadState) => {
+      const downloadId = state.downloadId ?? state.modelId
+      if (downloadId === variant.model_id || downloadId === sid) {
+        hasRealProgressRef.current = true
+        removeDownloadingAliases()
+        setStartingState(false)
+      }
+    }
+    const handleProgress = (state: DownloadState) => {
+      const downloadId = state.downloadId ?? state.modelId
+      if (downloadId === variant.model_id || downloadId === sid) {
+        const transferred = state.size?.transferred ?? state.transferred ?? 0
+        const total = state.size?.total ?? state.total ?? 0
+        if ((state.percent ?? 0) > 0 || transferred > 0 || total > 0) {
+          hasRealProgressRef.current = true
+        }
+        setStartingState(false)
+      }
+    }
+    const handleStarted = (state: DownloadState) => {
+      const downloadId = state.downloadId ?? state.modelId
+      if (downloadId === variant.model_id || downloadId === sid) {
+        setStartingState(false)
+      }
     }
     // Also listen for onModelImported — onFileDownloadAndVerificationSuccess
     // only fires when SHA256 verification is enabled (skipVerification=false).
     // onModelImported fires unconditionally after model.yml is written.
     const handleImported = (payload: { modelId?: string }) => {
-      if (payload?.modelId === variant.model_id || payload?.modelId === sid) setDownloaded(true)
+      if (payload?.modelId === variant.model_id || payload?.modelId === sid) {
+        removeDownloadingAliases()
+        setStartingState(false)
+        setDownloaded(true)
+      }
     }
+    events.on(DownloadEvent.onFileDownloadUpdate, handleProgress)
+    events.on(DownloadEvent.onFileDownloadStarted, handleStarted)
     events.on(
       DownloadEvent.onFileDownloadAndVerificationSuccess,
       handleVerified
     )
+    events.on(DownloadEvent.onFileDownloadSuccess, handleFinished)
+    events.on(DownloadEvent.onFileDownloadError, handleFinished)
+    events.on(DownloadEvent.onFileDownloadStopped, handleFinished)
     events.on(AppEvent.onModelImported, handleImported)
     return () => {
+      events.off(DownloadEvent.onFileDownloadUpdate, handleProgress)
+      events.off(DownloadEvent.onFileDownloadStarted, handleStarted)
       events.off(DownloadEvent.onFileDownloadAndVerificationSuccess, handleVerified)
+      events.off(DownloadEvent.onFileDownloadSuccess, handleFinished)
+      events.off(DownloadEvent.onFileDownloadError, handleFinished)
+      events.off(DownloadEvent.onFileDownloadStopped, handleFinished)
       events.off(AppEvent.onModelImported, handleImported)
     }
-  }, [variant.model_id])
+  }, [removeLocalDownloadingModel, setStartingState, variant.model_id])
 
   const handleUseModel = useCallback(
     (modelId: string, provider = 'llamacpp') => {
@@ -97,11 +157,37 @@ export const ModelDownloadAction = ({
   )
 
   const handleDownloadModel = useCallback(async () => {
-    // Sanitize model ID so the download directory uses underscores instead of dots.
-    // This keeps the on-disk name consistent with what the llamacpp extension expects.
+    hasRealProgressRef.current = false
+    const isHfRepoImport = variant.path.startsWith('hf://')
+    // GGUF variants use filename-like IDs; MLX repo imports must keep the
+    // full Hugging Face repo id so ax-engine can resolve the downloaded folder.
     const baseModelId = variant.model_id.split('/').pop() || variant.model_id
-    const downloadModelId = sanitizeModelId(baseModelId)
+    const downloadModelId = isHfRepoImport
+      ? variant.model_id
+      : sanitizeModelId(baseModelId)
     addLocalDownloadingModel(variant.model_id)
+    addLocalDownloadingModel(downloadModelId)
+    setStartingState(true)
+    const startTimeout = window.setTimeout(() => {
+      if (!isStartingRef.current) return
+      setStartingState(false)
+      removeLocalDownloadingModel(downloadModelId)
+      removeLocalDownloadingModel(variant.model_id)
+      toast.error('Download did not start', {
+        description:
+          'This model is not available for Ax Studio in-app download yet. Open it on Hugging Face or choose a GGUF/Ax-ready model.',
+      })
+      serviceHub.models().abortDownload(downloadModelId).catch(() => {})
+    }, DOWNLOAD_START_TIMEOUT_MS)
+    const progressTimeout = window.setTimeout(() => {
+      if (hasRealProgressRef.current) return
+      setStartingState(false)
+      removeLocalDownloadingModel(downloadModelId)
+      removeLocalDownloadingModel(variant.model_id)
+      removeDownload(downloadModelId)
+      removeDownload(variant.model_id)
+      serviceHub.models().abortDownload(downloadModelId).catch(() => {})
+    }, DOWNLOAD_PROGRESS_TIMEOUT_MS)
     serviceHub
       .models()
       .pullModelWithMetadata(
@@ -112,11 +198,17 @@ export const ModelDownloadAction = ({
       )
       .catch((error) => {
         console.error('Failed to start model download:', error)
-        removeLocalDownloadingModel(variant.model_id)
         const description = extractErrorMessage(error, '')
         toast.error('Failed to start model download', {
           description: description || 'Unknown error (check DevTools console).',
         })
+      })
+      .finally(() => {
+        window.clearTimeout(startTimeout)
+        window.clearTimeout(progressTimeout)
+        setStartingState(false)
+        removeLocalDownloadingModel(downloadModelId)
+        removeLocalDownloadingModel(variant.model_id)
       })
   }, [
     serviceHub,
@@ -125,7 +217,9 @@ export const ModelDownloadAction = ({
     huggingfaceToken,
     model.mmproj_models,
     addLocalDownloadingModel,
+    removeDownload,
     removeLocalDownloadingModel,
+    setStartingState,
   ])
 
   const sanitizedModelId = sanitizeModelId(
@@ -151,6 +245,17 @@ export const ModelDownloadAction = ({
           </span>
         </div>
       </>
+    )
+  }
+
+  if (isStarting) {
+    return (
+      <div
+        className="size-6 flex items-center justify-center rounded text-muted-foreground"
+        title="Starting download"
+      >
+        <Loader2 size={16} className="animate-spin" />
+      </div>
     )
   }
 

@@ -94,6 +94,81 @@ describe('useModelSources', () => {
       expect(result.current.error).toBe(null)
     })
 
+    it('should synthesize downloadable MLX Hugging Face repo entries', async () => {
+      const mockSources: CatalogModel[] = [
+        {
+          model_name: 'Qwen3.5-9B-MLX-4bit',
+          description: 'MLX model',
+          developer: 'mlx-community',
+          downloads: 100,
+          num_quants: 0,
+          quants: [],
+          is_mlx: true,
+        },
+      ]
+
+      mockFetchModelCatalog.mockResolvedValueOnce(mockSources)
+
+      const { result } = renderHook(() => useModelSources())
+
+      await act(async () => {
+        await result.current.fetchSources()
+      })
+
+      expect(result.current.sources[0]).toMatchObject({
+        is_mlx: true,
+        num_quants: 1,
+        quants: [
+          {
+            model_id: 'mlx-community/Qwen3.5-9B-MLX-4bit',
+            path: 'hf://mlx-community/Qwen3.5-9B-MLX-4bit',
+            supports_in_app_download: true,
+          },
+        ],
+      })
+    })
+
+    it('should preserve existing MLX Hugging Face repo downloads', async () => {
+      const mockSources: CatalogModel[] = [
+        {
+          model_name: 'mlx-community/gemma-4-12B-it-4bit',
+          description: 'MLX model',
+          developer: 'mlx-community',
+          downloads: 100,
+          num_quants: 1,
+          quants: [
+            {
+              model_id: 'mlx-community/gemma-4-12B-it-4bit',
+              path: 'hf://mlx-community/gemma-4-12B-it-4bit',
+              file_size: '11GB',
+              supports_in_app_download: true,
+            },
+          ],
+          is_mlx: true,
+        },
+      ]
+
+      mockFetchModelCatalog.mockResolvedValueOnce(mockSources)
+
+      const { result } = renderHook(() => useModelSources())
+
+      await act(async () => {
+        await result.current.fetchSources()
+      })
+
+      expect(result.current.sources[0]).toMatchObject({
+        is_mlx: true,
+        num_quants: 1,
+        quants: [
+          {
+            model_id: 'mlx-community/gemma-4-12B-it-4bit',
+            path: 'hf://mlx-community/gemma-4-12B-it-4bit',
+            supports_in_app_download: true,
+          },
+        ],
+      })
+    })
+
     it('should handle fetch errors', async () => {
       const mockError = new Error('Network error')
       mockFetchModelCatalog.mockRejectedValueOnce(mockError)

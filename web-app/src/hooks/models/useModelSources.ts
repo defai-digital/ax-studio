@@ -6,6 +6,62 @@ import type { CatalogModel } from '@/services/models/types'
 import { sanitizeModelId } from '@/lib/utils'
 import { createSafeJSONStorage } from '@/lib/storage/storage'
 
+const isMlxCatalogModel = (catalog: CatalogModel) =>
+  catalog.is_mlx === true || catalog.developer === 'mlx-community'
+
+const normalizeCatalogModel = (catalog: CatalogModel): CatalogModel => {
+  const isMlx = isMlxCatalogModel(catalog)
+  const normalizedQuants = catalog.quants?.map((quant) => {
+    if (quant.path.startsWith('hf://')) return quant
+
+    const parts = quant.model_id.split('/')
+    const author = parts.length > 1 ? parts.slice(0, -1).join('/') : ''
+    const name = parts.length > 1 ? parts[parts.length - 1] : parts[0]
+    const sanitizedName = sanitizeModelId(name)
+    const newId = author ? `${author}/${sanitizedName}` : sanitizedName
+    return {
+      ...quant,
+      model_id: newId,
+    }
+  })
+
+  if ((normalizedQuants?.length ?? 0) > 0) {
+    return {
+      ...catalog,
+      quants: normalizedQuants,
+      num_quants: normalizedQuants?.length,
+    }
+  }
+
+  if (!isMlx) {
+    return {
+      ...catalog,
+      quants: normalizedQuants,
+      num_quants: normalizedQuants?.length ?? catalog.num_quants,
+    }
+  }
+
+  const repoId = catalog.model_name.includes('/')
+    ? catalog.model_name
+    : catalog.developer
+      ? `${catalog.developer}/${catalog.model_name}`
+      : catalog.model_name
+
+  return {
+    ...catalog,
+    is_mlx: true,
+    quants: [
+      {
+        model_id: repoId,
+        path: `hf://${repoId}`,
+        file_size: '',
+        supports_in_app_download: true,
+      },
+    ],
+    num_quants: 1,
+  }
+}
+
 // Zustand store for model sources
 type ModelSourcesState = {
   sources: CatalogModel[]
@@ -26,22 +82,7 @@ export const useModelSources = create<ModelSourcesState>()(
           const newSources = await getServiceHub()
             .models()
             .fetchModelCatalog()
-            .then((catalogs) =>
-              catalogs.map((catalog) => ({
-                ...catalog,
-                quants: catalog.quants?.map((quant) => {
-                  const parts = quant.model_id.split('/')
-                  const author = parts.length > 1 ? parts.slice(0, -1).join('/') : ''
-                  const name = parts.length > 1 ? parts[parts.length - 1] : parts[0]
-                  const sanitizedName = sanitizeModelId(name)
-                  const newId = author ? `${author}/${sanitizedName}` : sanitizedName
-                  return {
-                    ...quant,
-                    model_id: newId,
-                  }
-                }),
-              }))
-            )
+            .then((catalogs) => catalogs.map(normalizeCatalogModel))
 
           set({
             sources: newSources.length ? newSources : get().sources,
@@ -55,6 +96,19 @@ export const useModelSources = create<ModelSourcesState>()(
     {
       name: localStorageKey.modelSources,
       storage: createSafeJSONStorage(() => localStorage, 'useModelSources'),
+      merge: (persisted, current) => {
+        const persistedState = persisted as Partial<ModelSourcesState>
+
+        return {
+          ...current,
+          ...persistedState,
+          sources:
+            persistedState.sources?.map(normalizeCatalogModel) ??
+            current.sources,
+          loading: false,
+          error: null,
+        }
+      },
     }
   )
 )
