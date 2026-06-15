@@ -79,7 +79,7 @@ jobs:
           VERSION: ${{ needs.get-update-version.outputs.new_version }}
         run: |
           test -n "$VERSION"
-          git fetch origin "refs/tags/v${VERSION}:refs/tags/v${VERSION}"
+          git fetch --force origin "refs/tags/v${VERSION}:refs/tags/v${VERSION}"
           git rev-parse --verify "refs/tags/v${VERSION}"
 
   create-draft-release:
