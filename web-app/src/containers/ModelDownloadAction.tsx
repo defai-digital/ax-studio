@@ -95,8 +95,8 @@ export const ModelDownloadAction = ({
     const handleProgress = (state: DownloadState) => {
       const downloadId = state.downloadId ?? state.modelId
       if (downloadId === variant.model_id || downloadId === sid) {
-        const transferred = state.size?.transferred ?? state.transferred ?? 0
-        const total = state.size?.total ?? state.total ?? 0
+        const transferred = state.size?.transferred ?? 0
+        const total = state.size?.total ?? 0
         if ((state.percent ?? 0) > 0 || transferred > 0 || total > 0) {
           hasRealProgressRef.current = true
         }

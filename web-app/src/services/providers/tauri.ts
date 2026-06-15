@@ -19,6 +19,10 @@ const PROVIDER_LIST_TIMEOUT_MS = 8_000
 const PROVIDER_SETTINGS_TIMEOUT_MS = 8_000
 const PROVIDER_TOOL_CHECK_TIMEOUT_MS = 3_000
 
+type RuntimeModel = Model & {
+  runtimeProviderName: string
+}
+
 function mapRuntimeSettings(settings: SettingComponentProps[]): ProviderSetting[] {
   return settings.map((setting) => {
     return {
@@ -248,7 +252,7 @@ export class TauriProvidersService implements ProvidersService {
             description: model.description,
             capabilities,
             embedding: model.embedding,
-            provider: runtimeProviderName,
+            runtimeProviderName,
             settings: Object.values(modelSettings).reduce(
               (acc, setting) => {
                 let value = setting.controller_props.value
@@ -266,28 +270,28 @@ export class TauriProvidersService implements ProvidersService {
               },
               {} as Record<string, ProviderSetting>
             ),
-          } as Model
+          } as RuntimeModel
         })
       ).catch((error: unknown) => {
         console.warn(
           `Error resolving models for provider "${providerName}":`,
           extractErrorMessage(error)
         )
-        return [] as PromiseSettledResult<Model>[]
+        return [] as PromiseSettledResult<RuntimeModel>[]
       })
 
       const resolvedModels = modelEntries
         .filter(
-          (entry): entry is PromiseFulfilledResult<Model> =>
+          (entry): entry is PromiseFulfilledResult<RuntimeModel> =>
             entry.status === 'fulfilled'
         )
         .map((entry) => entry.value)
 
       const groupedModels = resolvedModels.reduce<Map<string, Model[]>>(
         (groups, model) => {
-          const group = groups.get(model.provider) ?? []
+          const group = groups.get(model.runtimeProviderName) ?? []
           group.push(model)
-          groups.set(model.provider, group)
+          groups.set(model.runtimeProviderName, group)
           return groups
         },
         new Map()
