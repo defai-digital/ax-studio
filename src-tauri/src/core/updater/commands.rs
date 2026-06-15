@@ -1,13 +1,13 @@
 /**
  * Tauri commands for custom updater with HMAC request signing
  *
- * Convention: First endpoint in tauri.conf.json uses HMAC signing, rest are fallbacks
+ * Static latest.json endpoints are also used by Tauri's updater plugin, so
+ * custom HMAC signing is applied only by the updater client when needed.
  */
 use super::custom_updater::{CustomUpdater, UpdateInfo};
 use tauri::{command, AppHandle};
 
-/// Check for updates using endpoints from tauri.conf.json
-/// First endpoint uses HMAC request signing, remaining endpoints are fallbacks
+/// Check for updates using endpoints from tauri.conf.json.
 #[command]
 pub async fn check_for_app_updates(
     app: AppHandle,

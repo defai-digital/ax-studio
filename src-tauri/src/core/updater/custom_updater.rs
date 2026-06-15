@@ -3,11 +3,8 @@
  *
  * This module provides a custom update checker that:
  * 1. Reads endpoints from tauri.conf.json (plugins.updater.endpoints)
- * 2. First endpoint is treated as PRIMARY - uses HMAC request signing
- * 3. Remaining endpoints are FALLBACK - no signing needed
- *
- * Convention: The first endpoint in the list should be the signed endpoint
- * (e.g., https://updates.axstudio.ai/update-check)
+ * 2. Signs requests only for custom update-check endpoints
+ * 3. Reads static latest.json endpoints without signing
  */
 use super::hmac_client::SignedRequestHeaders;
 use reqwest::Client;
@@ -102,8 +99,9 @@ impl CustomUpdater {
         format!("Ax-Studio/{} ({}; {})", app_version, os, arch)
     }
 
-    /// Check for updates using endpoints list
-    /// First endpoint uses HMAC signing, rest are fallbacks without signing
+    /// Check for updates using endpoints list.
+    /// Custom update-check endpoints use HMAC signing; static latest.json
+    /// endpoints must remain directly usable by Tauri's updater plugin.
     pub async fn check_for_updates(
         &self,
         endpoints: Vec<String>,
@@ -122,25 +120,24 @@ impl CustomUpdater {
 
         let mut last_error: Option<UpdateError> = None;
 
-        for (index, endpoint) in endpoints.iter().enumerate() {
-            let is_primary = index == 0;
+        for endpoint in endpoints.iter() {
+            let requires_signing = Self::requires_signing(endpoint);
 
-            let result = if is_primary {
+            let result = if requires_signing {
                 if self.secret_key.is_none() {
                     log::warn!(
-                        "Skipping signed primary update endpoint because AX_STUDIO_SIGNING_KEY is not configured"
+                        "Skipping signed update endpoint because AX_STUDIO_SIGNING_KEY is not configured: {}",
+                        endpoint
                     );
                     last_error = Some(UpdateError::MissingSigningKey);
                     continue;
                 }
 
-                // First endpoint: use HMAC signing
-                log::info!("Trying primary endpoint with signing: {}", endpoint);
+                log::info!("Trying update endpoint with signing: {}", endpoint);
                 self.check_with_signing(endpoint, nonce_seed, current_version)
                     .await
             } else {
-                // Fallback endpoints: no signing
-                log::info!("Trying fallback endpoint: {}", endpoint);
+                log::info!("Trying static update endpoint: {}", endpoint);
                 self.check_without_signing(endpoint, current_version).await
             };
 
@@ -164,6 +161,10 @@ impl CustomUpdater {
         // All endpoints failed
         log::error!("All {} endpoints failed", endpoints.len());
         Err(last_error.unwrap_or(UpdateError::AllEndpointsFailed))
+    }
+
+    fn requires_signing(endpoint: &str) -> bool {
+        endpoint.contains("update-check")
     }
 
     /// Check endpoint with HMAC request signing
@@ -297,5 +298,15 @@ mod tests {
         assert!(CustomUpdater::is_newer_version("1.0.0", "2.0.0-beta"));
         assert!(CustomUpdater::is_newer_version("2.0.0-beta", "2.0.0"));
         assert!(CustomUpdater::is_newer_version("1.9.0", "2.0.0-rc.1"));
+    }
+
+    #[test]
+    fn only_custom_update_check_endpoints_require_signing() {
+        assert!(CustomUpdater::requires_signing(
+            "https://updates.axstudio.ai/update-check"
+        ));
+        assert!(!CustomUpdater::requires_signing(
+            "https://github.com/defai-digital/ax-studio/releases/latest/download/latest.json"
+        ));
     }
 }
