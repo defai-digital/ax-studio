@@ -34,6 +34,24 @@ const BACKEND_DOWNLOAD_RETRY_BASE_MS = 500
 const GITHUB_RELEASES_URL =
   `https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=${GITHUB_RELEASES_PAGE_SIZE}`
 
+// Last-known-good llama.cpp release used only when first-run GitHub API
+// discovery fails inside the WebView. The actual binary is still downloaded
+// from the official release URL, so this is a bootstrap safety net rather than
+// a bundled backend.
+const BOOTSTRAP_REMOTE_BACKENDS: BackendVersion[] = [
+  { version: 'b9730', backend: 'macos-arm64' },
+  { version: 'b9730', backend: 'macos-x64' },
+  { version: 'b9730', backend: 'ubuntu-arm64' },
+  { version: 'b9730', backend: 'ubuntu-vulkan-arm64' },
+  { version: 'b9730', backend: 'ubuntu-vulkan-x64' },
+  { version: 'b9730', backend: 'ubuntu-x64' },
+  { version: 'b9730', backend: 'win-cpu-arm64' },
+  { version: 'b9730', backend: 'win-cpu-x64' },
+  { version: 'b9730', backend: 'win-cuda-12.4-x64' },
+  { version: 'b9730', backend: 'win-cuda-13.3-x64' },
+  { version: 'b9730', backend: 'win-vulkan-x64' },
+]
+
 let remoteBackendsCache:
   | {
       fetchedAt: number
@@ -267,7 +285,7 @@ export async function fetchRemoteBackends(): Promise<BackendVersion[]> {
     return backends
   } catch (e) {
     console.warn('[llamacpp] Failed to fetch remote backends from GitHub:', e)
-    return []
+    return BOOTSTRAP_REMOTE_BACKENDS
   }
 }
 
@@ -461,8 +479,8 @@ function pickDefaultBackend(osType: string, backends: BackendVersion[]): string 
     osType === 'macOS'
       ? ['macos-arm64', 'macos-x64', 'macos', 'metal']
       : osType === 'windows'
-        ? ['cuda', 'vulkan', 'avx2', 'avx']
-        : ['ubuntu', 'linux', 'avx2', 'avx']
+        ? ['win-cpu-x64', 'win-cpu-arm64', 'vulkan', 'cuda', 'avx2', 'avx']
+        : ['ubuntu-x64', 'ubuntu-arm64', 'ubuntu', 'linux', 'avx2', 'avx']
 
   for (const kw of keywords) {
     const match = candidates.find((b) => b.backend.toLowerCase().includes(kw))

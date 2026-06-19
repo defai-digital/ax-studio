@@ -156,9 +156,15 @@ describe('llamacpp backend helpers', () => {
     ])
   })
 
-  it('returns an empty backend list when the GitHub request fails', async () => {
+  it('uses bootstrap backends when the GitHub request fails', async () => {
     vi.mocked(fetch).mockRejectedValueOnce(new Error('boom'))
-    await expect(fetchRemoteBackends()).resolves.toEqual([])
+    await expect(fetchRemoteBackends()).resolves.toEqual(
+      expect.arrayContaining([
+        { version: 'b9730', backend: 'win-cpu-x64' },
+        { version: 'b9730', backend: 'macos-arm64' },
+        { version: 'b9730', backend: 'ubuntu-x64' },
+      ])
+    )
   })
 
   it('falls back to browser fetch when Tauri HTTP backend discovery fails', async () => {
@@ -220,6 +226,27 @@ describe('llamacpp backend helpers', () => {
     expect(listSupportedBackendsFromRust).toHaveBeenCalledTimes(1)
     expect(prioritizeBackends).toHaveBeenCalledTimes(1)
     expect(updateSetting).toHaveBeenCalledWith('version_backend', 'b1/cpu')
+  })
+
+  it('selects a Windows bootstrap backend when release discovery and Rust ranking fail', async () => {
+    ;(globalThis as Record<string, unknown>).IS_WINDOWS = true
+    ;(globalThis as Record<string, unknown>).IS_LINUX = false
+    vi.mocked(fetch).mockRejectedValue(new Error('blocked'))
+    vi.mocked(prioritizeBackends).mockResolvedValueOnce(null as never)
+    mocks.existsSync.mockImplementation(async (path: string) => {
+      return path.includes('/backends') || path.endsWith('llama-server.exe')
+    })
+
+    const updateSetting = vi.fn()
+    await configureBackends('', false, updateSetting)
+
+    expect(updateSetting).toHaveBeenCalledWith(
+      'version_backend',
+      'b9730/win-cpu-x64'
+    )
+
+    ;(globalThis as Record<string, unknown>).IS_WINDOWS = false
+    ;(globalThis as Record<string, unknown>).IS_LINUX = true
   })
 
   it('returns a safe no-update result when Rust update checks fail', async () => {
