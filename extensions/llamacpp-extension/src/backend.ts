@@ -51,12 +51,70 @@ interface GithubRelease {
 }
 
 type HardwareGpuInfo = GpuInfo
+type FetchLike = typeof fetch
 
 export const formatError = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms))
+
+async function fetchWithTimeout(
+  fetchImpl: FetchLike,
+  label: string
+): Promise<Response> {
+  let timeoutId!: ReturnType<typeof setTimeout>
+  try {
+    const response = await Promise.race([
+      fetchImpl(GITHUB_RELEASES_URL, {
+        headers: { Accept: 'application/vnd.github.v3+json' },
+      }),
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new Error(`${label} GitHub API timeout`)),
+          GITHUB_API_TIMEOUT_MS
+        )
+      }),
+    ])
+    if (!response.ok) throw new Error(`${label} GitHub API ${response.status}`)
+    return response
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+async function fetchGithubReleases(): Promise<GithubRelease[]> {
+  const candidates: Array<{ label: string; fetchImpl: FetchLike }> = []
+
+  if (typeof tauriFetch === 'function') {
+    candidates.push({ label: 'Tauri HTTP', fetchImpl: tauriFetch as FetchLike })
+  }
+  if (typeof fetch === 'function' && fetch !== tauriFetch) {
+    candidates.push({ label: 'browser fetch', fetchImpl: fetch })
+  }
+
+  if (candidates.length === 0) {
+    throw new Error('No HTTP fetch implementation available')
+  }
+
+  let lastError: unknown
+  for (const candidate of candidates) {
+    try {
+      const response = await fetchWithTimeout(candidate.fetchImpl, candidate.label)
+      return (await response.json()) as GithubRelease[]
+    } catch (error) {
+      lastError = error
+      console.warn(
+        `[llamacpp] ${candidate.label} backend discovery request failed:`,
+        error
+      )
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(String(lastError ?? 'Unknown GitHub API error'))
+}
 
 async function removePathIfPresent(path: string, label: string): Promise<void> {
   try {
@@ -189,25 +247,10 @@ export async function fetchRemoteBackends(): Promise<BackendVersion[]> {
   }
 
   try {
-    // Try Tauri HTTP plugin first (bypasses CSP), fall back to global fetch.
-    // CSP connect-src also includes api.github.com as defense-in-depth.
-    const doFetch = typeof tauriFetch === 'function' ? tauriFetch : fetch
-    let ghTimeoutId: ReturnType<typeof setTimeout>
-    const response = await Promise.race([
-      doFetch(GITHUB_RELEASES_URL, {
-        headers: { Accept: 'application/vnd.github.v3+json' },
-      }),
-      new Promise<never>((_, reject) => {
-        ghTimeoutId = setTimeout(
-          () => reject(new Error('GitHub API timeout')),
-          GITHUB_API_TIMEOUT_MS
-        )
-      }),
-    ])
-    clearTimeout(ghTimeoutId)
-    if (!response.ok) throw new Error(`GitHub API ${response.status}`)
-
-    const releases = (await response.json()) as GithubRelease[]
+    // Try Tauri HTTP first (bypasses CSP), then browser fetch. On some
+    // Windows WebViews the Tauri HTTP path can time out even though a normal
+    // GitHub request works, so do not treat the first route as authoritative.
+    const releases = await fetchGithubReleases()
 
     const backends: BackendVersion[] = []
     for (const release of releases) {

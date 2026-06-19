@@ -161,6 +161,25 @@ describe('llamacpp backend helpers', () => {
     await expect(fetchRemoteBackends()).resolves.toEqual([])
   })
 
+  it('falls back to browser fetch when Tauri HTTP backend discovery fails', async () => {
+    mocks.tauriFetchMock.mockRejectedValueOnce(new Error('tauri http failed'))
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => [
+        {
+          tag_name: 'b1',
+          assets: [{ name: 'llama-b1-bin-win-avx2-x64.zip' }],
+        },
+      ],
+    } as Response)
+
+    await expect(fetchRemoteBackends()).resolves.toEqual([
+      { version: 'b1', backend: 'win-avx2-x64' },
+    ])
+    expect(mocks.tauriFetchMock).toHaveBeenCalledTimes(1)
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
   it('reuses a cached backend release response to avoid repeated GitHub API calls', async () => {
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: true,
