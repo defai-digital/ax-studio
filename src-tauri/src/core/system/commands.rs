@@ -8,6 +8,19 @@ use crate::core::app::commands::{
 use crate::core::app::models::AppConfiguration;
 use crate::core::mcp::helpers::{stop_mcp_servers_with_context, ShutdownContext};
 use crate::core::state::AppState;
+use ax_studio_utils::normalize_path;
+
+fn is_path_in_allowed_user_dirs(
+    canonical_path: &std::path::Path,
+    home_dir: &std::path::Path,
+    temp_dir: &std::path::Path,
+) -> bool {
+    let canonical_path = normalize_path(canonical_path);
+    let home_dir = normalize_path(home_dir);
+    let temp_dir = normalize_path(temp_dir);
+
+    canonical_path.starts_with(&home_dir) || canonical_path.starts_with(&temp_dir)
+}
 
 fn validate_open_path(path: &PathBuf) -> Result<PathBuf, String> {
     if path.as_os_str().is_empty() {
@@ -18,8 +31,8 @@ fn validate_open_path(path: &PathBuf) -> Result<PathBuf, String> {
     let home_dir = dirs::home_dir().ok_or("Cannot determine home directory")?;
     let temp_dir = std::env::temp_dir();
 
-    if canonical_path.starts_with(&home_dir) || canonical_path.starts_with(&temp_dir) {
-        Ok(canonical_path)
+    if is_path_in_allowed_user_dirs(&canonical_path, &home_dir, &temp_dir) {
+        Ok(normalize_path(&canonical_path))
     } else {
         Err(format!(
             "Refusing to open path outside allowed user directories: {}",
@@ -180,5 +193,17 @@ mod tests {
     fn test_validate_open_path_rejects_empty() {
         let result = validate_open_path(&PathBuf::from(""));
         assert!(result.is_err());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn allows_verbatim_canonical_path_under_home_dir() {
+        assert!(is_path_in_allowed_user_dirs(
+            std::path::Path::new(
+                r"\\?\C:\Users\devop\AppData\Roaming\Ax-Studio\data\llamacpp\models",
+            ),
+            std::path::Path::new(r"C:\Users\devop"),
+            std::path::Path::new(r"C:\Users\devop\AppData\Local\Temp"),
+        ));
     }
 }
