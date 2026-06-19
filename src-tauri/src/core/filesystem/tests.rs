@@ -82,7 +82,8 @@ fn test_join_path() {
     let result = join_path(app.handle().clone(), request).unwrap();
     let app_data = get_app_data_folder_path(app.handle().clone());
     fs::create_dir_all(&app_data).unwrap();
-    let canonical_app_data = app_data.canonicalize().unwrap_or(app_data);
+    let canonical_app_data =
+        ax_studio_utils::normalize_path(&app_data.canonicalize().unwrap_or(app_data));
     let expected = canonical_app_data
         .join(format!("test_dir{}test_file", std::path::MAIN_SEPARATOR))
         .to_string_lossy()

@@ -121,4 +121,21 @@ mod tests {
             println!("Short path result: {:?}", result);
         }
     }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_normalize_path_strips_verbatim_disk_prefix() {
+        let base = super::normalize_path(std::path::Path::new(
+            r"\\?\C:\Users\devop\AppData\Roaming\Ax-Studio\data",
+        ));
+        let candidate = super::normalize_path(std::path::Path::new(
+            r"\\?\C:\Users\devop\AppData\Roaming\Ax-Studio\data\llamacpp\models",
+        ));
+
+        assert_eq!(
+            base,
+            std::path::PathBuf::from(r"C:\Users\devop\AppData\Roaming\Ax-Studio\data")
+        );
+        assert!(candidate.starts_with(&base));
+    }
 }

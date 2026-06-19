@@ -243,9 +243,11 @@ pub fn mv<R: Runtime>(
     let (source_arg, destination_arg) = request.into_paths("mv")?;
 
     let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app_handle.clone());
-    let canonical_app_data = app_data_folder
-        .canonicalize()
-        .unwrap_or_else(|_| app_data_folder.clone());
+    let canonical_app_data = ax_studio_utils::normalize_path(
+        &app_data_folder
+            .canonicalize()
+            .unwrap_or_else(|_| app_data_folder.clone()),
+    );
     let source = resolve_path(app_handle.clone(), &source_arg)?;
     let destination = resolve_path(app_handle, &destination_arg)?;
 
@@ -278,9 +280,11 @@ pub fn join_path<R: Runtime>(
 ) -> Result<String, String> {
     let args = request.into_parts()?;
     let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app_handle.clone());
-    let canonical_app_data = app_data_folder
-        .canonicalize()
-        .unwrap_or_else(|_| app_data_folder.clone());
+    let canonical_app_data = ax_studio_utils::normalize_path(
+        &app_data_folder
+            .canonicalize()
+            .unwrap_or_else(|_| app_data_folder.clone()),
+    );
     let path = resolve_path(app_handle, &args[0])?;
     let joined_path = args[1..].iter().fold(path, |acc, part| acc.join(part));
     let normalized = ax_studio_utils::normalize_path(&joined_path);
