@@ -140,13 +140,13 @@ windows-sys = { version = "0.60.2", features = ["Win32_Storage_FileSystem"] }
 # and mlx-sys, which require Apple's MLX C++ library and the Metal toolchain.
 #
 # Pinned to a specific upstream commit SHA so every fresh clone builds the
-# exact same code we validated against. To pick up upstream fixes (e.g. when
-# defai-digital/ax-engine#23 / #24 land), update the `rev` deliberately —
+# exact same code we validated against. To pick up upstream fixes, update the
+# `rev` deliberately to the peeled commit for the release tag we validated —
 # do NOT use `branch = "main"`, which would silently auto-pull every new
 # commit and could break our integration without notice.
 [target.'cfg(target_os = "macos")'.dependencies]
-ax-engine-core = { git = "https://github.com/defai-digital/ax-engine", rev = "5ac0257bd18b3bea6efc3eb9a24f4ba7f8a08a0a" }
-ax-engine-sdk = { git = "https://github.com/defai-digital/ax-engine", rev = "5ac0257bd18b3bea6efc3eb9a24f4ba7f8a08a0a", features = ["mlx-native", "tokenizer"] }
+ax-engine-core = { git = "https://github.com/defai-digital/ax-engine", rev = "2eb92375f4fc3a3eecffd49f67f8434b4dc72ffc" }
+ax-engine-sdk = { git = "https://github.com/defai-digital/ax-engine", rev = "2eb92375f4fc3a3eecffd49f67f8434b4dc72ffc", features = ["mlx-native", "tokenizer"] }
 # Direct `tokenizers` dep so we can decode generated token ids back to text —
 # EngineTokenizer (from ax-engine-sdk) only exposes `encode`. The SDK already
 # pulls this in transitively with matching features; declared here so we can

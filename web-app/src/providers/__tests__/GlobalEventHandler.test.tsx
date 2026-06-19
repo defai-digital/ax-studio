@@ -11,6 +11,9 @@ const {
   mockToastSuccess,
   mockGetProviders,
   mockGetActiveModels,
+  mockUpdateProgress,
+  mockRemoveDownload,
+  mockRemoveLocalDownloadingModel,
 } = vi.hoisted(() => {
   const eventHandlers = new Map<string, Set<(payload?: any) => void>>()
 
@@ -33,6 +36,9 @@ const {
     mockToastSuccess: vi.fn(),
     mockGetProviders: vi.fn(),
     mockGetActiveModels: vi.fn(),
+    mockUpdateProgress: vi.fn(),
+    mockRemoveDownload: vi.fn(),
+    mockRemoveLocalDownloadingModel: vi.fn(),
   }
 })
 
@@ -78,9 +84,9 @@ vi.mock('@/hooks/settings/useAppState', () => ({
 
 vi.mock('@/hooks/models/useDownloadStore', () => ({
   useDownloadStore: () => ({
-    updateProgress: vi.fn(),
-    removeDownload: vi.fn(),
-    removeLocalDownloadingModel: vi.fn(),
+    updateProgress: mockUpdateProgress,
+    removeDownload: mockRemoveDownload,
+    removeLocalDownloadingModel: mockRemoveLocalDownloadingModel,
   }),
 }))
 
@@ -186,5 +192,39 @@ describe('GlobalEventHandler', () => {
     })
     expect(mockGetProviders).not.toHaveBeenCalled()
     expect(mockSetProviders).not.toHaveBeenCalled()
+  })
+
+  it('normalizes fractional and whole-number download progress updates', async () => {
+    render(<GlobalEventHandler />)
+
+    emit('onFileDownloadUpdate', {
+      downloadId: 'mlx-community/gemma-4-12B-it-4bit',
+      modelId: 'mlx-community/gemma-4-12B-it-4bit',
+      percent: 1,
+      size: { transferred: 1, total: 1 },
+    })
+    emit('onFileDownloadUpdate', {
+      downloadId: 'legacy-percent',
+      modelId: 'legacy-percent',
+      percent: 75,
+      size: { transferred: 75, total: 100 },
+    })
+
+    expect(mockUpdateProgress).toHaveBeenNthCalledWith(
+      1,
+      'mlx-community/gemma-4-12B-it-4bit',
+      1,
+      'mlx-community/gemma-4-12B-it-4bit',
+      1,
+      1
+    )
+    expect(mockUpdateProgress).toHaveBeenNthCalledWith(
+      2,
+      'legacy-percent',
+      0.75,
+      'legacy-percent',
+      75,
+      100
+    )
   })
 })

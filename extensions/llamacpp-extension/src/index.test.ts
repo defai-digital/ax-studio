@@ -53,6 +53,9 @@ vi.mock('./backend', () => ({
   installBackendFromFile: vi.fn(async () => {}),
   getBackendExePath: vi.fn(async () => '/backend/llama-server'),
   getAxServingBinaryPath: vi.fn(async () => '/backend/ax-serving'),
+  formatError: vi.fn((error: unknown) =>
+    error instanceof Error ? error.message : String(error)
+  ),
   checkForBackendUpdate: vi.fn(async () => ({
     updateNeeded: false,
     newVersion: '',
@@ -570,25 +573,31 @@ describe('AxStudioLlamacppExtension', () => {
     ;((globalThis as any).core.extensionManager.getByName as any).mockReturnValue({
       downloadFiles,
     })
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        siblings: [
-          {
-            rfilename: 'model-00001-of-00001.safetensors',
-            lfs: {
-              sha256: 'abc',
-              size: 2048,
-            },
-          },
-          {
-            rfilename: 'config.json',
-            size: 128,
-          },
-        ],
-      }),
-      text: async () => '',
-    } as Response)
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async (url: RequestInfo | URL) =>
+        ({
+          ok: true,
+          json: async () =>
+            String(url).endsWith('/config.json')
+              ? { model_type: 'qwen3_5' }
+              : {
+                  siblings: [
+                    {
+                      rfilename: 'model-00001-of-00001.safetensors',
+                      lfs: {
+                        sha256: 'abc',
+                        size: 2048,
+                      },
+                    },
+                    {
+                      rfilename: 'config.json',
+                      size: 128,
+                    },
+                  ],
+                },
+          text: async () => '',
+        }) as Response
+    )
 
     await extension.import('mlx-community/Qwen3.5-9B-MLX-4bit', {
       modelPath: 'hf://mlx-community/Qwen3.5-9B-MLX-4bit',
@@ -626,6 +635,300 @@ describe('AxStudioLlamacppExtension', () => {
       )
     ).toContain(
       'model_path: "llamacpp/models/mlx-community/Qwen3.5-9B-MLX-4bit"'
+    )
+
+    fetchSpy.mockRestore()
+  })
+
+  it('generates AX manifest for Gemma MLX repos without bundled manifests', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    const downloadFiles = vi.fn(
+      async (
+        items: Array<{ save_path: string }>,
+        _taskId: string,
+        _headers?: Record<string, string>,
+        onProgress?: (transferred: number, total: number) => void
+      ) => {
+        onProgress?.(6_741_039_511, 6_741_039_511)
+        for (const item of items) {
+          mocks.fsState.set(item.save_path, 'downloaded')
+          mocks.fsState.set(`/app-data/${item.save_path}`, 'downloaded')
+        }
+      }
+    )
+    ;((globalThis as any).core.extensionManager.getByName as any).mockReturnValue({
+      downloadFiles,
+    })
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async (url: RequestInfo | URL) =>
+        ({
+          ok: true,
+          json: async () =>
+            String(url).endsWith('/config.json')
+              ? {
+                  model_type: 'gemma4_unified',
+                  text_config: { model_type: 'gemma4_unified_text' },
+                }
+              : {
+                  siblings: [
+                    {
+                      rfilename: 'config.json',
+                      size: 5415,
+                    },
+                    {
+                      rfilename: 'model-00001-of-00002.safetensors',
+                      lfs: {
+                        sha256: 'abc',
+                        size: 5_351_756_584,
+                      },
+                    },
+                    {
+                      rfilename: 'model-00002-of-00002.safetensors',
+                      lfs: {
+                        sha256: 'def',
+                        size: 1_389_282_927,
+                      },
+                    },
+                    {
+                      rfilename: 'model.safetensors.index.json',
+                      size: 135_329,
+                    },
+                    {
+                      rfilename: 'tokenizer.json',
+                      lfs: {
+                        sha256: 'tokenizer-sha',
+                        size: 32_169_626,
+                      },
+                    },
+                  ],
+                },
+          text: async () => '',
+        }) as Response
+    )
+
+    await extension.import('mlx-community/gemma-4-12B-it-4bit', {
+      modelPath: 'hf://mlx-community/gemma-4-12B-it-4bit',
+    } as any)
+
+    expect(invoke).toHaveBeenCalledWith('mlx_generate_model_manifest', {
+      modelDir:
+        '/app-data/llamacpp/models/mlx-community/gemma-4-12B-it-4bit',
+    })
+    expect(
+      mocks.fsState.get(
+        '/app-data/llamacpp/models/mlx-community/gemma-4-12B-it-4bit/model.yml'
+      )
+    ).toContain(
+      'model_path: "llamacpp/models/mlx-community/gemma-4-12B-it-4bit"'
+    )
+    expect(mocks.emit).toHaveBeenCalledWith('onModelImported', {
+      modelId: 'mlx-community/gemma-4-12B-it-4bit',
+    })
+
+    fetchSpy.mockRestore()
+  })
+
+  it('generates AX manifest for DiffusionGemma MLX repos without bundled manifests', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    const downloadFiles = vi.fn(
+      async (
+        items: Array<{ save_path: string }>,
+        _taskId: string,
+        _headers?: Record<string, string>,
+        onProgress?: (transferred: number, total: number) => void
+      ) => {
+        onProgress?.(16_543_055_405, 16_543_055_405)
+        for (const item of items) {
+          mocks.fsState.set(item.save_path, 'downloaded')
+          mocks.fsState.set(`/app-data/${item.save_path}`, 'downloaded')
+        }
+      }
+    )
+    ;((globalThis as any).core.extensionManager.getByName as any).mockReturnValue({
+      downloadFiles,
+    })
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async (url: RequestInfo | URL) =>
+        ({
+          ok: true,
+          json: async () =>
+            String(url).endsWith('/config.json')
+              ? {
+                  model_type: 'diffusion_gemma',
+                  text_config: { model_type: 'diffusion_gemma_text' },
+                }
+              : {
+                  siblings: [
+                    {
+                      rfilename: 'config.json',
+                      size: 58_854,
+                    },
+                    {
+                      rfilename: 'model-00001-of-00004.safetensors',
+                      lfs: {
+                        sha256: 'abc',
+                        size: 5_215_121_220,
+                      },
+                    },
+                    {
+                      rfilename: 'model-00002-of-00004.safetensors',
+                      lfs: {
+                        sha256: 'def',
+                        size: 5_358_706_305,
+                      },
+                    },
+                  ],
+                },
+          text: async () => '',
+        }) as Response
+    )
+
+    await extension.import('mlx-community/diffusiongemma-26B-A4B-it-4bit', {
+      modelPath: 'hf://mlx-community/diffusiongemma-26B-A4B-it-4bit',
+    } as any)
+
+    expect(invoke).toHaveBeenCalledWith('mlx_generate_model_manifest', {
+      modelDir:
+        '/app-data/llamacpp/models/mlx-community/diffusiongemma-26B-A4B-it-4bit',
+    })
+    expect(
+      mocks.fsState.get(
+        '/app-data/llamacpp/models/mlx-community/diffusiongemma-26B-A4B-it-4bit/model.yml'
+      )
+    ).toContain(
+      'model_path: "llamacpp/models/mlx-community/diffusiongemma-26B-A4B-it-4bit"'
+    )
+    expect(mocks.emit).toHaveBeenCalledWith('onModelImported', {
+      modelId: 'mlx-community/diffusiongemma-26B-A4B-it-4bit',
+    })
+
+    fetchSpy.mockRestore()
+  })
+
+  it('reports Gemma MLX manifest failures after download completion', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    const downloadFiles = vi.fn(
+      async (
+        items: Array<{ save_path: string }>,
+        _taskId: string,
+        _headers?: Record<string, string>,
+        onProgress?: (transferred: number, total: number) => void
+      ) => {
+        onProgress?.(1024, 1024)
+        for (const item of items) {
+          mocks.fsState.set(item.save_path, 'downloaded')
+          mocks.fsState.set(`/app-data/${item.save_path}`, 'downloaded')
+        }
+      }
+    )
+    ;((globalThis as any).core.extensionManager.getByName as any).mockReturnValue({
+      downloadFiles,
+    })
+    vi.mocked(invoke).mockImplementation(async (command: string, args?: unknown) => {
+      if (command === 'mlx_generate_model_manifest') {
+        throw new Error('failed to generate AX manifest: unsupported model type')
+      }
+      const path = (args as { path?: string } | undefined)?.path
+      return path ?? ''
+    })
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async (url: RequestInfo | URL) =>
+        ({
+          ok: true,
+          json: async () =>
+            String(url).endsWith('/config.json')
+              ? { model_type: 'gemma4' }
+              : {
+                  siblings: [
+                    {
+                      rfilename: 'model.safetensors',
+                      lfs: {
+                        sha256: 'abc',
+                        size: 1024,
+                      },
+                    },
+                    {
+                      rfilename: 'config.json',
+                      size: 128,
+                    },
+                  ],
+                },
+          text: async () => '',
+        }) as Response
+    )
+
+    await expect(
+      extension.import('mlx-community/gemma-4-e2b-it-4bit', {
+        modelPath: 'hf://mlx-community/gemma-4-e2b-it-4bit',
+      } as any)
+    ).rejects.toThrow(
+      'Downloaded mlx-community/gemma-4-e2b-it-4bit, but Ax Engine could not prepare it for MLX inference'
+    )
+    expect(mocks.emit).toHaveBeenCalledWith(
+      'onFileDownloadError',
+      expect.objectContaining({
+        modelId: 'mlx-community/gemma-4-e2b-it-4bit',
+        error: expect.stringContaining('could not prepare it for MLX inference'),
+      })
+    )
+    expect(
+      mocks.fsState.has(
+        '/app-data/llamacpp/models/mlx-community/gemma-4-e2b-it-4bit/model.yml'
+      )
+    ).toBe(false)
+
+    fetchSpy.mockRestore()
+  })
+
+  it('rejects unsupported Gemma 3 MLX repos before downloading', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    const downloadFiles = vi.fn()
+    ;((globalThis as any).core.extensionManager.getByName as any).mockReturnValue({
+      downloadFiles,
+    })
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async (url: RequestInfo | URL) =>
+        ({
+          ok: true,
+          json: async () =>
+            String(url).endsWith('/config.json')
+              ? {
+                  model_type: 'gemma3',
+                  text_config: { model_type: 'gemma3_text' },
+                }
+              : {
+                  siblings: [
+                    {
+                      rfilename: 'model.safetensors',
+                      lfs: {
+                        sha256: 'abc',
+                        size: 1024,
+                      },
+                    },
+                    {
+                      rfilename: 'config.json',
+                      size: 128,
+                    },
+                  ],
+                },
+          text: async () => '',
+        }) as Response
+    )
+
+    await expect(
+      extension.import('mlx-community/gemma-3-4b-it-4bit', {
+        modelPath: 'hf://mlx-community/gemma-3-4b-it-4bit',
+      } as any)
+    ).rejects.toThrow(
+      'uses model type gemma3, gemma3_text, which Ax Engine native MLX cannot prepare yet'
+    )
+    expect(downloadFiles).not.toHaveBeenCalled()
+    expect(mocks.emit).toHaveBeenCalledWith(
+      'onFileDownloadError',
+      expect.objectContaining({
+        modelId: 'mlx-community/gemma-3-4b-it-4bit',
+        error: expect.stringContaining('gemma3, gemma3_text'),
+      })
     )
 
     fetchSpy.mockRestore()

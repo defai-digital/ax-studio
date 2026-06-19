@@ -236,10 +236,16 @@ export function GlobalEventHandler() {
     const getDownloadId = (state: DownloadState) =>
       state.downloadId ?? state.modelId
 
+    const normalizePercent = (value: number) => {
+      if (!Number.isFinite(value)) return 0
+      const fraction = value > 1 ? value / 100 : value
+      return Math.max(0, Math.min(1, fraction))
+    }
+
     const onFileDownloadUpdate = (state: DownloadState) => {
       const downloadId = getDownloadId(state)
       const rawPercent = state.percent ?? (state.total ? (state.transferred ?? 0) / state.total : 0)
-      const percent = Math.max(0, Math.min(100, rawPercent))
+      const percent = normalizePercent(rawPercent)
       const transferred = state.size?.transferred ?? state.transferred ?? 0
       const total = state.size?.total ?? state.total ?? 0
 

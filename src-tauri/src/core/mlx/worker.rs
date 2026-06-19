@@ -22,6 +22,11 @@ use serde::{Deserialize, Serialize};
 use tokenizers::Tokenizer;
 use tokio::sync::oneshot;
 
+const DEFAULT_MLX_MAX_OUTPUT_TOKENS: u32 = 2048;
+const DIFFUSION_GEMMA_CHAT_MAX_OUTPUT_TOKENS: u32 = 64;
+const GEMMA4_CHANNEL_OPEN: &str = "<|channel>";
+const GEMMA4_CHANNEL_CLOSE: &str = "<channel|>";
+
 /// OpenAI-style chat message.
 #[derive(Clone, Debug, Deserialize)]
 pub struct ChatMessage {
@@ -213,6 +218,20 @@ struct LoadedModel {
     model_dir: PathBuf,
     tokenizer: Tokenizer,
     warm_session: Option<EngineSession>,
+}
+
+impl LoadedModel {
+    fn decode_chat_output(
+        &self,
+        model_id: &str,
+        output_tokens: &[u32],
+    ) -> Result<String, tokenizers::Error> {
+        if is_gemma4_family(model_id) {
+            decode_gemma4_chat_output(&self.tokenizer, output_tokens)
+        } else {
+            self.tokenizer.decode(output_tokens, true)
+        }
+    }
 }
 
 /// Build a fresh `EngineSession` pointed at the model dir. The worker keeps at
@@ -432,25 +451,17 @@ fn handle_generate(
         .to_vec();
     let _ = prompt; // prompt string was only used for tokenization
 
-    let sampling = GenerateSampling {
-        temperature: params.temperature.unwrap_or(0.7),
-        top_p: params.top_p.unwrap_or(0.95),
-        top_k: params.top_k.unwrap_or(0),
-        min_p: None,
-        repetition_penalty: params.repetition_penalty.unwrap_or(1.0),
-        repetition_context_size: None,
-        seed: params.seed.unwrap_or(0),
-        deterministic: None,
-        ignore_eos: false,
-    };
+    let sampling = effective_sampling(model_id, &params);
 
     let stop_sequences = effective_stop_sequences(model_id, params.stop);
+
+    let max_output_tokens = effective_max_output_tokens(model_id, params.max_output_tokens);
 
     let request = GenerateRequest {
         model_id: model_id.to_string(),
         input_tokens: prompt_tokens.clone(),
         input_text: None,
-        max_output_tokens: params.max_output_tokens.unwrap_or(2048),
+        max_output_tokens,
         sampling,
         stop_sequences,
         multimodal_inputs: Default::default(),
@@ -472,8 +483,7 @@ fn handle_generate(
     drop(session);
 
     let mut output_text = entry
-        .tokenizer
-        .decode(&response.output_tokens, true)
+        .decode_chat_output(model_id, &response.output_tokens)
         .map_err(|e| format!("tokenizer.decode failed for {model_id}: {e}"))?;
     if is_gemma4_family(model_id) {
         output_text = strip_gemma4_leading_thought_label(&output_text);
@@ -520,18 +530,8 @@ fn handle_generate_stream(
     let prompt_token_count = prompt_tokens.len() as u32;
     let _ = prompt;
 
-    let sampling = GenerateSampling {
-        temperature: params.temperature.unwrap_or(0.7),
-        top_p: params.top_p.unwrap_or(0.95),
-        top_k: params.top_k.unwrap_or(0),
-        min_p: None,
-        repetition_penalty: params.repetition_penalty.unwrap_or(1.0),
-        repetition_context_size: None,
-        seed: params.seed.unwrap_or(0),
-        deterministic: None,
-        ignore_eos: false,
-    };
-    let max_output_tokens = params.max_output_tokens.unwrap_or(2048);
+    let sampling = effective_sampling(model_id, &params);
+    let max_output_tokens = effective_max_output_tokens(model_id, params.max_output_tokens);
     let stop_sequences = effective_stop_sequences(model_id, params.stop);
 
     let request = GenerateRequest {
@@ -590,8 +590,7 @@ fn handle_generate_stream(
                 if !step_event.delta_tokens.is_empty() {
                     accumulated_output_tokens.extend(step_event.delta_tokens.iter().copied());
                     let mut full_text = entry
-                        .tokenizer
-                        .decode(&accumulated_output_tokens, true)
+                        .decode_chat_output(model_id, &accumulated_output_tokens)
                         .map_err(|e| format!("tokenizer.decode failed for {model_id}: {e}"))?;
                     if is_gemma4_family(model_id) {
                         full_text = strip_gemma4_leading_thought_label(&full_text);
@@ -599,10 +598,16 @@ fn handle_generate_stream(
                             strip_gemma4_thought_prefix = false;
                         }
                     }
-                    let text = decoded_text_delta(&emitted_text, &full_text);
-                    emitted_text = full_text;
-                    if !text.is_empty() {
-                        on_event(StreamEvent::Delta { text });
+                    if decoded_text_has_incomplete_trailing_codepoint(&full_text) {
+                        log::debug!(
+                            "[mlx-worker] holding back incomplete trailing codepoint for {model_id}"
+                        );
+                    } else {
+                        let text = decoded_text_delta(&emitted_text, &full_text);
+                        emitted_text = full_text;
+                        if !text.is_empty() {
+                            on_event(StreamEvent::Delta { text });
+                        }
                     }
                 } else if let Some(text) = step_event.delta_text {
                     let text = if strip_gemma4_thought_prefix {
@@ -620,8 +625,7 @@ fn handle_generate_stream(
                 let response = response_event.response;
                 if !response.output_tokens.is_empty() {
                     let mut final_text = entry
-                        .tokenizer
-                        .decode(&response.output_tokens, true)
+                        .decode_chat_output(model_id, &response.output_tokens)
                         .map_err(|e| format!("tokenizer.decode failed for {model_id}: {e}"))?;
                     if is_gemma4_family(model_id) {
                         final_text = strip_gemma4_leading_thought_label(&final_text);
@@ -683,7 +687,7 @@ fn format_prompt(messages: &[ChatMessage], model_id: &str) -> String {
 fn effective_stop_sequences(model_id: &str, requested: Option<Vec<String>>) -> Vec<String> {
     let mut stops = requested.unwrap_or_default();
     let family_stops: &[&str] = if is_gemma4_family(model_id) {
-        &["<turn|>", "<|turn>", "<|channel>", "<channel|>"]
+        &["<turn|>"]
     } else if is_gemma_family(model_id) {
         &["<end_of_turn>"]
     } else if model_id.to_lowercase().contains("qwen") {
@@ -698,6 +702,42 @@ fn effective_stop_sequences(model_id: &str, requested: Option<Vec<String>>) -> V
         }
     }
     stops
+}
+
+fn effective_max_output_tokens(model_id: &str, requested: Option<u32>) -> u32 {
+    let max_output_tokens = requested.unwrap_or(DEFAULT_MLX_MAX_OUTPUT_TOKENS).max(1);
+    if is_diffusion_gemma_family(model_id) {
+        return max_output_tokens.min(DIFFUSION_GEMMA_CHAT_MAX_OUTPUT_TOKENS);
+    }
+    max_output_tokens
+}
+
+fn effective_sampling(model_id: &str, params: &GenerateParams) -> GenerateSampling {
+    if is_diffusion_gemma_family(model_id) {
+        return GenerateSampling {
+            temperature: 0.0,
+            top_p: 1.0,
+            top_k: 0,
+            min_p: None,
+            repetition_penalty: 1.1,
+            repetition_context_size: None,
+            seed: 0,
+            deterministic: None,
+            ignore_eos: false,
+        };
+    }
+
+    GenerateSampling {
+        temperature: params.temperature.unwrap_or(0.7),
+        top_p: params.top_p.unwrap_or(0.95),
+        top_k: params.top_k.unwrap_or(0),
+        min_p: None,
+        repetition_penalty: params.repetition_penalty.unwrap_or(1.0),
+        repetition_context_size: None,
+        seed: params.seed.unwrap_or(0),
+        deterministic: None,
+        ignore_eos: false,
+    }
 }
 
 fn decoded_text_delta(previous: &str, current: &str) -> String {
@@ -718,9 +758,97 @@ fn decoded_text_delta(previous: &str, current: &str) -> String {
     current[common_byte_len..].to_string()
 }
 
+fn decoded_text_has_incomplete_trailing_codepoint(text: &str) -> bool {
+    text.ends_with('\u{FFFD}')
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Gemma4ChannelIds {
+    open: u32,
+    close: u32,
+}
+
+impl Gemma4ChannelIds {
+    fn from_tokenizer(tokenizer: &Tokenizer) -> Option<Self> {
+        Some(Self {
+            open: tokenizer.token_to_id(GEMMA4_CHANNEL_OPEN)?,
+            close: tokenizer.token_to_id(GEMMA4_CHANNEL_CLOSE)?,
+        })
+    }
+}
+
+fn split_gemma4_channels(tokens: &[u32], ids: Gemma4ChannelIds) -> (Vec<u32>, Vec<Vec<u32>>) {
+    let mut kept = Vec::with_capacity(tokens.len());
+    let mut channel_bodies = Vec::new();
+    let mut i = 0;
+    while i < tokens.len() {
+        if tokens[i] == ids.open {
+            let body_start = i + 1;
+            match tokens[body_start..].iter().position(|&t| t == ids.close) {
+                Some(offset) => {
+                    channel_bodies.push(tokens[body_start..body_start + offset].to_vec());
+                    i = body_start + offset + 1;
+                }
+                None => {
+                    channel_bodies.push(tokens[body_start..].to_vec());
+                    i = tokens.len();
+                }
+            }
+        } else if tokens[i] == ids.close {
+            if !kept.is_empty() {
+                channel_bodies.push(std::mem::take(&mut kept));
+            }
+            i += 1;
+        } else {
+            kept.push(tokens[i]);
+            i += 1;
+        }
+    }
+    (kept, channel_bodies)
+}
+
+fn strip_gemma4_channel_name_header(body: &str) -> &str {
+    let Some((name, rest)) = body.split_once('\n') else {
+        return body;
+    };
+    let name = name.trim();
+    if !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        rest
+    } else {
+        body
+    }
+}
+
+fn decode_gemma4_chat_output(
+    tokenizer: &Tokenizer,
+    output_tokens: &[u32],
+) -> Result<String, tokenizers::Error> {
+    let Some(ids) = Gemma4ChannelIds::from_tokenizer(tokenizer) else {
+        return tokenizer.decode(output_tokens, true);
+    };
+    let (kept, channel_bodies) = split_gemma4_channels(output_tokens, ids);
+    if channel_bodies.is_empty() {
+        return tokenizer.decode(output_tokens, true);
+    }
+
+    let mut body_texts = Vec::with_capacity(channel_bodies.len());
+    for body in &channel_bodies {
+        let body_text = tokenizer.decode(body, true)?;
+        body_texts.push(strip_gemma4_channel_name_header(&body_text).to_string());
+    }
+    let kept_text = tokenizer.decode(&kept, true)?;
+    if kept_text.trim().is_empty() {
+        Ok(body_texts.pop().unwrap_or(kept_text))
+    } else {
+        Ok(kept_text)
+    }
+}
+
 fn is_gemma4_family(model_id: &str) -> bool {
     let id_lower = model_id.to_lowercase();
-    id_lower.contains("gemma-4") || id_lower.contains("gemma4")
+    id_lower.contains("gemma-4")
+        || id_lower.contains("gemma4")
+        || is_diffusion_gemma_family(model_id)
 }
 
 fn is_gemma_family(model_id: &str) -> bool {
@@ -728,23 +856,27 @@ fn is_gemma_family(model_id: &str) -> bool {
     id_lower.contains("gemma-4") || id_lower.contains("gemma-3") || id_lower.contains("gemma4")
 }
 
+fn is_diffusion_gemma_family(model_id: &str) -> bool {
+    let id_lower = model_id.to_lowercase();
+    id_lower.contains("diffusiongemma")
+        || id_lower.contains("diffusion-gemma")
+        || id_lower.contains("diffusion_gemma")
+}
+
 /// Gemma 4 unified chat-template dialect. The empty thought channel mirrors
 /// the model's tokenizer template when `enable_thinking=false`; without it,
 /// Gemma may expose `thought` as visible answer text.
 fn format_gemma4(messages: &[ChatMessage]) -> String {
-    let mut out = String::new();
-    let mut pending_system: Option<String> = None;
+    let mut out = String::from("<bos>");
     for m in messages {
         match m.role.as_str() {
             "system" | "developer" => {
-                pending_system = Some(m.content.clone());
+                out.push_str("<|turn>system\n");
+                out.push_str(&m.content);
+                out.push_str("<turn|>\n");
             }
             "user" => {
                 out.push_str("<|turn>user\n");
-                if let Some(sys) = pending_system.take() {
-                    out.push_str(&sys);
-                    out.push_str("\n\n");
-                }
                 out.push_str(&m.content);
                 out.push_str("<turn|>\n");
             }
@@ -941,9 +1073,59 @@ mod tests {
     fn gemma4_12b_it_uses_gemma_template() {
         let prompt = format_prompt(&[user_msg("Hello")], "mlx-community/gemma-4-12B-it-4bit");
 
+        assert!(prompt.starts_with("<bos>"));
         assert!(prompt.contains("<|turn>user\nHello<turn|>\n"));
         assert!(prompt.ends_with("<|turn>model\n<|channel>thought\n<channel|>"));
         assert!(!prompt.contains("<start_of_turn>"));
+    }
+
+    #[test]
+    fn diffusiongemma_uses_gemma4_template_and_block_budget() {
+        let prompt = format_prompt(
+            &[user_msg("Hello")],
+            "mlx-community/diffusiongemma-26B-A4B-it-4bit",
+        );
+
+        assert!(prompt.starts_with("<bos>"));
+        assert!(prompt.contains("<|turn>user\nHello<turn|>\n"));
+        assert!(prompt.ends_with("<|turn>model\n<|channel>thought\n<channel|>"));
+        assert!(!prompt.contains("<|im_start|>"));
+
+        let stops = effective_stop_sequences(
+            "mlx-community/diffusiongemma-26B-A4B-it-4bit",
+            Some(vec!["custom-stop".to_string()]),
+        );
+        assert!(stops.contains(&"custom-stop".to_string()));
+        assert!(stops.contains(&"<turn|>".to_string()));
+        assert!(!stops.contains(&"<|channel>".to_string()));
+        assert!(!stops.contains(&"<channel|>".to_string()));
+
+        assert_eq!(
+            effective_max_output_tokens("mlx-community/diffusiongemma-26B-A4B-it-4bit", Some(4096)),
+            DIFFUSION_GEMMA_CHAT_MAX_OUTPUT_TOKENS
+        );
+        assert_eq!(
+            effective_max_output_tokens("mlx-community/diffusiongemma-26B-A4B-it-4bit", Some(64)),
+            64
+        );
+
+        let sampling = effective_sampling(
+            "mlx-community/diffusiongemma-26B-A4B-it-4bit",
+            &GenerateParams {
+                max_output_tokens: Some(4096),
+                temperature: Some(0.8),
+                top_p: Some(0.5),
+                top_k: Some(20),
+                repetition_penalty: Some(1.0),
+                seed: Some(42),
+                stop: None,
+            },
+        );
+        assert_eq!(sampling.temperature, 0.0);
+        assert_eq!(sampling.top_p, 1.0);
+        assert_eq!(sampling.top_k, 0);
+        assert_eq!(sampling.repetition_penalty, 1.1);
+        assert_eq!(sampling.seed, 0);
     }
 
     #[test]
@@ -975,9 +1157,9 @@ mod tests {
 
         assert!(stops.contains(&"custom-stop".to_string()));
         assert!(stops.contains(&"<turn|>".to_string()));
-        assert!(stops.contains(&"<|turn>".to_string()));
-        assert!(stops.contains(&"<|channel>".to_string()));
-        assert!(stops.contains(&"<channel|>".to_string()));
+        assert!(!stops.contains(&"<|turn>".to_string()));
+        assert!(!stops.contains(&"<|channel>".to_string()));
+        assert!(!stops.contains(&"<channel|>".to_string()));
         assert_eq!(
             stops
                 .iter()
@@ -991,5 +1173,18 @@ mod tests {
     fn cumulative_decode_delta_emits_only_new_text() {
         assert_eq!(decoded_text_delta("Hello", "Hello world"), " world");
         assert_eq!(decoded_text_delta("AGI", "AGI stands"), " stands");
+    }
+
+    #[test]
+    fn incomplete_trailing_codepoint_is_detected() {
+        assert!(decoded_text_has_incomplete_trailing_codepoint(
+            "Program 1: �"
+        ));
+        assert!(!decoded_text_has_incomplete_trailing_codepoint(
+            "Program 1: ✅"
+        ));
+        assert!(!decoded_text_has_incomplete_trailing_codepoint(
+            "literal � inside text."
+        ));
     }
 }

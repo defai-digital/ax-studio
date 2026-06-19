@@ -170,10 +170,55 @@ describe('DefaultModelsService', () => {
   })
 
   describe('fetchModelCatalog', () => {
-    it('should return the bundled AX Studio model catalog', async () => {
+    it('should return the bundled AX Studio model catalog with AX Engine MLX targets', async () => {
       const result = await modelsService.fetchModelCatalog()
 
-      expect(result).toEqual(bundledModelCatalog)
+      expect(result).toEqual(expect.arrayContaining(bundledModelCatalog))
+      expect(result).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            model_name: 'AX Engine Gemma 4 E2B',
+            developer: 'AX Engine',
+            is_mlx: true,
+            quants: expect.arrayContaining([
+              expect.objectContaining({
+                model_id: 'mlx-community/gemma-4-e2b-it-4bit',
+                path: 'hf://mlx-community/gemma-4-e2b-it-4bit',
+                supports_in_app_download: true,
+              }),
+              expect.objectContaining({
+                model_id: 'mlx-community/gemma-4-e2b-it-8bit',
+                path: 'hf://mlx-community/gemma-4-e2b-it-8bit',
+                supports_in_app_download: true,
+              }),
+            ]),
+          }),
+          expect.objectContaining({
+            model_name: 'AX Engine Qwen 3.6 35B A3B',
+            developer: 'AX Engine',
+            is_mlx: true,
+            quants: expect.arrayContaining([
+              expect.objectContaining({
+                model_id: 'mlx-community/Qwen3.6-35B-A3B-4bit',
+                path: 'hf://mlx-community/Qwen3.6-35B-A3B-4bit',
+                supports_in_app_download: true,
+              }),
+            ]),
+          }),
+          expect.objectContaining({
+            model_name: 'AX Engine DiffusionGemma 26B A4B',
+            developer: 'AX Engine',
+            is_mlx: true,
+            quants: expect.arrayContaining([
+              expect.objectContaining({
+                model_id: 'mlx-community/diffusiongemma-26B-A4B-it-4bit',
+                path: 'hf://mlx-community/diffusiongemma-26B-A4B-it-4bit',
+                supports_in_app_download: true,
+              }),
+            ]),
+          }),
+        ])
+      )
     })
   })
 

@@ -275,6 +275,29 @@ const DEFAULT_UBATCH_SIZE = 512
 const AUTO_GPU_LAYERS_SENTINEL = 100
 const AX_SERVING_SERVICE_MODEL_ID = '__ax_serving__'
 const AX_MODEL_MANIFEST_FILENAME = 'model-manifest.json'
+const AX_GENERATED_MLX_MANIFEST_MODEL_TYPES = new Set([
+  'deepseek_v3',
+  'diffusion_gemma',
+  'diffusion_gemma_text',
+  'gemma4',
+  'gemma4_assistant',
+  'gemma4_text',
+  'gemma4_unified',
+  'gemma4_unified_text',
+  'glm4_moe_lite',
+  'llama3',
+  'llama4',
+  'mistral3',
+  'mixtral',
+  'qwen3',
+  'qwen3.5',
+  'qwen3.6',
+  'qwen3_5',
+  'qwen3_5_moe',
+  'qwen3_5_text',
+  'qwen3_6',
+  'qwen3_next',
+])
 const AX_SERVING_ARTIFACT_ERROR_PREFIX = 'AX Engine requires'
 
 function isChatModelId(modelId: string): boolean {
@@ -739,6 +762,87 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     })
   }
 
+  private _repoHasAxManifest(files: HfRepoSibling[]): boolean {
+    return files.some(
+      (file) => file.rfilename.toLowerCase() === AX_MODEL_MANIFEST_FILENAME
+    )
+  }
+
+  private _extractHfModelTypes(config: unknown): string[] {
+    if (!config || typeof config !== 'object') return []
+    const record = config as Record<string, unknown>
+    const textConfig =
+      record.text_config && typeof record.text_config === 'object'
+        ? (record.text_config as Record<string, unknown>)
+        : undefined
+    return [record.model_type, textConfig?.model_type]
+      .filter((value): value is string => typeof value === 'string')
+      .filter(Boolean)
+  }
+
+  private async _fetchHfConfig(
+    repoId: string,
+    requestHeaders?: Record<string, string>
+  ): Promise<unknown> {
+    const controller = new AbortController()
+    const signal = this._getTimeoutSignal(20_000, controller)
+    const timeout = window.setTimeout(() => controller.abort(), 20_000)
+    try {
+      const response = await fetch(
+        this._huggingFaceResolveUrl(repoId, 'config.json'),
+        {
+          headers: requestHeaders,
+          signal,
+        }
+      )
+      if (!response.ok) {
+        const body = await response.text().catch(() => '')
+        throw new Error(
+          `Failed to fetch config.json for ${repoId}: ${response.status} ${body.slice(0, 200)}`
+        )
+      }
+      return await response.json()
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new Error(`Timed out fetching config.json for ${repoId}`)
+      }
+      throw error
+    } finally {
+      window.clearTimeout(timeout)
+    }
+  }
+
+  private async _assertCanGenerateHfMlxManifest(
+    repoId: string,
+    files: HfRepoSibling[],
+    requestHeaders?: Record<string, string>
+  ): Promise<void> {
+    if (this._repoHasAxManifest(files)) return
+
+    if (
+      !files.some((file) => file.rfilename.toLowerCase() === 'config.json')
+    ) {
+      throw new Error(
+        `MLX repo "${repoId}" does not include config.json, so Ax Studio cannot prepare it for Ax Engine.`
+      )
+    }
+
+    const modelTypes = this._extractHfModelTypes(
+      await this._fetchHfConfig(repoId, requestHeaders)
+    )
+    const supportedModelType = modelTypes.find((modelType) =>
+      AX_GENERATED_MLX_MANIFEST_MODEL_TYPES.has(modelType)
+    )
+    if (supportedModelType) return
+
+    const reportedTypes = modelTypes.length ? modelTypes.join(', ') : 'unknown'
+    throw new Error(
+      `MLX repo "${repoId}" uses model type ${reportedTypes}, which Ax Engine native MLX cannot prepare yet. Supported generated-manifest model types are: ${Array.from(
+        AX_GENERATED_MLX_MANIFEST_MODEL_TYPES
+      ).join(', ')}.`
+    )
+  }
+
   private async _importHfMlxRepo(
     modelId: string,
     repoImportPath: string,
@@ -789,6 +893,11 @@ export default class AxStudioLlamacppExtension extends AIEngine {
           `MLX repo "${repoId}" does not contain safetensors weights.`
         )
       }
+      await this._assertCanGenerateHfMlxManifest(
+        repoId,
+        files,
+        requestHeaders
+      )
 
       const items = await Promise.all(
         files.map(async (file) => {
@@ -832,7 +941,15 @@ export default class AxStudioLlamacppExtension extends AIEngine {
           size: { transferred: 1, total: 1 },
           downloadState: 'verifying',
         })
-        await invoke('mlx_generate_model_manifest', { modelDir })
+        try {
+          await invoke('mlx_generate_model_manifest', { modelDir })
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error)
+          throw new Error(
+            `Downloaded ${repoId}, but Ax Engine could not prepare it for MLX inference: ${message}`
+          )
+        }
         downloadedPaths.push(manifestPath)
       }
 

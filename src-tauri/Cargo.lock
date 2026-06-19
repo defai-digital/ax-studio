@@ -297,8 +297,8 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
 name = "ax-engine-core"
-version = "6.2.5"
-source = "git+https://github.com/defai-digital/ax-engine?rev=5ac0257bd18b3bea6efc3eb9a24f4ba7f8a08a0a#5ac0257bd18b3bea6efc3eb9a24f4ba7f8a08a0a"
+version = "6.5.1"
+source = "git+https://github.com/defai-digital/ax-engine?rev=2eb92375f4fc3a3eecffd49f67f8434b4dc72ffc#2eb92375f4fc3a3eecffd49f67f8434b4dc72ffc"
 dependencies = [
  "metal",
  "objc",
@@ -311,8 +311,8 @@ dependencies = [
 
 [[package]]
 name = "ax-engine-mlx"
-version = "6.2.5"
-source = "git+https://github.com/defai-digital/ax-engine?rev=5ac0257bd18b3bea6efc3eb9a24f4ba7f8a08a0a#5ac0257bd18b3bea6efc3eb9a24f4ba7f8a08a0a"
+version = "6.5.1"
+source = "git+https://github.com/defai-digital/ax-engine?rev=2eb92375f4fc3a3eecffd49f67f8434b4dc72ffc#2eb92375f4fc3a3eecffd49f67f8434b4dc72ffc"
 dependencies = [
  "ax-engine-core",
  "fs2",
@@ -325,8 +325,8 @@ dependencies = [
 
 [[package]]
 name = "ax-engine-sdk"
-version = "6.2.5"
-source = "git+https://github.com/defai-digital/ax-engine?rev=5ac0257bd18b3bea6efc3eb9a24f4ba7f8a08a0a#5ac0257bd18b3bea6efc3eb9a24f4ba7f8a08a0a"
+version = "6.5.1"
+source = "git+https://github.com/defai-digital/ax-engine?rev=2eb92375f4fc3a3eecffd49f67f8434b4dc72ffc#2eb92375f4fc3a3eecffd49f67f8434b4dc72ffc"
 dependencies = [
  "ax-engine-core",
  "ax-engine-mlx",
@@ -3219,8 +3219,8 @@ dependencies = [
 
 [[package]]
 name = "mlx-sys"
-version = "6.2.5"
-source = "git+https://github.com/defai-digital/ax-engine?rev=5ac0257bd18b3bea6efc3eb9a24f4ba7f8a08a0a#5ac0257bd18b3bea6efc3eb9a24f4ba7f8a08a0a"
+version = "6.5.1"
+source = "git+https://github.com/defai-digital/ax-engine?rev=2eb92375f4fc3a3eecffd49f67f8434b4dc72ffc#2eb92375f4fc3a3eecffd49f67f8434b4dc72ffc"
 dependencies = [
  "bindgen",
  "cc",
