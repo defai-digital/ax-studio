@@ -135,6 +135,10 @@ describe('llamacpp backend helpers', () => {
     consoleErrorSpy.mockRestore()
     consoleWarnSpy.mockRestore()
     vi.useRealTimers()
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: undefined,
+    })
   })
 
   it('parses matching backend assets from GitHub releases', async () => {
@@ -270,6 +274,32 @@ describe('llamacpp backend helpers', () => {
     )
 
     ;(globalThis as Record<string, unknown>).IS_WINDOWS = false
+    ;(globalThis as Record<string, unknown>).IS_LINUX = true
+  })
+
+  it('uses runtime Windows platform when build constants were produced on macOS', async () => {
+    ;(globalThis as Record<string, unknown>).IS_WINDOWS = false
+    ;(globalThis as Record<string, unknown>).IS_MACOS = true
+    ;(globalThis as Record<string, unknown>).IS_LINUX = false
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: { platform: 'Win32', userAgent: 'Windows NT 10.0' },
+    })
+    vi.mocked(fetch).mockRejectedValue(new Error('blocked'))
+    vi.mocked(prioritizeBackends).mockResolvedValueOnce(null as never)
+    mocks.existsSync.mockImplementation(async (path: string) => {
+      return path.includes('/backends') || path.endsWith('llama-server.exe')
+    })
+
+    const updateSetting = vi.fn()
+    await configureBackends('', false, updateSetting)
+
+    expect(updateSetting).toHaveBeenCalledWith(
+      'version_backend',
+      'b9730/win-cpu-x64'
+    )
+
+    ;(globalThis as Record<string, unknown>).IS_MACOS = false
     ;(globalThis as Record<string, unknown>).IS_LINUX = true
   })
 

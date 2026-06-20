@@ -79,6 +79,26 @@ export const formatError = (error: unknown): string =>
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms))
 
+function getRuntimeOsType(): 'windows' | 'macOS' | 'linux' {
+  const nav = (globalThis as { navigator?: Navigator & { userAgentData?: { platform?: string } } }).navigator
+  const platform = [
+    nav?.userAgentData?.platform,
+    nav?.platform,
+    nav?.userAgent,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+
+  if (platform.includes('win')) return 'windows'
+  if (platform.includes('mac')) return 'macOS'
+  if (platform.includes('linux') || platform.includes('x11')) return 'linux'
+
+  if (IS_WINDOWS) return 'windows'
+  if (IS_MACOS) return 'macOS'
+  return 'linux'
+}
+
 async function withTimeoutFallback<T>(
   promise: Promise<T>,
   fallback: T,
@@ -201,7 +221,7 @@ export async function getBackendDir(version: string, backend: string): Promise<s
  */
 export async function getBackendExePath(version: string, backend: string): Promise<string> {
   const dir = await getBackendDir(version, backend)
-  const isWindows = IS_WINDOWS
+  const isWindows = getRuntimeOsType() === 'windows'
   const binary = isWindows ? 'llama-server.exe' : 'llama-server'
 
   // Check ggml-org structure: llama-{version}/llama-server
@@ -329,10 +349,9 @@ interface HardwareInfo {
  * Get hardware info from the hardware extension for backend selection.
  */
 async function getHardwareInfo(): Promise<HardwareInfo> {
-  const isWindows = IS_WINDOWS
-  const isMac = IS_MACOS
+  const osType = getRuntimeOsType()
   const fallback = {
-    osType: isWindows ? 'windows' : isMac ? 'macOS' : 'linux',
+    osType,
     arch: 'x64',
     cpuExtensions: [],
     gpus: [],
@@ -344,7 +363,7 @@ async function getHardwareInfo(): Promise<HardwareInfo> {
       ?.getHardwareInfo?.()
     if (hw) {
       return {
-        osType: isWindows ? 'windows' : isMac ? 'macOS' : 'linux',
+        osType,
         arch: hw.arch ?? 'x64',
         cpuExtensions: hw.cpu_extensions ?? [],
         gpus: hw.gpus ?? [],
@@ -368,7 +387,7 @@ export async function downloadBackend(
   backend: string,
   onProgress?: (pct: number) => void
 ): Promise<void> {
-  const isWindows = IS_WINDOWS
+  const isWindows = getRuntimeOsType() === 'windows'
   const ext = isWindows ? '.zip' : '.tar.gz'
   const filename = `llama-${version}-bin-${backend}${ext}`
   const downloadUrl = `https://github.com/ggml-org/llama.cpp/releases/download/${version}/${filename}`
@@ -583,7 +602,7 @@ export async function configureBackends(
         const hw = await withTimeoutFallback(
           getHardwareInfo(),
           {
-            osType: IS_WINDOWS ? 'windows' : IS_MACOS ? 'macOS' : 'linux',
+            osType: getRuntimeOsType(),
             arch: 'x64',
             cpuExtensions: [],
             gpus: [],
