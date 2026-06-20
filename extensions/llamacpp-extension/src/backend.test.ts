@@ -249,6 +249,30 @@ describe('llamacpp backend helpers', () => {
     ;(globalThis as Record<string, unknown>).IS_LINUX = true
   })
 
+  it('selects a bootstrap backend when remote discovery returns no usable assets', async () => {
+    ;(globalThis as Record<string, unknown>).IS_WINDOWS = true
+    ;(globalThis as Record<string, unknown>).IS_LINUX = false
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => [{ tag_name: 'b1', assets: [{ name: 'notes.txt' }] }],
+    } as Response)
+    vi.mocked(prioritizeBackends).mockResolvedValueOnce(null as never)
+    mocks.existsSync.mockImplementation(async (path: string) => {
+      return path.includes('/backends') || path.endsWith('llama-server.exe')
+    })
+
+    const updateSetting = vi.fn()
+    await configureBackends('', false, updateSetting)
+
+    expect(updateSetting).toHaveBeenCalledWith(
+      'version_backend',
+      'b9730/win-cpu-x64'
+    )
+
+    ;(globalThis as Record<string, unknown>).IS_WINDOWS = false
+    ;(globalThis as Record<string, unknown>).IS_LINUX = true
+  })
+
   it('returns a safe no-update result when Rust update checks fail', async () => {
     vi.mocked(checkBackendForUpdates).mockRejectedValueOnce(new Error('bad'))
     await expect(checkForBackendUpdate('b1/cpu', [])).resolves.toEqual({

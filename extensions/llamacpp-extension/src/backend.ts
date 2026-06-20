@@ -28,6 +28,8 @@ import { getProxyConfig, buildProxyArg } from './util'
 // Keep the release page small because we only need recent backend artifacts.
 const GITHUB_RELEASES_PAGE_SIZE = 10
 const GITHUB_API_TIMEOUT_MS = 5_000
+const BACKEND_DISCOVERY_TIMEOUT_MS = 12_000
+const HARDWARE_INFO_TIMEOUT_MS = 6_000
 const REMOTE_BACKEND_CACHE_TTL_MS = 5 * 60 * 1000
 const BACKEND_DOWNLOAD_MAX_ATTEMPTS = 3
 const BACKEND_DOWNLOAD_RETRY_BASE_MS = 500
@@ -76,6 +78,31 @@ export const formatError = (error: unknown): string =>
 
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms))
+
+async function withTimeoutFallback<T>(
+  promise: Promise<T>,
+  fallback: T,
+  label: string,
+  timeoutMs: number
+): Promise<T> {
+  let timeoutId!: ReturnType<typeof setTimeout>
+  try {
+    return await Promise.race([
+      promise.catch((error) => {
+        console.warn(`[llamacpp] ${label} failed, using fallback:`, error)
+        return fallback
+      }),
+      new Promise<T>((resolve) => {
+        timeoutId = setTimeout(() => {
+          console.warn(`[llamacpp] ${label} timed out after ${timeoutMs}ms, using fallback`)
+          resolve(fallback)
+        }, timeoutMs)
+      }),
+    ])
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
 
 async function fetchWithTimeout(
   fetchImpl: FetchLike,
@@ -304,7 +331,12 @@ interface HardwareInfo {
 async function getHardwareInfo(): Promise<HardwareInfo> {
   const isWindows = IS_WINDOWS
   const isMac = IS_MACOS
-  const isLinux = IS_LINUX
+  const fallback = {
+    osType: isWindows ? 'windows' : isMac ? 'macOS' : 'linux',
+    arch: 'x64',
+    cpuExtensions: [],
+    gpus: [],
+  }
 
   try {
     const hw = await (window as any).core?.extensionManager
@@ -322,12 +354,7 @@ async function getHardwareInfo(): Promise<HardwareInfo> {
     console.debug('[llamacpp] Hardware extension unavailable, using fallback info:', error)
   }
   // Fallback: minimal info
-  return {
-    osType: isWindows ? 'windows' : isMac ? 'macOS' : 'linux',
-    arch: 'x64',
-    cpuExtensions: [],
-    gpus: [],
-  }
+  return fallback
 }
 
 // ─── Download ─────────────────────────────────────────────────────────────────
@@ -527,33 +554,47 @@ export async function configureBackends(
       // prioritizeBackends) are only needed when no backend is selected yet — on some
       // machines these calls can hang indefinitely, so skip them when a backend is
       // already configured.
-      // Timeout the entire discovery: getLocalInstalledBackends or
-      // fetchRemoteBackends can hang indefinitely on some machines
-      // (Tauri IPC deadlock, network issues).  12s is generous —
-      // fetchRemoteBackends already has a 5s per-request timeout.
-      let discoveryTimeoutId!: ReturnType<typeof setTimeout>
-      const discoveryResult = await Promise.race([
-        Promise.all([getLocalInstalledBackends(), fetchRemoteBackends()]),
-        new Promise<[BackendVersion[], BackendVersion[]]>((resolve) => {
-          discoveryTimeoutId = setTimeout(() => {
-            console.warn('[llamacpp] Backend discovery timed out after 12s, using empty lists')
-            resolve([[], []])
-          }, 12_000)
-        }),
+      // Timeout each source independently. A hung local filesystem/Rust IPC
+      // call must not erase the remote bootstrap list on first-run Windows.
+      const [localBackends, discoveredRemoteBackends] = await Promise.all([
+        withTimeoutFallback(
+          getLocalInstalledBackends(),
+          [],
+          'Local backend discovery',
+          BACKEND_DISCOVERY_TIMEOUT_MS
+        ),
+        withTimeoutFallback(
+          fetchRemoteBackends(),
+          BOOTSTRAP_REMOTE_BACKENDS,
+          'Remote backend discovery',
+          BACKEND_DISCOVERY_TIMEOUT_MS
+        ),
       ])
-      clearTimeout(discoveryTimeoutId)
-      const [localBackends, remoteBackends] = discoveryResult
+      const remoteBackends =
+        discoveredRemoteBackends.length > 0
+          ? discoveredRemoteBackends
+          : BOOTSTRAP_REMOTE_BACKENDS
       console.debug(
         `[llamacpp] configureBackends: currentVersionBackend="${currentVersionBackend}", ` +
         `localBackends=${localBackends.length}, remoteBackends=${remoteBackends.length}`
       )
 
       if (!targetVersionBackend) {
-        const hw = await getHardwareInfo()
+        const hw = await withTimeoutFallback(
+          getHardwareInfo(),
+          {
+            osType: IS_WINDOWS ? 'windows' : IS_MACOS ? 'macOS' : 'linux',
+            arch: 'x64',
+            cpuExtensions: [],
+            gpus: [],
+          },
+          'Hardware discovery',
+          HARDWARE_INFO_TIMEOUT_MS
+        )
         // Rust IPC calls can hang indefinitely on some machines.
         // Give each 6 seconds then fall back to a JS heuristic.
         const withFallback = <T>(p: Promise<T>, fallback: T): Promise<T> =>
-          Promise.race([p, new Promise<T>((r) => setTimeout(() => r(fallback), 6_000))])
+          withTimeoutFallback(p, fallback, 'Rust backend ranking', HARDWARE_INFO_TIMEOUT_MS)
 
         let picked: string | null = null
         try {
