@@ -330,6 +330,33 @@ describe('llamacpp backend helpers', () => {
     ;(globalThis as Record<string, unknown>).IS_LINUX = true
   })
 
+  it('clears a saved Windows ARM64 backend when running on AMD64 Windows', async () => {
+    ;(globalThis as Record<string, unknown>).IS_WINDOWS = false
+    ;(globalThis as Record<string, unknown>).IS_MACOS = true
+    ;(globalThis as Record<string, unknown>).IS_LINUX = false
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: { platform: 'Win32', userAgent: 'Windows NT 10.0; Win64; x64' },
+    })
+    vi.mocked(fetch).mockRejectedValue(new Error('blocked'))
+    vi.mocked(prioritizeBackends).mockResolvedValueOnce(null as never)
+    mocks.existsSync.mockImplementation(async (path: string) => {
+      return path.includes('/backends') || path.endsWith('llama-server.exe')
+    })
+
+    const updateSetting = vi.fn()
+    await configureBackends('b9730/win-cpu-arm64', false, updateSetting)
+
+    expect(updateSetting).toHaveBeenNthCalledWith(1, 'version_backend', '')
+    expect(updateSetting).toHaveBeenCalledWith(
+      'version_backend',
+      'b9730/win-cpu-x64'
+    )
+
+    ;(globalThis as Record<string, unknown>).IS_MACOS = false
+    ;(globalThis as Record<string, unknown>).IS_LINUX = true
+  })
+
   it('ignores an incompatible Rust-ranked backend before falling back by OS', async () => {
     ;(globalThis as Record<string, unknown>).IS_WINDOWS = false
     ;(globalThis as Record<string, unknown>).IS_MACOS = true
@@ -343,6 +370,36 @@ describe('llamacpp backend helpers', () => {
       backend_string: 'b9730/macos-arm64',
       version: 'b9730',
       backend_type: 'macos-arm64',
+    })
+    mocks.existsSync.mockImplementation(async (path: string) => {
+      return path.includes('/backends') || path.endsWith('llama-server.exe')
+    })
+
+    const updateSetting = vi.fn()
+    await configureBackends('', false, updateSetting)
+
+    expect(updateSetting).toHaveBeenCalledWith(
+      'version_backend',
+      'b9730/win-cpu-x64'
+    )
+
+    ;(globalThis as Record<string, unknown>).IS_MACOS = false
+    ;(globalThis as Record<string, unknown>).IS_LINUX = true
+  })
+
+  it('ignores a Rust-ranked Windows ARM64 backend on AMD64 Windows', async () => {
+    ;(globalThis as Record<string, unknown>).IS_WINDOWS = false
+    ;(globalThis as Record<string, unknown>).IS_MACOS = true
+    ;(globalThis as Record<string, unknown>).IS_LINUX = false
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: { platform: 'Win32', userAgent: 'Windows NT 10.0; Win64; x64' },
+    })
+    vi.mocked(fetch).mockRejectedValue(new Error('blocked'))
+    vi.mocked(prioritizeBackends).mockResolvedValueOnce({
+      backend_string: 'b9730/win-cpu-arm64',
+      version: 'b9730',
+      backend_type: 'win-cpu-arm64',
     })
     mocks.existsSync.mockImplementation(async (path: string) => {
       return path.includes('/backends') || path.endsWith('llama-server.exe')

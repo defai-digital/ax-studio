@@ -99,32 +99,67 @@ function getRuntimeOsType(): 'windows' | 'macOS' | 'linux' {
   return 'linux'
 }
 
+function getRuntimeArch(): 'x64' | 'arm64' {
+  const nav = (globalThis as { navigator?: Navigator & { userAgentData?: { platform?: string } } }).navigator
+  const platform = [
+    nav?.userAgentData?.platform,
+    nav?.platform,
+    nav?.userAgent,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+
+  if (platform.includes('arm64') || platform.includes('aarch64')) return 'arm64'
+  if (
+    platform.includes('amd64') ||
+    platform.includes('x86_64') ||
+    platform.includes('x64') ||
+    platform.includes('win32') ||
+    platform.includes('wow64')
+  ) {
+    return 'x64'
+  }
+
+  return 'x64'
+}
+
 function isBackendCompatibleWithOs(
   backend: string,
-  osType: 'windows' | 'macOS' | 'linux'
+  osType: 'windows' | 'macOS' | 'linux',
+  arch: 'x64' | 'arm64'
 ): boolean {
   const normalized = backend.toLowerCase()
-  if (osType === 'windows') return normalized.startsWith('win-')
-  if (osType === 'macOS') return normalized.startsWith('macos-')
-  return normalized.startsWith('ubuntu-') || normalized.startsWith('linux-')
+  if (osType === 'windows') {
+    return normalized.startsWith('win-') && normalized.endsWith(`-${arch}`)
+  }
+  if (osType === 'macOS') {
+    return normalized.startsWith('macos-') && normalized.endsWith(`-${arch}`)
+  }
+  return (
+    (normalized.startsWith('ubuntu-') || normalized.startsWith('linux-')) &&
+    normalized.endsWith(`-${arch}`)
+  )
 }
 
 function filterBackendsForOs(
   backends: BackendVersion[],
-  osType: 'windows' | 'macOS' | 'linux'
+  osType: 'windows' | 'macOS' | 'linux',
+  arch: 'x64' | 'arm64'
 ): BackendVersion[] {
   return backends.filter((backend) =>
-    isBackendCompatibleWithOs(backend.backend, osType)
+    isBackendCompatibleWithOs(backend.backend, osType, arch)
   )
 }
 
 function isVersionBackendCompatibleWithOs(
   versionBackend: string,
-  osType: 'windows' | 'macOS' | 'linux'
+  osType: 'windows' | 'macOS' | 'linux',
+  arch: 'x64' | 'arm64'
 ): boolean {
   const [, ...backendParts] = versionBackend.split('/')
   const backend = backendParts.join('/')
-  return Boolean(backend) && isBackendCompatibleWithOs(backend, osType)
+  return Boolean(backend) && isBackendCompatibleWithOs(backend, osType, arch)
 }
 
 async function withTimeoutFallback<T>(
@@ -596,14 +631,15 @@ export async function configureBackends(
     try {
       let targetVersionBackend = currentVersionBackend
       const runtimeOsType = getRuntimeOsType()
+      const runtimeArch = getRuntimeArch()
 
       if (
         targetVersionBackend &&
-        !isVersionBackendCompatibleWithOs(targetVersionBackend, runtimeOsType)
+        !isVersionBackendCompatibleWithOs(targetVersionBackend, runtimeOsType, runtimeArch)
       ) {
         console.warn(
           `[llamacpp] Clearing incompatible version_backend "${targetVersionBackend}" ` +
-          `for runtime OS ${runtimeOsType}`
+          `for runtime OS ${runtimeOsType}/${runtimeArch}`
         )
         targetVersionBackend = ''
         await onSettingUpdate('version_backend', '')
@@ -634,13 +670,18 @@ export async function configureBackends(
         discoveredRemoteBackends.length > 0
           ? discoveredRemoteBackends
           : BOOTSTRAP_REMOTE_BACKENDS,
-        runtimeOsType
+        runtimeOsType,
+        runtimeArch
       )
-      const compatibleLocalBackends = filterBackendsForOs(localBackends, runtimeOsType)
+      const compatibleLocalBackends = filterBackendsForOs(
+        localBackends,
+        runtimeOsType,
+        runtimeArch
+      )
       console.debug(
         `[llamacpp] configureBackends: currentVersionBackend="${currentVersionBackend}", ` +
         `localBackends=${compatibleLocalBackends.length}, remoteBackends=${remoteBackends.length}, ` +
-        `runtimeOsType=${runtimeOsType}`
+        `runtimeOsType=${runtimeOsType}, runtimeArch=${runtimeArch}`
       )
 
       if (!targetVersionBackend) {
@@ -670,13 +711,13 @@ export async function configureBackends(
           const best = await withFallback(prioritizeBackends(ranked, hw.gpus.length > 0), null)
           if (
             best?.backend_string &&
-            isVersionBackendCompatibleWithOs(best.backend_string, runtimeOsType)
+            isVersionBackendCompatibleWithOs(best.backend_string, runtimeOsType, runtimeArch)
           ) {
             picked = best.backend_string
           } else if (best?.backend_string) {
             console.warn(
               `[llamacpp] Ignoring incompatible ranked backend "${best.backend_string}" ` +
-              `for runtime OS ${runtimeOsType}`
+              `for runtime OS ${runtimeOsType}/${runtimeArch}`
             )
           }
         } catch (e) {
