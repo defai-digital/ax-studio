@@ -47,11 +47,11 @@ vi.mock('@ax-studio/tauri-plugin-llamacpp-api', () => ({
   getLocalInstalledBackendsInternal: vi.fn(async () => []),
   listSupportedBackendsFromRust: vi.fn(async (remote, local) => [...local, ...remote]),
   getSupportedFeaturesFromRust: vi.fn(async () => undefined),
-  prioritizeBackends: vi.fn(async () => ({ backend_string: 'b1/cpu' })),
+  prioritizeBackends: vi.fn(async () => ({ backend_string: 'b1/ubuntu-x64' })),
   checkBackendForUpdates: vi.fn(async () => ({
     update_needed: true,
     new_version: 'b2',
-    target_backend: 'cpu',
+    target_backend: 'ubuntu-x64',
   })),
   removeOldBackendVersions: vi.fn(async () => undefined),
   findLatestVersionForBackend: vi.fn(async () => null),
@@ -229,7 +229,7 @@ describe('llamacpp backend helpers', () => {
     expect(getSupportedFeaturesFromRust).toHaveBeenCalledTimes(1)
     expect(listSupportedBackendsFromRust).toHaveBeenCalledTimes(1)
     expect(prioritizeBackends).toHaveBeenCalledTimes(1)
-    expect(updateSetting).toHaveBeenCalledWith('version_backend', 'b1/cpu')
+    expect(updateSetting).toHaveBeenCalledWith('version_backend', 'b1/ubuntu-x64')
   })
 
   it('selects a Windows bootstrap backend when release discovery and Rust ranking fail', async () => {
@@ -287,6 +287,63 @@ describe('llamacpp backend helpers', () => {
     })
     vi.mocked(fetch).mockRejectedValue(new Error('blocked'))
     vi.mocked(prioritizeBackends).mockResolvedValueOnce(null as never)
+    mocks.existsSync.mockImplementation(async (path: string) => {
+      return path.includes('/backends') || path.endsWith('llama-server.exe')
+    })
+
+    const updateSetting = vi.fn()
+    await configureBackends('', false, updateSetting)
+
+    expect(updateSetting).toHaveBeenCalledWith(
+      'version_backend',
+      'b9730/win-cpu-x64'
+    )
+
+    ;(globalThis as Record<string, unknown>).IS_MACOS = false
+    ;(globalThis as Record<string, unknown>).IS_LINUX = true
+  })
+
+  it('clears a saved macOS backend when running on Windows', async () => {
+    ;(globalThis as Record<string, unknown>).IS_WINDOWS = false
+    ;(globalThis as Record<string, unknown>).IS_MACOS = true
+    ;(globalThis as Record<string, unknown>).IS_LINUX = false
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: { platform: 'Win32', userAgent: 'Windows NT 10.0' },
+    })
+    vi.mocked(fetch).mockRejectedValue(new Error('blocked'))
+    vi.mocked(prioritizeBackends).mockResolvedValueOnce(null as never)
+    mocks.existsSync.mockImplementation(async (path: string) => {
+      return path.includes('/backends') || path.endsWith('llama-server.exe')
+    })
+
+    const updateSetting = vi.fn()
+    await configureBackends('b9730/macos-arm64', false, updateSetting)
+
+    expect(updateSetting).toHaveBeenNthCalledWith(1, 'version_backend', '')
+    expect(updateSetting).toHaveBeenCalledWith(
+      'version_backend',
+      'b9730/win-cpu-x64'
+    )
+
+    ;(globalThis as Record<string, unknown>).IS_MACOS = false
+    ;(globalThis as Record<string, unknown>).IS_LINUX = true
+  })
+
+  it('ignores an incompatible Rust-ranked backend before falling back by OS', async () => {
+    ;(globalThis as Record<string, unknown>).IS_WINDOWS = false
+    ;(globalThis as Record<string, unknown>).IS_MACOS = true
+    ;(globalThis as Record<string, unknown>).IS_LINUX = false
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: { platform: 'Win32', userAgent: 'Windows NT 10.0' },
+    })
+    vi.mocked(fetch).mockRejectedValue(new Error('blocked'))
+    vi.mocked(prioritizeBackends).mockResolvedValueOnce({
+      backend_string: 'b9730/macos-arm64',
+      version: 'b9730',
+      backend_type: 'macos-arm64',
+    })
     mocks.existsSync.mockImplementation(async (path: string) => {
       return path.includes('/backends') || path.endsWith('llama-server.exe')
     })

@@ -99,6 +99,34 @@ function getRuntimeOsType(): 'windows' | 'macOS' | 'linux' {
   return 'linux'
 }
 
+function isBackendCompatibleWithOs(
+  backend: string,
+  osType: 'windows' | 'macOS' | 'linux'
+): boolean {
+  const normalized = backend.toLowerCase()
+  if (osType === 'windows') return normalized.startsWith('win-')
+  if (osType === 'macOS') return normalized.startsWith('macos-')
+  return normalized.startsWith('ubuntu-') || normalized.startsWith('linux-')
+}
+
+function filterBackendsForOs(
+  backends: BackendVersion[],
+  osType: 'windows' | 'macOS' | 'linux'
+): BackendVersion[] {
+  return backends.filter((backend) =>
+    isBackendCompatibleWithOs(backend.backend, osType)
+  )
+}
+
+function isVersionBackendCompatibleWithOs(
+  versionBackend: string,
+  osType: 'windows' | 'macOS' | 'linux'
+): boolean {
+  const [, ...backendParts] = versionBackend.split('/')
+  const backend = backendParts.join('/')
+  return Boolean(backend) && isBackendCompatibleWithOs(backend, osType)
+}
+
 async function withTimeoutFallback<T>(
   promise: Promise<T>,
   fallback: T,
@@ -567,6 +595,19 @@ export async function configureBackends(
   configureBackendsPromise = (async () => {
     try {
       let targetVersionBackend = currentVersionBackend
+      const runtimeOsType = getRuntimeOsType()
+
+      if (
+        targetVersionBackend &&
+        !isVersionBackendCompatibleWithOs(targetVersionBackend, runtimeOsType)
+      ) {
+        console.warn(
+          `[llamacpp] Clearing incompatible version_backend "${targetVersionBackend}" ` +
+          `for runtime OS ${runtimeOsType}`
+        )
+        targetVersionBackend = ''
+        await onSettingUpdate('version_backend', '')
+      }
 
       // Fetch remote backends and hardware info.
       // The Rust IPC calls (getSupportedFeaturesFromRust, listSupportedBackendsFromRust,
@@ -589,20 +630,24 @@ export async function configureBackends(
           BACKEND_DISCOVERY_TIMEOUT_MS
         ),
       ])
-      const remoteBackends =
+      const remoteBackends = filterBackendsForOs(
         discoveredRemoteBackends.length > 0
           ? discoveredRemoteBackends
-          : BOOTSTRAP_REMOTE_BACKENDS
+          : BOOTSTRAP_REMOTE_BACKENDS,
+        runtimeOsType
+      )
+      const compatibleLocalBackends = filterBackendsForOs(localBackends, runtimeOsType)
       console.debug(
         `[llamacpp] configureBackends: currentVersionBackend="${currentVersionBackend}", ` +
-        `localBackends=${localBackends.length}, remoteBackends=${remoteBackends.length}`
+        `localBackends=${compatibleLocalBackends.length}, remoteBackends=${remoteBackends.length}, ` +
+        `runtimeOsType=${runtimeOsType}`
       )
 
       if (!targetVersionBackend) {
         const hw = await withTimeoutFallback(
           getHardwareInfo(),
           {
-            osType: getRuntimeOsType(),
+            osType: runtimeOsType,
             arch: 'x64',
             cpuExtensions: [],
             gpus: [],
@@ -618,9 +663,22 @@ export async function configureBackends(
         let picked: string | null = null
         try {
           await withFallback(getSupportedFeaturesFromRust(hw.osType, hw.cpuExtensions, hw.gpus), undefined)
-          const ranked = await withFallback(listSupportedBackendsFromRust(remoteBackends, localBackends), remoteBackends)
+          const ranked = await withFallback(
+            listSupportedBackendsFromRust(remoteBackends, compatibleLocalBackends),
+            remoteBackends
+          )
           const best = await withFallback(prioritizeBackends(ranked, hw.gpus.length > 0), null)
-          if (best?.backend_string) picked = best.backend_string
+          if (
+            best?.backend_string &&
+            isVersionBackendCompatibleWithOs(best.backend_string, runtimeOsType)
+          ) {
+            picked = best.backend_string
+          } else if (best?.backend_string) {
+            console.warn(
+              `[llamacpp] Ignoring incompatible ranked backend "${best.backend_string}" ` +
+              `for runtime OS ${runtimeOsType}`
+            )
+          }
         } catch (e) {
           console.warn('[llamacpp] Rust backend ranking failed, using JS fallback:', e)
         }
@@ -634,8 +692,8 @@ export async function configureBackends(
         // Final fallback: if remote discovery failed (CSP, network, etc.)
         // use the newest locally installed backend.  This ensures the engine
         // can start even when GitHub is unreachable.
-        if (!picked && localBackends.length > 0) {
-          const latest = localBackends.reduce((a, b) =>
+        if (!picked && compatibleLocalBackends.length > 0) {
+          const latest = compatibleLocalBackends.reduce((a, b) =>
             b.version > a.version ? b : a
           )
           picked = `${latest.version}/${latest.backend}`
