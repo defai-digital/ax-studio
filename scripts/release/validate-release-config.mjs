@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const repoRoot = path.resolve(import.meta.dirname, '..', '..')
-const stablePlatforms = ['darwin-aarch64']
+const stablePlatforms = ['darwin-aarch64', 'windows-x86_64']
 
 function readJson(relativePath) {
   return JSON.parse(fs.readFileSync(path.join(repoRoot, relativePath), 'utf8'))
