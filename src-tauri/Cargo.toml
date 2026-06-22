@@ -145,8 +145,8 @@ windows-sys = { version = "0.60.2", features = ["Win32_Storage_FileSystem"] }
 # do NOT use `branch = "main"`, which would silently auto-pull every new
 # commit and could break our integration without notice.
 [target.'cfg(target_os = "macos")'.dependencies]
-ax-engine-core = { git = "https://github.com/defai-digital/ax-engine", rev = "41021af98087e0175a44c33c6c67356915eb37cc" }
-ax-engine-sdk = { git = "https://github.com/defai-digital/ax-engine", rev = "41021af98087e0175a44c33c6c67356915eb37cc", features = ["mlx-native", "tokenizer"] }
+ax-engine-core = { git = "https://github.com/defai-digital/ax-engine", rev = "a55ac03df228d4b0343d4dfbf6f1ccef4fba419b" }
+ax-engine-sdk = { git = "https://github.com/defai-digital/ax-engine", rev = "a55ac03df228d4b0343d4dfbf6f1ccef4fba419b", features = ["mlx-native", "tokenizer"] }
 # Direct `tokenizers` dep so we can decode generated token ids back to text —
 # EngineTokenizer (from ax-engine-sdk) only exposes `encode`. The SDK already
 # pulls this in transitively with matching features; declared here so we can

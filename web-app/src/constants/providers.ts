@@ -19,7 +19,6 @@ export const LEGACY_BUNDLED_MLX_MODEL_IDS = new Set([
   'mlx-community/Qwen3-Coder-Next-4bit',
   'mlx-community/Qwen3.6-35B-A3B-5bit',
   'mlx-community/Qwen3.6-35B-A3B-4bit',
-  'mlx-community/Qwen3.5-35B-A3B-4bit',
   'mlx-community/GLM-4.7-Flash-4bit',
 ])
 
