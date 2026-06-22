@@ -39,7 +39,6 @@ import type { UIMessage } from '@ai-sdk/react'
 import type { ThreadMessage } from '@ax-studio/core'
 import { useLocalKnowledge } from '@/hooks/research/useLocalKnowledge'
 import { useThreadLocalKnowledge } from '@/hooks/threads/use-thread-local-knowledge'
-import { useThreadResearch } from '@/hooks/threads/use-thread-research'
 import { useThreadChat } from '@/hooks/threads/use-thread-chat'
 import { useThreadTools, type AddToolOutputFn } from '@/hooks/threads/use-thread-tools'
 import { useThreadSplit } from '@/hooks/threads/use-thread-split'
@@ -110,8 +109,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     [providers, selectedModelFromStore, selectedProvider, thread?.model]
   )
   const selectedProviderId = thread?.model?.provider ?? selectedProvider
-  const { pinnedResearch, clearResearch, handleResearchCommand, cancelResearch } =
-    useThreadResearch(threadId)
   const { promptResolution, optimizedModelConfig } = useThreadConfig({
     thread,
     selectedModel,
@@ -241,8 +238,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     setCurrentThreadId,
     setCurrentAssistant,
     processAndSendMessage,
-    handleResearchCommand,
-    cancelResearch,
     updateThread,
     setThreadPromptDraft,
   })
@@ -250,7 +245,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   // ─── Submit handler ───────────────────────────────────────────────────────
   const handleSubmit = useCallback(
     async (text: string) => {
-      if (handleResearchCommand(text)) return
       resetTurnState() // Reset fabric_search dedup tracker for new user message
       try {
         await processAndSendMessage(text)
@@ -262,7 +256,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
         })
       }
     },
-    [processAndSendMessage, handleResearchCommand, resetTurnState]
+    [processAndSendMessage, resetTurnState]
   )
 
   const threadModel = useMemo(() => thread?.model, [thread])
@@ -295,8 +289,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
       handleDeleteMessage={handleDeleteMessage}
       handleContextSizeIncrease={handleContextSizeIncrease}
       reasoningContainerRef={reasoningContainerRef}
-      pinnedResearch={pinnedResearch}
-      clearResearch={clearResearch}
       splitPaneOrder={splitPaneOrder}
       splitThreadId={splitThreadId}
       setSplitThreadId={setSplitThreadId}

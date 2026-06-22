@@ -41,8 +41,6 @@ describe('useThreadEffects', () => {
       setCurrentThreadId: vi.fn(),
       setCurrentAssistant: vi.fn(),
       processAndSendMessage: vi.fn(),
-      handleResearchCommand: vi.fn().mockReturnValue(false),
-      cancelResearch: vi.fn(),
       updateThread: vi.fn(),
       setThreadPromptDraft: vi.fn(),
     }
@@ -158,45 +156,6 @@ describe('useThreadEffects', () => {
         'strict mode first message'
       )
     })
-  })
-
-  it('routes /research initial message through handleResearchCommand', async () => {
-    defaultInput.handleResearchCommand = vi.fn().mockReturnValue(true)
-    sessionStorage.setItem(
-      `initial-message-${threadId}`,
-      JSON.stringify({ text: '/research quantum computing' })
-    )
-
-    renderHook(() => useThreadEffects(defaultInput))
-
-    await vi.waitFor(() => {
-      expect(defaultInput.handleResearchCommand).toHaveBeenCalledWith(
-        '/research quantum computing'
-      )
-    })
-
-    // processAndSendMessage should NOT be called when research command returns true
-    expect(defaultInput.processAndSendMessage).not.toHaveBeenCalled()
-  })
-
-  it('does not cancel research started from the initial message on unmount', async () => {
-    defaultInput.handleResearchCommand = vi.fn().mockReturnValue(true)
-    sessionStorage.setItem(
-      `initial-message-${threadId}`,
-      JSON.stringify({ text: '/research ai agents' })
-    )
-
-    const { unmount } = renderHook(() => useThreadEffects(defaultInput))
-
-    await vi.waitFor(() => {
-      expect(defaultInput.handleResearchCommand).toHaveBeenCalledWith(
-        '/research ai agents'
-      )
-    })
-
-    unmount()
-
-    expect(defaultInput.cancelResearch).not.toHaveBeenCalled()
   })
 
   it('applies thread prompt from sessionStorage', () => {

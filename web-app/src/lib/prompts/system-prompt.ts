@@ -183,7 +183,7 @@ The app searches the user's personal knowledge base before sending the message. 
 `
 
 /**
- * Appended when research or local knowledge is active.
+ * Appended when local knowledge is active.
  * Instructs the model to cite sources using numbered references.
  */
 export const CITATION_FORMAT_INSTRUCTION = `

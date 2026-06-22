@@ -21,7 +21,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu'
-import { ArrowUp, Atom, Binary, Database, ImagePlus, Loader2, Paperclip, PlusIcon, SearchIcon, Square, type LucideIcon, User, Wrench } from "lucide-react";
+import { ArrowUp, Atom, Binary, Database, ImagePlus, Loader2, Paperclip, PlusIcon, Square, type LucideIcon, User, Wrench } from "lucide-react";
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { TokenCounter } from '@/components/TokenCounter'
 import { AvatarEmoji } from '@/components/common/AvatarEmoji'
@@ -29,11 +29,6 @@ import DropdownToolsAvailable from '@/containers/DropdownToolsAvailable'
 import { McpExtensionToolLoader } from '@/containers/McpExtensionToolLoader'
 import type { MCPToolComponentProps, ThreadMessage } from '@ax-studio/core'
 import type { MCPTool } from '@/types/mcp'
-
-const RESEARCH_PROMPTS = [
-  { label: 'Standard', prompt: '/research:standard ', description: 'Balanced depth with page scraping' },
-  { label: 'Deep',     prompt: '/research:deep ',     description: 'Thorough multi-level research'     },
-] as const
 
 type ToolbarIconButtonProps = {
   icon: LucideIcon
@@ -74,9 +69,6 @@ type Props = {
   // Layout state
   isStreaming: boolean
   prompt: string
-  // Textarea ref (for quick-prompt focus)
-  textareaRef: React.RefObject<HTMLTextAreaElement | null>
-  setPrompt: (v: string) => void
   // Model capabilities
   selectedModel: Model | undefined
   // Assistant selector
@@ -114,8 +106,6 @@ type Props = {
 export const ChatInputToolbar = memo(function ChatInputToolbar({
   isStreaming,
   prompt,
-  textareaRef,
-  setPrompt,
   selectedModel,
   projectId,
   initialMessage,
@@ -145,17 +135,6 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
 }: Props) {
   const { t } = useTranslation()
   const selectedModelHasTools = selectedModel?.capabilities?.includes('tools') ?? false
-
-  const applyQuickPrompt = (value: string) => {
-    setPrompt(value)
-    setTimeout(() => {
-      if (textareaRef.current) {
-        textareaRef.current.focus()
-        const len = textareaRef.current.value.length
-        textareaRef.current.setSelectionRange(len, len)
-      }
-    }, 0)
-  }
 
   return (
     <div className="absolute z-20 bg-transparent bottom-0 w-full px-2 pb-2 pt-1">
@@ -250,22 +229,6 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                     </DropdownMenuSubContent>
                   </DropdownMenuSub>
                 )}
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <SearchIcon size={18} className="text-muted-foreground" />
-                    <span>Deep Research</span>
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    {RESEARCH_PROMPTS.map(({ label, prompt: p, description }) => (
-                      <DropdownMenuItem key={label} onClick={() => applyQuickPrompt(p)}>
-                        <div className="flex flex-col gap-0.5">
-                          <span>{label}</span>
-                          <span className="text-[11px] text-muted-foreground">{description}</span>
-                        </div>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
               </DropdownMenuContent>
             </DropdownMenu>
 

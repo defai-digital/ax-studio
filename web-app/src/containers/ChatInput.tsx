@@ -358,8 +358,6 @@ const ChatInput = memo(function ChatInput({
         <ChatInputToolbar
           isStreaming={isStreaming}
           prompt={prompt}
-          textareaRef={textareaRef}
-          setPrompt={setPrompt}
           selectedModel={selectedModel}
           projectId={projectId}
           initialMessage={initialMessage}

@@ -5,7 +5,6 @@ import { SMART_START_WORKFLOWS } from '../workflows'
 describe('SMART_START_WORKFLOWS', () => {
   it('defines the expected workflow catalog', () => {
     expect(SMART_START_WORKFLOWS.map((workflow) => workflow.id)).toEqual([
-      'research',
       'write',
       'analyze',
       'compare',
@@ -42,12 +41,11 @@ describe('SMART_START_WORKFLOWS', () => {
       workflow.buildPrompt(values),
     )
 
-    expect(prompts[0]).toContain('comprehensive deep dive')
-    expect(prompts[1]).toContain('Use a professional tone')
-    expect(prompts[2]).toContain('Provide a full analysis')
-    expect(prompts[3]).toContain('cost and quality')
-    expect(prompts[4]).toContain('action items')
-    expect(prompts[5]).toContain('Fully localize')
+    expect(prompts[0]).toContain('Use a professional tone')
+    expect(prompts[1]).toContain('Provide a full analysis')
+    expect(prompts[2]).toContain('cost and quality')
+    expect(prompts[3]).toContain('action items')
+    expect(prompts[4]).toContain('Fully localize')
   })
 
   it('uses fallback prompt wording when optional fields are absent', () => {

@@ -50,7 +50,6 @@ export type MainThreadPaneProps = {
   setThreadPromptDraft: (draft: string) => void
   promptResolution: { source: string; resolvedPrompt: string }
   updateThread: (id: string, updates: Partial<Thread>) => void
-  hasPanels?: boolean
   isSplitView?: boolean
   onSplitClose?: () => void
 }
@@ -76,18 +75,15 @@ export function MainThreadPane({
   setThreadPromptDraft,
   promptResolution,
   updateThread,
-  hasPanels = false,
   isSplitView = false,
   onSplitClose,
 }: MainThreadPaneProps) {
   const containerCls = isSplitView
     ? 'h-full rounded-xl border bg-background overflow-hidden flex flex-col relative'
-    : hasPanels
-      ? 'h-full rounded-xl border bg-background overflow-hidden flex flex-col'
-      : 'flex flex-1 flex-col h-full overflow-hidden'
+    : 'flex flex-1 flex-col h-full overflow-hidden'
 
-  const contentCls = isSplitView || hasPanels ? 'mx-auto w-full px-2' : 'mx-auto w-full max-w-2xl px-4 sm:px-6'
-  const inputCls = isSplitView || hasPanels ? 'p-2' : 'py-4 mx-auto w-full max-w-2xl px-4 sm:px-6'
+  const contentCls = isSplitView ? 'mx-auto w-full px-2' : 'mx-auto w-full max-w-2xl px-4 sm:px-6'
+  const inputCls = isSplitView ? 'p-2' : 'py-4 mx-auto w-full max-w-2xl px-4 sm:px-6'
 
   const title = thread?.title || (isSplitView ? 'Current Thread' : 'New Thread')
   const firstUserMessageText = getFirstUserMessageText(chatMessages)

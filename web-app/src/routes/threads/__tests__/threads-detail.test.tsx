@@ -58,14 +58,6 @@ vi.mock('@/hooks/research/useLocalKnowledge', () => ({
   }),
 }))
 
-vi.mock('@/hooks/threads/use-thread-research', () => ({
-  useThreadResearch: () => ({
-    pinnedResearch: null,
-    clearResearch: vi.fn(),
-    handleResearchCommand: vi.fn(),
-  }),
-}))
-
 vi.mock('@/hooks/threads/use-thread-config', () => ({
   useThreadConfig: () => ({
     promptResolution: { resolvedPrompt: '' },

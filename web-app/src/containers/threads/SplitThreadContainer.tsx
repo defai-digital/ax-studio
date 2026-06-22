@@ -22,14 +22,12 @@ import { useChat } from '@/hooks/chat/use-chat'
 import { useThreadConfig } from '@/hooks/threads/use-thread-config'
 import { useThreadChat } from '@/hooks/threads/use-thread-chat'
 import { useThreadTools, type AddToolOutputFn } from '@/hooks/threads/use-thread-tools'
-import { useThreadResearch } from '@/hooks/threads/use-thread-research'
 import { extractContentPartsFromUIMessage } from '@/lib/messages'
 import {
   CODE_EXECUTION_INSTRUCTION,
   LOCAL_KNOWLEDGE_INSTRUCTION,
   CITATION_FORMAT_INSTRUCTION,
 } from '@/lib/prompts/system-prompt'
-import { ResearchPanel } from '@/components/research/ResearchPanel'
 import { MainThreadPane } from '@/containers/threads/MainThreadPane'
 
 export function SplitThreadContainer({
@@ -61,8 +59,6 @@ export function SplitThreadContainer({
     autoTuningEnabled,
     threadMessageCount,
   })
-  const { pinnedResearch, clearResearch, handleResearchCommand } =
-    useThreadResearch(threadId)
   const {
     followUpMessage,
     onToolCall,
@@ -198,11 +194,10 @@ export function SplitThreadContainer({
   // ─── Submit handler ───────────────────────────────────────────────────────
   const handleSubmit = useCallback(
     async (text: string) => {
-      if (handleResearchCommand(text)) return
       resetTurnState()
       await processAndSendMessage(text)
     },
-    [processAndSendMessage, handleResearchCommand, resetTurnState],
+    [processAndSendMessage, resetTurnState],
   )
 
   // ─── Derived values ──────────────────────────────────────────────────────
@@ -223,14 +218,6 @@ export function SplitThreadContainer({
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="relative h-full">
-      {pinnedResearch && (
-        <div className="absolute inset-0 z-10 flex flex-col bg-background rounded-md border overflow-hidden">
-          <ResearchPanel
-            threadId={threadId}
-            onClose={() => clearResearch(threadId)}
-          />
-        </div>
-      )}
       <MainThreadPane
         threadId={threadId}
         thread={thread}

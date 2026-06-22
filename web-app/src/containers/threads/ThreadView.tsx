@@ -19,11 +19,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { ResearchPanel } from '@/components/research/ResearchPanel'
 import { SplitThreadContainer } from '@/containers/threads/SplitThreadContainer'
 import { MainThreadPane } from '@/containers/threads/MainThreadPane'
 import { Columns2, MessageSquareText } from 'lucide-react'
-import type { ResearchEntry } from '@/hooks/research/useResearchPanel'
 
 export type ThreadViewProps = {
   threadId: string
@@ -40,8 +38,6 @@ export type ThreadViewProps = {
   handleDeleteMessage: (messageId: string) => void
   handleContextSizeIncrease: () => Promise<void>
   reasoningContainerRef: RefObject<HTMLDivElement | null>
-  pinnedResearch: ResearchEntry | null
-  clearResearch: (threadId: string) => void
   splitPaneOrder: string[] | null
   splitThreadId: string | null
   setSplitThreadId: (id: string | null) => void
@@ -70,8 +66,6 @@ export function ThreadView({
   handleDeleteMessage,
   handleContextSizeIncrease,
   reasoningContainerRef,
-  pinnedResearch,
-  clearResearch,
   splitPaneOrder,
   splitThreadId,
   setSplitThreadId,
@@ -85,7 +79,6 @@ export function ThreadView({
   updateThread,
 }: ThreadViewProps) {
   const navigate = useNavigate()
-  const hasPanels = Boolean(pinnedResearch)
 
   return (
     <div className="flex flex-col h-[calc(100dvh-(env(safe-area-inset-bottom)+env(safe-area-inset-top)))]">
@@ -163,11 +156,6 @@ export function ThreadView({
             {splitPaneOrder.map((pane) =>
               pane === 'main' ? (
                 <div key="main-pane" className="relative h-full">
-                  {pinnedResearch && (
-                    <div className="absolute inset-0 z-10 flex flex-col bg-background rounded-md border overflow-hidden">
-                      <ResearchPanel threadId={threadId} onClose={() => clearResearch(threadId)} />
-                    </div>
-                  )}
                   <MainThreadPane
                     threadId={threadId}
                     thread={thread}
@@ -208,7 +196,7 @@ export function ThreadView({
             )}
           </div>
         ) : (
-          <div className={hasPanels ? 'grid grid-cols-2 gap-2 px-2 pb-2 h-full' : 'flex flex-1 flex-col h-full overflow-hidden'}>
+          <div className="flex flex-1 flex-col h-full overflow-hidden">
             <MainThreadPane
               threadId={threadId}
               thread={thread}
@@ -230,11 +218,7 @@ export function ThreadView({
               setThreadPromptDraft={setThreadPromptDraft}
               promptResolution={promptResolution}
               updateThread={updateThread}
-              hasPanels={hasPanels}
             />
-            {pinnedResearch && (
-              <ResearchPanel threadId={threadId} onClose={() => clearResearch(threadId)} />
-            )}
           </div>
         )}
       </div>

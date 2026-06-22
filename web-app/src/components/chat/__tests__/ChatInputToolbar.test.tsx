@@ -205,12 +205,6 @@ describe('ChatInputToolbar — Phase 3 Manual Test Protocol', () => {
     expect(sendButton.className).toContain('to-violet-600')
   })
 
-  // Quick prompt dropdown items
-  it('renders deep research quick prompt option', () => {
-    render(<ChatInputToolbar {...createProps()} />)
-    expect(screen.getByText('Deep Research')).toBeInTheDocument()
-  })
-
   it('renders attach image action when handler is provided', () => {
     render(<ChatInputToolbar {...createProps({ onAttachImages: vi.fn() })} />)
     expect(screen.getByText('Attach Image')).toBeInTheDocument()

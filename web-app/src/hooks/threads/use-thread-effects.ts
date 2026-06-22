@@ -26,8 +26,6 @@ export type ThreadEffectsInput = {
   setCurrentThreadId: (id?: string) => void
   setCurrentAssistant: (assistant: Assistant) => void
   processAndSendMessage: (text: string) => Promise<void>
-  handleResearchCommand: (text: string) => boolean
-  cancelResearch: () => void
   updateThread: (id: string, updates: Partial<Thread>) => void
   setThreadPromptDraft: (draft: string) => void
 }
@@ -43,7 +41,6 @@ export function useThreadEffects({
   setCurrentThreadId,
   setCurrentAssistant,
   processAndSendMessage,
-  handleResearchCommand,
   updateThread,
   setThreadPromptDraft,
 }: ThreadEffectsInput): void {
@@ -100,8 +97,6 @@ export function useThreadEffects({
   // Use refs for all callbacks so the effect only re-runs when threadId changes.
   // Callbacks are recreated on every render (unstable deps chain via Zustand
   // selectors), so putting them in the dep array would re-trigger the effect.
-  const handleResearchCommandRef = useRef(handleResearchCommand)
-  handleResearchCommandRef.current = handleResearchCommand
   const processAndSendMessageRef = useRef(processAndSendMessage)
   processAndSendMessageRef.current = processAndSendMessage
   const updateThreadRef = useRef(updateThread)
@@ -145,10 +140,6 @@ export function useThreadEffects({
         if (!message) {
           console.error('Invalid initial message payload in sessionStorage')
           initialMessageSentForThreadRef.current = null
-          return
-        }
-        if (handleResearchCommandRef.current(message)) {
-          clearInitialMessage()
           return
         }
         await processAndSendMessageRef.current(message)

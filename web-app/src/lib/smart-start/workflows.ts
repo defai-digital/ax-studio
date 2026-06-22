@@ -1,5 +1,4 @@
 import {
-  Search,
   PenTool,
   BarChart3,
   GitCompare,
@@ -32,38 +31,6 @@ export interface SmartStartWorkflow {
 }
 
 export const SMART_START_WORKFLOWS: SmartStartWorkflow[] = [
-  {
-    id: 'research',
-    icon: Search,
-    label: 'Research & Summarize',
-    description: 'Find and summarize information about a topic',
-    color: 'violet',
-    tag: 'Research',
-    fields: [
-      { id: 'topic', label: 'What topic?', type: 'text', placeholder: 'e.g., AI trends in healthcare 2026', required: true },
-      {
-        id: 'depth', label: 'How deep?', type: 'radio',
-        options: [
-          { value: 'quick', label: 'Quick overview' },
-          { value: 'detailed', label: 'Detailed report' },
-          { value: 'deep', label: 'Deep dive' },
-        ],
-      },
-      {
-        id: 'format', label: 'Output format', type: 'radio',
-        options: [
-          { value: 'summary', label: 'Summary' },
-          { value: 'bullets', label: 'Bullet points' },
-          { value: 'report', label: 'Full report' },
-        ],
-      },
-    ],
-    buildPrompt: (v) => {
-      const depth = v.depth === 'deep' ? 'comprehensive deep dive' : v.depth === 'detailed' ? 'detailed report' : 'quick overview'
-      const format = v.format === 'report' ? 'Write a full report with sections.' : v.format === 'bullets' ? 'Use bullet points.' : 'Write a concise summary.'
-      return `Research the topic: "${v.topic}"\n\nProvide a ${depth}. ${format} Include sources for key claims.`
-    },
-  },
   {
     id: 'write',
     icon: PenTool,
