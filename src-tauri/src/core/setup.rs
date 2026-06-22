@@ -816,11 +816,44 @@ pub fn setup_tray(app: &App) -> tauri::Result<TrayIcon> {
 pub fn setup_theme_listener<R: Runtime>(app: &App<R>) -> tauri::Result<()> {
     // Setup theme listener for main window
     if let Some(window) = app.get_webview_window("main") {
+        configure_macos_zoom_behavior(&window);
         setup_window_theme_listener(app.handle().clone(), window);
     }
 
     Ok(())
 }
+
+#[cfg(target_os = "macos")]
+fn configure_macos_zoom_behavior<R: Runtime>(window: &tauri::WebviewWindow<R>) {
+    if let Err(error) = window.with_webview(|webview| {
+        let ns_window = webview.ns_window();
+        if ns_window.is_null() {
+            return;
+        }
+
+        unsafe {
+            use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
+
+            let ns_window = &*ns_window.cast::<NSWindow>();
+            let mut behavior = ns_window.collectionBehavior();
+            behavior.remove(
+                NSWindowCollectionBehavior::FullScreenPrimary
+                    | NSWindowCollectionBehavior::FullScreenAuxiliary
+                    | NSWindowCollectionBehavior::FullScreenAllowsTiling,
+            );
+            behavior.insert(
+                NSWindowCollectionBehavior::FullScreenNone
+                    | NSWindowCollectionBehavior::FullScreenDisallowsTiling,
+            );
+            ns_window.setCollectionBehavior(behavior);
+        }
+    }) {
+        log::warn!("Failed to configure macOS window zoom behavior: {error}");
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn configure_macos_zoom_behavior<R: Runtime>(_window: &tauri::WebviewWindow<R>) {}
 
 fn setup_window_theme_listener<R: Runtime>(
     app_handle: tauri::AppHandle<R>,

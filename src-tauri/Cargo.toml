@@ -147,6 +147,7 @@ windows-sys = { version = "0.60.2", features = ["Win32_Storage_FileSystem"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 ax-engine-core = { git = "https://github.com/defai-digital/ax-engine", rev = "a55ac03df228d4b0343d4dfbf6f1ccef4fba419b" }
 ax-engine-sdk = { git = "https://github.com/defai-digital/ax-engine", rev = "a55ac03df228d4b0343d4dfbf6f1ccef4fba419b", features = ["mlx-native", "tokenizer"] }
+objc2-app-kit = { version = "0.3.2", features = ["NSWindow"] }
 # Direct `tokenizers` dep so we can decode generated token ids back to text —
 # EngineTokenizer (from ax-engine-sdk) only exposes `encode`. The SDK already
 # pulls this in transitively with matching features; declared here so we can

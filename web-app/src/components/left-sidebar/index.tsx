@@ -34,8 +34,8 @@ export function LeftSidebar() {
   return (
     <div className="relative z-50">
       <Sidebar variant="sidebar" collapsible="icon">
-        {/* Header — matches Figma: px-3 pt-4 pb-3 */}
-        <SidebarHeader className="flex px-3 pt-4 pb-3">
+        {/* Header — leave room for the macOS overlay titlebar/traffic lights. */}
+        <SidebarHeader className={`flex px-3 pb-3 ${IS_MACOS ? 'pt-[calc(env(safe-area-inset-top)+3.5rem)]' : 'pt-4'}`}>
           {/* Collapsed: logo icon only */}
           <div className="hidden group-data-[collapsible=icon]:flex justify-center mb-1">
             <div className="size-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-md shadow-indigo-500/20">
