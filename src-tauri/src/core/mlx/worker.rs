@@ -10,7 +10,7 @@
 #![cfg(target_os = "macos")]
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread::{self, JoinHandle};
 
@@ -406,6 +406,14 @@ fn handle_load(
     let tokenizer = Tokenizer::from_file(&tokenizer_path)
         .map_err(|e| format!("Tokenizer::from_file failed for {model_id}: {e}"))?;
 
+    // Validate model architecture before calling into MLX FFI. Unsupported
+    // architectures (e.g. multimodal MoE) cause the MLX C library to abort()
+    // which kills the worker thread with no recoverable error. Pre-checking
+    // here gives the user a clear message instead of a silent crash.
+    if let Err(arch_err) = validate_model_architecture(model_dir, model_id) {
+        return Err(arch_err);
+    }
+
     // Build the first warm session up-front, so the user gets a clear error
     // here instead of on first generate and the first request can skip
     // EngineSession::new on the visible path.
@@ -760,6 +768,82 @@ fn decoded_text_delta(previous: &str, current: &str) -> String {
 
 fn decoded_text_has_incomplete_trailing_codepoint(text: &str) -> bool {
     text.ends_with('\u{FFFD}')
+}
+
+/// Validate the model architecture from `config.json` before calling into MLX
+/// FFI. The MLX C library calls `abort()` on unsupported architectures, which
+/// kills the worker thread irrecoverably. We reject known-unsupported types
+/// (multimodal MoE, vision-conditional) with a clear error message.
+fn validate_model_architecture(model_dir: &Path, model_id: &str) -> Result<(), String> {
+    let config_path = model_dir.join("config.json");
+    if !config_path.is_file() {
+        // No config.json — let the engine decide; it may still work.
+        return Ok(());
+    }
+
+    let config_str = match std::fs::read_to_string(&config_path) {
+        Ok(s) => s,
+        Err(_) => return Ok(()), // can't read — don't block
+    };
+
+    // Minimal JSON parse: extract "architectures": ["..."] without pulling
+    // in a full JSON crate. The field is always a simple string array.
+    let Some(arch_block) = extract_json_string_array(&config_str, "architectures") else {
+        return Ok(()); // no architectures field — don't block
+    };
+
+    if arch_block.is_empty() {
+        return Ok(());
+    }
+
+    let arch = &arch_block[0]; // primary architecture
+
+    // Known-unsupported: multimodal MoE variants that the ax-engine MLX
+    // backend cannot initialize (causes C-level abort, not a Rust error).
+    let unsupported_patterns = ["MoeForConditionalGeneration"];
+
+    for pattern in &unsupported_patterns {
+        if arch.contains(pattern) {
+            return Err(format!(
+                "Model '{model_id}' uses architecture '{arch}' which is not supported by the MLX engine. \
+                 This architecture may require a multimodal or MoE backend that is not yet available. \
+                 Please use a text-only model variant instead (e.g. Qwen3.5-9B-4bit, Qwen3-Coder-Next-4bit, or gemma-4-e2b-it-4bit)."
+            ));
+        }
+    }
+
+    log::info!("[mlx-worker] architecture check passed for {model_id}: {arch}");
+    Ok(())
+}
+
+/// Extract the first string array value for a given JSON key from raw JSON
+/// text. Minimal parser — avoids pulling in serde_json for a single field.
+fn extract_json_string_array(json: &str, key: &str) -> Option<Vec<String>> {
+    let pattern = format!("\"{}\"", key);
+    let key_pos = json.find(&pattern)?;
+    let after_key = &json[key_pos + pattern.len()..];
+    let colon_pos = after_key.find(':')?;
+    let after_colon = after_key[colon_pos + 1..].trim_start();
+
+    if !after_colon.starts_with('[') {
+        return None;
+    }
+    let bracket_start = &after_colon[1..];
+    let bracket_end = bracket_start.find(']')?;
+    let array_content = &bracket_start[..bracket_end];
+
+    let mut results = Vec::new();
+    let mut remaining = array_content;
+    while let Some(quote_start) = remaining.find('"') {
+        let inner = &remaining[quote_start + 1..];
+        if let Some(quote_end) = inner.find('"') {
+            results.push(inner[..quote_end].to_string());
+            remaining = &inner[quote_end + 1..];
+        } else {
+            break;
+        }
+    }
+    Some(results)
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1173,6 +1257,48 @@ mod tests {
     fn cumulative_decode_delta_emits_only_new_text() {
         assert_eq!(decoded_text_delta("Hello", "Hello world"), " world");
         assert_eq!(decoded_text_delta("AGI", "AGI stands"), " stands");
+    }
+
+    #[test]
+    fn extract_json_string_array_parses_architectures() {
+        let json = r#"{"architectures": ["Qwen3_5MoeForConditionalGeneration"], "model_type": "qwen3_5_moe"}"#;
+        let result = extract_json_string_array(json, "architectures");
+        assert_eq!(result, Some(vec!["Qwen3_5MoeForConditionalGeneration".to_string()]));
+    }
+
+    #[test]
+    fn extract_json_string_array_returns_none_for_missing_key() {
+        let json = r#"{"model_type": "qwen3"}"#;
+        assert_eq!(extract_json_string_array(json, "architectures"), None);
+    }
+
+    #[test]
+    fn validate_model_architecture_rejects_moe() {
+        let dir = std::env::temp_dir().join("test_mlx_arch_reject");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("config.json"),
+            r#"{"architectures": ["Qwen3_5MoeForConditionalGeneration"]}"#,
+        )
+        .unwrap();
+        let result = validate_model_architecture(&dir, "mlx-community/Qwen3.5-35B-A3B-4bit");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not supported"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn validate_model_architecture_allows_text_only() {
+        let dir = std::env::temp_dir().join("test_mlx_arch_allow");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("config.json"),
+            r#"{"architectures": ["Qwen3ForCausalLM"]}"#,
+        )
+        .unwrap();
+        let result = validate_model_architecture(&dir, "mlx-community/Qwen3-8B-4bit");
+        assert!(result.is_ok());
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
