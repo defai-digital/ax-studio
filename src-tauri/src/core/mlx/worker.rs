@@ -265,7 +265,22 @@ fn build_session(model_dir: &PathBuf) -> Result<EngineSession, String> {
             "OFF (default; direct path)"
         },
     );
-    EngineSession::new(config).map_err(|e| format!("EngineSession::new failed: {e:?}"))
+    // Wrap in catch_unwind: the MLX FFI layer may panic on unsupported
+    // configurations or corrupted model files. Without this, the panic
+    // kills the worker thread and the frontend sees only "worker dropped
+    // reply" with no useful error message.
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| EngineSession::new(config)))
+        .map_err(|panic_info| {
+            let detail = if let Some(s) = panic_info.downcast_ref::<String>() {
+                s.clone()
+            } else if let Some(s) = panic_info.downcast_ref::<&str>() {
+                s.to_string()
+            } else {
+                "unknown panic".to_string()
+            };
+            format!("MLX engine panicked during model initialization: {detail}")
+        })?
+        .map_err(|e| format!("EngineSession::new failed: {e:?}"))
 }
 
 fn take_warm_session(entry: &mut LoadedModel, model_id: &str) -> Result<EngineSession, String> {
@@ -798,21 +813,7 @@ fn validate_model_architecture(model_dir: &Path, model_id: &str) -> Result<(), S
 
     let arch = &arch_block[0]; // primary architecture
 
-    // Known-unsupported: multimodal MoE variants that the ax-engine MLX
-    // backend cannot initialize (causes C-level abort, not a Rust error).
-    let unsupported_patterns = ["MoeForConditionalGeneration"];
-
-    for pattern in &unsupported_patterns {
-        if arch.contains(pattern) {
-            return Err(format!(
-                "Model '{model_id}' uses architecture '{arch}' which is not supported by the MLX engine. \
-                 This architecture may require a multimodal or MoE backend that is not yet available. \
-                 Please use a text-only model variant instead (e.g. Qwen3.5-9B-4bit, Qwen3-Coder-Next-4bit, or gemma-4-e2b-it-4bit)."
-            ));
-        }
-    }
-
-    log::info!("[mlx-worker] architecture check passed for {model_id}: {arch}");
+    log::info!("[mlx-worker] model {model_id} architecture: {arch}");
     Ok(())
 }
 
@@ -1273,17 +1274,17 @@ mod tests {
     }
 
     #[test]
-    fn validate_model_architecture_rejects_moe() {
-        let dir = std::env::temp_dir().join("test_mlx_arch_reject");
+    fn validate_model_architecture_logs_moe_without_blocking() {
+        let dir = std::env::temp_dir().join("test_mlx_arch_moe");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(
             dir.join("config.json"),
             r#"{"architectures": ["Qwen3_5MoeForConditionalGeneration"]}"#,
         )
         .unwrap();
+        // MoE models should pass validation (engine supports qwen3_5_moe)
         let result = validate_model_architecture(&dir, "mlx-community/Qwen3.5-35B-A3B-4bit");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("not supported"));
+        assert!(result.is_ok());
         std::fs::remove_dir_all(&dir).ok();
     }
 
