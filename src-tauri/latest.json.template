@@ -13,14 +13,3 @@
     }
   }
 }
-{
-  "version": "",
-  "notes": "",
-  "pub_date": "",
-  "platforms": {
-    "darwin-aarch64": {
-      "signature": "",
-      "url": ""
-    }
-  }
-}
