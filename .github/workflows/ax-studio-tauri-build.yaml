@@ -272,6 +272,7 @@ jobs:
     needs: [get-update-version, validate-release-tag, create-draft-release]
     env:
       HAS_UPDATER_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && secrets.TAURI_UPDATER_PUBKEY != '' }}
+      HAS_WINDOWS_SIGN_CERTS: ${{ secrets.AZURE_KEY_VAULT_URI != '' && secrets.AZURE_CLIENT_ID != '' && secrets.AZURE_TENANT_ID != '' && secrets.AZURE_CLIENT_SECRET != '' && secrets.AZURE_CERT_NAME != '' }}
       CARGO_NET_GIT_FETCH_WITH_CLI: "true"
     outputs:
       WIN_SIG: ${{ steps.metadata.outputs.WIN_SIG }}
@@ -300,6 +301,7 @@ jobs:
         run: cargo install ctoml
 
       - name: Install AzureSignTool
+        if: ${{ env.HAS_WINDOWS_SIGN_CERTS == 'true' }}
         run: dotnet tool install --global --version 6.0.0 AzureSignTool
 
       - name: Update app version from release tag
@@ -325,9 +327,13 @@ jobs:
           jq --arg version "$VERSION" '.version = $version' web-app/package.json > /tmp/package.json
           mv /tmp/package.json web-app/package.json
 
-          # Add sign commands to tauri.windows.conf.json
-          jq '.bundle.windows.signCommand = "powershell -ExecutionPolicy Bypass -File ./src-tauri/sign.ps1 %1"' ./src-tauri/tauri.windows.conf.json > /tmp/tauri.windows.conf.json
-          mv /tmp/tauri.windows.conf.json ./src-tauri/tauri.windows.conf.json
+          # Add Windows code-signing only when Azure signing secrets are present.
+          if [ "$HAS_WINDOWS_SIGN_CERTS" = "true" ]; then
+            jq '.bundle.windows.signCommand = "powershell -ExecutionPolicy Bypass -File ./src-tauri/sign.ps1 %1"' ./src-tauri/tauri.windows.conf.json > /tmp/tauri.windows.conf.json
+            mv /tmp/tauri.windows.conf.json ./src-tauri/tauri.windows.conf.json
+          else
+            echo "::warning::Azure code-signing secrets not configured — building unsigned Windows artifacts."
+          fi
 
           # Update tauri plugin versions
           jq --arg version "$VERSION" '.version = $version' ./src-tauri/plugins/tauri-plugin-hardware/package.json > /tmp/package.json
