@@ -272,6 +272,7 @@ jobs:
     needs: [get-update-version, validate-release-tag, create-draft-release]
     env:
       HAS_UPDATER_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && secrets.TAURI_UPDATER_PUBKEY != '' }}
+      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
     outputs:
       WIN_SIG: ${{ steps.metadata.outputs.WIN_SIG }}
       FILE_NAME: ${{ steps.metadata.outputs.FILE_NAME }}
@@ -288,6 +289,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+
+      - name: Enable long paths
+        run: git config --global core.longpaths true
 
       - name: Install jq
         uses: dcarbone/install-jq-action@v2.0.1
