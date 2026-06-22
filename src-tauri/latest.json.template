@@ -6,6 +6,21 @@
     "darwin-aarch64": {
       "signature": "",
       "url": ""
+    },
+    "windows-x86_64": {
+      "signature": "",
+      "url": ""
+    }
+  }
+}
+{
+  "version": "",
+  "notes": "",
+  "pub_date": "",
+  "platforms": {
+    "darwin-aarch64": {
+      "signature": "",
+      "url": ""
     }
   }
 }

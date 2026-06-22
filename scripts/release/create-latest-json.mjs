@@ -11,7 +11,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   const value = process.argv[index + 1]
 
   if (!key.startsWith('--') || value === undefined || value.startsWith('--')) {
-    console.error(`usage: node scripts/release/create-latest-json.mjs --version <version> --darwin-signature <signature> --darwin-url <url> --out <path>`)
+    console.error(`usage: node scripts/release/create-latest-json.mjs --version <version> --darwin-signature <signature> --darwin-url <url> [--windows-signature <signature>] [--windows-url <url>] --out <path>`)
     process.exit(2)
   }
 
@@ -31,6 +31,8 @@ function required(name) {
 const version = required('version')
 const darwinSignature = args.get('darwin-signature') ?? ''
 const darwinUrl = required('darwin-url')
+const windowsSignature = args.get('windows-signature') ?? ''
+const windowsUrl = args.get('windows-url') ?? ''
 const outPath = path.resolve(repoRoot, required('out'))
 const templatePath = path.join(repoRoot, 'src-tauri/latest.json.template')
 const latest = JSON.parse(fs.readFileSync(templatePath, 'utf8'))
@@ -43,6 +45,13 @@ latest.platforms = {
     signature: darwinSignature,
     url: darwinUrl,
   },
+}
+
+if (windowsUrl) {
+  latest.platforms['windows-x86_64'] = {
+    signature: windowsSignature,
+    url: windowsUrl,
+  }
 }
 
 fs.writeFileSync(outPath, `${JSON.stringify(latest, null, 2)}\n`)

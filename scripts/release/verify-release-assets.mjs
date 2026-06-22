@@ -44,7 +44,11 @@ const requiredAssets = [
   'latest.json',
 ]
 // Only present when TAURI_SIGNING_PRIVATE_KEY is configured
-const optionalAssets = ['Ax-Studio.app.tar.gz']
+const optionalAssets = [
+  'Ax-Studio.app.tar.gz',
+  `Ax-Studio_${version}_x64-setup.exe`,
+  `Ax-Studio_${version}_x64-portable.exe`,
+]
 
 function fail(message) {
   console.error(`release asset error: ${message}`)
@@ -64,8 +68,8 @@ for (const asset of optionalAssets) {
 }
 
 for (const asset of assets) {
-  if (/windows|win|x64|linux|amd64|appimage|\.deb|\.msi|setup\.exe/i.test(asset)) {
-    fail(`unsupported platform asset in macOS-only release: ${asset}`)
+  if (/linux|amd64|appimage|\.deb/i.test(asset)) {
+    fail(`unsupported platform asset in release: ${asset}`)
   }
 }
 
@@ -83,4 +87,4 @@ if (process.exitCode) {
   process.exit(process.exitCode)
 }
 
-console.log(`release assets ok: ${tag} contains macOS arm64 artifacts only`)
+console.log(`release assets ok: ${tag} contains macOS arm64 + Windows x64 artifacts`)

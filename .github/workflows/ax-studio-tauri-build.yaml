@@ -267,8 +267,137 @@ jobs:
           [ -f "$TAR" ] && FILES+=("$TAR")
           gh release upload "v${VERSION}" "${FILES[@]}" --clobber --repo "$GITHUB_REPOSITORY"
 
+  build-windows:
+    runs-on: windows-latest
+    needs: [get-update-version, validate-release-tag, create-draft-release]
+    env:
+      HAS_UPDATER_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && secrets.TAURI_UPDATER_PUBKEY != '' }}
+    outputs:
+      WIN_SIG: ${{ steps.metadata.outputs.WIN_SIG }}
+      FILE_NAME: ${{ steps.metadata.outputs.FILE_NAME }}
+      PORTABLE_FILE_NAME: ${{ steps.metadata.outputs.PORTABLE_FILE_NAME }}
+    permissions:
+      contents: write
+    steps:
+      - name: Getting the repo
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/v${{ needs.get-update-version.outputs.new_version }}
+
+      - name: Installing node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install jq
+        uses: dcarbone/install-jq-action@v2.0.1
+
+      - name: Install ctoml
+        run: cargo install ctoml
+
+      - name: Install AzureSignTool
+        run: dotnet tool install --global --version 6.0.0 AzureSignTool
+
+      - name: Update app version from release tag
+        shell: bash
+        env:
+          VERSION: ${{ needs.get-update-version.outputs.new_version }}
+          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+        run: |
+          if [ "$HAS_UPDATER_KEY" = "true" ] && [ -n "$TAURI_UPDATER_PUBKEY" ]; then
+            jq --arg version "$VERSION" --arg pubkey "$TAURI_UPDATER_PUBKEY" \
+              '.version = $version | .bundle.createUpdaterArtifacts = true | .plugins.updater.pubkey = $pubkey' \
+              ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
+          else
+            jq --arg version "$VERSION" \
+              '.version = $version | .bundle.createUpdaterArtifacts = false' \
+              ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
+          fi
+          mv /tmp/tauri.conf.json ./src-tauri/tauri.conf.json
+
+          jq '.bundle.windows.nsis.template = "tauri.bundle.windows.nsis.template"' ./src-tauri/tauri.windows.conf.json > /tmp/tauri.windows.conf.json
+          mv /tmp/tauri.windows.conf.json ./src-tauri/tauri.windows.conf.json
+
+          jq --arg version "$VERSION" '.version = $version' web-app/package.json > /tmp/package.json
+          mv /tmp/package.json web-app/package.json
+
+          # Add sign commands to tauri.windows.conf.json
+          jq '.bundle.windows.signCommand = "powershell -ExecutionPolicy Bypass -File ./sign.ps1 %1"' ./src-tauri/tauri.windows.conf.json > /tmp/tauri.windows.conf.json
+          mv /tmp/tauri.windows.conf.json ./src-tauri/tauri.windows.conf.json
+
+          # Update tauri plugin versions
+          jq --arg version "$VERSION" '.version = $version' ./src-tauri/plugins/tauri-plugin-hardware/package.json > /tmp/package.json
+          mv /tmp/package.json ./src-tauri/plugins/tauri-plugin-hardware/package.json
+
+          jq --arg version "$VERSION" '.version = $version' ./src-tauri/plugins/tauri-plugin-llamacpp/package.json > /tmp/package.json
+          mv /tmp/package.json ./src-tauri/plugins/tauri-plugin-llamacpp/package.json
+
+          ctoml ./src-tauri/plugins/tauri-plugin-hardware/Cargo.toml package.version "$VERSION"
+          ctoml ./src-tauri/plugins/tauri-plugin-llamacpp/Cargo.toml package.version "$VERSION"
+          ctoml ./src-tauri/Cargo.toml package.version "$VERSION"
+          ctoml ./src-tauri/Cargo.toml dependencies.tauri.features[] "devtools"
+
+          # Patch NSIS template for stable channel
+          sed -i "s/ax_studio_version/$VERSION/g" ./src-tauri/tauri.bundle.windows.nsis.template
+          sed -i "s/ax_studio_build/${VERSION}.0/g" ./src-tauri/tauri.bundle.windows.nsis.template
+          sed -i "s/ax_studio_productname/Ax-Studio/g" ./src-tauri/tauri.bundle.windows.nsis.template
+          sed -i "s/ax_studio_mainbinaryname/ax-studio/g" ./src-tauri/tauri.bundle.windows.nsis.template
+
+      - name: Config Yarn
+        run: |
+          corepack enable
+          corepack prepare yarn@4.5.3 --activate
+          yarn --version
+          yarn config set -H enableImmutableInstalls false
+
+      - name: Build app
+        shell: bash
+        run: make build
+        env:
+          AZURE_KEY_VAULT_URI: ${{ secrets.AZURE_KEY_VAULT_URI }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_CERT_NAME: ${{ secrets.AZURE_CERT_NAME }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          AX_STUDIO_SIGNING_KEY: ${{ secrets.AX_STUDIO_SIGNING_KEY }}
+
+      - name: Set output filename for windows
+        id: metadata
+        shell: bash
+        env:
+          VERSION: ${{ needs.get-update-version.outputs.new_version }}
+        run: |
+          FILE_NAME=Ax-Studio_${VERSION}_x64-setup.exe
+          WIN_SIG=""
+          if [ -f "./src-tauri/target/release/bundle/nsis/Ax-Studio_${VERSION}_x64-setup.exe.sig" ]; then
+            WIN_SIG=$(cat "./src-tauri/target/release/bundle/nsis/Ax-Studio_${VERSION}_x64-setup.exe.sig")
+          fi
+          PORTABLE_FILE_NAME="Ax-Studio_${VERSION}_x64-portable.exe"
+          # Copy portable exe to deterministic name
+          PORTABLE_SRC=$(ls -1 ./src-tauri/target/release/Ax-Studio*.exe 2>/dev/null | head -n 1)
+          if [ -n "$PORTABLE_SRC" ] && [ -f "$PORTABLE_SRC" ]; then
+            cp "$PORTABLE_SRC" "./src-tauri/target/release/${PORTABLE_FILE_NAME}"
+          fi
+          echo "WIN_SIG=${WIN_SIG}" >> "$GITHUB_OUTPUT"
+          echo "FILE_NAME=${FILE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "PORTABLE_FILE_NAME=${PORTABLE_FILE_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload release artifacts to GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.get-update-version.outputs.new_version }}
+        shell: bash
+        run: |
+          NSIS_DIR="./src-tauri/target/release/bundle/nsis"
+          FILES=("$NSIS_DIR/${{ steps.metadata.outputs.FILE_NAME }}")
+          PORTABLE="./src-tauri/target/release/${{ steps.metadata.outputs.PORTABLE_FILE_NAME }}"
+          [ -f "$PORTABLE" ] && FILES+=("$PORTABLE")
+          gh release upload "v${VERSION}" "${FILES[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+
   sync-temp-to-latest:
-    needs: [create-draft-release, get-update-version, build-macos]
+    needs: [create-draft-release, get-update-version, build-macos, build-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -289,10 +418,19 @@ jobs:
             DARWIN_URL="https://github.com/defai-digital/ax-studio/releases/download/v${VERSION}/${DMG_NAME}"
           fi
 
+          WIN_SIGNATURE="${{ needs.build-windows.outputs.WIN_SIG }}"
+          WIN_NSIS="${{ needs.build-windows.outputs.FILE_NAME }}"
+          WINDOWS_URL=""
+          if [ -n "$WIN_NSIS" ]; then
+            WINDOWS_URL="https://github.com/defai-digital/ax-studio/releases/download/v${VERSION}/${WIN_NSIS}"
+          fi
+
           node scripts/release/create-latest-json.mjs \
             --version "$VERSION" \
             --darwin-signature "$DARWIN_SIGNATURE" \
             --darwin-url "$DARWIN_URL" \
+            --windows-signature "$WIN_SIGNATURE" \
+            --windows-url "$WINDOWS_URL" \
             --out latest.json
           node scripts/release/verify-latest-json.mjs --file latest.json --version "$VERSION"
           cat latest.json
@@ -307,7 +445,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY"
 
   sign-release-assets:
-    needs: [get-update-version, sync-temp-to-latest]
+    needs: [get-update-version, sync-temp-to-latest, build-windows]
     runs-on: ubuntu-latest
     env:
       HAS_MINISIGN_KEY: ${{ secrets.AX_STUDIO_MINISIGN_SECRET_KEY_B64 != '' && secrets.AX_STUDIO_MINISIGN_PUBLIC_KEY != '' }}
@@ -337,6 +475,8 @@ jobs:
             --pattern "Ax-Studio_${{ needs.get-update-version.outputs.new_version }}_aarch64.dmg" \
             --pattern "Ax-Studio.app.tar.gz" \
             --pattern "ax-studio-mac-arm64-${{ needs.get-update-version.outputs.new_version }}.zip" \
+            --pattern "Ax-Studio_${{ needs.get-update-version.outputs.new_version }}_x64-setup.exe" \
+            --pattern "Ax-Studio_${{ needs.get-update-version.outputs.new_version }}_x64-portable.exe" \
             --pattern "latest.json"
 
       - name: Sign release assets with minisign

@@ -32,7 +32,7 @@ const filePath = path.resolve(repoRoot, required('file'))
 const expectedVersion = required('version')
 const latest = JSON.parse(fs.readFileSync(filePath, 'utf8'))
 const platforms = Object.keys(latest.platforms ?? {})
-const expectedPlatforms = ['darwin-aarch64']
+const expectedPlatforms = ['darwin-aarch64', 'windows-x86_64']
 
 function fail(message) {
   console.error(`latest.json error: ${message}`)
@@ -60,8 +60,21 @@ if (darwin?.url && !/\/Ax-Studio(?:-[A-Za-z0-9.-]+)?(?:_|\.)/.test(darwin.url)) 
   fail(`darwin-aarch64 url does not look like an Ax-Studio macOS artifact URL: ${darwin.url}`)
 }
 
+const windows = latest.platforms?.['windows-x86_64']
+if (!windows?.signature) {
+  console.warn('warning: windows-x86_64 signature is empty — updater will not work until TAURI_SIGNING_PRIVATE_KEY is configured')
+}
+
+if (!windows?.url) {
+  console.warn('warning: windows-x86_64 url is empty — Windows build may not have completed')
+}
+
+if (windows?.url && !/\/Ax-Studio_.*_x64-setup\.exe$/.test(windows.url)) {
+  fail(`windows-x86_64 url does not look like an Ax-Studio Windows NSIS installer URL: ${windows.url}`)
+}
+
 if (process.exitCode) {
   process.exit(process.exitCode)
 }
 
-console.log(`latest.json ok: ${expectedVersion} for darwin-aarch64`)
+console.log(`latest.json ok: ${expectedVersion} for darwin-aarch64 + windows-x86_64`)
