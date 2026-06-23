@@ -378,9 +378,11 @@ jobs:
           fi
           PORTABLE_FILE_NAME="Ax-Studio_${VERSION}_x64-portable.exe"
           # Copy portable exe to deterministic name
-          PORTABLE_SRC=$(ls -1 ./src-tauri/target/release/Ax-Studio*.exe 2>/dev/null | head -n 1)
+          PORTABLE_SRC=$(find ./src-tauri/target/release -maxdepth 1 -type f \( -name "Ax-Studio*.exe" -o -name "ax-studio.exe" \) -print -quit || true)
           if [ -n "$PORTABLE_SRC" ] && [ -f "$PORTABLE_SRC" ]; then
             cp "$PORTABLE_SRC" "./src-tauri/target/release/${PORTABLE_FILE_NAME}"
+          else
+            echo "::notice::Portable Windows exe not found; continuing with NSIS installer only."
           fi
           echo "WIN_SIG=${WIN_SIG}" >> "$GITHUB_OUTPUT"
           echo "FILE_NAME=${FILE_NAME}" >> "$GITHUB_OUTPUT"
