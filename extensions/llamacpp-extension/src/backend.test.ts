@@ -103,6 +103,7 @@ describe('llamacpp backend helpers', () => {
     consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     mocks.storage.clear()
     mocks.existsSync.mockResolvedValue(false)
+    vi.mocked(invoke).mockResolvedValue(undefined)
     clearRemoteBackendsCacheForTests()
     ensureLocalStorage()
     ;(globalThis as any).window = globalThis
@@ -324,6 +325,46 @@ describe('llamacpp backend helpers', () => {
     expect(updateSetting).toHaveBeenCalledWith(
       'version_backend',
       'b9730/win-cpu-x64'
+    )
+
+    ;(globalThis as Record<string, unknown>).IS_MACOS = false
+    ;(globalThis as Record<string, unknown>).IS_LINUX = true
+  })
+
+  it('uses native hardware arch when macOS WebView reports Apple Silicon as MacIntel', async () => {
+    ;(globalThis as Record<string, unknown>).IS_WINDOWS = false
+    ;(globalThis as Record<string, unknown>).IS_MACOS = true
+    ;(globalThis as Record<string, unknown>).IS_LINUX = false
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: { platform: 'MacIntel', userAgent: 'Macintosh; Intel Mac OS X' },
+    })
+    vi.mocked(invoke).mockImplementation(async (command: string) => {
+      if (command === 'plugin:hardware|get_system_info') {
+        return {
+          os_type: 'macos',
+          cpu: {
+            arch: 'arm64',
+            extensions: [],
+          },
+          gpus: [],
+        }
+      }
+      return undefined
+    })
+    vi.mocked(fetch).mockRejectedValue(new Error('blocked'))
+    vi.mocked(prioritizeBackends).mockResolvedValueOnce(null as never)
+    mocks.existsSync.mockImplementation(async (path: string) => {
+      return path.includes('/backends') || path.endsWith('llama-server')
+    })
+
+    const updateSetting = vi.fn()
+    await configureBackends('b9730/macos-x64', false, updateSetting)
+
+    expect(updateSetting).toHaveBeenNthCalledWith(1, 'version_backend', '')
+    expect(updateSetting).toHaveBeenCalledWith(
+      'version_backend',
+      'b9730/macos-arm64'
     )
 
     ;(globalThis as Record<string, unknown>).IS_MACOS = false

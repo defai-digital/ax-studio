@@ -124,6 +124,15 @@ function getRuntimeArch(): 'x64' | 'arm64' {
   return 'x64'
 }
 
+function normalizeRuntimeOsType(osType: unknown): 'windows' | 'macOS' | 'linux' | null {
+  if (typeof osType !== 'string') return null
+  const normalized = osType.toLowerCase()
+  if (normalized.includes('win')) return 'windows'
+  if (normalized.includes('mac') || normalized.includes('darwin')) return 'macOS'
+  if (normalized.includes('linux')) return 'linux'
+  return null
+}
+
 function isBackendCompatibleWithOs(
   backend: string,
   osType: 'windows' | 'macOS' | 'linux',
@@ -403,9 +412,33 @@ export async function fetchRemoteBackends(): Promise<BackendVersion[]> {
 
 interface HardwareInfo {
   osType: string
-  arch: string
+  arch: 'x64' | 'arm64'
   cpuExtensions: string[]
   gpus: HardwareGpuInfo[]
+}
+
+interface NativeSystemInfo {
+  cpu?: {
+    arch?: string
+    extensions?: string[]
+  }
+  os_type?: string
+  gpus?: HardwareGpuInfo[]
+}
+
+function normalizeRuntimeArch(arch: unknown): 'x64' | 'arm64' | null {
+  if (typeof arch !== 'string') return null
+  const normalized = arch.toLowerCase()
+  if (normalized === 'arm64' || normalized === 'aarch64') return 'arm64'
+  if (
+    normalized === 'x64' ||
+    normalized === 'x86_64' ||
+    normalized === 'amd64' ||
+    normalized === 'x86-64'
+  ) {
+    return 'x64'
+  }
+  return null
 }
 
 /**
@@ -413,11 +446,27 @@ interface HardwareInfo {
  */
 async function getHardwareInfo(): Promise<HardwareInfo> {
   const osType = getRuntimeOsType()
+  const runtimeArch = getRuntimeArch()
   const fallback = {
     osType,
-    arch: 'x64',
+    arch: runtimeArch,
     cpuExtensions: [],
     gpus: [],
+  }
+
+  try {
+    const nativeInfo = await invoke<NativeSystemInfo>('plugin:hardware|get_system_info')
+    const nativeArch = normalizeRuntimeArch(nativeInfo?.cpu?.arch)
+    if (nativeInfo && nativeArch) {
+      return {
+        osType: normalizeRuntimeOsType(nativeInfo.os_type) ?? osType,
+        arch: nativeArch,
+        cpuExtensions: nativeInfo.cpu?.extensions ?? [],
+        gpus: nativeInfo.gpus ?? [],
+      }
+    }
+  } catch (error) {
+    console.debug('[llamacpp] Native hardware plugin unavailable, trying extension info:', error)
   }
 
   try {
@@ -427,7 +476,7 @@ async function getHardwareInfo(): Promise<HardwareInfo> {
     if (hw) {
       return {
         osType,
-        arch: hw.arch ?? 'x64',
+        arch: normalizeRuntimeArch(hw.arch) ?? runtimeArch,
         cpuExtensions: hw.cpu_extensions ?? [],
         gpus: hw.gpus ?? [],
       }
@@ -631,7 +680,18 @@ export async function configureBackends(
     try {
       let targetVersionBackend = currentVersionBackend
       const runtimeOsType = getRuntimeOsType()
-      const runtimeArch = getRuntimeArch()
+      const hw = await withTimeoutFallback(
+        getHardwareInfo(),
+        {
+          osType: runtimeOsType,
+          arch: getRuntimeArch(),
+          cpuExtensions: [],
+          gpus: [],
+        },
+        'Hardware discovery',
+        HARDWARE_INFO_TIMEOUT_MS
+      )
+      const runtimeArch = normalizeRuntimeArch(hw.arch) ?? getRuntimeArch()
 
       if (
         targetVersionBackend &&
@@ -685,17 +745,6 @@ export async function configureBackends(
       )
 
       if (!targetVersionBackend) {
-        const hw = await withTimeoutFallback(
-          getHardwareInfo(),
-          {
-            osType: runtimeOsType,
-            arch: 'x64',
-            cpuExtensions: [],
-            gpus: [],
-          },
-          'Hardware discovery',
-          HARDWARE_INFO_TIMEOUT_MS
-        )
         // Rust IPC calls can hang indefinitely on some machines.
         // Give each 6 seconds then fall back to a JS heuristic.
         const withFallback = <T>(p: Promise<T>, fallback: T): Promise<T> =>
