@@ -378,6 +378,27 @@ fn should_skip_upstream_request_header(name: &hyper::header::HeaderName) -> bool
         || super::proxy::is_hop_by_hop_header(name)
 }
 
+fn normalize_upstream_api_key(api_key: Option<&str>) -> Option<String> {
+    let trimmed = api_key?.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let mut parts = trimmed.splitn(2, char::is_whitespace);
+    let prefix = parts.next().unwrap_or_default();
+    let key = if prefix.eq_ignore_ascii_case("Bearer") {
+        parts.next().map(str::trim).unwrap_or(trimmed)
+    } else {
+        trimmed
+    };
+
+    if key.is_empty() {
+        None
+    } else {
+        Some(key.to_string())
+    }
+}
+
 fn should_skip_anthropic_fallback_header(name: &hyper::header::HeaderName) -> bool {
     let lower = name.as_str().to_ascii_lowercase();
     matches!(
@@ -648,7 +669,8 @@ async fn try_anthropic_fallback(
             fallback_req = fallback_req.header(name, value);
         }
     }
-    if let Some(key) = session_api_key {
+    let fallback_api_key = normalize_upstream_api_key(session_api_key.as_deref());
+    if let Some(key) = fallback_api_key {
         fallback_req = fallback_req.header("Authorization", format!("Bearer {key}"));
     }
 
@@ -947,7 +969,7 @@ pub(super) async fn dispatch_to_upstream<R: tauri::Runtime>(
 ) -> Result<Response<Body>, hyper::Error> {
     let upstream_url = resolution.target_base_url.clone();
     let is_anthropic_messages = resolution.is_anthropic_messages;
-    let session_api_key = resolution.session_api_key;
+    let session_api_key = normalize_upstream_api_key(resolution.session_api_key.as_deref());
     let buffered_body = resolution.buffered_body;
     let provider_custom_headers = resolution.provider_custom_headers;
     let target_base_url = upstream_url.clone();
@@ -1261,6 +1283,24 @@ mod tests {
             }],
             models: models.iter().map(|model| model.to_string()).collect(),
         }
+    }
+
+    #[test]
+    fn normalize_upstream_api_key_strips_bearer_prefix_and_whitespace() {
+        assert_eq!(
+            normalize_upstream_api_key(Some("  Bearer sk-or-test  ")).as_deref(),
+            Some("sk-or-test")
+        );
+        assert_eq!(
+            normalize_upstream_api_key(Some("BEARER\tsk-test")).as_deref(),
+            Some("sk-test")
+        );
+        assert_eq!(
+            normalize_upstream_api_key(Some("Bearer")).as_deref(),
+            Some("Bearer")
+        );
+        assert_eq!(normalize_upstream_api_key(Some("   ")), None);
+        assert_eq!(normalize_upstream_api_key(None), None);
     }
 
     #[test]

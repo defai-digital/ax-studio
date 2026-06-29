@@ -55,6 +55,19 @@ describe('provider-sync', () => {
     ])
   })
 
+  it('normalizes pasted bearer API keys before registering providers', () => {
+    const requests = buildRemoteProviderRequests([
+      makeProvider('openrouter', { api_key: '  Bearer sk-or-test  ' }),
+    ])
+
+    expect(requests).toEqual([
+      expect.objectContaining({
+        provider: 'openrouter',
+        api_key: 'sk-or-test',
+      }),
+    ])
+  })
+
   it('invokes batch registration when remote providers are present', async () => {
     await syncRemoteProviders([makeProvider('openai')])
 

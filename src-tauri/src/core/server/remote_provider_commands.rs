@@ -43,6 +43,26 @@ pub struct RegisterProviderRequest {
     pub models: Vec<String>,
 }
 
+fn normalize_provider_api_key(api_key: Option<String>) -> Option<String> {
+    let api_key = api_key?;
+    let trimmed = api_key.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let mut parts = trimmed.splitn(2, char::is_whitespace);
+    let prefix = parts.next().unwrap_or_default();
+    let rest = parts.next();
+
+    if prefix.eq_ignore_ascii_case("Bearer") {
+        if let Some(rest) = rest.map(str::trim).filter(|key| !key.is_empty()) {
+            return Some(rest.to_string());
+        }
+    }
+
+    Some(trimmed.to_string())
+}
+
 /// Register a remote provider configuration
 #[tauri::command]
 pub async fn register_provider_config(
@@ -57,7 +77,7 @@ pub async fn register_provider_config(
 
     let config = ProviderConfig {
         provider: request.provider.clone(),
-        api_key: request.api_key,
+        api_key: normalize_provider_api_key(request.api_key),
         base_url: request.base_url,
         custom_headers: request.custom_headers,
         models: request.models,
@@ -86,7 +106,7 @@ pub async fn register_provider_configs_batch(
         let provider_name = request.provider.clone();
         let config = ProviderConfig {
             provider: request.provider,
-            api_key: request.api_key,
+            api_key: normalize_provider_api_key(request.api_key),
             base_url: request.base_url,
             custom_headers: request.custom_headers,
             models: request.models,
@@ -252,5 +272,23 @@ mod tests {
             }]
         );
         assert_eq!(redacted.models, vec!["gpt-4.1".to_string()]);
+    }
+
+    #[test]
+    fn test_normalize_provider_api_key_strips_bearer_prefix_and_whitespace() {
+        assert_eq!(
+            normalize_provider_api_key(Some("  Bearer sk-or-test  ".to_string())).as_deref(),
+            Some("sk-or-test")
+        );
+        assert_eq!(
+            normalize_provider_api_key(Some("BEARER\tsk-test".to_string())).as_deref(),
+            Some("sk-test")
+        );
+        assert_eq!(
+            normalize_provider_api_key(Some("  sk-plain  ".to_string())).as_deref(),
+            Some("sk-plain")
+        );
+        assert_eq!(normalize_provider_api_key(Some("   ".to_string())), None);
+        assert_eq!(normalize_provider_api_key(None), None);
     }
 }

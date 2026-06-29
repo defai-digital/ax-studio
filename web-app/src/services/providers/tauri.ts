@@ -116,6 +116,12 @@ function usesOpenAICompatibleAuth(provider: ModelProvider, baseUrl: string): boo
   return baseUrl.includes('/openai')
 }
 
+function normalizeProviderApiKey(apiKey?: string): string | undefined {
+  const trimmed = apiKey?.trim()
+  if (!trimmed) return undefined
+  return trimmed.replace(/^Bearer\s+/i, '').trim() || undefined
+}
+
 const HEADER_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
 const RESERVED_CUSTOM_HEADERS = new Set([
   'accept-encoding',
@@ -385,11 +391,12 @@ export class TauriProvidersService implements ProvidersService {
       }
 
       // Only add authentication headers if API key is provided
-      if (provider.api_key) {
+      const apiKey = normalizeProviderApiKey(provider.api_key)
+      if (apiKey) {
         if (!usesOpenAICompatibleAuth(provider, baseUrl)) {
-          headers['x-goog-api-key'] = provider.api_key
+          headers['x-goog-api-key'] = apiKey
         } else {
-          headers['Authorization'] = `Bearer ${provider.api_key}`
+          headers['Authorization'] = `Bearer ${apiKey}`
         }
       }
 

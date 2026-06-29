@@ -18,12 +18,22 @@ type RegisteredProviderConfigView = {
   provider: string
 }
 
+function normalizeProviderApiKey(apiKey?: string): string | undefined {
+  const trimmed = apiKey?.trim()
+  if (!trimmed) return undefined
+  return trimmed.replace(/^Bearer\s+/i, '').trim() || undefined
+}
+
 function isRemoteProvider(provider: ModelProvider): boolean {
   return !LOCAL_PROVIDER_IDS.has(provider.provider)
 }
 
 function isActiveRemoteProvider(provider: ModelProvider): boolean {
-  return isRemoteProvider(provider) && provider.active && Boolean(provider.api_key)
+  return (
+    isRemoteProvider(provider) &&
+    provider.active &&
+    Boolean(normalizeProviderApiKey(provider.api_key))
+  )
 }
 
 export function buildRemoteProviderRequests(
@@ -33,7 +43,7 @@ export function buildRemoteProviderRequests(
     .filter(isActiveRemoteProvider)
     .map((provider) => ({
       provider: provider.provider,
-      api_key: provider.api_key,
+      api_key: normalizeProviderApiKey(provider.api_key),
       base_url: provider.base_url,
       custom_headers: (provider.custom_header || []).map((header) => ({
         header: header.header,

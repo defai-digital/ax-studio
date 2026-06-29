@@ -122,6 +122,27 @@ describe('TauriProvidersService', () => {
     )
   })
 
+  it('normalizes pasted bearer API keys before fetching provider models', async () => {
+    mocks.fetchNative.mockResolvedValue(response({ data: [{ id: 'model-a' }] }))
+
+    await service.fetchModelsFromProvider(
+      provider({
+        provider: 'openrouter',
+        base_url: 'https://openrouter.ai/api/v1',
+        api_key: '  Bearer sk-or-test  ',
+      })
+    )
+
+    expect(mocks.fetchNative).toHaveBeenCalledWith(
+      'https://openrouter.ai/api/v1/models',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer sk-or-test',
+        }),
+      })
+    )
+  })
+
   it('uses bearer auth for Gemini OpenAI-compatible model listing', async () => {
     mocks.fetchTauri.mockResolvedValue(
       response({ data: [{ id: 'gemini-2.5-flash' }] })
