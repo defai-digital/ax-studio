@@ -23,6 +23,7 @@ src-tauri/icons
 src-tauri/gen/apple
 src-tauri/gen/android
 src-tauri/resources/bin
+src-tauri/tauri.bundle.windows.nsis.template
 
 # Helper tools
 .opencode

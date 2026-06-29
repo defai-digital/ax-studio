@@ -25,6 +25,7 @@ import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
 import { syncRemoteProviders } from './providers/provider-sync'
 import { LOCAL_PROVIDER_IDS } from '@/constants/providers'
 import { extractErrorMessage } from '@/lib/utils/error'
+import { getModelCapabilities } from '@/lib/models'
 
 // Use native fetch — same reason as model-factory.ts (Tauri plugin ReadableStream
 // incompatibility). Proxy accepts CORS from tauri:// origins on loopback.
@@ -492,7 +493,10 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
       // Determine tool support for this model
       const providerModels = provider.models ?? []
       const modelEntry = providerModels.find((m) => m.id === modelId)
-      const modelSupportsTools = modelEntry?.capabilities?.includes('tools') ?? this.modelSupportsTools
+      const modelSupportsTools =
+        (modelEntry?.capabilities?.includes('tools') ?? false) ||
+        getModelCapabilities(providerId, modelId).includes('tools') ||
+        this.modelSupportsTools
 
       // Refresh tools AFTER routing so the correct model's capabilities are used
       await this.refreshTools(modelSupportsTools)

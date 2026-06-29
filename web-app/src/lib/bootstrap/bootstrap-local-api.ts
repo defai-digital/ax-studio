@@ -76,6 +76,39 @@ async function startLocalApiServer(
   })
 }
 
+function isPortBindError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return (
+    message.includes('Only one usage of each socket address') ||
+    message.includes('Address already in use') ||
+    message.includes('EADDRINUSE') ||
+    message.includes('os error 10048')
+  )
+}
+
+async function startLocalApiServerWithPortFallback(
+  config: LocalApiServerConfig,
+  apiKey: string
+): Promise<number> {
+  const attempts = [config.port, ...Array.from({ length: 10 }, (_, i) => config.port + i + 1)]
+  let lastError: unknown
+
+  for (const port of attempts) {
+    try {
+      const actualPort = await startLocalApiServer({ ...config, port }, apiKey)
+      return typeof actualPort === 'number' ? actualPort : port
+    } catch (error) {
+      lastError = error
+      if (!isPortBindError(error)) {
+        throw error
+      }
+      console.warn(`Local API Server port ${port} is unavailable; trying next port`, error)
+    }
+  }
+
+  throw lastError
+}
+
 export async function bootstrapLocalApi(
   input: BootstrapLocalApiInput
 ): Promise<BootstrapResult> {
@@ -126,10 +159,10 @@ export async function bootstrapLocalApi(
 
       // CORS must be enabled so the webview can reach the proxy via native fetch.
       // Force it on to survive users with persisted `false` from old defaults.
-      const actualPort = await startLocalApiServer(config, effectiveApiKey)
+      const actualPort = await startLocalApiServerWithPortFallback(config, effectiveApiKey)
 
-      if (actualPort && (actualPort as number) !== config.port) {
-        setServerPort(actualPort as number)
+      if (actualPort && actualPort !== config.port) {
+        setServerPort(actualPort)
       }
       setServerStatus('running')
       return ok()

@@ -7,7 +7,7 @@ use rmcp::{
     ServiceExt,
 };
 use serde_json::Value;
-use std::{collections::HashMap, env, process::Stdio, sync::Arc, time::Duration};
+use std::{collections::HashMap, env, net::IpAddr, process::Stdio, sync::Arc, time::Duration};
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_http::reqwest;
 use tokio::{io::AsyncReadExt, net::lookup_host, process::Command, sync::Mutex, time::timeout};
@@ -42,12 +42,6 @@ async fn validate_external_transport_url(
         ));
     }
 
-    if ax_studio_utils::is_internal_url(transport_url) {
-        return Err(format!(
-            "MCP {transport_kind} URL for server {server_name} points to an internal/private address, which is not allowed"
-        ));
-    }
-
     let parsed = reqwest::Url::parse(transport_url)
         .map_err(|e| format!("Invalid MCP {transport_kind} URL for server {server_name}: {e}"))?;
     let host = parsed.host_str().ok_or_else(|| {
@@ -56,12 +50,28 @@ async fn validate_external_transport_url(
     let port = parsed.port_or_known_default().ok_or_else(|| {
         format!("MCP {transport_kind} URL for server {server_name} is missing a port")
     })?;
+    let is_loopback_host = host.eq_ignore_ascii_case("localhost")
+        || host.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback());
+
+    if !is_loopback_host && ax_studio_utils::is_internal_url(transport_url) {
+        return Err(format!(
+            "MCP {transport_kind} URL for server {server_name} points to an internal/private address, which is not allowed"
+        ));
+    }
 
     let addrs = lookup_host((host, port)).await.map_err(|e| {
         format!("Failed to resolve MCP {transport_kind} URL for server {server_name}: {e}")
     })?;
 
     for addr in addrs {
+        if is_loopback_host && !addr.ip().is_loopback() {
+            return Err(format!(
+                "MCP {transport_kind} URL for server {server_name} resolves outside loopback, which is not allowed for localhost"
+            ));
+        }
+        if is_loopback_host && addr.ip().is_loopback() {
+            continue;
+        }
         if ax_studio_utils::is_private_ip(addr.ip()) {
             return Err(format!(
                 "MCP {transport_kind} URL for server {server_name} resolves to an internal/private address, which is not allowed"
@@ -574,21 +584,24 @@ pub fn extract_command_args(config: &Value) -> Option<McpServerConfig> {
     let transport_type = obj.get("type").and_then(|t| t.as_str()).map(String::from);
     let url = obj.get("url").and_then(|u| u.as_str()).map(String::from);
 
-    let is_http = transport_type.as_deref() == Some("http") && url.is_some();
+    let is_external_transport =
+        matches!(transport_type.as_deref(), Some("http" | "sse")) && url.is_some();
 
     let command = match obj.get("command").and_then(|c| c.as_str()) {
         Some(cmd) if !cmd.is_empty() => cmd.to_string(),
         _ => {
-            if is_http {
+            if is_external_transport {
                 String::new()
             } else {
-                log::warn!("MCP config missing or empty 'command' field and is not HTTP");
+                log::warn!(
+                    "MCP config missing or empty 'command' field and is not an external transport"
+                );
                 return None;
             }
         }
     };
 
-    if !is_http && !ALLOWED_COMMANDS.contains(&command.as_str()) {
+    if !is_external_transport && !ALLOWED_COMMANDS.contains(&command.as_str()) {
         log::warn!("MCP config command '{command}' is not in allowed list");
         return None;
     }
@@ -804,6 +817,18 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_command_args_sse_without_command() {
+        let config = serde_json::json!({
+            "type": "sse",
+            "url": "http://127.0.0.1:5008/mcp"
+        });
+        let result = extract_command_args(&config).unwrap();
+        assert_eq!(result.transport_type.as_deref(), Some("sse"));
+        assert_eq!(result.url.as_deref(), Some("http://127.0.0.1:5008/mcp"));
+        assert!(result.command.is_empty());
+    }
+
+    #[test]
     fn test_extract_command_args_allowed_command_python() {
         let config = serde_json::json!({
             "command": "python",
@@ -896,6 +921,23 @@ mod tests {
         let args = args.unwrap();
         assert_eq!(args.transport_type.as_deref(), Some("http"));
         assert!(args.url.is_some());
+    }
+
+    #[test]
+    fn test_restart_sse_server_config_is_valid() {
+        let sse_config = serde_json::json!({
+            "type": "sse",
+            "url": "http://127.0.0.1:5008/mcp"
+        });
+        let args = extract_command_args(&sse_config);
+        assert!(
+            args.is_some(),
+            "SSE server config must be parseable for restart"
+        );
+        let args = args.unwrap();
+        assert_eq!(args.transport_type.as_deref(), Some("sse"));
+        assert!(args.url.is_some());
+        assert!(args.command.is_empty());
     }
 
     #[test]

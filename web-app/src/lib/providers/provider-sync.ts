@@ -65,7 +65,7 @@ export async function syncRemoteProviders(providers: ModelProvider[]): Promise<v
   )
   const staleRemoteProviderIds = registeredProviderIds.filter((provider) => {
     if (LOCAL_PROVIDER_IDS.has(provider)) return false
-    return !activeRemoteProviderIds.has(provider) || !knownRemoteProviderIds.has(provider)
+    return knownRemoteProviderIds.has(provider) && !activeRemoteProviderIds.has(provider)
   })
 
   // Use allSettled so one failed unregister doesn't block the batch register

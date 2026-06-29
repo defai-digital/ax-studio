@@ -23,6 +23,11 @@ export const getModelCapabilities = (
   modelId: string
 ): string[] => {
   const providerConfig = models[providerName as unknown as keyof typeof models]
+  const normalizedProvider = providerName.toLowerCase()
+  const normalizedModelId = modelId.toLowerCase()
+  const isXaiGrokModel =
+    ['grok', 'xai', 'x-ai'].includes(normalizedProvider) ||
+    normalizedModelId.startsWith('grok-')
 
   const supportsToolCalls = Array.isArray(
     providerConfig?.supportsToolCalls as unknown
@@ -38,7 +43,9 @@ export const getModelCapabilities = (
 
   return [
     ModelCapabilities.COMPLETION,
-    supportsToolCalls.includes(modelId) ? ModelCapabilities.TOOLS : undefined,
+    supportsToolCalls.includes(modelId) || isXaiGrokModel
+      ? ModelCapabilities.TOOLS
+      : undefined,
     supportsImages.includes(modelId) ? ModelCapabilities.VISION : undefined,
   ].filter(Boolean) as string[]
 }

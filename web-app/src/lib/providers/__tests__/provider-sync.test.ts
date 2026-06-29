@@ -135,7 +135,7 @@ describe('provider-sync', () => {
     expect(invokeMock).toHaveBeenCalledTimes(3)
   })
 
-  it('unregisters remote providers that were removed from the frontend list', async () => {
+  it('does not unregister providers missing from a partial frontend list', async () => {
     invokeMock.mockImplementation(async (command: string) => {
       if (command === 'list_provider_configs') {
         return [{ provider: 'openai' }, { provider: 'anthropic' }]
@@ -146,10 +146,7 @@ describe('provider-sync', () => {
     await syncRemoteProviders([makeProvider('openai')])
 
     expect(invokeMock).toHaveBeenNthCalledWith(1, 'list_provider_configs')
-    expect(invokeMock).toHaveBeenNthCalledWith(2, 'unregister_provider_config', {
-      provider: 'anthropic',
-    })
-    expect(invokeMock).toHaveBeenNthCalledWith(3, 'register_provider_configs_batch', {
+    expect(invokeMock).toHaveBeenNthCalledWith(2, 'register_provider_configs_batch', {
       requests: [
         {
           provider: 'openai',
@@ -160,6 +157,7 @@ describe('provider-sync', () => {
         },
       ],
     })
+    expect(invokeMock).toHaveBeenCalledTimes(2)
   })
 
   it('skips invoke when there are no remote providers at all', async () => {

@@ -204,6 +204,12 @@ describe('getModelCapabilities', () => {
     expect(capabilities).not.toContain(ModelCapabilities.VISION)
   })
 
+  it('marks xAI Grok custom provider models as tool-capable', () => {
+    const capabilities = getModelCapabilities('grok', 'grok-4.3')
+    expect(capabilities).toContain(ModelCapabilities.COMPLETION)
+    expect(capabilities).toContain(ModelCapabilities.TOOLS)
+  })
+
   it('handles model not in capability list', () => {
     const capabilities = getModelCapabilities('anthropic', 'claude-3-haiku')
     expect(capabilities).toContain(ModelCapabilities.COMPLETION)

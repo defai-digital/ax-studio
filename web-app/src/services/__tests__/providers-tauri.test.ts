@@ -179,6 +179,25 @@ describe('TauriProvidersService', () => {
     warnSpy.mockRestore()
   })
 
+  it('uses known Alibaba models when model discovery returns an empty list', async () => {
+    mocks.fetchNative.mockResolvedValue(response({ data: [] }))
+
+    await expect(
+      service.fetchModelsFromProvider(
+        provider({
+          provider: 'alibaba',
+          base_url: 'https://coding-intl.dashscope.aliyuncs.com/v1',
+        })
+      )
+    ).resolves.toEqual([
+      'qwen-plus',
+      'qwen-turbo',
+      'qwen-max',
+      'qwen3-coder-plus',
+      'qwen3-coder-next',
+    ])
+  })
+
   it.each([
     [
       401,
