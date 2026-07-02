@@ -191,6 +191,15 @@ export const fs = {
     )
   },
 
+  readFileBase64(path: string): Promise<string> {
+    const safePath = validatePath(path)
+    return validateBridgeResult(
+      getCoreApi().readFileBase64({ request: { args: [safePath] } }),
+      'readFileBase64',
+      expectString
+    )
+  },
+
   existsSync(path: string): Promise<boolean> {
     const safePath = validatePath(path)
     return validateBridgeResult(

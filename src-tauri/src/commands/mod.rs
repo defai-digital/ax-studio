@@ -9,6 +9,7 @@ macro_rules! desktop_handlers {
             crate::core::filesystem::commands::exists_sync,
             crate::core::filesystem::commands::readdir_sync,
             crate::core::filesystem::commands::read_file_sync,
+            crate::core::filesystem::commands::read_file_base64,
             crate::core::filesystem::commands::rm,
             crate::core::filesystem::commands::mv,
             crate::core::filesystem::commands::file_stat,

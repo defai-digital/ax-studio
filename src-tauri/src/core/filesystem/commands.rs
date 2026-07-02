@@ -328,6 +328,36 @@ pub fn read_file_sync<R: Runtime>(
 }
 
 #[tauri::command]
+/// Read a file as base64-encoded string (for binary files like Excel, images, etc.)
+/// This command allows reading from arbitrary paths (not restricted to app data folder)
+/// since it's used for user-selected file uploads (e.g., AX-BI data import).
+pub fn read_file_base64<R: Runtime>(
+    _app_handle: tauri::AppHandle<R>,
+    request: SinglePathRequest,
+) -> Result<String, String> {
+    // Extract path without app-data-folder restriction
+    let raw_path = match request {
+        SinglePathRequest::Legacy { args } => args
+            .into_iter()
+            .next()
+            .ok_or_else(|| "read_file_base64: no path provided".to_string())?,
+        SinglePathRequest::Typed { path } => path,
+    };
+    // Strip file:// prefix if present
+    let clean_path = if raw_path.starts_with("file://") {
+        raw_path.trim_start_matches("file://")
+    } else {
+        &raw_path
+    };
+    let path = std::path::Path::new(clean_path);
+    if !path.exists() {
+        return Err(format!("File not found: {}", clean_path));
+    }
+    let bytes = fs::read(path).map_err(|e| format!("Failed to read {}: {}", clean_path, e))?;
+    Ok(base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes))
+}
+
+#[tauri::command]
 /// Atomically write a UTF-8 text file inside the app data folder.
 pub fn write_file_sync<R: Runtime>(
     app_handle: tauri::AppHandle<R>,

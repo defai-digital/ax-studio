@@ -238,9 +238,18 @@ export function useThreadChat({
         ? await prepareLocalKnowledge(normalizedText)
         : { context: '' }
       const knowledgeContext = localKnowledge.context
+      
+      // Add file path information for document attachments so the LLM can reference them
+      const docAttachments = attachments?.filter(
+        (att) => att.type === 'document' && att.path
+      ) ?? []
+      const filePathInfo = docAttachments.length > 0
+        ? `\n\n[Attached files: ${docAttachments.map((a) => `${a.name} at ${a.path}`).join(', ')}]`
+        : ''
+      
       const modelText = knowledgeContext
-        ? `${text}${knowledgeContext}`
-        : text
+        ? `${text}${knowledgeContext}${filePathInfo}`
+        : `${text}${filePathInfo}`
 
       const userMessage = newUserThreadContent(
         threadId,
@@ -287,10 +296,18 @@ export function useThreadChat({
         }
       }
 
+      // Preserve document attachment metadata so workflows (e.g. AX-BI) can
+      // access the original file paths even though documents are inlined as
+      // text rather than added as file parts.
+      const existingMeta = userMessage.metadata as Record<string, unknown> ?? {}
+      const messageMeta = docAttachments.length > 0
+        ? { ...existingMeta, document_attachments: docAttachments.map((a) => ({ name: a.name, path: a.path, fileType: a.fileType })) }
+        : existingMeta
+
       sendMessage({
         parts: requestParts,
         id: messageId,
-        metadata: userMessage.metadata,
+        metadata: messageMeta,
       })
 
       if (knowledgeContext) {

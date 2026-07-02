@@ -42,7 +42,12 @@ async fn validate_external_transport_url(
         ));
     }
 
-    if ax_studio_utils::is_internal_url(transport_url) {
+    // Allow localhost connections for local MCP servers (e.g., AX-BI)
+    let is_localhost = transport_url.contains("127.0.0.1")
+        || transport_url.contains("localhost")
+        || transport_url.contains("::1");
+
+    if !is_localhost && ax_studio_utils::is_internal_url(transport_url) {
         return Err(format!(
             "MCP {transport_kind} URL for server {server_name} points to an internal/private address, which is not allowed"
         ));
@@ -57,15 +62,18 @@ async fn validate_external_transport_url(
         format!("MCP {transport_kind} URL for server {server_name} is missing a port")
     })?;
 
-    let addrs = lookup_host((host, port)).await.map_err(|e| {
-        format!("Failed to resolve MCP {transport_kind} URL for server {server_name}: {e}")
-    })?;
+    // Skip private IP check for localhost connections
+    if !is_localhost {
+        let addrs = lookup_host((host, port)).await.map_err(|e| {
+            format!("Failed to resolve MCP {transport_kind} URL for server {server_name}: {e}")
+        })?;
 
-    for addr in addrs {
-        if ax_studio_utils::is_private_ip(addr.ip()) {
-            return Err(format!(
-                "MCP {transport_kind} URL for server {server_name} resolves to an internal/private address, which is not allowed"
-            ));
+        for addr in addrs {
+            if ax_studio_utils::is_private_ip(addr.ip()) {
+                return Err(format!(
+                    "MCP {transport_kind} URL for server {server_name} resolves to an internal/private address, which is not allowed"
+                ));
+            }
         }
     }
 

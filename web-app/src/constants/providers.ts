@@ -172,6 +172,55 @@ export const predefinedProviders = [
   {
     active: true,
     api_key: '',
+    base_url: 'https://api.x.ai/v1',
+    explore_models_url: 'https://docs.x.ai/docs/models',
+    provider: 'xai',
+    settings: [
+      {
+        key: 'api-key',
+        title: 'API Key',
+        description:
+          "The xAI API uses API keys for authentication. Visit your [API Keys](https://console.x.ai/settings/keys) page to retrieve the API key you'll use in your requests.",
+        controller_type: 'input',
+        controller_props: {
+          placeholder: 'Insert API Key',
+          value: '',
+          type: 'password',
+          input_actions: ['unobscure', 'copy'],
+        },
+      },
+      {
+        key: 'base-url',
+        title: 'Base URL',
+        description:
+          'The base endpoint to use. See the [xAI API documentation](https://docs.x.ai/api) for more information.',
+        controller_type: 'input',
+        controller_props: {
+          placeholder: 'https://api.x.ai/v1',
+          value: 'https://api.x.ai/v1',
+        },
+      },
+    ],
+    models: [
+      {
+        id: 'grok-4.3',
+        name: 'Grok 4.3',
+        version: '1.0',
+        description: 'xAI Grok 4.3 model with tool calling support.',
+        capabilities: ['completion', 'tools', 'vision'],
+      },
+      {
+        id: 'grok-3',
+        name: 'Grok 3',
+        version: '1.0',
+        description: 'xAI Grok 3 model with tool calling support.',
+        capabilities: ['completion', 'tools', 'vision'],
+      },
+    ],
+  },
+  {
+    active: true,
+    api_key: '',
     base_url: 'https://api.groq.com/openai/v1',
     explore_models_url: 'https://console.groq.com/docs/models',
     provider: 'groq',
