@@ -301,6 +301,8 @@ fn test_download_event_creation() {
     let event = DownloadEvent {
         transferred: 1024,
         total: 2048,
+        download_id: None,
+        model_id: None,
     };
 
     assert_eq!(event.transferred, 1024);
@@ -358,11 +360,14 @@ fn test_download_event_serialization() {
     let event = DownloadEvent {
         transferred: 512,
         total: 1024,
+        download_id: Some("task-1".to_string()),
+        model_id: None,
     };
 
     let json = serde_json::to_string(&event).unwrap();
     assert!(json.contains("\"transferred\":512"));
     assert!(json.contains("\"total\":1024"));
+    assert!(json.contains("\"downloadId\":\"task-1\""));
 }
 
 #[test]

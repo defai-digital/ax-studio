@@ -333,6 +333,8 @@ struct DownloadCtx {
     cancel_token: CancellationToken,
     evt_name: String,
     progress_tracker: ProgressTracker,
+    task_id: String,
+    model_id: Option<String>,
 }
 
 /// Downloads multiple files in parallel with individual progress tracking
@@ -395,15 +397,49 @@ pub async fn _download_files_internal(
 
     let progress_tracker = ProgressTracker::new(file_id_sizes);
 
+    // Extract model_id from items for event identification
+    let download_model_id = items
+        .iter()
+        .find_map(|item| item.model_id.as_ref())
+        .map(|s| s.to_string())
+        .or_else(|| {
+            items.first().and_then(|item| {
+                std::path::Path::new(&item.save_path)
+                    .parent()
+                    .and_then(|p| p.file_name())
+                    .and_then(|n| n.to_str())
+                    .map(|s| s.to_string())
+            })
+        });
+
     // save file under app data folder
-    let app_data_folder = get_app_data_folder_path(app.clone());
+    let app_data_folder_raw = get_app_data_folder_path(app.clone());
+    // Canonicalize and normalize the app data folder to resolve symlinks
+    // (e.g., /var -> /private/var on macOS) so the starts_with check works correctly.
+    let app_data_folder = normalize_path(
+        &app_data_folder_raw
+            .canonicalize()
+            .unwrap_or_else(|_| app_data_folder_raw.clone()),
+    );
 
     // Collect download tasks for parallel execution
     let mut download_tasks = Vec::new();
 
     for (index, item) in items.iter().enumerate() {
-        let save_path = app_data_folder.join(&item.save_path);
-        let save_path = normalize_path(&save_path);
+        let save_path_raw = app_data_folder.join(&item.save_path);
+        // Canonicalize the parent directory to resolve symlinks (e.g., /var -> /private/var)
+        // so the starts_with check works correctly on macOS. The file itself doesn't exist yet.
+        let save_path = if let Some(parent) = save_path_raw.parent() {
+            let canonical_parent = parent
+                .canonicalize()
+                .unwrap_or_else(|_| parent.to_path_buf());
+            let file_name = save_path_raw
+                .file_name()
+                .unwrap_or_default();
+            normalize_path(&canonical_parent.join(file_name))
+        } else {
+            normalize_path(&save_path_raw)
+        };
 
         if !save_path.starts_with(&app_data_folder) {
             return Err(format!(
@@ -425,6 +461,8 @@ pub async fn _download_files_internal(
             cancel_token: cancel_token.clone(),
             evt_name: evt_name.clone(),
             progress_tracker: progress_tracker.clone(),
+            task_id: task_id.to_string(),
+            model_id: download_model_id.clone(),
         };
 
         let task = tokio::spawn(async move {
@@ -513,7 +551,12 @@ pub async fn _download_files_internal(
 
     // Emit final progress
     let (transferred, total) = progress_tracker.get_total_progress().await;
-    let final_evt = DownloadEvent { transferred, total };
+    let final_evt = DownloadEvent {
+        transferred,
+        total,
+        download_id: Some(task_id.to_string()),
+        model_id: download_model_id.clone(),
+    };
     app.emit(&evt_name, final_evt).ok();
     Ok(())
 }
@@ -533,6 +576,8 @@ async fn download_single_file(
         cancel_token,
         evt_name,
         progress_tracker,
+        task_id,
+        model_id,
     } = ctx;
     // Create parent directories if they don't exist
     if let Some(parent) = save_path.parent() {
@@ -624,6 +669,8 @@ async fn download_single_file(
         DownloadEvent {
             transferred: init_transferred,
             total: init_total,
+            download_id: Some(task_id.clone()),
+            model_id: model_id.clone(),
         },
     );
 
@@ -697,6 +744,8 @@ async fn download_single_file(
             let evt = DownloadEvent {
                 transferred: combined_transferred,
                 total: combined_total,
+                download_id: Some(task_id.clone()),
+                model_id: model_id.clone(),
             };
             app.emit(&evt_name, evt).ok();
 
@@ -719,6 +768,8 @@ async fn download_single_file(
     let evt = DownloadEvent {
         transferred: combined_transferred,
         total: combined_total,
+        download_id: Some(task_id.clone()),
+        model_id: model_id.clone(),
     };
     app.emit(&evt_name, evt).ok();
 

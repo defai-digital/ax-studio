@@ -46,6 +46,10 @@ pub struct DownloadItem {
 pub struct DownloadEvent {
     pub transferred: u64,
     pub total: u64,
+    #[serde(rename = "downloadId", skip_serializing_if = "Option::is_none")]
+    pub download_id: Option<String>,
+    #[serde(rename = "modelId", skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
 }
 
 /// Structure to track progress for each file in parallel downloads
@@ -106,10 +110,14 @@ mod tests {
         let evt = DownloadEvent {
             transferred: 500,
             total: 1000,
+            download_id: Some("task-1".to_string()),
+            model_id: Some("model-1".to_string()),
         };
         let json = serde_json::to_value(&evt).unwrap();
         assert_eq!(json["transferred"], 500);
         assert_eq!(json["total"], 1000);
+        assert_eq!(json["downloadId"], "task-1");
+        assert_eq!(json["modelId"], "model-1");
     }
 
     // --- ProxyConfig deserialization ---
