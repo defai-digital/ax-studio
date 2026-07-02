@@ -222,6 +222,17 @@ async function preflightLocalModelThroughProxy(
     providerId,
     lastError,
   })
+  
+  // Provide specific guidance for MLX compute errors
+  if (lastError.includes('Compute error') || lastError.includes('500')) {
+    throw new Error(
+      `MLX model "${modelId}" failed to initialize. This is a known issue with some MLX models. ` +
+      `Try: (1) Restart AX Studio, (2) Use a different quantization (Q4_K_M recommended), ` +
+      `or (3) Switch to a GGUF model via llama.cpp for better stability. ` +
+      `Original error: ${lastError}`
+    )
+  }
+  
   throw new Error(
     `Local model "${modelId}" is not ready through Ax Studio proxy: ${lastError}`
   )

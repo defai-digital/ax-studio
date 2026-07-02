@@ -15,6 +15,11 @@ export interface MCPToolCallResult {
     type?: string
     text: string
   }>
+  // Optional properties that some MCP servers may return
+  structuredContent?: unknown
+  structured_content?: unknown
+  isError?: boolean
+  is_error?: boolean
 }
 
 /**
