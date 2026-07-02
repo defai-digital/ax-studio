@@ -421,6 +421,35 @@ export function useThreadTools({
               })
             } else if (mcpToolNames.has(toolName)) {
               result = await serviceHub.mcp().callTool({ toolName, arguments: toolCall.input as Record<string, unknown> })
+            } else if (toolName === 'process_file_for_bi') {
+              // Custom tool: read file as base64 and upload to AX-BI
+              try {
+                const { fs } = await import('@ax-studio/core')
+                const input = toolCall.input as { file_path: string; filename: string }
+                const fileContent = await fs.readFileBase64(input.file_path)
+                result = await serviceHub.mcp().callTool({
+                  serverName: 'ax-bi',
+                  toolName: 'upload_file',
+                  arguments: {
+                    request: {
+                      file_content: fileContent,
+                      filename: input.filename,
+                    },
+                  },
+                })
+                // Extract structured content from MCP result
+                const structuredContent = (result as any).structuredContent ?? (result as any).structured_content
+                if (structuredContent) {
+                  result = structuredContent
+                } else {
+                  const textContent = result.content?.find((c: any) => c.text)?.text
+                  if (textContent) {
+                    try { result = JSON.parse(textContent) } catch { result = { message: textContent } }
+                  }
+                }
+              } catch (error) {
+                result = { error: `Failed to upload file: ${error instanceof Error ? error.message : String(error)}` }
+              }
             } else {
               result = { error: `Tool '${toolName}' not found in any service` }
             }

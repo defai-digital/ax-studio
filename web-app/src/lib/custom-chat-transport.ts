@@ -222,6 +222,17 @@ async function preflightLocalModelThroughProxy(
     providerId,
     lastError,
   })
+  
+  // Provide specific guidance for MLX compute errors
+  if (lastError.includes('Compute error') || lastError.includes('500')) {
+    throw new Error(
+      `MLX model "${modelId}" failed to initialize. This is a known issue with some MLX models. ` +
+      `Try: (1) Restart AX Studio, (2) Use a different quantization (Q4_K_M recommended), ` +
+      `or (3) Switch to a GGUF model via llama.cpp for better stability. ` +
+      `Original error: ${lastError}`
+    )
+  }
+  
   throw new Error(
     `Local model "${modelId}" is not ready through Ax Studio proxy: ${lastError}`
   )
@@ -242,7 +253,6 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
   public lastRouterResult: RouterResult | null = null
   private tools: Record<string, Tool> = {}
   private onTokenUsage?: TokenUsageCallback
-  private modelSupportsTools = false
   private systemMessage?: string
   private serviceHub: ServiceHub | null
   private threadId?: string
@@ -279,12 +289,11 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
     } catch { return null }
   }
 
-  async updateRagToolsAvailability(_hasDocuments: boolean, modelSupportsTools: boolean, _ragFeatureAvailable: boolean) {
-    this.modelSupportsTools = modelSupportsTools
+  async updateRagToolsAvailability(_hasDocuments: boolean, _modelSupportsTools: boolean, _ragFeatureAvailable: boolean) {
     await this.refreshTools()
   }
 
-  async refreshTools(overrideModelSupportsTools?: boolean) {
+  async refreshTools(_overrideModelSupportsTools?: boolean) {
     const toolsRecord: Record<string, Tool> = {}
     const getDisabledToolsForThread = useToolAvailable.getState().getDisabledToolsForThread
     const disabledToolKeys = this.threadId
@@ -294,19 +303,9 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
       disabledToolKeys.includes(`${serverName}::${toolName}`)
 
     if (this.serviceHub) {
-      const providerId =
-        this.modelOverrideProviderId ?? useModelProvider.getState().selectedProvider
-      const modelId =
-        this.modelOverrideId ?? useModelProvider.getState().selectedModel?.id
-      const provider = providerId
-        ? useModelProvider.getState().getProviderByName(providerId)
-        : undefined
-      const model = provider?.models.find((entry) => entry.id === modelId)
-      const modelSupportsTools = overrideModelSupportsTools
-        ?? model?.capabilities?.includes('tools')
-        ?? this.modelSupportsTools
-
-      if (modelSupportsTools) {
+      // Always load tools regardless of model capability declaration
+      // This ensures custom tools like process_file_for_bi are always available
+      {
         const localKnowledgeEnabled = this.threadId
           ? useLocalKnowledge.getState().isLocalKnowledgeEnabledForThread(this.threadId)
           : useLocalKnowledge.getState().localKnowledgeEnabled
@@ -364,11 +363,66 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
             }
           }
         } catch (error) { console.warn('Failed to load RAG tools:', error) }
-
+      
+        // Add custom AX-BI file upload tool that reads files as base64
+        if (this.serviceHub) {
+          const serviceHub = this.serviceHub
+          toolsRecord['process_file_for_bi'] = {
+            description: 'LOCAL DATA PROCESSING: Read a file from the local filesystem and process it for business intelligence analysis. This tool reads the file content and sends it to the local AX-BI analytics engine running on this machine (localhost). Use this when the user wants to analyze or visualize a file with AX-BI.',
+            inputSchema: jsonSchema({
+              type: 'object',
+              properties: {
+                file_path: { type: 'string', description: 'The absolute path to the file to upload' },
+                filename: { type: 'string', description: 'The name to use for the uploaded file' },
+              },
+              required: ['file_path', 'filename'],
+            }),
+            execute: async ({ file_path, filename }: { file_path: string; filename: string }) => {
+              try {
+                const { fs } = await import('@ax-studio/core')
+                const fileContent = await fs.readFileBase64(file_path)
+                const result = await serviceHub.mcp().callTool({
+                  serverName: 'ax-bi',
+                  toolName: 'upload_file',
+                  arguments: {
+                    request: {
+                      file_content: fileContent,
+                      filename: filename,
+                    },
+                  },
+                })
+                // Extract the actual result from MCP response
+                // MCP returns { error: '', content: [...], structuredContent: {...} }
+                if (result.error) {
+                  return { error: result.error }
+                }
+                // Return the structured content or parse from text content
+                const structuredContent = (result as any).structuredContent ?? (result as any).structured_content
+                if (structuredContent) {
+                  return structuredContent
+                }
+                // Parse from text content
+                const textContent = result.content?.find((c: any) => c.text)?.text
+                if (textContent) {
+                  try {
+                    return JSON.parse(textContent)
+                  } catch {
+                    return { message: textContent }
+                  }
+                }
+                return { message: 'File uploaded successfully' }
+              } catch (error) {
+                return { error: `Failed to upload file: ${error instanceof Error ? error.message : String(error)}` }
+              }
+            },
+          } as Tool
+        }
+      
       }
     }
 
     this.tools = toolsRecord
+    console.log('[DEBUG] Tools loaded:', Object.keys(toolsRecord))
   }
 
   getTools(): Record<string, Tool> { return this.tools }
@@ -490,9 +544,8 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
       })
 
       // Determine tool support for this model
-      const providerModels = provider.models ?? []
-      const modelEntry = providerModels.find((m) => m.id === modelId)
-      const modelSupportsTools = modelEntry?.capabilities?.includes('tools') ?? this.modelSupportsTools
+      // Always enable tools regardless of model capability declaration
+      const modelSupportsTools = true // Force tools to be passed to LLM
 
       // Refresh tools AFTER routing so the correct model's capabilities are used
       await this.refreshTools(modelSupportsTools)

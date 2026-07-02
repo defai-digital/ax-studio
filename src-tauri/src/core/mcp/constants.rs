@@ -19,6 +19,14 @@ pub const DEFAULT_MCP_CONFIG: &str = r#"{
       "env": {},
       "active": true
     },
+    "ax-bi": {
+      "type": "http",
+      "url": "http://127.0.0.1:8088/mcp",
+      "command": "",
+      "args": [],
+      "env": {},
+      "active": false
+    },
     "filesystem": {
       "command": "npx",
       "args": [
