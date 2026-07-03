@@ -124,16 +124,16 @@ jobs:
 
   test-on-windows:
     if: github.event_name == 'push'
-    strategy:
-      fail-fast: false
-      matrix:
-        antivirus-tools: ['mcafee', 'bit-defender']
-    runs-on: windows-desktop-${{ matrix.antivirus-tools }}
+    runs-on: 'windows-latest'
     steps:
       - name: Getting the repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: install dependencies
+        run: |
+          choco install --yes --no-progress make
 
       - name: Installing node
         uses: actions/setup-node@v4
@@ -160,10 +160,18 @@ jobs:
           yarn --version
           yarn config set -H enableImmutableInstalls false
 
+      - name: Install WebView2 Runtime (Bootstrapper)
+        shell: powershell
+        run: |
+          Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile 'setup.exe'
+          Start-Process -FilePath setup.exe -Verb RunAs -Wait
+
       - name: Linter and test
         shell: powershell
         run: |
           make test
+        env:
+          NODE_OPTIONS: '--max-old-space-size=2048'
 
   test-on-windows-pr:
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
