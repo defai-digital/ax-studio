@@ -168,12 +168,22 @@ jobs:
           Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile 'setup.exe'
           Start-Process -FilePath setup.exe -Verb RunAs -Wait
 
+      - name: Configure Cargo for Windows paths
+        shell: powershell
+        run: |
+          git config --global core.longpaths true
+          New-Item -ItemType Directory -Force C:\cargo | Out-Null
+          New-Item -ItemType Directory -Force C:\cargo-target | Out-Null
+
       - name: Linter and test
         shell: powershell
         run: |
           make test
         env:
           NODE_OPTIONS: '--max-old-space-size=2048'
+          CARGO_HOME: C:\cargo
+          CARGO_TARGET_DIR: C:\cargo-target
+          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
 
   test-on-windows-pr:
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
@@ -218,12 +228,22 @@ jobs:
           yarn --version
           yarn config set -H enableImmutableInstalls false
 
+      - name: Configure Cargo for Windows paths
+        shell: powershell
+        run: |
+          git config --global core.longpaths true
+          New-Item -ItemType Directory -Force C:\cargo | Out-Null
+          New-Item -ItemType Directory -Force C:\cargo-target | Out-Null
+
       - name: Linter and test
         shell: powershell
         run: |
           make test
         env:
           NODE_OPTIONS: '--max-old-space-size=2048'
+          CARGO_HOME: C:\cargo
+          CARGO_TARGET_DIR: C:\cargo-target
+          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
 
   test-on-ubuntu:
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-latest' || 'ubuntu-latest' }}
