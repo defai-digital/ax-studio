@@ -27,8 +27,8 @@ impl HeaderNames {
 
 /// Generate a cryptographically secure nonce (64 hex characters = 32 bytes)
 pub fn generate_nonce() -> String {
-    let mut rng = rand::thread_rng();
-    let bytes: [u8; 32] = rng.gen();
+    let mut rng = rand::rng();
+    let bytes: [u8; 32] = rng.random();
     hex::encode(bytes)
 }
 

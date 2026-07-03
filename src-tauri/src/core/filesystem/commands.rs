@@ -358,7 +358,10 @@ pub fn read_file_base64<R: Runtime>(
         return Err(format!("File not found: {}", clean_path));
     }
     let bytes = fs::read(path).map_err(|e| format!("Failed to read {}: {}", clean_path, e))?;
-    Ok(base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes))
+    Ok(base64::Engine::encode(
+        &base64::engine::general_purpose::STANDARD,
+        &bytes,
+    ))
 }
 
 #[tauri::command]

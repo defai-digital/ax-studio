@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  evaluateCoverageGate,
-  normalizeGateMode,
-  runCoverageGate,
-} from './module-coverage-gate.mjs'
+import { evaluateCoverageGate, normalizeGateMode, runCoverageGate } from './module-coverage-gate.mjs'
 
 const thresholds = {
   modules: {

@@ -1,4 +1,4 @@
-use rand::{distributions::Alphanumeric, Rng};
+use rand::{distr::Alphanumeric, Rng};
 use sha2::{Digest, Sha256};
 use std::path::Path;
 use tokio::fs::File;
@@ -7,8 +7,8 @@ use tokio_util::sync::CancellationToken;
 
 /// Generates random app token
 pub fn generate_app_token() -> String {
-    rand::thread_rng()
-        .sample_iter(&Alphanumeric)
+    rand::rng()
+        .sample_iter(Alphanumeric)
         .take(32)
         .map(char::from)
         .collect()

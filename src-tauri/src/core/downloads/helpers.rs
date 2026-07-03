@@ -433,9 +433,7 @@ pub async fn _download_files_internal(
             let canonical_parent = parent
                 .canonicalize()
                 .unwrap_or_else(|_| parent.to_path_buf());
-            let file_name = save_path_raw
-                .file_name()
-                .unwrap_or_default();
+            let file_name = save_path_raw.file_name().unwrap_or_default();
             normalize_path(&canonical_parent.join(file_name))
         } else {
             normalize_path(&save_path_raw)

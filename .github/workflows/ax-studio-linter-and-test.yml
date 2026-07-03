@@ -36,19 +36,22 @@ on:
       - 'web-app/**'
       - '!README.md'
 
+permissions:
+  contents: read
+
 jobs:
   base_branch_cov:
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: ${{ github.base_ref }}
-      - name: Use Node.js 20.x
-        uses: actions/setup-node@v3
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: 'Cleanup cache'
         continue-on-error: true
@@ -83,14 +86,14 @@ jobs:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Getting the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Installing node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: 'Cleanup cache'
         continue-on-error: true
@@ -128,14 +131,14 @@ jobs:
     runs-on: windows-desktop-${{ matrix.antivirus-tools }}
     steps:
       - name: Getting the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Installing node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       # Clean cache, continue on error
       - name: 'Cleanup cache'
@@ -167,7 +170,7 @@ jobs:
     runs-on: 'windows-latest'
     steps:
       - name: Getting the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -176,9 +179,9 @@ jobs:
           choco install --yes --no-progress make
 
       - name: Installing node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: 'Cleanup cache'
         shell: powershell
@@ -217,7 +220,7 @@ jobs:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Getting the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -233,9 +236,9 @@ jobs:
           swap-storage: true
 
       - name: Installing node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Install Tauri dependencies
         run: |
@@ -273,16 +276,20 @@ jobs:
     runs-on: ubuntu-latest
     needs: base_branch_cov
     continue-on-error: true
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
     steps:
       - name: Getting the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Installing node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
       - name: 'Cleanup cache'
         continue-on-error: true
         run: |
@@ -321,7 +328,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           lcov-file: './coverage/lcov.info'
           base-lcov-file: './lcov.info'
-          send-summary-comment: true
+          send-summary-comment: ${{ github.actor != 'dependabot[bot]' }}
           show-annotations: 'warning'
 
       - name: Upload module audit artifact
