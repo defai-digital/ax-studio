@@ -46,6 +46,7 @@ import { z } from 'zod/v4'
 import { toast } from 'sonner'
 import { findDownloadedLocalModel } from '@/lib/models/downloaded'
 import { extractErrorMessage } from '@/lib/utils/error'
+import { isMlxSupported } from '@/lib/platform/utils'
 
 type SearchParams = {
   repo: string
@@ -606,6 +607,14 @@ function HubModelDetailContent() {
                               size="sm"
                               className="rounded-lg"
                               onClick={async () => {
+                                // Check if this is an MLX model and if MLX is supported on this platform
+                                const isMlxModel = modelData.is_mlx || variant.path.startsWith('hf://')
+                                if (isMlxModel && !isMlxSupported()) {
+                                  toast.error('MLX models not supported', {
+                                    description: 'MLX models only work on macOS with Apple Silicon (M1/M2/M3/M4). Please download a GGUF version instead.',
+                                  })
+                                  return
+                                }
                                 try {
                                   await serviceHub
                                     .models()

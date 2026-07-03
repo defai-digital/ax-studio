@@ -43,9 +43,11 @@ pub fn add_cors_headers_with_host_and_origin(
 ) -> hyper::http::response::Builder {
     // When CORS is disabled, still add headers if the request comes from
     // a local origin hitting the loopback proxy.  This covers:
-    //   - tauri://localhost (production Tauri webview)
-    //   - http://localhost:* (Vite dev server during development)
+    //   - tauri://localhost (production Tauri webview on macOS)
+    //   - http://tauri.localhost (production Tauri webview on Windows/Linux)
     //   - https://tauri.localhost (alternative Tauri origin)
+    //   - http://localhost:* (Vite dev server during development)
+    //   - http://127.0.0.1:* (loopback with explicit IP)
     // The Tauri webview uses globalThis.fetch for SSE streaming because
     // the Tauri HTTP plugin's ReadableStream doesn't support pipeThrough().
     // Without CORS headers the browser rejects the response.
@@ -53,6 +55,7 @@ pub fn add_cors_headers_with_host_and_origin(
         let is_loopback_host = is_valid_host(host, &[]);
         let is_local_origin = origin.starts_with("tauri://")
             || origin.starts_with("https://tauri.")
+            || origin.starts_with("http://tauri.")
             || origin.starts_with("http://localhost")
             || origin.starts_with("http://127.0.0.1");
         if !(is_loopback_host && is_local_origin) {
@@ -165,5 +168,46 @@ mod tests {
             .headers()
             .get("Access-Control-Allow-Credentials")
             .is_none());
+    }
+
+    /// Windows Tauri webview uses http://tauri.localhost origin.
+    /// This must be trusted by default when CORS is disabled on loopback.
+    #[test]
+    fn test_tauri_localhost_http_origin_trusted_when_cors_disabled() {
+        let builder = hyper::http::Response::builder();
+        let result = add_cors_headers_with_host_and_origin(
+            builder,
+            "127.0.0.1:1337",
+            "http://tauri.localhost",
+            &[],
+            false, // CORS disabled (default desktop case)
+        );
+        let resp = result.body(hyper::Body::empty()).unwrap();
+        assert_eq!(
+            resp.headers()
+                .get("Access-Control-Allow-Origin")
+                .map(|v| v.to_str().unwrap()),
+            Some("http://tauri.localhost")
+        );
+    }
+
+    /// macOS Tauri webview uses tauri://localhost origin.
+    #[test]
+    fn test_tauri_macos_origin_trusted_when_cors_disabled() {
+        let builder = hyper::http::Response::builder();
+        let result = add_cors_headers_with_host_and_origin(
+            builder,
+            "localhost:1337",
+            "tauri://localhost",
+            &[],
+            false,
+        );
+        let resp = result.body(hyper::Body::empty()).unwrap();
+        assert_eq!(
+            resp.headers()
+                .get("Access-Control-Allow-Origin")
+                .map(|v| v.to_str().unwrap()),
+            Some("tauri://localhost")
+        );
     }
 }

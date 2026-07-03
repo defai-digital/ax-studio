@@ -500,9 +500,23 @@ fn handle_generate(
     // Consume one unused warm session per call. We intentionally do not reuse
     // this session after generation.
     let mut session = take_warm_session(entry, model_id)?;
-    let response = session
-        .generate(request)
-        .map_err(|e| format!("session.generate failed for {model_id}: {e:?}"))?;
+    let response = match session.generate(request) {
+        Ok(r) => r,
+        Err(e) => {
+            let err_str = format!("{e:?}");
+            // Provide more helpful diagnostics for common MLX failures
+            if err_str.contains("Compute error") || err_str.contains("compute") {
+                return Err(format!(
+                    "MLX compute error for {model_id}. This typically means: \
+                     (1) insufficient unified memory — try a smaller quantization like Q4_K_M, \
+                     (2) incompatible quantization format (IQ4_XS may not work on all chips), \
+                     (3) older Apple Silicon with limited Metal support. \
+                     Original error: {err_str}"
+                ));
+            }
+            return Err(format!("session.generate failed for {model_id}: {err_str}"));
+        }
+    };
     drop(session);
 
     let mut output_text = entry
@@ -575,9 +589,22 @@ fn handle_generate_stream(
 
     let mut session = take_warm_session(entry, model_id)?;
     let started = std::time::Instant::now();
-    let mut stream = session
-        .stream_generate(request)
-        .map_err(|e| format!("session.stream_generate failed for {model_id}: {e:?}"))?;
+    let mut stream = match session.stream_generate(request) {
+        Ok(s) => s,
+        Err(e) => {
+            let err_str = format!("{e:?}");
+            if err_str.contains("Compute error") || err_str.contains("compute") {
+                return Err(format!(
+                    "MLX compute error for {model_id}. This typically means: \
+                     (1) insufficient unified memory — try a smaller quantization like Q4_K_M, \
+                     (2) incompatible quantization format (IQ4_XS may not work on all chips), \
+                     (3) older Apple Silicon with limited Metal support. \
+                     Original error: {err_str}"
+                ));
+            }
+            return Err(format!("session.stream_generate failed for {model_id}: {err_str}"));
+        }
+    };
     let mut saw_start = false;
     let mut prompt_token_count = prompt_token_count;
     let mut output_token_count = 0_u32;

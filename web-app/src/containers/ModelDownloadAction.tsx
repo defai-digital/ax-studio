@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { findDownloadedLocalModel } from '@/lib/models/downloaded'
 import { getPreferredMmprojPath } from '@/lib/models'
+import { isMlxSupported } from '@/lib/platform/utils'
 
 const DOWNLOAD_START_TIMEOUT_MS = 60_000
 const DOWNLOAD_PROGRESS_TIMEOUT_MS = 120_000
@@ -159,6 +160,13 @@ export const ModelDownloadAction = ({
   const handleDownloadModel = useCallback(async () => {
     hasRealProgressRef.current = false
     const isHfRepoImport = variant.path.startsWith('hf://')
+    // Check if this is an MLX model and if MLX is supported on this platform
+    if ((isHfRepoImport || model?.is_mlx) && !isMlxSupported()) {
+      toast.error('MLX models not supported', {
+        description: 'MLX models only work on macOS with Apple Silicon (M1/M2/M3/M4). Please download a GGUF version instead.',
+      })
+      return
+    }
     // GGUF variants use filename-like IDs; MLX repo imports must keep the
     // full Hugging Face repo id so ax-engine can resolve the downloaded folder.
     const baseModelId = variant.model_id.split('/').pop() || variant.model_id

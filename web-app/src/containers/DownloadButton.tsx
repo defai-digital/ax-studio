@@ -20,6 +20,7 @@ import { DEFAULT_MODEL_QUANTIZATIONS } from '@/constants/models'
 import { ExternalLink, Download, Pause, Play, Loader2 } from 'lucide-react'
 import { findDownloadedLocalModel } from '@/lib/models/downloaded'
 import { getPreferredMmprojPath } from '@/lib/models'
+import { isMlxSupported } from '@/lib/platform/utils'
 
 const DOWNLOAD_START_TIMEOUT_MS = 60_000
 const DOWNLOAD_PROGRESS_TIMEOUT_MS = 120_000
@@ -178,6 +179,14 @@ export function DownloadButtonPlaceholder({
     downloadProcesses.find((e) => e.id === modelId)?.progress || 0
 
   const handleDownload = async () => {
+    // Check if this is an MLX model and if MLX is supported on this platform
+    const isMlxModel = modelUrl.startsWith('hf://') || model?.is_mlx
+    if (isMlxModel && !isMlxSupported()) {
+      toast.error('MLX models not supported', {
+        description: 'MLX models only work on macOS with Apple Silicon (M1/M2/M3/M4). Please download a GGUF version instead.',
+      })
+      return
+    }
     hasRealProgressRef.current = false
     addLocalDownloadingModel(modelId)
     setStartingState(true)

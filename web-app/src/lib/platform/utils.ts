@@ -20,3 +20,22 @@ export type Platform = 'tauri' | 'web'
 export const getCurrentPlatform = (): Platform => {
   return isPlatformTauri() ? 'tauri' : 'web'
 }
+
+/**
+ * Detect if running on macOS. MLX models only work on macOS with Apple Silicon.
+ * Uses navigator.platform which works in both browser and Tauri WebView.
+ */
+export const isMacOS = (): boolean => {
+  if (typeof navigator !== 'undefined') {
+    return /Mac|iPod|iPhone|iPad/.test(navigator.platform)
+  }
+  return false
+}
+
+/**
+ * Check if MLX models are supported on this platform.
+ * MLX requires macOS with Apple Silicon (M1/M2/M3/M4).
+ */
+export const isMlxSupported = (): boolean => {
+  return isMacOS()
+}
