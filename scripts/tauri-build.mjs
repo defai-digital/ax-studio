@@ -40,6 +40,17 @@ if (process.platform === 'darwin') {
   const here = dirname(fileURLToPath(import.meta.url))
   const repoRoot = resolve(here, '..')
   const tauriDir = join(repoRoot, 'src-tauri')
+  const appleSigningIdentity =
+    process.env.AX_STUDIO_APPLE_CODESIGN_IDENTITY?.trim() ||
+    process.env.APPLE_SIGNING_IDENTITY?.trim() ||
+    ''
+
+  if (appleSigningIdentity) {
+    console.log(
+      '[tauri-build] Apple signing identity is configured; keeping Tauri signed/notarized app bundle'
+    )
+    process.exit(0)
+  }
 
   let identifier = 'ai.axstudio.app'
   try {
