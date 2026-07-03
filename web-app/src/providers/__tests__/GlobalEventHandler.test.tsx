@@ -11,6 +11,7 @@ const {
   mockToastSuccess,
   mockGetProviders,
   mockGetActiveModels,
+  mockCoreInvoke,
   mockUpdateProgress,
   mockRemoveDownload,
   mockRemoveLocalDownloadingModel,
@@ -36,6 +37,7 @@ const {
     mockToastSuccess: vi.fn(),
     mockGetProviders: vi.fn(),
     mockGetActiveModels: vi.fn(),
+    mockCoreInvoke: vi.fn(),
     mockUpdateProgress: vi.fn(),
     mockRemoveDownload: vi.fn(),
     mockRemoveLocalDownloadingModel: vi.fn(),
@@ -98,6 +100,9 @@ vi.mock('@/hooks/useServiceHub', () => ({
     models: () => ({
       getActiveModels: mockGetActiveModels,
     }),
+    core: () => ({
+      invoke: mockCoreInvoke,
+    }),
     path: () => ({
       sep: () => '/',
     }),
@@ -129,6 +134,7 @@ describe('GlobalEventHandler', () => {
     vi.clearAllMocks()
     mockGetProviders.mockResolvedValue([{ provider: 'llamacpp', models: [] }])
     mockGetActiveModels.mockResolvedValue(['model-a'])
+    mockCoreInvoke.mockResolvedValue(undefined)
   })
 
   it('refreshes providers on version_backend settings change', async () => {
@@ -148,12 +154,33 @@ describe('GlobalEventHandler', () => {
   it('refreshes active models on model ready and model stopped events', async () => {
     render(<GlobalEventHandler />)
 
-    emit('OnModelReady', { modelId: 'model-a' })
-    emit('OnModelStopped', { modelId: 'model-a' })
+    emit('OnModelReady', {
+      modelId: 'model-a',
+      port: 11434,
+      api_key: 'local-key',
+      provider: 'llamacpp',
+    })
+
+    await waitFor(() => {
+      expect(mockCoreInvoke).toHaveBeenCalledWith('register_provider_config', {
+        request: {
+          provider: 'llamacpp',
+          api_key: 'local-key',
+          base_url: 'http://127.0.0.1:11434/v1',
+          custom_headers: [],
+          models: ['model-a'],
+        },
+      })
+    })
+
+    emit('OnModelStopped', { provider: 'llamacpp' })
 
     await waitFor(() => {
       expect(mockGetActiveModels).toHaveBeenCalledTimes(2)
       expect(mockSetActiveModels).toHaveBeenCalledWith(['model-a'])
+      expect(mockCoreInvoke).toHaveBeenCalledWith('unregister_provider_config', {
+        provider: 'llamacpp',
+      })
     })
   })
 

@@ -172,6 +172,17 @@ describe('createSafeJSONStorage', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const storage = createSafeJSONStorage(() => { throw new Error('unavailable') })
     expect(storage.getItem('k')).toBeNull()
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('quietly returns null when browser storage is not defined', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const storage = createSafeJSONStorage(() => {
+      throw new ReferenceError('localStorage is not defined')
+    })
+    expect(storage.getItem('k')).toBeNull()
+    expect(warn).not.toHaveBeenCalled()
     warn.mockRestore()
   })
 })

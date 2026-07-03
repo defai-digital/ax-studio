@@ -13,6 +13,10 @@ const logStorageError = (
   console.warn(`[storage] Failed to ${action} ${label}${key}:`, error)
 }
 
+const isStorageUnavailableError = (error: unknown) =>
+  error instanceof ReferenceError &&
+  /\b(localStorage|sessionStorage)\b.*\bnot defined\b/i.test(error.message)
+
 const resolveStorage = (
   getStorage: () => StorageLike,
   context?: string
@@ -20,7 +24,9 @@ const resolveStorage = (
   try {
     return getStorage()
   } catch (error) {
-    logStorageError('resolve', 'storage', error, context)
+    if (!isStorageUnavailableError(error)) {
+      logStorageError('resolve', 'storage', error, context)
+    }
     return null
   }
 }
