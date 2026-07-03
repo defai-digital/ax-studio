@@ -20,8 +20,8 @@ import { toast } from 'sonner'
 import { findDownloadedLocalModel } from '@/lib/models/downloaded'
 import { getPreferredMmprojPath } from '@/lib/models'
 
-const DOWNLOAD_START_TIMEOUT_MS = 15_000
-const DOWNLOAD_PROGRESS_TIMEOUT_MS = 45_000
+const DOWNLOAD_START_TIMEOUT_MS = 60_000
+const DOWNLOAD_PROGRESS_TIMEOUT_MS = 120_000
 
 export const ModelDownloadAction = ({
   variant,
@@ -188,6 +188,10 @@ export const ModelDownloadAction = ({
       removeDownload(variant.model_id)
       serviceHub.models().abortDownload(downloadModelId).catch(() => {})
     }, DOWNLOAD_PROGRESS_TIMEOUT_MS)
+    // Mark download as started before the async call to prevent
+    // timeouts from cancelling MLX downloads that need extra time
+    // for HuggingFace metadata and manifest generation checks.
+    hasRealProgressRef.current = true
     serviceHub
       .models()
       .pullModelWithMetadata(

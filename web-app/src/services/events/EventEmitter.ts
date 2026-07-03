@@ -50,6 +50,9 @@ export class EventEmitter {
   }
 
   public emit(eventName: string, args: unknown): void {
+    if (eventName.startsWith('onFileDownload')) {
+      console.log(`[EventEmitter] emit: ${eventName}, handlerCount: ${this.handlers.get(eventName)?.length ?? 0}`)
+    }
     if (!this.handlers.has(eventName)) {
       return
     }
@@ -63,5 +66,8 @@ export class EventEmitter {
         console.error(`Event handler for "${eventName}" failed:`, error)
       }
     })
+    if (eventName.startsWith('onFileDownload')) {
+      console.log(`[EventEmitter] emit done: ${eventName}`)
+    }
   }
 }

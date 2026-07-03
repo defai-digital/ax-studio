@@ -12,7 +12,6 @@ import {
   ExternalLink,
   Eye,
   HardDrive,
-  Loader2,
   Wrench,
 } from 'lucide-react'
 import { motion } from 'motion/react'
@@ -47,11 +46,6 @@ import { z } from 'zod/v4'
 import { toast } from 'sonner'
 import { findDownloadedLocalModel } from '@/lib/models/downloaded'
 import { extractErrorMessage } from '@/lib/utils/error'
-import { sanitizeModelId } from '@/lib/utils'
-import { AppEvent, DownloadEvent, DownloadState, events } from '@ax-studio/core'
-
-const DOWNLOAD_START_TIMEOUT_MS = 15_000
-const DOWNLOAD_PROGRESS_TIMEOUT_MS = 45_000
 
 type SearchParams = {
   repo: string
@@ -98,56 +92,9 @@ function HubModelDetailContent() {
   const {
     downloads,
     localDownloadingModels,
-    addLocalDownloadingModel,
-    removeDownload,
-    removeLocalDownloadingModel,
   } = useDownloadStore()
   const serviceHub = useServiceHub()
   const [repoData, setRepoData] = useState<CatalogModel | undefined>()
-  const [isStarting, setStarting] = useState<boolean>(false)
-  const isStartingRef = useRef(false)
-  const hasRealProgressRef = useRef(false)
-
-  const setStartingState = useCallback((value: boolean) => {
-    isStartingRef.current = value
-    setStarting(value)
-  }, [])
-
-  // Listen for download events to update starting state
-  useEffect(() => {
-    const handleProgress = (state: DownloadState) => {
-      const downloadId = state.downloadId ?? state.modelId
-      if (downloadId) {
-        hasRealProgressRef.current = true
-      }
-    }
-    const handleStarted = (state: DownloadState) => {
-      const downloadId = state.downloadId ?? state.modelId
-      if (downloadId) {
-        hasRealProgressRef.current = true
-        setStartingState(false)
-      }
-    }
-    const handleFinished = (state: DownloadState) => {
-      const downloadId = state.downloadId ?? state.modelId
-      if (downloadId) {
-        hasRealProgressRef.current = true
-        setStartingState(false)
-      }
-    }
-    events.on(DownloadEvent.onFileDownloadUpdate, handleProgress)
-    events.on(DownloadEvent.onFileDownloadStarted, handleStarted)
-    events.on(DownloadEvent.onFileDownloadSuccess, handleFinished)
-    events.on(DownloadEvent.onFileDownloadError, handleFinished)
-    events.on(DownloadEvent.onFileDownloadStopped, handleFinished)
-    return () => {
-      events.off(DownloadEvent.onFileDownloadUpdate, handleProgress)
-      events.off(DownloadEvent.onFileDownloadStarted, handleStarted)
-      events.off(DownloadEvent.onFileDownloadSuccess, handleFinished)
-      events.off(DownloadEvent.onFileDownloadError, handleFinished)
-      events.off(DownloadEvent.onFileDownloadStopped, handleFinished)
-    }
-  }, [setStartingState])
 
   // State for README content
   const [readmeContent, setReadmeContent] = useState<string>('')
@@ -658,42 +605,12 @@ function HubModelDetailContent() {
                             <Button
                               size="sm"
                               className="rounded-lg"
-                              disabled={isStarting}
                               onClick={async () => {
-                                hasRealProgressRef.current = false
-                                const isHfRepoImport = variant.path.startsWith('hf://')
-                                const baseModelId = variant.model_id.split('/').pop() || variant.model_id
-                                const downloadModelId = isHfRepoImport
-                                  ? variant.model_id
-                                  : sanitizeModelId(baseModelId)
-                                addLocalDownloadingModel(variant.model_id)
-                                addLocalDownloadingModel(downloadModelId)
-                                setStartingState(true)
-                                const startTimeout = window.setTimeout(() => {
-                                  if (!isStartingRef.current) return
-                                  setStartingState(false)
-                                  removeLocalDownloadingModel(downloadModelId)
-                                  removeLocalDownloadingModel(variant.model_id)
-                                  toast.error('Download did not start', {
-                                    description:
-                                      'This model is not available for Ax Studio in-app download yet. Open it on Hugging Face or choose a GGUF/Ax-ready model.',
-                                  })
-                                  serviceHub.models().abortDownload(downloadModelId).catch(() => {})
-                                }, DOWNLOAD_START_TIMEOUT_MS)
-                                const progressTimeout = window.setTimeout(() => {
-                                  if (hasRealProgressRef.current) return
-                                  setStartingState(false)
-                                  removeLocalDownloadingModel(downloadModelId)
-                                  removeLocalDownloadingModel(variant.model_id)
-                                  removeDownload(downloadModelId)
-                                  removeDownload(variant.model_id)
-                                  serviceHub.models().abortDownload(downloadModelId).catch(() => {})
-                                }, DOWNLOAD_PROGRESS_TIMEOUT_MS)
                                 try {
                                   await serviceHub
                                     .models()
                                     .pullModelWithMetadata(
-                                      downloadModelId,
+                                      variant.model_id,
                                       variant.path,
                                       getPreferredMmprojPath(
                                         modelData.mmproj_models
@@ -701,24 +618,17 @@ function HubModelDetailContent() {
                                       huggingfaceToken
                                     )
                                 } catch (error) {
-                                  console.error('Failed to start model download:', error)
+                                  console.error('Failed to download model:', error)
                                   const description = extractErrorMessage(error, '')
                                   toast.error('Failed to download model', {
                                     description: description || 'Unknown error (check DevTools console).',
                                   })
-                                } finally {
-                                  window.clearTimeout(startTimeout)
-                                  window.clearTimeout(progressTimeout)
                                 }
                               }}
                               variant="outline"
                             >
-                              {isStarting ? (
-                                <Loader2 className="size-3.5 mr-1.5 animate-spin" />
-                              ) : (
-                                <Download className="size-3.5 mr-1.5" />
-                              )}
-                              {isStarting ? 'Starting...' : 'Download'}
+                              <Download className="size-3.5 mr-1.5" />
+                              Download
                             </Button>
                           )
                         })()}

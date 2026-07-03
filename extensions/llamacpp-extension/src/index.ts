@@ -817,25 +817,42 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     files: HfRepoSibling[],
     requestHeaders?: Record<string, string>
   ): Promise<void> {
-    if (this._repoHasAxManifest(files)) return
+    if (this._repoHasAxManifest(files)) {
+      console.log('[mlx-manifest] repo has AX manifest, skipping check')
+      return
+    }
 
     if (
       !files.some((file) => file.rfilename.toLowerCase() === 'config.json')
     ) {
+      console.error('[mlx-manifest] no config.json in repo files')
       throw new Error(
         `MLX repo "${repoId}" does not include config.json, so Ax Studio cannot prepare it for Ax Engine.`
       )
     }
 
-    const modelTypes = this._extractHfModelTypes(
-      await this._fetchHfConfig(repoId, requestHeaders)
-    )
+    console.log('[mlx-manifest] fetching config.json...')
+    let config: unknown
+    try {
+      config = await this._fetchHfConfig(repoId, requestHeaders)
+      console.log('[mlx-manifest] config.json fetched:', JSON.stringify(config).slice(0, 200))
+    } catch (error) {
+      console.error('[mlx-manifest] failed to fetch config.json:', error)
+      throw error
+    }
+
+    const modelTypes = this._extractHfModelTypes(config)
+    console.log('[mlx-manifest] extracted model types:', modelTypes)
     const supportedModelType = modelTypes.find((modelType) =>
       AX_GENERATED_MLX_MANIFEST_MODEL_TYPES.has(modelType)
     )
-    if (supportedModelType) return
+    if (supportedModelType) {
+      console.log('[mlx-manifest] supported model type found:', supportedModelType)
+      return
+    }
 
     const reportedTypes = modelTypes.length ? modelTypes.join(', ') : 'unknown'
+    console.error('[mlx-manifest] unsupported model type:', reportedTypes)
     throw new Error(
       `MLX repo "${repoId}" uses model type ${reportedTypes}, which Ax Engine native MLX cannot prepare yet. Supported generated-manifest model types are: ${Array.from(
         AX_GENERATED_MLX_MANIFEST_MODEL_TYPES
@@ -849,9 +866,11 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     requestHeaders?: Record<string, string>,
     repoFiles?: HfRepoSibling[]
   ): Promise<void> {
+    console.log('[mlx-import] starting:', { modelId, repoImportPath, repoFilesCount: repoFiles?.length })
     const repoId = this._repoIdFromHfImportPath(repoImportPath)
     const modelDir = await this._modelDir(modelId)
     const relativeModelDir = `llamacpp/models/${modelId}`
+    console.log('[mlx-import] paths:', { repoId, modelDir, relativeModelDir })
     await this._ensureDir(modelDir)
 
     const downloadExt = (window as any).core?.extensionManager?.getByName(
@@ -860,6 +879,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     if (!downloadExt) {
       throw new Error('Download extension not available')
     }
+    console.log('[mlx-import] download extension available')
 
     const downloadedPaths: string[] = []
 
@@ -868,6 +888,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       modelId,
       fileName: repoId,
     })
+    console.log('[mlx-import] emitted onFileDownloadStarted, core.events?', !!(window as any).core?.events, 'hasOn?', typeof (window as any).core?.events?.on)
     events.emit(DownloadEvent.onFileDownloadUpdate, {
       downloadId: modelId,
       modelId,
@@ -876,6 +897,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       size: { transferred: 0, total: 0 },
       downloadState: 'downloading',
     })
+    console.log('[mlx-import] emitted onFileDownloadUpdate (0%)')
 
     try {
       const files = repoFiles?.length
@@ -884,6 +906,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
             return true
           })
         : await this._fetchHfRepoFiles(repoId, requestHeaders)
+      console.log('[mlx-import] got', files.length, 'files')
       if (
         !files.some((file) =>
           file.rfilename.toLowerCase().endsWith('.safetensors')
@@ -893,11 +916,9 @@ export default class AxStudioLlamacppExtension extends AIEngine {
           `MLX repo "${repoId}" does not contain safetensors weights.`
         )
       }
-      await this._assertCanGenerateHfMlxManifest(
-        repoId,
-        files,
-        requestHeaders
-      )
+      // Pre-flight manifest check removed to match v1.3.10 behavior.
+      // The actual mlx_generate_model_manifest call after download
+      // will validate compatibility properly.
 
       const items = await Promise.all(
         files.map(async (file) => {
@@ -915,21 +936,29 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         })
       )
 
-      await downloadExt.downloadFiles(
-        items,
-        `mlx-import-${modelId}`,
-        requestHeaders,
-        (transferred: number, total: number) => {
-          events.emit(DownloadEvent.onFileDownloadUpdate, {
-            downloadId: modelId,
-            modelId,
-            fileName: repoId,
-            percent: total > 0 ? transferred / total : 0,
-            size: { transferred, total },
-            downloadState: 'downloading',
-          })
-        }
-      )
+      console.log('[mlx-import] calling downloadFiles with', items.length, 'items')
+      console.log('[mlx-import] first item:', items[0])
+      try {
+        await downloadExt.downloadFiles(
+          items,
+          `mlx-import-${modelId}`,
+          requestHeaders,
+          (transferred: number, total: number) => {
+            events.emit(DownloadEvent.onFileDownloadUpdate, {
+              downloadId: modelId,
+              modelId,
+              fileName: repoId,
+              percent: total > 0 ? transferred / total : 0,
+              size: { transferred, total },
+              downloadState: 'downloading',
+            })
+          }
+        )
+        console.log('[mlx-import] downloadFiles completed')
+      } catch (error) {
+        console.error('[mlx-import] downloadFiles failed:', error)
+        throw error
+      }
 
       const manifestPath = await joinPath([modelDir, AX_MODEL_MANIFEST_FILENAME])
       if (!(await fs.existsSync(manifestPath))) {
@@ -941,9 +970,12 @@ export default class AxStudioLlamacppExtension extends AIEngine {
           size: { transferred: 1, total: 1 },
           downloadState: 'verifying',
         })
+        console.log('[mlx-import] generating model manifest...')
         try {
           await invoke('mlx_generate_model_manifest', { modelDir })
+          console.log('[mlx-import] manifest generated successfully')
         } catch (error) {
+          console.error('[mlx-import] manifest generation failed:', error)
           const message =
             error instanceof Error ? error.message : String(error)
           throw new Error(
@@ -983,6 +1015,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       modelId,
     })
     events.emit(AppEvent.onModelImported, { modelId })
+    console.log('[mlx-import] import completed successfully, all events emitted')
   }
 
   private async _hasAxModelManifestAtPath(modelPath: string): Promise<boolean> {
@@ -2414,6 +2447,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   // ─── import() ─────────────────────────────────────────────────────────────
 
   async import(modelId: string, opts: ImportOptions): Promise<void> {
+    console.log('[import] called with:', { modelId, modelPath: opts.modelPath })
     const importOptions = opts as ImportOptionsWithHeaders
     // Validate model ID — no path traversal
     if (!/^[a-zA-Z0-9/\-_.]+$/.test(modelId) || modelId.includes('..')) {
@@ -2453,6 +2487,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     await _wrap('_validatePathWithinModelsDir', () =>
       this._validatePathWithinModelsDir(modelFilePath, 'Model')
     )
+    console.log('[import] validation passed, checking HF repo import:', { modelPath, isHfRepo: this._isHfRepoImportPath(modelPath) })
 
     const downloadExt = (window as any).core?.extensionManager?.getByName(
       '@ax-studio/download-extension'
@@ -2634,6 +2669,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   }
 
   async abortImport(modelId: string): Promise<void> {
+    console.warn('[llamacpp] abortImport called for:', modelId, new Error().stack)
     const downloadExt = (window as any).core?.extensionManager?.getByName(
       '@ax-studio/download-extension'
     )

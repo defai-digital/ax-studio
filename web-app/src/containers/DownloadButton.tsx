@@ -21,8 +21,8 @@ import { ExternalLink, Download, Pause, Play, Loader2 } from 'lucide-react'
 import { findDownloadedLocalModel } from '@/lib/models/downloaded'
 import { getPreferredMmprojPath } from '@/lib/models'
 
-const DOWNLOAD_START_TIMEOUT_MS = 15_000
-const DOWNLOAD_PROGRESS_TIMEOUT_MS = 45_000
+const DOWNLOAD_START_TIMEOUT_MS = 60_000
+const DOWNLOAD_PROGRESS_TIMEOUT_MS = 120_000
 
 type ModelProps = {
   model: CatalogModel
@@ -200,6 +200,10 @@ export function DownloadButtonPlaceholder({
       removeDownload(modelId)
       serviceHub.models().abortDownload(modelId).catch(() => {})
     }, DOWNLOAD_PROGRESS_TIMEOUT_MS)
+    // Mark download as started before the async call to prevent
+    // timeouts from cancelling MLX downloads that need extra time
+    // for HuggingFace metadata and manifest generation checks.
+    hasRealProgressRef.current = true
     serviceHub
       .models()
       .pullModelWithMetadata(modelId, modelUrl, mmprojPath, huggingfaceToken)
