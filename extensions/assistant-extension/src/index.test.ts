@@ -293,6 +293,34 @@ describe('AxStudioAssistantExtension', () => {
       consoleSpy.mockRestore()
     })
 
+    it('treats stored assistants with invalid ids as corrupt data', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      mockExistsSync.mockResolvedValueOnce(true)
+      mockReaddirSync.mockResolvedValue(['escape'])
+      mockJoinPath.mockResolvedValueOnce(
+        'file://assistants/escape/assistant.json'
+      )
+      mockExistsSync.mockResolvedValueOnce(true)
+      mockReadFileSync.mockResolvedValueOnce(
+        JSON.stringify({ id: '../escape', name: 'Escape' })
+      )
+
+      const result = await ext.getAssistants()
+
+      expect(result).toEqual([])
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Failed to read assistant escape:',
+        expect.any(Error)
+      )
+      expect(mockShowToast).toHaveBeenCalledWith(
+        'Some assistants could not be loaded',
+        'Skipped corrupt assistant data for escape.'
+      )
+
+      consoleSpy.mockRestore()
+    })
+
     it('returns empty array when directory exists but is empty', async () => {
       mockExistsSync.mockResolvedValueOnce(true)
       mockReaddirSync.mockResolvedValue([])
@@ -339,6 +367,24 @@ describe('AxStudioAssistantExtension', () => {
       expect(mockMkdir).not.toHaveBeenCalled()
       expect(mockWriteFileSync).toHaveBeenCalledTimes(1)
     })
+
+    it('rejects assistant ids that would cross the storage boundary', async () => {
+      await expect(
+        ext.createAssistant({ id: '../escape', name: 'Escape' } as any)
+      ).rejects.toThrow('Path traversal sequences are not allowed')
+
+      expect(mockJoinPath).not.toHaveBeenCalled()
+      expect(mockWriteFileSync).not.toHaveBeenCalled()
+    })
+
+    it('rejects assistant ids with unsupported characters', async () => {
+      await expect(
+        ext.createAssistant({ id: 'bad/id', name: 'Bad' } as any)
+      ).rejects.toThrow('Use only alphanumeric, hyphens, underscores')
+
+      expect(mockJoinPath).not.toHaveBeenCalled()
+      expect(mockWriteFileSync).not.toHaveBeenCalled()
+    })
   })
 
   describe('deleteAssistant', () => {
@@ -373,6 +419,15 @@ describe('AxStudioAssistantExtension', () => {
 
       await ext.deleteAssistant(assistant)
 
+      expect(mockRm).not.toHaveBeenCalled()
+    })
+
+    it('rejects invalid assistant ids before deleting paths', async () => {
+      await expect(
+        ext.deleteAssistant({ id: '../escape', name: 'Escape' } as any)
+      ).rejects.toThrow('Path traversal sequences are not allowed')
+
+      expect(mockJoinPath).not.toHaveBeenCalled()
       expect(mockRm).not.toHaveBeenCalled()
     })
   })

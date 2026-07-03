@@ -10,11 +10,29 @@ import {
  * functionality for managing assistants.
  */
 export default class AxStudioAssistantExtension extends AssistantExtension {
+  private isValidAssistantId(id: string): boolean {
+    return /^[a-zA-Z0-9\-_]+$/.test(id)
+  }
+
+  private assertValidAssistantId(id: string): void {
+    if (id.includes('..')) {
+      throw new Error(
+        `Invalid assistant ID: "${id}". Path traversal sequences are not allowed.`
+      )
+    }
+    if (!this.isValidAssistantId(id)) {
+      throw new Error(
+        `Invalid assistant ID: "${id}". Use only alphanumeric, hyphens, underscores.`
+      )
+    }
+  }
+
   private isAssistant(value: unknown): value is Assistant {
     return (
       !!value &&
       typeof value === 'object' &&
       typeof (value as Assistant).id === 'string' &&
+      this.isValidAssistantId((value as Assistant).id) &&
       typeof (value as Assistant).name === 'string'
     )
   }
@@ -98,17 +116,7 @@ export default class AxStudioAssistantExtension extends AssistantExtension {
   }
 
   async createAssistant(assistant: Assistant): Promise<void> {
-    // Validate assistant ID to prevent path traversal
-    if (assistant.id.includes('..')) {
-      throw new Error(
-        `Invalid assistant ID: "${assistant.id}". Path traversal sequences are not allowed.`
-      )
-    }
-    if (!/^[a-zA-Z0-9\-_]+$/.test(assistant.id)) {
-      throw new Error(
-        `Invalid assistant ID: "${assistant.id}". Use only alphanumeric, hyphens, underscores.`
-      )
-    }
+    this.assertValidAssistantId(assistant.id)
     const assistantPath = await joinPath([
       'file://assistants',
       assistant.id,
@@ -120,17 +128,7 @@ export default class AxStudioAssistantExtension extends AssistantExtension {
   }
 
   async deleteAssistant(assistant: Assistant): Promise<void> {
-    // Validate assistant ID to prevent path traversal
-    if (assistant.id.includes('..')) {
-      throw new Error(
-        `Invalid assistant ID: "${assistant.id}". Path traversal sequences are not allowed.`
-      )
-    }
-    if (!/^[a-zA-Z0-9\-_]+$/.test(assistant.id)) {
-      throw new Error(
-        `Invalid assistant ID: "${assistant.id}". Use only alphanumeric, hyphens, underscores.`
-      )
-    }
+    this.assertValidAssistantId(assistant.id)
     const assistantPath = await joinPath([
       'file://assistants',
       assistant.id,

@@ -26,7 +26,7 @@ const LOADER_REMOVE_DELAY_MS = 300
 export function hideInitialLoader() {
   document.body.classList.add('loaded')
   const loader = document.getElementById('initial-loader')
-  if (loader) {
+  if (loader instanceof Element) {
     setTimeout(() => loader.remove(), LOADER_REMOVE_DELAY_MS)
   }
 }
