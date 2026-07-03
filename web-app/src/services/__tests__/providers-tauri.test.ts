@@ -373,7 +373,7 @@ describe('TauriProvidersService', () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: 'local-tool-model',
-          provider: 'llamacpp',
+          runtimeProviderName: 'llamacpp',
           capabilities: expect.arrayContaining(['tools']),
         }),
         expect.objectContaining({
@@ -423,14 +423,15 @@ describe('TauriProvidersService', () => {
     const mlxProvider = result.find((p) => p.provider === 'mlx')
 
     expect(result.filter((p) => p.provider === 'mlx')).toHaveLength(1)
+    expect(llamaProvider).toEqual(expect.objectContaining({ provider: 'llamacpp' }))
     expect(llamaProvider?.models).toEqual([
-      expect.objectContaining({ id: 'local.gguf', provider: 'llamacpp' }),
+      expect.objectContaining({ id: 'local.gguf', runtimeProviderName: 'llamacpp' }),
     ])
     expect(mlxProvider?.models).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: 'mlx-community/Qwen3.5-4B-4bit',
-          provider: 'mlx',
+          runtimeProviderName: 'mlx',
         }),
       ])
     )

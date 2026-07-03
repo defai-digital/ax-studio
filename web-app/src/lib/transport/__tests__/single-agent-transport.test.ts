@@ -103,7 +103,7 @@ describe('executeSingleAgentStream', () => {
     )
   })
 
-  it('disables tools when model does not support them', async () => {
+  it('passes tools when available because capability gating happens upstream', async () => {
     const { streamText } = await import('ai')
     const tools = { search: {} as any }
     await executeSingleAgentStream(
@@ -112,8 +112,8 @@ describe('executeSingleAgentStream', () => {
 
     const call = (await import('ai')).streamText as ReturnType<typeof vi.fn>
     const args = call.mock.calls[0][0]
-    expect(args.tools).toBeUndefined()
-    expect(args.toolChoice).toBeUndefined()
+    expect(args.tools).toBe(tools)
+    expect(args.toolChoice).toBe('auto')
   })
 
   it('disables tools when no tools are provided even if model supports them', async () => {

@@ -314,9 +314,16 @@ describe('ProviderDetail', () => {
     await waitFor(() => {
       expect(screen.getByTestId('check-icon')).toBeInTheDocument()
     })
-    expect(mockUpdateProvider).toHaveBeenCalledWith('test-provider', {
-      active: true,
-    })
+    expect(mockUpdateProvider).toHaveBeenCalledWith(
+      'test-provider',
+      expect.objectContaining({
+        active: true,
+        models: expect.arrayContaining([
+          expect.objectContaining({ id: 'model-1' }),
+          expect.objectContaining({ id: 'model-2' }),
+        ]),
+      })
+    )
   })
 
   it('shows connection error after failed test', async () => {

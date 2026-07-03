@@ -880,7 +880,7 @@ describe('AxStudioLlamacppExtension', () => {
     fetchSpy.mockRestore()
   })
 
-  it('rejects unsupported Gemma 3 MLX repos before downloading', async () => {
+  it('downloads Gemma 3 MLX repos and delegates manifest support to Ax Engine', async () => {
     const extension = new AxStudioLlamacppExtension('', '')
     const downloadFiles = vi.fn()
     ;((globalThis as any).core.extensionManager.getByName as any).mockReturnValue({
@@ -919,17 +919,11 @@ describe('AxStudioLlamacppExtension', () => {
       extension.import('mlx-community/gemma-3-4b-it-4bit', {
         modelPath: 'hf://mlx-community/gemma-3-4b-it-4bit',
       } as any)
-    ).rejects.toThrow(
-      'uses model type gemma3, gemma3_text, which Ax Engine native MLX cannot prepare yet'
-    )
-    expect(downloadFiles).not.toHaveBeenCalled()
-    expect(mocks.emit).toHaveBeenCalledWith(
-      'onFileDownloadError',
-      expect.objectContaining({
-        modelId: 'mlx-community/gemma-3-4b-it-4bit',
-        error: expect.stringContaining('gemma3, gemma3_text'),
-      })
-    )
+    ).resolves.toBeUndefined()
+    expect(downloadFiles).toHaveBeenCalled()
+    expect(invoke).toHaveBeenCalledWith('mlx_generate_model_manifest', {
+      modelDir: '/app-data/llamacpp/models/mlx-community/gemma-3-4b-it-4bit',
+    })
 
     fetchSpy.mockRestore()
   })

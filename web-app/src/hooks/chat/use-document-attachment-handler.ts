@@ -475,8 +475,9 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
 
         // If no files left, clear the hasDocuments flag on the thread
         if (!useFileRegistry.getState().hasFiles(colId)) {
-          const current = useThreads.getState().threads[effectiveThreadId]
-          useThreads.getState().updateThread(effectiveThreadId, {
+          const threadsState = useThreads.getState()
+          const current = threadsState.threads?.[effectiveThreadId]
+          threadsState.updateThread(effectiveThreadId, {
             metadata: { ...(current?.metadata ?? {}), hasDocuments: false },
           })
         }
