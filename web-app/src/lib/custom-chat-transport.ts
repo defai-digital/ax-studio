@@ -25,6 +25,7 @@ import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
 import { syncRemoteProviders } from './providers/provider-sync'
 import { LOCAL_PROVIDER_IDS } from '@/constants/providers'
 import { extractErrorMessage } from '@/lib/utils/error'
+import { normalizeMcpResultForToolOutput } from './ax-bi/mcp-result'
 
 // Use native fetch — same reason as model-factory.ts (Tauri plugin ReadableStream
 // incompatibility). Proxy accepts CORS from tauri:// origins on loopback.
@@ -391,26 +392,7 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
                     },
                   },
                 })
-                // Extract the actual result from MCP response
-                // MCP returns { error: '', content: [...], structuredContent: {...} }
-                if (result.error) {
-                  return { error: result.error }
-                }
-                // Return the structured content or parse from text content
-                const structuredContent = (result as any).structuredContent ?? (result as any).structured_content
-                if (structuredContent) {
-                  return structuredContent
-                }
-                // Parse from text content
-                const textContent = result.content?.find((c: any) => c.text)?.text
-                if (textContent) {
-                  try {
-                    return JSON.parse(textContent)
-                  } catch {
-                    return { message: textContent }
-                  }
-                }
-                return { message: 'File uploaded successfully' }
+                return normalizeMcpResultForToolOutput(result, 'File uploaded successfully')
               } catch (error) {
                 return { error: `Failed to upload file: ${error instanceof Error ? error.message : String(error)}` }
               }
@@ -422,7 +404,6 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
     }
 
     this.tools = toolsRecord
-    console.log('[DEBUG] Tools loaded:', Object.keys(toolsRecord))
   }
 
   getTools(): Record<string, Tool> { return this.tools }

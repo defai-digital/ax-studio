@@ -1,4 +1,5 @@
 import type { MCPTool } from '@/types/mcp'
+import { isRecord, parseJsonMcpResult } from './mcp-result'
 
 export type AxBiToolResult = {
   success?: boolean
@@ -24,10 +25,6 @@ const AUTO_OPEN_RESULT_TOOLS = new Set([
   'update_chart',
   'update_chart_preview',
 ])
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value)
-}
 
 function getSchemaProperties(schema: unknown): Record<string, unknown> | undefined {
   if (!isRecord(schema)) return undefined
@@ -87,23 +84,7 @@ export function parseAxBiToolResult(result: {
   structuredContent?: unknown
   structured_content?: unknown
 }): AxBiToolResult | null {
-  const structuredContent =
-    result.structuredContent ?? result.structured_content
-  if (isRecord(structuredContent)) return structuredContent as AxBiToolResult
-
-  const content = result.content ?? []
-  for (const item of content) {
-    if (typeof item.text !== 'string') continue
-    try {
-      const parsed = JSON.parse(item.text)
-      if (isRecord(parsed)) {
-        return parsed as AxBiToolResult
-      }
-    } catch {
-      // MCP text content may be plain prose. Keep scanning for structured JSON.
-    }
-  }
-  return null
+  return parseJsonMcpResult<Record<string, unknown>>(result) as AxBiToolResult | null
 }
 
 export function getAxBiResultUrl(

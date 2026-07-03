@@ -2,7 +2,7 @@ import { fs } from '@ax-studio/core'
 import type { ServiceHub } from '@/services'
 import type { Attachment } from '@/types/attachment'
 import type { MCPTool, MCPToolCallResult } from '@ax-studio/core'
-import { parseAxBiToolResult } from './tool-navigation'
+import { getFirstMcpText, isRecord, parseJsonMcpResult } from './mcp-result'
 
 const AX_BI_SERVER = 'ax-bi'
 const SUPPORTED_DATA_TYPES = new Set(['csv', 'tsv', 'txt', 'xls', 'xlsx', 'parquet'])
@@ -93,34 +93,12 @@ export type AxBiChartIntentExtractor = (
   prompt: string
 ) => Promise<AxBiChartIntentDraft | null>
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value)
-}
-
 function parseJsonToolResult<T>(result: MCPToolCallResult): T {
-  const structuredContent =
-    result.structuredContent ?? result.structured_content
-  if (isRecord(structuredContent)) return structuredContent as T
-
-  const parsed = parseAxBiToolResult(result)
-  if (parsed && isRecord(parsed)) return parsed as T
-
-  const textParts: string[] = []
-  for (const item of result.content ?? []) {
-    if (typeof item.text !== 'string') continue
-    textParts.push(item.text)
-    try {
-      const value = JSON.parse(item.text)
-      if (isRecord(value)) return value as T
-    } catch {
-      // Some MCP tools return prose in text parts. Keep scanning for JSON.
-    }
-  }
+  const parsedJson = parseJsonMcpResult<Record<string, unknown>>(result)
+  if (parsedJson) return parsedJson as T
 
   const isError = result.isError ?? result.is_error
-  const textError = textParts
-    .map((text) => text.trim())
-    .find((text) => text.length > 0)
+  const textError = getFirstMcpText(result)
   throw new Error(
     result.error ||
       textError ||

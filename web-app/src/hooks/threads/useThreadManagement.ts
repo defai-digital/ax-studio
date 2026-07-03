@@ -26,6 +26,25 @@ type ThreadManagementState = {
   getProjectById: (id: string) => Promise<ThreadFolder | undefined>
 }
 
+type ThreadProjectMetadata = NonNullable<Thread['metadata']>['project']
+
+function updateProjectMetadataForThreads(
+  projectId: string,
+  getProjectMetadata: (thread: Thread) => ThreadProjectMetadata | undefined
+) {
+  const threadsState = useThreads.getState()
+  Object.values(threadsState.threads)
+    .filter((thread) => thread.metadata?.project?.id === projectId)
+    .forEach((thread) => {
+      threadsState.updateThread(thread.id, {
+        metadata: {
+          ...thread.metadata,
+          project: getProjectMetadata(thread),
+        },
+      })
+    })
+}
+
 const useThreadManagementStore = create<ThreadManagementState>()(
   (set, get) => ({
     folders: [],
@@ -64,42 +83,19 @@ const useThreadManagementStore = create<ThreadManagementState>()(
       )
       if (!updatedProject) return
 
-      const threadsState = useThreads.getState()
-      const threadsToUpdate = Object.values(threadsState.threads).filter(
-        (thread) => thread.metadata?.project?.id === id
-      )
-
-      threadsToUpdate.forEach((thread) => {
-        threadsState.updateThread(thread.id, {
-          metadata: {
-            ...thread.metadata,
-            project: {
-              id: updatedProject.id,
-              name: updatedProject.name,
-              updated_at: updatedProject.updated_at,
-              logo: updatedProject.logo,
-              projectPrompt: updatedProject.projectPrompt ?? null,
-            },
-          },
-        })
+      updateProjectMetadataForThreads(id, () => {
+        return {
+          id: updatedProject.id,
+          name: updatedProject.name,
+          updated_at: updatedProject.updated_at,
+          logo: updatedProject.logo,
+          projectPrompt: updatedProject.projectPrompt ?? null,
+        }
       })
     },
 
     deleteFolder: async (id) => {
-      // Remove project metadata from all threads that belong to this project
-      const threadsState = useThreads.getState()
-      const threadsToUpdate = Object.values(threadsState.threads).filter(
-        (thread) => thread.metadata?.project?.id === id
-      )
-
-      threadsToUpdate.forEach((thread) => {
-        threadsState.updateThread(thread.id, {
-          metadata: {
-            ...thread.metadata,
-            project: undefined,
-          },
-        })
-      })
+      updateProjectMetadataForThreads(id, () => undefined)
 
       const projectsService = getServiceHub().projects()
       await projectsService.deleteProject(id)

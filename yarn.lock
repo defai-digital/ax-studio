@@ -1302,7 +1302,7 @@ __metadata:
     clsx: "npm:2.1.1"
     cmdk: "npm:^1.1.1"
     crypto-js: "npm:4.2.0"
-    dompurify: "npm:^3.4.11"
+    dompurify: "npm:^3.3.3"
     emoji-picker-react: "npm:4.12.2"
     eslint: "npm:9.25.1"
     eslint-plugin-react-hooks: "npm:5.2.0"
@@ -7399,7 +7399,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"dompurify@npm:^3.4.11":
+"dompurify@npm:^3.3.3":
   version: 3.4.11
   resolution: "dompurify@npm:3.4.11"
   dependencies:

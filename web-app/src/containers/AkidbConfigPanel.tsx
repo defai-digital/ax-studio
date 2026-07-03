@@ -69,7 +69,7 @@ export default function AkidbConfigPanel() {
     } catch {
       toast.error('Folder picker is not available in this environment')
     }
-  }, [])
+  }, [serviceHub])
 
   // Handle embedding model change — sync dimension automatically
   const handleModelChange = useCallback(

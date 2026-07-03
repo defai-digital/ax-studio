@@ -25,6 +25,7 @@ import {
   parseAxBiToolResult,
   withAxBiAutoNavigate,
 } from '@/lib/ax-bi/tool-navigation'
+import { normalizeMcpResultForToolOutput } from '@/lib/ax-bi/mcp-result'
 
 export type AddToolOutputFn = (...args: unknown[]) => unknown
 
@@ -37,6 +38,13 @@ export type ThreadToolsResult = {
 }
 
 type ToolResultContent = Array<{ type?: string; text?: string }>
+type ToolExecutionResult = {
+  error?: string
+  content?: ToolResultContent
+  structuredContent?: unknown
+  structured_content?: unknown
+  message?: string
+}
 
 function fabricSearchTermCoverage(
   result: { content?: ToolResultContent } | undefined,
@@ -421,7 +429,7 @@ export function useThreadTools({
               continue
             }
 
-            let result
+            let result: ToolExecutionResult
             if (ragToolNames && ragToolNames.has(toolName)) {
               result = await serviceHub.rag().callTool({
                 toolName,
@@ -448,16 +456,7 @@ export function useThreadTools({
                     },
                   },
                 })
-                // Extract structured content from MCP result
-                const structuredContent = (result as any).structuredContent ?? (result as any).structured_content
-                if (structuredContent) {
-                  result = structuredContent
-                } else {
-                  const textContent = result.content?.find((c: any) => c.text)?.text
-                  if (textContent) {
-                    try { result = JSON.parse(textContent) } catch { result = { message: textContent } }
-                  }
-                }
+                result = normalizeMcpResultForToolOutput(result, 'File uploaded successfully') as ToolExecutionResult
               } catch (error) {
                 result = { error: `Failed to upload file: ${error instanceof Error ? error.message : String(error)}` }
               }

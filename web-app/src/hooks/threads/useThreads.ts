@@ -69,6 +69,37 @@ type ThreadState = {
   _createThreadInFlight: boolean
 }
 
+function deleteThreadsFromState(
+  state: Pick<ThreadState, 'threads' | 'currentThreadId'>,
+  shouldDelete: (thread: Thread) => boolean
+) {
+  const threadsToDeleteIds = Object.keys(state.threads).filter((threadId) =>
+    shouldDelete(state.threads[threadId])
+  )
+  const threadsToDelete = new Set(threadsToDeleteIds)
+
+  threadsToDeleteIds.forEach(cleanupThreadResources)
+
+  const remainingThreads = Object.keys(state.threads)
+    .filter((threadId) => !threadsToDelete.has(threadId))
+    .reduce(
+      (acc, threadId) => {
+        acc[threadId] = state.threads[threadId]
+        return acc
+      },
+      {} as Record<string, Thread>
+    )
+
+  return {
+    threads: remainingThreads,
+    currentThreadId:
+      state.currentThreadId && threadsToDelete.has(state.currentThreadId)
+        ? undefined
+        : state.currentThreadId,
+    searchIndex: buildSearchIndex(remainingThreads),
+  }
+}
+
 export const useThreads = create<ThreadState>()((set, get) => ({
   threads: {},
   searchIndex: null,
@@ -172,93 +203,23 @@ export const useThreads = create<ThreadState>()((set, get) => ({
     })
   },
   deleteAllThreads: () => {
-    set((state) => {
-      const allThreadIds = Object.keys(state.threads)
-
-      // Identify threads to keep (favorites OR have project metadata)
-      const threadsToKeepIds = allThreadIds.filter(
-        (threadId) =>
-          state.threads[threadId].isFavorite ||
-          state.threads[threadId].metadata?.project
+    set((state) =>
+      deleteThreadsFromState(
+        state,
+        (thread) => !thread.isFavorite && !thread.metadata?.project
       )
-
-      // Identify threads to delete (non-favorites AND no project metadata)
-      const threadsToDeleteIds = allThreadIds.filter(
-        (threadId) =>
-          !state.threads[threadId].isFavorite &&
-          !state.threads[threadId].metadata?.project
-      )
-
-      threadsToDeleteIds.forEach(cleanupThreadResources)
-
-      // Keep favorite threads and threads with project metadata
-      const remainingThreads = threadsToKeepIds.reduce(
-        (acc, threadId) => {
-          acc[threadId] = state.threads[threadId]
-          return acc
-        },
-        {} as Record<string, Thread>
-      )
-
-      return {
-        threads: remainingThreads,
-        // Drop the active-thread pointer if it's among the ones being
-        // deleted so the UI doesn't sit on a ghost thread.
-        currentThreadId:
-          state.currentThreadId && threadsToDeleteIds.includes(state.currentThreadId)
-            ? undefined
-            : state.currentThreadId,
-        searchIndex: buildSearchIndex(remainingThreads),
-      }
-    })
+    )
   },
   clearAllThreads: () => {
-    set((state) => {
-      const allThreadIds = Object.keys(state.threads)
-
-      allThreadIds.forEach(cleanupThreadResources)
-
-      return {
-        threads: {},
-        currentThreadId: undefined,
-        searchIndex: buildSearchIndex({}),
-      }
-    })
+    set((state) => deleteThreadsFromState(state, () => true))
   },
   deleteAllThreadsByProject: (projectId) => {
-    set((state) => {
-      const allThreadIds = Object.keys(state.threads)
-
-      // Identify threads belonging to this project
-      const threadsToDeleteIds = allThreadIds.filter(
-        (threadId) =>
-          state.threads[threadId].metadata?.project?.id === projectId
+    set((state) =>
+      deleteThreadsFromState(
+        state,
+        (thread) => thread.metadata?.project?.id === projectId
       )
-
-      threadsToDeleteIds.forEach(cleanupThreadResources)
-
-      // Keep threads that don't belong to this project
-      const remainingThreads = allThreadIds
-        .filter((threadId) => !threadsToDeleteIds.includes(threadId))
-        .reduce(
-          (acc, threadId) => {
-            acc[threadId] = state.threads[threadId]
-            return acc
-          },
-          {} as Record<string, Thread>
-        )
-
-      return {
-        threads: remainingThreads,
-        // Drop the active-thread pointer if the user was viewing a thread
-        // that belonged to the project we just cleared.
-        currentThreadId:
-          state.currentThreadId && threadsToDeleteIds.includes(state.currentThreadId)
-            ? undefined
-            : state.currentThreadId,
-        searchIndex: buildSearchIndex(remainingThreads),
-      }
-    })
+    )
   },
   unstarAllThreads: () => {
     set((state) => {
