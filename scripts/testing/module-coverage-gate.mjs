@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * module-coverage-gate.mjs
  *
