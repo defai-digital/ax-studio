@@ -6,12 +6,80 @@ export type AxBiToolResult = {
   explore_url?: string
   dashboard_url?: string
   remote_navigation_queued?: boolean
-  live_update_command_id?: string
+  remote_navigation_url?: string | null
+  live_update_attempted?: boolean
+  live_update_command_id?: string | null
+  live_update_url?: string | null
   error?: unknown
 }
 
+const AX_BI_SERVER = 'ax-bi'
+const AUTO_OPEN_RESULT_TOOLS = new Set([
+  'add_chart_to_existing_dashboard',
+  'generate_chart',
+  'generate_dashboard',
+  'generate_explore_link',
+  'open_sql_lab_with_context',
+  'remote_navigate',
+  'update_chart',
+  'update_chart_preview',
+])
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function getSchemaProperties(schema: unknown): Record<string, unknown> | undefined {
+  if (!isRecord(schema)) return undefined
+  const properties = schema.properties
+  return isRecord(properties) ? properties : undefined
+}
+
+function getRequestSchema(tool: MCPTool): Record<string, unknown> | undefined {
+  const properties = getSchemaProperties(tool.inputSchema)
+  const request = properties?.request
+  return isRecord(request) ? request : undefined
+}
+
+function supportsTopLevelAutoNavigate(tool: MCPTool): boolean {
+  return Boolean(getSchemaProperties(tool.inputSchema)?.auto_navigate)
+}
+
+function supportsRequestAutoNavigate(tool: MCPTool): boolean {
+  return Boolean(getSchemaProperties(getRequestSchema(tool))?.auto_navigate)
+}
+
+export function findAxBiTool(tools: MCPTool[], toolName: string): MCPTool | undefined {
+  return tools.find((tool) => tool.server === AX_BI_SERVER && tool.name === toolName)
+}
+
+export function withAxBiAutoNavigate(
+  tools: MCPTool[],
+  toolName: string,
+  input: Record<string, unknown>
+): Record<string, unknown> {
+  const tool = findAxBiTool(tools, toolName)
+  if (!tool) return input
+
+  if (supportsRequestAutoNavigate(tool)) {
+    const request = isRecord(input.request) ? input.request : {}
+    return {
+      ...input,
+      request: {
+        ...request,
+        auto_navigate: true,
+      },
+    }
+  }
+
+  if (supportsTopLevelAutoNavigate(tool)) {
+    return {
+      ...input,
+      auto_navigate: true,
+    }
+  }
+
+  return input
 }
 
 export function parseAxBiToolResult(result: {
@@ -42,11 +110,6 @@ export function getAxBiResultUrl(
   toolName: string,
   result: AxBiToolResult
 ): string | undefined {
-  const AUTO_OPEN_RESULT_TOOLS = new Set([
-    'generate_chart',
-    'generate_dashboard',
-    'create_chart_from_intent',
-  ])
   if (!AUTO_OPEN_RESULT_TOOLS.has(toolName)) return undefined
   return result.explore_url ?? result.dashboard_url ?? result.url ?? undefined
 }
@@ -56,36 +119,4 @@ export function didAxBiQueueLiveUpdate(result: AxBiToolResult): boolean {
     result.remote_navigation_queued === true ||
       result.live_update_command_id
   )
-}
-
-export function withAxBiAutoNavigate<T extends Record<string, unknown>>(
-  tools: MCPTool[],
-  toolName: string,
-  input: T
-): T {
-  const AUTO_OPEN_RESULT_TOOLS = new Set([
-    'generate_chart',
-    'generate_dashboard',
-    'create_chart_from_intent',
-  ])
-  if (!AUTO_OPEN_RESULT_TOOLS.has(toolName)) return input
-
-  const tool = tools.find((t) => t.name === toolName)
-  if (!tool) return input
-
-  const schema = tool.inputSchema as Record<string, unknown>
-  const properties = (schema.properties ?? {}) as Record<string, unknown>
-  if (!('auto_open' in properties)) {
-    ;(schema.properties as Record<string, unknown>).auto_open = {
-      type: 'boolean',
-      description: 'Automatically open the result URL in AX-BI',
-    }
-  }
-
-  const inputCopy = { ...input }
-  if (inputCopy.request && isRecord(inputCopy.request)) {
-    ;(inputCopy.request as Record<string, unknown>).auto_open = true
-  }
-
-  return inputCopy
 }

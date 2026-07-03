@@ -36,6 +36,7 @@ struct ResolvedProviderConfig {
     target_base_url: String,
     session_api_key: Option<String>,
     provider_custom_headers: Vec<ProviderCustomHeader>,
+    allow_chat_template_kwargs: bool,
 }
 
 fn is_reserved_upstream_custom_header(name: &str) -> bool {
@@ -191,6 +192,12 @@ fn disable_thinking_for_deterministic_answer(json_body: &mut serde_json::Value) 
     true
 }
 
+fn strip_chat_template_kwargs(json_body: &mut serde_json::Value) -> bool {
+    json_body
+        .as_object_mut()
+        .is_some_and(|object| object.remove("chat_template_kwargs").is_some())
+}
+
 fn normalize_request_body(body_bytes: &Bytes, allow_chat_template_kwargs: bool) -> Bytes {
     let mut json_body: serde_json::Value = match serde_json::from_slice(body_bytes) {
         Ok(v) => v,
@@ -219,8 +226,13 @@ fn normalize_request_body(body_bytes: &Bytes, allow_chat_template_kwargs: bool) 
         }
     }
 
-    if allow_chat_template_kwargs && disable_thinking_for_deterministic_answer(&mut json_body) {
-        log::debug!("Disabled chat-template thinking for tool/local-knowledge request");
+    if allow_chat_template_kwargs {
+        if disable_thinking_for_deterministic_answer(&mut json_body) {
+            log::debug!("Disabled chat-template thinking for tool/local-knowledge request");
+            modified = true;
+        }
+    } else if strip_chat_template_kwargs(&mut json_body) {
+        log::debug!("Stripped chat_template_kwargs before forwarding upstream");
         modified = true;
     }
 
@@ -320,6 +332,7 @@ fn resolve_provider_config_from_map(
         target_base_url: build_upstream_url(base_url, destination_path, is_anthropic_messages),
         session_api_key: provider_cfg.api_key.clone(),
         provider_custom_headers: provider_cfg.custom_headers.clone(),
+        allow_chat_template_kwargs: provider_name == "llamacpp",
     }))
 }
 
@@ -350,6 +363,7 @@ async fn resolve_active_ax_serving_fallback<R: tauri::Runtime>(
         target_base_url: build_upstream_url(&base_url, destination_path, is_anthropic_messages),
         session_api_key: None,
         provider_custom_headers: Vec::new(),
+        allow_chat_template_kwargs: true,
     })
 }
 
@@ -362,6 +376,27 @@ fn should_skip_upstream_request_header(name: &hyper::header::HeaderName) -> bool
         || lower == "x-ax-provider"
         || lower == "x-ax-request-role"
         || super::proxy::is_hop_by_hop_header(name)
+}
+
+fn normalize_upstream_api_key(api_key: Option<&str>) -> Option<String> {
+    let trimmed = api_key?.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let mut parts = trimmed.splitn(2, char::is_whitespace);
+    let prefix = parts.next().unwrap_or_default();
+    let key = if prefix.eq_ignore_ascii_case("Bearer") {
+        parts.next().map(str::trim).unwrap_or(trimmed)
+    } else {
+        trimmed
+    };
+
+    if key.is_empty() {
+        None
+    } else {
+        Some(key.to_string())
+    }
 }
 
 fn should_skip_anthropic_fallback_header(name: &hyper::header::HeaderName) -> bool {
@@ -470,6 +505,7 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
                         ),
                         session_api_key: cfg.api_key.clone(),
                         provider_custom_headers: cfg.custom_headers.clone(),
+                        allow_chat_template_kwargs: hint == "llamacpp",
                     }))
                 } else {
                     // Provider is registered but has no base_url — fall through to
@@ -555,17 +591,21 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
         }
     };
 
-    // Normalize the request body: strip non-standard fields that upstream providers reject.
-    let normalized_body = normalize_request_body(&body_bytes, !is_anthropic_messages);
-
     match resolved {
-        Ok(Some(resolved)) => Ok(ProviderResolution {
-            target_base_url: resolved.target_base_url,
-            session_api_key: resolved.session_api_key,
-            provider_custom_headers: resolved.provider_custom_headers,
-            is_anthropic_messages,
-            buffered_body: normalized_body,
-        }),
+        Ok(Some(resolved)) => {
+            // Normalize the request body: strip non-standard fields that upstream
+            // providers reject. chat_template_kwargs is only accepted by local
+            // llama.cpp-style routes; OpenAI-compatible hosted providers reject it.
+            let normalized_body =
+                normalize_request_body(&body_bytes, resolved.allow_chat_template_kwargs);
+            Ok(ProviderResolution {
+                target_base_url: resolved.target_base_url,
+                session_api_key: resolved.session_api_key,
+                provider_custom_headers: resolved.provider_custom_headers,
+                is_anthropic_messages,
+                buffered_body: normalized_body,
+            })
+        }
         Ok(None) => {
             log::warn!("No remote provider configured for model_id: {model_id}");
             Err(error_response(
@@ -629,7 +669,8 @@ async fn try_anthropic_fallback(
             fallback_req = fallback_req.header(name, value);
         }
     }
-    if let Some(key) = session_api_key {
+    let fallback_api_key = normalize_upstream_api_key(session_api_key.as_deref());
+    if let Some(key) = fallback_api_key {
         fallback_req = fallback_req.header("Authorization", format!("Bearer {key}"));
     }
 
@@ -928,7 +969,7 @@ pub(super) async fn dispatch_to_upstream<R: tauri::Runtime>(
 ) -> Result<Response<Body>, hyper::Error> {
     let upstream_url = resolution.target_base_url.clone();
     let is_anthropic_messages = resolution.is_anthropic_messages;
-    let session_api_key = resolution.session_api_key;
+    let session_api_key = normalize_upstream_api_key(resolution.session_api_key.as_deref());
     let buffered_body = resolution.buffered_body;
     let provider_custom_headers = resolution.provider_custom_headers;
     let target_base_url = upstream_url.clone();
@@ -1245,6 +1286,24 @@ mod tests {
     }
 
     #[test]
+    fn normalize_upstream_api_key_strips_bearer_prefix_and_whitespace() {
+        assert_eq!(
+            normalize_upstream_api_key(Some("  Bearer sk-or-test  ")).as_deref(),
+            Some("sk-or-test")
+        );
+        assert_eq!(
+            normalize_upstream_api_key(Some("BEARER\tsk-test")).as_deref(),
+            Some("sk-test")
+        );
+        assert_eq!(
+            normalize_upstream_api_key(Some("Bearer")).as_deref(),
+            Some("Bearer")
+        );
+        assert_eq!(normalize_upstream_api_key(Some("   ")), None);
+        assert_eq!(normalize_upstream_api_key(None), None);
+    }
+
+    #[test]
     fn find_provider_name_matches_explicit_model_membership() {
         let mut providers = HashMap::new();
         providers.insert(
@@ -1471,6 +1530,20 @@ mod tests {
         let body = Bytes::from(
             r#"{"model":"gpt-4","messages":[
                 {"role":"user","content":"Question\n\n## Local Knowledge Base (ACTIVE)\nRetrieved context."}
+            ]}"#,
+        );
+
+        let result = normalize_request_body(&body, false);
+        let parsed: serde_json::Value = serde_json::from_slice(&result).unwrap();
+
+        assert!(parsed.get("chat_template_kwargs").is_none());
+    }
+
+    #[test]
+    fn normalize_request_body_strips_chat_template_kwargs_when_not_allowed() {
+        let body = Bytes::from(
+            r#"{"model":"gpt-4","chat_template_kwargs":{"enable_thinking":false},"messages":[
+                {"role":"user","content":"hello"}
             ]}"#,
         );
 

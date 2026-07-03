@@ -17,6 +17,14 @@ import {
   parseFabricSearchResults,
 } from '@/lib/fabric-search'
 import { pushUniqueNormalizedString } from '@/lib/utils/array'
+import { toast } from 'sonner'
+import {
+  findAxBiTool,
+  getAxBiResultUrl,
+  didAxBiQueueLiveUpdate,
+  parseAxBiToolResult,
+  withAxBiAutoNavigate,
+} from '@/lib/ax-bi/tool-navigation'
 
 export type AddToolOutputFn = (...args: unknown[]) => unknown
 
@@ -366,6 +374,7 @@ export function useThreadTools({
       const signal = toolCallAbortController.current.signal
 
       const mcpToolNames = useAppState.getState().mcpToolNames
+      const mcpTools = useAppState.getState().tools
       const state = useChatSessions.getState()
       const queuedTools = state.ensureSessionData(threadId).tools as QueuedTool[]
 
@@ -382,6 +391,8 @@ export function useThreadTools({
           if (signal.aborted) break
           try {
             const toolName = toolCall.toolName
+            const rawToolInput = toolCall.input as Record<string, unknown>
+            const toolInput = withAxBiAutoNavigate(mcpTools, toolName, rawToolInput)
 
             // Reject duplicate fabric_search calls — return the instruction to answer
             if (toolName === 'fabric_search' && fabricSearchUsedInTurn.current) {
@@ -398,7 +409,7 @@ export function useThreadTools({
 
             const approved = await useToolApproval
               .getState()
-              .showApprovalModal(toolName, threadId, toolCall.input as Record<string, unknown>)
+              .showApprovalModal(toolName, threadId, toolInput)
 
             if (!approved) {
               addToolOutput({
@@ -414,13 +425,13 @@ export function useThreadTools({
             if (ragToolNames && ragToolNames.has(toolName)) {
               result = await serviceHub.rag().callTool({
                 toolName,
-                arguments: toolCall.input as Record<string, unknown>,
+                arguments: toolInput,
                 threadId,
                 projectId,
                 scope: projectId ? 'project' : 'thread',
               })
             } else if (mcpToolNames.has(toolName)) {
-              result = await serviceHub.mcp().callTool({ toolName, arguments: toolCall.input as Record<string, unknown> })
+              result = await serviceHub.mcp().callTool({ toolName, arguments: toolInput })
             } else if (toolName === 'process_file_for_bi') {
               // Custom tool: read file as base64 and upload to AX-BI
               try {
@@ -463,8 +474,27 @@ export function useThreadTools({
               result = await retryFabricSearchWithKeywordFallback({
                 serviceHub,
                 result,
-                toolInput: toolCall.input,
+                toolInput,
               })
+            }
+
+            const axBiToolResult = findAxBiTool(mcpTools, toolName)
+              ? parseAxBiToolResult(result)
+              : null
+            if (axBiToolResult?.success === false) {
+              toast.error('AX-BI tool failed', {
+                description:
+                  typeof axBiToolResult.error === 'string'
+                    ? axBiToolResult.error
+                    : 'The AX-BI tool returned an error.',
+              })
+            } else if (axBiToolResult && didAxBiQueueLiveUpdate(axBiToolResult)) {
+              toast.success('AX-BI updated')
+            } else if (axBiToolResult) {
+              const url = getAxBiResultUrl(toolName, axBiToolResult)
+              if (url) {
+                await serviceHub.opener().openUrl(url)
+              }
             }
 
             if (result.error) {

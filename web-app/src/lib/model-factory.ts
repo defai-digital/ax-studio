@@ -75,18 +75,6 @@ function toOpenAIParams(parameters: Record<string, unknown>): Record<string, unk
   return result
 }
 
-function hasToolConversationState(messages: unknown): boolean {
-  if (!Array.isArray(messages)) return false
-  return messages.some((message) => {
-    if (!message || typeof message !== 'object' || Array.isArray(message)) {
-      return false
-    }
-    const record = message as Record<string, unknown>
-    return record.role === 'tool' ||
-      (Array.isArray(record.tool_calls) && record.tool_calls.length > 0)
-  })
-}
-
 function textIncludes(value: unknown, needle: string): boolean {
   if (typeof value === 'string') return value.includes(needle)
   if (Array.isArray(value)) return value.some((item) => textIncludes(item, needle))
@@ -126,27 +114,6 @@ function hasLocalKnowledgeToolResult(messages: unknown): boolean {
   })
 }
 
-function disableThinkingForToolFollowUp(
-  body: Record<string, unknown>
-): Record<string, unknown> {
-  if (!hasToolConversationState(body.messages)) return body
-
-  const existing =
-    body.chat_template_kwargs &&
-    typeof body.chat_template_kwargs === 'object' &&
-    !Array.isArray(body.chat_template_kwargs)
-      ? body.chat_template_kwargs as Record<string, unknown>
-      : {}
-
-  return {
-    ...body,
-    chat_template_kwargs: {
-      ...existing,
-      enable_thinking: false,
-    },
-  }
-}
-
 function finalizeLocalKnowledgeFollowUp(
   body: Record<string, unknown>
 ): Record<string, unknown> {
@@ -164,7 +131,9 @@ function finalizeLocalKnowledgeFollowUp(
 function prepareOpenAIRequestBody(
   body: Record<string, unknown>
 ): Record<string, unknown> {
-  return finalizeLocalKnowledgeFollowUp(disableThinkingForToolFollowUp(body))
+  const next = finalizeLocalKnowledgeFollowUp(body)
+  delete next.chat_template_kwargs
+  return next
 }
 
 function toOpenAICompatibleString(value: unknown): string | null {

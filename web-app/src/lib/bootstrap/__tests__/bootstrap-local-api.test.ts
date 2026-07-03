@@ -12,6 +12,7 @@ const makeServiceHub = (isRunning = false, shouldFail = false) => ({
 
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>
 let consoleInfoSpy: ReturnType<typeof vi.spyOn>
+let consoleWarnSpy: ReturnType<typeof vi.spyOn>
 
 const defaultConfig = {
   host: 'localhost',
@@ -36,6 +37,7 @@ const makeInput = (overrides: Partial<BootstrapLocalApiInput> = {}): BootstrapLo
 beforeEach(() => {
   consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
   consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+  consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
   // Reset window.core
   ;(globalThis as any).window = {
     core: {
@@ -54,6 +56,7 @@ beforeEach(() => {
 afterEach(() => {
   consoleErrorSpy.mockRestore()
   consoleInfoSpy.mockRestore()
+  consoleWarnSpy.mockRestore()
   vi.unstubAllGlobals()
 })
 
@@ -108,6 +111,39 @@ describe('bootstrapLocalApi', () => {
     const input = makeInput({ serviceHub: makeServiceHub(false) as any })
     await bootstrapLocalApi(input)
     expect(input.setServerPort).toHaveBeenCalledWith(40000)
+  })
+
+  it('tries the next port when the configured port is already in use', async () => {
+    ;(globalThis as any).window.core.api.startServer = vi.fn()
+      .mockRejectedValueOnce(new Error('Only one usage of each socket address is normally permitted. (os error 10048)'))
+      .mockResolvedValueOnce(39292)
+    const input = makeInput({ serviceHub: makeServiceHub(false) as any })
+
+    const result = await bootstrapLocalApi(input)
+
+    expect(result).toEqual({ ok: true })
+    expect((globalThis as any).window.core.api.startServer).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ port: 39291 })
+    )
+    expect((globalThis as any).window.core.api.startServer).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ port: 39292 })
+    )
+    expect(input.setServerPort).toHaveBeenCalledWith(39292)
+    expect(input.setServerStatus).toHaveBeenLastCalledWith('running')
+  })
+
+  it('does not retry non-bind startup errors', async () => {
+    ;(globalThis as any).window.core.api.startServer = vi.fn()
+      .mockRejectedValue(new Error('An API key is required'))
+    const input = makeInput({ serviceHub: makeServiceHub(false) as any })
+
+    const result = await bootstrapLocalApi(input)
+
+    expect(result.ok).toBe(false)
+    expect((globalThis as any).window.core.api.startServer).toHaveBeenCalledTimes(1)
+    expect(input.setServerStatus).toHaveBeenLastCalledWith('stopped')
   })
 
   it('does not update port when server returns same port', async () => {

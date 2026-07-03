@@ -116,6 +116,12 @@ function usesOpenAICompatibleAuth(provider: ModelProvider, baseUrl: string): boo
   return baseUrl.includes('/openai')
 }
 
+function normalizeProviderApiKey(apiKey?: string): string | undefined {
+  const trimmed = apiKey?.trim()
+  if (!trimmed) return undefined
+  return trimmed.replace(/^Bearer\s+/i, '').trim() || undefined
+}
+
 const HEADER_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
 const RESERVED_CUSTOM_HEADERS = new Set([
   'accept-encoding',
@@ -138,6 +144,41 @@ const RESERVED_CUSTOM_HEADERS = new Set([
   'x-forwarded-host',
   'x-forwarded-proto',
 ])
+
+const ALIBABA_FALLBACK_MODELS = [
+  'qwen-plus',
+  'qwen-turbo',
+  'qwen-max',
+  'qwen3-coder-plus',
+  'qwen3-coder-next',
+]
+
+function isAlibabaCompatibleProvider(provider: ModelProvider, baseUrl: string): boolean {
+  const providerName = provider.provider.toLowerCase()
+  const normalizedBaseUrl = baseUrl.toLowerCase()
+  return (
+    providerName.includes('alibaba') ||
+    providerName.includes('aliyun') ||
+    providerName.includes('dashscope') ||
+    providerName.includes('qwen') ||
+    normalizedBaseUrl.includes('dashscope.aliyuncs.com') ||
+    normalizedBaseUrl.includes('aliyuncs.com/compatible-mode') ||
+    normalizedBaseUrl.includes('coding-intl.dashscope.aliyuncs.com') ||
+    normalizedBaseUrl.includes('coding.dashscope.aliyuncs.com')
+  )
+}
+
+function withProviderFallbackModels(
+  provider: ModelProvider,
+  baseUrl: string,
+  modelIds: string[]
+): string[] {
+  if (modelIds.length > 0) return modelIds
+  if (isAlibabaCompatibleProvider(provider, baseUrl)) {
+    return ALIBABA_FALLBACK_MODELS
+  }
+  return modelIds
+}
 
 function isSafeCustomHeader(header: { header: string; value: string }): boolean {
   const name = header.header.trim()
@@ -350,11 +391,12 @@ export class TauriProvidersService implements ProvidersService {
       }
 
       // Only add authentication headers if API key is provided
-      if (provider.api_key) {
+      const apiKey = normalizeProviderApiKey(provider.api_key)
+      if (apiKey) {
         if (!usesOpenAICompatibleAuth(provider, baseUrl)) {
-          headers['x-goog-api-key'] = provider.api_key
+          headers['x-goog-api-key'] = apiKey
         } else {
-          headers['Authorization'] = `Bearer ${provider.api_key}`
+          headers['Authorization'] = `Bearer ${apiKey}`
         }
       }
 
@@ -404,24 +446,26 @@ export class TauriProvidersService implements ProvidersService {
       const parsed = providerModelsResponseSchema.safeParse(data)
       if (!parsed.success) {
         console.warn('Unexpected response format from provider API:', data)
-        return []
+        return withProviderFallbackModels(provider, baseUrl, [])
       }
 
       const result = parsed.data
+      let modelIds: string[]
       if ('data' in result) {
         // OpenAI format: { data: [{ id: "model-id" }, ...] }
-        return result.data.map((m) => m.id).filter(Boolean)
+        modelIds = result.data.map((m) => m.id).filter(Boolean)
       } else if ('models' in result) {
         // Alternative format: { models: [...] }
-        return result.models
+        modelIds = result.models
           .map((m) => (typeof m === 'string' ? m : m.id))
           .filter(Boolean)
       } else {
         // Direct array format: ["model-id1", { id: "model-id2" }, ...]
-        return (result as Array<string | { id: string }>)
+        modelIds = (result as Array<string | { id: string }>)
           .map((m) => (typeof m === 'string' ? m : m.id))
           .filter(Boolean)
       }
+      return withProviderFallbackModels(provider, baseUrl, modelIds)
     } catch (error) {
       console.error('Error fetching models from provider:', error)
 

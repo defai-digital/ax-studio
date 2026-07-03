@@ -1264,7 +1264,10 @@ mod tests {
     fn extract_json_string_array_parses_architectures() {
         let json = r#"{"architectures": ["Qwen3_5MoeForConditionalGeneration"], "model_type": "qwen3_5_moe"}"#;
         let result = extract_json_string_array(json, "architectures");
-        assert_eq!(result, Some(vec!["Qwen3_5MoeForConditionalGeneration".to_string()]));
+        assert_eq!(
+            result,
+            Some(vec!["Qwen3_5MoeForConditionalGeneration".to_string()])
+        );
     }
 
     #[test]

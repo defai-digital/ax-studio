@@ -543,7 +543,6 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
         requestRole: 'final',
       })
 
-      // Determine tool support for this model
       // Always enable tools regardless of model capability declaration
       const modelSupportsTools = true // Force tools to be passed to LLM
 

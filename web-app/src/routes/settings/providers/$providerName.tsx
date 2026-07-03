@@ -71,6 +71,29 @@ function validateSettingValue(
   return null
 }
 
+function mergeProviderModelIds(provider: ModelProvider, modelIds: string[]): {
+  models: Model[]
+  added: number
+} {
+  const existingById = new Map(provider.models.map((model) => [model.id, model]))
+  const nextModels = [...provider.models]
+  let added = 0
+
+  for (const id of modelIds) {
+    if (existingById.has(id)) continue
+    nextModels.push({
+      id,
+      model: id,
+      name: id,
+      capabilities: getModelCapabilities(provider.provider, id),
+      version: '1.0',
+    })
+    added++
+  }
+
+  return { models: nextModels, added }
+}
+
 // as route.threadsDetail
 export const Route = createFileRoute('/settings/providers/$providerName')({
   component: ProviderDetail,
@@ -188,14 +211,19 @@ function ProviderDetail() {
       const modelIds = await serviceHub
         .providers()
         .fetchModelsFromProvider(provider)
+      const { models, added } = mergeProviderModelIds(provider, modelIds)
 
-      updateProvider(providerName, { active: true })
+      updateProvider(providerName, {
+        ...provider,
+        active: true,
+        models,
+      })
       setConnectionStatus('success')
       setConnectionMessage(
         t('providers:refreshModelsSuccess', {
-          count: modelIds.length,
+          count: added,
           provider: provider.provider,
-          defaultValue: `Connection successful. Found ${modelIds.length} model(s).`,
+          defaultValue: `Connection successful. Added ${added} new model(s).`,
         })
       )
     } catch (error) {
@@ -282,25 +310,17 @@ function ProviderDetail() {
       }
 
       // Single-prefix provider: import directly (existing behavior)
-      const existingModelIds = provider.models.map((m) => m.id)
-      const newIds = modelIds.filter((id) => !existingModelIds.includes(id))
+      const { models, added } = mergeProviderModelIds(provider, modelIds)
 
-      if (newIds.length > 0) {
-        const newModels: Model[] = newIds.map((id) => ({
-          id,
-          model: id,
-          name: id,
-          capabilities: getModelCapabilities(provider.provider, id),
-          version: '1.0',
-        }))
+      if (added > 0) {
         updateProvider(providerName, {
           ...provider,
           active: true,
-          models: [...provider.models, ...newModels],
+          models,
         })
         toast.success(t('providers:models'), {
           description: t('providers:refreshModelsSuccess', {
-            count: newIds.length,
+            count: added,
             provider: provider.provider,
           }),
         })
