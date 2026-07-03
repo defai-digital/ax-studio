@@ -129,9 +129,7 @@ jobs:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID || secrets.NOTARY_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER || secrets.NOTARY_ISSUER }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
-          AX_STUDIO_SIGNING_KEY: ${{ secrets.AX_STUDIO_SIGNING_KEY }}
         run: |
           missing=0
           for name in \
@@ -141,9 +139,7 @@ jobs:
             APPLE_API_KEY_ID \
             APPLE_API_ISSUER \
             TAURI_SIGNING_PRIVATE_KEY \
-            TAURI_SIGNING_PRIVATE_KEY_PASSWORD \
-            TAURI_UPDATER_PUBKEY \
-            AX_STUDIO_SIGNING_KEY
+            TAURI_UPDATER_PUBKEY
           do
             if [ -z "${!name}" ]; then
               echo "::error::$name is required for stable macOS release"
