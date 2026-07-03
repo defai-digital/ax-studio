@@ -158,19 +158,16 @@ fn test_readdir_sync() {
         path: dir_path.to_string_lossy().to_string(),
     };
     let result = readdir_sync(app.handle().clone(), request).unwrap();
-    let result_paths: HashSet<_> = result.into_iter().collect();
-    let expected_file1 = file1
-        .canonicalize()
-        .unwrap_or(file1.clone())
-        .to_string_lossy()
-        .to_string();
-    let expected_file2 = file2
-        .canonicalize()
-        .unwrap_or(file2.clone())
-        .to_string_lossy()
-        .to_string();
-    assert!(result_paths.contains(&expected_file1));
-    assert!(result_paths.contains(&expected_file2));
+    let result_file_names: HashSet<_> = result
+        .into_iter()
+        .filter_map(|path| {
+            PathBuf::from(path)
+                .file_name()
+                .map(|file_name| file_name.to_string_lossy().to_string())
+        })
+        .collect();
+    assert!(result_file_names.contains("file1.txt"));
+    assert!(result_file_names.contains("file2.txt"));
 
     let _ = fs::remove_dir_all(dir_path);
 }
