@@ -3,6 +3,7 @@ import type { ServiceHub } from '@/services'
 import type { Attachment } from '@/types/attachment'
 import type { MCPTool, MCPToolCallResult } from '@ax-studio/core'
 import { getFirstMcpText, isRecord, parseJsonMcpResult } from './mcp-result'
+import { AxBI, type DashboardPlan } from './sdk'
 
 const AX_BI_SERVER = 'ax-bi'
 const SUPPORTED_DATA_TYPES = new Set(['csv', 'tsv', 'txt', 'xls', 'xlsx', 'parquet'])
@@ -60,6 +61,12 @@ export type AxBiDashboardWorkflowResult =
 export type AxBiChartIntentWorkflowResult =
   | { handled: false }
   | { handled: true; message: string; chartUrl?: string }
+
+export type AxBiSdkPromptWorkflowResult =
+  | { handled: false }
+  | { handled: true; message: string; plan: DashboardPlan }
+
+type AxBiSdkClient = Pick<AxBI, 'ai'>
 
 export type AxBiChartMetric =
   | { type: 'count' }
@@ -316,6 +323,13 @@ export function isAxBiExistingDatasetChartRequest(prompt: string): boolean {
   return isAxBiChartCandidate(prompt)
 }
 
+export function isAxBiSdkPromptRequest(prompt: string): boolean {
+  return (
+    /\b(?:ax-?bi|axbi)\b/i.test(prompt) &&
+    /\b(?:prompt|plan|dashboard|chart|charts|analytics|report|visuali[sz]e|business intelligence)\b/i.test(prompt)
+  )
+}
+
 function pickDataAttachment(attachments: Attachment[]): Attachment | undefined {
   return attachments.find((attachment) => {
     if (attachment.type !== 'document') return false
@@ -452,6 +466,93 @@ function chartIdFromResult(result: ChartResult): number | undefined {
 
 function dashboardUrlFromResult(result: DashboardResult): string | undefined {
   return result.dashboard_url || result.url || undefined
+}
+
+function getServerUrlFromMcpConfig(config: unknown): string | undefined {
+  if (!isRecord(config)) return undefined
+  const mcpServers = config.mcpServers
+  if (!isRecord(mcpServers)) return undefined
+  const axBi = mcpServers[AX_BI_SERVER]
+  if (!isRecord(axBi) || typeof axBi.url !== 'string') return undefined
+  return axBi.url
+}
+
+async function createAxBiSdkClient(serviceHub: ServiceHub): Promise<AxBI> {
+  const configuredMcpUrl = getServerUrlFromMcpConfig(
+    await serviceHub.mcp().getMCPConfig().catch(() => null)
+  )
+  const baseUrl = configuredMcpUrl
+    ? configuredMcpUrl.replace(/\/mcp\/?$/i, '').replace(/\/+$/, '')
+    : 'http://127.0.0.1:8088'
+
+  return new AxBI({
+    baseUrl,
+    mcpUrl: baseUrl,
+    auth: { type: 'token', accessToken: '' },
+  })
+}
+
+function formatDashboardPlan(plan: DashboardPlan): string {
+  const lines = [`AX-BI generated a dashboard plan: ${plan.title || 'Untitled dashboard'}`]
+  if (plan.description) lines.push('', plan.description)
+
+  const sections = Array.isArray(plan.sections) ? plan.sections : []
+  if (sections.length > 0) {
+    lines.push('', 'Sections:')
+    for (const section of sections) {
+      lines.push(`- ${section.title || 'Untitled section'}`)
+      const chartIntents = Array.isArray(section.chart_intents)
+        ? section.chart_intents
+        : []
+      for (const chart of chartIntents.slice(0, 4)) {
+        const dimension = chart.dimension ? ` by ${chart.dimension}` : ''
+        lines.push(`  - ${chart.chart_type}: ${chart.metric}${dimension}`)
+      }
+    }
+  }
+
+  if (plan.assumptions?.length) {
+    lines.push('', 'Assumptions:', ...plan.assumptions.map((item) => `- ${item}`))
+  }
+
+  if (plan.clarifying_questions?.length) {
+    lines.push(
+      '',
+      'Clarifying questions:',
+      ...plan.clarifying_questions.map((item) => `- ${item}`)
+    )
+  }
+
+  if (typeof plan.confidence_score === 'number') {
+    const confidence =
+      plan.confidence_score <= 1
+        ? plan.confidence_score * 100
+        : plan.confidence_score
+    lines.push('', `Confidence: ${Math.round(confidence)}%`)
+  }
+
+  return lines.join('\n')
+}
+
+export async function runAxBiSdkPromptWorkflow({
+  prompt,
+  serviceHub,
+  client,
+}: {
+  prompt: string
+  serviceHub: ServiceHub
+  client?: AxBiSdkClient
+}): Promise<AxBiSdkPromptWorkflowResult> {
+  if (!isAxBiSdkPromptRequest(prompt)) return { handled: false }
+
+  const axbi = client ?? await createAxBiSdkClient(serviceHub)
+  const plan = await axbi.ai.planDashboard({ prompt })
+
+  return {
+    handled: true,
+    plan,
+    message: formatDashboardPlan(plan),
+  }
 }
 
 function collectRecords(value: unknown, records: Record<string, unknown>[] = []): Record<string, unknown>[] {

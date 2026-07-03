@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   isAxBiDashboardRequest,
   isAxBiExistingDatasetChartRequest,
+  isAxBiSdkPromptRequest,
   runAxBiExistingDatasetChartWorkflow,
+  runAxBiSdkPromptWorkflow,
 } from '../dashboard-workflow'
 import type { Attachment } from '@/types/attachment'
 
@@ -57,6 +59,55 @@ describe('AX-BI dashboard workflow', () => {
         'Use AX-BI MCP. Create a saved bar chart from palmer_penguins showing average body_mass_g by species. Name it Test - Avg Body Mass by Species.'
       )
     ).toBe(true)
+  })
+
+  it('detects AX-BI SDK prompt requests', () => {
+    expect(
+      isAxBiSdkPromptRequest('Prompt AX-BI to plan a revenue dashboard')
+    ).toBe(true)
+    expect(isAxBiSdkPromptRequest('Summarize this note')).toBe(false)
+  })
+
+  it('plans an AX-BI dashboard through the SDK client', async () => {
+    const planDashboard = vi.fn().mockResolvedValue({
+      title: 'Revenue Dashboard',
+      description: 'Revenue and region performance.',
+      sections: [
+        {
+          title: 'Revenue',
+          chart_intents: [
+            {
+              metric: 'revenue',
+              dimension: 'region',
+              chart_type: 'bar',
+            },
+          ],
+        },
+      ],
+      assumptions: ['Using certified datasets first.'],
+      clarifying_questions: ['Which fiscal period should be used?'],
+      confidence_score: 0.82,
+    })
+
+    const result = await runAxBiSdkPromptWorkflow({
+      prompt: 'Prompt AX-BI to plan a revenue dashboard by region',
+      serviceHub: {} as never,
+      client: {
+        ai: { planDashboard },
+      },
+    })
+
+    expect(planDashboard).toHaveBeenCalledWith({
+      prompt: 'Prompt AX-BI to plan a revenue dashboard by region',
+    })
+    expect(result).toMatchObject({
+      handled: true,
+      message: expect.stringContaining('Revenue Dashboard'),
+    })
+    if (result.handled) {
+      expect(result.message).toContain('bar: revenue by region')
+      expect(result.message).toContain('Confidence: 82%')
+    }
   })
 
   it('creates an existing-dataset count bar chart through AX-BI MCP directly', async () => {

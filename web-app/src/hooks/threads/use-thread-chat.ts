@@ -23,9 +23,17 @@ import {
   useChatAttachments,
   NEW_THREAD_ATTACHMENT_KEY,
 } from '@/hooks/chat/useChatAttachments'
-import { newUserThreadContent } from '@/lib/completion'
+import {
+  newAssistantThreadContent,
+  newUserThreadContent,
+} from '@/lib/completion'
 import { getModelContextLength } from '@/lib/models'
 import { convertThreadMessagesToUIMessages } from '@/lib/messages'
+import {
+  runAxBiDashboardWorkflow,
+  runAxBiExistingDatasetChartWorkflow,
+  runAxBiSdkPromptWorkflow,
+} from '@/lib/ax-bi/dashboard-workflow'
 import {
   ThreadMessage,
   MessageStatus,
@@ -265,6 +273,60 @@ export function useThreadChat({
       }
       addMessage(userMessage)
       updateThreadTimestamp(threadId)
+
+      let directAxBiResult:
+        | Awaited<ReturnType<typeof runAxBiExistingDatasetChartWorkflow>>
+        | Awaited<ReturnType<typeof runAxBiDashboardWorkflow>>
+        | Awaited<ReturnType<typeof runAxBiSdkPromptWorkflow>>
+
+      directAxBiResult = await runAxBiExistingDatasetChartWorkflow({
+        prompt: normalizedText,
+        serviceHub,
+      })
+      if (!directAxBiResult.handled) {
+        directAxBiResult = await runAxBiDashboardWorkflow({
+          prompt: normalizedText,
+          attachments: pendingAttachments,
+          serviceHub,
+        })
+      }
+      if (!directAxBiResult.handled) {
+        directAxBiResult = await runAxBiSdkPromptWorkflow({
+          prompt: normalizedText,
+          serviceHub,
+        })
+      }
+
+      if (directAxBiResult.handled) {
+        const assistantMessage = newAssistantThreadContent(
+          threadId,
+          directAxBiResult.message,
+          {
+            axBi: {
+              sdk: 'plan' in directAxBiResult,
+              dashboardUrl:
+                'dashboardUrl' in directAxBiResult
+                  ? directAxBiResult.dashboardUrl
+                  : undefined,
+              chartUrl:
+                'chartUrl' in directAxBiResult
+                  ? directAxBiResult.chartUrl
+                  : undefined,
+            },
+          },
+        )
+        addMessage(assistantMessage)
+        updateThreadTimestamp(threadId)
+        setChatMessages(
+          convertThreadMessagesToUIMessages(
+            useMessages.getState().getMessages(threadId)
+          )
+        )
+        if (pendingAttachments.length > 0) {
+          useChatAttachments.getState().clearAttachments(attachmentsKey)
+        }
+        return
+      }
 
       // Request parts include hidden local-knowledge context for the model.
       // Visible parts keep the user's chat bubble clean.

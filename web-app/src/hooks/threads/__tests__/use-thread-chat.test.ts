@@ -2,8 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useMessages } from '@/hooks/chat/useMessages'
 import { useThreads } from '@/hooks/threads/useThreads'
+import { useChatAttachments } from '@/hooks/chat/useChatAttachments'
 import { useChatSessions } from '@/stores/chat-session-store'
 import { useThreadChat, type ThreadChatParams } from '../use-thread-chat'
+import { runAxBiDashboardWorkflow } from '@/lib/ax-bi/dashboard-workflow'
+
+const axBiWorkflowMocks = vi.hoisted(() => ({
+  runAxBiDashboardWorkflow: vi.fn(),
+  runAxBiExistingDatasetChartWorkflow: vi.fn(),
+  runAxBiSdkPromptWorkflow: vi.fn(),
+}))
 
 // Mock AI SDK
 vi.mock('ai', () => ({
@@ -28,7 +36,27 @@ vi.mock('@/lib/completion', () => ({
       metadata: {},
     })
   ),
+  newAssistantThreadContent: vi.fn(
+    (
+      threadId: string,
+      content: string,
+      metadata: Record<string, unknown>,
+      id = 'assistant-id-1'
+    ) => ({
+      id,
+      thread_id: threadId,
+      role: 'assistant',
+      type: 'text',
+      object: 'thread.message',
+      status: 'ready',
+      content: [{ type: 'text', text: { value: content, annotations: [] } }],
+      created_at: Date.now(),
+      metadata,
+    })
+  ),
 }))
+
+vi.mock('@/lib/ax-bi/dashboard-workflow', () => axBiWorkflowMocks)
 
 // Mock messages conversion
 vi.mock('@/lib/messages', () => ({
@@ -109,6 +137,7 @@ describe('useThreadChat', () => {
 
     // Reset stores
     useMessages.setState({ messages: {} })
+    useChatAttachments.setState({ attachmentsByThread: {} })
     useThreads.setState({
       threads: {
         [threadId]: {
@@ -119,6 +148,9 @@ describe('useThreadChat', () => {
         } as unknown as Thread,
       },
     })
+    axBiWorkflowMocks.runAxBiExistingDatasetChartWorkflow.mockResolvedValue({ handled: false })
+    axBiWorkflowMocks.runAxBiDashboardWorkflow.mockResolvedValue({ handled: false })
+    axBiWorkflowMocks.runAxBiSdkPromptWorkflow.mockResolvedValue({ handled: false })
   })
 
   describe('processAndSendMessage', () => {
@@ -268,6 +300,40 @@ describe('useThreadChat', () => {
           ],
         }),
       ])
+    })
+
+    it('passes failed document-processing attachments to direct AX-BI dashboard workflow', async () => {
+      const attachment = {
+        name: 'sales.csv',
+        type: 'document' as const,
+        path: '/tmp/sales.csv',
+        fileType: 'csv',
+        processed: false,
+        error: 'Failed to extract text',
+      }
+      useChatAttachments.setState({
+        attachmentsByThread: {
+          [threadId]: [attachment],
+        },
+      })
+      axBiWorkflowMocks.runAxBiDashboardWorkflow.mockResolvedValueOnce({
+        handled: true,
+        message: 'Created AX-BI dashboard',
+      })
+
+      const { result } = renderHook(() => useThreadChat(defaultParams()))
+
+      await act(async () => {
+        await result.current.processAndSendMessage('Create an AX-BI dashboard from this file')
+      })
+
+      expect(runAxBiDashboardWorkflow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          attachments: [attachment],
+        })
+      )
+      expect(mockSendMessage).not.toHaveBeenCalled()
+      expect(useMessages.getState().getMessages(threadId)).toHaveLength(2)
     })
   })
 
