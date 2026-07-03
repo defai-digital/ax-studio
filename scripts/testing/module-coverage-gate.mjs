@@ -53,7 +53,7 @@ export function evaluateCoverageGate(audit, thresholds) {
       const actual = data[metric]?.pct ?? 0
 
       const status = actual >= threshold ? 'PASS' : 'FAIL'
-      const icon = actual >= threshold ? '✓' : '✗'
+      const icon = actual >= threshold ? 'PASS' : 'FAIL'
 
       rows.push({
         moduleName,
@@ -79,16 +79,16 @@ export function formatCoverageGateReport({ mode, rows, warnings, failures }) {
     '',
     'Module Coverage Gate',
     `Mode: ${normalizedMode}`,
-    '─'.repeat(70),
+    '-'.repeat(70),
   ]
 
   for (const row of rows) {
     output.push(
-      `  ${row.icon} ${row.moduleName.padEnd(20)} ${row.metric.padEnd(12)} ${String(row.actual.toFixed(1) + '%').padStart(7)} / ${String(row.threshold + '%').padStart(6)}  [${row.status}]`
+      `  ${row.icon.padEnd(4)} ${row.moduleName.padEnd(20)} ${row.metric.padEnd(12)} ${String(row.actual.toFixed(1) + '%').padStart(7)} / ${String(row.threshold + '%').padStart(6)}  [${row.status}]`
     )
   }
 
-  output.push('─'.repeat(70))
+  output.push('-'.repeat(70))
 
   if (warnings.length > 0) {
     output.push('', 'Warnings:', ...warnings)
