@@ -29,12 +29,11 @@ import {
   GitBranch,
   Paperclip,
   RefreshCw,
-  ThumbsDown,
-  ThumbsUp,
   Zap,
 } from 'lucide-react'
 import { useMessages } from '@/hooks/chat/useMessages'
 import { useForkThread } from '@/hooks/threads/use-fork-thread'
+import { MessageRatingActions } from '@/components/chat/MessageRatingActions'
 import { RoutingBadge } from '@/components/RoutingBadge'
 import type { CitationData } from '@/types/citation-types'
 
@@ -101,6 +100,9 @@ export const MessageItem = memo(
 
     const meta = message.metadata as Record<string, unknown> | undefined
     const currentRating = meta?.rating as 'up' | 'down' | undefined
+    const currentFeedback = meta?.feedback as
+      | { reasons?: string[]; comment?: string }
+      | undefined
     const localKnowledgeRetrieval = meta?.localKnowledgeRetrieval as
       | {
           searched?: boolean
@@ -120,20 +122,40 @@ export const MessageItem = memo(
     const citationData = useCitations((s) => s.getCitations(message.id))
     const flagLowConfidence = useGuardrails((s) => s.flagLowConfidence)
 
-    const handleRating = useCallback(
-      (rating: 'up' | 'down') => {
+    const persistRating = useCallback(
+      (
+        rating: 'up' | 'down' | undefined,
+        feedback?: { reasons: string[]; comment: string }
+      ) => {
         if (!threadId || !storedThreadMessage) return
         const existingMeta = (message.metadata ?? {}) as Record<string, unknown>
-        const newRating = existingMeta.rating === rating ? undefined : rating
-        updateMessage({
-          ...storedThreadMessage,
-          metadata: {
-            ...existingMeta,
-            rating: newRating,
-          },
-        })
+        const nextMeta: Record<string, unknown> = { ...existingMeta, rating }
+        if (rating === 'down' && feedback) {
+          nextMeta.feedback = {
+            reasons: feedback.reasons,
+            comment: feedback.comment,
+            at: Date.now(),
+          }
+        } else {
+          delete nextMeta.feedback
+        }
+        updateMessage({ ...storedThreadMessage, metadata: nextMeta })
       },
       [message.metadata, storedThreadMessage, threadId, updateMessage]
+    )
+
+    const handleRateUp = useCallback(
+      () => persistRating(currentRating === 'up' ? undefined : 'up'),
+      [persistRating, currentRating]
+    )
+    const handleSubmitDownvote = useCallback(
+      (data: { reasons: string[]; comment: string }) =>
+        persistRating('down', data),
+      [persistRating]
+    )
+    const handleClearRating = useCallback(
+      () => persistRating(undefined),
+      [persistRating]
     )
 
     const handleRegenerate = useCallback(() => {
@@ -609,33 +631,14 @@ export const MessageItem = memo(
                   </Button>
                 )}
 
-                {/* Thumbs up / down rating */}
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  title="Good response"
-                  aria-label="Good response"
-                  className={cn(
-                    'text-muted-foreground/50 hover:text-emerald-500',
-                    currentRating === 'up' && 'text-emerald-500'
-                  )}
-                  onClick={() => handleRating('up')}
-                >
-                  <ThumbsUp className="size-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  title="Poor response"
-                  aria-label="Poor response"
-                  className={cn(
-                    'text-muted-foreground/50 hover:text-rose-500',
-                    currentRating === 'down' && 'text-rose-500'
-                  )}
-                  onClick={() => handleRating('down')}
-                >
-                  <ThumbsDown className="size-3.5" />
-                </Button>
+                {/* Thumbs up / down rating with downvote feedback capture */}
+                <MessageRatingActions
+                  rating={currentRating}
+                  feedback={currentFeedback}
+                  onRateUp={handleRateUp}
+                  onSubmitDownvote={handleSubmitDownvote}
+                  onClearRating={handleClearRating}
+                />
               </div>
 
               <TokenSpeedIndicator
