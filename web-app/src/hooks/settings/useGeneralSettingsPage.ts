@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useAppUpdater } from '@/hooks/updater/useAppUpdater'
@@ -25,6 +25,16 @@ export function useGeneralSettingsPage() {
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
   const [isValidatingToken, setIsValidatingToken] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
+  const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (copyResetTimerRef.current) {
+        clearTimeout(copyResetTimerRef.current)
+        copyResetTimerRef.current = null
+      }
+    }
+  }, [])
 
   useEffect(() => {
     const fetchDataFolder = async () => {
@@ -53,7 +63,13 @@ export function useGeneralSettingsPage() {
     try {
       await navigator.clipboard.writeText(text)
       setIsCopied(true)
-      setTimeout(() => setIsCopied(false), 2000)
+      if (copyResetTimerRef.current) {
+        clearTimeout(copyResetTimerRef.current)
+      }
+      copyResetTimerRef.current = setTimeout(() => {
+        setIsCopied(false)
+        copyResetTimerRef.current = null
+      }, 2000)
     } catch (error) {
       console.error('Failed to copy to clipboard:', error)
     }
