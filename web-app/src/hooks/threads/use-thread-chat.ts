@@ -405,6 +405,7 @@ export function useThreadChat({
       chatMessages,
       setChatMessages,
       prepareLocalKnowledge,
+      serviceHub,
     ]
   )
 
