@@ -10,7 +10,7 @@ import {
   DialogHeader,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { FileText, Pencil, X } from "lucide-react";
+import { FileText, Pencil, X } from 'lucide-react'
 import {
   extractFilesFromPrompt,
   injectFilesIntoPrompt,
@@ -35,12 +35,14 @@ export function EditMessageDialog({
   const [isOpen, setIsOpen] = useState(false)
   const { files: initialFiles, cleanPrompt: initialCleanPrompt } = useMemo(
     () => extractFilesFromPrompt(message),
-    [message],
+    [message]
   )
   const [draft, setDraft] = useState(initialCleanPrompt)
   const [keptImages, setKeptImages] = useState<string[]>(imageUrls || [])
   const [keptFiles, setKeptFiles] = useState<FileMetadata[]>(initialFiles)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const isOpenRef = useRef(isOpen)
+  isOpenRef.current = isOpen
   const selectedModel = useModelProvider((state) => state.selectedModel)
 
   useEffect(() => {
@@ -51,11 +53,18 @@ export function EditMessageDialog({
   }, [message, imageUrls])
 
   useEffect(() => {
-    if (isOpen && textareaRef.current) {
-      setTimeout(() => {
-        textareaRef.current?.focus()
-        textareaRef.current?.select()
-      }, 100)
+    if (!isOpen || !textareaRef.current) {
+      return
+    }
+
+    const focusTimer = setTimeout(() => {
+      if (!isOpenRef.current) return
+      textareaRef.current?.focus()
+      textareaRef.current?.select()
+    }, 100)
+
+    return () => {
+      clearTimeout(focusTimer)
     }
   }, [isOpen])
 
@@ -118,9 +127,7 @@ export function EditMessageDialog({
                 </span>
                 <button
                   onClick={() =>
-                    setKeptFiles((prev) =>
-                      prev.filter((f) => f.id !== file.id),
-                    )
+                    setKeptFiles((prev) => prev.filter((f) => f.id !== file.id))
                   }
                   className="p-0.5 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
                 >
@@ -146,9 +153,7 @@ export function EditMessageDialog({
                 />
                 <button
                   onClick={() =>
-                    setKeptImages((prev) =>
-                      prev.filter((_, i) => i !== index),
-                    )
+                    setKeptImages((prev) => prev.filter((_, i) => i !== index))
                   }
                   className="absolute -top-1 -right-1 p-0.5 rounded-full bg-destructive text-white opacity-0 group-hover:opacity-100 transition-opacity"
                 >
@@ -184,8 +189,7 @@ export function EditMessageDialog({
               (draft === initialCleanPrompt &&
                 JSON.stringify(imageUrls || []) ===
                   JSON.stringify(keptImages) &&
-                JSON.stringify(initialFiles) ===
-                  JSON.stringify(keptFiles)) ||
+                JSON.stringify(initialFiles) === JSON.stringify(keptFiles)) ||
               !draft.trim()
             }
             onClick={handleSave}

@@ -1,4 +1,4 @@
-import { Pencil } from "lucide-react";
+import { Pencil } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import {
@@ -40,6 +40,8 @@ export function RenameThreadDialog({
 
   const isControlled = open !== undefined
   const isOpen = isControlled ? !!open : internalOpen
+  const isOpenRef = useRef(isOpen)
+  isOpenRef.current = isOpen
   const setOpenSafe = (next: boolean) => {
     if (isControlled) {
       onOpenChange?.(next)
@@ -49,12 +51,19 @@ export function RenameThreadDialog({
   }
 
   useEffect(() => {
-    if (isOpen) {
-      setTitle(plainTitleForRename || t('common:newThread'))
-      setTimeout(() => {
-        inputRef.current?.focus()
-        inputRef.current?.select()
-      }, 100)
+    if (!isOpen) {
+      return
+    }
+
+    setTitle(plainTitleForRename || t('common:newThread'))
+    const focusTimer = setTimeout(() => {
+      if (!isOpenRef.current) return
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    }, 100)
+
+    return () => {
+      clearTimeout(focusTimer)
     }
   }, [isOpen, plainTitleForRename, t])
 
