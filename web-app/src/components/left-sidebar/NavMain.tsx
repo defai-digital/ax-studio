@@ -13,6 +13,7 @@ import { useRef } from 'react'
 import { BlocksIcon, type BlocksIconHandle } from '../animated-icon/blocks'
 import { SearchDialog } from '@/containers/dialogs/SearchDialog'
 import { useSearchDialog } from '@/hooks/ui/useSearchDialog'
+import { CollapsedRecentChats } from '@/components/left-sidebar/CollapsedRecentChats'
 import {
   SidebarMenu,
   SidebarMenuButton,
@@ -124,6 +125,8 @@ export function NavMain() {
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
+          {/* Collapsed-only: recent chats flyout (Chats list is hidden when collapsed) */}
+          <CollapsedRecentChats />
         </SidebarMenu>
       </div>
 
