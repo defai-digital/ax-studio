@@ -6,7 +6,7 @@
   "build": {
     "frontendDist": "../web-app/dist",
     "devUrl": "http://localhost:1420",
-    "beforeDevCommand": "node scripts/run-with-env.mjs IS_TAURI=true IS_DEV=true yarn dev:web",
+    "beforeDevCommand": "node scripts/tauri-dev-web.mjs",
     "beforeBuildCommand": "node scripts/run-with-env.mjs IS_TAURI=true yarn build:web"
   },
   "app": {

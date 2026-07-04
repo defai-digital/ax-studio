@@ -6,6 +6,8 @@ REPORT_PORTAL_PROJECT_NAME ?= ""
 REPORT_PORTAL_LAUNCH_NAME ?= "Ax-Studio App"
 REPORT_PORTAL_DESCRIPTION ?= "Ax-Studio App report"
 DEV_PORT ?= 1420
+NODE ?= node
+TAURI_CLI ?= $(NODE) node_modules/@tauri-apps/cli/tauri.js
 
 .PHONY: all install-and-build install-rust-targets dev-setup ensure-dev-setup ensure-dev-port-free dev dev-stop install-web-app dev-web-app build-web-app serve-web-app build-serve-web-app lint test test-quality test-quality-blocking build clean
 
@@ -57,8 +59,8 @@ else
 endif
 
 dev: ensure-dev-port-free ensure-dev-setup
-	yarn copy:assets:tauri
-	yarn tauri dev
+	$(NODE) scripts/copy-assets-tauri.mjs
+	$(TAURI_CLI) dev
 
 dev-stop:
 ifeq ($(OS),Windows_NT)
