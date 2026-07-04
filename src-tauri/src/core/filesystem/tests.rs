@@ -238,6 +238,15 @@ fn test_file_stat_accepts_legacy_and_typed_requests() {
     .unwrap();
     assert_eq!(legacy.size, 5);
 
+    let legacy_args = file_stat(
+        app.handle().clone(),
+        FileStatRequest::LegacyArgs {
+            args: vec!["file://test_file_stat.txt".to_string()],
+        },
+    )
+    .unwrap();
+    assert_eq!(legacy_args.size, 5);
+
     let typed = file_stat(
         app.handle().clone(),
         FileStatRequest::Typed {

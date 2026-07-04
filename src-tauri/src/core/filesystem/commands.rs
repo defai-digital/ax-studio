@@ -92,6 +92,7 @@ impl JoinPathRequest {
 #[derive(Debug, serde::Deserialize)]
 #[serde(untagged)]
 pub enum FileStatRequest {
+    LegacyArgs { args: Vec<String> },
     Legacy { args: String },
     Typed { path: String },
 }
@@ -99,6 +100,11 @@ pub enum FileStatRequest {
 impl FileStatRequest {
     fn into_path(self) -> Result<String, String> {
         match self {
+            Self::LegacyArgs { args } => args
+                .into_iter()
+                .next()
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| "file_stat error: Invalid argument".to_string()),
             Self::Legacy { args } if !args.is_empty() => Ok(args),
             Self::Typed { path } if !path.is_empty() => Ok(path),
             _ => Err("file_stat error: Invalid argument".to_string()),
