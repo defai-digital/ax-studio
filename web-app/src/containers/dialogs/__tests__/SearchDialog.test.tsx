@@ -77,13 +77,23 @@ vi.mock('lucide-react', () => {
     Plus: Icon,
     FolderPlus: Icon,
     Settings: Icon,
+    Settings2: Icon,
     Plug: Icon,
     Palette: Icon,
     Server: Icon,
+    ServerCog: Icon,
     Cpu: Icon,
     History: Icon,
     FolderOpen: Icon,
     Blocks: Icon,
+    Bot: Icon,
+    Lock: Icon,
+    ShieldCheck: Icon,
+    Paperclip: Icon,
+    Route: Icon,
+    Keyboard: Icon,
+    Puzzle: Icon,
+    Network: Icon,
   }
 })
 

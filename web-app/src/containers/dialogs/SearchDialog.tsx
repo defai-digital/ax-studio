@@ -12,13 +12,23 @@ import {
   Plus,
   FolderPlus,
   Settings,
+  Settings2,
   Plug,
   Palette,
   Server,
+  ServerCog,
   Cpu,
   History,
   FolderOpen,
   Blocks,
+  Bot,
+  Lock,
+  ShieldCheck,
+  Paperclip,
+  Route as RouteIcon,
+  Keyboard,
+  Puzzle,
+  Network,
 } from 'lucide-react'
 import Fuse from 'fuse.js'
 import { useThreads } from '@/hooks/threads/useThreads'
@@ -185,6 +195,120 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
         action: () => {
           handleClose()
           navigate({ to: route.settings.hardware })
+        },
+      },
+      {
+        id: 'assistants',
+        label: t('common:assistants', { defaultValue: 'Assistants' }),
+        keywords: ['assistant', 'assistants', 'persona', 'agent', 'system prompt'],
+        icon: Bot,
+        category: t('common:settings'),
+        action: () => {
+          handleClose()
+          navigate({ to: route.settings.assistant })
+        },
+      },
+      {
+        id: 'general',
+        label: t('settings:general.title', { defaultValue: 'General' }),
+        keywords: ['general', 'language', 'data folder', 'reset', 'version'],
+        icon: Settings2,
+        category: t('common:settings'),
+        action: () => {
+          handleClose()
+          navigate({ to: route.settings.general })
+        },
+      },
+      {
+        id: 'privacy',
+        label: t('settings:privacy.title', { defaultValue: 'Privacy' }),
+        keywords: ['privacy', 'telemetry', 'analytics', 'data'],
+        icon: Lock,
+        category: t('common:settings'),
+        action: () => {
+          handleClose()
+          navigate({ to: route.settings.privacy })
+        },
+      },
+      {
+        id: 'guardrails',
+        label: t('settings:guardrails.title', { defaultValue: 'Guardrails' }),
+        keywords: ['guardrails', 'safety', 'confidence', 'moderation'],
+        icon: ShieldCheck,
+        category: t('common:settings'),
+        action: () => {
+          handleClose()
+          navigate({ to: route.settings.guardrails })
+        },
+      },
+      {
+        id: 'attachments',
+        label: t('settings:attachments.title', { defaultValue: 'Attachments' }),
+        keywords: ['attachments', 'files', 'documents', 'upload', 'rag'],
+        icon: Paperclip,
+        category: t('common:settings'),
+        action: () => {
+          handleClose()
+          navigate({ to: route.settings.attachments })
+        },
+      },
+      {
+        id: 'llm-router',
+        label: t('settings:llmRouter.title', { defaultValue: 'LLM Router' }),
+        keywords: ['router', 'routing', 'auto', 'model selection', 'llm'],
+        icon: RouteIcon,
+        category: t('common:settings'),
+        action: () => {
+          handleClose()
+          navigate({ to: route.settings.llm_router })
+        },
+      },
+      {
+        id: 'shortcuts',
+        label: t('settings:shortcuts.title', {
+          defaultValue: 'Keyboard Shortcuts',
+        }),
+        keywords: ['keyboard', 'shortcuts', 'hotkeys', 'keybindings'],
+        icon: Keyboard,
+        category: t('common:settings'),
+        action: () => {
+          handleClose()
+          navigate({ to: route.settings.shortcuts })
+        },
+      },
+      {
+        id: 'local-api-server',
+        label: t('settings:localApiServer.title', {
+          defaultValue: 'Local API Server',
+        }),
+        keywords: ['api', 'server', 'local', 'openai compatible', 'endpoint'],
+        icon: ServerCog,
+        category: t('common:settings'),
+        action: () => {
+          handleClose()
+          navigate({ to: route.settings.local_api_server })
+        },
+      },
+      {
+        id: 'https-proxy',
+        label: t('settings:httpsProxy.title', { defaultValue: 'HTTPS Proxy' }),
+        keywords: ['proxy', 'https', 'network', 'vpn'],
+        icon: Network,
+        category: t('common:settings'),
+        action: () => {
+          handleClose()
+          navigate({ to: route.settings.https_proxy })
+        },
+      },
+      {
+        id: 'extensions',
+        label: t('settings:extensions.title', { defaultValue: 'Extensions' }),
+        keywords: ['extensions', 'plugins', 'addons'],
+        icon: Puzzle,
+        category: t('common:settings'),
+        action: () => {
+          handleClose()
+          navigate({ to: route.settings.extensions })
         },
       },
     ],
