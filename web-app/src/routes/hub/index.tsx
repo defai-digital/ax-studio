@@ -117,6 +117,22 @@ function HubContent() {
   )
   const huggingFaceRepoRequestRef = useRef<AbortController | null>(null)
 
+  const cancelHuggingFaceModelFetch = useCallback((updateSearching = true) => {
+    if (addModelSourceTimeoutRef.current) {
+      clearTimeout(addModelSourceTimeoutRef.current)
+      addModelSourceTimeoutRef.current = null
+    }
+
+    if (huggingFaceRepoRequestRef.current) {
+      huggingFaceRepoRequestRef.current.abort()
+      huggingFaceRepoRequestRef.current = null
+    }
+
+    if (updateSearching) {
+      setIsSearching(false)
+    }
+  }, [])
+
   const filters: {
     id: FilterTag
     label: string
@@ -244,6 +260,8 @@ function HubContent() {
   }, [isInitialLoad, filteredModels.length])
 
   const fetchHuggingFaceModel = async (searchValue: string) => {
+    cancelHuggingFaceModelFetch()
+
     if (
       !searchValue.length ||
       (!searchValue.includes('/') && !searchValue.startsWith('http'))
@@ -252,14 +270,6 @@ function HubContent() {
     }
 
     setIsSearching(true)
-    if (addModelSourceTimeoutRef.current) {
-      clearTimeout(addModelSourceTimeoutRef.current)
-    }
-
-    if (huggingFaceRepoRequestRef.current) {
-      huggingFaceRepoRequestRef.current.abort()
-      huggingFaceRepoRequestRef.current = null
-    }
 
     addModelSourceTimeoutRef.current = setTimeout(async () => {
       const controller = new AbortController()
@@ -290,6 +300,7 @@ function HubContent() {
       } finally {
         if (huggingFaceRepoRequestRef.current === controller) {
           huggingFaceRepoRequestRef.current = null
+          addModelSourceTimeoutRef.current = null
           setIsSearching(false)
         }
       }
@@ -297,14 +308,8 @@ function HubContent() {
   }
 
   useEffect(() => {
-    return () => {
-      if (addModelSourceTimeoutRef.current) {
-        clearTimeout(addModelSourceTimeoutRef.current)
-      }
-      huggingFaceRepoRequestRef.current?.abort()
-      huggingFaceRepoRequestRef.current = null
-    }
-  }, [])
+    return () => cancelHuggingFaceModelFetch(false)
+  }, [cancelHuggingFaceModelFetch])
 
   const handleSearchChange = (e: ChangeEvent<HTMLInputElement>) => {
     setIsSearching(false)
@@ -436,6 +441,7 @@ function HubContent() {
                   onClick={() => {
                     setSearchValue('')
                     setHuggingFaceRepo(null)
+                    cancelHuggingFaceModelFetch()
                   }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-muted-foreground"
                 >
@@ -452,6 +458,7 @@ function HubContent() {
                     setActiveFilter(f.id)
                     if (f.id === 'downloaded') {
                       setHuggingFaceRepo(null)
+                      cancelHuggingFaceModelFetch()
                     }
                   }}
                   className={cn(
@@ -582,6 +589,7 @@ function HubContent() {
                       setActiveFilter(checked ? 'downloaded' : 'all')
                       if (checked) {
                         setHuggingFaceRepo(null)
+                        cancelHuggingFaceModelFetch()
                       } else {
                         fetchHuggingFaceModel(searchValue)
                       }
