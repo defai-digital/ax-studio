@@ -8,6 +8,7 @@ const {
   mockNavigate,
   mockToastError,
   mockProviders,
+  mockIsMlxSupported,
 } = vi.hoisted(() => ({
   mockAddLocalDownloadingModel: vi.fn(),
   mockRemoveLocalDownloadingModel: vi.fn(),
@@ -15,6 +16,7 @@ const {
   mockNavigate: vi.fn(),
   mockToastError: vi.fn(),
   mockProviders: { current: [] as ModelProvider[] },
+  mockIsMlxSupported: vi.fn(),
 }))
 
 vi.mock('@/hooks/models/useDownloadStore', () => ({
@@ -71,6 +73,10 @@ vi.mock('sonner', () => ({
   toast: {
     error: mockToastError,
   },
+}))
+
+vi.mock('@/lib/platform/utils', () => ({
+  isMlxSupported: mockIsMlxSupported,
 }))
 
 vi.mock('@tanstack/react-router', () => ({
@@ -137,6 +143,7 @@ describe('ModelDownloadAction', () => {
     vi.clearAllMocks()
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     mockProviders.current = []
+    mockIsMlxSupported.mockReturnValue(true)
     mockPullModelWithMetadata.mockResolvedValue(undefined)
   })
 
@@ -186,6 +193,37 @@ describe('ModelDownloadAction', () => {
       undefined,
       'hf-test-token'
     )
+  })
+
+  it('blocks MLX downloads on unsupported platforms', () => {
+    mockIsMlxSupported.mockReturnValue(false)
+    const mlxVariant = {
+      model_id: 'mlx-community/Qwen3.5-9B-MLX-4bit',
+      path: 'hf://mlx-community/Qwen3.5-9B-MLX-4bit',
+    }
+    const mlxModel = {
+      ...model,
+      model_name: 'mlx-community/Qwen3.5-9B-MLX-4bit',
+      is_mlx: true,
+    }
+
+    render(
+      <ModelDownloadAction
+        variant={mlxVariant}
+        model={mlxModel as never}
+      />
+    )
+
+    fireEvent.click(screen.getByTitle('hub:downloadModel'))
+
+    expect(mockToastError).toHaveBeenCalledWith(
+      'MLX models not supported',
+      expect.objectContaining({
+        description: expect.stringContaining('MLX models only work on macOS'),
+      })
+    )
+    expect(mockAddLocalDownloadingModel).not.toHaveBeenCalled()
+    expect(mockPullModelWithMetadata).not.toHaveBeenCalled()
   })
 
   it('tracks GGUF downloads with the sanitized runtime model id', () => {

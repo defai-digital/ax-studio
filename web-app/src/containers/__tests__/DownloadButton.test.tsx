@@ -9,12 +9,14 @@ const {
   mockPullModelWithMetadata,
   mockToastError,
   mockProviders,
+  mockIsMlxSupported,
 } = vi.hoisted(() => ({
   mockAddLocalDownloadingModel: vi.fn(),
   mockRemoveLocalDownloadingModel: vi.fn(),
   mockPullModelWithMetadata: vi.fn(),
   mockToastError: vi.fn(),
   mockProviders: { current: [] as ModelProvider[] },
+  mockIsMlxSupported: vi.fn(),
 }))
 
 vi.mock('@/hooks/models/useDownloadStore', () => ({
@@ -74,6 +76,10 @@ vi.mock('sonner', () => ({
   toast: {
     error: mockToastError,
   },
+}))
+
+vi.mock('@/lib/platform/utils', () => ({
+  isMlxSupported: mockIsMlxSupported,
 }))
 
 vi.mock('@ax-studio/core', () => ({
@@ -154,6 +160,7 @@ describe('DownloadButtonPlaceholder', () => {
     vi.clearAllMocks()
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     mockProviders.current = []
+    mockIsMlxSupported.mockReturnValue(true)
     mockPullModelWithMetadata.mockResolvedValue(undefined)
   })
 
@@ -230,6 +237,41 @@ describe('DownloadButtonPlaceholder', () => {
       undefined,
       'hf-test-token'
     )
+  })
+
+  it('blocks MLX downloads on unsupported platforms', () => {
+    mockIsMlxSupported.mockReturnValue(false)
+    const mlxModel = {
+      ...baseModel,
+      model_name: 'mlx-community/Qwen3.5-9B-MLX-4bit',
+      developer: 'mlx-community',
+      is_mlx: true,
+      quants: [
+        {
+          model_id: 'mlx-community/Qwen3.5-9B-MLX-4bit',
+          path: 'hf://mlx-community/Qwen3.5-9B-MLX-4bit',
+          file_size: '6GB',
+        },
+      ],
+    }
+
+    render(
+      <DownloadButtonPlaceholder
+        model={mlxModel}
+        handleUseModel={handleUseModel}
+      />
+    )
+
+    fireEvent.click(screen.getByText('hub:download'))
+
+    expect(mockToastError).toHaveBeenCalledWith(
+      'MLX models not supported',
+      expect.objectContaining({
+        description: expect.stringContaining('MLX models only work on macOS'),
+      })
+    )
+    expect(mockAddLocalDownloadingModel).not.toHaveBeenCalled()
+    expect(mockPullModelWithMetadata).not.toHaveBeenCalled()
   })
 
   it('renders "New Chat" button when model is downloaded', () => {

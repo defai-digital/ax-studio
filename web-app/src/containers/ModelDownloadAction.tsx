@@ -228,6 +228,7 @@ export const ModelDownloadAction = ({
     variant.model_id,
     huggingfaceToken,
     model.mmproj_models,
+    model?.is_mlx,
     addLocalDownloadingModel,
     removeDownload,
     removeLocalDownloadingModel,
