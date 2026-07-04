@@ -43,7 +43,7 @@ const cask = `cask "ax-studio" do
 
   url "https://github.com/defai-digital/ax-studio/releases/download/v#{version}/Ax-Studio_#{version}_aarch64.dmg"
   name "AX Studio"
-  desc "AI workspace for cloud models, local inference, tools, artifacts, and research workflows"
+  desc "AI workspace for cloud models, local inference, tools, and research"
   homepage "https://github.com/defai-digital/ax-studio"
 
   depends_on arch: :arm64
@@ -55,7 +55,7 @@ const cask = `cask "ax-studio" do
 
   postflight do
     system_command "/usr/bin/xattr",
-      args: ["-cr", "#{appdir}/Ax-Studio.app"]
+                   args: ["-cr", "#{appdir}/Ax-Studio.app"]
   end
 
   zap trash: [
