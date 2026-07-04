@@ -7,6 +7,7 @@ use base64::Engine;
 use rfd::AsyncFileDialog;
 use std::ffi::OsString;
 use std::fs;
+use std::io::Write;
 use std::path::PathBuf;
 use tauri::Runtime;
 use tauri::State;
@@ -59,6 +60,55 @@ impl PathPairRequest {
                 "{command} error: Invalid argument - source and destination required"
             )),
         }
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(untagged)]
+pub enum FileContentRequest {
+    Legacy { args: Vec<String> },
+    TypedData { path: String, data: String },
+    TypedContent { path: String, content: String },
+}
+
+impl FileContentRequest {
+    fn into_parts(self, command: &str) -> Result<(String, String), String> {
+        match self {
+            Self::Legacy { args } => {
+                if args.len() < 2 || args[0].is_empty() {
+                    Err(format!(
+                        "{command} error: Invalid argument - path and content required"
+                    ))
+                } else {
+                    Ok((args[0].clone(), args[1].clone()))
+                }
+            }
+            Self::TypedData { path, data } if !path.is_empty() => Ok((path, data)),
+            Self::TypedContent { path, content } if !path.is_empty() => Ok((path, content)),
+            _ => Err(format!(
+                "{command} error: Invalid argument - path and content required"
+            )),
+        }
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(untagged)]
+pub enum GgufFilesRequest {
+    Legacy { args: Vec<String> },
+    Typed { paths: Vec<String> },
+}
+
+impl GgufFilesRequest {
+    fn into_paths(self) -> Result<Vec<String>, String> {
+        let paths = match self {
+            Self::Legacy { args } => args,
+            Self::Typed { paths } => paths,
+        };
+        if paths.is_empty() || paths.iter().any(|path| path.is_empty()) {
+            return Err("get_gguf_files error: Invalid argument".to_string());
+        }
+        Ok(paths)
     }
 }
 
@@ -211,12 +261,15 @@ fn normalize_with_existing_ancestor(path: PathBuf) -> PathBuf {
     ax_studio_utils::normalize_path(&path)
 }
 
-fn normalize_copy_destination_path<R: Runtime>(
+fn normalize_app_data_write_path<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     path: &str,
+    command: &str,
 ) -> Result<PathBuf, String> {
     if path.starts_with("http://") || path.starts_with("https://") {
-        return Err("copy_file error: destination path must be local app data".to_string());
+        return Err(format!(
+            "{command} error: destination path must be local app data"
+        ));
     }
 
     let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app_handle);
@@ -381,7 +434,7 @@ pub fn copy_file<R: Runtime>(
 ) -> Result<(), String> {
     let (source_arg, destination_arg) = request.into_paths("copy_file")?;
     let source = normalize_copy_source_path(&source_arg)?;
-    let destination = normalize_copy_destination_path(app_handle, &destination_arg)?;
+    let destination = normalize_app_data_write_path(app_handle, &destination_arg, "copy_file")?;
 
     if let Some(parent) = destination.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -500,6 +553,88 @@ pub fn write_file_sync<R: Runtime>(
     let tmp_path = std::path::PathBuf::from(tmp);
     fs::write(&tmp_path, content).map_err(|e| e.to_string())?;
     fs::rename(&tmp_path, &path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+/// Write string-backed binary data inside the app data folder.
+pub fn write_blob<R: Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    request: FileContentRequest,
+) -> Result<(), String> {
+    let (path_arg, data) = request.into_parts("write_blob")?;
+    let path = normalize_app_data_write_path(app_handle, &path_arg, "write_blob")?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    fs::write(path, data.as_bytes()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+/// Remove a file inside the app data folder.
+pub fn unlink_sync<R: Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    request: SinglePathRequest,
+) -> Result<(), String> {
+    let path = resolve_path(app_handle, &request.into_path("unlink_sync")?)?;
+    if path.is_dir() {
+        return Err("unlink_sync error: Path is a directory".to_string());
+    }
+    fs::remove_file(path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+/// Append UTF-8 text to a file inside the app data folder, creating it if needed.
+pub fn append_file_sync<R: Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    request: FileContentRequest,
+) -> Result<(), String> {
+    let (path_arg, content) = request.into_parts("append_file_sync")?;
+    let path = normalize_app_data_write_path(app_handle, &path_arg, "append_file_sync")?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|e| e.to_string())?;
+    file.write_all(content.as_bytes())
+        .map_err(|e| e.to_string())
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GgufFilesResult {
+    pub gguf: Vec<String>,
+    pub non_gguf: Vec<String>,
+}
+
+#[tauri::command]
+/// Classify app-data file paths by GGUF extension.
+pub fn get_gguf_files<R: Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    request: GgufFilesRequest,
+) -> Result<GgufFilesResult, String> {
+    let mut gguf = Vec::new();
+    let mut non_gguf = Vec::new();
+
+    for path_arg in request.into_paths()? {
+        let path = resolve_path(app_handle.clone(), &path_arg)?;
+        let output_path = path.to_string_lossy().to_string();
+        let is_gguf = path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .map(|extension| extension.eq_ignore_ascii_case("gguf"))
+            .unwrap_or(false);
+
+        if path.is_file() && is_gguf {
+            gguf.push(output_path);
+        } else {
+            non_gguf.push(output_path);
+        }
+    }
+
+    Ok(GgufFilesResult { gguf, non_gguf })
 }
 
 #[tauri::command]

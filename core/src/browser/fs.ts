@@ -179,7 +179,11 @@ export const fs = {
 
   writeBlob(path: string, data: string): Promise<void> {
     const safePath = validatePath(path)
-    return validateBridgeResult(getCoreApi().writeBlob(safePath, data), 'writeBlob', expectVoid)
+    return validateBridgeResult(
+      getCoreApi().writeBlob({ path: safePath, data }),
+      'writeBlob',
+      expectVoid
+    )
   },
 
   readFileSync(path: string): Promise<string> {
@@ -265,7 +269,7 @@ export const fs = {
   getGgufFiles(paths: string[]): Promise<{ gguf: string[]; nonGguf: string[] }> {
     const safePaths = paths.map((p) => validatePath(p))
     return validateBridgeResult(
-      getCoreApi().getGgufFiles(safePaths),
+      getCoreApi().getGgufFiles({ paths: safePaths }),
       'getGgufFiles',
       expectGgufFilesResult
     )

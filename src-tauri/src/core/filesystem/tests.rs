@@ -145,6 +145,101 @@ fn test_write_file_sync_writes_typed_request_atomically() {
 }
 
 #[test]
+fn test_write_blob_writes_typed_data_inside_app_data() {
+    let app = mock_app();
+
+    write_blob(
+        app.handle().clone(),
+        FileContentRequest::TypedData {
+            path: "file://blob/data.bin".to_string(),
+            data: "blob bytes".to_string(),
+        },
+    )
+    .unwrap();
+
+    let written = fs::read(
+        get_app_data_folder_path(app.handle().clone())
+            .join("blob")
+            .join("data.bin"),
+    )
+    .unwrap();
+    assert_eq!(written, b"blob bytes");
+}
+
+#[test]
+fn test_unlink_sync_removes_file_inside_app_data() {
+    let app = mock_app();
+    let app_data = get_app_data_folder_path(app.handle().clone());
+    fs::create_dir_all(&app_data).unwrap();
+    let file_path = app_data.join("delete-me.txt");
+    fs::write(&file_path, "remove me").unwrap();
+
+    unlink_sync(
+        app.handle().clone(),
+        SinglePathRequest::Typed {
+            path: "file://delete-me.txt".to_string(),
+        },
+    )
+    .unwrap();
+
+    assert!(!file_path.exists());
+}
+
+#[test]
+fn test_append_file_sync_appends_text_inside_app_data() {
+    let app = mock_app();
+
+    append_file_sync(
+        app.handle().clone(),
+        FileContentRequest::TypedContent {
+            path: "file://append/log.txt".to_string(),
+            content: "first".to_string(),
+        },
+    )
+    .unwrap();
+    append_file_sync(
+        app.handle().clone(),
+        FileContentRequest::Legacy {
+            args: vec!["file://append/log.txt".to_string(), "-second".to_string()],
+        },
+    )
+    .unwrap();
+
+    let written = fs::read_to_string(
+        get_app_data_folder_path(app.handle().clone())
+            .join("append")
+            .join("log.txt"),
+    )
+    .unwrap();
+    assert_eq!(written, "first-second");
+}
+
+#[test]
+fn test_get_gguf_files_classifies_app_data_files() {
+    let app = mock_app();
+    let app_data = get_app_data_folder_path(app.handle().clone());
+    fs::create_dir_all(app_data.join("models")).unwrap();
+    fs::write(app_data.join("models").join("model.gguf"), "model").unwrap();
+    fs::write(app_data.join("models").join("notes.txt"), "notes").unwrap();
+
+    let result = get_gguf_files(
+        app.handle().clone(),
+        GgufFilesRequest::Typed {
+            paths: vec![
+                "file://models/model.gguf".to_string(),
+                "file://models/notes.txt".to_string(),
+            ],
+        },
+    )
+    .unwrap();
+
+    assert_eq!(result.gguf.len(), 1);
+    assert!(result.gguf[0].ends_with("models/model.gguf"));
+    assert_eq!(result.non_gguf.len(), 1);
+    assert!(result.non_gguf[0].ends_with("models/notes.txt"));
+}
+
+#[test]
 fn test_readdir_sync() {
     let app = mock_app();
     let dir_path = get_app_data_folder_path(app.handle().clone()).join("test_readdir_sync_dir");

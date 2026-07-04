@@ -94,12 +94,20 @@ describe('legacy API bridge', () => {
     await APIs.appendFileSync({
       request: { path: '/tmp/file.txt', content: 'hello' },
     })
+    await APIs.writeBlob({ path: '/tmp/file.bin', data: 'blob' })
+    await APIs.getGgufFiles({ paths: ['/tmp/a.gguf', '/tmp/readme.txt'] })
 
     expect(mocks.invoke).toHaveBeenNthCalledWith(1, 'append_file_sync', {
       request: { path: '/tmp/file.txt', content: 'hello' },
     })
     expect(mocks.invoke).toHaveBeenNthCalledWith(2, 'append_file_sync', {
       request: { path: '/tmp/file.txt', content: 'hello' },
+    })
+    expect(mocks.invoke).toHaveBeenNthCalledWith(3, 'write_blob', {
+      request: { path: '/tmp/file.bin', data: 'blob' },
+    })
+    expect(mocks.invoke).toHaveBeenNthCalledWith(4, 'get_gguf_files', {
+      request: { paths: ['/tmp/a.gguf', '/tmp/readme.txt'] },
     })
   })
 })

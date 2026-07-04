@@ -31,7 +31,10 @@ describe('fs module', () => {
     const path = 'path/to/file'
     const data = 'blob data'
     await fs.writeBlob(path, data)
-    expect(globalThis.core.api.writeBlob).toHaveBeenCalledWith(path, data)
+    expect(globalThis.core.api.writeBlob).toHaveBeenCalledWith({
+      path,
+      data,
+    })
   })
 
   it('should call readFileSync with correct arguments', () => {
@@ -87,7 +90,7 @@ describe('fs module', () => {
   it('should call getGgufFiles with correct arguments', async () => {
     const paths = ['path/to/file1', 'path/to/file2']
     await fs.getGgufFiles(paths)
-    expect(globalThis.core.api.getGgufFiles).toHaveBeenCalledWith(paths)
+    expect(globalThis.core.api.getGgufFiles).toHaveBeenCalledWith({ paths })
   })
 
   it('should call fileStat with correct arguments', async () => {
@@ -156,7 +159,10 @@ describe('fs module', () => {
     it('should validate path in writeBlob', async () => {
       // Absolute paths are now allowed - Tauri provides sandboxing
       await fs.writeBlob('/valid/path/file', 'data')
-      expect(globalThis.core.api.writeBlob).toHaveBeenCalledWith('/valid/path/file', 'data')
+      expect(globalThis.core.api.writeBlob).toHaveBeenCalledWith({
+        path: '/valid/path/file',
+        data: 'data',
+      })
     })
   })
 
