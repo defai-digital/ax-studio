@@ -43,13 +43,17 @@ export function ExtensionProvider({ children }: PropsWithChildren) {
     )
   }, [])
 
-  const runSetup = useCallback(async () => {
+  const runSetup = useCallback(async (isCancelled: () => boolean) => {
     try {
       await setupExtensions()
+      if (isCancelled()) return false
+
       console.info('[ExtensionProvider] Extension setup finished')
       setInitError(null)
       return true
     } catch (err) {
+      if (isCancelled()) return false
+
       const message = err instanceof Error ? err.message : String(err)
       console.error('Extension setup failed, rendering app anyway:', err)
       setInitError(message)
@@ -70,8 +74,9 @@ export function ExtensionProvider({ children }: PropsWithChildren) {
     let cleanupExtensionsUpdated: () => void = () => {}
     const retryTimers: ReturnType<typeof setTimeout>[] = []
     setInitError(null)
+    const isCancelled = () => cancelled
 
-    void runSetup().then((ok) => {
+    void runSetup(isCancelled).then((ok) => {
       if (cancelled) return
       if (ok) {
         notifyProvidersChanged('extensions-ready')
@@ -80,7 +85,7 @@ export function ExtensionProvider({ children }: PropsWithChildren) {
       for (const delayMs of EXTENSION_START_RETRY_DELAYS_MS) {
         retryTimers.push(setTimeout(() => {
           if (cancelled) return
-          void runSetup().then((retryOk) => {
+          void runSetup(isCancelled).then((retryOk) => {
             if (!cancelled && retryOk) {
               notifyProvidersChanged('extensions-ready')
             }
@@ -93,7 +98,7 @@ export function ExtensionProvider({ children }: PropsWithChildren) {
       .events()
       ?.listen(EXTENSIONS_UPDATED_EVENT, () => {
         console.info('[ExtensionProvider] Extensions updated; refreshing active extensions')
-        void runSetup().then((ok) => {
+        void runSetup(isCancelled).then((ok) => {
           if (ok) {
             notifyProvidersChanged(EXTENSIONS_UPDATED_EVENT)
           }

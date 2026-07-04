@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ExtensionProvider } from '../ExtensionProvider'
 
@@ -141,6 +141,38 @@ describe('ExtensionProvider', () => {
     })
 
     expect(screen.getByTestId('child')).toBeInTheDocument()
+  })
+
+  it('ignores extension startup failure after unmount', async () => {
+    let rejectRegister: ((error: Error) => void) | undefined
+    mocks.extensionManager.registerActive.mockReturnValue(
+      new Promise<void>((_resolve, reject) => {
+        rejectRegister = reject
+      })
+    )
+
+    const { unmount } = render(
+      <ExtensionProvider>
+        <div data-testid="child">App shell</div>
+      </ExtensionProvider>
+    )
+
+    await waitFor(() => {
+      expect(mocks.extensionManager.registerActive).toHaveBeenCalled()
+    })
+
+    unmount()
+
+    await act(async () => {
+      rejectRegister?.(new Error('late extension boom'))
+      await Promise.resolve()
+    })
+
+    expect(consoleErrorSpy).not.toHaveBeenCalledWith(
+      'Extension setup failed, rendering app anyway:',
+      expect.any(Error)
+    )
+    expect(mocks.extensionManager.unload).toHaveBeenCalled()
   })
 
   it('refreshes active extensions when background install completes', async () => {
