@@ -28,7 +28,7 @@ fn is_allowed_model_url(url: &str) -> Result<(), String> {
             "Model metadata URL host '{host_str}' is not in the allowlist"
         ));
     }
-    if parsed.socket_addrs(|| None).map_or(false, |addrs| {
+    if parsed.socket_addrs(|| None).is_ok_and(|addrs| {
         addrs.iter().any(|a| match a.ip() {
             std::net::IpAddr::V4(v4) => v4.is_loopback() || v4.is_private() || v4.is_unspecified(),
             std::net::IpAddr::V6(v6) => v6.is_loopback() || v6.is_unspecified(),
@@ -41,7 +41,7 @@ fn is_allowed_model_url(url: &str) -> Result<(), String> {
 /// Read GGUF metadata from a model file
 #[tauri::command]
 pub async fn read_gguf_metadata(path: String) -> Result<GgufMetadata, String> {
-    return read_gguf_metadata_internal(path).await;
+    read_gguf_metadata_internal(path).await
 }
 
 #[tauri::command]
@@ -145,17 +145,8 @@ pub async fn is_model_supported(
 
     log::info!("Total VRAM reported/calculated (in bytes): {}", &total_vram);
 
-    let usable_vram = if total_vram > RESERVE_BYTES {
-        total_vram - RESERVE_BYTES
-    } else {
-        0
-    };
-
-    let usable_total_memory = if total_system_memory > RESERVE_BYTES {
-        (total_system_memory - RESERVE_BYTES) + usable_vram
-    } else {
-        usable_vram
-    };
+    let usable_vram = total_vram.saturating_sub(RESERVE_BYTES);
+    let usable_total_memory = total_system_memory.saturating_sub(RESERVE_BYTES) + usable_vram;
     log::info!("System RAM: {} bytes", &total_system_memory);
     log::info!("Total VRAM: {} bytes", &total_vram);
     log::info!("Usable total memory: {} bytes", &usable_total_memory);

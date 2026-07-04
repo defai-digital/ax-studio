@@ -363,26 +363,17 @@ impl AxServingArgumentBuilder {
         port: u16,
         _mmproj_path: Option<String>,
     ) -> Vec<String> {
-        let mut args = Vec::new();
-
-        // Subcommand
-        args.push("serve".to_string());
-
-        // Model path
-        args.push("-m".to_string());
-        args.push(model_path.to_string());
-
-        // Model ID
-        args.push("--model-id".to_string());
-        args.push(model_id.to_string());
-
-        // Port and host
-        args.push("--port".to_string());
-        args.push(port.to_string());
-        args.push("--host".to_string());
-        args.push("127.0.0.1".to_string());
-
-        args
+        vec![
+            "serve".to_string(),
+            "-m".to_string(),
+            model_path.to_string(),
+            "--model-id".to_string(),
+            model_id.to_string(),
+            "--port".to_string(),
+            port.to_string(),
+            "--host".to_string(),
+            "127.0.0.1".to_string(),
+        ]
     }
 
     /// Build environment variables for ax-serving.

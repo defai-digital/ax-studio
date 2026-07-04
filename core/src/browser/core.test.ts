@@ -4,7 +4,9 @@ import {
   baseName,
   dirName,
   getAppDataFolderPath,
+  isSubdirectory,
   joinPath,
+  log,
   openExternalUrl,
   openFileExplorer,
   showToast,
@@ -51,7 +53,9 @@ describe('test core apis', () => {
   it('should reject private/local network URLs', () => {
     expect(() => openExternalUrl('http://localhost/something')).toThrow('private/internal networks')
     expect(() => openExternalUrl('http://127.0.0.1/something')).toThrow('private/internal networks')
-    expect(() => openExternalUrl('http://192.168.1.1/something')).toThrow('private/internal networks')
+    expect(() => openExternalUrl('http://192.168.1.1/something')).toThrow(
+      'private/internal networks'
+    )
     expect(() => openExternalUrl('http://10.0.0.1/something')).toThrow('private/internal networks')
   })
 
@@ -124,5 +128,43 @@ describe('dirName - just a pass thru api', () => {
 
     expect(mockDirName).toHaveBeenCalledWith({ args: [path] })
     expect(globalThis.core.api.baseName).toHaveBeenCalledWith({ args: [path] })
+  })
+})
+
+describe('system bridge helpers', () => {
+  it('sends isSubdirectory args as a named payload', async () => {
+    const isSubdirectoryApi = vi.fn().mockResolvedValue(true)
+    globalThis.core = {
+      api: {
+        isSubdirectory: isSubdirectoryApi,
+      },
+    }
+
+    await expect(isSubdirectory('/path/to/file.txt', '/path')).resolves.toBe(true)
+
+    expect(isSubdirectoryApi).toHaveBeenCalledWith({
+      from: '/path/to/file.txt',
+      to: '/path',
+    })
+  })
+
+  it('sends log messages as a single bridge payload', () => {
+    const logApi = vi.fn().mockResolvedValue(undefined)
+    globalThis.core = {
+      api: {
+        log: logApi,
+      },
+    }
+
+    log('started', 'extension.ts')
+    log('done')
+
+    expect(logApi).toHaveBeenNthCalledWith(1, {
+      message: 'started',
+      fileName: 'extension.ts',
+    })
+    expect(logApi).toHaveBeenNthCalledWith(2, {
+      message: 'done',
+    })
   })
 })

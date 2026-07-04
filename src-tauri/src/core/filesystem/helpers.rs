@@ -26,7 +26,7 @@ pub fn resolve_path<R: Runtime>(
                     "URLs pointing to internal networks are not allowed: {path}"
                 ));
             }
-            Some(url::Host::Domain(d)) if d == "localhost" => {
+            Some(url::Host::Domain("localhost")) => {
                 return Err(
                     "URLs pointing to localhost are not allowed in filesystem paths".to_string(),
                 );

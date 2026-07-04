@@ -247,15 +247,17 @@ impl LoadedModel {
 /// To deliberately enable n-gram for A/B testing (e.g. to demonstrate the
 /// crash, or once upstream fixes it), set env var `AX_MLX_NGRAM=1` when
 /// launching the app.
-fn build_session(model_dir: &PathBuf) -> Result<EngineSession, String> {
+fn build_session(model_dir: &Path) -> Result<EngineSession, String> {
     let enable_ngram = std::env::var("AX_MLX_NGRAM")
         .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "True"))
         .unwrap_or(false);
     let disable_ngram = !enable_ngram;
-    let mut config = EngineSessionConfig::default();
-    config.mlx_model_artifacts_dir = Some(model_dir.clone());
-    config.mlx_model_artifacts_source = Some(NativeModelArtifactsSource::ExplicitConfig);
-    config.mlx_disable_ngram_acceleration = disable_ngram;
+    let config = EngineSessionConfig {
+        mlx_model_artifacts_dir: Some(model_dir.to_path_buf()),
+        mlx_model_artifacts_source: Some(NativeModelArtifactsSource::ExplicitConfig),
+        mlx_disable_ngram_acceleration: disable_ngram,
+        ..Default::default()
+    };
     log::info!(
         "[mlx-worker] build_session model_dir={} ngram={}",
         model_dir.display(),
@@ -389,7 +391,7 @@ fn run_worker(rx: Receiver<MlxCommand>) {
 fn handle_load(
     models: &mut HashMap<String, LoadedModel>,
     model_id: &str,
-    model_dir: &PathBuf,
+    model_dir: &Path,
 ) -> Result<(), String> {
     if models.contains_key(model_id) {
         log::debug!("[mlx-worker] load: {model_id} already resident, no-op");
@@ -425,9 +427,7 @@ fn handle_load(
     // architectures (e.g. multimodal MoE) cause the MLX C library to abort()
     // which kills the worker thread with no recoverable error. Pre-checking
     // here gives the user a clear message instead of a silent crash.
-    if let Err(arch_err) = validate_model_architecture(model_dir, model_id) {
-        return Err(arch_err);
-    }
+    validate_model_architecture(model_dir, model_id)?;
 
     // Build the first warm session up-front, so the user gets a clear error
     // here instead of on first generate and the first request can skip
@@ -442,7 +442,7 @@ fn handle_load(
     models.insert(
         model_id.to_string(),
         LoadedModel {
-            model_dir: model_dir.clone(),
+            model_dir: model_dir.to_path_buf(),
             tokenizer,
             warm_session: Some(warm_session),
         },
@@ -528,10 +528,10 @@ fn handle_generate(
 
     let prompt_token_count = response
         .prompt_token_count
-        .unwrap_or_else(|| response.prompt_tokens.len() as u32);
+        .unwrap_or(response.prompt_tokens.len() as u32);
     let output_token_count = response
         .output_token_count
-        .unwrap_or_else(|| response.output_tokens.len() as u32);
+        .unwrap_or(response.output_tokens.len() as u32);
 
     // `GenerateResponse.status` carries finish_reason; map it to OpenAI-style.
     let finish_reason = response_finish_reason(&response);
@@ -602,7 +602,9 @@ fn handle_generate_stream(
                      Original error: {err_str}"
                 ));
             }
-            return Err(format!("session.stream_generate failed for {model_id}: {err_str}"));
+            return Err(format!(
+                "session.stream_generate failed for {model_id}: {err_str}"
+            ));
         }
     };
     let mut saw_start = false;
@@ -613,7 +615,7 @@ fn handle_generate_stream(
     let mut emitted_text = String::new();
     let mut strip_gemma4_thought_prefix = is_gemma4_family(model_id);
 
-    while let Some(event_result) = stream.next() {
+    for event_result in stream.by_ref() {
         let event = event_result
             .map_err(|e| format!("session.next_stream_event failed for {model_id}: {e:?}"))?;
 
@@ -688,10 +690,10 @@ fn handle_generate_stream(
                 }
                 prompt_token_count = response
                     .prompt_token_count
-                    .unwrap_or_else(|| response.prompt_tokens.len() as u32);
+                    .unwrap_or(response.prompt_tokens.len() as u32);
                 output_token_count = response
                     .output_token_count
-                    .unwrap_or_else(|| response.output_tokens.len() as u32);
+                    .unwrap_or(response.output_tokens.len() as u32);
                 finish_reason = response_finish_reason(&response);
             }
         }

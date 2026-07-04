@@ -1,7 +1,5 @@
 use std::ffi::OsString;
-#[cfg(windows)]
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::error::{ErrorCode, LlamacppError, ServerResult};
 
@@ -132,7 +130,7 @@ fn path_arg(
     Ok(Some((flag_index, PathBuf::from(path))))
 }
 
-fn validate_existing_file(path: &PathBuf, label: &str, user_message: &str) -> ServerResult<()> {
+fn validate_existing_file(path: &Path, label: &str, user_message: &str) -> ServerResult<()> {
     if !path.exists() {
         let err_msg = format!("Invalid or inaccessible {label} path: {}", path.display());
         log::error!("{}", &err_msg);
@@ -147,7 +145,7 @@ fn validate_existing_file(path: &PathBuf, label: &str, user_message: &str) -> Se
     Ok(())
 }
 
-fn update_path_arg(args: &mut [String], flag_index: usize, path: &PathBuf) {
+fn update_path_arg(args: &mut [String], flag_index: usize, path: &Path) {
     #[cfg(windows)]
     {
         if let Some(short) = get_short_path(path) {
@@ -163,7 +161,7 @@ fn update_path_arg(args: &mut [String], flag_index: usize, path: &PathBuf) {
 }
 
 /// Validate model path exists and update args with platform-appropriate path format
-pub fn validate_model_path(args: &mut Vec<String>) -> ServerResult<PathBuf> {
+pub fn validate_model_path(args: &mut [String]) -> ServerResult<PathBuf> {
     let (model_path_index, model_path_pb) =
         path_arg(args, "-m", "Model path was not provided after '-m' flag.")?.ok_or_else(|| {
             LlamacppError::new(
@@ -184,7 +182,7 @@ pub fn validate_model_path(args: &mut Vec<String>) -> ServerResult<PathBuf> {
 }
 
 /// Validate mmproj path exists and update args with platform-appropriate path format
-pub fn validate_mmproj_path(args: &mut Vec<String>) -> ServerResult<Option<PathBuf>> {
+pub fn validate_mmproj_path(args: &mut [String]) -> ServerResult<Option<PathBuf>> {
     let Some((mmproj_path_index, mmproj_path_pb)) = path_arg(
         args,
         "--mmproj",

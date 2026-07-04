@@ -128,3 +128,9 @@ impl CpuStaticInfo {
         vec![]
     }
 }
+
+impl Default for CpuStaticInfo {
+    fn default() -> Self {
+        Self::new()
+    }
+}

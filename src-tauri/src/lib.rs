@@ -56,7 +56,7 @@ pub fn run() {
     let app_builder = app_builder.manage(crate::core::mlx::state::MlxState::new());
 
     let app = app_builder
-        .setup(|app| Ok(setup::app_setup(app)?))
+        .setup(setup::app_setup)
         .build(tauri::generate_context!());
 
     let app = match app {

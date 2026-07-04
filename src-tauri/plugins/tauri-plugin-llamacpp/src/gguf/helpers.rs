@@ -42,9 +42,9 @@ pub fn read_gguf_metadata<R: Read + Seek>(reader: R) -> io::Result<GgufMetadata>
     })
 }
 
-fn read_metadata_entry<R: Read + Seek>(reader: &mut R, index: u64) -> io::Result<(String, String)>
+fn read_metadata_entry<R>(reader: &mut R, index: u64) -> io::Result<(String, String)>
 where
-    R: ReadBytesExt,
+    R: Read + Seek + ReadBytesExt,
 {
     let key = read_gguf_string(reader).map_err(|e| {
         io::Error::new(
@@ -60,9 +60,9 @@ where
     Ok((key, value))
 }
 
-fn read_gguf_string<R: Read>(reader: &mut R) -> io::Result<String>
+fn read_gguf_string<R>(reader: &mut R) -> io::Result<String>
 where
-    R: ReadBytesExt,
+    R: Read + ReadBytesExt,
 {
     let len = reader.read_u64::<LittleEndian>()?;
     if len > (1024 * 1024) {
@@ -73,12 +73,12 @@ where
     }
     let mut buf = vec![0u8; len as usize];
     reader.read_exact(&mut buf)?;
-    Ok(String::from_utf8(buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?)
+    String::from_utf8(buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
 }
 
-fn read_gguf_value<R: Read + Seek>(reader: &mut R, value_type: GgufValueType) -> io::Result<String>
+fn read_gguf_value<R>(reader: &mut R, value_type: GgufValueType) -> io::Result<String>
 where
-    R: ReadBytesExt,
+    R: Read + Seek + ReadBytesExt,
 {
     match value_type {
         GgufValueType::Uint8 => Ok(reader.read_u8()?.to_string()),
@@ -122,13 +122,9 @@ where
     }
 }
 
-fn skip_array_data<R: Read + Seek>(
-    reader: &mut R,
-    elem_type: GgufValueType,
-    len: u64,
-) -> io::Result<()>
+fn skip_array_data<R>(reader: &mut R, elem_type: GgufValueType, len: u64) -> io::Result<()>
 where
-    R: ReadBytesExt,
+    R: Read + Seek + ReadBytesExt,
 {
     match elem_type {
         GgufValueType::Uint8 | GgufValueType::Int8 | GgufValueType::Bool => {

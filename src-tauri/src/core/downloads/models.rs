@@ -9,18 +9,10 @@ pub struct DownloadTaskState {
     pub generation: u64,
 }
 
+#[derive(Default)]
 pub struct DownloadManagerState {
     pub cancel_tokens: HashMap<String, DownloadTaskState>,
     pub next_generation: u64,
-}
-
-impl Default for DownloadManagerState {
-    fn default() -> Self {
-        Self {
-            cancel_tokens: HashMap::new(),
-            next_generation: 0,
-        }
-    }
 }
 
 #[derive(serde::Deserialize, Clone, Debug)]

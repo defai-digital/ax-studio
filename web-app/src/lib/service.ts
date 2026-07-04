@@ -36,21 +36,23 @@ export function openExternalUrl(url: string) {
   window?.open(url, '_blank')
 }
 
-// Filesystem commands in src-tauri/src/core/filesystem/commands.rs take a
-// single struct parameter named `request` (e.g. `request: SinglePathRequest`).
+// Some legacy bridge commands take a single struct parameter named `request`
+// (e.g. `request: SinglePathRequest`).
 // In Tauri 2 the parameter name maps to a top-level key in the invoke args,
 // so a JS call like `existsSync({ args: ['/path'] })` produces
 // `{ args: ['/path'] }` and Tauri reports
 // "command exists_sync missing required key request".
 //
 // Core's fs/core helper modules (`core/src/browser/fs.ts`,
-// `core/src/browser/core.ts`) still use the legacy unwrapped shape, so we
-// wrap them here. Also covers a couple of commands that nominally live
-// outside `filesystem/commands.rs` but use the same `request: ...` pattern
-// (`open_file_explorer` is parameter-named directly so it's *not* in the set).
-const FILESYSTEM_REQUEST_COMMANDS: ReadonlySet<string> = new Set([
+// `core/src/browser/core.ts`) still use the legacy unwrapped shape for some
+// routes, so we wrap them here. Commands with directly named parameters
+// (`open_file_explorer`, `is_subdirectory`) are intentionally not included.
+const REQUEST_WRAPPED_COMMANDS: ReadonlySet<string> = new Set([
   'exists_sync',
   'join_path',
+  'dir_name',
+  'base_name',
+  'log',
   'mkdir',
   'rm',
   'mv',
@@ -84,9 +86,15 @@ export const APIs = {
               return getServiceHub().core().invoke(command, args)
             }
 
-            const raw: Record<string, unknown> = (args || {}) as Record<string, unknown>
+            const raw: Record<string, unknown> = (args || {}) as Record<
+              string,
+              unknown
+            >
 
-            const pickString = (obj: Record<string, unknown>, keys: string[]): string | undefined => {
+            const pickString = (
+              obj: Record<string, unknown>,
+              keys: string[]
+            ): string | undefined => {
               for (const key of keys) {
                 const value = obj[key]
                 if (typeof value === 'string') return value
@@ -94,7 +102,10 @@ export const APIs = {
               return undefined
             }
 
-            const pickNumber = (obj: Record<string, unknown>, keys: string[]): number | undefined => {
+            const pickNumber = (
+              obj: Record<string, unknown>,
+              keys: string[]
+            ): number | undefined => {
               for (const key of keys) {
                 const value = obj[key]
                 if (typeof value === 'number') return value
@@ -102,10 +113,16 @@ export const APIs = {
               return undefined
             }
 
-            const pickStringArray = (obj: Record<string, unknown>, keys: string[]): string[] | undefined => {
+            const pickStringArray = (
+              obj: Record<string, unknown>,
+              keys: string[]
+            ): string[] | undefined => {
               for (const key of keys) {
                 const value = obj[key]
-                if (Array.isArray(value) && value.every((v) => typeof v === 'string')) {
+                if (
+                  Array.isArray(value) &&
+                  value.every((v) => typeof v === 'string')
+                ) {
                   return value as string[]
                 }
               }
@@ -117,7 +134,10 @@ export const APIs = {
               port: pickNumber(raw, ['port']),
               prefix: pickString(raw, ['prefix']),
               api_key: pickString(raw, ['api_key', 'apiKey']),
-              trusted_hosts: pickStringArray(raw, ['trusted_hosts', 'trustedHosts']),
+              trusted_hosts: pickStringArray(raw, [
+                'trusted_hosts',
+                'trustedHosts',
+              ]),
               cors_enabled:
                 typeof raw.isCorsEnabled === 'boolean'
                   ? raw.isCorsEnabled
@@ -129,22 +149,23 @@ export const APIs = {
             return getServiceHub().core().invoke(command, { config })
           }
 
-          // Wrap legacy unwrapped filesystem-command args under `request:`
+          // Wrap legacy unwrapped single-request command args under `request:`
           // unless the caller already supplied that key.
           if (
-            FILESYSTEM_REQUEST_COMMANDS.has(command) &&
+            REQUEST_WRAPPED_COMMANDS.has(command) &&
             args &&
             !('request' in args)
           ) {
-            return getServiceHub()
-              .core()
-              .invoke(command, { request: args })
+            return getServiceHub().core().invoke(command, { request: args })
           }
 
           return getServiceHub().core().invoke(command, args)
         } else {
           // For Web platform, provide fallback implementations
-          console.warn(`API call '${proxy.route}' not supported in web environment`, args)
+          console.warn(
+            `API call '${proxy.route}' not supported in web environment`,
+            args
+          )
           return Promise.resolve(null)
         }
       },

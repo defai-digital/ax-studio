@@ -38,7 +38,7 @@ describe('legacy API bridge', () => {
 
     expect(warn).toHaveBeenCalledWith(
       "API call 'getTools' not supported in web environment",
-      { provider: 'mcp' },
+      { provider: 'mcp' }
     )
   })
 
@@ -87,9 +87,12 @@ describe('legacy API bridge', () => {
     expect(mocks.invoke).toHaveBeenCalledWith('start_server', args)
   })
 
-  it('wraps filesystem request commands unless already wrapped', async () => {
+  it('wraps single-request bridge commands unless already wrapped', async () => {
     mocks.isTauri = true
 
+    await APIs.dirName({ args: ['/tmp/file.txt'] })
+    await APIs.baseName({ args: ['/tmp/file.txt'] })
+    await APIs.log({ message: 'hello', fileName: 'boot.ts' })
     await APIs.appendFileSync({ path: '/tmp/file.txt', content: 'hello' })
     await APIs.appendFileSync({
       request: { path: '/tmp/file.txt', content: 'hello' },
@@ -97,17 +100,40 @@ describe('legacy API bridge', () => {
     await APIs.writeBlob({ path: '/tmp/file.bin', data: 'blob' })
     await APIs.getGgufFiles({ paths: ['/tmp/a.gguf', '/tmp/readme.txt'] })
 
-    expect(mocks.invoke).toHaveBeenNthCalledWith(1, 'append_file_sync', {
+    expect(mocks.invoke).toHaveBeenNthCalledWith(1, 'dir_name', {
+      request: { args: ['/tmp/file.txt'] },
+    })
+    expect(mocks.invoke).toHaveBeenNthCalledWith(2, 'base_name', {
+      request: { args: ['/tmp/file.txt'] },
+    })
+    expect(mocks.invoke).toHaveBeenNthCalledWith(3, 'log', {
+      request: { message: 'hello', fileName: 'boot.ts' },
+    })
+    expect(mocks.invoke).toHaveBeenNthCalledWith(4, 'append_file_sync', {
       request: { path: '/tmp/file.txt', content: 'hello' },
     })
-    expect(mocks.invoke).toHaveBeenNthCalledWith(2, 'append_file_sync', {
+    expect(mocks.invoke).toHaveBeenNthCalledWith(5, 'append_file_sync', {
       request: { path: '/tmp/file.txt', content: 'hello' },
     })
-    expect(mocks.invoke).toHaveBeenNthCalledWith(3, 'write_blob', {
+    expect(mocks.invoke).toHaveBeenNthCalledWith(6, 'write_blob', {
       request: { path: '/tmp/file.bin', data: 'blob' },
     })
-    expect(mocks.invoke).toHaveBeenNthCalledWith(4, 'get_gguf_files', {
+    expect(mocks.invoke).toHaveBeenNthCalledWith(7, 'get_gguf_files', {
       request: { paths: ['/tmp/a.gguf', '/tmp/readme.txt'] },
+    })
+  })
+
+  it('passes directly named bridge args through unchanged', async () => {
+    mocks.isTauri = true
+
+    await APIs.isSubdirectory({
+      from: '/tmp/project/file.txt',
+      to: '/tmp/project',
+    })
+
+    expect(mocks.invoke).toHaveBeenCalledWith('is_subdirectory', {
+      from: '/tmp/project/file.txt',
+      to: '/tmp/project',
     })
   })
 })

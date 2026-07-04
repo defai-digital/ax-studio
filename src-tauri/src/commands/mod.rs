@@ -48,6 +48,10 @@ macro_rules! desktop_handlers {
             // System commands
             crate::core::system::commands::relaunch,
             crate::core::system::commands::canonicalize_path,
+            crate::core::system::commands::dir_name,
+            crate::core::system::commands::base_name,
+            crate::core::system::commands::is_subdirectory,
+            crate::core::system::commands::log,
             crate::core::system::commands::open_file_explorer,
             crate::core::system::commands::factory_reset,
             crate::core::system::commands::read_logs,

@@ -77,6 +77,7 @@ pub struct UnloadResult {
 }
 
 /// Load a llama model and start the server
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn load_llama_model<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
@@ -138,7 +139,7 @@ pub async fn load_llama_model<R: Runtime>(
     } else {
         // Standard llama.cpp path
         let builder = ArgumentBuilder::new(config.clone(), is_embedding)
-            .map_err(|e| ServerError::InvalidArgument(e))?;
+            .map_err(ServerError::InvalidArgument)?;
         let args = builder.build(&model_id, &model_path, port, mmproj_path.clone());
 
         let api_key: String = envs
@@ -164,11 +165,9 @@ pub async fn load_llama_model<R: Runtime>(
         let mmproj_path_pb = validate_mmproj_path(&mut args)?;
 
         let mmproj_path_string = if let Some(ref _mmproj_pb) = mmproj_path_pb {
-            if let Some(mmproj_index) = args.iter().position(|arg| arg == "--mmproj") {
-                Some(args[mmproj_index + 1].clone())
-            } else {
-                None
-            }
+            args.iter()
+                .position(|arg| arg == "--mmproj")
+                .map(|mmproj_index| args[mmproj_index + 1].clone())
         } else {
             None
         };
@@ -384,12 +383,12 @@ pub async fn load_llama_model<R: Runtime>(
 
     log::info!("Server process started with PID: {} and is ready", pid);
     let session_info = SessionInfo {
-        pid: pid.clone(),
+        pid,
         port: port.into(),
-        model_id: model_id,
+        model_id,
         model_path: model_path_pb.display().to_string(),
-        is_embedding: is_embedding,
-        api_key: api_key,
+        is_embedding,
+        api_key,
         mmproj_path: mmproj_path_string,
     };
 
@@ -397,7 +396,7 @@ pub async fn load_llama_model<R: Runtime>(
     {
         let mut process_map = state.llama_server_process.lock().await;
         process_map.insert(
-            pid.clone(),
+            pid,
             LLamaBackendSession {
                 child,
                 info: session_info.clone(),

@@ -62,21 +62,22 @@ pub async fn cleanup_all_stale_locks<R: Runtime>(app: &AppHandle<R>) -> Result<(
     let pattern = app_data_dir.join("mcp_lock_*.json");
     let pattern_str = pattern.to_string_lossy();
 
-    for entry in glob::glob(&pattern_str).map_err(|e| format!("Glob error: {}", e))? {
-        if let Ok(path) = entry {
-            // Read the file directly — avoids fragile port-from-filename parsing
-            // and handles both "mcp_lock_{port}.json" and "mcp_lock_{port}_{name}.json".
-            if let Ok(content) = fs::read_to_string(&path) {
-                if let Ok(lock) = serde_json::from_str::<McpLockFile>(&content) {
-                    if !is_process_alive(lock.pid) {
-                        log::info!(
-                            "Removing stale MCP lock {:?} (server={}, PID={} is dead)",
-                            path,
-                            lock.server_name,
-                            lock.pid
-                        );
-                        fs::remove_file(&path).ok();
-                    }
+    for path in glob::glob(&pattern_str)
+        .map_err(|e| format!("Glob error: {}", e))?
+        .flatten()
+    {
+        // Read the file directly — avoids fragile port-from-filename parsing
+        // and handles both "mcp_lock_{port}.json" and "mcp_lock_{port}_{name}.json".
+        if let Ok(content) = fs::read_to_string(&path) {
+            if let Ok(lock) = serde_json::from_str::<McpLockFile>(&content) {
+                if !is_process_alive(lock.pid) {
+                    log::info!(
+                        "Removing stale MCP lock {:?} (server={}, PID={} is dead)",
+                        path,
+                        lock.server_name,
+                        lock.pid
+                    );
+                    fs::remove_file(&path).ok();
                 }
             }
         }
@@ -159,14 +160,15 @@ pub fn cleanup_own_locks<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     let pattern_str = pattern.to_string_lossy();
     let current_pid = std::process::id();
 
-    for entry in glob::glob(&pattern_str).map_err(|e| format!("Glob error: {}", e))? {
-        if let Ok(path) = entry {
-            if let Ok(content) = fs::read_to_string(&path) {
-                if let Ok(lock) = serde_json::from_str::<McpLockFile>(&content) {
-                    if lock.pid == current_pid {
-                        fs::remove_file(&path).ok();
-                        log::debug!("Removed own lock file: {:?}", path);
-                    }
+    for path in glob::glob(&pattern_str)
+        .map_err(|e| format!("Glob error: {}", e))?
+        .flatten()
+    {
+        if let Ok(content) = fs::read_to_string(&path) {
+            if let Ok(lock) = serde_json::from_str::<McpLockFile>(&content) {
+                if lock.pid == current_pid {
+                    fs::remove_file(&path).ok();
+                    log::debug!("Removed own lock file: {:?}", path);
                 }
             }
         }

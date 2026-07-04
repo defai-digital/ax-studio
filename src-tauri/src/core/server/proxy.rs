@@ -6,7 +6,7 @@ use ax_studio_utils::{is_valid_host, remove_prefix};
 use hyper::{Body, Request, Response, StatusCode};
 use reqwest::Client;
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 use subtle::ConstantTimeEq;
 
@@ -15,14 +15,16 @@ const AUTH_LOCKOUT_SECS: u64 = 60;
 const AUTH_MAX_ENTRIES: usize = 1024;
 const WHITELISTED_PATHS: &[&str] = &["/favicon.ico"];
 
-static AUTH_FAILURES: std::sync::LazyLock<Mutex<HashMap<String, (usize, Instant)>>> =
-    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+static AUTH_FAILURES: OnceLock<Mutex<HashMap<String, (usize, Instant)>>> = OnceLock::new();
 
 fn lock_auth_map() -> std::sync::MutexGuard<'static, HashMap<String, (usize, Instant)>> {
-    AUTH_FAILURES.lock().unwrap_or_else(|e| {
-        log::warn!("AUTH_FAILURES mutex poisoned, reinitializing: {e}");
-        e.into_inner()
-    })
+    AUTH_FAILURES
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .unwrap_or_else(|e| {
+            log::warn!("AUTH_FAILURES mutex poisoned, reinitializing: {e}");
+            e.into_inner()
+        })
 }
 
 fn is_rate_limited(client_id: &str) -> bool {
@@ -448,17 +450,14 @@ pub(super) async fn proxy_request<R: tauri::Runtime>(
     }
 
     // Static / meta routes (GET only — no body needed)
-    match (method.clone(), path.as_str()) {
-        (hyper::Method::GET, "/models") => {
-            return Ok(gateway_routes::handle_models_route(
-                &host_header,
-                &origin_header,
-                &config,
-                &app_handle,
-            )
-            .await);
-        }
-        _ => {}
+    if let (hyper::Method::GET, "/models") = (method.clone(), path.as_str()) {
+        return Ok(gateway_routes::handle_models_route(
+            &host_header,
+            &origin_header,
+            &config,
+            &app_handle,
+        )
+        .await);
     }
 
     // Model provider routing (POST /messages, POST /chat/completions, etc.)

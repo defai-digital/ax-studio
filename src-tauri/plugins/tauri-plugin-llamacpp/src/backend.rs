@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[tauri::command]
 pub fn map_old_backend_to_new(old_backend: String) -> String {
@@ -138,7 +138,7 @@ pub async fn get_local_installed_backends(
 
 /// Helper function to check if a backend is properly installed
 /// Checks for the existence of llama-server executable in the expected locations
-fn is_backend_installed(backend_dir: &PathBuf) -> bool {
+fn is_backend_installed(backend_dir: &Path) -> bool {
     if !backend_dir.exists() || !backend_dir.is_dir() {
         return false;
     }

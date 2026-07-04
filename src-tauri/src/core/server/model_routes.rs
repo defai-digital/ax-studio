@@ -413,6 +413,7 @@ fn should_skip_anthropic_fallback_header(name: &hyper::header::HeaderName) -> bo
 
 /// Resolve the provider for a POST model request (reads body, looks up provider config).
 /// Returns `Ok(ProviderResolution)` on success, `Err(Response)` to return an error immediately.
+#[allow(clippy::too_many_arguments)]
 pub(super) async fn resolve_model_route<R: tauri::Runtime>(
     destination_path: &str,
     body: Body,
@@ -450,7 +451,7 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
     if body_bytes.len() > MAX_BODY_SIZE {
         return Err(error_response(
             StatusCode::PAYLOAD_TOO_LARGE,
-            &format!(
+            format!(
                 "Request body exceeds {} MB limit",
                 MAX_BODY_SIZE / 1024 / 1024
             ),
@@ -515,8 +516,8 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
                         "Provider hint '{hint}' matched but has no base_url, trying heuristic"
                     );
                     let heuristic = resolve_provider_config_from_map(
-                        &provider_configs,
-                        &provider_model_index,
+                        provider_configs,
+                        provider_model_index,
                         &model_id,
                         destination_path,
                         is_anthropic_messages,
@@ -539,8 +540,8 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
             } else {
                 log::debug!("Provider hint '{hint}' not found in registered providers, falling back to heuristic");
                 resolve_provider_config_from_map(
-                    &provider_configs,
-                    &provider_model_index,
+                    provider_configs,
+                    provider_model_index,
                     &model_id,
                     destination_path,
                     is_anthropic_messages,
@@ -548,8 +549,8 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
             }
         } else {
             resolve_provider_config_from_map(
-                &provider_configs,
-                &provider_model_index,
+                provider_configs,
+                provider_model_index,
                 &model_id,
                 destination_path,
                 is_anthropic_messages,
@@ -632,6 +633,7 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
 /// Attempt to re-send a failed Anthropic /messages request as /chat/completions.
 /// Returns `Some(Response)` if the fallback was attempted (success or error),
 /// or `None` if the body couldn't be transformed.
+#[allow(clippy::too_many_arguments)]
 async fn try_anthropic_fallback(
     target_base_url: &str,
     headers: &hyper::HeaderMap,
@@ -643,7 +645,7 @@ async fn try_anthropic_fallback(
     config: &ProxyConfig,
     client: &Client,
 ) -> Option<Result<Response<Body>, hyper::Error>> {
-    let fallback_url = strip_provider_endpoint_suffix(&target_base_url).to_string();
+    let fallback_url = strip_provider_endpoint_suffix(target_base_url).to_string();
 
     let json_body = match serde_json::from_slice::<serde_json::Value>(buffered_body) {
         Ok(v) => v,
@@ -749,6 +751,7 @@ type StreamsCleanup = Option<(
     >,
 )>;
 
+#[allow(clippy::too_many_arguments)]
 fn build_streaming_response(
     response: reqwest::Response,
     status: StatusCode,
@@ -862,15 +865,14 @@ fn build_streaming_response(
                         }
                         out.push_str(&patched);
                     }
-                    if !out.is_empty() {
-                        if sender
+                    if !out.is_empty()
+                        && sender
                             .send_data(hyper::body::Bytes::from(out))
                             .await
                             .is_err()
-                        {
-                            log::debug!("Client disconnected during streaming");
-                            break;
-                        }
+                    {
+                        log::debug!("Client disconnected during streaming");
+                        break;
                     }
                 }
                 Err(e) => {
@@ -957,6 +959,7 @@ async fn check_upstream_not_ssrf(url: &str) -> Result<(), String> {
 
 /// Send the buffered request to the upstream provider and return the response.
 /// Handles the Anthropic /messages → /chat/completions fallback on error.
+#[allow(clippy::too_many_arguments)]
 pub(super) async fn dispatch_to_upstream<R: tauri::Runtime>(
     resolution: ProviderResolution,
     destination_path: &str,

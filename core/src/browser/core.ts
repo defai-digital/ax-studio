@@ -18,7 +18,6 @@ const PRIVATE_HOSTNAME_PATTERNS = [
   /^::1$/i,
   /^localhost$/i,
   /^$/,
-
 ]
 
 const isPrivateHostname = (hostname: string): boolean => {
@@ -31,10 +30,14 @@ export const validateUrlProtocol = (url: string): void => {
   try {
     const parsedUrl = new URL(trimmed)
     if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-      throw new Error(`Unsafe URL protocol: ${parsedUrl.protocol}. Only http and https are allowed.`)
+      throw new Error(
+        `Unsafe URL protocol: ${parsedUrl.protocol}. Only http and https are allowed.`
+      )
     }
     if (isPrivateHostname(parsedUrl.hostname)) {
-      throw new Error(`URLs pointing to private/internal networks are not allowed: ${parsedUrl.hostname}`)
+      throw new Error(
+        `URLs pointing to private/internal networks are not allowed: ${parsedUrl.hostname}`
+      )
     }
   } catch (error) {
     if (error instanceof TypeError) {
@@ -117,16 +120,17 @@ const getResourcePath: () => Promise<string> = () =>
  * Gets the user's home path.
  * @returns return user's home path
  */
-const getUserHomePath = (): Promise<string> =>
-  getCoreApi().getUserHomePath() as Promise<string>
+const getUserHomePath = (): Promise<string> => getCoreApi().getUserHomePath() as Promise<string>
 
 /**
  * Log to file from browser processes.
  *
  * @param message - Message to log.
  */
-const log: (message: string, fileName?: string) => void = (message, fileName) =>
-  void getCoreApi().log(message, fileName)
+const log: (message: string, fileName?: string) => void = (message, fileName) => {
+  const payload = fileName ? { message, fileName } : { message }
+  void getCoreApi().log(payload)
+}
 
 /**
  * Check whether the path is a subdirectory of another path.
@@ -137,7 +141,7 @@ const log: (message: string, fileName?: string) => void = (message, fileName) =>
  * @returns {Promise<boolean>} - A promise that resolves with a boolean indicating whether the path is a subdirectory.
  */
 const isSubdirectory: (from: string, to: string) => Promise<boolean> = (from: string, to: string) =>
-  getCoreApi().isSubdirectory(from, to) as Promise<boolean>
+  getCoreApi().isSubdirectory({ from, to }) as Promise<boolean>
 
 /**
  * Show toast message from browser processes.

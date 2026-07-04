@@ -41,6 +41,128 @@ fn validate_open_path(path: &PathBuf) -> Result<PathBuf, String> {
     }
 }
 
+#[derive(Debug, serde::Deserialize)]
+#[serde(untagged)]
+pub enum SinglePathRequest {
+    Legacy { args: Vec<String> },
+    Typed { path: String },
+}
+
+impl SinglePathRequest {
+    fn into_path(self, command: &str) -> Result<PathBuf, String> {
+        let path = match self {
+            Self::Legacy { args } => args.into_iter().next(),
+            Self::Typed { path } => Some(path),
+        }
+        .filter(|path| !path.is_empty())
+        .ok_or_else(|| format!("{command} error: Invalid argument"))?;
+
+        Ok(PathBuf::from(path))
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(untagged)]
+pub enum LogRequest {
+    Legacy {
+        args: Vec<String>,
+    },
+    Typed {
+        message: String,
+        #[serde(default, alias = "file_name", alias = "fileName")]
+        file_name: Option<String>,
+    },
+}
+
+impl LogRequest {
+    fn into_parts(self) -> Result<(String, Option<String>), String> {
+        match self {
+            Self::Legacy { args } => {
+                let mut args = args.into_iter();
+                let message = args
+                    .next()
+                    .filter(|message| !message.is_empty())
+                    .ok_or_else(|| "log error: Invalid argument".to_string())?;
+                let file_name = args.next().filter(|file_name| !file_name.is_empty());
+                Ok((message, file_name))
+            }
+            Self::Typed { message, file_name } if !message.is_empty() => {
+                Ok((message, file_name.filter(|file_name| !file_name.is_empty())))
+            }
+            Self::Typed { .. } => Err("log error: Invalid argument".to_string()),
+        }
+    }
+}
+
+fn normalize_for_subdirectory_check(path: PathBuf) -> PathBuf {
+    if let Ok(canonical) = path.canonicalize() {
+        return normalize_path(&canonical);
+    }
+
+    let mut missing_components = Vec::new();
+    let mut ancestor = path.as_path();
+    while !ancestor.as_os_str().is_empty() {
+        if let Ok(canonical) = ancestor.canonicalize() {
+            let mut normalized = normalize_path(&canonical);
+            for component in missing_components.iter().rev() {
+                normalized.push(component);
+            }
+            return normalize_path(&normalized);
+        }
+
+        if let Some(file_name) = ancestor.file_name() {
+            missing_components.push(file_name.to_os_string());
+        }
+
+        match ancestor.parent() {
+            Some(parent) if parent != ancestor => ancestor = parent,
+            _ => break,
+        }
+    }
+
+    normalize_path(&path)
+}
+
+#[tauri::command]
+pub fn dir_name(request: SinglePathRequest) -> Result<String, String> {
+    let path = request.into_path("dir_name")?;
+    let dir = path
+        .parent()
+        .ok_or_else(|| "dir_name error: Invalid argument".to_string())?;
+    Ok(dir.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub fn base_name(request: SinglePathRequest) -> Result<String, String> {
+    let path = request.into_path("base_name")?;
+    let name = path
+        .file_name()
+        .ok_or_else(|| "base_name error: Invalid argument".to_string())?;
+    Ok(name.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub fn is_subdirectory(from: String, to: String) -> Result<bool, String> {
+    if from.is_empty() || to.is_empty() {
+        return Err("is_subdirectory error: Invalid argument".to_string());
+    }
+
+    let candidate = normalize_for_subdirectory_check(PathBuf::from(from));
+    let base = normalize_for_subdirectory_check(PathBuf::from(to));
+    Ok(candidate != base && candidate.starts_with(base))
+}
+
+#[tauri::command]
+pub fn log(request: LogRequest) -> Result<(), String> {
+    let (message, file_name) = request.into_parts()?;
+    if let Some(file_name) = file_name {
+        ::log::info!("[browser:{file_name}] {message}");
+    } else {
+        ::log::info!("[browser] {message}");
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn canonicalize_path(path: String) -> Result<String, String> {
     let path = PathBuf::from(path);
@@ -63,11 +185,11 @@ pub async fn factory_reset<R: Runtime>(
     let windows = app_handle.webview_windows();
     for (label, window) in windows.iter() {
         window.close().unwrap_or_else(|_| {
-            log::warn!("Failed to close window: {label:?}");
+            ::log::warn!("Failed to close window: {label:?}");
         });
     }
     let data_folder = get_app_data_folder_path(app_handle.clone());
-    log::info!("Factory reset, removing data folder: {data_folder:?}");
+    ::log::info!("Factory reset, removing data folder: {data_folder:?}");
 
     let _ = stop_mcp_servers_with_context(&app_handle, &state, ShutdownContext::FactoryReset).await;
 
@@ -81,12 +203,12 @@ pub async fn factory_reset<R: Runtime>(
 
         use crate::core::mcp::lockfile::cleanup_own_locks;
         if let Err(e) = cleanup_own_locks(&app_handle) {
-            log::warn!("Failed to cleanup lock files: {}", e);
+            ::log::warn!("Failed to cleanup lock files: {}", e);
         }
         if data_folder.exists() {
             if let Err(e) = fs::remove_dir_all(&data_folder) {
                 let message = format!("Failed to remove data folder: {e}");
-                log::error!("{message}");
+                ::log::error!("{message}");
                 return Err(message);
             }
         }
@@ -193,6 +315,52 @@ mod tests {
     fn test_validate_open_path_rejects_empty() {
         let result = validate_open_path(&PathBuf::from(""));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_dir_name_and_base_name_accept_legacy_requests() {
+        let dir = dir_name(SinglePathRequest::Legacy {
+            args: vec!["/tmp/ax-studio/file.txt".to_string()],
+        })
+        .expect("dir_name should accept legacy args");
+        let name = base_name(SinglePathRequest::Legacy {
+            args: vec!["/tmp/ax-studio/file.txt".to_string()],
+        })
+        .expect("base_name should accept legacy args");
+
+        assert_eq!(dir, "/tmp/ax-studio");
+        assert_eq!(name, "file.txt");
+    }
+
+    #[test]
+    fn test_is_subdirectory_normalizes_relative_segments() {
+        let result = is_subdirectory(
+            "/tmp/ax-studio/a/../a/file.txt".to_string(),
+            "/tmp/ax-studio/a".to_string(),
+        )
+        .expect("is_subdirectory should normalize paths");
+
+        assert!(result);
+        assert!(!is_subdirectory(
+            "/tmp/ax-studio/a".to_string(),
+            "/tmp/ax-studio/a".to_string(),
+        )
+        .expect("equal paths are not subdirectories"));
+        assert!(!is_subdirectory(
+            "/tmp/ax-studio/a2/file.txt".to_string(),
+            "/tmp/ax-studio/a".to_string(),
+        )
+        .expect("component prefixes must not match"));
+    }
+
+    #[test]
+    fn test_log_accepts_typed_request() {
+        let result = log(LogRequest::Typed {
+            message: "hello".to_string(),
+            file_name: Some("extension.ts".to_string()),
+        });
+
+        assert!(result.is_ok());
     }
 
     #[cfg(windows)]

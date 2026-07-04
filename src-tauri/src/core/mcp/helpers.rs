@@ -552,7 +552,10 @@ async fn schedule_mcp_start_task<R: Runtime>(
         };
 
         // Verify the exact service instance we just inserted, without a sleep-plus-map recheck race.
-        if let Err(_) = timeout(Duration::from_secs(3), inserted_service.list_all_tools()).await {
+        if timeout(Duration::from_secs(3), inserted_service.list_all_tools())
+            .await
+            .is_err()
+        {
             log::warn!("MCP server {name} started but failed initial health check (timed out)");
             // Don't fail — startup completed and later requests can still succeed if the server warms up.
         }

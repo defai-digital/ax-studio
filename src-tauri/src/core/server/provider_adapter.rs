@@ -150,10 +150,7 @@ fn convert_messages(
             continue;
         }
 
-        let content_array = match content.as_array() {
-            Some(arr) => arr,
-            None => return None,
-        };
+        let content_array = content.as_array()?;
 
         match role {
             "assistant" => {
@@ -579,7 +576,7 @@ pub(super) async fn transform_and_forward_stream<S>(
                         None => continue,
                     };
                     let finish_reason = choice.and_then(|c| c.get("finish_reason"));
-                    let has_finish = finish_reason.map_or(false, |v| !v.is_null());
+                    let has_finish = finish_reason.is_some_and(|v| !v.is_null());
 
                     // First chunk: send message_start
                     if is_first {

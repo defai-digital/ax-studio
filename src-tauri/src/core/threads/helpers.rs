@@ -102,7 +102,7 @@ pub fn update_thread_metadata(path: &Path, thread: &ThreadRecord) -> Result<(), 
     if let Ok(f) = File::open(&tmp_path) {
         let _ = f.sync_all();
     }
-    fs::rename(&tmp_path, &path).map_err(|e| e.to_string())?;
+    fs::rename(&tmp_path, path).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -116,7 +116,7 @@ where
     }
 
     let tmp_path = path.with_extension("jsonl.tmp");
-    let input = File::open(&path).map_err(|e| e.to_string())?;
+    let input = File::open(path).map_err(|e| e.to_string())?;
     let reader = BufReader::new(input);
     let mut output = File::create(&tmp_path).map_err(|e| e.to_string())?;
     let mut changed = false;
@@ -141,7 +141,7 @@ where
     output.flush().map_err(|e| e.to_string())?;
     output.sync_all().map_err(|e| e.to_string())?;
     drop(output);
-    fs::rename(&tmp_path, &path).map_err(|e| e.to_string())?;
+    fs::rename(&tmp_path, path).map_err(|e| e.to_string())?;
     Ok(changed)
 }
 
