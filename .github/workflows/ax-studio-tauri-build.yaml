@@ -354,6 +354,29 @@ jobs:
             rm -rf "$cert_dir"
           }
 
+          verify_release_entitlements() {
+            local path="$1"
+            local entitlements_file
+            local value
+
+            entitlements_file="$(mktemp)"
+            codesign -d --entitlements - --xml "$path" > "$entitlements_file"
+            plutil -lint "$entitlements_file"
+
+            for entitlement in \
+              'com\.apple\.security\.cs\.allow-jit' \
+              'com\.apple\.security\.cs\.disable-library-validation'
+            do
+              if ! value="$(plutil -extract "$entitlement" raw "$entitlements_file" 2>/dev/null)" || [ "$value" != "true" ]; then
+                echo "::error::Code signature for $path is missing required entitlement: $entitlement"
+                rm -f "$entitlements_file"
+                exit 1
+              fi
+            done
+
+            rm -f "$entitlements_file"
+          }
+
           for binary in \
             "$APP_PATH/Contents/MacOS/bun" \
             "$APP_PATH/Contents/MacOS/uv" \
@@ -371,8 +394,7 @@ jobs:
               "$binary"
             codesign --verify --strict --verbose=4 "$binary"
             verify_embedded_cert_chain "$binary"
-            codesign -d --entitlements - --xml "$binary" > /tmp/ax-studio-entitlements.plist
-            plutil -lint /tmp/ax-studio-entitlements.plist
+            verify_release_entitlements "$binary"
           done
 
           codesign \
@@ -385,6 +407,7 @@ jobs:
             "$APP_PATH"
           codesign --verify --deep --strict --verbose=4 "$APP_PATH"
           verify_embedded_cert_chain "$APP_PATH"
+          verify_release_entitlements "$APP_PATH"
 
           rm -f "$TAR_PATH" "$TAR_PATH.sig"
           (cd "$BUNDLE_MACOS" && tar -czf "Ax-Studio.app.tar.gz" "Ax-Studio.app")
@@ -447,6 +470,18 @@ jobs:
 
           hdiutil attach -readonly -nobrowse -mountpoint "$MOUNT_DIR" "$DMG_PATH"
           codesign --verify --deep --strict --verbose=4 "$MOUNT_DIR/Ax-Studio.app"
+          codesign -d --entitlements - --xml "$MOUNT_DIR/Ax-Studio.app" > /tmp/ax-studio-dmg-entitlements.plist
+          plutil -lint /tmp/ax-studio-dmg-entitlements.plist
+          for entitlement in \
+            'com\.apple\.security\.cs\.allow-jit' \
+            'com\.apple\.security\.cs\.disable-library-validation'
+          do
+            value="$(plutil -extract "$entitlement" raw /tmp/ax-studio-dmg-entitlements.plist 2>/dev/null || true)"
+            if [ "$value" != "true" ]; then
+              echo "::error::DMG app bundle is missing required entitlement: $entitlement"
+              exit 1
+            fi
+          done
 
       - name: Set output filename for mac
         id: metadata
