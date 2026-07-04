@@ -48,6 +48,8 @@ const cask = `cask "ax-studio" do
 
   depends_on arch: :arm64
   depends_on macos: :tahoe
+  depends_on formula: "mlx"
+  depends_on formula: "mlx-c"
 
   app "Ax-Studio.app"
 
