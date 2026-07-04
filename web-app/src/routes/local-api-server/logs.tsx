@@ -22,6 +22,15 @@ function LogsViewer() {
   useEffect(() => {
     let isMounted = true
     let unsubscribe = () => {}
+    const scrollTimers = new Set<ReturnType<typeof setTimeout>>()
+
+    const scheduleScrollToBottom = (delay: number) => {
+      const timer = setTimeout(() => {
+        scrollTimers.delete(timer)
+        if (isMounted) scrollToBottom()
+      }, delay)
+      scrollTimers.add(timer)
+    }
 
     serviceHub
       .app()
@@ -34,9 +43,7 @@ function LogsViewer() {
         setLogs(logs)
 
         // Scroll to bottom after initial logs are loaded
-        setTimeout(() => {
-          scrollToBottom()
-        }, 100)
+        scheduleScrollToBottom(100)
       })
       .catch((error) => {
         console.error('[local-api-server/logs] Failed to read logs:', error)
@@ -45,17 +52,14 @@ function LogsViewer() {
     serviceHub
       .events()
       ?.listen(LOG_EVENT_NAME, (event) => {
+        if (!isMounted) return
+
         const { message } = event.payload as { message: string }
         const log: LogEntry | undefined = serviceHub.app().parseLogLine(message)
         if (log?.target === SERVER_LOG_TARGET) {
-          setLogs((prevLogs) => {
-            const newLogs = [...prevLogs, log]
-            // Schedule scroll to bottom after state update
-            setTimeout(() => {
-              scrollToBottom()
-            }, 0)
-            return newLogs
-          })
+          setLogs((prevLogs) => [...prevLogs, log])
+          // Schedule scroll to bottom after state update
+          scheduleScrollToBottom(0)
         }
       })
       .then((unsub) => {
@@ -72,6 +76,8 @@ function LogsViewer() {
     return () => {
       isMounted = false
       unsubscribe()
+      scrollTimers.forEach((timer) => clearTimeout(timer))
+      scrollTimers.clear()
     }
   }, [serviceHub])
 

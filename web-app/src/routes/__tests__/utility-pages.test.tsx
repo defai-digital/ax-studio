@@ -164,6 +164,47 @@ describe('utility routes', () => {
     })
   })
 
+  it('cleans up local API server log timers and ignores late events after unmount', async () => {
+    let listener: ((event: { payload: { message: string } }) => void) | undefined
+    const unsubscribe = vi.fn()
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')
+    mocks.readLogs.mockResolvedValue([
+      {
+        level: 'info',
+        message: 'server booted',
+        target: 'app_lib::core::server::proxy',
+        timestamp: '2026-05-09T00:00:00.000Z',
+      },
+    ])
+    mocks.listen.mockImplementation(async (_event, callback) => {
+      listener = callback
+      return unsubscribe
+    })
+
+    try {
+      const Component = LocalApiLogsRoute.component as React.ComponentType
+      const { unmount } = render(<Component />)
+
+      await waitFor(() => {
+        expect(screen.getByText('server booted')).toBeInTheDocument()
+      })
+      expect(listener).toBeDefined()
+
+      unmount()
+
+      expect(unsubscribe).toHaveBeenCalled()
+      expect(clearTimeoutSpy).toHaveBeenCalled()
+
+      act(() => {
+        listener?.({ payload: { message: 'late log line' } })
+      })
+
+      expect(mocks.parseLogLine).not.toHaveBeenCalled()
+    } finally {
+      clearTimeoutSpy.mockRestore()
+    }
+  })
+
   it('renders system monitor usage and updates usage from service hub', async () => {
     const Component = SystemMonitorRoute.component as React.ComponentType
     render(<Component />)
