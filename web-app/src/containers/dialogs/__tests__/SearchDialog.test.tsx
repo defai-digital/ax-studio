@@ -7,6 +7,9 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   setProjectDialogOpen: vi.fn(),
   onOpenChange: vi.fn(),
+  updateCurrentThreadModel: vi.fn(),
+  selectModelProvider: vi.fn(),
+  providers: [] as unknown[],
   threads: {
     'thread-alpha': {
       id: 'thread-alpha',
@@ -28,10 +31,22 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 vi.mock('@/hooks/threads/useThreads', () => ({
-  useThreads: (
-    selector: (state: { threads: Record<string, Thread> }) => unknown
-  ) => selector({ threads: mocks.threads }),
+  useThreads: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({
+      threads: mocks.threads,
+      updateCurrentThreadModel: mocks.updateCurrentThreadModel,
+    }),
 }))
+
+vi.mock('@/hooks/models/useModelProvider', () => ({
+  useModelProvider: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({
+      providers: mocks.providers,
+      selectModelProvider: mocks.selectModelProvider,
+    }),
+}))
+
+vi.mock('sonner', () => ({ toast: vi.fn() }))
 
 vi.mock('@/hooks/ui/useProjectDialog', () => ({
   useProjectDialog: () => ({ setOpen: mocks.setProjectDialogOpen }),
@@ -83,6 +98,7 @@ vi.mock('lucide-react', () => {
     Server: Icon,
     ServerCog: Icon,
     Database: Icon,
+    Sparkles: Icon,
     Cpu: Icon,
     History: Icon,
     FolderOpen: Icon,
@@ -126,6 +142,7 @@ describe('SearchDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
+    mocks.providers = []
     Element.prototype.scrollIntoView = vi.fn()
   })
 
@@ -184,5 +201,48 @@ describe('SearchDialog', () => {
     expect(localStorage.getItem(localStorageKey.recentSearches)).toBeNull()
     expect(screen.queryByRole('option', { name: 'Alpha roadmap' })).toBeNull()
     expect(screen.queryByRole('option', { name: 'Beta notes' })).toBeNull()
+  })
+
+  it('does not show models in the empty-state command list', () => {
+    mocks.providers = [
+      { provider: 'openai', active: true, models: [{ id: 'gpt-4o' }] },
+    ]
+    render(<SearchDialog open onOpenChange={mocks.onOpenChange} />)
+    // No query yet → models are search-only, not listed
+    expect(screen.queryByRole('option', { name: /gpt-4o/ })).toBeNull()
+  })
+
+  it('surfaces a model on search and switches to it on select', async () => {
+    mocks.providers = [
+      { provider: 'openai', active: true, models: [{ id: 'gpt-4o' }] },
+      { provider: 'disabled-co', active: false, models: [{ id: 'secret' }] },
+    ]
+    render(<SearchDialog open onOpenChange={mocks.onOpenChange} />)
+
+    const input = screen.getByRole('textbox', { name: 'Search' })
+    fireEvent.change(input, { target: { value: 'gpt-4o' } })
+
+    const option = await screen.findByRole('option', { name: /gpt-4o/ })
+    fireEvent.click(option)
+
+    expect(mocks.selectModelProvider).toHaveBeenCalledWith('openai', 'gpt-4o')
+    expect(mocks.updateCurrentThreadModel).toHaveBeenCalledWith({
+      id: 'gpt-4o',
+      provider: 'openai',
+    })
+    expect(
+      JSON.parse(localStorage.getItem(localStorageKey.lastUsedModel) ?? '{}')
+    ).toEqual({ provider: 'openai', model: 'gpt-4o' })
+  })
+
+  it('excludes models from inactive providers even when searched', () => {
+    mocks.providers = [
+      { provider: 'disabled-co', active: false, models: [{ id: 'secret-model' }] },
+    ]
+    render(<SearchDialog open onOpenChange={mocks.onOpenChange} />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search' }), {
+      target: { value: 'secret-model' },
+    })
+    expect(screen.queryByRole('option', { name: /secret-model/ })).toBeNull()
   })
 })

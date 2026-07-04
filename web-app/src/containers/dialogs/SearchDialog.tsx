@@ -30,9 +30,13 @@ import {
   Keyboard,
   Puzzle,
   Network,
+  Sparkles,
 } from 'lucide-react'
 import Fuse from 'fuse.js'
+import { toast } from 'sonner'
 import { useThreads } from '@/hooks/threads/useThreads'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
+import { getModelDisplayName } from '@/lib/utils'
 import { useProjectDialog } from '@/hooks/ui/useProjectDialog'
 import { localStorageKey } from '@/constants/localStorage'
 import { useTranslation } from '@/i18n/react-i18next-compat'
@@ -93,6 +97,13 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
   const listRef = useRef<HTMLDivElement>(null)
 
   const threads = useThreads((state) => state.threads)
+  const updateCurrentThreadModel = useThreads(
+    (state) => state.updateCurrentThreadModel
+  )
+  const providers = useModelProvider((state) => state.providers)
+  const selectModelProvider = useModelProvider(
+    (state) => state.selectModelProvider
+  )
   const { setOpen: setProjectDialogOpen } = useProjectDialog()
 
   const handleClose = useCallback(() => {
@@ -327,6 +338,50 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
     [t, handleClose, navigate, setProjectDialogOpen],
   )
 
+  // Dynamic commands: one per model of every active provider. These are only
+  // surfaced via search (not the empty-state list), and selecting one switches
+  // the active model exactly as the composer picker does.
+  const modelCommands: CommandItem[] = useMemo(() => {
+    const modelsCategory = t('common:models', { defaultValue: 'Models' })
+    const items: CommandItem[] = []
+    for (const provider of providers) {
+      if (!provider.active) continue
+      for (const model of provider.models ?? []) {
+        const name = getModelDisplayName(model)
+        items.push({
+          id: `model-${provider.provider}-${model.id}`,
+          label: name,
+          description: provider.provider,
+          keywords: [model.id, provider.provider, 'model', 'switch'],
+          icon: Sparkles,
+          category: modelsCategory,
+          action: () => {
+            handleClose()
+            selectModelProvider(provider.provider, model.id)
+            updateCurrentThreadModel({
+              id: model.id,
+              provider: provider.provider,
+            })
+            safeStorageSetItem(
+              localStorage,
+              localStorageKey.lastUsedModel,
+              JSON.stringify({ provider: provider.provider, model: model.id }),
+              'SearchDialog'
+            )
+            toast(`Switched to ${name}`)
+          },
+        })
+      }
+    }
+    return items
+  }, [
+    providers,
+    t,
+    handleClose,
+    selectModelProvider,
+    updateCurrentThreadModel,
+  ])
+
   // Build thread list for Fuse search
   const threadList = useMemo(() => {
     return Object.values(threads).filter((t) => t.id !== TEMPORARY_CHAT_ID)
@@ -345,7 +400,9 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
 
   const commandFuse = useMemo(
     () =>
-      new Fuse(commands, {
+      // Index static commands + every model so a query like "gpt" surfaces
+      // models. The empty-state list still shows only the static commands.
+      new Fuse([...commands, ...modelCommands], {
         keys: [
           { name: 'label', weight: 0.6 },
           { name: 'description', weight: 0.25 },
@@ -354,7 +411,7 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
         threshold: 0.3,
         includeScore: true,
       }),
-    [commands],
+    [commands, modelCommands],
   )
 
   // Focus input when dialog opens
