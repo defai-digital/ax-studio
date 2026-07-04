@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { Route as ProviderDetailRoute } from '../$providerName'
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve
+  })
+
+  return { promise, resolve }
+}
 
 const mockUpdateProvider = vi.fn()
 const mockGetProviderByName = vi.fn()
@@ -339,6 +348,54 @@ describe('ProviderDetail', () => {
         ]),
       })
     )
+  })
+
+  it('ignores delayed connection test results after unmount', async () => {
+    const ProviderDetail = ProviderDetailRoute.component
+    const modelFetch = deferred<string[]>()
+    mockFetchModelsFromProvider.mockReturnValue(modelFetch.promise)
+
+    const { unmount } = render(<ProviderDetail />)
+
+    const buttons = screen.getAllByTestId('button')
+    const testButton = buttons.find(
+      (btn) =>
+        btn.textContent?.includes('testConnection') ||
+        btn.textContent?.includes('Test')
+    )
+    if (testButton) {
+      fireEvent.click(testButton)
+    }
+
+    expect(mockFetchModelsFromProvider).toHaveBeenCalledTimes(1)
+    unmount()
+
+    await act(async () => {
+      modelFetch.resolve(['model-1'])
+      await modelFetch.promise
+    })
+
+    expect(mockUpdateProvider).not.toHaveBeenCalled()
+  })
+
+  it('ignores delayed model refresh results after unmount', async () => {
+    const ProviderDetail = ProviderDetailRoute.component
+    const modelFetch = deferred<string[]>()
+    mockFetchModelsFromProvider.mockReturnValue(modelFetch.promise)
+
+    const { unmount } = render(<ProviderDetail />)
+
+    fireEvent.click(screen.getByText('Refresh'))
+
+    expect(mockFetchModelsFromProvider).toHaveBeenCalledTimes(1)
+    unmount()
+
+    await act(async () => {
+      modelFetch.resolve(['model-1'])
+      await modelFetch.promise
+    })
+
+    expect(mockUpdateProvider).not.toHaveBeenCalled()
   })
 
   it('shows connection error after failed test', async () => {

@@ -116,6 +116,14 @@ function ProviderDetail() {
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle')
   const [connectionMessage, setConnectionMessage] = useState('')
   const lastValidValues = useRef<Record<string, string>>({})
+  const isMountedRef = useRef(true)
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     if (provider?.settings) {
@@ -211,6 +219,8 @@ function ProviderDetail() {
       const modelIds = await serviceHub
         .providers()
         .fetchModelsFromProvider(provider)
+      if (!isMountedRef.current) return
+
       const { models, added } = mergeProviderModelIds(provider, modelIds)
 
       updateProvider(providerName, {
@@ -227,6 +237,8 @@ function ProviderDetail() {
         })
       )
     } catch (error) {
+      if (!isMountedRef.current) return
+
       updateProvider(providerName, { active: false })
       setConnectionStatus('error')
       setConnectionMessage(
@@ -300,6 +312,7 @@ function ProviderDetail() {
       const modelIds = await serviceHub
         .providers()
         .fetchModelsFromProvider(provider)
+      if (!isMountedRef.current) return
 
       // Detect multi-upstream gateway: if models have 2+ distinct prefixes,
       // show a selection dialog so the user can pick which upstreams to import.
@@ -331,6 +344,8 @@ function ProviderDetail() {
         })
       }
     } catch (error) {
+      if (!isMountedRef.current) return
+
       console.error(
         t('providers:refreshModelsFailed', { provider: provider.provider }),
         error
@@ -342,7 +357,9 @@ function ProviderDetail() {
       })
       updateProvider(providerName, { active: false })
     } finally {
-      setRefreshingModels(false)
+      if (isMountedRef.current) {
+        setRefreshingModels(false)
+      }
     }
   }
 
