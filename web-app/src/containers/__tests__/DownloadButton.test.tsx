@@ -501,4 +501,26 @@ describe('DownloadButtonPlaceholder', () => {
     )
     expect(mockAbortDownload).toHaveBeenCalledWith('test-model-q4_k_m')
   })
+
+  it('clears pending download watchdogs on unmount', () => {
+    vi.useFakeTimers()
+    mockPullModelWithMetadata.mockReturnValue(new Promise(() => {}))
+    const clearTimeoutSpy = vi.spyOn(window, 'clearTimeout')
+
+    try {
+      const { unmount } = render(
+        <DownloadButtonPlaceholder
+          model={baseModel}
+          handleUseModel={handleUseModel}
+        />
+      )
+
+      fireEvent.click(screen.getByText('hub:download'))
+      unmount()
+
+      expect(clearTimeoutSpy).toHaveBeenCalledTimes(2)
+    } finally {
+      clearTimeoutSpy.mockRestore()
+    }
+  })
 })

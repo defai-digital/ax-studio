@@ -297,4 +297,23 @@ describe('ModelDownloadAction', () => {
     expect(mockRemoveLocalDownloadingModel).toHaveBeenCalledWith('model-q4')
     expect(mockAbortDownload).toHaveBeenCalledWith('model-q4')
   })
+
+  it('clears pending download watchdogs on unmount', () => {
+    vi.useFakeTimers()
+    mockPullModelWithMetadata.mockReturnValue(new Promise(() => {}))
+    const clearTimeoutSpy = vi.spyOn(window, 'clearTimeout')
+
+    try {
+      const { unmount } = render(
+        <ModelDownloadAction variant={variant} model={model as never} />
+      )
+
+      fireEvent.click(screen.getByTitle('hub:downloadModel'))
+      unmount()
+
+      expect(clearTimeoutSpy).toHaveBeenCalledTimes(2)
+    } finally {
+      clearTimeoutSpy.mockRestore()
+    }
+  })
 })

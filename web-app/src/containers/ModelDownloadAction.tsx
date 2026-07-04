@@ -47,10 +47,33 @@ export const ModelDownloadAction = ({
   const [isStarting, setStarting] = useState<boolean>(false)
   const isStartingRef = useRef(false)
   const hasRealProgressRef = useRef(false)
+  const mountedRef = useRef(true)
+  const downloadTimersRef = useRef<Set<number>>(new Set())
 
   const setStartingState = useCallback((value: boolean) => {
     isStartingRef.current = value
-    setStarting(value)
+    if (mountedRef.current) {
+      setStarting(value)
+    }
+  }, [])
+
+  const clearDownloadTimer = useCallback(
+    (timer: number) => {
+      window.clearTimeout(timer)
+      downloadTimersRef.current.delete(timer)
+    },
+    []
+  )
+
+  useEffect(() => {
+    mountedRef.current = true
+    const downloadTimers = downloadTimersRef.current
+
+    return () => {
+      mountedRef.current = false
+      downloadTimers.forEach((timer) => window.clearTimeout(timer))
+      downloadTimers.clear()
+    }
   }, [])
 
   const downloadProcesses = useMemo(
@@ -183,6 +206,7 @@ export const ModelDownloadAction = ({
     addLocalDownloadingModel(downloadModelId)
     setStartingState(true)
     const progressTimeout = window.setTimeout(() => {
+      downloadTimersRef.current.delete(progressTimeout)
       if (hasRealProgressRef.current) return
       setStartingState(false)
       removeLocalDownloadingModel(downloadModelId)
@@ -196,9 +220,11 @@ export const ModelDownloadAction = ({
           console.error('Failed to abort stalled model download:', error)
         })
     }, DOWNLOAD_PROGRESS_TIMEOUT_MS)
+    downloadTimersRef.current.add(progressTimeout)
     const startTimeout = window.setTimeout(() => {
+      downloadTimersRef.current.delete(startTimeout)
       if (!isStartingRef.current) return
-      window.clearTimeout(progressTimeout)
+      clearDownloadTimer(progressTimeout)
       setStartingState(false)
       removeLocalDownloadingModel(downloadModelId)
       removeLocalDownloadingModel(variant.model_id)
@@ -213,6 +239,7 @@ export const ModelDownloadAction = ({
           console.error('Failed to abort stalled model download:', error)
         })
     }, DOWNLOAD_START_TIMEOUT_MS)
+    downloadTimersRef.current.add(startTimeout)
     serviceHub
       .models()
       .pullModelWithMetadata(
@@ -229,8 +256,8 @@ export const ModelDownloadAction = ({
         })
       })
       .finally(() => {
-        window.clearTimeout(startTimeout)
-        window.clearTimeout(progressTimeout)
+        clearDownloadTimer(startTimeout)
+        clearDownloadTimer(progressTimeout)
         setStartingState(false)
         removeLocalDownloadingModel(downloadModelId)
         removeLocalDownloadingModel(variant.model_id)
@@ -246,6 +273,7 @@ export const ModelDownloadAction = ({
     removeDownload,
     removeLocalDownloadingModel,
     setStartingState,
+    clearDownloadTimer,
   ])
 
   const sanitizedModelId = sanitizeModelId(
