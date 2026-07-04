@@ -40,16 +40,15 @@ export function DownloadButtonPlaceholder({
     addLocalDownloadingModel,
     removeDownload,
     removeLocalDownloadingModel,
-  } =
-    useDownloadStore(
-      useShallow((state) => ({
-        downloads: state.downloads,
-        localDownloadingModels: state.localDownloadingModels,
-        addLocalDownloadingModel: state.addLocalDownloadingModel,
-        removeDownload: state.removeDownload,
-        removeLocalDownloadingModel: state.removeLocalDownloadingModel,
-      }))
-    )
+  } = useDownloadStore(
+    useShallow((state) => ({
+      downloads: state.downloads,
+      localDownloadingModels: state.localDownloadingModels,
+      addLocalDownloadingModel: state.addLocalDownloadingModel,
+      removeDownload: state.removeDownload,
+      removeLocalDownloadingModel: state.removeLocalDownloadingModel,
+    }))
+  )
   const { t } = useTranslation()
   const providers = useModelProvider((state) => state.providers)
 
@@ -183,7 +182,8 @@ export function DownloadButtonPlaceholder({
     const isMlxModel = modelUrl.startsWith('hf://') || model?.is_mlx
     if (isMlxModel && !isMlxSupported()) {
       toast.error('MLX models not supported', {
-        description: 'MLX models only work on macOS with Apple Silicon (M1/M2/M3/M4). Please download a GGUF version instead.',
+        description:
+          'MLX models only work on macOS with Apple Silicon (M1/M2/M3/M4). Please download a GGUF version instead.',
       })
       return
     }
@@ -192,27 +192,34 @@ export function DownloadButtonPlaceholder({
     setStartingState(true)
     setIsPaused(false)
     const mmprojPath = getPreferredMmprojPath(model.mmproj_models)
+    const progressTimeout = window.setTimeout(() => {
+      if (hasRealProgressRef.current) return
+      setStartingState(false)
+      removeLocalDownloadingModel(modelId)
+      removeDownload(modelId)
+      serviceHub
+        .models()
+        .abortDownload(modelId)
+        .catch((error) => {
+          console.error('Failed to abort stalled model download:', error)
+        })
+    }, DOWNLOAD_PROGRESS_TIMEOUT_MS)
     const startTimeout = window.setTimeout(() => {
       if (!isStartingRef.current) return
+      window.clearTimeout(progressTimeout)
       setStartingState(false)
       removeLocalDownloadingModel(modelId)
       toast.error('Download did not start', {
         description:
           'This model is not available for Ax Studio in-app download yet. Open it on Hugging Face or choose a GGUF/Ax-ready model.',
       })
-      serviceHub.models().abortDownload(modelId).catch(() => {})
+      serviceHub
+        .models()
+        .abortDownload(modelId)
+        .catch((error) => {
+          console.error('Failed to abort stalled model download:', error)
+        })
     }, DOWNLOAD_START_TIMEOUT_MS)
-    const progressTimeout = window.setTimeout(() => {
-      if (hasRealProgressRef.current) return
-      setStartingState(false)
-      removeLocalDownloadingModel(modelId)
-      removeDownload(modelId)
-      serviceHub.models().abortDownload(modelId).catch(() => {})
-    }, DOWNLOAD_PROGRESS_TIMEOUT_MS)
-    // Mark download as started before the async call to prevent
-    // timeouts from cancelling MLX downloads that need extra time
-    // for HuggingFace metadata and manifest generation checks.
-    hasRealProgressRef.current = true
     serviceHub
       .models()
       .pullModelWithMetadata(modelId, modelUrl, mmprojPath, huggingfaceToken)

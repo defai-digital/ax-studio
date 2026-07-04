@@ -1,22 +1,31 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   mockAddLocalDownloadingModel,
+  mockAbortDownload,
+  mockRemoveDownload,
   mockRemoveLocalDownloadingModel,
   mockPullModelWithMetadata,
   mockNavigate,
   mockToastError,
   mockProviders,
   mockIsMlxSupported,
+  mockEvents,
 } = vi.hoisted(() => ({
   mockAddLocalDownloadingModel: vi.fn(),
+  mockAbortDownload: vi.fn(),
+  mockRemoveDownload: vi.fn(),
   mockRemoveLocalDownloadingModel: vi.fn(),
   mockPullModelWithMetadata: vi.fn(),
   mockNavigate: vi.fn(),
   mockToastError: vi.fn(),
   mockProviders: { current: [] as ModelProvider[] },
   mockIsMlxSupported: vi.fn(),
+  mockEvents: {
+    on: vi.fn(),
+    off: vi.fn(),
+  },
 }))
 
 vi.mock('@/hooks/models/useDownloadStore', () => ({
@@ -39,6 +48,7 @@ vi.mock('@/hooks/models/useDownloadStore', () => ({
     downloads: {},
     localDownloadingModels: new Set<string>(),
     addLocalDownloadingModel: mockAddLocalDownloadingModel,
+    removeDownload: mockRemoveDownload,
     removeLocalDownloadingModel: mockRemoveLocalDownloadingModel,
   })),
 }))
@@ -58,6 +68,7 @@ vi.mock('@/hooks/models/useModelProvider', () => ({
 vi.mock('@/hooks/useServiceHub', () => ({
   useServiceHub: () => ({
     models: () => ({
+      abortDownload: mockAbortDownload,
       pullModelWithMetadata: mockPullModelWithMetadata,
     }),
   }),
@@ -96,10 +107,7 @@ vi.mock('@ax-studio/core', () => ({
   AppEvent: {
     onModelImported: 'onModelImported',
   },
-  events: {
-    on: vi.fn(),
-    off: vi.fn(),
-  },
+  events: mockEvents,
 }))
 
 vi.mock('@/components/ui/button', () => ({
@@ -144,10 +152,12 @@ describe('ModelDownloadAction', () => {
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     mockProviders.current = []
     mockIsMlxSupported.mockReturnValue(true)
+    mockAbortDownload.mockResolvedValue(undefined)
     mockPullModelWithMetadata.mockResolvedValue(undefined)
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     consoleErrorSpy.mockRestore()
   })
 
@@ -177,10 +187,7 @@ describe('ModelDownloadAction', () => {
     }
 
     render(
-      <ModelDownloadAction
-        variant={mlxVariant}
-        model={mlxModel as never}
-      />
+      <ModelDownloadAction variant={mlxVariant} model={mlxModel as never} />
     )
 
     fireEvent.click(screen.getByTitle('hub:downloadModel'))
@@ -208,10 +215,7 @@ describe('ModelDownloadAction', () => {
     }
 
     render(
-      <ModelDownloadAction
-        variant={mlxVariant}
-        model={mlxModel as never}
-      />
+      <ModelDownloadAction variant={mlxVariant} model={mlxModel as never} />
     )
 
     fireEvent.click(screen.getByTitle('hub:downloadModel'))
@@ -232,9 +236,7 @@ describe('ModelDownloadAction', () => {
       path: 'https://huggingface.co/mradermacher/Qwen3.5-9B-heretic-GGUF/resolve/main/Qwen3.5-9B-heretic.Q4_K_M.gguf',
     }
 
-    render(
-      <ModelDownloadAction variant={ggufVariant} model={model as never} />
-    )
+    render(<ModelDownloadAction variant={ggufVariant} model={model as never} />)
 
     fireEvent.click(screen.getByTitle('hub:downloadModel'))
 
@@ -253,7 +255,9 @@ describe('ModelDownloadAction', () => {
   })
 
   it('removes local downloading state and shows an error when the download fails to start', async () => {
-    mockPullModelWithMetadata.mockRejectedValueOnce(new Error('IPC unavailable'))
+    mockPullModelWithMetadata.mockRejectedValueOnce(
+      new Error('IPC unavailable')
+    )
 
     render(<ModelDownloadAction variant={variant} model={model as never} />)
 
@@ -268,5 +272,29 @@ describe('ModelDownloadAction', () => {
         })
       )
     })
+  })
+
+  it('aborts an accepted download when no real progress arrives', () => {
+    vi.useFakeTimers()
+    mockPullModelWithMetadata.mockReturnValue(new Promise(() => {}))
+
+    render(<ModelDownloadAction variant={variant} model={model as never} />)
+
+    fireEvent.click(screen.getByTitle('hub:downloadModel'))
+
+    const startedHandler = mockEvents.on.mock.calls.find(
+      ([event]) => event === 'onFileDownloadStarted'
+    )?.[1] as ((state: { downloadId: string }) => void) | undefined
+
+    expect(startedHandler).toBeDefined()
+
+    act(() => {
+      startedHandler?.({ downloadId: 'model-q4' })
+      vi.advanceTimersByTime(120_000)
+    })
+
+    expect(mockRemoveDownload).toHaveBeenCalledWith('model-q4')
+    expect(mockRemoveLocalDownloadingModel).toHaveBeenCalledWith('model-q4')
+    expect(mockAbortDownload).toHaveBeenCalledWith('model-q4')
   })
 })

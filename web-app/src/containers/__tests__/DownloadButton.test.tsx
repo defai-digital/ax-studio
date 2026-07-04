@@ -1,22 +1,31 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { act, render, screen, fireEvent } from '@testing-library/react'
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
 
 // --- Mocks ---
 
 const {
   mockAddLocalDownloadingModel,
+  mockAbortDownload,
+  mockRemoveDownload,
   mockRemoveLocalDownloadingModel,
   mockPullModelWithMetadata,
   mockToastError,
   mockProviders,
   mockIsMlxSupported,
+  mockEvents,
 } = vi.hoisted(() => ({
   mockAddLocalDownloadingModel: vi.fn(),
+  mockAbortDownload: vi.fn(),
+  mockRemoveDownload: vi.fn(),
   mockRemoveLocalDownloadingModel: vi.fn(),
   mockPullModelWithMetadata: vi.fn(),
   mockToastError: vi.fn(),
   mockProviders: { current: [] as ModelProvider[] },
   mockIsMlxSupported: vi.fn(),
+  mockEvents: {
+    on: vi.fn(),
+    off: vi.fn(),
+  },
 }))
 
 vi.mock('@/hooks/models/useDownloadStore', () => ({
@@ -40,6 +49,7 @@ vi.mock('@/hooks/models/useDownloadStore', () => ({
       downloads: {},
       localDownloadingModels: new Set<string>(),
       addLocalDownloadingModel: mockAddLocalDownloadingModel,
+      removeDownload: mockRemoveDownload,
       removeLocalDownloadingModel: mockRemoveLocalDownloadingModel,
     }
     return typeof selector === 'function' ? selector(state) : state
@@ -61,6 +71,7 @@ vi.mock('@/hooks/models/useModelProvider', () => ({
 vi.mock('@/hooks/useServiceHub', () => ({
   useServiceHub: () => ({
     models: () => ({
+      abortDownload: mockAbortDownload,
       pullModelWithMetadata: mockPullModelWithMetadata,
     }),
   }),
@@ -95,10 +106,7 @@ vi.mock('@ax-studio/core', () => ({
   AppEvent: {
     onModelImported: 'onModelImported',
   },
-  events: {
-    on: vi.fn(),
-    off: vi.fn(),
-  },
+  events: mockEvents,
 }))
 
 vi.mock('@/constants/models', () => ({
@@ -161,10 +169,12 @@ describe('DownloadButtonPlaceholder', () => {
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     mockProviders.current = []
     mockIsMlxSupported.mockReturnValue(true)
+    mockAbortDownload.mockResolvedValue(undefined)
     mockPullModelWithMetadata.mockResolvedValue(undefined)
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     consoleErrorSpy.mockRestore()
   })
 
@@ -276,7 +286,10 @@ describe('DownloadButtonPlaceholder', () => {
 
   it('renders "New Chat" button when model is downloaded', () => {
     mockProviders.current = [
-      { provider: 'llamacpp', models: [{ id: 'test-model-q4_k_m' }] } as ModelProvider,
+      {
+        provider: 'llamacpp',
+        models: [{ id: 'test-model-q4_k_m' }],
+      } as ModelProvider,
     ]
 
     render(
@@ -291,7 +304,10 @@ describe('DownloadButtonPlaceholder', () => {
 
   it('calls handleUseModel with modelId when "New Chat" is clicked', () => {
     mockProviders.current = [
-      { provider: 'llamacpp', models: [{ id: 'test-model-q4_k_m' }] } as ModelProvider,
+      {
+        provider: 'llamacpp',
+        models: [{ id: 'test-model-q4_k_m' }],
+      } as ModelProvider,
     ]
 
     render(
@@ -302,10 +318,7 @@ describe('DownloadButtonPlaceholder', () => {
     )
 
     fireEvent.click(screen.getByText('hub:newChat'))
-    expect(handleUseModel).toHaveBeenCalledWith(
-      'test-model-q4_k_m',
-      'llamacpp'
-    )
+    expect(handleUseModel).toHaveBeenCalledWith('test-model-q4_k_m', 'llamacpp')
   })
 
   it('starts download when download button is clicked', () => {
@@ -341,6 +354,7 @@ describe('DownloadButtonPlaceholder', () => {
         },
         localDownloadingModels: new Set(['test-model-q4_k_m']),
         addLocalDownloadingModel: mockAddLocalDownloadingModel,
+        removeDownload: mockRemoveDownload,
         removeLocalDownloadingModel: mockRemoveLocalDownloadingModel,
       }
       return typeof selector === 'function' ? selector(state) : state
@@ -362,6 +376,7 @@ describe('DownloadButtonPlaceholder', () => {
         downloads: {},
         localDownloadingModels: new Set(['test-model-q4_k_m']),
         addLocalDownloadingModel: mockAddLocalDownloadingModel,
+        removeDownload: mockRemoveDownload,
         removeLocalDownloadingModel: mockRemoveLocalDownloadingModel,
       }
       return typeof selector === 'function' ? selector(state) : state
@@ -430,7 +445,9 @@ describe('DownloadButtonPlaceholder', () => {
   })
 
   it('removes local downloading state and shows an error when the download fails to start', async () => {
-    mockPullModelWithMetadata.mockRejectedValueOnce(new Error('IPC unavailable'))
+    mockPullModelWithMetadata.mockRejectedValueOnce(
+      new Error('IPC unavailable')
+    )
 
     render(
       <DownloadButtonPlaceholder
@@ -452,5 +469,36 @@ describe('DownloadButtonPlaceholder', () => {
         })
       )
     })
+  })
+
+  it('aborts an accepted download when no real progress arrives', () => {
+    vi.useFakeTimers()
+    mockPullModelWithMetadata.mockReturnValue(new Promise(() => {}))
+
+    render(
+      <DownloadButtonPlaceholder
+        model={baseModel}
+        handleUseModel={handleUseModel}
+      />
+    )
+
+    fireEvent.click(screen.getByText('hub:download'))
+
+    const startedHandler = mockEvents.on.mock.calls.find(
+      ([event]) => event === 'onFileDownloadStarted'
+    )?.[1] as ((state: { downloadId: string }) => void) | undefined
+
+    expect(startedHandler).toBeDefined()
+
+    act(() => {
+      startedHandler?.({ downloadId: 'test-model-q4_k_m' })
+      vi.advanceTimersByTime(120_000)
+    })
+
+    expect(mockRemoveDownload).toHaveBeenCalledWith('test-model-q4_k_m')
+    expect(mockRemoveLocalDownloadingModel).toHaveBeenCalledWith(
+      'test-model-q4_k_m'
+    )
+    expect(mockAbortDownload).toHaveBeenCalledWith('test-model-q4_k_m')
   })
 })
