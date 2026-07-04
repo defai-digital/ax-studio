@@ -279,6 +279,80 @@ jobs:
           TAURI_SIGNING_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
           AX_STUDIO_SIGNING_KEY: ${{ secrets.AX_STUDIO_SIGNING_KEY }}
 
+      - name: Re-sign and verify macOS app bundle
+        if: ${{ env.HAS_SIGN_CERTS == 'true' }}
+        env:
+          VERSION: ${{ needs.get-update-version.outputs.new_version }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          APP_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Ax-Studio.app"
+          BUNDLE_MACOS="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos"
+          BUNDLE_DMG="./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg"
+          ENTITLEMENTS="./src-tauri/Entitlements.plist"
+          TAR_PATH="${BUNDLE_MACOS}/Ax-Studio.app.tar.gz"
+          DMG_PATH="${BUNDLE_DMG}/Ax-Studio_${VERSION}_aarch64.dmg"
+
+          test -d "$APP_PATH"
+          test -n "${APPLE_SIGNING_IDENTITY:-}"
+          plutil -lint "$ENTITLEMENTS"
+
+          # Tauri currently produces a notarized-looking app whose embedded
+          # entitlement blob is not readable by codesign on macOS 26. Re-sign
+          # the exact app payload with the imported Developer ID identity, then
+          # rebuild all derived macOS artifacts from that verified bundle.
+          rm -f "$APP_PATH/Contents/CodeResources"
+          xattr -cr "$APP_PATH"
+
+          for binary in \
+            "$APP_PATH/Contents/MacOS/bun" \
+            "$APP_PATH/Contents/MacOS/uv" \
+            "$APP_PATH/Contents/MacOS/ax-studio"
+          do
+            test -f "$binary"
+            codesign \
+              --force \
+              --timestamp \
+              --options runtime \
+              --entitlements "$ENTITLEMENTS" \
+              --sign "$APPLE_SIGNING_IDENTITY" \
+              "$binary"
+            codesign --verify --strict --verbose=4 "$binary"
+            codesign -d --entitlements :- "$binary" > /tmp/ax-studio-entitlements.plist
+            plutil -lint /tmp/ax-studio-entitlements.plist
+          done
+
+          codesign \
+            --force \
+            --timestamp \
+            --options runtime \
+            --entitlements "$ENTITLEMENTS" \
+            --sign "$APPLE_SIGNING_IDENTITY" \
+            "$APP_PATH"
+          codesign --verify --deep --strict --verbose=4 "$APP_PATH"
+
+          rm -f "$TAR_PATH" "$TAR_PATH.sig"
+          (cd "$BUNDLE_MACOS" && tar -czf "Ax-Studio.app.tar.gz" "Ax-Studio.app")
+          TAURI_PRIVATE_KEY="$TAURI_SIGNING_PRIVATE_KEY" \
+            TAURI_PRIVATE_KEY_PASSWORD="${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" \
+            node src-tauri/tauri signer sign "$TAR_PATH"
+          test -s "$TAR_PATH.sig"
+
+          rm -f "$DMG_PATH"
+          DMG_ROOT="$(mktemp -d)"
+          trap 'rm -rf "$DMG_ROOT"' EXIT
+          ditto "$APP_PATH" "$DMG_ROOT/Ax-Studio.app"
+          ln -s /Applications "$DMG_ROOT/Applications"
+          hdiutil create \
+            -volname "Ax-Studio" \
+            -srcfolder "$DMG_ROOT" \
+            -ov \
+            -format UDZO \
+            "$DMG_PATH"
+          codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$DMG_PATH"
+
       - name: Notarize and staple DMG
         if: ${{ env.HAS_SIGN_CERTS == 'true' }}
         env:
@@ -300,6 +374,26 @@ jobs:
           xcrun stapler staple "$DMG_PATH"
           xcrun stapler validate "$DMG_PATH"
           spctl -a -vv -t install "$DMG_PATH"
+
+      - name: Verify notarized DMG app bundle
+        if: ${{ env.HAS_SIGN_CERTS == 'true' }}
+        run: |
+          set -euo pipefail
+          DMG_PATH="$(find ./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg -maxdepth 1 -name '*.dmg' -print -quit)"
+          if [ -z "$DMG_PATH" ]; then
+            echo "::error::No DMG found to verify."
+            exit 1
+          fi
+
+          MOUNT_DIR="$(mktemp -d)"
+          cleanup() {
+            hdiutil detach "$MOUNT_DIR" >/dev/null 2>&1 || true
+            rm -rf "$MOUNT_DIR"
+          }
+          trap cleanup EXIT
+
+          hdiutil attach -readonly -nobrowse -mountpoint "$MOUNT_DIR" "$DMG_PATH"
+          codesign --verify --deep --strict --verbose=4 "$MOUNT_DIR/Ax-Studio.app"
 
       - name: Set output filename for mac
         id: metadata
