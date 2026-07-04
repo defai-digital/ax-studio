@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   generalSettingState: {
     huggingfaceToken: '',
   },
+  isDev: vi.fn(),
   pausePolling: vi.fn(),
   writeText: vi.fn(),
 }))
@@ -63,6 +64,14 @@ vi.mock('@/hooks/settings/useGeneralSetting', () => ({
   }),
 }))
 
+vi.mock('@/lib/utils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/utils')>()
+  return {
+    ...actual,
+    isDev: mocks.isDev,
+  }
+})
+
 vi.mock('sonner', () => ({
   toast: {
     error: vi.fn(),
@@ -77,6 +86,7 @@ describe('useGeneralSettingsPage', () => {
     vi.clearAllMocks()
     mocks.generalSettingState.huggingfaceToken = ''
     mocks.getAppDataFolder.mockReturnValue(new Promise<string>(() => {}))
+    mocks.isDev.mockReturnValue(false)
     mocks.writeText.mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -194,5 +204,36 @@ describe('useGeneralSettingsPage', () => {
     expect(validationSignal?.aborted).toBe(true)
     expect(toast.error).not.toHaveBeenCalled()
     expect(toast.success).not.toHaveBeenCalled()
+  })
+
+  it('ignores update check completion after unmount', async () => {
+    let resolveUpdate!: (update: null) => void
+    const updatePromise = new Promise<null>((resolve) => {
+      resolveUpdate = resolve
+    })
+    mocks.checkForUpdate.mockReturnValue(updatePromise)
+
+    const { result, unmount } = renderHook(() => useGeneralSettingsPage())
+    let checkPromise!: Promise<void>
+
+    await act(async () => {
+      checkPromise = result.current.handleCheckForUpdate()
+      await Promise.resolve()
+    })
+
+    expect(result.current.isCheckingUpdate).toBe(true)
+
+    act(() => {
+      unmount()
+    })
+
+    await act(async () => {
+      resolveUpdate(null)
+      await checkPromise
+    })
+
+    expect(mocks.checkForUpdate).toHaveBeenCalledWith(true)
+    expect(toast.info).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
   })
 })

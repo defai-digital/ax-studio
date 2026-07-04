@@ -142,16 +142,24 @@ export function useGeneralSettingsPage() {
   }
 
   const handleCheckForUpdate = useCallback(async () => {
+    if (!mountedRef.current) return
+
     setIsCheckingUpdate(true)
     try {
       if (isDev()) return toast.info(t('settings:general.devVersion'))
       const update = await checkForUpdate(true)
+      if (!mountedRef.current) return
+
       if (!update) toast.info(t('settings:general.noUpdateAvailable'))
     } catch (error) {
+      if (!mountedRef.current) return
+
       console.error('Failed to check for updates:', error)
       toast.error(t('settings:general.updateError'))
     } finally {
-      setIsCheckingUpdate(false)
+      if (mountedRef.current) {
+        setIsCheckingUpdate(false)
+      }
     }
   }, [t, checkForUpdate])
 
