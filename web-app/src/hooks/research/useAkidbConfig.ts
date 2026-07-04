@@ -128,6 +128,8 @@ type AkidbConfigStore = {
   syncNow: () => Promise<AkidbSyncResult>
 }
 
+let statusLoadGeneration = 0
+
 export const useAkidbConfig = create<AkidbConfigStore>()((set, get) => ({
   config: null,
   status: null,
@@ -139,7 +141,9 @@ export const useAkidbConfig = create<AkidbConfigStore>()((set, get) => ({
   load: async () => {
     set({ loading: true, error: null })
     try {
-      const config = await getServiceHub().core().invoke<AkidbConfig | null>('read_akidb_config')
+      const config = await getServiceHub()
+        .core()
+        .invoke<AkidbConfig | null>('read_akidb_config')
       set({ config })
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e) })
@@ -162,18 +166,27 @@ export const useAkidbConfig = create<AkidbConfigStore>()((set, get) => ({
   },
 
   loadStatus: async () => {
+    const generation = ++statusLoadGeneration
     try {
-      const status = await getServiceHub().core().invoke<AkidbStatus | null>('read_akidb_status')
-      set({ status })
+      const status = await getServiceHub()
+        .core()
+        .invoke<AkidbStatus | null>('read_akidb_status')
+      if (generation === statusLoadGeneration) {
+        set({ status })
+      }
     } catch {
-      set({ status: null })
+      if (generation === statusLoadGeneration) {
+        set({ status: null })
+      }
     }
   },
 
   syncNow: async () => {
     set({ syncing: true, error: null })
     try {
-      const result = await getServiceHub().core().invoke<AkidbSyncResult>('akidb_sync_now')
+      const result = await getServiceHub()
+        .core()
+        .invoke<AkidbSyncResult>('akidb_sync_now')
       // Refresh status after sync completes
       await get().loadStatus()
       return result

@@ -2,6 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockInvoke = vi.fn()
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve
+  })
+
+  return { promise, resolve }
+}
+
 vi.mock('@/hooks/useServiceHub', () => ({
   getServiceHub: () => ({ core: () => ({ invoke: mockInvoke }) }),
 }))
@@ -177,6 +186,46 @@ describe('useAkidbConfig store', () => {
       await useAkidbConfig.getState().loadStatus()
 
       expect(useAkidbConfig.getState().status).toBe(null)
+    })
+
+    it('should ignore stale status when a newer request finishes first', async () => {
+      const staleStatus: AkidbStatus = {
+        status: 'syncing',
+        config_loaded: true,
+        data_folder: '/old-data',
+        last_sync_at: '2024-01-01T00:00:00Z',
+        total_files: 100,
+        indexed_files: 50,
+        pending_files: 50,
+        error_files: 0,
+        daemon_pid: 1234,
+      }
+      const freshStatus: AkidbStatus = {
+        status: 'idle',
+        config_loaded: true,
+        data_folder: '/new-data',
+        last_sync_at: '2024-01-01T00:01:00Z',
+        total_files: 120,
+        indexed_files: 120,
+        pending_files: 0,
+        error_files: 0,
+        daemon_pid: null,
+      }
+      const staleRequest = createDeferred<AkidbStatus | null>()
+      mockInvoke
+        .mockReturnValueOnce(staleRequest.promise)
+        .mockResolvedValueOnce(freshStatus)
+
+      const firstLoad = useAkidbConfig.getState().loadStatus()
+      const secondLoad = useAkidbConfig.getState().loadStatus()
+
+      await secondLoad
+      expect(useAkidbConfig.getState().status).toEqual(freshStatus)
+
+      staleRequest.resolve(staleStatus)
+      await firstLoad
+
+      expect(useAkidbConfig.getState().status).toEqual(freshStatus)
     })
   })
 
