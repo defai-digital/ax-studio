@@ -157,4 +157,21 @@ describe('SearchDialog', () => {
       JSON.parse(localStorage.getItem(localStorageKey.recentSearches) ?? '[]')
     ).toEqual(['thread-alpha', 'thread-beta'])
   })
+
+  it('clears rendered recent searches and persisted recent ids', () => {
+    localStorage.setItem(
+      localStorageKey.recentSearches,
+      JSON.stringify(['thread-beta', 'thread-alpha'])
+    )
+
+    render(<SearchDialog open onOpenChange={mocks.onOpenChange} />)
+
+    expect(screen.getByRole('option', { name: 'Alpha roadmap' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear recent' }))
+
+    expect(localStorage.getItem(localStorageKey.recentSearches)).toBeNull()
+    expect(screen.queryByRole('option', { name: 'Alpha roadmap' })).toBeNull()
+    expect(screen.queryByRole('option', { name: 'Beta notes' })).toBeNull()
+  })
 })
