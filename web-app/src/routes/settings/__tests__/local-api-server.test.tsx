@@ -1,5 +1,5 @@
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom'
 
 const mocks = vi.hoisted(() => {
@@ -32,11 +32,9 @@ const mocks = vi.hoisted(() => {
     setActiveModels: ReturnType<typeof vi.fn>
   }
 
-  const setServerStatus = vi.fn(
-    (value: 'running' | 'stopped' | 'pending') => {
-      appState.serverStatus = value
-    }
-  )
+  const setServerStatus = vi.fn((value: 'running' | 'stopped' | 'pending') => {
+    appState.serverStatus = value
+  })
   const setActiveModels = vi.fn((models: string[]) => {
     appState.activeModels = models
   })
@@ -219,7 +217,9 @@ vi.mock('@/components/ui/switch', () => ({
 }))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
-  DropdownMenu: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  DropdownMenu: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
   DropdownMenuContent: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
@@ -331,6 +331,17 @@ function renderLocalApiServerRoute() {
   return render(<Component />)
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve
+    reject = promiseReject
+  })
+
+  return { promise, resolve, reject }
+}
+
 describe('Local API Server settings route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -378,6 +389,23 @@ describe('Local API Server settings route', () => {
     await waitFor(() => {
       expect(mocks.getServerStatus).toHaveBeenCalledTimes(1)
     })
+  })
+
+  it('ignores delayed status checks after the route unmounts', async () => {
+    const statusCheck = deferred<boolean>()
+    mocks.getServerStatus.mockReturnValue(statusCheck.promise)
+
+    const { unmount } = renderLocalApiServerRoute()
+
+    expect(mocks.getServerStatus).toHaveBeenCalledTimes(1)
+    unmount()
+
+    await act(async () => {
+      statusCheck.resolve(true)
+      await statusCheck.promise
+    })
+
+    expect(mocks.setServerStatus).not.toHaveBeenCalled()
   })
 
   it('blocks server start when CORS requires an API key but no key is set', async () => {

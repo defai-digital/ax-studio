@@ -154,13 +154,17 @@ function LocalAPIServerContent() {
   const setActiveModels = useAppState((state) => state.setActiveModels)
 
   useEffect(() => {
+    let mounted = true
+
     const checkServerStatus = async () => {
       try {
         const running = await serviceHub.app().getServerStatus()
+        if (!mounted) return
         if (running) {
           setServerStatus('running')
         }
       } catch (error) {
+        if (!mounted) return
         console.error('Failed to check server status:', error)
       }
     }
@@ -169,7 +173,10 @@ function LocalAPIServerContent() {
     // Also check when window gains focus (e.g., server started from another page)
     const handleFocus = () => checkServerStatus()
     window.addEventListener('focus', handleFocus)
-    return () => window.removeEventListener('focus', handleFocus)
+    return () => {
+      mounted = false
+      window.removeEventListener('focus', handleFocus)
+    }
   }, [serviceHub, setServerStatus])
 
   const [isModelLoading, setIsModelLoading] = useState(false)
