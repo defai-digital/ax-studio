@@ -3,15 +3,15 @@ import { route } from '@/constants/routes'
 import HeaderPage from '@/containers/HeaderPage'
 import SettingsMenu from '@/components/common/SettingsMenu'
 import { Card, CardItem } from '@/components/common/Card'
-import { Code, Pencil, Plus, Trash2, Wrench } from "lucide-react";
+import { Code, Pencil, Plus, Trash2, Wrench } from 'lucide-react'
 import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
 import {
-  useMCPServers,
-  MCPServerConfig,
-  MCPSettings,
   DEFAULT_MCP_SETTINGS,
+  type MCPServerConfig,
+  type MCPSettings,
+  useMCPServers,
 } from '@/hooks/tools/useMCPServers'
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import AddEditMCPServer from '@/containers/dialogs/mcp/AddEditMCPServer'
 import DeleteMCPServerConfirm from '@/containers/dialogs/mcp/DeleteMCPServerConfirm'
 import EditJsonMCPserver from '@/containers/dialogs/mcp/EditJsonMCPserver'
@@ -144,7 +144,32 @@ function MCPServersDesktop() {
   const [loadingServers, setLoadingServers] = useState<{
     [key: string]: boolean
   }>({})
+  const isMountedRef = useRef(true)
   const setErrorMessage = useAppState((state) => state.setErrorMessage)
+
+  useEffect(() => {
+    isMountedRef.current = true
+
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
+
+  const refreshConnectedServers = useCallback(
+    async (shouldIgnoreResult?: () => boolean) => {
+      try {
+        const servers = await serviceHub.mcp().getConnectedServers()
+        if (isMountedRef.current && !shouldIgnoreResult?.()) {
+          setConnectedServers(servers)
+        }
+      } catch (error) {
+        if (isMountedRef.current && !shouldIgnoreResult?.()) {
+          console.error(error)
+        }
+      }
+    },
+    [serviceHub]
+  )
 
   const updateToolCallTimeout = (rawValue: string) => {
     if (rawValue === '') {
@@ -331,7 +356,7 @@ function MCPServersDesktop() {
                 ? t('mcp-servers:serverStatusActive', { serverKey })
                 : t('mcp-servers:serverStatusInactive', { serverKey })
             )
-            serviceHub.mcp().getConnectedServers().then(setConnectedServers).catch(console.error).catch(console.error)
+            void refreshConnectedServers()
           })
           .catch((error) => {
             editServer(serverKey, {
@@ -355,7 +380,9 @@ function MCPServersDesktop() {
             })
           })
           .finally(() => {
-            setLoadingServers((prev) => ({ ...prev, [serverKey]: false }))
+            if (isMountedRef.current) {
+              setLoadingServers((prev) => ({ ...prev, [serverKey]: false }))
+            }
           })
       } else {
         editServer(serverKey, {
@@ -367,28 +394,50 @@ function MCPServersDesktop() {
           .mcp()
           .deactivateMCPServer(serverKey)
           .finally(() => {
-            serviceHub.mcp().getConnectedServers().then(setConnectedServers).catch(console.error)
-            setLoadingServers((prev) => ({ ...prev, [serverKey]: false }))
+            void refreshConnectedServers()
+            if (isMountedRef.current) {
+              setLoadingServers((prev) => ({ ...prev, [serverKey]: false }))
+            }
           })
       }
     }
   }
 
   useEffect(() => {
-    serviceHub.mcp().getConnectedServers().then(setConnectedServers).catch(console.error)
-
+    let isActive = true
     let unlisten: (() => void) | undefined
+    const shouldIgnoreResult = () => !isActive
+
+    void refreshConnectedServers(shouldIgnoreResult)
+
     const setupListener = async () => {
-      unlisten = await listen(SystemEvent.MCP_UPDATE, () => {
-        serviceHub.mcp().getConnectedServers().then(setConnectedServers).catch(console.error)
-      })
+      try {
+        const nextUnlisten = await listen(SystemEvent.MCP_UPDATE, () => {
+          if (isActive) {
+            void refreshConnectedServers(shouldIgnoreResult)
+          }
+        })
+
+        if (!isActive) {
+          nextUnlisten()
+          return
+        }
+
+        unlisten = nextUnlisten
+      } catch (error) {
+        if (isActive) {
+          console.error(error)
+        }
+      }
     }
-    setupListener()
+
+    void setupListener()
 
     return () => {
+      isActive = false
       unlisten?.()
     }
-  }, [serviceHub, setConnectedServers])
+  }, [refreshConnectedServers])
 
   return (
     <Fragment>
@@ -443,10 +492,7 @@ function MCPServersDesktop() {
                             size="icon-xs"
                             variant="ghost"
                           >
-                            <Code
-                              size={18}
-                              className="text-muted-foreground"
-                            />
+                            <Code size={18} className="text-muted-foreground" />
                           </Button>
                         </div>
                       </div>
