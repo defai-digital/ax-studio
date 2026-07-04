@@ -92,21 +92,22 @@ function HardwareContent() {
   }
 
   // Fetch llamacpp devices when page mounts
+  const hasLlamacppProvider = Boolean(llamacpp)
   useEffect(() => {
-    if (!IS_MACOS && llamacpp) {
-      fetchDevices()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    if (IS_MACOS || !hasLlamacppProvider) return
+    void fetchDevices()
+  }, [fetchDevices, hasLlamacppProvider])
 
   // Fetch initial hardware info and system usage
   useEffect(() => {
+    let cancelled = false
     setIsLoading(true)
     Promise.all([
       serviceHub
         .hardware()
         .getHardwareInfo()
         .then((data: HardwareData | null) => {
+          if (cancelled) return
           if (data) setHardwareData(data)
         })
         .catch((error) => {
@@ -116,14 +117,20 @@ function HardwareContent() {
         .hardware()
         .getSystemUsage()
         .then((data: SystemUsage | null) => {
+          if (cancelled) return
           if (data) updateSystemUsage(data)
         })
         .catch((error: unknown) => {
           console.error('Failed to get initial system usage:', error)
         }),
     ]).finally(() => {
+      if (cancelled) return
       setIsLoading(false)
     })
+
+    return () => {
+      cancelled = true
+    }
   }, [serviceHub, setHardwareData, updateSystemUsage])
 
   useEffect(() => {

@@ -2,6 +2,18 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom'
 
+type MockProvider = {
+  provider: string
+  active: boolean
+  models: unknown[]
+}
+
+const mocks = vi.hoisted(() => ({
+  fetchDevices: vi.fn(),
+  toggleDevice: vi.fn(),
+  providers: [] as MockProvider[],
+}))
+
 // Mock all the dependencies with minimal implementation
 vi.mock('@/components/common/SettingsMenu', () => ({
   default: () => <div data-testid="settings-menu">Settings Menu</div>,
@@ -64,14 +76,14 @@ vi.mock('@/hooks/models/useLlamacppDevices', () => ({
     devices: [{ id: 'gpu-0', name: 'RTX 3080', activated: true }],
     loading: false,
     error: null,
-    toggleDevice: vi.fn(),
-    fetchDevices: vi.fn(),
+    toggleDevice: mocks.toggleDevice,
+    fetchDevices: mocks.fetchDevices,
   }),
 }))
 
 vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: () => ({
-    providers: [{ provider: 'llamacpp', active: true, models: [] }],
+    providers: mocks.providers,
     getProviderByName: vi.fn(() => undefined),
   }),
 }))
@@ -126,6 +138,7 @@ describe('Hardware Settings', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     global.IS_MACOS = false
+    mocks.providers = [{ provider: 'llamacpp', active: true, models: [] }]
   })
 
   it('renders hardware settings page', async () => {
@@ -172,6 +185,35 @@ describe('Hardware Settings', () => {
       expect(screen.getByText('settings:hardware.gpus')).toBeInTheDocument()
       expect(screen.getByText('RTX 3080')).toBeInTheDocument()
     })
+  })
+
+  it('fetches llama.cpp devices when provider becomes available after mount', async () => {
+    mocks.providers = []
+    const { rerender } = renderHardwareContent()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('header-page')).toBeInTheDocument()
+    })
+    expect(mocks.fetchDevices).not.toHaveBeenCalled()
+
+    const Component = Route.component as React.ComponentType
+    mocks.providers = [{ provider: 'llamacpp', active: true, models: [] }]
+    rerender(<Component />)
+
+    await waitFor(() => {
+      expect(mocks.fetchDevices).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('does not fetch llama.cpp devices on macOS', async () => {
+    global.IS_MACOS = true
+    renderHardwareContent()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('header-page')).toBeInTheDocument()
+    })
+
+    expect(mocks.fetchDevices).not.toHaveBeenCalled()
   })
 
   it('hides GPU devices on macOS', async () => {
