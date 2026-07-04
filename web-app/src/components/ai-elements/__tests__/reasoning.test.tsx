@@ -17,8 +17,8 @@ import {
   Reasoning,
   ReasoningTrigger,
   ReasoningContent,
-  useReasoning,
 } from '../reasoning'
+import { useReasoning } from '../reasoning-context'
 
 describe('Reasoning', () => {
   it('renders children inside a collapsible', () => {

@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // Mock shiki before importing the component
 vi.mock('shiki', () => {
@@ -23,7 +23,8 @@ vi.mock('@/lib/themes/shiki-theme-dark', () => ({
   axStudioDarkTheme: { name: 'ax-studio-dark' },
 }))
 
-import { CodeBlock, CodeBlockCopyButton, highlightCode } from '../code-block'
+import { CodeBlock, CodeBlockCopyButton } from '../code-block'
+import { highlightCode } from '../code-block-highlight'
 
 type RenderResult = ReturnType<typeof render>
 
@@ -35,6 +36,10 @@ const renderCodeBlock = async (ui: Parameters<typeof render>[0]): Promise<Render
   })
   return result!
 }
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 describe('CodeBlock', () => {
   beforeEach(() => {
@@ -203,5 +208,24 @@ describe('CodeBlockCopyButton', () => {
       </CodeBlock>
     )
     expect(screen.getByText('Custom Copy')).toBeInTheDocument()
+  })
+
+  it('clears pending copied-state reset timer on unmount', async () => {
+    vi.useFakeTimers()
+
+    const { unmount } = await renderCodeBlock(
+      <CodeBlock code="test" language="javascript">
+        <CodeBlockCopyButton timeout={5000} />
+      </CodeBlock>
+    )
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button'))
+      await Promise.resolve()
+    })
+
+    expect(vi.getTimerCount()).toBe(1)
+    unmount()
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

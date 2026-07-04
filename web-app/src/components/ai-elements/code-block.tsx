@@ -1,5 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
-
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import DOMPurify from 'dompurify';
@@ -13,48 +11,11 @@ import {
   useRef,
   useState,
 } from "react";
-import { createHighlighter, type BundledLanguage, type Highlighter, type ShikiTransformer } from "shiki";
-import { axStudioLightTheme } from "@/lib/themes/shiki-theme-light";
-import { axStudioDarkTheme } from "@/lib/themes/shiki-theme-dark";
-
-// --- Singleton highlighter (shared across all CodeBlock instances) ---
-let _highlighterPromise: Promise<Highlighter> | null = null;
-const _loadedLangs = new Set<string>();
-
-function getHighlighter(): Promise<Highlighter> {
-  if (!_highlighterPromise) {
-    _highlighterPromise = createHighlighter({
-      themes: [axStudioLightTheme, axStudioDarkTheme],
-      langs: [],
-    });
-  }
-  return _highlighterPromise;
-}
-
-// --- LRU-style cache bounded to 200 entries ---
-// Concurrency safety: _pendingHighlights acts as a dedup guard. When two
-// concurrent calls arrive for the same cacheKey, the second returns the
-// first's in-flight promise (line 83-84). The promise is registered in
-// _pendingHighlights BEFORE any await, so no concurrent writer can start
-// duplicate work for the same key. The async scanner flags TOCTOU on the
-// read-then-write pattern, but it is safe because _pendingHighlights prevents
-// multiple writers from ever coexisting for the same key.
-const MAX_CACHE_SIZE = 200;
-const _htmlCache = new Map<string, [string, string]>();
-const _pendingHighlights = new Map<string, Promise<[string, string]>>();
-
-function cacheHighlight(cacheKey: string, result: [string, string]) {
-  while (_htmlCache.size >= MAX_CACHE_SIZE) {
-    const firstKey = _htmlCache.keys().next().value;
-    if (firstKey === undefined || firstKey === cacheKey) break;
-    _htmlCache.delete(firstKey);
-  }
-  _htmlCache.set(cacheKey, result);
-}
+import { highlightCode, type CodeBlockLanguage } from './code-block-highlight'
 
 type CodeBlockProps = HTMLAttributes<HTMLDivElement> & {
   code: string;
-  language: BundledLanguage;
+  language: CodeBlockLanguage;
   showLineNumbers?: boolean;
 };
 
@@ -65,70 +26,6 @@ type CodeBlockContextType = {
 const CodeBlockContext = createContext<CodeBlockContextType>({
   code: "",
 });
-
-const lineNumberTransformer: ShikiTransformer = {
-  name: "line-numbers",
-  line(node, line) {
-    node.children.unshift({
-      type: "element",
-      tagName: "span",
-      properties: {
-        className: [
-          "inline-block",
-          "min-w-10",
-          "mr-4",
-          "text-right",
-          "text-muted-foreground",
-        ],
-      },
-      children: [{ type: "text", value: String(line) }],
-    });
-  },
-};
-
-export async function highlightCode(
-  code: string,
-  language: BundledLanguage,
-  showLineNumbers = false,
-): Promise<[string, string]> {
-  const cacheKey = `${language}:${showLineNumbers ? "1" : "0"}:${code}`;
-  const cached = _htmlCache.get(cacheKey);
-  if (cached) return cached;
-
-  // Deduplicate concurrent calls for the same cache key
-  const pending = _pendingHighlights.get(cacheKey);
-  if (pending) return pending;
-
-  const promise = (async (): Promise<[string, string]> => {
-    const transformers: ShikiTransformer[] = showLineNumbers
-      ? [lineNumberTransformer]
-      : [];
-
-    const hl = await getHighlighter();
-    if (!_loadedLangs.has(language)) {
-      await hl.loadLanguage(language);
-      _loadedLangs.add(language);
-    }
-
-    const existing = _htmlCache.get(cacheKey);
-    if (existing) return existing;
-
-    const result: [string, string] = [
-      hl.codeToHtml(code, { lang: language, theme: "ax-studio-light", transformers }),
-      hl.codeToHtml(code, { lang: language, theme: "ax-studio-dark", transformers }),
-    ];
-
-    cacheHighlight(cacheKey, result);
-    return result;
-  })();
-
-  _pendingHighlights.set(cacheKey, promise);
-  try {
-    return await promise;
-  } finally {
-    _pendingHighlights.delete(cacheKey);
-  }
-}
 
 export const CodeBlock = ({
   code,
@@ -214,6 +111,16 @@ export const CodeBlockCopyButton = ({
 }: CodeBlockCopyButtonProps) => {
   const [isCopied, setIsCopied] = useState(false);
   const { code } = useContext(CodeBlockContext);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (resetTimerRef.current) {
+        clearTimeout(resetTimerRef.current);
+        resetTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const copyToClipboard = async () => {
     if (typeof window === "undefined" || !navigator?.clipboard?.writeText) {
@@ -225,7 +132,13 @@ export const CodeBlockCopyButton = ({
       await navigator.clipboard.writeText(code);
       setIsCopied(true);
       onCopy?.();
-      setTimeout(() => setIsCopied(false), timeout);
+      if (resetTimerRef.current) {
+        clearTimeout(resetTimerRef.current);
+      }
+      resetTimerRef.current = setTimeout(() => {
+        setIsCopied(false);
+        resetTimerRef.current = null;
+      }, timeout);
     } catch (error) {
       onError?.(error as Error);
     }
