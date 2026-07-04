@@ -24,9 +24,18 @@ import { DeleteMessageDialog } from '@/containers/dialogs/message/DeleteMessageD
 import TokenSpeedIndicator from '@/containers/TokenSpeedIndicator'
 import { extractFilesFromPrompt, FileMetadata } from '@/lib/fileMetadata'
 import { Button } from '@/components/ui/button'
-import { Database, GitBranch, Paperclip, RefreshCw, ThumbsDown, ThumbsUp, Zap } from "lucide-react";
+import {
+  Database,
+  GitBranch,
+  Paperclip,
+  RefreshCw,
+  ThumbsDown,
+  ThumbsUp,
+  Zap,
+} from 'lucide-react'
 import { useMessages } from '@/hooks/chat/useMessages'
 import { RoutingBadge } from '@/components/RoutingBadge'
+import type { CitationData } from '@/types/citation-types'
 
 const CHAT_STATUS = {
   STREAMING: 'streaming',
@@ -100,18 +109,13 @@ export const MessageItem = memo(
         }
       | undefined
 
-    // Hydrate citation data from message metadata into the citation store.
-    // Only re-run when the message ID changes or citation data first appears.
-    // Avoid depending on `meta` directly — it's a new object reference on every
-    // render, which was causing "Maximum update depth exceeded" during streaming.
     const hydrateCitations = useCitations((s) => s.hydrate)
-    const hasCitationData = !!meta?.citationData
+    const metadataCitationData = meta?.citationData as CitationData | undefined
     useEffect(() => {
-      if (message.role === 'assistant' && hasCitationData) {
-        hydrateCitations(message.id, message.metadata as Record<string, unknown> | undefined)
+      if (message.role === 'assistant' && metadataCitationData) {
+        hydrateCitations(message.id, { citationData: metadataCitationData })
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [message.id, message.role, hasCitationData])
+    }, [hydrateCitations, message.id, message.role, metadataCitationData])
     const citationData = useCitations((s) => s.getCitations(message.id))
     const flagLowConfidence = useGuardrails((s) => s.flagLowConfidence)
 

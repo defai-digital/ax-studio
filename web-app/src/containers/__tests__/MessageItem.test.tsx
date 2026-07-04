@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { UIMessage } from 'ai'
 
@@ -85,6 +85,7 @@ vi.mock('@/components/RunLogViewer', () => ({
   RunLogSummary: () => <div data-testid="run-log-summary" />,
 }))
 
+import { useCitations } from '@/hooks/citations/use-citations'
 import { MessageItem } from '../MessageItem'
 
 function makeMessage(overrides: Partial<UIMessage> = {}): UIMessage {
@@ -99,6 +100,7 @@ function makeMessage(overrides: Partial<UIMessage> = {}): UIMessage {
 describe('MessageItem', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    useCitations.setState({ citationsByMessage: {} })
   })
 
   describe('user messages', () => {
@@ -247,6 +249,73 @@ describe('MessageItem', () => {
       )
       const md = screen.getByTestId('render-markdown')
       expect(md.textContent).toBe('Response text')
+    })
+
+    it('hydrates updated citation metadata for the same assistant message', async () => {
+      const initialCitationData = {
+        sources: [
+          {
+            id: 'src-1',
+            type: 'web' as const,
+            url: 'https://example.com',
+            title: 'Example',
+            snippet: 'Initial source',
+            retrievedAt: 1,
+          },
+        ],
+        confidence: 'moderate' as const,
+      }
+      const updatedCitationData = {
+        sources: [
+          ...initialCitationData.sources,
+          {
+            id: 'src-2',
+            type: 'document' as const,
+            title: 'Internal notes',
+            snippet: 'Updated source',
+            documentName: 'notes.md',
+            retrievedAt: 2,
+          },
+        ],
+        confidence: 'strong' as const,
+      }
+      const initialMessage = makeMessage({
+        id: 'citation-msg',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'Response text [1]' }],
+        metadata: { citationData: initialCitationData },
+      } as never)
+
+      const { rerender } = render(
+        <MessageItem
+          message={initialMessage}
+          isLastMessage={false}
+          status="ready"
+        />
+      )
+
+      await waitFor(() => {
+        expect(useCitations.getState().getCitations('citation-msg')).toEqual(
+          initialCitationData
+        )
+      })
+
+      rerender(
+        <MessageItem
+          message={{
+            ...initialMessage,
+            metadata: { citationData: updatedCitationData },
+          }}
+          isLastMessage={false}
+          status="ready"
+        />
+      )
+
+      await waitFor(() => {
+        expect(useCitations.getState().getCitations('citation-msg')).toEqual(
+          updatedCitationData
+        )
+      })
     })
 
     it('renders reasoning parts', () => {

@@ -9,10 +9,11 @@ const citationData = {
       type: 'web' as const,
       url: 'https://example.com',
       title: 'Example',
+      snippet: 'Example source',
       retrievedAt: 1,
     },
   ],
-  confidence: 'high' as const,
+  confidence: 'moderate' as const,
 }
 
 describe('useCitations', () => {
@@ -28,19 +29,62 @@ describe('useCitations', () => {
     )
   })
 
-  it('hydrates citation metadata once', () => {
+  it('hydrates citation metadata idempotently', () => {
+    useCitations.getState().hydrate('message-1', { citationData })
+    const hydratedCitationData =
+      useCitations.getState().getCitations('message-1')
+    useCitations.getState().hydrate('message-1', {
+      citationData: {
+        ...citationData,
+        sources: citationData.sources.map((source) => ({ ...source })),
+      },
+    })
+
+    expect(useCitations.getState().getCitations('message-1')).toBe(
+      hydratedCitationData
+    )
+  })
+
+  it('updates hydrated citation metadata when the message metadata changes', () => {
+    const updatedCitationData = {
+      ...citationData,
+      confidence: 'strong' as const,
+      sources: [
+        ...citationData.sources,
+        {
+          id: 'src-2',
+          type: 'document' as const,
+          title: 'Internal doc',
+          snippet: 'Internal source',
+          documentName: 'notes.md',
+          retrievedAt: 2,
+        },
+      ],
+    }
+
     useCitations.getState().hydrate('message-1', { citationData })
     useCitations.getState().hydrate('message-1', {
-      citationData: { ...citationData, confidence: 'low' },
+      citationData: updatedCitationData,
     })
 
     expect(useCitations.getState().getCitations('message-1')).toEqual(
-      citationData,
+      updatedCitationData
     )
   })
 
   it('ignores metadata without citation data', () => {
     useCitations.getState().hydrate('message-1', undefined)
+
+    expect(useCitations.getState().getCitations('message-1')).toBeUndefined()
+  })
+
+  it('ignores malformed citation metadata', () => {
+    useCitations.getState().hydrate('message-1', {
+      citationData: {
+        sources: [{ id: 'src-1', title: 'Missing fields' }],
+        confidence: 'high',
+      },
+    })
 
     expect(useCitations.getState().getCitations('message-1')).toBeUndefined()
   })
