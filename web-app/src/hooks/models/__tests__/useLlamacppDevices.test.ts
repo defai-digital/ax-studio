@@ -43,6 +43,15 @@ vi.mock('@/hooks/useServiceHub', async () => {
   }
 })
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve
+  })
+
+  return { promise, resolve }
+}
+
 describe('useLlamacppDevices', () => {
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>
 
@@ -255,6 +264,59 @@ describe('useLlamacppDevices', () => {
     expect(devices[0].activated).toBe(true)
     expect(devices[1].activated).toBe(false)
     expect(devices[2].activated).toBe(true)
+  })
+
+  it('should ignore stale device results when a newer fetch finishes first', async () => {
+    const staleRequest =
+      deferred<Array<{ id: string; name: string; mem: number; free: number }>>()
+    const freshRequest =
+      deferred<Array<{ id: string; name: string; mem: number; free: number }>>()
+
+    mockGetLlamacppDevices
+      .mockReturnValueOnce(staleRequest.promise)
+      .mockReturnValueOnce(freshRequest.promise)
+
+    let staleFetch!: Promise<void>
+    let freshFetch!: Promise<void>
+    act(() => {
+      staleFetch = useLlamacppDevices.getState().fetchDevices()
+      freshFetch = useLlamacppDevices.getState().fetchDevices()
+    })
+
+    await act(async () => {
+      freshRequest.resolve([
+        { id: 'gpu-fresh', name: 'Fresh GPU', mem: 16384, free: 8192 },
+      ])
+      await freshFetch
+    })
+
+    expect(useLlamacppDevices.getState().devices).toEqual([
+      {
+        id: 'gpu-fresh',
+        name: 'Fresh GPU',
+        mem: 16384,
+        free: 8192,
+        activated: true,
+      },
+    ])
+    expect(useLlamacppDevices.getState().loading).toBe(false)
+
+    await act(async () => {
+      staleRequest.resolve([
+        { id: 'gpu-stale', name: 'Stale GPU', mem: 8192, free: 4096 },
+      ])
+      await staleFetch
+    })
+
+    expect(useLlamacppDevices.getState().devices).toEqual([
+      {
+        id: 'gpu-fresh',
+        name: 'Fresh GPU',
+        mem: 16384,
+        free: 8192,
+        activated: true,
+      },
+    ])
   })
 
   // --- toggleDevice ---

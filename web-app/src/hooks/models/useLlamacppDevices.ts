@@ -15,16 +15,20 @@ interface LlamacppDevicesStore {
   toggleDevice: (deviceId: string) => void
 }
 
+let fetchDevicesRequestId = 0
+
 export const useLlamacppDevices = create<LlamacppDevicesStore>((set, get) => ({
   devices: [],
   loading: false,
   error: null,
 
   fetchDevices: async () => {
+    const requestId = ++fetchDevicesRequestId
     set({ loading: true, error: null })
 
     try {
       const devices = await getServiceHub().hardware().getLlamacppDevices()
+      if (requestId !== fetchDevicesRequestId) return
 
       // Check current device setting from provider
       const { getProviderByName } = useModelProvider.getState()
@@ -49,6 +53,8 @@ export const useLlamacppDevices = create<LlamacppDevicesStore>((set, get) => ({
 
       set({ devices: devicesWithActivation, loading: false })
     } catch (error) {
+      if (requestId !== fetchDevicesRequestId) return
+
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to fetch devices'
       set({ error: errorMessage, loading: false })
