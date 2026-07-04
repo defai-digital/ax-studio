@@ -206,7 +206,26 @@ describe('AxStudioLlamacppExtension', () => {
       },
       api: {},
     }
-    vi.mocked(invoke).mockImplementation(async (_command: string, args?: unknown) => {
+    vi.mocked(invoke).mockImplementation(async (command: string, args?: unknown) => {
+      if (command === 'mlx_hf_snapshot_dir') {
+        const { modelId, revision } = args as {
+          modelId: string
+          revision: string
+        }
+        return `/hf-cache/models--${modelId.replace(/\//g, '--')}/snapshots/${revision}`
+      }
+      if (command === 'mlx_has_model_manifest') {
+        const modelDir = (args as { modelDir?: string } | undefined)?.modelDir
+        return Boolean(modelDir && mocks.fsState.has(`${modelDir}/model-manifest.json`))
+      }
+      if (command === 'mlx_cleanup_import_artifacts') {
+        const paths = (args as { paths?: string[] } | undefined)?.paths ?? []
+        for (const path of paths) {
+          mocks.fsState.delete(path)
+          mocks.dirState.delete(path)
+        }
+        return undefined
+      }
       const path = (args as { path?: string } | undefined)?.path
       return path ?? ''
     })
@@ -466,8 +485,10 @@ describe('AxStudioLlamacppExtension', () => {
     fetchSpy.mockRestore()
   })
 
-  it('imports Hugging Face MLX repos into the Ax-Studio model directory', async () => {
+  it('imports Hugging Face MLX repos into the Hugging Face snapshot cache', async () => {
     const extension = new AxStudioLlamacppExtension('', '')
+    const snapshotDir =
+      '/hf-cache/models--mlx-community--gemma-4-12B-it-4bit/snapshots/abc123'
     const downloadFiles = vi.fn(
       async (
         items: Array<{ save_path: string }>,
@@ -488,6 +509,7 @@ describe('AxStudioLlamacppExtension', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({
+        sha: 'abc123',
         siblings: [
           {
             rfilename: 'model-manifest.json',
@@ -524,14 +546,12 @@ describe('AxStudioLlamacppExtension', () => {
     expect(downloadFiles).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({
-          url: 'https://huggingface.co/mlx-community/gemma-4-12B-it-4bit/resolve/main/model-manifest.json',
-          save_path:
-            'llamacpp/models/mlx-community/gemma-4-12B-it-4bit/model-manifest.json',
+          url: 'https://huggingface.co/mlx-community/gemma-4-12B-it-4bit/resolve/abc123/model-manifest.json',
+          save_path: `${snapshotDir}/model-manifest.json`,
         }),
         expect.objectContaining({
-          url: 'https://huggingface.co/mlx-community/gemma-4-12B-it-4bit/resolve/main/model-00001-of-00001.safetensors',
-          save_path:
-            'llamacpp/models/mlx-community/gemma-4-12B-it-4bit/model-00001-of-00001.safetensors',
+          url: 'https://huggingface.co/mlx-community/gemma-4-12B-it-4bit/resolve/abc123/model-00001-of-00001.safetensors',
+          save_path: `${snapshotDir}/model-00001-of-00001.safetensors`,
           sha256: 'abc',
           size: 1024,
         }),
@@ -545,7 +565,7 @@ describe('AxStudioLlamacppExtension', () => {
         '/app-data/llamacpp/models/mlx-community/gemma-4-12B-it-4bit/model.yml'
       )
     ).toContain(
-      'model_path: "llamacpp/models/mlx-community/gemma-4-12B-it-4bit"'
+      `model_path: "${snapshotDir}"`
     )
     expect(mocks.emit).toHaveBeenCalledWith('onModelImported', {
       modelId: 'mlx-community/gemma-4-12B-it-4bit',
@@ -556,6 +576,8 @@ describe('AxStudioLlamacppExtension', () => {
 
   it('generates AX manifest after importing Hugging Face MLX repos without one', async () => {
     const extension = new AxStudioLlamacppExtension('', '')
+    const snapshotDir =
+      '/hf-cache/models--mlx-community--Qwen3.5-9B-MLX-4bit/snapshots/main'
     const downloadFiles = vi.fn(
       async (
         items: Array<{ save_path: string }>,
@@ -617,8 +639,7 @@ describe('AxStudioLlamacppExtension', () => {
       expect.arrayContaining([
         expect.objectContaining({
           url: 'https://huggingface.co/mlx-community/Qwen3.5-9B-MLX-4bit/resolve/main/model-00001-of-00001.safetensors',
-          save_path:
-            'llamacpp/models/mlx-community/Qwen3.5-9B-MLX-4bit/model-00001-of-00001.safetensors',
+          save_path: `${snapshotDir}/model-00001-of-00001.safetensors`,
         }),
       ]),
       'mlx-import-mlx-community/Qwen3.5-9B-MLX-4bit',
@@ -626,15 +647,14 @@ describe('AxStudioLlamacppExtension', () => {
       expect.any(Function)
     )
     expect(invoke).toHaveBeenCalledWith('mlx_generate_model_manifest', {
-      modelDir:
-        '/app-data/llamacpp/models/mlx-community/Qwen3.5-9B-MLX-4bit',
+      modelDir: snapshotDir,
     })
     expect(
       mocks.fsState.get(
         '/app-data/llamacpp/models/mlx-community/Qwen3.5-9B-MLX-4bit/model.yml'
       )
     ).toContain(
-      'model_path: "llamacpp/models/mlx-community/Qwen3.5-9B-MLX-4bit"'
+      `model_path: "${snapshotDir}"`
     )
 
     fetchSpy.mockRestore()
@@ -642,6 +662,8 @@ describe('AxStudioLlamacppExtension', () => {
 
   it('generates AX manifest for Gemma MLX repos without bundled manifests', async () => {
     const extension = new AxStudioLlamacppExtension('', '')
+    const snapshotDir =
+      '/hf-cache/models--mlx-community--gemma-4-12B-it-4bit/snapshots/main'
     const downloadFiles = vi.fn(
       async (
         items: Array<{ save_path: string }>,
@@ -711,15 +733,14 @@ describe('AxStudioLlamacppExtension', () => {
     } as any)
 
     expect(invoke).toHaveBeenCalledWith('mlx_generate_model_manifest', {
-      modelDir:
-        '/app-data/llamacpp/models/mlx-community/gemma-4-12B-it-4bit',
+      modelDir: snapshotDir,
     })
     expect(
       mocks.fsState.get(
         '/app-data/llamacpp/models/mlx-community/gemma-4-12B-it-4bit/model.yml'
       )
     ).toContain(
-      'model_path: "llamacpp/models/mlx-community/gemma-4-12B-it-4bit"'
+      `model_path: "${snapshotDir}"`
     )
     expect(mocks.emit).toHaveBeenCalledWith('onModelImported', {
       modelId: 'mlx-community/gemma-4-12B-it-4bit',
@@ -730,6 +751,8 @@ describe('AxStudioLlamacppExtension', () => {
 
   it('generates AX manifest for DiffusionGemma MLX repos without bundled manifests', async () => {
     const extension = new AxStudioLlamacppExtension('', '')
+    const snapshotDir =
+      '/hf-cache/models--mlx-community--diffusiongemma-26B-A4B-it-4bit/snapshots/main'
     const downloadFiles = vi.fn(
       async (
         items: Array<{ save_path: string }>,
@@ -788,15 +811,14 @@ describe('AxStudioLlamacppExtension', () => {
     } as any)
 
     expect(invoke).toHaveBeenCalledWith('mlx_generate_model_manifest', {
-      modelDir:
-        '/app-data/llamacpp/models/mlx-community/diffusiongemma-26B-A4B-it-4bit',
+      modelDir: snapshotDir,
     })
     expect(
       mocks.fsState.get(
         '/app-data/llamacpp/models/mlx-community/diffusiongemma-26B-A4B-it-4bit/model.yml'
       )
     ).toContain(
-      'model_path: "llamacpp/models/mlx-community/diffusiongemma-26B-A4B-it-4bit"'
+      `model_path: "${snapshotDir}"`
     )
     expect(mocks.emit).toHaveBeenCalledWith('onModelImported', {
       modelId: 'mlx-community/diffusiongemma-26B-A4B-it-4bit',
@@ -825,6 +847,18 @@ describe('AxStudioLlamacppExtension', () => {
       downloadFiles,
     })
     vi.mocked(invoke).mockImplementation(async (command: string, args?: unknown) => {
+      if (command === 'mlx_hf_snapshot_dir') {
+        const { modelId, revision } = args as {
+          modelId: string
+          revision: string
+        }
+        return `/hf-cache/models--${modelId.replace(/\//g, '--')}/snapshots/${revision}`
+      }
+      if (command === 'mlx_cleanup_import_artifacts') {
+        const paths = (args as { paths?: string[] } | undefined)?.paths ?? []
+        for (const path of paths) mocks.fsState.delete(path)
+        return undefined
+      }
       if (command === 'mlx_generate_model_manifest') {
         throw new Error('failed to generate AX manifest: unsupported model type')
       }
@@ -922,7 +956,8 @@ describe('AxStudioLlamacppExtension', () => {
     ).resolves.toBeUndefined()
     expect(downloadFiles).toHaveBeenCalled()
     expect(invoke).toHaveBeenCalledWith('mlx_generate_model_manifest', {
-      modelDir: '/app-data/llamacpp/models/mlx-community/gemma-3-4b-it-4bit',
+      modelDir:
+        '/hf-cache/models--mlx-community--gemma-3-4b-it-4bit/snapshots/main',
     })
 
     fetchSpy.mockRestore()

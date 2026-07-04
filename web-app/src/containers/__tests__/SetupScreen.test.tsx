@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import SetupScreen from '../SetupScreen'
 
 // ── Mocks ────────────────────────────────────────────────
@@ -35,7 +35,8 @@ vi.mock('@/hooks/models/useModelProvider', () => ({
 
 vi.mock('@/i18n/react-i18next-compat', () => ({
   useTranslation: () => ({
-    t: (_key: string, opts?: { defaultValue?: string }) => opts?.defaultValue ?? _key,
+    t: (_key: string, opts?: { defaultValue?: string }) =>
+      opts?.defaultValue ?? _key,
   }),
 }))
 
@@ -47,7 +48,9 @@ vi.mock('@/containers/HeaderPage', () => ({
 
 vi.mock('@/components/ui/button', () => ({
   Button: ({ children, onClick, ...props }: any) => (
-    <button onClick={onClick} {...props}>{children}</button>
+    <button onClick={onClick} {...props}>
+      {children}
+    </button>
   ),
 }))
 
@@ -58,7 +61,9 @@ vi.mock('motion/react', () => ({
     h1: ({ children, ...props }: any) => <h1 {...props}>{children}</h1>,
     p: ({ children, ...props }: any) => <p {...props}>{children}</p>,
     button: ({ children, onClick, ...props }: any) => (
-      <button onClick={onClick} {...props}>{children}</button>
+      <button onClick={onClick} {...props}>
+        {children}
+      </button>
     ),
   },
   AnimatePresence: ({ children }: any) => <>{children}</>,
@@ -67,6 +72,7 @@ vi.mock('motion/react', () => ({
 vi.mock('@/constants/localStorage', () => ({
   localStorageKey: {
     setupCompleted: 'setup-completed',
+    workspaceMode: 'workspace-mode',
   },
 }))
 
@@ -95,8 +101,8 @@ describe('SetupScreen — Manual Test Protocol', () => {
     expect(screen.getByText('Welcome to Ax-Studio')).toBeInTheDocument()
   })
 
-  // Protocol #2: Navigate through all 5 steps
-  it('navigates through all 5 steps: Welcome → Theme → Providers → Privacy → Ready', () => {
+  // Protocol #2: Navigate through all 6 steps
+  it('navigates through all 6 steps: Welcome → Mode → Theme → Providers → Privacy → Ready', () => {
     renderSetup()
 
     // Step 0: Welcome
@@ -110,17 +116,27 @@ describe('SetupScreen — Manual Test Protocol', () => {
     expect(screen.getByText('Skip')).toBeInTheDocument()
     expect(screen.getByText('Continue')).toBeInTheDocument()
 
-    // Navigate to Step 1: Theme
+    // Navigate to Step 1: Workspace mode
+    clickButton('Continue')
+    expect(screen.getByText('Choose your workspace mode')).toBeInTheDocument()
+    expect(screen.getByText('Simple Chat')).toBeInTheDocument()
+    expect(screen.getByText('Local Private AI')).toBeInTheDocument()
+    expect(screen.getByText('Developer Agent')).toBeInTheDocument()
+    expect(screen.getByText('Knowledge Workspace')).toBeInTheDocument()
+    expect(screen.getByText('Controlled Workspace')).toBeInTheDocument()
+    expect(screen.getByText('Recommended')).toBeInTheDocument()
+
+    // Now has Back button instead of Skip
+    expect(screen.getByText('Back')).toBeInTheDocument()
+
+    // Navigate to Step 2: Theme
     clickButton('Continue')
     expect(screen.getByText('Choose your theme')).toBeInTheDocument()
     expect(screen.getByText('Light')).toBeInTheDocument()
     expect(screen.getByText('Dark')).toBeInTheDocument()
     expect(screen.getByText('System')).toBeInTheDocument()
 
-    // Now has Back button instead of Skip
-    expect(screen.getByText('Back')).toBeInTheDocument()
-
-    // Navigate to Step 2: Providers
+    // Navigate to Step 3: Providers
     clickButton('Continue')
     expect(screen.getByText('Set up providers')).toBeInTheDocument()
     expect(screen.getByText('Local (LlamaCPP)')).toBeInTheDocument()
@@ -130,7 +146,7 @@ describe('SetupScreen — Manual Test Protocol', () => {
     expect(screen.getByText('Google Gemini')).toBeInTheDocument()
     expect(screen.getByText('Recommended')).toBeInTheDocument()
 
-    // Navigate to Step 3: Privacy
+    // Navigate to Step 4: Privacy
     clickButton('Continue')
     expect(screen.getByText('Your privacy matters')).toBeInTheDocument()
     expect(screen.getByText('Local-first')).toBeInTheDocument()
@@ -138,9 +154,10 @@ describe('SetupScreen — Manual Test Protocol', () => {
     expect(screen.getByText('Your keys, your control')).toBeInTheDocument()
     expect(screen.getByText('Open source')).toBeInTheDocument()
 
-    // Navigate to Step 4: Ready
+    // Navigate to Step 5: Ready
     clickButton('Continue')
     expect(screen.getByText("You're all set!")).toBeInTheDocument()
+    expect(screen.getByText('Developer Agent')).toBeInTheDocument()
     expect(screen.getByText('New chat')).toBeInTheDocument()
     expect(screen.getByText('Search')).toBeInTheDocument()
     expect(screen.getByText('New project')).toBeInTheDocument()
@@ -156,7 +173,8 @@ describe('SetupScreen — Manual Test Protocol', () => {
   // Protocol #3: Theme step applies immediately
   it('calls setTheme when a theme option is clicked', () => {
     renderSetup()
-    clickButton('Continue') // Go to Theme step
+    clickButton('Continue') // Mode
+    clickButton('Continue') // Theme
 
     fireEvent.click(screen.getByText('Dark'))
     expect(mockSetTheme).toHaveBeenCalledWith('dark')
@@ -171,6 +189,7 @@ describe('SetupScreen — Manual Test Protocol', () => {
   // Protocol #4: Providers step toggles
   it('calls updateProvider when a provider is toggled', () => {
     renderSetup()
+    clickButton('Continue') // Mode
     clickButton('Continue') // Theme
     clickButton('Continue') // Providers
 
@@ -180,7 +199,9 @@ describe('SetupScreen — Manual Test Protocol', () => {
 
     // Click LlamaCPP (currently active, should toggle to inactive)
     fireEvent.click(screen.getByText('Local (LlamaCPP)'))
-    expect(mockUpdateProvider).toHaveBeenCalledWith('llamacpp', { active: false })
+    expect(mockUpdateProvider).toHaveBeenCalledWith('llamacpp', {
+      active: false,
+    })
   })
 
   // Protocol #5: Get Started sets localStorage and calls onComplete
@@ -192,10 +213,31 @@ describe('SetupScreen — Manual Test Protocol', () => {
     clickButton('Continue') // 2
     clickButton('Continue') // 3
     clickButton('Continue') // 4
+    clickButton('Continue') // 5
 
     clickButton('Get Started')
 
     expect(localStorage.getItem('setup-completed')).toBe('true')
+    expect(localStorage.getItem('workspace-mode')).toBe('developer-agent')
+    expect(onComplete).toHaveBeenCalledOnce()
+  })
+
+  it('persists the selected workspace mode on completion', () => {
+    const { onComplete } = renderSetup()
+
+    clickButton('Continue') // Mode
+    fireEvent.click(screen.getByText('Local Private AI'))
+    clickButton('Continue') // Theme
+    clickButton('Continue') // Providers
+    clickButton('Continue') // Privacy
+    clickButton('Continue') // Ready
+
+    expect(screen.getByText('Local Private AI')).toBeInTheDocument()
+
+    clickButton('Get Started')
+
+    expect(localStorage.getItem('setup-completed')).toBe('true')
+    expect(localStorage.getItem('workspace-mode')).toBe('local-private-ai')
     expect(onComplete).toHaveBeenCalledOnce()
   })
 
@@ -206,6 +248,7 @@ describe('SetupScreen — Manual Test Protocol', () => {
     clickButton('Skip')
 
     expect(localStorage.getItem('setup-completed')).toBe('true')
+    expect(localStorage.getItem('workspace-mode')).toBe('developer-agent')
     expect(onComplete).toHaveBeenCalledOnce()
   })
 
@@ -213,21 +256,21 @@ describe('SetupScreen — Manual Test Protocol', () => {
   it('back button navigates to previous step', () => {
     renderSetup()
 
-    clickButton('Continue') // Go to Theme
-    expect(screen.getByText('Choose your theme')).toBeInTheDocument()
+    clickButton('Continue') // Go to Mode
+    expect(screen.getByText('Choose your workspace mode')).toBeInTheDocument()
 
     clickButton('Back') // Back to Welcome
     expect(screen.getByText('Welcome to Ax-Studio')).toBeInTheDocument()
   })
 
-  // Progress dots: 5 dots rendered
-  it('renders 5 progress dots', () => {
+  // Progress dots: 6 dots rendered
+  it('renders 6 progress dots', () => {
     const { container } = renderSetup()
     // Progress dots are in the first flex gap-2 mb-8 container
     const dotsContainer = container.querySelector('.gap-2.mb-8')
     expect(dotsContainer).toBeInTheDocument()
     const dots = dotsContainer!.querySelectorAll('.rounded-full')
-    expect(dots).toHaveLength(5)
+    expect(dots).toHaveLength(6)
   })
 
   // HeaderPage is rendered
@@ -245,6 +288,7 @@ describe('SetupScreen — Manual Test Protocol', () => {
     clickButton('Continue') // 2
     clickButton('Continue') // 3
     clickButton('Continue') // 4
+    clickButton('Continue') // 5
 
     expect(screen.getByText("You're all set!")).toBeInTheDocument()
     // No "Continue" button on last step — only "Get Started"

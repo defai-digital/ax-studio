@@ -1,5 +1,6 @@
 use super::models::{DownloadEvent, DownloadItem, ProgressTracker, ProxyConfig};
 use crate::core::app::commands::get_app_data_folder_path;
+use crate::core::hf_cache;
 use ax_studio_utils::normalize_path;
 use futures_util::{future::join_all, StreamExt};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
@@ -243,6 +244,47 @@ pub fn should_bypass_proxy(url: &str, no_proxy: &[String]) -> bool {
     false
 }
 
+pub fn resolve_download_save_path<R: Runtime>(
+    app: &tauri::AppHandle<R>,
+    save_path: &str,
+) -> Result<std::path::PathBuf, String> {
+    let app_data_folder_raw = get_app_data_folder_path(app.clone());
+    let app_data_folder = normalize_path(
+        &app_data_folder_raw
+            .canonicalize()
+            .unwrap_or_else(|_| app_data_folder_raw.clone()),
+    );
+    let raw_path = std::path::PathBuf::from(save_path);
+
+    if raw_path.is_absolute() {
+        let normalized = hf_cache::normalize_existing_or_parent(&raw_path);
+        if normalized.starts_with(&app_data_folder) || hf_cache::is_within_cache(&normalized) {
+            return Ok(normalized);
+        }
+
+        return Err(format!(
+            "Path {} is outside allowed download roots: Ax-Studio data folder {} or Hugging Face cache {}",
+            normalized.display(),
+            app_data_folder.display(),
+            hf_cache::cache_root()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|| "<unavailable>".to_string())
+        ));
+    }
+
+    let save_path_raw = app_data_folder.join(save_path);
+    let save_path = hf_cache::normalize_existing_or_parent(&save_path_raw);
+    if !save_path.starts_with(&app_data_folder) {
+        return Err(format!(
+            "Path {} is outside of Ax-Studio data folder {}",
+            save_path.display(),
+            app_data_folder.display()
+        ));
+    }
+
+    Ok(save_path)
+}
+
 pub fn _get_client_for_item(
     item: &DownloadItem,
     header_map: &HeaderMap,
@@ -412,40 +454,11 @@ pub async fn _download_files_internal(
             })
         });
 
-    // save file under app data folder
-    let app_data_folder_raw = get_app_data_folder_path(app.clone());
-    // Canonicalize and normalize the app data folder to resolve symlinks
-    // (e.g., /var -> /private/var on macOS) so the starts_with check works correctly.
-    let app_data_folder = normalize_path(
-        &app_data_folder_raw
-            .canonicalize()
-            .unwrap_or_else(|_| app_data_folder_raw.clone()),
-    );
-
     // Collect download tasks for parallel execution
     let mut download_tasks = Vec::new();
 
     for (index, item) in items.iter().enumerate() {
-        let save_path_raw = app_data_folder.join(&item.save_path);
-        // Canonicalize the parent directory to resolve symlinks (e.g., /var -> /private/var)
-        // so the starts_with check works correctly on macOS. The file itself doesn't exist yet.
-        let save_path = if let Some(parent) = save_path_raw.parent() {
-            let canonical_parent = parent
-                .canonicalize()
-                .unwrap_or_else(|_| parent.to_path_buf());
-            let file_name = save_path_raw.file_name().unwrap_or_default();
-            normalize_path(&canonical_parent.join(file_name))
-        } else {
-            normalize_path(&save_path_raw)
-        };
-
-        if !save_path.starts_with(&app_data_folder) {
-            return Err(format!(
-                "Path {} is outside of Ax-Studio data folder {}",
-                save_path.display(),
-                app_data_folder.display()
-            ));
-        }
+        let save_path = resolve_download_save_path(&app, &item.save_path)?;
 
         // Spawn download task for each file
         let item_clone = item.clone();

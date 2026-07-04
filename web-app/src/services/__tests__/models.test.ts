@@ -1054,6 +1054,7 @@ describe('DefaultModelsService', () => {
         expect.objectContaining({
           modelPath: 'hf://mlx-community/Qwen3.5-4B-4bit',
           hfRepoFiles: repoResponse.siblings,
+          hfRevision: repoResponse.sha,
         })
       )
     })

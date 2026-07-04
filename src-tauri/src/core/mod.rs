@@ -2,6 +2,7 @@ pub mod app;
 pub mod downloads;
 pub mod extensions;
 pub mod filesystem;
+pub mod hf_cache;
 pub mod mcp;
 pub mod mlx;
 pub mod research;

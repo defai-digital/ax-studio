@@ -114,7 +114,8 @@ export interface ModelsService {
     mmprojSha256?: string,
     mmprojSize?: number,
     downloadHeaders?: Record<string, string>,
-    hfRepoFiles?: HuggingFaceRepo['siblings']
+    hfRepoFiles?: HuggingFaceRepo['siblings'],
+    hfRevision?: string
   ): Promise<void>
   pullModelWithMetadata(
     id: string,

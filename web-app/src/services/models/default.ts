@@ -269,7 +269,8 @@ export class DefaultModelsService implements ModelsService {
     mmprojSha256?: string,
     mmprojSize?: number,
     downloadHeaders?: Record<string, string>,
-    hfRepoFiles?: HuggingFaceRepo['siblings']
+    hfRepoFiles?: HuggingFaceRepo['siblings'],
+    hfRevision?: string
   ): Promise<void> {
     const engine = this.getEngine()
     if (!engine) {
@@ -286,6 +287,7 @@ export class DefaultModelsService implements ModelsService {
       mmprojSize,
       downloadHeaders,
       ...(hfRepoFiles?.length ? { hfRepoFiles } : {}),
+      ...(hfRevision ? { hfRevision } : {}),
     }
 
     return engine.import(id, importOptions)
@@ -308,11 +310,13 @@ export class DefaultModelsService implements ModelsService {
     const parsedModelPath = this.parseHuggingFaceModelPath(modelPath)
     const isHfRepoImport = modelPath.startsWith('hf://')
     let hfRepoFiles: HuggingFaceRepo['siblings'] | undefined
+    let hfRevision: string | undefined
 
     if (isHfRepoImport) {
       const repoId = modelPath.slice('hf://'.length).trim()
       const repoInfo = await this.fetchHuggingFaceRepo(repoId, hfToken)
       hfRepoFiles = repoInfo?.siblings
+      hfRevision = repoInfo?.sha
       if (!hfRepoFiles?.length) {
         throw new Error(`Failed to resolve Hugging Face files for ${repoId}`)
       }
@@ -368,7 +372,8 @@ export class DefaultModelsService implements ModelsService {
       mmprojSha256,
       mmprojSize,
       hfToken ? { Authorization: `Bearer ${hfToken}` } : undefined,
-      hfRepoFiles
+      hfRepoFiles,
+      hfRevision
     )
   }
 

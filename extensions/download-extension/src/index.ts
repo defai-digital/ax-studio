@@ -1,10 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
-import {
-  BaseExtension,
-  getAppDataFolderPath,
-  validateUrlProtocol,
-} from '@ax-studio/core'
+import { BaseExtension, validateUrlProtocol } from '@ax-studio/core'
 
 interface DownloadItem {
   url: string
@@ -37,10 +33,6 @@ export default class AxStudioDownloadManager extends BaseExtension {
    */
   private _sanitizeTaskId(taskId: string): string {
     return taskId.replace(/[^a-zA-Z0-9\-_]/g, '_')
-  }
-
-  private _isAbsolutePath(path: string): boolean {
-    return /^(?:[a-zA-Z]:[\\/]|\/|\\\\)/.test(path)
   }
 
   private _normalizePathForComparison(path: string): string {
@@ -97,20 +89,9 @@ export default class AxStudioDownloadManager extends BaseExtension {
       throw new Error('Download save path must not be empty')
     }
 
-    if (!this._isAbsolutePath(savePath)) {
-      return
-    }
-
-    const appDataPath = await getAppDataFolderPath()
-    const normalizedAppDataPath = this._normalizePathForComparison(appDataPath)
-    const exactMatch = normalizedSavePath === normalizedAppDataPath
-    const childPath = normalizedSavePath.startsWith(`${normalizedAppDataPath}/`)
-
-    if (!exactMatch && !childPath) {
-      throw new Error(
-        `Download save path must stay within the Ax-Studio data folder: ${savePath}`
-      )
-    }
+    // The Rust download command owns final root enforcement. Keeping that
+    // check in one place allows both app-data relative paths and trusted
+    // absolute roots such as the Hugging Face hub cache.
   }
 
   private async _validateDownloadItem(item: DownloadItem): Promise<void> {

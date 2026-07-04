@@ -280,18 +280,26 @@ describe('AxStudioDownloadManager', () => {
       expect(invoke).not.toHaveBeenCalled()
     })
 
-    it('rejects absolute save paths outside the app data folder', async () => {
-      await expect(
-        manager.downloadFiles(
-          [{ url: 'https://example.com/file', save_path: '/outside/app-data/file.gguf' }],
-          'task-1'
-        )
-      ).rejects.toThrow(
-        'Download save path must stay within the Ax-Studio data folder: /outside/app-data/file.gguf'
+    it('delegates absolute save path root enforcement to Tauri', async () => {
+      const mockUnlisten = vi.fn()
+      vi.mocked(listen).mockResolvedValue(mockUnlisten)
+      vi.mocked(invoke).mockResolvedValue(undefined)
+
+      await manager.downloadFiles(
+        [{ url: 'https://example.com/file', save_path: '/outside/app-data/file.gguf' }],
+        'task-1'
       )
 
-      expect(listen).not.toHaveBeenCalled()
-      expect(invoke).not.toHaveBeenCalled()
+      expect(invoke).toHaveBeenCalledWith('download_files', {
+        items: [
+          {
+            url: 'https://example.com/file',
+            save_path: '/outside/app-data/file.gguf',
+          },
+        ],
+        taskId: 'task-1',
+        headers: {},
+      })
     })
   })
 

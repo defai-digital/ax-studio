@@ -1,5 +1,4 @@
 export const localStorageKey = {
-
   LeftPanel: 'left-panel',
   threads: 'threads',
   messages: 'messages',
@@ -9,7 +8,7 @@ export const localStorageKey = {
   settingInterface: 'setting-appearance',
   settingGeneral: 'setting-general',
   settingAxBiLiveNavigation: 'setting-ax-bi-live-navigation',
-  
+
   settingCodeBlock: 'setting-code-block',
   settingLocalApiServer: 'setting-local-api-server',
   settingProxyConfig: 'setting-proxy-config',
@@ -22,6 +21,7 @@ export const localStorageKey = {
   lastUsedAssistant: 'last-used-assistant',
   favoriteModels: 'favorite-models',
   setupCompleted: 'setup-completed',
+  workspaceMode: 'workspace-mode',
   threadManagement: 'thread-management',
   modelSupportCache: 'ax-studio-model-support-cache',
   recentSearches: 'recent-searches',

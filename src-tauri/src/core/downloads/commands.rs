@@ -1,8 +1,6 @@
-use super::helpers::{_download_files_internal, err_to_string};
+use super::helpers::{_download_files_internal, err_to_string, resolve_download_save_path};
 use super::models::DownloadItem;
-use crate::core::app::commands::get_app_data_folder_path;
 use crate::core::state::AppState;
-use ax_studio_utils::normalize_path;
 use std::collections::HashMap;
 use tauri::{Runtime, State};
 use tokio_util::sync::CancellationToken;
@@ -59,16 +57,14 @@ pub async fn download_files<R: Runtime>(
 
     // delete files if cancelled
     if should_cleanup_cancelled_outputs {
-        let app_data_folder = get_app_data_folder_path(app.clone());
         for item in items {
-            let save_path = normalize_path(&app_data_folder.join(&item.save_path));
-            if save_path.starts_with(&app_data_folder) {
-                let _ = tokio::fs::remove_file(&save_path).await;
-            } else {
-                log::warn!(
-                    "Skipped unsafe cleanup path outside app data folder: {}",
-                    save_path.display()
-                );
+            match resolve_download_save_path(&app, &item.save_path) {
+                Ok(save_path) => {
+                    let _ = tokio::fs::remove_file(&save_path).await;
+                }
+                Err(error) => {
+                    log::warn!("Skipped unsafe cleanup path after cancelled download: {error}");
+                }
             }
         }
     }

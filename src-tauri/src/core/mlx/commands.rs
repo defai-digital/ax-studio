@@ -17,6 +17,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Runtime, State};
 
 use crate::core::app::commands::get_app_data_folder_path;
+use crate::core::hf_cache;
 use crate::core::mlx::state::MlxState;
 use crate::core::mlx::worker::{ChatMessage, GenerateParams, StreamEvent};
 
@@ -119,6 +120,52 @@ pub fn mlx_resolve_model_dir<R: Runtime>(
     Ok(path.to_string_lossy().to_string())
 }
 
+/// Resolve the local Hugging Face cache snapshot directory AX Studio should use
+/// for a repo/revision download.
+#[tauri::command]
+pub fn mlx_hf_snapshot_dir(model_id: String, revision: String) -> Result<String, String> {
+    let path = hf_cache::snapshot_dir(&model_id, &revision)?;
+    Ok(path.to_string_lossy().to_string())
+}
+
+/// Best-effort cleanup for failed MLX imports. Cleanup is restricted to the
+/// Hugging Face cache, so a failed remote download cannot delete arbitrary files.
+#[tauri::command]
+pub fn mlx_cleanup_import_artifacts(paths: Vec<String>) -> Result<(), String> {
+    for raw_path in paths {
+        if raw_path.trim().is_empty() {
+            continue;
+        }
+        let path = hf_cache::normalize_existing_or_parent(Path::new(&raw_path));
+        if !hf_cache::is_within_cache(&path) {
+            log::warn!(
+                "Skipping MLX import cleanup outside Hugging Face cache: {}",
+                path.display()
+            );
+            continue;
+        }
+        if path.is_file() {
+            let _ = std::fs::remove_file(&path);
+        } else if path.is_dir() {
+            let _ = std::fs::remove_dir_all(&path);
+        }
+    }
+    Ok(())
+}
+
+/// Check whether a Hugging Face cache snapshot has AX Engine native artifacts.
+#[tauri::command]
+pub fn mlx_has_model_manifest(model_dir: String) -> Result<bool, String> {
+    let path = hf_cache::normalize_existing_or_parent(Path::new(&model_dir));
+    if !hf_cache::is_within_cache(&path) {
+        return Err(format!(
+            "MLX model directory is outside Hugging Face cache: {}",
+            path.display()
+        ));
+    }
+    Ok(is_ax_native_model_dir(&path))
+}
+
 /// Generate or validate AX Engine's native manifest for a downloaded MLX
 /// Hugging Face snapshot.
 #[tauri::command]
@@ -159,13 +206,7 @@ pub async fn mlx_generate_model_manifest(model_dir: String) -> Result<(), String
 /// recent snapshot if multiple exist. Returns None if the cache layout doesn't
 /// match (e.g. model not downloaded yet).
 pub(crate) fn resolve_hf_cache_dir(model_id: &str) -> Option<PathBuf> {
-    let home = std::env::var_os("HOME")?;
-    let repo_dirname = format!("models--{}", model_id.replace('/', "--"));
-    let repo_dir = PathBuf::from(home)
-        .join(".cache")
-        .join("huggingface")
-        .join("hub")
-        .join(&repo_dirname);
+    let repo_dir = hf_cache::repo_cache_dir(model_id).ok()?;
     let snapshots = repo_dir.join("snapshots");
     let entries = std::fs::read_dir(&snapshots).ok()?;
     let mut best: Option<(std::time::SystemTime, PathBuf)> = None;
@@ -186,8 +227,9 @@ fn resolve_downloaded_or_cached_model_dir<R: Runtime>(
     app_handle: &AppHandle<R>,
     model_id: &str,
 ) -> Option<PathBuf> {
-    resolve_app_data_model_dir(app_handle, model_id)
-        .or_else(|| resolve_hf_cache_dir(model_id).filter(|path| is_ax_native_model_dir(path)))
+    resolve_hf_cache_dir(model_id)
+        .filter(|path| is_ax_native_model_dir(path))
+        .or_else(|| resolve_app_data_model_dir(app_handle, model_id))
 }
 
 fn resolve_app_data_model_dir<R: Runtime>(
