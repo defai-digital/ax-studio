@@ -9,6 +9,10 @@ const {
   mockBootstrapEvents,
   mockBootstrapLocalApi,
   mockSyncRemoteProviders,
+  mockSetApiKey,
+  mockSetServerPort,
+  mockSetServerStatus,
+  mockLocalApiServerState,
 } = vi.hoisted(() => ({
   mockBootstrapProviders: vi.fn(),
   mockBootstrapThreads: vi.fn(),
@@ -16,6 +20,22 @@ const {
   mockBootstrapEvents: vi.fn(),
   mockBootstrapLocalApi: vi.fn(),
   mockSyncRemoteProviders: vi.fn(),
+  mockSetApiKey: vi.fn(),
+  mockSetServerPort: vi.fn(),
+  mockSetServerStatus: vi.fn(),
+  mockLocalApiServerState: {
+    enableOnStartup: true,
+    serverHost: '127.0.0.1' as const,
+    serverPort: 1337,
+    apiPrefix: '/v1',
+    apiKey: 'ax-test',
+    trustedHosts: ['localhost'],
+    corsEnabled: true,
+    verboseLogs: false,
+    proxyTimeout: 600,
+    setServerPort: vi.fn(),
+    setApiKey: vi.fn(),
+  },
 }))
 
 // Mock Tauri deep link
@@ -69,6 +89,18 @@ vi.mock('@/hooks/tools/useMCPServers', () => ({
   })),
 }))
 
+vi.mock('@/hooks/settings/useLocalApiServer', () => ({
+  useLocalApiServer: vi.fn(() => mockLocalApiServerState),
+}))
+
+vi.mock('@/hooks/settings/useAppState', () => ({
+  useAppState: vi.fn((selector) =>
+    selector({
+      setServerStatus: mockSetServerStatus,
+    })
+  ),
+}))
+
 vi.mock('@/lib/bootstrap/bootstrap-providers', () => ({
   bootstrapProviders: mockBootstrapProviders,
 }))
@@ -96,6 +128,19 @@ vi.mock('@/lib/providers/provider-sync', () => ({
 describe('DataProvider', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    Object.assign(mockLocalApiServerState, {
+      enableOnStartup: true,
+      serverHost: '127.0.0.1',
+      serverPort: 1337,
+      apiPrefix: '/v1',
+      apiKey: 'ax-test',
+      trustedHosts: ['localhost'],
+      corsEnabled: true,
+      verboseLogs: false,
+      proxyTimeout: 600,
+      setServerPort: mockSetServerPort,
+      setApiKey: mockSetApiKey,
+    })
     mockBootstrapProviders.mockResolvedValue({ unsubscribeDeepLink: vi.fn() })
     mockBootstrapThreads.mockResolvedValue(undefined)
     mockBootstrapUpdater.mockReturnValue(vi.fn())
@@ -114,5 +159,41 @@ describe('DataProvider', () => {
     const { container } = render(<DataProvider />)
 
     expect(container.textContent).toBe('')
+  })
+
+  it('bootstraps the local API from the initial startup snapshot once', () => {
+    const { rerender } = render(<DataProvider />)
+
+    expect(mockBootstrapLocalApi).toHaveBeenCalledTimes(1)
+    expect(mockBootstrapLocalApi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enabled: true,
+        config: expect.objectContaining({
+          host: '127.0.0.1',
+          port: 1337,
+          prefix: '/v1',
+          apiKey: 'ax-test',
+          trustedHosts: ['localhost'],
+          corsEnabled: true,
+          verboseLogs: false,
+          proxyTimeout: 600,
+        }),
+        setServerPort: mockSetServerPort,
+        setApiKey: mockSetApiKey,
+        setServerStatus: mockSetServerStatus,
+      })
+    )
+
+    Object.assign(mockLocalApiServerState, {
+      enableOnStartup: false,
+      serverPort: 1555,
+      apiKey: 'ax-updated',
+    })
+
+    rerender(<DataProvider />)
+
+    expect(mockBootstrapLocalApi).toHaveBeenCalledTimes(1)
+    expect(mockBootstrapLocalApi.mock.calls[0][0].config.port).toBe(1337)
+    expect(mockBootstrapLocalApi.mock.calls[0][0].config.apiKey).toBe('ax-test')
   })
 })

@@ -78,10 +78,58 @@ export function DataProvider() {
     [navigate]
   )
 
+  const startupSnapshot = useRef({
+    serviceHub,
+    setProviders,
+    checkForUpdate,
+    setServers,
+    setSettings,
+    setAssistants,
+    initializeWithLastUsed,
+    setThreads,
+    handleDeepLink,
+    enableOnStartup,
+    serverHost,
+    serverPort,
+    setServerPort,
+    apiPrefix,
+    apiKey,
+    setApiKey,
+    trustedHosts,
+    corsEnabled,
+    verboseLogs,
+    proxyTimeout,
+    setServerStatus,
+  })
+
   // ─── Effect 1: One-time startup bootstrap ────────────────────────────────
-  // Runs once on mount (serviceHub is stable). Calls all startup units
-  // concurrently where safe and handles each failure independently.
+  // Runs once on mount from the initial startup snapshot. Later settings edits
+  // are handled by their own settings flows and must not tear down startup
+  // listeners, retry timers, or the updater interval.
   useEffect(() => {
+    const {
+      serviceHub,
+      setProviders,
+      checkForUpdate,
+      setServers,
+      setSettings,
+      setAssistants,
+      initializeWithLastUsed,
+      setThreads,
+      handleDeepLink,
+      enableOnStartup,
+      serverHost,
+      serverPort,
+      setServerPort,
+      apiPrefix,
+      apiKey,
+      setApiKey,
+      trustedHosts,
+      corsEnabled,
+      verboseLogs,
+      proxyTimeout,
+      setServerStatus,
+    } = startupSnapshot.current
     let unmounted = false
     let cleanupDeepLink: () => void = () => {}
     let cleanupEvents: () => void = () => {}
@@ -174,10 +222,7 @@ export function DataProvider() {
       cleanupUpdater()
       providerStartupRefreshTimers.forEach(clearTimeout)
     }
-    // serviceHub is stable for the app lifetime; other deps are store actions
-    // (stable Zustand references) or config values captured once at startup.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serviceHub])
+  }, [])
 
   // ─── Effect 2: Reactive remote provider sync ──────────────────────────────
   // Re-fires when providers change (e.g. user adds/removes a provider or key).
