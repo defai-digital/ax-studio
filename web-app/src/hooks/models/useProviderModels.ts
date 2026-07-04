@@ -11,7 +11,36 @@ type UseProviderModelsState = {
 const modelsCache = new Map<string, { models: string[]; timestamp: number }>()
 const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
 
-export const useProviderModels = (provider?: ModelProvider): UseProviderModelsState => {
+function hashCachePart(value: string): string {
+  let hash = 0x811c9dc5
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 0x01000193) >>> 0
+  }
+  return hash.toString(36)
+}
+
+function getProviderModelsCacheKey(provider: ModelProvider): string {
+  const baseUrl = provider.base_url?.trim().replace(/\/+$/, '') ?? ''
+  const apiKeyHash = hashCachePart(provider.api_key ?? '')
+  const customHeaders = (provider.custom_header ?? [])
+    .map(
+      (header) =>
+        `${header.header.trim().toLowerCase()}:${hashCachePart(header.value)}`
+    )
+    .sort()
+    .join('|')
+
+  return [provider.provider, baseUrl, apiKeyHash, customHeaders].join('::')
+}
+
+export function clearProviderModelsCache() {
+  modelsCache.clear()
+}
+
+export const useProviderModels = (
+  provider?: ModelProvider
+): UseProviderModelsState => {
   const serviceHub = useServiceHub()
   const [models, setModels] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
@@ -23,6 +52,9 @@ export const useProviderModels = (provider?: ModelProvider): UseProviderModelsSt
   const fetchModels = useCallback(async () => {
     if (!provider || !provider.base_url) {
       // Clear models if provider is invalid (base_url is required, api_key is optional)
+      requestIdRef.current += 1
+      abortRef.current?.abort()
+      prevProviderKey.current = ''
       setModels([])
       setError(null)
       setLoading(false)
@@ -30,7 +62,7 @@ export const useProviderModels = (provider?: ModelProvider): UseProviderModelsSt
     }
 
     // Clear any previous state when starting a new fetch for a different provider
-    const currentProviderKey = `${provider.provider}-${provider.base_url}`
+    const currentProviderKey = getProviderModelsCacheKey(provider)
     if (currentProviderKey !== prevProviderKey.current) {
       setModels([])
       setError(null)
@@ -38,7 +70,7 @@ export const useProviderModels = (provider?: ModelProvider): UseProviderModelsSt
       prevProviderKey.current = currentProviderKey
     }
 
-    const cacheKey = `${provider.provider}-${provider.base_url}`
+    const cacheKey = currentProviderKey
     const cached = modelsCache.get(cacheKey)
 
     // Check cache first
@@ -55,8 +87,14 @@ export const useProviderModels = (provider?: ModelProvider): UseProviderModelsSt
     setError(null)
 
     try {
-      const fetchedModels = await serviceHub.providers().fetchModelsFromProvider(provider)
-      if (currentRequestId !== requestIdRef.current || controller.signal.aborted) return
+      const fetchedModels = await serviceHub
+        .providers()
+        .fetchModelsFromProvider(provider)
+      if (
+        currentRequestId !== requestIdRef.current ||
+        controller.signal.aborted
+      )
+        return
       const sortedModels = [...fetchedModels].sort((a, b) => a.localeCompare(b))
 
       setModels(sortedModels)
@@ -66,12 +104,21 @@ export const useProviderModels = (provider?: ModelProvider): UseProviderModelsSt
         timestamp: Date.now(),
       })
     } catch (err) {
-      if (currentRequestId !== requestIdRef.current || controller.signal.aborted) return
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch models'
+      if (
+        currentRequestId !== requestIdRef.current ||
+        controller.signal.aborted
+      )
+        return
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to fetch models'
       setError(errorMessage)
       console.error(`Error fetching models from ${provider.provider}:`, err)
     } finally {
-      if (currentRequestId === requestIdRef.current && !controller.signal.aborted) setLoading(false)
+      if (
+        currentRequestId === requestIdRef.current &&
+        !controller.signal.aborted
+      )
+        setLoading(false)
     }
   }, [provider, serviceHub])
 
@@ -85,7 +132,9 @@ export const useProviderModels = (provider?: ModelProvider): UseProviderModelsSt
 
   useEffect(() => {
     fetchModels()
-    return () => { abortRef.current?.abort() }
+    return () => {
+      abortRef.current?.abort()
+    }
   }, [fetchModels])
 
   return {

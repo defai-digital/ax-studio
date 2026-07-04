@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
-import { useProviderModels } from '../useProviderModels'
+import {
+  clearProviderModelsCache,
+  useProviderModels,
+} from '../useProviderModels'
 import { useServiceHub } from '@/hooks/useServiceHub'
 
 // Local minimal provider type for tests
@@ -30,6 +33,7 @@ describe('useProviderModels', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     vi.clearAllMocks()
+    clearProviderModelsCache()
     const hub = (useServiceHub as unknown as () => any)()
     const mockedFetch = vi.fn()
     vi.spyOn(hub, 'providers').mockReturnValue({
@@ -64,11 +68,43 @@ describe('useProviderModels', () => {
     const { result } = renderHook(() => useProviderModels(mockProvider))
 
     await waitFor(() => {
-      expect(result.current.models).toEqual(['gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo'])
+      expect(result.current.models).toEqual([
+        'gpt-3.5-turbo',
+        'gpt-4',
+        'gpt-4-turbo',
+      ])
     })
 
     expect(result.current.error).toBe(null)
     expect(fetchModelsSpy).toHaveBeenCalledWith(mockProvider)
+  })
+
+  it('should refetch models when provider credentials change', async () => {
+    fetchModelsSpy
+      .mockResolvedValueOnce(['old-credential-model'])
+      .mockResolvedValueOnce(['new-credential-model'])
+
+    const { result, rerender } = renderHook(
+      ({ provider }) => useProviderModels(provider),
+      { initialProps: { provider: mockProvider } }
+    )
+
+    await waitFor(() => {
+      expect(result.current.models).toEqual(['old-credential-model'])
+    })
+
+    rerender({
+      provider: {
+        ...mockProvider,
+        api_key: 'new-test-api-key',
+      },
+    })
+
+    await waitFor(() => {
+      expect(result.current.models).toEqual(['new-credential-model'])
+    })
+
+    expect(fetchModelsSpy).toHaveBeenCalledTimes(2)
   })
 
   it('should clear models when switching to invalid provider', async () => {
@@ -79,10 +115,17 @@ describe('useProviderModels', () => {
       { initialProps: { provider: mockProvider } }
     )
 
-    await waitFor(() => {
-      expect(result.current.models).toEqual(['gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo'])
-      expect(result.current.loading).toBe(false)
-    }, { timeout: 500 })
+    await waitFor(
+      () => {
+        expect(result.current.models).toEqual([
+          'gpt-3.5-turbo',
+          'gpt-4',
+          'gpt-4-turbo',
+        ])
+        expect(result.current.loading).toBe(false)
+      },
+      { timeout: 500 }
+    )
 
     // Switch to invalid provider
     rerender({ provider: { ...mockProvider, base_url: undefined } })
