@@ -1,6 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { Route } from '../$modelId'
+
+const mocks = vi.hoisted(() => ({
+  convertHfRepoToCatalogModel: vi.fn(),
+  fetchHuggingFaceRepo: vi.fn(),
+  isModelSupported: vi.fn(),
+  pullModelWithMetadata: vi.fn(),
+}))
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve
+  })
+
+  return { promise, resolve }
+}
 
 // Mock dependencies
 vi.mock('@/containers/HeaderPage', () => ({
@@ -25,10 +41,10 @@ vi.mock('@/hooks/settings/useGeneralSetting', () => ({
 vi.mock('@/hooks/useServiceHub', () => ({
   useServiceHub: () => ({
     models: () => ({
-      fetchHuggingFaceRepo: vi.fn().mockResolvedValue(null),
-      convertHfRepoToCatalogModel: vi.fn(),
-      isModelSupported: vi.fn().mockResolvedValue('GREEN'),
-      pullModelWithMetadata: vi.fn(),
+      fetchHuggingFaceRepo: mocks.fetchHuggingFaceRepo,
+      convertHfRepoToCatalogModel: mocks.convertHfRepoToCatalogModel,
+      isModelSupported: mocks.isModelSupported,
+      pullModelWithMetadata: mocks.pullModelWithMetadata,
     }),
   }),
 }))
@@ -154,6 +170,8 @@ import { sanitizeModelId } from '@/lib/utils'
 describe('Hub Model Detail Route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.fetchHuggingFaceRepo.mockResolvedValue(null)
+    mocks.isModelSupported.mockResolvedValue('GREEN')
   })
 
   it('should use raw modelId parameter for catalog lookup', () => {
@@ -165,6 +183,31 @@ describe('Hub Model Detail Route', () => {
 
     expect(sanitizeModelId).not.toHaveBeenCalledWith(mockModelId)
     expect(screen.getByText('Model not found')).toBeInTheDocument()
+  })
+
+  it('ignores delayed repo lookup results after unmount', async () => {
+    const repoLookup = deferred<unknown>()
+    mocks.fetchHuggingFaceRepo.mockReturnValue(repoLookup.promise)
+    ;(useParams as any).mockReturnValue({ modelId: 'user/model' })
+
+    const Component = Route.component as React.ComponentType
+    const { unmount } = render(<Component />)
+
+    await waitFor(() => {
+      expect(mocks.fetchHuggingFaceRepo).toHaveBeenCalledTimes(1)
+    })
+    const signal = mocks.fetchHuggingFaceRepo.mock.calls[0][2] as AbortSignal
+
+    unmount()
+
+    expect(signal.aborted).toBe(true)
+
+    await act(async () => {
+      repoLookup.resolve({ id: 'repo-result' })
+      await repoLookup.promise
+    })
+
+    expect(mocks.convertHfRepoToCatalogModel).not.toHaveBeenCalled()
   })
 
   it('should render "Model not found" when no model data', () => {

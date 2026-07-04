@@ -123,10 +123,14 @@ function HubModelDetailContent() {
     const repoInfo = await serviceHub
       .models()
       .fetchHuggingFaceRepo(search.repo || modelId, huggingfaceToken, signal)
+    if (signal?.aborted) return
+
     if (repoInfo) {
       const repoDetail = serviceHub
         .models()
         .convertHfRepoToCatalogModel(repoInfo)
+      if (signal?.aborted) return
+
       setRepoData(repoDetail || undefined)
     }
   }, [serviceHub, modelId, search, huggingfaceToken])
