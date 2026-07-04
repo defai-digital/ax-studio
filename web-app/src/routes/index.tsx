@@ -37,7 +37,6 @@ const homeSearchSchema = z.object({
     .optional(),
 })
 import { useThreads } from '@/hooks/threads/useThreads'
-import DropdownModelProvider from '@/containers/DropdownModelProvider'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { resolveSystemPrompt } from '@/lib/prompts/system-prompt'
 import { Button } from '@/components/ui/button'
@@ -182,7 +181,6 @@ function Index() {
     <div className="flex h-full flex-col overflow-hidden">
       <HeaderPage>
         <div className="flex items-center w-full pr-4">
-          <DropdownModelProvider model={selectedModel} useLastUsedModel />
           <div className="flex items-center gap-1 ml-auto shrink-0">
             <Button
               variant={showThreadPromptEditor ? 'secondary' : 'ghost'}

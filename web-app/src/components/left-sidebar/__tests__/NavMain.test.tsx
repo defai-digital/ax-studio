@@ -29,6 +29,10 @@ vi.mock('@/constants/routes', () => ({
   route: {
     home: '/',
     hub: { index: '/hub' },
+    settings: {
+      assistant: '/settings/assistant',
+      mcp_servers: '/settings/mcp-servers',
+    },
   },
 }))
 

@@ -2,7 +2,7 @@ import TextareaAutosize from 'react-textarea-autosize'
 import { cn } from '@/lib/utils'
 import { usePrompt } from '@/hooks/ui/usePrompt'
 import { useThreads } from '@/hooks/threads/useThreads'
-import { useCallback, useEffect, useRef, useState, memo } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useAppState } from '@/hooks/settings/useAppState'
@@ -19,6 +19,7 @@ import { useChatAttachments, NEW_THREAD_ATTACHMENT_KEY } from '@/hooks/chat/useC
 import { useDocumentAttachmentHandler } from '@/hooks/chat/use-document-attachment-handler'
 import { useImageAttachmentHandler } from '@/hooks/chat/use-image-attachment-handler'
 import { ChatInputToolbar } from '@/components/chat/ChatInputToolbar'
+import DropdownModelProvider from '@/containers/DropdownModelProvider'
 import { ChatInputAttachments } from '@/components/ChatInputAttachments'
 import { TokenCounter } from '@/components/TokenCounter'
 import { useTranslation } from '@/i18n/react-i18next-compat'
@@ -168,25 +169,6 @@ const ChatInput = memo(function ChatInput({
     [setGlobalPrompt, threadId]
   )
 
-  // Prompt improvement suggestion — appears after user pauses typing (2s, >30 chars)
-  const [showImproveHint, setShowImproveHint] = useState(false)
-  const improveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    if (improveTimerRef.current) clearTimeout(improveTimerRef.current)
-    setShowImproveHint(false)
-
-    const trimmed = prompt.trim()
-    if (trimmed.length > 30 && initialMessage) {
-      improveTimerRef.current = setTimeout(() => {
-        setShowImproveHint(true)
-      }, 2000)
-    }
-    return () => {
-      if (improveTimerRef.current) clearTimeout(improveTimerRef.current)
-    }
-  }, [prompt, initialMessage])
-
   // Focus management
   useEffect(() => {
     const handleFocusIn = () => {
@@ -248,6 +230,19 @@ const ChatInput = memo(function ChatInput({
   const MCPToolComponent = mcpExtension?.getToolComponent?.()
   const isStreaming = chatStatus === 'submitted' || chatStatus === 'streaming'
 
+  // Model selector, rendered inside the composer toolbar. `useLastUsedModel`
+  // reproduces the previous per-context header behaviour exactly: on the new-chat
+  // home it defaulted to the last-used model; in threads and projects it did not.
+  const modelSelector = useMemo(
+    () => (
+      <DropdownModelProvider
+        model={model}
+        useLastUsedModel={Boolean(initialMessage && !projectId)}
+      />
+    ),
+    [model, initialMessage, projectId]
+  )
+
   return (
     <div
       className="relative"
@@ -264,23 +259,6 @@ const ChatInput = memo(function ChatInput({
         className="hidden"
         onChange={handleFileChange}
       />
-      {/* Prompt improvement suggestion */}
-      {showImproveHint && (
-        <div className="flex items-center justify-between gap-2 mb-2 px-3 py-2 rounded-xl bg-primary/5 border border-primary/20 animate-in fade-in-0 slide-in-from-bottom-1 duration-200">
-          <span className="text-xs text-muted-foreground">
-            Want me to make this more specific for better results?
-          </span>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              type="button"
-              onClick={() => setShowImproveHint(false)}
-              className="text-[11px] text-muted-foreground hover:text-foreground px-2 py-1 rounded-md hover:bg-muted transition-colors"
-            >
-              Send as-is
-            </button>
-          </div>
-        </div>
-      )}
       <div className="relative">
         {isDragOver && (
           <div className="absolute inset-0 z-30 rounded-2xl border-2 border-dashed border-primary/60 bg-primary/5 pointer-events-none" />
@@ -358,6 +336,7 @@ const ChatInput = memo(function ChatInput({
         <ChatInputToolbar
           isStreaming={isStreaming}
           prompt={prompt}
+          modelSelector={modelSelector}
           selectedModel={selectedModel}
           projectId={projectId}
           initialMessage={initialMessage}

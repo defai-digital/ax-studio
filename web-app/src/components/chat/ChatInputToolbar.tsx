@@ -65,10 +65,32 @@ function ToolbarIconButton({
   )
 }
 
+// A read-only capability indicator. Looks like a chip, not a button, so it
+// doesn't misrepresent a passive "this model supports X" signal as an action.
+function ToolbarIndicator({
+  icon: Icon,
+  tooltip,
+  iconClassName,
+}: Pick<ToolbarIconButtonProps, 'icon' | 'tooltip' | 'iconClassName'>) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex size-6 items-center justify-center rounded-md cursor-default">
+          <Icon size={16} className={iconClassName} />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
+  )
+}
+
 type Props = {
   // Layout state
   isStreaming: boolean
   prompt: string
+  // Model selector — rendered at the far left of the toolbar (in the composer,
+  // where competitors put it) rather than in the page header.
+  modelSelector?: ReactNode
   // Model capabilities
   selectedModel: Model | undefined
   // Assistant selector
@@ -106,6 +128,7 @@ type Props = {
 export const ChatInputToolbar = memo(function ChatInputToolbar({
   isStreaming,
   prompt,
+  modelSelector,
   selectedModel,
   projectId,
   initialMessage,
@@ -139,11 +162,12 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
   return (
     <div className="absolute z-20 bg-transparent bottom-0 w-full px-2 pb-2 pt-1">
       <div className="flex justify-between items-center w-full">
-        {/* Left: action buttons */}
+        {/* Left: model selector + action buttons */}
         <div className="px-1 flex items-center gap-1 flex-1 min-w-0">
+          {modelSelector && <div className="shrink-0">{modelSelector}</div>}
           <div
             className={cn(
-              'px-1 flex items-center w-full gap-1',
+              'px-1 flex items-center flex-1 min-w-0 gap-1',
               isStreaming && 'opacity-50 pointer-events-none'
             )}
           >
@@ -233,9 +257,9 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
             </DropdownMenu>
 
             {selectedModel?.capabilities?.includes('embeddings') && (
-              <ToolbarIconButton
+              <ToolbarIndicator
                 icon={Binary}
-                iconClassName="text-muted-foreground"
+                iconClassName="text-muted-foreground/70"
                 tooltip={<p>{t('embeddings')}</p>}
               />
             )}
@@ -293,9 +317,9 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
             />
 
             {selectedModel?.capabilities?.includes('reasoning') && (
-              <ToolbarIconButton
+              <ToolbarIndicator
                 icon={Atom}
-                iconClassName="text-muted-foreground"
+                iconClassName="text-muted-foreground/70"
                 tooltip={<p>{t('reasoning')}</p>}
               />
             )}

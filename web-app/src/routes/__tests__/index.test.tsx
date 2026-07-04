@@ -77,7 +77,14 @@ vi.mock('@/lib/prompts/system-prompt', () => ({
 }))
 
 vi.mock('@/containers/ChatInput', () => ({
-  default: () => <div data-testid="chat-input-container">ChatInput</div>,
+  // The model selector now lives inside the composer (ChatInput), not the
+  // page header. Reflect that ownership here so the placement is asserted.
+  default: () => (
+    <div data-testid="chat-input-container">
+      ChatInput
+      <div data-testid="model-selector">Model Selector</div>
+    </div>
+  ),
 }))
 
 vi.mock('@/containers/HeaderPage', () => ({
@@ -92,10 +99,6 @@ vi.mock('@/containers/SetupScreen', () => ({
       <button onClick={onComplete}>Complete Setup</button>
     </div>
   ),
-}))
-
-vi.mock('@/containers/DropdownModelProvider', () => ({
-  default: () => <div data-testid="model-selector">Model Selector</div>,
 }))
 
 vi.mock('@/components/ui/button', () => ({
@@ -209,8 +212,8 @@ describe('Home Page (index.tsx) — Manual Test Protocol', () => {
     expect(screen.getByTestId('chat-input-container')).toBeInTheDocument()
   })
 
-  // Protocol #11: Model selector renders
-  it('renders model selector in header', () => {
+  // Protocol #11: Model selector renders (now within the composer, not the header)
+  it('renders model selector in the composer', () => {
     renderIndex()
     expect(screen.getByTestId('model-selector')).toBeInTheDocument()
   })

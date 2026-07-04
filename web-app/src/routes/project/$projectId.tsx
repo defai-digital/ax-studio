@@ -21,7 +21,6 @@ import {
   PencilIcon,
   Trash2,
 } from 'lucide-react'
-import DropdownModelProvider from '@/containers/DropdownModelProvider'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -110,8 +109,17 @@ function ProjectPageContent() {
   return (
     <div className="flex flex-col h-svh w-full">
       <HeaderPage>
-        <div className="flex items-center justify-between w-full">
-          <DropdownModelProvider />
+        <div className="flex items-center gap-2 w-full min-w-0 pr-4">
+          {project.logo ? (
+            <img
+              src={project.logo}
+              alt={project.name}
+              className="size-5 rounded-md object-cover shrink-0"
+            />
+          ) : (
+            <FolderOpen className="size-4 text-muted-foreground shrink-0" />
+          )}
+          <span className="text-sm font-medium truncate">{project.name}</span>
         </div>
       </HeaderPage>
 

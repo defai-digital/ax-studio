@@ -12,7 +12,6 @@ import type { ChatStatus } from 'ai'
 import HeaderPage from '@/containers/HeaderPage'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import DropdownModelProvider from '@/containers/DropdownModelProvider'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -84,7 +83,6 @@ export function ThreadView({
     <div className="flex flex-col h-[calc(100dvh-(env(safe-area-inset-bottom)+env(safe-area-inset-top)))]">
       <HeaderPage>
         <div className="flex items-center w-full pr-4">
-          <DropdownModelProvider model={threadModel} />
           <div className="flex items-center gap-1 ml-auto shrink-0">
             {!splitPaneOrder && (
               <Button
