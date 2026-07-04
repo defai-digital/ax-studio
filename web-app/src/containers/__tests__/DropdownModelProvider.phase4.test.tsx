@@ -5,7 +5,7 @@
  * hook dependencies. Covers protocol items #1-15.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 
 // ── Mock data ────────────────────────────────────────
 
@@ -13,6 +13,7 @@ const mockSelectModelProvider = vi.fn()
 const mockUpdateCurrentThreadModel = vi.fn()
 const mockNavigate = vi.fn()
 const mockToggleFavorite = vi.fn()
+const mockGetLastUsedModel = vi.hoisted(() => vi.fn())
 
 const mockProviders = [
   {
@@ -119,7 +120,7 @@ vi.mock('@/constants/providers', () => ({
 }))
 
 vi.mock('@/lib/utils/getModelToStart', () => ({
-  getLastUsedModel: () => null,
+  getLastUsedModel: mockGetLastUsedModel,
 }))
 
 vi.mock('@/lib/utils/highlight', () => ({
@@ -162,6 +163,7 @@ import DropdownModelProvider from '../DropdownModelProvider'
 describe('DropdownModelProvider — Phase 4 Manual Test Protocol', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockGetLastUsedModel.mockReturnValue(null)
   })
 
   // Protocol #1: Popover opens — trigger renders with model name
@@ -459,6 +461,53 @@ describe('DropdownModelProvider — Phase 4 Manual Test Protocol', () => {
       />
     )
     expect(mockSelectModelProvider).toHaveBeenCalledWith('openai', 'gpt-4o')
+  })
+
+  it('selects last used model when useLastUsedModel becomes enabled after mount', async () => {
+    mockGetLastUsedModel.mockReturnValue({
+      provider: 'anthropic',
+      model: 'claude-3.5-sonnet',
+    })
+
+    const { rerender } = render(<DropdownModelProvider useLastUsedModel={false} />)
+
+    expect(mockSelectModelProvider).not.toHaveBeenCalledWith(
+      'anthropic',
+      'claude-3.5-sonnet'
+    )
+
+    rerender(<DropdownModelProvider useLastUsedModel />)
+
+    await waitFor(() => {
+      expect(mockSelectModelProvider).toHaveBeenCalledWith(
+        'anthropic',
+        'claude-3.5-sonnet'
+      )
+    })
+  })
+
+  it('reinitializes when thread model changes after a manual selection', async () => {
+    const { rerender } = render(<DropdownModelProvider />)
+
+    fireEvent.click(screen.getByTitle('claude-3.5-sonnet'))
+    expect(mockSelectModelProvider).toHaveBeenCalledWith(
+      'anthropic',
+      'claude-3.5-sonnet'
+    )
+
+    vi.clearAllMocks()
+    rerender(
+      <DropdownModelProvider
+        model={{ id: 'gpt-4o-mini', provider: 'openai' } as any}
+      />
+    )
+
+    await waitFor(() => {
+      expect(mockSelectModelProvider).toHaveBeenCalledWith(
+        'openai',
+        'gpt-4o-mini'
+      )
+    })
   })
 
   // Protocol #13: Thread-specific — model prop is independent per thread

@@ -440,6 +440,9 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
   const activeThreadId = model?.id ? undefined : currentThreadId
   const isRouterConfigured = routerEnabled && !!routerModelId && !!routerProviderId
   const isAutoActive = isRouterConfigured && isAutoRouteEnabled(activeThreadId)
+  const modelId = model?.id
+  const modelProvider = model?.provider
+  const modelKey = modelId && modelProvider ? `${modelProvider}:${modelId}` : ''
 
   // Search state
   const [open, setOpen] = useState(false)
@@ -469,18 +472,29 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
 
   // Track whether the user manually selected a model (prevents provider-refresh from reverting)
   const userSelectedRef = useRef(false)
+  const previousModelKeyRef = useRef<string | undefined>(undefined)
 
   // Initialize model provider - avoid race conditions with manual selections
   useEffect(() => {
+    const modelChanged = previousModelKeyRef.current !== modelKey
+    previousModelKeyRef.current = modelKey
+
+    // A thread model identity change is navigation/state, not a provider refresh.
+    // Reset the manual guard before initialization so a previous click cannot
+    // block the newly active thread's persisted model.
+    if (modelChanged) {
+      userSelectedRef.current = false
+    }
+
     // Skip re-initialization if the user manually selected a model and
     // the trigger is just a provider list refresh (not a model prop change).
     if (userSelectedRef.current) return
 
     const initializeModel = () => {
       // Auto select model when existing thread is passed
-      if (model) {
-        selectModelProvider(model?.provider as string, model?.id as string)
-        if (!checkModelExists(model.provider, model.id)) {
+      if (modelId && modelProvider) {
+        selectModelProvider(modelProvider, modelId)
+        if (!checkModelExists(modelProvider, modelId)) {
           selectModelProvider('', '')
         }
       } else if (useLastUsedModel) {
@@ -495,21 +509,15 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
     }
 
     initializeModel()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    model,
-    selectModelProvider,
-    updateCurrentThreadModel,
-    providers,
     checkModelExists,
+    modelId,
+    modelKey,
+    modelProvider,
+    selectModelProvider,
+    useLastUsedModel,
     // selectedModel and selectedProvider intentionally excluded to prevent race conditions
   ])
-
-  // Reset the manual-selection guard when the thread model prop changes
-  // (e.g. user navigates to a different thread)
-  useEffect(() => {
-    userSelectedRef.current = false
-  }, [model?.id, model?.provider])
 
   // Update display model when selection changes
   useEffect(() => {
