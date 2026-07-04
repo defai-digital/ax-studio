@@ -2,12 +2,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { Route } from '../$modelId'
 
-const mocks = vi.hoisted(() => ({
-  convertHfRepoToCatalogModel: vi.fn(),
-  fetchHuggingFaceRepo: vi.fn(),
-  isModelSupported: vi.fn(),
-  pullModelWithMetadata: vi.fn(),
-}))
+const mocks = vi.hoisted(() => {
+  const modelsService = {
+    convertHfRepoToCatalogModel: vi.fn(),
+    fetchHuggingFaceRepo: vi.fn(),
+    isModelSupported: vi.fn(),
+    pullModelWithMetadata: vi.fn(),
+  }
+
+  return {
+    ...modelsService,
+    serviceHub: {
+      models: () => modelsService,
+    },
+  }
+})
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -39,14 +48,7 @@ vi.mock('@/hooks/settings/useGeneralSetting', () => ({
 }))
 
 vi.mock('@/hooks/useServiceHub', () => ({
-  useServiceHub: () => ({
-    models: () => ({
-      fetchHuggingFaceRepo: mocks.fetchHuggingFaceRepo,
-      convertHfRepoToCatalogModel: mocks.convertHfRepoToCatalogModel,
-      isModelSupported: mocks.isModelSupported,
-      pullModelWithMetadata: mocks.pullModelWithMetadata,
-    }),
-  }),
+  useServiceHub: () => mocks.serviceHub,
 }))
 
 vi.mock('@/hooks/models/useDownloadStore', () => ({
@@ -208,6 +210,31 @@ describe('Hub Model Detail Route', () => {
     })
 
     expect(mocks.convertHfRepoToCatalogModel).not.toHaveBeenCalled()
+  })
+
+  it('clears stale repo data when a new route lookup has no result', async () => {
+    mocks.fetchHuggingFaceRepo.mockResolvedValueOnce({ id: 'first-repo' })
+    mocks.convertHfRepoToCatalogModel.mockReturnValue({
+      model_name: 'first-model',
+      developer: 'org',
+      downloads: 0,
+      quants: [],
+    })
+    ;(useParams as any).mockReturnValue({ modelId: 'first-model' })
+
+    const Component = Route.component as React.ComponentType
+    const { rerender } = render(<Component />)
+
+    expect(await screen.findByText('first-model')).toBeInTheDocument()
+
+    ;(useParams as any).mockReturnValue({ modelId: 'missing-model' })
+    rerender(<Component />)
+
+    await waitFor(() => {
+      expect(mocks.fetchHuggingFaceRepo).toHaveBeenCalledTimes(2)
+      expect(screen.queryByText('first-model')).not.toBeInTheDocument()
+    })
+    expect(screen.getByText('Model not found')).toBeInTheDocument()
   })
 
   it('should render "Model not found" when no model data', () => {

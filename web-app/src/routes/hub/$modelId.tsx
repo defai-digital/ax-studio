@@ -125,14 +125,17 @@ function HubModelDetailContent() {
       .fetchHuggingFaceRepo(search.repo || modelId, huggingfaceToken, signal)
     if (signal?.aborted) return
 
-    if (repoInfo) {
-      const repoDetail = serviceHub
-        .models()
-        .convertHfRepoToCatalogModel(repoInfo)
-      if (signal?.aborted) return
-
-      setRepoData(repoDetail || undefined)
+    if (!repoInfo) {
+      setRepoData(undefined)
+      return
     }
+
+    const repoDetail = serviceHub
+      .models()
+      .convertHfRepoToCatalogModel(repoInfo)
+    if (signal?.aborted) return
+
+    setRepoData(repoDetail || undefined)
   }, [serviceHub, modelId, search, huggingfaceToken])
 
   useEffect(() => {
