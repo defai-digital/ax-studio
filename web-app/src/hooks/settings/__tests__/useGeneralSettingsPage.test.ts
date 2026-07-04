@@ -1,5 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
 import { useGeneralSettingsPage } from '../useGeneralSettingsPage'
 
 const mocks = vi.hoisted(() => ({
@@ -124,5 +125,27 @@ describe('useGeneralSettingsPage', () => {
     unmount()
 
     expect(clearTimeoutSpy).toHaveBeenCalled()
+  })
+
+  it('ignores app data folder load errors after unmount', async () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {})
+    let rejectLoad!: (error: Error) => void
+    const loadPromise = new Promise<string>((_resolve, reject) => {
+      rejectLoad = reject
+    })
+    mocks.getAppDataFolder.mockReturnValue(loadPromise)
+
+    const { unmount } = renderHook(() => useGeneralSettingsPage())
+    unmount()
+
+    await act(async () => {
+      rejectLoad(new Error('late load failure'))
+      await loadPromise.catch(() => undefined)
+    })
+
+    expect(consoleErrorSpy).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
   })
 })

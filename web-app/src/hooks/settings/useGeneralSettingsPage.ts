@@ -37,11 +37,16 @@ export function useGeneralSettingsPage() {
   }, [])
 
   useEffect(() => {
+    let cancelled = false
+
     const fetchDataFolder = async () => {
       try {
         const path = await serviceHub.app().getAppDataFolder()
-        setAppDataFolder(path)
+        if (!cancelled) {
+          setAppDataFolder(path)
+        }
       } catch (error) {
+        if (cancelled) return
         console.error('Failed to read app data folder:', error)
         toast.error(
           t('settings:general.failedToLoadDataFolder', {
@@ -51,6 +56,10 @@ export function useGeneralSettingsPage() {
       }
     }
     fetchDataFolder()
+
+    return () => {
+      cancelled = true
+    }
   }, [serviceHub, t])
 
   const openFileTitle = (): string => {
