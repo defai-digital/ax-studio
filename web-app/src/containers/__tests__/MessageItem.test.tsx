@@ -23,6 +23,11 @@ vi.mock('@/hooks/models/useModelProvider', () => ({
   ),
 }))
 
+// Fork depends on the router + thread/message stores; isolate MessageItem from it.
+vi.mock('@/hooks/threads/use-fork-thread', () => ({
+  useForkThread: () => vi.fn().mockResolvedValue(undefined),
+}))
+
 vi.mock('@/containers/dialogs/message/EditMessageDialog', () => ({
   EditMessageDialog: () => <button data-testid="edit-dialog">Edit</button>,
 }))

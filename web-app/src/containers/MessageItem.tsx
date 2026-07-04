@@ -34,6 +34,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { useMessages } from '@/hooks/chat/useMessages'
+import { useForkThread } from '@/hooks/threads/use-fork-thread'
 import { RoutingBadge } from '@/components/RoutingBadge'
 import type { CitationData } from '@/types/citation-types'
 
@@ -149,6 +150,18 @@ export const MessageItem = memo(
     const handleDelete = useCallback(() => {
       onDelete?.(message.id)
     }, [onDelete, message.id])
+
+    const forkThread = useForkThread()
+    const [isForking, setIsForking] = useState(false)
+    const handleFork = useCallback(async () => {
+      if (!threadId || isForking) return
+      setIsForking(true)
+      try {
+        await forkThread(threadId, message.id)
+      } finally {
+        setIsForking(false)
+      }
+    }, [forkThread, threadId, message.id, isForking])
 
     // Get image URLs from file parts for the edit dialog
     const imageUrls = useMemo(() => {
@@ -581,17 +594,20 @@ export const MessageItem = memo(
                   </Button>
                 )}
 
-                {/* Fork conversation — disabled until fork flow is implemented */}
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  disabled
-                  title="Fork conversation"
-                  aria-label="Fork conversation"
-                  className="text-muted-foreground/50 hover:text-violet-500 disabled:opacity-30"
-                >
-                  <GitBranch className="size-3.5" />
-                </Button>
+                {/* Fork conversation — branch into a new thread from this point */}
+                {threadId && !isStreaming && (
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={handleFork}
+                    disabled={isForking}
+                    title="Branch conversation from here"
+                    aria-label="Branch conversation from here"
+                    className="text-muted-foreground/50 hover:text-violet-500 disabled:opacity-30"
+                  >
+                    <GitBranch className="size-3.5" />
+                  </Button>
+                )}
 
                 {/* Thumbs up / down rating */}
                 <Button
