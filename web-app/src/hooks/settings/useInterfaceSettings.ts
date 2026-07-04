@@ -89,17 +89,47 @@ export const ACCENT_COLORS = [
 export type AccentColorValue = (typeof ACCENT_COLORS)[number]['value']
 const DEFAULT_ACCENT_COLOR: AccentColorValue = 'gray'
 
+// Pick black or white text for the best contrast on a given hex color,
+// using WCAG relative luminance. Prevents unreadable white-on-light-accent
+// text (e.g. Orange/Green) on primary surfaces.
+const readableForeground = (hex: string): string => {
+  const c = hex.replace('#', '')
+  if (c.length < 6) return '#ffffff'
+  const channel = (h: string) => {
+    const v = parseInt(h, 16) / 255
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
+  }
+  const L =
+    0.2126 * channel(c.slice(0, 2)) +
+    0.7152 * channel(c.slice(2, 4)) +
+    0.0722 * channel(c.slice(4, 6))
+  const contrastWhite = 1.05 / (L + 0.05)
+  const contrastBlack = (L + 0.05) / 0.05
+  return contrastWhite >= contrastBlack ? '#ffffff' : '#09090b'
+}
+
 export const applyAccentColorToDOM = (colorValue: string, isDark: boolean) => {
   const color = ACCENT_COLORS.find((c) => c.value === colorValue)
   if (!color) return
 
   const root = document.documentElement
-  // Sidebar color changes with theme
+  const onPrimary = readableForeground(color.primary)
+
+  // Sidebar surface changes with theme
   root.style.setProperty(
     '--sidebar',
     isDark ? color.sidebar.dark : color.sidebar.light
   )
+
+  // Primary surfaces + the tokens derived from primary. Setting only --primary
+  // previously left focus rings, the sidebar active highlight, and primary-
+  // foreground text stuck on the default indigo, breaking non-indigo accents.
   root.style.setProperty('--primary', color.primary)
+  root.style.setProperty('--primary-foreground', onPrimary)
+  root.style.setProperty('--ring', color.primary)
+  root.style.setProperty('--sidebar-primary', color.primary)
+  root.style.setProperty('--sidebar-primary-foreground', onPrimary)
+  root.style.setProperty('--sidebar-ring', color.primary)
 }
 
 interface InterfaceSettingsState {
