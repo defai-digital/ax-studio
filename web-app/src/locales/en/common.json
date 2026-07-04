@@ -6,6 +6,7 @@
   "integrations": "Integrations",
   "mcp-servers": "MCP Servers",
   "local_api_server": "Local API Server",
+  "knowledgeBase": "Knowledge Base",
   "https_proxy": "HTTPS Proxy",
   "extensions": "Extensions",
   "attachments": "Attachments",

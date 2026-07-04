@@ -9,6 +9,7 @@ import { useAppState } from '@/hooks/settings/useAppState'
 import type { ChatStatus } from 'ai'
 import { useAssistant } from '@/hooks/chat/useAssistant'
 import { useLocalKnowledge } from '@/hooks/research/useLocalKnowledge'
+import { useAkidbConfig } from '@/hooks/research/useAkidbConfig'
 import { useTools } from '@/hooks/tools/useTools'
 import { useMessages } from '@/hooks/chat/useMessages'
 import { useShallow } from 'zustand/react/shallow'
@@ -24,6 +25,9 @@ import { ChatInputAttachments } from '@/components/ChatInputAttachments'
 import { TokenCounter } from '@/components/TokenCounter'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { X } from 'lucide-react'
+import { useNavigate } from '@tanstack/react-router'
+import { toast } from 'sonner'
+import { route } from '@/constants/routes'
 import { resolveEffectiveSelectedModel } from '@/lib/chat/selected-model'
 
 type ChatInputProps = {
@@ -47,6 +51,7 @@ const ChatInput = memo(function ChatInput({
   onStop,
   chatStatus,
 }: ChatInputProps) {
+  const navigate = useNavigate()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isFocused, setIsFocused] = useState(false)
@@ -78,12 +83,42 @@ const ChatInput = memo(function ChatInput({
         : globalLocalKnowledgeEnabled)
     : globalLocalKnowledgeEnabled
   const toggleLocalKnowledge = useCallback(() => {
+    const enabling = !isLocalKnowledgeEnabled
     if (effectiveThreadId) {
       toggleLocalKnowledgeForThread(effectiveThreadId)
     } else {
       toggleLocalKnowledgeGlobal()
     }
-  }, [effectiveThreadId, toggleLocalKnowledgeForThread, toggleLocalKnowledgeGlobal])
+    // When turning Local Knowledge on without a synced folder, point the user to
+    // setup — otherwise the toggle silently does nothing. Non-blocking nudge.
+    if (enabling) {
+      void (async () => {
+        try {
+          const store = useAkidbConfig.getState()
+          if (!store.config) await store.load()
+          const cfg = useAkidbConfig.getState().config
+          const configured = Boolean(cfg?.ingest?.sources?.[0]?.path?.trim())
+          if (!configured) {
+            toast('Set up a knowledge folder to use Local Knowledge', {
+              action: {
+                label: 'Set up',
+                onClick: () =>
+                  navigate({ to: route.settings.knowledge_base }),
+              },
+            })
+          }
+        } catch {
+          // Ignore — never block toggling on a config read failure.
+        }
+      })()
+    }
+  }, [
+    isLocalKnowledgeEnabled,
+    effectiveThreadId,
+    toggleLocalKnowledgeForThread,
+    toggleLocalKnowledgeGlobal,
+    navigate,
+  ])
   const currentThread = useThreads((state) =>
     effectiveThreadId ? state.threads[effectiveThreadId] : state.getCurrentThread()
   )

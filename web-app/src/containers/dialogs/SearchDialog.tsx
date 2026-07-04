@@ -17,6 +17,7 @@ import {
   Palette,
   Server,
   ServerCog,
+  Database,
   Cpu,
   History,
   FolderOpen,
@@ -274,6 +275,17 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
         action: () => {
           handleClose()
           navigate({ to: route.settings.shortcuts })
+        },
+      },
+      {
+        id: 'knowledge-base',
+        label: t('common:knowledgeBase', { defaultValue: 'Knowledge Base' }),
+        keywords: ['knowledge', 'rag', 'documents', 'folder', 'sync', 'akidb'],
+        icon: Database,
+        category: t('common:settings'),
+        action: () => {
+          handleClose()
+          navigate({ to: route.settings.knowledge_base })
         },
       },
       {

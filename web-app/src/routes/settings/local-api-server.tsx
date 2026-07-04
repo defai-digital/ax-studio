@@ -29,7 +29,6 @@ import { toast } from 'sonner'
 import { getModelToStart } from '@/lib/utils/getModelToStart'
 import { LogViewer } from '@/components/LogViewer'
 
-import AkidbConfigPanel from '@/containers/AkidbConfigPanel'
 import {
   Popover,
   PopoverTrigger,
@@ -575,9 +574,6 @@ function LocalAPIServerContent() {
                   />
 
                 </Card>
-
-                {/* AkiDB folder sync configuration */}
-                <AkidbConfigPanel />
               </div>
             </div>
           </div>

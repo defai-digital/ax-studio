@@ -15,6 +15,7 @@ export const route = {
     shortcuts: '/settings/shortcuts',
     extensions: '/settings/extensions',
     local_api_server: '/settings/local-api-server',
+    knowledge_base: '/settings/knowledge-base',
     mcp_servers: '/settings/mcp-servers',
     https_proxy: '/settings/https-proxy',
     hardware: '/settings/hardware',

@@ -19,6 +19,7 @@ import { Route as SettingsPrivacyRouteImport } from './routes/settings/privacy'
 import { Route as SettingsMcpServersRouteImport } from './routes/settings/mcp-servers'
 import { Route as SettingsLocalApiServerRouteImport } from './routes/settings/local-api-server'
 import { Route as SettingsLlmRouterRouteImport } from './routes/settings/llm-router'
+import { Route as SettingsKnowledgeBaseRouteImport } from './routes/settings/knowledge-base'
 import { Route as SettingsInterfaceRouteImport } from './routes/settings/interface'
 import { Route as SettingsHttpsProxyRouteImport } from './routes/settings/https-proxy'
 import { Route as SettingsHardwareRouteImport } from './routes/settings/hardware'
@@ -82,6 +83,11 @@ const SettingsLocalApiServerRoute = SettingsLocalApiServerRouteImport.update({
 const SettingsLlmRouterRoute = SettingsLlmRouterRouteImport.update({
   id: '/settings/llm-router',
   path: '/settings/llm-router',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsKnowledgeBaseRoute = SettingsKnowledgeBaseRouteImport.update({
+  id: '/settings/knowledge-base',
+  path: '/settings/knowledge-base',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsInterfaceRoute = SettingsInterfaceRouteImport.update({
@@ -172,6 +178,7 @@ export interface FileRoutesByFullPath {
   '/settings/hardware': typeof SettingsHardwareRoute
   '/settings/https-proxy': typeof SettingsHttpsProxyRoute
   '/settings/interface': typeof SettingsInterfaceRoute
+  '/settings/knowledge-base': typeof SettingsKnowledgeBaseRoute
   '/settings/llm-router': typeof SettingsLlmRouterRoute
   '/settings/local-api-server': typeof SettingsLocalApiServerRoute
   '/settings/mcp-servers': typeof SettingsMcpServersRoute
@@ -198,6 +205,7 @@ export interface FileRoutesByTo {
   '/settings/hardware': typeof SettingsHardwareRoute
   '/settings/https-proxy': typeof SettingsHttpsProxyRoute
   '/settings/interface': typeof SettingsInterfaceRoute
+  '/settings/knowledge-base': typeof SettingsKnowledgeBaseRoute
   '/settings/llm-router': typeof SettingsLlmRouterRoute
   '/settings/local-api-server': typeof SettingsLocalApiServerRoute
   '/settings/mcp-servers': typeof SettingsMcpServersRoute
@@ -225,6 +233,7 @@ export interface FileRoutesById {
   '/settings/hardware': typeof SettingsHardwareRoute
   '/settings/https-proxy': typeof SettingsHttpsProxyRoute
   '/settings/interface': typeof SettingsInterfaceRoute
+  '/settings/knowledge-base': typeof SettingsKnowledgeBaseRoute
   '/settings/llm-router': typeof SettingsLlmRouterRoute
   '/settings/local-api-server': typeof SettingsLocalApiServerRoute
   '/settings/mcp-servers': typeof SettingsMcpServersRoute
@@ -253,6 +262,7 @@ export interface FileRouteTypes {
     | '/settings/hardware'
     | '/settings/https-proxy'
     | '/settings/interface'
+    | '/settings/knowledge-base'
     | '/settings/llm-router'
     | '/settings/local-api-server'
     | '/settings/mcp-servers'
@@ -279,6 +289,7 @@ export interface FileRouteTypes {
     | '/settings/hardware'
     | '/settings/https-proxy'
     | '/settings/interface'
+    | '/settings/knowledge-base'
     | '/settings/llm-router'
     | '/settings/local-api-server'
     | '/settings/mcp-servers'
@@ -305,6 +316,7 @@ export interface FileRouteTypes {
     | '/settings/hardware'
     | '/settings/https-proxy'
     | '/settings/interface'
+    | '/settings/knowledge-base'
     | '/settings/llm-router'
     | '/settings/local-api-server'
     | '/settings/mcp-servers'
@@ -332,6 +344,7 @@ export interface RootRouteChildren {
   SettingsHardwareRoute: typeof SettingsHardwareRoute
   SettingsHttpsProxyRoute: typeof SettingsHttpsProxyRoute
   SettingsInterfaceRoute: typeof SettingsInterfaceRoute
+  SettingsKnowledgeBaseRoute: typeof SettingsKnowledgeBaseRoute
   SettingsLlmRouterRoute: typeof SettingsLlmRouterRoute
   SettingsLocalApiServerRoute: typeof SettingsLocalApiServerRoute
   SettingsMcpServersRoute: typeof SettingsMcpServersRoute
@@ -413,6 +426,13 @@ declare module '@tanstack/react-router' {
       path: '/settings/llm-router'
       fullPath: '/settings/llm-router'
       preLoaderRoute: typeof SettingsLlmRouterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings/knowledge-base': {
+      id: '/settings/knowledge-base'
+      path: '/settings/knowledge-base'
+      fullPath: '/settings/knowledge-base'
+      preLoaderRoute: typeof SettingsKnowledgeBaseRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings/interface': {
@@ -532,6 +552,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsHardwareRoute: SettingsHardwareRoute,
   SettingsHttpsProxyRoute: SettingsHttpsProxyRoute,
   SettingsInterfaceRoute: SettingsInterfaceRoute,
+  SettingsKnowledgeBaseRoute: SettingsKnowledgeBaseRoute,
   SettingsLlmRouterRoute: SettingsLlmRouterRoute,
   SettingsLocalApiServerRoute: SettingsLocalApiServerRoute,
   SettingsMcpServersRoute: SettingsMcpServersRoute,

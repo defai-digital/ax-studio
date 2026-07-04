@@ -21,6 +21,7 @@ import {
   Route,
   ShieldCheck,
   Puzzle,
+  Database,
 } from 'lucide-react'
 
 type SettingsMenuItem = {
@@ -92,6 +93,13 @@ const SettingsMenu = () => {
       route: route.settings.attachments,
       isEnabled: true,
       icon: <FileText className="size-3.5" />,
+      group: 'AI',
+    },
+    {
+      title: 'common:knowledgeBase',
+      route: route.settings.knowledge_base,
+      isEnabled: true,
+      icon: <Database className="size-3.5" />,
       group: 'AI',
     },
     {

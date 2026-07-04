@@ -82,6 +82,7 @@ vi.mock('lucide-react', () => {
     Palette: Icon,
     Server: Icon,
     ServerCog: Icon,
+    Database: Icon,
     Cpu: Icon,
     History: Icon,
     FolderOpen: Icon,
