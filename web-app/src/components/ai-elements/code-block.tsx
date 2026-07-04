@@ -37,13 +37,12 @@ export const CodeBlock = ({
 }: CodeBlockProps) => {
   const [html, setHtml] = useState<string>("");
   const [darkHtml, setDarkHtml] = useState<string>("");
-  const cancelledRef = useRef(false);
 
   useEffect(() => {
-    cancelledRef.current = false;
+    let cancelled = false;
     highlightCode(code, language, showLineNumbers)
       .then(([light, dark]) => {
-        if (!cancelledRef.current) {
+        if (!cancelled) {
           setHtml(light);
           setDarkHtml(dark);
         }
@@ -51,7 +50,7 @@ export const CodeBlock = ({
       .catch((error) => {
         console.error("[CodeBlock] Failed to highlight code:", error);
         // Fallback: show raw code when highlighting fails
-        if (!cancelledRef.current) {
+        if (!cancelled) {
           const escaped = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           const fallback = `<pre><code>${escaped}</code></pre>`;
           setHtml(fallback);
@@ -60,7 +59,7 @@ export const CodeBlock = ({
       });
 
     return () => {
-      cancelledRef.current = true;
+      cancelled = true;
     };
   }, [code, language, showLineNumbers]);
 
