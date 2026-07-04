@@ -52,6 +52,8 @@ export function LogViewer() {
     serviceHub
       .events()
       ?.listen(LOG_EVENT_NAME, (event) => {
+        if (!isMounted) return
+
         const { message } = event.payload as { message: string }
         const log: LogEntry | undefined = serviceHub.app().parseLogLine(message)
         if (log?.target === SERVER_LOG_TARGET) {
@@ -62,6 +64,11 @@ export function LogViewer() {
         }
       })
       .then((unsub) => {
+        if (!isMounted) {
+          unsub()
+          return
+        }
+
         unsubscribe = unsub
       })
       .catch((error) => {

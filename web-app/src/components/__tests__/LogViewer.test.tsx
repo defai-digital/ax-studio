@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { LogViewer } from '../LogViewer'
 
@@ -65,5 +65,57 @@ describe('LogViewer', () => {
         expect.any(Function)
       )
     })
+  })
+
+  it('ignores live log events after unmount', async () => {
+    let listener:
+      | ((event: { payload: { message: string } }) => void)
+      | undefined
+    const unsubscribe = vi.fn()
+    mockListen.mockImplementationOnce(async (_event, callback) => {
+      listener = callback
+      return unsubscribe
+    })
+
+    const { unmount } = render(<LogViewer />)
+
+    await waitFor(() => {
+      expect(listener).toBeDefined()
+    })
+
+    unmount()
+
+    act(() => {
+      listener?.({ payload: { message: 'late log line' } })
+    })
+
+    expect(unsubscribe).toHaveBeenCalled()
+    expect(mockParseLogLine).not.toHaveBeenCalled()
+  })
+
+  it('unsubscribes when live log subscription resolves after unmount', async () => {
+    let resolveListen!: (unsubscribe: () => void) => void
+    const unsubscribe = vi.fn()
+    mockListen.mockImplementationOnce(
+      () =>
+        new Promise<() => void>((resolve) => {
+          resolveListen = resolve
+        })
+    )
+
+    const { unmount } = render(<LogViewer />)
+
+    await waitFor(() => {
+      expect(mockListen).toHaveBeenCalled()
+    })
+
+    unmount()
+
+    await act(async () => {
+      resolveListen(unsubscribe)
+      await Promise.resolve()
+    })
+
+    expect(unsubscribe).toHaveBeenCalled()
   })
 })
