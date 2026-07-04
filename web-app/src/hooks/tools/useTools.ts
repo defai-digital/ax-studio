@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { SystemEvent } from '@/types/events'
 import { useAppState } from '@/hooks/settings/useAppState'
@@ -10,11 +10,17 @@ export const useTools = () => {
   const serviceHub = useServiceHub()
   const updateTools = useAppState((state) => state.updateTools)
   const updateMcpToolNames = useAppState((state) => state.updateMcpToolNames)
+  const refreshGenerationRef = useRef(0)
 
-  const { isDefaultsInitialized, setDefaultDisabledTools, markDefaultsAsInitialized } = useToolAvailable()
+  const {
+    isDefaultsInitialized,
+    setDefaultDisabledTools,
+    markDefaultsAsInitialized,
+  } = useToolAvailable()
 
-  useEffect(() => {
-    async function setTools() {
+  const refreshTools = useCallback(
+    async (isCancelled: () => boolean) => {
+      const generation = ++refreshGenerationRef.current
       try {
         // Get MCP extension first
         const mcpExtension = ExtensionManager.getInstance().get<MCPExtension>(
@@ -23,6 +29,7 @@ export const useTools = () => {
 
         // Fetch MCP tools
         const mcpTools = await serviceHub.mcp().getTools()
+        if (isCancelled() || generation !== refreshGenerationRef.current) return
 
         // Update MCP tools
         updateTools(mcpTools)
@@ -31,38 +38,63 @@ export const useTools = () => {
         updateMcpToolNames(mcpTools.map((t) => t.name))
 
         // Initialize default disabled tools for new users (only once)
-        if (!isDefaultsInitialized() && mcpTools.length > 0 && mcpExtension?.getDefaultDisabledTools) {
+        if (
+          !isDefaultsInitialized() &&
+          mcpTools.length > 0 &&
+          mcpExtension?.getDefaultDisabledTools
+        ) {
           const defaultDisabled = await mcpExtension.getDefaultDisabledTools()
+          if (isCancelled() || generation !== refreshGenerationRef.current) return
           if (defaultDisabled.length > 0) {
             setDefaultDisabledTools(defaultDisabled)
             markDefaultsAsInitialized()
           }
         }
       } catch (error) {
-        console.error('Failed to fetch MCP tools:', error)
+        if (!isCancelled() && generation === refreshGenerationRef.current) {
+          console.error('Failed to fetch MCP tools:', error)
+        }
       }
+    },
+    [
+      serviceHub,
+      updateTools,
+      updateMcpToolNames,
+      isDefaultsInitialized,
+      setDefaultDisabledTools,
+      markDefaultsAsInitialized,
+    ]
+  )
 
-    }
-    setTools()
-
+  useEffect(() => {
     let unsubscribe = () => {}
     let unmounted = false
+    const isCancelled = () => unmounted
+    void refreshTools(isCancelled)
+
     const eventsService = serviceHub.events()
     if (eventsService) {
-      eventsService.listen(SystemEvent.MCP_UPDATE, setTools).then((unsub) => {
-        if (unmounted) {
-          unsub()
-          return
-        }
-        unsubscribe = unsub
-      }).catch((error) => {
-        console.error('Failed to set up MCP update listener:', error)
-      })
+      eventsService
+        .listen(SystemEvent.MCP_UPDATE, () => {
+          void refreshTools(isCancelled)
+        })
+        .then((unsub) => {
+          if (unmounted) {
+            unsub()
+            return
+          }
+          unsubscribe = unsub
+        })
+        .catch((error) => {
+          if (!unmounted) {
+            console.error('Failed to set up MCP update listener:', error)
+          }
+        })
     }
     return () => {
       unmounted = true
+      refreshGenerationRef.current += 1
       unsubscribe()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [serviceHub, refreshTools])
 }

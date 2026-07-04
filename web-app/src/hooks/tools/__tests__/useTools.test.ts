@@ -1,42 +1,67 @@
 import { renderHook, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import type { MCPTool } from '@/types/mcp'
 import { SystemEvent } from '@/types/events'
 
-// Mock functions
-const mockGetTools = vi.fn()
-const mockUpdateTools = vi.fn()
-const mockUpdateMcpToolNames = vi.fn()
-const mockListen = vi.fn()
-const mockUnsubscribe = vi.fn()
+const mocks = vi.hoisted(() => {
+  const getTools = vi.fn()
+  const listen = vi.fn()
+  const serviceHub = {
+    mcp: () => ({
+      getTools,
+    }),
+    events: () => ({
+      listen,
+    }),
+  }
+
+  return {
+    getTools,
+    updateTools: vi.fn(),
+    updateMcpToolNames: vi.fn(),
+    listen,
+    unsubscribe: vi.fn(),
+    isDefaultsInitialized: vi.fn(),
+    setDefaultDisabledTools: vi.fn(),
+    markDefaultsAsInitialized: vi.fn(),
+    serviceHub,
+  }
+})
 
 // Mock useAppState
 vi.mock('@/hooks/settings/useAppState', () => ({
-  useAppState: (selector: any) =>
+  useAppState: (
+    selector: (state: {
+      updateTools: typeof mocks.updateTools
+      updateMcpToolNames: typeof mocks.updateMcpToolNames
+    }) => unknown
+  ) =>
     selector({
-      updateTools: mockUpdateTools,
-      updateMcpToolNames: mockUpdateMcpToolNames,
+      updateTools: mocks.updateTools,
+      updateMcpToolNames: mocks.updateMcpToolNames,
     }),
 }))
 
 // Mock the ServiceHub
-const mockServiceHub = () => ({
-  mcp: () => ({
-    getTools: mockGetTools,
-  }),
-  events: () => ({
-    listen: mockListen,
-  }),
-})
 vi.mock('@/hooks/useServiceHub', () => ({
-  getServiceHub: mockServiceHub,
-  useServiceHub: mockServiceHub,
+  getServiceHub: () => mocks.serviceHub,
+  useServiceHub: () => mocks.serviceHub,
+}))
+
+vi.mock('@/hooks/tools/useToolAvailable', () => ({
+  useToolAvailable: () => ({
+    isDefaultsInitialized: mocks.isDefaultsInitialized,
+    setDefaultDisabledTools: mocks.setDefaultDisabledTools,
+    markDefaultsAsInitialized: mocks.markDefaultsAsInitialized,
+  }),
 }))
 
 describe('useTools', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockListen.mockResolvedValue(mockUnsubscribe)
-    mockGetTools.mockResolvedValue([])
+    mocks.listen.mockResolvedValue(mocks.unsubscribe)
+    mocks.getTools.mockResolvedValue([])
+    mocks.isDefaultsInitialized.mockReturnValue(true)
   })
 
   afterEach(() => {
@@ -45,34 +70,34 @@ describe('useTools', () => {
 
   it('should call getTools and updateTools on mount', async () => {
     const { useTools } = await import('../useTools')
-    
+
     const mockTools = [
-      { name: 'test-tool', description: 'A test tool' },
-      { name: 'another-tool', description: 'Another test tool' },
+      createTool('test-tool', 'A test tool'),
+      createTool('another-tool', 'Another test tool'),
     ]
-    mockGetTools.mockResolvedValue(mockTools)
+    mocks.getTools.mockResolvedValue(mockTools)
 
     renderHook(() => useTools())
 
     // Wait for async operations to complete
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0))
-    })
+    await flushAsyncWork()
 
-    expect(mockGetTools).toHaveBeenCalledTimes(1)
-    expect(mockUpdateTools).toHaveBeenCalledWith(mockTools)
+    expect(mocks.getTools).toHaveBeenCalledTimes(1)
+    expect(mocks.updateTools).toHaveBeenCalledWith(mockTools)
+    expect(mocks.updateMcpToolNames).toHaveBeenCalledWith([
+      'test-tool',
+      'another-tool',
+    ])
   })
 
   it('should set up event listener for MCP_UPDATE', async () => {
     const { useTools } = await import('../useTools')
-    
+
     renderHook(() => useTools())
 
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0))
-    })
+    await flushAsyncWork()
 
-    expect(mockListen).toHaveBeenCalledWith(
+    expect(mocks.listen).toHaveBeenCalledWith(
       SystemEvent.MCP_UPDATE,
       expect.any(Function)
     )
@@ -80,63 +105,60 @@ describe('useTools', () => {
 
   it('should call setTools when MCP_UPDATE event is triggered', async () => {
     const { useTools } = await import('../useTools')
-    
-    const mockTools = [{ name: 'updated-tool', description: 'Updated tool' }]
-    mockGetTools.mockResolvedValue(mockTools)
 
-    let eventCallback: () => void
+    const mockTools = [createTool('updated-tool', 'Updated tool')]
+    mocks.getTools.mockResolvedValue(mockTools)
 
-    mockListen.mockImplementation((_event, callback) => {
+    let eventCallback: (() => void) | undefined
+
+    mocks.listen.mockImplementation((_event, callback) => {
       eventCallback = callback
-      return Promise.resolve(mockUnsubscribe)
+      return Promise.resolve(mocks.unsubscribe)
     })
 
     renderHook(() => useTools())
 
     // Wait for initial setup
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0))
-    })
+    await flushAsyncWork()
 
     // Clear the initial calls
     vi.clearAllMocks()
-    mockGetTools.mockResolvedValue(mockTools)
+    mocks.getTools.mockResolvedValue(mockTools)
 
     // Trigger the event
     await act(async () => {
-      eventCallback()
-      await new Promise(resolve => setTimeout(resolve, 0))
+      eventCallback?.()
     })
+    await flushAsyncWork()
 
-    expect(mockGetTools).toHaveBeenCalledTimes(1)
-    expect(mockUpdateTools).toHaveBeenCalledWith(mockTools)
+    expect(mocks.getTools).toHaveBeenCalledTimes(1)
+    expect(mocks.updateTools).toHaveBeenCalledWith(mockTools)
   })
 
   it('should return unsubscribe function for cleanup', async () => {
     const { useTools } = await import('../useTools')
-    
+
     const { unmount } = renderHook(() => useTools())
 
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0))
-    })
+    await flushAsyncWork()
 
-    expect(mockListen).toHaveBeenCalled()
+    expect(mocks.listen).toHaveBeenCalled()
 
     // Unmount should call the unsubscribe function
     unmount()
 
-    expect(mockListen).toHaveBeenCalledWith(
+    expect(mocks.listen).toHaveBeenCalledWith(
       SystemEvent.MCP_UPDATE,
       expect.any(Function)
     )
+    expect(mocks.unsubscribe).toHaveBeenCalledTimes(1)
   })
 
   it('should handle getTools errors gracefully', async () => {
     const { useTools } = await import('../useTools')
-    
+
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    mockGetTools.mockRejectedValue(new Error('Failed to get tools'))
+    mocks.getTools.mockRejectedValue(new Error('Failed to get tools'))
 
     renderHook(() => useTools())
 
@@ -145,18 +167,18 @@ describe('useTools', () => {
       await new Promise(resolve => setTimeout(resolve, 100))
     })
 
-    expect(mockGetTools).toHaveBeenCalledTimes(1)
+    expect(mocks.getTools).toHaveBeenCalledTimes(1)
     // updateTools should not be called if getTools fails
-    expect(mockUpdateTools).not.toHaveBeenCalled()
+    expect(mocks.updateTools).not.toHaveBeenCalled()
 
     consoleErrorSpy.mockRestore()
   })
 
   it('should handle event listener setup errors gracefully', async () => {
     const { useTools } = await import('../useTools')
-    
+
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    mockListen.mockRejectedValue(new Error('Failed to set up listener'))
+    mocks.listen.mockRejectedValue(new Error('Failed to set up listener'))
 
     renderHook(() => useTools())
 
@@ -166,24 +188,107 @@ describe('useTools', () => {
     })
 
     // Initial getTools should still work
-    expect(mockGetTools).toHaveBeenCalledTimes(1)
-    expect(mockListen).toHaveBeenCalled()
+    expect(mocks.getTools).toHaveBeenCalledTimes(1)
+    expect(mocks.listen).toHaveBeenCalled()
 
     consoleErrorSpy.mockRestore()
   })
 
-  it('should only set up effect once with empty dependency array', async () => {
+  it('should not update tools after unmount while refresh is pending', async () => {
     const { useTools } = await import('../useTools')
-    
+    const pendingTools = createDeferred<MCPTool[]>()
+    mocks.getTools.mockReturnValue(pendingTools.promise)
+
+    const { unmount } = renderHook(() => useTools())
+
+    unmount()
+
+    await act(async () => {
+      pendingTools.resolve([createTool('late-tool')])
+      await pendingTools.promise
+    })
+    await flushAsyncWork()
+
+    expect(mocks.updateTools).not.toHaveBeenCalled()
+    expect(mocks.updateMcpToolNames).not.toHaveBeenCalled()
+  })
+
+  it('should ignore stale refresh results when a newer MCP update completes first', async () => {
+    const { useTools } = await import('../useTools')
+    const slowTools = createDeferred<MCPTool[]>()
+    const staleTools = [createTool('stale-tool')]
+    const freshTools = [createTool('fresh-tool')]
+    let eventCallback: (() => void) | undefined
+
+    mocks.getTools
+      .mockImplementationOnce(() => slowTools.promise)
+      .mockResolvedValueOnce(freshTools)
+    mocks.listen.mockImplementation((_event, callback) => {
+      eventCallback = callback
+      return Promise.resolve(mocks.unsubscribe)
+    })
+
+    renderHook(() => useTools())
+    await flushAsyncWork()
+
+    await act(async () => {
+      eventCallback?.()
+    })
+    await flushAsyncWork()
+
+    expect(mocks.updateTools).toHaveBeenCalledTimes(1)
+    expect(mocks.updateTools).toHaveBeenCalledWith(freshTools)
+    expect(mocks.updateMcpToolNames).toHaveBeenCalledWith(['fresh-tool'])
+
+    await act(async () => {
+      slowTools.resolve(staleTools)
+      await slowTools.promise
+    })
+    await flushAsyncWork()
+
+    expect(mocks.updateTools).toHaveBeenCalledTimes(1)
+    expect(mocks.updateTools).not.toHaveBeenCalledWith(staleTools)
+  })
+
+  it('should not rerun with stable dependencies on rerender', async () => {
+    const { useTools } = await import('../useTools')
+
     const { rerender } = renderHook(() => useTools())
 
     // Initial render
-    expect(mockGetTools).toHaveBeenCalledTimes(1)
-    expect(mockListen).toHaveBeenCalledTimes(1)
+    expect(mocks.getTools).toHaveBeenCalledTimes(1)
+    expect(mocks.listen).toHaveBeenCalledTimes(1)
 
     // Rerender should not trigger additional calls
     rerender()
-    expect(mockGetTools).toHaveBeenCalledTimes(1)
-    expect(mockListen).toHaveBeenCalledTimes(1)
+    expect(mocks.getTools).toHaveBeenCalledTimes(1)
+    expect(mocks.listen).toHaveBeenCalledTimes(1)
   })
 })
+
+function createTool(name: string, description = 'A test tool'): MCPTool {
+  return {
+    name,
+    description,
+    inputSchema: {},
+    server: 'test-server',
+  }
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+
+  return { promise, resolve, reject }
+}
+
+async function flushAsyncWork() {
+  await act(async () => {
+    await Promise.resolve()
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  })
+}
