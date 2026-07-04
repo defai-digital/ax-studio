@@ -231,6 +231,36 @@ jobs:
           p12-file-base64: ${{ secrets.APPLE_CERTIFICATE || secrets.CODE_SIGN_P12_BASE64 }}
           p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD || secrets.CODE_SIGN_P12_PASSWORD }}
 
+      - name: Install Apple Developer ID certificate chain
+        if: ${{ env.HAS_SIGN_CERTS == 'true' }}
+        run: |
+          set -euo pipefail
+
+          CERT_DIR="$(mktemp -d)"
+          trap 'rm -rf "$CERT_DIR"' EXIT
+
+          curl -fsSLo "$CERT_DIR/AppleRootCA.cer" \
+            https://www.apple.com/appleca/AppleIncRootCertificate.cer
+          curl -fsSLo "$CERT_DIR/DeveloperIDCA.cer" \
+            https://www.apple.com/certificateauthority/DeveloperIDCA.cer
+          curl -fsSLo "$CERT_DIR/DeveloperIDG2CA.cer" \
+            https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+
+          security list-keychains -d user | sed 's/[ "]//g' > "$CERT_DIR/keychains.txt"
+          if [ ! -s "$CERT_DIR/keychains.txt" ]; then
+            echo "$HOME/Library/Keychains/login.keychain-db" > "$CERT_DIR/keychains.txt"
+          fi
+
+          while IFS= read -r keychain; do
+            [ -n "$keychain" ] || continue
+            for cert in "$CERT_DIR"/*.cer; do
+              security add-certificates -k "$keychain" "$cert" 2>/dev/null || true
+            done
+          done < "$CERT_DIR/keychains.txt"
+
+          security find-certificate -a -c "Apple Root CA" -Z >/dev/null
+          security find-certificate -a -c "Developer ID Certification Authority" -Z >/dev/null
+
       - name: Resolve Apple signing identity
         if: ${{ env.HAS_SIGN_CERTS == 'true' }}
         env:
@@ -304,6 +334,26 @@ jobs:
           rm -f "$APP_PATH/Contents/CodeResources"
           xattr -cr "$APP_PATH"
 
+          verify_embedded_cert_chain() {
+            local path="$1"
+            local cert_dir
+            local cert_count
+
+            cert_dir="$(mktemp -d)"
+            codesign -d --extract-certificates="$cert_dir/cert-" "$path"
+            cert_count="$(find "$cert_dir" -maxdepth 1 -type f -name 'cert-*' | wc -l | tr -d ' ')"
+            if [ "$cert_count" -lt 2 ]; then
+              echo "::error::Code signature for $path embeds $cert_count certificate(s); expected at least leaf + intermediate."
+              rm -rf "$cert_dir"
+              exit 1
+            fi
+
+            for cert in "$cert_dir"/cert-*; do
+              openssl x509 -inform DER -in "$cert" -noout -subject -issuer
+            done
+            rm -rf "$cert_dir"
+          }
+
           for binary in \
             "$APP_PATH/Contents/MacOS/bun" \
             "$APP_PATH/Contents/MacOS/uv" \
@@ -314,11 +364,14 @@ jobs:
               --force \
               --timestamp \
               --options runtime \
+              --generate-entitlement-der \
+              --force-library-entitlements \
               --entitlements "$ENTITLEMENTS" \
               --sign "$APPLE_SIGNING_IDENTITY" \
               "$binary"
             codesign --verify --strict --verbose=4 "$binary"
-            codesign -d --entitlements :- "$binary" > /tmp/ax-studio-entitlements.plist
+            verify_embedded_cert_chain "$binary"
+            codesign -d --entitlements - --xml "$binary" > /tmp/ax-studio-entitlements.plist
             plutil -lint /tmp/ax-studio-entitlements.plist
           done
 
@@ -326,10 +379,12 @@ jobs:
             --force \
             --timestamp \
             --options runtime \
+            --generate-entitlement-der \
             --entitlements "$ENTITLEMENTS" \
             --sign "$APPLE_SIGNING_IDENTITY" \
             "$APP_PATH"
           codesign --verify --deep --strict --verbose=4 "$APP_PATH"
+          verify_embedded_cert_chain "$APP_PATH"
 
           rm -f "$TAR_PATH" "$TAR_PATH.sig"
           (cd "$BUNDLE_MACOS" && tar -czf "Ax-Studio.app.tar.gz" "Ax-Studio.app")
