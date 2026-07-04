@@ -60,6 +60,7 @@ const FILESYSTEM_REQUEST_COMMANDS: ReadonlySet<string> = new Set([
   'readdir_sync',
   'unlink_sync',
   'append_file_sync',
+  'copy_file',
   'write_yaml',
   'read_yaml',
   'decompress',

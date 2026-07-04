@@ -255,7 +255,11 @@ export const fs = {
   copyFile(src: string, dest: string): Promise<void> {
     const safeSrc = validatePath(src)
     const safeDest = validatePath(dest)
-    return validateBridgeResult(getCoreApi().copyFile(safeSrc, safeDest), 'copyFile', expectVoid)
+    return validateBridgeResult(
+      getCoreApi().copyFile({ source: safeSrc, destination: safeDest }),
+      'copyFile',
+      expectVoid
+    )
   },
 
   getGgufFiles(paths: string[]): Promise<{ gguf: string[]; nonGguf: string[] }> {

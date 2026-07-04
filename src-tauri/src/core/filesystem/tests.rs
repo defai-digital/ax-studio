@@ -197,6 +197,99 @@ fn test_mv_moves_file_within_app_data_folder() {
 }
 
 #[test]
+fn test_copy_file_copies_absolute_source_into_app_data() {
+    let app = mock_app();
+    let app_data = get_app_data_folder_path(app.handle().clone());
+    fs::create_dir_all(&app_data).unwrap();
+    fs::create_dir_all(app_data.join("copied")).unwrap();
+
+    let source_dir =
+        std::env::temp_dir().join(format!("ax-studio-copy-source-{}", std::process::id()));
+    fs::create_dir_all(&source_dir).unwrap();
+    let source_path = source_dir.join("source.gguf");
+    fs::write(&source_path, "model bytes").unwrap();
+
+    copy_file(
+        app.handle().clone(),
+        PathPairRequest::Typed {
+            source: source_path.to_string_lossy().to_string(),
+            destination: app_data
+                .join("copied")
+                .join("model.gguf")
+                .to_string_lossy()
+                .to_string(),
+        },
+    )
+    .unwrap();
+
+    assert_eq!(
+        fs::read_to_string(app_data.join("copied").join("model.gguf")).unwrap(),
+        "model bytes"
+    );
+
+    let _ = fs::remove_dir_all(source_dir);
+    let _ = fs::remove_dir_all(app_data.join("copied"));
+}
+
+#[test]
+fn test_copy_file_accepts_file_url_destination_in_app_data() {
+    let app = mock_app();
+    let app_data = get_app_data_folder_path(app.handle().clone());
+
+    let source_dir =
+        std::env::temp_dir().join(format!("ax-studio-copy-url-source-{}", std::process::id()));
+    fs::create_dir_all(&source_dir).unwrap();
+    let source_path = source_dir.join("source.gguf");
+    fs::write(&source_path, "model bytes").unwrap();
+
+    copy_file(
+        app.handle().clone(),
+        PathPairRequest::Typed {
+            source: source_path.to_string_lossy().to_string(),
+            destination: "file://copied-url/model.gguf".to_string(),
+        },
+    )
+    .unwrap();
+
+    assert_eq!(
+        fs::read_to_string(app_data.join("copied-url").join("model.gguf")).unwrap(),
+        "model bytes"
+    );
+
+    let _ = fs::remove_dir_all(source_dir);
+    let _ = fs::remove_dir_all(app_data.join("copied-url"));
+}
+
+#[test]
+fn test_copy_file_rejects_destination_outside_app_data() {
+    let app = mock_app();
+    let source_dir = std::env::temp_dir().join(format!(
+        "ax-studio-copy-source-outside-{}",
+        std::process::id()
+    ));
+    fs::create_dir_all(&source_dir).unwrap();
+    let source_path = source_dir.join("source.gguf");
+    fs::write(&source_path, "model bytes").unwrap();
+
+    let error = copy_file(
+        app.handle().clone(),
+        PathPairRequest::Typed {
+            source: source_path.to_string_lossy().to_string(),
+            destination: source_dir
+                .join("outside.gguf")
+                .to_string_lossy()
+                .to_string(),
+        },
+    )
+    .unwrap_err();
+
+    assert!(error.contains("outside app data folder"));
+    assert!(!source_dir.join("outside.gguf").exists());
+
+    let _ = fs::remove_dir_all(source_dir);
+}
+
+#[test]
 fn test_consume_approved_save_target_allows_once() {
     let temp_dir = std::env::temp_dir().join("ax-studio-filesystem-tests");
     fs::create_dir_all(&temp_dir).unwrap();

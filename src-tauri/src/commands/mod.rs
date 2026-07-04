@@ -12,6 +12,7 @@ macro_rules! desktop_handlers {
             crate::core::filesystem::commands::read_file_base64,
             crate::core::filesystem::commands::rm,
             crate::core::filesystem::commands::mv,
+            crate::core::filesystem::commands::copy_file,
             crate::core::filesystem::commands::file_stat,
             crate::core::filesystem::commands::write_file_sync,
             crate::core::filesystem::commands::write_yaml,

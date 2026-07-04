@@ -5,6 +5,7 @@ use super::models::{DialogOpenOptions, FileStat};
 use crate::core::state::AppState;
 use base64::Engine;
 use rfd::AsyncFileDialog;
+use std::ffi::OsString;
 use std::fs;
 use std::path::PathBuf;
 use tauri::Runtime;
@@ -156,6 +157,100 @@ impl DecompressRequest {
     }
 }
 
+fn normalize_copy_source_path(path: &str) -> Result<PathBuf, String> {
+    if path.starts_with("http://") || path.starts_with("https://") {
+        return Err("copy_file error: source path must be a local file".to_string());
+    }
+
+    let normalized = if path.starts_with("file:/") || path.starts_with("file:\\") {
+        ax_studio_utils::normalize_file_path(path)
+    } else {
+        path.to_string()
+    };
+    let source = PathBuf::from(normalized);
+    if !source.is_absolute() {
+        return Err("copy_file error: source path must be absolute".to_string());
+    }
+
+    let canonical = source
+        .canonicalize()
+        .map_err(|e| format!("copy_file error: cannot resolve source path: {e}"))?;
+    if !canonical.is_file() {
+        return Err("copy_file error: source path must be a file".to_string());
+    }
+
+    Ok(ax_studio_utils::normalize_path(&canonical))
+}
+
+fn normalize_with_existing_ancestor(path: PathBuf) -> PathBuf {
+    if let Ok(canonical) = path.canonicalize() {
+        return ax_studio_utils::normalize_path(&canonical);
+    }
+
+    let mut missing_components: Vec<OsString> = Vec::new();
+    let mut current = path.as_path();
+
+    while let Some(parent) = current.parent() {
+        if let Some(file_name) = current.file_name() {
+            missing_components.push(file_name.to_os_string());
+        }
+
+        if parent.exists() {
+            if let Ok(canonical_parent) = parent.canonicalize() {
+                let mut resolved = canonical_parent;
+                for component in missing_components.iter().rev() {
+                    resolved.push(component);
+                }
+                return ax_studio_utils::normalize_path(&resolved);
+            }
+        }
+
+        current = parent;
+    }
+
+    ax_studio_utils::normalize_path(&path)
+}
+
+fn normalize_copy_destination_path<R: Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    path: &str,
+) -> Result<PathBuf, String> {
+    if path.starts_with("http://") || path.starts_with("https://") {
+        return Err("copy_file error: destination path must be local app data".to_string());
+    }
+
+    let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app_handle);
+    let canonical_app_data = ax_studio_utils::normalize_path(
+        &app_data_folder
+            .canonicalize()
+            .unwrap_or_else(|_| app_data_folder.clone()),
+    );
+
+    let destination = if path.starts_with("file:/") || path.starts_with("file:\\") {
+        let normalized = ax_studio_utils::normalize_file_path(path);
+        let relative_normalized = normalized
+            .trim_start_matches(std::path::MAIN_SEPARATOR)
+            .trim_start_matches('/')
+            .trim_start_matches('\\');
+        canonical_app_data.join(relative_normalized)
+    } else {
+        PathBuf::from(path)
+    };
+
+    let resolved = normalize_with_existing_ancestor(destination);
+    if !resolved.starts_with(&canonical_app_data) {
+        let message = format!(
+            "Path traversal blocked: {} is outside app data folder {}",
+            resolved.display(),
+            canonical_app_data.display()
+        );
+        log::warn!("{message}");
+        return Err(message);
+    }
+
+    Ok(resolved)
+}
+
 // Akidb (knowledge-base) commands moved to the sibling `akidb` module.
 // See crate::core::filesystem::akidb for read_akidb_*, write_akidb_*,
 // akidb_sync_now, and cancel_akidb_sync.
@@ -276,6 +371,25 @@ pub fn mv<R: Runtime>(
     }
 
     fs::rename(&source, &destination).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+/// Copy a local file into a destination inside the app data folder.
+pub fn copy_file<R: Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    request: PathPairRequest,
+) -> Result<(), String> {
+    let (source_arg, destination_arg) = request.into_paths("copy_file")?;
+    let source = normalize_copy_source_path(&source_arg)?;
+    let destination = normalize_copy_destination_path(app_handle, &destination_arg)?;
+
+    if let Some(parent) = destination.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+
+    fs::copy(&source, &destination)
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

@@ -78,7 +78,10 @@ describe('fs module', () => {
     const src = 'path/to/src'
     const dest = 'path/to/dest'
     await fs.copyFile(src, dest)
-    expect(globalThis.core.api.copyFile).toHaveBeenCalledWith(src, dest)
+    expect(globalThis.core.api.copyFile).toHaveBeenCalledWith({
+      source: src,
+      destination: dest,
+    })
   })
 
   it('should call getGgufFiles with correct arguments', async () => {
