@@ -1,8 +1,25 @@
 import { describe, expect, it } from 'vitest'
+import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
-import { createTauriDevWebCommand } from '../tauri-dev-web.mjs'
+import { createTauriDevWebCommand, getRepoRoot } from '../tauri-dev-web.mjs'
 
 describe('tauri dev web command', () => {
+  it('can be imported by tools when process.argv[1] is unavailable', () => {
+    const output = execFileSync(
+      process.execPath,
+      [
+        '-e',
+        "import('./scripts/tauri-dev-web.mjs').then(() => console.log('ok'))",
+      ],
+      {
+        cwd: getRepoRoot(),
+        encoding: 'utf8',
+      }
+    )
+
+    expect(output.trim()).toBe('ok')
+  })
+
   it('runs Vite from the web-app workspace with Tauri dev env', () => {
     const repoRoot = '/repo/ax-studio'
     const command = createTauriDevWebCommand({

@@ -66,7 +66,10 @@ export function runTauriDevWeb(options = {}) {
   return 0
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   const exitCode = runTauriDevWeb()
   if (exitCode !== 0) {
     process.exit(exitCode)
