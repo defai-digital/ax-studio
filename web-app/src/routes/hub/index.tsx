@@ -24,7 +24,21 @@ import {
 import { useServiceHub } from '@/hooks/useServiceHub'
 import type { CatalogModel } from '@/services/models/types'
 import HeaderPage from '@/containers/HeaderPage'
-import { Atom, CheckCircle2, ChevronsUpDown, Download, Eye, FileCode, HardDrive, Loader, MessageCircle, RotateCcw, Search, Wrench, X } from "lucide-react";
+import {
+  Atom,
+  CheckCircle2,
+  ChevronsUpDown,
+  Download,
+  Eye,
+  FileCode,
+  HardDrive,
+  Loader,
+  MessageCircle,
+  RotateCcw,
+  Search,
+  Wrench,
+  X,
+} from 'lucide-react'
 import { motion, AnimatePresence } from 'motion/react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import Fuse from 'fuse.js'
@@ -106,10 +120,9 @@ function HubContent() {
   // read the latest status without listing the state as a dep — doing so
   // would recreate the callback on every set and cascade renders through
   // every ModelInfoHoverCard in the list.
-  const modelSupportStatusRef =
-    useRef<Record<string, 'RED' | 'YELLOW' | 'GREEN' | 'GREY' | 'LOADING'>>(
-      {}
-    )
+  const modelSupportStatusRef = useRef<
+    Record<string, 'RED' | 'YELLOW' | 'GREEN' | 'GREY' | 'LOADING'>
+  >({})
   modelSupportStatusRef.current = modelSupportStatus
   const [isInitialLoad, setIsInitialLoad] = useState(true)
   const addModelSourceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -274,15 +287,26 @@ function HubContent() {
     addModelSourceTimeoutRef.current = setTimeout(async () => {
       const controller = new AbortController()
       huggingFaceRepoRequestRef.current = controller
+      const isActiveLookup = () =>
+        huggingFaceRepoRequestRef.current === controller &&
+        !controller.signal.aborted
 
       try {
         const repoInfo = await serviceHub
           .models()
-          .fetchHuggingFaceRepo(searchValue, huggingfaceToken, controller.signal)
+          .fetchHuggingFaceRepo(
+            searchValue,
+            huggingfaceToken,
+            controller.signal
+          )
+        if (!isActiveLookup()) return
+
         if (repoInfo) {
           const catalogModel = serviceHub
             .models()
             .convertHfRepoToCatalogModel(repoInfo)
+          if (!isActiveLookup()) return
+
           if (
             !sources.some(
               (s) =>
@@ -583,7 +607,9 @@ function HubContent() {
               <div className="flex items-center gap-2 justify-end sm:hidden mb-3">
                 <div className="flex items-center gap-2">
                   <Switch
-                    checked={activeFilter === 'downloaded' || activeFilter === 'mlx'}
+                    checked={
+                      activeFilter === 'downloaded' || activeFilter === 'mlx'
+                    }
                     onCheckedChange={(checked) => {
                       setIsInitialLoad(true)
                       setActiveFilter(checked ? 'downloaded' : 'all')
@@ -672,7 +698,7 @@ function HubContent() {
                               />
                               <h3
                                 className={cn(
-                                  'font-semibold text-foreground group-hover:text-primary transition-colors truncate capitalize',
+                                  'font-semibold text-foreground group-hover:text-primary transition-colors truncate capitalize'
                                 )}
                                 style={{ fontSize: '14px' }}
                                 title={extractModelName(model.model_name) || ''}

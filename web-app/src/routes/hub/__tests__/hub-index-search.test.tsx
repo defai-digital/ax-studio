@@ -40,7 +40,9 @@ vi.mock('@/components/ui/switch', () => ({
 }))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
-  DropdownMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DropdownMenu: ({ children }: { children: ReactNode }) => (
+    <div>{children}</div>
+  ),
   DropdownMenuContent: ({ children }: { children: ReactNode }) => (
     <div>{children}</div>
   ),
@@ -129,8 +131,9 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
 }))
 
 vi.mock('@/hooks/settings/useGeneralSetting', () => ({
-  useGeneralSetting: (selector: (state: { huggingfaceToken: string }) => string) =>
-    selector({ huggingfaceToken: 'hf-token' }),
+  useGeneralSetting: (
+    selector: (state: { huggingfaceToken: string }) => string
+  ) => selector({ huggingfaceToken: 'hf-token' }),
 }))
 
 vi.mock('@/hooks/models/useModelProvider', () => ({
@@ -178,6 +181,17 @@ vi.mock('@/constants/models', () => ({
 
 import { Route } from '../index'
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve
+    reject = promiseReject
+  })
+
+  return { promise, resolve, reject }
+}
+
 describe('Hub index search', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -205,5 +219,55 @@ describe('Hub index search', () => {
     })
 
     expect(mocks.fetchHuggingFaceRepo).not.toHaveBeenCalled()
+  })
+
+  it('ignores stale Hugging Face lookup results after a newer search starts', async () => {
+    const firstLookup = deferred<unknown>()
+    const secondLookup = deferred<unknown>()
+    mocks.fetchHuggingFaceRepo.mockImplementation((value: string) => {
+      if (value === 'org/first-model') return firstLookup.promise
+      if (value === 'org/second-model') return secondLookup.promise
+      return Promise.resolve(null)
+    })
+    mocks.convertHfRepoToCatalogModel.mockImplementation((repoInfo) => repoInfo)
+
+    const Component = Route.component as React.ComponentType
+    render(<Component />)
+
+    const input = screen.getByPlaceholderText('Search models, developers...')
+
+    fireEvent.change(input, { target: { value: 'org/first-model' } })
+    await act(async () => {
+      vi.advanceTimersByTime(500)
+    })
+
+    fireEvent.change(input, { target: { value: 'org/second-model' } })
+    await act(async () => {
+      vi.advanceTimersByTime(500)
+    })
+
+    await act(async () => {
+      firstLookup.resolve({
+        model_name: 'first-model',
+        developer: 'org',
+        description: 'stale result',
+        quants: [],
+      })
+      await Promise.resolve()
+    })
+
+    expect(screen.queryByText('first-model')).not.toBeInTheDocument()
+
+    await act(async () => {
+      secondLookup.resolve({
+        model_name: 'second-model',
+        developer: 'org',
+        description: 'current result',
+        quants: [],
+      })
+      await Promise.resolve()
+    })
+
+    expect(screen.getByText('second-model')).toBeInTheDocument()
   })
 })
