@@ -36,6 +36,15 @@ vi.mock('@/lib/utils', () => ({
   sanitizeModelId: vi.fn((id: string) => id),
 }))
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve
+  })
+
+  return { promise, resolve }
+}
+
 describe('useModelSources', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -326,6 +335,74 @@ describe('useModelSources', () => {
 
       expect(result.current.error).toBe(null)
       expect(result.current.sources).toEqual(mockSources)
+    })
+
+    it('should ignore stale catalog results when a newer fetch finishes first', async () => {
+      const staleRequest = deferred<CatalogModel[]>()
+      const freshRequest = deferred<CatalogModel[]>()
+      const staleSources: CatalogModel[] = [
+        {
+          model_name: 'stale-model',
+          description: 'Older catalog response',
+          developer: 'provider-1',
+          downloads: 100,
+          num_quants: 1,
+          quants: [
+            {
+              model_id: 'stale-model-q4',
+              path: '/path/stale',
+              file_size: '1GB',
+            },
+          ],
+          is_mlx: false,
+        },
+      ]
+      const freshSources: CatalogModel[] = [
+        {
+          model_name: 'fresh-model',
+          description: 'Newer catalog response',
+          developer: 'provider-2',
+          downloads: 200,
+          num_quants: 1,
+          quants: [
+            {
+              model_id: 'fresh-model-q4',
+              path: '/path/fresh',
+              file_size: '2GB',
+            },
+          ],
+          is_mlx: false,
+        },
+      ]
+
+      mockFetchModelCatalog
+        .mockReturnValueOnce(staleRequest.promise)
+        .mockReturnValueOnce(freshRequest.promise)
+
+      const { result } = renderHook(() => useModelSources())
+
+      let staleFetch!: Promise<void>
+      let freshFetch!: Promise<void>
+      act(() => {
+        staleFetch = result.current.fetchSources()
+        freshFetch = result.current.fetchSources()
+      })
+
+      await act(async () => {
+        freshRequest.resolve(freshSources)
+        await freshFetch
+      })
+
+      expect(result.current.sources).toEqual(freshSources)
+      expect(result.current.loading).toBe(false)
+
+      await act(async () => {
+        staleRequest.resolve(staleSources)
+        await staleFetch
+      })
+
+      expect(result.current.sources).toEqual(freshSources)
+      expect(result.current.error).toBe(null)
     })
   })
 

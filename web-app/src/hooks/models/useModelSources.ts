@@ -62,6 +62,8 @@ const normalizeCatalogModel = (catalog: CatalogModel): CatalogModel => {
   }
 }
 
+let fetchSourcesRequestId = 0
+
 // Zustand store for model sources
 type ModelSourcesState = {
   sources: CatalogModel[]
@@ -77,6 +79,7 @@ export const useModelSources = create<ModelSourcesState>()(
       error: null,
       loading: false,
       fetchSources: async () => {
+        const requestId = ++fetchSourcesRequestId
         set({ loading: true, error: null })
         try {
           const newSources = await getServiceHub()
@@ -84,11 +87,15 @@ export const useModelSources = create<ModelSourcesState>()(
             .fetchModelCatalog()
             .then((catalogs) => catalogs.map(normalizeCatalogModel))
 
+          if (requestId !== fetchSourcesRequestId) return
+
           set({
             sources: newSources.length ? newSources : get().sources,
             loading: false,
           })
         } catch (error) {
+          if (requestId !== fetchSourcesRequestId) return
+
           set({ error: error as Error, loading: false })
         }
       },
