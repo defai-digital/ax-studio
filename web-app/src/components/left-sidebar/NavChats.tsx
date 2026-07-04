@@ -41,10 +41,10 @@ import { usePinnedThreads } from '@/hooks/threads/usePinnedThreads'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { RenameThreadDialog, DeleteThreadDialog } from '@/containers/dialogs'
+import { TEMPORARY_CHAT_ID } from '@/constants/chat'
 
 export function NavChats() {
   const { t } = useTranslation()
-  const getFilteredThreads = useThreads((state) => state.getFilteredThreads)
   const threads = useThreads((state) => state.threads)
   const deleteAllThreads = useThreads((state) => state.deleteAllThreads)
   const renameThread = useThreads((state) => state.renameThread)
@@ -53,9 +53,10 @@ export function NavChats() {
   const { pinnedIds, pinnedSet, togglePin, reorder } = usePinnedThreads()
 
   const threadsWithoutProject = useMemo(() => {
-    return getFilteredThreads('').filter((thread) => !thread.metadata?.project)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [getFilteredThreads, threads])
+    return Object.values(threads).filter(
+      (thread) => thread.id !== TEMPORARY_CHAT_ID && !thread.metadata?.project
+    )
+  }, [threads])
 
   const groupedThreads = useMemo(() => {
     return groupByDate(

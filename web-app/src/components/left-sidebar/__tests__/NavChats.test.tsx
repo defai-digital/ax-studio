@@ -28,11 +28,31 @@ const mockThreadsWithProject: Thread[] = [
   } as Thread,
 ]
 
+const mockTemporaryThreads: Thread[] = [
+  {
+    id: 'temporary-chat',
+    title: 'Temporary Chat',
+    updated: Date.now() / 1000,
+    created: Date.now() / 1000,
+    metadata: {},
+  } as Thread,
+]
+
+function toThreadRecord(threads: Thread[]) {
+  return Object.fromEntries(threads.map((thread) => [thread.id, thread]))
+}
+
+const allMockThreads = [
+  ...mockThreads,
+  ...mockThreadsWithProject,
+  ...mockTemporaryThreads,
+]
+
 vi.mock('@/hooks/threads/useThreads', () => ({
   useThreads: vi.fn((selector) =>
     selector({
-      getFilteredThreads: (query: string) => [...mockThreads, ...mockThreadsWithProject],
-      threads: [...mockThreads, ...mockThreadsWithProject],
+      getFilteredThreads: (_query: string) => allMockThreads,
+      threads: toThreadRecord(allMockThreads),
       deleteAllThreads: vi.fn(),
       renameThread: vi.fn(),
       deleteThread: vi.fn(),
@@ -165,10 +185,11 @@ describe('NavChats', () => {
 
   it('renders thread list with non-project threads only', () => {
     render(<NavChats />)
-    // The groupByDate mock filters out project threads
-    // Should show Chat Alpha and Chat Beta (no project)
+    // Should show Chat Alpha and Chat Beta, but no project or temporary threads.
     expect(screen.getByText('Chat Alpha')).toBeInTheDocument()
     expect(screen.getByText('Chat Beta')).toBeInTheDocument()
+    expect(screen.queryByText('Project Chat')).toBeNull()
+    expect(screen.queryByText('Temporary Chat')).toBeNull()
   })
 
   it('renders date group section labels', () => {
@@ -186,7 +207,7 @@ describe('NavChats', () => {
     vi.mocked(useThreads).mockImplementation((selector: (state: Record<string, unknown>) => unknown) =>
       selector({
         getFilteredThreads: () => [],
-        threads: [],
+        threads: {},
         deleteAllThreads: vi.fn(),
         renameThread: vi.fn(),
         deleteThread: vi.fn(),
@@ -202,7 +223,7 @@ describe('NavChats', () => {
     vi.mocked(useThreads).mockImplementation((selector: (state: Record<string, unknown>) => unknown) =>
       selector({
         getFilteredThreads: () => [...mockThreads, ...mockThreadsWithProject],
-        threads: [...mockThreads, ...mockThreadsWithProject],
+        threads: toThreadRecord([...mockThreads, ...mockThreadsWithProject]),
         deleteAllThreads: vi.fn(),
         renameThread: vi.fn(),
         deleteThread: vi.fn(),
