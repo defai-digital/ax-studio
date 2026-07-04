@@ -124,7 +124,7 @@ export const useProviderModels = (
 
   const refetch = useCallback(() => {
     if (provider) {
-      const cacheKey = `${provider.provider}-${provider.base_url}`
+      const cacheKey = getProviderModelsCacheKey(provider)
       modelsCache.delete(cacheKey)
       fetchModels()
     }

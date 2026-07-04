@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import {
   clearProviderModelsCache,
   useProviderModels,
@@ -102,6 +102,28 @@ describe('useProviderModels', () => {
 
     await waitFor(() => {
       expect(result.current.models).toEqual(['new-credential-model'])
+    })
+
+    expect(fetchModelsSpy).toHaveBeenCalledTimes(2)
+  })
+
+  it('should invalidate the active provider cache on manual refetch', async () => {
+    fetchModelsSpy
+      .mockResolvedValueOnce(['cached-model'])
+      .mockResolvedValueOnce(['fresh-model'])
+
+    const { result } = renderHook(() => useProviderModels(mockProvider))
+
+    await waitFor(() => {
+      expect(result.current.models).toEqual(['cached-model'])
+    })
+
+    act(() => {
+      result.current.refetch()
+    })
+
+    await waitFor(() => {
+      expect(result.current.models).toEqual(['fresh-model'])
     })
 
     expect(fetchModelsSpy).toHaveBeenCalledTimes(2)
