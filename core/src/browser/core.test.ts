@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
+import { AppEvent } from '../types/api'
 import {
   baseName,
   dirName,
@@ -6,6 +7,7 @@ import {
   joinPath,
   openExternalUrl,
   openFileExplorer,
+  showToast,
 } from './core'
 
 describe('test core apis', () => {
@@ -85,6 +87,24 @@ describe('test core apis', () => {
     const result = await getAppDataFolderPath()
     expect(globalThis.core.api.getAppDataFolderPath).toHaveBeenCalled()
     expect(result).toBe('/path/to/app/data')
+  })
+
+  it('should emit toast events through the core event bridge', () => {
+    const emit = vi.fn()
+    globalThis.core = {
+      events: {
+        emit,
+        on: vi.fn(),
+        off: vi.fn(),
+      },
+    }
+
+    showToast('Backend setup failed', 'Network down')
+
+    expect(emit).toHaveBeenCalledWith(AppEvent.onShowToast, {
+      title: 'Backend setup failed',
+      message: 'Network down',
+    })
   })
 })
 

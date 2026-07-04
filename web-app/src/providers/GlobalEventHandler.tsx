@@ -35,6 +35,27 @@ export function GlobalEventHandler() {
   // ─── Settings changes ───────────────────────────────────────────────────────
 
   useEffect(() => {
+    const handleShowToast = (payload: {
+      title?: string
+      message?: string
+    } | null) => {
+      const title = payload?.title?.trim()
+      if (!title) return
+
+      const message = payload?.message?.trim()
+      toast.info(
+        title,
+        message ? { description: message } : undefined
+      )
+    }
+
+    events.on(AppEvent.onShowToast, handleShowToast)
+    return () => {
+      events.off(AppEvent.onShowToast, handleShowToast)
+    }
+  }, [])
+
+  useEffect(() => {
     const handleSettingsChanged = async (event: {
       key: string
       value: string

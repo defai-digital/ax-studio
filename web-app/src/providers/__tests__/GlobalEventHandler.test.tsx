@@ -8,6 +8,7 @@ const {
   mockSetProviders,
   mockSetActiveModels,
   mockToastError,
+  mockToastInfo,
   mockToastSuccess,
   mockGetProviders,
   mockGetActiveModels,
@@ -34,6 +35,7 @@ const {
     mockSetProviders: vi.fn(),
     mockSetActiveModels: vi.fn(),
     mockToastError: vi.fn(),
+    mockToastInfo: vi.fn(),
     mockToastSuccess: vi.fn(),
     mockGetProviders: vi.fn(),
     mockGetActiveModels: vi.fn(),
@@ -53,6 +55,7 @@ vi.mock('@ax-studio/core', () => ({
   },
   AppEvent: {
     onModelImported: 'onModelImported',
+    onShowToast: 'onShowToast',
   },
   DownloadEvent: {
     onModelValidationFailed: 'onModelValidationFailed',
@@ -118,6 +121,7 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
 vi.mock('sonner', () => ({
   toast: {
     error: mockToastError,
+    info: mockToastInfo,
     success: mockToastSuccess,
   },
 }))
@@ -149,6 +153,20 @@ describe('GlobalEventHandler', () => {
         '/'
       )
     })
+  })
+
+  it('shows bridge toast events from extensions', () => {
+    render(<GlobalEventHandler />)
+
+    emit('onShowToast', {
+      title: 'llama.cpp backend setup failed',
+      message: 'Backend configuration failed: network down',
+    })
+
+    expect(mockToastInfo).toHaveBeenCalledWith(
+      'llama.cpp backend setup failed',
+      { description: 'Backend configuration failed: network down' }
+    )
   })
 
   it('refreshes active models on model ready and model stopped events', async () => {

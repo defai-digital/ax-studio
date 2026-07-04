@@ -39,6 +39,7 @@ export enum AppEvent {
   onAppUpdateDownloadError = 'onAppUpdateDownloadError',
   onAppUpdateDownloadSuccess = 'onAppUpdateDownloadSuccess',
   onModelImported = 'onModelImported',
+  onShowToast = 'onShowToast',
 
   onDeepLink = 'onDeepLink',
   onMainViewStateChange = 'onMainViewStateChange',

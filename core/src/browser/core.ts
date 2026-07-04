@@ -1,3 +1,6 @@
+import { AppEvent } from '../types/api'
+import { events } from './events'
+
 /**
  * Validates that a URL has a safe protocol (http or https).
  * @param url - The URL to validate
@@ -143,7 +146,7 @@ const isSubdirectory: (from: string, to: string) => Promise<boolean> = (from: st
  * @returns
  */
 const showToast: (title: string, message: string) => void = (title, message) =>
-  void getCoreApi().showToast(title, message)
+  events.emit(AppEvent.onShowToast, { title, message })
 
 /**
  * Functions exports
