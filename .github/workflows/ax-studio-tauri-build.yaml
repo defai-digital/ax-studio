@@ -100,12 +100,10 @@ jobs:
             if [ "$is_draft" = "true" ]; then
               gh release edit "$TAG" --draft=true --prerelease=false --repo "$GITHUB_REPOSITORY"
             else
-              # Re-drafting a published release takes every download URL
-              # (Homebrew, updater latest.json, docs links) offline for all
-              # users. Ship a new patch version instead of rebuilding over a
-              # live release; delete the release manually to force a rebuild.
-              echo "::error::Release $TAG is already published. Refusing to re-draft a live release."
-              exit 1
+              # Keep the published release online while rebuilding assets for
+              # the same tag. Later upload steps use --clobber, and the final
+              # Homebrew step updates the tap to the new DMG checksum.
+              echo "::notice::Release $TAG is already published; continuing to replace assets in place."
             fi
           else
             gh release create "$TAG" --title "$VERSION" --draft --generate-notes --repo "$GITHUB_REPOSITORY"
