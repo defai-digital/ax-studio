@@ -10,7 +10,9 @@ const mocks = vi.hoisted(() => {
   }
   const listen = vi.fn()
   const core: Record<string, unknown> = {}
-  const ExtensionManager = vi.fn(() => extensionManager) as unknown as {
+  const ExtensionManager = vi.fn(function () {
+    return extensionManager
+  }) as unknown as {
     (): typeof extensionManager
     getInstance: ReturnType<typeof vi.fn>
   }
@@ -26,8 +28,8 @@ const mocks = vi.hoisted(() => {
       }),
     },
     ExtensionManager,
-    EngineManager: vi.fn(),
-    ModelManager: vi.fn(),
+    EngineManager: vi.fn(function () {}),
+    ModelManager: vi.fn(function () {}),
     events: {
       emit: vi.fn(),
     },
@@ -121,7 +123,9 @@ describe('ExtensionProvider', () => {
   })
 
   it('keeps the app rendered if extension startup fails', async () => {
-    mocks.extensionManager.registerActive.mockRejectedValue(new Error('extension boom'))
+    mocks.extensionManager.registerActive.mockRejectedValue(
+      new Error('extension boom')
+    )
 
     render(
       <ExtensionProvider>

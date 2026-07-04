@@ -1,4 +1,3 @@
-import { Loader } from "lucide-react";
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { Route as ProviderDetailRoute } from '../$providerName'
@@ -109,7 +108,10 @@ vi.mock('@/hooks/useServiceHub', () => ({
 
 vi.mock('@/i18n/react-i18next-compat', () => ({
   useTranslation: () => ({
-    t: (key: string, options?: { count?: number; provider?: string; defaultValue?: string }) => {
+    t: (
+      key: string,
+      options?: { count?: number; provider?: string; defaultValue?: string }
+    ) => {
       if (options?.defaultValue) return options.defaultValue
       return key
     },
@@ -135,7 +137,10 @@ vi.mock('@/constants/providers', () => ({
 }))
 
 vi.mock('@/constants/routes', () => ({
-  route: { hub: { index: '/hub' }, settings: { providers: '/settings/providers/$providerName' } },
+  route: {
+    hub: { index: '/hub' },
+    settings: { providers: '/settings/providers/$providerName' },
+  },
 }))
 
 vi.mock('@/components/ui/button', () => ({
@@ -163,10 +168,6 @@ vi.mock('@/components/ui/button', () => ({
 
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn() },
-}))
-
-vi.mock('lucide-react', () => ({
-  Loader: () => <span data-testid="icon-loader" />,
 }))
 
 vi.mock('lucide-react', () => ({
@@ -214,7 +215,13 @@ const mockProvider = {
 describe('ProviderDetail', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockGetProviderByName.mockReturnValue({ ...mockProvider, settings: mockProvider.settings.map(s => ({ ...s, controller_props: { ...s.controller_props } })) })
+    mockGetProviderByName.mockReturnValue({
+      ...mockProvider,
+      settings: mockProvider.settings.map((s) => ({
+        ...s,
+        controller_props: { ...s.controller_props },
+      })),
+    })
     mockFetchModelsFromProvider.mockResolvedValue(['model-1', 'model-2'])
   })
 
@@ -244,7 +251,9 @@ describe('ProviderDetail', () => {
     const inputs = screen.getAllByTestId('dynamic-input')
     const apiKeyInput = inputs[0]
 
-    fireEvent.change(apiKeyInput, { target: { value: '<script>alert(1)</script>' } })
+    fireEvent.change(apiKeyInput, {
+      target: { value: '<script>alert(1)</script>' },
+    })
 
     expect(mockUpdateProvider).not.toHaveBeenCalled()
   })
@@ -280,7 +289,9 @@ describe('ProviderDetail', () => {
     const inputs = screen.getAllByTestId('dynamic-input')
     const baseUrlInput = inputs[1]
 
-    fireEvent.change(baseUrlInput, { target: { value: 'https://api.newprovider.com/v1' } })
+    fireEvent.change(baseUrlInput, {
+      target: { value: 'https://api.newprovider.com/v1' },
+    })
 
     expect(mockUpdateProvider).toHaveBeenCalled()
   })
@@ -292,7 +303,9 @@ describe('ProviderDetail', () => {
 
     const buttons = screen.getAllByTestId('button')
     const testButton = buttons.find(
-      (btn) => btn.textContent?.includes('testConnection') || btn.textContent?.includes('Test Connection')
+      (btn) =>
+        btn.textContent?.includes('testConnection') ||
+        btn.textContent?.includes('Test Connection')
     )
     expect(testButton).toBeDefined()
   })
@@ -305,7 +318,9 @@ describe('ProviderDetail', () => {
 
     const buttons = screen.getAllByTestId('button')
     const testButton = buttons.find(
-      (btn) => btn.textContent?.includes('testConnection') || btn.textContent?.includes('Test')
+      (btn) =>
+        btn.textContent?.includes('testConnection') ||
+        btn.textContent?.includes('Test')
     )
     if (testButton) {
       fireEvent.click(testButton)
@@ -328,13 +343,17 @@ describe('ProviderDetail', () => {
 
   it('shows connection error after failed test', async () => {
     const ProviderDetail = ProviderDetailRoute.component
-    mockFetchModelsFromProvider.mockRejectedValue(new Error('Connection refused'))
+    mockFetchModelsFromProvider.mockRejectedValue(
+      new Error('Connection refused')
+    )
 
     render(<ProviderDetail />)
 
     const buttons = screen.getAllByTestId('button')
     const testButton = buttons.find(
-      (btn) => btn.textContent?.includes('testConnection') || btn.textContent?.includes('Test')
+      (btn) =>
+        btn.textContent?.includes('testConnection') ||
+        btn.textContent?.includes('Test')
     )
     if (testButton) {
       fireEvent.click(testButton)

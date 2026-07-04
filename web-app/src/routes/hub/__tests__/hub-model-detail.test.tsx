@@ -125,6 +125,7 @@ vi.mock('motion/react', () => ({
 }))
 
 vi.mock('lucide-react', () => ({
+  ArrowLeft: () => <div />,
   Eye: () => <div />,
   Wrench: () => <div />,
   Calendar: () => <div />,
@@ -133,14 +134,12 @@ vi.mock('lucide-react', () => ({
   HardDrive: () => <div />,
 }))
 
-vi.mock('lucide-react', () => ({
-  ArrowLeft: () => <div />,
-}))
-
 vi.mock('@/lib/models', () => ({
   extractModelName: vi.fn(),
   extractDescription: vi.fn(),
-  getPreferredMmprojPath: vi.fn((models?: Array<{ path: string }>) => models?.[0]?.path),
+  getPreferredMmprojPath: vi.fn(
+    (models?: Array<{ path: string }>) => models?.[0]?.path
+  ),
 }))
 
 vi.mock('@/lib/utils', () => ({

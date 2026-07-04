@@ -43,7 +43,9 @@ import { toast } from 'sonner'
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function createFileInputRef() {
-  return { current: { value: '', click: vi.fn() } as unknown as HTMLInputElement }
+  return {
+    current: { value: '', click: vi.fn() } as unknown as HTMLInputElement,
+  }
 }
 
 function createTextareaRef() {
@@ -61,11 +63,7 @@ function defaultParams() {
   }
 }
 
-function createMockFile(
-  name: string,
-  size: number,
-  type: string
-): File {
+function createMockFile(name: string, size: number, type: string): File {
   const file = new File(['x'.repeat(Math.min(size, 100))], name, { type })
   Object.defineProperty(file, 'size', { value: size })
   return file
@@ -96,7 +94,9 @@ describe('useImageAttachmentHandler', () => {
   // ── Phase 1: Hook returns expected shape ─────────────────────────────────
 
   it('returns the expected API surface', () => {
-    const { result } = renderHook(() => useImageAttachmentHandler(defaultParams()))
+    const { result } = renderHook(() =>
+      useImageAttachmentHandler(defaultParams())
+    )
 
     expect(typeof result.current.processImageFiles).toBe('function')
     expect(typeof result.current.handleFileChange).toBe('function')
@@ -141,7 +141,11 @@ describe('useImageAttachmentHandler', () => {
     const params = defaultParams()
     const { result } = renderHook(() => useImageAttachmentHandler(params))
 
-    const oversizedFile = createMockFile('big.png', 11 * 1024 * 1024, 'image/png')
+    const oversizedFile = createMockFile(
+      'big.png',
+      11 * 1024 * 1024,
+      'image/png'
+    )
 
     await act(async () => {
       await result.current.processImageFiles([oversizedFile])
@@ -177,9 +181,9 @@ describe('useImageAttachmentHandler', () => {
         if (this.onload) this.onload()
       }),
     }
-    globalThis.FileReader = vi.fn(
-      () => mockReaderInstance
-    ) as unknown as typeof FileReader
+    globalThis.FileReader = vi.fn(function () {
+      return mockReaderInstance
+    }) as unknown as typeof FileReader
 
     const params = defaultParams()
     const { result } = renderHook(() => useImageAttachmentHandler(params))
@@ -270,7 +274,12 @@ describe('useImageAttachmentHandler', () => {
       await result.current.handlePaste({
         preventDefault,
         clipboardData: {
-          items: [{ type: 'image/png', getAsFile: () => createMockFile('p.png', 100, 'image/png') }],
+          items: [
+            {
+              type: 'image/png',
+              getAsFile: () => createMockFile('p.png', 100, 'image/png'),
+            },
+          ],
         },
       } as unknown as React.ClipboardEvent)
     })
@@ -300,7 +309,11 @@ describe('useImageAttachmentHandler', () => {
     const params = defaultParams()
     const { result } = renderHook(() => useImageAttachmentHandler(params))
 
-    const oversizedFile = createMockFile('big.png', 11 * 1024 * 1024, 'image/png')
+    const oversizedFile = createMockFile(
+      'big.png',
+      11 * 1024 * 1024,
+      'image/png'
+    )
     const invalidFile = createMockFile('doc.bmp', 100, 'image/bmp')
 
     await act(async () => {

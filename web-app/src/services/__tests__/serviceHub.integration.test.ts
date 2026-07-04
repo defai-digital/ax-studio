@@ -11,82 +11,108 @@ vi.mock('@/lib/platform/utils', () => ({
 vi.mock('@ax-studio/core', () => ({
   EngineManager: {
     instance: vi.fn(() => ({
-      engines: new Map()
-    }))
-  }
+      engines: new Map(),
+    })),
+  },
 }))
 
 // Mock token.js to avoid initialization issues
 vi.mock('token.js', () => ({
-  models: {}
+  models: {},
 }))
 
 // Mock ExtensionManager to avoid initialization issues
 vi.mock('@/lib/extension', () => ({
   ExtensionManager: {
     getInstance: vi.fn(() => ({
-      getEngine: vi.fn()
-    }))
-  }
+      getEngine: vi.fn(),
+    })),
+  },
 }))
 
 // Mock dynamic imports for Tauri services
 vi.mock('../theme/tauri', () => ({
-  TauriThemeService: vi.fn().mockImplementation(() => ({
-    setTheme: vi.fn(),
-    getCurrentWindow: vi.fn()
-  }))
+  TauriThemeService: vi.fn().mockImplementation(function () {
+    return {
+      setTheme: vi.fn(),
+      getCurrentWindow: vi.fn(),
+    }
+  }),
 }))
 
 vi.mock('../window/tauri', () => ({
-  TauriWindowService: vi.fn().mockImplementation(() => ({}))
+  TauriWindowService: vi.fn().mockImplementation(function () {
+    return {}
+  }),
 }))
 
 vi.mock('../events/tauri', () => ({
-  TauriEventsService: vi.fn().mockImplementation(() => ({
-    emit: vi.fn(),
-    listen: vi.fn()
-  }))
+  TauriEventsService: vi.fn().mockImplementation(function () {
+    return {
+      emit: vi.fn(),
+      listen: vi.fn(),
+    }
+  }),
 }))
 
 vi.mock('../hardware/tauri', () => ({
-  TauriHardwareService: vi.fn().mockImplementation(() => ({}))
+  TauriHardwareService: vi.fn().mockImplementation(function () {
+    return {}
+  }),
 }))
 
 vi.mock('../app/tauri', () => ({
-  TauriAppService: vi.fn().mockImplementation(() => ({}))
+  TauriAppService: vi.fn().mockImplementation(function () {
+    return {}
+  }),
 }))
 
 vi.mock('../mcp/tauri', () => ({
-  TauriMCPService: vi.fn().mockImplementation(() => ({}))
+  TauriMCPService: vi.fn().mockImplementation(function () {
+    return {}
+  }),
 }))
 
 vi.mock('../providers/tauri', () => ({
-  TauriProvidersService: vi.fn().mockImplementation(() => ({}))
+  TauriProvidersService: vi.fn().mockImplementation(function () {
+    return {}
+  }),
 }))
 
 vi.mock('../dialog/tauri', () => ({
-  TauriDialogService: vi.fn().mockImplementation(() => ({}))
+  TauriDialogService: vi.fn().mockImplementation(function () {
+    return {}
+  }),
 }))
 
 vi.mock('../opener/tauri', () => ({
-  TauriOpenerService: vi.fn().mockImplementation(() => ({}))
+  TauriOpenerService: vi.fn().mockImplementation(function () {
+    return {}
+  }),
 }))
 
 vi.mock('../updater/tauri', () => ({
-  TauriUpdaterService: vi.fn().mockImplementation(() => ({}))
+  TauriUpdaterService: vi.fn().mockImplementation(function () {
+    return {}
+  }),
 }))
 
 vi.mock('../path/tauri', () => ({
-  TauriPathService: vi.fn().mockImplementation(() => ({}))
+  TauriPathService: vi.fn().mockImplementation(function () {
+    return {}
+  }),
 }))
 
 vi.mock('../core/tauri', () => ({
-  TauriCoreService: vi.fn().mockImplementation(() => ({}))
+  TauriCoreService: vi.fn().mockImplementation(function () {
+    return {}
+  }),
 }))
 
 vi.mock('../deeplink/tauri', () => ({
-  TauriDeepLinkService: vi.fn().mockImplementation(() => ({}))
+  TauriDeepLinkService: vi.fn().mockImplementation(function () {
+    return {}
+  }),
 }))
 
 // Mock console to avoid noise in tests
@@ -127,14 +153,32 @@ describe('ServiceHub Integration Tests', () => {
   describe('Service Access', () => {
     it('should provide access to all required services', () => {
       const services = [
-        'theme', 'window', 'events', 'hardware', 'app',
-        'messages', 'mcp', 'threads', 'providers', 'models', 'assistants',
-        'dialog', 'opener', 'updater', 'path', 'core', 'deeplink',
-        'projects', 'rag', 'uploads',
+        'theme',
+        'window',
+        'events',
+        'hardware',
+        'app',
+        'messages',
+        'mcp',
+        'threads',
+        'providers',
+        'models',
+        'assistants',
+        'dialog',
+        'opener',
+        'updater',
+        'path',
+        'core',
+        'deeplink',
+        'projects',
+        'rag',
+        'uploads',
       ]
 
-      services.forEach(serviceName => {
-        expect(typeof serviceHub[serviceName as keyof ServiceHub]).toBe('function')
+      services.forEach((serviceName) => {
+        expect(typeof serviceHub[serviceName as keyof ServiceHub]).toBe(
+          'function'
+        )
         expect(serviceHub[serviceName as keyof ServiceHub]()).toBeDefined()
       })
     })
@@ -183,14 +227,14 @@ describe('ServiceHub Integration Tests', () => {
   describe('Basic Service Functionality', () => {
     it('should have working theme service', () => {
       const theme = serviceHub.theme()
-      
+
       expect(typeof theme.setTheme).toBe('function')
       expect(typeof theme.getCurrentWindow).toBe('function')
     })
 
     it('should have working events service', () => {
       const events = serviceHub.events()
-      
+
       expect(typeof events.emit).toBe('function')
       expect(typeof events.listen).toBe('function')
     })
@@ -258,9 +302,9 @@ describe('ServiceHub Integration Tests', () => {
       await expect(
         serviceHub.app().relocateAppDataFolder('/tmp/data')
       ).rejects.toThrow('App data relocation is not available in web mode')
-      await expect(serviceHub.app().readYaml('/tmp/config.yaml')).rejects.toThrow(
-        'YAML file access is not available in web mode'
-      )
+      await expect(
+        serviceHub.app().readYaml('/tmp/config.yaml')
+      ).rejects.toThrow('YAML file access is not available in web mode')
     })
 
     it('should expose safe web fallback MCP behavior', async () => {
@@ -270,7 +314,9 @@ describe('ServiceHub Integration Tests', () => {
       await expect(serviceHub.mcp().getTools()).resolves.toEqual([])
       await expect(serviceHub.mcp().getConnectedServers()).resolves.toEqual([])
       await expect(
-        serviceHub.mcp().callTool({ server: 'missing', name: 'noop', arguments: {} })
+        serviceHub
+          .mcp()
+          .callTool({ server: 'missing', name: 'noop', arguments: {} })
       ).resolves.toEqual({ content: [], error: '' })
 
       const cancellable = serviceHub.mcp().callToolWithCancellation({
@@ -311,38 +357,44 @@ describe('ServiceHub Integration Tests', () => {
       ).resolves.toBeUndefined()
       await expect(serviceHub.hardware().getHardwareInfo()).resolves.toBeNull()
       await expect(serviceHub.hardware().getSystemUsage()).resolves.toBeNull()
-      await expect(serviceHub.hardware().getLlamacppDevices()).resolves.toEqual([])
+      await expect(serviceHub.hardware().getLlamacppDevices()).resolves.toEqual(
+        []
+      )
     })
 
     it('should expose web fallback path, core, and deeplink helpers', async () => {
       await expect(serviceHub.path().join('/tmp', '', 'models')).resolves.toBe(
         '/tmp/models'
       )
-      await expect(serviceHub.path().dirname('/tmp/models/file.gguf')).resolves.toBe(
-        '/tmp/models'
-      )
-      await expect(serviceHub.path().basename('/tmp/models/file.gguf')).resolves.toBe(
-        'file.gguf'
-      )
-      await expect(serviceHub.path().extname('/tmp/models/file.gguf')).resolves.toBe(
-        '.gguf'
-      )
+      await expect(
+        serviceHub.path().dirname('/tmp/models/file.gguf')
+      ).resolves.toBe('/tmp/models')
+      await expect(
+        serviceHub.path().basename('/tmp/models/file.gguf')
+      ).resolves.toBe('file.gguf')
+      await expect(
+        serviceHub.path().extname('/tmp/models/file.gguf')
+      ).resolves.toBe('.gguf')
       expect(serviceHub.path().sep()).toBe('/')
 
       await expect(serviceHub.core().invoke('read_logs')).rejects.toThrow(
         'Core command "read_logs" is not available in web mode'
       )
-      expect(serviceHub.core().convertFileSrc('/tmp/file.txt')).toBe('/tmp/file.txt')
-      await expect(serviceHub.core().getActiveExtensions()).resolves.toEqual([])
-      await expect(serviceHub.core().installExtensions()).resolves.toBeUndefined()
-      await expect(
-        serviceHub.core().installExtension([
-          { url: '/extensions/a.js', name: 'extension-a' },
-        ])
-      ).resolves.toEqual([{ url: '/extensions/a.js', name: 'extension-a' }])
-      await expect(serviceHub.core().uninstallExtension(['extension-a'])).resolves.toBe(
-        false
+      expect(serviceHub.core().convertFileSrc('/tmp/file.txt')).toBe(
+        '/tmp/file.txt'
       )
+      await expect(serviceHub.core().getActiveExtensions()).resolves.toEqual([])
+      await expect(
+        serviceHub.core().installExtensions()
+      ).resolves.toBeUndefined()
+      await expect(
+        serviceHub
+          .core()
+          .installExtension([{ url: '/extensions/a.js', name: 'extension-a' }])
+      ).resolves.toEqual([{ url: '/extensions/a.js', name: 'extension-a' }])
+      await expect(
+        serviceHub.core().uninstallExtension(['extension-a'])
+      ).resolves.toBe(false)
 
       const unlisten = await serviceHub.deeplink().onOpenUrl(vi.fn())
       expect(() => unlisten()).not.toThrow()
