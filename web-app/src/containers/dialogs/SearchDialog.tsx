@@ -205,13 +205,18 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
 
   // Focus input when dialog opens
   useEffect(() => {
+    let focusTimer: ReturnType<typeof setTimeout> | undefined
     if (open) {
       setSearchQuery('')
       setSelectedIndex(0)
       setActiveTab('all')
-      setTimeout(() => {
+      focusTimer = setTimeout(() => {
         inputRef.current?.focus()
       }, 0)
+    }
+
+    return () => {
+      if (focusTimer) clearTimeout(focusTimer)
     }
   }, [open])
 
@@ -252,39 +257,42 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
     setRecentVersion((v) => v + 1)
   }
 
-  const handleSelectThread = (threadId: string) => {
-    const stored = safeStorageGetItem(
-      localStorage,
-      localStorageKey.recentSearches,
-      'SearchDialog'
-    )
-    let threadIds: string[] = []
+  const handleSelectThread = useCallback(
+    (threadId: string) => {
+      const stored = safeStorageGetItem(
+        localStorage,
+        localStorageKey.recentSearches,
+        'SearchDialog'
+      )
+      let threadIds: string[] = []
 
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored)
-        threadIds = Array.isArray(parsed)
-          ? parsed.filter((id): id is string => typeof id === 'string')
-          : []
-      } catch {
-        threadIds = []
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored)
+          threadIds = Array.isArray(parsed)
+            ? parsed.filter((id): id is string => typeof id === 'string')
+            : []
+        } catch {
+          threadIds = []
+        }
       }
-    }
 
-    threadIds = threadIds.filter((id) => id !== threadId)
-    threadIds.unshift(threadId)
-    threadIds = threadIds.slice(0, MAX_RECENT_SEARCHES)
+      threadIds = threadIds.filter((id) => id !== threadId)
+      threadIds.unshift(threadId)
+      threadIds = threadIds.slice(0, MAX_RECENT_SEARCHES)
 
-    safeStorageSetItem(
-      localStorage,
-      localStorageKey.recentSearches,
-      JSON.stringify(threadIds),
-      'SearchDialog'
-    )
+      safeStorageSetItem(
+        localStorage,
+        localStorageKey.recentSearches,
+        JSON.stringify(threadIds),
+        'SearchDialog'
+      )
 
-    handleClose()
-    navigate({ to: route.threadsDetail, params: { threadId } })
-  }
+      handleClose()
+      navigate({ to: route.threadsDetail, params: { threadId } })
+    },
+    [handleClose, navigate]
+  )
 
   // Filtered results
   const filteredThreads = useMemo(() => {
@@ -366,8 +374,7 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
     } else if (selectedItem.thread) {
       handleSelectThread(selectedItem.thread.id)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allItems, selectedIndex])
+  }, [allItems, handleSelectThread, selectedIndex])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
