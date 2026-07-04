@@ -25,14 +25,21 @@ export function useGeneralSettingsPage() {
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
   const [isValidatingToken, setIsValidatingToken] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
+  const mountedRef = useRef(true)
   const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const tokenValidationAbortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
+    mountedRef.current = true
+
     return () => {
+      mountedRef.current = false
       if (copyResetTimerRef.current) {
         clearTimeout(copyResetTimerRef.current)
         copyResetTimerRef.current = null
       }
+      tokenValidationAbortRef.current?.abort()
+      tokenValidationAbortRef.current = null
     }
   }, [])
 
@@ -175,16 +182,26 @@ export function useGeneralSettingsPage() {
       toast.error('Please enter a Hugging Face token to validate')
       return
     }
+
+    tokenValidationAbortRef.current?.abort()
     setIsValidatingToken(true)
     const controller = new AbortController()
+    tokenValidationAbortRef.current = controller
     const timeoutId = setTimeout(() => controller.abort(), TOKEN_VALIDATION_TIMEOUT_MS)
+    const isCurrentValidation = () =>
+      mountedRef.current && tokenValidationAbortRef.current === controller
+
     try {
       const resp = await fetch('https://huggingface.co/api/whoami-v2', {
         headers: { Authorization: `Bearer ${token}` },
         signal: controller.signal,
       })
+      if (!isCurrentValidation()) return
+
       if (resp.ok) {
         const data = await resp.json()
+        if (!isCurrentValidation()) return
+
         toast.success('Token is valid', {
           description: data?.name
             ? `Signed in as ${data.name}`
@@ -197,6 +214,8 @@ export function useGeneralSettingsPage() {
         })
       }
     } catch (e) {
+      if (!isCurrentValidation()) return
+
       const name = (e as { name?: string })?.name
       if (name === 'AbortError') {
         toast.error('Validation timed out', {
@@ -211,7 +230,12 @@ export function useGeneralSettingsPage() {
       }
     } finally {
       clearTimeout(timeoutId)
-      setIsValidatingToken(false)
+      if (tokenValidationAbortRef.current === controller) {
+        tokenValidationAbortRef.current = null
+        if (mountedRef.current) {
+          setIsValidatingToken(false)
+        }
+      }
     }
   }
 

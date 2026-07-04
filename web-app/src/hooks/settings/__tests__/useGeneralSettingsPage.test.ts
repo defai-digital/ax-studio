@@ -6,6 +6,9 @@ import { useGeneralSettingsPage } from '../useGeneralSettingsPage'
 const mocks = vi.hoisted(() => ({
   checkForUpdate: vi.fn(),
   getAppDataFolder: vi.fn(),
+  generalSettingState: {
+    huggingfaceToken: '',
+  },
   pausePolling: vi.fn(),
   writeText: vi.fn(),
 }))
@@ -56,7 +59,7 @@ vi.mock('@/hooks/settings/useHardware', () => ({
 
 vi.mock('@/hooks/settings/useGeneralSetting', () => ({
   useGeneralSetting: () => ({
-    huggingfaceToken: '',
+    huggingfaceToken: mocks.generalSettingState.huggingfaceToken,
   }),
 }))
 
@@ -72,6 +75,7 @@ describe('useGeneralSettingsPage', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.clearAllMocks()
+    mocks.generalSettingState.huggingfaceToken = ''
     mocks.getAppDataFolder.mockReturnValue(new Promise<string>(() => {}))
     mocks.writeText.mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'clipboard', {
@@ -85,6 +89,7 @@ describe('useGeneralSettingsPage', () => {
   afterEach(() => {
     vi.runOnlyPendingTimers()
     vi.useRealTimers()
+    vi.unstubAllGlobals()
     vi.restoreAllMocks()
   })
 
@@ -147,5 +152,47 @@ describe('useGeneralSettingsPage', () => {
 
     expect(consoleErrorSpy).not.toHaveBeenCalled()
     expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('aborts Hugging Face token validation on unmount without stale toasts', async () => {
+    mocks.generalSettingState.huggingfaceToken = 'hf_test'
+    let validationSignal: AbortSignal | undefined
+    const fetchMock = vi.fn(
+      (_url: string | URL | Request, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          validationSignal = init?.signal
+          validationSignal?.addEventListener('abort', () => {
+            reject(new DOMException('aborted', 'AbortError'))
+          })
+        })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result, unmount } = renderHook(() => useGeneralSettingsPage())
+    let validatePromise!: Promise<void>
+
+    await act(async () => {
+      validatePromise = result.current.validateHuggingFaceToken()
+      await Promise.resolve()
+    })
+
+    act(() => {
+      unmount()
+    })
+
+    await act(async () => {
+      await validatePromise
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://huggingface.co/api/whoami-v2',
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer hf_test' },
+        signal: validationSignal,
+      })
+    )
+    expect(validationSignal?.aborted).toBe(true)
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(toast.success).not.toHaveBeenCalled()
   })
 })
