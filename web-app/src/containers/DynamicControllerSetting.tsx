@@ -1,4 +1,4 @@
-import { type ChangeEvent, useEffect, useState } from 'react'
+import { type ChangeEvent, useEffect, useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
@@ -45,14 +45,41 @@ function InputControl({
 }: InputControlProps) {
   const [showPassword, setShowPassword] = useState(false)
   const [isCopied, setIsCopied] = useState(false)
+  const mountedRef = useRef(true)
+  const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hasInputActions = inputActions && inputActions.length > 0
 
-  const copyToClipboard = () => {
-    if (value) {
-      navigator.clipboard.writeText(String(value))
-      setIsCopied(true)
-      setTimeout(() => setIsCopied(false), 1000)
+  useEffect(() => {
+    mountedRef.current = true
+
+    return () => {
+      mountedRef.current = false
+      if (copyResetTimerRef.current) {
+        clearTimeout(copyResetTimerRef.current)
+      }
     }
+  }, [])
+
+  const copyToClipboard = async () => {
+    if (!value) return
+
+    try {
+      await navigator.clipboard.writeText(String(value))
+    } catch (error) {
+      console.error('Failed to copy setting value:', error)
+      return
+    }
+
+    if (!mountedRef.current) return
+
+    setIsCopied(true)
+    if (copyResetTimerRef.current) {
+      clearTimeout(copyResetTimerRef.current)
+    }
+    copyResetTimerRef.current = setTimeout(() => {
+      setIsCopied(false)
+      copyResetTimerRef.current = null
+    }, 1000)
   }
 
   const inputType = type === 'password' && showPassword ? 'text' : type
@@ -126,7 +153,7 @@ function InputControl({
         )}
         {hasInputActions && inputActions.includes('copy') && (
           <button
-            onClick={copyToClipboard}
+            onClick={() => void copyToClipboard()}
             className="p-1 rounded text-muted-foreground"
           >
             {isCopied ? <CheckCheck className="text-primary" size={16} /> : <Copy size={16} />}

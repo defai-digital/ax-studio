@@ -1,5 +1,5 @@
 import React from 'react'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import '@testing-library/jest-dom'
@@ -17,7 +17,7 @@ describe('DynamicControllerSetting', () => {
     vi.clearAllMocks()
     Object.assign(navigator, {
       clipboard: {
-        writeText: vi.fn(),
+        writeText: vi.fn().mockResolvedValue(undefined),
       },
     })
   })
@@ -52,6 +52,89 @@ describe('DynamicControllerSetting', () => {
     await waitFor(() => {
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith('secret')
     })
+  })
+
+  it('clears pending copy feedback timer on unmount', async () => {
+    vi.useFakeTimers()
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')
+
+    try {
+      const { unmount } = render(
+        <DynamicControllerSetting
+          controllerType="input"
+          controllerProps={{
+            value: 'secret',
+            input_actions: ['copy'],
+          }}
+          onChange={vi.fn()}
+        />,
+      )
+
+      const input = screen.getByDisplayValue('secret')
+      const copyButton = input.parentElement!.querySelector('button')!
+
+      await act(async () => {
+        fireEvent.click(copyButton)
+        await Promise.resolve()
+      })
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('secret')
+
+      unmount()
+
+      expect(clearTimeoutSpy).toHaveBeenCalled()
+    } finally {
+      clearTimeoutSpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('ignores clipboard completion after unmount', async () => {
+    let resolveWrite!: () => void
+    Object.assign(navigator.clipboard, {
+      writeText: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveWrite = resolve
+          }),
+      ),
+    })
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+
+    try {
+      const { unmount } = render(
+        <DynamicControllerSetting
+          controllerType="input"
+          controllerProps={{
+            value: 'secret',
+            input_actions: ['copy'],
+          }}
+          onChange={vi.fn()}
+        />,
+      )
+
+      const input = screen.getByDisplayValue('secret')
+      const copyButton = input.parentElement!.querySelector('button')!
+
+      await act(async () => {
+        fireEvent.click(copyButton)
+        await Promise.resolve()
+      })
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('secret')
+
+      unmount()
+
+      await act(async () => {
+        resolveWrite()
+        await Promise.resolve()
+      })
+
+      const copyResetCalls = setTimeoutSpy.mock.calls.filter(
+        ([, delay]) => delay === 1000,
+      )
+      expect(copyResetCalls).toHaveLength(0)
+    } finally {
+      setTimeoutSpy.mockRestore()
+    }
   })
 
   it('renders number inputs with bounded stepper controls', () => {
