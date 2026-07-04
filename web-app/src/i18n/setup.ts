@@ -35,6 +35,10 @@ export interface I18nInstance {
 // Global i18n instance
 let i18nInstance: I18nInstance
 
+type TranslationOptions = Record<string, unknown> & {
+  lng?: string
+}
+
 // Dynamically load locale files
 const localeFiles = import.meta.glob('../locales/**/*.json', { eager: true })
 
@@ -130,8 +134,9 @@ export const getStoredLanguage = (): string => {
 }
 
 // Translation function
-const translate = (key: string, options: Record<string, unknown> = {}): string => {
-  const { language, fallbackLng, resources: res, defaultNS } = i18nInstance
+const translate = (key: string, options: TranslationOptions = {}): string => {
+  const { fallbackLng, resources: res, defaultNS } = i18nInstance
+  const language = options.lng ?? i18nInstance.language
   
   // Parse key to extract namespace and actual key
   let namespace = defaultNS
