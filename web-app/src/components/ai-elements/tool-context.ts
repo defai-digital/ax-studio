@@ -1,10 +1,12 @@
 import { createContext, useContext } from 'react'
 import type { ToolUIPart } from 'ai'
 
+export type ToolState = ToolUIPart['state'] | 'output-denied'
+
 export type ToolContextValue = {
   isOpen: boolean
   setIsOpen: (open: boolean) => void
-  state: ToolUIPart['state']
+  state: ToolState
 }
 
 export const ToolContext = createContext<ToolContextValue | null>(null)

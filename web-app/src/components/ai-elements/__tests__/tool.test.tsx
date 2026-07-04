@@ -113,6 +113,19 @@ describe('ToolHeader', () => {
     expect(screen.getByText('failed')).toBeInTheDocument()
   })
 
+  it('shows "failed" badge when state is output-denied', () => {
+    render(
+      <Tool state="output-denied" defaultOpen={true}>
+        <ToolHeader
+          title="restricted"
+          state="output-denied"
+          type="tool-restricted"
+        />
+      </Tool>
+    )
+    expect(screen.getByText('failed')).toBeInTheDocument()
+  })
+
   it('derives tool name from type when title is not provided', () => {
     render(
       <Tool state="output-available" defaultOpen={true}>

@@ -17,11 +17,11 @@ import {
   useState,
 } from 'react'
 import { CodeBlock } from './code-block'
-import { ToolContext, useTool } from './tool-context'
+import { ToolContext, type ToolState, useTool } from './tool-context'
 
 export type ToolProps = ComponentProps<typeof Collapsible> & {
   className?: string
-  state: ToolUIPart['state']
+  state: ToolState
   open?: boolean
   defaultOpen?: boolean
   onOpenChange?: (open: boolean) => void
@@ -64,7 +64,7 @@ export const Tool = memo(
 
 export type ToolHeaderProps = {
   title?: string
-  state: ToolUIPart['state']
+  state: ToolState
   type: ToolUIPart['type']
   className?: string
 }
@@ -74,7 +74,6 @@ export const ToolHeader = memo(
     const { isOpen } = useTool()
     const toolName = title ?? type.split('-').slice(1).join('-')
     const isRunning = state === 'input-streaming' || state === 'input-available'
-    // @ts-expect-error state only available in AI SDK v6
     const hasError = state === 'output-error' || state === 'output-denied'
 
     return (
