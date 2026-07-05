@@ -1,6 +1,6 @@
 import { models } from 'token.js'
 import { ModelCapabilities } from '@/types/models'
-import type { MMProjModel } from '@/services/models/types'
+import type { CatalogModel, MMProjModel } from '@/services/models/types'
 
 export const defaultModel = (provider?: string) => {
   if (!provider || !Object.keys(models).includes(provider)) {
@@ -74,7 +74,20 @@ export const extractModelName = (model?: string) => {
   return model?.split('/')[1] ?? model
 }
 
-export function getModelContextLength(model?: { settings?: Record<string, { controller_props?: { value?: unknown } }> }): number | undefined {
+export function isMlxCatalogModel(model: CatalogModel): boolean {
+  return (
+    model.is_mlx === true ||
+    model.developer === 'mlx-community' ||
+    model.library_name?.toLowerCase() === 'mlx' ||
+    (model.num_safetensors ?? 0) > 0 ||
+    (model.safetensors_files?.length ?? 0) > 0 ||
+    model.model_name.toLowerCase().startsWith('mlx-community/')
+  )
+}
+
+export function getModelContextLength(model?: {
+  settings?: Record<string, { controller_props?: { value?: unknown } }>
+}): number | undefined {
   const raw =
     model?.settings?.ctx_len?.controller_props?.value ??
     model?.settings?.ctx_size?.controller_props?.value

@@ -39,6 +39,7 @@ describe('hub model filters', () => {
     expect(
       isMlxCatalogModel(model({ model_name: 'mlx-community/Qwen3-4B-4bit' }))
     ).toBe(true)
+    expect(isMlxCatalogModel(model({ developer: 'mlx-community' }))).toBe(true)
   })
 
   it('does not match GGUF-only catalog models', () => {

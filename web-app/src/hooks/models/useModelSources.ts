@@ -3,11 +3,9 @@ import { localStorageKey } from '@/constants/localStorage'
 import { persist } from 'zustand/middleware'
 import { getServiceHub } from '@/hooks/useServiceHub'
 import type { CatalogModel } from '@/services/models/types'
+import { isMlxCatalogModel } from '@/lib/models'
 import { sanitizeModelId } from '@/lib/utils'
 import { createSafeJSONStorage } from '@/lib/storage/storage'
-
-const isMlxCatalogModel = (catalog: CatalogModel) =>
-  catalog.is_mlx === true || catalog.developer === 'mlx-community'
 
 const normalizeCatalogModel = (catalog: CatalogModel): CatalogModel => {
   const isMlx = isMlxCatalogModel(catalog)
