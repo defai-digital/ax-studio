@@ -4,11 +4,6 @@ import { SettingComponentProps } from '../types'
 vi.mock('./core')
 vi.mock('./fs')
 
-class TestBaseExtension extends BaseExtension {
-  onLoad(): void {}
-  onUnload(): void {}
-}
-
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>
 let consoleWarnSpy: ReturnType<typeof vi.spyOn>
 
@@ -31,61 +26,22 @@ type StoredSetting = {
   controllerProps: { value: unknown }
 }
 
-describe('BaseExtension', () => {
-  let baseExtension: TestBaseExtension
+function createLocalStorageMock() {
+  let store: Record<string, string> = {}
 
-  beforeEach(() => {
-    baseExtension = new TestBaseExtension('https://example.com', 'TestExtension')
-    const localStorageMock = (() => {
-      let store: Record<string, string> = {}
-
-      return {
-        getItem: (key: string) => store[key] || null,
-        setItem: (key: string, value: string) => {
-          store[key] = value
-        },
-        removeItem: (key: string) => {
-          delete store[key]
-        },
-        clear: () => {
-          store = {}
-        },
-      }
-    })()
-
-    Object.defineProperty(global, 'localStorage', {
-      configurable: true,
-      value: localStorageMock,
-    })
-  })
-
-  afterEach(() => {
-    vi.clearAllMocks()
-  })
-
-  it('should have the correct properties', () => {
-    expect(baseExtension.name).toBe('TestExtension')
-    expect(baseExtension.productName).toBeUndefined()
-    expect(baseExtension.url).toBe('https://example.com')
-    expect(baseExtension.active).toBeUndefined()
-    expect(baseExtension.description).toBeUndefined()
-    expect(baseExtension.version).toBeUndefined()
-  })
-
-  it('should return undefined for type()', () => {
-    expect(baseExtension.type()).toBeUndefined()
-  })
-
-  it('should have abstract methods onLoad() and onUnload()', () => {
-    expect(baseExtension.onLoad).toBeDefined()
-    expect(baseExtension.onUnload).toBeDefined()
-  })
-
-  it('should install the extension', async () => {
-    await baseExtension.install()
-    // Add your assertions here
-  })
-})
+  return {
+    getItem: (key: string) => store[key] || null,
+    setItem: (key: string, value: string) => {
+      store[key] = value
+    },
+    removeItem: (key: string) => {
+      delete store[key]
+    },
+    clear: () => {
+      store = {}
+    },
+  }
+}
 
 describe('BaseExtension', () => {
   class TestBaseExtension extends BaseExtension {
@@ -97,6 +53,10 @@ describe('BaseExtension', () => {
 
   beforeEach(() => {
     baseExtension = new TestBaseExtension('https://example.com', 'TestExtension')
+    Object.defineProperty(global, 'localStorage', {
+      configurable: true,
+      value: createLocalStorageMock(),
+    })
   })
 
   afterEach(() => {
