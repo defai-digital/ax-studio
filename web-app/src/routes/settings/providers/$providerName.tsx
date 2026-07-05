@@ -10,7 +10,7 @@ import {
 } from '@/lib/utils'
 import { createFileRoute, Link, useParams } from '@tanstack/react-router'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import Capabilities from '@/components/common/Capabilities'
+import { Capabilities } from '@/components/common/Capabilities'
 import { DynamicControllerSetting } from '@/containers/DynamicControllerSetting'
 import { RenderMarkdown } from '@/containers/RenderMarkdown'
 import { DialogEditModel } from '@/containers/dialogs/model/EditModel'
@@ -37,7 +37,7 @@ import { DialogAddModel } from '@/containers/dialogs/model/AddModel'
 import { SelectModelGroups } from '@/containers/dialogs/model/SelectModelGroups'
 import { groupModelsByPrefix, type ModelGroup } from '@/lib/model-group-utils'
 import { getModelCapabilities } from '@/lib/models'
-import ProvidersAvatar from '@/components/common/ProvidersAvatar'
+import { ProvidersAvatar } from '@/components/common/ProvidersAvatar'
 import { z } from 'zod/v4'
 
 const URL_REGEX = /^https?:\/\/[^\s]+$/

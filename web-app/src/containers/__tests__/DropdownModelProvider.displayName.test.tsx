@@ -54,7 +54,9 @@ vi.mock('@/hooks/useServiceHub', () => ({
   useServiceHub: vi.fn(() => ({
     models: () => ({
       checkMmprojExists: vi.fn(() => Promise.resolve(false)),
-      checkMmprojExistsAndUpdateOffloadMMprojSetting: vi.fn(() => Promise.resolve()),
+      checkMmprojExistsAndUpdateOffloadMMprojSetting: vi.fn(() =>
+        Promise.resolve()
+      ),
     }),
   })),
 }))
@@ -81,7 +83,9 @@ vi.mock('@/lib/platform/utils', () => ({
 
 // Mock UI components
 vi.mock('@/components/ui/popover', () => ({
-  Popover: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Popover: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   PopoverTrigger: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="popover-trigger">{children}</div>
   ),
@@ -97,7 +101,7 @@ vi.mock('../ProvidersAvatar', () => ({
 }))
 
 vi.mock('@/components/common/Capabilities', () => ({
-  default: ({ capabilities }: { capabilities: string[] }) => (
+  Capabilities: ({ capabilities }: { capabilities: string[] }) => (
     <div data-testid="capabilities">{capabilities.join(',')}</div>
   ),
 }))
@@ -220,8 +224,12 @@ describe('DropdownModelProvider - Display Name Integration', () => {
     } as Model
 
     expect(getModelDisplayName(modelWithDisplayName)).toBe('Short Name')
-    expect(getModelDisplayName(modelWithoutDisplayName)).toBe('model-without-display-name.gguf')
-    expect(getModelDisplayName(modelWithEmptyDisplayName)).toBe('model-with-empty.gguf')
+    expect(getModelDisplayName(modelWithoutDisplayName)).toBe(
+      'model-without-display-name.gguf'
+    )
+    expect(getModelDisplayName(modelWithEmptyDisplayName)).toBe(
+      'model-with-empty.gguf'
+    )
   })
 
   it('should maintain model ID for internal operations while showing display name', () => {
@@ -271,11 +279,15 @@ describe('DropdownModelProvider - Display Name Integration', () => {
     render(<DropdownModelProvider />)
 
     // Check trigger shows Short Name
-    const triggerButton = screen.getByTestId('popover-trigger').querySelector('button')
+    const triggerButton = screen
+      .getByTestId('popover-trigger')
+      .querySelector('button')
     expect(triggerButton).toHaveTextContent('Short Name')
     // Short Name appears in dropdown (at least 1 occurrence)
     expect(screen.getAllByText('Short Name').length).toBeGreaterThanOrEqual(1)
     // Custom Model 1 is also in the dropdown
-    expect(screen.getAllByText('Custom Model 1').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Custom Model 1').length).toBeGreaterThanOrEqual(
+      1
+    )
   })
 })

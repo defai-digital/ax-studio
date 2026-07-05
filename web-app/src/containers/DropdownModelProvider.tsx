@@ -5,9 +5,14 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
-import { cn, getProviderTitle, getModelDisplayName, getProviderColor } from '@/lib/utils'
+import {
+  cn,
+  getProviderTitle,
+  getModelDisplayName,
+  getProviderColor,
+} from '@/lib/utils'
 import { highlightMatch } from '@/lib/utils/highlight'
-import Capabilities from '@/components/common/Capabilities'
+import { Capabilities } from '@/components/common/Capabilities'
 import { useNavigate } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import { useThreads } from '@/hooks/threads/useThreads'
@@ -18,7 +23,16 @@ import { safeStorageSetItem } from '@/lib/storage/storage'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useFavoriteModel } from '@/hooks/models/useFavoriteModel'
 import { predefinedProviders } from '@/constants/providers'
-import { ChevronDown, Search, Check, Star, CircleOff, Settings, X, Route } from 'lucide-react'
+import {
+  ChevronDown,
+  Search,
+  Check,
+  Star,
+  CircleOff,
+  Settings,
+  X,
+  Route,
+} from 'lucide-react'
 import { getLastUsedModel } from '@/lib/utils/getModelToStart'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useRouterSettings } from '@/hooks/settings/useRouterSettings'
@@ -59,7 +73,11 @@ interface SearchableModel {
 type FlatRow =
   | { type: 'fav-header' }
   | { type: 'fav-divider' }
-  | { type: 'provider-header'; providerKey: string; providerInfo: ModelProvider }
+  | {
+      type: 'provider-header'
+      providerKey: string
+      providerInfo: ModelProvider
+    }
   | { type: 'model-item'; item: SearchableModel; keyPrefix?: string }
   | { type: 'empty-search'; searchValue: string }
 
@@ -153,7 +171,9 @@ const ModelItem = memo(function ModelItem({
       role="button"
       tabIndex={0}
       onClick={() => onSelect(searchableModel)}
-      onKeyDown={(e) => { if (e.key === 'Enter') onSelect(searchableModel) }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') onSelect(searchableModel)
+      }}
       className={cn(
         'w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors cursor-pointer',
         isSelected ? 'bg-primary/5' : 'hover:bg-muted/50'
@@ -170,7 +190,10 @@ const ModelItem = memo(function ModelItem({
       {/* Model info */}
       <div className="flex-1 min-w-0">
         <span
-          className={cn('truncate block', isSelected ? 'text-primary' : 'text-foreground/80')}
+          className={cn(
+            'truncate block',
+            isSelected ? 'text-primary' : 'text-foreground/80'
+          )}
           style={{ fontSize: '13px', fontWeight: isSelected ? 500 : 400 }}
         >
           {getModelDisplayName(searchableModel.model)}
@@ -329,7 +352,11 @@ type VirtualizedListProps = {
   searchValue: string
 }
 
-function VirtualizedList({ flatRows, renderRow, searchValue }: VirtualizedListProps) {
+function VirtualizedList({
+  flatRows,
+  renderRow,
+  searchValue,
+}: VirtualizedListProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const virtualizer = useVirtualizer({
@@ -403,7 +430,10 @@ function getRowKey(row: FlatRow, index: number): string {
 
 function PlainList({ flatRows, renderRow }: PlainListProps) {
   return (
-    <div className="max-h-[360px] overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+    <div
+      className="max-h-[360px] overflow-y-auto"
+      style={{ scrollbarWidth: 'thin' }}
+    >
       {flatRows.map((row, i) => (
         <div key={getRowKey(row, i)}>{renderRow(row)}</div>
       ))}
@@ -438,7 +468,8 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
   const setThreadOverride = useRouterSettings((s) => s.setThreadOverride)
   const currentThreadId = useThreads((s) => s.currentThreadId)
   const activeThreadId = model?.id ? undefined : currentThreadId
-  const isRouterConfigured = routerEnabled && !!routerModelId && !!routerProviderId
+  const isRouterConfigured =
+    routerEnabled && !!routerModelId && !!routerProviderId
   const isAutoActive = isRouterConfigured && isAutoRouteEnabled(activeThreadId)
   const modelId = model?.id
   const modelProvider = model?.provider
@@ -604,15 +635,20 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
 
     const results = fuseInstance.search(searchValue.toLowerCase())
     // Cap results to prevent excessive DOM work on broad queries
-    const capped = results.length > MAX_SEARCH_RESULTS
-      ? results.slice(0, MAX_SEARCH_RESULTS)
-      : results
+    const capped =
+      results.length > MAX_SEARCH_RESULTS
+        ? results.slice(0, MAX_SEARCH_RESULTS)
+        : results
 
     return capped.map((result: FuseResult<SearchableModel>) => {
       const item = result.item
       const idMatch = result.matches?.find((m) => m.key === 'searchStr')
       const indices = (idMatch?.indices ?? []) as [number, number][]
-      const highlightedId = highlightMatch(item.model.id, indices, 'text-accent')
+      const highlightedId = highlightMatch(
+        item.model.id,
+        indices,
+        'text-accent'
+      )
 
       return {
         ...item,
@@ -743,62 +779,65 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
   )
 
   // ── Render a single row ─────────────────────────────────────────────────
-  const renderRow = useCallback((row: FlatRow) => {
-    switch (row.type) {
-      case 'fav-header':
-        return (
-          <div className="px-3 pt-2 pb-1 flex items-center gap-1.5 text-[10px] tracking-widest uppercase text-muted-foreground/40 font-semibold">
-            <Star className="size-2.5 fill-amber-500 text-amber-500" />
-            {t('common:favorites')}
-          </div>
-        )
+  const renderRow = useCallback(
+    (row: FlatRow) => {
+      switch (row.type) {
+        case 'fav-header':
+          return (
+            <div className="px-3 pt-2 pb-1 flex items-center gap-1.5 text-[10px] tracking-widest uppercase text-muted-foreground/40 font-semibold">
+              <Star className="size-2.5 fill-amber-500 text-amber-500" />
+              {t('common:favorites')}
+            </div>
+          )
 
-      case 'fav-divider':
-        return <div className="h-px bg-border/50 mx-3 my-1.5" />
+        case 'fav-divider':
+          return <div className="h-px bg-border/50 mx-3 my-1.5" />
 
-      case 'provider-header':
-        return (
-          <ProviderHeader
-            providerKey={row.providerKey}
-            providerInfo={row.providerInfo}
-            onSettings={handleProviderSettings}
-          />
-        )
+        case 'provider-header':
+          return (
+            <ProviderHeader
+              providerKey={row.providerKey}
+              providerInfo={row.providerInfo}
+              onSettings={handleProviderSettings}
+            />
+          )
 
-      case 'model-item':
-        return (
-          <ModelItem
-            searchableModel={row.item}
-            isSelected={
-              selectedModel?.id === row.item.model.id &&
-              selectedProvider === row.item.provider.provider
-            }
-            isFavorite={favoriteIdSet.has(row.item.model.id)}
-            color={getProviderColor(row.item.provider.provider)}
-            onSelect={handleSelect}
-            onToggleFavorite={toggleFavorite}
-          />
-        )
+        case 'model-item':
+          return (
+            <ModelItem
+              searchableModel={row.item}
+              isSelected={
+                selectedModel?.id === row.item.model.id &&
+                selectedProvider === row.item.provider.provider
+              }
+              isFavorite={favoriteIdSet.has(row.item.model.id)}
+              color={getProviderColor(row.item.provider.provider)}
+              onSelect={handleSelect}
+              onToggleFavorite={toggleFavorite}
+            />
+          )
 
-      case 'empty-search':
-        return (
-          <div className="py-8 text-center">
-            <CircleOff className="size-8 text-muted-foreground/20 mx-auto mb-2" />
-            <p className="text-[13px] text-muted-foreground">
-              {t('common:noModelsFoundFor', { searchValue: row.searchValue })}
-            </p>
-          </div>
-        )
-    }
-  }, [
-    selectedModel?.id,
-    selectedProvider,
-    favoriteIdSet,
-    handleSelect,
-    toggleFavorite,
-    handleProviderSettings,
-    t,
-  ])
+        case 'empty-search':
+          return (
+            <div className="py-8 text-center">
+              <CircleOff className="size-8 text-muted-foreground/20 mx-auto mb-2" />
+              <p className="text-[13px] text-muted-foreground">
+                {t('common:noModelsFoundFor', { searchValue: row.searchValue })}
+              </p>
+            </div>
+          )
+      }
+    },
+    [
+      selectedModel?.id,
+      selectedProvider,
+      favoriteIdSet,
+      handleSelect,
+      toggleFavorite,
+      handleProviderSettings,
+      t,
+    ]
+  )
 
   const currentModel = selectedModel?.id
     ? getModelBy(selectedModel?.id)
@@ -841,10 +880,7 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
             <ChevronDown className="size-3.5 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
           </button>
           {currentModel?.settings && provider && (
-            <ModelSetting
-              model={currentModel as Model}
-              provider={provider}
-            />
+            <ModelSetting model={currentModel as Model} provider={provider} />
           )}
         </div>
       </PopoverTrigger>
@@ -874,7 +910,11 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
 
           {/* Model list — virtualized for large lists, plain for small */}
           {useVirtual ? (
-            <VirtualizedList flatRows={flatRows} renderRow={renderRow} searchValue={searchValue} />
+            <VirtualizedList
+              flatRows={flatRows}
+              renderRow={renderRow}
+              searchValue={searchValue}
+            />
           ) : (
             <PlainList flatRows={flatRows} renderRow={renderRow} />
           )}

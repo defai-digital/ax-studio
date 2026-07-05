@@ -64,7 +64,7 @@ vi.mock('@/hooks/models/useModelProvider', () => ({
       selectedProvider: 'openai',
       selectedModel: mockSelectedModel,
       getProviderByName: (name: string) =>
-      mockProviders.find((p) => p.provider === name),
+        mockProviders.find((p) => p.provider === name),
       selectModelProvider: mockSelectModelProvider,
       getModelBy: (id: string) => {
         for (const p of mockProviders) {
@@ -75,7 +75,7 @@ vi.mock('@/hooks/models/useModelProvider', () => ({
       },
     }
     return selector ? selector(state) : state
-    },
+  },
 }))
 
 vi.mock('@/hooks/threads/useThreads', () => ({
@@ -149,7 +149,7 @@ vi.mock('@/containers/ModelSetting', () => ({
 }))
 
 vi.mock('@/components/common/Capabilities', () => ({
-  default: ({ capabilities }: any) => (
+  Capabilities: ({ capabilities }: any) => (
     <div data-testid="capabilities">{capabilities.join(',')}</div>
   ),
 }))
@@ -469,7 +469,9 @@ describe('DropdownModelProvider — Phase 4 Manual Test Protocol', () => {
       model: 'claude-3.5-sonnet',
     })
 
-    const { rerender } = render(<DropdownModelProvider useLastUsedModel={false} />)
+    const { rerender } = render(
+      <DropdownModelProvider useLastUsedModel={false} />
+    )
 
     expect(mockSelectModelProvider).not.toHaveBeenCalledWith(
       'anthropic',

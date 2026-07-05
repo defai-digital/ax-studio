@@ -45,7 +45,7 @@ function getTooltipLabel(capability: string) {
   return capability
 }
 
-const Capabilities = memo(function Capabilities({
+export const Capabilities = memo(function Capabilities({
   capabilities,
   compact,
 }: CapabilitiesProps) {
@@ -99,5 +99,3 @@ const Capabilities = memo(function Capabilities({
     </div>
   )
 })
-
-export default Capabilities

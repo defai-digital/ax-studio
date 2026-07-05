@@ -48,7 +48,7 @@ vi.mock('@/components/common/Card', () => ({
 }))
 
 vi.mock('@/components/common/Capabilities', () => ({
-  default: () => <div />,
+  Capabilities: () => <div />,
 }))
 
 vi.mock('@/containers/DynamicControllerSetting', () => ({
@@ -96,7 +96,7 @@ vi.mock('@/containers/dialogs/model/AddModel', () => ({
 }))
 
 vi.mock('@/components/common/ProvidersAvatar', () => ({
-  default: () => <div data-testid="providers-avatar" />,
+  ProvidersAvatar: () => <div data-testid="providers-avatar" />,
 }))
 
 vi.mock('@/hooks/models/useModelProvider', () => ({

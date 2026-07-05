@@ -1,6 +1,6 @@
 import { getProviderLogo, getProviderTitle } from '@/lib/utils'
 
-const ProvidersAvatar = ({ provider }: { provider: ProviderObject }) => {
+export function ProvidersAvatar({ provider }: { provider: ProviderObject }) {
   return (
     <>
       {getProviderLogo(provider.provider) === undefined ? (
@@ -25,5 +25,3 @@ const ProvidersAvatar = ({ provider }: { provider: ProviderObject }) => {
     </>
   )
 }
-
-export default ProvidersAvatar

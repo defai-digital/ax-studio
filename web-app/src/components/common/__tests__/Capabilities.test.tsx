@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import Capabilities from '../Capabilities'
+import { Capabilities } from '../Capabilities'
 
 // Mock Tooltip components
 vi.mock('@/components/ui/tooltip', () => ({
