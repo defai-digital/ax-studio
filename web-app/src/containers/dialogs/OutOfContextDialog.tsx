@@ -10,7 +10,7 @@ import { useContextSizeApproval } from '@/hooks/models/useModelContextApproval'
 import { useTranslation } from '@/i18n'
 import { AlertTriangle } from 'lucide-react'
 
-export default function OutOfContextPromiseModal() {
+export function OutOfContextPromiseModal() {
   const { t } = useTranslation()
   const { isModalOpen, modalProps, setModalOpen } = useContextSizeApproval()
   if (!modalProps) {
@@ -45,9 +45,7 @@ export default function OutOfContextPromiseModal() {
             <AlertTriangle className="size-4" />
             {t('model-errors:title')}
           </DialogTitle>
-          <DialogDescription>
-            {t('model-errors:description')}
-          </DialogDescription>
+          <DialogDescription>{t('model-errors:description')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <button
