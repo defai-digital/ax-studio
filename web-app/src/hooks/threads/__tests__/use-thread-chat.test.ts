@@ -419,14 +419,12 @@ describe('useThreadChat', () => {
       expect(mockRegenerate).toHaveBeenCalledWith({ messageId: 'msg-1' })
     })
 
-    it('deletes messages after the selected user message when regenerating assistant message', () => {
+    it('marks the old tail inactive instead of deleting it, tagging it as version 1', () => {
       useMessages.setState({
         messages: {
           [threadId]: [
             { id: 'user-1', thread_id: threadId, role: 'user', content: [] },
             { id: 'assistant-1', thread_id: threadId, role: 'assistant', content: [] },
-            { id: 'user-2', thread_id: threadId, role: 'user', content: [] },
-            { id: 'assistant-2', thread_id: threadId, role: 'assistant', content: [] },
           ] as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
         },
       })
@@ -437,12 +435,253 @@ describe('useThreadChat', () => {
         result.current.handleRegenerate('assistant-1')
       })
 
-      // Should delete assistant-1 after user-1 (keep user-1, delete everything after)
-      // The delete function is called for user-2 and assistant-2
+      // Nothing is deleted — both messages remain in the raw store
       const messages = useMessages.getState().getMessages(threadId)
-      // user-1 is kept, assistant-1 + user-2 + assistant-2 are deleted
-      expect(messages.length).toBe(1)
-      expect(messages[0].id).toBe('user-1')
+      expect(messages).toHaveLength(2)
+
+      const assistant1 = messages.find((m) => m.id === 'assistant-1')!
+      expect(assistant1.metadata).toMatchObject({
+        versionGroupId: 'user-1',
+        versionIndex: 1,
+        isActiveVersion: false,
+      })
+      expect(mockRegenerate).toHaveBeenCalledWith({ messageId: 'assistant-1' })
+    })
+
+    it('tags every message in a multi-message tail with the same version', () => {
+      useMessages.setState({
+        messages: {
+          [threadId]: [
+            { id: 'user-1', thread_id: threadId, role: 'user', content: [] },
+            { id: 'assistant-1', thread_id: threadId, role: 'assistant', content: [] },
+            { id: 'tool-1', thread_id: threadId, role: 'tool', content: [] },
+          ] as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
+        },
+      })
+
+      const { result } = renderHook(() => useThreadChat(defaultParams()))
+
+      act(() => {
+        result.current.handleRegenerate('assistant-1')
+      })
+
+      const messages = useMessages.getState().getMessages(threadId)
+      const tool1 = messages.find((m) => m.id === 'tool-1')!
+      expect(tool1.metadata).toMatchObject({
+        versionGroupId: 'user-1',
+        versionIndex: 1,
+        isActiveVersion: false,
+      })
+    })
+
+    it('increments the version index on a second regenerate for the same turn', () => {
+      useMessages.setState({
+        messages: {
+          [threadId]: [
+            { id: 'user-1', thread_id: threadId, role: 'user', content: [] },
+            {
+              id: 'assistant-1',
+              thread_id: threadId,
+              role: 'assistant',
+              content: [],
+              metadata: { versionGroupId: 'user-1', versionIndex: 1, isActiveVersion: false },
+            },
+            {
+              id: 'assistant-2',
+              thread_id: threadId,
+              role: 'assistant',
+              content: [],
+              metadata: { versionGroupId: 'user-1', versionIndex: 2, isActiveVersion: true },
+            },
+          ] as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
+        },
+      })
+
+      const { result } = renderHook(() => useThreadChat(defaultParams()))
+
+      act(() => {
+        result.current.handleRegenerate('assistant-2')
+      })
+
+      const messages = useMessages.getState().getMessages(threadId)
+      const assistant1 = messages.find((m) => m.id === 'assistant-1')!
+      const assistant2 = messages.find((m) => m.id === 'assistant-2')!
+      // v1 (already superseded) is untouched
+      expect(assistant1.metadata).toMatchObject({ versionIndex: 1, isActiveVersion: false })
+      // v2 becomes inactive, ready to be replaced by the incoming v3
+      expect(assistant2.metadata).toMatchObject({
+        versionGroupId: 'user-1',
+        versionIndex: 2,
+        isActiveVersion: false,
+      })
+    })
+
+    it('does nothing to the store when there is no preceding tail', () => {
+      useMessages.setState({
+        messages: {
+          [threadId]: [
+            { id: 'user-1', thread_id: threadId, role: 'user', content: [] },
+          ] as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
+        },
+      })
+
+      const { result } = renderHook(() => useThreadChat(defaultParams()))
+
+      act(() => {
+        result.current.handleRegenerate('user-1')
+      })
+
+      const messages = useMessages.getState().getMessages(threadId)
+      expect(messages[0].metadata ?? {}).toEqual({})
+      expect(mockRegenerate).toHaveBeenCalledWith({ messageId: 'user-1' })
+    })
+  })
+
+  describe('persistMessageOnFinish + version tagging', () => {
+    it('applies a pending version tag to the newly persisted message after a regenerate', () => {
+      useMessages.setState({
+        messages: {
+          [threadId]: [
+            { id: 'user-1', thread_id: threadId, role: 'user', content: [] },
+            { id: 'assistant-1', thread_id: threadId, role: 'assistant', content: [] },
+          ] as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
+        },
+      })
+
+      const { result } = renderHook(() => useThreadChat(defaultParams()))
+
+      act(() => {
+        result.current.handleRegenerate('assistant-1')
+      })
+      act(() => {
+        result.current.persistMessageOnFinish(
+          { id: 'assistant-2', role: 'assistant', parts: [{ type: 'text', text: 'new answer' }] } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+          [{ type: 'text', text: { value: 'new answer', annotations: [] } }] as any // eslint-disable-line @typescript-eslint/no-explicit-any
+        )
+      })
+
+      const messages = useMessages.getState().getMessages(threadId)
+      const newMessage = messages.find((m) => m.id === 'assistant-2')!
+      expect(newMessage.metadata).toMatchObject({
+        versionGroupId: 'user-1',
+        versionIndex: 2,
+        isActiveVersion: true,
+      })
+    })
+
+    it('does not tag a normal (non-regenerate) message', () => {
+      const { result } = renderHook(() => useThreadChat(defaultParams()))
+
+      act(() => {
+        result.current.persistMessageOnFinish(
+          { id: 'msg-1', role: 'assistant', parts: [{ type: 'text', text: 'Hi' }] } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+          [{ type: 'text', text: { value: 'Hi', annotations: [] } }] as any // eslint-disable-line @typescript-eslint/no-explicit-any
+        )
+      })
+
+      const messages = useMessages.getState().getMessages(threadId)
+      expect((messages[0].metadata as Record<string, unknown>).versionGroupId).toBeUndefined()
+    })
+
+    it('a regenerate stopped before finishing does not tag the next unrelated message', async () => {
+      useMessages.setState({
+        messages: {
+          [threadId]: [
+            { id: 'user-1', thread_id: threadId, role: 'user', content: [] },
+            { id: 'assistant-1', thread_id: threadId, role: 'assistant', content: [] },
+          ] as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
+        },
+      })
+
+      const { result } = renderHook(() => useThreadChat(defaultParams()))
+
+      act(() => {
+        result.current.handleRegenerate('assistant-1') // sets a pending tag
+      })
+      // Simulate: the regenerate was stopped (isAbort=true upstream), so
+      // persistMessageOnFinish never fired. Instead, the user sends a normal
+      // follow-up message, which must clear the stale pending tag.
+      await act(async () => {
+        await result.current.processAndSendMessage('a totally new question')
+      })
+      act(() => {
+        result.current.persistMessageOnFinish(
+          { id: 'assistant-unrelated', role: 'assistant', parts: [{ type: 'text', text: 'reply' }] } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+          [{ type: 'text', text: { value: 'reply', annotations: [] } }] as any // eslint-disable-line @typescript-eslint/no-explicit-any
+        )
+      })
+
+      const messages = useMessages.getState().getMessages(threadId)
+      const unrelated = messages.find((m) => m.id === 'assistant-unrelated')!
+      expect((unrelated.metadata as Record<string, unknown>).versionGroupId).toBeUndefined()
+    })
+  })
+
+  describe('handleSwitchVersion', () => {
+    const groupId = 'user-1'
+    const setupTwoVersions = () => {
+      useMessages.setState({
+        messages: {
+          [threadId]: [
+            { id: 'user-1', thread_id: threadId, role: 'user', content: [] },
+            {
+              id: 'assistant-v1',
+              thread_id: threadId,
+              role: 'assistant',
+              content: [{ type: 'text', text: { value: 'first answer', annotations: [] } }],
+              metadata: { versionGroupId: groupId, versionIndex: 1, isActiveVersion: false },
+            },
+            {
+              id: 'assistant-v2',
+              thread_id: threadId,
+              role: 'assistant',
+              content: [{ type: 'text', text: { value: 'second answer', annotations: [] } }],
+              metadata: { versionGroupId: groupId, versionIndex: 2, isActiveVersion: true },
+            },
+          ] as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
+        },
+      })
+    }
+
+    it('switches to the previous version and rebuilds chatMessages', () => {
+      setupTwoVersions()
+      const { result } = renderHook(() => useThreadChat(defaultParams()))
+
+      act(() => {
+        result.current.handleSwitchVersion(groupId, 'prev')
+      })
+
+      const messages = useMessages.getState().getMessages(threadId)
+      const v1 = messages.find((m) => m.id === 'assistant-v1')!
+      const v2 = messages.find((m) => m.id === 'assistant-v2')!
+      expect(v1.metadata).toMatchObject({ isActiveVersion: true })
+      expect(v2.metadata).toMatchObject({ isActiveVersion: false })
+      expect(mockSetChatMessages).toHaveBeenCalled()
+    })
+
+    it('is a no-op once already at the boundary version', () => {
+      setupTwoVersions()
+      const { result } = renderHook(() => useThreadChat(defaultParams()))
+
+      act(() => {
+        result.current.handleSwitchVersion(groupId, 'prev') // v2 -> v1
+      })
+      mockSetChatMessages.mockClear()
+      act(() => {
+        result.current.handleSwitchVersion(groupId, 'prev') // already at v1
+      })
+
+      expect(mockSetChatMessages).not.toHaveBeenCalled()
+    })
+
+    it('is a no-op for an unknown group', () => {
+      const { result } = renderHook(() => useThreadChat(defaultParams()))
+
+      act(() => {
+        result.current.handleSwitchVersion('does-not-exist', 'next')
+      })
+
+      expect(mockSetChatMessages).not.toHaveBeenCalled()
     })
   })
 

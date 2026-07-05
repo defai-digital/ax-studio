@@ -35,6 +35,7 @@ export type ThreadViewProps = {
   handleRegenerate: (messageId?: string) => void
   handleEditMessage: (messageId: string, newText: string) => void
   handleDeleteMessage: (messageId: string) => void
+  handleSwitchVersion: (groupId: string, direction: 'prev' | 'next') => void
   handleContextSizeIncrease: () => Promise<void>
   reasoningContainerRef: RefObject<HTMLDivElement | null>
   splitPaneOrder: string[] | null
@@ -63,6 +64,7 @@ export function ThreadView({
   handleRegenerate,
   handleEditMessage,
   handleDeleteMessage,
+  handleSwitchVersion,
   handleContextSizeIncrease,
   reasoningContainerRef,
   splitPaneOrder,
@@ -167,6 +169,7 @@ export function ThreadView({
                     handleRegenerate={handleRegenerate}
                     handleEditMessage={handleEditMessage}
                     handleDeleteMessage={handleDeleteMessage}
+                    handleSwitchVersion={handleSwitchVersion}
                     handleContextSizeIncrease={handleContextSizeIncrease}
                     reasoningContainerRef={reasoningContainerRef}
                     showThreadPromptEditor={showThreadPromptEditor}
@@ -208,6 +211,7 @@ export function ThreadView({
               handleRegenerate={handleRegenerate}
               handleEditMessage={handleEditMessage}
               handleDeleteMessage={handleDeleteMessage}
+              handleSwitchVersion={handleSwitchVersion}
               handleContextSizeIncrease={handleContextSizeIncrease}
               reasoningContainerRef={reasoningContainerRef}
               showThreadPromptEditor={false}

@@ -1,8 +1,10 @@
-import { type RefObject, useState, useEffect } from 'react'
+import { type RefObject, useState, useEffect, useMemo } from 'react'
 import type { UIMessage } from '@ai-sdk/react'
 import type { ChatStatus } from 'ai'
 import { cn } from '@/lib/utils'
 import { MessageItem } from '@/containers/MessageItem'
+import { useMessages } from '@/hooks/chat/useMessages'
+import { getVersionInfoByMessageId } from '@/lib/messages/versions'
 import {
   Conversation,
   ConversationContent,
@@ -101,6 +103,7 @@ export type MessagesAreaProps = {
   handleRegenerate: (messageId?: string) => void
   handleEditMessage: (messageId: string, newText: string) => void
   handleDeleteMessage: (messageId: string) => void
+  handleSwitchVersion: (groupId: string, direction: 'prev' | 'next') => void
   handleContextSizeIncrease?: () => Promise<void>
   contentCls: string
 }
@@ -115,9 +118,18 @@ export function MessagesArea({
   handleRegenerate,
   handleEditMessage,
   handleDeleteMessage,
+  handleSwitchVersion,
   handleContextSizeIncrease,
   contentCls,
 }: MessagesAreaProps) {
+  // Raw (unfiltered) messages — includes superseded versions, needed to
+  // compute each grouped message's "n / total" position. chatMessages itself
+  // is already filtered to the active version of each group.
+  const rawMessages = useMessages((state) => state.messages[threadId])
+  const versionInfoByMessageId = useMemo(
+    () => getVersionInfoByMessageId(rawMessages ?? []),
+    [rawMessages]
+  )
   const metadata = thread?.metadata as Record<string, unknown> | undefined
   const forkedFrom = metadata?.forkedFrom ?? metadata?.parentThreadId
   const bannerKey = `branch-banner-dismissed-${threadId}`
@@ -164,6 +176,8 @@ export function MessagesArea({
                 onRegenerate={handleRegenerate}
                 onEdit={handleEditMessage}
                 onDelete={handleDeleteMessage}
+                versionInfo={versionInfoByMessageId.get(message.id)}
+                onSwitchVersion={handleSwitchVersion}
               />
             </motion.div>
           ))}

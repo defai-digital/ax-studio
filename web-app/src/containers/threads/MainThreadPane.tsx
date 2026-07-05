@@ -42,6 +42,7 @@ export type MainThreadPaneProps = {
   handleRegenerate: (messageId?: string) => void
   handleEditMessage: (messageId: string, newText: string) => void
   handleDeleteMessage: (messageId: string) => void
+  handleSwitchVersion: (groupId: string, direction: 'prev' | 'next') => void
   handleContextSizeIncrease?: () => Promise<void>
   reasoningContainerRef: RefObject<HTMLDivElement | null>
   showThreadPromptEditor: boolean
@@ -67,6 +68,7 @@ export function MainThreadPane({
   handleRegenerate,
   handleEditMessage,
   handleDeleteMessage,
+  handleSwitchVersion,
   handleContextSizeIncrease,
   reasoningContainerRef,
   showThreadPromptEditor,
@@ -166,6 +168,7 @@ export function MainThreadPane({
           handleRegenerate={handleRegenerate}
           handleEditMessage={handleEditMessage}
           handleDeleteMessage={handleDeleteMessage}
+          handleSwitchVersion={handleSwitchVersion}
           handleContextSizeIncrease={handleContextSizeIncrease}
           contentCls={contentCls}
         />

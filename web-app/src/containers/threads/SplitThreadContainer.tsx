@@ -160,6 +160,7 @@ export function SplitThreadContainer({
     handleRegenerate,
     handleEditMessage,
     handleDeleteMessage,
+    handleSwitchVersion,
     handleContextSizeIncrease,
   } = useThreadChat({
     threadId,
@@ -231,6 +232,7 @@ export function SplitThreadContainer({
         handleRegenerate={handleRegenerate}
         handleEditMessage={handleEditMessage}
         handleDeleteMessage={handleDeleteMessage}
+        handleSwitchVersion={handleSwitchVersion}
         handleContextSizeIncrease={handleContextSizeIncrease}
         reasoningContainerRef={reasoningContainerRef}
         showThreadPromptEditor={showThreadPromptEditor}

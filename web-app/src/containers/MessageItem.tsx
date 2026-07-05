@@ -25,6 +25,8 @@ import TokenSpeedIndicator from '@/containers/TokenSpeedIndicator'
 import { extractFilesFromPrompt, FileMetadata } from '@/lib/fileMetadata'
 import { Button } from '@/components/ui/button'
 import {
+  ChevronLeft,
+  ChevronRight,
   Database,
   GitBranch,
   Paperclip,
@@ -34,6 +36,7 @@ import {
 import { useMessages } from '@/hooks/chat/useMessages'
 import { useForkThread } from '@/hooks/threads/use-fork-thread'
 import { MessageRatingActions } from '@/components/chat/MessageRatingActions'
+import type { VersionInfo } from '@/lib/messages/versions'
 import { RoutingBadge } from '@/components/RoutingBadge'
 import type { CitationData } from '@/types/citation-types'
 
@@ -74,6 +77,8 @@ export type MessageItemProps = {
   onRegenerate?: (messageId: string) => void
   onEdit?: (messageId: string, newText: string) => void
   onDelete?: (messageId: string) => void
+  versionInfo?: VersionInfo
+  onSwitchVersion?: (groupId: string, direction: 'prev' | 'next') => void
   assistant?: { avatar?: React.ReactNode; name?: string }
 }
 
@@ -87,6 +92,8 @@ export const MessageItem = memo(
     onRegenerate,
     onEdit,
     onDelete,
+    versionInfo,
+    onSwitchVersion,
   }: MessageItemProps) => {
     const selectedModel = useModelProvider((state) => state.selectedModel)
     const updateMessage = useMessages((state) => state.updateMessage)
@@ -161,6 +168,14 @@ export const MessageItem = memo(
     const handleRegenerate = useCallback(() => {
       onRegenerate?.(message.id)
     }, [onRegenerate, message.id])
+
+    const handleSwitchVersion = useCallback(
+      (direction: 'prev' | 'next') => {
+        if (!versionInfo) return
+        onSwitchVersion?.(versionInfo.groupId, direction)
+      },
+      [onSwitchVersion, versionInfo]
+    )
 
     const handleEdit = useCallback(
       (newText: string) => {
@@ -616,6 +631,37 @@ export const MessageItem = memo(
                   </Button>
                 )}
 
+                {/* Response version switcher — flips between regenerated attempts */}
+                {versionInfo && !isStreaming && isLastMessage && (
+                  <div className="flex items-center gap-0.5 text-muted-foreground/50 px-0.5">
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => handleSwitchVersion('prev')}
+                      disabled={versionInfo.position <= 1}
+                      title="Previous version"
+                      aria-label="Previous version"
+                      className="hover:text-foreground disabled:opacity-30"
+                    >
+                      <ChevronLeft size={14} />
+                    </Button>
+                    <span className="text-[11px] tabular-nums select-none">
+                      {versionInfo.position}/{versionInfo.total}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => handleSwitchVersion('next')}
+                      disabled={versionInfo.position >= versionInfo.total}
+                      title="Next version"
+                      aria-label="Next version"
+                      className="hover:text-foreground disabled:opacity-30"
+                    >
+                      <ChevronRight size={14} />
+                    </Button>
+                  </div>
+                )}
+
                 {/* Fork conversation — branch into a new thread from this point */}
                 {threadId && !isStreaming && (
                   <Button
@@ -674,10 +720,18 @@ export const MessageItem = memo(
       return false
     }
 
+    // versionInfo is recomputed fresh on every MessagesArea render, so compare
+    // its contents rather than object identity (which would always differ).
+    const versionInfoEqual =
+      prevProps.versionInfo?.position === nextProps.versionInfo?.position &&
+      prevProps.versionInfo?.total === nextProps.versionInfo?.total &&
+      prevProps.versionInfo?.groupId === nextProps.versionInfo?.groupId
+
     return (
       prevProps.message === nextProps.message &&
       prevProps.isLastMessage === nextProps.isLastMessage &&
-      prevProps.status === nextProps.status
+      prevProps.status === nextProps.status &&
+      versionInfoEqual
     )
   }
 )

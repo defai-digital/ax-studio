@@ -29,6 +29,7 @@ import {
 } from '@/lib/completion'
 import { getModelContextLength } from '@/lib/models'
 import { convertThreadMessagesToUIMessages } from '@/lib/messages'
+import { getVersionMeta, selectVisibleMessages } from '@/lib/messages/versions'
 import {
   runAxBiDashboardWorkflow,
   runAxBiExistingDatasetChartWorkflow,
@@ -78,6 +79,7 @@ export type ThreadChatResult = {
   handleRegenerate: (messageId?: string) => void
   handleEditMessage: (messageId: string, newText: string) => void
   handleDeleteMessage: (messageId: string) => void
+  handleSwitchVersion: (groupId: string, direction: 'prev' | 'next') => void
   handleContextSizeIncrease: () => Promise<void>
 }
 
@@ -104,6 +106,17 @@ export function useThreadChat({
   // ─── Message loading ────────────────────────────────────────────────────────
 
   const loadedThreadRef = useRef<string | undefined>(undefined)
+
+  // Set by handleRegenerate right before calling the AI SDK's regenerate(),
+  // and consumed once (one-shot) by persistMessageOnFinish to tag the newly
+  // generated message as the next version in the group. Cleared whenever a
+  // fresh user message is sent, so a regenerate that's stopped mid-stream
+  // (which never reaches persistMessageOnFinish) can't bleed into a later,
+  // unrelated message.
+  const pendingVersionTagRef = useRef<{
+    groupId: string
+    versionIndex: number
+  } | null>(null)
 
   // Tracks unmount / thread-change so long-running tasks (e.g. the 30s
   // attachment-processing poll) can bail out instead of blindly sending a
@@ -154,7 +167,9 @@ export function useThreadChat({
           }
 
           setMessages(threadId, messagesToSet)
-          const uiMessages = convertThreadMessagesToUIMessages(messagesToSet)
+          const uiMessages = convertThreadMessagesToUIMessages(
+            selectVisibleMessages(messagesToSet)
+          )
           setChatMessages(uiMessages)
           loadedThreadRef.current = threadId
         }
@@ -178,6 +193,11 @@ export function useThreadChat({
   const processAndSendMessage = useCallback(
     async (text: string) => {
       const normalizedText = text.trim()
+
+      // A fresh user turn always invalidates any pending regenerate-version
+      // tag (e.g. one left over from a regenerate that was stopped before
+      // persistMessageOnFinish ever fired).
+      pendingVersionTagRef.current = null
 
       // Rename thread on first message if still using default title
       const currentThread = useThreads.getState().threads[threadId]
@@ -319,7 +339,7 @@ export function useThreadChat({
         updateThreadTimestamp(threadId)
         setChatMessages(
           convertThreadMessagesToUIMessages(
-            useMessages.getState().getMessages(threadId)
+            selectVisibleMessages(useMessages.getState().getMessages(threadId))
           )
         )
         if (pendingAttachments.length > 0) {
@@ -415,6 +435,20 @@ export function useThreadChat({
     (message: UIMessage, contentParts: ThreadMessage['content']) => {
       if (contentParts.length === 0) return
 
+      // Consume (one-shot) any pending regenerate-version tag so this newly
+      // generated message takes its place as the next version in the group.
+      const pendingTag = pendingVersionTagRef.current
+      pendingVersionTagRef.current = null
+      const baseMetadata = (message.metadata || {}) as Record<string, unknown>
+      const metadata = pendingTag
+        ? {
+            ...baseMetadata,
+            versionGroupId: pendingTag.groupId,
+            versionIndex: pendingTag.versionIndex,
+            isActiveVersion: true,
+          }
+        : baseMetadata
+
       const assistantMessage = {
         type: 'text',
         role: ChatCompletionRole.Assistant,
@@ -425,7 +459,7 @@ export function useThreadChat({
         status: MessageStatus.Ready,
         created_at: Date.now(),
         completed_at: Date.now(),
-        metadata: (message.metadata || {}) as Record<string, unknown>,
+        metadata,
       } as unknown as ThreadMessage
 
       const existingMessages = useMessages.getState().getMessages(threadId)
@@ -441,42 +475,143 @@ export function useThreadChat({
   )
 
   // ─── Regenerate ─────────────────────────────────────────────────────────────
+  //
+  // Regenerating no longer deletes the superseded response — it marks the old
+  // tail inactive (tagging it as version 1 the first time) and tags the newly
+  // generated message, once persisted, as the next version in the same group
+  // (keyed by the preceding user message's id). Both versions stay in
+  // storage; handleSwitchVersion flips which one is visible.
 
   const handleRegenerate = useCallback(
     (messageId?: string) => {
-      const currentLocalMessages = useMessages.getState().getMessages(threadId)
+      const allMessages = useMessages.getState().getMessages(threadId)
+      const visibleMessages = selectVisibleMessages(allMessages)
 
       if (messageId) {
-        const messageIndex = currentLocalMessages.findIndex(
+        const messageIndex = visibleMessages.findIndex(
           (m) => m.id === messageId
         )
         if (messageIndex !== -1) {
-          const selectedMessage = currentLocalMessages[messageIndex]
+          const selectedMessage = visibleMessages[messageIndex]
 
-          let deleteFromIndex = messageIndex
+          let anchorIndex = messageIndex
           if (selectedMessage.role === 'assistant') {
             for (let i = messageIndex - 1; i >= 0; i--) {
-              if (currentLocalMessages[i].role === 'user') {
-                deleteFromIndex = i
+              if (visibleMessages[i].role === 'user') {
+                anchorIndex = i
                 break
               }
             }
           }
 
-          const messagesToDelete = currentLocalMessages.slice(
-            deleteFromIndex + 1
-          )
-          if (messagesToDelete.length > 0) {
-            messagesToDelete.forEach((msg) => {
-              deleteMessage(threadId, msg.id)
+          const oldTail = visibleMessages.slice(anchorIndex + 1)
+
+          if (oldTail.length > 0) {
+            const groupId = visibleMessages[anchorIndex].id
+            const oldTailMeta = getVersionMeta(oldTail[0])
+            const oldTailIndex =
+              oldTailMeta.versionGroupId === groupId &&
+              typeof oldTailMeta.versionIndex === 'number'
+                ? oldTailMeta.versionIndex
+                : 1
+
+            const existingIndices = allMessages
+              .map((m) => {
+                const meta = getVersionMeta(m)
+                return meta.versionGroupId === groupId
+                  ? meta.versionIndex
+                  : undefined
+              })
+              .filter((v): v is number => typeof v === 'number')
+            const nextIndex = Math.max(oldTailIndex, ...existingIndices, 0) + 1
+
+            oldTail.forEach((msg) => {
+              updateMessage({
+                ...msg,
+                metadata: {
+                  ...(msg.metadata as Record<string, unknown> | undefined),
+                  versionGroupId: groupId,
+                  versionIndex: oldTailIndex,
+                  isActiveVersion: false,
+                },
+              })
             })
+
+            pendingVersionTagRef.current = { groupId, versionIndex: nextIndex }
           }
         }
       }
 
       regenerate(messageId ? { messageId } : undefined)
     },
-    [threadId, deleteMessage, regenerate]
+    [threadId, updateMessage, regenerate]
+  )
+
+  // ─── Switch version ─────────────────────────────────────────────────────────
+  //
+  // Flips which stored version of a group is active — no new generation, just
+  // toggling isActiveVersion and rebuilding the visible chatMessages mirror.
+
+  const handleSwitchVersion = useCallback(
+    (groupId: string, direction: 'prev' | 'next') => {
+      const allMessages = useMessages.getState().getMessages(threadId)
+      const groupMessages = allMessages.filter(
+        (m) => getVersionMeta(m).versionGroupId === groupId
+      )
+      if (groupMessages.length === 0) return
+
+      const indices = Array.from(
+        new Set(
+          groupMessages
+            .map((m) => getVersionMeta(m).versionIndex)
+            .filter((v): v is number => typeof v === 'number')
+        )
+      ).sort((a, b) => a - b)
+      if (indices.length < 2) return
+
+      const activeMessage = groupMessages.find(
+        (m) => getVersionMeta(m).isActiveVersion === true
+      )
+      const activeVersionIndex = getVersionMeta(
+        activeMessage ?? groupMessages[0]
+      ).versionIndex
+      const activeIndex =
+        typeof activeVersionIndex === 'number'
+          ? activeVersionIndex
+          : indices[indices.length - 1]
+
+      const pos = indices.indexOf(activeIndex)
+      if (pos === -1) return
+
+      const targetPos =
+        direction === 'next'
+          ? Math.min(pos + 1, indices.length - 1)
+          : Math.max(pos - 1, 0)
+      const targetIndex = indices[targetPos]
+      if (targetIndex === activeIndex) return
+
+      groupMessages.forEach((msg) => {
+        const meta = getVersionMeta(msg)
+        const shouldBeActive = meta.versionIndex === targetIndex
+        if (Boolean(meta.isActiveVersion) !== shouldBeActive) {
+          updateMessage({
+            ...msg,
+            metadata: {
+              ...(msg.metadata as Record<string, unknown> | undefined),
+              isActiveVersion: shouldBeActive,
+            },
+          })
+        }
+      })
+
+      const refreshedMessages = useMessages.getState().getMessages(threadId)
+      setChatMessages(
+        convertThreadMessagesToUIMessages(
+          selectVisibleMessages(refreshedMessages)
+        )
+      )
+    },
+    [threadId, updateMessage, setChatMessages]
   )
 
   // ─── Edit message ───────────────────────────────────────────────────────────
@@ -628,6 +763,7 @@ export function useThreadChat({
     handleRegenerate,
     handleEditMessage,
     handleDeleteMessage,
+    handleSwitchVersion,
     handleContextSizeIncrease,
   }
 }

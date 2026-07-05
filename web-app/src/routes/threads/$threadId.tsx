@@ -211,6 +211,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     handleRegenerate,
     handleEditMessage,
     handleDeleteMessage,
+    handleSwitchVersion,
     handleContextSizeIncrease,
   } = useThreadChat({
     threadId,
@@ -287,6 +288,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
       handleRegenerate={handleRegenerate}
       handleEditMessage={handleEditMessage}
       handleDeleteMessage={handleDeleteMessage}
+      handleSwitchVersion={handleSwitchVersion}
       handleContextSizeIncrease={handleContextSizeIncrease}
       reasoningContainerRef={reasoningContainerRef}
       splitPaneOrder={splitPaneOrder}
