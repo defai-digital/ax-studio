@@ -23,7 +23,7 @@ import { useFavoriteModel } from '@/hooks/models/useFavoriteModel'
 type Props = {
   provider?: ProviderObject
 }
-const DeleteProvider = ({ provider }: Props) => {
+export function DeleteProvider({ provider }: Props) {
   const { t } = useTranslation()
   const { deleteProvider } = useModelProvider()
   const { favoriteModels, removeFavorite } = useFavoriteModel()
@@ -109,4 +109,3 @@ const DeleteProvider = ({ provider }: Props) => {
     />
   )
 }
-export default DeleteProvider

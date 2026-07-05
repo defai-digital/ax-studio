@@ -17,7 +17,7 @@ import { DialogEditModel } from '@/containers/dialogs/model/EditModel'
 import { ModelSetting } from '@/containers/ModelSetting'
 import { DialogDeleteModel } from '@/containers/dialogs/model/DeleteModel'
 import { route } from '@/constants/routes'
-import DeleteProvider from '@/containers/dialogs/DeleteProvider'
+import { DeleteProvider } from '@/containers/dialogs/DeleteProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { Button } from '@/components/ui/button'
 import {

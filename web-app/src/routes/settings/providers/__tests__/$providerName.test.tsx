@@ -88,7 +88,7 @@ vi.mock('@/containers/FavoriteModelAction', () => ({
 }))
 
 vi.mock('@/containers/dialogs/DeleteProvider', () => ({
-  default: () => <div data-testid="delete-provider" />,
+  DeleteProvider: () => <div data-testid="delete-provider" />,
 }))
 
 vi.mock('@/containers/dialogs/model/AddModel', () => ({
