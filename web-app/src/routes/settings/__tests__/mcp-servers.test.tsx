@@ -1,5 +1,5 @@
 import type { ComponentType, InputHTMLAttributes, ReactNode } from 'react'
-import { act, render, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SystemEvent } from '@/types/events'
 
@@ -283,5 +283,42 @@ describe('MCP servers settings route', () => {
     })
 
     expect(mocks.getConnectedServers).not.toHaveBeenCalled()
+  })
+
+  it('updates tool call timeout only for decimal integer seconds in range', async () => {
+    renderMCPServersRoute()
+    await waitFor(() => {
+      expect(mocks.getConnectedServers).toHaveBeenCalled()
+    })
+
+    const input = screen.getByDisplayValue('60')
+
+    fireEvent.change(input, { target: { value: '120' } })
+    expect(mocks.updateSettings).toHaveBeenLastCalledWith({
+      toolCallTimeoutSeconds: 120,
+    })
+
+    mocks.updateSettings.mockClear()
+
+    for (const value of ['0', '-1', '1.5', '1e3', '3601']) {
+      fireEvent.change(input, { target: { value } })
+    }
+
+    expect(mocks.updateSettings).not.toHaveBeenCalled()
+  })
+
+  it('resets empty tool call timeout input to the default', async () => {
+    renderMCPServersRoute()
+    await waitFor(() => {
+      expect(mocks.getConnectedServers).toHaveBeenCalled()
+    })
+
+    fireEvent.change(screen.getByDisplayValue('60'), {
+      target: { value: '' },
+    })
+
+    expect(mocks.updateSettings).toHaveBeenCalledWith({
+      toolCallTimeoutSeconds: 60,
+    })
   })
 })

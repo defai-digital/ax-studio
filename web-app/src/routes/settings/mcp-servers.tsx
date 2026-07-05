@@ -44,6 +44,24 @@ const OFFICIAL_SERVER_HINTS: Record<
   },
 }
 
+const MAX_TOOL_CALL_TIMEOUT_SECONDS = 3600
+
+function parseToolCallTimeoutSeconds(rawValue: string): number | null {
+  const trimmed = rawValue.trim()
+  if (trimmed === '' || !/^\d+$/.test(trimmed)) return null
+
+  const value = Number(trimmed)
+  if (
+    !Number.isSafeInteger(value) ||
+    value < 1 ||
+    value > MAX_TOOL_CALL_TIMEOUT_SECONDS
+  ) {
+    return null
+  }
+
+  return value
+}
+
 // Function to mask sensitive URL parameters
 const maskSensitiveUrl = (url: string) => {
   if (!url) return url
@@ -179,10 +197,10 @@ function MCPServersDesktop() {
       return
     }
 
-    const numericValue = Number(rawValue)
-    if (!Number.isNaN(numericValue)) {
-      updateSettings({ toolCallTimeoutSeconds: numericValue })
-    }
+    const numericValue = parseToolCallTimeoutSeconds(rawValue)
+    if (numericValue === null) return
+
+    updateSettings({ toolCallTimeoutSeconds: numericValue })
   }
 
   const handleOpenDialog = (serverKey?: string) => {
@@ -531,6 +549,7 @@ function MCPServersDesktop() {
                       <Input
                         type="number"
                         min={1}
+                        max={MAX_TOOL_CALL_TIMEOUT_SECONDS}
                         step={1}
                         value={settings.toolCallTimeoutSeconds}
                         onChange={(event) =>
