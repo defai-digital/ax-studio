@@ -1,4 +1,4 @@
-import { ArrowDown } from "lucide-react";
+import { ArrowDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { ComponentProps } from 'react'
@@ -8,27 +8,34 @@ import { AnimatePresence, motion } from 'motion/react'
 
 type ConversationProps = ComponentProps<typeof StickToBottom>
 
-export const Conversation = memo(({ className, ...props }: ConversationProps) => (
-  <StickToBottom
-    className={cn('relative flex-1 overflow-hidden [&>div]:!overflow-x-hidden', className)}
-    initial="smooth"
-    resize="smooth"
-    role="log"
-    {...props}
-  />
-))
+export const Conversation = memo(
+  ({ className, ...props }: ConversationProps) => (
+    <StickToBottom
+      className={cn(
+        'relative flex-1 overflow-hidden [&>div]:!overflow-x-hidden',
+        className
+      )}
+      initial="smooth"
+      resize="smooth"
+      role="log"
+      {...props}
+    />
+  )
+)
 
 Conversation.displayName = 'Conversation'
 
 type ConversationContentProps = ComponentProps<typeof StickToBottom.Content>
 
-export const ConversationContent = memo(({ className, ...props }: ConversationContentProps) => (
-  <StickToBottom.Content
-    className={cn('flex flex-col gap-x-8 gap-y-3 px-2 min-w-0', className)}
-    scrollClassName="!overflow-x-hidden"
-    {...props}
-  />
-))
+export const ConversationContent = memo(
+  ({ className, ...props }: ConversationContentProps) => (
+    <StickToBottom.Content
+      className={cn('flex flex-col gap-x-8 gap-y-3 px-2 min-w-0', className)}
+      scrollClassName="!overflow-x-hidden"
+      {...props}
+    />
+  )
+)
 
 ConversationContent.displayName = 'ConversationContent'
 

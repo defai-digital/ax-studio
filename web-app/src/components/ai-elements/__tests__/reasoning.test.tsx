@@ -13,11 +13,7 @@ vi.mock('./shimmer', () => ({
   ),
 }))
 
-import {
-  Reasoning,
-  ReasoningTrigger,
-  ReasoningContent,
-} from '../reasoning'
+import { Reasoning, ReasoningTrigger, ReasoningContent } from '../reasoning'
 import { useReasoning } from '../reasoning-context'
 
 describe('Reasoning', () => {
@@ -94,9 +90,7 @@ describe('ReasoningTrigger', () => {
         <ReasoningTrigger />
       </Reasoning>
     )
-    expect(
-      screen.getByText('Thought for a few seconds')
-    ).toBeInTheDocument()
+    expect(screen.getByText('Thought for a few seconds')).toBeInTheDocument()
   })
 
   it('shows "Thinking..." when duration is 0', () => {

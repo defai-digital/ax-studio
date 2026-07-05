@@ -13,7 +13,12 @@ vi.mock('use-stick-to-bottom', () => {
     className?: string
     role?: string
   }) => (
-    <div data-testid="stick-to-bottom" className={className} role={role} {...props}>
+    <div
+      data-testid="stick-to-bottom"
+      className={className}
+      role={role}
+      {...props}
+    >
       {children}
     </div>
   )

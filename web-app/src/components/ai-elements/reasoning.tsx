@@ -7,13 +7,7 @@ import {
 import { cn } from '@/lib/utils'
 import { BrainIcon, ChevronDownIcon } from 'lucide-react'
 import type { ComponentProps, ReactNode } from 'react'
-import {
-  memo,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { AXMarkdown } from '@/lib/markdown/renderer'
 import { Shimmer } from './shimmer'
 import { ReasoningContext, useReasoning } from './reasoning-context'
@@ -102,9 +96,7 @@ export const Reasoning = memo(
   }
 )
 
-type ReasoningTriggerProps = ComponentProps<
-  typeof CollapsibleTrigger
-> & {
+type ReasoningTriggerProps = ComponentProps<typeof CollapsibleTrigger> & {
   getThinkingMessage?: (isStreaming: boolean, duration?: number) => ReactNode
 }
 
@@ -155,9 +147,7 @@ export const ReasoningTrigger = memo(
   }
 )
 
-type ReasoningContentProps = ComponentProps<
-  typeof CollapsibleContent
-> & {
+type ReasoningContentProps = ComponentProps<typeof CollapsibleContent> & {
   children: string
 }
 
@@ -172,9 +162,7 @@ export const ReasoningContent = memo(
       {...props}
     >
       <div className="pl-4 border-l-2 border-violet-500/25 py-1 italic leading-relaxed">
-        <AXMarkdown animated={true}>
-          {children}
-        </AXMarkdown>
+        <AXMarkdown animated={true}>{children}</AXMarkdown>
       </div>
     </CollapsibleContent>
   )
