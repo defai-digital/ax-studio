@@ -28,9 +28,11 @@ describe('normalizeHuggingFaceRepoId', () => {
 
 describe('buildHuggingFaceRepoUrl', () => {
   it('builds a stable repository URL', () => {
-    expect(buildHuggingFaceRepoUrl('https://huggingface.co/microsoft/DialoGPT-medium/')).toBe(
-      'https://huggingface.co/microsoft/DialoGPT-medium'
-    )
+    expect(
+      buildHuggingFaceRepoUrl(
+        'https://huggingface.co/microsoft/DialoGPT-medium/'
+      )
+    ).toBe('https://huggingface.co/microsoft/DialoGPT-medium')
   })
 })
 

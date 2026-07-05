@@ -66,7 +66,11 @@ interface MlxChatCompletion {
     message: { role: string; content: string }
     finish_reason: string
   }>
-  usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number }
+  usage: {
+    prompt_tokens: number
+    completion_tokens: number
+    total_tokens: number
+  }
 }
 
 type StreamEvent =
@@ -95,9 +99,8 @@ function toMlxParams(req: OpenAIChatRequest): MlxGenerateParams {
     temperature: req.temperature,
     top_p: req.top_p,
     top_k: req.top_k,
-    repetition_penalty: req.frequency_penalty != null
-      ? 1 + req.frequency_penalty
-      : undefined,
+    repetition_penalty:
+      req.frequency_penalty != null ? 1 + req.frequency_penalty : undefined,
     seed: req.seed,
     stop,
   }
@@ -120,7 +123,7 @@ function nonStreamResponse(result: MlxChatCompletion): Response {
 function streamingResponse(
   modelId: string,
   messages: OpenAIChatMessage[],
-  params: MlxGenerateParams,
+  params: MlxGenerateParams
 ): Response {
   const encoder = new TextEncoder()
   const created = Math.floor(Date.now() / 1000)
@@ -156,7 +159,10 @@ function streamingResponse(
         }
       }
 
-      const enqueueChunk = (delta: { role?: string; content?: string }, finish_reason: string | null) => {
+      const enqueueChunk = (
+        delta: { role?: string; content?: string },
+        finish_reason: string | null
+      ) => {
         const chunk = {
           id,
           object: 'chat.completion.chunk',
@@ -192,7 +198,9 @@ function streamingResponse(
               object: 'chat.completion.chunk',
               created,
               model: modelId,
-              choices: [{ index: 0, delta: {}, finish_reason: evt.finish_reason }],
+              choices: [
+                { index: 0, delta: {}, finish_reason: evt.finish_reason },
+              ],
               usage: {
                 prompt_tokens: evt.prompt_token_count,
                 completion_tokens: evt.output_token_count,
@@ -200,7 +208,9 @@ function streamingResponse(
               },
             }
 
-            safeEnqueue(encoder.encode(`data: ${JSON.stringify(finalChunk)}\n\n`))
+            safeEnqueue(
+              encoder.encode(`data: ${JSON.stringify(finalChunk)}\n\n`)
+            )
             safeEnqueue(encoder.encode('data: [DONE]\n\n'))
             safeClose()
           } else if (evt.type === 'error') {
@@ -219,9 +229,15 @@ function streamingResponse(
       try {
         // Idempotent — Rust resolves the HF cache snapshot from modelId.
         await invoke('mlx_load_model', { modelId })
-        await invoke('mlx_chat_stream', { modelId, messages, params, onEvent: channel })
+        await invoke('mlx_chat_stream', {
+          modelId,
+          messages,
+          params,
+          onEvent: channel,
+        })
       } catch (e) {
-        if (lastErr == null) lastErr = e instanceof Error ? e.message : String(e)
+        if (lastErr == null)
+          lastErr = e instanceof Error ? e.message : String(e)
         controller.error(new Error(`[mlx-ipc-fetch] ${lastErr}`))
       }
     },
@@ -238,24 +254,33 @@ function streamingResponse(
 export function createMlxIpcFetch(): typeof fetch {
   return async function mlxIpcFetch(
     _input: RequestInfo | URL,
-    init?: RequestInit,
+    init?: RequestInit
   ): Promise<Response> {
     const method = (init?.method ?? 'GET').toUpperCase()
     if (method !== 'POST') {
-      return new Response(JSON.stringify({ error: 'mlx fetch supports POST only' }), {
-        status: 405,
-        headers: JSON_HEADERS,
-      })
+      return new Response(
+        JSON.stringify({ error: 'mlx fetch supports POST only' }),
+        {
+          status: 405,
+          headers: JSON_HEADERS,
+        }
+      )
     }
 
     let parsed: OpenAIChatRequest
     try {
-      const raw = typeof init?.body === 'string' ? init.body : await new Response(init?.body).text()
+      const raw =
+        typeof init?.body === 'string'
+          ? init.body
+          : await new Response(init?.body).text()
       parsed = JSON.parse(raw) as OpenAIChatRequest
     } catch (e) {
       return new Response(
-        JSON.stringify({ error: 'mlx fetch could not parse request body', detail: String(e) }),
-        { status: 400, headers: JSON_HEADERS },
+        JSON.stringify({
+          error: 'mlx fetch could not parse request body',
+          detail: String(e),
+        }),
+        { status: 400, headers: JSON_HEADERS }
       )
     }
 
@@ -279,7 +304,7 @@ export function createMlxIpcFetch(): typeof fetch {
       const message = e instanceof Error ? e.message : String(e)
       return new Response(
         JSON.stringify({ error: `[mlx-ipc-fetch] ${message}` }),
-        { status: 500, headers: JSON_HEADERS },
+        { status: 500, headers: JSON_HEADERS }
       )
     }
   } as typeof fetch

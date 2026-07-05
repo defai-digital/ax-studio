@@ -56,7 +56,9 @@ describe('window drag helpers', () => {
     startWindowDragFromMouseEvent(
       createMouseEvent(chrome.querySelector('button span'))
     )
-    startWindowDragFromMouseEvent(createMouseEvent(chrome.querySelector('input')))
+    startWindowDragFromMouseEvent(
+      createMouseEvent(chrome.querySelector('input'))
+    )
     startWindowDragFromMouseEvent(createMouseEvent(chrome.querySelector('a')))
     startWindowDragFromMouseEvent(
       createMouseEvent(chrome.querySelector('[role="menuitem"]'))

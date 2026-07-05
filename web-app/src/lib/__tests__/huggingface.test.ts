@@ -22,9 +22,9 @@ describe('getHuggingFaceModelUrl', () => {
 
 describe('getCleanHuggingFaceRepoId', () => {
   it('strips prefixes and trailing slash', () => {
-    expect(
-      getCleanHuggingFaceRepoId('https://huggingface.co/org/model/')
-    ).toBe('org/model')
+    expect(getCleanHuggingFaceRepoId('https://huggingface.co/org/model/')).toBe(
+      'org/model'
+    )
   })
 })
 
@@ -40,6 +40,8 @@ describe('getHuggingFaceModelFileUrl', () => {
   it('preserves nested file path separators', () => {
     expect(
       getHuggingFaceModelFileUrl('org/model', 'tokenizer/tokenizer.json')
-    ).toBe('https://huggingface.co/org/model/resolve/main/tokenizer/tokenizer.json')
+    ).toBe(
+      'https://huggingface.co/org/model/resolve/main/tokenizer/tokenizer.json'
+    )
   })
 })
