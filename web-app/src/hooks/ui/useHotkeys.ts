@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect } from 'react'
 import { useRouter } from '@tanstack/react-router'
 
 // Detect if the user is on macOS
@@ -28,19 +28,8 @@ export function useKeyboardShortcut({
   usePlatformMetaKey = false,
 }: UseKeyboardShortcutProps) {
   // If usePlatformMetaKey is true, use Command on Mac and Ctrl on Windows/Linux
-  const effectiveMetaKey = useMemo(() => {
-    if (usePlatformMetaKey) {
-      return isMac
-    }
-    return metaKey
-  }, [metaKey, usePlatformMetaKey])
-
-  const effectiveCtrlKey = useMemo(() => {
-    if (usePlatformMetaKey) {
-      return !isMac
-    }
-    return ctrlKey
-  }, [ctrlKey, usePlatformMetaKey])
+  const effectiveMetaKey = usePlatformMetaKey ? isMac : metaKey
+  const effectiveCtrlKey = usePlatformMetaKey ? !isMac : ctrlKey
   const router = useRouter()
   const pathname = router.state.location.pathname
 
