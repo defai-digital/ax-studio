@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CatalogModel } from '@/services/models/types'
-import { isMlxCatalogModel } from '../-hubFilters'
+import { isMlxCatalogModel } from '@/lib/models'
 
 const model = (overrides: Partial<CatalogModel>): CatalogModel => ({
   model_name: 'test/model',
