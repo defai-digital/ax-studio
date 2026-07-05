@@ -1,4 +1,4 @@
-import { Download, X } from "lucide-react";
+import { Download, X } from 'lucide-react'
 import {
   Popover,
   PopoverContent,
@@ -77,10 +77,7 @@ export function DownloadManagement() {
   const { open: isLeftPanelOpen } = useLeftPanel()
   const [isPopoverOpen, setIsPopoverOpen] = useState(false)
   const serviceHub = useServiceHub()
-  const {
-    downloads,
-    localDownloadingModels,
-  } = useDownloadStore()
+  const { downloads, localDownloadingModels } = useDownloadStore()
   const { updateState } = useAppUpdater()
 
   const [appUpdateState, setAppUpdateState] = useState({
@@ -147,16 +144,20 @@ export function DownloadManagement() {
     })
   }, [t])
 
-  const onAppUpdateDownloadError = useCallback((data?: { message?: string }) => {
-    setAppUpdateState((prev) => ({
-      ...prev,
-      isDownloading: false,
-    }))
-    toast.error(t('common:toast.appUpdateDownloadFailed.title'), {
-      description:
-        data?.message || t('common:toast.appUpdateDownloadFailed.description'),
-    })
-  }, [t])
+  const onAppUpdateDownloadError = useCallback(
+    (data?: { message?: string }) => {
+      setAppUpdateState((prev) => ({
+        ...prev,
+        isDownloading: false,
+      }))
+      toast.error(t('common:toast.appUpdateDownloadFailed.title'), {
+        description:
+          data?.message ||
+          t('common:toast.appUpdateDownloadFailed.description'),
+      })
+    },
+    [t]
+  )
 
   const downloadProcesses = useMemo(() => {
     return toDownloadProcesses(downloads, localDownloadingModels)
@@ -329,10 +330,7 @@ export function DownloadManagement() {
           }
         })
         .catch((error) => {
-          console.error(
-            '[DownloadManagement] Failed to abort download:',
-            error
-          )
+          console.error('[DownloadManagement] Failed to abort download:', error)
           toast.error('Failed to cancel download', {
             id: 'cancel-download',
             description:
@@ -398,7 +396,7 @@ export function DownloadManagement() {
             {isLeftPanelOpen ? (
               <div className="p-2 rounded-md my-1 relative border cursor-pointer text-left">
                 <div className="font-studio font-medium flex gap-2 items-center justify-between">
-                  <span className='text-sm'>{t('downloads')}</span>
+                  <span className="text-sm">{t('downloads')}</span>
                   <div className="bg-primary/50 font-bold size-4 rounded-full  flex items-center justify-center text-xs">
                     <span>{downloadCount}</span>
                   </div>
@@ -413,10 +411,7 @@ export function DownloadManagement() {
             ) : (
               <div className="fixed bottom-4 left-4 z-50 size-10 border-2 rounded-full shadow-md cursor-pointer flex items-center justify-center">
                 <div className="relative">
-                  <Download
-                    className="text-muted-foreground -mt-1"
-                    size={20}
-                  />
+                  <Download className="text-muted-foreground -mt-1" size={20} />
                   <div className="bg-primary font-bold size-5 rounded-full absolute -top-4 -right-4 flex items-center justify-center text-xs">
                     <span>{downloadCount}</span>
                   </div>
@@ -434,9 +429,7 @@ export function DownloadManagement() {
           >
             <div className="flex flex-col">
               <div className="px-3 py-2 border-b">
-                <p>
-                  {t('downloading')}
-                </p>
+                <p>{t('downloading')}</p>
               </div>
               <div className="p-2 max-h-[300px] overflow-y-auto space-y-2">
                 {appUpdateState.isDownloading && (
