@@ -1,7 +1,7 @@
-import { Smile } from "lucide-react";
+import { Smile } from 'lucide-react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import AddEditAssistant from '../AddEditAssistant'
+import { AddEditAssistant } from '../AddEditAssistant'
 
 vi.mock('@/i18n/react-i18next-compat', () => ({
   useTranslation: () => ({
@@ -48,22 +48,35 @@ vi.mock('@/components/ui/dialog', () => ({
   DialogContent: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
-  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   DialogTitle: ({ children }: { children: React.ReactNode }) => (
     <h2 data-testid="dialog-title">{children}</h2>
   ),
-  DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
-  DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogDescription: ({ children }: { children: React.ReactNode }) => (
+    <p>{children}</p>
+  ),
+  DialogFooter: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }))
 
 vi.mock('@/components/ui/button', () => ({
   Button: ({ children, onClick, ...props }: Record<string, unknown>) => (
-    <button onClick={onClick as () => void} {...props}>{children as React.ReactNode}</button>
+    <button onClick={onClick as () => void} {...props}>
+      {children as React.ReactNode}
+    </button>
   ),
 }))
 
 vi.mock('@/components/ui/input', () => ({
-  Input: ({ value, onChange, placeholder, ...props }: Record<string, unknown>) => (
+  Input: ({
+    value,
+    onChange,
+    placeholder,
+    ...props
+  }: Record<string, unknown>) => (
     <input
       value={value as string}
       onChange={onChange as React.ChangeEventHandler<HTMLInputElement>}
@@ -74,7 +87,12 @@ vi.mock('@/components/ui/input', () => ({
 }))
 
 vi.mock('@/components/ui/textarea', () => ({
-  Textarea: ({ value, onChange, placeholder, ...props }: Record<string, unknown>) => (
+  Textarea: ({
+    value,
+    onChange,
+    placeholder,
+    ...props
+  }: Record<string, unknown>) => (
     <textarea
       value={value as string}
       onChange={onChange as React.ChangeEventHandler<HTMLTextAreaElement>}
@@ -85,12 +103,18 @@ vi.mock('@/components/ui/textarea', () => ({
 }))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
-  DropdownMenu: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  DropdownMenuContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  DropdownMenu: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
+  DropdownMenuContent: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
   DropdownMenuItem: ({ children, onClick }: Record<string, unknown>) => (
     <div onClick={onClick as () => void}>{children as React.ReactNode}</div>
   ),
-  DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
 }))
 
 describe('AddEditAssistant', () => {
@@ -213,7 +237,8 @@ describe('AddEditAssistant', () => {
       />
     )
     expect(
-      (screen.getByPlaceholderText('assistants:enterName') as HTMLInputElement).value
+      (screen.getByPlaceholderText('assistants:enterName') as HTMLInputElement)
+        .value
     ).toBe('Edit Name')
   })
 })

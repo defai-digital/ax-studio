@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { useAssistant } from '@/hooks/chat/useAssistant'
 
 import { HeaderPage } from '@/containers/HeaderPage'
-import AddEditAssistant from '@/containers/dialogs/AddEditAssistant'
+import { AddEditAssistant } from '@/containers/dialogs/AddEditAssistant'
 import { DeleteAssistantDialog } from '@/containers/dialogs'
 import { AvatarEmoji } from '@/components/common/AvatarEmoji'
 import { useTranslation } from '@/i18n/react-i18next-compat'

@@ -1,4 +1,4 @@
-import { ChevronDown, Plus, Smile, Trash2 } from "lucide-react";
+import { ChevronDown, Plus, Smile, Trash2 } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import {
   Dialog,
@@ -43,7 +43,7 @@ function getAssistantParameterType(value: unknown): AssistantParameterType {
   return 'string'
 }
 
-export default function AddEditAssistant({
+export function AddEditAssistant({
   open,
   onOpenChange,
   editingKey,
@@ -67,7 +67,9 @@ export default function AddEditAssistant({
   // input focus + typed values attached to the correct row when the
   // user removes a parameter mid-list — using `key={index}` caused
   // React to reuse the row below as if nothing was removed.
-  const [paramsIds, setParamsIds] = useState<string[]>(() => [crypto.randomUUID()])
+  const [paramsIds, setParamsIds] = useState<string[]>(() => [
+    crypto.randomUUID(),
+  ])
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const emojiPickerRef = useRef<HTMLDivElement>(null)
   const emojiPickerTriggerRef = useRef<HTMLDivElement>(null)
@@ -113,9 +115,8 @@ export default function AddEditAssistant({
       setParamsValues(values.length > 0 ? values : [''])
       setParamsTypes(types.length > 0 ? types : ['string'])
       setParamsIds(
-        Array.from(
-          { length: Math.max(keys.length, 1) },
-          () => crypto.randomUUID()
+        Array.from({ length: Math.max(keys.length, 1) }, () =>
+          crypto.randomUUID()
         )
       )
     } else if (open) {
@@ -214,10 +215,7 @@ export default function AddEditAssistant({
     setParamsIds(newIds.length > 0 ? newIds : [crypto.randomUUID()])
   }
 
-  const handlePredefinedParameterSelect = (
-    key: string,
-    value: unknown
-  ) => {
+  const handlePredefinedParameterSelect = (key: string, value: unknown) => {
     if (paramsKeys.includes(key)) return
 
     const newKeys = [...paramsKeys]
@@ -385,7 +383,9 @@ export default function AddEditAssistant({
 
           <div className="space-y-2 my-4 mt-6">
             <div className="flex items-center justify-between">
-              <label className="text-[13px] text-muted-foreground">{t('common:settings')}</label>
+              <label className="text-[13px] text-muted-foreground">
+                {t('common:settings')}
+              </label>
             </div>
           </div>
 
@@ -400,10 +400,7 @@ export default function AddEditAssistant({
                 <div
                   key={key}
                   onClick={() =>
-                    handlePredefinedParameterSelect(
-                      setting.key,
-                      setting.value
-                    )
+                    handlePredefinedParameterSelect(setting.key, setting.value)
                   }
                   className={cn(
                     'text-xs bg-secondary-foreground/5 py-1 px-2 rounded-sm cursor-pointer',
@@ -418,7 +415,9 @@ export default function AddEditAssistant({
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-[13px] text-muted-foreground">{t('assistants:parameters')}</label>
+              <label className="text-[13px] text-muted-foreground">
+                {t('assistants:parameters')}
+              </label>
               <Button
                 variant="ghost"
                 size="icon-xs"

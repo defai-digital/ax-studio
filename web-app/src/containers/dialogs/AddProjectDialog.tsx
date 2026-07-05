@@ -22,7 +22,7 @@ import { AvatarEmoji } from '@/components/common/AvatarEmoji'
 import { toast } from 'sonner'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { ChevronDown, Plus } from 'lucide-react'
-import AddEditAssistant from './AddEditAssistant'
+import { AddEditAssistant } from './AddEditAssistant'
 
 interface AddProjectDialogProps {
   open: boolean

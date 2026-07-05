@@ -38,7 +38,7 @@ vi.mock('@/components/common/AvatarEmoji', () => ({
 }))
 
 vi.mock('./AddEditAssistant', () => ({
-  default: () => null,
+  AddEditAssistant: () => null,
 }))
 
 vi.mock('@/components/ui/dialog', () => ({
