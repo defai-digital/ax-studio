@@ -1,4 +1,4 @@
-import { Copy, CheckCheck } from "lucide-react";
+import { Copy, CheckCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useEffect, useRef, useState } from 'react'
 
@@ -62,11 +62,7 @@ export const CopyButton = ({ text }: { text: string }) => {
   }
 
   return (
-    <Button
-      variant="ghost"
-      size="icon-xs"
-      onClick={handleCopy}
-    >
+    <Button variant="ghost" size="icon-xs" onClick={handleCopy}>
       {copied ? (
         <>
           <CheckCheck size={16} className="text-primary" />

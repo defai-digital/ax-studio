@@ -44,12 +44,18 @@ export function CardItem({
       >
         <div className="flex-1 min-w-0 space-y-0.5">
           {title && (
-            <div className="font-medium text-foreground" style={{ fontSize: '13px' }}>
+            <div
+              className="font-medium text-foreground"
+              style={{ fontSize: '13px' }}
+            >
               {title}
             </div>
           )}
           {description && (
-            <div className="text-muted-foreground leading-relaxed" style={{ fontSize: '12px' }}>
+            <div
+              className="text-muted-foreground leading-relaxed"
+              style={{ fontSize: '12px' }}
+            >
               {description}
             </div>
           )}
@@ -67,7 +73,10 @@ export function CardItem({
         )}
       </div>
       {descriptionOutside && (
-        <div className="px-5 pb-4 text-muted-foreground leading-relaxed" style={{ fontSize: '12px' }}>
+        <div
+          className="px-5 pb-4 text-muted-foreground leading-relaxed"
+          style={{ fontSize: '12px' }}
+        >
           {descriptionOutside}
         </div>
       )}
@@ -81,7 +90,10 @@ export function Card({ title, children, header }: CardProps) {
       {header && <div className="px-5 pt-5">{header}</div>}
       {title && (
         <div className="px-5 pt-5 pb-1">
-          <h2 className="text-foreground font-semibold tracking-tight" style={{ fontSize: '14px' }}>
+          <h2
+            className="text-foreground font-semibold tracking-tight"
+            style={{ fontSize: '14px' }}
+          >
             {title}
           </h2>
         </div>

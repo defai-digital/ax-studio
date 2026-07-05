@@ -16,15 +16,17 @@ interface AvatarEmojiProps {
   textClassName?: string
 }
 
-export const AvatarEmoji: React.FC<AvatarEmojiProps> = memo(({
-  avatar,
-  imageClassName = 'w-5 h-5 object-contain',
-  textClassName = 'text-base',
-}) => {
-  if (!avatar) return null
-  if (isCustomImageAvatar(avatar)) {
-    return <img src={avatar} alt="Custom avatar" className={imageClassName} />
-  }
+export const AvatarEmoji: React.FC<AvatarEmojiProps> = memo(
+  ({
+    avatar,
+    imageClassName = 'w-5 h-5 object-contain',
+    textClassName = 'text-base',
+  }) => {
+    if (!avatar) return null
+    if (isCustomImageAvatar(avatar)) {
+      return <img src={avatar} alt="Custom avatar" className={imageClassName} />
+    }
 
-  return <span className={textClassName}>{avatar}</span>
-})
+    return <span className={textClassName}>{avatar}</span>
+  }
+)

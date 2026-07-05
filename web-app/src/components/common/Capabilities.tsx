@@ -1,4 +1,4 @@
-import { Atom, Binary, Eye, Globe, Wrench } from "lucide-react";
+import { Atom, Binary, Eye, Globe, Wrench } from 'lucide-react'
 import {
   Tooltip,
   TooltipContent,
@@ -23,22 +23,32 @@ const capabilityStyles: Record<string, string> = {
 
 function getIcon(capability: string) {
   switch (capability) {
-    case 'vision': return <Eye className="size-2.5" />
-    case 'tools': return <Wrench className="size-2.5" />
-    case 'reasoning': return <Atom className="size-2.5" />
-    case 'embeddings': return <Binary className="size-2.5" />
-    case 'web_search': return <Globe className="size-2.5" />
-    default: return null
+    case 'vision':
+      return <Eye className="size-2.5" />
+    case 'tools':
+      return <Wrench className="size-2.5" />
+    case 'reasoning':
+      return <Atom className="size-2.5" />
+    case 'embeddings':
+      return <Binary className="size-2.5" />
+    case 'web_search':
+      return <Globe className="size-2.5" />
+    default:
+      return null
   }
 }
 
 function getTooltipLabel(capability: string) {
   if (capability === 'web_search') return 'Web Search'
-  if (capability === 'embeddings') return 'Embedding Model (for RAG/vectors, not chat)'
+  if (capability === 'embeddings')
+    return 'Embedding Model (for RAG/vectors, not chat)'
   return capability
 }
 
-const Capabilities = memo(function Capabilities({ capabilities, compact }: CapabilitiesProps) {
+const Capabilities = memo(function Capabilities({
+  capabilities,
+  compact,
+}: CapabilitiesProps) {
   if (!capabilities.length) return null
 
   // Filter out proactive capability as it's now managed in MCP settings
@@ -52,7 +62,8 @@ const Capabilities = memo(function Capabilities({ capabilities, compact }: Capab
         const icon = getIcon(capability)
         if (!icon) return null
 
-        const badgeStyle = capabilityStyles[capability] || 'bg-muted text-muted-foreground'
+        const badgeStyle =
+          capabilityStyles[capability] || 'bg-muted text-muted-foreground'
         const badgeCls = `inline-flex items-center px-1.5 py-0.5 rounded text-[10px] ${badgeStyle}`
 
         // Compact mode: simple span with title — avoids Radix Tooltip overhead
