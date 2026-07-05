@@ -1,7 +1,15 @@
 import { describe, it, expect } from 'vitest'
-import { assistantSchema, assistantsSchema } from '../assistants.schema'
+import { assistantsSchema } from '../assistants.schema'
 
-describe('assistantSchema', () => {
+function parseAssistant(assistant: unknown) {
+  const result = assistantsSchema.safeParse([assistant])
+
+  return result.success
+    ? { success: true as const, data: result.data[0] }
+    : { success: false as const }
+}
+
+describe('assistantsSchema assistant items', () => {
   const validAssistant = {
     id: 'asst-1',
     name: 'Test Assistant',
@@ -9,7 +17,7 @@ describe('assistantSchema', () => {
   }
 
   it('should validate a minimal valid assistant', () => {
-    const result = assistantSchema.safeParse(validAssistant)
+    const result = parseAssistant(validAssistant)
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.id).toBe('asst-1')
@@ -38,7 +46,7 @@ describe('assistantSchema', () => {
       max_result_tokens: 4096,
       optional: true,
     }
-    const result = assistantSchema.safeParse(full)
+    const result = parseAssistant(full)
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.type).toBe('agent')
@@ -50,32 +58,32 @@ describe('assistantSchema', () => {
   })
 
   it('should fail when id is missing', () => {
-    const result = assistantSchema.safeParse({ name: 'Test', created_at: 123 })
+    const result = parseAssistant({ name: 'Test', created_at: 123 })
     expect(result.success).toBe(false)
   })
 
   it('should fail when name is missing', () => {
-    const result = assistantSchema.safeParse({ id: '1', created_at: 123 })
+    const result = parseAssistant({ id: '1', created_at: 123 })
     expect(result.success).toBe(false)
   })
 
   it('should fail when created_at is missing', () => {
-    const result = assistantSchema.safeParse({ id: '1', name: 'Test' })
+    const result = parseAssistant({ id: '1', name: 'Test' })
     expect(result.success).toBe(false)
   })
 
   it('should fail when id is not a string', () => {
-    const result = assistantSchema.safeParse({ id: 123, name: 'Test', created_at: 123 })
+    const result = parseAssistant({ id: 123, name: 'Test', created_at: 123 })
     expect(result.success).toBe(false)
   })
 
   it('should fail when created_at is a string', () => {
-    const result = assistantSchema.safeParse({ id: '1', name: 'Test', created_at: '123' })
+    const result = parseAssistant({ id: '1', name: 'Test', created_at: '123' })
     expect(result.success).toBe(false)
   })
 
   it('should fail when type is an invalid enum value', () => {
-    const result = assistantSchema.safeParse({
+    const result = parseAssistant({
       ...validAssistant,
       type: 'bot',
     })
@@ -84,13 +92,13 @@ describe('assistantSchema', () => {
 
   it('should validate type enum values', () => {
     for (const type of ['assistant', 'agent']) {
-      const result = assistantSchema.safeParse({ ...validAssistant, type })
+      const result = parseAssistant({ ...validAssistant, type })
       expect(result.success).toBe(true)
     }
   })
 
   it('should fail when tool_scope has invalid mode', () => {
-    const result = assistantSchema.safeParse({
+    const result = parseAssistant({
       ...validAssistant,
       tool_scope: { mode: 'invalid', tool_keys: [] },
     })
@@ -98,7 +106,7 @@ describe('assistantSchema', () => {
   })
 
   it('should fail when tool_scope.tool_keys is not an array', () => {
-    const result = assistantSchema.safeParse({
+    const result = parseAssistant({
       ...validAssistant,
       tool_scope: { mode: 'all', tool_keys: 'not-array' },
     })
@@ -106,7 +114,7 @@ describe('assistantSchema', () => {
   })
 
   it('should accept empty string for name', () => {
-    const result = assistantSchema.safeParse({
+    const result = parseAssistant({
       id: '1',
       name: '',
       created_at: 0,
@@ -115,7 +123,7 @@ describe('assistantSchema', () => {
   })
 
   it('should strip unknown fields', () => {
-    const result = assistantSchema.safeParse({
+    const result = parseAssistant({
       ...validAssistant,
       unknownField: 'value',
     })
