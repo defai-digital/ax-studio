@@ -156,7 +156,7 @@ vi.mock('@/components/common/Capabilities', () => ({
 
 // ── Import after mocks ──────────────────────────────
 
-import DropdownModelProvider from '../DropdownModelProvider'
+import { DropdownModelProvider } from '../DropdownModelProvider'
 
 // ── Tests ───────────────────────────────────────────
 

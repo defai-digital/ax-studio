@@ -442,7 +442,7 @@ function PlainList({ flatRows, renderRow }: PlainListProps) {
 }
 
 // ── Main component ────────────────────────────────────────────────────────
-const DropdownModelProvider = memo(function DropdownModelProvider({
+export const DropdownModelProvider = memo(function DropdownModelProvider({
   model,
   useLastUsedModel = false,
 }: DropdownModelProviderProps) {
@@ -940,5 +940,3 @@ const DropdownModelProvider = memo(function DropdownModelProvider({
     </Popover>
   )
 })
-
-export default DropdownModelProvider

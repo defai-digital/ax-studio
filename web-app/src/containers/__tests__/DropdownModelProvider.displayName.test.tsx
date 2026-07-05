@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import '@testing-library/jest-dom'
-import DropdownModelProvider from '../DropdownModelProvider'
+import { DropdownModelProvider } from '../DropdownModelProvider'
 import { getModelDisplayName } from '@/lib/utils'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 

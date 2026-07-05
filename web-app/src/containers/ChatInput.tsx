@@ -23,7 +23,7 @@ import {
 import { useDocumentAttachmentHandler } from '@/hooks/chat/use-document-attachment-handler'
 import { useImageAttachmentHandler } from '@/hooks/chat/use-image-attachment-handler'
 import { ChatInputToolbar } from '@/components/chat/ChatInputToolbar'
-import DropdownModelProvider from '@/containers/DropdownModelProvider'
+import { DropdownModelProvider } from '@/containers/DropdownModelProvider'
 import { ChatInputAttachments } from '@/components/ChatInputAttachments'
 import { TokenCounter } from '@/components/TokenCounter'
 import { useTranslation } from '@/i18n/react-i18next-compat'
