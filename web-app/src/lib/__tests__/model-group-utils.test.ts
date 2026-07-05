@@ -1,25 +1,43 @@
 import { describe, it, expect } from 'vitest'
-import { groupModelsByPrefix, formatPrefixName } from '../model-group-utils'
+import { groupModelsByPrefix } from '../model-group-utils'
 
 describe('formatPrefixName', () => {
   it('formats hyphenated prefixes into title case', () => {
-    expect(formatPrefixName('workers-ai')).toBe('Workers AI')
-    expect(formatPrefixName('google-vertex-ai')).toBe('Google Vertex AI')
-    expect(formatPrefixName('azure-openai')).toBe('Azure Openai')
+    const groups = groupModelsByPrefix([
+      'workers-ai/model',
+      'google-vertex-ai/model',
+      'azure-openai/model',
+    ])
+
+    expect(groups.map((group) => group.displayName)).toEqual([
+      'Workers AI',
+      'Google Vertex AI',
+      'Azure Openai',
+    ])
   })
 
   it('keeps known abbreviations uppercase', () => {
-    expect(formatPrefixName('workers-ai')).toBe('Workers AI')
-    expect(formatPrefixName('some-api')).toBe('Some API')
-    expect(formatPrefixName('custom-ml')).toBe('Custom ML')
+    const groups = groupModelsByPrefix([
+      'workers-ai/model',
+      'some-api/model',
+      'custom-ml/model',
+    ])
+
+    expect(groups.map((group) => group.displayName)).toEqual([
+      'Workers AI',
+      'Some API',
+      'Custom ML',
+    ])
   })
 
   it('returns "Other" for empty prefix', () => {
-    expect(formatPrefixName('')).toBe('Other')
+    expect(groupModelsByPrefix(['gpt-4o'])[0].displayName).toBe('Other')
   })
 
   it('handles single-word prefixes', () => {
-    expect(formatPrefixName('openrouter')).toBe('Openrouter')
+    expect(groupModelsByPrefix(['openrouter/model'])[0].displayName).toBe(
+      'Openrouter'
+    )
   })
 })
 

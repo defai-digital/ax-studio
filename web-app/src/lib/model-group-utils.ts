@@ -21,7 +21,7 @@ export type ModelGroup = {
  * Format a raw prefix into a human-readable name.
  * "workers-ai" → "Workers AI", "google-vertex-ai" → "Google Vertex AI"
  */
-export function formatPrefixName(prefix: string): string {
+function formatPrefixName(prefix: string): string {
   if (!prefix) return 'Other'
   return prefix
     .split('-')
