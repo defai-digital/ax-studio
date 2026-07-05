@@ -4,6 +4,7 @@ import { useServiceHub } from '@/hooks/useServiceHub'
 import { useAppUpdater } from '@/hooks/updater/useAppUpdater'
 import { useHardware } from '@/hooks/settings/useHardware'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
+import { useClipboardCopy } from '@/hooks/ui/useClipboardCopy'
 import { SystemEvent } from '@/types/events'
 import { isRootDir } from '@/lib/utils/path'
 import { isDev } from '@/lib/utils'
@@ -19,14 +20,13 @@ export function useGeneralSettingsPage() {
   const { huggingfaceToken } = useGeneralSetting()
 
   const [appDataFolder, setAppDataFolder] = useState<string | undefined>()
-  const [isCopied, setIsCopied] = useState(false)
+  const { isCopied, copyToClipboard } = useClipboardCopy()
   const [selectedNewPath, setSelectedNewPath] = useState<string | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
   const [isValidatingToken, setIsValidatingToken] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
   const mountedRef = useRef(true)
-  const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const tokenValidationAbortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
@@ -34,10 +34,6 @@ export function useGeneralSettingsPage() {
 
     return () => {
       mountedRef.current = false
-      if (copyResetTimerRef.current) {
-        clearTimeout(copyResetTimerRef.current)
-        copyResetTimerRef.current = null
-      }
       tokenValidationAbortRef.current?.abort()
       tokenValidationAbortRef.current = null
     }
@@ -73,22 +69,6 @@ export function useGeneralSettingsPage() {
     if (IS_MACOS) return t('settings:general.showInFinder')
     if (IS_WINDOWS) return t('settings:general.showInFileExplorer')
     return t('settings:general.openContainingFolder')
-  }
-
-  const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text)
-      setIsCopied(true)
-      if (copyResetTimerRef.current) {
-        clearTimeout(copyResetTimerRef.current)
-      }
-      copyResetTimerRef.current = setTimeout(() => {
-        setIsCopied(false)
-        copyResetTimerRef.current = null
-      }, 2000)
-    } catch (error) {
-      console.error('Failed to copy to clipboard:', error)
-    }
   }
 
   const handleDataFolderChange = async () => {
@@ -195,7 +175,10 @@ export function useGeneralSettingsPage() {
     setIsValidatingToken(true)
     const controller = new AbortController()
     tokenValidationAbortRef.current = controller
-    const timeoutId = setTimeout(() => controller.abort(), TOKEN_VALIDATION_TIMEOUT_MS)
+    const timeoutId = setTimeout(
+      () => controller.abort(),
+      TOKEN_VALIDATION_TIMEOUT_MS
+    )
     const isCurrentValidation = () =>
       mountedRef.current && tokenValidationAbortRef.current === controller
 

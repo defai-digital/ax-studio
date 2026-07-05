@@ -1,4 +1,4 @@
-import { type ChangeEvent, useEffect, useRef, useState } from 'react'
+import { type ChangeEvent, useEffect, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
@@ -7,6 +7,7 @@ import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import type { SliderProps } from '@radix-ui/react-slider'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
+import { useClipboardCopy } from '@/hooks/ui/useClipboardCopy'
 import { cn } from '@/lib/utils'
 import {
   CheckCheck,
@@ -44,49 +45,21 @@ function InputControl({
   step = 1,
 }: InputControlProps) {
   const [showPassword, setShowPassword] = useState(false)
-  const [isCopied, setIsCopied] = useState(false)
-  const mountedRef = useRef(true)
-  const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { isCopied, copyToClipboard } = useClipboardCopy({ resetDelayMs: 1000 })
   const hasInputActions = inputActions && inputActions.length > 0
 
-  useEffect(() => {
-    mountedRef.current = true
-
-    return () => {
-      mountedRef.current = false
-      if (copyResetTimerRef.current) {
-        clearTimeout(copyResetTimerRef.current)
-      }
-    }
-  }, [])
-
-  const copyToClipboard = async () => {
+  const handleCopy = async () => {
     if (!value) return
-
-    try {
-      await navigator.clipboard.writeText(String(value))
-    } catch (error) {
-      console.error('Failed to copy setting value:', error)
-      return
-    }
-
-    if (!mountedRef.current) return
-
-    setIsCopied(true)
-    if (copyResetTimerRef.current) {
-      clearTimeout(copyResetTimerRef.current)
-    }
-    copyResetTimerRef.current = setTimeout(() => {
-      setIsCopied(false)
-      copyResetTimerRef.current = null
-    }, 1000)
+    await copyToClipboard(String(value))
   }
 
   const inputType = type === 'password' && showPassword ? 'text' : type
   const hasValue = value !== undefined && value !== null && value !== ''
   const stringValue = hasValue ? String(value) : ''
   const numericValue = hasValue
-    ? (typeof value === 'number' ? value : Number(value) || 0)
+    ? typeof value === 'number'
+      ? value
+      : Number(value) || 0
     : (min ?? 0)
 
   const handleNumberAdjustment = (delta: number) => {
@@ -143,20 +116,26 @@ function InputControl({
         className={cn('w-full', hasInputActions && 'pr-16')}
       />
       <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
-        {hasInputActions && inputActions.includes('unobscure') && type === 'password' && (
-          <button
-            onClick={() => setShowPassword(!showPassword)}
-            className="p-1 rounded text-muted-foreground"
-          >
-            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-          </button>
-        )}
+        {hasInputActions &&
+          inputActions.includes('unobscure') &&
+          type === 'password' && (
+            <button
+              onClick={() => setShowPassword(!showPassword)}
+              className="p-1 rounded text-muted-foreground"
+            >
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          )}
         {hasInputActions && inputActions.includes('copy') && (
           <button
-            onClick={() => void copyToClipboard()}
+            onClick={() => void handleCopy()}
             className="p-1 rounded text-muted-foreground"
           >
-            {isCopied ? <CheckCheck className="text-primary" size={16} /> : <Copy size={16} />}
+            {isCopied ? (
+              <CheckCheck className="text-primary" size={16} />
+            ) : (
+              <Copy size={16} />
+            )}
           </button>
         )}
       </div>
@@ -176,10 +155,21 @@ interface SliderControlProps {
   onChange?: (value: SliderProps['defaultValue']) => void
 }
 
-function SliderControl({ value, sliderKey, title, min = 0, max = 100, step = 1, onChange }: SliderControlProps) {
-  const initialValue = Array.isArray(value) && value[0] !== undefined ? value : [min]
+function SliderControl({
+  value,
+  sliderKey,
+  title,
+  min = 0,
+  max = 100,
+  step = 1,
+  onChange,
+}: SliderControlProps) {
+  const initialValue =
+    Array.isArray(value) && value[0] !== undefined ? value : [min]
   const [currentValue, setCurrentValue] = useState<number[]>(initialValue)
-  const [inputValue, setInputValue] = useState<string>(initialValue[0].toString())
+  const [inputValue, setInputValue] = useState<string>(
+    initialValue[0].toString()
+  )
   const [inputNumber, setInputNumber] = useState<number>(initialValue[0])
   const isExceedingMax = inputNumber > max
 
@@ -254,7 +244,13 @@ type DynamicControllerProps = {
   className?: string
   description?: string
   readonly?: boolean
-  controllerType: 'input' | 'checkbox' | 'dropdown' | 'textarea' | 'slider' | string
+  controllerType:
+    | 'input'
+    | 'checkbox'
+    | 'dropdown'
+    | 'textarea'
+    | 'slider'
+    | string
   controllerProps: {
     value?: string | boolean | number
     placeholder?: string
@@ -284,7 +280,11 @@ export function DynamicControllerSetting({
       <InputControl
         type={controllerProps.type}
         placeholder={controllerProps.placeholder}
-        value={typeof controllerProps.value === 'number' ? controllerProps.value : (controllerProps.value as string) || ''}
+        value={
+          typeof controllerProps.value === 'number'
+            ? controllerProps.value
+            : (controllerProps.value as string) || ''
+        }
         inputActions={controllerProps.input_actions}
         className={className}
         min={controllerProps.min}
@@ -358,5 +358,10 @@ export function DynamicControllerSetting({
     )
   }
 
-  return <Switch checked={!!controllerProps.value} onCheckedChange={(v) => onChange(v)} />
+  return (
+    <Switch
+      checked={!!controllerProps.value}
+      onCheckedChange={(v) => onChange(v)}
+    />
+  )
 }
