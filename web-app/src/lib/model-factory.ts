@@ -281,7 +281,7 @@ function normalizeOpenAICompatiblePayload(
   return changed
 }
 
-export function normalizeOpenAICompatibleEventData(data: string): string {
+function normalizeOpenAICompatibleEventData(data: string): string {
   try {
     const parsed = JSON.parse(data) as Record<string, unknown>
     if (!Array.isArray(parsed.choices)) return data

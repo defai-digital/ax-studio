@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { ModelFactory, normalizeOpenAICompatibleEventData } from '../model-factory'
+import { ModelFactory } from '../model-factory'
 import type { ProviderObject } from '@ax-studio/core'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { createMlxIpcFetch } from '../mlx-ipc-fetch'
@@ -28,13 +28,39 @@ vi.mock('@ai-sdk/google', () => ({
   createGoogleGenerativeAI: vi.fn(() => vi.fn(() => ({ type: 'google' }))),
 }))
 
+async function readPatchedSseData(data: string): Promise<Record<string, unknown>> {
+  const provider: ProviderObject = {
+    provider: 'openai',
+    api_key: 'test-api-key',
+    base_url: 'https://api.openai.com/v1',
+    models: [],
+    settings: [],
+    active: true,
+  }
+
+  await ModelFactory.createModel('gpt-4', provider)
+
+  const createModelConfig = vi.mocked(createOpenAICompatible).mock.calls.at(-1)?.[0]
+  const patchedFetch = createModelConfig?.fetch
+  expect(patchedFetch).toBeTypeOf('function')
+
+  const response = await patchedFetch!(
+    `data:text/event-stream;charset=utf-8,${encodeURIComponent(`data: ${data}\n\n`)}`
+  )
+  const body = await response.text()
+  const line = body.split('\n').find((item) => item.startsWith('data:'))
+  expect(line).toBeDefined()
+
+  return JSON.parse(line!.replace(/^data:\s*/, '')) as Record<string, unknown>
+}
+
 describe('ModelFactory', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  describe('normalizeOpenAICompatibleEventData', () => {
-    it('normalizes non-string content and reasoning fields in streaming chunks', () => {
+  describe('OpenAI-compatible streaming patch fetch', () => {
+    it('normalizes non-string content and reasoning fields in streaming chunks', async () => {
       const input = JSON.stringify({
         choices: [
           {
@@ -53,14 +79,15 @@ describe('ModelFactory', () => {
         ],
       })
 
-      const output = JSON.parse(normalizeOpenAICompatibleEventData(input))
+      const output = await readPatchedSseData(input)
 
-      expect(output.choices[0].delta.content).toBe('Hello')
-      expect(output.choices[0].delta.reasoning_content).toBeUndefined()
-      expect(output.choices[0].delta.role).toBe('1')
+      const choice = (output.choices as Array<{ delta: Record<string, unknown> }>)[0]
+      expect(choice.delta.content).toBe('Hello')
+      expect(choice.delta.reasoning_content).toBeUndefined()
+      expect(choice.delta.role).toBe('1')
     })
 
-    it('normalizes tool call metadata for streaming chunks', () => {
+    it('normalizes tool call metadata for streaming chunks', async () => {
       const input = JSON.stringify({
         choices: [
           {
@@ -80,9 +107,13 @@ describe('ModelFactory', () => {
         ],
       })
 
-      const output = JSON.parse(normalizeOpenAICompatibleEventData(input))
+      const output = await readPatchedSseData(input)
 
-      expect(output.choices[0].delta.tool_calls[0]).toMatchObject({
+      const choice = (output.choices as Array<{
+        delta: { tool_calls: Array<Record<string, unknown>> }
+        finish_reason: unknown
+      }>)[0]
+      expect(choice.delta.tool_calls[0]).toMatchObject({
         index: 0,
         id: '42',
         function: {
@@ -90,10 +121,10 @@ describe('ModelFactory', () => {
           arguments: '{"city":"Surat"}',
         },
       })
-      expect(output.choices[0].finish_reason).toBe('false')
+      expect(choice.finish_reason).toBe('false')
     })
 
-    it('leaves valid chunks unchanged', () => {
+    it('leaves valid chunks unchanged', async () => {
       const input = JSON.stringify({
         choices: [
           {
@@ -117,14 +148,19 @@ describe('ModelFactory', () => {
         ],
       })
 
-      const output = JSON.parse(normalizeOpenAICompatibleEventData(input))
-      expect(output.choices[0].delta.content).toBe('hello')
-      expect(output.choices[0].delta.reasoning_content).toBeUndefined()
-      expect(output.choices[0].delta.role).toBe('assistant')
-      expect(output.choices[0].finish_reason).toBe('stop')
+      const output = await readPatchedSseData(input)
+
+      const choice = (output.choices as Array<{
+        delta: Record<string, unknown>
+        finish_reason: unknown
+      }>)[0]
+      expect(choice.delta.content).toBe('hello')
+      expect(choice.delta.reasoning_content).toBeUndefined()
+      expect(choice.delta.role).toBe('assistant')
+      expect(choice.finish_reason).toBe('stop')
     })
 
-    it('uses reasoning text as visible content when a stream chunk has no content', () => {
+    it('uses reasoning text as visible content when a stream chunk has no content', async () => {
       const input = JSON.stringify({
         choices: [
           {
@@ -136,9 +172,11 @@ describe('ModelFactory', () => {
         ],
       })
 
-      const output = JSON.parse(normalizeOpenAICompatibleEventData(input))
-      expect(output.choices[0].delta.content).toBe('thinking-only text')
-      expect(output.choices[0].delta.reasoning_content).toBeUndefined()
+      const output = await readPatchedSseData(input)
+
+      const choice = (output.choices as Array<{ delta: Record<string, unknown> }>)[0]
+      expect(choice.delta.content).toBe('thinking-only text')
+      expect(choice.delta.reasoning_content).toBeUndefined()
     })
   })
 
