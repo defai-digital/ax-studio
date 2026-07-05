@@ -1,6 +1,6 @@
 import { uniqueStrings } from './array'
 
-export const OUT_OF_CONTEXT_SIZE =
+const OUT_OF_CONTEXT_SIZE =
   'the request exceeds the available context size.'
 
 export function isContextSizeError(message: string): boolean {

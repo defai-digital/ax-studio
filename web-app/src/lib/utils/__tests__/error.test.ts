@@ -1,14 +1,16 @@
 import { describe, it, expect } from 'vitest'
-import { extractErrorMessage, OUT_OF_CONTEXT_SIZE, toError } from '../error'
+import { extractErrorMessage, isContextSizeError, toError } from '../error'
 
 describe('error utilities', () => {
-  describe('OUT_OF_CONTEXT_SIZE', () => {
-    it('should have correct error message', () => {
-      expect(OUT_OF_CONTEXT_SIZE).toBe('the request exceeds the available context size.')
+  describe('isContextSizeError', () => {
+    it('matches context-size errors case-insensitively', () => {
+      expect(
+        isContextSizeError('The request exceeds the available context size.')
+      ).toBe(true)
     })
 
-    it('should be a string', () => {
-      expect(typeof OUT_OF_CONTEXT_SIZE).toBe('string')
+    it('ignores unrelated errors', () => {
+      expect(isContextSizeError('model failed to load')).toBe(false)
     })
   })
 
