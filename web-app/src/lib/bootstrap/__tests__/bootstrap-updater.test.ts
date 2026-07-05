@@ -11,7 +11,9 @@ afterEach(() => {
 
 // UPDATE_CHECK_INTERVAL_MS is declared globally in types/global.d.ts
 // Vitest needs a value for it
-;(globalThis as any).UPDATE_CHECK_INTERVAL_MS = 60_000
+;(
+  globalThis as typeof globalThis & { UPDATE_CHECK_INTERVAL_MS: number }
+).UPDATE_CHECK_INTERVAL_MS = 60_000
 
 describe('bootstrapUpdater', () => {
   it('does nothing in dev mode and returns a no-op cleanup', () => {
