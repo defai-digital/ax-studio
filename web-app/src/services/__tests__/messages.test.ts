@@ -33,13 +33,13 @@ describe('DefaultMessagesService', () => {
     createMessage: vi.fn(),
     modifyMessage: vi.fn(),
     deleteMessage: vi.fn(),
+    openExternalUrl: vi.fn(),
   }
 
   beforeEach(() => {
     messagesService = new DefaultMessagesService()
     vi.clearAllMocks()
     consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    // @ts-expect-error test-only core bridge
     window.core = undefined
     vi.mocked(ExtensionManager.getInstance).mockReturnValue(
       mockExtensionManager as ReturnType<typeof ExtensionManager.getInstance>
@@ -83,7 +83,6 @@ describe('DefaultMessagesService', () => {
 
     it('should fall back to native storage when extension is not found', async () => {
       mockExtensionManager.get.mockReturnValue(null)
-      // @ts-expect-error test-only core bridge
       window.core = { api: mockNativeApi }
       const threadId = 'thread-123'
       const mockMessages = [{ id: 'msg-1', thread_id: threadId, role: 'user' }]
@@ -96,11 +95,12 @@ describe('DefaultMessagesService', () => {
     })
 
     it('should fall back to native storage when extension list fails', async () => {
-      // @ts-expect-error test-only core bridge
       window.core = { api: mockNativeApi }
       const threadId = 'thread-123'
       const mockMessages = [{ id: 'msg-1', thread_id: threadId, role: 'user' }]
-      mockExtension.listMessages.mockRejectedValueOnce(new Error('Extension missing file'))
+      mockExtension.listMessages.mockRejectedValueOnce(
+        new Error('Extension missing file')
+      )
       mockNativeApi.listMessages.mockResolvedValue(mockMessages)
 
       const result = await messagesService.fetchMessages(threadId)
@@ -172,7 +172,6 @@ describe('DefaultMessagesService', () => {
     })
 
     it('should fall back to native storage when extension create fails', async () => {
-      // @ts-expect-error test-only core bridge
       window.core = { api: mockNativeApi }
       const message = {
         id: 'msg-1',
@@ -180,7 +179,9 @@ describe('DefaultMessagesService', () => {
         content: 'Hello',
         role: 'user',
       }
-      mockExtension.createMessage.mockRejectedValueOnce(new Error('Extension missing file'))
+      mockExtension.createMessage.mockRejectedValueOnce(
+        new Error('Extension missing file')
+      )
       mockNativeApi.createMessage.mockResolvedValue(message)
 
       const result = await messagesService.createMessage(message as never)
@@ -255,7 +256,6 @@ describe('DefaultMessagesService', () => {
     })
 
     it('should fall back to native storage when extension modify fails', async () => {
-      // @ts-expect-error test-only core bridge
       window.core = { api: mockNativeApi }
       const message = {
         id: 'msg-1',
@@ -263,7 +263,9 @@ describe('DefaultMessagesService', () => {
         content: 'Updated',
         role: 'user',
       }
-      mockExtension.modifyMessage.mockRejectedValueOnce(new Error('Extension missing file'))
+      mockExtension.modifyMessage.mockRejectedValueOnce(
+        new Error('Extension missing file')
+      )
       mockNativeApi.modifyMessage.mockResolvedValue(message)
 
       const result = await messagesService.modifyMessage(message as never)
@@ -331,14 +333,18 @@ describe('DefaultMessagesService', () => {
     })
 
     it('should fall back to native storage when extension delete fails', async () => {
-      // @ts-expect-error test-only core bridge
       window.core = { api: mockNativeApi }
-      mockExtension.deleteMessage.mockRejectedValueOnce(new Error('Extension missing file'))
+      mockExtension.deleteMessage.mockRejectedValueOnce(
+        new Error('Extension missing file')
+      )
       mockNativeApi.deleteMessage.mockResolvedValue(undefined)
 
       await messagesService.deleteMessage('thread-123', 'msg-1')
 
-      expect(mockExtension.deleteMessage).toHaveBeenCalledWith('thread-123', 'msg-1')
+      expect(mockExtension.deleteMessage).toHaveBeenCalledWith(
+        'thread-123',
+        'msg-1'
+      )
       expect(mockNativeApi.deleteMessage).toHaveBeenCalledWith({
         threadId: 'thread-123',
         messageId: 'msg-1',
