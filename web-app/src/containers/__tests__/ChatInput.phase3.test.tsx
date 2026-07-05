@@ -23,7 +23,11 @@ vi.mock('react-textarea-autosize', () => ({
 
 vi.mock('@/hooks/ui/usePrompt', () => ({
   usePrompt: (selector?: any) => {
-    const state = { prompt: '', setPrompt: mockSetGlobalPrompt, resetPrompt: vi.fn() }
+    const state = {
+      prompt: '',
+      setPrompt: mockSetGlobalPrompt,
+      resetPrompt: vi.fn(),
+    }
     return selector ? selector(state) : state
   },
 }))
@@ -58,20 +62,23 @@ vi.mock('@/hooks/models/useModelProvider', () => ({
 }))
 
 vi.mock('@/hooks/settings/useAppState', () => ({
-  useAppState: Object.assign((selector?: any) => {
-    const state = {
-      abortControllers: { 'thread-1': { abort: mockAbort } },
-      cancelToolCall: vi.fn(),
-      tools: [],
+  useAppState: Object.assign(
+    (selector?: any) => {
+      const state = {
+        abortControllers: { 'thread-1': { abort: mockAbort } },
+        cancelToolCall: vi.fn(),
+        tools: [],
+      }
+      return selector ? selector(state) : state
+    },
+    {
+      getState: () => ({
+        abortControllers: { 'thread-1': { abort: mockAbort } },
+        cancelToolCall: vi.fn(),
+        tools: [],
+      }),
     }
-    return selector ? selector(state) : state
-  }, {
-    getState: () => ({
-      abortControllers: { 'thread-1': { abort: mockAbort } },
-      cancelToolCall: vi.fn(),
-      tools: [],
-    }),
-  }),
+  ),
 }))
 
 vi.mock('@/hooks/chat/useAssistant', () => ({
@@ -113,15 +120,30 @@ vi.mock('@/hooks/chat/use-chat-send-handler', () => ({
 }))
 
 vi.mock('@/components/chat/ChatInputToolbar', () => ({
-  ChatInputToolbar: ({ isStreaming, stopStreaming, handleSendMessage, submitCurrentPrompt, prompt }: any) => (
+  ChatInputToolbar: ({
+    isStreaming,
+    stopStreaming,
+    handleSendMessage,
+    submitCurrentPrompt,
+    prompt,
+  }: any) => (
     <div data-testid="toolbar" data-streaming={isStreaming}>
       {isStreaming ? (
-        <button data-testid="stop-btn" onClick={() => stopStreaming('thread-1')}>Stop</button>
+        <button
+          data-testid="stop-btn"
+          onClick={() => stopStreaming('thread-1')}
+        >
+          Stop
+        </button>
       ) : (
         <button
           data-testid="send-btn"
           disabled={!prompt?.trim()}
-          onClick={() => submitCurrentPrompt ? submitCurrentPrompt() : handleSendMessage(prompt)}
+          onClick={() =>
+            submitCurrentPrompt
+              ? submitCurrentPrompt()
+              : handleSendMessage(prompt)
+          }
         >
           Send
         </button>
@@ -147,7 +169,7 @@ vi.mock('@/lib/utils', async (importOriginal) => {
 
 // ── Import after mocks ──────────────────────────────
 
-import ChatInput from '../ChatInput'
+import { ChatInput } from '../ChatInput'
 import { resolveEffectiveSelectedModel } from '@/lib/chat/selected-model'
 
 // ── Tests ───────────────────────────────────────────
@@ -405,7 +427,10 @@ describe('ChatInput — Phase 3 Manual Test Protocol', () => {
   })
 
   it('resolves thread model metadata from its provider before falling back to the store model', () => {
-    const fallbackModel: Model = { id: 'fallback-model', capabilities: ['tools'] }
+    const fallbackModel: Model = {
+      id: 'fallback-model',
+      capabilities: ['tools'],
+    }
     const threadProviderModel: Model = {
       id: 'thread-model',
       capabilities: ['vision'],

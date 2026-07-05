@@ -16,7 +16,10 @@ import { useShallow } from 'zustand/react/shallow'
 import { ExtensionTypeEnum, MCPExtension } from '@ax-studio/core'
 import { ExtensionManager } from '@/lib/extension'
 import { useChatSendHandler } from '@/hooks/chat/use-chat-send-handler'
-import { useChatAttachments, NEW_THREAD_ATTACHMENT_KEY } from '@/hooks/chat/useChatAttachments'
+import {
+  useChatAttachments,
+  NEW_THREAD_ATTACHMENT_KEY,
+} from '@/hooks/chat/useChatAttachments'
 import { useDocumentAttachmentHandler } from '@/hooks/chat/use-document-attachment-handler'
 import { useImageAttachmentHandler } from '@/hooks/chat/use-image-attachment-handler'
 import { ChatInputToolbar } from '@/components/chat/ChatInputToolbar'
@@ -59,7 +62,9 @@ const ChatInput = memo(function ChatInput({
   const [message, setMessage] = useState('')
   const [dropdownToolsAvailable, setDropdownToolsAvailable] = useState(false)
   const [tooltipToolsAvailable, setTooltipToolsAvailable] = useState(false)
-  const [selectedAssistant, setSelectedAssistant] = useState<Assistant | undefined>(undefined)
+  const [selectedAssistant, setSelectedAssistant] = useState<
+    Assistant | undefined
+  >(undefined)
 
   // Don't subscribe to the whole `abortControllers` record — every
   // streaming token on any thread would re-render ChatInput. We only
@@ -72,15 +77,23 @@ const ChatInput = memo(function ChatInput({
   const currentThreadId = useThreads((state) => state.currentThreadId)
   const effectiveThreadId = threadId ?? currentThreadId
 
-  const globalLocalKnowledgeEnabled = useLocalKnowledge((state) => state.localKnowledgeEnabled)
-  const localKnowledgeEnabledPerThread = useLocalKnowledge((state) => state.localKnowledgeEnabledPerThread)
-  const toggleLocalKnowledgeGlobal = useLocalKnowledge((state) => state.toggleLocalKnowledge)
-  const toggleLocalKnowledgeForThread = useLocalKnowledge((state) => state.toggleLocalKnowledgeForThread)
+  const globalLocalKnowledgeEnabled = useLocalKnowledge(
+    (state) => state.localKnowledgeEnabled
+  )
+  const localKnowledgeEnabledPerThread = useLocalKnowledge(
+    (state) => state.localKnowledgeEnabledPerThread
+  )
+  const toggleLocalKnowledgeGlobal = useLocalKnowledge(
+    (state) => state.toggleLocalKnowledge
+  )
+  const toggleLocalKnowledgeForThread = useLocalKnowledge(
+    (state) => state.toggleLocalKnowledgeForThread
+  )
 
   const isLocalKnowledgeEnabled = effectiveThreadId
-    ? (effectiveThreadId in localKnowledgeEnabledPerThread
-        ? localKnowledgeEnabledPerThread[effectiveThreadId]
-        : globalLocalKnowledgeEnabled)
+    ? effectiveThreadId in localKnowledgeEnabledPerThread
+      ? localKnowledgeEnabledPerThread[effectiveThreadId]
+      : globalLocalKnowledgeEnabled
     : globalLocalKnowledgeEnabled
   const toggleLocalKnowledge = useCallback(() => {
     const enabling = !isLocalKnowledgeEnabled
@@ -102,8 +115,7 @@ const ChatInput = memo(function ChatInput({
             toast('Set up a knowledge folder to use Local Knowledge', {
               action: {
                 label: 'Set up',
-                onClick: () =>
-                  navigate({ to: route.settings.knowledge_base }),
+                onClick: () => navigate({ to: route.settings.knowledge_base }),
               },
             })
           }
@@ -120,11 +132,19 @@ const ChatInput = memo(function ChatInput({
     navigate,
   ])
   const currentThread = useThreads((state) =>
-    effectiveThreadId ? state.threads[effectiveThreadId] : state.getCurrentThread()
+    effectiveThreadId
+      ? state.threads[effectiveThreadId]
+      : state.getCurrentThread()
   )
-  const updateCurrentThreadAssistant = useThreads((state) => state.updateCurrentThreadAssistant)
-  const spellCheckChatInput = useGeneralSetting((state) => state.spellCheckChatInput)
-  const tokenCounterCompact = useGeneralSetting((state) => state.tokenCounterCompact)
+  const updateCurrentThreadAssistant = useThreads(
+    (state) => state.updateCurrentThreadAssistant
+  )
+  const spellCheckChatInput = useGeneralSetting(
+    (state) => state.spellCheckChatInput
+  )
+  const tokenCounterCompact = useGeneralSetting(
+    (state) => state.tokenCounterCompact
+  )
   const { t } = useTranslation()
 
   useTools()
@@ -132,9 +152,14 @@ const ChatInput = memo(function ChatInput({
   // ─── Document attachments ──────────────────────────────────────────────
   const attachmentsKey = effectiveThreadId || NEW_THREAD_ATTACHMENT_KEY
   const pendingAttachments = useChatAttachments(
-    useCallback((state) => state.getAttachments(attachmentsKey), [attachmentsKey])
+    useCallback(
+      (state) => state.getAttachments(attachmentsKey),
+      [attachmentsKey]
+    )
   )
-  const transferAttachments = useChatAttachments((state) => state.transferAttachments)
+  const transferAttachments = useChatAttachments(
+    (state) => state.transferAttachments
+  )
 
   // Transfer attachments from __new-thread__ → real threadId when thread is created
   const lastTransferredThreadId = useRef<string | null>(null)
@@ -148,25 +173,24 @@ const ChatInput = memo(function ChatInput({
     }
   }, [currentThreadId, transferAttachments])
 
-  const {
-    handleAttachDocsIngest,
-    handleRemoveAttachment,
-    ingestingDocs,
-  } = useDocumentAttachmentHandler({
-    attachmentsKey,
-    effectiveThreadId,
-  })
+  const { handleAttachDocsIngest, handleRemoveAttachment, ingestingDocs } =
+    useDocumentAttachmentHandler({
+      attachmentsKey,
+      effectiveThreadId,
+    })
 
   const providers = useModelProvider((state) => state.providers)
   const selectedProvider = useModelProvider((state) => state.selectedProvider)
-  const selectedModelFromStore = useModelProvider((state) => state.selectedModel) ?? undefined
+  const selectedModelFromStore =
+    useModelProvider((state) => state.selectedModel) ?? undefined
   const selectedModel = resolveEffectiveSelectedModel({
     model,
     providers,
     selectedProvider,
     selectedModelFromStore,
   })
-  const hasVisionSupport = selectedModel?.capabilities?.includes('vision') ?? false
+  const hasVisionSupport =
+    selectedModel?.capabilities?.includes('vision') ?? false
   const {
     isDragOver,
     handleFileChange,
@@ -220,17 +244,24 @@ const ChatInput = memo(function ChatInput({
     }
   }, [])
 
-  useEffect(() => { textareaRef.current?.focus() }, [])
-  useEffect(() => { textareaRef.current?.focus() }, [effectiveThreadId])
+  useEffect(() => {
+    textareaRef.current?.focus()
+  }, [])
+  useEffect(() => {
+    textareaRef.current?.focus()
+  }, [effectiveThreadId])
 
   useEffect(() => {
     if (chatStatus !== 'submitted') {
-      setTimeout(() => { textareaRef.current?.focus() }, 10)
+      setTimeout(() => {
+        textareaRef.current?.focus()
+      }, 10)
     }
   }, [chatStatus])
 
   useEffect(() => {
-    if (tooltipToolsAvailable && dropdownToolsAvailable) setTooltipToolsAvailable(false)
+    if (tooltipToolsAvailable && dropdownToolsAvailable)
+      setTooltipToolsAvailable(false)
   }, [dropdownToolsAvailable, tooltipToolsAvailable])
 
   const { handleSendMessage } = useChatSendHandler({
@@ -315,7 +346,9 @@ const ChatInput = memo(function ChatInput({
           <div
             className={cn(
               'relative z-10 px-0 pb-10 border rounded-2xl border-input bg-white dark:bg-zinc-900 transition-shadow',
-              isFocused && !isStreaming && 'ring-2 ring-primary/25 border-primary/30',
+              isFocused &&
+                !isStreaming &&
+                'ring-2 ring-primary/25 border-primary/30',
               isStreaming && 'border-transparent'
             )}
           >
@@ -333,7 +366,8 @@ const ChatInput = memo(function ChatInput({
                 setRows(Math.min(newRows, maxRows))
               }}
               onKeyDown={(e) => {
-                const isComposing = e.nativeEvent.isComposing || e.keyCode === 229
+                const isComposing =
+                  e.nativeEvent.isComposing || e.keyCode === 229
                 if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
                   e.preventDefault()
                   if (!isStreaming) {
@@ -413,14 +447,18 @@ const ChatInput = memo(function ChatInput({
         </div>
       )}
 
-      {!tokenCounterCompact && !initialMessage && (threadMessages?.length > 0 || prompt.trim().length > 0) && (
-        <div className="flex-1 w-full flex justify-start px-2">
-          <TokenCounter messages={threadMessages || []} model={selectedModel} />
-        </div>
-      )}
+      {!tokenCounterCompact &&
+        !initialMessage &&
+        (threadMessages?.length > 0 || prompt.trim().length > 0) && (
+          <div className="flex-1 w-full flex justify-start px-2">
+            <TokenCounter
+              messages={threadMessages || []}
+              model={selectedModel}
+            />
+          </div>
+        )}
     </div>
   )
 })
 
 export { ChatInput }
-export default ChatInput

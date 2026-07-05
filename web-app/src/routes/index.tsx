@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router'
-import ChatInput from '@/containers/ChatInput'
+import { ChatInput } from '@/containers/ChatInput'
 import { HeaderPage } from '@/containers/HeaderPage'
 import { useTools } from '@/hooks/tools/useTools'
 import { cn } from '@/lib/utils'

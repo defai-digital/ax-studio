@@ -84,7 +84,7 @@ vi.mock('@/lib/prompts/system-prompt', () => ({
 vi.mock('@/containers/ChatInput', () => ({
   // The model selector now lives inside the composer (ChatInput), not the
   // page header. Reflect that ownership here so the placement is asserted.
-  default: () => (
+  ChatInput: () => (
     <div data-testid="chat-input-container">
       ChatInput
       <div data-testid="model-selector">Model Selector</div>

@@ -4,7 +4,7 @@ import type { ChatStatus } from 'ai'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { MessageSquareText } from 'lucide-react'
-import ChatInput from '@/containers/ChatInput'
+import { ChatInput } from '@/containers/ChatInput'
 import { MessagesArea } from '@/containers/threads/MessagesArea'
 
 function getPromptSourceLabel(source: string) {
@@ -23,7 +23,9 @@ function getPromptSourceLabel(source: string) {
 function getFirstUserMessageText(messages: UIMessage[]) {
   const firstUserMessage = messages.find((message) => message.role === 'user')
   return firstUserMessage?.parts
-    .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+    .filter(
+      (part): part is { type: 'text'; text: string } => part.type === 'text'
+    )
     .map((part) => part.text)
     .join('')
     .trim()
@@ -84,12 +86,17 @@ export function MainThreadPane({
     ? 'h-full rounded-xl border bg-background overflow-hidden flex flex-col relative'
     : 'flex flex-1 flex-col h-full overflow-hidden'
 
-  const contentCls = isSplitView ? 'mx-auto w-full px-2' : 'mx-auto w-full max-w-2xl px-4 sm:px-6'
-  const inputCls = isSplitView ? 'p-2' : 'py-4 mx-auto w-full max-w-2xl px-4 sm:px-6'
+  const contentCls = isSplitView
+    ? 'mx-auto w-full px-2'
+    : 'mx-auto w-full max-w-2xl px-4 sm:px-6'
+  const inputCls = isSplitView
+    ? 'p-2'
+    : 'py-4 mx-auto w-full max-w-2xl px-4 sm:px-6'
 
   const title = thread?.title || (isSplitView ? 'Current Thread' : 'New Thread')
   const firstUserMessageText = getFirstUserMessageText(chatMessages)
-  const showNormalTitle = !isSplitView && (!!threadLogo || title !== firstUserMessageText)
+  const showNormalTitle =
+    !isSplitView && (!!threadLogo || title !== firstUserMessageText)
 
   return (
     <div className={containerCls}>
@@ -99,7 +106,11 @@ export function MainThreadPane({
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               {threadLogo && (
-                <img src={threadLogo} alt={title} className="size-5 rounded-sm object-cover shrink-0" />
+                <img
+                  src={threadLogo}
+                  alt={title}
+                  className="size-5 rounded-sm object-cover shrink-0"
+                />
               )}
               <span className="truncate">{title}</span>
             </div>
@@ -112,7 +123,12 @@ export function MainThreadPane({
               >
                 <MessageSquareText className="size-3.5" />
               </Button>
-              <Button variant="ghost" size="icon-xs" className="shrink-0" onClick={onSplitClose}>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="shrink-0"
+                onClick={onSplitClose}
+              >
                 <span className="size-4">✕</span>
               </Button>
             </div>
@@ -132,14 +148,32 @@ export function MainThreadPane({
             placeholder="Leave empty to inherit from project/global."
           />
           <div className="flex justify-end gap-2">
-            <Button size="sm" variant="ghost" onClick={() => {
-              setThreadPromptDraft('')
-              updateThread(threadId, { metadata: { ...thread?.metadata, threadPrompt: null } })
-            }}>Clear Override</Button>
-            <Button size="sm" onClick={() => {
-              updateThread(threadId, { metadata: { ...thread?.metadata, threadPrompt: threadPromptDraft.trim() || null } })
-              setShowThreadPromptEditor(false)
-            }}>Save</Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setThreadPromptDraft('')
+                updateThread(threadId, {
+                  metadata: { ...thread?.metadata, threadPrompt: null },
+                })
+              }}
+            >
+              Clear Override
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                updateThread(threadId, {
+                  metadata: {
+                    ...thread?.metadata,
+                    threadPrompt: threadPromptDraft.trim() || null,
+                  },
+                })
+                setShowThreadPromptEditor(false)
+              }}
+            >
+              Save
+            </Button>
           </div>
         </div>
       )}
@@ -149,7 +183,11 @@ export function MainThreadPane({
         <div className="px-4 sm:px-6 pb-2 shrink-0">
           <div className="mx-auto w-full max-w-2xl flex items-center gap-2 min-w-0">
             {threadLogo && (
-              <img src={threadLogo} alt={title} className="size-5 rounded-sm object-cover shrink-0" />
+              <img
+                src={threadLogo}
+                alt={title}
+                className="size-5 rounded-sm object-cover shrink-0"
+              />
             )}
             <h2 className="text-sm font-medium truncate">{title}</h2>
           </div>
@@ -175,10 +213,19 @@ export function MainThreadPane({
         <div className="relative">
           <div
             className="absolute -top-8 left-0 right-0 h-8 pointer-events-none z-10"
-            style={{ background: 'linear-gradient(to top, var(--background) 20%, transparent)' }}
+            style={{
+              background:
+                'linear-gradient(to top, var(--background) 20%, transparent)',
+            }}
           />
           <div className={inputCls}>
-            <ChatInput threadId={threadId} model={threadModel} onSubmit={handleSubmit} onStop={stop} chatStatus={status} />
+            <ChatInput
+              threadId={threadId}
+              model={threadModel}
+              onSubmit={handleSubmit}
+              onStop={stop}
+              chatStatus={status}
+            />
           </div>
         </div>
       </div>

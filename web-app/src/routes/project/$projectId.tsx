@@ -7,7 +7,7 @@ import { useAssistant } from '@/hooks/chat/useAssistant'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { toast } from 'sonner'
 
-import ChatInput from '@/containers/ChatInput'
+import { ChatInput } from '@/containers/ChatInput'
 import { HeaderPage } from '@/containers/HeaderPage'
 import { ThreadList } from '@/containers/ThreadList'
 import { ProjectFiles } from '@/containers/ProjectFiles'
