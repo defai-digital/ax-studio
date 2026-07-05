@@ -1,5 +1,7 @@
 import { models } from 'token.js'
+
 import { ModelCapabilities } from '@/types/models'
+
 import type { CatalogModel, MMProjModel } from '@/services/models/types'
 
 export const defaultModel = (provider?: string) => {
@@ -10,6 +12,18 @@ export const defaultModel = (provider?: string) => {
     models[provider as unknown as keyof typeof models]
       .models as unknown as string[]
   )[0]
+}
+
+function getProviderCapabilityList(
+  providerConfig: unknown,
+  capabilityName: 'supportsToolCalls' | 'supportsImages'
+): string[] {
+  if (!providerConfig || typeof providerConfig !== 'object') return []
+
+  const value = (providerConfig as Record<typeof capabilityName, unknown>)[
+    capabilityName
+  ]
+  return Array.isArray(value) ? (value as string[]) : []
 }
 
 /**
@@ -29,17 +43,14 @@ export const getModelCapabilities = (
     ['grok', 'xai', 'x-ai'].includes(normalizedProvider) ||
     normalizedModelId.startsWith('grok-')
 
-  const supportsToolCalls = Array.isArray(
-    providerConfig?.supportsToolCalls as unknown
+  const supportsToolCalls = getProviderCapabilityList(
+    providerConfig,
+    'supportsToolCalls'
   )
-    ? (providerConfig.supportsToolCalls as unknown as string[])
-    : []
-
-  const supportsImages = Array.isArray(
-    providerConfig?.supportsImages as unknown
+  const supportsImages = getProviderCapabilityList(
+    providerConfig,
+    'supportsImages'
   )
-    ? (providerConfig.supportsImages as unknown as string[])
-    : []
 
   return [
     ModelCapabilities.COMPLETION,

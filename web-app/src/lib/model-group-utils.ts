@@ -27,7 +27,8 @@ function formatPrefixName(prefix: string): string {
     .split('-')
     .map((word) => {
       // Keep known abbreviations uppercase
-      if (['ai', 'api', 'ml'].includes(word.toLowerCase())) return word.toUpperCase()
+      if (['ai', 'api', 'ml'].includes(word.toLowerCase()))
+        return word.toUpperCase()
       return word.charAt(0).toUpperCase() + word.slice(1)
     })
     .join(' ')

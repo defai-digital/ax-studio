@@ -58,14 +58,17 @@ function getProxyBaseUrl(): string {
  * Unsupported fields (top_k, repeat_penalty) are dropped; non-standard names are mapped.
  * Undefined/null values are omitted so the request body stays clean.
  */
-function toOpenAIParams(parameters: Record<string, unknown>): Record<string, unknown> {
+function toOpenAIParams(
+  parameters: Record<string, unknown>
+): Record<string, unknown> {
   const result: Record<string, unknown> = {}
   const p = parameters as Partial<ModelParameters>
 
   if (p.temperature != null) result.temperature = p.temperature
   if (p.top_p != null) result.top_p = p.top_p
   if (p.presence_penalty != null) result.presence_penalty = p.presence_penalty
-  if (p.frequency_penalty != null) result.frequency_penalty = p.frequency_penalty
+  if (p.frequency_penalty != null)
+    result.frequency_penalty = p.frequency_penalty
   // OpenAI uses `max_tokens`, not `max_output_tokens`
   if (p.max_output_tokens != null) result.max_tokens = p.max_output_tokens
   // OpenAI uses `stop`, not `stop_sequences`
@@ -77,7 +80,8 @@ function toOpenAIParams(parameters: Record<string, unknown>): Record<string, unk
 
 function textIncludes(value: unknown, needle: string): boolean {
   if (typeof value === 'string') return value.includes(needle)
-  if (Array.isArray(value)) return value.some((item) => textIncludes(item, needle))
+  if (Array.isArray(value))
+    return value.some((item) => textIncludes(item, needle))
   if (!value || typeof value !== 'object') return false
   return Object.values(value as Record<string, unknown>).some((item) =>
     textIncludes(item, needle)
@@ -99,17 +103,19 @@ function hasLocalKnowledgeToolResult(messages: unknown): boolean {
       }
     }
   }
-  const currentTurnMessages = lastUserIdx >= 0 ? messages.slice(lastUserIdx + 1) : messages
+  const currentTurnMessages =
+    lastUserIdx >= 0 ? messages.slice(lastUserIdx + 1) : messages
 
   return currentTurnMessages.some((message) => {
     if (!message || typeof message !== 'object' || Array.isArray(message)) {
       return false
     }
     const record = message as Record<string, unknown>
-    return record.role === 'tool' && (
-      textIncludes(record, 'LOCAL_KNOWLEDGE_RESULT_READY') ||
-      textIncludes(record, 'fabric_search') ||
-      textIncludes(record, 'Based on the search results above')
+    return (
+      record.role === 'tool' &&
+      (textIncludes(record, 'LOCAL_KNOWLEDGE_RESULT_READY') ||
+        textIncludes(record, 'fabric_search') ||
+        textIncludes(record, 'Based on the search results above'))
     )
   })
 }
@@ -243,7 +249,8 @@ function normalizeOpenAICompatiblePayload(
   const content = payload.content
   const hasVisibleContent = typeof content === 'string' && content.length > 0
   const reasoningFallback =
-    typeof payload.reasoning_content === 'string' && payload.reasoning_content.length > 0
+    typeof payload.reasoning_content === 'string' &&
+    payload.reasoning_content.length > 0
       ? payload.reasoning_content
       : typeof payload.reasoning === 'string' && payload.reasoning.length > 0
         ? payload.reasoning
@@ -261,7 +268,11 @@ function normalizeOpenAICompatiblePayload(
     }
   }
 
-  if ('role' in payload && payload.role != null && typeof payload.role !== 'string') {
+  if (
+    'role' in payload &&
+    payload.role != null &&
+    typeof payload.role !== 'string'
+  ) {
     payload.role = String(payload.role)
     changed = true
   }
@@ -289,7 +300,8 @@ function normalizeOpenAICompatibleEventData(data: string): string {
     let changed = false
 
     for (const choice of parsed.choices) {
-      if (!choice || typeof choice !== 'object' || Array.isArray(choice)) continue
+      if (!choice || typeof choice !== 'object' || Array.isArray(choice))
+        continue
 
       const normalizedChoice = choice as Record<string, unknown>
 
@@ -367,8 +379,13 @@ function normalizeOpenAICompatibleSseLine(line: string): string {
  *
  * Applied to ALL providers since the proxy passes streaming bytes through unchanged.
  */
-function createStreamingPatchFetch(baseFetch: typeof httpFetch): typeof httpFetch {
-  return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+function createStreamingPatchFetch(
+  baseFetch: typeof httpFetch
+): typeof httpFetch {
+  return async (
+    input: RequestInfo | URL,
+    init?: RequestInit
+  ): Promise<Response> => {
     const response = await baseFetch(input, init)
     const contentType = response.headers.get('content-type') ?? ''
 
@@ -383,7 +400,10 @@ function createStreamingPatchFetch(baseFetch: typeof httpFetch): typeof httpFetc
         errorBody = await Promise.race([
           response.text(),
           new Promise<string>((_, reject) => {
-            errorTimeoutId = setTimeout(() => reject(new Error('Timeout reading error body')), 5000)
+            errorTimeoutId = setTimeout(
+              () => reject(new Error('Timeout reading error body')),
+              5000
+            )
           }),
         ])
       } catch {
@@ -391,7 +411,9 @@ function createStreamingPatchFetch(baseFetch: typeof httpFetch): typeof httpFetc
       } finally {
         if (errorTimeoutId) clearTimeout(errorTimeoutId)
       }
-      console.error(`[StreamingPatch] proxy error ${response.status}: ${errorBody.slice(0, 300)}`)
+      console.error(
+        `[StreamingPatch] proxy error ${response.status}: ${errorBody.slice(0, 300)}`
+      )
       // Return a new Response with a plain-text body the SDK can parse
       return new Response(errorBody, {
         status: response.status,
@@ -414,13 +436,17 @@ function createStreamingPatchFetch(baseFetch: typeof httpFetch): typeof httpFetc
         const lines = buffer.split('\n')
         buffer = lines.pop() ?? ''
 
-        const patched = lines.map((line) => normalizeOpenAICompatibleSseLine(line))
+        const patched = lines.map((line) =>
+          normalizeOpenAICompatibleSseLine(line)
+        )
 
         controller.enqueue(encoder.encode(patched.join('\n') + '\n'))
       },
       flush(controller) {
         if (buffer.trim()) {
-          controller.enqueue(encoder.encode(normalizeOpenAICompatibleSseLine(buffer)))
+          controller.enqueue(
+            encoder.encode(normalizeOpenAICompatibleSseLine(buffer))
+          )
         }
       },
     })
@@ -433,7 +459,10 @@ function createStreamingPatchFetch(baseFetch: typeof httpFetch): typeof httpFetc
         headers: response.headers,
       })
     } catch (e) {
-      console.warn('[StreamingPatch] pipeThrough failed, returning original:', e)
+      console.warn(
+        '[StreamingPatch] pipeThrough failed, returning original:',
+        e
+      )
       return response
     }
   }
@@ -447,7 +476,10 @@ function createCustomFetch(
   baseFetch: typeof httpFetch,
   parameters: Record<string, unknown>
 ): typeof httpFetch {
-  return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  return async (
+    input: RequestInfo | URL,
+    init?: RequestInit
+  ): Promise<Response> => {
     if (init?.method === 'POST' || !init?.method) {
       if (typeof init?.body !== 'string') {
         // Body is Blob, ReadableStream, FormData, etc. — skip parameter injection
@@ -462,7 +494,9 @@ function createCustomFetch(
       }
       init = {
         ...init,
-        body: JSON.stringify(prepareOpenAIRequestBody({ ...body, ...parameters })),
+        body: JSON.stringify(
+          prepareOpenAIRequestBody({ ...body, ...parameters })
+        ),
       }
     }
     return baseFetch(input, init)

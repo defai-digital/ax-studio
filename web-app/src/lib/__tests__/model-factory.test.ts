@@ -28,7 +28,9 @@ vi.mock('@ai-sdk/google', () => ({
   createGoogleGenerativeAI: vi.fn(() => vi.fn(() => ({ type: 'google' }))),
 }))
 
-async function readPatchedSseData(data: string): Promise<Record<string, unknown>> {
+async function readPatchedSseData(
+  data: string
+): Promise<Record<string, unknown>> {
   const provider: ProviderObject = {
     provider: 'openai',
     api_key: 'test-api-key',
@@ -40,7 +42,9 @@ async function readPatchedSseData(data: string): Promise<Record<string, unknown>
 
   await ModelFactory.createModel('gpt-4', provider)
 
-  const createModelConfig = vi.mocked(createOpenAICompatible).mock.calls.at(-1)?.[0]
+  const createModelConfig = vi
+    .mocked(createOpenAICompatible)
+    .mock.calls.at(-1)?.[0]
   const patchedFetch = createModelConfig?.fetch
   expect(patchedFetch).toBeTypeOf('function')
 
@@ -81,7 +85,9 @@ describe('ModelFactory', () => {
 
       const output = await readPatchedSseData(input)
 
-      const choice = (output.choices as Array<{ delta: Record<string, unknown> }>)[0]
+      const choice = (
+        output.choices as Array<{ delta: Record<string, unknown> }>
+      )[0]
       expect(choice.delta.content).toBe('Hello')
       expect(choice.delta.reasoning_content).toBeUndefined()
       expect(choice.delta.role).toBe('1')
@@ -109,10 +115,12 @@ describe('ModelFactory', () => {
 
       const output = await readPatchedSseData(input)
 
-      const choice = (output.choices as Array<{
-        delta: { tool_calls: Array<Record<string, unknown>> }
-        finish_reason: unknown
-      }>)[0]
+      const choice = (
+        output.choices as Array<{
+          delta: { tool_calls: Array<Record<string, unknown>> }
+          finish_reason: unknown
+        }>
+      )[0]
       expect(choice.delta.tool_calls[0]).toMatchObject({
         index: 0,
         id: '42',
@@ -150,10 +158,12 @@ describe('ModelFactory', () => {
 
       const output = await readPatchedSseData(input)
 
-      const choice = (output.choices as Array<{
-        delta: Record<string, unknown>
-        finish_reason: unknown
-      }>)[0]
+      const choice = (
+        output.choices as Array<{
+          delta: Record<string, unknown>
+          finish_reason: unknown
+        }>
+      )[0]
       expect(choice.delta.content).toBe('hello')
       expect(choice.delta.reasoning_content).toBeUndefined()
       expect(choice.delta.role).toBe('assistant')
@@ -174,7 +184,9 @@ describe('ModelFactory', () => {
 
       const output = await readPatchedSseData(input)
 
-      const choice = (output.choices as Array<{ delta: Record<string, unknown> }>)[0]
+      const choice = (
+        output.choices as Array<{ delta: Record<string, unknown> }>
+      )[0]
       expect(choice.delta.content).toBe('thinking-only text')
       expect(choice.delta.reasoning_content).toBeUndefined()
     })
@@ -189,9 +201,7 @@ describe('ModelFactory', () => {
         models: [],
         settings: [],
         active: true,
-        custom_header: [
-          { header: 'anthropic-version', value: '2023-06-01' },
-        ],
+        custom_header: [{ header: 'anthropic-version', value: '2023-06-01' }],
       }
 
       const model = await ModelFactory.createModel('claude-3-opus', provider)
@@ -295,9 +305,7 @@ describe('ModelFactory', () => {
         models: [],
         settings: [],
         active: true,
-        custom_header: [
-          { header: 'X-Custom-Header', value: 'custom-value' },
-        ],
+        custom_header: [{ header: 'X-Custom-Header', value: 'custom-value' }],
       }
 
       const model = await ModelFactory.createModel('custom-model', provider)
@@ -315,7 +323,12 @@ describe('ModelFactory', () => {
         active: true,
       }
 
-      await ModelFactory.createModel('glm-5.1', provider, {}, { requestRole: 'router' })
+      await ModelFactory.createModel(
+        'glm-5.1',
+        provider,
+        {},
+        { requestRole: 'router' }
+      )
 
       expect(createOpenAICompatible).toHaveBeenCalledWith(
         expect.objectContaining({
