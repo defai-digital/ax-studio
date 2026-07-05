@@ -66,7 +66,7 @@ vi.mock('@/constants/routes', () => ({
 }))
 
 vi.mock('@/components/common/SettingsMenu', () => ({
-  default: () => <aside data-testid="settings-menu" />,
+  SettingsMenu: () => <aside data-testid="settings-menu" />,
 }))
 
 vi.mock('@/containers/HeaderPage', () => ({

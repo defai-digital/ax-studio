@@ -32,7 +32,7 @@ type SettingsMenuItem = {
   group: 'App' | 'AI' | 'Advanced' | 'Other'
 }
 
-const SettingsMenu = () => {
+export function SettingsMenu() {
   const { t } = useTranslation()
   const matches = useMatches()
 
@@ -220,5 +220,3 @@ const SettingsMenu = () => {
     </div>
   )
 }
-
-export default SettingsMenu

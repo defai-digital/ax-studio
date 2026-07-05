@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import { HeaderPage } from '@/containers/HeaderPage'
-import SettingsMenu from '@/components/common/SettingsMenu'
+import { SettingsMenu } from '@/components/common/SettingsMenu'
 import { Card, CardItem } from '@/components/common/Card'
 import { Code, Pencil, Plus, Trash2, Wrench } from 'lucide-react'
 import { SettingsPageLayout } from '@/components/settings/SettingsPageLayout'

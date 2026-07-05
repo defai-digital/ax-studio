@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
-import SettingsMenu from '@/components/common/SettingsMenu'
+import { SettingsMenu } from '@/components/common/SettingsMenu'
 import { HeaderPage } from '@/containers/HeaderPage'
 import { SettingsPageLayout } from '@/components/settings/SettingsPageLayout'
 import AkidbConfigPanel from '@/containers/AkidbConfigPanel'

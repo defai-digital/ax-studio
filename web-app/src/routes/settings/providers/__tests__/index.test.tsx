@@ -8,7 +8,7 @@ let mockProviders: any[] = []
 
 // Mock dependencies
 vi.mock('@/components/common/SettingsMenu', () => ({
-  default: () => <div data-testid="settings-menu">Settings Menu</div>,
+  SettingsMenu: () => <div data-testid="settings-menu">Settings Menu</div>,
 }))
 
 vi.mock('@/containers/HeaderPage', () => ({

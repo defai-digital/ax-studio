@@ -73,7 +73,7 @@ vi.mock('@/containers/HeaderPage', () => ({
 }))
 
 vi.mock('@/components/common/SettingsMenu', () => ({
-  default: () => <nav data-testid="settings-menu" />,
+  SettingsMenu: () => <nav data-testid="settings-menu" />,
 }))
 
 vi.mock('@/components/settings/SettingsPageLayout', () => ({

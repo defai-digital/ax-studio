@@ -1,6 +1,6 @@
 import { Card, CardItem } from '@/components/common/Card'
 import { HeaderPage } from '@/containers/HeaderPage'
-import SettingsMenu from '@/components/common/SettingsMenu'
+import { SettingsMenu } from '@/components/common/SettingsMenu'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import {
   cn,

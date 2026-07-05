@@ -77,7 +77,7 @@ vi.mock('lucide-react', () => ({
 }))
 
 vi.mock('@/components/common/SettingsMenu', () => ({
-  default: () => <nav data-testid="settings-menu" />,
+  SettingsMenu: () => <nav data-testid="settings-menu" />,
 }))
 
 vi.mock('@/containers/HeaderPage', () => ({

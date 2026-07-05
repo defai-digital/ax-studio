@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import SettingsMenu from '../SettingsMenu'
+import { SettingsMenu } from '../SettingsMenu'
 import { useMatches } from '@tanstack/react-router'
 
 // Mock global platform constants - simulate desktop (Tauri) environment

@@ -17,7 +17,7 @@ const mockUpdateSettings = vi.fn()
 const mockFetchModelsFromProvider = vi.fn()
 
 vi.mock('@/components/common/SettingsMenu', () => ({
-  default: () => <div data-testid="settings-menu" />,
+  SettingsMenu: () => <div data-testid="settings-menu" />,
 }))
 
 vi.mock('@/containers/HeaderPage', () => ({
