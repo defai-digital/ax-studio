@@ -7,9 +7,13 @@ let mockStreamingTokenCount = 0
 vi.mock('@/hooks/settings/useAppState', () => ({
   useAppState: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
-      tokenSpeed: mockStreamingTokenSpeed > 0
-        ? { tokenSpeed: mockStreamingTokenSpeed, tokenCount: mockStreamingTokenCount }
-        : null,
+      tokenSpeed:
+        mockStreamingTokenSpeed > 0
+          ? {
+              tokenSpeed: mockStreamingTokenSpeed,
+              tokenCount: mockStreamingTokenCount,
+            }
+          : null,
     }),
 }))
 

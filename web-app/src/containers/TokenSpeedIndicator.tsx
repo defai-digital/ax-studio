@@ -26,8 +26,8 @@ export const TokenSpeedIndicator = memo(
     const streamingTokenSpeed = useAppState((state) =>
       state.tokenSpeed ? Math.round(state.tokenSpeed.tokenSpeed) : 0
     )
-    const streamingTokenCount = useAppState((state) =>
-      state.tokenSpeed?.tokenCount || 0
+    const streamingTokenCount = useAppState(
+      (state) => state.tokenSpeed?.tokenCount || 0
     )
 
     // Fallback to persisted metadata when not streaming
@@ -75,5 +75,3 @@ export const TokenSpeedIndicator = memo(
     )
   }
 )
-
-export default memo(TokenSpeedIndicator)

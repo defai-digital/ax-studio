@@ -41,7 +41,7 @@ vi.mock('@/containers/dialogs/message/DeleteMessageDialog', () => ({
 }))
 
 vi.mock('@/containers/TokenSpeedIndicator', () => ({
-  default: () => <div data-testid="token-speed" />,
+  TokenSpeedIndicator: () => <div data-testid="token-speed" />,
 }))
 
 vi.mock('@/lib/fileMetadata', () => ({
@@ -75,10 +75,14 @@ vi.mock('@/components/ai-elements/tool', () => ({
   ToolInput: ({ input }: { input: unknown }) => (
     <div data-testid="tool-input">{JSON.stringify(input)}</div>
   ),
-  ToolOutput: ({ output, errorText }: { output: unknown; errorText?: string }) => (
-    <div data-testid="tool-output">
-      {errorText || JSON.stringify(output)}
-    </div>
+  ToolOutput: ({
+    output,
+    errorText,
+  }: {
+    output: unknown
+    errorText?: string
+  }) => (
+    <div data-testid="tool-output">{errorText || JSON.stringify(output)}</div>
   ),
 }))
 
@@ -114,13 +118,7 @@ describe('MessageItem', () => {
         role: 'user',
         parts: [{ type: 'text', text: 'Hi there' }],
       })
-      render(
-        <MessageItem
-          message={msg}
-          isLastMessage={false}
-          status="ready"
-        />
-      )
+      render(<MessageItem message={msg} isLastMessage={false} status="ready" />)
       expect(screen.getByText('Hi there')).toBeInTheDocument()
     })
 
@@ -130,11 +128,7 @@ describe('MessageItem', () => {
         parts: [{ type: 'text', text: '' }],
       })
       const { container } = render(
-        <MessageItem
-          message={msg}
-          isLastMessage={false}
-          status="ready"
-        />
+        <MessageItem message={msg} isLastMessage={false} status="ready" />
       )
       // The message wrapper exists but no text content div
       expect(container.querySelector('.rounded-2xl')).toBeNull()
@@ -151,13 +145,7 @@ describe('MessageItem', () => {
           } as never,
         ],
       })
-      render(
-        <MessageItem
-          message={msg}
-          isLastMessage={false}
-          status="ready"
-        />
-      )
+      render(<MessageItem message={msg} isLastMessage={false} status="ready" />)
       const img = screen.getByAltText('Uploaded attachment')
       expect(img.getAttribute('src')).toBe('https://example.com/image.png')
     })
@@ -216,26 +204,30 @@ describe('MessageItem', () => {
     it('shows local knowledge source status when a user message used retrieval', () => {
       const msg = makeMessage({
         role: 'user',
-        parts: [{ type: 'text', text: 'What real-world hiring outcome did the author achieve?' }],
+        parts: [
+          {
+            type: 'text',
+            text: 'What real-world hiring outcome did the author achieve?',
+          },
+        ],
         metadata: {
           localKnowledgeRetrieval: {
             searched: true,
             extracted: true,
-            source: '/Users/devop/Documents/akidb-testing/coding-interview-university.md',
+            source:
+              '/Users/devop/Documents/akidb-testing/coding-interview-university.md',
           },
         },
       } as never)
 
-      render(
-        <MessageItem
-          message={msg}
-          isLastMessage={false}
-          status="ready"
-        />
-      )
+      render(<MessageItem message={msg} isLastMessage={false} status="ready" />)
 
-      expect(screen.getByText(/Searched local knowledge and extracted source/i)).toBeInTheDocument()
-      expect(screen.getByText('coding-interview-university.md')).toBeInTheDocument()
+      expect(
+        screen.getByText(/Searched local knowledge and extracted source/i)
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText('coding-interview-university.md')
+      ).toBeInTheDocument()
     })
   })
 
@@ -245,13 +237,7 @@ describe('MessageItem', () => {
         role: 'assistant',
         parts: [{ type: 'text', text: 'Response text' }],
       })
-      render(
-        <MessageItem
-          message={msg}
-          isLastMessage={false}
-          status="ready"
-        />
-      )
+      render(<MessageItem message={msg} isLastMessage={false} status="ready" />)
       const md = screen.getByTestId('render-markdown')
       expect(md.textContent).toBe('Response text')
     })
@@ -328,13 +314,7 @@ describe('MessageItem', () => {
         role: 'assistant',
         parts: [{ type: 'reasoning', text: 'Thinking...' } as never],
       })
-      render(
-        <MessageItem
-          message={msg}
-          isLastMessage={false}
-          status="ready"
-        />
-      )
+      render(<MessageItem message={msg} isLastMessage={false} status="ready" />)
       expect(screen.getByTestId('reasoning')).toBeInTheDocument()
       expect(screen.getByTestId('reasoning-content').textContent).toBe(
         'Thinking...'
@@ -353,13 +333,7 @@ describe('MessageItem', () => {
           } as never,
         ],
       })
-      render(
-        <MessageItem
-          message={msg}
-          isLastMessage={false}
-          status="ready"
-        />
-      )
+      render(<MessageItem message={msg} isLastMessage={false} status="ready" />)
       expect(screen.getByTestId('tool')).toBeInTheDocument()
       expect(screen.getByTestId('tool-header').textContent).toBe('search')
     })
@@ -377,13 +351,7 @@ describe('MessageItem', () => {
           } as never,
         ],
       })
-      render(
-        <MessageItem
-          message={msg}
-          isLastMessage={false}
-          status="ready"
-        />
-      )
+      render(<MessageItem message={msg} isLastMessage={false} status="ready" />)
       expect(screen.getByTestId('tool-header').textContent).toBe('web_search')
     })
 
@@ -398,13 +366,7 @@ describe('MessageItem', () => {
           } as never,
         ],
       })
-      render(
-        <MessageItem
-          message={msg}
-          isLastMessage={false}
-          status="ready"
-        />
-      )
+      render(<MessageItem message={msg} isLastMessage={false} status="ready" />)
       expect(screen.getByAltText('Generated image')).toBeInTheDocument()
     })
 
@@ -472,16 +434,12 @@ describe('MessageItem', () => {
           } as never,
         ],
       })
-      render(
-        <MessageItem
-          message={msg}
-          isLastMessage={false}
-          status="ready"
-        />
-      )
+      render(<MessageItem message={msg} isLastMessage={false} status="ready" />)
       const outputs = screen.getAllByTestId('tool-output')
       // Should render error output
-      expect(outputs.some((el) => el.textContent?.includes('Connection timeout'))).toBe(true)
+      expect(
+        outputs.some((el) => el.textContent?.includes('Connection timeout'))
+      ).toBe(true)
     })
   })
 
@@ -500,13 +458,7 @@ describe('MessageItem', () => {
           } as never,
         ],
       })
-      render(
-        <MessageItem
-          message={msg}
-          isLastMessage={false}
-          status="ready"
-        />
-      )
+      render(<MessageItem message={msg} isLastMessage={false} status="ready" />)
       expect(screen.getByTestId('reasoning')).toBeInTheDocument()
       expect(screen.getByTestId('render-markdown')).toBeInTheDocument()
       expect(screen.getByTestId('tool')).toBeInTheDocument()
@@ -522,13 +474,7 @@ describe('MessageItem', () => {
           { type: 'text', text: 'Part two' },
         ],
       })
-      render(
-        <MessageItem
-          message={msg}
-          isLastMessage={false}
-          status="ready"
-        />
-      )
+      render(<MessageItem message={msg} isLastMessage={false} status="ready" />)
       const copyBtn = screen.getByTestId('copy-button')
       expect(copyBtn.getAttribute('data-text')).toBe('Part one\nPart two')
     })
@@ -546,13 +492,7 @@ describe('MessageItem', () => {
           } as never,
         ],
       })
-      render(
-        <MessageItem
-          message={msg}
-          isLastMessage={false}
-          status="ready"
-        />
-      )
+      render(<MessageItem message={msg} isLastMessage={false} status="ready" />)
       fireEvent.click(screen.getByAltText('Uploaded attachment'))
       // Preview overlay should appear
       const previewImg = screen.getByAltText('Preview')
@@ -585,13 +525,7 @@ describe('MessageItem', () => {
           } as never,
         ],
       })
-      render(
-        <MessageItem
-          message={msg}
-          isLastMessage={false}
-          status="ready"
-        />
-      )
+      render(<MessageItem message={msg} isLastMessage={false} status="ready" />)
       expect(screen.queryByTestId('agent-output-card')).toBeNull()
     })
   })

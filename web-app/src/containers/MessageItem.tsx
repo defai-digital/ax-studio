@@ -1,4 +1,11 @@
-import { memo, type ComponentProps, useState, useCallback, useEffect, useMemo } from 'react'
+import {
+  memo,
+  type ComponentProps,
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+} from 'react'
 import type { UIMessage, ChatStatus } from 'ai'
 import { RenderMarkdown } from './RenderMarkdown'
 import { cn } from '@/lib/utils'
@@ -21,7 +28,7 @@ import { CopyButton } from '@/components/common/CopyButton'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { EditMessageDialog } from '@/containers/dialogs/message/EditMessageDialog'
 import { DeleteMessageDialog } from '@/containers/dialogs/message/DeleteMessageDialog'
-import TokenSpeedIndicator from '@/containers/TokenSpeedIndicator'
+import { TokenSpeedIndicator } from '@/containers/TokenSpeedIndicator'
 import { extractFilesFromPrompt, FileMetadata } from '@/lib/fileMetadata'
 import { Button } from '@/components/ui/button'
 import {
@@ -98,7 +105,9 @@ export const MessageItem = memo(
     const selectedModel = useModelProvider((state) => state.selectedModel)
     const updateMessage = useMessages((state) => state.updateMessage)
     const storedThreadMessage = useMessages((state) =>
-      threadId ? state.messages[threadId]?.find((m) => m.id === message.id) : undefined
+      threadId
+        ? state.messages[threadId]?.find((m) => m.id === message.id)
+        : undefined
     )
     const [previewImage, setPreviewImage] = useState<{
       url: string
@@ -205,7 +214,11 @@ export const MessageItem = memo(
       return message.parts
         .filter((part) => {
           if (part.type !== 'file') return false
-          const filePart = part as { type: 'file'; url?: string; mediaType?: string }
+          const filePart = part as {
+            type: 'file'
+            url?: string
+            mediaType?: string
+          }
           return filePart.url && filePart.mediaType?.startsWith('image/')
         })
         .map((part) => (part as { url: string }).url)
@@ -265,7 +278,10 @@ export const MessageItem = memo(
         const finalText = (thinkMatch[2] ?? '').trim()
 
         return (
-          <div key={`${message.id}-${partIndex}`} className="w-full min-w-0 overflow-hidden">
+          <div
+            key={`${message.id}-${partIndex}`}
+            className="w-full min-w-0 overflow-hidden"
+          >
             {reasoningText &&
               renderReasoningPart(
                 { type: 'reasoning', text: reasoningText },
@@ -292,7 +308,10 @@ export const MessageItem = memo(
       }
 
       return (
-        <div key={`${message.id}-${partIndex}`} className="w-full min-w-0 overflow-hidden">
+        <div
+          key={`${message.id}-${partIndex}`}
+          className="w-full min-w-0 overflow-hidden"
+        >
           {message.role === 'user' ? (
             <div className="flex justify-end w-full h-full text-start break-words whitespace-normal">
               <div className="relative max-w-[80%]">
@@ -321,7 +340,11 @@ export const MessageItem = memo(
                 {displayText && (
                   <div
                     className="px-4 py-3 rounded-2xl rounded-tr-sm text-white shadow-sm select-text whitespace-pre-wrap break-words overflow-hidden"
-                    style={{ background: 'linear-gradient(135deg, #6366f1, #7c3aed)', fontSize: '14px', lineHeight: '1.6' }}
+                    style={{
+                      background: 'linear-gradient(135deg, #6366f1, #7c3aed)',
+                      fontSize: '14px',
+                      lineHeight: '1.6',
+                    }}
                   >
                     {displayText}
                   </div>
@@ -332,7 +355,9 @@ export const MessageItem = memo(
                       <Database size={13} />
                       <span>
                         Searched local knowledge
-                        {localKnowledgeRetrieval.extracted ? ' and extracted source' : ''}
+                        {localKnowledgeRetrieval.extracted
+                          ? ' and extracted source'
+                          : ''}
                       </span>
                       {localKnowledgeRetrieval.source && (
                         <span className="truncate max-w-64 font-mono">
@@ -450,13 +475,20 @@ export const MessageItem = memo(
       //   ToolUIPart      → type: 'tool-{name}'   (static/chat-level tools)
       //   DynamicToolUIPart → type: 'dynamic-tool', toolName: string  (streamText tools)
       // Both carry a `state` field; anything else is not a tool part.
-      if (!part || typeof part !== 'object' || !('type' in part) || !('state' in part)) {
+      if (
+        !part ||
+        typeof part !== 'object' ||
+        !('type' in part) ||
+        !('state' in part)
+      ) {
         return null
       }
 
       const maybeToolPart = part as Partial<ToolPart>
       const isDynamic = maybeToolPart.type === 'dynamic-tool'
-      const isStatic = typeof maybeToolPart.type === 'string' && maybeToolPart.type.startsWith('tool-')
+      const isStatic =
+        typeof maybeToolPart.type === 'string' &&
+        maybeToolPart.type.startsWith('tool-')
       if ((!isDynamic && !isStatic) || !maybeToolPart.state) {
         return null
       }
@@ -497,7 +529,11 @@ export const MessageItem = memo(
             {toolPart.state === 'output-error' && (
               <ToolOutput
                 output={undefined}
-                errorText={toolPart.error || toolPart.errorText || 'Tool execution failed'}
+                errorText={
+                  toolPart.error ||
+                  toolPart.errorText ||
+                  'Tool execution failed'
+                }
                 resolver={(input) => Promise.resolve(input)}
               />
             )}
@@ -572,10 +608,19 @@ export const MessageItem = memo(
           <div className="flex flex-col min-w-0 flex-1">
             {/* Routing badge — shown when the LLM Router selected this model */}
             {(() => {
-              const meta = message.metadata as Record<string, unknown> | undefined
-              const routing = meta?.routing as { modelId?: string; reason?: string; routed?: boolean } | undefined
+              const meta = message.metadata as
+                | Record<string, unknown>
+                | undefined
+              const routing = meta?.routing as
+                | { modelId?: string; reason?: string; routed?: boolean }
+                | undefined
               if (routing?.routed && routing.modelId) {
-                return <RoutingBadge modelId={routing.modelId} reason={routing.reason ?? ''} />
+                return (
+                  <RoutingBadge
+                    modelId={routing.modelId}
+                    reason={routing.reason ?? ''}
+                  />
+                )
               }
               return null
             })()}
@@ -583,7 +628,10 @@ export const MessageItem = memo(
             {message.parts.map((part, i) => {
               switch (part.type) {
                 case CONTENT_TYPE.TEXT:
-                  return renderTextPart(part as { type: 'text'; text: string }, i)
+                  return renderTextPart(
+                    part as { type: 'text'; text: string },
+                    i
+                  )
                 case CONTENT_TYPE.FILE:
                   return renderFilePart(part as FilePart, i)
                 case CONTENT_TYPE.REASONING:
@@ -618,18 +666,21 @@ export const MessageItem = memo(
                   <DeleteMessageDialog onDelete={handleDelete} />
                 )}
 
-                {selectedModel && onRegenerate && !isStreaming && isLastMessage && (
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={handleRegenerate}
-                    title="Regenerate response"
-                    aria-label="Regenerate response"
-                    className="text-muted-foreground/50 hover:text-foreground"
-                  >
-                    <RefreshCw size={14} />
-                  </Button>
-                )}
+                {selectedModel &&
+                  onRegenerate &&
+                  !isStreaming &&
+                  isLastMessage && (
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={handleRegenerate}
+                      title="Regenerate response"
+                      aria-label="Regenerate response"
+                      className="text-muted-foreground/50 hover:text-foreground"
+                    >
+                      <RefreshCw size={14} />
+                    </Button>
+                  )}
 
                 {/* Response version switcher — flips between regenerated attempts */}
                 {versionInfo && !isStreaming && isLastMessage && (
