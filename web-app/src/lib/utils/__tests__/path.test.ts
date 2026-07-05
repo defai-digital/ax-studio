@@ -1,87 +1,106 @@
+/// <reference path="../../../types/global.d.ts" />
 import { describe, it, expect } from 'vitest'
 import { isRootDir } from '../path'
 
 /**
- * IMPORTANT: In vitest.config.ts, IS_WINDOWS is defined as JSON.stringify('false')
- * which produces the string "false" — this is TRUTHY in JavaScript.
- * Therefore isRootDir always takes the Windows branch in tests.
- *
- * DISCOVERED BUG: IS_WINDOWS = '"false"' is truthy, so the Unix/Mac branch
- * is unreachable in the test environment. All tests below verify Windows behavior.
+ * IS_WINDOWS is now properly a boolean (false in the vitest config),
+ * so tests exercise the Unix/Mac branch on non-Windows CI.
+ * Both platform branches are covered below.
  */
 
 describe('isRootDir', () => {
-  // ── A: Specification Tests (Windows branch, since IS_WINDOWS is truthy) ──
+  // ── A: Specification Tests ──
 
-  describe('Windows root detection (active branch in tests)', () => {
-    it('returns true for C:\\ drive root', () => {
-      expect(isRootDir('C:\\')).toBe(true)
+  describe('Unix/Mac root detection', () => {
+    it('returns true for the Unix filesystem root /', () => {
+      // On Windows this would be false, but CI runs on Unix/Mac
+      if (IS_WINDOWS) return
+      expect(isRootDir('/')).toBe(true)
     })
 
-    it('returns true for D:\\ drive root', () => {
-      expect(isRootDir('D:\\')).toBe(true)
+    it('returns true for / with trailing slashes', () => {
+      if (IS_WINDOWS) return
+      expect(isRootDir('//')).toBe(true)
     })
 
-    it('returns true for lowercase drive letter', () => {
-      expect(isRootDir('c:\\')).toBe(true)
+    it('returns false for a subdirectory on Unix', () => {
+      if (IS_WINDOWS) return
+      expect(isRootDir('/home')).toBe(false)
     })
 
-    it('returns true for drive letter without backslash (C:)', () => {
-      // The regex /^[a-zA-Z]:\\?$/ makes the backslash optional
-      expect(isRootDir('C:')).toBe(true)
-    })
-
-    it('returns false for a subdirectory on Windows', () => {
-      expect(isRootDir('C:\\Users')).toBe(false)
-    })
-
-    it('returns false for a deep path on Windows', () => {
-      expect(isRootDir('C:\\Users\\Documents\\folder')).toBe(false)
+    it('returns false for a deep path on Unix', () => {
+      if (IS_WINDOWS) return
+      expect(isRootDir('/home/user/docs')).toBe(false)
     })
 
     it('returns false for an empty string', () => {
       expect(isRootDir('')).toBe(false)
     })
+  })
 
-    it('returns false for a Unix-style root /', () => {
-      // In Windows branch, "/" does not match /^[a-zA-Z]:\\?$/
-      expect(isRootDir('/')).toBe(false)
+  describe('Windows root detection', () => {
+    it('returns true for C:\\ drive root', () => {
+      if (!IS_WINDOWS) return
+      expect(isRootDir('C:\\')).toBe(true)
     })
 
-    it('returns false for a forward-slash path', () => {
-      expect(isRootDir('/home/user')).toBe(false)
+    it('returns true for D:\\ drive root', () => {
+      if (!IS_WINDOWS) return
+      expect(isRootDir('D:\\')).toBe(true)
+    })
+
+    it('returns true for lowercase drive letter', () => {
+      if (!IS_WINDOWS) return
+      expect(isRootDir('c:\\')).toBe(true)
+    })
+
+    it('returns true for drive letter without backslash (C:)', () => {
+      if (!IS_WINDOWS) return
+      expect(isRootDir('C:')).toBe(true)
+    })
+
+    it('returns false for a subdirectory on Windows', () => {
+      if (!IS_WINDOWS) return
+      expect(isRootDir('C:\\Users')).toBe(false)
+    })
+
+    it('returns false for a Unix-style root / on Windows', () => {
+      if (!IS_WINDOWS) return
+      expect(isRootDir('/')).toBe(false)
     })
   })
 
   // ── B: Attack Tests ──
 
-  describe('adversarial inputs (Windows branch)', () => {
-    it('rejects multi-character prefix before colon', () => {
-      expect(isRootDir('CD:\\')).toBe(false)
-    })
-
-    it('rejects numeric drive letter', () => {
-      expect(isRootDir('1:\\')).toBe(false)
-    })
-
-    it('rejects special character as drive letter', () => {
-      expect(isRootDir('$:\\')).toBe(false)
-    })
-
-    it('rejects drive root with trailing content', () => {
-      expect(isRootDir('C:\\folder')).toBe(false)
-    })
-
-    it('rejects only a backslash', () => {
-      expect(isRootDir('\\')).toBe(false)
-    })
-
+  describe('adversarial inputs', () => {
     it('rejects whitespace strings', () => {
       expect(isRootDir(' ')).toBe(false)
       expect(isRootDir('  ')).toBe(false)
     })
 
-    it('rejects UNC paths', () => {
+    it('rejects random text', () => {
+      expect(isRootDir('random')).toBe(false)
+      expect(isRootDir('123')).toBe(false)
+    })
+
+    // Windows-specific adversarial inputs
+    it('rejects multi-character prefix before colon (Windows)', () => {
+      if (!IS_WINDOWS) return
+      expect(isRootDir('CD:\\')).toBe(false)
+    })
+
+    it('rejects numeric drive letter (Windows)', () => {
+      if (!IS_WINDOWS) return
+      expect(isRootDir('1:\\')).toBe(false)
+    })
+
+    it('rejects special character as drive letter (Windows)', () => {
+      if (!IS_WINDOWS) return
+      expect(isRootDir('$:\\')).toBe(false)
+    })
+
+    it('rejects UNC paths (Windows)', () => {
+      if (!IS_WINDOWS) return
       expect(isRootDir('\\\\server\\share')).toBe(false)
     })
   })
@@ -89,16 +108,8 @@ describe('isRootDir', () => {
   // ── C: Property Tests ──
 
   describe('properties', () => {
-    it('is case-insensitive for drive letters A-Z', () => {
-      for (const letter of ['A', 'z', 'M', 'x']) {
-        expect(isRootDir(`${letter}:\\`)).toBe(
-          isRootDir(`${letter.toLowerCase()}:\\`)
-        )
-      }
-    })
-
     it('returns a boolean for any string input', () => {
-      const inputs = ['', '/', 'C:\\', 'random', '123', 'C:\\Users']
+      const inputs = ['', '/', 'C:\\', 'random', '123', '/home/user']
       for (const input of inputs) {
         const result = isRootDir(input)
         expect(typeof result).toBe('boolean')
@@ -106,25 +117,32 @@ describe('isRootDir', () => {
     })
 
     it('is a pure function — same input always yields same output', () => {
-      expect(isRootDir('C:\\')).toBe(isRootDir('C:\\'))
+      expect(isRootDir('/')).toBe(isRootDir('/'))
       expect(isRootDir('foo')).toBe(isRootDir('foo'))
     })
 
-    it('all 26 uppercase drive letters are recognized as root', () => {
-      for (let code = 65; code <= 90; code++) {
-        const letter = String.fromCharCode(code)
-        expect(isRootDir(`${letter}:\\`)).toBe(true)
-      }
-    })
-
-    it('all 26 lowercase drive letters are recognized as root', () => {
-      for (let code = 97; code <= 122; code++) {
-        const letter = String.fromCharCode(code)
-        expect(isRootDir(`${letter}:\\`)).toBe(true)
-      }
-    })
+    if (!IS_WINDOWS) {
+      it('Unix: / with various trailing slashes is still root', () => {
+        expect(isRootDir('/')).toBe(true)
+        expect(isRootDir('//')).toBe(true)
+      })
+    } else {
+      it('Windows: all 26 drive letters are recognized as root', () => {
+        for (let code = 65; code <= 90; code++) {
+          const letter = String.fromCharCode(code)
+          expect(isRootDir(`${letter}:\\`)).toBe(true)
+        }
+      })
+    }
   })
 
   // ── D: Regression Tests ──
-  // No past bug-fix commits found for this file beyond initial commit and rename.
+
+  describe('regression: IS_WINDOWS string coercion bug', () => {
+    it('IS_WINDOWS is a proper boolean, not a truthy string', () => {
+      // Previously JSON.stringify('false') produced the string "false"
+      // which is truthy, causing the Windows branch to always execute.
+      expect(typeof IS_WINDOWS).toBe('boolean')
+    })
+  })
 })

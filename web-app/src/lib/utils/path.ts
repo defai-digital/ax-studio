@@ -8,6 +8,8 @@
  * @returns `true` if the path is a root directory, otherwise `false`.
  */
 export const isRootDir = (selectedNewPath: string) => {
+  if (!selectedNewPath) return false
+
   // Windows root: C:\, D:\, etc.
   if (IS_WINDOWS) {
     return /^[a-zA-Z]:\\?$/.test(selectedNewPath)

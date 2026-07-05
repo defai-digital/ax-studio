@@ -37,12 +37,12 @@ export default defineConfig({
     },
   },
   define: {
-    IS_TAURI: JSON.stringify('false'),
-    IS_WEB_APP: JSON.stringify('false'),
-    IS_MACOS: JSON.stringify('false'),
-    IS_WINDOWS: JSON.stringify('false'),
+    IS_TAURI: false,
+    IS_WEB_APP: false,
+    IS_MACOS: false,
+    IS_WINDOWS: false,
     PLATFORM: JSON.stringify('web'),
     VERSION: JSON.stringify('test'),
-    AUTO_UPDATER_DISABLED: JSON.stringify('false'),
+    AUTO_UPDATER_DISABLED: false,
   },
 })
