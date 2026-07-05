@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { useInterfaceSettings } from '../useInterfaceSettings'
+import {
+  useInterfaceSettings,
+  type AccentColorValue,
+} from '../useInterfaceSettings'
 
 // Mock constants
 vi.mock('@/constants/localStorage', () => ({
@@ -33,6 +36,8 @@ Object.defineProperty(global, 'IS_WINDOWS', { value: false, writable: true })
 Object.defineProperty(global, 'IS_MACOS', { value: false, writable: true })
 Object.defineProperty(global, 'IS_TAURI', { value: false, writable: true })
 Object.defineProperty(global, 'IS_WEB_APP', { value: false, writable: true })
+
+const invalidAccentColor = 'invalid' as unknown as AccentColorValue
 
 describe('useInterfaceSettings', () => {
   beforeEach(() => {
@@ -81,7 +86,7 @@ describe('useInterfaceSettings', () => {
       const currentColor = result.current.accentColor
 
       act(() => {
-        result.current.setAccentColor('invalid' as any)
+        result.current.setAccentColor(invalidAccentColor)
       })
 
       // Should remain unchanged
