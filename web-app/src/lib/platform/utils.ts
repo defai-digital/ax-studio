@@ -19,7 +19,7 @@ export const isPlatformTauri = (): boolean => {
  * Detect if running on macOS. MLX models only work on macOS with Apple Silicon.
  * Uses navigator.platform which works in both browser and Tauri WebView.
  */
-export const isMacOS = (): boolean => {
+const isMacOS = (): boolean => {
   if (typeof navigator !== 'undefined') {
     return /Mac|iPod|iPhone|iPad/.test(navigator.platform)
   }

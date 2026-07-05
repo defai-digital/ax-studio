@@ -9,9 +9,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 describe('platform/utils', () => {
   let originalWindow: typeof globalThis.window
+  let originalPlatform: string
 
   beforeEach(() => {
     originalWindow = globalThis.window
+    originalPlatform = navigator.platform
   })
 
   afterEach(() => {
@@ -23,6 +25,10 @@ describe('platform/utils', () => {
         configurable: true,
       })
     }
+    Object.defineProperty(navigator, 'platform', {
+      value: originalPlatform,
+      configurable: true,
+    })
   })
 
   describe('isPlatformTauri', () => {
@@ -40,6 +46,30 @@ describe('platform/utils', () => {
 
       // Cleanup
       delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__
+    })
+  })
+
+  describe('isMlxSupported', () => {
+    it('returns true on Apple platforms', async () => {
+      Object.defineProperty(navigator, 'platform', {
+        value: 'MacIntel',
+        configurable: true,
+      })
+
+      const { isMlxSupported } = await import('../utils')
+
+      expect(isMlxSupported()).toBe(true)
+    })
+
+    it('returns false on non-Apple platforms', async () => {
+      Object.defineProperty(navigator, 'platform', {
+        value: 'Win32',
+        configurable: true,
+      })
+
+      const { isMlxSupported } = await import('../utils')
+
+      expect(isMlxSupported()).toBe(false)
     })
   })
 
