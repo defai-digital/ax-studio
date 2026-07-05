@@ -56,4 +56,24 @@ describe('partitionDuplicateAttachments', () => {
     expect(result.newItems).toEqual([{ name: 'unknown.pdf' }])
     expect(result.duplicateLabels).toEqual(['a.pdf'])
   })
+
+  it('partitions duplicates within the same incoming batch', () => {
+    const result = partitionDuplicateAttachments({
+      existingItems: [],
+      incomingItems: [
+        { name: 'a.pdf', path: '/docs/a.pdf' },
+        { name: 'a-again.pdf', path: '/docs/a.pdf' },
+        { name: 'b.pdf', path: '/docs/b.pdf' },
+      ],
+      getExistingIdentity: (item) => item.path,
+      getIncomingIdentity: (item) => item.path,
+      getDuplicateLabel: (item) => item.name,
+    })
+
+    expect(result.newItems).toEqual([
+      { name: 'a.pdf', path: '/docs/a.pdf' },
+      { name: 'b.pdf', path: '/docs/b.pdf' },
+    ])
+    expect(result.duplicateLabels).toEqual(['a-again.pdf'])
+  })
 })

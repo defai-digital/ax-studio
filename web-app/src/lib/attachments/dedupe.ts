@@ -31,6 +31,9 @@ export function partitionDuplicateAttachments<TExisting, TIncoming>({
       continue
     }
     newItems.push(item)
+    if (identity) {
+      existingIdentities.add(identity)
+    }
   }
 
   return { newItems, duplicateLabels }
