@@ -32,6 +32,89 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 
 ---
 
+## Get Started
+
+### Supported Desktop Targets
+
+| Platform | Status | Install path |
+| --- | --- | --- |
+| macOS Apple Silicon | Active support | Homebrew cask or GitHub release assets |
+| Windows x64 | Active support | GitHub release installer |
+| Windows ARM64 | Active support target | GitHub release installer when an ARM64 asset is published |
+| Linux desktop | Not active support | Source builds only, without release/SLA expectations |
+
+Linux users should use AX Serving, OpenAI-compatible endpoints, or source builds
+when they need AX workflows outside the supported desktop release targets.
+
+### Install
+
+**macOS Apple Silicon - recommended**
+
+```bash
+brew tap defai-digital/ax-studio
+brew install --cask ax-studio
+open -a Ax-Studio
+```
+
+The Homebrew cask is the fastest install path for supported Macs.
+
+**Windows**
+
+Download the latest `Ax-Studio_*_x64-setup.exe` from
+[GitHub Releases](https://github.com/defai-digital/ax-studio/releases/latest)
+and run the installer.
+
+Windows ARM64 is a supported release target. Use
+`Ax-Studio_*_arm64-setup.exe` when that asset is available on the latest
+release page.
+
+**Manual download**
+
+All release assets are published on the
+[AX Studio releases page](https://github.com/defai-digital/ax-studio/releases).
+
+### First Launch
+
+1. Open **Ax-Studio**.
+2. Go to **Settings -> Providers**.
+3. Add an API key for one provider, or configure a local provider.
+4. Start a new thread from **Chat** or choose a Smart Start workflow.
+5. Optional: open **Hub** to download or import a local model.
+
+No project setup is required for normal desktop use. Cloud providers require
+their own API keys. Local models run only after the required model/runtime is
+installed or downloaded.
+
+### Update
+
+**macOS Homebrew**
+
+```bash
+brew upgrade --cask ax-studio
+```
+
+**Windows**
+
+Download and run the latest x64 or ARM64 installer from
+[GitHub Releases](https://github.com/defai-digital/ax-studio/releases/latest).
+If the latest release does not include an ARM64 installer yet, use the x64
+installer or wait for the next ARM64 release asset.
+
+### Uninstall
+
+**macOS Homebrew**
+
+```bash
+brew uninstall --cask ax-studio
+brew untap defai-digital/ax-studio
+```
+
+**Windows**
+
+Uninstall AX Studio from **Settings -> Apps -> Installed apps**.
+
+---
+
 ## Why Local AI Work Breaks Down
 
 AI work becomes hard to trust when every workflow lives in a different tool:
@@ -113,74 +196,6 @@ AX Studio is the general AI workspace in the AutomatosX stack.
 | **AX Serving** | [defai-digital/ax-serving](https://github.com/defai-digital/ax-serving) | Local/enterprise model serving and orchestration |
 | **AX Fabric** | - | Knowledge infrastructure, RAG, distillation, and memory lifecycle |
 | **AX Trust** | - | Policy, permissions, approval, and governance layer |
-
----
-
-## Get Started in 60 Seconds
-
-### Install
-
-AX Studio Desktop officially supports macOS Apple Silicon, Windows x64, and
-Windows ARM64.
-Linux desktop builds are not published or supported; Linux users should use
-AX Serving, OpenAI-compatible endpoints, or source builds without release/SLA
-expectations.
-
-**macOS Apple Silicon - recommended**
-
-```bash
-brew tap defai-digital/ax-studio
-brew install --cask ax-studio
-open -a Ax-Studio
-```
-
-The Homebrew cask is the fastest install path for supported Macs.
-
-**Windows**
-
-Download the latest `Ax-Studio_*_x64-setup.exe` or
-`Ax-Studio_*_arm64-setup.exe` from
-[GitHub Releases](https://github.com/defai-digital/ax-studio/releases/latest)
-and run the installer.
-
-**Manual download**
-
-All release assets are published on the
-[AX Studio releases page](https://github.com/defai-digital/ax-studio/releases).
-
-### First Launch
-
-1. Open **Ax-Studio**.
-2. Go to **Settings -> Providers**.
-3. Add an API key for one provider, or configure a local provider.
-4. Start a new thread from **Chat** or choose a Smart Start workflow.
-5. Optional: open **Hub** to download or import a local model.
-
-No project setup is required for normal desktop use. Cloud providers require
-their own API keys. Local models run only after the required model/runtime is
-installed or downloaded.
-
-### Update
-
-**macOS Homebrew**
-
-```bash
-brew upgrade --cask ax-studio
-```
-
-**Windows**
-
-Download and run the latest x64 or ARM64 installer from
-[GitHub Releases](https://github.com/defai-digital/ax-studio/releases/latest).
-
-### Uninstall
-
-**macOS Homebrew**
-
-```bash
-brew uninstall --cask ax-studio
-brew untap defai-digital/ax-studio
-```
 
 ## Use It Your Way
 
