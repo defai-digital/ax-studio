@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { mockGetAppDataFolderPath, mockValidateUrlProtocol } = vi.hoisted(() => ({
-  mockGetAppDataFolderPath: vi.fn(),
-  mockValidateUrlProtocol: vi.fn(),
-}))
+const { mockGetAppDataFolderPath, mockValidateUrlProtocol } = vi.hoisted(
+  () => ({
+    mockGetAppDataFolderPath: vi.fn(),
+    mockValidateUrlProtocol: vi.fn(),
+  })
+)
 
 // Mock Tauri APIs before import
 vi.mock('@tauri-apps/api/core', () => ({
@@ -22,11 +24,17 @@ vi.mock('@ax-studio/core', () => ({
     description = ''
     version = ''
     constructor() {}
-    type() { return undefined }
+    type() {
+      return undefined
+    }
     async registerSettings(_settings: unknown[]) {}
-    async getSetting<T>(_key: string, defaultValue: T) { return defaultValue }
+    async getSetting<T>(_key: string, defaultValue: T) {
+      return defaultValue
+    }
     onSettingUpdate() {}
-    async getSettings() { return [] }
+    async getSettings() {
+      return []
+    }
     async updateSettings() {}
   },
   getAppDataFolderPath: mockGetAppDataFolderPath,
@@ -75,7 +83,9 @@ describe('AxStudioDownloadManager', () => {
 
   describe('onLoad', () => {
     it('registers settings without loading persisted secrets', async () => {
-      const registerSpy = vi.spyOn(manager, 'registerSettings').mockResolvedValue()
+      const registerSpy = vi
+        .spyOn(manager, 'registerSettings')
+        .mockResolvedValue()
 
       await manager.onLoad()
 
@@ -96,7 +106,12 @@ describe('AxStudioDownloadManager', () => {
       )
 
       expect(invoke).toHaveBeenCalledWith('download_files', {
-        items: [{ url: 'https://example.com/model.gguf', save_path: '/app/data/save/path/model.gguf' }],
+        items: [
+          {
+            url: 'https://example.com/model.gguf',
+            save_path: '/app/data/save/path/model.gguf',
+          },
+        ],
         taskId: 'task-1',
         headers: {},
       })
@@ -116,12 +131,12 @@ describe('AxStudioDownloadManager', () => {
 
       expect(invoke).toHaveBeenCalledWith('download_files', {
         items: [
-            {
-              url: 'https://example.com/model.gguf',
-              save_path: 'models/model.gguf',
-              proxy: { url: 'http://proxy:8080' },
-            },
-          ],
+          {
+            url: 'https://example.com/model.gguf',
+            save_path: 'models/model.gguf',
+            proxy: { url: 'http://proxy:8080' },
+          },
+        ],
         taskId: 'task-1',
         headers: {},
       })
@@ -159,7 +174,12 @@ describe('AxStudioDownloadManager', () => {
       )
 
       expect(invoke).toHaveBeenCalledWith('download_files', {
-        items: [{ url: 'https://example.com/model.gguf', save_path: 'models/model.gguf' }],
+        items: [
+          {
+            url: 'https://example.com/model.gguf',
+            save_path: 'models/model.gguf',
+          },
+        ],
         taskId: 'task-1',
         headers: { Authorization: 'Bearer hf_abc123' },
       })
@@ -186,13 +206,18 @@ describe('AxStudioDownloadManager', () => {
         'model.v1.0'
       )
 
-      expect(listen).toHaveBeenCalledWith('download-model_v1_0', expect.any(Function))
+      expect(listen).toHaveBeenCalledWith(
+        'download-model_v1_0',
+        expect.any(Function)
+      )
       expect(mockUnlisten).toHaveBeenCalled()
     })
 
     it('calls onProgress callback with event payload', async () => {
       const mockUnlisten = vi.fn()
-      let listenCallback: ((event: { payload: { transferred: number; total: number } }) => void) | null = null
+      let listenCallback:
+        | ((event: { payload: { transferred: number; total: number } }) => void)
+        | null = null
 
       vi.mocked(listen).mockImplementation(async (_event, callback) => {
         listenCallback = callback as typeof listenCallback
@@ -217,17 +242,33 @@ describe('AxStudioDownloadManager', () => {
 
     it('cleans up listener on error', async () => {
       const mockUnlisten = vi.fn()
+      const consoleErrorSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {})
       vi.mocked(listen).mockResolvedValue(mockUnlisten)
       vi.mocked(invoke).mockRejectedValue(new Error('download failed'))
 
-      await expect(
-        manager.downloadFiles(
-          [{ url: 'https://example.com/file', save_path: 'models/file.gguf' }],
-          'task-1'
-        )
-      ).rejects.toThrow('download failed')
+      try {
+        await expect(
+          manager.downloadFiles(
+            [
+              {
+                url: 'https://example.com/file',
+                save_path: 'models/file.gguf',
+              },
+            ],
+            'task-1'
+          )
+        ).rejects.toThrow('download failed')
 
-      expect(mockUnlisten).toHaveBeenCalled()
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          "[download-ext] invoke('download_files') failed for task task-1:",
+          expect.any(Error)
+        )
+        expect(mockUnlisten).toHaveBeenCalled()
+      } finally {
+        consoleErrorSpy.mockRestore()
+      }
     })
 
     it('drains queued progress callbacks before unlistening', async () => {
@@ -286,7 +327,12 @@ describe('AxStudioDownloadManager', () => {
       vi.mocked(invoke).mockResolvedValue(undefined)
 
       await manager.downloadFiles(
-        [{ url: 'https://example.com/file', save_path: '/outside/app-data/file.gguf' }],
+        [
+          {
+            url: 'https://example.com/file',
+            save_path: '/outside/app-data/file.gguf',
+          },
+        ],
         'task-1'
       )
 
@@ -315,9 +361,23 @@ describe('AxStudioDownloadManager', () => {
     })
 
     it('rethrows errors from invoke', async () => {
+      const consoleErrorSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {})
       vi.mocked(invoke).mockRejectedValue(new Error('cancel failed'))
 
-      await expect(manager.cancelDownload('task-1')).rejects.toThrow('cancel failed')
+      try {
+        await expect(manager.cancelDownload('task-1')).rejects.toThrow(
+          'cancel failed'
+        )
+
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          'Error cancelling download:',
+          expect.any(Error)
+        )
+      } finally {
+        consoleErrorSpy.mockRestore()
+      }
     })
   })
 })

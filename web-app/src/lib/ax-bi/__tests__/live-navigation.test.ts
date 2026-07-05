@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { sendAxBiLiveCommand, tryAxBiLiveNavigation } from '../live-navigation'
 import { useAxBiLiveNavigation } from '@/hooks/settings/useAxBiLiveNavigation'
 
@@ -35,11 +35,21 @@ class MockWebSocket {
 }
 
 describe('AX-BI live navigation', () => {
+  let consoleInfoSpy: ReturnType<typeof vi.spyOn>
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+
   beforeEach(() => {
     vi.clearAllMocks()
+    consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     MockWebSocket.instances = []
     vi.stubGlobal('WebSocket', MockWebSocket)
     useAxBiLiveNavigation.setState({ enabled: true })
+  })
+
+  afterEach(() => {
+    consoleInfoSpy.mockRestore()
+    consoleWarnSpy.mockRestore()
   })
 
   it('sends local AX-BI URLs to the matching live endpoint as internal paths', async () => {

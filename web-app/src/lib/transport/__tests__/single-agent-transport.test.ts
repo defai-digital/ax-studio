@@ -197,13 +197,24 @@ describe('executeSingleAgentStream', () => {
   })
 
   it('onError callback returns error message string', async () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {})
     await executeSingleAgentStream(makeConfig())
     const opts = mockStreamText.getCapturedOptions() as Record<string, unknown>
     const onError = opts.onError as (e: unknown) => string
 
-    const msg = onError(new Error('stream failed'))
-    expect(typeof msg).toBe('string')
-    expect(msg).toContain('stream failed')
+    try {
+      const msg = onError(new Error('stream failed'))
+      expect(typeof msg).toBe('string')
+      expect(msg).toContain('stream failed')
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        '[SingleAgentTransport] stream error:',
+        expect.any(Error)
+      )
+    } finally {
+      consoleErrorSpy.mockRestore()
+    }
   })
 
   it('onFinish callback calls onTokenUsage when usage is present', async () => {
