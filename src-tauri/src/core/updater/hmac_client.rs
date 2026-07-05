@@ -104,7 +104,7 @@ mod tests {
     fn test_signature_generation() {
         // Test with known values
         let signature = generate_signature(
-            "your-super-secret-key-change-in-production-minimum-32-chars",
+            "hmac-fixture-00000000000000000000000000000000",
             "test-seed-123",
             "1704067200",
             "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
