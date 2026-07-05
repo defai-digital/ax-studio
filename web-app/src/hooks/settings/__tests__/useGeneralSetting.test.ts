@@ -1,9 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import {
-  sanitizePersistedGeneralSettings,
-  useGeneralSetting,
-} from '../useGeneralSetting'
+import { useGeneralSetting } from '../useGeneralSetting'
 
 // Mock constants
 vi.mock('@/constants/localStorage', () => ({
@@ -12,18 +9,9 @@ vi.mock('@/constants/localStorage', () => ({
   },
 }))
 
-// Mock zustand persist
-vi.mock('zustand/middleware', () => ({
-  persist: (fn: any) => fn,
-  createJSONStorage: () => ({
-    getItem: vi.fn(),
-    setItem: vi.fn(),
-    removeItem: vi.fn(),
-  }),
-}))
-
 describe('useGeneralSetting', () => {
   beforeEach(() => {
+    localStorage.clear()
     vi.clearAllMocks()
 
     // Reset store state to defaults
@@ -220,23 +208,17 @@ describe('useGeneralSetting', () => {
         result.current.setHuggingfaceToken('new-token')
       })
 
-      expect(
-        sanitizePersistedGeneralSettings({
-          state: {
-            currentLanguage: result.current.currentLanguage,
-            spellCheckChatInput: result.current.spellCheckChatInput,
-            tokenCounterCompact: result.current.tokenCounterCompact,
-            huggingfaceToken: result.current.huggingfaceToken,
-          },
-          version: 0,
-        })
-      ).toEqual({
-        state: {
-          currentLanguage: 'en',
-          spellCheckChatInput: true,
-          tokenCounterCompact: true,
-        },
-        version: 0,
+      const persistedCall = vi.mocked(localStorage.setItem).mock.calls
+        .filter(([key]) => key === 'general-settings')
+        .at(-1)
+
+      expect(persistedCall).toBeDefined()
+      const persistedValue = JSON.parse(persistedCall![1])
+      expect(persistedValue.state.huggingfaceToken).toBeUndefined()
+      expect(persistedValue.state).toMatchObject({
+        currentLanguage: 'en',
+        spellCheckChatInput: true,
+        tokenCounterCompact: true,
       })
     })
   })

@@ -25,7 +25,7 @@ type GeneralSettingState = {
   setApplyMode: (value: ApplyMode) => void
 }
 
-export function sanitizePersistedGeneralSettings(value: unknown): unknown {
+function sanitizePersistedGeneralSettings(value: unknown): unknown {
   if (!value || typeof value !== 'object') {
     return value
   }
