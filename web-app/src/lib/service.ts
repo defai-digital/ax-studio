@@ -27,7 +27,7 @@ const AppRoutes = [
   'changeAppDataFolder',
 ]
 // Define API routes based on different route types
-export const Routes = [...CoreRoutes, ...APIRoutes, ...AppRoutes].map((r) => ({
+const apiRoutes = [...CoreRoutes, ...APIRoutes, ...AppRoutes].map((r) => ({
   route: r,
 }))
 
@@ -71,7 +71,7 @@ const REQUEST_WRAPPED_COMMANDS: ReadonlySet<string> = new Set([
 ])
 
 export const APIs = {
-  ...Object.values(Routes).reduce((acc, proxy) => {
+  ...apiRoutes.reduce((acc, proxy) => {
     return {
       ...acc,
       [proxy.route]: (args?: InvokeArgs) => {
