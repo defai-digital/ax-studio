@@ -14,7 +14,20 @@ Object.defineProperty(global, 'window', {
     core: {},
   },
   writable: true,
+  configurable: true,
 })
+
+function removeWindowForTest(): () => void {
+  const originalWindow = globalThis.window
+  Reflect.deleteProperty(globalThis, 'window')
+  return () => {
+    Object.defineProperty(globalThis, 'window', {
+      value: originalWindow,
+      writable: true,
+      configurable: true,
+    })
+  }
+}
 
 describe('ModelManager', () => {
   let modelManager: ModelManager
@@ -23,7 +36,7 @@ describe('ModelManager', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(events.emit).mockReset()
-    ;(global.window as any).core = {}
+    window.core = {}
     modelManager = new ModelManager()
     mockModel = {
       id: 'test-model-1',
@@ -34,16 +47,15 @@ describe('ModelManager', () => {
 
   describe('constructor', () => {
     it('should set itself on window.core.modelManager when window exists', () => {
-      expect((global.window as any).core.modelManager).toBe(modelManager)
+      expect(window.core?.modelManager).toBe(modelManager)
     })
 
     it('should not throw when window is unavailable', () => {
-      const originalWindow = (global as any).window
-      delete (global as any).window
+      const restoreWindow = removeWindowForTest()
 
       expect(() => new ModelManager()).not.toThrow()
 
-      ;(global as any).window = originalWindow
+      restoreWindow()
     })
   })
 
@@ -142,31 +154,30 @@ describe('ModelManager', () => {
 
   describe('instance', () => {
     it('should create a new instance when none exists on window.core', () => {
-      ;(global.window as any).core = {}
-      
+      window.core = {}
+
       const instance = ModelManager.instance()
       expect(instance).toBeInstanceOf(ModelManager)
-      expect((global.window as any).core.modelManager).toBe(instance)
+      expect(window.core.modelManager).toBe(instance)
     })
 
     it('should return existing instance when it exists on window.core', () => {
       const existingManager = new ModelManager()
-      ;(global.window as any).core.modelManager = existingManager
+      window.core = { ...(window.core ?? {}), modelManager: existingManager }
 
       const instance = ModelManager.instance()
       expect(instance).toBe(existingManager)
     })
 
     it('should reuse a cached instance when window is unavailable', () => {
-      const originalWindow = (global as any).window
-      delete (global as any).window
+      const restoreWindow = removeWindowForTest()
 
       const first = ModelManager.instance()
       const second = ModelManager.instance()
 
       expect(first).toBe(second)
 
-      ;(global as any).window = originalWindow
+      restoreWindow()
     })
   })
 
