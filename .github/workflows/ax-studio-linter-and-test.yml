@@ -41,6 +41,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   base_branch_cov:
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
@@ -426,8 +430,9 @@ jobs:
 
       - name: Linter and test
         run: |
-          export DISPLAY=$(w -h | awk 'NR==1 {print $2}')
-          echo -e "Display ID: $DISPLAY"
+          display_id=$(w -h | awk 'NR==1 {print $2}')
+          export DISPLAY="$display_id"
+          printf 'Display ID: %s\n' "$DISPLAY"
           make test
 
       - uses: actions/upload-artifact@v4
