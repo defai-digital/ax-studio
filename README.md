@@ -1,8 +1,25 @@
 # AX Studio
 
-**A native desktop AI workspace that unifies cloud LLMs, local inference (including in-process Apple MLX), a local knowledge base, persistent memory, MCP tools, and research workflows into one app.**
+**A local-first AI workspace for people and teams who need chat, models,
+tools, memory, knowledge, and local execution in one controlled desktop app.**
 
-AX Studio is a [Tauri 2](https://tauri.app/) desktop application (Rust backend + React 19 frontend) for general-purpose AI work. Cloud and local inference live side-by-side under one provider abstraction; conversations, projects, attachments, and a local knowledge base are stored on-device.
+AX Studio is a native [Tauri 2](https://tauri.app/) desktop application with a
+Rust backend and React frontend. It brings cloud providers, OpenAI-compatible
+endpoints, bundled local inference, Apple MLX through AX Engine, MCP tools,
+research, persistent memory, artifacts, and a local API server into one
+workspace.
+
+- **Start quickly** with the desktop app, connect a provider, and chat in
+  minutes
+- **Run local-first** with on-device threads, settings, memory, downloads, and
+  optional local inference
+- **Choose the right model** across OpenAI, Anthropic, Azure OpenAI,
+  OpenRouter, xAI, Groq, Gemini, MLX, `llama.cpp`, Ollama, and custom
+  OpenAI-compatible endpoints
+- **Connect tools safely** through MCP servers, local files, downloads, and
+  provider/runtime logs
+- **Operate like a workspace** with projects, persistent threads, Smart Start,
+  research reports, artifacts, local knowledge, and a localhost API
 
 Built by [DEFAI Digital](https://github.com/defai-digital).
 
@@ -12,339 +29,357 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 
 ---
 
-## Highlights
+## Why Local AI Work Breaks Down
 
-- **7 cloud + local providers** — OpenAI, Anthropic, Azure OpenAI, Google Gemini, Groq, OpenRouter, plus an Apple-MLX provider on macOS
-- **Three local-inference paths** — cross-platform `llama.cpp` for GGUF, optional `ax-serving` subprocess, and **in-process `ax-engine-sdk`** for Apple MLX on macOS
-- **Local knowledge base** — AKIDB / fabric-ingest daemon for personal RAG over your own documents
-- **Persistent memory** — categorized memory entries that automatically inform conversations
-- **LLM Router** — autonomously picks the best model for each message
-- **MCP client** — connect external tools, databases, and APIs over stdio, HTTP SSE, or Streamable HTTP
-- **Research workflow** — web scraping + source-cited responses with inline `[N]` citation markers
-- **Smart Start** — guided workflow templates instead of a blank chat box
-- **Local OpenAI-compatible API** — `127.0.0.1:1337/v1` for other apps to route through AX Studio
-- **Workspace guardrails** — per-thread system prompts, data-mode boundaries, attachment policies
-- **System monitor + log viewer** — real-time hardware telemetry and provider/MCP activity visibility
+AI work becomes hard to trust when every workflow lives in a different tool:
+cloud chat apps, local model managers, RAG scripts, MCP configs, research
+tabs, provider settings, and audit logs.
 
----
+- **Provider sprawl** makes switching models and endpoints fragile.
+- **Local runtime opacity** makes model downloads, engines, and GPU state hard
+  to understand.
+- **Tool execution is often invisible**, especially when MCP calls, file access,
+  and research happen behind a chat transcript.
+- **Context disappears** when chats, memory, sources, and artifacts are not
+  part of the same workspace.
 
-## Provider support
+AX Studio addresses this by making model access, local inference, tools,
+knowledge, memory, and generated work visible inside one desktop command
+center.
 
-### Cloud LLMs
+## What AX Studio Is
 
-Configure each in **Settings → Providers → \<provider\>** with an API key and (where relevant) base URL.
+AX Studio is not just a ChatGPT-style chat window. It is a local-first AI
+workspace built around a native desktop shell and a provider/runtime control
+plane.
 
-| Provider | API style |
-|---|---|
-| **OpenAI** | OpenAI |
-| **Anthropic** | Anthropic Messages (with direct-browser-access header set) |
-| **Azure OpenAI** | OpenAI-compatible |
-| **Google Gemini** | OpenAI-compatible endpoint |
-| **Groq** | OpenAI-compatible |
-| **OpenRouter** | OpenAI-compatible aggregator |
-| Any OpenAI-compatible HTTP endpoint | — |
+- **More useful than a single-provider chat app.** AX Studio can route work
+  across hosted providers, local engines, and OpenAI-compatible endpoints.
+- **More approachable than a local-model stack.** The app gives users model
+  download/import, runtime status, settings, logs, and local API access in one
+  place.
+- **More extensible than a static desktop app.** MCP, TypeScript extensions,
+  Tauri plugins, and the local API let advanced users connect tools and
+  workflows without replacing the workspace.
+- **More private by default.** Conversations, app data, memory, and local
+  knowledge live on the user's machine unless the selected provider or tool
+  sends data elsewhere.
 
-### Local inference
+## Why Teams Choose AX Studio
 
-The `llamacpp-extension` is the engine manager — it exposes a dropdown under **Settings → Engine Settings → Inference Engine** to pick the backend that the `llamacpp` provider proxies to:
+| Requirement | Typical chat/local-model apps | AX Studio |
+| --- | --- | --- |
+| Quick desktop onboarding | Often starts with blank chat or engine setup | Desktop-first quick start, Smart Start workflows, provider settings |
+| Cloud and local models | Usually separate apps | One provider/model surface across cloud, local, and OpenAI-compatible endpoints |
+| Local runtime visibility | Hidden subprocesses and scattered logs | Engine settings, hardware telemetry, downloads, local API logs, app logs |
+| Knowledge and memory | External RAG tools or prompt notes | Local knowledge, persistent memory, thread/project state |
+| MCP tools | Config exists but tool execution can feel opaque | MCP server management plus visible tool calls and results |
+| Extensibility | Mostly plugin-specific | Core SDK, bundled extensions, Tauri plugins, MCP, local API |
 
-- `llama.cpp (Default)` — bundled `llama.cpp` server, no extra setup
-- `AX Engine via ax-serving` — requires `ax-serving` to be installed separately on the machine
+## Runtime Architecture
 
-The MLX provider is a separate top-level provider entry (not managed by the llamacpp-extension).
+![AX Studio runtime architecture](docs/images/ax-studio-runtime.png)
 
-#### `llama.cpp` (macOS · Windows · Linux)
+Source: [docs/ax-studio-runtime.mmd](docs/ax-studio-runtime.mmd)
 
-Cross-platform GGUF inference via a bundled `llama.cpp` build managed by `tauri-plugin-llamacpp`. Models can be downloaded inside the app (Hub) or pointed at a local path. Auto-update of the engine binary is opt-in under Settings → Engine Settings.
+The important distinction is that AX Studio has a native control layer around
+the chat experience:
 
-#### ax-serving (macOS · Windows · Linux, requires separate install)
+- **Desktop shell** - Tauri 2 host with native filesystem, process, update,
+  logging, MCP, downloads, and local server capabilities.
+- **Workspace UI** - React 19 app for chat, threads, projects, models,
+  providers, settings, research, artifacts, and logs.
+- **Provider plane** - hosted APIs, custom OpenAI-compatible endpoints, MLX,
+  `llama.cpp`, Ollama, and AX Serving-style local routing.
+- **Tool plane** - MCP servers over stdio, SSE, streamable HTTP, and
+  child-process integration.
+- **Knowledge plane** - persistent memory, attachments, local knowledge, and
+  research sources.
+- **Extension plane** - bundled TypeScript extensions and native Tauri plugins
+  for downloads, local inference, hardware telemetry, and assistant behavior.
 
-The same `llamacpp` provider can be re-pointed at an `ax-serving` subprocess instead of bundled llama.cpp. Useful when you want AX Engine's runtime features (KV-cache management, request scheduling, route-identity benchmarks) without linking the SDK in-process. **Not bundled** — install `ax-serving` from [defai-digital/ax-engine](https://github.com/defai-digital/ax-engine) per its README, then flip the engine dropdown.
+## The AutomatosX Ecosystem
 
-Why pick ax-serving over the in-process MLX provider:
+AX Studio is the general AI workspace in the AutomatosX stack.
 
-- You need cross-platform local inference with AX Engine semantics
-- You want the AX server's HTTP API surface for diagnostic / benchmark use
-- You're avoiding the in-process MLX path's current upstream-bug workarounds
-
-#### MLX provider (macOS Apple Silicon, in-process)
-
-In-process Apple MLX inference through the [`ax-engine-sdk`](https://github.com/defai-digital/ax-engine) Rust crate. No Python subprocess, no separate server — the SDK is linked directly into the Tauri backend and runs MLX models on Metal in the same process as the app.
-
-**What ships in the picker:** 11 mlx-community models, ranging from `Qwen3-4B-4bit` (2.1 GB) to `Qwen3-Coder-Next-4bit` (42 GB), including Qwen3, Qwen3.5, Qwen3.6, Gemma 4, and GLM-4.7-Flash variants. Each entry is annotated with observed stability (`✅` confirmed working, `❌` known upstream issue) so you can pick realistically.
-
-**Runtime knobs** (set at app launch):
-
-| Env var | Default | Effect |
-|---|---|---|
-| `AX_MLX_NGRAM` | unset (OFF) | Set to `1` to enable ax-engine's n-gram speculation. Off by default while upstream patches a known [`mlx-c 0.6.0` slice-abort bug](https://github.com/defai-digital/ax-engine/issues/23) that crashes the app when n-gram runs on 4-bit MLX models. |
-
-Per-family chat templates are applied automatically based on `model_id` — ChatML for Qwen-family, `<start_of_turn>` for Gemma-family. Defaults: `max_output_tokens = 2048`, `temperature = 0.7`, `top_p = 0.95`.
-
-**Requirements** (per upstream ax-engine README): macOS 14 (Sonoma) or later, Apple Silicon (M2 Max or newer recommended), 32 GB RAM minimum.
-
-The MLX provider is hard-gated to macOS via `#[cfg(target_os = "macos")]` — Cargo skips compiling those modules on Windows/Linux. The rest of the app builds and runs on all platforms.
-
----
-
-## Local knowledge base (AKIDB)
-
-AX Studio integrates with a local **fabric-ingest** daemon that provides RAG (retrieval-augmented generation) over your own documents:
-
-- Ingest documents into a local vector store (`akidb`) without sending content to a cloud service
-- Per-thread "local knowledge" toggle pulls relevant chunks into context automatically
-- Chunks surface as inline citations (the same `[N]` markers used by web research)
-- Configured under **Settings → Local Knowledge** (`useAkidbConfig`)
-
-The daemon is managed by `src-tauri/src/core/filesystem/akidb.rs` — its config and data live outside the app data folder so it survives upgrades.
+| Component | Repository | Role |
+| --- | --- | --- |
+| **AX Studio** | [defai-digital/ax-studio](https://github.com/defai-digital/ax-studio) | General AI workspace: chat, models, tools, knowledge, memory, artifacts |
+| **AX Code** | [defai-digital/ax-code](https://github.com/defai-digital/ax-code) | Coding and automation runtime for repositories and developer workflows |
+| **AX Engine** | [defai-digital/ax-engine](https://github.com/defai-digital/ax-engine) | Apple Silicon optimized local inference and runtime components |
+| **AX Serving** | [defai-digital/ax-serving](https://github.com/defai-digital/ax-serving) | Local/enterprise model serving and orchestration |
+| **AX Fabric** | - | Knowledge infrastructure, RAG, distillation, and memory lifecycle |
+| **AX Trust** | - | Policy, permissions, approval, and governance layer |
 
 ---
 
-## Persistent memory
+## Get Started in 60 Seconds
 
-A **Memory** panel (Settings → Memory) stores categorized facts about you (preferences, projects, recurring contexts) as structured entries. The model receives memory snippets relevant to the current conversation automatically, bounded by a token budget.
+### Install
 
-- Per-entry CRUD, search, and category-based filtering
-- Per-thread navigation — click a memory entry to jump to the thread that produced it
-- Bulk export/import for backup or sharing between machines
-- Token-bounded — older or low-relevance entries trim out as new ones land
+**macOS Apple Silicon - recommended**
 
----
+```bash
+brew tap defai-digital/ax-studio
+brew install --cask ax-studio
+open -a Ax-Studio
+```
 
-## MCP (Model Context Protocol)
+The Homebrew cask is the fastest install path for supported Macs.
 
-Embedded MCP client (`rmcp`) supporting four transports:
+**Windows**
 
-- **stdio** — local MCP servers launched as child processes
-- **HTTP SSE** — remote MCP servers over Server-Sent Events
-- **Streamable HTTP** — newer streaming spec
-- **Child-process** — command-launched servers with stdio bridging
+Download the latest `Ax-Studio_*_x64-setup.exe` from
+[GitHub Releases](https://github.com/defai-digital/ax-studio/releases/latest)
+and run the installer.
 
-Add servers under **Settings → MCP Servers**. Each connected server contributes tools the model can call inline during chat — calls and results are visible in the chat transcript.
+**Manual download**
 
----
+All release assets are published on the
+[AX Studio releases page](https://github.com/defai-digital/ax-studio/releases).
 
-## Workflows
+### First Launch
+
+1. Open **Ax-Studio**.
+2. Go to **Settings -> Providers**.
+3. Add an API key for one provider, or configure a local provider.
+4. Start a new thread from **Chat** or choose a Smart Start workflow.
+5. Optional: open **Hub** to download or import a local model.
+
+No project setup is required for normal desktop use. Cloud providers require
+their own API keys. Local models run only after the required model/runtime is
+installed or downloaded.
+
+### Update
+
+**macOS Homebrew**
+
+```bash
+brew upgrade --cask ax-studio
+```
+
+**Windows**
+
+Download and run the latest installer from
+[GitHub Releases](https://github.com/defai-digital/ax-studio/releases/latest).
+
+### Uninstall
+
+**macOS Homebrew**
+
+```bash
+brew uninstall --cask ax-studio
+brew untap defai-digital/ax-studio
+```
+
+## Use It Your Way
+
+### Desktop Workspace
+
+Use AX Studio as a daily AI workspace for:
+
+- long-running chat threads and project-specific prompts
+- writing, research, comparison, extraction, translation, and analysis
+- local model downloads and imports
+- MCP tools and external data sources
+- memory-backed conversations
+- source-cited research reports and artifacts
+
+### Local Models
+
+AX Studio supports multiple local inference paths:
+
+| Runtime | Platform | Use it when |
+| --- | --- | --- |
+| `llama.cpp` | macOS, Windows, Linux source builds | You want GGUF local inference through the bundled engine manager |
+| MLX provider | Apple Silicon macOS | You want in-process AX Engine SDK inference on Metal |
+| AX Serving / OpenAI-compatible | Any reachable endpoint | You already run a local or remote OpenAI-compatible model server |
+| Ollama | Local machine | You want AX Studio to use models served by Ollama |
+
+The app separates local runtime configuration from cloud provider settings so
+users can decide when work stays local and when it routes to a hosted model.
+
+### Local API Server
+
+AX Studio starts a local OpenAI-compatible API server on:
+
+```text
+http://127.0.0.1:1337
+```
+
+Common endpoints:
+
+- `POST /v1/chat/completions`
+- `POST /v1/completions`
+
+This lets other local tools route through AX Studio's provider setup, model
+selection, and local runtime configuration.
+
+### MCP Tools
+
+Configure MCP servers from **Settings -> MCP Servers**. AX Studio supports:
+
+- stdio servers launched as local child processes
+- HTTP SSE servers
+- streamable HTTP servers
+- command-launched servers with stdio bridging
+
+Connected servers expose tools that can be called from AI workflows. Tool calls
+and results are visible in the workspace.
+
+## Core Features
 
 ### Smart Start
 
-The home screen surfaces structured workflow templates instead of a blank chat:
+Start from guided workflows instead of a blank prompt:
 
-- Research & Summarize · Write & Edit · Analyze · Compare · Extract & Organize · Translate & Adapt
+- Research & Summarize
+- Write & Edit
+- Analyze
+- Compare
+- Extract & Organize
+- Translate & Adapt
 
-Each template gathers structured input (topic, depth, format, tone) and emits a system prompt + user message tuned to that workflow. Free-form chat is always available as the escape hatch.
+### Provider and Model Control
 
-### Research
+Built-in provider settings currently cover:
 
-The `research` backend module supports multi-source web research:
+| Family | Providers |
+| --- | --- |
+| Cloud APIs | OpenAI, Anthropic, Azure OpenAI, OpenRouter, xAI, Groq, Gemini |
+| Local/runtime | MLX, `llama.cpp`, Ollama |
+| Custom | Any OpenAI-compatible endpoint |
 
-- HTML scraping (`scraper.rs`) and content extraction
-- Inline `[N]` citation markers in chat output linked back to source URLs
-- Research artifacts (search queries, source list, progress) persisted on the thread
-- UI: `ResearchPanel`, `ResearchProgress`, `ResearchReport`, `SourcesList` components
+### Local Knowledge
 
-### LLM Router
+AX Studio integrates a local knowledge workflow for retrieval-augmented
+generation over user documents. The local knowledge path is designed to keep
+indexes and document context on the user's machine.
 
-Configure a "router model" under **Settings → LLM Router** and the app will autonomously select the best model for each incoming user message — sends a lightweight classification request, picks from your available models, falls back to the user-selected model if anything fails. Bias rules detect high-risk coding/engineering keywords and steer toward stronger models.
+### Persistent Memory
 
----
+The memory panel stores reusable facts, preferences, projects, and recurring
+context. Memory entries can be searched, categorized, edited, exported, and
+reused across conversations.
 
-## Workspace
+### Research and Citations
 
-| Concept | What it is |
-|---|---|
-| **Thread** | A single conversation with a model. Stored locally (sled). Has its own system prompt, model selection, attachments, and tool config. |
-| **Project** | A workspace of related threads sharing a project-level prompt and settings. |
-| **Hub** | Model browser — lists available models from cloud providers and local engines with filters by capability, family, and size. Per-model detail pages. |
-| **Attachments** | Document uploads tied to a thread — extracted text becomes context. PDF, Markdown, plain text. |
-| **Logs** | Top-level log viewer for provider routing, MCP calls, and tool use. |
-| **Local API Server Logs** | Separate logs for the embedded OpenAI-compatible HTTP server. |
+Research workflows collect sources, scrape readable content, summarize
+findings, and render cited answers with inline source markers. Research
+artifacts stay attached to the thread.
 
----
+### Artifacts
 
-## Developer surface
+AX Studio can render rich outputs such as documents, code, tables, charts,
+Mermaid diagrams, SVG, HTML, and other generated artifacts without forcing all
+work to remain inside the chat transcript.
 
-### Local OpenAI-compatible API
+### System Visibility
 
-Starts automatically on `http://127.0.0.1:1337`. Endpoints:
+The app includes hardware telemetry, runtime state, download progress, local
+API logs, app logs, provider activity, and MCP server visibility so local-first
+work does not become a black box.
 
-- `POST /v1/chat/completions` — OpenAI chat shape
-- `POST /v1/completions` — legacy completion shape
-- Proxies through to whichever provider the requested `model` resolves to
+## Security and Governance
 
-Lets other local apps consume LLMs through AX Studio's provider abstraction — one set of API keys, one routing config.
+AX Studio is local-first, but not all workflows are local-only. The data path
+depends on the selected provider, MCP server, and local runtime.
 
-### TypeScript extension system
+- App data, threads, settings, memory, and downloaded models are stored locally.
+- Cloud model requests go to the configured provider.
+- Local model requests stay local when using local runtimes.
+- MCP tool calls go to the configured local or remote MCP server.
+- Provider keys and sensitive settings should be treated as local secrets.
+- The local API binds to localhost by default.
 
-Bundled extensions live in `extensions/` and load at startup:
+For packaging and release controls, see [docs/release.md](docs/release.md).
 
-| Extension | Role |
-|---|---|
-| `assistant-extension` | Assistant lifecycle hooks |
-| `conversational-extension` | Thread/conversation state extension |
-| `llamacpp-extension` | Local llama.cpp engine management |
-| `download-extension` | Model/asset download manager |
+## Developer Setup
 
-Extensions implement the interfaces from `@ax-studio/core` and run in an isolated context.
-
-### Custom Tauri plugins
-
-- `tauri-plugin-hardware` — CPU/GPU/RAM/disk telemetry surfaced to the System Monitor page
-- `tauri-plugin-llamacpp` — manages the bundled `llama.cpp` binary subprocess lifecycle
-
----
-
-## Settings & guardrails
-
-All under **Settings →**:
-
-| Panel | What it controls |
-|---|---|
-| **Providers** | Per-provider API keys, base URLs, custom headers |
-| **LLM Router** | Auto-routing rules and router-model selection |
-| **Engine Settings** | Local-engine configuration (llama.cpp parameters, MLX runtime hints) |
-| **Assistant** | Default system prompt, persona, response style |
-| **Guardrails** | Data-mode (Local/Hybrid/Cloud), citation requirements, low-confidence flagging |
-| **MCP Servers** | Connect/disable MCP servers |
-| **Memory** | Persistent memory entries and budget |
-| **Attachments** | File-type allowlist, size limits |
-| **Hardware** | Surface hardware capabilities to the model selector |
-| **HTTPS Proxy** | Corporate proxy support |
-| **Privacy** | Telemetry, crash reports, analytics opt-outs |
-| **Extensions** | Enable/disable bundled extensions |
-| **Interface** | Theme, language, layout |
-| **Shortcuts** | Keyboard shortcut customization |
-| **Local API Server** | Port, auth, access controls for the local OpenAI-compatible endpoint |
-
----
-
-## Build from source
+Use this path when contributing to AX Studio or running the app from source.
 
 ### Prerequisites
 
 - Node.js 20+
-- Yarn 4.5.3+
-- Rust 1.77.2+ (Rust 1.85+ if building MLX support on macOS)
-- Tauri CLI 2.7.0+
+- Yarn 4.5.3
+- Rust 1.77.2+
+- Tauri CLI 2.x
+- macOS users building MLX support: Apple Silicon is required for the MLX provider
+
+### Run From Source
 
 ```bash
-cargo install tauri-cli
-git clone https://github.com/defai-digital/ax-studio
+git clone https://github.com/defai-digital/ax-studio.git
 cd ax-studio
+corepack enable
+corepack prepare yarn@4.5.3 --activate
 make dev
 ```
 
-`make dev` runs the full toolchain: installs deps, builds `core/` and `extensions/`, downloads required binaries, and launches the desktop app with Vite + Tauri hot reload.
-
-### Common Make targets
-
-| Target | Description |
-|---|---|
-| `make dev` | Install deps + launch with hot reload (debug build) |
-| `make build` | Release build for the current platform |
-| `make dev-web-app` | Frontend-only dev server (no Rust compilation, faster iteration) |
-| `make build-web-app` | Build the React frontend only |
-| `make test` | Lint + frontend tests + Rust tests |
-| `make test-quality` | Enforce per-module coverage thresholds |
-| `make clean` | Delete build artifacts |
-
-### First-build notes for MLX users (macOS only)
-
-`src-tauri/Cargo.toml` pins `ax-engine-sdk` to a specific upstream commit SHA via a git dependency — Cargo clones it into its cache on first build. If the initial clone fails with a libgit2 network error:
+If `corepack` is not available on your machine, run Yarn 4.5.3 through npm and
+make sure `yarn --version` reports `4.5.3` before using Make targets:
 
 ```bash
-export CARGO_NET_GIT_FETCH_WITH_CLI=true
+npm exec --yes --package @yarnpkg/cli-dist@4.5.3 -- yarn install --immutable
 ```
 
-…and rerun, which switches to system `git` for the fetch.
+`make dev` installs dependencies when needed, builds `core/` and bundled
+extensions, downloads required binaries, copies Tauri assets, and launches the
+desktop app with hot reload.
 
----
+### Common Commands
 
-## Installation
+| Command | Purpose |
+| --- | --- |
+| `make dev` | Full Tauri desktop dev app |
+| `make dev-web-app` | Frontend-only Vite app on port 1420 |
+| `make build` | Production build for the current platform |
+| `make test` | Lint, TypeScript tests, and Rust tests |
+| `yarn test` | Run Vitest suites |
+| `yarn lint` | Run workspace ESLint |
+| `cargo test --manifest-path src-tauri/Cargo.toml --no-default-features --features test-tauri -- --test-threads=1` | Tauri backend tests |
+| `make clean` | Remove build artifacts, caches, node_modules, and bundled resources |
 
-### Currently shipping
+### Repository Layout
 
-- **macOS Apple Silicon** — `.dmg` installer published on [GitHub Releases](https://github.com/defai-digital/ax-studio/releases) (latest: v1.3.2)
+| Path | Purpose |
+| --- | --- |
+| `web-app/` | React frontend, routes, components, stores, services |
+| `core/` | Shared TypeScript SDK and extension-facing APIs |
+| `extensions/` | Bundled assistant, conversation, download, and local-inference extensions |
+| `src-tauri/` | Rust Tauri host, IPC commands, MCP, downloads, local API, native capabilities |
+| `src-tauri/plugins/` | Native Rust plugins for hardware telemetry and local inference |
+| `docs/` | Architecture notes, conventions, release docs, PRDs, ADR-style drafts |
+| `scripts/` | Build, release, test, and quality-gate utilities |
 
-### In the codebase but not currently distributed
+For contribution rules, start with [CONTRIBUTING.md](CONTRIBUTING.md).
 
-- **Windows x64** — build infrastructure (`yarn build:tauri:win32`, CI workflow, Windows `#[cfg]` code paths) is present, but no prebuilt installer is currently published. A developer can attempt a source build but it's untested.
-- **Linux x86_64** — `.deb` and `.AppImage` formats are configured but not currently released.
+## Documentation
 
-> The MLX provider only works on macOS Apple Silicon. On Windows/Linux source builds it appears in the picker but is non-functional — use the `llama.cpp` extension for local inference instead.
-
----
-
-## Repository layout
-
-```text
-ax-studio/
-├── web-app/                      # React 19 + TanStack Router frontend
-│   ├── src/routes/               #   File-based routes
-│   │   ├── threads/$threadId     #     Per-thread chat view
-│   │   ├── project/$projectId    #     Project workspace
-│   │   ├── hub/                  #     Model browser (index + per-model detail)
-│   │   ├── settings/             #     ~16 settings panels
-│   │   ├── local-api-server/     #     Logs for the embedded HTTP server
-│   │   ├── system-monitor.tsx    #     Hardware telemetry
-│   │   └── logs.tsx              #     Top-level log viewer
-│   ├── src/components/           #   UI: chat, smart-start, research, citations, ai-elements, ...
-│   ├── src/hooks/                #   Zustand stores (settings, threads, chat, MCP, integrations)
-│   ├── src/lib/                  #   Transport, LLM router, model factory, fabric search
-│   └── src/constants/            #   Provider catalog (providers.ts)
-├── src-tauri/                    # Rust backend + Tauri host
-│   ├── src/commands/             #   Tauri IPC command handlers
-│   ├── src/core/
-│   │   ├── threads/              #     Thread persistence (sled)
-│   │   ├── mcp/                  #     MCP client lifecycle + tool dispatch
-│   │   ├── mlx/                  #     In-process MLX worker (macOS only)
-│   │   ├── server/               #     Local OpenAI-compatible HTTP API on :1337
-│   │   ├── research/             #     Research workflow + scraper.rs
-│   │   ├── downloads/            #     Model and asset downloader
-│   │   ├── filesystem/           #     Scoped FS access + akidb.rs (local KB)
-│   │   ├── system/               #     System info + telemetry
-│   │   └── updater/              #     Auto-updater
-│   └── plugins/                  #   tauri-plugin-hardware, tauri-plugin-llamacpp
-├── core/                         # @ax-studio/core — shared types + extension SDK
-├── extensions/                   # Bundled extensions (assistant, conversational, llamacpp, download)
-├── scripts/                      # Build, release, testing helpers
-└── docs/                         # ADRs, PRDs, runtime diagrams
-```
-
----
-
-## Tech stack
-
-**Frontend:** React 19 · TypeScript 5 · Vite 6 · TanStack Router (file-based) · Zustand · Vercel AI SDK v5 · Tailwind CSS · Vitest
-
-**Backend:** Tauri 2 · Rust 1.77+ (1.85+ for MLX) · Tokio (full features) · `rmcp` (MCP client) · `sled` (thread storage) · Reqwest · Hyper · Serde
-
-**Local inference:**
-- `llama.cpp` via `tauri-plugin-llamacpp` (cross-platform)
-- `ax-engine-sdk` v4.9.0 pinned to upstream commit (macOS Apple Silicon, see `src-tauri/Cargo.toml`)
-
----
-
-## Contributing
-
-AX Studio is **not accepting unsolicited public code contributions or pull requests** at this time.
-
-We welcome:
-
-- bug reports (with logs, screenshots, environment)
-- feature requests
-- product feedback
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the current repository policy.
+- [Contributing](CONTRIBUTING.md)
+- [Frontend and backend conventions](docs/CONVENTIONS.md)
+- [Release deployment](docs/release.md)
+- [Release checklist](docs/release-checklist.md)
+- [Runtime architecture source](docs/ax-studio-runtime.mmd)
+- [Deep research engine notes](docs/DEEP_RESEARCH_ENGINE.md)
+- [Integration notes](docs/Integrations.md)
 
 ## Community
 
-Join us on [Discord](https://discord.gg/cTavsMgu).
+Report bugs, feature requests, and product feedback through
+[GitHub Issues](https://github.com/defai-digital/ax-studio/issues). Join the
+community on [Discord](https://discord.gg/cTavsMgu).
 
-## Project History
+## Provenance
 
-AX Studio was originally derived from [Jan](https://github.com/janhq/jan), licensed under Apache 2.0. It has since been substantially reworked and is independently maintained by DEFAI Private Limited.
+AX Studio is maintained by [DEFAI Private Limited](https://github.com/defai-digital).
+
+This project was originally derived from
+[Jan](https://github.com/janhq/jan), which is licensed under the Apache
+License, Version 2.0. AX Studio has since been substantially modified,
+reworked, and operationally decoupled from Jan.ai. See [NOTICE](NOTICE) for the
+full provenance notice.
 
 ## License
 
-[Apache 2.0](LICENSE). See [NOTICE](NOTICE) for project provenance and attribution.
+AX Studio is licensed under the [Apache License, Version 2.0](LICENSE).
