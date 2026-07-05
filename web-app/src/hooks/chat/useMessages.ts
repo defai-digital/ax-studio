@@ -86,32 +86,36 @@ export const useMessages = create<MessageState>()((set, get) => ({
     }))
 
     // Persist to storage asynchronously — rollback on failure
-    getServiceHub().messages().createMessage(newMessage).then((createdMessage) => {
-      if (createdMessage.id !== newMessage.id) {
-        removeTrackedMessage(newMessage.thread_id, newMessage.id)
-      }
-      trackPersistedMessage(createdMessage)
-      set((state) => ({
-        messages: {
-          ...state.messages,
-          [message.thread_id]:
-            state.messages[message.thread_id]?.map((existing) =>
-              existing.id === newMessage.id ? createdMessage : existing
+    getServiceHub()
+      .messages()
+      .createMessage(newMessage)
+      .then((createdMessage) => {
+        if (createdMessage.id !== newMessage.id) {
+          removeTrackedMessage(newMessage.thread_id, newMessage.id)
+        }
+        trackPersistedMessage(createdMessage)
+        set((state) => ({
+          messages: {
+            ...state.messages,
+            [message.thread_id]: state.messages[message.thread_id]?.map(
+              (existing) =>
+                existing.id === newMessage.id ? createdMessage : existing
             ) ?? [createdMessage],
-        },
-      }))
-    }).catch((error) => {
-      console.error('Failed to persist message:', error)
-      // Rollback: remove the optimistically added message
-      set((state) => ({
-        messages: {
-          ...state.messages,
-          [message.thread_id]: (state.messages[message.thread_id] || []).filter(
-            (m) => m.id !== newMessage.id
-          ),
-        },
-      }))
-    })
+          },
+        }))
+      })
+      .catch((error) => {
+        console.error('Failed to persist message:', error)
+        // Rollback: remove the optimistically added message
+        set((state) => ({
+          messages: {
+            ...state.messages,
+            [message.thread_id]: (
+              state.messages[message.thread_id] || []
+            ).filter((m) => m.id !== newMessage.id),
+          },
+        }))
+      })
   },
   updateMessage: (message) => {
     const updatedMessage = {
@@ -120,7 +124,8 @@ export const useMessages = create<MessageState>()((set, get) => ({
     const messageKey = trackedMessageKey(message.thread_id, message.id)
     const mutationId = (latestMessageMutationId.get(messageKey) ?? 0) + 1
     latestMessageMutationId.set(messageKey, mutationId)
-    const pendingMutations = pendingMessageMutationIds.get(messageKey) ?? new Set<number>()
+    const pendingMutations =
+      pendingMessageMutationIds.get(messageKey) ?? new Set<number>()
     pendingMutations.add(mutationId)
     pendingMessageMutationIds.set(messageKey, pendingMutations)
     visibleMessageMutationId.set(messageKey, mutationId)
@@ -134,67 +139,74 @@ export const useMessages = create<MessageState>()((set, get) => ({
     set((state) => ({
       messages: {
         ...state.messages,
-        [message.thread_id]: (state.messages[message.thread_id] || []).map((m) =>
-          m.id === message.id ? updatedMessage : m
+        [message.thread_id]: (state.messages[message.thread_id] || []).map(
+          (m) => (m.id === message.id ? updatedMessage : m)
         ),
       },
     }))
 
     // Persist to storage asynchronously — targeted rollback on failure
-    getServiceHub().messages().modifyMessage(updatedMessage).then((persistedMessage) => {
-      const remainingPendingMutations = pendingMessageMutationIds.get(messageKey)
-      remainingPendingMutations?.delete(mutationId)
-      if (!remainingPendingMutations?.size) {
-        pendingMessageMutationIds.delete(messageKey)
-      }
+    getServiceHub()
+      .messages()
+      .modifyMessage(updatedMessage)
+      .then((persistedMessage) => {
+        const remainingPendingMutations =
+          pendingMessageMutationIds.get(messageKey)
+        remainingPendingMutations?.delete(mutationId)
+        if (!remainingPendingMutations?.size) {
+          pendingMessageMutationIds.delete(messageKey)
+        }
 
-      const latestSuccess = latestSuccessfulMutationId.get(messageKey) ?? 0
-      if (mutationId >= latestSuccess) {
-        persistedMessages.set(messageKey, persistedMessage)
-        latestSuccessfulMutationId.set(messageKey, mutationId)
-      }
+        const latestSuccess = latestSuccessfulMutationId.get(messageKey) ?? 0
+        if (mutationId >= latestSuccess) {
+          persistedMessages.set(messageKey, persistedMessage)
+          latestSuccessfulMutationId.set(messageKey, mutationId)
+        }
 
-      const higherPendingExists = Array.from(
-        pendingMessageMutationIds.get(messageKey) ?? []
-      ).some((pendingId) => pendingId > mutationId)
-      const currentVisible = visibleMessageMutationId.get(messageKey) ?? 0
-      if (higherPendingExists || currentVisible > mutationId) return
+        const higherPendingExists = Array.from(
+          pendingMessageMutationIds.get(messageKey) ?? []
+        ).some((pendingId) => pendingId > mutationId)
+        const currentVisible = visibleMessageMutationId.get(messageKey) ?? 0
+        if (higherPendingExists || currentVisible > mutationId) return
 
-      visibleMessageMutationId.set(messageKey, mutationId)
+        visibleMessageMutationId.set(messageKey, mutationId)
 
-      set((state) => ({
-        messages: {
-          ...state.messages,
-          [message.thread_id]: (state.messages[message.thread_id] || []).map((m) =>
-            m.id === message.id ? persistedMessage : m
-          ),
-        },
-      }))
-    }).catch((error) => {
-      console.error('Failed to persist message update:', error)
-      const remainingPendingMutations = pendingMessageMutationIds.get(messageKey)
-      remainingPendingMutations?.delete(mutationId)
-      if (!remainingPendingMutations?.size) {
-        pendingMessageMutationIds.delete(messageKey)
-      }
-
-      if ((visibleMessageMutationId.get(messageKey) ?? 0) !== mutationId) return
-
-      visibleMessageMutationId.set(
-        messageKey,
-        latestSuccessfulMutationId.get(messageKey) ?? 0
-      )
-      if (previousMessage) {
         set((state) => ({
           messages: {
             ...state.messages,
-            [message.thread_id]: (state.messages[message.thread_id] || []).map((m) =>
-              m.id === message.id ? previousMessage : m
+            [message.thread_id]: (state.messages[message.thread_id] || []).map(
+              (m) => (m.id === message.id ? persistedMessage : m)
             ),
           },
         }))
-      }
-    })
+      })
+      .catch((error) => {
+        console.error('Failed to persist message update:', error)
+        const remainingPendingMutations =
+          pendingMessageMutationIds.get(messageKey)
+        remainingPendingMutations?.delete(mutationId)
+        if (!remainingPendingMutations?.size) {
+          pendingMessageMutationIds.delete(messageKey)
+        }
+
+        if ((visibleMessageMutationId.get(messageKey) ?? 0) !== mutationId)
+          return
+
+        visibleMessageMutationId.set(
+          messageKey,
+          latestSuccessfulMutationId.get(messageKey) ?? 0
+        )
+        if (previousMessage) {
+          set((state) => ({
+            messages: {
+              ...state.messages,
+              [message.thread_id]: (
+                state.messages[message.thread_id] || []
+              ).map((m) => (m.id === message.id ? previousMessage : m)),
+            },
+          }))
+        }
+      })
   },
   deleteMessage: (threadId, messageId) => {
     const previousMessage = get().messages[threadId]?.find(
@@ -210,26 +222,30 @@ export const useMessages = create<MessageState>()((set, get) => ({
           ) || [],
       },
     }))
-    getServiceHub().messages().deleteMessage(threadId, messageId).then(() => {
-      removeTrackedMessage(threadId, messageId)
-    }).catch((error) => {
-      console.error('Failed to delete message, rolling back:', error)
-      // Re-insert only the single deleted message using the CURRENT state.
-      // Don't replay a full pre-delete snapshot — that would overwrite any
-      // messages (assistant replies, follow-ups) that arrived during the
-      // failed API-call window.
-      if (!previousMessage) return
-      set((state) => {
-        const currentList = state.messages[threadId] ?? []
-        if (currentList.some((m) => m.id === messageId)) return state
-        const restored = [...currentList, previousMessage].sort(
-          (a, b) => (a.created_at || 0) - (b.created_at || 0)
-        )
-        return {
-          messages: { ...state.messages, [threadId]: restored },
-        }
+    getServiceHub()
+      .messages()
+      .deleteMessage(threadId, messageId)
+      .then(() => {
+        removeTrackedMessage(threadId, messageId)
       })
-    })
+      .catch((error) => {
+        console.error('Failed to delete message, rolling back:', error)
+        // Re-insert only the single deleted message using the CURRENT state.
+        // Don't replay a full pre-delete snapshot — that would overwrite any
+        // messages (assistant replies, follow-ups) that arrived during the
+        // failed API-call window.
+        if (!previousMessage) return
+        set((state) => {
+          const currentList = state.messages[threadId] ?? []
+          if (currentList.some((m) => m.id === messageId)) return state
+          const restored = [...currentList, previousMessage].sort(
+            (a, b) => (a.created_at || 0) - (b.created_at || 0)
+          )
+          return {
+            messages: { ...state.messages, [threadId]: restored },
+          }
+        })
+      })
   },
   clearAllMessages: () => {
     persistedMessages.clear()

@@ -36,7 +36,6 @@ export const useChatAttachments = create<AttachmentStore>()((set, get) => ({
   },
   clearAttachments: (threadId) => {
     set((state) => {
-       
       const { [threadId]: _, ...rest } = state.attachmentsByThread
       return { attachmentsByThread: rest }
     })
@@ -55,7 +54,10 @@ export const useChatAttachments = create<AttachmentStore>()((set, get) => ({
       // same file isn't listed twice when both sides happen to have it.
       const merged = [...existingDestination, ...fromAttachments].filter(
         (attachment, index, arr) =>
-          arr.findIndex((other) => other.name === attachment.name && other.size === attachment.size) === index
+          arr.findIndex(
+            (other) =>
+              other.name === attachment.name && other.size === attachment.size
+          ) === index
       )
 
       return {

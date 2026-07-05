@@ -18,9 +18,7 @@ vi.mock('@/hooks/useServiceHub', () => ({
   }),
 }))
 
-
 describe('useMessages', () => {
-
   beforeEach(() => {
     vi.clearAllMocks()
     mockCreateMessage.mockImplementation(async (message) => message)
@@ -214,7 +212,9 @@ describe('useMessages', () => {
       await act(async () => {
         await Promise.resolve()
       })
-      expect(result.current.messages['thread1']).toContainEqual(mockCreatedMessage)
+      expect(result.current.messages['thread1']).toContainEqual(
+        mockCreatedMessage
+      )
     })
 
     it('should handle message without created_at', async () => {
@@ -250,7 +250,9 @@ describe('useMessages', () => {
       )
 
       await vi.waitFor(() => {
-        expect(result.current.messages['thread1']).toContainEqual(mockCreatedMessage)
+        expect(result.current.messages['thread1']).toContainEqual(
+          mockCreatedMessage
+        )
       })
     })
 
@@ -295,7 +297,9 @@ describe('useMessages', () => {
       )
 
       await vi.waitFor(() => {
-        expect(result.current.messages['thread1']).toContainEqual(mockCreatedMessage)
+        expect(result.current.messages['thread1']).toContainEqual(
+          mockCreatedMessage
+        )
       })
     })
   })
@@ -340,7 +344,10 @@ describe('useMessages', () => {
         result.current.deleteMessage('empty-thread', 'non-existent-msg')
       })
 
-      expect(mockDeleteMessage).toHaveBeenCalledWith('empty-thread', 'non-existent-msg')
+      expect(mockDeleteMessage).toHaveBeenCalledWith(
+        'empty-thread',
+        'non-existent-msg'
+      )
       expect(result.current.messages['empty-thread']).toEqual([])
     })
 
@@ -365,7 +372,10 @@ describe('useMessages', () => {
         result.current.deleteMessage('thread1', 'non-existent-msg')
       })
 
-      expect(mockDeleteMessage).toHaveBeenCalledWith('thread1', 'non-existent-msg')
+      expect(mockDeleteMessage).toHaveBeenCalledWith(
+        'thread1',
+        'non-existent-msg'
+      )
       expect(result.current.messages['thread1']).toEqual(testMessages)
     })
   })
@@ -381,7 +391,9 @@ describe('useMessages', () => {
         created_at: Date.now(),
       } as ThreadMessage
 
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const consoleErrorSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {})
       let resolveFirstEdit: ((message: ThreadMessage) => void) | undefined
       mockModifyMessage
         .mockReturnValueOnce(
