@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import type { Chat, UIMessage } from '@ai-sdk/react'
+import type { CustomChatTransport } from '@/lib/custom-chat-transport'
+import type { ChatSession } from '../chat-session-store'
 import { useChatSessions, isSessionBusy } from '../chat-session-store'
 
 vi.mock('@/lib/custom-chat-transport', () => ({
@@ -7,14 +10,38 @@ vi.mock('@/lib/custom-chat-transport', () => ({
 
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>
 
-const makeChat = (status = 'idle') => ({
-  status,
-  messages: [],
-  stop: vi.fn(),
-  '~registerStatusCallback': vi.fn().mockReturnValue(vi.fn()),
-})
+type TestChat = Chat<UIMessage> & {
+  'stop': ReturnType<typeof vi.fn>
+  '~registerStatusCallback': ReturnType<typeof vi.fn>
+}
 
-const makeTransport = () => ({} as any)
+const makeChat = (status = 'idle'): TestChat =>
+  ({
+    status,
+    'messages': [],
+    'stop': vi.fn(),
+    '~registerStatusCallback': vi.fn().mockReturnValue(vi.fn()),
+  }) as unknown as TestChat
+
+const createChat =
+  (chat = makeChat()) =>
+  () =>
+    chat
+
+const makeTransport = (): CustomChatTransport =>
+  ({}) as unknown as CustomChatTransport
+
+const makeBusySession = ({
+  isStreaming,
+  tools,
+}: {
+  isStreaming: boolean
+  tools: unknown[]
+}): ChatSession =>
+  ({
+    isStreaming,
+    data: { tools },
+  }) as ChatSession
 
 beforeEach(() => {
   consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -54,7 +81,9 @@ describe('setActiveConversationId', () => {
 describe('ensureSession', () => {
   it('creates a new session and sets it as active', () => {
     const chat = makeChat()
-    useChatSessions.getState().ensureSession('s1', makeTransport(), () => chat as any, 'My Chat')
+    useChatSessions
+      .getState()
+      .ensureSession('s1', makeTransport(), createChat(chat), 'My Chat')
     const state = useChatSessions.getState()
     expect(state.sessions['s1']).toBeDefined()
     expect(state.sessions['s1'].title).toBe('My Chat')
@@ -64,8 +93,12 @@ describe('ensureSession', () => {
   it('returns the existing chat if session already exists', () => {
     const chat = makeChat()
     const transport = makeTransport()
-    const first = useChatSessions.getState().ensureSession('s1', transport, () => chat as any)
-    const second = useChatSessions.getState().ensureSession('s1', transport, () => makeChat() as any)
+    const first = useChatSessions
+      .getState()
+      .ensureSession('s1', transport, createChat(chat))
+    const second = useChatSessions
+      .getState()
+      .ensureSession('s1', transport, createChat())
     expect(first).toBe(second)
   })
 
@@ -73,8 +106,12 @@ describe('ensureSession', () => {
     const chat = makeChat()
     const transport1 = makeTransport()
     const transport2 = makeTransport()
-    useChatSessions.getState().ensureSession('s1', transport1, () => chat as any, 'Title1')
-    useChatSessions.getState().ensureSession('s1', transport2, () => chat as any, 'Title2')
+    useChatSessions
+      .getState()
+      .ensureSession('s1', transport1, createChat(chat), 'Title1')
+    useChatSessions
+      .getState()
+      .ensureSession('s1', transport2, createChat(chat), 'Title2')
     const session = useChatSessions.getState().sessions['s1']
     expect(session.transport).toBe(transport2)
     expect(session.title).toBe('Title2')
@@ -83,14 +120,18 @@ describe('ensureSession', () => {
   it('promotes standalone data into the new session', () => {
     const standaloneData = useChatSessions.getState().ensureSessionData('s1')
     const chat = makeChat()
-    useChatSessions.getState().ensureSession('s1', makeTransport(), () => chat as any)
+    useChatSessions
+      .getState()
+      .ensureSession('s1', makeTransport(), createChat(chat))
     expect(useChatSessions.getState().sessions['s1'].data).toBe(standaloneData)
     expect(useChatSessions.getState().standaloneData['s1']).toBeUndefined()
   })
 
   it('registers the status callback on the chat', () => {
     const chat = makeChat()
-    useChatSessions.getState().ensureSession('s1', makeTransport(), () => chat as any)
+    useChatSessions
+      .getState()
+      .ensureSession('s1', makeTransport(), createChat(chat))
     expect(chat['~registerStatusCallback']).toHaveBeenCalled()
   })
 })
@@ -98,7 +139,9 @@ describe('ensureSession', () => {
 describe('getSessionData', () => {
   it('returns data for an active session', () => {
     const chat = makeChat()
-    useChatSessions.getState().ensureSession('s1', makeTransport(), () => chat as any)
+    useChatSessions
+      .getState()
+      .ensureSession('s1', makeTransport(), createChat(chat))
     const data = useChatSessions.getState().getSessionData('s1')
     expect(data.tools).toEqual([])
     expect(data.messages).toEqual([])
@@ -121,7 +164,9 @@ describe('getSessionData', () => {
 describe('updateStatus', () => {
   it('updates status and sets isStreaming true for streaming', () => {
     const chat = makeChat('idle')
-    useChatSessions.getState().ensureSession('s1', makeTransport(), () => chat as any)
+    useChatSessions
+      .getState()
+      .ensureSession('s1', makeTransport(), createChat(chat))
     useChatSessions.getState().updateStatus('s1', 'streaming')
     const session = useChatSessions.getState().sessions['s1']
     expect(session.status).toBe('streaming')
@@ -130,14 +175,18 @@ describe('updateStatus', () => {
 
   it('sets isStreaming true for submitted status', () => {
     const chat = makeChat('idle')
-    useChatSessions.getState().ensureSession('s1', makeTransport(), () => chat as any)
+    useChatSessions
+      .getState()
+      .ensureSession('s1', makeTransport(), createChat(chat))
     useChatSessions.getState().updateStatus('s1', 'submitted')
     expect(useChatSessions.getState().sessions['s1'].isStreaming).toBe(true)
   })
 
   it('sets isStreaming false for idle status', () => {
     const chat = makeChat('streaming')
-    useChatSessions.getState().ensureSession('s1', makeTransport(), () => chat as any)
+    useChatSessions
+      .getState()
+      .ensureSession('s1', makeTransport(), createChat(chat))
     useChatSessions.getState().updateStatus('s1', 'idle')
     expect(useChatSessions.getState().sessions['s1'].isStreaming).toBe(false)
   })
@@ -150,7 +199,9 @@ describe('updateStatus', () => {
 
   it('skips the update when status and isStreaming are unchanged', () => {
     const chat = makeChat('idle')
-    useChatSessions.getState().ensureSession('s1', makeTransport(), () => chat as any)
+    useChatSessions
+      .getState()
+      .ensureSession('s1', makeTransport(), createChat(chat))
     const sessionBefore = useChatSessions.getState().sessions['s1']
     useChatSessions.getState().updateStatus('s1', 'idle')
     expect(useChatSessions.getState().sessions['s1']).toBe(sessionBefore)
@@ -160,21 +211,27 @@ describe('updateStatus', () => {
 describe('setSessionTitle', () => {
   it('updates the session title', () => {
     const chat = makeChat()
-    useChatSessions.getState().ensureSession('s1', makeTransport(), () => chat as any, 'Old')
+    useChatSessions
+      .getState()
+      .ensureSession('s1', makeTransport(), createChat(chat), 'Old')
     useChatSessions.getState().setSessionTitle('s1', 'New')
     expect(useChatSessions.getState().sessions['s1'].title).toBe('New')
   })
 
   it('is a no-op when title is undefined', () => {
     const chat = makeChat()
-    useChatSessions.getState().ensureSession('s1', makeTransport(), () => chat as any, 'Title')
+    useChatSessions
+      .getState()
+      .ensureSession('s1', makeTransport(), createChat(chat), 'Title')
     useChatSessions.getState().setSessionTitle('s1', undefined)
     expect(useChatSessions.getState().sessions['s1'].title).toBe('Title')
   })
 
   it('is a no-op when title is unchanged', () => {
     const chat = makeChat()
-    useChatSessions.getState().ensureSession('s1', makeTransport(), () => chat as any, 'Same')
+    useChatSessions
+      .getState()
+      .ensureSession('s1', makeTransport(), createChat(chat), 'Same')
     const sessionBefore = useChatSessions.getState().sessions['s1']
     useChatSessions.getState().setSessionTitle('s1', 'Same')
     expect(useChatSessions.getState().sessions['s1']).toBe(sessionBefore)
@@ -186,7 +243,9 @@ describe('removeSession', () => {
     const unsubscribe = vi.fn()
     const chat = makeChat()
     chat['~registerStatusCallback'] = vi.fn().mockReturnValue(unsubscribe)
-    useChatSessions.getState().ensureSession('s1', makeTransport(), () => chat as any)
+    useChatSessions
+      .getState()
+      .ensureSession('s1', makeTransport(), createChat(chat))
     useChatSessions.getState().removeSession('s1')
     expect(useChatSessions.getState().sessions['s1']).toBeUndefined()
     expect(unsubscribe).toHaveBeenCalled()
@@ -204,14 +263,20 @@ describe('removeSession', () => {
     chat['~registerStatusCallback'] = vi.fn().mockReturnValue(() => {
       throw new Error('unsub error')
     })
-    useChatSessions.getState().ensureSession('s1', makeTransport(), () => chat as any)
+    useChatSessions
+      .getState()
+      .ensureSession('s1', makeTransport(), createChat(chat))
     expect(() => useChatSessions.getState().removeSession('s1')).not.toThrow()
   })
 
   it('handles errors in chat.stop gracefully', () => {
     const chat = makeChat()
-    chat.stop = vi.fn().mockImplementation(() => { throw new Error('stop error') })
-    useChatSessions.getState().ensureSession('s1', makeTransport(), () => chat as any)
+    chat.stop = vi.fn().mockImplementation(() => {
+      throw new Error('stop error')
+    })
+    useChatSessions
+      .getState()
+      .ensureSession('s1', makeTransport(), createChat(chat))
     expect(() => useChatSessions.getState().removeSession('s1')).not.toThrow()
   })
 })
@@ -220,8 +285,12 @@ describe('clearSessions', () => {
   it('removes all sessions and resets state', () => {
     const c1 = makeChat()
     const c2 = makeChat()
-    useChatSessions.getState().ensureSession('s1', makeTransport(), () => c1 as any)
-    useChatSessions.getState().ensureSession('s2', makeTransport(), () => c2 as any)
+    useChatSessions
+      .getState()
+      .ensureSession('s1', makeTransport(), createChat(c1))
+    useChatSessions
+      .getState()
+      .ensureSession('s2', makeTransport(), createChat(c2))
     useChatSessions.getState().clearSessions()
     const state = useChatSessions.getState()
     expect(state.sessions).toEqual({})
@@ -242,14 +311,20 @@ describe('isSessionBusy', () => {
   })
 
   it('returns true when streaming', () => {
-    expect(isSessionBusy({ isStreaming: true, data: { tools: [] } } as any)).toBe(true)
+    expect(
+      isSessionBusy(makeBusySession({ isStreaming: true, tools: [] }))
+    ).toBe(true)
   })
 
   it('returns true when there are pending tools', () => {
-    expect(isSessionBusy({ isStreaming: false, data: { tools: ['tool1'] } } as any)).toBe(true)
+    expect(
+      isSessionBusy(makeBusySession({ isStreaming: false, tools: ['tool1'] }))
+    ).toBe(true)
   })
 
   it('returns false when not streaming and no tools', () => {
-    expect(isSessionBusy({ isStreaming: false, data: { tools: [] } } as any)).toBe(false)
+    expect(
+      isSessionBusy(makeBusySession({ isStreaming: false, tools: [] }))
+    ).toBe(false)
   })
 })
