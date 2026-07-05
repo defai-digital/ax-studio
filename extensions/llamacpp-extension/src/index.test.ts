@@ -570,6 +570,7 @@ describe('AxStudioLlamacppExtension', () => {
     expect(mocks.emit).toHaveBeenCalledWith('onModelImported', {
       modelId: 'mlx-community/gemma-4-12B-it-4bit',
     })
+    expect(consoleDebugSpy).not.toHaveBeenCalled()
 
     fetchSpy.mockRestore()
   })
