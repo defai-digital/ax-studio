@@ -28,7 +28,6 @@ vi.mock('@/hooks/useServiceHub', () => ({
   }),
   getServiceHub: () => ({}),
   initializeServiceHubStore: vi.fn(),
-  isServiceHubInitialized: () => true,
 }))
 
 vi.mock('@/types/attachment', () => ({

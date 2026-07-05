@@ -46,10 +46,3 @@ export const getServiceHub = (): ServiceHub => {
 export const initializeServiceHubStore = (serviceHub: ServiceHub) => {
   useServiceStore.getState().setServiceHub(serviceHub)
 }
-
-/**
- * Check if ServiceHub is initialized
- */
-export const isServiceHubInitialized = (): boolean => {
-  return useServiceStore.getState().serviceHub !== null
-}

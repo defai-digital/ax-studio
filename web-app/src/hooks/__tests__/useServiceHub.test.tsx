@@ -9,7 +9,6 @@ vi.unmock('@/hooks/useServiceHub')
 import {
   getServiceHub,
   initializeServiceHubStore,
-  isServiceHubInitialized,
   useServiceHub,
   useServiceStore,
 } from '../useServiceHub'
@@ -22,11 +21,11 @@ describe('useServiceHub store helpers', () => {
   })
 
   it('tracks whether the service hub is initialized', () => {
-    expect(isServiceHubInitialized()).toBe(false)
+    expect(useServiceStore.getState().serviceHub).toBeNull()
 
     initializeServiceHubStore(serviceHub)
 
-    expect(isServiceHubInitialized()).toBe(true)
+    expect(useServiceStore.getState().serviceHub).toBe(serviceHub)
     expect(getServiceHub()).toBe(serviceHub)
   })
 

@@ -68,7 +68,6 @@ vi.mock('@/hooks/useServiceHub', () => ({
   }),
   getServiceHub: () => ({}),
   initializeServiceHubStore: vi.fn(),
-  isServiceHubInitialized: () => true,
 }))
 
 // ─── Import under test ───────────────────────────────────────────────────────

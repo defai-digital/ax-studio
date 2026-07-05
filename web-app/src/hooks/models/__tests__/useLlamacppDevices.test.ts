@@ -39,7 +39,6 @@ vi.mock('@/hooks/useServiceHub', async () => {
       providers: () => mockProvidersService,
     }),
     initializeServiceHubStore: vi.fn(),
-    isServiceHubInitialized: () => true,
   }
 })
 

@@ -13,7 +13,6 @@ vi.mock('@/hooks/useServiceHub', () => ({
   useServiceHub: vi.fn(),
   getServiceHub: vi.fn(),
   initializeServiceHubStore: (...args: unknown[]) => mockInitializeServiceHubStore(...args),
-  isServiceHubInitialized: () => true,
 }))
 
 describe('ServiceHubProvider', () => {

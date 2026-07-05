@@ -166,7 +166,6 @@ vi.mock('@/hooks/useServiceHub', () => ({
   useServiceHub: () => mockServiceHub,
   getServiceHub: () => mockServiceHub,
   initializeServiceHubStore: vi.fn(),
-  isServiceHubInitialized: () => true,
 }))
 
 // Mock window.matchMedia for useMediaQuery tests
