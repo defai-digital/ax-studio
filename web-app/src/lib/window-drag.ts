@@ -29,7 +29,7 @@ type StartWindowDragOptions = {
   logContext?: string
 }
 
-export function canStartWindowDrag(target: EventTarget | null) {
+function canStartWindowDrag(target: EventTarget | null) {
   if (!(target instanceof Element)) return false
 
   return !target.closest(WINDOW_DRAG_IGNORE_SELECTOR)
