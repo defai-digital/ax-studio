@@ -1,5 +1,6 @@
 import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ServiceHub } from '@/services'
 
 vi.mock('@/services', () => ({
   ServiceHub: class ServiceHub {},
@@ -14,7 +15,9 @@ import {
 } from '../useServiceHub'
 
 describe('useServiceHub store helpers', () => {
-  const serviceHub = { app: () => ({}) } as any
+  const serviceHub = {
+    app: () => ({}),
+  } as Pick<ServiceHub, 'app'> as ServiceHub
 
   beforeEach(() => {
     useServiceStore.setState({ serviceHub: null })
