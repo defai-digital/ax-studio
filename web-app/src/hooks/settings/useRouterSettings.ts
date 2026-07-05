@@ -28,7 +28,9 @@ interface RouterSettingsState {
   resetToDefaults: () => void
 }
 
-const DEFAULT_TIMEOUT = 15000
+export const ROUTER_TIMEOUT_MIN_MS = 500
+export const ROUTER_TIMEOUT_MAX_MS = 30000
+export const ROUTER_TIMEOUT_DEFAULT_MS = 15000
 
 export const useRouterSettings = create<RouterSettingsState>()(
   persist(
@@ -36,7 +38,7 @@ export const useRouterSettings = create<RouterSettingsState>()(
       enabled: false,
       routerModelId: null,
       routerProviderId: null,
-      timeout: DEFAULT_TIMEOUT,
+      timeout: ROUTER_TIMEOUT_DEFAULT_MS,
       threadOverrides: {},
 
       setEnabled: (enabled) => set({ enabled }),
@@ -48,7 +50,14 @@ export const useRouterSettings = create<RouterSettingsState>()(
         set({ routerModelId: null, routerProviderId: null }),
 
       setTimeoutMs: (ms) =>
-        set({ timeout: Math.max(500, Math.min(ms, 30000)) }),
+        set((state) => {
+          if (!Number.isFinite(ms)) return state
+          const timeout = Math.max(
+            ROUTER_TIMEOUT_MIN_MS,
+            Math.min(Math.trunc(ms), ROUTER_TIMEOUT_MAX_MS)
+          )
+          return { timeout }
+        }),
 
       setThreadOverride: (threadId, enabled) =>
         set((state) => {
@@ -94,7 +103,7 @@ export const useRouterSettings = create<RouterSettingsState>()(
           enabled: false,
           routerModelId: null,
           routerProviderId: null,
-          timeout: DEFAULT_TIMEOUT,
+          timeout: ROUTER_TIMEOUT_DEFAULT_MS,
           threadOverrides: {},
         }),
     }),
@@ -115,7 +124,7 @@ export const useRouterSettings = create<RouterSettingsState>()(
           version < 3 &&
           (!state.timeout || state.timeout === 3000 || state.timeout === 8000)
         ) {
-          state.timeout = 15000
+          state.timeout = ROUTER_TIMEOUT_DEFAULT_MS
         }
         return state
       },

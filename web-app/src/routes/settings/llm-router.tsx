@@ -21,7 +21,11 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command'
-import { useRouterSettings } from '@/hooks/settings/useRouterSettings'
+import {
+  ROUTER_TIMEOUT_MAX_MS,
+  ROUTER_TIMEOUT_MIN_MS,
+  useRouterSettings,
+} from '@/hooks/settings/useRouterSettings'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 
 export const Route = createFileRoute(
@@ -29,6 +33,22 @@ export const Route = createFileRoute(
 )({
   component: LLMRouterSettings,
 })
+
+function parseRouterTimeoutInput(raw: string): number | null {
+  const trimmed = raw.trim()
+  if (!/^[1-9]\d*$/.test(trimmed)) return null
+
+  const timeoutMs = Number(trimmed)
+  if (!Number.isSafeInteger(timeoutMs)) return null
+  if (
+    timeoutMs < ROUTER_TIMEOUT_MIN_MS ||
+    timeoutMs > ROUTER_TIMEOUT_MAX_MS
+  ) {
+    return null
+  }
+
+  return timeoutMs
+}
 
 function LLMRouterSettings() {
   const enabled = useRouterSettings((s) => s.enabled)
@@ -95,8 +115,8 @@ function LLMRouterSettings() {
   }
 
   const handleTimeoutChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseInt(e.target.value, 10)
-    if (!isNaN(val)) setTimeoutMs(val)
+    const timeoutMs = parseRouterTimeoutInput(e.target.value)
+    if (timeoutMs !== null) setTimeoutMs(timeoutMs)
   }
 
   return (
@@ -249,8 +269,8 @@ function LLMRouterSettings() {
                     <div className="flex items-center gap-2">
                       <Input
                         type="number"
-                        min={500}
-                        max={30000}
+                        min={ROUTER_TIMEOUT_MIN_MS}
+                        max={ROUTER_TIMEOUT_MAX_MS}
                         step={500}
                         value={timeout}
                         onChange={handleTimeoutChange}

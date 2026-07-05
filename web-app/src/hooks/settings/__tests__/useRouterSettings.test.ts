@@ -43,6 +43,21 @@ describe('useRouterSettings', () => {
     expect(useRouterSettings.getState().timeout).toBe(30000) // max 30000
   })
 
+  it('ignores non-finite timeout values', () => {
+    useRouterSettings.getState().setTimeoutMs(12000)
+
+    useRouterSettings.getState().setTimeoutMs(Number.NaN)
+    expect(useRouterSettings.getState().timeout).toBe(12000)
+
+    useRouterSettings.getState().setTimeoutMs(Number.POSITIVE_INFINITY)
+    expect(useRouterSettings.getState().timeout).toBe(12000)
+  })
+
+  it('normalizes fractional timeout values to whole milliseconds', () => {
+    useRouterSettings.getState().setTimeoutMs(12000.9)
+    expect(useRouterSettings.getState().timeout).toBe(12000)
+  })
+
   it('sets and clears thread overrides', () => {
     useRouterSettings.getState().setThreadOverride('thread-1', true)
     expect(useRouterSettings.getState().threadOverrides['thread-1']).toBe(true)

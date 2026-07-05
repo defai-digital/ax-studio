@@ -193,6 +193,8 @@ vi.mock('@/components/ui/command', () => ({
 }))
 
 vi.mock('@/hooks/settings/useRouterSettings', () => ({
+  ROUTER_TIMEOUT_MAX_MS: 30000,
+  ROUTER_TIMEOUT_MIN_MS: 500,
   useRouterSettings: (selector: (state: RouterSettingsState) => unknown) =>
     selector(mocks.routerState),
 }))
@@ -388,5 +390,28 @@ describe('LLM Router settings route', () => {
 
     expect(mocks.routerState.setTimeoutMs).toHaveBeenCalledTimes(1)
     expect(mocks.routerState.setTimeoutMs).toHaveBeenCalledWith(12000)
+  })
+
+  it('rejects fractional timeout input instead of truncating it', () => {
+    mocks.routerState.enabled = true
+
+    renderLLMRouterRoute()
+    fireEvent.change(screen.getByDisplayValue('15000'), {
+      target: { value: '12000.5' },
+    })
+
+    expect(mocks.routerState.setTimeoutMs).not.toHaveBeenCalled()
+  })
+
+  it('rejects timeout input outside the supported range', () => {
+    mocks.routerState.enabled = true
+
+    renderLLMRouterRoute()
+    const timeoutInput = screen.getByDisplayValue('15000')
+
+    fireEvent.change(timeoutInput, { target: { value: '499' } })
+    fireEvent.change(timeoutInput, { target: { value: '30001' } })
+
+    expect(mocks.routerState.setTimeoutMs).not.toHaveBeenCalled()
   })
 })
