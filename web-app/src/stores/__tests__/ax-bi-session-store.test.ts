@@ -80,4 +80,15 @@ describe('useAxBiSessions', () => {
     expect(useAxBiSessions.getState().sessions[second.id]).toBeUndefined()
     expect(useAxBiSessions.getState().activeSessionId).toBe(first.id)
   })
+
+  it('keeps the active session when deleting an inactive session', () => {
+    const first = useAxBiSessions.getState().createSession({ title: 'First' })
+    const second = useAxBiSessions.getState().createSession({ title: 'Second' })
+
+    useAxBiSessions.getState().setActiveSession(second.id)
+    useAxBiSessions.getState().deleteSession(first.id)
+
+    expect(useAxBiSessions.getState().sessions[first.id]).toBeUndefined()
+    expect(useAxBiSessions.getState().activeSessionId).toBe(second.id)
+  })
 })
