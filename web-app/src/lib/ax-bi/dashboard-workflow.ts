@@ -300,11 +300,11 @@ function parseExistingDatasetChartIntent(prompt: string): ExistingDatasetChartIn
   }
 }
 
-export function isAxBiChartCandidate(prompt: string): boolean {
+function isAxBiChartCandidate(prompt: string): boolean {
   return /\bax-?bi\s+mcp\b/i.test(prompt) && /\b(chart|charts|bar|scatter|graph|plot|visuali[sz]e)\b/i.test(prompt)
 }
 
-export function isAxBiDashboardRequest(
+function isAxBiDashboardRequest(
   prompt: string,
   attachments: Attachment[] | undefined
 ): boolean {
@@ -319,7 +319,7 @@ export function isAxBiDashboardRequest(
   )
 }
 
-export function isAxBiSdkPromptRequest(prompt: string): boolean {
+function isAxBiSdkPromptRequest(prompt: string): boolean {
   return (
     /\b(?:ax-?bi|axbi)\b/i.test(prompt) &&
     /\b(?:prompt|plan|dashboard|chart|charts|analytics|report|visuali[sz]e|business intelligence)\b/i.test(prompt)

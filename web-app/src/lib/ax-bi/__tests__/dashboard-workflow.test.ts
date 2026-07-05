@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  isAxBiDashboardRequest,
-  isAxBiChartCandidate,
-  isAxBiSdkPromptRequest,
+  runAxBiDashboardWorkflow,
   runAxBiExistingDatasetChartWorkflow,
   runAxBiSdkPromptWorkflow,
 } from '../dashboard-workflow'
@@ -18,54 +16,52 @@ const csvAttachment: Attachment = {
 }
 
 describe('AX-BI dashboard workflow', () => {
-  it('detects dashboard requests with supported data attachments', () => {
-    expect(
-      isAxBiDashboardRequest('Can you create a dashboard from this file?', [
-        csvAttachment,
-      ])
-    ).toBe(true)
+  it('handles dashboard requests with supported data attachments', async () => {
+    const result = await runAxBiDashboardWorkflow({
+      prompt: 'Can you create a dashboard from this file?',
+      attachments: [csvAttachment],
+      serviceHub: {
+        mcp: () => ({
+          getTools: async () => [],
+        }),
+      } as never,
+    })
+
+    expect(result).toMatchObject({
+      handled: true,
+      message: expect.stringContaining('required tool "upload_file"'),
+    })
   })
 
-  it('does not intercept ordinary attachment questions', () => {
-    expect(
-      isAxBiDashboardRequest('Summarize this file for me', [csvAttachment])
-    ).toBe(false)
+  it('does not intercept ordinary attachment questions', async () => {
+    const result = await runAxBiDashboardWorkflow({
+      prompt: 'Summarize this file for me',
+      attachments: [csvAttachment],
+      serviceHub: {} as never,
+    })
+
+    expect(result).toEqual({ handled: false })
   })
 
-  it('does not intercept dashboard requests without data attachments', () => {
-    expect(isAxBiDashboardRequest('Create a dashboard', [])).toBe(false)
+  it('does not intercept dashboard requests without data attachments', async () => {
+    const result = await runAxBiDashboardWorkflow({
+      prompt: 'Create a dashboard',
+      attachments: [],
+      serviceHub: {} as never,
+    })
+
+    expect(result).toEqual({ handled: false })
   })
 
-  it('does not intercept existing AX-BI dataset chart requests', () => {
-    expect(
-      isAxBiDashboardRequest(
+  it('does not intercept existing AX-BI dataset chart requests', async () => {
+    const result = await runAxBiDashboardWorkflow({
+      prompt:
         'Use AX-BI MCP. Create a saved bar chart from palmer_penguins showing count of records by species.',
-        [csvAttachment]
-      )
-    ).toBe(false)
-  })
+      attachments: [csvAttachment],
+      serviceHub: {} as never,
+    })
 
-  it('detects existing AX-BI dataset chart requests', () => {
-    expect(
-      isAxBiChartCandidate(
-        'Use AX-BI MCP only. Find dataset palmer_penguins. Create a saved bar chart showing COUNT(*) by species. Name it Test - Penguins Count by Species.'
-      )
-    ).toBe(true)
-  })
-
-  it('detects existing AX-BI aggregate chart requests', () => {
-    expect(
-      isAxBiChartCandidate(
-        'Use AX-BI MCP. Create a saved bar chart from palmer_penguins showing average body_mass_g by species. Name it Test - Avg Body Mass by Species.'
-      )
-    ).toBe(true)
-  })
-
-  it('detects AX-BI SDK prompt requests', () => {
-    expect(
-      isAxBiSdkPromptRequest('Prompt AX-BI to plan a revenue dashboard')
-    ).toBe(true)
-    expect(isAxBiSdkPromptRequest('Summarize this note')).toBe(false)
+    expect(result).toEqual({ handled: false })
   })
 
   it('plans an AX-BI dashboard through the SDK client', async () => {
@@ -108,6 +104,21 @@ describe('AX-BI dashboard workflow', () => {
       expect(result.message).toContain('bar: revenue by region')
       expect(result.message).toContain('Confidence: 82%')
     }
+  })
+
+  it('does not intercept ordinary prompts through the SDK workflow', async () => {
+    const planDashboard = vi.fn()
+
+    const result = await runAxBiSdkPromptWorkflow({
+      prompt: 'Summarize this note',
+      serviceHub: {} as never,
+      client: {
+        ai: { planDashboard },
+      },
+    })
+
+    expect(result).toEqual({ handled: false })
+    expect(planDashboard).not.toHaveBeenCalled()
   })
 
   it('creates an existing-dataset count bar chart through AX-BI MCP directly', async () => {
