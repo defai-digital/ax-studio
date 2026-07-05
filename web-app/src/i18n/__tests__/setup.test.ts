@@ -15,7 +15,7 @@ Object.defineProperty(window, 'localStorage', {
 
 async function loadI18n() {
   vi.resetModules()
-  return (await import('../setup')).default
+  return (await import('../setup')).i18n
 }
 
 describe('getStoredLanguage', () => {
@@ -26,23 +26,27 @@ describe('getStoredLanguage', () => {
   it('should initialize with complete language from valid stored settings', async () => {
     const validData = {
       state: {
-        currentLanguage: 'en'
-      }
+        currentLanguage: 'en',
+      },
     }
     mockLocalStorage.getItem.mockReturnValue(JSON.stringify(validData))
 
     const i18n = await loadI18n()
 
     expect(i18n.language).toBe('en')
-    expect(mockLocalStorage.getItem).toHaveBeenCalledWith(localStorageKey.settingGeneral)
+    expect(mockLocalStorage.getItem).toHaveBeenCalledWith(
+      localStorageKey.settingGeneral
+    )
   })
 
   it('should initialize with "en" for stored languages that are incomplete or unsupported', async () => {
-    mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
-      state: {
-        currentLanguage: 'ja',
-      },
-    }))
+    mockLocalStorage.getItem.mockReturnValue(
+      JSON.stringify({
+        state: {
+          currentLanguage: 'ja',
+        },
+      })
+    )
 
     expect((await loadI18n()).language).toBe('en')
   })
@@ -93,8 +97,8 @@ describe('getStoredLanguage', () => {
   it('should initialize with "en" when state.currentLanguage is missing', async () => {
     const invalidData = {
       state: {
-        spellCheckChatInput: true
-      }
+        spellCheckChatInput: true,
+      },
     }
     mockLocalStorage.getItem.mockReturnValue(JSON.stringify(invalidData))
 
@@ -106,8 +110,8 @@ describe('getStoredLanguage', () => {
   it('should initialize with "en" when currentLanguage is not a string', async () => {
     const invalidData = {
       state: {
-        currentLanguage: 123
-      }
+        currentLanguage: 123,
+      },
     }
     mockLocalStorage.getItem.mockReturnValue(JSON.stringify(invalidData))
 
@@ -149,10 +153,10 @@ describe('getStoredLanguage', () => {
         currentLanguage: 'en',
         nested: {
           invalid: {
-            structure: true
-          }
-        }
-      }
+            structure: true,
+          },
+        },
+      },
     }
     // This should still work since the valid properties are present
     mockLocalStorage.getItem.mockReturnValue(JSON.stringify(invalidData))

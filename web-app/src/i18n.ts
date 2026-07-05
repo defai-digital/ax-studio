@@ -1,5 +1,5 @@
 // Re-export our custom i18n implementation
-export { default } from '@/i18n/setup'
+export { i18n } from '@/i18n/setup'
 
 // Re-export compatibility functions for existing code
 export { useTranslation } from '@/i18n/react-i18next-compat'

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { useCallback, useEffect, useMemo } from 'react'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { TranslationContext } from './context'
-import i18next from './setup'
+import { i18n as i18next } from './setup'
 
 // Translation provider component
 export function TranslationProvider({ children }: { children: ReactNode }) {

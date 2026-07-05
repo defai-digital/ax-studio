@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 
 // Mock the dependencies
 vi.mock('@/i18n/setup', () => ({
-  default: { t: vi.fn(), init: vi.fn() },
+  i18n: { t: vi.fn(), init: vi.fn() },
 }))
 
 vi.mock('@/i18n/react-i18next-compat', () => ({
@@ -18,9 +18,9 @@ vi.mock('@/i18n/TranslationContext', () => ({
 }))
 
 describe('i18n module', () => {
-  it('should re-export default from i18n/setup', async () => {
+  it('should re-export i18n from i18n/setup', async () => {
     const i18nModule = await import('../i18n')
-    expect(i18nModule.default).toBeDefined()
+    expect(i18nModule.i18n).toBeDefined()
   })
 
   it('should re-export useTranslation', async () => {
@@ -43,9 +43,14 @@ describe('i18n module', () => {
 
   it('should export all expected functions', async () => {
     const i18nModule = await import('../i18n')
-    const expectedExports = ['default', 'useTranslation', 'useAppTranslation', 'TranslationProvider']
-    
-    expectedExports.forEach(exportName => {
+    const expectedExports = [
+      'i18n',
+      'useTranslation',
+      'useAppTranslation',
+      'TranslationProvider',
+    ]
+
+    expectedExports.forEach((exportName) => {
       expect(i18nModule[exportName]).toBeDefined()
     })
   })

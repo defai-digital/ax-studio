@@ -18,7 +18,7 @@ vi.mock('@/hooks/settings/useGeneralSetting', () => ({
 }))
 
 vi.mock('../setup', () => ({
-  default: {
+  i18n: {
     changeLanguage: mocks.changeLanguage,
     t: mocks.t,
   },
@@ -32,9 +32,7 @@ function TranslationConsumer({
   return (
     <TranslationContext.Consumer>
       {({ t }) => (
-        <span data-testid="translation">
-          {t('common:newChat', options)}
-        </span>
+        <span data-testid="translation">{t('common:newChat', options)}</span>
       )}
     </TranslationContext.Consumer>
   )

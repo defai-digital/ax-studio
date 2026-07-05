@@ -1,11 +1,10 @@
 import { localStorageKey } from '@/constants/localStorage'
-import {
-  safeStorageGetItem,
-  safeStorageSetItem,
-} from '@/lib/storage/storage'
+import { safeStorageGetItem, safeStorageSetItem } from '@/lib/storage/storage'
 
 // Validation helper for stored settings structure
-const isValidStoredSettings = (parsed: unknown): parsed is { state: { currentLanguage: string } } => {
+const isValidStoredSettings = (
+  parsed: unknown
+): parsed is { state: { currentLanguage: string } } => {
   if (typeof parsed !== 'object' || parsed === null) return false
   const obj = parsed as Record<string, unknown>
   if (typeof obj.state !== 'object' || obj.state === null) return false
@@ -64,14 +63,13 @@ Object.entries(localeFiles).forEach(([path, module]) => {
     }
 
     // Add namespace resources to language
-    resources[language][namespace] = (module as { default: { [key: string]: string } }).default || (module as { [key: string]: string })
+    resources[language][namespace] =
+      (module as { default: { [key: string]: string } }).default ||
+      (module as { [key: string]: string })
   }
 })
 
-function flattenTranslationKeys(
-  value: unknown,
-  prefix = ''
-): string[] {
+function flattenTranslationKeys(value: unknown, prefix = ''): string[] {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return prefix ? [prefix] : []
   }
@@ -90,7 +88,9 @@ function getCompleteLanguages(minCoverage = 0.95): string[] {
 
   const expectedKeys = new Set(
     Object.entries(englishResources).flatMap(([namespace, namespaceValues]) =>
-      flattenTranslationKeys(namespaceValues).map((key) => `${namespace}:${key}`)
+      flattenTranslationKeys(namespaceValues).map(
+        (key) => `${namespace}:${key}`
+      )
     )
   )
 
@@ -100,8 +100,11 @@ function getCompleteLanguages(minCoverage = 0.95): string[] {
     .filter(([language, languageResources]) => {
       if (language === 'en') return true
       const languageKeys = new Set(
-        Object.entries(languageResources).flatMap(([namespace, namespaceValues]) =>
-          flattenTranslationKeys(namespaceValues).map((key) => `${namespace}:${key}`)
+        Object.entries(languageResources).flatMap(
+          ([namespace, namespaceValues]) =>
+            flattenTranslationKeys(namespaceValues).map(
+              (key) => `${namespace}:${key}`
+            )
         )
       )
       let matched = 0
@@ -137,34 +140,40 @@ const getStoredLanguage = (): string => {
 const translate = (key: string, options: TranslationOptions = {}): string => {
   const { fallbackLng, resources: res, defaultNS } = i18nInstance
   const language = options.lng ?? i18nInstance.language
-  
+
   // Parse key to extract namespace and actual key
   let namespace = defaultNS
   let translationKey = key
-  
+
   if (key.includes(':')) {
     const parts = key.split(':')
     namespace = parts[0]
     translationKey = parts[1]
   }
-  
+
   // Helper function to get nested value from object using dot notation
-  const getNestedValue = (obj: Record<string, unknown>, path: string): string | undefined => {
+  const getNestedValue = (
+    obj: Record<string, unknown>,
+    path: string
+  ): string | undefined => {
     return path.split('.').reduce((current, key) => {
-      return current && typeof current === 'object' && current !== null && key in current
+      return current &&
+        typeof current === 'object' &&
+        current !== null &&
+        key in current
         ? (current as Record<string, unknown>)[key]
         : undefined
     }, obj as unknown) as string | undefined
   }
-  
+
   // Try to get translation from current language
   let translation = getNestedValue(res[language]?.[namespace], translationKey)
-  
+
   // Fallback to fallback language if not found
   if (translation === undefined && language !== fallbackLng) {
     translation = getNestedValue(res[fallbackLng]?.[namespace], translationKey)
   }
-  
+
   // If still not found, fall back to defaultValue option, then return the key itself
   if (translation === undefined) {
     if (options.defaultValue !== undefined) {
@@ -173,14 +182,14 @@ const translate = (key: string, options: TranslationOptions = {}): string => {
     console.warn(`Translation missing for key: ${key}`)
     return key
   }
-  
+
   // Handle interpolation
   if (typeof translation === 'string' && options) {
     return translation.replace(/\{\{(\w+)\}\}/g, (match, variable) => {
       return options[variable] !== undefined ? String(options[variable]) : match
     })
   }
-  
+
   return String(translation)
 }
 
@@ -188,7 +197,7 @@ const translate = (key: string, options: TranslationOptions = {}): string => {
 const changeLanguage = (lng: string): void => {
   if (i18nInstance && getCompleteLanguages().includes(lng)) {
     i18nInstance.language = lng
-    
+
     // Update localStorage
     try {
       const stored = safeStorageGetItem(
@@ -203,7 +212,7 @@ const changeLanguage = (lng: string): void => {
         parsed !== null &&
         typeof parsed.state === 'object' &&
         parsed.state !== null
-          ? (parsed.state as { currentLanguage?: string } )
+          ? (parsed.state as { currentLanguage?: string })
           : {}
       const nextState = {
         ...parsedState,
@@ -224,7 +233,7 @@ const changeLanguage = (lng: string): void => {
 // Initialize i18n instance
 const initI18n = (): I18nInstance => {
   const currentLanguage = getStoredLanguage()
-  
+
   i18nInstance = {
     language: currentLanguage,
     fallbackLng: 'en',
@@ -234,11 +243,9 @@ const initI18n = (): I18nInstance => {
     changeLanguage,
     t: translate,
   }
-  
+
   return i18nInstance
 }
 
 // Initialize and export the i18n instance
-const i18n = initI18n()
-
-export default i18n
+export const i18n = initI18n()
