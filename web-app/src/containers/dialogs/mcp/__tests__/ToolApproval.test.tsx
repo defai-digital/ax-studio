@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import ToolApproval from '../ToolApproval'
+import { ToolApproval } from '../ToolApproval'
 
 const mockOnApprove = vi.fn()
 const mockOnDeny = vi.fn()
@@ -36,7 +36,9 @@ vi.mock('@/components/ui/dialog', () => ({
   DialogContent: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
-  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   DialogTitle: ({ children }: { children: React.ReactNode }) => (
     <h2 data-testid="dialog-title">{children}</h2>
   ),
@@ -47,7 +49,9 @@ vi.mock('@/components/ui/dialog', () => ({
 
 vi.mock('@/components/ui/button', () => ({
   Button: ({ children, onClick, ...props }: Record<string, unknown>) => (
-    <button onClick={onClick as () => void} {...props}>{children as React.ReactNode}</button>
+    <button onClick={onClick as () => void} {...props}>
+      {children as React.ReactNode}
+    </button>
   ),
 }))
 
@@ -71,7 +75,9 @@ describe('ToolApproval', () => {
     render(<ToolApproval />)
     expect(screen.getByText('tools:toolApproval.deny')).toBeInTheDocument()
     expect(screen.getByText('tools:toolApproval.allowOnce')).toBeInTheDocument()
-    expect(screen.getByText('tools:toolApproval.alwaysAllow')).toBeInTheDocument()
+    expect(
+      screen.getByText('tools:toolApproval.alwaysAllow')
+    ).toBeInTheDocument()
   })
 
   it('calls onApprove(true) when allow once is clicked', () => {
@@ -94,7 +100,9 @@ describe('ToolApproval', () => {
 
   it('renders security notice', () => {
     render(<ToolApproval />)
-    expect(screen.getByText('tools:toolApproval.securityNotice')).toBeInTheDocument()
+    expect(
+      screen.getByText('tools:toolApproval.securityNotice')
+    ).toBeInTheDocument()
     expect(screen.getByTestId('shield-icon')).toBeInTheDocument()
   })
 })

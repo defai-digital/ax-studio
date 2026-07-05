@@ -10,7 +10,7 @@ import { useToolApproval } from '@/hooks/tools/useToolApproval'
 import { Shield, Wrench } from 'lucide-react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 
-export default function ToolApproval() {
+export function ToolApproval() {
   const { t } = useTranslation()
   const { isModalOpen, modalProps, setModalOpen } = useToolApproval()
 
