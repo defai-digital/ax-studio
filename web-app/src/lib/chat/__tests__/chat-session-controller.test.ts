@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import type { Chat, UIMessage } from '@ai-sdk/react'
+import type { CustomChatTransport } from '@/lib/custom-chat-transport'
 import {
   createSessionData,
   isSessionBusy,
@@ -6,21 +8,39 @@ import {
   applyStatusUpdate,
   destroySession,
 } from '../chat-session-controller'
-import type { ChatSession } from '../chat-session-types'
+import type { ChatSession, SessionData } from '../chat-session-types'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const makeChat = (status = 'idle') => ({
-  status,
-  'messages': [],
-  'stop': vi.fn(),
-  '~registerStatusCallback': vi.fn().mockReturnValue(vi.fn()),
+type TestChat = Chat<UIMessage> & {
+  'stop': ReturnType<typeof vi.fn>
+  '~registerStatusCallback'?: ReturnType<typeof vi.fn>
+}
+
+const makeChat = (status = 'idle'): TestChat =>
+  ({
+    status,
+    'messages': [],
+    'stop': vi.fn(),
+    '~registerStatusCallback': vi.fn().mockReturnValue(vi.fn()),
+  }) as unknown as TestChat
+
+const createChat =
+  (chat = makeChat()) =>
+  () =>
+    chat
+
+const makeTransport = (): CustomChatTransport =>
+  ({}) as unknown as CustomChatTransport
+
+const makeSessionData = (tools: unknown[] = []): SessionData => ({
+  tools,
+  messages: [],
+  idMap: new Map(),
 })
 
-const makeTransport = () => ({}) as any
-
 const makeSession = (overrides: Partial<ChatSession> = {}): ChatSession => ({
-  chat: makeChat() as any,
+  chat: makeChat(),
   transport: makeTransport(),
   status: 'idle',
   isStreaming: false,
@@ -71,7 +91,7 @@ describe('isSessionBusy', () => {
 
   it('returns true when there are pending tools', () => {
     const session = makeSession({
-      data: { tools: ['t1'], messages: [], idMap: new Map() },
+      data: makeSessionData(['t1']),
     })
     expect(isSessionBusy(session)).toBe(true)
   })
@@ -90,7 +110,7 @@ describe('createSession', () => {
     const session = createSession(
       's1',
       makeTransport(),
-      () => chat as any,
+      createChat(chat),
       'Title',
       undefined,
       onStatusChange
@@ -106,7 +126,7 @@ describe('createSession', () => {
     const session = createSession(
       's1',
       makeTransport(),
-      () => chat as any,
+      createChat(chat),
       undefined,
       undefined,
       vi.fn()
@@ -119,7 +139,7 @@ describe('createSession', () => {
     const session = createSession(
       's1',
       makeTransport(),
-      () => chat as any,
+      createChat(chat),
       undefined,
       undefined,
       vi.fn()
@@ -134,7 +154,7 @@ describe('createSession', () => {
     const session = createSession(
       's1',
       makeTransport(),
-      () => chat as any,
+      createChat(chat),
       undefined,
       undefined,
       vi.fn()
@@ -144,12 +164,12 @@ describe('createSession', () => {
   })
 
   it('handles missing ~registerStatusCallback gracefully', () => {
-    const chat = makeChat() as any
+    const chat = makeChat()
     delete chat['~registerStatusCallback']
     const session = createSession(
       's1',
       makeTransport(),
-      () => chat,
+      createChat(chat),
       undefined,
       undefined,
       vi.fn()
@@ -159,7 +179,7 @@ describe('createSession', () => {
 
   it('calls onStatusChange when the status callback fires', () => {
     let capturedCallback: (() => void) | undefined
-    const chat = makeChat() as any
+    const chat = makeChat()
     chat['~registerStatusCallback'] = vi
       .fn()
       .mockImplementation((cb: () => void) => {
@@ -170,7 +190,7 @@ describe('createSession', () => {
     createSession(
       's1',
       makeTransport(),
-      () => chat,
+      createChat(chat),
       undefined,
       undefined,
       onStatusChange
@@ -181,11 +201,11 @@ describe('createSession', () => {
 
   it('uses existingData when provided', () => {
     const existingData = createSessionData()
-    existingData.tools.push({ toolName: 'existing' } as any)
+    existingData.tools.push({ toolName: 'existing' })
     const session = createSession(
       's1',
       makeTransport(),
-      () => makeChat() as any,
+      createChat(),
       undefined,
       existingData,
       vi.fn()
@@ -197,7 +217,7 @@ describe('createSession', () => {
     const session = createSession(
       's1',
       makeTransport(),
-      () => makeChat() as any,
+      createChat(),
       undefined,
       undefined,
       vi.fn()
@@ -257,7 +277,7 @@ describe('destroySession', () => {
 
   it('calls chat.stop()', () => {
     const chat = makeChat()
-    destroySession(makeSession({ chat: chat as any }))
+    destroySession(makeSession({ chat }))
     expect(chat.stop).toHaveBeenCalled()
   })
 
@@ -275,9 +295,7 @@ describe('destroySession', () => {
     chat.stop = vi.fn().mockImplementation(() => {
       throw new Error('stop error')
     })
-    expect(() =>
-      destroySession(makeSession({ chat: chat as any }))
-    ).not.toThrow()
+    expect(() => destroySession(makeSession({ chat }))).not.toThrow()
   })
 
   it('continues calling remaining unsubscribers after one throws', () => {
