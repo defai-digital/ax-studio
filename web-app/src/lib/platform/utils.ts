@@ -15,12 +15,6 @@ export const isPlatformTauri = (): boolean => {
   return !(IS_WEB_APP === true || (IS_WEB_APP as unknown as string) === 'true')
 }
 
-export type Platform = 'tauri' | 'web'
-
-export const getCurrentPlatform = (): Platform => {
-  return isPlatformTauri() ? 'tauri' : 'web'
-}
-
 /**
  * Detect if running on macOS. MLX models only work on macOS with Apple Silicon.
  * Uses navigator.platform which works in both browser and Tauri WebView.

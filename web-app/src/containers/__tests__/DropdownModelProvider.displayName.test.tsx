@@ -77,7 +77,6 @@ vi.mock('@/hooks/models/useFavoriteModel', () => ({
 
 vi.mock('@/lib/platform/utils', () => ({
   isPlatformTauri: vi.fn().mockReturnValue(true),
-  getCurrentPlatform: vi.fn().mockReturnValue('tauri'),
 }))
 
 // Mock UI components

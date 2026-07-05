@@ -43,12 +43,4 @@ describe('platform/utils', () => {
     })
   })
 
-  describe('getCurrentPlatform', () => {
-    it('returns "web" when no Tauri internals', async () => {
-      const { getCurrentPlatform } = await import('../utils')
-      const result = getCurrentPlatform()
-      expect(result).toBe('web')
-    })
-  })
-
 })
