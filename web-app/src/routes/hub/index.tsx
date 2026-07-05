@@ -52,6 +52,7 @@ import { Button } from '@/components/ui/button'
 import { RenderMarkdown } from '@/containers/RenderMarkdown'
 import { encodeHubRouteParam } from '@/lib/hub'
 import { isMlxCatalogModel } from '@/lib/models'
+import { formatCompactNumber } from '@/lib/utils/number'
 import { z } from 'zod/v4'
 import { findDownloadedCatalogModel } from '@/lib/models/downloaded'
 import { useModelSupportStatus } from '@/hooks/models/useModelSupportStatus'
@@ -740,9 +741,7 @@ function HubContent() {
                           <div className="flex items-center gap-1 text-[11px] text-muted-foreground/50 min-w-0 overflow-hidden">
                             <span className="flex items-center gap-1 whitespace-nowrap">
                               <Download size={12} className="shrink-0" />
-                              {model.downloads
-                                ? `${(model.downloads / 1000).toFixed(0)}k`
-                                : '0'}
+                              {formatCompactNumber(model.downloads ?? 0, 0)}
                             </span>
                             <span className="text-muted-foreground/20">
                               &middot;
