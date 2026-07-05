@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type { ServiceHub } from '@/services'
 
 // Mock @ax-studio/core events before importing the module under test
 vi.mock('@ax-studio/core', () => {
@@ -23,23 +24,38 @@ vi.mock('@ax-studio/core', () => {
 import { bootstrapEvents } from '../bootstrap-events'
 import { AppEvent, events } from '@ax-studio/core'
 
-const makeServiceHub = (providers: ModelProvider[] = []) => ({
-  providers: () => ({
-    getProviders: vi.fn().mockResolvedValue(providers),
-  }),
-  path: () => ({ sep: () => '/' }),
+type MockCoreEvents = typeof events & {
+  _emit: (event: string, ...args: unknown[]) => void
+  _listeners: Record<string, ((...args: unknown[]) => void)[]>
+}
+
+const mockEvents = events as MockCoreEvents
+
+const makeProvider = (provider: string): ModelProvider => ({
+  active: true,
+  provider,
+  settings: [],
+  models: [],
 })
+
+const makeServiceHub = (providers: ModelProvider[] = []): ServiceHub =>
+  ({
+    providers: () => ({
+      getProviders: vi.fn().mockResolvedValue(providers),
+    }),
+    path: () => ({ sep: () => '/' }),
+  }) as Pick<ServiceHub, 'providers' | 'path'> as ServiceHub
 
 beforeEach(() => {
   vi.mocked(events.on).mockClear()
   vi.mocked(events.off).mockClear()
-  ;(events as any)._listeners['onModelImported'] = []
+  mockEvents._listeners['onModelImported'] = []
 })
 
 describe('bootstrapEvents', () => {
   it('registers the onModelImported listener', () => {
     const serviceHub = makeServiceHub()
-    bootstrapEvents({ serviceHub: serviceHub as any, setProviders: vi.fn() })
+    bootstrapEvents({ serviceHub, setProviders: vi.fn() })
     expect(events.on).toHaveBeenCalledWith(
       AppEvent.onModelImported,
       expect.any(Function)
@@ -49,7 +65,7 @@ describe('bootstrapEvents', () => {
   it('returns a cleanup that removes the listener', () => {
     const serviceHub = makeServiceHub()
     const cleanup = bootstrapEvents({
-      serviceHub: serviceHub as any,
+      serviceHub,
       setProviders: vi.fn(),
     })
     cleanup()
@@ -60,14 +76,14 @@ describe('bootstrapEvents', () => {
   })
 
   it('calls setProviders with reloaded providers when onModelImported fires', async () => {
-    const mockProviders = [{ provider: 'openai' }] as ModelProvider[]
+    const mockProviders = [makeProvider('openai')]
     const serviceHub = makeServiceHub(mockProviders)
     const setProviders = vi.fn()
 
-    bootstrapEvents({ serviceHub: serviceHub as any, setProviders })
+    bootstrapEvents({ serviceHub, setProviders })
 
     // Simulate the event firing
-    ;(events as any)._emit(AppEvent.onModelImported)
+    mockEvents._emit(AppEvent.onModelImported)
 
     // Wait for the async getProviders call
     await vi.waitFor(() =>
@@ -76,17 +92,15 @@ describe('bootstrapEvents', () => {
   })
 
   it('does not call setProviders after cleanup', async () => {
-    const serviceHub = makeServiceHub([
-      { provider: 'openai' },
-    ] as ModelProvider[])
+    const serviceHub = makeServiceHub([makeProvider('openai')])
     const setProviders = vi.fn()
 
     const cleanup = bootstrapEvents({
-      serviceHub: serviceHub as any,
+      serviceHub,
       setProviders,
     })
     cleanup()
-    ;(events as any)._emit(AppEvent.onModelImported)
+    mockEvents._emit(AppEvent.onModelImported)
     await new Promise((r) => setTimeout(r, 10))
     expect(setProviders).not.toHaveBeenCalled()
   })
