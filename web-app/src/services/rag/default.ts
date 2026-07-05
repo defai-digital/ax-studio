@@ -18,6 +18,9 @@ import {
 } from '@/lib/file-registry'
 
 const RAG_SERVER = 'rag-internal'
+const RETRIEVE_DEFAULT_TOP_K = 3
+const RETRIEVE_MIN_TOP_K = 1
+const RETRIEVE_MAX_TOP_K = 10
 
 const RAG_TOOLS: MCPTool[] = [
   {
@@ -94,6 +97,28 @@ function fail(message: string): MCPToolCallResult {
     error: message,
     content: [{ type: 'text', text: message }],
   }
+}
+
+function parseIntegerArgument(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isSafeInteger(value) ? value : null
+  }
+
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const trimmed = value.trim()
+  if (!/^-?\d+$/.test(trimmed)) {
+    return null
+  }
+
+  const parsed = Number(trimmed)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function parseStringArgument(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
 }
 
 export class DefaultRAGService implements RAGService {
@@ -201,11 +226,22 @@ export class DefaultRAGService implements RAGService {
     const collectionId = this.resolveCollectionId(args)
     if (!collectionId) return fail('No thread or project context for retrieve')
 
-    const query = String(args.arguments.query ?? '')
+    const query = parseStringArgument(args.arguments.query)
     if (!query) return fail('Query is required for retrieve')
 
     const topK =
-      typeof args.arguments.top_k === 'number' ? args.arguments.top_k : 3
+      args.arguments.top_k === undefined
+        ? RETRIEVE_DEFAULT_TOP_K
+        : parseIntegerArgument(args.arguments.top_k)
+    if (
+      topK === null ||
+      topK < RETRIEVE_MIN_TOP_K ||
+      topK > RETRIEVE_MAX_TOP_K
+    ) {
+      return fail(
+        `top_k must be a whole number between ${RETRIEVE_MIN_TOP_K} and ${RETRIEVE_MAX_TOP_K}`
+      )
+    }
 
     try {
       const searchArgs: Record<string, unknown> = {
@@ -310,11 +346,21 @@ export class DefaultRAGService implements RAGService {
     const collectionId = this.resolveCollectionId(args)
     if (!collectionId) return fail('No thread or project context')
 
-    const fileId = String(args.arguments.file_id ?? '')
-    const startOrder = Number(args.arguments.start_order ?? 0)
-    const endOrder = Number(args.arguments.end_order ?? 0)
+    const fileId = parseStringArgument(args.arguments.file_id)
 
     if (!fileId) return fail('file_id is required')
+
+    const startOrder = parseIntegerArgument(args.arguments.start_order)
+    const endOrder = parseIntegerArgument(args.arguments.end_order)
+    if (startOrder === null || endOrder === null) {
+      return fail('start_order and end_order must be non-negative whole numbers')
+    }
+    if (startOrder < 0 || endOrder < 0) {
+      return fail('start_order and end_order must be non-negative whole numbers')
+    }
+    if (endOrder < startOrder) {
+      return fail('end_order must be greater than or equal to start_order')
+    }
 
     try {
       const result = await hub.callTool({
@@ -322,7 +368,7 @@ export class DefaultRAGService implements RAGService {
         arguments: {
           query: '',
           collection_id: collectionId,
-          top_k: Math.max(endOrder - startOrder + 1, 1),
+          top_k: endOrder - startOrder + 1,
           mode: 'keyword',
           filters: { doc_id: fileId },
         },

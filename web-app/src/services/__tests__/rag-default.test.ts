@@ -204,6 +204,23 @@ describe('DefaultRAGService', () => {
       })
       expect(result.error).toContain('No thread or project')
     })
+
+    it('rejects invalid top_k before calling fabric_search', async () => {
+      const mockCallTool = vi.fn()
+      service.setMcpService({ callTool: mockCallTool })
+
+      const result = await service.callTool({
+        toolName: 'retrieve',
+        arguments: { query: 'test', top_k: Number.POSITIVE_INFINITY },
+        threadId: 't1',
+        scope: 'thread',
+      })
+
+      expect(result.error).toContain(
+        'top_k must be a whole number between 1 and 10'
+      )
+      expect(mockCallTool).not.toHaveBeenCalled()
+    })
   })
 
   describe('callTool — list_attachments', () => {
@@ -242,6 +259,104 @@ describe('DefaultRAGService', () => {
       })
       const payload = JSON.parse(result.content[0].text)
       expect(payload.attachments).toEqual([])
+    })
+  })
+
+  describe('callTool — get_chunks', () => {
+    it('calls fabric_search with a validated chunk range', async () => {
+      const mockCallTool = vi.fn().mockResolvedValue({
+        error: '',
+        content: [
+          {
+            text: JSON.stringify({
+              results: [
+                {
+                  chunkId: 'chunk-1',
+                  content: 'chunk text',
+                  score: 0.7,
+                  offset: 2,
+                },
+              ],
+            }),
+          },
+        ],
+      })
+      service.setMcpService({ callTool: mockCallTool })
+
+      const result = await service.callTool({
+        toolName: 'get_chunks',
+        arguments: { file_id: 'file-1', start_order: '2', end_order: 4 },
+        threadId: 'thread-123',
+        scope: 'thread',
+      })
+
+      expect(result.error).toBe('')
+      expect(mockCallTool).toHaveBeenCalledWith(
+        expect.objectContaining({
+          toolName: 'fabric_search',
+          arguments: expect.objectContaining({
+            query: '',
+            collection_id: 'thread_thread-123',
+            top_k: 3,
+            mode: 'keyword',
+            filters: { doc_id: 'file-1' },
+          }),
+        })
+      )
+
+      const payload = JSON.parse(result.content[0].text)
+      expect(payload.chunks).toHaveLength(1)
+      expect(payload.chunks[0].id).toBe('chunk-1')
+      expect(payload.chunks[0].chunk_file_order).toBe(2)
+    })
+
+    it('rejects non-integer chunk ranges before calling fabric_search', async () => {
+      const mockCallTool = vi.fn()
+      service.setMcpService({ callTool: mockCallTool })
+
+      const result = await service.callTool({
+        toolName: 'get_chunks',
+        arguments: { file_id: 'file-1', start_order: '1.5', end_order: 2 },
+        threadId: 't1',
+        scope: 'thread',
+      })
+
+      expect(result.error).toContain(
+        'start_order and end_order must be non-negative whole numbers'
+      )
+      expect(mockCallTool).not.toHaveBeenCalled()
+    })
+
+    it('rejects reversed chunk ranges before calling fabric_search', async () => {
+      const mockCallTool = vi.fn()
+      service.setMcpService({ callTool: mockCallTool })
+
+      const result = await service.callTool({
+        toolName: 'get_chunks',
+        arguments: { file_id: 'file-1', start_order: 5, end_order: 4 },
+        threadId: 't1',
+        scope: 'thread',
+      })
+
+      expect(result.error).toContain(
+        'end_order must be greater than or equal to start_order'
+      )
+      expect(mockCallTool).not.toHaveBeenCalled()
+    })
+
+    it('rejects non-string file ids before calling fabric_search', async () => {
+      const mockCallTool = vi.fn()
+      service.setMcpService({ callTool: mockCallTool })
+
+      const result = await service.callTool({
+        toolName: 'get_chunks',
+        arguments: { file_id: 123, start_order: 0, end_order: 1 },
+        threadId: 't1',
+        scope: 'thread',
+      })
+
+      expect(result.error).toContain('file_id is required')
+      expect(mockCallTool).not.toHaveBeenCalled()
     })
   })
 
