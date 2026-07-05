@@ -6,7 +6,7 @@ use crate::core::state::{AppState, ProviderState, SharedMcpServers};
 use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::test::mock_app;
 use tauri::Manager;
@@ -234,9 +234,21 @@ fn test_get_gguf_files_classifies_app_data_files() {
     .unwrap();
 
     assert_eq!(result.gguf.len(), 1);
-    assert!(result.gguf[0].ends_with("models/model.gguf"));
+    let expected_model_path = Path::new("models").join("model.gguf");
+    assert!(
+        PathBuf::from(&result.gguf[0]).ends_with(&expected_model_path),
+        "expected model path to end with {:?}, got {}",
+        expected_model_path,
+        result.gguf[0]
+    );
     assert_eq!(result.non_gguf.len(), 1);
-    assert!(result.non_gguf[0].ends_with("models/notes.txt"));
+    let expected_notes_path = Path::new("models").join("notes.txt");
+    assert!(
+        PathBuf::from(&result.non_gguf[0]).ends_with(&expected_notes_path),
+        "expected notes path to end with {:?}, got {}",
+        expected_notes_path,
+        result.non_gguf[0]
+    );
 }
 
 #[test]
