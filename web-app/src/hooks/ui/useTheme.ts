@@ -13,7 +13,7 @@ export const checkOSDarkMode = (): boolean => {
   )
 }
 
-export type ThemeState = {
+type ThemeState = {
   activeTheme: AppTheme
   setTheme: (theme: AppTheme) => void
   isDark: boolean

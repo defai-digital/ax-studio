@@ -18,7 +18,7 @@ import { AXMarkdown } from '@/lib/markdown/renderer'
 import { Shimmer } from './shimmer'
 import { ReasoningContext, useReasoning } from './reasoning-context'
 
-export type ReasoningProps = ComponentProps<typeof Collapsible> & {
+type ReasoningProps = ComponentProps<typeof Collapsible> & {
   isStreaming?: boolean
   open?: boolean
   defaultOpen?: boolean
@@ -102,7 +102,7 @@ export const Reasoning = memo(
   }
 )
 
-export type ReasoningTriggerProps = ComponentProps<
+type ReasoningTriggerProps = ComponentProps<
   typeof CollapsibleTrigger
 > & {
   getThinkingMessage?: (isStreaming: boolean, duration?: number) => ReactNode
@@ -155,7 +155,7 @@ export const ReasoningTrigger = memo(
   }
 )
 
-export type ReasoningContentProps = ComponentProps<
+type ReasoningContentProps = ComponentProps<
   typeof CollapsibleContent
 > & {
   children: string

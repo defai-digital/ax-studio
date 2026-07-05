@@ -8,7 +8,7 @@ import {
   useMemo,
 } from "react";
 
-export type TextShimmerProps = {
+type TextShimmerProps = {
   children: string;
   as?: ElementType;
   className?: string;

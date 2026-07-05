@@ -19,7 +19,7 @@ import {
 import { CodeBlock } from './code-block'
 import { ToolContext, type ToolState, useTool } from './tool-context'
 
-export type ToolProps = ComponentProps<typeof Collapsible> & {
+type ToolProps = ComponentProps<typeof Collapsible> & {
   className?: string
   state: ToolState
   open?: boolean
@@ -62,7 +62,7 @@ export const Tool = memo(
   }
 )
 
-export type ToolHeaderProps = {
+type ToolHeaderProps = {
   title?: string
   state: ToolState
   type: ToolUIPart['type']
@@ -112,7 +112,7 @@ export const ToolHeader = memo(
   }
 )
 
-export type ToolContentProps = ComponentProps<typeof CollapsibleContent>
+type ToolContentProps = ComponentProps<typeof CollapsibleContent>
 
 export const ToolContent = memo(
   ({ className, children, ...props }: ToolContentProps) => (
@@ -131,7 +131,7 @@ export const ToolContent = memo(
   )
 )
 
-export type ToolInputProps = ComponentProps<'div'> & {
+type ToolInputProps = ComponentProps<'div'> & {
   input: ToolUIPart['input']
 }
 
@@ -197,7 +197,7 @@ const ToolImage = memo(({ data, index }: ToolImageProps) => {
   )
 })
 
-export type ToolOutputProps = ComponentProps<'div'> & {
+type ToolOutputProps = ComponentProps<'div'> & {
   output: ToolUIPart['output']
   errorText: ToolUIPart['errorText']
   resolver: (input: string) => Promise<string>

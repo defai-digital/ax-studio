@@ -9,11 +9,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { generateId } from 'ai'
 import type { UIMessage } from '@ai-sdk/react'
-
-// Message parts for chat messages (Vercel AI SDK format)
-type MessagePart =
-  | { type: 'text'; text: string }
-  | { type: 'file'; mediaType: string; url: string }
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useThreads } from '@/hooks/threads/useThreads'
 import { useMessages } from '@/hooks/chat/useMessages'
@@ -42,11 +37,16 @@ import {
   ContentType,
 } from '@ax-studio/core'
 
+// Message parts for chat messages (Vercel AI SDK format)
+type MessagePart =
+  | { type: 'text'; text: string }
+  | { type: 'file'; mediaType: string; url: string }
+
 type SendMessageFn = (args: {
   parts: MessagePart[]
   id: string
   metadata: unknown
-}) => void  
+}) => void
 type RegenerateFn = (args?: { messageId?: string }) => void
 
 export type ThreadChatParams = {
@@ -70,7 +70,7 @@ export type ThreadChatParams = {
   }>
 }
 
-export type ThreadChatResult = {
+type ThreadChatResult = {
   processAndSendMessage: (text: string) => Promise<void>
   persistMessageOnFinish: (
     message: UIMessage,
