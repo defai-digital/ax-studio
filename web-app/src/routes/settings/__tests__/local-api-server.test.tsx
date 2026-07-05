@@ -466,12 +466,42 @@ describe('Local API Server settings route', () => {
     expect(portInput).toHaveValue(1337)
   })
 
+  it('rejects non-decimal server port input instead of coercing it', () => {
+    renderLocalApiServerRoute()
+
+    const portInput = screen.getByDisplayValue('1337')
+
+    fireEvent.change(portInput, { target: { value: '1e3' } })
+    fireEvent.blur(portInput)
+
+    expect(mocks.setServerPort).not.toHaveBeenCalled()
+    expect(portInput).toHaveValue(1337)
+
+    fireEvent.change(portInput, { target: { value: '0x539' } })
+    fireEvent.blur(portInput)
+
+    expect(mocks.setServerPort).not.toHaveBeenCalled()
+    expect(portInput).toHaveValue(1337)
+  })
+
   it('rejects fractional proxy timeout input instead of truncating it', () => {
     renderLocalApiServerRoute()
 
     const timeoutInput = screen.getByDisplayValue('600')
 
     fireEvent.change(timeoutInput, { target: { value: '600.5' } })
+    fireEvent.blur(timeoutInput)
+
+    expect(mocks.setProxyTimeout).not.toHaveBeenCalled()
+    expect(timeoutInput).toHaveValue(600)
+  })
+
+  it('rejects non-decimal proxy timeout input instead of coercing it', () => {
+    renderLocalApiServerRoute()
+
+    const timeoutInput = screen.getByDisplayValue('600')
+
+    fireEvent.change(timeoutInput, { target: { value: '1e3' } })
     fireEvent.blur(timeoutInput)
 
     expect(mocks.setProxyTimeout).not.toHaveBeenCalled()

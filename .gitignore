@@ -76,6 +76,7 @@ llm-docs
 # Local AI tool configs
 .ax-grok/
 .gemini/
+.qoder/
 opencode.json
 agent-teams/
 .mcp.json

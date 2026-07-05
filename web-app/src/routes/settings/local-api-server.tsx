@@ -54,8 +54,9 @@ function parseBoundedInteger(
   min: number,
   max: number
 ): number | null {
-  if (raw.trim() === '') return null
-  const value = Number(raw)
+  const trimmed = raw.trim()
+  if (trimmed === '' || !/^\d+$/.test(trimmed)) return null
+  const value = Number(trimmed)
   if (!Number.isInteger(value) || value < min || value > max) return null
   return value
 }
