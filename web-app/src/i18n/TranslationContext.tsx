@@ -44,5 +44,3 @@ export function TranslationProvider({ children }: { children: ReactNode }) {
     </TranslationContext.Provider>
   )
 }
-
-export default TranslationProvider
