@@ -1,7 +1,19 @@
 import { describe, it, expect } from 'vitest'
-import { threadFolderSchema, projectsStorageSchema } from '../projects.schema'
+import { projectsStorageSchema } from '../projects.schema'
 
-describe('threadFolderSchema', () => {
+function parseFolder(folder: unknown) {
+  const result = projectsStorageSchema.safeParse({
+    state: {
+      folders: [folder],
+    },
+  })
+
+  return result.success
+    ? { success: true as const, data: result.data.state?.folders[0] }
+    : { success: false as const }
+}
+
+describe('projectsStorageSchema folder items', () => {
   const validFolder = {
     id: 'folder-1',
     name: 'My Project',
@@ -9,7 +21,7 @@ describe('threadFolderSchema', () => {
   }
 
   it('should validate a minimal valid folder', () => {
-    const result = threadFolderSchema.safeParse(validFolder)
+    const result = parseFolder(validFolder)
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.id).toBe('folder-1')
@@ -25,7 +37,7 @@ describe('threadFolderSchema', () => {
       logo: 'https://example.com/logo.png',
       projectPrompt: 'You are helping with project X',
     }
-    const result = threadFolderSchema.safeParse(full)
+    const result = parseFolder(full)
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.assistantId).toBe('asst-1')
@@ -35,7 +47,7 @@ describe('threadFolderSchema', () => {
   })
 
   it('should accept null for projectPrompt', () => {
-    const result = threadFolderSchema.safeParse({
+    const result = parseFolder({
       ...validFolder,
       projectPrompt: null,
     })
@@ -47,24 +59,24 @@ describe('threadFolderSchema', () => {
 
   it('should fail when id is missing', () => {
     const { id: _, ...rest } = validFolder
-    const result = threadFolderSchema.safeParse(rest)
+    const result = parseFolder(rest)
     expect(result.success).toBe(false)
   })
 
   it('should fail when name is missing', () => {
     const { name: _, ...rest } = validFolder
-    const result = threadFolderSchema.safeParse(rest)
+    const result = parseFolder(rest)
     expect(result.success).toBe(false)
   })
 
   it('should fail when updated_at is missing', () => {
     const { updated_at: _, ...rest } = validFolder
-    const result = threadFolderSchema.safeParse(rest)
+    const result = parseFolder(rest)
     expect(result.success).toBe(false)
   })
 
   it('should fail when updated_at is a string', () => {
-    const result = threadFolderSchema.safeParse({
+    const result = parseFolder({
       ...validFolder,
       updated_at: '2023-01-01',
     })
@@ -72,7 +84,7 @@ describe('threadFolderSchema', () => {
   })
 
   it('should accept empty string for name', () => {
-    const result = threadFolderSchema.safeParse({
+    const result = parseFolder({
       ...validFolder,
       name: '',
     })
