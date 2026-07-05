@@ -13,7 +13,7 @@ import {
 import { extractErrorMessage } from '@/lib/utils/error'
 
 import { useModelProvider } from '@/hooks/models/useModelProvider'
-import SetupScreen from '@/containers/SetupScreen'
+import { SetupScreen } from '@/containers/SetupScreen'
 import { route } from '@/constants/routes'
 import { localStorageKey } from '@/constants/localStorage'
 import { SESSION_STORAGE_KEY } from '@/constants/chat'

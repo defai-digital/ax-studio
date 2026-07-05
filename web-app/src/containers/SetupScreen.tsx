@@ -94,7 +94,7 @@ function getWorkspaceMode(modeId: WorkspaceModeId): WorkspaceMode {
   )
 }
 
-function SetupScreen({ onComplete }: SetupScreenProps) {
+export function SetupScreen({ onComplete }: SetupScreenProps) {
   const { t } = useTranslation()
   const [step, setStep] = useState(0)
   const [direction, setDirection] = useState(1) // 1 = forward, -1 = backward
@@ -596,5 +596,3 @@ function StepReady({ selectedMode }: { selectedMode: WorkspaceModeId }) {
     </div>
   )
 }
-
-export default SetupScreen

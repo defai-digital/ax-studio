@@ -99,7 +99,7 @@ vi.mock('@/containers/HeaderPage', () => ({
 }))
 
 vi.mock('@/containers/SetupScreen', () => ({
-  default: ({ onComplete }: { onComplete?: () => void }) => (
+  SetupScreen: ({ onComplete }: { onComplete?: () => void }) => (
     <div data-testid="setup-screen">
       <button onClick={onComplete}>Complete Setup</button>
     </div>
