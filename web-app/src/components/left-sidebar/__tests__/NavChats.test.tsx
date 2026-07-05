@@ -98,7 +98,7 @@ vi.mock('@/lib/utils/date-group', () => ({
 }))
 
 vi.mock('@/containers/ThreadList', () => ({
-  default: ({ threads }: { threads: Thread[] }) => (
+  ThreadList: ({ threads }: { threads: Thread[] }) => (
     <div data-testid="thread-list">
       {threads.map((t: Thread) => (
         <div key={t.id} data-testid={`thread-${t.id}`}>

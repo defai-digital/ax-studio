@@ -42,7 +42,7 @@ import {
   useState,
 } from 'react'
 import { useThreads } from '@/hooks/threads/useThreads'
-import ThreadList from '@/containers/ThreadList'
+import { ThreadList } from '@/containers/ThreadList'
 import { DeleteAllThreadsDialog } from '@/containers/dialogs/thread/DeleteAllThreadsDialog'
 import { groupByDate, type DateGroup } from '@/lib/utils/date-group'
 import { usePinnedThreads } from '@/hooks/threads/usePinnedThreads'

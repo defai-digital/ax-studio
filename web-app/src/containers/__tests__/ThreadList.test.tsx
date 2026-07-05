@@ -13,9 +13,7 @@ vi.mock('@/hooks/threads/useThreads', () => ({
 }))
 
 vi.mock('@/hooks/chat/useMessages', () => ({
-  useMessages: vi.fn((selector) =>
-    selector({ messages: {} })
-  ),
+  useMessages: vi.fn((selector) => selector({ messages: {} })),
 }))
 
 vi.mock('@/hooks/threads/useThreadManagement', () => ({
@@ -54,7 +52,15 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
 }))
 
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({ children, to, params }: { children: React.ReactNode; to: string; params?: Record<string, string> }) => (
+  Link: ({
+    children,
+    to,
+    params,
+  }: {
+    children: React.ReactNode
+    to: string
+    params?: Record<string, string>
+  }) => (
     <a href={`${to}/${params?.threadId || ''}`} data-testid="thread-link">
       {children}
     </a>
@@ -67,31 +73,61 @@ vi.mock('@/containers/dialogs', () => ({
 }))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
-  DropdownMenu: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  DropdownMenuContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DropdownMenuItem: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DropdownMenu: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
+  DropdownMenuContent: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DropdownMenuItem: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   DropdownMenuSeparator: () => <hr />,
-  DropdownMenuSub: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  DropdownMenuSubContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DropdownMenuSubTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  DropdownMenuSub: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
+  DropdownMenuSubContent: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DropdownMenuSubTrigger: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
 }))
 
 vi.mock('@/components/ui/context-menu', () => ({
   ContextMenu: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  ContextMenuContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  ContextMenuItem: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  ContextMenuContent: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  ContextMenuItem: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   ContextMenuSeparator: () => <hr />,
-  ContextMenuTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  ContextMenuTrigger: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
 }))
 
 vi.mock('@/components/ui/dialog', () => ({
   Dialog: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  DialogContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
-  DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
+  DialogContent: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogDescription: ({ children }: { children: React.ReactNode }) => (
+    <p>{children}</p>
+  ),
+  DialogFooter: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogTitle: ({ children }: { children: React.ReactNode }) => (
+    <h2>{children}</h2>
+  ),
 }))
 
 vi.mock('@/components/ui/input', () => ({
@@ -118,7 +154,7 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }))
 
-import ThreadList from '../ThreadList'
+import { ThreadList } from '../ThreadList'
 
 function makeThread(overrides: Partial<Thread> = {}): Thread {
   return {
