@@ -19,7 +19,7 @@ describe('teamEmoji utility', () => {
     })
 
     it('should contain expected team members', () => {
-      const memberIds = teamEmoji.map(m => m.id)
+      const memberIds = teamEmoji.map((m) => m.id)
       expect(memberIds).toContain('louis')
       expect(memberIds).toContain('emre')
       expect(memberIds).toContain('alex')
@@ -28,13 +28,13 @@ describe('teamEmoji utility', () => {
     })
 
     it('should have unique IDs', () => {
-      const ids = teamEmoji.map(m => m.id)
+      const ids = teamEmoji.map((m) => m.id)
       const uniqueIds = [...new Set(ids)]
       expect(ids.length).toBe(uniqueIds.length)
     })
 
     it('should have valid image URLs', () => {
-      teamEmoji.forEach(member => {
+      teamEmoji.forEach((member) => {
         expect(member.imgUrl).toMatch(/^\/images\/emoji\/.*\.png$/)
       })
     })

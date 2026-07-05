@@ -1,5 +1,9 @@
 function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
 }
 
 // Highlights matched ranges from Fuse.js (indices are [start, end] inclusive pairs).
@@ -28,7 +32,9 @@ export function highlightMatch(
   return parts
     .map((part) => {
       const escaped = escapeHtml(part.text)
-      return part.highlight ? `<span class="${highlightClassName}">${escaped}</span>` : escaped
+      return part.highlight
+        ? `<span class="${highlightClassName}">${escaped}</span>`
+        : escaped
     })
     .join('')
 }

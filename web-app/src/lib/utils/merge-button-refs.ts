@@ -9,11 +9,12 @@ export function mergeButtonRefs<T extends HTMLButtonElement>(
 ): React.RefCallback<T> {
   return (value) => {
     for (const ref of refs) {
-      if (typeof ref === "function") {
-        ref(value);
+      if (typeof ref === 'function') {
+        ref(value)
       } else if (ref != null) {
-        (ref as React.MutableRefObject<T | null>).current = value;
+        const mutableRef = ref as React.MutableRefObject<T | null>
+        mutableRef.current = value
       }
     }
-  };
+  }
 }

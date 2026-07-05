@@ -20,8 +20,12 @@ describe('mergeButtonRefs', () => {
   })
 
   it('assigns to mutable ref objects', () => {
-    const ref1 = { current: null } as React.MutableRefObject<HTMLButtonElement | null>
-    const ref2 = { current: null } as React.MutableRefObject<HTMLButtonElement | null>
+    const ref1 = {
+      current: null,
+    } as React.MutableRefObject<HTMLButtonElement | null>
+    const ref2 = {
+      current: null,
+    } as React.MutableRefObject<HTMLButtonElement | null>
     const merged = mergeButtonRefs([ref1, ref2])
 
     const element = document.createElement('button')
@@ -33,7 +37,9 @@ describe('mergeButtonRefs', () => {
 
   it('handles a mix of function refs and object refs', () => {
     const fnRef = vi.fn()
-    const objRef = { current: null } as React.MutableRefObject<HTMLButtonElement | null>
+    const objRef = {
+      current: null,
+    } as React.MutableRefObject<HTMLButtonElement | null>
     const merged = mergeButtonRefs([fnRef, objRef])
 
     const element = document.createElement('button')
@@ -45,7 +51,9 @@ describe('mergeButtonRefs', () => {
 
   it('handles null value (unmount)', () => {
     const fnRef = vi.fn()
-    const objRef = { current: document.createElement('button') } as React.MutableRefObject<HTMLButtonElement | null>
+    const objRef = {
+      current: document.createElement('button'),
+    } as React.MutableRefObject<HTMLButtonElement | null>
     const merged = mergeButtonRefs([fnRef, objRef])
 
     merged(null)
@@ -56,7 +64,10 @@ describe('mergeButtonRefs', () => {
 
   it('skips null refs in the array', () => {
     const fnRef = vi.fn()
-    const merged = mergeButtonRefs([null as unknown as React.LegacyRef<HTMLButtonElement>, fnRef])
+    const merged = mergeButtonRefs([
+      null as unknown as React.LegacyRef<HTMLButtonElement>,
+      fnRef,
+    ])
 
     const element = document.createElement('button')
     // Should not throw

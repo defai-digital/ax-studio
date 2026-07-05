@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { appendUniqueString, pushUniqueNormalizedString, uniqueStrings } from '../array'
+import {
+  appendUniqueString,
+  pushUniqueNormalizedString,
+  uniqueStrings,
+} from '../array'
 
 describe('array utils', () => {
   it('deduplicates strings while preserving first-seen order', () => {

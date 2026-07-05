@@ -7,7 +7,10 @@ export function appendUniqueString(values: string[], value: string): string[] {
   return [...values, value]
 }
 
-export function pushUniqueNormalizedString(values: string[], value: string): void {
+export function pushUniqueNormalizedString(
+  values: string[],
+  value: string
+): void {
   const normalized = value.trim().replace(/\s+/g, ' ')
   if (normalized && !values.includes(normalized)) values.push(normalized)
 }

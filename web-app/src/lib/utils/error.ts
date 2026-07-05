@@ -1,7 +1,6 @@
 import { uniqueStrings } from './array'
 
-const OUT_OF_CONTEXT_SIZE =
-  'the request exceeds the available context size.'
+const OUT_OF_CONTEXT_SIZE = 'the request exceeds the available context size.'
 
 export function isContextSizeError(message: string): boolean {
   return message.trim().toLowerCase().includes(OUT_OF_CONTEXT_SIZE)
@@ -43,7 +42,8 @@ export function extractErrorMessage(
       return JSON.stringify(
         error,
         Object.keys(error).filter(
-          (key) => !['stack', 'fileName', 'lineNumber', 'columnNumber'].includes(key)
+          (key) =>
+            !['stack', 'fileName', 'lineNumber', 'columnNumber'].includes(key)
         )
       )
     } catch {

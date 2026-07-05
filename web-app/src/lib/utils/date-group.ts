@@ -26,7 +26,7 @@ function getDateGroup(date: Date | string | number): DateGroup {
   const diffDays = Math.round(
     (Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) -
       Date.UTC(target.getFullYear(), target.getMonth(), target.getDate())) /
-      MS_PER_DAY,
+      MS_PER_DAY
   )
 
   if (diffDays < 0 || Number.isNaN(diffDays)) return 'Today'
@@ -53,7 +53,7 @@ export function groupByDate<T>(
   items: T[],
   getDate: (item: T) => Date | string | number,
   pinnedIds?: Set<string>,
-  getId?: (item: T) => string,
+  getId?: (item: T) => string
 ): GroupedItem<T>[] {
   const groupOrder: DateGroup[] = [
     'Pinned',

@@ -109,11 +109,11 @@ describe('getDateGroup — properties', () => {
 
   it('groups are monotonically ordered: more recent dates never get a later group', () => {
     const groupRank: Record<string, number> = {
-      Today: 0,
-      Yesterday: 1,
+      'Today': 0,
+      'Yesterday': 1,
       'This Week': 2,
       'This Month': 3,
-      Older: 4,
+      'Older': 4,
     }
     let prevRank = -1
     for (let d = 0; d <= 60; d++) {
@@ -186,7 +186,7 @@ describe('groupByDate', () => {
       items,
       (i) => i.createdAt,
       pinnedIds,
-      (i) => i.id,
+      (i) => i.id
     )
 
     const pinnedGroup = result.find((g) => g.group === 'Pinned')
@@ -195,16 +195,13 @@ describe('groupByDate', () => {
   })
 
   it('Pinned group appears before all date groups', () => {
-    const items = [
-      makeItem('a', daysAgo(0)),
-      makeItem('b', daysAgo(1)),
-    ]
+    const items = [makeItem('a', daysAgo(0)), makeItem('b', daysAgo(1))]
     const pinnedIds = new Set(['b'])
     const result = groupByDate(
       items,
       (i) => i.createdAt,
       pinnedIds,
-      (i) => i.id,
+      (i) => i.id
     )
 
     expect(result[0].group).toBe('Pinned')

@@ -14,4 +14,3 @@ export function withTimeout<T>(
     if (timeout !== undefined) clearTimeout(timeout)
   }) as Promise<T>
 }
-

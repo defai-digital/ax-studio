@@ -1,6 +1,4 @@
-export const safeJSONParse = <T>(
-  raw: string | null | undefined
-): T | null => {
+export const safeJSONParse = <T>(raw: string | null | undefined): T | null => {
   if (!raw) return null
 
   try {

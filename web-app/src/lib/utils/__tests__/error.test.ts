@@ -19,23 +19,32 @@ describe('error utilities', () => {
       expect(extractErrorMessage(new Error('boom'))).toBe('boom')
       expect(extractErrorMessage({ reason: 'bad input' })).toBe('bad input')
       expect(extractErrorMessage({ detail: 'not found' })).toBe('not found')
-      expect(extractErrorMessage({ code: 'MODEL_LOAD_FAILED' })).toBe('MODEL_LOAD_FAILED')
+      expect(extractErrorMessage({ code: 'MODEL_LOAD_FAILED' })).toBe(
+        'MODEL_LOAD_FAILED'
+      )
     })
 
     it('deduplicates array error messages', () => {
-      expect(extractErrorMessage([
-        new Error('first'),
-        { message: 'first' },
-        { cause: { message: 'second' } },
-      ], 'Unknown error')).toBe('first; second')
+      expect(
+        extractErrorMessage(
+          [
+            new Error('first'),
+            { message: 'first' },
+            { cause: { message: 'second' } },
+          ],
+          'Unknown error'
+        )
+      ).toBe('first; second')
     })
 
     it('falls back to redacted JSON for arbitrary objects', () => {
-      expect(extractErrorMessage({
-        code: '',
-        fileName: 'internal.ts',
-        value: 42,
-      })).toBe('{"code":"","value":42}')
+      expect(
+        extractErrorMessage({
+          code: '',
+          fileName: 'internal.ts',
+          value: 42,
+        })
+      ).toBe('{"code":"","value":42}')
     })
   })
 

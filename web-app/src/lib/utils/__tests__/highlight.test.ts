@@ -5,10 +5,15 @@ describe('highlight utility', () => {
   describe('highlightMatch', () => {
     it('should highlight characters at specified range', () => {
       const text = 'Hello World'
-      const indices: [number, number][] = [[0, 0], [6, 6]]
+      const indices: [number, number][] = [
+        [0, 0],
+        [6, 6],
+      ]
       const result = highlightMatch(text, indices)
 
-      expect(result).toBe('<span class="search-highlight">H</span>ello <span class="search-highlight">W</span>orld')
+      expect(result).toBe(
+        '<span class="search-highlight">H</span>ello <span class="search-highlight">W</span>orld'
+      )
     })
 
     it('should handle empty indices array', () => {
@@ -39,7 +44,9 @@ describe('highlight utility', () => {
     it('should escape HTML in text', () => {
       const result = highlightMatch('<b>Hello</b>', [[3, 7]])
 
-      expect(result).toBe('&lt;b&gt;<span class="search-highlight">Hello</span>&lt;/b&gt;')
+      expect(result).toBe(
+        '&lt;b&gt;<span class="search-highlight">Hello</span>&lt;/b&gt;'
+      )
     })
   })
 })
