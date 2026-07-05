@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { EventEmitter } from '../events/EventEmitter'
 
 describe('EventEmitter', () => {
@@ -6,6 +6,10 @@ describe('EventEmitter', () => {
 
   beforeEach(() => {
     eventEmitter = new EventEmitter()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   describe('constructor', () => {
@@ -190,6 +194,19 @@ describe('EventEmitter', () => {
       eventEmitter.emit('test', null)
 
       expect(handler).toHaveBeenCalledWith(null)
+    })
+
+    it('should emit download events without debug logging', () => {
+      const consoleLogSpy = vi
+        .spyOn(console, 'log')
+        .mockImplementation(() => {})
+      const handler = vi.fn()
+
+      eventEmitter.on('onFileDownloadUpdate', handler)
+      eventEmitter.emit('onFileDownloadUpdate', { progress: 50 })
+
+      expect(handler).toHaveBeenCalledWith({ progress: 50 })
+      expect(consoleLogSpy).not.toHaveBeenCalled()
     })
   })
 
