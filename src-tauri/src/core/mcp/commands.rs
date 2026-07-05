@@ -1,4 +1,4 @@
-use rmcp::model::{CallToolRequestParam, CallToolResult};
+use rmcp::model::{CallToolRequestParams, CallToolResult};
 use serde_json::{json, Map, Value};
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tokio::sync::oneshot;
@@ -11,6 +11,17 @@ use super::{
 use crate::core::{
     app::commands::get_app_data_folder_path, mcp::models::McpSettings, state::AppState,
 };
+
+fn call_tool_params(
+    tool_name: String,
+    arguments: Option<serde_json::Map<String, serde_json::Value>>,
+) -> CallToolRequestParams {
+    let params = CallToolRequestParams::new(tool_name);
+    match arguments {
+        Some(arguments) => params.with_arguments(arguments),
+        None => params,
+    }
+}
 use crate::core::{
     mcp::models::ToolWithServer,
     state::{RunningServiceEnum, SharedMcpServers},
@@ -471,10 +482,7 @@ pub async fn call_tool<R: Runtime>(
     };
 
     // Phase 2: Call the tool without holding the servers lock
-    let tool_call = service.call_tool(CallToolRequestParam {
-        name: tool_name.clone().into(),
-        arguments: arguments.clone(),
-    });
+    let tool_call = service.call_tool(call_tool_params(tool_name.clone(), arguments.clone()));
 
     let mut result = if let Some(cancel_rx) = cancel_rx {
         tokio::select! {
@@ -512,10 +520,8 @@ pub async fn call_tool<R: Runtime>(
                 log::info!(
                     "Retrying MCP tool call '{tool_name}' on restarted server {target_server_name}"
                 );
-                let retry_call = restarted_service.call_tool(CallToolRequestParam {
-                    name: tool_name.clone().into(),
-                    arguments,
-                });
+                let retry_call =
+                    restarted_service.call_tool(call_tool_params(tool_name.clone(), arguments));
                 result = match timeout(timeout_duration, retry_call).await {
                     Ok(call_result) => call_result.map_err(|e| e.to_string()),
                     Err(_) => Err(format!(

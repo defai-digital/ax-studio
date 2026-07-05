@@ -65,30 +65,37 @@ sha2 = "0.10"
 [dependencies]
 dirs = "6.0.0"
 reqwest = { workspace = true, features = ["native-tls-vendored"] }
+reqwest12 = { package = "reqwest", version = "0.12", default-features = false, features = [
+    "json",
+    "rustls-tls",
+    "stream",
+] }
 tauri-plugin-updater = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs", rev = "c4c45d503ea115a839aae718d02f79e7c7f0f673" }
 flate2 = "1.0"
 futures-util = "0.3.31"
+futures = "0.3"
 hex = "0.4"
 hmac = { workspace = true }
 hyper = { version = "0.14", features = ["server"] }
 ax-studio-utils = { workspace = true }
 log = { workspace = true }
 rand = { workspace = true }
-rmcp = { version = "0.8.5", features = [
+rmcp = { version = "1.4.0", features = [
     "client",
-    "transport-sse-client",
-    "transport-sse-client-reqwest",
+    "client-side-sse",
     "transport-streamable-http-client",
     "transport-streamable-http-client-reqwest",
     "transport-child-process",
     "tower",
     "reqwest",
 ] }
+http = "1"
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = "0.9.34"
+sse-stream = "0.2"
 sha2 = { workspace = true }
 tar = "0.4"
 zip = "2"

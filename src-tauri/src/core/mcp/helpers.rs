@@ -1,8 +1,8 @@
 use rmcp::{
     model::{ClientCapabilities, ClientInfo, Implementation},
     transport::{
-        streamable_http_client::StreamableHttpClientTransportConfig, SseClientTransport,
-        StreamableHttpClientTransport, TokioChildProcess,
+        streamable_http_client::StreamableHttpClientTransportConfig, StreamableHttpClientTransport,
+        TokioChildProcess,
     },
     ServiceExt,
 };
@@ -16,20 +16,60 @@ use tokio::{io::AsyncReadExt, net::lookup_host, process::Command, sync::Mutex, t
 use crate::core::mcp::constants::CREATE_NO_WINDOW;
 use crate::core::{
     app::commands::get_app_data_folder_path,
+    mcp::legacy_sse::LegacySseTransport,
     mcp::models::{McpServerConfig, McpSettings},
     state::{AppState, RunningServiceEnum, SharedMcpServers},
 };
 use ax_studio_utils::{can_override_npx, can_override_uvx};
 
 const ALLOWED_COMMANDS: &[&str] = &["node", "python", "python3", "bun", "npx", "uvx"];
-const DEFAULT_MCP_CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
-
 const DANGEROUS_ENV_KEYS: &[&str] = &[
     "LD_PRELOAD",
     "DYLD_INSERT_LIBRARIES",
     "LD_LIBRARY_PATH",
     "DYLD_LIBRARY_PATH",
 ];
+
+fn build_mcp_headers(
+    headers: &serde_json::Map<String, Value>,
+) -> Result<std::collections::HashMap<http::HeaderName, http::HeaderValue>, String> {
+    let mut mapped_headers = HashMap::new();
+    for (key, value) in headers {
+        let Some(v_str) = value.as_str() else {
+            continue;
+        };
+        let header_name = http::HeaderName::from_bytes(key.as_bytes())
+            .map_err(|e| format!("Invalid MCP header name {key}: {e}"))?;
+        let header_value = http::HeaderValue::from_str(v_str)
+            .map_err(|e| format!("Invalid MCP header value for {key}: {e}"))?;
+        mapped_headers.insert(header_name, header_value);
+    }
+    Ok(mapped_headers)
+}
+
+fn mcp_client_info(name: &str) -> ClientInfo {
+    ClientInfo::new(
+        ClientCapabilities::default(),
+        Implementation::new(name, "0.0.1"),
+    )
+}
+
+fn build_reqwest12_headers(
+    headers: &serde_json::Map<String, Value>,
+) -> Result<reqwest12::header::HeaderMap, String> {
+    let mut mapped_headers = reqwest12::header::HeaderMap::new();
+    for (key, value) in headers {
+        let Some(v_str) = value.as_str() else {
+            continue;
+        };
+        let header_name = reqwest12::header::HeaderName::from_bytes(key.as_bytes())
+            .map_err(|e| format!("Invalid MCP header name {key}: {e}"))?;
+        let header_value = reqwest12::header::HeaderValue::from_str(v_str)
+            .map_err(|e| format!("Invalid MCP header value for {key}: {e}"))?;
+        mapped_headers.insert(header_name, header_value);
+    }
+    Ok(mapped_headers)
+}
 
 async fn validate_external_transport_url(
     server_name: &str,
@@ -284,48 +324,15 @@ async fn schedule_mcp_start_task<R: Runtime>(
     if config_params.transport_type.as_deref() == Some("http") && config_params.url.is_some() {
         let transport_url = config_params.url.as_deref().unwrap_or("");
         validate_external_transport_url(&name, "HTTP", transport_url).await?;
-        let transport = StreamableHttpClientTransport::with_client(
-            reqwest::Client::builder()
-                .default_headers({
-                    // Map envs to request headers
-                    let mut headers: tauri::http::HeaderMap = reqwest::header::HeaderMap::new();
-                    for (key, value) in config_params.headers.iter() {
-                        if let Some(v_str) = value.as_str() {
-                            // Try to map env keys to HTTP header names (case-insensitive)
-                            // Most HTTP headers are Title-Case, so we try to convert
-                            let header_name =
-                                reqwest::header::HeaderName::from_bytes(key.as_bytes());
-                            if let Ok(header_name) = header_name {
-                                if let Ok(header_value) =
-                                    reqwest::header::HeaderValue::from_str(v_str)
-                                {
-                                    headers.insert(header_name, header_value);
-                                }
-                            }
-                        }
-                    }
-                    headers
-                })
-                .connect_timeout(config_params.timeout.unwrap_or(DEFAULT_MCP_CONNECT_TIMEOUT))
-                .build()
-                .map_err(|e| format!("Failed to build HTTP client for {name}: {e}"))?,
-            StreamableHttpClientTransportConfig {
-                uri: transport_url.to_string().into(),
-                ..Default::default()
-            },
+        if let Some(connect_timeout) = config_params.timeout {
+            log::debug!("MCP HTTP server {name} configured connect timeout: {connect_timeout:?}");
+        }
+        let transport = StreamableHttpClientTransport::from_config(
+            StreamableHttpClientTransportConfig::with_uri(transport_url.to_string())
+                .custom_headers(build_mcp_headers(&config_params.headers)?),
         );
 
-        let client_info = ClientInfo {
-            protocol_version: Default::default(),
-            capabilities: ClientCapabilities::default(),
-            client_info: Implementation {
-                name: "Ax-Studio Streamable Client".to_string(),
-                version: "0.0.1".to_string(),
-                title: None,
-                website_url: None,
-                icons: None,
-            },
-        };
+        let client_info = mcp_client_info("Ax-Studio Streamable Client");
         let client = client_info.serve(transport).await.inspect_err(|e| {
             log::error!("client error: {e:?}");
         });
@@ -349,35 +356,16 @@ async fn schedule_mcp_start_task<R: Runtime>(
     {
         let transport_url = config_params.url.as_deref().unwrap_or("");
         validate_external_transport_url(&name, "SSE", transport_url).await?;
-        let transport = SseClientTransport::start_with_client(
-            reqwest::Client::builder()
-                .default_headers({
-                    // Map envs to request headers
-                    let mut headers = reqwest::header::HeaderMap::new();
-                    for (key, value) in config_params.headers.iter() {
-                        if let Some(v_str) = value.as_str() {
-                            // Try to map env keys to HTTP header names (case-insensitive)
-                            // Most HTTP headers are Title-Case, so we try to convert
-                            let header_name =
-                                reqwest::header::HeaderName::from_bytes(key.as_bytes());
-                            if let Ok(header_name) = header_name {
-                                if let Ok(header_value) =
-                                    reqwest::header::HeaderValue::from_str(v_str)
-                                {
-                                    headers.insert(header_name, header_value);
-                                }
-                            }
-                        }
-                    }
-                    headers
-                })
-                .connect_timeout(config_params.timeout.unwrap_or(DEFAULT_MCP_CONNECT_TIMEOUT))
+        if let Some(connect_timeout) = config_params.timeout {
+            log::debug!("MCP SSE server {name} configured connect timeout: {connect_timeout:?}");
+        }
+        let transport = LegacySseTransport::start(
+            reqwest12::Client::builder()
+                .default_headers(build_reqwest12_headers(&config_params.headers)?)
+                .connect_timeout(config_params.timeout.unwrap_or(Duration::from_secs(30)))
                 .build()
                 .map_err(|e| format!("Failed to build SSE client for {name}: {e}"))?,
-            rmcp::transport::sse_client::SseClientConfig {
-                sse_endpoint: transport_url.to_string().into(),
-                ..Default::default()
-            },
+            transport_url,
         )
         .await
         .map_err(|e| {
@@ -385,17 +373,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
             format!("Failed to start SSE transport: {e}")
         })?;
 
-        let client_info = ClientInfo {
-            protocol_version: Default::default(),
-            capabilities: ClientCapabilities::default(),
-            client_info: Implementation {
-                name: "Ax-Studio SSE Client".to_string(),
-                version: "0.0.1".to_string(),
-                title: None,
-                website_url: None,
-                icons: None,
-            },
-        };
+        let client_info = mcp_client_info("Ax-Studio SSE Client");
         let client = client_info.serve(transport).await.map_err(|e| {
             log::error!("client error: {e:?}");
             e.to_string()
