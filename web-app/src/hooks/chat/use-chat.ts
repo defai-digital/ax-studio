@@ -5,10 +5,7 @@ import {
   type UseChatOptions,
   useChat as useChatSDK,
 } from '@ai-sdk/react'
-import {
-  type ChatInit,
-  type LanguageModelUsage,
-} from 'ai'
+import { type ChatInit, type LanguageModelUsage } from 'ai'
 import { useEffect, useMemo, useRef, useCallback } from 'react'
 import { useChatSessions } from '@/stores/chat-session-store'
 import { useAppState } from '@/hooks/settings/useAppState'
@@ -28,10 +25,10 @@ type CustomChatOptions = Omit<ChatInit<UIMessage>, 'transport'> &
 // This is a wrapper around the AI SDK's useChat hook
 // It implements model switching and uses the custom chat transport,
 // making a nice reusable hook for chat functionality.
-export function useChat(
-  options?: CustomChatOptions
-) {
-  const transportRef = useRef<ReturnType<typeof createChatTransport> | undefined>(undefined)
+export function useChat(options?: CustomChatOptions) {
+  const transportRef = useRef<
+    ReturnType<typeof createChatTransport> | undefined
+  >(undefined)
   const {
     sessionId,
     sessionTitle,
@@ -61,9 +58,10 @@ export function useChat(
 
   // Subscribe to local knowledge toggle — refresh tools when it changes
   const localKnowledgeEnabled = useLocalKnowledge((state) =>
-    sessionId ? state.isLocalKnowledgeEnabledForThread(sessionId) : state.localKnowledgeEnabled
+    sessionId
+      ? state.isLocalKnowledgeEnabledForThread(sessionId)
+      : state.localKnowledgeEnabled
   )
-
 
   const existingSessionTransport = sessionId
     ? useChatSessions.getState().sessions[sessionId]?.transport
@@ -107,7 +105,9 @@ export function useChat(
 
   useEffect(() => {
     if (transportRef.current) {
-      transportRef.current.updateModelOverrideProviderId(modelOverrideProviderId)
+      transportRef.current.updateModelOverrideProviderId(
+        modelOverrideProviderId
+      )
     }
   }, [modelOverrideProviderId])
 
@@ -135,7 +135,11 @@ export function useChat(
     return ensureSession(
       sessionId,
       transportRef.current,
-      () => new Chat({ ...chatInitOptionsRef.current, transport: transportRef.current }),
+      () =>
+        new Chat({
+          ...chatInitOptionsRef.current,
+          transport: transportRef.current,
+        }),
       sessionTitle
     )
   }, [sessionId, ensureSession, sessionTitle])

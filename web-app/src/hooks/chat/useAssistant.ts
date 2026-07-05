@@ -120,12 +120,17 @@ export const useAssistant = create<AssistantState>((set, get) => ({
       .catch((error) => {
         console.error('Failed to update assistant:', error)
         // Rollback
-        set({ assistants: previousAssistants, currentAssistant: previousCurrentAssistant })
+        set({
+          assistants: previousAssistants,
+          currentAssistant: previousCurrentAssistant,
+        })
       })
   },
   deleteAssistant: (id) => {
     const state = get()
-    const assistantToDelete = state.assistants.find((assistant) => assistant.id === id)
+    const assistantToDelete = state.assistants.find(
+      (assistant) => assistant.id === id
+    )
     if (!assistantToDelete) return
 
     // Check if we're deleting the current assistant

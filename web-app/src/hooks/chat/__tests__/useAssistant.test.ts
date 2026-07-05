@@ -118,7 +118,9 @@ describe('useAssistant', () => {
       result.current.setCurrentAssistant(assistant2)
     })
 
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {})
     mockDeleteAssistant.mockRejectedValueOnce(new Error('disk full'))
 
     await act(async () => {

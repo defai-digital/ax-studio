@@ -97,7 +97,9 @@ describe('useChat', () => {
     vi.clearAllMocks()
     sessionState.sessions = {}
     // Reset transport ref by creating fresh mock
-    ;(createChatTransport as ReturnType<typeof vi.fn>).mockReturnValue({ ...mockTransport })
+    ;(createChatTransport as ReturnType<typeof vi.fn>).mockReturnValue({
+      ...mockTransport,
+    })
   })
 
   // ── Phase 1: Basic initialization ────────────────────────────────────────
@@ -120,9 +122,7 @@ describe('useChat', () => {
   })
 
   it('returns chatResult properties plus custom methods', () => {
-    const { result } = renderHook(() =>
-      useChat({ sessionId: 'session-1' })
-    )
+    const { result } = renderHook(() => useChat({ sessionId: 'session-1' }))
 
     expect(result.current.messages).toEqual([])
     expect(result.current.status).toBe('ready')
@@ -169,13 +169,15 @@ describe('useChat', () => {
 
   it('updates system message on transport when it changes', () => {
     const { rerender } = renderHook(
-      (props: { systemMessage?: string }) => useChat({ sessionId: 's1', ...props }),
+      (props: { systemMessage?: string }) =>
+        useChat({ sessionId: 's1', ...props }),
       { initialProps: { systemMessage: 'first' } }
     )
 
     // The transport is created with the systemMessage in the constructor,
     // and the effect also calls updateSystemMessage
-    const transport = (createChatTransport as ReturnType<typeof vi.fn>).mock.results[0]?.value
+    const transport = (createChatTransport as ReturnType<typeof vi.fn>).mock
+      .results[0]?.value
     if (transport) {
       expect(transport.updateSystemMessage).toHaveBeenCalledWith('first')
     }
@@ -194,9 +196,7 @@ describe('useChat', () => {
       'session-reuse': { transport: existingTransport },
     }
 
-    renderHook(() =>
-      useChat({ sessionId: 'session-reuse' })
-    )
+    renderHook(() => useChat({ sessionId: 'session-reuse' }))
 
     // The useChatSDK should be called; the important thing is
     // that createChatTransport was still called (but the transport
@@ -208,12 +208,12 @@ describe('useChat', () => {
 
   it('updateRagToolsAvailability delegates to transport', async () => {
     const transport = { ...mockTransport }
-    ;(createChatTransport as ReturnType<typeof vi.fn>).mockReturnValue(transport)
+    ;(createChatTransport as ReturnType<typeof vi.fn>).mockReturnValue(
+      transport
+    )
     transport.updateRagToolsAvailability.mockResolvedValue(undefined)
 
-    const { result } = renderHook(() =>
-      useChat({ sessionId: 'session-rag' })
-    )
+    const { result } = renderHook(() => useChat({ sessionId: 'session-rag' }))
 
     await result.current.updateRagToolsAvailability(true, true, true)
 
@@ -226,11 +226,11 @@ describe('useChat', () => {
 
   it('updateSystemMessageDirect delegates to transport', () => {
     const transport = { ...mockTransport }
-    ;(createChatTransport as ReturnType<typeof vi.fn>).mockReturnValue(transport)
-
-    const { result } = renderHook(() =>
-      useChat({ sessionId: 'session-sys' })
+    ;(createChatTransport as ReturnType<typeof vi.fn>).mockReturnValue(
+      transport
     )
+
+    const { result } = renderHook(() => useChat({ sessionId: 'session-sys' }))
 
     result.current.updateSystemMessageDirect('new system msg')
 
@@ -267,12 +267,15 @@ describe('useChat', () => {
       { initialProps: { inferenceParameters: params1 } }
     )
 
-    const firstCallCount = (createChatTransport as ReturnType<typeof vi.fn>).mock.calls.length
+    const firstCallCount = (createChatTransport as ReturnType<typeof vi.fn>)
+      .mock.calls.length
 
     rerender({ inferenceParameters: params2 })
 
     // Should not create a new transport for same content
-    expect((createChatTransport as ReturnType<typeof vi.fn>).mock.calls.length).toBe(firstCallCount)
+    expect(
+      (createChatTransport as ReturnType<typeof vi.fn>).mock.calls.length
+    ).toBe(firstCallCount)
   })
 
   // ── No options ───────────────────────────────────────────────────────────

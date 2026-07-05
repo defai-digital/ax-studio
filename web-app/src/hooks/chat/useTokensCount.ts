@@ -1,5 +1,5 @@
 import { useCallback, useState, useRef, useEffect, useMemo } from 'react'
-import { ThreadMessage } from '@ax-studio/core'
+import type { ThreadMessage } from '@ax-studio/core'
 import { usePrompt } from '@/hooks/ui/usePrompt'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceStore } from '@/hooks/useServiceHub'
@@ -34,12 +34,37 @@ const messageContentText = (message: ThreadMessage): string => {
 const messagesText = (messages: ThreadMessage[]): string =>
   messages.map(messageContentText).join(' ')
 
+const HOSTED_MODEL_CONTEXT_WINDOWS: Array<{ pattern: RegExp; tokens: number }> =
+  [
+    // OpenAI models
+    { pattern: /gpt-4o/i, tokens: 128000 },
+    { pattern: /gpt-4-turbo/i, tokens: 128000 },
+    { pattern: /gpt-4/i, tokens: 8192 },
+    { pattern: /gpt-3\.5-turbo/i, tokens: 16385 },
+
+    // Anthropic models
+    { pattern: /claude-3/i, tokens: 200000 },
+
+    // Other providers
+    { pattern: /groq/i, tokens: 128000 },
+    { pattern: /gemini/i, tokens: 128000 },
+    { pattern: /deepseek/i, tokens: 64000 },
+    { pattern: /qwen/i, tokens: 32768 },
+    { pattern: /mistral/i, tokens: 32000 },
+    { pattern: /llama/i, tokens: 128000 },
+    { pattern: /command/i, tokens: 128000 },
+    { pattern: /google/i, tokens: 128000 },
+  ]
+
 // Check if a model provider is hosted (external API) rather than local
-const isHostedModel = (selectedModel: { id?: string } | null, providers: ModelProvider[]): boolean => {
+const isHostedModel = (
+  selectedModel: { id?: string } | null,
+  providers: ModelProvider[]
+): boolean => {
   if (!selectedModel?.id) return false
 
   // Find the provider for this model
-  const provider = providers.find(p =>
+  const provider = providers.find((p) =>
     p.models?.some((m: Model) => m.id === selectedModel.id)
   )
 
@@ -48,12 +73,15 @@ const isHostedModel = (selectedModel: { id?: string } | null, providers: ModelPr
   }
 
   // Hosted providers typically have external URLs and require API keys
-  const hasExternalUrl = provider.base_url &&
+  const hasExternalUrl =
+    provider.base_url &&
     !provider.base_url.includes('localhost') &&
     !provider.base_url.includes('127.0.0.1') &&
     !provider.base_url.includes('0.0.0.0')
 
-  const requiresApiKey = provider.settings?.some((s: ProviderSetting) => s.key === 'api-key')
+  const requiresApiKey = provider.settings?.some(
+    (s: ProviderSetting) => s.key === 'api-key'
+  )
 
   return !!(hasExternalUrl && requiresApiKey)
 }
@@ -80,7 +108,9 @@ export const useTokensCount = (
   modelOverride?: Model
 ) => {
   const serviceHub = useServiceStore((state) => state.serviceHub)
-  const selectedModelFromStore = useModelProvider((state) => state.selectedModel)
+  const selectedModelFromStore = useModelProvider(
+    (state) => state.selectedModel
+  )
   const providers = useModelProvider((state) => state.providers)
   const selectedModel = modelOverride ?? selectedModelFromStore
   const [tokenData, setTokenData] = useState<TokenCountData>({
@@ -117,45 +147,25 @@ export const useTokensCount = (
     // For hosted models without explicit settings, provide defaults based on model ID
     // First check if this looks like a hosted model by examining the model ID patterns
     // (even if providers aren't loaded yet)
-    const looksLikeHostedModel = selectedModel?.id && (
-      selectedModel.id.includes('gpt') ||
-      selectedModel.id.includes('claude') ||
-      selectedModel.id.includes('groq') ||
-      selectedModel.id.includes('gemini') ||
-      selectedModel.id.includes('deepseek') ||
-      selectedModel.id.includes('qwen') ||
-      // Check provider patterns in the model ID
-      selectedModel.id.includes('openai') ||
-      selectedModel.id.includes('anthropic') ||
-      selectedModel.id.includes('azure') ||
-      selectedModel.id.includes('openrouter')
-    )
+    const looksLikeHostedModel =
+      selectedModel?.id &&
+      (selectedModel.id.includes('gpt') ||
+        selectedModel.id.includes('claude') ||
+        selectedModel.id.includes('groq') ||
+        selectedModel.id.includes('gemini') ||
+        selectedModel.id.includes('deepseek') ||
+        selectedModel.id.includes('qwen') ||
+        // Check provider patterns in the model ID
+        selectedModel.id.includes('openai') ||
+        selectedModel.id.includes('anthropic') ||
+        selectedModel.id.includes('azure') ||
+        selectedModel.id.includes('openrouter'))
 
-    const isHosted = looksLikeHostedModel || isHostedModel(selectedModel, providers)
+    const isHosted =
+      looksLikeHostedModel || isHostedModel(selectedModel, providers)
     if (isHosted && selectedModel?.id) {
-      const modelPatterns: Array<{ pattern: RegExp, tokens: number }> = [
-        // OpenAI models
-        { pattern: /gpt-4o/i, tokens: 128000 },
-        { pattern: /gpt-4-turbo/i, tokens: 128000 },
-        { pattern: /gpt-4/i, tokens: 8192 }, // This should match gpt-4, gpt-4-32k, etc.
-        { pattern: /gpt-3\.5-turbo/i, tokens: 16385 },
-
-        // Anthropic models
-        { pattern: /claude-3/i, tokens: 200000 }, // Covers all Claude 3 variants
-
-        // Other providers
-        { pattern: /groq/i, tokens: 128000 },
-        { pattern: /gemini/i, tokens: 128000 },
-        { pattern: /deepseek/i, tokens: 64000 },
-        { pattern: /qwen/i, tokens: 32768 },
-        { pattern: /mistral/i, tokens: 32000 },
-        { pattern: /llama/i, tokens: 128000 },
-        { pattern: /command/i, tokens: 128000 },
-        { pattern: /google/i, tokens: 128000 },
-      ]
-
       // Check if model ID matches any known patterns
-      for (const { pattern, tokens } of modelPatterns) {
+      for (const { pattern, tokens } of HOSTED_MODEL_CONTEXT_WINDOWS) {
         if (pattern.test(selectedModel.id)) {
           return tokens
         }
@@ -212,7 +222,8 @@ export const useTokensCount = (
         }
       }
 
-      if (requestId !== requestIdRef.current || controller.signal.aborted) return
+      if (requestId !== requestIdRef.current || controller.signal.aborted)
+        return
 
       consecutiveErrorsRef.current = 0
 
@@ -227,7 +238,8 @@ export const useTokensCount = (
         isNearLimit: percentage !== undefined ? percentage >= 80 : false,
       })
     } catch (error) {
-      if (requestId !== requestIdRef.current || controller.signal.aborted) return
+      if (requestId !== requestIdRef.current || controller.signal.aborted)
+        return
 
       const msg = extractErrorMessage(error, String(error))
 

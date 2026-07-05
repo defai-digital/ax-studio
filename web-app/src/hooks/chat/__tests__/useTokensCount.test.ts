@@ -120,7 +120,9 @@ describe('useTokensCount', () => {
       {
         id: '1',
         role: 'user',
-        content: [{ type: 'text', text: { value: 'Hello world', annotations: [] } }],
+        content: [
+          { type: 'text', text: { value: 'Hello world', annotations: [] } },
+        ],
       } as unknown as ThreadMessage,
     ]
 
@@ -311,7 +313,15 @@ describe('useTokensCount', () => {
       {
         id: '1',
         role: 'user',
-        content: [{ type: 'text', text: { value: 'Hello world this is a test message', annotations: [] } }],
+        content: [
+          {
+            type: 'text',
+            text: {
+              value: 'Hello world this is a test message',
+              annotations: [],
+            },
+          },
+        ],
       } as unknown as ThreadMessage,
     ]
 
@@ -383,7 +393,9 @@ describe('useTokensCount', () => {
       {
         id: '1',
         role: 'user',
-        content: [{ type: 'text', text: { value: 'Test message', annotations: [] } }],
+        content: [
+          { type: 'text', text: { value: 'Test message', annotations: [] } },
+        ],
       } as unknown as ThreadMessage,
     ]
 
@@ -490,10 +502,9 @@ describe('useTokensCount messageSignature', () => {
       } as unknown as ThreadMessage,
     ]
 
-    const { rerender } = renderHook(
-      ({ msgs }) => useTokensCount(msgs),
-      { initialProps: { msgs: messages1 } }
-    )
+    const { rerender } = renderHook(({ msgs }) => useTokensCount(msgs), {
+      initialProps: { msgs: messages1 },
+    })
 
     await act(async () => {
       vi.advanceTimersByTime(300)
