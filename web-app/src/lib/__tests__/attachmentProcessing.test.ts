@@ -20,13 +20,17 @@ function createMockServiceHub(overrides: Record<string, unknown> = {}) {
   return {
     uploads: () => ({
       ingestImage: vi.fn().mockResolvedValue({ id: 'img-1' }),
-      ingestFileAttachment: vi.fn().mockResolvedValue({ id: 'doc-1', size: 100, chunkCount: 5 }),
-      ingestFileAttachmentForProject: vi.fn().mockResolvedValue({ id: 'proj-doc-1', size: 200, chunkCount: 10 }),
-      ...overrides.uploads as object,
+      ingestFileAttachment: vi
+        .fn()
+        .mockResolvedValue({ id: 'doc-1', size: 100, chunkCount: 5 }),
+      ingestFileAttachmentForProject: vi
+        .fn()
+        .mockResolvedValue({ id: 'proj-doc-1', size: 200, chunkCount: 10 }),
+      ...(overrides.uploads as object),
     }),
     rag: () => ({
       parseDocument: vi.fn().mockResolvedValue('parsed content here'),
-      ...overrides.rag as object,
+      ...(overrides.rag as object),
     }),
   } as never
 }
@@ -103,10 +107,14 @@ describe('processAttachmentsForSend', () => {
 
     // Should have been called with 'processing' then 'done'
     expect(updateFn).toHaveBeenCalledWith('new.png', 'processing')
-    expect(updateFn).toHaveBeenCalledWith('new.png', 'done', expect.objectContaining({
-      id: 'img-1',
-      processed: true,
-    }))
+    expect(updateFn).toHaveBeenCalledWith(
+      'new.png',
+      'done',
+      expect.objectContaining({
+        id: 'img-1',
+        processed: true,
+      })
+    )
   })
 
   it('throws and calls update with error when image ingestion fails', async () => {
@@ -211,7 +219,9 @@ describe('processAttachmentsForSend', () => {
 
     expect(result.processedAttachments).toHaveLength(1)
     expect(result.processedAttachments[0].injectionMode).toBe('inline')
-    expect(result.processedAttachments[0].inlineContent).toBe('parsed content here')
+    expect(result.processedAttachments[0].inlineContent).toBe(
+      'parsed content here'
+    )
     expect(result.hasEmbeddedDocuments).toBe(false)
   })
 
@@ -365,7 +375,9 @@ describe('processAttachmentsForSend', () => {
     const updateFn = vi.fn()
     const failHub = createMockServiceHub({
       uploads: {
-        ingestFileAttachment: vi.fn().mockRejectedValue(new Error('ingest failed')),
+        ingestFileAttachment: vi
+          .fn()
+          .mockRejectedValue(new Error('ingest failed')),
       },
       rag: {
         parseDocument: vi.fn().mockRejectedValue(new Error('parse error')),
@@ -387,7 +399,11 @@ describe('processAttachmentsForSend', () => {
 
   it('processes mixed images and documents together', async () => {
     const img: Attachment = { name: 'photo.png', type: 'image' }
-    const doc: Attachment = { name: 'file.txt', type: 'document', path: '/file.txt' }
+    const doc: Attachment = {
+      name: 'file.txt',
+      type: 'document',
+      path: '/file.txt',
+    }
 
     const hub = createMockServiceHub()
     const result = await processAttachmentsForSend({

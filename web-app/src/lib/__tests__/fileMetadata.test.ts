@@ -71,9 +71,7 @@ describe('injectFilesIntoPrompt', () => {
 
   it('preserves original prompt text before the metadata block', () => {
     const prompt = 'Hello, how are you?\nI have a question.'
-    const result = injectFilesIntoPrompt(prompt, [
-      { id: '1', name: 'f.txt' },
-    ])
+    const result = injectFilesIntoPrompt(prompt, [{ id: '1', name: 'f.txt' }])
     expect(result.startsWith(prompt)).toBe(true)
   })
 })
@@ -114,8 +112,7 @@ describe('extractFilesFromPrompt', () => {
   })
 
   it('skips lines missing required name', () => {
-    const input =
-      'hi\n\n[ATTACHED_FILES]\n- file_id: lonely\n[/ATTACHED_FILES]'
+    const input = 'hi\n\n[ATTACHED_FILES]\n- file_id: lonely\n[/ATTACHED_FILES]'
     const { files } = extractFilesFromPrompt(input)
     expect(files).toHaveLength(0)
   })
@@ -288,9 +285,7 @@ describe('fileMetadata round-trip properties', () => {
   })
 
   it('inject with empty prompt produces extractable result', () => {
-    const injected = injectFilesIntoPrompt('', [
-      { id: '1', name: 'x.txt' },
-    ])
+    const injected = injectFilesIntoPrompt('', [{ id: '1', name: 'x.txt' }])
     const { files, cleanPrompt } = extractFilesFromPrompt(injected)
     expect(files).toHaveLength(1)
     expect(files[0].id).toBe('1')

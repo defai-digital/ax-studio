@@ -30,7 +30,7 @@ type FileRegistryState = {
   listFiles: (collectionId: string) => FileRegistryEntry[]
   getFile: (
     collectionId: string,
-    fileId: string,
+    fileId: string
   ) => FileRegistryEntry | undefined
   clearCollection: (collectionId: string) => void
   hasFiles: (collectionId: string) => boolean
@@ -81,14 +81,13 @@ export const useFileRegistry = create<FileRegistryState>()(
           return { files: rest }
         }),
 
-      hasFiles: (collectionId) =>
-        (get().files[collectionId] ?? []).length > 0,
+      hasFiles: (collectionId) => (get().files[collectionId] ?? []).length > 0,
     }),
     {
       name: localStorageKey.fileRegistryStore,
       storage: createSafeJSONStorage(() => localStorage, 'useFileRegistry'),
-    },
-  ),
+    }
+  )
 )
 
 /**

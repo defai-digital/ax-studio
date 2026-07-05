@@ -1,9 +1,12 @@
-import { ServiceHub } from '@/services'
-import { Attachment } from '@/types/attachment'
-import { extractErrorMessage, toError } from '@/lib/utils/error'
 import { toast } from 'sonner'
 
+import { extractErrorMessage, toError } from '@/lib/utils/error'
+
+import type { ServiceHub } from '@/services'
+import type { Attachment } from '@/types/attachment'
+
 type AttachmentProcessingStatus = 'processing' | 'done' | 'error' | 'clear_all'
+type DocumentInjectionMode = 'inline' | 'embeddings'
 
 type AttachmentProcessingOptions = {
   attachments: Attachment[]
@@ -21,6 +24,16 @@ type AttachmentProcessingOptions = {
     status: AttachmentProcessingStatus,
     updatedAttachment?: Partial<Attachment>
   ) => void
+}
+
+function resolveChosenDocumentMode(
+  projectId: string | undefined,
+  userChoice: DocumentInjectionMode | undefined,
+  autoFallbackMode: DocumentInjectionMode | undefined
+): DocumentInjectionMode {
+  return projectId
+    ? 'embeddings'
+    : (userChoice ?? autoFallbackMode ?? 'embeddings')
 }
 
 export type AttachmentProcessingResult = {
@@ -105,7 +118,7 @@ export const processAttachmentsForSend = async (
       notifyUpdate(doc.name, 'processing')
 
       const targetPreference = doc.parseMode ?? parsePreference
-      let targetMode: 'inline' | 'embeddings' =
+      let targetMode: DocumentInjectionMode =
         targetPreference === 'inline' ? 'inline' : 'embeddings'
       let parsedContent: string | undefined
 
@@ -114,7 +127,8 @@ export const processAttachmentsForSend = async (
         targetMode = 'embeddings'
       }
 
-      const canInline = !projectId && targetPreference !== 'embeddings' && !!doc.path
+      const canInline =
+        !projectId && targetPreference !== 'embeddings' && !!doc.path
 
       if (canInline) {
         try {
@@ -122,15 +136,20 @@ export const processAttachmentsForSend = async (
             .rag()
             .parseDocument?.(doc.path!, doc.fileType)
         } catch (err) {
-          console.warn(`[AttachProc] Failed to parse ${doc.name} for inline use`, err)
+          console.warn(
+            `[AttachProc] Failed to parse ${doc.name} for inline use`,
+            err
+          )
         }
       }
 
+      const userChoice = perFileChoices?.get(doc.path || '')
       if (targetPreference === 'auto') {
-        // Check if user made a per-file choice for this document
-        const userChoice = perFileChoices?.get(doc.path || '')
-        // Project files always use embeddings
-        const effectiveMode = projectId ? 'embeddings' : (userChoice ?? autoFallbackMode ?? 'embeddings')
+        const effectiveMode = resolveChosenDocumentMode(
+          projectId,
+          userChoice,
+          autoFallbackMode
+        )
         targetMode = effectiveMode
 
         // Only do auto-detection if no user choice was made and not project file
@@ -164,10 +183,11 @@ export const processAttachmentsForSend = async (
           )
         }
       } else if (targetPreference === 'prompt') {
-        // Check if user made a per-file choice for this document
-        const userChoice = perFileChoices?.get(doc.path || '')
-        // Project files always use embeddings
-        targetMode = projectId ? 'embeddings' : (userChoice ?? autoFallbackMode ?? 'embeddings')
+        targetMode = resolveChosenDocumentMode(
+          projectId,
+          userChoice,
+          autoFallbackMode
+        )
       }
 
       if (targetMode === 'inline' && parsedContent) {
@@ -192,7 +212,9 @@ export const processAttachmentsForSend = async (
       notifyUpdate(doc.name, 'processing')
 
       const res = projectId
-        ? await serviceHub.uploads().ingestFileAttachmentForProject(projectId, doc)
+        ? await serviceHub
+            .uploads()
+            .ingestFileAttachmentForProject(projectId, doc)
         : await serviceHub.uploads().ingestFileAttachment(threadId, doc)
 
       processedAttachments.push({

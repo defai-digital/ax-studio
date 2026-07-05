@@ -13,7 +13,8 @@ export interface FileMetadata {
 
 const FILE_METADATA_START = '[ATTACHED_FILES]'
 const FILE_METADATA_END = '[/ATTACHED_FILES]'
-const FILE_METADATA_FIELD_REGEX = /(?:^|,\s*)(file_id|name|type|size|chunks|mode):\s*/g
+const FILE_METADATA_FIELD_REGEX =
+  /(?:^|,\s*)(file_id|name|type|size|chunks|mode):\s*/g
 
 const parseMetadataLine = (line: string): Record<string, string> => {
   const map: Record<string, string> = {}
@@ -52,7 +53,8 @@ export function injectFilesIntoPrompt(
       const parts = [`file_id: ${file.id}`, `name: ${file.name}`]
       if (file.type) parts.push(`type: ${file.type}`)
       if (typeof file.size === 'number') parts.push(`size: ${file.size}`)
-      if (typeof file.chunkCount === 'number') parts.push(`chunks: ${file.chunkCount}`)
+      if (typeof file.chunkCount === 'number')
+        parts.push(`chunks: ${file.chunkCount}`)
       if (file.injectionMode) parts.push(`mode: ${file.injectionMode}`)
       return `- ${parts.join(', ')}`
     })
@@ -119,9 +121,7 @@ export function extractFilesFromPrompt(prompt: string): {
   }
 
   // Extract clean prompt (everything before [ATTACHED_FILES])
-  const cleanPrompt = prompt
-    .substring(0, startIndex)
-    .trim()
+  const cleanPrompt = prompt.substring(0, startIndex).trim()
 
   return { files, cleanPrompt }
 }

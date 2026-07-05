@@ -1,8 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { useFileRegistry, threadCollectionId, projectCollectionId } from '../file-registry'
+import {
+  useFileRegistry,
+  threadCollectionId,
+  projectCollectionId,
+} from '../file-registry'
 import type { FileRegistryEntry } from '../file-registry'
 
-function makeEntry(overrides: Partial<FileRegistryEntry> = {}): FileRegistryEntry {
+function makeEntry(
+  overrides: Partial<FileRegistryEntry> = {}
+): FileRegistryEntry {
   return {
     file_id: 'file-001',
     file_name: 'report.pdf',
@@ -37,19 +43,27 @@ describe('file-registry', () => {
       const entry = makeEntry()
       useFileRegistry.getState().addFile('thread_abc', entry)
       expect(useFileRegistry.getState().listFiles('thread_abc')).toHaveLength(1)
-      expect(useFileRegistry.getState().listFiles('thread_abc')[0].file_id).toBe('file-001')
+      expect(
+        useFileRegistry.getState().listFiles('thread_abc')[0].file_id
+      ).toBe('file-001')
     })
 
     it('adds multiple files to the same collection', () => {
-      useFileRegistry.getState().addFile('col', makeEntry({ file_id: 'f1', file_path: '/a' }))
-      useFileRegistry.getState().addFile('col', makeEntry({ file_id: 'f2', file_path: '/b' }))
+      useFileRegistry
+        .getState()
+        .addFile('col', makeEntry({ file_id: 'f1', file_path: '/a' }))
+      useFileRegistry
+        .getState()
+        .addFile('col', makeEntry({ file_id: 'f2', file_path: '/b' }))
       expect(useFileRegistry.getState().listFiles('col')).toHaveLength(2)
     })
 
     it('prevents duplicate files by path within same collection', () => {
       const entry = makeEntry()
       useFileRegistry.getState().addFile('col', entry)
-      useFileRegistry.getState().addFile('col', { ...entry, file_id: 'different-id' })
+      useFileRegistry
+        .getState()
+        .addFile('col', { ...entry, file_id: 'different-id' })
       expect(useFileRegistry.getState().listFiles('col')).toHaveLength(1)
     })
 
@@ -64,8 +78,12 @@ describe('file-registry', () => {
 
   describe('removeFile', () => {
     it('removes a file by id', () => {
-      useFileRegistry.getState().addFile('col', makeEntry({ file_id: 'f1', file_path: '/a' }))
-      useFileRegistry.getState().addFile('col', makeEntry({ file_id: 'f2', file_path: '/b' }))
+      useFileRegistry
+        .getState()
+        .addFile('col', makeEntry({ file_id: 'f1', file_path: '/a' }))
+      useFileRegistry
+        .getState()
+        .addFile('col', makeEntry({ file_id: 'f2', file_path: '/b' }))
       useFileRegistry.getState().removeFile('col', 'f1')
       const files = useFileRegistry.getState().listFiles('col')
       expect(files).toHaveLength(1)
@@ -98,7 +116,9 @@ describe('file-registry', () => {
 
   describe('getFile', () => {
     it('returns file by id', () => {
-      useFileRegistry.getState().addFile('col', makeEntry({ file_id: 'target' }))
+      useFileRegistry
+        .getState()
+        .addFile('col', makeEntry({ file_id: 'target' }))
       const found = useFileRegistry.getState().getFile('col', 'target')
       expect(found).toBeDefined()
       expect(found!.file_id).toBe('target')
@@ -111,16 +131,24 @@ describe('file-registry', () => {
 
   describe('clearCollection', () => {
     it('removes all files for a collection', () => {
-      useFileRegistry.getState().addFile('col', makeEntry({ file_id: 'f1', file_path: '/a' }))
-      useFileRegistry.getState().addFile('col', makeEntry({ file_id: 'f2', file_path: '/b' }))
+      useFileRegistry
+        .getState()
+        .addFile('col', makeEntry({ file_id: 'f1', file_path: '/a' }))
+      useFileRegistry
+        .getState()
+        .addFile('col', makeEntry({ file_id: 'f2', file_path: '/b' }))
       useFileRegistry.getState().clearCollection('col')
       expect(useFileRegistry.getState().listFiles('col')).toEqual([])
       expect(useFileRegistry.getState().files['col']).toBeUndefined()
     })
 
     it('does not affect other collections', () => {
-      useFileRegistry.getState().addFile('col-a', makeEntry({ file_path: '/a' }))
-      useFileRegistry.getState().addFile('col-b', makeEntry({ file_path: '/b' }))
+      useFileRegistry
+        .getState()
+        .addFile('col-a', makeEntry({ file_path: '/a' }))
+      useFileRegistry
+        .getState()
+        .addFile('col-b', makeEntry({ file_path: '/b' }))
       useFileRegistry.getState().clearCollection('col-a')
       expect(useFileRegistry.getState().listFiles('col-b')).toHaveLength(1)
     })
