@@ -10,7 +10,7 @@ import type { ChatStatus } from 'ai'
 import type { CustomChatTransport } from '@/lib/custom-chat-transport'
 import type { ChatSession, SessionData } from './chat-session-types'
 
-export const STREAMING_STATUSES: ChatStatus[] = ['submitted', 'streaming']
+const STREAMING_STATUSES: ChatStatus[] = ['submitted', 'streaming']
 
 type ChatWithStatusCallback = Chat<UIMessage> & {
   '~registerStatusCallback'?: (callback: () => void) => () => void

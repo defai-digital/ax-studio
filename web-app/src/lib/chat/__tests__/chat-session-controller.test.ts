@@ -5,7 +5,6 @@ import {
   createSession,
   applyStatusUpdate,
   destroySession,
-  STREAMING_STATUSES,
 } from '../chat-session-controller'
 import type { ChatSession } from '../chat-session-types'
 
@@ -56,15 +55,6 @@ describe('createSessionData', () => {
     const b = createSessionData()
     expect(a).not.toBe(b)
     expect(a.idMap).not.toBe(b.idMap)
-  })
-})
-
-// ─── STREAMING_STATUSES ───────────────────────────────────────────────────────
-
-describe('STREAMING_STATUSES', () => {
-  it('includes submitted and streaming', () => {
-    expect(STREAMING_STATUSES).toContain('submitted')
-    expect(STREAMING_STATUSES).toContain('streaming')
   })
 })
 
