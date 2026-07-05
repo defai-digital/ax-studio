@@ -4,10 +4,18 @@ import Capabilities from '../Capabilities'
 
 // Mock Tooltip components
 vi.mock('@/components/ui/tooltip', () => ({
-  Tooltip: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  TooltipContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  TooltipProvider: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  TooltipTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Tooltip: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  TooltipContent: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  TooltipProvider: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  TooltipTrigger: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }))
 
 // Mock Tabler icons
@@ -64,7 +72,17 @@ describe('Capabilities', () => {
   })
 
   it('should render all capabilities in correct order', () => {
-    render(<Capabilities capabilities={['tools', 'vision', 'reasoning', 'web_search', 'embeddings']} />)
+    render(
+      <Capabilities
+        capabilities={[
+          'tools',
+          'vision',
+          'reasoning',
+          'web_search',
+          'embeddings',
+        ]}
+      />
+    )
 
     expect(screen.getByTestId('icon-tool')).toBeInTheDocument()
     expect(screen.getByTestId('icon-eye')).toBeInTheDocument()
@@ -76,11 +94,15 @@ describe('Capabilities', () => {
   it('should handle empty capabilities array', () => {
     const { container } = render(<Capabilities capabilities={[]} />)
 
-    expect(container.querySelector('[data-testid^="icon-"]')).not.toBeInTheDocument()
+    expect(
+      container.querySelector('[data-testid^="icon-"]')
+    ).not.toBeInTheDocument()
   })
 
   it('should handle unknown capabilities gracefully', () => {
-    const { container } = render(<Capabilities capabilities={['unknown_capability']} />)
+    const { container } = render(
+      <Capabilities capabilities={['unknown_capability']} />
+    )
 
     expect(container).toBeInTheDocument()
   })
@@ -119,7 +141,9 @@ describe('Capabilities', () => {
   })
 
   it('should filter out proactive capability', () => {
-    const { container } = render(<Capabilities capabilities={['proactive', 'tools']} />)
+    const { container } = render(
+      <Capabilities capabilities={['proactive', 'tools']} />
+    )
     // Only tools badge should render, not proactive
     const badges = container.querySelectorAll('span[title]')
     expect(badges).toHaveLength(1)
