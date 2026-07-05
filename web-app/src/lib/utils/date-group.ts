@@ -19,7 +19,7 @@ function startOfDay(date: Date): Date {
   return d
 }
 
-export function getDateGroup(date: Date | string | number): DateGroup {
+function getDateGroup(date: Date | string | number): DateGroup {
   const now = startOfDay(new Date())
   const target = startOfDay(new Date(date))
   // Use UTC to avoid DST-related off-by-one errors in day difference

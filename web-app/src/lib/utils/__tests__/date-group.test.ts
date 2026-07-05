@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getDateGroup, groupByDate, type DateGroup } from '@/lib/utils/date-group'
+import { groupByDate, type DateGroup } from '@/lib/utils/date-group'
 
 // Helper: create a Date that is `daysAgo` days before now, at local midnight
 function daysAgo(n: number): Date {
@@ -9,53 +9,57 @@ function daysAgo(n: number): Date {
   return d
 }
 
+function groupForDate(date: Date | string | number): DateGroup {
+  return groupByDate([{ date }], (item) => item.date)[0].group
+}
+
 // ─── A. Specification Tests ─────────────────────────────────────────────────
 
 describe('getDateGroup', () => {
   it('returns "Today" for current date', () => {
-    expect(getDateGroup(new Date())).toBe('Today')
+    expect(groupForDate(new Date())).toBe('Today')
   })
 
   it('returns "Today" for earlier today', () => {
     const earlier = new Date()
     earlier.setHours(1, 0, 0, 0)
-    expect(getDateGroup(earlier)).toBe('Today')
+    expect(groupForDate(earlier)).toBe('Today')
   })
 
   it('returns "Yesterday" for one day ago', () => {
-    expect(getDateGroup(daysAgo(1))).toBe('Yesterday')
+    expect(groupForDate(daysAgo(1))).toBe('Yesterday')
   })
 
   it('returns "This Week" for 2 days ago', () => {
-    expect(getDateGroup(daysAgo(2))).toBe('This Week')
+    expect(groupForDate(daysAgo(2))).toBe('This Week')
   })
 
   it('returns "This Week" for 7 days ago', () => {
-    expect(getDateGroup(daysAgo(7))).toBe('This Week')
+    expect(groupForDate(daysAgo(7))).toBe('This Week')
   })
 
   it('returns "This Month" for 8 days ago', () => {
-    expect(getDateGroup(daysAgo(8))).toBe('This Month')
+    expect(groupForDate(daysAgo(8))).toBe('This Month')
   })
 
   it('returns "This Month" for 30 days ago', () => {
-    expect(getDateGroup(daysAgo(30))).toBe('This Month')
+    expect(groupForDate(daysAgo(30))).toBe('This Month')
   })
 
   it('returns "Older" for 31 days ago', () => {
-    expect(getDateGroup(daysAgo(31))).toBe('Older')
+    expect(groupForDate(daysAgo(31))).toBe('Older')
   })
 
   it('returns "Older" for 365 days ago', () => {
-    expect(getDateGroup(daysAgo(365))).toBe('Older')
+    expect(groupForDate(daysAgo(365))).toBe('Older')
   })
 
   it('accepts a numeric timestamp', () => {
-    expect(getDateGroup(Date.now())).toBe('Today')
+    expect(groupForDate(Date.now())).toBe('Today')
   })
 
   it('accepts an ISO string', () => {
-    expect(getDateGroup(new Date().toISOString())).toBe('Today')
+    expect(groupForDate(new Date().toISOString())).toBe('Today')
   })
 })
 
@@ -65,23 +69,23 @@ describe('getDateGroup — edge cases', () => {
   it('treats future dates as "Today"', () => {
     const tomorrow = new Date()
     tomorrow.setDate(tomorrow.getDate() + 1)
-    expect(getDateGroup(tomorrow)).toBe('Today')
+    expect(groupForDate(tomorrow)).toBe('Today')
   })
 
   it('treats invalid date input as "Today"', () => {
-    expect(getDateGroup('not-a-date')).toBe('Today')
+    expect(groupForDate('not-a-date')).toBe('Today')
   })
 
   it('handles midnight boundary — end of yesterday', () => {
     const endOfYesterday = daysAgo(1)
     endOfYesterday.setHours(23, 59, 59, 999)
-    expect(getDateGroup(endOfYesterday)).toBe('Yesterday')
+    expect(groupForDate(endOfYesterday)).toBe('Yesterday')
   })
 
   it('handles midnight boundary — start of today', () => {
     const startOfToday = new Date()
     startOfToday.setHours(0, 0, 0, 0)
-    expect(getDateGroup(startOfToday)).toBe('Today')
+    expect(groupForDate(startOfToday)).toBe('Today')
   })
 })
 
@@ -99,7 +103,7 @@ describe('getDateGroup — properties', () => {
     ]
     const testDays = [0, 1, 2, 5, 7, 8, 15, 30, 31, 100, 365]
     for (const d of testDays) {
-      expect(validGroups).toContain(getDateGroup(daysAgo(d)))
+      expect(validGroups).toContain(groupForDate(daysAgo(d)))
     }
   })
 
@@ -113,7 +117,7 @@ describe('getDateGroup — properties', () => {
     }
     let prevRank = -1
     for (let d = 0; d <= 60; d++) {
-      const group = getDateGroup(daysAgo(d))
+      const group = groupForDate(daysAgo(d))
       const rank = groupRank[group]
       expect(rank).toBeGreaterThanOrEqual(prevRank)
       prevRank = rank
