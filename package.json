@@ -40,7 +40,7 @@
     "build:icon": "tauri icon ./src-tauri/icons/icon.png",
     "build:core": "cd core && yarn build && yarn pack",
     "build:web": "yarn workspace @ax-studio/web-app build",
-    "build:extensions": "mkdir -p ./pre-install && rimraf ./pre-install/*.tgz || true && yarn workspace @ax-studio/core build && cd extensions && yarn install && yarn workspaces foreach -Apt run build:publish",
+    "build:extensions": "mkdir -p ./pre-install && rimraf ./pre-install/*.tgz || true && yarn build:core && cd extensions && yarn install && yarn workspaces foreach -Apt run build:publish",
     "prepare": "husky"
   },
   "devDependencies": {

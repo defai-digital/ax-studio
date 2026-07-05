@@ -10,10 +10,13 @@ __metadata:
   resolution: "@ax-studio/assistant-extension@workspace:assistant-extension"
   dependencies:
     "@ax-studio/core": ../../core/package.tgz
+    react: "npm:19.0.0"
     rimraf: "npm:6.0.1"
     rolldown: "npm:1.0.0-beta.1"
     typescript: "npm:5.9.2"
     vitest: "npm:3.2.6"
+  peerDependencies:
+    react: 19.0.0
   languageName: unknown
   linkType: soft
 
@@ -22,46 +25,49 @@ __metadata:
   resolution: "@ax-studio/conversational-extension@workspace:conversational-extension"
   dependencies:
     "@ax-studio/core": ../../core/package.tgz
+    react: "npm:19.0.0"
     rimraf: "npm:6.0.1"
     rolldown: "npm:1.0.0-beta.1"
     typescript: "npm:5.9.2"
     vitest: "npm:3.2.6"
+  peerDependencies:
+    react: 19.0.0
   languageName: unknown
   linkType: soft
 
 "@ax-studio/core@file:../../core/package.tgz::locator=%40ax-studio%2Fassistant-extension%40workspace%3Aassistant-extension":
   version: 1.1.0
-  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=698d0d&locator=%40ax-studio%2Fassistant-extension%40workspace%3Aassistant-extension"
+  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=48c443&locator=%40ax-studio%2Fassistant-extension%40workspace%3Aassistant-extension"
   peerDependencies:
     react: 19.0.0
-  checksum: 10c0/b52e43ace5c0ede9bd528011ff5b7a13f63030619f84daed9522518de4baa545328d92e8776ea84370e1f0a5eabaf3d264f0f010b836d8512b7fede157ff4fec
+  checksum: 10c0/b6b17251d425aa85d4c5dea707d1370f409d02dff7188273db65189a980de572f5dc88820ac80b4b4bb75da5fc4af99ee7f7bebc14c3d5cd96c39c4a991d2fa7
   languageName: node
   linkType: hard
 
 "@ax-studio/core@file:../../core/package.tgz::locator=%40ax-studio%2Fconversational-extension%40workspace%3Aconversational-extension":
   version: 1.1.0
-  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=698d0d&locator=%40ax-studio%2Fconversational-extension%40workspace%3Aconversational-extension"
+  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=48c443&locator=%40ax-studio%2Fconversational-extension%40workspace%3Aconversational-extension"
   peerDependencies:
     react: 19.0.0
-  checksum: 10c0/b52e43ace5c0ede9bd528011ff5b7a13f63030619f84daed9522518de4baa545328d92e8776ea84370e1f0a5eabaf3d264f0f010b836d8512b7fede157ff4fec
+  checksum: 10c0/b6b17251d425aa85d4c5dea707d1370f409d02dff7188273db65189a980de572f5dc88820ac80b4b4bb75da5fc4af99ee7f7bebc14c3d5cd96c39c4a991d2fa7
   languageName: node
   linkType: hard
 
 "@ax-studio/core@file:../../core/package.tgz::locator=%40ax-studio%2Fdownload-extension%40workspace%3Adownload-extension":
   version: 1.1.0
-  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=698d0d&locator=%40ax-studio%2Fdownload-extension%40workspace%3Adownload-extension"
+  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=48c443&locator=%40ax-studio%2Fdownload-extension%40workspace%3Adownload-extension"
   peerDependencies:
     react: 19.0.0
-  checksum: 10c0/b52e43ace5c0ede9bd528011ff5b7a13f63030619f84daed9522518de4baa545328d92e8776ea84370e1f0a5eabaf3d264f0f010b836d8512b7fede157ff4fec
+  checksum: 10c0/b6b17251d425aa85d4c5dea707d1370f409d02dff7188273db65189a980de572f5dc88820ac80b4b4bb75da5fc4af99ee7f7bebc14c3d5cd96c39c4a991d2fa7
   languageName: node
   linkType: hard
 
 "@ax-studio/core@file:../../core/package.tgz::locator=%40ax-studio%2Fllamacpp-extension%40workspace%3Allamacpp-extension":
   version: 1.1.0
-  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=698d0d&locator=%40ax-studio%2Fllamacpp-extension%40workspace%3Allamacpp-extension"
+  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=48c443&locator=%40ax-studio%2Fllamacpp-extension%40workspace%3Allamacpp-extension"
   peerDependencies:
     react: 19.0.0
-  checksum: 10c0/b52e43ace5c0ede9bd528011ff5b7a13f63030619f84daed9522518de4baa545328d92e8776ea84370e1f0a5eabaf3d264f0f010b836d8512b7fede157ff4fec
+  checksum: 10c0/b6b17251d425aa85d4c5dea707d1370f409d02dff7188273db65189a980de572f5dc88820ac80b4b4bb75da5fc4af99ee7f7bebc14c3d5cd96c39c4a991d2fa7
   languageName: node
   linkType: hard
 
@@ -71,10 +77,13 @@ __metadata:
   dependencies:
     "@ax-studio/core": ../../core/package.tgz
     "@tauri-apps/api": "npm:2.8.0"
+    react: "npm:19.0.0"
     rimraf: "npm:6.0.1"
     rolldown: "npm:1.0.0-beta.1"
     typescript: "npm:5.8.3"
     vitest: "npm:3.2.6"
+  peerDependencies:
+    react: 19.0.0
   languageName: unknown
   linkType: soft
 
@@ -87,10 +96,13 @@ __metadata:
     "@tauri-apps/api": "npm:2.8.0"
     "@tauri-apps/plugin-http": "npm:2.5.0"
     "@tauri-apps/plugin-log": "npm:^2.6.0"
+    react: "npm:19.0.0"
     rimraf: "npm:6.0.1"
     rolldown: "npm:1.0.0-beta.1"
     typescript: "npm:5.9.2"
     vitest: "npm:3.2.6"
+  peerDependencies:
+    react: 19.0.0
   languageName: unknown
   linkType: soft
 
@@ -1642,6 +1654,13 @@ __metadata:
     err-code: "npm:^2.0.2"
     retry: "npm:^0.12.0"
   checksum: 10c0/9c7045a1a2928094b5b9b15336dcd2a7b1c052f674550df63cc3f36cd44028e5080448175b6f6ca32b642de81150f5e7b1a98b728f15cb069f2dd60ac2616b96
+  languageName: node
+  linkType: hard
+
+"react@npm:19.0.0":
+  version: 19.0.0
+  resolution: "react@npm:19.0.0"
+  checksum: 10c0/9cad8f103e8e3a16d15cb18a0d8115d8bd9f9e1ce3420310aea381eb42aa0a4f812cf047bb5441349257a05fba8a291515691e3cb51267279b2d2c3253f38471
   languageName: node
   linkType: hard
 
