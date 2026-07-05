@@ -13,11 +13,6 @@ export interface CPU {
   instructions?: string[] // Cortex migration: ensure instructions data ready
 }
 
-export interface GPUAdditionalInfo {
-  compute_cap: string
-  driver_version: string
-}
-
 export interface GPU {
   name: string
   total_memory: number
