@@ -1,9 +1,22 @@
 import { ContentType, MessageStatus, type ThreadMessage } from '@ax-studio/core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ServiceHub } from '@/services'
 
-const mocks = vi.hoisted(() => ({
+type ThreadExportMocks = {
+  isTauri: boolean
+  serviceHub: Partial<
+    Pick<ServiceHub, 'messages' | 'threads' | 'dialog' | 'core'>
+  > | null
+  toast: {
+    error: ReturnType<typeof vi.fn>
+    success: ReturnType<typeof vi.fn>
+    warning: ReturnType<typeof vi.fn>
+  }
+}
+
+const mocks = vi.hoisted<ThreadExportMocks>(() => ({
   isTauri: false,
-  serviceHub: null as any,
+  serviceHub: null,
   toast: {
     error: vi.fn(),
     success: vi.fn(),
