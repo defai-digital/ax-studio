@@ -17,15 +17,16 @@ AX Studio is a cross-platform AI workspace built with a React 19 frontend (Vite 
 - `make dev-ios` / `make dev-android` — Mobile dev builds (Tauri mobile, `--features mobile`)
 
 ### Testing
-- `yarn test` — Run all Vitest tests (core, web-app, llamacpp-extension)
+- `yarn test` — Run all root Vitest projects (core, web-app, bundled extensions, and test infrastructure)
 - `yarn test -- --run web-app/src/path/to/file.test.ts` — Run a single test file
 - `yarn test:watch` — Run tests in watch mode
 - `yarn test:coverage` — Run tests with v8 coverage
 - `make test` — Full test suite: lint + Vitest + Rust cargo tests (src-tauri, tauri-plugin-hardware, src-tauri/utils)
+- `make test-quality` — Module-level coverage audit + threshold gates
 - `cargo test --manifest-path src-tauri/Cargo.toml --no-default-features --features test-tauri -- --test-threads=1` — Rust backend tests only
 
 ### Linting & Formatting
-- `yarn lint` — ESLint via web-app workspace
+- `yarn lint` — ESLint for core and web-app workspaces
 - `cargo fmt --manifest-path src-tauri/Cargo.toml` — Format Rust code
 - `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` — Lint Rust code
 
@@ -44,47 +45,36 @@ AX Studio is a cross-platform AI workspace built with a React 19 frontend (Vite 
 | `extensions/` | Bundled feature extensions (assistant, conversational, download, llamacpp) |
 | `src-tauri/` | Rust Tauri backend — IPC commands, native capabilities, MCP, downloads |
 | `src-tauri/plugins/` | Rust plugins for specialized native integrations (hardware, llamacpp) |
-| `packages/` | Vendored forks (`remend`, `streamdown`) consumed by the web-app |
-| `agent-teams/` | Bundled agent team JSON definitions |
-| `autoqa/` | Python-based E2E test framework |
 | `scripts/` | Build, test, and release utilities |
 
 **Nested workspaces gotcha**: The root Yarn workspace only covers `core` and `web-app`. `extensions/` and `src-tauri/plugins/` are *separate* Yarn workspaces with their own `yarn.lock` — a root `yarn install` does not install their dependencies (the `make` targets and `yarn build:extensions` handle this).
 
 ### How the Pieces Connect
 
-- **Frontend ↔ Backend**: Communication happens through Tauri IPC. Command handlers live in `src-tauri/src/core/<module>/commands.rs`; `src-tauri/src/commands/mod.rs` is just the `handlers!` macro that registers them (shared commands for mobile, plus desktop-only extras).
+- **Frontend ↔ Backend**: Communication happens through Tauri IPC. Command handlers live in `src-tauri/src/core/<module>/commands.rs`; `src-tauri/src/commands/mod.rs` exposes the `desktop_handlers!` macro that registers them.
 - **Core SDK**: Provides shared TypeScript types, contracts, and extension-facing APIs consumed by both `web-app/` and `extensions/`.
 - **Extensions**: Packaged feature modules loaded by the app at runtime. Each extension is a separate workspace package under `extensions/` with its own build.
 - **Build order matters**: `core` must be built before `web-app` or `extensions` (the `make` targets handle this).
 
 ### Frontend Structure (`web-app/src/`)
 
-The frontend uses a **feature-first** organization. Domain-specific code lives in `features/`, while shared/cross-cutting code stays in top-level directories.
+The frontend is organized by concern. Domain-specific code is grouped under top-level `hooks/`, `lib/`, `components/`, and `services/` folders.
 
-- `features/` — Feature modules, each with its own `components/`, `hooks/`, `lib/`, `stores/`
-  - `chat/` — Chat hooks, transport layer, session store, input components
-  - `multi-agent/` — Agent editor, team builder, orchestration lib, cost estimation
-  - `threads/` — Thread management hooks, thread view components
-  - `research/` — Research panel, parsers, scrapers
-  - `models/` — Model CRUD dialogs, provider/download hooks
-  - `assistants/` — Assistant CRUD, useAssistant hook
-  - `mcp/` — MCP server dialogs, useMCPServers hook
-  - `providers/` — Provider CRUD dialogs
-- `components/` — Shared UI primitives (Radix UI based), animated icons, left sidebar
-- `containers/` — Cross-cutting composed components and remaining dialogs
-- `hooks/` — Shared cross-cutting hooks (theme, hotkeys, media query, sidebar, app state)
-- `lib/` — Shared utilities: `providers/`, `bootstrap/`, `platform/`, `markdown/`, `shortcuts/`
+- `hooks/` — Domain-organized hooks such as `chat/`, `threads/`, `models/`, `settings/`, `tools/`, `research/`, and `ui/`
+- `components/` — Shared UI primitives, AI elements, common presentation components, animated icons, settings views, and left sidebar pieces
+- `containers/` — Smart composed components that consume stores, call services, and manage navigation or dialogs
+- `lib/` — Shared utilities and feature libraries such as `providers/`, `bootstrap/`, `platform/`, `markdown/`, `shortcuts/`, `models/`, `transport/`, and `ax-bi/`
 - `services/` — Platform-abstracted API/IPC service adapters (each with `default.ts`/`tauri.ts`/`types.ts`)
-- `routes/` — TanStack Router route definitions (thin wrappers that delegate to feature components)
+- `routes/` — TanStack Router route definitions
+- `stores/` — Zustand stores
 - `schemas/` — Zod validation schemas
-- `locales/` — i18n translations (15+ languages)
+- `locales/` and `i18n/` — i18n translations and setup
 - Path alias: `@` maps to `web-app/src/`
 
 **Conventions:**
 - Tests are co-located next to source files (`Foo.tsx` + `Foo.test.tsx`)
 - Hooks use camelCase naming (`useChat.ts`, not `use-chat.ts`)
-- Feature modules should not import from other feature modules directly
+- Keep reusable cross-domain code in `components/`, `hooks/`, `lib/`, or `services/` rather than reaching into another domain-specific subfolder directly
 
 ### Rust Backend Structure (`src-tauri/src/`)
 
@@ -93,12 +83,11 @@ Organized as domain modules under `core/`, each exposing its Tauri commands from
 - `core/mcp/` — MCP server orchestration
 - `core/downloads/` — Binary and model download management
 - `core/threads/` — Thread/conversation persistence
-- `core/agent_teams/`, `core/agent_run_logs/` — Multi-agent team definitions and run logs
 - `core/research/` — Research workflow backend
-- `core/code_execution/` — Code execution sandbox
 - `core/server/` — Local API server and remote provider proxying
-- `core/extensions/`, `core/app/`, `core/filesystem/`, `core/system/`, `core/integrations/`, `core/updater/` — Extension loading, app config, FS access, system info, integrations, auto-update
-- `commands/` — `handlers!` macro registering all commands (desktop vs mobile variants)
+- `core/mlx/` — In-process MLX inference via ax-engine-sdk on macOS
+- `core/extensions/`, `core/app/`, `core/filesystem/`, `core/system/`, `core/updater/` — Extension loading, app config, FS access, system utilities, and auto-update
+- `commands/` — `desktop_handlers!` macro registering desktop commands
 
 ## Code Style
 
