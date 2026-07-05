@@ -29,7 +29,7 @@ function deferred<T>() {
 
 // Mock dependencies
 vi.mock('@/containers/HeaderPage', () => ({
-  default: ({ children }: { children: React.ReactNode }) => (
+  HeaderPage: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="header-page">{children}</div>
   ),
 }))
@@ -226,7 +226,6 @@ describe('Hub Model Detail Route', () => {
     const { rerender } = render(<Component />)
 
     expect(await screen.findByText('first-model')).toBeInTheDocument()
-
     ;(useParams as any).mockReturnValue({ modelId: 'missing-model' })
     rerender(<Component />)
 

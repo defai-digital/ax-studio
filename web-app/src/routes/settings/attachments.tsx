@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import SettingsMenu from '@/components/common/SettingsMenu'
-import HeaderPage from '@/containers/HeaderPage'
+import { HeaderPage } from '@/containers/HeaderPage'
 import { Card, CardItem } from '@/components/common/Card'
 import { useAttachments } from '@/hooks/chat/useAttachments'
 import { useTranslation } from '@/i18n/react-i18next-compat'

@@ -81,7 +81,7 @@ vi.mock('@/components/common/SettingsMenu', () => ({
 }))
 
 vi.mock('@/containers/HeaderPage', () => ({
-  default: ({ children }: { children: React.ReactNode }) => (
+  HeaderPage: ({ children }: { children: React.ReactNode }) => (
     <header data-testid="header-page">{children}</header>
   ),
 }))

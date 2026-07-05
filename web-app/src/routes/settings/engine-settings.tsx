@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import SettingsMenu from '@/components/common/SettingsMenu'
-import HeaderPage from '@/containers/HeaderPage'
+import { HeaderPage } from '@/containers/HeaderPage'
 import { Card, CardItem } from '@/components/common/Card'
 import { DynamicControllerSetting } from '@/containers/DynamicControllerSetting'
 import { RenderMarkdown } from '@/containers/RenderMarkdown'

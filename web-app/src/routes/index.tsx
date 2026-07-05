@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router'
 import ChatInput from '@/containers/ChatInput'
-import HeaderPage from '@/containers/HeaderPage'
+import { HeaderPage } from '@/containers/HeaderPage'
 import { useTools } from '@/hooks/tools/useTools'
 import { cn } from '@/lib/utils'
 import {
@@ -11,7 +11,6 @@ import {
   isStorageFlagEnabled,
 } from '@/lib/storage/storage'
 import { extractErrorMessage } from '@/lib/utils/error'
-
 
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import SetupScreen from '@/containers/SetupScreen'
@@ -138,13 +137,12 @@ function Index() {
     [createThread, selectedModel, activeModel?.id, selectedProvider, navigate]
   )
 
-  const [setupCompleted, setSetupCompleted] = useState(
-    () =>
-      isStorageFlagEnabled(
-        localStorage,
-        localStorageKey.setupCompleted,
-        'routes/index'
-      )
+  const [setupCompleted, setSetupCompleted] = useState(() =>
+    isStorageFlagEnabled(
+      localStorage,
+      localStorageKey.setupCompleted,
+      'routes/index'
+    )
   )
 
   const hasValidProviders =

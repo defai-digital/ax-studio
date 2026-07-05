@@ -1,4 +1,4 @@
-import HeaderPage from '@/containers/HeaderPage'
+import { HeaderPage } from '@/containers/HeaderPage'
 import {
   createFileRoute,
   useParams,
@@ -90,10 +90,7 @@ function HubModelDetailContent() {
   const search = useSearch({ from: Route.id })
 
   const providers = useModelProvider((state) => state.providers)
-  const {
-    downloads,
-    localDownloadingModels,
-  } = useDownloadStore()
+  const { downloads, localDownloadingModels } = useDownloadStore()
   const serviceHub = useServiceHub()
   const [repoData, setRepoData] = useState<CatalogModel | undefined>()
 
@@ -119,24 +116,27 @@ function HubModelDetailContent() {
     fetchSources()
   }, [fetchSources])
 
-  const fetchRepo = useCallback(async (signal?: AbortSignal) => {
-    const repoInfo = await serviceHub
-      .models()
-      .fetchHuggingFaceRepo(search.repo || modelId, huggingfaceToken, signal)
-    if (signal?.aborted) return
+  const fetchRepo = useCallback(
+    async (signal?: AbortSignal) => {
+      const repoInfo = await serviceHub
+        .models()
+        .fetchHuggingFaceRepo(search.repo || modelId, huggingfaceToken, signal)
+      if (signal?.aborted) return
 
-    if (!repoInfo) {
-      setRepoData(undefined)
-      return
-    }
+      if (!repoInfo) {
+        setRepoData(undefined)
+        return
+      }
 
-    const repoDetail = serviceHub
-      .models()
-      .convertHfRepoToCatalogModel(repoInfo)
-    if (signal?.aborted) return
+      const repoDetail = serviceHub
+        .models()
+        .convertHfRepoToCatalogModel(repoInfo)
+      if (signal?.aborted) return
 
-    setRepoData(repoDetail || undefined)
-  }, [serviceHub, modelId, search, huggingfaceToken])
+      setRepoData(repoDetail || undefined)
+    },
+    [serviceHub, modelId, search, huggingfaceToken]
+  )
 
   useEffect(() => {
     const controller = new AbortController()
@@ -535,11 +535,12 @@ function HubModelDetailContent() {
                   const isDownloaded = !!downloadedModel
 
                   // Extract format from model_id
-                  const format = modelData.is_mlx || variant.path.startsWith('hf://')
-                    ? 'MLX'
-                    : variant.model_id.toLowerCase().includes('tensorrt')
-                      ? 'TensorRT'
-                      : 'GGUF'
+                  const format =
+                    modelData.is_mlx || variant.path.startsWith('hf://')
+                      ? 'MLX'
+                      : variant.model_id.toLowerCase().includes('tensorrt')
+                        ? 'TensorRT'
+                        : 'GGUF'
                   // Extract version name (remove format suffix)
                   const versionName = variant.model_id
                     .replace(/_GGUF$/i, '')
@@ -599,7 +600,8 @@ function HubModelDetailContent() {
                                 className="rounded-lg"
                                 onClick={() =>
                                   handleUseModel(
-                                    downloadedModel?.modelId ?? variant.model_id,
+                                    downloadedModel?.modelId ??
+                                      variant.model_id,
                                     downloadedModel?.providerId
                                   )
                                 }
@@ -615,10 +617,13 @@ function HubModelDetailContent() {
                               className="rounded-lg"
                               onClick={async () => {
                                 // Check if this is an MLX model and if MLX is supported on this platform
-                                const isMlxModel = modelData.is_mlx || variant.path.startsWith('hf://')
+                                const isMlxModel =
+                                  modelData.is_mlx ||
+                                  variant.path.startsWith('hf://')
                                 if (isMlxModel && !isMlxSupported()) {
                                   toast.error('MLX models not supported', {
-                                    description: 'MLX models only work on macOS with Apple Silicon (M1/M2/M3/M4). Please download a GGUF version instead.',
+                                    description:
+                                      'MLX models only work on macOS with Apple Silicon (M1/M2/M3/M4). Please download a GGUF version instead.',
                                   })
                                   return
                                 }
@@ -634,10 +639,18 @@ function HubModelDetailContent() {
                                       huggingfaceToken
                                     )
                                 } catch (error) {
-                                  console.error('Failed to download model:', error)
-                                  const description = extractErrorMessage(error, '')
+                                  console.error(
+                                    'Failed to download model:',
+                                    error
+                                  )
+                                  const description = extractErrorMessage(
+                                    error,
+                                    ''
+                                  )
                                   toast.error('Failed to download model', {
-                                    description: description || 'Unknown error (check DevTools console).',
+                                    description:
+                                      description ||
+                                      'Unknown error (check DevTools console).',
                                   })
                                 }
                               }}

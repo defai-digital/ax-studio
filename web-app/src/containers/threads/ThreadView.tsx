@@ -9,7 +9,7 @@ import type { RefObject } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import type { UIMessage } from '@ai-sdk/react'
 import type { ChatStatus } from 'ai'
-import HeaderPage from '@/containers/HeaderPage'
+import { HeaderPage } from '@/containers/HeaderPage'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -109,10 +109,19 @@ export function ThreadView({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => handleSplit('left')}>Split Left</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleSplit('right')}>Split Right</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => handleSplit('left')}>
+                  Split Left
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => handleSplit('right')}>
+                  Split Right
+                </DropdownMenuItem>
                 {splitPaneOrder && (
-                  <DropdownMenuItem onSelect={() => { setSplitThreadId(null); setSplitDirection(null) }}>
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      setSplitThreadId(null)
+                      setSplitDirection(null)
+                    }}
+                  >
                     Close Split View
                   </DropdownMenuItem>
                 )}
@@ -126,10 +135,13 @@ export function ThreadView({
           {!splitPaneOrder && showThreadPromptEditor && (
             <div className="mx-auto w-full md:w-4/5 xl:w-4/6 mt-2 rounded-md border bg-card p-3 space-y-2">
               <p className="text-xs text-muted-foreground">
-                {promptResolution.source === 'thread' ? 'Using Thread Prompt'
-                  : promptResolution.source === 'project' ? 'Inheriting from Project Prompt'
-                  : promptResolution.source === 'global' ? 'Inheriting from Global Prompt'
-                  : 'Using Fallback Prompt'}
+                {promptResolution.source === 'thread'
+                  ? 'Using Thread Prompt'
+                  : promptResolution.source === 'project'
+                    ? 'Inheriting from Project Prompt'
+                    : promptResolution.source === 'global'
+                      ? 'Inheriting from Global Prompt'
+                      : 'Using Fallback Prompt'}
               </p>
               <Textarea
                 value={threadPromptDraft}
@@ -138,14 +150,32 @@ export function ThreadView({
                 placeholder="Leave empty to inherit from project/global."
               />
               <div className="flex justify-end gap-2">
-                <Button size="sm" variant="ghost" onClick={() => {
-                  setThreadPromptDraft('')
-                  updateThread(threadId, { metadata: { ...thread?.metadata, threadPrompt: null } })
-                }}>Clear Override</Button>
-                <Button size="sm" onClick={() => {
-                  updateThread(threadId, { metadata: { ...thread?.metadata, threadPrompt: threadPromptDraft.trim() || null } })
-                  setShowThreadPromptEditor(false)
-                }}>Save</Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setThreadPromptDraft('')
+                    updateThread(threadId, {
+                      metadata: { ...thread?.metadata, threadPrompt: null },
+                    })
+                  }}
+                >
+                  Clear Override
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    updateThread(threadId, {
+                      metadata: {
+                        ...thread?.metadata,
+                        threadPrompt: threadPromptDraft.trim() || null,
+                      },
+                    })
+                    setShowThreadPromptEditor(false)
+                  }}
+                >
+                  Save
+                </Button>
               </div>
             </div>
           )}
@@ -183,7 +213,10 @@ export function ThreadView({
                       if (!splitThreadId) return
                       setSplitThreadId(null)
                       setSplitDirection(null)
-                      navigate({ to: '/threads/$threadId', params: { threadId: splitThreadId } })
+                      navigate({
+                        to: '/threads/$threadId',
+                        params: { threadId: splitThreadId },
+                      })
                     }}
                   />
                 </div>
@@ -191,7 +224,10 @@ export function ThreadView({
                 <SplitThreadContainer
                   key="split-pane"
                   threadId={splitThreadId}
-                  onClose={() => { setSplitThreadId(null); setSplitDirection(null) }}
+                  onClose={() => {
+                    setSplitThreadId(null)
+                    setSplitDirection(null)
+                  }}
                 />
               )
             )}

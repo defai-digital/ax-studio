@@ -10,7 +10,9 @@ type HeaderPageProps = {
   children?: ReactNode
 }
 
-const HeaderPage = memo(function HeaderPage({ children }: HeaderPageProps) {
+export const HeaderPage = memo(function HeaderPage({
+  children,
+}: HeaderPageProps) {
   const { open, setLeftPanel } = useLeftPanel()
   const handleWindowDrag = useCallback((event: MouseEvent<HTMLDivElement>) => {
     if (IS_MACOS) return
@@ -27,9 +29,7 @@ const HeaderPage = memo(function HeaderPage({ children }: HeaderPageProps) {
       )}
       onMouseDown={handleWindowDrag}
     >
-      <div
-        className={cn('flex items-center w-full gap-2')}
-      >
+      <div className={cn('flex items-center w-full gap-2')}>
         {!open && (
           <Button
             variant="ghost"
@@ -38,19 +38,11 @@ const HeaderPage = memo(function HeaderPage({ children }: HeaderPageProps) {
             onClick={() => setLeftPanel(!open)}
             aria-label="Toggle sidebar"
           >
-            <PanelLeft
-              className="text-muted-foreground relative size-4.5"
-            />
+            <PanelLeft className="text-muted-foreground relative size-4.5" />
           </Button>
         )}
-        <div
-          className={cn('flex-1 min-w-0')}
-        >
-          {children}
-        </div>
+        <div className={cn('flex-1 min-w-0')}>{children}</div>
       </div>
     </div>
   )
 })
-
-export default HeaderPage

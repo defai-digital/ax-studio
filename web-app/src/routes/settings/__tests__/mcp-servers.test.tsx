@@ -67,7 +67,7 @@ vi.mock('lucide-react', () => ({
 }))
 
 vi.mock('@/containers/HeaderPage', () => ({
-  default: ({ children }: { children: ReactNode }) => (
+  HeaderPage: ({ children }: { children: ReactNode }) => (
     <header data-testid="header-page">{children}</header>
   ),
 }))

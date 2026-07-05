@@ -10,7 +10,7 @@ import {
 } from '@/lib/shortcuts'
 import { PlatformMetaKey } from '@/components/common/PlatformMetaKey'
 import { Kbd, KbdGroup } from '@/components/ui/kbd'
-import HeaderPage from '@/containers/HeaderPage'
+import { HeaderPage } from '@/containers/HeaderPage'
 import { Keyboard as KeyboardIcon } from 'lucide-react'
 import { SettingsPageLayout } from '@/components/settings/SettingsPageLayout'
 

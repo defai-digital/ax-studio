@@ -8,7 +8,7 @@ import { useTranslation } from '@/i18n/react-i18next-compat'
 import { toast } from 'sonner'
 
 import ChatInput from '@/containers/ChatInput'
-import HeaderPage from '@/containers/HeaderPage'
+import { HeaderPage } from '@/containers/HeaderPage'
 import ThreadList from '@/containers/ThreadList'
 import ProjectFiles from '@/containers/ProjectFiles'
 import { AvatarEmoji } from '@/components/common/AvatarEmoji'
@@ -44,7 +44,7 @@ function ProjectPageContent() {
   const { getFolderById, updateFolder } = useThreadManagement()
   const threads = useThreads((state) => state.threads)
   const deleteAllThreadsByProject = useThreads(
-    (state) => state.deleteAllThreadsByProject,
+    (state) => state.deleteAllThreadsByProject
   )
   const { assistants } = useAssistant()
 
@@ -72,7 +72,7 @@ function ProjectPageContent() {
     name: string,
     assistantId?: string,
     logo?: string,
-    projectPrompt?: string | null,
+    projectPrompt?: string | null
   ) => {
     if (project) {
       try {
@@ -240,10 +240,7 @@ function ProjectPageContent() {
 
           {/* Project Settings */}
           <div>
-            <h2
-              style={{ fontSize: '15px', fontWeight: 600 }}
-              className="mb-3"
-            >
+            <h2 style={{ fontSize: '15px', fontWeight: 600 }} className="mb-3">
               {t('projects.addProjectDialog.settings', {
                 defaultValue: 'Project Settings',
               })}

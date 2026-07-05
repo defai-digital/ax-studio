@@ -30,7 +30,7 @@ import { Button } from '@/components/ui/button'
 import { safeStorageSetItem } from '@/lib/storage/storage'
 import { useTheme } from '@/hooks/ui/useTheme'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
-import HeaderPage from './HeaderPage'
+import { HeaderPage } from './HeaderPage'
 
 interface SetupScreenProps {
   onComplete?: () => void

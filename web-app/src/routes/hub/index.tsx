@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import type { CatalogModel } from '@/services/models/types'
-import HeaderPage from '@/containers/HeaderPage'
+import { HeaderPage } from '@/containers/HeaderPage'
 import {
   Atom,
   CheckCircle2,

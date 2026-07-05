@@ -15,7 +15,7 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 vi.mock('@/containers/HeaderPage', () => ({
-  default: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  HeaderPage: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }))
 
 vi.mock('@/components/common/Card', () => ({

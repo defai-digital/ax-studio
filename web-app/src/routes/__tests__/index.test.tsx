@@ -56,18 +56,23 @@ vi.mock('@/hooks/ui/usePrompt', () => ({
 }))
 
 vi.mock('@/components/smart-start/WorkflowSelector', () => ({
-  WorkflowSelector: ({ onPromptReady }: { onPromptReady: (prompt: string) => void }) => (
+  WorkflowSelector: ({
+    onPromptReady,
+  }: {
+    onPromptReady: (prompt: string) => void
+  }) => (
     <button
       type="button"
       onClick={() =>
-        onPromptReady('Help me build a REST API with authentication and CRUD endpoints')
+        onPromptReady(
+          'Help me build a REST API with authentication and CRUD endpoints'
+        )
       }
     >
       Build REST API
     </button>
   ),
 }))
-
 
 vi.mock('@/lib/prompts/system-prompt', () => ({
   resolveSystemPrompt: () => ({
@@ -88,7 +93,7 @@ vi.mock('@/containers/ChatInput', () => ({
 }))
 
 vi.mock('@/containers/HeaderPage', () => ({
-  default: ({ children }: { children?: React.ReactNode }) => (
+  HeaderPage: ({ children }: { children?: React.ReactNode }) => (
     <div data-testid="header-page">{children}</div>
   ),
 }))
@@ -103,7 +108,9 @@ vi.mock('@/containers/SetupScreen', () => ({
 
 vi.mock('@/components/ui/button', () => ({
   Button: ({ children, onClick, ...props }: any) => (
-    <button onClick={onClick} {...props}>{children}</button>
+    <button onClick={onClick} {...props}>
+      {children}
+    </button>
   ),
 }))
 
@@ -115,7 +122,9 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: ({ children }: any) => <div>{children}</div>,
   DropdownMenuContent: ({ children }: any) => <div>{children}</div>,
   DropdownMenuItem: ({ children, onSelect }: any) => (
-    <div role="menuitem" onClick={onSelect}>{children}</div>
+    <div role="menuitem" onClick={onSelect}>
+      {children}
+    </div>
   ),
   DropdownMenuTrigger: ({ children }: any) => <>{children}</>,
 }))
@@ -126,7 +135,9 @@ vi.mock('motion/react', () => ({
     h1: ({ children, ...props }: any) => <h1 {...props}>{children}</h1>,
     p: ({ children, ...props }: any) => <p {...props}>{children}</p>,
     button: ({ children, onClick, className, ...props }: any) => (
-      <button onClick={onClick} className={className} {...props}>{children}</button>
+      <button onClick={onClick} className={className} {...props}>
+        {children}
+      </button>
     ),
   },
 }))
@@ -177,7 +188,9 @@ describe('Home Page (index.tsx) — Manual Test Protocol', () => {
 
     expect(screen.getByText('What can I help you with?')).toBeInTheDocument()
     expect(
-      screen.getByText("Ask anything, build with AI, or explore what's possible.")
+      screen.getByText(
+        "Ask anything, build with AI, or explore what's possible."
+      )
     ).toBeInTheDocument()
   })
 
@@ -243,13 +256,17 @@ describe('Home Page (index.tsx) — Manual Test Protocol', () => {
     renderIndex()
 
     fireEvent.click(screen.getByLabelText('Thread Prompt'))
-    const textarea = screen.getByPlaceholderText(/Set a prompt for the new thread/)
+    const textarea = screen.getByPlaceholderText(
+      /Set a prompt for the new thread/
+    )
 
     await act(async () => {
       fireEvent.change(textarea, { target: { value: 'Custom system prompt' } })
     })
 
-    expect(sessionStorage.getItem('new-thread-prompt')).toBe('Custom system prompt')
+    expect(sessionStorage.getItem('new-thread-prompt')).toBe(
+      'Custom system prompt'
+    )
   })
 
   // Protocol #15: Split view menu renders

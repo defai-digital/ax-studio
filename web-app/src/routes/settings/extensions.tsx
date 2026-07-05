@@ -6,7 +6,7 @@ import SettingsMenu from '@/components/common/SettingsMenu'
 import { RenderMarkdown } from '@/containers/RenderMarkdown'
 import { ExtensionManager } from '@/lib/extension'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import HeaderPage from '@/containers/HeaderPage'
+import { HeaderPage } from '@/containers/HeaderPage'
 import { Puzzle } from 'lucide-react'
 import { SettingsPageLayout } from '@/components/settings/SettingsPageLayout'
 
