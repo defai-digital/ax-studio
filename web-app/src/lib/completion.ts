@@ -115,16 +115,3 @@ export const newAssistantThreadContent = (
   completed_at: 0,
   metadata,
 } as unknown as ThreadMessage)
-
-export const emptyThreadContent = {
-  type: 'text',
-  role: ChatCompletionRole.Assistant,
-  content: [],
-  id: ulid(),
-  object: 'thread.message',
-  thread_id: '',
-  status: MessageStatus.Ready,
-  created_at: 0,
-  completed_at: 0,
-  metadata: {},
-} as unknown as ThreadMessage

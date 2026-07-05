@@ -7,7 +7,6 @@ import {
 import {
   newUserThreadContent,
   newAssistantThreadContent,
-  emptyThreadContent,
 } from '../completion'
 import type { Attachment } from '@/types/attachment'
 
@@ -275,37 +274,6 @@ describe('newAssistantThreadContent', () => {
     const content = 'Here is code: `const x = 1;`\n```js\nconsole.log("hi")\n```'
     const msg = newAssistantThreadContent('t1', content)
     expect(msg.content[0].text?.value).toBe(content)
-  })
-})
-
-describe('emptyThreadContent', () => {
-  it('has assistant role', () => {
-    expect(emptyThreadContent.role).toBe(ChatCompletionRole.Assistant)
-  })
-
-  it('has empty content array', () => {
-    expect(emptyThreadContent.content).toEqual([])
-  })
-
-  it('has empty thread_id', () => {
-    expect(emptyThreadContent.thread_id).toBe('')
-  })
-
-  it('has ready status', () => {
-    expect(emptyThreadContent.status).toBe(MessageStatus.Ready)
-  })
-
-  it('has a valid string id', () => {
-    expect(typeof emptyThreadContent.id).toBe('string')
-    expect(emptyThreadContent.id.length).toBeGreaterThan(0)
-  })
-
-  it('has object set to thread.message', () => {
-    expect(emptyThreadContent.object).toBe('thread.message')
-  })
-
-  it('has type set to text', () => {
-    expect(emptyThreadContent.type).toBe('text')
   })
 })
 
