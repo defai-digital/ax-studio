@@ -14,16 +14,32 @@ vi.mock('@/containers/HeaderPage', () => ({
 }))
 
 vi.mock('@/components/common/Card', () => ({
-  Card: ({ header, children }: { header?: React.ReactNode; children: React.ReactNode }) => (
+  Card: ({
+    header,
+    children,
+  }: {
+    header?: React.ReactNode
+    children: React.ReactNode
+  }) => (
     <div data-testid="card">
       {header && <div data-testid="card-header">{header}</div>}
       {children}
     </div>
   ),
-  CardItem: ({ title, description, actions }: { title?: string; description?: string; actions?: React.ReactNode }) => (
+  CardItem: ({
+    title,
+    description,
+    actions,
+  }: {
+    title?: string
+    description?: string
+    actions?: React.ReactNode
+  }) => (
     <div data-testid="card-item" data-title={title}>
       {title && <div data-testid="card-item-title">{title}</div>}
-      {description && <div data-testid="card-item-description">{description}</div>}
+      {description && (
+        <div data-testid="card-item-description">{description}</div>
+      )}
       {actions && <div data-testid="card-item-actions">{actions}</div>}
     </div>
   ),
@@ -106,7 +122,7 @@ describe('Shortcuts Settings Route', () => {
 
     const container = screen.getByTestId('header-page')
     expect(container).toBeInTheDocument()
-    
+
     const settingsMenu = screen.getByTestId('settings-menu')
     expect(settingsMenu).toBeInTheDocument()
   })
@@ -145,7 +161,7 @@ describe('Shortcuts Settings Route', () => {
 
   it('should be properly structured as a route component', () => {
     const Component = ShortcutsRoute.component as React.ComponentType
-    
+
     // Test that the component can be rendered without errors
     expect(() => {
       render(<Component />)
@@ -177,7 +193,7 @@ describe('Shortcuts Settings Route', () => {
     // Check the main container structure
     const container = screen.getByTestId('header-page')
     expect(container).toBeInTheDocument()
-    
+
     // Check the settings layout
     const settingsMenu = screen.getByTestId('settings-menu')
     expect(settingsMenu).toBeInTheDocument()

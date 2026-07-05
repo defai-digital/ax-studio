@@ -14,16 +14,34 @@ vi.mock('@/containers/HeaderPage', () => ({
 }))
 
 vi.mock('@/components/common/Card', () => ({
-  Card: ({ title, children }: { title?: string; children: React.ReactNode }) => (
+  Card: ({
+    title,
+    children,
+  }: {
+    title?: string
+    children: React.ReactNode
+  }) => (
     <div data-testid="card" data-title={title}>
       {title && <div data-testid="card-title">{title}</div>}
       {children}
     </div>
   ),
-  CardItem: ({ title, description, actions, className }: { title?: string; description?: string; actions?: React.ReactNode; className?: string }) => (
+  CardItem: ({
+    title,
+    description,
+    actions,
+    className,
+  }: {
+    title?: string
+    description?: string
+    actions?: React.ReactNode
+    className?: string
+  }) => (
     <div data-testid="card-item" data-title={title} className={className}>
       {title && <div data-testid="card-item-title">{title}</div>}
-      {description && <div data-testid="card-item-description">{description}</div>}
+      {description && (
+        <div data-testid="card-item-description">{description}</div>
+      )}
       {actions && <div data-testid="card-item-actions">{actions}</div>}
     </div>
   ),
@@ -34,11 +52,15 @@ vi.mock('@/containers/ThemeSwitcher', () => ({
 }))
 
 vi.mock('@/containers/FontSizeSwitcher', () => ({
-  FontSizeSwitcher: () => <div data-testid="font-size-switcher">Font Size Switcher</div>,
+  FontSizeSwitcher: () => (
+    <div data-testid="font-size-switcher">Font Size Switcher</div>
+  ),
 }))
 
 vi.mock('@/containers/AccentColorPicker', () => ({
-  AccentColorPicker: () => <div data-testid="accent-color-picker">Accent Color Picker</div>,
+  AccentColorPicker: () => (
+    <div data-testid="accent-color-picker">Accent Color Picker</div>
+  ),
 }))
 
 vi.mock('@/hooks/settings/useInterfaceSettings', () => ({
@@ -67,7 +89,15 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
 }))
 
 vi.mock('@/components/ui/button', () => ({
-  Button: ({ children, onClick, ...props }: { children: React.ReactNode; onClick?: () => void; [key: string]: any }) => (
+  Button: ({
+    children,
+    onClick,
+    ...props
+  }: {
+    children: React.ReactNode
+    onClick?: () => void
+    [key: string]: any
+  }) => (
     <button data-testid="button" onClick={onClick} {...props}>
       {children}
     </button>
@@ -134,7 +164,7 @@ describe('Interface Settings Route', () => {
     expect(resetButtons.length).toBeGreaterThan(0)
 
     // Check that buttons are clickable
-    resetButtons.forEach(button => {
+    resetButtons.forEach((button) => {
       expect(button).toBeInTheDocument()
     })
   })
@@ -147,7 +177,7 @@ describe('Interface Settings Route', () => {
     expect(resetButtons.length).toBeGreaterThan(0)
 
     // Verify buttons can be clicked without errors
-    resetButtons.forEach(button => {
+    resetButtons.forEach((button) => {
       fireEvent.click(button)
       expect(button).toBeInTheDocument()
     })
@@ -172,9 +202,10 @@ describe('Interface Settings Route', () => {
     const cardItems = screen.getAllByTestId('card-item')
 
     // Check that some card items have responsive classes
-    const responsiveItems = cardItems.filter(item =>
-      item.className?.includes('flex-col') ||
-      item.className?.includes('sm:flex-row')
+    const responsiveItems = cardItems.filter(
+      (item) =>
+        item.className?.includes('flex-col') ||
+        item.className?.includes('sm:flex-row')
     )
 
     expect(responsiveItems.length).toBeGreaterThan(0)

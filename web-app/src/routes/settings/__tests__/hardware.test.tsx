@@ -26,13 +26,25 @@ vi.mock('@/containers/HeaderPage', () => ({
 }))
 
 vi.mock('@/components/common/Card', () => ({
-  Card: ({ title, children }: { title?: string; children: React.ReactNode }) => (
+  Card: ({
+    title,
+    children,
+  }: {
+    title?: string
+    children: React.ReactNode
+  }) => (
     <div data-testid="card">
       {title && <div>{title}</div>}
       {children}
     </div>
   ),
-  CardItem: ({ title, actions }: { title?: string; actions?: React.ReactNode }) => (
+  CardItem: ({
+    title,
+    actions,
+  }: {
+    title?: string
+    actions?: React.ReactNode
+  }) => (
     <div data-testid="card-item">
       {title && <div>{title}</div>}
       {actions}
@@ -61,7 +73,12 @@ vi.mock('@/hooks/settings/useHardware', () => ({
     hardwareData: {
       os_type: 'windows',
       os_name: 'Windows 11',
-      cpu: { name: 'Intel i7', arch: 'x64', core_count: 8, extensions: ['SSE'] },
+      cpu: {
+        name: 'Intel i7',
+        arch: 'x64',
+        core_count: 8,
+        extensions: ['SSE'],
+      },
       total_memory: 16384,
     },
     systemUsage: { cpu: 50, used_memory: 8192 },
@@ -100,15 +117,17 @@ vi.mock('@/lib/utils', () => ({
 }))
 vi.mock('@/lib/utils/number', () => ({ toNumber: (n: number) => n }))
 vi.mock('@tauri-apps/api/webviewWindow', () => ({ WebviewWindow: vi.fn() }))
-vi.mock('@/constants/routes', () => ({ 
-  route: { 
-    settings: { 
-      hardware: '/settings/hardware' 
-    }, 
-    systemMonitor: '/monitor' 
-  } 
+vi.mock('@/constants/routes', () => ({
+  route: {
+    settings: {
+      hardware: '/settings/hardware',
+    },
+    systemMonitor: '/monitor',
+  },
 }))
-vi.mock('@/constants/windows', () => ({ windowKey: { systemMonitorWindow: 'monitor' } }))
+vi.mock('@/constants/windows', () => ({
+  windowKey: { systemMonitorWindow: 'monitor' },
+}))
 vi.mock('lucide-react', () => ({
   Cpu: () => <div data-testid="cpu-icon" />,
   Monitor: () => <div data-testid="icon" />,
@@ -153,7 +172,7 @@ describe('Hardware Settings', () => {
 
   it('displays OS information', async () => {
     renderHardwareContent()
-    
+
     await waitFor(() => {
       expect(screen.getByText('settings:hardware.os')).toBeInTheDocument()
       expect(screen.getByText('windows')).toBeInTheDocument()
@@ -162,7 +181,7 @@ describe('Hardware Settings', () => {
 
   it('displays CPU information', async () => {
     renderHardwareContent()
-    
+
     await waitFor(() => {
       expect(screen.getByText('settings:hardware.cpu')).toBeInTheDocument()
       expect(screen.getByText('Intel i7')).toBeInTheDocument()
@@ -171,7 +190,7 @@ describe('Hardware Settings', () => {
 
   it('displays memory information', async () => {
     renderHardwareContent()
-    
+
     await waitFor(() => {
       expect(screen.getByText('settings:hardware.memory')).toBeInTheDocument()
     })
@@ -180,7 +199,7 @@ describe('Hardware Settings', () => {
   it('displays GPU devices on non-macOS', async () => {
     global.IS_MACOS = false
     renderHardwareContent()
-    
+
     await waitFor(() => {
       expect(screen.getByText('settings:hardware.gpus')).toBeInTheDocument()
       expect(screen.getByText('RTX 3080')).toBeInTheDocument()
@@ -219,7 +238,7 @@ describe('Hardware Settings', () => {
   it('hides GPU devices on macOS', async () => {
     global.IS_MACOS = true
     renderHardwareContent()
-    
+
     await waitFor(() => {
       expect(screen.queryByText('GPUs')).not.toBeInTheDocument()
     })

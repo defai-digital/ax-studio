@@ -2,7 +2,12 @@ import { Card, CardItem } from '@/components/common/Card'
 import HeaderPage from '@/containers/HeaderPage'
 import SettingsMenu from '@/components/common/SettingsMenu'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
-import { cn, getProviderTitle, getProviderColor, getModelDisplayName } from '@/lib/utils'
+import {
+  cn,
+  getProviderTitle,
+  getProviderColor,
+  getModelDisplayName,
+} from '@/lib/utils'
 import { createFileRoute, Link, useParams } from '@tanstack/react-router'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import Capabilities from '@/components/common/Capabilities'
@@ -15,7 +20,15 @@ import { route } from '@/constants/routes'
 import DeleteProvider from '@/containers/dialogs/DeleteProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { Button } from '@/components/ui/button'
-import { CheckCircle2, Loader, Plug, RefreshCw, Search, Star, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  Loader,
+  Plug,
+  RefreshCw,
+  Search,
+  Star,
+  XCircle,
+} from 'lucide-react'
 import { useFavoriteModel } from '@/hooks/models/useFavoriteModel'
 import { toast } from 'sonner'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -37,7 +50,12 @@ function FavoriteModelAction({ model }: { model: Model }) {
   const { isFavorite, toggleFavorite } = useFavoriteModel()
   const isModelFavorite = isFavorite(model.id)
   return (
-    <Button aria-label="Toggle favorite" variant="ghost" size="icon-xs" onClick={() => toggleFavorite(model)}>
+    <Button
+      aria-label="Toggle favorite"
+      variant="ghost"
+      size="icon-xs"
+      onClick={() => toggleFavorite(model)}
+    >
       {isModelFavorite ? (
         <Star size={18} className="text-muted-foreground" fill="currentColor" />
       ) : (
@@ -71,11 +89,16 @@ function validateSettingValue(
   return null
 }
 
-function mergeProviderModelIds(provider: ModelProvider, modelIds: string[]): {
+function mergeProviderModelIds(
+  provider: ModelProvider,
+  modelIds: string[]
+): {
   models: Model[]
   added: number
 } {
-  const existingById = new Map(provider.models.map((model) => [model.id, model]))
+  const existingById = new Map(
+    provider.models.map((model) => [model.id, model])
+  )
   const nextModels = [...provider.models]
   let added = 0
 
@@ -112,8 +135,12 @@ function ProviderDetail() {
   const { getProviderByName, updateProvider } = useModelProvider()
   const provider = getProviderByName(providerName)
   const providerColor = getProviderColor(providerName)
-  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
-  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle')
+  const [validationErrors, setValidationErrors] = useState<
+    Record<string, string>
+  >({})
+  const [connectionStatus, setConnectionStatus] = useState<
+    'idle' | 'testing' | 'success' | 'error'
+  >('idle')
   const [connectionMessage, setConnectionMessage] = useState('')
   const lastValidValues = useRef<Record<string, string>>({})
   const isMountedRef = useRef(true)
@@ -128,7 +155,10 @@ function ProviderDetail() {
   useEffect(() => {
     if (provider?.settings) {
       provider.settings.forEach((setting) => {
-        if (!(setting.key in lastValidValues.current) && typeof setting.controller_props.value === 'string') {
+        if (
+          !(setting.key in lastValidValues.current) &&
+          typeof setting.controller_props.value === 'string'
+        ) {
           lastValidValues.current[setting.key] = setting.controller_props.value
         }
       })
@@ -279,7 +309,9 @@ function ProviderDetail() {
         }
       }
 
-      const removed = provider.models.filter((m) => !selectedSet.has(m.id)).length
+      const removed = provider.models.filter(
+        (m) => !selectedSet.has(m.id)
+      ).length
 
       updateProvider(providerName, { ...provider, models: updatedModels })
 
@@ -296,7 +328,7 @@ function ProviderDetail() {
         })
       }
     },
-    [provider, providerName, updateProvider, t],
+    [provider, providerName, updateProvider, t]
   )
 
   const handleRefreshModels = async () => {
@@ -374,7 +406,10 @@ function ProviderDetail() {
       </HeaderPage>
       <div className="flex flex-1 min-h-0">
         <SettingsMenu />
-        <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+        <div
+          className="flex-1 overflow-y-auto"
+          style={{ scrollbarWidth: 'thin' }}
+        >
           {/* Sticky header with provider avatar */}
           <div className="flex items-center gap-3 px-8 py-5 border-b border-border/40 bg-background sticky top-0 z-10">
             <div
@@ -384,9 +419,22 @@ function ProviderDetail() {
                 border: `1px solid ${providerColor}30`,
               }}
             >
-              <ProvidersAvatar provider={provider ?? { provider: providerName, active: true, models: [], settings: [] } as ProviderObject} />
+              <ProvidersAvatar
+                provider={
+                  provider ??
+                  ({
+                    provider: providerName,
+                    active: true,
+                    models: [],
+                    settings: [],
+                  } as ProviderObject)
+                }
+              />
             </div>
-            <h1 className="text-foreground tracking-tight" style={{ fontSize: '16px', fontWeight: 600 }}>
+            <h1
+              className="text-foreground tracking-tight"
+              style={{ fontSize: '16px', fontWeight: 600 }}
+            >
               {getProviderTitle(providerName)}
             </h1>
           </div>
@@ -397,11 +445,21 @@ function ProviderDetail() {
               <div>
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <h2 className="text-foreground tracking-tight mb-1" style={{ fontSize: '16px', fontWeight: 600 }}>
-                      {t('provider:configuration', { defaultValue: 'Configuration' })}
+                    <h2
+                      className="text-foreground tracking-tight mb-1"
+                      style={{ fontSize: '16px', fontWeight: 600 }}
+                    >
+                      {t('provider:configuration', {
+                        defaultValue: 'Configuration',
+                      })}
                     </h2>
-                    <p className="text-muted-foreground" style={{ fontSize: '13px' }}>
-                      {t('provider:configurationDesc', { defaultValue: 'API credentials and endpoint settings.' })}
+                    <p
+                      className="text-muted-foreground"
+                      style={{ fontSize: '13px' }}
+                    >
+                      {t('provider:configurationDesc', {
+                        defaultValue: 'API credentials and endpoint settings.',
+                      })}
                     </p>
                   </div>
                 </div>
@@ -413,9 +471,7 @@ function ProviderDetail() {
                         className="mt-2"
                         onBlur={(e) => {
                           if (
-                            !e.currentTarget.contains(
-                              e.relatedTarget as Node
-                            )
+                            !e.currentTarget.contains(e.relatedTarget as Node)
                           ) {
                             handleSettingBlur(setting.key)
                           }
@@ -556,7 +612,9 @@ function ProviderDetail() {
                         size="sm"
                         className="rounded-lg h-8 text-[12px]"
                         onClick={handleTestConnection}
-                        disabled={connectionStatus === 'testing' || !provider?.base_url}
+                        disabled={
+                          connectionStatus === 'testing' || !provider?.base_url
+                        }
                       >
                         {connectionStatus === 'testing' ? (
                           <Loader
@@ -577,23 +635,31 @@ function ProviderDetail() {
               <div>
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <h2 className="text-foreground tracking-tight mb-1" style={{ fontSize: '16px', fontWeight: 600 }}>
+                    <h2
+                      className="text-foreground tracking-tight mb-1"
+                      style={{ fontSize: '16px', fontWeight: 600 }}
+                    >
                       {t('providers:models')}
                     </h2>
-                    <p className="text-muted-foreground" style={{ fontSize: '13px' }}>
-                      {t('provider:modelsDesc', { defaultValue: 'Available models for this provider.' })}
+                    <p
+                      className="text-muted-foreground"
+                      style={{ fontSize: '13px' }}
+                    >
+                      {t('provider:modelsDesc', {
+                        defaultValue: 'Available models for this provider.',
+                      })}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0 ml-4">
                     <div className="relative">
-                      <Search
-                        className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground size-3.5"
-                      />
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground size-3.5" />
                       <input
                         type="text"
                         value={modelSearch}
                         onChange={(e) => setModelSearch(e.target.value)}
-                        placeholder={t('common:searchModels', { defaultValue: 'Search models...' })}
+                        placeholder={t('common:searchModels', {
+                          defaultValue: 'Search models...',
+                        })}
                         className="h-8 w-44 rounded-lg border border-input bg-background pl-8 pr-2 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                       />
                     </div>
@@ -625,71 +691,85 @@ function ProviderDetail() {
                 <Card>
                   {provider?.models?.length ? (
                     provider?.models
-                    .filter((model) => {
-                      if (!modelSearch) return true
-                      const search = modelSearch.toLowerCase()
-                      return (
-                        model.id.toLowerCase().includes(search) ||
-                        model.name?.toLowerCase().includes(search) ||
-                        getModelDisplayName(model).toLowerCase().includes(search)
-                      )
-                    })
-                    .map((model, modelIndex) => {
-                      const capabilities = model.capabilities || []
-                      return (
-                        <CardItem
-                          key={modelIndex}
-                          title={
-                            <div className="flex items-center gap-2">
-                              <span
-                                className="font-medium line-clamp-1"
-                                title={model.id}
-                              >
-                                {getModelDisplayName(model)}
-                              </span>
-                              <Capabilities capabilities={capabilities} />
-                            </div>
-                          }
-                          actions={
-                            <div className="flex items-center gap-0.5">
-                              <DialogEditModel
-                                provider={provider}
-                                modelId={model.id}
-                              />
-                              {model.settings && (
-                                <ModelSetting provider={provider} model={model} />
-                              )}
-                              {((provider &&
-                                !predefinedProviders.some(
-                                  (p) => p.provider === provider.provider
-                                )) ||
-                                (provider &&
-                                  predefinedProviders.some(
+                      .filter((model) => {
+                        if (!modelSearch) return true
+                        const search = modelSearch.toLowerCase()
+                        return (
+                          model.id.toLowerCase().includes(search) ||
+                          model.name?.toLowerCase().includes(search) ||
+                          getModelDisplayName(model)
+                            .toLowerCase()
+                            .includes(search)
+                        )
+                      })
+                      .map((model, modelIndex) => {
+                        const capabilities = model.capabilities || []
+                        return (
+                          <CardItem
+                            key={modelIndex}
+                            title={
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className="font-medium line-clamp-1"
+                                  title={model.id}
+                                >
+                                  {getModelDisplayName(model)}
+                                </span>
+                                <Capabilities capabilities={capabilities} />
+                              </div>
+                            }
+                            actions={
+                              <div className="flex items-center gap-0.5">
+                                <DialogEditModel
+                                  provider={provider}
+                                  modelId={model.id}
+                                />
+                                {model.settings && (
+                                  <ModelSetting
+                                    provider={provider}
+                                    model={model}
+                                  />
+                                )}
+                                {((provider &&
+                                  !predefinedProviders.some(
                                     (p) => p.provider === provider.provider
-                                  ) &&
-                                  Boolean(provider.api_key?.length))) && (
-                                <FavoriteModelAction model={model} />
-                              )}
-                              <DialogDeleteModel
-                                provider={provider}
-                                modelId={model.id}
-                              />
-                            </div>
-                          }
-                        />
-                      )
-                    })
+                                  )) ||
+                                  (provider &&
+                                    predefinedProviders.some(
+                                      (p) => p.provider === provider.provider
+                                    ) &&
+                                    Boolean(provider.api_key?.length))) && (
+                                  <FavoriteModelAction model={model} />
+                                )}
+                                <DialogDeleteModel
+                                  provider={provider}
+                                  modelId={model.id}
+                                />
+                              </div>
+                            }
+                          />
+                        )
+                      })
                   ) : (
                     <div className="px-5 py-4">
                       <div className="flex items-center gap-2">
-                        <h6 className="font-medium" style={{ fontSize: '13px' }}>
+                        <h6
+                          className="font-medium"
+                          style={{ fontSize: '13px' }}
+                        >
                           {t('providers:noModelFound')}
                         </h6>
                       </div>
-                      <p className="text-muted-foreground mt-1 leading-relaxed" style={{ fontSize: '12px' }}>
+                      <p
+                        className="text-muted-foreground mt-1 leading-relaxed"
+                        style={{ fontSize: '12px' }}
+                      >
                         {t('providers:noModelFoundDesc')}
                         &nbsp;
-                        <Link to={route.hub.index} className="text-primary hover:underline">
+                        <Link
+                          to={route.hub.index}
+                          className="text-primary hover:underline"
+                        >
                           {t('common:hub')}
                         </Link>
                       </p>
@@ -703,10 +783,7 @@ function ProviderDetail() {
                         <div className="flex items-center gap-2">
                           <div className="flex items-center gap-2 animate-pulse">
                             <div className="flex gap-2 px-2 py-1 rounded-full text-xs">
-                              <Loader
-                                size={16}
-                                className="animate-spin"
-                              />
+                              <Loader size={16} className="animate-spin" />
                               Importing...
                             </div>
                             <span className="font-medium line-clamp-1">
@@ -728,7 +805,9 @@ function ProviderDetail() {
       {provider && pendingGroups && (
         <SelectModelGroups
           open={!!pendingGroups}
-          onOpenChange={(open) => { if (!open) setPendingGroups(null) }}
+          onOpenChange={(open) => {
+            if (!open) setPendingGroups(null)
+          }}
           groups={pendingGroups}
           existingModelIds={new Set(provider.models.map((m) => m.id))}
           onConfirm={(selectedIds) => {

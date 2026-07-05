@@ -60,7 +60,15 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 vi.mock('@/components/ui/button', () => ({
-  Button: ({ children, onClick, ...props }: { children: React.ReactNode; onClick?: () => void; [key: string]: any }) => (
+  Button: ({
+    children,
+    onClick,
+    ...props
+  }: {
+    children: React.ReactNode
+    onClick?: () => void
+    [key: string]: any
+  }) => (
     <button data-testid="button" onClick={onClick} {...props}>
       {children}
     </button>
@@ -68,18 +76,42 @@ vi.mock('@/components/ui/button', () => ({
 }))
 
 vi.mock('@/components/ui/dialog', () => ({
-  Dialog: ({ children }: { children: React.ReactNode }) => <div data-testid="dialog">{children}</div>,
-  DialogClose: ({ children }: { children: React.ReactNode }) => <div data-testid="dialog-close">{children}</div>,
-  DialogContent: ({ children }: { children: React.ReactNode }) => <div data-testid="dialog-content">{children}</div>,
-  DialogDescription: ({ children }: { children: React.ReactNode }) => <p data-testid="dialog-description">{children}</p>,
-  DialogFooter: ({ children }: { children: React.ReactNode }) => <div data-testid="dialog-footer">{children}</div>,
-  DialogHeader: ({ children }: { children: React.ReactNode }) => <div data-testid="dialog-header">{children}</div>,
-  DialogTitle: ({ children }: { children: React.ReactNode }) => <div data-testid="dialog-title">{children}</div>,
-  DialogTrigger: ({ children }: { children: React.ReactNode }) => <div data-testid="dialog-trigger">{children}</div>,
+  Dialog: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="dialog">{children}</div>
+  ),
+  DialogClose: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="dialog-close">{children}</div>
+  ),
+  DialogContent: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="dialog-content">{children}</div>
+  ),
+  DialogDescription: ({ children }: { children: React.ReactNode }) => (
+    <p data-testid="dialog-description">{children}</p>
+  ),
+  DialogFooter: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="dialog-footer">{children}</div>
+  ),
+  DialogHeader: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="dialog-header">{children}</div>
+  ),
+  DialogTitle: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="dialog-title">{children}</div>
+  ),
+  DialogTrigger: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="dialog-trigger">{children}</div>
+  ),
 }))
 
 vi.mock('@/components/ui/input', () => ({
-  Input: ({ value, onChange, placeholder }: { value: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; placeholder?: string }) => (
+  Input: ({
+    value,
+    onChange,
+    placeholder,
+  }: {
+    value: string
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+    placeholder?: string
+  }) => (
     <input
       data-testid="input"
       value={value}
@@ -90,7 +122,13 @@ vi.mock('@/components/ui/input', () => ({
 }))
 
 vi.mock('@/components/ui/switch', () => ({
-  Switch: ({ checked, onCheckedChange }: { checked: boolean; onCheckedChange: (checked: boolean) => void }) => (
+  Switch: ({
+    checked,
+    onCheckedChange,
+  }: {
+    checked: boolean
+    onCheckedChange: (checked: boolean) => void
+  }) => (
     <input
       data-testid="switch"
       type="checkbox"
@@ -150,8 +188,12 @@ describe('Providers Settings Route', () => {
     const Component = ProvidersRoute.component as React.ComponentType
     render(<Component />)
 
-    expect(screen.getAllByText('common:modelProviders').length).toBeGreaterThan(0)
-    expect(screen.getByText('Connect external APIs and local model engines.')).toBeInTheDocument()
+    expect(screen.getAllByText('common:modelProviders').length).toBeGreaterThan(
+      0
+    )
+    expect(
+      screen.getByText('Connect external APIs and local model engines.')
+    ).toBeInTheDocument()
   })
 
   it('should render empty state with no providers', () => {
@@ -164,7 +206,13 @@ describe('Providers Settings Route', () => {
 
   it('should render providers when data is available', () => {
     mockProviders = [
-      { provider: 'openai', active: true, models: [{ id: 'gpt-4' }], settings: [], api_key: 'sk-test' },
+      {
+        provider: 'openai',
+        active: true,
+        models: [{ id: 'gpt-4' }],
+        settings: [],
+        api_key: 'sk-test',
+      },
       { provider: 'anthropic', active: false, models: [], settings: [] },
     ]
 
@@ -246,7 +294,11 @@ describe('Providers Settings Route', () => {
     fireEvent.change(input, { target: { value: 'new-provider' } })
 
     const buttons = screen.getAllByTestId('button')
-    const addButton = buttons.find(button => button.textContent?.includes('Add') || button.textContent?.includes('Create'))
+    const addButton = buttons.find(
+      (button) =>
+        button.textContent?.includes('Add') ||
+        button.textContent?.includes('Create')
+    )
     if (addButton) {
       fireEvent.click(addButton)
       expect(addButton).toBeInTheDocument()
@@ -261,7 +313,11 @@ describe('Providers Settings Route', () => {
     fireEvent.change(input, { target: { value: 'openai' } })
 
     const buttons = screen.getAllByTestId('button')
-    const addButton = buttons.find(button => button.textContent?.includes('Add') || button.textContent?.includes('Create'))
+    const addButton = buttons.find(
+      (button) =>
+        button.textContent?.includes('Add') ||
+        button.textContent?.includes('Create')
+    )
     if (addButton) {
       fireEvent.click(addButton)
       expect(addButton).toBeInTheDocument()
@@ -299,7 +355,11 @@ describe('Providers Settings Route', () => {
     render(<Component />)
 
     const buttons = screen.getAllByTestId('button')
-    const addButton = buttons.find(button => button.textContent?.includes('Add') || button.textContent?.includes('Create'))
+    const addButton = buttons.find(
+      (button) =>
+        button.textContent?.includes('Add') ||
+        button.textContent?.includes('Create')
+    )
     if (addButton) {
       fireEvent.click(addButton)
       expect(addButton).toBeInTheDocument()
@@ -308,7 +368,12 @@ describe('Providers Settings Route', () => {
 
   it('should render provider with model count and description', () => {
     mockProviders = [
-      { provider: 'openai', active: true, models: [{ id: 'm1' }, { id: 'm2' }], settings: [] },
+      {
+        provider: 'openai',
+        active: true,
+        models: [{ id: 'm1' }, { id: 'm2' }],
+        settings: [],
+      },
     ]
 
     const Component = ProvidersRoute.component as React.ComponentType

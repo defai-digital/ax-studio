@@ -14,16 +14,32 @@ vi.mock('@/containers/HeaderPage', () => ({
 }))
 
 vi.mock('@/components/common/Card', () => ({
-  Card: ({ header, children }: { header?: React.ReactNode; children: React.ReactNode }) => (
+  Card: ({
+    header,
+    children,
+  }: {
+    header?: React.ReactNode
+    children: React.ReactNode
+  }) => (
     <div data-testid="card">
       {header && <div data-testid="card-header">{header}</div>}
       {children}
     </div>
   ),
-  CardItem: ({ title, description, actions }: { title?: string; description?: string; actions?: React.ReactNode }) => (
+  CardItem: ({
+    title,
+    description,
+    actions,
+  }: {
+    title?: string
+    description?: string
+    actions?: React.ReactNode
+  }) => (
     <div data-testid="card-item" data-title={title}>
       {title && <div data-testid="card-item-title">{title}</div>}
-      {description && <div data-testid="card-item-description">{description}</div>}
+      {description && (
+        <div data-testid="card-item-description">{description}</div>
+      )}
       {actions && <div data-testid="card-item-actions">{actions}</div>}
     </div>
   ),
@@ -170,7 +186,7 @@ describe('Extensions Settings Route', () => {
 
     const headerPage = screen.getByTestId('header-page')
     expect(headerPage).toBeInTheDocument()
-    
+
     const settingsMenu = screen.getByTestId('settings-menu')
     expect(settingsMenu).toBeInTheDocument()
   })
@@ -180,7 +196,7 @@ describe('Extensions Settings Route', () => {
     render(<Component />)
 
     const cardItems = screen.getAllByTestId('card-item')
-    
+
     cardItems.forEach((item, index) => {
       expect(item).toBeInTheDocument()
       expect(item).toHaveAttribute('data-title')
@@ -202,7 +218,7 @@ describe('Extensions Settings Route', () => {
 
     const cardItems = screen.getAllByTestId('card-item')
     expect(cardItems).toHaveLength(3)
-    
+
     // Each card item should be rendered (checking that map function works correctly)
     expect(cardItems[0]).toBeInTheDocument()
     expect(cardItems[1]).toBeInTheDocument()
@@ -223,7 +239,8 @@ describe('Extensions Settings Route', () => {
     const Component = ExtensionsRoute.component as React.ComponentType
     render(<Component />)
 
-    const settingsContent = screen.getByTestId('settings-menu').nextElementSibling
+    const settingsContent =
+      screen.getByTestId('settings-menu').nextElementSibling
     expect(settingsContent).toHaveClass('flex-1', 'overflow-y-auto')
   })
 })
