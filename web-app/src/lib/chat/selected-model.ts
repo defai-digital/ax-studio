@@ -16,7 +16,7 @@ export function resolveEffectiveSelectedModel({
       providers
         .find((provider) => provider.provider === model.provider)
         ?.models.find((providerModel) => providerModel.id === model.id) ??
-      { id: model.id, provider: model.provider } as Model
+      ({ id: model.id, provider: model.provider } as Model)
     )
   }
 
@@ -24,8 +24,9 @@ export function resolveEffectiveSelectedModel({
     return (
       providers
         .find((provider) => provider.provider === selectedProvider)
-        ?.models.find((providerModel) => providerModel.id === selectedModelFromStore?.id) ??
-      selectedModelFromStore
+        ?.models.find(
+          (providerModel) => providerModel.id === selectedModelFromStore?.id
+        ) ?? selectedModelFromStore
     )
   }
 

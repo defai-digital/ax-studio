@@ -32,7 +32,9 @@ export function createSessionData(): SessionData {
  * Returns true if the session has active streaming or pending tool calls.
  */
 export function isSessionBusy(session: ChatSession | undefined): boolean {
-  return (session?.isStreaming ?? false) || (session?.data?.tools?.length ?? 0) > 0
+  return (
+    (session?.isStreaming ?? false) || (session?.data?.tools?.length ?? 0) > 0
+  )
 }
 
 /**
@@ -51,7 +53,9 @@ export function createSession(
 ): ChatSession {
   const chat = createChat()
   const syncStatus = () => onStatusChange(sessionId, chat.status)
-  const registerStatusCallback = (chat as ChatWithStatusCallback)['~registerStatusCallback']
+  const registerStatusCallback = (chat as ChatWithStatusCallback)[
+    '~registerStatusCallback'
+  ]
   const unsubscribeStatus = registerStatusCallback
     ? registerStatusCallback(syncStatus)
     : undefined

@@ -44,17 +44,21 @@ describe('provider-sync', () => {
       makeProvider('groq', { api_key: '' }),
     ])
 
-    expect(invokeMock).toHaveBeenNthCalledWith(2, 'register_provider_configs_batch', {
-      requests: [
-        {
-          provider: 'openai',
-          api_key: 'sk-test',
-          base_url: 'https://openai.example.com/v1',
-          custom_headers: [{ header: 'X-Test', value: '1' }],
-          models: ['openai-model'],
-        },
-      ],
-    })
+    expect(invokeMock).toHaveBeenNthCalledWith(
+      2,
+      'register_provider_configs_batch',
+      {
+        requests: [
+          {
+            provider: 'openai',
+            api_key: 'sk-test',
+            base_url: 'https://openai.example.com/v1',
+            custom_headers: [{ header: 'X-Test', value: '1' }],
+            models: ['openai-model'],
+          },
+        ],
+      }
+    )
   })
 
   it('normalizes pasted bearer API keys before registering providers', async () => {
@@ -62,31 +66,39 @@ describe('provider-sync', () => {
       makeProvider('openrouter', { api_key: '  Bearer sk-or-test  ' }),
     ])
 
-    expect(invokeMock).toHaveBeenNthCalledWith(2, 'register_provider_configs_batch', {
-      requests: [
-        expect.objectContaining({
-          provider: 'openrouter',
-          api_key: 'sk-or-test',
-        }),
-      ],
-    })
+    expect(invokeMock).toHaveBeenNthCalledWith(
+      2,
+      'register_provider_configs_batch',
+      {
+        requests: [
+          expect.objectContaining({
+            provider: 'openrouter',
+            api_key: 'sk-or-test',
+          }),
+        ],
+      }
+    )
   })
 
   it('invokes batch registration when remote providers are present', async () => {
     await syncRemoteProviders([makeProvider('openai')])
 
     expect(invokeMock).toHaveBeenNthCalledWith(1, 'list_provider_configs')
-    expect(invokeMock).toHaveBeenNthCalledWith(2, 'register_provider_configs_batch', {
-      requests: [
-        {
-          provider: 'openai',
-          api_key: 'sk-test',
-          base_url: 'https://openai.example.com/v1',
-          custom_headers: [{ header: 'X-Test', value: '1' }],
-          models: ['openai-model'],
-        },
-      ],
-    })
+    expect(invokeMock).toHaveBeenNthCalledWith(
+      2,
+      'register_provider_configs_batch',
+      {
+        requests: [
+          {
+            provider: 'openai',
+            api_key: 'sk-test',
+            base_url: 'https://openai.example.com/v1',
+            custom_headers: [{ header: 'X-Test', value: '1' }],
+            models: ['openai-model'],
+          },
+        ],
+      }
+    )
   })
 
   it('unregisters inactive remote providers before registering active ones', async () => {
@@ -109,23 +121,35 @@ describe('provider-sync', () => {
     ])
 
     expect(invokeMock).toHaveBeenNthCalledWith(1, 'list_provider_configs')
-    expect(invokeMock).toHaveBeenNthCalledWith(2, 'unregister_provider_config', {
-      provider: 'anthropic',
-    })
-    expect(invokeMock).toHaveBeenNthCalledWith(3, 'unregister_provider_config', {
-      provider: 'groq',
-    })
-    expect(invokeMock).toHaveBeenNthCalledWith(4, 'register_provider_configs_batch', {
-      requests: [
-        {
-          provider: 'openai',
-          api_key: 'sk-test',
-          base_url: 'https://openai.example.com/v1',
-          custom_headers: [{ header: 'X-Test', value: '1' }],
-          models: ['openai-model'],
-        },
-      ],
-    })
+    expect(invokeMock).toHaveBeenNthCalledWith(
+      2,
+      'unregister_provider_config',
+      {
+        provider: 'anthropic',
+      }
+    )
+    expect(invokeMock).toHaveBeenNthCalledWith(
+      3,
+      'unregister_provider_config',
+      {
+        provider: 'groq',
+      }
+    )
+    expect(invokeMock).toHaveBeenNthCalledWith(
+      4,
+      'register_provider_configs_batch',
+      {
+        requests: [
+          {
+            provider: 'openai',
+            api_key: 'sk-test',
+            base_url: 'https://openai.example.com/v1',
+            custom_headers: [{ header: 'X-Test', value: '1' }],
+            models: ['openai-model'],
+          },
+        ],
+      }
+    )
   })
 
   it('unregisters stale remote providers when there are no eligible active providers', async () => {
@@ -143,12 +167,20 @@ describe('provider-sync', () => {
     ])
 
     expect(invokeMock).toHaveBeenNthCalledWith(1, 'list_provider_configs')
-    expect(invokeMock).toHaveBeenNthCalledWith(2, 'unregister_provider_config', {
-      provider: 'anthropic',
-    })
-    expect(invokeMock).toHaveBeenNthCalledWith(3, 'unregister_provider_config', {
-      provider: 'groq',
-    })
+    expect(invokeMock).toHaveBeenNthCalledWith(
+      2,
+      'unregister_provider_config',
+      {
+        provider: 'anthropic',
+      }
+    )
+    expect(invokeMock).toHaveBeenNthCalledWith(
+      3,
+      'unregister_provider_config',
+      {
+        provider: 'groq',
+      }
+    )
     expect(invokeMock).toHaveBeenCalledTimes(3)
   })
 
@@ -163,17 +195,21 @@ describe('provider-sync', () => {
     await syncRemoteProviders([makeProvider('openai')])
 
     expect(invokeMock).toHaveBeenNthCalledWith(1, 'list_provider_configs')
-    expect(invokeMock).toHaveBeenNthCalledWith(2, 'register_provider_configs_batch', {
-      requests: [
-        {
-          provider: 'openai',
-          api_key: 'sk-test',
-          base_url: 'https://openai.example.com/v1',
-          custom_headers: [{ header: 'X-Test', value: '1' }],
-          models: ['openai-model'],
-        },
-      ],
-    })
+    expect(invokeMock).toHaveBeenNthCalledWith(
+      2,
+      'register_provider_configs_batch',
+      {
+        requests: [
+          {
+            provider: 'openai',
+            api_key: 'sk-test',
+            base_url: 'https://openai.example.com/v1',
+            custom_headers: [{ header: 'X-Test', value: '1' }],
+            models: ['openai-model'],
+          },
+        ],
+      }
+    )
     expect(invokeMock).toHaveBeenCalledTimes(2)
   })
 

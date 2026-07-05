@@ -50,8 +50,7 @@ export function mergeProviders(
     const updatedModels = provider.models?.map((model) => {
       const settings =
         existingModels.find(
-          (m) =>
-            m.id.split(':').slice(0, 2).join(pathSep) === model.id
+          (m) => m.id.split(':').slice(0, 2).join(pathSep) === model.id
         )?.settings || model.settings
 
       const existingModel = existingModels.find((m) => m.id === model.id)
@@ -101,9 +100,7 @@ export function mergeProviders(
 }
 
 function isValidModel(e: { id?: string; model?: string }): boolean {
-  return (
-    ('id' in e || 'model' in e) && typeof (e.id ?? e.model) === 'string'
-  )
+  return ('id' in e || 'model' in e) && typeof (e.id ?? e.model) === 'string'
 }
 
 function filterValidModels<T extends { id?: string; model?: string }>(
@@ -112,10 +109,9 @@ function filterValidModels<T extends { id?: string; model?: string }>(
   return models.filter(isValidModel)
 }
 
-function filterLegacyBundledMlxModels<T extends { id?: string; model?: string }>(
-  provider: string,
-  models: T[]
-): T[] {
+function filterLegacyBundledMlxModels<
+  T extends { id?: string; model?: string },
+>(provider: string, models: T[]): T[] {
   if (provider !== 'mlx') return models
 
   return models.filter(

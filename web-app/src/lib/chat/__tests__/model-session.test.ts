@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  isLocalProvider,
-  prepareProviderForChat,
-} from '../model-session'
+import { isLocalProvider, prepareProviderForChat } from '../model-session'
 
 function makeProvider(
   provider: string,
@@ -33,9 +30,7 @@ describe('model-session', () => {
 
     await expect(
       prepareProviderForChat(serviceHub, makeProvider('openai'), 'gpt-4.1')
-    ).rejects.toThrow(
-      'No API key configured'
-    )
+    ).rejects.toThrow('No API key configured')
   })
 
   it('allows local providers without an api key', async () => {
@@ -58,7 +53,11 @@ describe('model-session', () => {
       models: () => ({ startModel }),
     } as unknown as import('@/services').ServiceHub
 
-    await prepareProviderForChat(serviceHub, makeProvider('llamacpp'), 'model-a')
+    await prepareProviderForChat(
+      serviceHub,
+      makeProvider('llamacpp'),
+      'model-a'
+    )
 
     expect(startModel).toHaveBeenCalledWith(
       expect.objectContaining({ provider: 'llamacpp' }),

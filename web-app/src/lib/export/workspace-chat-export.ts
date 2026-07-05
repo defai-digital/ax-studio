@@ -1,7 +1,11 @@
 import { ContentType, type ThreadMessage } from '@ax-studio/core'
 import type { ThreadFolder } from '@/services/projects/types'
 
-export type WorkspaceChatExportFormat = 'csv' | 'json' | 'alpaca' | 'openai-jsonl'
+export type WorkspaceChatExportFormat =
+  | 'csv'
+  | 'json'
+  | 'alpaca'
+  | 'openai-jsonl'
 
 export interface WorkspaceThreadLike {
   id: string
@@ -35,7 +39,8 @@ export interface WorkspaceChatsExportData {
 }
 
 const toIsoDate = (timestamp: number): string => {
-  const normalized = timestamp < 1_000_000_000_000 ? timestamp * 1000 : timestamp
+  const normalized =
+    timestamp < 1_000_000_000_000 ? timestamp * 1000 : timestamp
   return new Date(normalized).toISOString()
 }
 
@@ -85,7 +90,9 @@ const extractThreadMessageText = (message: ThreadMessage): string => {
         const toolName =
           contentPart.tool_name ?? contentPart.tool_call_id ?? 'tool_call'
         const details = stringifyToolPart(contentPart.input, contentPart.output)
-        return details ? `[Tool: ${toolName}]\n${details}` : `[Tool: ${toolName}]`
+        return details
+          ? `[Tool: ${toolName}]\n${details}`
+          : `[Tool: ${toolName}]`
       }
 
       return ''

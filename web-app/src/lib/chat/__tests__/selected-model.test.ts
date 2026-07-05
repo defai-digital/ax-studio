@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { resolveEffectiveSelectedModel } from '../selected-model'
 
-const createProvider = (
-  provider: string,
-  models: Model[]
-): ModelProvider => ({
+const createProvider = (provider: string, models: Model[]): ModelProvider => ({
   active: true,
   provider,
   settings: [],
@@ -14,7 +11,10 @@ const createProvider = (
 describe('resolveEffectiveSelectedModel', () => {
   it('prefers thread model metadata from the matching provider', () => {
     const threadModel: Model = { id: 'thread-model', capabilities: ['vision'] }
-    const fallbackModel: Model = { id: 'fallback-model', capabilities: ['tools'] }
+    const fallbackModel: Model = {
+      id: 'fallback-model',
+      capabilities: ['tools'],
+    }
 
     const selectedModel = resolveEffectiveSelectedModel({
       model: { id: 'thread-model', provider: 'zai-coding' },
@@ -57,7 +57,10 @@ describe('resolveEffectiveSelectedModel', () => {
   })
 
   it('falls back to the selected store model when provider metadata is missing', () => {
-    const fallbackModel: Model = { id: 'offline-model', capabilities: ['tools'] }
+    const fallbackModel: Model = {
+      id: 'offline-model',
+      capabilities: ['tools'],
+    }
 
     const selectedModel = resolveEffectiveSelectedModel({
       providers: [createProvider('llamacpp', [])],

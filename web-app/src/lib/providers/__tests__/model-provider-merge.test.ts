@@ -2,10 +2,16 @@ import { describe, it, expect } from 'vitest'
 import { mergeProviders } from '../model-provider-merge'
 
 // Minimal test helpers
-function makeProvider(name: string, models: Partial<Model>[] = [], extra: Partial<ModelProvider> = {}): ModelProvider {
+function makeProvider(
+  name: string,
+  models: Partial<Model>[] = [],
+  extra: Partial<ModelProvider> = {}
+): ModelProvider {
   return {
     provider: name,
-    models: models.map((m) => ({ id: `${name}-model`, capabilities: [], ...m }) as Model),
+    models: models.map(
+      (m) => ({ id: `${name}-model`, capabilities: [], ...m }) as Model
+    ),
     settings: [],
     api_key: '',
     base_url: '',
@@ -24,8 +30,15 @@ describe('mergeProviders', () => {
   })
 
   it('preserves api_key and base_url from existing provider', () => {
-    const existing = [makeProvider('openai', [], { api_key: 'sk-existing', base_url: 'https://api.openai.com' })]
-    const incoming = [makeProvider('openai', [{ id: 'gpt-4' }], { api_key: '', base_url: '' })]
+    const existing = [
+      makeProvider('openai', [], {
+        api_key: 'sk-existing',
+        base_url: 'https://api.openai.com',
+      }),
+    ]
+    const incoming = [
+      makeProvider('openai', [{ id: 'gpt-4' }], { api_key: '', base_url: '' }),
+    ]
     const result = mergeProviders(incoming, existing, [], '/')
     expect(result[0].api_key).toBe('sk-existing')
     expect(result[0].base_url).toBe('https://api.openai.com')
@@ -33,7 +46,9 @@ describe('mergeProviders', () => {
 
   it('excludes models in deletedModels from merged list', () => {
     const existing = [makeProvider('openai', [{ id: 'gpt-3' }])]
-    const incoming = [makeProvider('openai', [{ id: 'gpt-4' }, { id: 'gpt-3' }])]
+    const incoming = [
+      makeProvider('openai', [{ id: 'gpt-4' }, { id: 'gpt-3' }]),
+    ]
     const result = mergeProviders(incoming, existing, ['gpt-4'], '/')
     const modelIds = result[0].models.map((m) => m.id)
     expect(modelIds).not.toContain('gpt-4')
@@ -42,9 +57,7 @@ describe('mergeProviders', () => {
 
   it('keeps re-downloaded local models even when the id is in deletedModels', () => {
     const incoming = [
-      makeProvider('llamacpp', [
-        { id: 'mlx-community/Qwen3.5-4B-4bit' },
-      ]),
+      makeProvider('llamacpp', [{ id: 'mlx-community/Qwen3.5-4B-4bit' }]),
     ]
     const result = mergeProviders(
       incoming,
@@ -66,10 +79,15 @@ describe('mergeProviders', () => {
   })
 
   it('uses pathSep when matching model settings by ID segments', () => {
-    const existingModel = { id: 'llama:7b/path', settings: { key: 'value' } } as unknown as Model
+    const existingModel = {
+      id: 'llama:7b/path',
+      settings: { key: 'value' },
+    } as unknown as Model
     const existing = [makeProvider('llamacpp', [existingModel])]
     const incomingModel = { id: 'llama:7b' } as unknown as Model
-    const incoming = [makeProvider('llamacpp', [incomingModel], { persist: true })]
+    const incoming = [
+      makeProvider('llamacpp', [incomingModel], { persist: true }),
+    ]
     const result = mergeProviders(incoming, existing, [], '/')
     // With pathSep='/', 'llama:7b'.split(':').slice(0,2).join('/') = 'llama/7b' ≠ 'llama:7b/path'
     // No settings match expected — just verify it doesn't throw
@@ -78,15 +96,28 @@ describe('mergeProviders', () => {
 
   it('treats deletedModels as empty array when undefined is passed', () => {
     const incoming = [makeProvider('openai', [{ id: 'gpt-4' }])]
-    const result = mergeProviders(incoming, [], undefined as unknown as string[], '/')
+    const result = mergeProviders(
+      incoming,
+      [],
+      undefined as unknown as string[],
+      '/'
+    )
     expect(result[0].models.map((m) => m.id)).toContain('gpt-4')
   })
 
   it('merges capabilities from incoming and existing models', () => {
-    const existingModel = { id: 'gpt-4', capabilities: ['vision'] } as unknown as Model
+    const existingModel = {
+      id: 'gpt-4',
+      capabilities: ['vision'],
+    } as unknown as Model
     const existing = [makeProvider('openai', [existingModel])]
-    const incomingModel = { id: 'gpt-4', capabilities: ['tools'] } as unknown as Model
-    const incoming = [makeProvider('openai', [incomingModel], { persist: true })]
+    const incomingModel = {
+      id: 'gpt-4',
+      capabilities: ['tools'],
+    } as unknown as Model
+    const incoming = [
+      makeProvider('openai', [incomingModel], { persist: true }),
+    ]
     const result = mergeProviders(incoming, existing, [], '/')
     const caps = result[0].models[0].capabilities ?? []
     expect(caps).toContain('tools')

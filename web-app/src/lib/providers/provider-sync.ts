@@ -39,23 +39,23 @@ function isActiveRemoteProvider(provider: ModelProvider): boolean {
 function buildRemoteProviderRequests(
   providers: ModelProvider[]
 ): RegisterProviderRequest[] {
-  return providers
-    .filter(isActiveRemoteProvider)
-    .map((provider) => ({
-      provider: provider.provider,
-      api_key: normalizeProviderApiKey(provider.api_key),
-      base_url: provider.base_url,
-      custom_headers: (provider.custom_header || []).map((header) => ({
-        header: header.header,
-        value: header.value,
-      })),
-      models: provider.models.map((model) => model.id),
-    }))
+  return providers.filter(isActiveRemoteProvider).map((provider) => ({
+    provider: provider.provider,
+    api_key: normalizeProviderApiKey(provider.api_key),
+    base_url: provider.base_url,
+    custom_headers: (provider.custom_header || []).map((header) => ({
+      header: header.header,
+      value: header.value,
+    })),
+    models: provider.models.map((model) => model.id),
+  }))
 }
 
 async function listRegisteredProviderIds(): Promise<string[]> {
   const configs = await withTimeout(
-    getServiceHub().core().invoke<RegisteredProviderConfigView[]>('list_provider_configs'),
+    getServiceHub()
+      .core()
+      .invoke<RegisteredProviderConfigView[]>('list_provider_configs'),
     PROVIDER_SYNC_TIMEOUT_MS,
     `Listing provider configs timed out after ${PROVIDER_SYNC_TIMEOUT_MS}ms`
   ).catch((error) => {
@@ -65,17 +65,24 @@ async function listRegisteredProviderIds(): Promise<string[]> {
   return configs.map((config) => config.provider)
 }
 
-export async function syncRemoteProviders(providers: ModelProvider[]): Promise<void> {
+export async function syncRemoteProviders(
+  providers: ModelProvider[]
+): Promise<void> {
   const registeredProviderIds = await listRegisteredProviderIds()
   const activeRemoteProviderIds = new Set(
-    providers.filter(isActiveRemoteProvider).map((provider) => provider.provider)
+    providers
+      .filter(isActiveRemoteProvider)
+      .map((provider) => provider.provider)
   )
   const knownRemoteProviderIds = new Set(
     providers.filter(isRemoteProvider).map((provider) => provider.provider)
   )
   const staleRemoteProviderIds = registeredProviderIds.filter((provider) => {
     if (LOCAL_PROVIDER_IDS.has(provider)) return false
-    return knownRemoteProviderIds.has(provider) && !activeRemoteProviderIds.has(provider)
+    return (
+      knownRemoteProviderIds.has(provider) &&
+      !activeRemoteProviderIds.has(provider)
+    )
   })
 
   // Use allSettled so one failed unregister doesn't block the batch register
@@ -83,7 +90,9 @@ export async function syncRemoteProviders(providers: ModelProvider[]): Promise<v
     const results = await Promise.allSettled(
       staleRemoteProviderIds.map((provider) =>
         withTimeout(
-          getServiceHub().core().invoke('unregister_provider_config', { provider }),
+          getServiceHub()
+            .core()
+            .invoke('unregister_provider_config', { provider }),
           PROVIDER_SYNC_TIMEOUT_MS,
           `Unregistering provider "${provider}" timed out after ${PROVIDER_SYNC_TIMEOUT_MS}ms`
         )
@@ -99,7 +108,9 @@ export async function syncRemoteProviders(providers: ModelProvider[]): Promise<v
   const requests = buildRemoteProviderRequests(providers)
   if (requests.length === 0) return
   await withTimeout(
-    getServiceHub().core().invoke('register_provider_configs_batch', { requests }),
+    getServiceHub()
+      .core()
+      .invoke('register_provider_configs_batch', { requests }),
     PROVIDER_SYNC_TIMEOUT_MS,
     `Registering provider configs timed out after ${PROVIDER_SYNC_TIMEOUT_MS}ms`
   ).catch((error) => {

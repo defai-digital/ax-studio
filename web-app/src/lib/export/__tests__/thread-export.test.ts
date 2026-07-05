@@ -100,7 +100,7 @@ describe('thread export', () => {
     expect(click).toHaveBeenCalledTimes(1)
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:export')
     expect(mocks.toast.success).toHaveBeenCalledWith(
-      'Exported "Project: Launch Plan!" as JSON',
+      'Exported "Project: Launch Plan!" as JSON'
     )
   })
 
@@ -139,7 +139,9 @@ describe('thread export', () => {
     ])
     fetchMessages
       .mockResolvedValueOnce([message])
-      .mockResolvedValueOnce([{ ...message, id: 'msg-2', thread_id: 'thread-2' }])
+      .mockResolvedValueOnce([
+        { ...message, id: 'msg-2', thread_id: 'thread-2' },
+      ])
 
     await exportAllThreads('alpaca')
 
@@ -147,7 +149,7 @@ describe('thread export', () => {
     expect(fetchMessages).toHaveBeenCalledWith('thread-2')
     expect(click).toHaveBeenCalledTimes(1)
     expect(mocks.toast.success).toHaveBeenCalledWith(
-      'Exported 2 chats as JSON (Alpaca)',
+      'Exported 2 chats as JSON (Alpaca)'
     )
   })
 
@@ -167,7 +169,7 @@ describe('thread export', () => {
 
     expect(error).toHaveBeenCalledWith(
       'Failed to export thread:',
-      expect.any(Error),
+      expect.any(Error)
     )
     expect(mocks.toast.error).toHaveBeenCalledWith('Failed to export chat')
   })

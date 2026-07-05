@@ -15,10 +15,30 @@ const EXPORT_CONFIG: Record<
   WorkspaceChatExportFormat,
   { label: string; extension: string; fileSuffix: string; mimeType: string }
 > = {
-  csv: { label: 'CSV', extension: 'csv', fileSuffix: 'csv', mimeType: 'text/csv;charset=utf-8' },
-  json: { label: 'JSON', extension: 'json', fileSuffix: 'json', mimeType: 'application/json;charset=utf-8' },
-  alpaca: { label: 'JSON (Alpaca)', extension: 'json', fileSuffix: 'alpaca', mimeType: 'application/json;charset=utf-8' },
-  'openai-jsonl': { label: 'JSONL (OpenAI)', extension: 'jsonl', fileSuffix: 'openai', mimeType: 'application/x-ndjson;charset=utf-8' },
+  'csv': {
+    label: 'CSV',
+    extension: 'csv',
+    fileSuffix: 'csv',
+    mimeType: 'text/csv;charset=utf-8',
+  },
+  'json': {
+    label: 'JSON',
+    extension: 'json',
+    fileSuffix: 'json',
+    mimeType: 'application/json;charset=utf-8',
+  },
+  'alpaca': {
+    label: 'JSON (Alpaca)',
+    extension: 'json',
+    fileSuffix: 'alpaca',
+    mimeType: 'application/json;charset=utf-8',
+  },
+  'openai-jsonl': {
+    label: 'JSONL (OpenAI)',
+    extension: 'jsonl',
+    fileSuffix: 'openai',
+    mimeType: 'application/x-ndjson;charset=utf-8',
+  },
 }
 
 export const CHAT_EXPORT_OPTIONS = [
@@ -40,7 +60,11 @@ const toSafeFileName = (value: string): string =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'chat'
 
-const downloadTextFile = (content: string, filename: string, mimeType: string): void => {
+const downloadTextFile = (
+  content: string,
+  filename: string,
+  mimeType: string
+): void => {
   const blob = new Blob([content], { type: mimeType })
   const objectUrl = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
@@ -67,7 +91,9 @@ export async function exportThread(
   }
 
   try {
-    const messages: ThreadMessage[] = await serviceHub.messages().fetchMessages(thread.id)
+    const messages: ThreadMessage[] = await serviceHub
+      .messages()
+      .fetchMessages(thread.id)
     if (!messages || messages.length === 0) {
       toast.warning('No messages to export')
       return
@@ -141,17 +167,24 @@ export async function exportAllThreads(
 
     const messagesByThreadId: Record<string, ThreadMessage[]> = {}
     for (const thread of threads) {
-      const threadId = typeof thread === 'object' && thread !== null
-        ? (thread as { id: string }).id
-        : ''
+      const threadId =
+        typeof thread === 'object' && thread !== null
+          ? (thread as { id: string }).id
+          : ''
       if (threadId) {
-        messagesByThreadId[threadId] = await serviceHub.messages().fetchMessages(threadId)
+        messagesByThreadId[threadId] = await serviceHub
+          .messages()
+          .fetchMessages(threadId)
       }
     }
 
     const threadList = threads.map((t) => {
       const obj = t as { id: string; title: string; updated: number }
-      return { id: obj.id, title: obj.title || 'Untitled', updated: obj.updated || 0 }
+      return {
+        id: obj.id,
+        title: obj.title || 'Untitled',
+        updated: obj.updated || 0,
+      }
     })
 
     const exportData = buildWorkspaceChatsExportData(

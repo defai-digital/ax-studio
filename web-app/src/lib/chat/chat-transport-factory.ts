@@ -13,7 +13,9 @@ export type TransportOptions = {
   modelOverrideProviderId?: string
 }
 
-export function createChatTransport(options: TransportOptions): CustomChatTransport {
+export function createChatTransport(
+  options: TransportOptions
+): CustomChatTransport {
   return new CustomChatTransport(
     options.systemMessage,
     options.sessionId,

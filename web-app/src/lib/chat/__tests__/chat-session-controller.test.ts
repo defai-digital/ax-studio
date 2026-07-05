@@ -12,12 +12,12 @@ import type { ChatSession } from '../chat-session-types'
 
 const makeChat = (status = 'idle') => ({
   status,
-  messages: [],
-  stop: vi.fn(),
+  'messages': [],
+  'stop': vi.fn(),
   '~registerStatusCallback': vi.fn().mockReturnValue(vi.fn()),
 })
 
-const makeTransport = () => ({} as any)
+const makeTransport = () => ({}) as any
 
 const makeSession = (overrides: Partial<ChatSession> = {}): ChatSession => ({
   chat: makeChat() as any,
@@ -70,7 +70,9 @@ describe('isSessionBusy', () => {
   })
 
   it('returns true when there are pending tools', () => {
-    const session = makeSession({ data: { tools: ['t1'], messages: [], idMap: new Map() } })
+    const session = makeSession({
+      data: { tools: ['t1'], messages: [], idMap: new Map() },
+    })
     expect(isSessionBusy(session)).toBe(true)
   })
 
@@ -85,7 +87,14 @@ describe('createSession', () => {
   it('creates a session using the provided chat factory', () => {
     const chat = makeChat('idle')
     const onStatusChange = vi.fn()
-    const session = createSession('s1', makeTransport(), () => chat as any, 'Title', undefined, onStatusChange)
+    const session = createSession(
+      's1',
+      makeTransport(),
+      () => chat as any,
+      'Title',
+      undefined,
+      onStatusChange
+    )
     expect(session.chat).toBe(chat)
     expect(session.title).toBe('Title')
     expect(session.status).toBe('idle')
@@ -94,13 +103,27 @@ describe('createSession', () => {
 
   it('sets isStreaming true when initial chat status is streaming', () => {
     const chat = makeChat('streaming')
-    const session = createSession('s1', makeTransport(), () => chat as any, undefined, undefined, vi.fn())
+    const session = createSession(
+      's1',
+      makeTransport(),
+      () => chat as any,
+      undefined,
+      undefined,
+      vi.fn()
+    )
     expect(session.isStreaming).toBe(true)
   })
 
   it('sets isStreaming true when initial chat status is submitted', () => {
     const chat = makeChat('submitted')
-    const session = createSession('s1', makeTransport(), () => chat as any, undefined, undefined, vi.fn())
+    const session = createSession(
+      's1',
+      makeTransport(),
+      () => chat as any,
+      undefined,
+      undefined,
+      vi.fn()
+    )
     expect(session.isStreaming).toBe(true)
   })
 
@@ -108,7 +131,14 @@ describe('createSession', () => {
     const unsubscribe = vi.fn()
     const chat = makeChat()
     chat['~registerStatusCallback'] = vi.fn().mockReturnValue(unsubscribe)
-    const session = createSession('s1', makeTransport(), () => chat as any, undefined, undefined, vi.fn())
+    const session = createSession(
+      's1',
+      makeTransport(),
+      () => chat as any,
+      undefined,
+      undefined,
+      vi.fn()
+    )
     expect(chat['~registerStatusCallback']).toHaveBeenCalled()
     expect(session.unsubscribers).toContain(unsubscribe)
   })
@@ -116,19 +146,35 @@ describe('createSession', () => {
   it('handles missing ~registerStatusCallback gracefully', () => {
     const chat = makeChat() as any
     delete chat['~registerStatusCallback']
-    const session = createSession('s1', makeTransport(), () => chat, undefined, undefined, vi.fn())
+    const session = createSession(
+      's1',
+      makeTransport(),
+      () => chat,
+      undefined,
+      undefined,
+      vi.fn()
+    )
     expect(session.unsubscribers).toHaveLength(0)
   })
 
   it('calls onStatusChange when the status callback fires', () => {
     let capturedCallback: (() => void) | undefined
     const chat = makeChat() as any
-    chat['~registerStatusCallback'] = vi.fn().mockImplementation((cb: () => void) => {
-      capturedCallback = cb
-      return vi.fn()
-    })
+    chat['~registerStatusCallback'] = vi
+      .fn()
+      .mockImplementation((cb: () => void) => {
+        capturedCallback = cb
+        return vi.fn()
+      })
     const onStatusChange = vi.fn()
-    createSession('s1', makeTransport(), () => chat, undefined, undefined, onStatusChange)
+    createSession(
+      's1',
+      makeTransport(),
+      () => chat,
+      undefined,
+      undefined,
+      onStatusChange
+    )
     capturedCallback?.()
     expect(onStatusChange).toHaveBeenCalledWith('s1', 'idle')
   })
@@ -136,12 +182,26 @@ describe('createSession', () => {
   it('uses existingData when provided', () => {
     const existingData = createSessionData()
     existingData.tools.push({ toolName: 'existing' } as any)
-    const session = createSession('s1', makeTransport(), () => makeChat() as any, undefined, existingData, vi.fn())
+    const session = createSession(
+      's1',
+      makeTransport(),
+      () => makeChat() as any,
+      undefined,
+      existingData,
+      vi.fn()
+    )
     expect(session.data).toBe(existingData)
   })
 
   it('creates new session data when existingData is undefined', () => {
-    const session = createSession('s1', makeTransport(), () => makeChat() as any, undefined, undefined, vi.fn())
+    const session = createSession(
+      's1',
+      makeTransport(),
+      () => makeChat() as any,
+      undefined,
+      undefined,
+      vi.fn()
+    )
     expect(session.data.tools).toEqual([])
     expect(session.data.idMap).toBeInstanceOf(Map)
   })
@@ -202,18 +262,28 @@ describe('destroySession', () => {
   })
 
   it('does not throw when an unsubscriber throws', () => {
-    const badUnsub = vi.fn().mockImplementation(() => { throw new Error('unsub error') })
-    expect(() => destroySession(makeSession({ unsubscribers: [badUnsub] }))).not.toThrow()
+    const badUnsub = vi.fn().mockImplementation(() => {
+      throw new Error('unsub error')
+    })
+    expect(() =>
+      destroySession(makeSession({ unsubscribers: [badUnsub] }))
+    ).not.toThrow()
   })
 
   it('does not throw when chat.stop() throws', () => {
     const chat = makeChat()
-    chat.stop = vi.fn().mockImplementation(() => { throw new Error('stop error') })
-    expect(() => destroySession(makeSession({ chat: chat as any }))).not.toThrow()
+    chat.stop = vi.fn().mockImplementation(() => {
+      throw new Error('stop error')
+    })
+    expect(() =>
+      destroySession(makeSession({ chat: chat as any }))
+    ).not.toThrow()
   })
 
   it('continues calling remaining unsubscribers after one throws', () => {
-    const badUnsub = vi.fn().mockImplementation(() => { throw new Error('fail') })
+    const badUnsub = vi.fn().mockImplementation(() => {
+      throw new Error('fail')
+    })
     const goodUnsub = vi.fn()
     destroySession(makeSession({ unsubscribers: [badUnsub, goodUnsub] }))
     expect(goodUnsub).toHaveBeenCalled()
