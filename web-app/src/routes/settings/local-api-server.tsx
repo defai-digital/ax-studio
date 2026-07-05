@@ -49,6 +49,17 @@ import {
 const PATH_TRAVERSAL_RE = /(?:\.\.|\/\.\.|\.(?=\/))/
 const VALID_PREFIX_RE = /^\/[a-zA-Z0-9_\-/]*$/
 
+function parseBoundedInteger(
+  raw: string,
+  min: number,
+  max: number
+): number | null {
+  if (raw.trim() === '') return null
+  const value = Number(raw)
+  if (!Number.isInteger(value) || value < min || value > max) return null
+  return value
+}
+
 function sanitizePrefix(raw: string): string {
   let prefix = raw.trim().replace(/\\/g, '/')
   if (!prefix.startsWith('/')) prefix = '/' + prefix
@@ -68,8 +79,8 @@ function PortInput({ isServerRunning }: { isServerRunning?: boolean }) {
       value={inputValue}
       onChange={(e) => setInputValue(e.target.value)}
       onBlur={() => {
-        const port = parseInt(inputValue)
-        if (!isNaN(port) && port >= 0 && port <= 65535) setServerPort(port)
+        const port = parseBoundedInteger(inputValue, 0, 65535)
+        if (port !== null) setServerPort(port)
         else setInputValue(serverPort.toString())
       }}
       className={cn(
@@ -91,9 +102,8 @@ function ProxyTimeoutInput({ isServerRunning }: { isServerRunning?: boolean }) {
       value={inputValue}
       onChange={(e) => setInputValue(e.target.value)}
       onBlur={() => {
-        const timeout = parseInt(inputValue)
-        if (!isNaN(timeout) && timeout >= 0 && timeout <= 86400)
-          setProxyTimeout(timeout)
+        const timeout = parseBoundedInteger(inputValue, 0, 86400)
+        if (timeout !== null) setProxyTimeout(timeout)
         else setInputValue(proxyTimeout.toString())
       }}
       className={cn(

@@ -41,6 +41,9 @@ const mocks = vi.hoisted(() => {
   const setServerPort = vi.fn((value: number) => {
     localApiState.serverPort = value
   })
+  const setProxyTimeout = vi.fn((value: number) => {
+    localApiState.proxyTimeout = value
+  })
 
   Object.assign(localApiState, {
     corsEnabled: true,
@@ -68,7 +71,7 @@ const mocks = vi.hoisted(() => {
     addTrustedHost: vi.fn(),
     removeTrustedHost: vi.fn(),
     proxyTimeout: 600,
-    setProxyTimeout: vi.fn(),
+    setProxyTimeout,
   })
 
   Object.assign(appState, {
@@ -84,6 +87,7 @@ const mocks = vi.hoisted(() => {
     getServerStatus: vi.fn(),
     localApiState,
     openLocalApiServerLogsWindow: vi.fn(),
+    setProxyTimeout,
     setActiveModels,
     setServerPort,
     setServerStatus,
@@ -448,6 +452,30 @@ describe('Local API Server settings route', () => {
     expect(mocks.toast.success).toHaveBeenCalledWith('Server started', {
       description: 'Local API server running on port 1444',
     })
+  })
+
+  it('rejects fractional server port input instead of truncating it', () => {
+    renderLocalApiServerRoute()
+
+    const portInput = screen.getByDisplayValue('1337')
+
+    fireEvent.change(portInput, { target: { value: '1337.5' } })
+    fireEvent.blur(portInput)
+
+    expect(mocks.setServerPort).not.toHaveBeenCalled()
+    expect(portInput).toHaveValue(1337)
+  })
+
+  it('rejects fractional proxy timeout input instead of truncating it', () => {
+    renderLocalApiServerRoute()
+
+    const timeoutInput = screen.getByDisplayValue('600')
+
+    fireEvent.change(timeoutInput, { target: { value: '600.5' } })
+    fireEvent.blur(timeoutInput)
+
+    expect(mocks.setProxyTimeout).not.toHaveBeenCalled()
+    expect(timeoutInput).toHaveValue(600)
   })
 
   it('stops the local API server when it is already running', async () => {
