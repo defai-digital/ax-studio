@@ -24,7 +24,7 @@ sysinfo = "0.34.2"
 libc = "0.2"
 nix = { version = "=0.30.1", features = ["signal", "process"] }
 ax-studio-utils = { path = "./utils", package = "ax-studio-utils" }
-tauri = { version = "2.5.0", default-features = false }
+tauri = { version = "2.11.5", default-features = false }
 tauri-plugin-hardware = { path = "./plugins/tauri-plugin-hardware" }
 tauri-plugin-llamacpp = { path = "./plugins/tauri-plugin-llamacpp" }
 
@@ -59,7 +59,7 @@ test-tauri = [
 ]
 
 [build-dependencies]
-tauri-build = { version = "2.0.2", features = [] }
+tauri-build = { version = "2.6.3", features = [] }
 sha2 = "0.10"
 
 [dependencies]
