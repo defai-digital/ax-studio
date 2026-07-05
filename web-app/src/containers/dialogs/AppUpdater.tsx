@@ -1,4 +1,4 @@
-import { Download } from "lucide-react";
+import { Download } from 'lucide-react'
 import { useAppUpdater } from '@/hooks/updater/useAppUpdater'
 
 import { Button } from '@/components/ui/button'
@@ -10,7 +10,7 @@ import { cn, isDev } from '@/lib/utils'
 import { isNightly, isBeta } from '@/lib/version'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 
-const DialogAppUpdater = () => {
+export function DialogAppUpdater() {
   const { t } = useTranslation()
   const { updateState, downloadAndInstallUpdate, setRemindMeLater } =
     useAppUpdater()
@@ -140,5 +140,3 @@ const DialogAppUpdater = () => {
     </>
   )
 }
-
-export default DialogAppUpdater

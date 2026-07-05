@@ -3,7 +3,7 @@ import { Fragment } from 'react/jsx-runtime'
 import { useCallback, useEffect, type MouseEvent, type ReactNode } from 'react'
 import { motion } from 'motion/react'
 
-import DialogAppUpdater from '@/containers/dialogs/AppUpdater'
+import { DialogAppUpdater } from '@/containers/dialogs/AppUpdater'
 import { ThemeProvider } from '@/providers/ThemeProvider'
 import { InterfaceProvider } from '@/providers/InterfaceProvider'
 import { KeyboardShortcutsProvider } from '@/providers/KeyboardShortcuts'
