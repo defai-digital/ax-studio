@@ -58,7 +58,6 @@ vi.mock('motion/react', () => ({
 import {
   Conversation,
   ConversationContent,
-  ConversationEmptyState,
   ConversationScrollButton,
 } from '../conversation'
 import { useStickToBottomContext } from 'use-stick-to-bottom'
@@ -111,50 +110,6 @@ describe('ConversationContent', () => {
     )
     const el = screen.getByTestId('stick-content')
     expect(el.className).toContain('custom-content')
-  })
-})
-
-describe('ConversationEmptyState', () => {
-  it('renders default title and description', () => {
-    render(<ConversationEmptyState />)
-    expect(screen.getByText('No messages yet')).toBeInTheDocument()
-    expect(
-      screen.getByText('Start a conversation to see messages here')
-    ).toBeInTheDocument()
-  })
-
-  it('renders custom title and description', () => {
-    render(
-      <ConversationEmptyState
-        title="Welcome"
-        description="Type to begin"
-      />
-    )
-    expect(screen.getByText('Welcome')).toBeInTheDocument()
-    expect(screen.getByText('Type to begin')).toBeInTheDocument()
-  })
-
-  it('renders icon when provided', () => {
-    render(
-      <ConversationEmptyState icon={<span data-testid="icon">I</span>} />
-    )
-    expect(screen.getByTestId('icon')).toBeInTheDocument()
-  })
-
-  it('renders children instead of default content', () => {
-    render(
-      <ConversationEmptyState>
-        <span data-testid="custom">Custom empty</span>
-      </ConversationEmptyState>
-    )
-    expect(screen.getByTestId('custom')).toBeInTheDocument()
-    expect(screen.queryByText('No messages yet')).toBeNull()
-  })
-
-  it('does not render description when set to empty string', () => {
-    render(<ConversationEmptyState description="" />)
-    // Only title should appear
-    expect(screen.getByText('No messages yet')).toBeInTheDocument()
   })
 })
 
