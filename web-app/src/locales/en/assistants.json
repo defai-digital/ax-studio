@@ -24,6 +24,7 @@
   "invalidNumberParameter": "Enter a valid decimal number.",
   "booleanValue": "Boolean",
   "jsonValue": "JSON",
+  "invalidJsonParameter": "Enter valid JSON.",
   "trueValue": "True",
   "falseValue": "False",
   "jsonValuePlaceholder": "JSON Value",

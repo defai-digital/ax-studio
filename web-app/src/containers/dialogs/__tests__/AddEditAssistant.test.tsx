@@ -258,6 +258,68 @@ describe('AddEditAssistant', () => {
     ).toBeInTheDocument()
   })
 
+  it('saves valid JSON parameters as parsed values', () => {
+    render(
+      <AddEditAssistant
+        open={true}
+        onOpenChange={mockOnOpenChange}
+        editingKey={null}
+        onSave={mockOnSave}
+      />
+    )
+
+    fireEvent.change(screen.getByPlaceholderText('assistants:enterName'), {
+      target: { value: 'My Assistant' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('assistants:key'), {
+      target: { value: 'metadata' },
+    })
+    fireEvent.click(screen.getByText('assistants:jsonValue'))
+    fireEvent.change(
+      screen.getByPlaceholderText('assistants:jsonValuePlaceholder'),
+      {
+        target: { value: '{"enabled":true}' },
+      }
+    )
+    fireEvent.click(screen.getByText('assistants:save'))
+
+    expect(mockOnSave).toHaveBeenCalledOnce()
+    expect(mockOnSave.mock.calls[0][0].parameters).toEqual({
+      metadata: { enabled: true },
+    })
+  })
+
+  it('blocks invalid JSON parameters instead of saving them as strings', () => {
+    render(
+      <AddEditAssistant
+        open={true}
+        onOpenChange={mockOnOpenChange}
+        editingKey={null}
+        onSave={mockOnSave}
+      />
+    )
+
+    fireEvent.change(screen.getByPlaceholderText('assistants:enterName'), {
+      target: { value: 'My Assistant' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('assistants:key'), {
+      target: { value: 'metadata' },
+    })
+    fireEvent.click(screen.getByText('assistants:jsonValue'))
+    fireEvent.change(
+      screen.getByPlaceholderText('assistants:jsonValuePlaceholder'),
+      {
+        target: { value: '{"enabled":' },
+      }
+    )
+    fireEvent.click(screen.getByText('assistants:save'))
+
+    expect(mockOnSave).not.toHaveBeenCalled()
+    expect(
+      screen.getByText('assistants:invalidJsonParameter')
+    ).toBeInTheDocument()
+  })
+
   it('clears name error when user types', () => {
     render(
       <AddEditAssistant

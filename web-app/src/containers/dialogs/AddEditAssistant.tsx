@@ -290,6 +290,13 @@ export function AddEditAssistant({
         }
 
         parameters[key] = parsed
+      } else if (paramsTypes[index] === 'json' && typeof value === 'string') {
+        try {
+          parameters[key] = value.trim() === '' ? {} : JSON.parse(value)
+        } catch {
+          nextParamsErrors[index] = t('assistants:invalidJsonParameter')
+          hasParamError = true
+        }
       } else {
         parameters[key] = value
       }
