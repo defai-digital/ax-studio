@@ -1,5 +1,5 @@
-import { ComponentType } from 'react'
-import { MCPTool, MCPToolComponentProps } from '@ax-studio/core'
+import { useCallback, useMemo, type ComponentType } from 'react'
+import type { MCPTool, MCPToolComponentProps } from '@ax-studio/core'
 import { useToolAvailable } from '@/hooks/tools/useToolAvailable'
 import { useThreads } from '@/hooks/threads/useThreads'
 
@@ -20,45 +20,84 @@ export const McpExtensionToolLoader = ({
   threadId,
   MCPToolComponent,
 }: McpExtensionToolLoaderProps) => {
-  // Get tool management hooks
-  const { isToolDisabled, setToolDisabledForThread, setDefaultDisabledTools, getDefaultDisabledTools } = useToolAvailable()
-  const currentThreadId = useThreads((state) =>
-    threadId ?? state.getCurrentThread()?.id
+  const {
+    isToolDisabled,
+    setToolDisabledForThread,
+    setDefaultDisabledTools,
+    getDefaultDisabledTools,
+  } = useToolAvailable()
+  const currentThreadId = useThreads(
+    (state) => threadId ?? state.getCurrentThread()?.id
   )
   const effectiveThreadId = threadId ?? currentThreadId
-
-  // Handle tool toggle for custom component
-  const handleToolToggle = (toolName: string, enabled: boolean) => {
-    const tool = tools.find(t => t.name === toolName)
-    if (!tool) return
-
-    const toolKey = `${tool.server}::${toolName}`
-
-    if (initialMessage) {
-      const currentDefaults = getDefaultDisabledTools()
-      if (enabled) {
-        setDefaultDisabledTools(currentDefaults.filter((key) => key !== toolKey))
-      } else {
-        setDefaultDisabledTools([...currentDefaults, toolKey])
+  const toolsByName = useMemo(() => {
+    const nextToolsByName = new Map<string, MCPTool>()
+    tools.forEach((tool) => {
+      if (!nextToolsByName.has(tool.name)) {
+        nextToolsByName.set(tool.name, tool)
       }
-    } else if (effectiveThreadId) {
-      setToolDisabledForThread(effectiveThreadId, tool.server, toolName, enabled)
-    }
-  }
+    })
+    return nextToolsByName
+  }, [tools])
 
-  const isToolEnabled = (toolName: string): boolean => {
-    const tool = tools.find(t => t.name === toolName)
-    if (!tool) return false
+  const handleToolToggle = useCallback(
+    (toolName: string, enabled: boolean) => {
+      const tool = toolsByName.get(toolName)
+      if (!tool) return
 
-    const toolKey = `${tool.server}::${toolName}`
+      const toolKey = `${tool.server}::${toolName}`
 
-    if (initialMessage) {
-      return !getDefaultDisabledTools().includes(toolKey)
-    } else if (effectiveThreadId) {
-      return !isToolDisabled(effectiveThreadId, tool.server, toolName)
-    }
-    return false
-  }
+      if (initialMessage) {
+        const currentDefaults = getDefaultDisabledTools()
+        if (enabled) {
+          setDefaultDisabledTools(
+            currentDefaults.filter((key) => key !== toolKey)
+          )
+        } else {
+          setDefaultDisabledTools([...currentDefaults, toolKey])
+        }
+      } else if (effectiveThreadId) {
+        setToolDisabledForThread(
+          effectiveThreadId,
+          tool.server,
+          toolName,
+          enabled
+        )
+      }
+    },
+    [
+      effectiveThreadId,
+      getDefaultDisabledTools,
+      initialMessage,
+      setDefaultDisabledTools,
+      setToolDisabledForThread,
+      toolsByName,
+    ]
+  )
+
+  const isToolEnabled = useCallback(
+    (toolName: string): boolean => {
+      const tool = toolsByName.get(toolName)
+      if (!tool) return false
+
+      const toolKey = `${tool.server}::${toolName}`
+
+      if (initialMessage) {
+        return !getDefaultDisabledTools().includes(toolKey)
+      }
+      if (effectiveThreadId) {
+        return !isToolDisabled(effectiveThreadId, tool.server, toolName)
+      }
+      return false
+    },
+    [
+      effectiveThreadId,
+      getDefaultDisabledTools,
+      initialMessage,
+      isToolDisabled,
+      toolsByName,
+    ]
+  )
 
   // Only render if we have the custom MCP component and conditions are met
   if (!selectedModelHasTools || !hasActiveMCPServers || !MCPToolComponent) {

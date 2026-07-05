@@ -210,4 +210,34 @@ describe('McpExtensionToolLoader', () => {
       true
     )
   })
+
+  it('preserves first matching tool behavior for duplicate tool names', () => {
+    const duplicateNameTools = [
+      { name: 'search', server: 'first-server', description: 'First search' },
+      { name: 'search', server: 'second-server', description: 'Second search' },
+    ]
+    const MockComponent = vi.fn(({ onToolToggle }) => (
+      <button
+        data-testid="toggle-btn"
+        onClick={() => onToolToggle('search', true)}
+      />
+    ))
+
+    render(
+      <McpExtensionToolLoader
+        tools={duplicateNameTools}
+        hasActiveMCPServers
+        selectedModelHasTools
+        MCPToolComponent={MockComponent}
+      />
+    )
+
+    screen.getByTestId('toggle-btn').click()
+    expect(mockSetToolDisabledForThread).toHaveBeenCalledWith(
+      'thread-42',
+      'first-server',
+      'search',
+      true
+    )
+  })
 })
