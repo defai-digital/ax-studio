@@ -20,7 +20,10 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function parseJsonMcpResult<T extends Record<string, unknown>>(
-  result: Pick<AxBiMcpResult, 'content' | 'structuredContent' | 'structured_content'>
+  result: Pick<
+    AxBiMcpResult,
+    'content' | 'structuredContent' | 'structured_content'
+  >
 ): T | null {
   const structuredContent =
     result.structuredContent ?? result.structured_content
@@ -39,7 +42,9 @@ export function parseJsonMcpResult<T extends Record<string, unknown>>(
   return null
 }
 
-export function getFirstMcpText(result: Pick<AxBiMcpResult, 'content'>): string | undefined {
+export function getFirstMcpText(
+  result: Pick<AxBiMcpResult, 'content'>
+): string | undefined {
   return result.content
     ?.map((item) => item.text?.trim())
     .find((text): text is string => Boolean(text))

@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  sendAxBiLiveCommand,
-  tryAxBiLiveNavigation,
-} from '../live-navigation'
+import { sendAxBiLiveCommand, tryAxBiLiveNavigation } from '../live-navigation'
 import { useAxBiLiveNavigation } from '@/hooks/settings/useAxBiLiveNavigation'
 
 class MockWebSocket {
@@ -50,11 +47,17 @@ describe('AX-BI live navigation', () => {
       'http://127.0.0.1:8088/explore/?form_data_key=abc#top'
     )
 
-    await vi.waitFor(() => expect(MockWebSocket.instances[0]?.sent).toHaveLength(1))
-    MockWebSocket.instances[0].emit('message', { data: JSON.stringify({ ok: true }) })
+    await vi.waitFor(() =>
+      expect(MockWebSocket.instances[0]?.sent).toHaveLength(1)
+    )
+    MockWebSocket.instances[0].emit('message', {
+      data: JSON.stringify({ ok: true }),
+    })
 
     await expect(promise).resolves.toBe(true)
-    expect(MockWebSocket.instances[0].url).toBe('ws://127.0.0.1:8088/ax-bi/live')
+    expect(MockWebSocket.instances[0].url).toBe(
+      'ws://127.0.0.1:8088/ax-bi/live'
+    )
     expect(JSON.parse(MockWebSocket.instances[0].sent[0])).toEqual({
       action: 'navigate',
       url: '/explore/?form_data_key=abc#top',
@@ -64,8 +67,12 @@ describe('AX-BI live navigation', () => {
   it('infers SQL Lab action from SQL Lab links', async () => {
     const promise = tryAxBiLiveNavigation('http://127.0.0.1:8088/sqllab/')
 
-    await vi.waitFor(() => expect(MockWebSocket.instances[0]?.sent).toHaveLength(1))
-    MockWebSocket.instances[0].emit('message', { data: JSON.stringify({ ok: true }) })
+    await vi.waitFor(() =>
+      expect(MockWebSocket.instances[0]?.sent).toHaveLength(1)
+    )
+    MockWebSocket.instances[0].emit('message', {
+      data: JSON.stringify({ ok: true }),
+    })
 
     await expect(promise).resolves.toBe(true)
     expect(JSON.parse(MockWebSocket.instances[0].sent[0])).toEqual({
@@ -88,8 +95,12 @@ describe('AX-BI live navigation', () => {
       url: '/explore/',
     })
 
-    await vi.waitFor(() => expect(MockWebSocket.instances[0]?.sent).toHaveLength(1))
-    MockWebSocket.instances[0].emit('message', { data: JSON.stringify({ ok: true }) })
+    await vi.waitFor(() =>
+      expect(MockWebSocket.instances[0]?.sent).toHaveLength(1)
+    )
+    MockWebSocket.instances[0].emit('message', {
+      data: JSON.stringify({ ok: true }),
+    })
 
     await expect(promise).resolves.toBe(true)
     expect(JSON.parse(MockWebSocket.instances[0].sent[0])).toEqual({

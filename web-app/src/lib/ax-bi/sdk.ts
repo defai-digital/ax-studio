@@ -15,7 +15,12 @@ type JsonRpcResponse =
 
 export type AxBIAuthConfig =
   | { type: 'token'; accessToken: string }
-  | { type: 'apiKey'; apiKey: string; headerName?: string; headerPrefix?: string }
+  | {
+      type: 'apiKey'
+      apiKey: string
+      headerName?: string
+      headerPrefix?: string
+    }
 
 export type AxBIConfig = {
   baseUrl: string
@@ -61,7 +66,9 @@ class AxBIAuthProvider {
 
     const headerName = this.auth.headerName ?? 'Authorization'
     const prefix = this.auth.headerPrefix ?? 'Bearer '
-    return this.auth.apiKey ? { [headerName]: `${prefix}${this.auth.apiKey}` } : {}
+    return this.auth.apiKey
+      ? { [headerName]: `${prefix}${this.auth.apiKey}` }
+      : {}
   }
 }
 
@@ -110,7 +117,7 @@ class MCPClient {
     const id = String(++this.requestId)
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      Accept: 'application/json, text/event-stream',
+      'Accept': 'application/json, text/event-stream',
       ...this.auth.headers(),
     }
     if (this.sessionId) headers['Mcp-Session-Id'] = this.sessionId
@@ -238,7 +245,9 @@ export class AxBI {
 
   constructor(config: AxBIConfig) {
     const baseUrl = config.baseUrl.replace(/\/+$/, '')
-    const mcpUrl = (config.mcpUrl ?? baseUrl).replace(/\/+$/, '').replace(/\/mcp$/, '')
+    const mcpUrl = (config.mcpUrl ?? baseUrl)
+      .replace(/\/+$/, '')
+      .replace(/\/mcp$/, '')
     this.ai = new AIResource(
       new MCPClient(
         mcpUrl,

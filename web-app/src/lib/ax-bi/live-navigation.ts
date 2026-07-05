@@ -102,7 +102,10 @@ export async function sendAxBiLiveCommand(
     const timer = setTimeout(() => {
       if (settled) return
       settled = true
-      console.info('[AX-BI live] remote command timeout', { endpoint, action: safeCommand.action })
+      console.info('[AX-BI live] remote command timeout', {
+        endpoint,
+        action: safeCommand.action,
+      })
       try {
         socket?.close()
       } catch {

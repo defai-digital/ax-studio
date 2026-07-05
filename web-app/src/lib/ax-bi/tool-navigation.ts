@@ -26,7 +26,9 @@ const AUTO_OPEN_RESULT_TOOLS = new Set([
   'update_chart_preview',
 ])
 
-function getSchemaProperties(schema: unknown): Record<string, unknown> | undefined {
+function getSchemaProperties(
+  schema: unknown
+): Record<string, unknown> | undefined {
   if (!isRecord(schema)) return undefined
   const properties = schema.properties
   return isRecord(properties) ? properties : undefined
@@ -46,8 +48,13 @@ function supportsRequestAutoNavigate(tool: MCPTool): boolean {
   return Boolean(getSchemaProperties(getRequestSchema(tool))?.auto_navigate)
 }
 
-export function findAxBiTool(tools: MCPTool[], toolName: string): MCPTool | undefined {
-  return tools.find((tool) => tool.server === AX_BI_SERVER && tool.name === toolName)
+export function findAxBiTool(
+  tools: MCPTool[],
+  toolName: string
+): MCPTool | undefined {
+  return tools.find(
+    (tool) => tool.server === AX_BI_SERVER && tool.name === toolName
+  )
 }
 
 export function withAxBiAutoNavigate(
@@ -84,7 +91,9 @@ export function parseAxBiToolResult(result: {
   structuredContent?: unknown
   structured_content?: unknown
 }): AxBiToolResult | null {
-  return parseJsonMcpResult<Record<string, unknown>>(result) as AxBiToolResult | null
+  return parseJsonMcpResult<Record<string, unknown>>(
+    result
+  ) as AxBiToolResult | null
 }
 
 export function getAxBiResultUrl(
@@ -97,7 +106,6 @@ export function getAxBiResultUrl(
 
 export function didAxBiQueueLiveUpdate(result: AxBiToolResult): boolean {
   return Boolean(
-    result.remote_navigation_queued === true ||
-      result.live_update_command_id
+    result.remote_navigation_queued === true || result.live_update_command_id
   )
 }

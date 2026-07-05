@@ -1,17 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  connectAxBiMcpServer,
-  listAxBiDatasets,
-} from '../datasets'
+import { connectAxBiMcpServer, listAxBiDatasets } from '../datasets'
 
 describe('ax-bi datasets', () => {
   function makeDatasetServiceHub(result: unknown) {
     const callTool = vi.fn().mockResolvedValue(result)
     const serviceHub = {
       mcp: () => ({
-        getTools: vi.fn().mockResolvedValue([
-          { server: 'ax-bi', name: 'list_datasets' },
-        ]),
+        getTools: vi
+          .fn()
+          .mockResolvedValue([{ server: 'ax-bi', name: 'list_datasets' }]),
         callTool,
       }),
     }
@@ -185,13 +182,15 @@ describe('ax-bi datasets', () => {
   it('uses list_datasets when available', async () => {
     const callTool = vi.fn().mockResolvedValue({
       error: '',
-      content: [{ text: JSON.stringify({ datasets: [{ id: 'd1', name: 'orders' }] }) }],
+      content: [
+        { text: JSON.stringify({ datasets: [{ id: 'd1', name: 'orders' }] }) },
+      ],
     })
     const serviceHub = {
       mcp: () => ({
-        getTools: vi.fn().mockResolvedValue([
-          { server: 'ax-bi', name: 'list_datasets' },
-        ]),
+        getTools: vi
+          .fn()
+          .mockResolvedValue([{ server: 'ax-bi', name: 'list_datasets' }]),
         callTool,
       }),
     }

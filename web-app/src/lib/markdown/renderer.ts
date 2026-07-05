@@ -7,4 +7,3 @@ import {
 // underlying renderer can be swapped without touching the rest of the app.
 export const AXMarkdown = VendorStreamdown
 export const axDefaultRehypePlugins = vendorDefaultRehypePlugins
-

@@ -6,7 +6,14 @@ import { getFirstMcpText, isRecord, parseJsonMcpResult } from './mcp-result'
 import { AxBI, type DashboardPlan } from './sdk'
 
 const AX_BI_SERVER = 'ax-bi'
-const SUPPORTED_DATA_TYPES = new Set(['csv', 'tsv', 'txt', 'xls', 'xlsx', 'parquet'])
+const SUPPORTED_DATA_TYPES = new Set([
+  'csv',
+  'tsv',
+  'txt',
+  'xls',
+  'xlsx',
+  'parquet',
+])
 const PRESENTATION_TYPES = new Set(['ppt', 'pptx'])
 
 const DASHBOARD_INTENT =
@@ -70,7 +77,11 @@ type AxBiSdkClient = Pick<AxBI, 'ai'>
 
 export type AxBiChartMetric =
   | { type: 'count' }
-  | { type: 'aggregate'; aggregate: 'AVG' | 'SUM' | 'MIN' | 'MAX'; column: string }
+  | {
+      type: 'aggregate'
+      aggregate: 'AVG' | 'SUM' | 'MIN' | 'MAX'
+      column: string
+    }
 
 export type AxBiChartIntentDraft =
   | {
@@ -93,8 +104,7 @@ type ExistingDatasetChartIntent = AxBiChartIntentDraft & {
   chartName: string
 }
 
-type ResolvedExistingDatasetChartIntent =
-  ExistingDatasetChartIntent
+type ResolvedExistingDatasetChartIntent = ExistingDatasetChartIntent
 
 export type AxBiChartIntentExtractor = (
   prompt: string
@@ -109,7 +119,9 @@ function parseJsonToolResult<T>(result: MCPToolCallResult): T {
   throw new Error(
     result.error ||
       textError ||
-      (isError ? 'AX-BI MCP returned an error response without details' : 'AX-BI MCP returned an empty response')
+      (isError
+        ? 'AX-BI MCP returned an error response without details'
+        : 'AX-BI MCP returned an empty response')
   )
 }
 
@@ -153,16 +165,25 @@ function normalizeChartIntentDraft(
 ): ExistingDatasetChartIntent | null {
   if (!isRecord(value)) return null
   if (value.unsupported === true) return null
-  if (typeof value.datasetName !== 'string' || value.datasetName.trim().length === 0) {
+  if (
+    typeof value.datasetName !== 'string' ||
+    value.datasetName.trim().length === 0
+  ) {
     return null
   }
   const chartKind = value.chartKind === 'scatter' ? 'scatter' : 'bar'
 
   if (chartKind === 'scatter') {
-    if (typeof value.xColumn !== 'string' || value.xColumn.trim().length === 0) {
+    if (
+      typeof value.xColumn !== 'string' ||
+      value.xColumn.trim().length === 0
+    ) {
       return null
     }
-    if (typeof value.yColumn !== 'string' || value.yColumn.trim().length === 0) {
+    if (
+      typeof value.yColumn !== 'string' ||
+      value.yColumn.trim().length === 0
+    ) {
       return null
     }
     const draft: AxBiChartIntentDraft = {
@@ -209,9 +230,12 @@ function normalizeChartIntentDraft(
   }
 }
 
-function parseExistingDatasetChartIntent(prompt: string): ExistingDatasetChartIntent | null {
+function parseExistingDatasetChartIntent(
+  prompt: string
+): ExistingDatasetChartIntent | null {
   if (!/\bax-?bi\s+mcp\b/i.test(prompt)) return null
-  if (!/\b(bar\s+chart|scatter\s+chart|chart|scatter)\b/i.test(prompt)) return null
+  if (!/\b(bar\s+chart|scatter\s+chart|chart|scatter)\b/i.test(prompt))
+    return null
 
   const datasetMatch =
     prompt.match(/\bdataset\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\b/i) ??
@@ -220,11 +244,19 @@ function parseExistingDatasetChartIntent(prompt: string): ExistingDatasetChartIn
 
   if (/\bscatter\b/i.test(prompt)) {
     const xMatch =
-      prompt.match(/\bwith\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\s+on\s+(?:the\s+)?x-?axis\b/i) ??
-      prompt.match(/\b([A-Za-z0-9_][A-Za-z0-9_.-]*)\s+(?:as|for)\s+(?:the\s+)?x-?axis\b/i)
+      prompt.match(
+        /\bwith\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\s+on\s+(?:the\s+)?x-?axis\b/i
+      ) ??
+      prompt.match(
+        /\b([A-Za-z0-9_][A-Za-z0-9_.-]*)\s+(?:as|for)\s+(?:the\s+)?x-?axis\b/i
+      )
     const yMatch =
-      prompt.match(/\band\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\s+on\s+(?:the\s+)?y-?axis\b/i) ??
-      prompt.match(/\b([A-Za-z0-9_][A-Za-z0-9_.-]*)\s+(?:as|for)\s+(?:the\s+)?y-?axis\b/i)
+      prompt.match(
+        /\band\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\s+on\s+(?:the\s+)?y-?axis\b/i
+      ) ??
+      prompt.match(
+        /\b([A-Za-z0-9_][A-Za-z0-9_.-]*)\s+(?:as|for)\s+(?:the\s+)?y-?axis\b/i
+      )
     if (!xMatch?.[1] || !yMatch?.[1]) return null
 
     const groupByMatch =
@@ -287,9 +319,7 @@ function parseExistingDatasetChartIntent(prompt: string): ExistingDatasetChartIn
     metric.type === 'count'
       ? `${datasetMatch[1]} Count by ${groupByMatch[1]}`
       : `${humanize(metric.column)} ${metric.aggregate} by ${humanize(groupByMatch[1])}`
-  const chartName = stripTrailingPunctuation(
-    nameMatch?.[1] ?? defaultChartName
-  )
+  const chartName = stripTrailingPunctuation(nameMatch?.[1] ?? defaultChartName)
 
   return {
     datasetName: stripTrailingPunctuation(datasetMatch[1]),
@@ -301,7 +331,10 @@ function parseExistingDatasetChartIntent(prompt: string): ExistingDatasetChartIn
 }
 
 function isAxBiChartCandidate(prompt: string): boolean {
-  return /\bax-?bi\s+mcp\b/i.test(prompt) && /\b(chart|charts|bar|scatter|graph|plot|visuali[sz]e)\b/i.test(prompt)
+  return (
+    /\bax-?bi\s+mcp\b/i.test(prompt) &&
+    /\b(chart|charts|bar|scatter|graph|plot|visuali[sz]e)\b/i.test(prompt)
+  )
 }
 
 function isAxBiDashboardRequest(
@@ -314,7 +347,9 @@ function isAxBiDashboardRequest(
     attachments?.some((attachment) => {
       if (attachment.type !== 'document') return false
       const fileType = normalizeFileType(attachment)
-      return SUPPORTED_DATA_TYPES.has(fileType) || PRESENTATION_TYPES.has(fileType)
+      return (
+        SUPPORTED_DATA_TYPES.has(fileType) || PRESENTATION_TYPES.has(fileType)
+      )
     })
   )
 }
@@ -322,7 +357,9 @@ function isAxBiDashboardRequest(
 function isAxBiSdkPromptRequest(prompt: string): boolean {
   return (
     /\b(?:ax-?bi|axbi)\b/i.test(prompt) &&
-    /\b(?:prompt|plan|dashboard|chart|charts|analytics|report|visuali[sz]e|business intelligence)\b/i.test(prompt)
+    /\b(?:prompt|plan|dashboard|chart|charts|analytics|report|visuali[sz]e|business intelligence)\b/i.test(
+      prompt
+    )
   )
 }
 
@@ -330,7 +367,9 @@ function pickDataAttachment(attachments: Attachment[]): Attachment | undefined {
   return attachments.find((attachment) => {
     if (attachment.type !== 'document') return false
     const fileType = normalizeFileType(attachment)
-    return SUPPORTED_DATA_TYPES.has(fileType) || PRESENTATION_TYPES.has(fileType)
+    return (
+      SUPPORTED_DATA_TYPES.has(fileType) || PRESENTATION_TYPES.has(fileType)
+    )
   })
 }
 
@@ -340,22 +379,28 @@ function columnName(column: DatasetColumn): string | undefined {
 
 function isNumericColumn(column: DatasetColumn): boolean {
   const type = (column.type || '').toLowerCase()
-  return /\b(int|float|double|decimal|numeric|number|real|long|short|bigint)\b/.test(type)
+  return /\b(int|float|double|decimal|numeric|number|real|long|short|bigint)\b/.test(
+    type
+  )
 }
 
 function isDateColumn(column: DatasetColumn): boolean {
   if (column.is_dttm) return true
   const type = (column.type || '').toLowerCase()
   const name = (columnName(column) || '').toLowerCase()
-  return /\b(date|time|timestamp|datetime)\b/.test(type) || /(^|_)(date|time|year|month)(_|$)/.test(name)
+  return (
+    /\b(date|time|timestamp|datetime)\b/.test(type) ||
+    /(^|_)(date|time|year|month)(_|$)/.test(name)
+  )
 }
 
 function isLikelyCategory(column: DatasetColumn): boolean {
   const name = (columnName(column) || '').toLowerCase()
   if (isDateColumn(column) || isNumericColumn(column)) return false
   return (
-    /\b(country|region|territory|state|city|product|category|status|segment|line|type|name)\b/.test(name) ||
-    Boolean(columnName(column))
+    /\b(country|region|territory|state|city|product|category|status|segment|line|type|name)\b/.test(
+      name
+    ) || Boolean(columnName(column))
   )
 }
 
@@ -416,7 +461,13 @@ function buildChartPlans(dataset: DatasetInfo): ChartPlan[] {
         config: {
           chart_type: 'xy',
           x: { name: categoryName },
-          y: [{ name: numericName, aggregate: 'SUM', label: `SUM(${numericName})` }],
+          y: [
+            {
+              name: numericName,
+              aggregate: 'SUM',
+              label: `SUM(${numericName})`,
+            },
+          ],
           kind: 'bar',
           orientation: 'vertical',
           show_value: true,
@@ -432,7 +483,13 @@ function buildChartPlans(dataset: DatasetInfo): ChartPlan[] {
         config: {
           chart_type: 'xy',
           x: { name: dateName },
-          y: [{ name: numericName, aggregate: 'SUM', label: `SUM(${numericName})` }],
+          y: [
+            {
+              name: numericName,
+              aggregate: 'SUM',
+              label: `SUM(${numericName})`,
+            },
+          ],
           kind: 'line',
           time_grain: 'P1M',
           show_value: false,
@@ -475,7 +532,10 @@ function getServerUrlFromMcpConfig(config: unknown): string | undefined {
 
 async function createAxBiSdkClient(serviceHub: ServiceHub): Promise<AxBI> {
   const configuredMcpUrl = getServerUrlFromMcpConfig(
-    await serviceHub.mcp().getMCPConfig().catch(() => null)
+    await serviceHub
+      .mcp()
+      .getMCPConfig()
+      .catch(() => null)
   )
   const baseUrl = configuredMcpUrl
     ? configuredMcpUrl.replace(/\/mcp\/?$/i, '').replace(/\/+$/, '')
@@ -489,7 +549,9 @@ async function createAxBiSdkClient(serviceHub: ServiceHub): Promise<AxBI> {
 }
 
 function formatDashboardPlan(plan: DashboardPlan): string {
-  const lines = [`AX-BI generated a dashboard plan: ${plan.title || 'Untitled dashboard'}`]
+  const lines = [
+    `AX-BI generated a dashboard plan: ${plan.title || 'Untitled dashboard'}`,
+  ]
   if (plan.description) lines.push('', plan.description)
 
   const sections = Array.isArray(plan.sections) ? plan.sections : []
@@ -508,7 +570,11 @@ function formatDashboardPlan(plan: DashboardPlan): string {
   }
 
   if (plan.assumptions?.length) {
-    lines.push('', 'Assumptions:', ...plan.assumptions.map((item) => `- ${item}`))
+    lines.push(
+      '',
+      'Assumptions:',
+      ...plan.assumptions.map((item) => `- ${item}`)
+    )
   }
 
   if (plan.clarifying_questions?.length) {
@@ -541,7 +607,7 @@ export async function runAxBiSdkPromptWorkflow({
 }): Promise<AxBiSdkPromptWorkflowResult> {
   if (!isAxBiSdkPromptRequest(prompt)) return { handled: false }
 
-  const axbi = client ?? await createAxBiSdkClient(serviceHub)
+  const axbi = client ?? (await createAxBiSdkClient(serviceHub))
   const plan = await axbi.ai.planDashboard({ prompt })
 
   return {
@@ -551,7 +617,10 @@ export async function runAxBiSdkPromptWorkflow({
   }
 }
 
-function collectRecords(value: unknown, records: Record<string, unknown>[] = []): Record<string, unknown>[] {
+function collectRecords(
+  value: unknown,
+  records: Record<string, unknown>[] = []
+): Record<string, unknown>[] {
   if (Array.isArray(value)) {
     for (const item of value) collectRecords(item, records)
     return records
@@ -565,7 +634,10 @@ function collectRecords(value: unknown, records: Record<string, unknown>[] = [])
   return records
 }
 
-function findDatasetRecord(result: unknown, datasetName: string): Record<string, unknown> | undefined {
+function findDatasetRecord(
+  result: unknown,
+  datasetName: string
+): Record<string, unknown> | undefined {
   const expected = datasetName.toLowerCase()
   return collectRecords(result).find((record) => {
     const names = [record.table_name, record.name, record.dataset_name]
@@ -588,7 +660,10 @@ function findColumn(
   return columns.find((column) => {
     const name = columnName(column)
     if (!name) return false
-    return name.toLowerCase() === requested || normalizeColumnLookup(name) === compact
+    return (
+      name.toLowerCase() === requested ||
+      normalizeColumnLookup(name) === compact
+    )
   })
 }
 
@@ -799,11 +874,19 @@ function chartUrlFromResult(result: ChartResult): string | undefined {
   if (result.explore_url) return result.explore_url
   const chartRecord: Record<string, unknown> | undefined =
     chart && isRecord(chart) ? (chart as Record<string, unknown>) : undefined
-  const chartUrl = typeof chartRecord?.url === 'string' ? chartRecord.url : undefined
+  const chartUrl =
+    typeof chartRecord?.url === 'string' ? chartRecord.url : undefined
   if (chartUrl) return chartUrl
 
-  const id = result.slice_id ?? result.chart_id ?? chart?.slice_id ?? result.id ?? chart?.id
-  return id != null ? `http://127.0.0.1:8080/explore/?slice_id=${id}` : undefined
+  const id =
+    result.slice_id ??
+    result.chart_id ??
+    chart?.slice_id ??
+    result.id ??
+    chart?.id
+  return id != null
+    ? `http://127.0.0.1:8080/explore/?slice_id=${id}`
+    : undefined
 }
 
 export async function runAxBiExistingDatasetChartWorkflow({
@@ -824,7 +907,11 @@ export async function runAxBiExistingDatasetChartWorkflow({
 
   const tools = await serviceHub.mcp().getTools()
   const toolNames = axBiToolNames(tools)
-  for (const required of ['list_datasets', 'get_dataset_info', 'generate_chart']) {
+  for (const required of [
+    'list_datasets',
+    'get_dataset_info',
+    'generate_chart',
+  ]) {
     if (!canCallAxBiTool(toolNames, required)) {
       throw new Error(
         `AX-BI MCP is connected, but the required tool "${required}" is not available directly or through the "call_tool" proxy. Please restart the AX-BI MCP service and reconnect it in Ax Studio.`
@@ -845,7 +932,8 @@ export async function runAxBiExistingDatasetChartWorkflow({
       },
     },
   })
-  const parsedDatasetList = parseJsonToolResult<Record<string, unknown>>(datasetList)
+  const parsedDatasetList =
+    parseJsonToolResult<Record<string, unknown>>(datasetList)
   const dataset = findDatasetRecord(parsedDatasetList, intent.datasetName)
   const datasetId = dataset?.id
   if (datasetId == null) {
@@ -862,7 +950,8 @@ export async function runAxBiExistingDatasetChartWorkflow({
       },
     },
   })
-  const parsedDatasetInfo = parseJsonToolResult<Record<string, unknown>>(datasetInfoResult)
+  const parsedDatasetInfo =
+    parseJsonToolResult<Record<string, unknown>>(datasetInfoResult)
   const columns = datasetColumnsFromResult(parsedDatasetInfo)
   if (columns.length === 0) {
     throw new Error(
@@ -962,7 +1051,11 @@ export async function runAxBiDashboardWorkflow({
       .filter((tool) => tool.server === AX_BI_SERVER)
       .map((tool) => tool.name)
   )
-  for (const required of ['upload_file', 'generate_chart', 'generate_dashboard']) {
+  for (const required of [
+    'upload_file',
+    'generate_chart',
+    'generate_dashboard',
+  ]) {
     if (!toolNames.has(required)) {
       return {
         handled: true,
@@ -1017,7 +1110,11 @@ export async function runAxBiDashboardWorkflow({
     })
     const chartResult = parseJsonToolResult<ChartResult>(chart)
     if (chartResult.error) {
-      console.warn('[AX-BI] Chart generation failed', plan.name, chartResult.error)
+      console.warn(
+        '[AX-BI] Chart generation failed',
+        plan.name,
+        chartResult.error
+      )
       continue
     }
     const chartId = chartIdFromResult(chartResult)

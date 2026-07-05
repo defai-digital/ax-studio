@@ -126,9 +126,24 @@ describe('AX-BI dashboard workflow', () => {
     const serviceHub = {
       mcp: () => ({
         getTools: async () => [
-          { server: 'ax-bi', name: 'list_datasets', description: '', inputSchema: {} },
-          { server: 'ax-bi', name: 'get_dataset_info', description: '', inputSchema: {} },
-          { server: 'ax-bi', name: 'generate_chart', description: '', inputSchema: {} },
+          {
+            server: 'ax-bi',
+            name: 'list_datasets',
+            description: '',
+            inputSchema: {},
+          },
+          {
+            server: 'ax-bi',
+            name: 'get_dataset_info',
+            description: '',
+            inputSchema: {},
+          },
+          {
+            server: 'ax-bi',
+            name: 'generate_chart',
+            description: '',
+            inputSchema: {},
+          },
         ],
         callTool: async (args: { toolName: string; arguments: object }) => {
           calls.push(args)
@@ -211,9 +226,24 @@ describe('AX-BI dashboard workflow', () => {
     const serviceHub = {
       mcp: () => ({
         getTools: async () => [
-          { server: 'ax-bi', name: 'list_datasets', description: '', inputSchema: {} },
-          { server: 'ax-bi', name: 'get_dataset_info', description: '', inputSchema: {} },
-          { server: 'ax-bi', name: 'generate_chart', description: '', inputSchema: {} },
+          {
+            server: 'ax-bi',
+            name: 'list_datasets',
+            description: '',
+            inputSchema: {},
+          },
+          {
+            server: 'ax-bi',
+            name: 'get_dataset_info',
+            description: '',
+            inputSchema: {},
+          },
+          {
+            server: 'ax-bi',
+            name: 'generate_chart',
+            description: '',
+            inputSchema: {},
+          },
         ],
         callTool: async (args: { toolName: string; arguments: object }) => {
           calls.push(args)
@@ -309,9 +339,24 @@ describe('AX-BI dashboard workflow', () => {
     const serviceHub = {
       mcp: () => ({
         getTools: async () => [
-          { server: 'ax-bi', name: 'list_datasets', description: '', inputSchema: {} },
-          { server: 'ax-bi', name: 'get_dataset_info', description: '', inputSchema: {} },
-          { server: 'ax-bi', name: 'generate_chart', description: '', inputSchema: {} },
+          {
+            server: 'ax-bi',
+            name: 'list_datasets',
+            description: '',
+            inputSchema: {},
+          },
+          {
+            server: 'ax-bi',
+            name: 'get_dataset_info',
+            description: '',
+            inputSchema: {},
+          },
+          {
+            server: 'ax-bi',
+            name: 'generate_chart',
+            description: '',
+            inputSchema: {},
+          },
         ],
         callTool: async (args: { toolName: string; arguments: object }) => {
           calls.push(args)
@@ -403,9 +448,24 @@ describe('AX-BI dashboard workflow', () => {
     const serviceHub = {
       mcp: () => ({
         getTools: async () => [
-          { server: 'ax-bi', name: 'list_datasets', description: '', inputSchema: {} },
-          { server: 'ax-bi', name: 'get_dataset_info', description: '', inputSchema: {} },
-          { server: 'ax-bi', name: 'generate_chart', description: '', inputSchema: {} },
+          {
+            server: 'ax-bi',
+            name: 'list_datasets',
+            description: '',
+            inputSchema: {},
+          },
+          {
+            server: 'ax-bi',
+            name: 'get_dataset_info',
+            description: '',
+            inputSchema: {},
+          },
+          {
+            server: 'ax-bi',
+            name: 'generate_chart',
+            description: '',
+            inputSchema: {},
+          },
         ],
         callTool: async (args: { toolName: string; arguments: object }) => {
           calls.push(args)
@@ -488,9 +548,24 @@ describe('AX-BI dashboard workflow', () => {
     const serviceHub = {
       mcp: () => ({
         getTools: async () => [
-          { server: 'ax-bi', name: 'list_datasets', description: '', inputSchema: {} },
-          { server: 'ax-bi', name: 'get_dataset_info', description: '', inputSchema: {} },
-          { server: 'ax-bi', name: 'generate_chart', description: '', inputSchema: {} },
+          {
+            server: 'ax-bi',
+            name: 'list_datasets',
+            description: '',
+            inputSchema: {},
+          },
+          {
+            server: 'ax-bi',
+            name: 'get_dataset_info',
+            description: '',
+            inputSchema: {},
+          },
+          {
+            server: 'ax-bi',
+            name: 'generate_chart',
+            description: '',
+            inputSchema: {},
+          },
         ],
         callTool: async (args: { toolName: string; arguments: object }) => {
           calls.push(args)
@@ -568,16 +643,33 @@ describe('AX-BI dashboard workflow', () => {
   })
 
   it('creates an existing-dataset chart through the AX-BI call_tool proxy', async () => {
-    const calls: Array<{ toolName: string; arguments: Record<string, unknown> }> = []
+    const calls: Array<{
+      toolName: string
+      arguments: Record<string, unknown>
+    }> = []
     const serviceHub = {
       mcp: () => ({
         getTools: async () => [
-          { server: 'ax-bi', name: 'search_tools', description: '', inputSchema: {} },
-          { server: 'ax-bi', name: 'call_tool', description: '', inputSchema: {} },
+          {
+            server: 'ax-bi',
+            name: 'search_tools',
+            description: '',
+            inputSchema: {},
+          },
+          {
+            server: 'ax-bi',
+            name: 'call_tool',
+            description: '',
+            inputSchema: {},
+          },
         ],
-        callTool: async (args: { toolName: string; arguments: Record<string, unknown> }) => {
+        callTool: async (args: {
+          toolName: string
+          arguments: Record<string, unknown>
+        }) => {
           calls.push(args)
-          if (args.toolName !== 'call_tool') throw new Error('Expected call_tool proxy')
+          if (args.toolName !== 'call_tool')
+            throw new Error('Expected call_tool proxy')
           if (args.arguments.name === 'list_datasets') {
             return {
               error: '',
@@ -662,9 +754,24 @@ describe('AX-BI dashboard workflow', () => {
     const serviceHub = {
       mcp: () => ({
         getTools: async () => [
-          { server: 'ax-bi', name: 'list_datasets', description: '', inputSchema: {} },
-          { server: 'ax-bi', name: 'get_dataset_info', description: '', inputSchema: {} },
-          { server: 'ax-bi', name: 'generate_chart', description: '', inputSchema: {} },
+          {
+            server: 'ax-bi',
+            name: 'list_datasets',
+            description: '',
+            inputSchema: {},
+          },
+          {
+            server: 'ax-bi',
+            name: 'get_dataset_info',
+            description: '',
+            inputSchema: {},
+          },
+          {
+            server: 'ax-bi',
+            name: 'generate_chart',
+            description: '',
+            inputSchema: {},
+          },
         ],
         callTool: async (args: { toolName: string }) => {
           if (args.toolName === 'list_datasets') {
@@ -717,8 +824,18 @@ describe('AX-BI dashboard workflow', () => {
     const serviceHub = {
       mcp: () => ({
         getTools: async () => [
-          { server: 'ax-bi', name: 'search_tools', description: '', inputSchema: {} },
-          { server: 'ax-bi', name: 'call_tool', description: '', inputSchema: {} },
+          {
+            server: 'ax-bi',
+            name: 'search_tools',
+            description: '',
+            inputSchema: {},
+          },
+          {
+            server: 'ax-bi',
+            name: 'call_tool',
+            description: '',
+            inputSchema: {},
+          },
         ],
         callTool: async (args: { toolName: string }) => {
           calls.push(args.toolName)

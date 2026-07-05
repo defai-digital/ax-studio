@@ -7,7 +7,10 @@ import {
   extractContentPartsFromUIMessage,
 } from '../index'
 
-function makeThread(content: ThreadMessage['content'], role: string = 'assistant'): ThreadMessage {
+function makeThread(
+  content: ThreadMessage['content'],
+  role: string = 'assistant'
+): ThreadMessage {
   return { id: 'm1', role, content } as ThreadMessage
 }
 
@@ -15,21 +18,35 @@ function makeThread(content: ThreadMessage['content'], role: string = 'assistant
 
 describe('convertThreadMessageToUIMessage', () => {
   it('converts a plain text message', () => {
-    const msg = makeThread([{ type: ContentType.Text, text: { value: 'Hello', annotations: [] } }])
+    const msg = makeThread([
+      { type: ContentType.Text, text: { value: 'Hello', annotations: [] } },
+    ])
     const ui = convertThreadMessageToUIMessage(msg)
     expect(ui.role).toBe('assistant')
-    expect(ui.parts).toContainEqual(expect.objectContaining({ type: 'text', text: 'Hello' }))
+    expect(ui.parts).toContainEqual(
+      expect.objectContaining({ type: 'text', text: 'Hello' })
+    )
   })
 
   it('converts a reasoning content block', () => {
-    const msg = makeThread([{ type: ContentType.Reasoning, text: { value: 'thinking...', annotations: [] } }])
+    const msg = makeThread([
+      {
+        type: ContentType.Reasoning,
+        text: { value: 'thinking...', annotations: [] },
+      },
+    ])
     const ui = convertThreadMessageToUIMessage(msg)
-    expect(ui.parts).toContainEqual(expect.objectContaining({ type: 'reasoning', text: 'thinking...' }))
+    expect(ui.parts).toContainEqual(
+      expect.objectContaining({ type: 'reasoning', text: 'thinking...' })
+    )
   })
 
   it('promotes in-progress <think> tags to reasoning parts', () => {
     const msg = makeThread([
-      { type: ContentType.Text, text: { value: '<think>partial reasoning', annotations: [] } },
+      {
+        type: ContentType.Text,
+        text: { value: '<think>partial reasoning', annotations: [] },
+      },
     ])
     const ui = convertThreadMessageToUIMessage(msg)
     const reasoningPart = ui.parts?.find((p) => p.type === 'reasoning')
@@ -38,7 +55,10 @@ describe('convertThreadMessageToUIMessage', () => {
 
   it('splits completed <think>…</think> into reasoning + text parts', () => {
     const msg = makeThread([
-      { type: ContentType.Text, text: { value: '<think>reasoning</think>answer', annotations: [] } },
+      {
+        type: ContentType.Text,
+        text: { value: '<think>reasoning</think>answer', annotations: [] },
+      },
     ])
     const ui = convertThreadMessageToUIMessage(msg)
     const parts = ui.parts ?? []
@@ -74,8 +94,12 @@ describe('convertThreadMessageToUIMessage', () => {
 describe('convertThreadMessagesToUIMessages', () => {
   it('maps an array of messages and filters nulls', () => {
     const messages = [
-      makeThread([{ type: ContentType.Text, text: { value: 'a', annotations: [] } }]),
-      makeThread([{ type: ContentType.Text, text: { value: 'b', annotations: [] } }]),
+      makeThread([
+        { type: ContentType.Text, text: { value: 'a', annotations: [] } },
+      ]),
+      makeThread([
+        { type: ContentType.Text, text: { value: 'b', annotations: [] } },
+      ]),
     ]
     const result = convertThreadMessagesToUIMessages(messages)
     expect(result).toHaveLength(2)
@@ -102,7 +126,9 @@ describe('extractContentPartsFromUIMessage', () => {
   })
 
   it('extracts a reasoning part as reasoning ThreadContent', () => {
-    const ui = makeUI([{ type: 'reasoning', reasoning: 'deep thought', text: '' } as never])
+    const ui = makeUI([
+      { type: 'reasoning', reasoning: 'deep thought', text: '' } as never,
+    ])
     const content = extractContentPartsFromUIMessage(ui)
     expect(content).toContainEqual(
       expect.objectContaining({ type: ContentType.Reasoning })

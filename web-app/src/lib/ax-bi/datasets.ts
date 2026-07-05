@@ -32,7 +32,10 @@ function normalizeAxBiMcpUrl(value: string): string {
 export async function getConfiguredAxBiMcpUrl(
   serviceHub: ServiceHub
 ): Promise<string> {
-  const config = await serviceHub.mcp().getMCPConfig().catch(() => null)
+  const config = await serviceHub
+    .mcp()
+    .getMCPConfig()
+    .catch(() => null)
   const axBi = config?.mcpServers?.[AX_BI_SERVER]
   return normalizeAxBiMcpUrl(axBi?.url ?? DEFAULT_AX_BI_MCP_URL)
 }
@@ -123,11 +126,7 @@ function collectDatasetRecords(
   }
 
   if (!isRecord(value)) return records
-  if (
-    'table_name' in value ||
-    'name' in value ||
-    'dataset_name' in value
-  ) {
+  if ('table_name' in value || 'name' in value || 'dataset_name' in value) {
     records.push(value)
   }
 
@@ -145,7 +144,9 @@ function datasetName(record: Record<string, unknown>): string | undefined {
   return undefined
 }
 
-function normalizeDatasetRecord(record: Record<string, unknown>): AxBiDataset | null {
+function normalizeDatasetRecord(
+  record: Record<string, unknown>
+): AxBiDataset | null {
   const name = datasetName(record)
   if (!name) return null
 

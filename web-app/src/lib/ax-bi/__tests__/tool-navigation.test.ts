@@ -67,7 +67,9 @@ describe('AX-BI tool navigation helpers', () => {
     ]
 
     const input = { request: { dataset_id: 20 } }
-    expect(withAxBiAutoNavigate(tools, 'generate_explore_link', input)).toBe(input)
+    expect(withAxBiAutoNavigate(tools, 'generate_explore_link', input)).toBe(
+      input
+    )
   })
 
   it('parses structured AX-BI JSON results from MCP text content', () => {
