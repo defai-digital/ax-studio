@@ -13,7 +13,6 @@ import { ThreadMessage } from '@ax-studio/core'
 interface TokenCounterProps {
   messages?: ThreadMessage[]
   className?: string
-  compact?: boolean
   additionalTokens?: number // For vision tokens or other additions
   uploadedFiles?: Array<{
     name: string
