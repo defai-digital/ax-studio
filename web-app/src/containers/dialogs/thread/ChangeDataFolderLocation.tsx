@@ -1,4 +1,4 @@
-import { Folder } from "lucide-react";
+import { Folder } from 'lucide-react'
 import {
   Dialog,
   DialogClose,
@@ -21,7 +21,7 @@ interface ChangeDataFolderLocationProps {
   onOpenChange: (open: boolean) => void
 }
 
-export default function ChangeDataFolderLocation({
+export function ChangeDataFolderLocation({
   children,
   currentPath,
   newPath,

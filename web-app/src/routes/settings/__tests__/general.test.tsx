@@ -52,7 +52,7 @@ vi.mock('@/containers/LanguageSwitcher', () => ({
 }))
 
 vi.mock('@/containers/dialogs/thread/ChangeDataFolderLocation', () => ({
-  default: ({ children }: { children: React.ReactNode }) => (
+  ChangeDataFolderLocation: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="change-data-folder-dialog">{children}</div>
   ),
 }))

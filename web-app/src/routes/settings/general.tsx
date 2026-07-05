@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardItem } from '@/components/common/Card'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
-import ChangeDataFolderLocation from '@/containers/dialogs/thread/ChangeDataFolderLocation'
+import { ChangeDataFolderLocation } from '@/containers/dialogs/thread/ChangeDataFolderLocation'
 import { FactoryResetDialog } from '@/containers/dialogs'
 import {
   CheckCheck,
