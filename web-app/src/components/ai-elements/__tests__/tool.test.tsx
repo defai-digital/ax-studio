@@ -9,13 +9,7 @@ vi.mock('../code-block', () => ({
   ),
 }))
 
-import {
-  Tool,
-  ToolHeader,
-  ToolContent,
-  ToolInput,
-  ToolOutput,
-} from '../tool'
+import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from '../tool'
 import { useTool } from '../tool-context'
 
 describe('Tool', () => {
@@ -77,11 +71,7 @@ describe('ToolHeader', () => {
   it('shows "running" badge when state is input-available', () => {
     render(
       <Tool state="input-available" defaultOpen={true}>
-        <ToolHeader
-          title="search"
-          state="input-available"
-          type="tool-search"
-        />
+        <ToolHeader title="search" state="input-available" type="tool-search" />
       </Tool>
     )
     expect(screen.getByText('running')).toBeInTheDocument()
@@ -90,11 +80,7 @@ describe('ToolHeader', () => {
   it('shows "completed" badge when state is output-available', () => {
     render(
       <Tool state="output-available" defaultOpen={true}>
-        <ToolHeader
-          title="fetch"
-          state="output-available"
-          type="tool-fetch"
-        />
+        <ToolHeader title="fetch" state="output-available" type="tool-fetch" />
       </Tool>
     )
     expect(screen.getByText('completed')).toBeInTheDocument()
@@ -103,11 +89,7 @@ describe('ToolHeader', () => {
   it('shows "failed" badge when state is output-error', () => {
     render(
       <Tool state="output-error" defaultOpen={true}>
-        <ToolHeader
-          title="broken"
-          state="output-error"
-          type="tool-broken"
-        />
+        <ToolHeader title="broken" state="output-error" type="tool-broken" />
       </Tool>
     )
     expect(screen.getByText('failed')).toBeInTheDocument()
@@ -129,10 +111,7 @@ describe('ToolHeader', () => {
   it('derives tool name from type when title is not provided', () => {
     render(
       <Tool state="output-available" defaultOpen={true}>
-        <ToolHeader
-          state="output-available"
-          type="tool-web-search"
-        />
+        <ToolHeader state="output-available" type="tool-web-search" />
       </Tool>
     )
     // type is "tool-web-search", splitting by '-' and dropping first gives "web-search"
@@ -188,7 +167,11 @@ describe('ToolOutput', () => {
     const { container } = render(
       <Tool state="output-available" defaultOpen={true}>
         <ToolContent>
-          <ToolOutput output={undefined} errorText={undefined} resolver={resolver} />
+          <ToolOutput
+            output={undefined}
+            errorText={undefined}
+            resolver={resolver}
+          />
         </ToolContent>
       </Tool>
     )
@@ -199,7 +182,11 @@ describe('ToolOutput', () => {
     render(
       <Tool state="output-available" defaultOpen={true}>
         <ToolContent>
-          <ToolOutput output="some result" errorText={undefined} resolver={resolver} />
+          <ToolOutput
+            output="some result"
+            errorText={undefined}
+            resolver={resolver}
+          />
         </ToolContent>
       </Tool>
     )
@@ -210,7 +197,11 @@ describe('ToolOutput', () => {
     render(
       <Tool state="output-error" defaultOpen={true}>
         <ToolContent>
-          <ToolOutput output={undefined} errorText="Something failed" resolver={resolver} />
+          <ToolOutput
+            output={undefined}
+            errorText="Something failed"
+            resolver={resolver}
+          />
         </ToolContent>
       </Tool>
     )
@@ -222,7 +213,11 @@ describe('ToolOutput', () => {
     render(
       <Tool state="output-available" defaultOpen={true}>
         <ToolContent>
-          <ToolOutput output="plain text result" errorText={undefined} resolver={resolver} />
+          <ToolOutput
+            output="plain text result"
+            errorText={undefined}
+            resolver={resolver}
+          />
         </ToolContent>
       </Tool>
     )
@@ -257,7 +252,11 @@ describe('ToolOutput', () => {
     render(
       <Tool state="output-available" defaultOpen={true}>
         <ToolContent>
-          <ToolOutput output={output} errorText={undefined} resolver={resolver} />
+          <ToolOutput
+            output={output}
+            errorText={undefined}
+            resolver={resolver}
+          />
         </ToolContent>
       </Tool>
     )
@@ -273,7 +272,11 @@ describe('ToolOutput', () => {
     render(
       <Tool state="output-available" defaultOpen={true}>
         <ToolContent>
-          <ToolOutput output={output} errorText={undefined} resolver={resolver} />
+          <ToolOutput
+            output={output}
+            errorText={undefined}
+            resolver={resolver}
+          />
         </ToolContent>
       </Tool>
     )
@@ -286,7 +289,11 @@ describe('ToolOutput', () => {
     render(
       <Tool state="output-available" defaultOpen={true}>
         <ToolContent>
-          <ToolOutput output={output} errorText={undefined} resolver={resolver} />
+          <ToolOutput
+            output={output}
+            errorText={undefined}
+            resolver={resolver}
+          />
         </ToolContent>
       </Tool>
     )

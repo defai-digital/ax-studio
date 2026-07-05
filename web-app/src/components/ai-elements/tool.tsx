@@ -1,4 +1,3 @@
-
 import { useControllableState } from '@radix-ui/react-use-controllable-state'
 import {
   Collapsible,
@@ -9,13 +8,7 @@ import { cn } from '@/lib/utils'
 import type { ToolUIPart } from 'ai'
 import { ChevronDownIcon, WrenchIcon } from 'lucide-react'
 import type { ComponentProps, ReactNode } from 'react'
-import {
-  memo,
-  useEffect,
-  isValidElement,
-  useMemo,
-  useState,
-} from 'react'
+import { memo, useEffect, isValidElement, useMemo, useState } from 'react'
 import { CodeBlock } from './code-block'
 import { ToolContext, type ToolState, useTool } from './tool-context'
 
@@ -87,7 +80,9 @@ export const ToolHeader = memo(
         )}
       >
         <WrenchIcon className="size-3.5 text-indigo-500 shrink-0" />
-        <span className="font-mono capitalize">{toolName.replaceAll('_', ' ')}</span>
+        <span className="font-mono capitalize">
+          {toolName.replaceAll('_', ' ')}
+        </span>
         {isRunning ? (
           <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500">
             running
