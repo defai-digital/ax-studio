@@ -11,9 +11,16 @@ import { useAttachmentIngestionPrompt } from '@/hooks/chat/useAttachmentIngestio
 import { useTranslation } from '@/i18n'
 import { formatBytes } from '@/lib/utils'
 
-export default function AttachmentIngestionDialog() {
+export function AttachmentIngestionDialog() {
   const { t } = useTranslation()
-  const { isModalOpen, currentAttachment, currentIndex, totalCount, choose, cancel } = useAttachmentIngestionPrompt()
+  const {
+    isModalOpen,
+    currentAttachment,
+    currentIndex,
+    totalCount,
+    choose,
+    cancel,
+  } = useAttachmentIngestionPrompt()
 
   if (!isModalOpen || !currentAttachment) return null
 
@@ -36,7 +43,10 @@ export default function AttachmentIngestionDialog() {
 
         <div className="border rounded-md p-3 bg-secondary">
           <div className="flex items-center justify-between gap-2">
-            <span className="truncate font-medium" title={currentAttachment.name}>
+            <span
+              className="truncate font-medium"
+              title={currentAttachment.name}
+            >
               {currentAttachment.name}
             </span>
             <span className="text-xs text-muted-foreground shrink-0">
