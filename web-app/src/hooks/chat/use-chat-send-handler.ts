@@ -18,7 +18,10 @@ import { toast } from 'sonner'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useThreads } from '@/hooks/threads/useThreads'
-import { useChatAttachments, NEW_THREAD_ATTACHMENT_KEY } from '@/hooks/chat/useChatAttachments'
+import {
+  useChatAttachments,
+  NEW_THREAD_ATTACHMENT_KEY,
+} from '@/hooks/chat/useChatAttachments'
 import { safeStorageSetItem } from '@/lib/storage/storage'
 
 type Input = {
@@ -60,7 +63,8 @@ export function useChatSendHandler({
     async (prompt: string) => {
       if (sendingRef.current) return
       const selectedModel = resolvedSelectedModel ?? selectedModelFromStore
-      const selectedModelId = selectedModel?.id ?? defaultModel(selectedProvider)
+      const selectedModelId =
+        selectedModel?.id ?? defaultModel(selectedProvider)
       if (!selectedModelId) {
         setMessage('Please select a model to start chatting.')
         return
@@ -69,7 +73,8 @@ export function useChatSendHandler({
       sendingRef.current = true
       try {
         // Guard: don't send while attachments are processing
-        const pendingKey = useThreads.getState().currentThreadId || NEW_THREAD_ATTACHMENT_KEY
+        const pendingKey =
+          useThreads.getState().currentThreadId || NEW_THREAD_ATTACHMENT_KEY
         const pending = useChatAttachments.getState().getAttachments(pendingKey)
         if (pending.some((a) => a.processing)) {
           toast.info('Please wait for attachments to finish processing')
@@ -105,13 +110,14 @@ export function useChatSendHandler({
             'useChatSendHandler'
           )
           if (!storedTemporaryMessage || !storedTempNavigation) {
-            console.warn('sessionStorage write failed for temporary chat; continuing navigation')
+            console.warn(
+              'sessionStorage write failed for temporary chat; continuing navigation'
+            )
           }
           // Transfer pending attachments to the temporary chat ID
-          useChatAttachments.getState().transferAttachments(
-            NEW_THREAD_ATTACHMENT_KEY,
-            TEMPORARY_CHAT_ID
-          )
+          useChatAttachments
+            .getState()
+            .transferAttachments(NEW_THREAD_ATTACHMENT_KEY, TEMPORARY_CHAT_ID)
           router.navigate({
             to: route.threadsDetail,
             params: { threadId: TEMPORARY_CHAT_ID },
@@ -130,7 +136,9 @@ export function useChatSendHandler({
 
           if (projectId) {
             try {
-              const project = await serviceHub.projects().getProjectById(projectId)
+              const project = await serviceHub
+                .projects()
+                .getProjectById(projectId)
               if (project) {
                 projectMetadata = {
                   id: project.id,
@@ -168,10 +176,9 @@ export function useChatSendHandler({
           })
 
           // Transfer pending attachments from the home-page key to the real thread
-          useChatAttachments.getState().transferAttachments(
-            NEW_THREAD_ATTACHMENT_KEY,
-            newThread.id
-          )
+          useChatAttachments
+            .getState()
+            .transferAttachments(NEW_THREAD_ATTACHMENT_KEY, newThread.id)
 
           setSelectedAssistant(undefined)
 
@@ -182,7 +189,9 @@ export function useChatSendHandler({
             'useChatSendHandler'
           )
           if (!storedInitialMessage) {
-            console.warn('sessionStorage write failed for initial message; continuing navigation')
+            console.warn(
+              'sessionStorage write failed for initial message; continuing navigation'
+            )
           }
 
           router.navigate({

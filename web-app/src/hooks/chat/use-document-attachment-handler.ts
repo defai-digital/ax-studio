@@ -44,7 +44,10 @@ type Result = {
   handleRemoveAttachment: (indexToRemove: number) => Promise<void>
 }
 
-export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId }: Input): Result {
+export function useDocumentAttachmentHandler({
+  attachmentsKey,
+  effectiveThreadId,
+}: Input): Result {
   const serviceHub = useServiceHub()
   const selectedModel = useModelProvider((state) => state.selectedModel)
   const selectedProvider = useModelProvider((state) => state.selectedProvider)
@@ -56,13 +59,22 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
   const maxFileSizeMB = useAttachments((s) => s.maxFileSizeMB)
   const autoInlineContextRatio = useAttachments((s) => s.autoInlineContextRatio)
   const attachments = useChatAttachments(
-    useCallback((state) => state.getAttachments(attachmentsKey), [attachmentsKey])
+    useCallback(
+      (state) => state.getAttachments(attachmentsKey),
+      [attachmentsKey]
+    )
   )
-  const setAttachmentsForThread = useChatAttachments((state) => state.setAttachments)
-  const clearAttachmentsForThread = useChatAttachments((state) => state.clearAttachments)
+  const setAttachmentsForThread = useChatAttachments(
+    (state) => state.setAttachments
+  )
+  const clearAttachmentsForThread = useChatAttachments(
+    (state) => state.clearAttachments
+  )
 
   // Derived
-  const ingestingDocs = attachments.some((a) => a.type === 'document' && a.processing)
+  const ingestingDocs = attachments.some(
+    (a) => a.type === 'document' && a.processing
+  )
 
   // ─── updateAttachmentProcessing ───────────────────────────────────────────
   // Internal helper — updates processing status across all matching keys
@@ -71,7 +83,9 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
 
   const docAbortRef = useRef<AbortController | null>(null)
   useEffect(() => {
-    return () => { docAbortRef.current?.abort() }
+    return () => {
+      docAbortRef.current?.abort()
+    }
   }, [])
 
   const updateAttachmentProcessing = useCallback(
@@ -159,7 +173,10 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
             setActiveModels(active || [])
             return active?.includes(selectedModel.id) ?? false
           } catch (err) {
-            console.warn('Failed to prepare model for attachment token estimation', err)
+            console.warn(
+              'Failed to prepare model for attachment token estimation',
+              err
+            )
             return false
           } finally {
             updateLoadingModel(false)
@@ -168,13 +185,17 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
         return modelReadyPromise
       }
 
-      const modelContextLength = getModelContextLength(selectedModel ?? undefined)
+      const modelContextLength = getModelContextLength(
+        selectedModel ?? undefined
+      )
 
       const rawContextThreshold =
         typeof modelContextLength === 'number' && modelContextLength > 0
           ? Math.floor(
               modelContextLength *
-                (typeof autoInlineContextRatio === 'number' ? autoInlineContextRatio : 0.75)
+                (typeof autoInlineContextRatio === 'number'
+                  ? autoInlineContextRatio
+                  : 0.75)
             )
           : undefined
 
@@ -199,7 +220,12 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
           const doc = docsNeedingPrompt[i]
           const choice = await useAttachmentIngestionPrompt
             .getState()
-            .showPrompt(doc, ATTACHMENT_AUTO_INLINE_FALLBACK_BYTES, i, docsNeedingPrompt.length)
+            .showPrompt(
+              doc,
+              ATTACHMENT_AUTO_INLINE_FALLBACK_BYTES,
+              i,
+              docsNeedingPrompt.length
+            )
 
           if (!choice) {
             setAttachmentsForThread(attachmentsKey, (prev) =>
@@ -216,24 +242,37 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
         }
       }
 
-      const estimateTokens = async (text: string): Promise<number | undefined> => {
+      const estimateTokens = async (
+        text: string
+      ): Promise<number | undefined> => {
         try {
           if (!selectedModel?.id) return undefined
           const modelReady = await getModelReady()
           if (!modelReady || controller.signal.aborted) return undefined
-          const tokenCount = await serviceHub.models().getTokensCount(selectedModel.id, [
-            {
-              id: 'inline-attachment',
-              object: 'thread.message',
-              thread_id: effectiveThreadId,
-              role: 'user',
-              content: [{ type: ContentType.Text, text: { value: text, annotations: [] } }],
-              status: MessageStatus.Ready,
-              created_at: Date.now(),
-              completed_at: Date.now(),
-            } as ThreadMessage,
-          ])
-          if (typeof tokenCount !== 'number' || !Number.isFinite(tokenCount) || tokenCount <= 0) {
+          const tokenCount = await serviceHub
+            .models()
+            .getTokensCount(selectedModel.id, [
+              {
+                id: 'inline-attachment',
+                object: 'thread.message',
+                thread_id: effectiveThreadId,
+                role: 'user',
+                content: [
+                  {
+                    type: ContentType.Text,
+                    text: { value: text, annotations: [] },
+                  },
+                ],
+                status: MessageStatus.Ready,
+                created_at: Date.now(),
+                completed_at: Date.now(),
+              } as ThreadMessage,
+            ])
+          if (
+            typeof tokenCount !== 'number' ||
+            !Number.isFinite(tokenCount) ||
+            tokenCount <= 0
+          ) {
             return undefined
           }
           return tokenCount
@@ -244,17 +283,18 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
       }
 
       try {
-        const { processedAttachments, hasEmbeddedDocuments } = await processAttachmentsForSend({
-          attachments: docs,
-          threadId: processingThreadId,
-          serviceHub,
-          selectedProvider,
-          contextThreshold,
-          estimateTokens,
-          parsePreference,
-          perFileChoices: docChoices.size > 0 ? docChoices : undefined,
-          updateAttachmentProcessing,
-        })
+        const { processedAttachments, hasEmbeddedDocuments } =
+          await processAttachmentsForSend({
+            attachments: docs,
+            threadId: processingThreadId,
+            serviceHub,
+            selectedProvider,
+            contextThreshold,
+            estimateTokens,
+            parsePreference,
+            perFileChoices: docChoices.size > 0 ? docChoices : undefined,
+            updateAttachmentProcessing,
+          })
 
         if (controller.signal.aborted) return
 
@@ -359,7 +399,15 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
         } catch (e) {
           console.warn('Failed to read file size for', p, e)
         }
-        preparedAttachments.push(createDocumentAttachment({ name, path: p, fileType, size, parseMode: parsePreference }))
+        preparedAttachments.push(
+          createDocumentAttachment({
+            name,
+            path: p,
+            fileType,
+            size,
+            parseMode: parsePreference,
+          })
+        )
       }
 
       const maxFileSizeBytes =
@@ -372,7 +420,9 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
           (att) => typeof att.size === 'number' && att.size > maxFileSizeBytes
         )
         if (hasOversized) {
-          toast.error('File too large', { description: `One or more files exceed the ${maxFileSizeMB}MB limit` })
+          toast.error('File too large', {
+            description: `One or more files exceed the ${maxFileSizeMB}MB limit`,
+          })
           return
         }
       }
@@ -391,7 +441,9 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
         })
         duplicates = result.duplicateLabels
         newDocAttachments = result.newItems
-        return newDocAttachments.length > 0 ? [...currentAttachments, ...newDocAttachments] : currentAttachments
+        return newDocAttachments.length > 0
+          ? [...currentAttachments, ...newDocAttachments]
+          : currentAttachments
       })
 
       if (duplicates.length > 0) {
@@ -423,7 +475,11 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
     async (indexToRemove: number) => {
       const attachmentToRemove = attachments[indexToRemove]
 
-      if (attachmentToRemove?.id && effectiveThreadId && attachmentToRemove.type === 'document') {
+      if (
+        attachmentToRemove?.id &&
+        effectiveThreadId &&
+        attachmentToRemove.type === 'document'
+      ) {
         const colId = threadCollectionId(effectiveThreadId)
 
         // Best-effort: delete indexed chunks from AkiDB via MCP
@@ -445,7 +501,9 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
             if (text) {
               try {
                 const parsed = JSON.parse(text)
-                const results = Array.isArray(parsed.results) ? parsed.results : []
+                const results = Array.isArray(parsed.results)
+                  ? parsed.results
+                  : []
                 const chunkIds = results
                   .map((r: Record<string, unknown>) => r.chunkId ?? r.chunk_id)
                   .filter(Boolean) as string[]
@@ -487,7 +545,13 @@ export function useDocumentAttachmentHandler({ attachmentsKey, effectiveThreadId
         prev.filter((_, index) => index !== indexToRemove)
       )
     },
-    [attachments, attachmentsKey, effectiveThreadId, serviceHub, setAttachmentsForThread]
+    [
+      attachments,
+      attachmentsKey,
+      effectiveThreadId,
+      serviceHub,
+      setAttachmentsForThread,
+    ]
   )
 
   return {

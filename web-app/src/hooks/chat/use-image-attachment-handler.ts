@@ -45,6 +45,14 @@ function isSafeImagePath(path: string): boolean {
   return getFileTypeFromExtension(path) !== ''
 }
 
+function createFileChangeEvent(
+  files: File[] | FileList
+): React.ChangeEvent<HTMLInputElement> {
+  return {
+    target: { files },
+  } as unknown as React.ChangeEvent<HTMLInputElement>
+}
+
 export function useImageAttachmentHandler({
   attachmentsKey,
   effectiveThreadId,
@@ -181,7 +189,12 @@ export function useImageAttachmentHandler({
                 setAttachmentsForThread(attachmentsKey, (prev) =>
                   prev.map((a) =>
                     a.name === img.name && a.type === 'image'
-                      ? { ...a, processing: false, processed: true, id: result.id }
+                      ? {
+                          ...a,
+                          processing: false,
+                          processed: true,
+                          id: result.id,
+                        }
                       : a
                   )
                 )
@@ -254,7 +267,9 @@ export function useImageAttachmentHandler({
           for (const path of paths) {
             try {
               if (!isSafeImagePath(path)) {
-                throw new Error('Selected file path is not a supported image path')
+                throw new Error(
+                  'Selected file path is not a supported image path'
+                )
               }
               const { convertFileSrc } = await import('@tauri-apps/api/core')
               const fileUrl = convertFileSrc(path)
@@ -264,7 +279,8 @@ export function useImageAttachmentHandler({
               }
               const blob = await response.blob()
               const fileName = basename(path) || 'image'
-              const mimeType = getFileTypeFromExtension(fileName) || 'image/jpeg'
+              const mimeType =
+                getFileTypeFromExtension(fileName) || 'image/jpeg'
               files.push(new File([blob], fileName, { type: mimeType }))
             } catch (error) {
               console.error('Failed to read file:', error)
@@ -353,10 +369,7 @@ export function useImageAttachmentHandler({
       }
       const files = e.dataTransfer.files
       if (files && files.length > 0) {
-        const syntheticEvent = {
-          target: { files },
-        } as React.ChangeEvent<HTMLInputElement>
-        handleFileChange(syntheticEvent)
+        handleFileChange(createFileChangeEvent(files))
       }
     },
     [hasMmproj, handleFileChange]
@@ -378,19 +391,14 @@ export function useImageAttachmentHandler({
         if (imageItems.length > 0) {
           e.preventDefault()
           const files: File[] = []
-          let processedCount = 0
-          imageItems.forEach((item) => {
+          for (const item of imageItems) {
             const file = item.getAsFile()
             if (file) files.push(file)
-            processedCount++
-            if (processedCount === imageItems.length && files.length > 0) {
-              const syntheticEvent = {
-                target: { files },
-              } as unknown as React.ChangeEvent<HTMLInputElement>
-              handleFileChange(syntheticEvent)
-              hasProcessedImage = true
-            }
-          })
+          }
+          if (files.length > 0) {
+            handleFileChange(createFileChangeEvent(files))
+            hasProcessedImage = true
+          }
           if (hasProcessedImage) return
         }
       }
@@ -412,11 +420,9 @@ export function useImageAttachmentHandler({
                 const blob = await item.getType(type)
                 const extension = type.split('/')[1] || 'png'
                 files.push(
-                  new File(
-                    [blob],
-                    `pasted-image-${Date.now()}.${extension}`,
-                    { type }
-                  )
+                  new File([blob], `pasted-image-${Date.now()}.${extension}`, {
+                    type,
+                  })
                 )
               } catch (error) {
                 console.error('Error reading clipboard item:', error)
@@ -425,10 +431,7 @@ export function useImageAttachmentHandler({
           }
           if (files.length > 0) {
             e.preventDefault()
-            const syntheticEvent = {
-              target: { files },
-            } as unknown as React.ChangeEvent<HTMLInputElement>
-            handleFileChange(syntheticEvent)
+            handleFileChange(createFileChangeEvent(files))
           }
         } catch (error) {
           console.error('Clipboard API access failed:', error)

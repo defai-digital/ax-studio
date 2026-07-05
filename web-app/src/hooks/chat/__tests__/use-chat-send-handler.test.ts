@@ -5,17 +5,13 @@ import { renderHook, act } from '@testing-library/react'
 
 // All mock variables used inside vi.mock must use vi.hoisted to avoid
 // "Cannot access before initialization" errors due to vi.mock hoisting.
-const {
-  mockNavigate,
-  mockCreateThread,
-  mockUpdateThread,
-  mockGetProjectById,
-} = vi.hoisted(() => ({
-  mockNavigate: vi.fn(),
-  mockCreateThread: vi.fn(),
-  mockUpdateThread: vi.fn(),
-  mockGetProjectById: vi.fn(),
-}))
+const { mockNavigate, mockCreateThread, mockUpdateThread, mockGetProjectById } =
+  vi.hoisted(() => ({
+    mockNavigate: vi.fn(),
+    mockCreateThread: vi.fn(),
+    mockUpdateThread: vi.fn(),
+    mockGetProjectById: vi.fn(),
+  }))
 
 // Mutable state for model provider — cannot use vi.hoisted for these
 // because they need reassignment in tests. We use a shared object instead.
@@ -241,7 +237,10 @@ describe('useChatSendHandler', () => {
     }
     mockGetProjectById.mockResolvedValue(project)
 
-    const projectAssistant = { id: 'assistant-1', name: 'Project Assistant' } as Assistant
+    const projectAssistant = {
+      id: 'assistant-1',
+      name: 'Project Assistant',
+    } as Assistant
     const otherAssistant = { id: 'assistant-2', name: 'Other' } as Assistant
 
     const newThread = { id: 'thread-proj', metadata: {} }
@@ -273,7 +272,6 @@ describe('useChatSendHandler', () => {
       }
     )
   })
-
 
   it('gracefully handles project fetch failure', async () => {
     mockGetProjectById.mockRejectedValue(new Error('Network error'))

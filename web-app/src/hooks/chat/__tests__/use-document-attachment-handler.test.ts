@@ -45,7 +45,10 @@ vi.mock('@/hooks/chat/useAttachments', () => ({
     }),
 }))
 
-let mockSelectedModel: { id: string; settings?: Record<string, unknown> } | null = {
+let mockSelectedModel: {
+  id: string
+  settings?: Record<string, unknown>
+} | null = {
   id: 'model-1',
 }
 let mockSelectedProvider = 'openai'
@@ -84,7 +87,9 @@ vi.mock('@/hooks/threads/useThreads', () => {
 })
 
 const mockDialogOpen = vi.fn()
-const mockMcpCallTool = vi.fn().mockResolvedValue({ error: '', content: [{ text: '{"results":[]}' }] })
+const mockMcpCallTool = vi
+  .fn()
+  .mockResolvedValue({ error: '', content: [{ text: '{"results":[]}' }] })
 const mockStartModel = vi.fn().mockResolvedValue(undefined)
 const mockGetActiveModels = vi.fn().mockResolvedValue(['model-1'])
 const mockGetTokensCount = vi.fn().mockResolvedValue(100)
@@ -169,9 +174,11 @@ describe('useDocumentAttachmentHandler', () => {
 
   it('ingestingDocs is true when any document attachment is processing', () => {
     act(() => {
-      useChatAttachments.getState().setAttachments(ATTACHMENTS_KEY, [
-        { name: 'test.pdf', type: 'document', processing: true },
-      ])
+      useChatAttachments
+        .getState()
+        .setAttachments(ATTACHMENTS_KEY, [
+          { name: 'test.pdf', type: 'document', processing: true },
+        ])
     })
 
     const { result } = renderHook(() =>
@@ -217,7 +224,9 @@ describe('useDocumentAttachmentHandler', () => {
       await result.current.handleAttachDocsIngest()
     })
 
-    expect(toast.info).toHaveBeenCalledWith('Attachments are disabled in Settings')
+    expect(toast.info).toHaveBeenCalledWith(
+      'Attachments are disabled in Settings'
+    )
   })
 
   // ── Phase 4: handleAttachDocsIngest - no selection ───────────────────────
@@ -236,7 +245,9 @@ describe('useDocumentAttachmentHandler', () => {
     })
 
     expect(mockDialogOpen).toHaveBeenCalled()
-    const attachments = useChatAttachments.getState().getAttachments(ATTACHMENTS_KEY)
+    const attachments = useChatAttachments
+      .getState()
+      .getAttachments(ATTACHMENTS_KEY)
     expect(attachments).toEqual([])
   })
 
@@ -288,7 +299,9 @@ describe('useDocumentAttachmentHandler', () => {
       await result.current.handleRemoveAttachment(1)
     })
 
-    const remaining = useChatAttachments.getState().getAttachments(ATTACHMENTS_KEY)
+    const remaining = useChatAttachments
+      .getState()
+      .getAttachments(ATTACHMENTS_KEY)
     expect(remaining).toHaveLength(2)
     expect(remaining[0].name).toBe('a.pdf')
     expect(remaining[1].name).toBe('c.pdf')
@@ -304,7 +317,9 @@ describe('useDocumentAttachmentHandler', () => {
       })
     )
 
-    const { processAttachmentsForSend } = await import('@/lib/attachmentProcessing')
+    const { processAttachmentsForSend } = await import(
+      '@/lib/attachmentProcessing'
+    )
 
     await act(async () => {
       await result.current.processNewDocumentAttachments([])
@@ -324,7 +339,9 @@ describe('useDocumentAttachmentHandler', () => {
       })
     )
 
-    const { processAttachmentsForSend } = await import('@/lib/attachmentProcessing')
+    const { processAttachmentsForSend } = await import(
+      '@/lib/attachmentProcessing'
+    )
 
     await act(async () => {
       await result.current.processNewDocumentAttachments([
@@ -352,7 +369,9 @@ describe('useDocumentAttachmentHandler', () => {
       })
     )
 
-    const { processAttachmentsForSend } = await import('@/lib/attachmentProcessing')
+    const { processAttachmentsForSend } = await import(
+      '@/lib/attachmentProcessing'
+    )
 
     await act(async () => {
       await result.current.processNewDocumentAttachments([
@@ -387,7 +406,12 @@ describe('useDocumentAttachmentHandler', () => {
     // Seed attachment with matching id
     act(() => {
       useChatAttachments.getState().setAttachments(ATTACHMENTS_KEY, [
-        { name: 'report.pdf', type: 'document', id: 'file-abc', path: '/tmp/report.pdf' },
+        {
+          name: 'report.pdf',
+          type: 'document',
+          id: 'file-abc',
+          path: '/tmp/report.pdf',
+        },
       ])
     })
 
@@ -403,9 +427,13 @@ describe('useDocumentAttachmentHandler', () => {
     })
 
     // File should be gone from registry
-    expect(useFileRegistry.getState().listFiles('thread_thread-1')).toHaveLength(0)
+    expect(
+      useFileRegistry.getState().listFiles('thread_thread-1')
+    ).toHaveLength(0)
     // Attachment should be gone from store
-    expect(useChatAttachments.getState().getAttachments(ATTACHMENTS_KEY)).toHaveLength(0)
+    expect(
+      useChatAttachments.getState().getAttachments(ATTACHMENTS_KEY)
+    ).toHaveLength(0)
   })
 
   it('clears hasDocuments flag when last file is removed', async () => {
@@ -418,9 +446,11 @@ describe('useDocumentAttachmentHandler', () => {
         collection_id: 'thread_thread-1',
         created_at: '2026-01-01T00:00:00Z',
       })
-      useChatAttachments.getState().setAttachments(ATTACHMENTS_KEY, [
-        { name: 'doc.pdf', type: 'document', id: 'only-file' },
-      ])
+      useChatAttachments
+        .getState()
+        .setAttachments(ATTACHMENTS_KEY, [
+          { name: 'doc.pdf', type: 'document', id: 'only-file' },
+        ])
     })
 
     const { result } = renderHook(() =>
@@ -442,16 +472,21 @@ describe('useDocumentAttachmentHandler', () => {
 
   it('attempts to delete chunks from AkiDB when removing indexed document', async () => {
     // Set up a search result with chunks
-    mockMcpCallTool.mockResolvedValueOnce({
-      error: '',
-      content: [{ text: JSON.stringify({ results: [
-        { chunkId: 'c1' },
-        { chunkId: 'c2' },
-      ] }) }],
-    }).mockResolvedValueOnce({
-      error: '',
-      content: [{ text: 'deleted' }],
-    })
+    mockMcpCallTool
+      .mockResolvedValueOnce({
+        error: '',
+        content: [
+          {
+            text: JSON.stringify({
+              results: [{ chunkId: 'c1' }, { chunkId: 'c2' }],
+            }),
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        error: '',
+        content: [{ text: 'deleted' }],
+      })
 
     act(() => {
       useFileRegistry.getState().addFile('thread_thread-1', {
@@ -462,9 +497,11 @@ describe('useDocumentAttachmentHandler', () => {
         collection_id: 'thread_thread-1',
         created_at: '2026-01-01T00:00:00Z',
       })
-      useChatAttachments.getState().setAttachments(ATTACHMENTS_KEY, [
-        { name: 'indexed.pdf', type: 'document', id: 'indexed-file' },
-      ])
+      useChatAttachments
+        .getState()
+        .setAttachments(ATTACHMENTS_KEY, [
+          { name: 'indexed.pdf', type: 'document', id: 'indexed-file' },
+        ])
     })
 
     const { result } = renderHook(() =>
@@ -512,9 +549,11 @@ describe('useDocumentAttachmentHandler', () => {
         collection_id: 'thread_thread-1',
         created_at: '2026-01-01T00:00:00Z',
       })
-      useChatAttachments.getState().setAttachments(ATTACHMENTS_KEY, [
-        { name: 'fail.pdf', type: 'document', id: 'fail-file' },
-      ])
+      useChatAttachments
+        .getState()
+        .setAttachments(ATTACHMENTS_KEY, [
+          { name: 'fail.pdf', type: 'document', id: 'fail-file' },
+        ])
     })
 
     const { result } = renderHook(() =>
@@ -530,6 +569,8 @@ describe('useDocumentAttachmentHandler', () => {
 
     // Registry should still be cleaned up despite MCP failure
     expect(useFileRegistry.getState().hasFiles('thread_thread-1')).toBe(false)
-    expect(useChatAttachments.getState().getAttachments(ATTACHMENTS_KEY)).toHaveLength(0)
+    expect(
+      useChatAttachments.getState().getAttachments(ATTACHMENTS_KEY)
+    ).toHaveLength(0)
   })
 })
