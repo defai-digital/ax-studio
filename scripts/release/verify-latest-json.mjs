@@ -32,7 +32,7 @@ const filePath = path.resolve(repoRoot, required('file'))
 const expectedVersion = required('version')
 const latest = JSON.parse(fs.readFileSync(filePath, 'utf8'))
 const platforms = Object.keys(latest.platforms ?? {})
-const expectedPlatforms = ['darwin-aarch64', 'windows-x86_64']
+const expectedPlatforms = ['darwin-aarch64', 'windows-x86_64', 'windows-aarch64']
 
 function fail(message) {
   console.error(`latest.json error: ${message}`)
@@ -43,7 +43,7 @@ if (latest.version !== expectedVersion) {
   fail(`version must be ${expectedVersion}, got ${latest.version}`)
 }
 
-if (JSON.stringify(platforms.sort()) !== JSON.stringify(expectedPlatforms)) {
+if (JSON.stringify([...platforms].sort()) !== JSON.stringify([...expectedPlatforms].sort())) {
   fail(`platforms must be ${expectedPlatforms.join(', ')}, got ${platforms.join(', ') || '(none)'}`)
 }
 
@@ -73,8 +73,21 @@ if (windows?.url && !/\/Ax-Studio_.*_x64-setup\.exe$/.test(windows.url)) {
   fail(`windows-x86_64 url does not look like an Ax-Studio Windows NSIS installer URL: ${windows.url}`)
 }
 
+const windowsArm64 = latest.platforms?.['windows-aarch64']
+if (!windowsArm64?.signature) {
+  console.warn('warning: windows-aarch64 signature is empty — updater will not work until TAURI_SIGNING_PRIVATE_KEY is configured')
+}
+
+if (!windowsArm64?.url) {
+  console.warn('warning: windows-aarch64 url is empty — Windows ARM64 build may not have completed')
+}
+
+if (windowsArm64?.url && !/\/Ax-Studio_.*_arm64-setup\.exe$/.test(windowsArm64.url)) {
+  fail(`windows-aarch64 url does not look like an Ax-Studio Windows ARM64 NSIS installer URL: ${windowsArm64.url}`)
+}
+
 if (process.exitCode) {
   process.exit(process.exitCode)
 }
 
-console.log(`latest.json ok: ${expectedVersion} for darwin-aarch64 + windows-x86_64`)
+console.log(`latest.json ok: ${expectedVersion} for darwin-aarch64 + windows-x86_64 + windows-aarch64`)

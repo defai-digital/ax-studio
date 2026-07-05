@@ -11,7 +11,9 @@ for (let index = 2; index < process.argv.length; index += 1) {
   const value = process.argv[index + 1]
 
   if (!key.startsWith('--') || value === undefined || value.startsWith('--')) {
-    console.error(`usage: node scripts/release/create-latest-json.mjs --version <version> --darwin-signature <signature> --darwin-url <url> [--windows-signature <signature>] [--windows-url <url>] --out <path>`)
+    console.error(
+      `usage: node scripts/release/create-latest-json.mjs --version <version> --darwin-signature <signature> --darwin-url <url> [--windows-x64-signature <signature>] [--windows-x64-url <url>] [--windows-arm64-signature <signature>] [--windows-arm64-url <url>] --out <path>`
+    )
     process.exit(2)
   }
 
@@ -31,8 +33,11 @@ function required(name) {
 const version = required('version')
 const darwinSignature = args.get('darwin-signature') ?? ''
 const darwinUrl = required('darwin-url')
-const windowsSignature = args.get('windows-signature') ?? ''
-const windowsUrl = args.get('windows-url') ?? ''
+const windowsX64Signature =
+  args.get('windows-x64-signature') ?? args.get('windows-signature') ?? ''
+const windowsX64Url = args.get('windows-x64-url') ?? args.get('windows-url') ?? ''
+const windowsArm64Signature = args.get('windows-arm64-signature') ?? ''
+const windowsArm64Url = args.get('windows-arm64-url') ?? ''
 const outPath = path.resolve(repoRoot, required('out'))
 const templatePath = path.join(repoRoot, 'src-tauri/latest.json.template')
 const latest = JSON.parse(fs.readFileSync(templatePath, 'utf8'))
@@ -47,10 +52,17 @@ latest.platforms = {
   },
 }
 
-if (windowsUrl) {
+if (windowsX64Url) {
   latest.platforms['windows-x86_64'] = {
-    signature: windowsSignature,
-    url: windowsUrl,
+    signature: windowsX64Signature,
+    url: windowsX64Url,
+  }
+}
+
+if (windowsArm64Url) {
+  latest.platforms['windows-aarch64'] = {
+    signature: windowsArm64Signature,
+    url: windowsArm64Url,
   }
 }
 

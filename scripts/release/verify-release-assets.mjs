@@ -41,13 +41,14 @@ const assets = output
 const requiredAssets = [
   `Ax-Studio_${version}_aarch64.dmg`,
   `ax-studio-mac-arm64-${version}.zip`,
+  `Ax-Studio_${version}_x64-setup.exe`,
+  `Ax-Studio_${version}_arm64-setup.exe`,
   'latest.json',
 ]
-// Only present when TAURI_SIGNING_PRIVATE_KEY is configured
 const optionalAssets = [
   'Ax-Studio.app.tar.gz',
-  `Ax-Studio_${version}_x64-setup.exe`,
   `Ax-Studio_${version}_x64-portable.exe`,
+  `Ax-Studio_${version}_arm64-portable.exe`,
 ]
 
 function fail(message) {
@@ -87,4 +88,4 @@ if (process.exitCode) {
   process.exit(process.exitCode)
 }
 
-console.log(`release assets ok: ${tag} contains macOS arm64 + Windows x64 artifacts`)
+console.log(`release assets ok: ${tag} contains macOS arm64 + Windows x64/ARM64 artifacts`)

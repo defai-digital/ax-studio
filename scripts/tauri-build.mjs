@@ -4,8 +4,11 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const args = ['tauri', 'build']
+const explicitTarget = process.env.TAURI_BUILD_TARGET?.trim()
 
-if (process.platform === 'darwin') {
+if (explicitTarget) {
+  args.push('--target', explicitTarget)
+} else if (process.platform === 'darwin') {
   // MLX (Apple Silicon only) cannot link for x86_64, so we build arm64 only.
   // The CI artifact pipeline expects aarch64-apple-darwin bundles.
   args.push('--target', 'aarch64-apple-darwin')

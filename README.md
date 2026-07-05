@@ -117,7 +117,8 @@ AX Studio is the general AI workspace in the AutomatosX stack.
 
 ### Install
 
-AX Studio Desktop officially supports macOS Apple Silicon and Windows x64.
+AX Studio Desktop officially supports macOS Apple Silicon, Windows x64, and
+Windows ARM64.
 Linux desktop builds are not published or supported; Linux users should use
 AX Serving, OpenAI-compatible endpoints, or source builds without release/SLA
 expectations.
@@ -134,7 +135,8 @@ The Homebrew cask is the fastest install path for supported Macs.
 
 **Windows**
 
-Download the latest `Ax-Studio_*_x64-setup.exe` from
+Download the latest `Ax-Studio_*_x64-setup.exe` or
+`Ax-Studio_*_arm64-setup.exe` from
 [GitHub Releases](https://github.com/defai-digital/ax-studio/releases/latest)
 and run the installer.
 
@@ -165,7 +167,7 @@ brew upgrade --cask ax-studio
 
 **Windows**
 
-Download and run the latest installer from
+Download and run the latest x64 or ARM64 installer from
 [GitHub Releases](https://github.com/defai-digital/ax-studio/releases/latest).
 
 ### Uninstall

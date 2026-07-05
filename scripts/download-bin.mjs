@@ -65,27 +65,36 @@ function ensureDirectory(dir) {
 function getPlatformArch() {
   const platform = os.platform() // 'darwin', 'linux', 'win32'
   const arch = os.arch() // 'x64', 'arm64', etc.
+  const windowsTarget = process.env.AX_STUDIO_WINDOWS_TARGET?.trim()
 
-  let bunPlatform, uvPlatform
+  let bunPlatform, uvPlatform, targetTriple
 
   if (platform === 'darwin') {
     bunPlatform = arch === 'arm64' ? 'darwin-aarch64' : 'darwin-x64'
     uvPlatform =
       arch === 'arm64' ? 'aarch64-apple-darwin' : 'x86_64-apple-darwin'
+    targetTriple = uvPlatform
   } else if (platform === 'linux') {
     bunPlatform = arch === 'arm64' ? 'linux-aarch64' : 'linux-x64'
     uvPlatform =
       arch === 'arm64'
         ? 'aarch64-unknown-linux-gnu'
         : 'x86_64-unknown-linux-gnu'
+    targetTriple = uvPlatform
   } else if (platform === 'win32') {
-    bunPlatform = 'windows-x64' // Bun has limited Windows support
-    uvPlatform = 'x86_64-pc-windows-msvc'
+    if (windowsTarget && !['x86_64-pc-windows-msvc', 'aarch64-pc-windows-msvc'].includes(windowsTarget)) {
+      throw new Error(`Unsupported AX_STUDIO_WINDOWS_TARGET: ${windowsTarget}`)
+    }
+
+    targetTriple =
+      windowsTarget || (arch === 'arm64' ? 'aarch64-pc-windows-msvc' : 'x86_64-pc-windows-msvc')
+    bunPlatform = targetTriple === 'aarch64-pc-windows-msvc' ? 'windows-aarch64' : 'windows-x64'
+    uvPlatform = targetTriple
   } else {
     throw new Error(`Unsupported platform: ${platform}`)
   }
 
-  return { bunPlatform, uvPlatform }
+  return { bunPlatform, uvPlatform, targetTriple }
 }
 
 async function main() {
@@ -95,7 +104,7 @@ async function main() {
   }
   console.log('Starting main function')
   const platform = os.platform()
-  const { bunPlatform, uvPlatform } = getPlatformArch()
+  const { bunPlatform, uvPlatform, targetTriple } = getPlatformArch()
   console.log(`bunPlatform: ${bunPlatform}, uvPlatform: ${uvPlatform}`)
 
   const binDir = 'src-tauri/resources/bin'
@@ -158,7 +167,7 @@ async function main() {
     if (platform === 'win32') {
       copyFileSync(
         path.join(binDir, 'bun.exe'),
-        path.join(binDir, 'bun-x86_64-pc-windows-msvc.exe')
+        path.join(binDir, `bun-${targetTriple}.exe`)
       )
     }
   } catch (err) {
@@ -203,7 +212,7 @@ async function main() {
     if (platform === 'win32') {
       copyFileSync(
         path.join(binDir, 'uv.exe'),
-        path.join(binDir, 'uv-x86_64-pc-windows-msvc.exe')
+        path.join(binDir, `uv-${targetTriple}.exe`)
       )
     }
   } catch (err) {

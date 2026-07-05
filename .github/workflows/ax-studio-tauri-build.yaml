@@ -649,8 +649,147 @@ jobs:
           [ -f "$PORTABLE" ] && FILES+=("$PORTABLE")
           gh release upload "v${VERSION}" "${FILES[@]}" --clobber --repo "$GITHUB_REPOSITORY"
 
+  build-windows-arm64:
+    runs-on: windows-latest
+    needs: [get-update-version, validate-release-tag, create-draft-release]
+    env:
+      HAS_UPDATER_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && secrets.TAURI_UPDATER_PUBKEY != '' }}
+      HAS_WINDOWS_SIGN_CERTS: ${{ secrets.AZURE_KEY_VAULT_URI != '' && secrets.AZURE_CLIENT_ID != '' && secrets.AZURE_TENANT_ID != '' && secrets.AZURE_CLIENT_SECRET != '' && secrets.AZURE_CERT_NAME != '' }}
+      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+    outputs:
+      WIN_ARM64_SIG: ${{ steps.metadata.outputs.WIN_ARM64_SIG }}
+      FILE_NAME: ${{ steps.metadata.outputs.FILE_NAME }}
+      PORTABLE_FILE_NAME: ${{ steps.metadata.outputs.PORTABLE_FILE_NAME }}
+    permissions:
+      contents: write
+    steps:
+      - name: Getting the repo
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/v${{ needs.get-update-version.outputs.new_version }}
+
+      - name: Installing node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Enable long paths
+        run: git config --global core.longpaths true
+
+      - name: Install jq
+        uses: dcarbone/install-jq-action@v2.0.1
+
+      - name: Install ctoml
+        run: cargo install ctoml
+
+      - name: Add Windows ARM64 Rust target
+        run: rustup target add aarch64-pc-windows-msvc
+
+      - name: Install AzureSignTool
+        if: ${{ env.HAS_WINDOWS_SIGN_CERTS == 'true' }}
+        run: dotnet tool install --global --version 6.0.0 AzureSignTool
+
+      - name: Update app version from release tag
+        shell: bash
+        env:
+          VERSION: ${{ needs.get-update-version.outputs.new_version }}
+          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+        run: |
+          if [ "$HAS_UPDATER_KEY" = "true" ] && [ -n "$TAURI_UPDATER_PUBKEY" ]; then
+            jq --arg version "$VERSION" --arg pubkey "$TAURI_UPDATER_PUBKEY" \
+              '.version = $version | .bundle.createUpdaterArtifacts = true | .plugins.updater.pubkey = $pubkey' \
+              ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
+          else
+            jq --arg version "$VERSION" \
+              '.version = $version | .bundle.createUpdaterArtifacts = false' \
+              ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
+          fi
+          mv /tmp/tauri.conf.json ./src-tauri/tauri.conf.json
+
+          jq --arg version "$VERSION" '.version = $version' web-app/package.json > /tmp/package.json
+          mv /tmp/package.json web-app/package.json
+
+          if [ "$HAS_WINDOWS_SIGN_CERTS" = "true" ]; then
+            jq '.bundle.windows.signCommand = "powershell -ExecutionPolicy Bypass -File ./src-tauri/sign.ps1 %1"' ./src-tauri/tauri.windows.conf.json > /tmp/tauri.windows.conf.json
+            mv /tmp/tauri.windows.conf.json ./src-tauri/tauri.windows.conf.json
+          else
+            echo "::warning::Azure code-signing secrets not configured — building unsigned Windows ARM64 artifacts."
+          fi
+
+          jq --arg version "$VERSION" '.version = $version' ./src-tauri/plugins/tauri-plugin-hardware/package.json > /tmp/package.json
+          mv /tmp/package.json ./src-tauri/plugins/tauri-plugin-hardware/package.json
+
+          jq --arg version "$VERSION" '.version = $version' ./src-tauri/plugins/tauri-plugin-llamacpp/package.json > /tmp/package.json
+          mv /tmp/package.json ./src-tauri/plugins/tauri-plugin-llamacpp/package.json
+
+          ctoml ./src-tauri/plugins/tauri-plugin-hardware/Cargo.toml package.version "$VERSION"
+          ctoml ./src-tauri/plugins/tauri-plugin-llamacpp/Cargo.toml package.version "$VERSION"
+          ctoml ./src-tauri/Cargo.toml package.version "$VERSION"
+          ctoml ./src-tauri/Cargo.toml dependencies.tauri.features[] "devtools"
+
+      - name: Config Yarn
+        run: |
+          corepack enable
+          corepack prepare yarn@4.5.3 --activate
+          yarn --version
+          yarn config set -H enableImmutableInstalls false
+
+      - name: Build app
+        shell: bash
+        run: make build
+        env:
+          AX_STUDIO_WINDOWS_TARGET: aarch64-pc-windows-msvc
+          TAURI_BUILD_TARGET: aarch64-pc-windows-msvc
+          AZURE_KEY_VAULT_URI: ${{ secrets.AZURE_KEY_VAULT_URI }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_CERT_NAME: ${{ secrets.AZURE_CERT_NAME }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_SIGNING_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+          AX_STUDIO_SIGNING_KEY: ${{ secrets.AX_STUDIO_SIGNING_KEY }}
+
+      - name: Set output filename for windows arm64
+        id: metadata
+        shell: bash
+        env:
+          VERSION: ${{ needs.get-update-version.outputs.new_version }}
+        run: |
+          TARGET_DIR="./src-tauri/target/aarch64-pc-windows-msvc/release"
+          FILE_NAME=Ax-Studio_${VERSION}_arm64-setup.exe
+          WIN_ARM64_SIG=""
+          if [ -f "${TARGET_DIR}/bundle/nsis/${FILE_NAME}.sig" ]; then
+            WIN_ARM64_SIG=$(cat "${TARGET_DIR}/bundle/nsis/${FILE_NAME}.sig")
+          fi
+          PORTABLE_FILE_NAME="Ax-Studio_${VERSION}_arm64-portable.exe"
+          PORTABLE_SRC=$(find "$TARGET_DIR" -maxdepth 1 -type f \( -name "Ax-Studio*.exe" -o -name "ax-studio.exe" \) -print -quit || true)
+          if [ -n "$PORTABLE_SRC" ] && [ -f "$PORTABLE_SRC" ]; then
+            cp "$PORTABLE_SRC" "${TARGET_DIR}/${PORTABLE_FILE_NAME}"
+          else
+            echo "::notice::Portable Windows ARM64 exe not found; continuing with NSIS installer only."
+          fi
+          {
+            echo "WIN_ARM64_SIG=${WIN_ARM64_SIG}"
+            echo "FILE_NAME=${FILE_NAME}"
+            echo "PORTABLE_FILE_NAME=${PORTABLE_FILE_NAME}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload release artifacts to GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.get-update-version.outputs.new_version }}
+        shell: bash
+        run: |
+          TARGET_DIR="./src-tauri/target/aarch64-pc-windows-msvc/release"
+          NSIS_DIR="${TARGET_DIR}/bundle/nsis"
+          FILES=("$NSIS_DIR/${{ steps.metadata.outputs.FILE_NAME }}")
+          PORTABLE="${TARGET_DIR}/${{ steps.metadata.outputs.PORTABLE_FILE_NAME }}"
+          [ -f "$PORTABLE" ] && FILES+=("$PORTABLE")
+          gh release upload "v${VERSION}" "${FILES[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+
   sync-temp-to-latest:
-    needs: [create-draft-release, get-update-version, build-macos, build-windows]
+    needs: [create-draft-release, get-update-version, build-macos, build-windows, build-windows-arm64]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -677,13 +816,21 @@ jobs:
           if [ -n "$WIN_NSIS" ]; then
             WINDOWS_URL="https://github.com/defai-digital/ax-studio/releases/download/v${VERSION}/${WIN_NSIS}"
           fi
+          WIN_ARM64_SIGNATURE="${{ needs.build-windows-arm64.outputs.WIN_ARM64_SIG }}"
+          WIN_ARM64_NSIS="${{ needs.build-windows-arm64.outputs.FILE_NAME }}"
+          WINDOWS_ARM64_URL=""
+          if [ -n "$WIN_ARM64_NSIS" ]; then
+            WINDOWS_ARM64_URL="https://github.com/defai-digital/ax-studio/releases/download/v${VERSION}/${WIN_ARM64_NSIS}"
+          fi
 
           node scripts/release/create-latest-json.mjs \
             --version "$VERSION" \
             --darwin-signature "$DARWIN_SIGNATURE" \
             --darwin-url "$DARWIN_URL" \
-            --windows-signature "$WIN_SIGNATURE" \
-            --windows-url "$WINDOWS_URL" \
+            --windows-x64-signature "$WIN_SIGNATURE" \
+            --windows-x64-url "$WINDOWS_URL" \
+            --windows-arm64-signature "$WIN_ARM64_SIGNATURE" \
+            --windows-arm64-url "$WINDOWS_ARM64_URL" \
             --out latest.json
           node scripts/release/verify-latest-json.mjs --file latest.json --version "$VERSION"
           cat latest.json
@@ -698,7 +845,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY"
 
   sign-release-assets:
-    needs: [get-update-version, sync-temp-to-latest, build-windows]
+    needs: [get-update-version, sync-temp-to-latest, build-windows, build-windows-arm64]
     runs-on: ubuntu-latest
     env:
       HAS_MINISIGN_KEY: ${{ secrets.AX_STUDIO_MINISIGN_SECRET_KEY_B64 != '' && secrets.AX_STUDIO_MINISIGN_PUBLIC_KEY != '' }}
@@ -730,6 +877,8 @@ jobs:
             --pattern "ax-studio-mac-arm64-${{ needs.get-update-version.outputs.new_version }}.zip" \
             --pattern "Ax-Studio_${{ needs.get-update-version.outputs.new_version }}_x64-setup.exe" \
             --pattern "Ax-Studio_${{ needs.get-update-version.outputs.new_version }}_x64-portable.exe" \
+            --pattern "Ax-Studio_${{ needs.get-update-version.outputs.new_version }}_arm64-setup.exe" \
+            --pattern "Ax-Studio_${{ needs.get-update-version.outputs.new_version }}_arm64-portable.exe" \
             --pattern "latest.json"
 
       - name: Sign release assets with minisign

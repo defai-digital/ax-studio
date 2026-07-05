@@ -1,14 +1,14 @@
 # Release Deployment
 
-AX Studio public desktop deployment supports macOS Apple Silicon and Windows
-x64. Linux desktop builds are not published, tested as release blockers, or
-covered by the support/SLA policy. Linux users should use AX Serving,
+AX Studio public desktop deployment supports macOS Apple Silicon, Windows x64,
+and Windows ARM64. Linux desktop builds are not published, tested as release
+blockers, or covered by the support/SLA policy. Linux users should use AX Serving,
 OpenAI-compatible endpoints, or source builds without official release
 expectations.
 
 Stable releases must produce signed and notarized macOS artifacts, Windows x64
-installer artifacts, a Tauri updater manifest for the supported desktop
-platforms, and a Homebrew cask update for macOS.
+and Windows ARM64 installer artifacts, a Tauri updater manifest for the
+supported desktop platforms, and a Homebrew cask update for macOS.
 
 ## Required GitHub Secrets
 
@@ -27,9 +27,10 @@ repository secrets before running `Tauri Builder - Tag` for a stable release:
 | `TAURI_UPDATER_PUBKEY` | Public key paired with the Tauri updater private key. |
 | `AX_STUDIO_SIGNING_KEY` | Application signing key consumed by the release build. |
 
-Windows x64 artifacts are part of the supported desktop release. Authenticode
-signing is enabled when these Azure signing secrets are configured; otherwise
-the workflow emits unsigned Windows artifacts and warns during the build:
+Windows x64 and ARM64 artifacts are part of the supported desktop release.
+Authenticode signing is enabled when these Azure signing secrets are configured;
+otherwise the workflow emits unsigned Windows artifacts and warns during the
+build:
 
 | Secret | Purpose |
 | --- | --- |
@@ -63,6 +64,7 @@ gh workflow run "Tauri Builder - Tag" \
   -f version=1.3.3
 ```
 
-The workflow creates or reuses a draft release, uploads macOS Apple Silicon and
-Windows x64 artifacts, writes and verifies `latest.json`, publishes the release
-only after asset verification passes, and then updates the Homebrew cask.
+The workflow creates or reuses a draft release, uploads macOS Apple Silicon,
+Windows x64, and Windows ARM64 artifacts, writes and verifies `latest.json`,
+publishes the release only after asset verification passes, and then updates the
+Homebrew cask.
