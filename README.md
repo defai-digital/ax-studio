@@ -409,7 +409,7 @@ Use this path when contributing to AX Studio or running the app from source.
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 20.19+ or 22.12+
 - Yarn 4.5.3
 - Rust 1.77.2+
 - Tauri CLI 2.x

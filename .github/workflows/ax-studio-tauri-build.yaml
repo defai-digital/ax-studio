@@ -30,7 +30,7 @@ jobs:
       - name: Installing node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20.19'
 
       - name: Validate release config
         run: node scripts/release/validate-release-config.mjs
@@ -131,7 +131,7 @@ jobs:
       - name: Installing node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20.19'
 
       - name: Install jq
         uses: dcarbone/install-jq-action@v2.0.1
@@ -536,7 +536,7 @@ jobs:
       - name: Installing node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20.19'
 
       - name: Enable long paths
         run: git config --global core.longpaths true
@@ -671,7 +671,7 @@ jobs:
       - name: Installing node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20.19'
 
       - name: Enable long paths
         run: git config --global core.longpaths true
