@@ -202,6 +202,62 @@ describe('AddEditAssistant', () => {
     expect(mockOnSave.mock.calls[0][0].name).toBe('My Assistant')
   })
 
+  it('saves decimal number parameters as numbers', () => {
+    render(
+      <AddEditAssistant
+        open={true}
+        onOpenChange={mockOnOpenChange}
+        editingKey={null}
+        onSave={mockOnSave}
+      />
+    )
+
+    fireEvent.change(screen.getByPlaceholderText('assistants:enterName'), {
+      target: { value: 'My Assistant' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('assistants:key'), {
+      target: { value: 'temperature' },
+    })
+    fireEvent.click(screen.getByText('assistants:numberValue'))
+    fireEvent.change(screen.getByPlaceholderText('assistants:value'), {
+      target: { value: '0.7' },
+    })
+    fireEvent.click(screen.getByText('assistants:save'))
+
+    expect(mockOnSave).toHaveBeenCalledOnce()
+    expect(mockOnSave.mock.calls[0][0].parameters).toEqual({
+      temperature: 0.7,
+    })
+  })
+
+  it('blocks invalid number parameters instead of coercing them to zero', () => {
+    render(
+      <AddEditAssistant
+        open={true}
+        onOpenChange={mockOnOpenChange}
+        editingKey={null}
+        onSave={mockOnSave}
+      />
+    )
+
+    fireEvent.change(screen.getByPlaceholderText('assistants:enterName'), {
+      target: { value: 'My Assistant' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('assistants:key'), {
+      target: { value: 'temperature' },
+    })
+    fireEvent.click(screen.getByText('assistants:numberValue'))
+    fireEvent.change(screen.getByPlaceholderText('assistants:value'), {
+      target: { value: '1e3' },
+    })
+    fireEvent.click(screen.getByText('assistants:save'))
+
+    expect(mockOnSave).not.toHaveBeenCalled()
+    expect(
+      screen.getByText('assistants:invalidNumberParameter')
+    ).toBeInTheDocument()
+  })
+
   it('clears name error when user types', () => {
     render(
       <AddEditAssistant

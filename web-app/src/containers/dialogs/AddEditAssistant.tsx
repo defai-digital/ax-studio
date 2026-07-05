@@ -36,6 +36,17 @@ interface AddEditAssistantProps {
 
 type AssistantParameterType = 'string' | 'number' | 'boolean' | 'json'
 
+function parseDecimalNumber(value: unknown): number | null {
+  const raw = typeof value === 'number' ? String(value) : String(value ?? '')
+  const trimmed = raw.trim()
+  if (trimmed === '' || !/^[+-]?(?:\d+|\d+\.\d+|\.\d+)$/.test(trimmed)) {
+    return null
+  }
+
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 function getAssistantParameterType(value: unknown): AssistantParameterType {
   if (typeof value === 'boolean') return 'boolean'
   if (typeof value === 'number') return 'number'
@@ -63,6 +74,7 @@ export function AddEditAssistant({
   const [paramsKeys, setParamsKeys] = useState<string[]>([''])
   const [paramsValues, setParamsValues] = useState<unknown[]>([''])
   const [paramsTypes, setParamsTypes] = useState<string[]>(['string'])
+  const [paramsErrors, setParamsErrors] = useState<Array<string | null>>([null])
   // Stable React keys for the three parallel `params*` arrays. Keeps
   // input focus + typed values attached to the correct row when the
   // user removes a parameter mid-list — using `key={index}` caused
@@ -114,6 +126,9 @@ export function AddEditAssistant({
       setParamsKeys(keys.length > 0 ? keys : [''])
       setParamsValues(values.length > 0 ? values : [''])
       setParamsTypes(types.length > 0 ? types : ['string'])
+      setParamsErrors(
+        Array.from({ length: Math.max(keys.length, 1) }, () => null)
+      )
       setParamsIds(
         Array.from({ length: Math.max(keys.length, 1) }, () =>
           crypto.randomUUID()
@@ -133,6 +148,7 @@ export function AddEditAssistant({
     setParamsKeys([''])
     setParamsValues([''])
     setParamsTypes(['string'])
+    setParamsErrors([null])
     setParamsIds([crypto.randomUUID()])
     setNameError(null)
     setShowEmojiPicker(false)
@@ -191,12 +207,17 @@ export function AddEditAssistant({
       setParamsValues(newValues)
       setParamsTypes(newTypes)
     }
+
+    const newErrors = [...paramsErrors]
+    newErrors[index] = null
+    setParamsErrors(newErrors)
   }
 
   const handleAddParameter = () => {
     setParamsKeys([...paramsKeys, ''])
     setParamsValues([...paramsValues, ''])
     setParamsTypes([...paramsTypes, 'string'])
+    setParamsErrors([...paramsErrors, null])
     setParamsIds([...paramsIds, crypto.randomUUID()])
   }
 
@@ -204,14 +225,17 @@ export function AddEditAssistant({
     const newKeys = [...paramsKeys]
     const newValues = [...paramsValues]
     const newTypes = [...paramsTypes]
+    const newErrors = [...paramsErrors]
     const newIds = [...paramsIds]
     newKeys.splice(index, 1)
     newValues.splice(index, 1)
     newTypes.splice(index, 1)
+    newErrors.splice(index, 1)
     newIds.splice(index, 1)
     setParamsKeys(newKeys.length > 0 ? newKeys : [''])
     setParamsValues(newValues.length > 0 ? newValues : [''])
     setParamsTypes(newTypes.length > 0 ? newTypes : ['string'])
+    setParamsErrors(newErrors.length > 0 ? newErrors : [null])
     setParamsIds(newIds.length > 0 ? newIds : [crypto.randomUUID()])
   }
 
@@ -239,6 +263,7 @@ export function AddEditAssistant({
     setParamsKeys(newKeys)
     setParamsValues(newValues)
     setParamsTypes(newTypes)
+    setParamsErrors(Array.from({ length: newKeys.length }, () => null))
     setParamsIds(newIds)
   }
 
@@ -250,16 +275,32 @@ export function AddEditAssistant({
     setNameError(null)
     // Convert parameters arrays to object
     const parameters: Record<string, unknown> = {}
+    const nextParamsErrors = paramsKeys.map(() => null as string | null)
+    let hasParamError = false
+
     paramsKeys.forEach((key, index) => {
       if (!key) return
       const value = paramsValues[index]
       if (paramsTypes[index] === 'number') {
-        const parsed = Number(value as string)
-        parameters[key] = isNaN(parsed) ? 0 : parsed
+        const parsed = parseDecimalNumber(value)
+        if (parsed === null) {
+          nextParamsErrors[index] = t('assistants:invalidNumberParameter')
+          hasParamError = true
+          return
+        }
+
+        parameters[key] = parsed
       } else {
         parameters[key] = value
       }
     })
+
+    if (hasParamError) {
+      setParamsErrors(nextParamsErrors)
+      return
+    }
+
+    setParamsErrors(nextParamsErrors)
 
     const assistant: Assistant = {
       avatar,
@@ -428,77 +469,25 @@ export function AddEditAssistant({
             </div>
 
             {paramsKeys.map((key, index) => (
-              <div
-                key={paramsIds[index] ?? `param-${index}`}
-                className="flex items-center gap-4"
-              >
-                <div className="flex items-center flex-col sm:flex-row w-full gap-2">
-                  <Input
-                    value={key}
-                    onChange={(e) =>
-                      handleParameterChange(index, e.target.value, 'key')
-                    }
-                    placeholder={t('assistants:key')}
-                    className="w-full sm:w-24"
-                  />
+              <div key={paramsIds[index] ?? `param-${index}`}>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center flex-col sm:flex-row w-full gap-2">
+                    <Input
+                      value={key}
+                      onChange={(e) =>
+                        handleParameterChange(index, e.target.value, 'key')
+                      }
+                      placeholder={t('assistants:key')}
+                      className="w-full sm:w-24"
+                    />
 
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <div className="relative w-full sm:w-30">
-                        <Input
-                          value={
-                            paramsTypes[index].charAt(0).toUpperCase() +
-                            paramsTypes[index].slice(1)
-                          }
-                          readOnly
-                        />
-                        <ChevronDown
-                          size={14}
-                          className="text-muted-foreground absolute right-2 top-1/2 -translate-y-1/2"
-                        />
-                      </div>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent className="w-32" align="start">
-                      <DropdownMenuItem
-                        onClick={() =>
-                          handleParameterChange(index, 'string', 'type')
-                        }
-                      >
-                        {t('assistants:stringValue')}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() =>
-                          handleParameterChange(index, 'number', 'type')
-                        }
-                      >
-                        {t('assistants:numberValue')}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() =>
-                          handleParameterChange(index, 'boolean', 'type')
-                        }
-                      >
-                        {t('assistants:booleanValue')}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() =>
-                          handleParameterChange(index, 'json', 'type')
-                        }
-                      >
-                        {t('assistants:jsonValue')}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-
-                  {paramsTypes[index] === 'boolean' ? (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <div className="relative sm:flex-1 w-full">
+                        <div className="relative w-full sm:w-30">
                           <Input
                             value={
-                              paramsValues[index]
-                                ? t('assistants:trueValue')
-                                : t('assistants:falseValue')
+                              paramsTypes[index].charAt(0).toUpperCase() +
+                              paramsTypes[index].slice(1)
                             }
                             readOnly
                           />
@@ -508,56 +497,116 @@ export function AddEditAssistant({
                           />
                         </div>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent className="w-24" align="start">
+                      <DropdownMenuContent className="w-32" align="start">
                         <DropdownMenuItem
                           onClick={() =>
-                            handleParameterChange(index, true, 'value')
+                            handleParameterChange(index, 'string', 'type')
                           }
                         >
-                          {t('assistants:trueValue')}
+                          {t('assistants:stringValue')}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() =>
-                            handleParameterChange(index, false, 'value')
+                            handleParameterChange(index, 'number', 'type')
                           }
                         >
-                          {t('assistants:falseValue')}
+                          {t('assistants:numberValue')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            handleParameterChange(index, 'boolean', 'type')
+                          }
+                        >
+                          {t('assistants:booleanValue')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            handleParameterChange(index, 'json', 'type')
+                          }
+                        >
+                          {t('assistants:jsonValue')}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                  ) : paramsTypes[index] === 'json' ? (
-                    <Input
-                      value={
-                        typeof paramsValues[index] === 'object'
-                          ? JSON.stringify(paramsValues[index], null, 2)
-                          : paramsValues[index]?.toString() || ''
-                      }
-                      onChange={(e) =>
-                        handleParameterChange(index, e.target.value, 'value')
-                      }
-                      placeholder={t('assistants:jsonValuePlaceholder')}
-                      className="sm:flex-1 h-9 w-full"
-                    />
-                  ) : (
-                    <Input
-                      value={paramsValues[index]?.toString() || ''}
-                      onChange={(e) =>
-                        handleParameterChange(index, e.target.value, 'value')
-                      }
-                      type={paramsTypes[index] === 'number' ? 'number' : 'text'}
-                      step={paramsTypes[index] === 'number' ? 'any' : undefined}
-                      placeholder={t('assistants:value')}
-                      className="sm:flex-1 h-9 w-full"
-                    />
-                  )}
+
+                    {paramsTypes[index] === 'boolean' ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <div className="relative sm:flex-1 w-full">
+                            <Input
+                              value={
+                                paramsValues[index]
+                                  ? t('assistants:trueValue')
+                                  : t('assistants:falseValue')
+                              }
+                              readOnly
+                            />
+                            <ChevronDown
+                              size={14}
+                              className="text-muted-foreground absolute right-2 top-1/2 -translate-y-1/2"
+                            />
+                          </div>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent className="w-24" align="start">
+                          <DropdownMenuItem
+                            onClick={() =>
+                              handleParameterChange(index, true, 'value')
+                            }
+                          >
+                            {t('assistants:trueValue')}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() =>
+                              handleParameterChange(index, false, 'value')
+                            }
+                          >
+                            {t('assistants:falseValue')}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : paramsTypes[index] === 'json' ? (
+                      <Input
+                        value={
+                          typeof paramsValues[index] === 'object'
+                            ? JSON.stringify(paramsValues[index], null, 2)
+                            : paramsValues[index]?.toString() || ''
+                        }
+                        onChange={(e) =>
+                          handleParameterChange(index, e.target.value, 'value')
+                        }
+                        placeholder={t('assistants:jsonValuePlaceholder')}
+                        className="sm:flex-1 h-9 w-full"
+                      />
+                    ) : (
+                      <Input
+                        value={paramsValues[index]?.toString() || ''}
+                        onChange={(e) =>
+                          handleParameterChange(index, e.target.value, 'value')
+                        }
+                        type={
+                          paramsTypes[index] === 'number' ? 'number' : 'text'
+                        }
+                        step={
+                          paramsTypes[index] === 'number' ? 'any' : undefined
+                        }
+                        placeholder={t('assistants:value')}
+                        className="sm:flex-1 h-9 w-full"
+                      />
+                    )}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => handleRemoveParameter(index)}
+                  >
+                    <Trash2 size={18} className="text-destructive" />
+                  </Button>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => handleRemoveParameter(index)}
-                >
-                  <Trash2 size={18} className="text-destructive" />
-                </Button>
+                {paramsErrors[index] && (
+                  <div className="mt-1 text-xs text-destructive">
+                    {paramsErrors[index]}
+                  </div>
+                )}
               </div>
             ))}
           </div>

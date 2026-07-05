@@ -21,6 +21,7 @@
   "value": "Value",
   "stringValue": "String",
   "numberValue": "Number",
+  "invalidNumberParameter": "Enter a valid decimal number.",
   "booleanValue": "Boolean",
   "jsonValue": "JSON",
   "trueValue": "True",
