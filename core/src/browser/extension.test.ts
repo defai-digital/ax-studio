@@ -22,6 +22,15 @@ afterEach(() => {
   consoleWarnSpy.mockRestore()
 })
 
+function setting(key: string, value: unknown): SettingComponentProps {
+  return { key, controllerProps: { value } } as SettingComponentProps
+}
+
+type StoredSetting = {
+  key: string
+  controllerProps: { value: unknown }
+}
+
 describe('BaseExtension', () => {
   let baseExtension: TestBaseExtension
 
@@ -119,8 +128,8 @@ describe('BaseExtension', () => {
 
   it('should register settings', async () => {
     const settings: SettingComponentProps[] = [
-      { key: 'setting1', controllerProps: { value: 'value1' } } as any,
-      { key: 'setting2', controllerProps: { value: 'value2' } } as any,
+      setting('setting1', 'value1'),
+      setting('setting2', 'value2'),
     ]
     const mock = vi.spyOn(localStorage, 'setItem')
     await baseExtension.registerSettings(settings)
@@ -143,9 +152,7 @@ describe('BaseExtension', () => {
   })
 
   it('should not mutate the caller settings array during registration', async () => {
-    const settings: SettingComponentProps[] = [
-      { key: 'setting1', controllerProps: { value: 'value1' } } as any,
-    ]
+    const settings: SettingComponentProps[] = [setting('setting1', 'value1')]
     const snapshot = JSON.parse(JSON.stringify(settings))
 
     await baseExtension.registerSettings(settings)
@@ -155,9 +162,7 @@ describe('BaseExtension', () => {
   })
 
   it('should get setting with default value', async () => {
-    const settings: SettingComponentProps[] = [
-      { key: 'setting1', controllerProps: { value: 'value1' } } as any,
-    ]
+    const settings: SettingComponentProps[] = [setting('setting1', 'value1')]
 
     vi.spyOn(baseExtension, 'getSettings').mockResolvedValue(settings)
 
@@ -169,16 +174,12 @@ describe('BaseExtension', () => {
   })
 
   it('should update settings', async () => {
-    const settings: SettingComponentProps[] = [
-      { key: 'setting1', controllerProps: { value: 'value1' } } as any,
-    ]
+    const settings: SettingComponentProps[] = [setting('setting1', 'value1')]
 
     vi.spyOn(baseExtension, 'getSettings').mockResolvedValue(settings)
     const mockSetItem = vi.spyOn(localStorage, 'setItem')
 
-    await baseExtension.updateSettings([
-      { key: 'setting1', controllerProps: { value: 'newValue' } } as any,
-    ])
+    await baseExtension.updateSettings([setting('setting1', 'newValue')])
 
     expect(mockSetItem).toHaveBeenCalledWith(
       'TestExtension',
@@ -187,16 +188,12 @@ describe('BaseExtension', () => {
   })
 
   it('should not overwrite settings value when partial input has undefined value', async () => {
-    const settings: SettingComponentProps[] = [
-      { key: 'setting1', controllerProps: { value: 'originalValue' } } as any,
-    ]
+    const settings: SettingComponentProps[] = [setting('setting1', 'originalValue')]
 
     vi.spyOn(baseExtension, 'getSettings').mockResolvedValue(settings)
     const mockSetItem = vi.spyOn(localStorage, 'setItem')
 
-    await baseExtension.updateSettings([
-      { key: 'setting1', controllerProps: { value: undefined } } as any,
-    ])
+    await baseExtension.updateSettings([setting('setting1', undefined)])
 
     const [, payload] = mockSetItem.mock.calls[0]
     const parsed = JSON.parse(payload)
@@ -206,9 +203,7 @@ describe('BaseExtension', () => {
   it('should ignore malformed stored settings during registration', async () => {
     localStorage.setItem('TestExtension', '{"bad":true}')
 
-    const settings: SettingComponentProps[] = [
-      { key: 'setting1', controllerProps: { value: 'value1' } } as any,
-    ]
+    const settings: SettingComponentProps[] = [setting('setting1', 'value1')]
 
     await expect(baseExtension.registerSettings(settings)).resolves.toBeUndefined()
   })
@@ -224,9 +219,7 @@ describe('BaseExtension', () => {
       throw new Error('storage unavailable')
     })
 
-    const settings: SettingComponentProps[] = [
-      { key: 'setting1', controllerProps: { value: 'value1' } } as any,
-    ]
+    const settings: SettingComponentProps[] = [setting('setting1', 'value1')]
 
     await expect(baseExtension.registerSettings(settings)).rejects.toThrow(
       'Failed to register settings for "TestExtension"'
@@ -239,27 +232,21 @@ describe('BaseExtension', () => {
     const unnamedExtension = new TestBaseExtension('https://example.com', '')
 
     await expect(
-      unnamedExtension.registerSettings([
-        { key: 'setting1', controllerProps: { value: 'value1' } } as any,
-      ])
+      unnamedExtension.registerSettings([setting('setting1', 'value1')])
     ).rejects.toThrow('Cannot register settings: extension name is not defined')
   })
 
   it('should throw when settings cannot be persisted during update', async () => {
-    const settings: SettingComponentProps[] = [
-      { key: 'setting1', controllerProps: { value: 'value1' } } as any,
-    ]
+    const settings: SettingComponentProps[] = [setting('setting1', 'value1')]
 
     vi.spyOn(baseExtension, 'getSettings').mockResolvedValue(settings)
     const setItemSpy = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
       throw new Error('storage unavailable')
     })
 
-    await expect(
-      baseExtension.updateSettings([
-        { key: 'setting1', controllerProps: { value: 'newValue' } } as any,
-      ])
-    ).rejects.toThrow('Failed to update settings for "TestExtension"')
+    await expect(baseExtension.updateSettings([setting('setting1', 'newValue')])).rejects.toThrow(
+      'Failed to update settings for "TestExtension"'
+    )
 
     setItemSpy.mockRestore()
   })
@@ -294,7 +281,7 @@ describe('BaseExtension', () => {
             { value: 'off', name: 'Off' },
           ],
         },
-      } as any,
+      } as SettingComponentProps,
     ]
 
     const setItemSpy = vi.spyOn(localStorage, 'setItem')
@@ -303,10 +290,8 @@ describe('BaseExtension', () => {
 
     expect(setItemSpy).toHaveBeenCalled()
     const [, latestPayload] = setItemSpy.mock.calls[setItemSpy.mock.calls.length - 1]
-    const persistedSettings = JSON.parse(latestPayload)
-    const flashSetting = persistedSettings.find(
-      (setting: any) => setting.key === 'flash_attn'
-    )
+    const persistedSettings = JSON.parse(latestPayload) as StoredSetting[]
+    const flashSetting = persistedSettings.find((setting) => setting.key === 'flash_attn')
 
     expect(flashSetting.controllerProps.value).toBe('auto')
 
@@ -350,43 +335,43 @@ describe('BaseExtension', () => {
 
   describe('getSetting type coercion edge cases', () => {
     it('should coerce stored number 0 to boolean false', async () => {
-      const settings = [{ key: 'flag', controllerProps: { value: 0 } }] as any[]
+      const settings = [setting('flag', 0)]
       vi.spyOn(baseExtension, 'getSettings').mockResolvedValue(settings)
       expect(await baseExtension.getSetting('flag', false)).toBe(false)
     })
 
     it('should coerce stored number 1 to boolean true', async () => {
-      const settings = [{ key: 'flag', controllerProps: { value: 1 } }] as any[]
+      const settings = [setting('flag', 1)]
       vi.spyOn(baseExtension, 'getSettings').mockResolvedValue(settings)
       expect(await baseExtension.getSetting('flag', false)).toBe(true)
     })
 
     it('should return default for null stored value', async () => {
-      const settings = [{ key: 'setting', controllerProps: { value: null } }] as any[]
+      const settings = [setting('setting', null)]
       vi.spyOn(baseExtension, 'getSettings').mockResolvedValue(settings)
       expect(await baseExtension.getSetting('setting', 'default')).toBe('default')
     })
 
     it('should coerce stored string to number', async () => {
-      const settings = [{ key: 'port', controllerProps: { value: '8080' } }] as any[]
+      const settings = [setting('port', '8080')]
       vi.spyOn(baseExtension, 'getSettings').mockResolvedValue(settings)
       expect(await baseExtension.getSetting('port', 0)).toBe(8080)
     })
 
     it('should return default for non-finite stored number', async () => {
-      const settings = [{ key: 'val', controllerProps: { value: 'notanumber' } }] as any[]
+      const settings = [setting('val', 'notanumber')]
       vi.spyOn(baseExtension, 'getSettings').mockResolvedValue(settings)
       expect(await baseExtension.getSetting('val', 42)).toBe(42)
     })
 
     it('should coerce stored boolean to string', async () => {
-      const settings = [{ key: 'name', controllerProps: { value: true } }] as any[]
+      const settings = [setting('name', true)]
       vi.spyOn(baseExtension, 'getSettings').mockResolvedValue(settings)
       expect(await baseExtension.getSetting('name', 'default')).toBe('true')
     })
 
     it('should return default array for non-array stored value', async () => {
-      const settings = [{ key: 'list', controllerProps: { value: 'notarray' } }] as any[]
+      const settings = [setting('list', 'notarray')]
       vi.spyOn(baseExtension, 'getSettings').mockResolvedValue(settings)
       expect(await baseExtension.getSetting('list', ['a', 'b'])).toEqual(['a', 'b'])
     })
