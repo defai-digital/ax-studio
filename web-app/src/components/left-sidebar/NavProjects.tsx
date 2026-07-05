@@ -30,7 +30,7 @@ import { useTranslation } from '@/i18n/react-i18next-compat'
 
 import { useState } from 'react'
 import type { ThreadFolder } from '@/services/projects/types'
-import AddProjectDialog from '@/containers/dialogs/AddProjectDialog'
+import { AddProjectDialog } from '@/containers/dialogs/AddProjectDialog'
 import { DeleteProjectDialog } from '@/containers/dialogs/DeleteProjectDialog'
 import { useProjectDialog } from '@/hooks/ui/useProjectDialog'
 

@@ -108,7 +108,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 }))
 
 vi.mock('@/containers/dialogs/AddProjectDialog', () => ({
-  default: () => <div data-testid="add-project-dialog" />,
+  AddProjectDialog: () => <div data-testid="add-project-dialog" />,
 }))
 
 vi.mock('@/containers/dialogs/DeleteProjectDialog', () => ({

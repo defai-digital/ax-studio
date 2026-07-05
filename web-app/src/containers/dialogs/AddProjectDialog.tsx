@@ -65,7 +65,7 @@ function isValidProjectLogoUrl(url: string): boolean {
   }
 }
 
-export default function AddProjectDialog({
+export function AddProjectDialog({
   open,
   onOpenChange,
   editingKey,
@@ -75,8 +75,12 @@ export default function AddProjectDialog({
   const { t } = useTranslation()
   const [name, setName] = useState(initialData?.name || '')
   const [logo, setLogo] = useState(initialData?.logo || '')
-  const [projectPrompt, setProjectPrompt] = useState(initialData?.projectPrompt || '')
-  const [selectedAssistantId, setSelectedAssistantId] = useState<string | undefined>(initialData?.assistantId)
+  const [projectPrompt, setProjectPrompt] = useState(
+    initialData?.projectPrompt || ''
+  )
+  const [selectedAssistantId, setSelectedAssistantId] = useState<
+    string | undefined
+  >(initialData?.assistantId)
   const { folders } = useThreadManagement()
   const { assistants, addAssistant } = useAssistant()
   const [addAssistantDialogOpen, setAddAssistantDialogOpen] = useState(false)
@@ -126,7 +130,11 @@ export default function AddProjectDialog({
     )
 
     if (isDuplicate) {
-      toast.warning(t('projects.addProjectDialog.alreadyExists', { projectName: trimmedName }))
+      toast.warning(
+        t('projects.addProjectDialog.alreadyExists', {
+          projectName: trimmedName,
+        })
+      )
       return
     }
 
@@ -139,9 +147,17 @@ export default function AddProjectDialog({
 
     // Show success message
     if (editingKey) {
-      toast.success(t('projects.addProjectDialog.updateSuccess', { projectName: trimmedName }))
+      toast.success(
+        t('projects.addProjectDialog.updateSuccess', {
+          projectName: trimmedName,
+        })
+      )
     } else {
-      toast.success(t('projects.addProjectDialog.createSuccess', { projectName: trimmedName }))
+      toast.success(
+        t('projects.addProjectDialog.createSuccess', {
+          projectName: trimmedName,
+        })
+      )
     }
     resetForm()
   }
@@ -162,163 +178,178 @@ export default function AddProjectDialog({
 
   return (
     <>
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            {editingKey ? t('projects.addProjectDialog.editTitle') : t('projects.addProjectDialog.createTitle')}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t('projects.addProjectDialog.namePlaceholder')}
-              className="w-full px-4 py-2.5 rounded-xl bg-muted/50 border border-border/50 outline-none text-[14px] focus:border-primary/30 transition-colors"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !isButtonDisabled) {
-                  handleSave()
-                }
-              }}
-            />
-          </div>
-          <div>
-            <label className="text-[13px] text-muted-foreground mb-1.5 block">
-              {t('projects.addProjectDialog.logoUrl', { defaultValue: 'Logo URL (optional)' })}
-            </label>
-            <Input
-              value={logo}
-              onChange={(e) => setLogo(e.target.value)}
-              placeholder={t('projects.addProjectDialog.logoUrlPlaceholder', {
-                defaultValue: 'https://example.com/logo.png',
-              })}
-              className="mt-1"
-            />
-            <Input
-              type="file"
-              accept="image/*"
-              className="mt-2"
-              onChange={(e) => handleLogoFileChange(e.target.files?.[0])}
-            />
-            {isValidProjectLogoUrl(logo) && (
-              <img
-                src={logo.trim()}
-                alt={name.trim() || t('projects.projectName')}
-                className="mt-2 size-10 rounded-md object-cover border"
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {editingKey
+                ? t('projects.addProjectDialog.editTitle')
+                : t('projects.addProjectDialog.createTitle')}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t('projects.addProjectDialog.namePlaceholder')}
+                className="w-full px-4 py-2.5 rounded-xl bg-muted/50 border border-border/50 outline-none text-[14px] focus:border-primary/30 transition-colors"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !isButtonDisabled) {
+                    handleSave()
+                  }
+                }}
               />
-            )}
-          </div>
-          <div>
-            <label className="text-[13px] text-muted-foreground mb-1.5 block">
-              {t('projects.addProjectDialog.projectPromptLabel')}
-            </label>
-            <Textarea
-              value={projectPrompt}
-              onChange={(e) => setProjectPrompt(e.target.value)}
-              className="min-h-24"
-              placeholder={t('projects.addProjectDialog.projectPromptPlaceholder')}
-            />
-            <div className="mt-2 flex justify-end">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setProjectPrompt('')}
-                disabled={!projectPrompt.trim()}
-              >
-                {t('projects.addProjectDialog.clearOverride')}
-              </Button>
             </div>
-          </div>
-          <div>
-            <label className="text-[13px] text-muted-foreground mb-1.5 block">
-              {t('projects.addProjectDialog.assistant')}
-            </label>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+            <div>
+              <label className="text-[13px] text-muted-foreground mb-1.5 block">
+                {t('projects.addProjectDialog.logoUrl', {
+                  defaultValue: 'Logo URL (optional)',
+                })}
+              </label>
+              <Input
+                value={logo}
+                onChange={(e) => setLogo(e.target.value)}
+                placeholder={t('projects.addProjectDialog.logoUrlPlaceholder', {
+                  defaultValue: 'https://example.com/logo.png',
+                })}
+                className="mt-1"
+              />
+              <Input
+                type="file"
+                accept="image/*"
+                className="mt-2"
+                onChange={(e) => handleLogoFileChange(e.target.files?.[0])}
+              />
+              {isValidProjectLogoUrl(logo) && (
+                <img
+                  src={logo.trim()}
+                  alt={name.trim() || t('projects.projectName')}
+                  className="mt-2 size-10 rounded-md object-cover border"
+                />
+              )}
+            </div>
+            <div>
+              <label className="text-[13px] text-muted-foreground mb-1.5 block">
+                {t('projects.addProjectDialog.projectPromptLabel')}
+              </label>
+              <Textarea
+                value={projectPrompt}
+                onChange={(e) => setProjectPrompt(e.target.value)}
+                className="min-h-24"
+                placeholder={t(
+                  'projects.addProjectDialog.projectPromptPlaceholder'
+                )}
+              />
+              <div className="mt-2 flex justify-end">
                 <Button
+                  type="button"
+                  size="sm"
                   variant="outline"
-                  className="w-full justify-between rounded-md"
+                  onClick={() => setProjectPrompt('')}
+                  disabled={!projectPrompt.trim()}
                 >
-                  {selectedAssistant ? (
-                    <div className="flex items-center gap-2">
-                      {selectedAssistant.avatar && (
-                        <AvatarEmoji
-                          avatar={selectedAssistant.avatar}
-                          imageClassName="w-4 h-4 object-contain"
-                          textClassName="text-sm"
-                        />
-                      )}
-                      <span>{selectedAssistant.name}</span>
-                    </div>
-                  ) : (
-                    <span className="text-muted-foreground">
-                      {t('projects.addProjectDialog.selectAssistant')}
-                    </span>
-                  )}
-                  <ChevronDown className="size-4 text-muted-foreground" />
+                  {t('projects.addProjectDialog.clearOverride')}
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-(--radix-dropdown-menu-trigger-width)">
-                <DropdownMenuItem
-                  onSelect={() => setSelectedAssistantId(undefined)}
+              </div>
+            </div>
+            <div>
+              <label className="text-[13px] text-muted-foreground mb-1.5 block">
+                {t('projects.addProjectDialog.assistant')}
+              </label>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-between rounded-md"
+                  >
+                    {selectedAssistant ? (
+                      <div className="flex items-center gap-2">
+                        {selectedAssistant.avatar && (
+                          <AvatarEmoji
+                            avatar={selectedAssistant.avatar}
+                            imageClassName="w-4 h-4 object-contain"
+                            textClassName="text-sm"
+                          />
+                        )}
+                        <span>{selectedAssistant.name}</span>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">
+                        {t('projects.addProjectDialog.selectAssistant')}
+                      </span>
+                    )}
+                    <ChevronDown className="size-4 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="start"
+                  className="w-(--radix-dropdown-menu-trigger-width)"
                 >
-                  <span className="text-muted-foreground">
-                    {t('projects.addProjectDialog.noAssistant')}
-                  </span>
-                </DropdownMenuItem>
-                {assistants.map((assistant) => (
                   <DropdownMenuItem
-                    key={assistant.id}
-                    onSelect={() => setSelectedAssistantId(assistant.id)}
+                    onSelect={() => setSelectedAssistantId(undefined)}
+                  >
+                    <span className="text-muted-foreground">
+                      {t('projects.addProjectDialog.noAssistant')}
+                    </span>
+                  </DropdownMenuItem>
+                  {assistants.map((assistant) => (
+                    <DropdownMenuItem
+                      key={assistant.id}
+                      onSelect={() => setSelectedAssistantId(assistant.id)}
+                    >
+                      <div className="flex items-center gap-2">
+                        {assistant.avatar && (
+                          <AvatarEmoji
+                            avatar={assistant.avatar}
+                            imageClassName="w-4 h-4 object-contain"
+                            textClassName="text-sm"
+                          />
+                        )}
+                        <span>{assistant.name}</span>
+                      </div>
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={() => setAddAssistantDialogOpen(true)}
                   >
                     <div className="flex items-center gap-2">
-                      {assistant.avatar && (
-                        <AvatarEmoji
-                          avatar={assistant.avatar}
-                          imageClassName="w-4 h-4 object-contain"
-                          textClassName="text-sm"
-                        />
-                      )}
-                      <span>{assistant.name}</span>
+                      <Plus className="size-4" />
+                      <span>{t('projects.addProjectDialog.addAssistant')}</span>
                     </div>
                   </DropdownMenuItem>
-                ))}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={() => setAddAssistantDialogOpen(true)}
-                >
-                  <div className="flex items-center gap-2">
-                    <Plus className="size-4" />
-                    <span>{t('projects.addProjectDialog.addAssistant')}</span>
-                  </div>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
-        </div>
-        <DialogFooter>
-          <Button size="sm" variant="outline" onClick={handleCancel}>
-            {t('cancel')}
-          </Button>
-          <Button size="sm" onClick={handleSave} disabled={Boolean(isButtonDisabled)}>
-            {editingKey ? t('projects.addProjectDialog.updateButton') : t('projects.addProjectDialog.createButton')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <DialogFooter>
+            <Button size="sm" variant="outline" onClick={handleCancel}>
+              {t('cancel')}
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSave}
+              disabled={Boolean(isButtonDisabled)}
+            >
+              {editingKey
+                ? t('projects.addProjectDialog.updateButton')
+                : t('projects.addProjectDialog.createButton')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-    <AddEditAssistant
-      open={addAssistantDialogOpen}
-      onOpenChange={setAddAssistantDialogOpen}
-      editingKey={null}
-      onSave={(assistant) => {
-        addAssistant(assistant)
-        setSelectedAssistantId(assistant.id)
-      }}
-    />
-  </>
+      <AddEditAssistant
+        open={addAssistantDialogOpen}
+        onOpenChange={setAddAssistantDialogOpen}
+        editingKey={null}
+        onSave={(assistant) => {
+          addAssistant(assistant)
+          setSelectedAssistantId(assistant.id)
+        }}
+      />
+    </>
   )
 }

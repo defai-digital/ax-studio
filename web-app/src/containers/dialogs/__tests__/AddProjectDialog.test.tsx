@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import AddProjectDialog from '../AddProjectDialog'
+import { AddProjectDialog } from '../AddProjectDialog'
 
 vi.mock('@/i18n/react-i18next-compat', () => ({
   useTranslation: () => ({
@@ -47,16 +47,27 @@ vi.mock('@/components/ui/dialog', () => ({
   DialogContent: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
-  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   DialogTitle: ({ children }: { children: React.ReactNode }) => (
     <h2 data-testid="dialog-title">{children}</h2>
   ),
-  DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
-  DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogDescription: ({ children }: { children: React.ReactNode }) => (
+    <p>{children}</p>
+  ),
+  DialogFooter: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }))
 
 vi.mock('@/components/ui/button', () => ({
-  Button: ({ children, onClick, disabled, ...props }: Record<string, unknown>) => (
+  Button: ({
+    children,
+    onClick,
+    disabled,
+    ...props
+  }: Record<string, unknown>) => (
     <button
       onClick={onClick as () => void}
       disabled={disabled as boolean}
@@ -68,7 +79,12 @@ vi.mock('@/components/ui/button', () => ({
 }))
 
 vi.mock('@/components/ui/input', () => ({
-  Input: ({ value, onChange, placeholder, ...props }: Record<string, unknown>) => (
+  Input: ({
+    value,
+    onChange,
+    placeholder,
+    ...props
+  }: Record<string, unknown>) => (
     <input
       value={value as string}
       onChange={onChange as React.ChangeEventHandler<HTMLInputElement>}
@@ -79,7 +95,12 @@ vi.mock('@/components/ui/input', () => ({
 }))
 
 vi.mock('@/components/ui/textarea', () => ({
-  Textarea: ({ value, onChange, placeholder, ...props }: Record<string, unknown>) => (
+  Textarea: ({
+    value,
+    onChange,
+    placeholder,
+    ...props
+  }: Record<string, unknown>) => (
     <textarea
       value={value as string}
       onChange={onChange as React.ChangeEventHandler<HTMLTextAreaElement>}
@@ -90,13 +111,19 @@ vi.mock('@/components/ui/textarea', () => ({
 }))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
-  DropdownMenu: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  DropdownMenuContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  DropdownMenu: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
+  DropdownMenuContent: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
   DropdownMenuItem: ({ children, onSelect }: Record<string, unknown>) => (
     <div onClick={onSelect as () => void}>{children as React.ReactNode}</div>
   ),
   DropdownMenuSeparator: () => <hr />,
-  DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
 }))
 
 describe('AddProjectDialog', () => {
@@ -165,9 +192,7 @@ describe('AddProjectDialog', () => {
       'projects.addProjectDialog.namePlaceholder'
     )
     fireEvent.change(nameInput, { target: { value: 'New Project' } })
-    fireEvent.click(
-      screen.getByText('projects.addProjectDialog.createButton')
-    )
+    fireEvent.click(screen.getByText('projects.addProjectDialog.createButton'))
     expect(mockOnSave).toHaveBeenCalledWith(
       'New Project',
       undefined,
@@ -185,9 +210,7 @@ describe('AddProjectDialog', () => {
         onSave={mockOnSave}
       />
     )
-    fireEvent.click(
-      screen.getByText('projects.addProjectDialog.createButton')
-    )
+    fireEvent.click(screen.getByText('projects.addProjectDialog.createButton'))
     expect(mockOnSave).not.toHaveBeenCalled()
   })
 
