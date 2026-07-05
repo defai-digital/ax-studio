@@ -14,7 +14,11 @@ import { ModelFactory } from './model-factory'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useAssistant } from '@/hooks/chat/useAssistant'
 import { useThreads } from '@/hooks/threads/useThreads'
-import { useFileRegistry, threadCollectionId, projectCollectionId } from '@/lib/file-registry'
+import {
+  useFileRegistry,
+  threadCollectionId,
+  projectCollectionId,
+} from '@/lib/file-registry'
 import { useRouterSettings } from '@/hooks/settings/useRouterSettings'
 import { routeMessage, getAvailableModelsForRouter } from './llm-router'
 import { executeSingleAgentStream } from './transport/single-agent-transport'
@@ -46,7 +50,10 @@ function modelProviderKey(modelId: string, providerId: string): string {
   return `${providerId}::${modelId}`
 }
 
-function isModelPreflightCached(modelId: string, providerId: string): boolean | null {
+function isModelPreflightCached(
+  modelId: string,
+  providerId: string
+): boolean | null {
   const key = modelProviderKey(modelId, providerId)
   const entry = preflightCache.get(key)
   if (!entry) return null
@@ -59,19 +66,31 @@ function isModelPreflightCached(modelId: string, providerId: string): boolean | 
   return true
 }
 
-function cachePreflightResult(modelId: string, providerId: string, ok: boolean) {
-  preflightCache.set(modelProviderKey(modelId, providerId), { ok, ts: Date.now() })
+function cachePreflightResult(
+  modelId: string,
+  providerId: string,
+  ok: boolean
+) {
+  preflightCache.set(modelProviderKey(modelId, providerId), {
+    ok,
+    ts: Date.now(),
+  })
 }
 
 function logRouterTrace(message: string, details?: Record<string, unknown>) {
   console.info(`[LLM Router] ${message}`, details ?? {})
 }
 
-function isLocalProviderId(providerId: string | undefined): providerId is string {
+function isLocalProviderId(
+  providerId: string | undefined
+): providerId is string {
   return !!providerId && LOCAL_PROVIDER_IDS.has(providerId)
 }
 
-function shouldAwaitLocalStartup(provider: ProviderObject, modelId: string): boolean {
+function shouldAwaitLocalStartup(
+  provider: ProviderObject,
+  modelId: string
+): boolean {
   return provider.provider === 'mlx' || modelId.startsWith('mlx-community/')
 }
 
@@ -161,8 +180,12 @@ async function preflightLocalModelThroughProxy(
     }
   }
 
-  const { serverHost, serverPort, apiPrefix, apiKey: localProxyKey } =
-    useLocalApiServer.getState()
+  const {
+    serverHost,
+    serverPort,
+    apiPrefix,
+    apiKey: localProxyKey,
+  } = useLocalApiServer.getState()
   const proxyUrl = `http://${serverHost}:${serverPort}${apiPrefix}`
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -223,17 +246,17 @@ async function preflightLocalModelThroughProxy(
     providerId,
     lastError,
   })
-  
+
   // Provide specific guidance for MLX compute errors
   if (lastError.includes('Compute error') || lastError.includes('500')) {
     throw new Error(
       `MLX model "${modelId}" failed to initialize. This is a known issue with some MLX models. ` +
-      `Try: (1) Restart AX Studio, (2) Use a different quantization (Q4_K_M recommended), ` +
-      `or (3) Switch to a GGUF model via llama.cpp for better stability. ` +
-      `Original error: ${lastError}`
+        `Try: (1) Restart AX Studio, (2) Use a different quantization (Q4_K_M recommended), ` +
+        `or (3) Switch to a GGUF model via llama.cpp for better stability. ` +
+        `Original error: ${lastError}`
     )
   }
-  
+
   throw new Error(
     `Local model "${modelId}" is not ready through Ax Studio proxy: ${lastError}`
   )
@@ -276,27 +299,44 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
     this.serviceHub = useServiceStore.getState().serviceHub
   }
 
-  updateSystemMessage(systemMessage: string | undefined) { this.systemMessage = systemMessage }
-  updateInferenceParameters(parameters: Record<string, unknown>) { this.inferenceParameters = { ...parameters } }
-  updateModelOverrideId(modelId: string | undefined) { this.modelOverrideId = modelId }
-  updateModelOverrideProviderId(providerId: string | undefined) { this.modelOverrideProviderId = providerId }
-  setOnTokenUsage(callback: TokenUsageCallback | undefined) { this.onTokenUsage = callback }
+  updateSystemMessage(systemMessage: string | undefined) {
+    this.systemMessage = systemMessage
+  }
+  updateInferenceParameters(parameters: Record<string, unknown>) {
+    this.inferenceParameters = { ...parameters }
+  }
+  updateModelOverrideId(modelId: string | undefined) {
+    this.modelOverrideId = modelId
+  }
+  updateModelOverrideProviderId(providerId: string | undefined) {
+    this.modelOverrideProviderId = providerId
+  }
+  setOnTokenUsage(callback: TokenUsageCallback | undefined) {
+    this.onTokenUsage = callback
+  }
 
   private getThreadMetadata(): Record<string, unknown> | null {
     if (!this.threadId) return null
     try {
       const thread = useThreads.getState().getThreadById(this.threadId)
       return (thread?.metadata as Record<string, unknown>) ?? null
-    } catch { return null }
+    } catch {
+      return null
+    }
   }
 
-  async updateRagToolsAvailability(_hasDocuments: boolean, _modelSupportsTools: boolean, _ragFeatureAvailable: boolean) {
+  async updateRagToolsAvailability(
+    _hasDocuments: boolean,
+    _modelSupportsTools: boolean,
+    _ragFeatureAvailable: boolean
+  ) {
     await this.refreshTools()
   }
 
   async refreshTools(_overrideModelSupportsTools?: boolean) {
     const toolsRecord: Record<string, Tool> = {}
-    const getDisabledToolsForThread = useToolAvailable.getState().getDisabledToolsForThread
+    const getDisabledToolsForThread =
+      useToolAvailable.getState().getDisabledToolsForThread
     const disabledToolKeys = this.threadId
       ? getDisabledToolsForThread(this.threadId)
       : useToolAvailable.getState().getDefaultDisabledTools()
@@ -308,37 +348,54 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
       // This ensures custom tools like process_file_for_bi are always available
       {
         const localKnowledgeEnabled = this.threadId
-          ? useLocalKnowledge.getState().isLocalKnowledgeEnabledForThread(this.threadId)
+          ? useLocalKnowledge
+              .getState()
+              .isLocalKnowledgeEnabledForThread(this.threadId)
           : useLocalKnowledge.getState().localKnowledgeEnabled
 
         try {
           const mcpTools = await this.serviceHub.mcp().getTools()
           if (Array.isArray(mcpTools) && mcpTools.length > 0) {
             mcpTools.forEach((tool) => {
-              const serverName = (tool as { server?: string }).server || 'unknown'
+              const serverName =
+                (tool as { server?: string }).server || 'unknown'
               if (!isToolDisabled(serverName, tool.name)) {
-                if ((serverName === 'ax-studio' || serverName === 'ax-fabric') && !localKnowledgeEnabled) return
+                if (
+                  (serverName === 'ax-studio' || serverName === 'ax-fabric') &&
+                  !localKnowledgeEnabled
+                )
+                  return
                 toolsRecord[tool.name] = {
                   description: tool.description,
-                  inputSchema: jsonSchema(tool.inputSchema as Record<string, unknown>),
+                  inputSchema: jsonSchema(
+                    tool.inputSchema as Record<string, unknown>
+                  ),
                 } as Tool
               }
             })
           }
-        } catch (error) { console.warn('Failed to load MCP tools:', error) }
+        } catch (error) {
+          console.warn('Failed to load MCP tools:', error)
+        }
 
         // Load RAG tools when thread has indexed documents
         try {
           if (this.threadId) {
             const threadMeta = this.getThreadMetadata()
             const hasThreadDocsFlag = threadMeta?.hasDocuments === true
-            const threadProjectId = (threadMeta?.project as Record<string, unknown> | undefined)?.id as string | undefined
+            const threadProjectId = (
+              threadMeta?.project as Record<string, unknown> | undefined
+            )?.id as string | undefined
 
             let hasProjectDocs = false
             if (threadProjectId) {
-              hasProjectDocs = useFileRegistry.getState().hasFiles(projectCollectionId(threadProjectId))
+              hasProjectDocs = useFileRegistry
+                .getState()
+                .hasFiles(projectCollectionId(threadProjectId))
             }
-            const hasThreadFiles = useFileRegistry.getState().hasFiles(threadCollectionId(this.threadId))
+            const hasThreadFiles = useFileRegistry
+              .getState()
+              .hasFiles(threadCollectionId(this.threadId))
 
             // Correct stale hasDocuments metadata from the old fake pipeline:
             // if the flag is true but no files exist in the registry, clear it.
@@ -347,38 +404,58 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
                 useThreads.getState().updateThread(this.threadId, {
                   metadata: { hasDocuments: false },
                 })
-              } catch { /* best-effort correction */ }
+              } catch {
+                /* best-effort correction */
+              }
             }
 
             if (hasThreadFiles || hasProjectDocs) {
               const ragTools = await this.serviceHub.rag().getTools()
               for (const tool of ragTools) {
-                const serverName = (tool as { server?: string }).server || 'unknown'
+                const serverName =
+                  (tool as { server?: string }).server || 'unknown'
                 if (!isToolDisabled(serverName, tool.name)) {
                   toolsRecord[tool.name] = {
                     description: tool.description,
-                    inputSchema: jsonSchema(tool.inputSchema as Record<string, unknown>),
+                    inputSchema: jsonSchema(
+                      tool.inputSchema as Record<string, unknown>
+                    ),
                   } as Tool
                 }
               }
             }
           }
-        } catch (error) { console.warn('Failed to load RAG tools:', error) }
-      
+        } catch (error) {
+          console.warn('Failed to load RAG tools:', error)
+        }
+
         // Add custom AX-BI file upload tool that reads files as base64
         if (this.serviceHub) {
           const serviceHub = this.serviceHub
           toolsRecord['process_file_for_bi'] = {
-            description: 'LOCAL DATA PROCESSING: Read a file from the local filesystem and process it for business intelligence analysis. This tool reads the file content and sends it to the local AX-BI analytics engine running on this machine (localhost). Use this when the user wants to analyze or visualize a file with AX-BI.',
+            description:
+              'LOCAL DATA PROCESSING: Read a file from the local filesystem and process it for business intelligence analysis. This tool reads the file content and sends it to the local AX-BI analytics engine running on this machine (localhost). Use this when the user wants to analyze or visualize a file with AX-BI.',
             inputSchema: jsonSchema({
               type: 'object',
               properties: {
-                file_path: { type: 'string', description: 'The absolute path to the file to upload' },
-                filename: { type: 'string', description: 'The name to use for the uploaded file' },
+                file_path: {
+                  type: 'string',
+                  description: 'The absolute path to the file to upload',
+                },
+                filename: {
+                  type: 'string',
+                  description: 'The name to use for the uploaded file',
+                },
               },
               required: ['file_path', 'filename'],
             }),
-            execute: async ({ file_path, filename }: { file_path: string; filename: string }) => {
+            execute: async ({
+              file_path,
+              filename,
+            }: {
+              file_path: string
+              filename: string
+            }) => {
               try {
                 const { fs } = await import('@ax-studio/core')
                 const fileContent = await fs.readFileBase64(file_path)
@@ -392,32 +469,44 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
                     },
                   },
                 })
-                return normalizeMcpResultForToolOutput(result, 'File uploaded successfully')
+                return normalizeMcpResultForToolOutput(
+                  result,
+                  'File uploaded successfully'
+                )
               } catch (error) {
-                return { error: `Failed to upload file: ${error instanceof Error ? error.message : String(error)}` }
+                return {
+                  error: `Failed to upload file: ${error instanceof Error ? error.message : String(error)}`,
+                }
               }
             },
           } as Tool
         }
-      
       }
     }
 
     this.tools = toolsRecord
   }
 
-  getTools(): Record<string, Tool> { return this.tools }
+  getTools(): Record<string, Tool> {
+    return this.tools
+  }
 
   async sendMessages(
-    options: { chatId: string; messages: UIMessage[]; abortSignal: AbortSignal | undefined }
-      & { trigger: 'submit-message' | 'regenerate-message'; messageId: string | undefined }
-      & ChatRequestOptions
+    options: {
+      chatId: string
+      messages: UIMessage[]
+      abortSignal: AbortSignal | undefined
+    } & {
+      trigger: 'submit-message' | 'regenerate-message'
+      messageId: string | undefined
+    } & ChatRequestOptions
   ): Promise<ReadableStream<UIMessageChunk>> {
     const selectedModelId = useModelProvider.getState().selectedModel?.id
     const selectedProviderId = useModelProvider.getState().selectedProvider
 
     const fallbackModelId = this.modelOverrideId ?? selectedModelId ?? ''
-    const fallbackProviderId = this.modelOverrideProviderId ?? selectedProviderId
+    const fallbackProviderId =
+      this.modelOverrideProviderId ?? selectedProviderId
     let finalModelId = fallbackModelId
     let finalProviderId = fallbackProviderId
     let preparedForPreflightKey: string | null = null
@@ -435,7 +524,7 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
       const providers = useModelProvider.getState().providers
       const availableModels = getAvailableModelsForRouter(
         providers,
-        routerSettings.routerModelId,
+        routerSettings.routerModelId
       )
       this.lastRouterResult = await routeMessage(
         options.messages,
@@ -444,7 +533,7 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
         availableModels,
         fallbackModelId,
         fallbackProviderId,
-        routerSettings.timeout,
+        routerSettings.timeout
       )
       logRouterTrace('decision complete', {
         routerModelId: routerSettings.routerModelId,
@@ -520,9 +609,14 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
         }
       }
 
-      this.model = await ModelFactory.createModel(modelId, provider, inferenceParams, {
-        requestRole: 'final',
-      })
+      this.model = await ModelFactory.createModel(
+        modelId,
+        provider,
+        inferenceParams,
+        {
+          requestRole: 'final',
+        }
+      )
 
       // Always enable tools regardless of model capability declaration
       const modelSupportsTools = true // Force tools to be passed to LLM
@@ -553,7 +647,9 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
 
       if (cached === false) {
         // Previously failed — skip directly to fallback
-        console.warn(`[LLM Router] Routed model "${finalModelId}" previously failed, using fallback`)
+        console.warn(
+          `[LLM Router] Routed model "${finalModelId}" previously failed, using fallback`
+        )
         this.lastRouterResult = {
           modelId: fallbackModelId,
           providerId: fallbackProviderId,
@@ -569,7 +665,9 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
         // Not cached — run preflight
         const routerResult = this.lastRouterResult
         try {
-          const routedProvider = useModelProvider.getState().getProviderByName(finalProviderId)
+          const routedProvider = useModelProvider
+            .getState()
+            .getProviderByName(finalProviderId)
           if (!routedProvider) {
             throw new Error(`Provider "${finalProviderId}" is not configured`)
           }
@@ -588,12 +686,23 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
               modelId: finalModelId,
               providerId: finalProviderId,
             })
-            await prepareProviderForFinalChat(getServiceHub(), routedProvider, finalModelId)
-            preparedForPreflightKey = modelProviderKey(finalModelId, finalProviderId)
+            await prepareProviderForFinalChat(
+              getServiceHub(),
+              routedProvider,
+              finalModelId
+            )
+            preparedForPreflightKey = modelProviderKey(
+              finalModelId,
+              finalProviderId
+            )
           }
 
-          const { serverHost, serverPort, apiPrefix, apiKey: localProxyKey } =
-            useLocalApiServer.getState()
+          const {
+            serverHost,
+            serverPort,
+            apiPrefix,
+            apiKey: localProxyKey,
+          } = useLocalApiServer.getState()
           const proxyUrl = `http://${serverHost}:${serverPort}${apiPrefix}`
           const preflightHeaders: Record<string, string> = {
             'Content-Type': 'application/json',
@@ -630,7 +739,7 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
           cachePreflightResult(finalModelId, finalProviderId, false)
           console.warn(
             `[LLM Router] Routed model "${finalModelId}" preflight failed, falling back to "${fallbackModelId}":`,
-            extractErrorMessage(error, String(error)),
+            extractErrorMessage(error, String(error))
           )
           this.lastRouterResult = {
             modelId: fallbackModelId,
@@ -649,25 +758,33 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
     return executeWithModel(finalModelId, finalProviderId)
   }
 
-  async reconnectToStream(_options: { chatId: string } & ChatRequestOptions): Promise<ReadableStream<UIMessageChunk> | null> {
+  async reconnectToStream(
+    _options: { chatId: string } & ChatRequestOptions
+  ): Promise<ReadableStream<UIMessageChunk> | null> {
     return null
   }
 
   mapUserInlineAttachments(messages: UIMessage[]): UIMessage[] {
     return messages.map((message) => {
       if (message.role !== 'user') return message
-      const metadata = message.metadata as { inline_file_contents?: Array<{ name?: string; content?: string }> } | undefined
+      const metadata = message.metadata as
+        | { inline_file_contents?: Array<{ name?: string; content?: string }> }
+        | undefined
       const inlineFileContents = Array.isArray(metadata?.inline_file_contents)
         ? metadata.inline_file_contents.filter((f) => f?.content)
         : []
       if (inlineFileContents.length > 0 && message.parts.length > 0) {
         const buildInlineText = (base: string) => {
           if (!inlineFileContents.length) return base
-          const formatted = inlineFileContents.map((f) => `File: ${f.name || 'attachment'}\n${f.content ?? ''}`).join('\n\n')
+          const formatted = inlineFileContents
+            .map((f) => `File: ${f.name || 'attachment'}\n${f.content ?? ''}`)
+            .join('\n\n')
           return base ? `${base}\n\n${formatted}` : formatted
         }
         const parts = message.parts.map((part) =>
-          part.type === 'text' ? { type: 'text' as const, text: buildInlineText(part.text ?? '') } : part
+          part.type === 'text'
+            ? { type: 'text' as const, text: buildInlineText(part.text ?? '') }
+            : part
         )
         return { ...message, parts }
       }

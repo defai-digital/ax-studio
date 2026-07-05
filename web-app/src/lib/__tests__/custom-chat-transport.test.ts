@@ -39,9 +39,7 @@ const mocks = vi.hoisted(() => {
     },
     {
       provider: 'mlx',
-      models: [
-        { id: 'mlx-community/Qwen3.6-27B-4bit', capabilities: [] },
-      ],
+      models: [{ id: 'mlx-community/Qwen3.6-27B-4bit', capabilities: [] }],
       settings: [],
     },
   ]
@@ -156,7 +154,13 @@ vi.mock('@/lib/llm-router', () => ({
 
 vi.mock('@/lib/transport/single-agent-transport', () => ({
   executeSingleAgentStream: vi.fn(() =>
-    Promise.resolve(new ReadableStream({ start(c) { c.close() } }))
+    Promise.resolve(
+      new ReadableStream({
+        start(c) {
+          c.close()
+        },
+      })
+    )
   ),
 }))
 
@@ -234,7 +238,10 @@ afterEach(() => {
 
 describe('CustomChatTransport — construction', () => {
   it('stores system message and thread ID', () => {
-    const transport = makeTransport({ systemMessage: 'Be helpful', threadId: 't1' })
+    const transport = makeTransport({
+      systemMessage: 'Be helpful',
+      threadId: 't1',
+    })
     expect(transport).toBeDefined()
   })
 
@@ -289,7 +296,11 @@ describe('CustomChatTransport — mapUserInlineAttachments', () => {
   it('passes through non-user messages unchanged', () => {
     const transport = makeTransport()
     const messages: UIMessage[] = [
-      { id: '1', role: 'assistant', parts: [{ type: 'text', text: 'response' }] } as any,
+      {
+        id: '1',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'response' }],
+      } as any,
     ]
     const result = transport.mapUserInlineAttachments(messages)
     expect(result).toEqual(messages)
@@ -298,7 +309,11 @@ describe('CustomChatTransport — mapUserInlineAttachments', () => {
   it('passes through user messages without inline attachments unchanged', () => {
     const transport = makeTransport()
     const messages: UIMessage[] = [
-      { id: '1', role: 'user', parts: [{ type: 'text', text: 'hello' }] } as any,
+      {
+        id: '1',
+        role: 'user',
+        parts: [{ type: 'text', text: 'hello' }],
+      } as any,
     ]
     const result = transport.mapUserInlineAttachments(messages)
     expect(result).toEqual(messages)
@@ -333,9 +348,7 @@ describe('CustomChatTransport — mapUserInlineAttachments', () => {
         role: 'user',
         parts: [{ type: 'text', text: '' }],
         metadata: {
-          inline_file_contents: [
-            { name: 'data.csv', content: 'a,b,c' },
-          ],
+          inline_file_contents: [{ name: 'data.csv', content: 'a,b,c' }],
         },
       } as any,
     ]
@@ -407,9 +420,9 @@ describe('CustomChatTransport — LLM Router integration', () => {
       'router-model'
     )
     expect(syncRemoteProviders).toHaveBeenCalledWith(mocks.providers)
-    expect(vi.mocked(syncRemoteProviders).mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(routeMessage).mock.invocationCallOrder[0]
-    )
+    expect(
+      vi.mocked(syncRemoteProviders).mock.invocationCallOrder[0]
+    ).toBeLessThan(vi.mocked(routeMessage).mock.invocationCallOrder[0])
     expect(routeMessage).toHaveBeenCalledWith(
       expect.any(Array),
       'router-model',
@@ -526,9 +539,9 @@ describe('CustomChatTransport — LLM Router integration', () => {
         }),
       })
     )
-    expect(vi.mocked(prepareProviderForChat).mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.fetch.mock.invocationCallOrder[0]
-    )
+    expect(
+      vi.mocked(prepareProviderForChat).mock.invocationCallOrder[0]
+    ).toBeLessThan(mocks.fetch.mock.invocationCallOrder[0])
     expect(ModelFactory.createModel).toHaveBeenCalledWith(
       'llama-3.2-3b-local.gguf',
       expect.objectContaining({ provider: 'llamacpp' }),
@@ -613,9 +626,9 @@ describe('CustomChatTransport — LLM Router integration', () => {
         body: expect.stringContaining('"stream":false'),
       })
     )
-    expect(vi.mocked(prepareProviderForChat).mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.fetch.mock.invocationCallOrder[0]
-    )
+    expect(
+      vi.mocked(prepareProviderForChat).mock.invocationCallOrder[0]
+    ).toBeLessThan(mocks.fetch.mock.invocationCallOrder[0])
     expect(ModelFactory.createModel).toHaveBeenCalledWith(
       'gemma-4-26b-a4b-it-4bit',
       expect.objectContaining({ provider: 'llamacpp' }),
