@@ -194,6 +194,11 @@ function makeTransport(
   )
 }
 
+const makeUiMessage = (
+  message: Pick<UIMessage, 'id' | 'role' | 'parts'> &
+    Partial<Pick<UIMessage, 'metadata'>>
+): UIMessage => message as unknown as UIMessage
+
 // ─── Tests ────────────────────────────────────────────────────────────────
 
 let consoleInfoSpy: ReturnType<typeof vi.spyOn>
@@ -296,11 +301,11 @@ describe('CustomChatTransport — mapUserInlineAttachments', () => {
   it('passes through non-user messages unchanged', () => {
     const transport = makeTransport()
     const messages: UIMessage[] = [
-      {
+      makeUiMessage({
         id: '1',
         role: 'assistant',
         parts: [{ type: 'text', text: 'response' }],
-      } as any,
+      }),
     ]
     const result = transport.mapUserInlineAttachments(messages)
     expect(result).toEqual(messages)
@@ -309,11 +314,11 @@ describe('CustomChatTransport — mapUserInlineAttachments', () => {
   it('passes through user messages without inline attachments unchanged', () => {
     const transport = makeTransport()
     const messages: UIMessage[] = [
-      {
+      makeUiMessage({
         id: '1',
         role: 'user',
         parts: [{ type: 'text', text: 'hello' }],
-      } as any,
+      }),
     ]
     const result = transport.mapUserInlineAttachments(messages)
     expect(result).toEqual(messages)
@@ -322,7 +327,7 @@ describe('CustomChatTransport — mapUserInlineAttachments', () => {
   it('appends inline file contents to text parts', () => {
     const transport = makeTransport()
     const messages: UIMessage[] = [
-      {
+      makeUiMessage({
         id: '1',
         role: 'user',
         parts: [{ type: 'text', text: 'Explain this' }],
@@ -331,7 +336,7 @@ describe('CustomChatTransport — mapUserInlineAttachments', () => {
             { name: 'code.py', content: 'print("hello")' },
           ],
         },
-      } as any,
+      }),
     ]
     const result = transport.mapUserInlineAttachments(messages)
     const textPart = result[0].parts[0] as { type: string; text: string }
@@ -343,14 +348,14 @@ describe('CustomChatTransport — mapUserInlineAttachments', () => {
   it('handles messages with no text part but inline attachments', () => {
     const transport = makeTransport()
     const messages: UIMessage[] = [
-      {
+      makeUiMessage({
         id: '1',
         role: 'user',
         parts: [{ type: 'text', text: '' }],
         metadata: {
           inline_file_contents: [{ name: 'data.csv', content: 'a,b,c' }],
         },
-      } as any,
+      }),
     ]
     const result = transport.mapUserInlineAttachments(messages)
     const textPart = result[0].parts[0] as { type: string; text: string }
@@ -361,7 +366,7 @@ describe('CustomChatTransport — mapUserInlineAttachments', () => {
   it('filters out attachments with no content', () => {
     const transport = makeTransport()
     const messages: UIMessage[] = [
-      {
+      makeUiMessage({
         id: '1',
         role: 'user',
         parts: [{ type: 'text', text: 'hello' }],
@@ -371,7 +376,7 @@ describe('CustomChatTransport — mapUserInlineAttachments', () => {
             { name: 'valid.txt', content: 'data' },
           ],
         },
-      } as any,
+      }),
     ]
     const result = transport.mapUserInlineAttachments(messages)
     const textPart = result[0].parts[0] as { type: string; text: string }
@@ -383,7 +388,7 @@ describe('CustomChatTransport — mapUserInlineAttachments', () => {
 describe('CustomChatTransport — reconnectToStream', () => {
   it('returns null (reconnection not supported)', async () => {
     const transport = makeTransport()
-    const result = await transport.reconnectToStream({ chatId: 'c1' } as any)
+    const result = await transport.reconnectToStream({ chatId: 'c1' })
     expect(result).toBeNull()
   })
 })
