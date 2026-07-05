@@ -21,7 +21,7 @@ export const route = {
     https_proxy: '/settings/https-proxy',
     hardware: '/settings/hardware',
     assistant: '/settings/assistant',
-engine_settings: '/settings/engine-settings',
+    engine_settings: '/settings/engine-settings',
     llm_router: '/settings/llm-router',
     guardrails: '/settings/guardrails',
   },

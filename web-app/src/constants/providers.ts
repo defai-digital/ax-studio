@@ -1,6 +1,7 @@
 const ANTHROPIC_VERSION_HEADER = 'anthropic-version'
 const ANTHROPIC_VERSION_VALUE = '2023-06-01'
-const ANTHROPIC_BROWSER_ACCESS_HEADER = 'anthropic-dangerous-direct-browser-access'
+const ANTHROPIC_BROWSER_ACCESS_HEADER =
+  'anthropic-dangerous-direct-browser-access'
 const ANTHROPIC_BROWSER_ACCESS_VALUE = 'true'
 
 // `mlx` is local too: model loading and chat route through the in-process
@@ -25,7 +26,10 @@ export const LEGACY_BUNDLED_MLX_MODEL_IDS = new Set([
 /** Default custom headers required for direct Anthropic API access from a browser. */
 export const ANTHROPIC_DEFAULT_HEADERS = [
   { header: ANTHROPIC_VERSION_HEADER, value: ANTHROPIC_VERSION_VALUE },
-  { header: ANTHROPIC_BROWSER_ACCESS_HEADER, value: ANTHROPIC_BROWSER_ACCESS_VALUE },
+  {
+    header: ANTHROPIC_BROWSER_ACCESS_HEADER,
+    value: ANTHROPIC_BROWSER_ACCESS_VALUE,
+  },
 ] as const
 
 export const openAIProviderSettings = [
@@ -132,7 +136,7 @@ export const predefinedProviders = [
       },
     ],
     models: [],
-    custom_header: [...ANTHROPIC_DEFAULT_HEADERS]
+    custom_header: [...ANTHROPIC_DEFAULT_HEADERS],
   },
   {
     active: true,
