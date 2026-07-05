@@ -47,7 +47,6 @@ type ToolbarIconButtonProps = {
   icon: LucideIcon
   tooltip: ReactNode
   iconClassName?: string
-  buttonClassName?: string
   onClick?: () => void
   children?: ReactNode
 }
@@ -56,19 +55,13 @@ function ToolbarIconButton({
   icon: Icon,
   tooltip,
   iconClassName,
-  buttonClassName,
   onClick,
   children,
 }: ToolbarIconButtonProps) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className={buttonClassName}
-          onClick={onClick}
-        >
+        <Button variant="ghost" size="icon-xs" onClick={onClick}>
           <Icon size={18} className={iconClassName} />
           {children}
         </Button>
