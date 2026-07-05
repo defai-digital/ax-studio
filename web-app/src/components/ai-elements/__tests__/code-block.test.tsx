@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import { render, screen, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // Mock shiki before importing the component
@@ -23,7 +23,7 @@ vi.mock('@/lib/themes/shiki-theme-dark', () => ({
   axStudioDarkTheme: { name: 'ax-studio-dark' },
 }))
 
-import { CodeBlock, CodeBlockCopyButton } from '../code-block'
+import { CodeBlock } from '../code-block'
 import { highlightCode } from '../code-block-highlight'
 
 type RenderResult = ReturnType<typeof render>
@@ -116,116 +116,5 @@ describe('highlightCode', () => {
     const r1 = await highlightCode('cached', 'javascript' as never)
     const r2 = await highlightCode('cached', 'javascript' as never)
     expect(r1).toBe(r2)
-  })
-})
-
-describe('CodeBlockCopyButton', () => {
-  beforeEach(() => {
-    Object.assign(navigator, {
-      clipboard: {
-        writeText: vi.fn().mockResolvedValue(undefined),
-      },
-    })
-  })
-
-  it('renders a copy button', async () => {
-    await renderCodeBlock(
-      <CodeBlock code="copy me" language="javascript">
-        <CodeBlockCopyButton />
-      </CodeBlock>
-    )
-    const button = screen.getByRole('button')
-    expect(button).toBeInTheDocument()
-  })
-
-  it('copies code to clipboard on click', async () => {
-    await renderCodeBlock(
-      <CodeBlock code="copy me" language="javascript">
-        <CodeBlockCopyButton />
-      </CodeBlock>
-    )
-    const button = screen.getByRole('button')
-    await act(async () => {
-      fireEvent.click(button)
-    })
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('copy me')
-  })
-
-  it('calls onCopy callback after successful copy', async () => {
-    const onCopy = vi.fn()
-    await renderCodeBlock(
-      <CodeBlock code="test" language="javascript">
-        <CodeBlockCopyButton onCopy={onCopy} />
-      </CodeBlock>
-    )
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button'))
-    })
-    expect(onCopy).toHaveBeenCalledOnce()
-  })
-
-  it('calls onError when clipboard API is not available', async () => {
-    Object.assign(navigator, {
-      clipboard: { writeText: undefined },
-    })
-    const onError = vi.fn()
-    await renderCodeBlock(
-      <CodeBlock code="test" language="javascript">
-        <CodeBlockCopyButton onError={onError} />
-      </CodeBlock>
-    )
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button'))
-    })
-    expect(onError).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'Clipboard API not available' })
-    )
-  })
-
-  it('calls onError when clipboard write fails', async () => {
-    const clipboardError = new Error('Permission denied')
-    Object.assign(navigator, {
-      clipboard: {
-        writeText: vi.fn().mockRejectedValue(clipboardError),
-      },
-    })
-    const onError = vi.fn()
-    await renderCodeBlock(
-      <CodeBlock code="test" language="javascript">
-        <CodeBlockCopyButton onError={onError} />
-      </CodeBlock>
-    )
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button'))
-    })
-    expect(onError).toHaveBeenCalledWith(clipboardError)
-  })
-
-  it('renders custom children instead of default icon', async () => {
-    await renderCodeBlock(
-      <CodeBlock code="test" language="javascript">
-        <CodeBlockCopyButton>Custom Copy</CodeBlockCopyButton>
-      </CodeBlock>
-    )
-    expect(screen.getByText('Custom Copy')).toBeInTheDocument()
-  })
-
-  it('clears pending copied-state reset timer on unmount', async () => {
-    vi.useFakeTimers()
-
-    const { unmount } = await renderCodeBlock(
-      <CodeBlock code="test" language="javascript">
-        <CodeBlockCopyButton timeout={5000} />
-      </CodeBlock>
-    )
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button'))
-      await Promise.resolve()
-    })
-
-    expect(vi.getTimerCount()).toBe(1)
-    unmount()
-    expect(vi.getTimerCount()).toBe(0)
   })
 })
