@@ -117,7 +117,17 @@ vi.mock('@/components/ui/input', () => ({
 
 vi.mock('@/components/ui/radio-group', () => ({
   RadioGroup: ({ children, onValueChange, value }: Record<string, unknown>) => (
-    <div data-testid="radio-group" data-value={value as string}>
+    <div
+      data-testid="radio-group"
+      data-value={value as string}
+      onClick={(event) => {
+        const target = event.target as HTMLInputElement
+        if (target instanceof HTMLInputElement && target.value) {
+          const handleValueChange = onValueChange as (value: string) => void
+          handleValueChange(target.value)
+        }
+      }}
+    >
       {children as React.ReactNode}
     </div>
   ),
@@ -253,5 +263,62 @@ describe('AddEditMCPServer', () => {
     expect(screen.getByTestId('radio-stdio')).toBeInTheDocument()
     expect(screen.getByTestId('radio-http')).toBeInTheDocument()
     expect(screen.getByTestId('radio-sse')).toBeInTheDocument()
+  })
+
+  it('saves HTTP timeout as a positive whole number', () => {
+    render(
+      <AddEditMCPServer
+        open={true}
+        onOpenChange={mockOnOpenChange}
+        editingKey={null}
+        onSave={mockOnSave}
+      />
+    )
+
+    fireEvent.change(screen.getByPlaceholderText('mcp-servers:enterServerName'), {
+      target: { value: 'http-server' },
+    })
+    fireEvent.click(screen.getByTestId('radio-http'))
+    fireEvent.change(screen.getByPlaceholderText('Enter URL'), {
+      target: { value: 'https://example.com/mcp' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('Enter timeout in seconds'), {
+      target: { value: '30' },
+    })
+    fireEvent.click(screen.getByText('mcp-servers:save'))
+
+    expect(mockOnSave).toHaveBeenCalledWith(
+      'http-server',
+      expect.objectContaining({
+        type: 'http',
+        url: 'https://example.com/mcp',
+        timeout: 30,
+      })
+    )
+  })
+
+  it('rejects fractional HTTP timeout instead of truncating it', () => {
+    render(
+      <AddEditMCPServer
+        open={true}
+        onOpenChange={mockOnOpenChange}
+        editingKey={null}
+        onSave={mockOnSave}
+      />
+    )
+
+    fireEvent.change(screen.getByPlaceholderText('mcp-servers:enterServerName'), {
+      target: { value: 'http-server' },
+    })
+    fireEvent.click(screen.getByTestId('radio-http'))
+    fireEvent.change(screen.getByPlaceholderText('Enter timeout in seconds'), {
+      target: { value: '30.5' },
+    })
+    fireEvent.click(screen.getByText('mcp-servers:save'))
+
+    expect(mockOnSave).not.toHaveBeenCalled()
+    expect(
+      screen.getByText('Timeout must be a positive whole number of seconds.')
+    ).toBeInTheDocument()
   })
 })

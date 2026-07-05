@@ -111,6 +111,14 @@ const makeArg = (value: string = ''): ArgEntry => ({
   value,
 })
 
+function parseOptionalPositiveInteger(raw: string): number | undefined | null {
+  const trimmed = raw.trim()
+  if (trimmed === '') return undefined
+  if (!/^[1-9]\d*$/.test(trimmed)) return null
+  const value = Number(trimmed)
+  return Number.isSafeInteger(value) ? value : null
+}
+
 export function AddEditMCPServer({
   open,
   onOpenChange,
@@ -140,6 +148,7 @@ export function AddEditMCPServer({
   const [isToggled, setIsToggled] = useState(false)
   const [jsonContent, setJsonContent] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [timeoutError, setTimeoutError] = useState<string | null>(null)
 
   const resetForm = useCallback(() => {
     setServerName('')
@@ -155,6 +164,7 @@ export function AddEditMCPServer({
     setIsToggled(false)
     setJsonContent('')
     setError(null)
+    setTimeoutError(null)
   }, [])
 
   // Reset form when modal opens/closes or editing key changes
@@ -341,6 +351,16 @@ export function AddEditMCPServer({
     }
 
     // Handle form mode
+    const parsedTimeout =
+      transportType !== 'stdio'
+        ? parseOptionalPositiveInteger(timeoutValue)
+        : undefined
+    if (parsedTimeout === null) {
+      setTimeoutError('Timeout must be a positive whole number of seconds.')
+      return
+    }
+    setTimeoutError(null)
+
     // Convert env arrays to object
     const envObj: Record<string, string> = {}
     envKeys.forEach((key, index) => {
@@ -371,8 +391,7 @@ export function AddEditMCPServer({
       ...(transportType !== 'stdio' && {
         url: url.trim(),
         headers: Object.keys(headersObj).length > 0 ? headersObj : undefined,
-        timeout:
-          timeoutValue.trim() !== '' ? parseInt(timeoutValue) : undefined,
+        timeout: parsedTimeout,
       }),
     }
 
@@ -680,10 +699,20 @@ export function AddEditMCPServer({
                   </label>
                   <Input
                     value={timeoutValue}
-                    onChange={(e) => setTimeoutValue(e.target.value)}
+                    onChange={(e) => {
+                      setTimeoutValue(e.target.value)
+                      setTimeoutError(null)
+                    }}
+                    min={1}
                     placeholder="Enter timeout in seconds"
+                    step={1}
                     type="number"
                   />
+                  {timeoutError && (
+                    <div className="text-destructive text-sm">
+                      {timeoutError}
+                    </div>
+                  )}
                 </div>
               </>
             )}
