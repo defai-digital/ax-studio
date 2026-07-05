@@ -6,6 +6,10 @@ updates:
     schedule:
       interval: 'weekly'
     open-pull-requests-limit: 0
+    ignore:
+      # Tauri 2's Linux GTK/WebKit runtime stack still depends on gtk-rs 0.18,
+      # which cannot consume glib >=0.20 without an upstream Tauri/GTK migration.
+      - dependency-name: 'glib'
   - package-ecosystem: 'npm'
     directories:
       - '/'
