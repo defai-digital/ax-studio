@@ -14,6 +14,11 @@ import { render, screen, fireEvent, act } from '@testing-library/react'
 const mockHandleSendMessage = vi.fn()
 const mockSetGlobalPrompt = vi.fn()
 const mockAbort = vi.fn()
+const mockNavigate = vi.fn()
+
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => mockNavigate,
+}))
 
 vi.mock('react-textarea-autosize', () => ({
   default: ({ minRows: _minRows, maxRows: _maxRows, rows, ...props }: any) => (
