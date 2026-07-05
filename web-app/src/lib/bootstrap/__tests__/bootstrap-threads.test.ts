@@ -1,24 +1,35 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
+import type { ServiceHub } from '@/services'
 import { bootstrapThreads } from '../bootstrap-threads'
 
 afterEach(() => {
   vi.restoreAllMocks()
 })
 
-const makeServiceHub = (threads: unknown[] = [], shouldFail = false) => ({
-  threads: () => ({
-    fetchThreads: shouldFail
-      ? vi.fn().mockRejectedValue(new Error('fetch failed'))
-      : vi.fn().mockResolvedValue(threads),
-  }),
+const makeThread = (id: string): Thread => ({
+  id,
+  title: id,
+  updated: 0,
 })
+
+const makeServiceHub = (
+  threads: Thread[] = [],
+  shouldFail = false
+): ServiceHub =>
+  ({
+    threads: () => ({
+      fetchThreads: shouldFail
+        ? vi.fn().mockRejectedValue(new Error('fetch failed'))
+        : vi.fn().mockResolvedValue(threads),
+    }),
+  }) as Pick<ServiceHub, 'threads'> as ServiceHub
 
 describe('bootstrapThreads', () => {
   it('calls setThreads with fetched threads', async () => {
-    const mockThreads = [{ id: 't1' }, { id: 't2' }]
+    const mockThreads = [makeThread('t1'), makeThread('t2')]
     const setThreads = vi.fn()
     const result = await bootstrapThreads({
-      serviceHub: makeServiceHub(mockThreads) as any,
+      serviceHub: makeServiceHub(mockThreads),
       setThreads,
     })
     expect(result).toEqual({ ok: true })
@@ -29,7 +40,7 @@ describe('bootstrapThreads', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const setThreads = vi.fn()
     const result = await bootstrapThreads({
-      serviceHub: makeServiceHub([], true) as any,
+      serviceHub: makeServiceHub([], true),
       setThreads,
     })
     expect(result.ok).toBe(false)
@@ -39,7 +50,7 @@ describe('bootstrapThreads', () => {
   it('calls setThreads with empty array when no threads exist', async () => {
     const setThreads = vi.fn()
     await bootstrapThreads({
-      serviceHub: makeServiceHub([]) as any,
+      serviceHub: makeServiceHub([]),
       setThreads,
     })
     expect(setThreads).toHaveBeenCalledWith([])
