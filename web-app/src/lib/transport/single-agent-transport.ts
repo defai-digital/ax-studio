@@ -4,14 +4,16 @@ import {
   streamText,
   stepCountIs,
   type LanguageModel,
-  type Tool,
   type LanguageModelUsage,
+  type Tool,
 } from 'ai'
 import type { UIMessageChunk } from 'ai'
-import type { TokenUsageCallback } from './transport-types'
-import { stripUnavailableToolParts } from './transport-types'
+
 import { useAppState } from '@/hooks/settings/useAppState'
 import { extractErrorMessage } from '@/lib/utils/error'
+
+import type { TokenUsageCallback } from './transport-types'
+import { stripUnavailableToolParts } from './transport-types'
 
 const MCP_TOOL_USE_INSTRUCTION = `
 
@@ -99,7 +101,6 @@ export async function executeSingleAgentStream(
     systemMessage,
     messages,
     abortSignal,
-    modelSupportsTools: _modelSupportsTools,
     onTokenUsage,
     mapUserInlineAttachments,
   } = config
@@ -107,9 +108,14 @@ export async function executeSingleAgentStream(
   // Strip tool invocation parts for tools that are no longer available (e.g.,
   // fabric_search / fabric_extract when local knowledge is toggled off mid-conversation).
   // Without this, the LLM sees prior tool calls in history and tries to re-invoke them.
-  const cleanedMessages = stripUnavailableToolParts(messages, new Set(Object.keys(tools)))
+  const cleanedMessages = stripUnavailableToolParts(
+    messages,
+    new Set(Object.keys(tools))
+  )
 
-  const modelMessages = convertToModelMessages(mapUserInlineAttachments(cleanedMessages))
+  const modelMessages = convertToModelMessages(
+    mapUserInlineAttachments(cleanedMessages)
+  )
 
   const hasTools = Object.keys(tools).length > 0
   // Always enable tools when available - the model capability check is handled upstream
@@ -143,11 +149,9 @@ export async function executeSingleAgentStream(
 
     const durationSec = durationMs / 1000
     const tokenSpeed = Math.round((tokenCount / durationSec) * 10) / 10
-    useAppState.getState().setTokenSpeed(
-      { id: 'streaming' } as never,
-      tokenSpeed,
-      tokenCount
-    )
+    useAppState
+      .getState()
+      .setTokenSpeed({ id: 'streaming' } as never, tokenSpeed, tokenCount)
   }
 
   return result.toUIMessageStream({
@@ -170,7 +174,8 @@ export async function executeSingleAgentStream(
 
       if (part.type === 'finish-step') {
         tokensPerSecond =
-          (part.providerMetadata?.providerMetadata?.tokensPerSecond as number) || 0
+          (part.providerMetadata?.providerMetadata
+            ?.tokensPerSecond as number) || 0
       }
 
       if (part.type === 'finish') {
@@ -188,19 +193,23 @@ export async function executeSingleAgentStream(
         // Fall back to character-count estimate (~4 chars per token) when the
         // server does not return usage statistics (e.g. ax-serving without
         // stream_options.include_usage support).
-        const tokenCount = outputTokens > 0 ? outputTokens : Math.ceil(totalChars / 4)
+        const tokenCount =
+          outputTokens > 0 ? outputTokens : Math.ceil(totalChars / 4)
 
         let tokenSpeed: number
         if (durationSec > 0 && tokenCount > 0) {
-          tokenSpeed = tokensPerSecond > 0 ? tokensPerSecond : tokenCount / durationSec
+          tokenSpeed =
+            tokensPerSecond > 0 ? tokensPerSecond : tokenCount / durationSec
         } else {
           tokenSpeed = 0
         }
-        useAppState.getState().setTokenSpeed(
-          { id: 'streaming' } as never,
-          Math.round(tokenSpeed * 10) / 10,
-          tokenCount
-        )
+        useAppState
+          .getState()
+          .setTokenSpeed(
+            { id: 'streaming' } as never,
+            Math.round(tokenSpeed * 10) / 10,
+            tokenCount
+          )
 
         return {
           usage: {
@@ -224,7 +233,9 @@ export async function executeSingleAgentStream(
     },
     onFinish: ({ responseMessage }) => {
       if (responseMessage) {
-        const metadata = responseMessage.metadata as Record<string, unknown> | undefined
+        const metadata = responseMessage.metadata as
+          | Record<string, unknown>
+          | undefined
         const usage = metadata?.usage as LanguageModelUsage | undefined
         if (usage) {
           onTokenUsage?.(usage, responseMessage.id)

@@ -43,7 +43,9 @@ vi.mock('@/hooks/settings/useAppState', () => ({
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
-function makeConfig(overrides: Partial<SingleAgentConfig> = {}): SingleAgentConfig {
+function makeConfig(
+  overrides: Partial<SingleAgentConfig> = {}
+): SingleAgentConfig {
   return {
     model: {} as any,
     tools: {},
@@ -71,7 +73,9 @@ describe('executeSingleAgentStream', () => {
 
   it('passes system message to streamText', async () => {
     const { streamText } = await import('ai')
-    await executeSingleAgentStream(makeConfig({ systemMessage: 'You are helpful' }))
+    await executeSingleAgentStream(
+      makeConfig({ systemMessage: 'You are helpful' })
+    )
 
     expect(streamText).toHaveBeenCalledWith(
       expect.objectContaining({ system: 'You are helpful' })
@@ -81,7 +85,9 @@ describe('executeSingleAgentStream', () => {
   it('passes abort signal to streamText', async () => {
     const { streamText } = await import('ai')
     const controller = new AbortController()
-    await executeSingleAgentStream(makeConfig({ abortSignal: controller.signal }))
+    await executeSingleAgentStream(
+      makeConfig({ abortSignal: controller.signal })
+    )
 
     expect(streamText).toHaveBeenCalledWith(
       expect.objectContaining({ abortSignal: controller.signal })
@@ -130,7 +136,9 @@ describe('executeSingleAgentStream', () => {
   it('messageMetadata returns undefined for non-finish parts', async () => {
     await executeSingleAgentStream(makeConfig())
     const opts = mockStreamText.getCapturedOptions() as Record<string, unknown>
-    const messageMetadata = opts.messageMetadata as (p: { part: unknown }) => unknown
+    const messageMetadata = opts.messageMetadata as (p: {
+      part: unknown
+    }) => unknown
 
     const result = messageMetadata({ part: { type: 'text-delta', text: '' } })
     expect(result).toBeUndefined()
@@ -139,18 +147,26 @@ describe('executeSingleAgentStream', () => {
   it('messageMetadata tracks text-delta and returns undefined until finish', async () => {
     await executeSingleAgentStream(makeConfig())
     const opts = mockStreamText.getCapturedOptions() as Record<string, unknown>
-    const messageMetadata = opts.messageMetadata as (p: { part: unknown }) => unknown
+    const messageMetadata = opts.messageMetadata as (p: {
+      part: unknown
+    }) => unknown
 
     // text-delta should track chars, return undefined
-    expect(messageMetadata({ part: { type: 'text-delta', text: 'hello' } })).toBeUndefined()
+    expect(
+      messageMetadata({ part: { type: 'text-delta', text: 'hello' } })
+    ).toBeUndefined()
     // finish-step should update tokensPerSecond metadata, return undefined
-    expect(messageMetadata({ part: { type: 'finish-step', providerMetadata: {} } })).toBeUndefined()
+    expect(
+      messageMetadata({ part: { type: 'finish-step', providerMetadata: {} } })
+    ).toBeUndefined()
   })
 
   it('messageMetadata returns usage metadata on finish', async () => {
     await executeSingleAgentStream(makeConfig())
     const opts = mockStreamText.getCapturedOptions() as Record<string, unknown>
-    const messageMetadata = opts.messageMetadata as (p: { part: unknown }) => unknown
+    const messageMetadata = opts.messageMetadata as (p: {
+      part: unknown
+    }) => unknown
 
     const result = messageMetadata({
       part: {
@@ -208,7 +224,11 @@ describe('executeSingleAgentStream', () => {
 describe('stripUnavailableToolParts', () => {
   it('returns messages unchanged when there are no assistant tool parts', () => {
     const messages: UIMessage[] = [
-      { id: '1', role: 'user', parts: [{ type: 'text', text: 'hello' }] } as any,
+      {
+        id: '1',
+        role: 'user',
+        parts: [{ type: 'text', text: 'hello' }],
+      } as any,
     ]
     const result = stripUnavailableToolParts(messages, new Set(['search']))
     expect(result).toEqual(messages)
@@ -221,7 +241,13 @@ describe('stripUnavailableToolParts', () => {
         role: 'assistant',
         parts: [
           { type: 'text', text: 'result' },
-          { type: 'tool-search', toolCallId: 'tc1', toolName: 'search', state: 'result', result: 'found' } as any,
+          {
+            type: 'tool-search',
+            toolCallId: 'tc1',
+            toolName: 'search',
+            state: 'result',
+            result: 'found',
+          } as any,
         ],
       } as any,
     ]
@@ -236,7 +262,13 @@ describe('stripUnavailableToolParts', () => {
         role: 'assistant',
         parts: [
           { type: 'text', text: 'result' },
-          { type: 'tool-deleted_tool', toolCallId: 'tc1', toolName: 'deleted_tool', state: 'result', result: 'gone' } as any,
+          {
+            type: 'tool-deleted_tool',
+            toolCallId: 'tc1',
+            toolName: 'deleted_tool',
+            state: 'result',
+            result: 'gone',
+          } as any,
         ],
       } as any,
     ]
@@ -251,7 +283,13 @@ describe('stripUnavailableToolParts', () => {
         id: '1',
         role: 'assistant',
         parts: [
-          { type: 'tool-deleted', toolCallId: 'tc1', toolName: 'deleted', state: 'result', result: 'gone' } as any,
+          {
+            type: 'tool-deleted',
+            toolCallId: 'tc1',
+            toolName: 'deleted',
+            state: 'result',
+            result: 'gone',
+          } as any,
         ],
       } as any,
     ]
@@ -265,7 +303,12 @@ describe('stripUnavailableToolParts', () => {
         id: '1',
         role: 'assistant',
         parts: [
-          { type: 'dynamic-tool', toolName: 'my_tool', toolCallId: 'tc1', state: 'result' } as any,
+          {
+            type: 'dynamic-tool',
+            toolName: 'my_tool',
+            toolCallId: 'tc1',
+            state: 'result',
+          } as any,
         ],
       } as any,
     ]
@@ -280,8 +323,16 @@ describe('stripUnavailableToolParts', () => {
 
   it('does not modify non-assistant messages', () => {
     const messages: UIMessage[] = [
-      { id: '1', role: 'user', parts: [{ type: 'text', text: 'hello' }] } as any,
-      { id: '2', role: 'system', parts: [{ type: 'text', text: 'system' }] } as any,
+      {
+        id: '1',
+        role: 'user',
+        parts: [{ type: 'text', text: 'hello' }],
+      } as any,
+      {
+        id: '2',
+        role: 'system',
+        parts: [{ type: 'text', text: 'system' }],
+      } as any,
     ]
     const result = stripUnavailableToolParts(messages, new Set())
     expect(result).toEqual(messages)
