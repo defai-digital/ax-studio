@@ -1,4 +1,4 @@
-import { useEffect, useState, memo } from 'react'
+import { useEffect, useState, memo, type ReactNode } from 'react'
 
 import {
   DropDrawer,
@@ -18,19 +18,18 @@ import { Switch } from '@/components/ui/switch'
 import { useThreads } from '@/hooks/threads/useThreads'
 import { useToolAvailable } from '@/hooks/tools/useToolAvailable'
 
-import React from 'react'
 import { useAppState } from '@/hooks/settings/useAppState'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { cn } from '@/lib/utils'
 
 interface DropdownToolsAvailableProps {
-  children: (isOpen: boolean, toolsCount: number) => React.ReactNode
+  children: (isOpen: boolean, toolsCount: number) => ReactNode
   initialMessage?: boolean
   threadId?: string
   onOpenChange?: (isOpen: boolean) => void
 }
 
-export default memo(function DropdownToolsAvailable({
+export const DropdownToolsAvailable = memo(function DropdownToolsAvailable({
   children,
   initialMessage = false,
   threadId,
@@ -44,8 +43,8 @@ export default memo(function DropdownToolsAvailable({
     setIsOpen(open)
     onOpenChange?.(open)
   }
-  const currentThreadId = useThreads((state) =>
-    threadId ?? state.getCurrentThread()?.id
+  const currentThreadId = useThreads(
+    (state) => threadId ?? state.getCurrentThread()?.id
   )
   const {
     isToolDisabled,
@@ -65,7 +64,11 @@ export default memo(function DropdownToolsAvailable({
     }
   }, [effectiveThreadId, tools, initializeThreadTools])
 
-  const handleToolToggle = (serverName: string, toolName: string, checked: boolean) => {
+  const handleToolToggle = (
+    serverName: string,
+    toolName: string,
+    checked: boolean
+  ) => {
     if (initialMessage) {
       // Update default tools for new threads/index page
       const currentDefaults = getDefaultDisabledTools()
@@ -172,19 +175,15 @@ export default memo(function DropdownToolsAvailable({
         <div className="max-h-64 overflow-y-auto">
           <DropDrawerGroup>
             {Object.entries(toolsByServer).map(([serverName, serverTools]) => (
-              <DropDrawerSub
-                id={`server-${serverName}`}
-                key={serverName}
-              >
+              <DropDrawerSub id={`server-${serverName}`} key={serverName}>
                 <DropDrawerSubTrigger className="py-2 hover:backdrop-blur-2xl rounded-sm px-2 mx-auto w-full">
                   <div className="flex items-center justify-between w-full">
-                    <span className="text-sm">
-                      {serverName}
-                    </span>
+                    <span className="text-sm">{serverName}</span>
                     <span className="text-xs text-muted-foreground inline-flex items-center mr-1 border px-1 rounded-sm">
                       {
-                        serverTools.filter((tool) => isToolChecked(tool.server, tool.name))
-                          .length
+                        serverTools.filter((tool) =>
+                          isToolChecked(tool.server, tool.name)
+                        ).length
                       }
                     </span>
                   </div>
@@ -193,9 +192,7 @@ export default memo(function DropdownToolsAvailable({
                   <DropDrawerGroup>
                     {serverTools.length > 1 && (
                       <div className="sticky top-0 z-10  border-b px-4 md:px-2 pr-2 py-1.5 flex items-center justify-between">
-                        <span className="text-xs font-medium">
-                          All Tools
-                        </span>
+                        <span className="text-xs font-medium">All Tools</span>
                         <div
                           className={cn(
                             'flex items-center gap-2',
@@ -219,11 +216,19 @@ export default memo(function DropdownToolsAvailable({
                         return (
                           <DropDrawerItem
                             onClick={(e) => {
-                              handleToolToggle(tool.server, tool.name, !isChecked)
+                              handleToolToggle(
+                                tool.server,
+                                tool.name,
+                                !isChecked
+                              )
                               e.preventDefault()
                             }}
                             onSelect={(e) => {
-                              handleToolToggle(tool.server, tool.name, !isChecked)
+                              handleToolToggle(
+                                tool.server,
+                                tool.name,
+                                !isChecked
+                              )
                               e.preventDefault()
                             }}
                             key={`${tool.server}::${tool.name}`}
@@ -232,7 +237,11 @@ export default memo(function DropdownToolsAvailable({
                               <Switch
                                 checked={isChecked}
                                 onCheckedChange={(checked) => {
-                                  handleToolToggle(tool.server, tool.name, checked)
+                                  handleToolToggle(
+                                    tool.server,
+                                    tool.name,
+                                    checked
+                                  )
                                 }}
                                 onClick={(e) => {
                                   e.stopPropagation()

@@ -55,7 +55,7 @@ vi.mock('@/components/common/AvatarEmoji', () => ({
 }))
 
 vi.mock('@/containers/DropdownToolsAvailable', () => ({
-  default: ({ children }: any) => (
+  DropdownToolsAvailable: ({ children }: any) => (
     <div data-testid="dropdown-tools-available">{children?.(false, 0)}</div>
   ),
 }))

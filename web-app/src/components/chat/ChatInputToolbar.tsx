@@ -38,7 +38,7 @@ import {
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { TokenCounter } from '@/components/TokenCounter'
 import { AvatarEmoji } from '@/components/common/AvatarEmoji'
-import DropdownToolsAvailable from '@/containers/DropdownToolsAvailable'
+import { DropdownToolsAvailable } from '@/containers/DropdownToolsAvailable'
 import { McpExtensionToolLoader } from '@/containers/McpExtensionToolLoader'
 import type { MCPToolComponentProps, ThreadMessage } from '@ax-studio/core'
 import type { MCPTool } from '@/types/mcp'

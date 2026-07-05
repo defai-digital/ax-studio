@@ -12,9 +12,7 @@ const mockTools = [
 let currentTools = mockTools
 
 vi.mock('@/hooks/settings/useAppState', () => ({
-  useAppState: vi.fn((selector) =>
-    selector({ tools: currentTools })
-  ),
+  useAppState: vi.fn((selector) => selector({ tools: currentTools })),
 }))
 
 vi.mock('@/hooks/threads/useThreads', () => ({
@@ -48,21 +46,45 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
 }))
 
 vi.mock('@/components/ui/dropdrawer', () => ({
-  DropDrawer: ({ children }: { children: React.ReactNode }) => <div data-testid="dropdrawer">{children}</div>,
-  DropDrawerContent: ({ children }: { children: React.ReactNode }) => <div data-testid="dropdrawer-content">{children}</div>,
-  DropDrawerItem: ({ children, disabled, icon }: { children: React.ReactNode; disabled?: boolean; icon?: React.ReactNode }) => (
+  DropDrawer: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="dropdrawer">{children}</div>
+  ),
+  DropDrawerContent: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="dropdrawer-content">{children}</div>
+  ),
+  DropDrawerItem: ({
+    children,
+    disabled,
+    icon,
+  }: {
+    children: React.ReactNode
+    disabled?: boolean
+    icon?: React.ReactNode
+  }) => (
     <div data-testid="dropdrawer-item" data-disabled={disabled}>
       {icon}
       {children}
     </div>
   ),
-  DropDrawerSub: ({ children }: { children: React.ReactNode }) => <div data-testid="dropdrawer-sub">{children}</div>,
-  DropDrawerLabel: ({ children }: { children: React.ReactNode }) => <div data-testid="dropdrawer-label">{children}</div>,
-  DropDrawerSubContent: ({ children }: { children: React.ReactNode }) => <div data-testid="dropdrawer-sub-content">{children}</div>,
+  DropDrawerSub: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="dropdrawer-sub">{children}</div>
+  ),
+  DropDrawerLabel: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="dropdrawer-label">{children}</div>
+  ),
+  DropDrawerSubContent: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="dropdrawer-sub-content">{children}</div>
+  ),
   DropDrawerSeparator: () => <hr data-testid="dropdrawer-separator" />,
-  DropDrawerSubTrigger: ({ children }: { children: React.ReactNode }) => <div data-testid="dropdrawer-sub-trigger">{children}</div>,
-  DropDrawerTrigger: ({ children }: { children: React.ReactNode }) => <div data-testid="dropdrawer-trigger">{children}</div>,
-  DropDrawerGroup: ({ children }: { children: React.ReactNode }) => <div data-testid="dropdrawer-group">{children}</div>,
+  DropDrawerSubTrigger: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="dropdrawer-sub-trigger">{children}</div>
+  ),
+  DropDrawerTrigger: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="dropdrawer-trigger">{children}</div>
+  ),
+  DropDrawerGroup: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="dropdrawer-group">{children}</div>
+  ),
 }))
 
 vi.mock('@/components/ui/switch', () => ({
@@ -71,7 +93,7 @@ vi.mock('@/components/ui/switch', () => ({
   ),
 }))
 
-import DropdownToolsAvailable from '../DropdownToolsAvailable'
+import { DropdownToolsAvailable } from '../DropdownToolsAvailable'
 
 describe('DropdownToolsAvailable', () => {
   const renderTrigger = (isOpen: boolean, toolsCount: number) => (
@@ -91,17 +113,13 @@ describe('DropdownToolsAvailable', () => {
   it('renders "no tools available" when tools list is empty', () => {
     currentTools = []
 
-    render(
-      <DropdownToolsAvailable>{renderTrigger}</DropdownToolsAvailable>
-    )
+    render(<DropdownToolsAvailable>{renderTrigger}</DropdownToolsAvailable>)
 
     expect(screen.getByText('common:noToolsAvailable')).toBeInTheDocument()
   })
 
   it('renders tool names grouped by server when tools exist', () => {
-    render(
-      <DropdownToolsAvailable>{renderTrigger}</DropdownToolsAvailable>
-    )
+    render(<DropdownToolsAvailable>{renderTrigger}</DropdownToolsAvailable>)
 
     expect(screen.getByText('server-1')).toBeInTheDocument()
     expect(screen.getByText('server-2')).toBeInTheDocument()
@@ -111,38 +129,28 @@ describe('DropdownToolsAvailable', () => {
   })
 
   it('renders "Available Tools" label', () => {
-    render(
-      <DropdownToolsAvailable>{renderTrigger}</DropdownToolsAvailable>
-    )
+    render(<DropdownToolsAvailable>{renderTrigger}</DropdownToolsAvailable>)
 
     expect(screen.getByText('Available Tools')).toBeInTheDocument()
   })
 
   it('shows enabled tools count in trigger', () => {
-    render(
-      <DropdownToolsAvailable>{renderTrigger}</DropdownToolsAvailable>
-    )
+    render(<DropdownToolsAvailable>{renderTrigger}</DropdownToolsAvailable>)
 
     // All 3 tools enabled since getDisabledToolsForThread returns []
     expect(screen.getByText('Tools (3) closed')).toBeInTheDocument()
   })
 
   it('shows reduced count when some tools are disabled', () => {
-    mockGetDisabledToolsForThread.mockReturnValue([
-      'server-1::tool-a',
-    ])
+    mockGetDisabledToolsForThread.mockReturnValue(['server-1::tool-a'])
 
-    render(
-      <DropdownToolsAvailable>{renderTrigger}</DropdownToolsAvailable>
-    )
+    render(<DropdownToolsAvailable>{renderTrigger}</DropdownToolsAvailable>)
 
     expect(screen.getByText('Tools (2) closed')).toBeInTheDocument()
   })
 
   it('initializes thread tools on mount when tools and threadId exist', () => {
-    render(
-      <DropdownToolsAvailable>{renderTrigger}</DropdownToolsAvailable>
-    )
+    render(<DropdownToolsAvailable>{renderTrigger}</DropdownToolsAvailable>)
 
     expect(mockInitializeThreadTools).toHaveBeenCalledWith(
       'thread-1',
@@ -151,27 +159,21 @@ describe('DropdownToolsAvailable', () => {
   })
 
   it('renders tool descriptions when provided', () => {
-    render(
-      <DropdownToolsAvailable>{renderTrigger}</DropdownToolsAvailable>
-    )
+    render(<DropdownToolsAvailable>{renderTrigger}</DropdownToolsAvailable>)
 
     expect(screen.getByText('Description A')).toBeInTheDocument()
     expect(screen.getByText('Description B')).toBeInTheDocument()
   })
 
   it('renders "All Tools" toggle when server has more than 1 tool', () => {
-    render(
-      <DropdownToolsAvailable>{renderTrigger}</DropdownToolsAvailable>
-    )
+    render(<DropdownToolsAvailable>{renderTrigger}</DropdownToolsAvailable>)
 
     // server-1 has 2 tools so "All Tools" should appear
     expect(screen.getByText('All Tools')).toBeInTheDocument()
   })
 
   it('shows enabled count per server', () => {
-    render(
-      <DropdownToolsAvailable>{renderTrigger}</DropdownToolsAvailable>
-    )
+    render(<DropdownToolsAvailable>{renderTrigger}</DropdownToolsAvailable>)
 
     // server-1 has 2 enabled tools, server-2 has 1
     expect(screen.getByText('2')).toBeInTheDocument()
