@@ -250,7 +250,7 @@ describe('extractInferenceParams', () => {
   it('should handle invalid values correctly by falling back to originParams', () => {
     const modelParams = { temperature: 'invalid', token_limit: -1 }
     const originParams = { temperature: 0.5, token_limit: 100 }
-    expect(extractInferenceParams(modelParams as any, originParams)).toEqual(originParams)
+    expect(extractInferenceParams(modelParams, originParams)).toEqual(originParams)
   })
 
   it('should return an empty object when no modelParams are provided', () => {
@@ -266,8 +266,8 @@ describe('extractInferenceParams', () => {
       max_tokens: 50.3,
       invalid_param: 'should_be_ignored',
     }
-    
-    const result = extractInferenceParams(modelParams as any)
+
+    const result = extractInferenceParams(modelParams)
     expect(result).toEqual({
       temperature: 1.5,
       token_limit: 100,
@@ -279,13 +279,13 @@ describe('extractInferenceParams', () => {
 
   it('should handle parameters without validation rules', () => {
     const modelParams = { engine: 'llama' }
-    const result = extractInferenceParams(modelParams as any)
+    const result = extractInferenceParams(modelParams)
     expect(result).toEqual({ engine: 'llama' })
   })
 
   it('should skip invalid values when no origin params provided', () => {
     const modelParams = { temperature: 'invalid', top_p: 0.8 }
-    const result = extractInferenceParams(modelParams as any)
+    const result = extractInferenceParams(modelParams)
     expect(result).toEqual({ top_p: 0.8 })
   })
 
@@ -297,7 +297,7 @@ describe('extractInferenceParams', () => {
     }
 
     const snapshot = { ...modelParams }
-    const result = extractInferenceParams(modelParams as any)
+    const result = extractInferenceParams(modelParams)
 
     expect(result).toEqual({
       temperature: 0.7,
@@ -326,7 +326,7 @@ describe('extractModelLoadParams', () => {
       invalid_param: 'should_be_ignored',
     }
 
-    const result = extractModelLoadParams(modelParams as any)
+    const result = extractModelLoadParams(modelParams)
     expect(result).toEqual({
       ctx_len: 2048,
       ngl: 12,
@@ -347,7 +347,7 @@ describe('extractModelLoadParams', () => {
       system_prompt: 'You are helpful',
       model_path: '/path',
     }
-    const result = extractModelLoadParams(modelParams as any)
+    const result = extractModelLoadParams(modelParams)
     expect(result).toEqual({
       pre_prompt: 'System:',
       system_prompt: 'You are helpful',
@@ -358,13 +358,13 @@ describe('extractModelLoadParams', () => {
   it('should fall back to origin params for invalid values', () => {
     const modelParams = { ctx_len: -1, ngl: 'invalid' }
     const originParams = { ctx_len: 2048, ngl: 12 }
-    const result = extractModelLoadParams(modelParams as any, originParams)
+    const result = extractModelLoadParams(modelParams, originParams)
     expect(result).toEqual({ ctx_len: 2048, ngl: 12 })
   })
 
   it('should skip invalid values when no origin params provided', () => {
     const modelParams = { ctx_len: -1, embedding: true }
-    const result = extractModelLoadParams(modelParams as any)
+    const result = extractModelLoadParams(modelParams)
     expect(result).toEqual({ embedding: true })
   })
 
@@ -373,7 +373,7 @@ describe('extractModelLoadParams', () => {
     const originParams = { ctx_len: 4096, ngl: 32 }
 
     const snapshot = { ...modelParams }
-    const result = extractModelLoadParams(modelParams as any, originParams as any)
+    const result = extractModelLoadParams(modelParams, originParams)
 
     expect(result).toEqual({
       ctx_len: 4096,
