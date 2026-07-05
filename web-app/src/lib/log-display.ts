@@ -1,3 +1,6 @@
+export const SERVER_PROXY_LOG_TARGET = 'app_lib::core::server::proxy'
+export const LOG_EVENT_NAME = 'log://log'
+
 const LOG_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
   hour12: false,
   timeZone: 'UTC',

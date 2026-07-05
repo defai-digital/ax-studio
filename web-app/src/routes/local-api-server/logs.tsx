@@ -5,14 +5,16 @@ import { useEffect, useState, useRef } from 'react'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import type { LogEntry } from '@/services/app/types'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { formatLogTimestamp, getLogLevelColor } from '@/lib/log-display'
+import {
+  LOG_EVENT_NAME,
+  SERVER_PROXY_LOG_TARGET,
+  formatLogTimestamp,
+  getLogLevelColor,
+} from '@/lib/log-display'
 
 export const Route = createFileRoute(route.localApiServerlogs)({
   component: LogsViewer,
 })
-
-const SERVER_LOG_TARGET = 'app_lib::core::server::proxy'
-const LOG_EVENT_NAME = 'log://log'
 
 function LogsViewer() {
   const { t } = useTranslation()
@@ -39,7 +41,7 @@ function LogsViewer() {
       .then((logData) => {
         if (!isMounted) return
         const logs = logData
-          .filter((log) => log?.target === SERVER_LOG_TARGET)
+          .filter((log) => log?.target === SERVER_PROXY_LOG_TARGET)
           .filter(Boolean) as LogEntry[]
         setLogs(logs)
 
@@ -57,7 +59,7 @@ function LogsViewer() {
 
         const { message } = event.payload as { message: string }
         const log: LogEntry | undefined = serviceHub.app().parseLogLine(message)
-        if (log?.target === SERVER_LOG_TARGET) {
+        if (log?.target === SERVER_PROXY_LOG_TARGET) {
           setLogs((prevLogs) => [...prevLogs, log])
           // Schedule scroll to bottom after state update
           scheduleScrollToBottom(0)

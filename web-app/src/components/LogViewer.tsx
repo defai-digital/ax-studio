@@ -3,11 +3,14 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import type { LogEntry } from '@/services/app/types'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { formatLogTimestamp, getLogLevelColor } from '@/lib/log-display'
+import {
+  LOG_EVENT_NAME,
+  SERVER_PROXY_LOG_TARGET,
+  formatLogTimestamp,
+  getLogLevelColor,
+} from '@/lib/log-display'
 import { useState } from 'react'
 
-const SERVER_LOG_TARGET = 'app_lib::core::server::proxy'
-const LOG_EVENT_NAME = 'log://log'
 const MAX_LOGS = 1_000
 
 export function LogViewer() {
@@ -40,7 +43,7 @@ export function LogViewer() {
       .readLogs()
       .then((logData) => {
         const filtered = logData
-          .filter((log) => log?.target === SERVER_LOG_TARGET)
+          .filter((log) => log?.target === SERVER_PROXY_LOG_TARGET)
           .filter(Boolean) as LogEntry[]
         if (isMounted) {
           setLogs(filtered.slice(-MAX_LOGS))
@@ -57,7 +60,7 @@ export function LogViewer() {
 
         const { message } = event.payload as { message: string }
         const log: LogEntry | undefined = serviceHub.app().parseLogLine(message)
-        if (log?.target === SERVER_LOG_TARGET) {
+        if (log?.target === SERVER_PROXY_LOG_TARGET) {
           setLogs((prev) => {
             const next = [...prev, log]
             return next.length > MAX_LOGS ? next.slice(-MAX_LOGS) : next

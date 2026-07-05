@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { formatLogTimestamp, getLogLevelColor } from '../log-display'
+import {
+  LOG_EVENT_NAME,
+  SERVER_PROXY_LOG_TARGET,
+  formatLogTimestamp,
+  getLogLevelColor,
+} from '../log-display'
 
 describe('log display helpers', () => {
   it('formats timestamps as UTC time', () => {
@@ -15,5 +20,10 @@ describe('log display helpers', () => {
     expect(getLogLevelColor('info')).toBe('text-blue-500')
     expect(getLogLevelColor('debug')).toBe('text-gray-500')
     expect(getLogLevelColor('trace')).toBe('text-gray-500')
+  })
+
+  it('exposes shared server log subscription constants', () => {
+    expect(SERVER_PROXY_LOG_TARGET).toBe('app_lib::core::server::proxy')
+    expect(LOG_EVENT_NAME).toBe('log://log')
   })
 })
