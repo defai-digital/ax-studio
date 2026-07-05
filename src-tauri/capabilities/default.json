@@ -3,6 +3,7 @@
   "identifier": "default",
   "description": "enables the default permissions",
   "windows": ["main"],
+  "platforms": ["macOS", "windows"],
   "remote": {
     "urls": []
   },

@@ -3,7 +3,7 @@
   "identifier": "logs-window",
   "description": "enables permissions for the logs window",
   "windows": ["logs-window-local-api-server"],
-  "platforms": ["linux", "macOS", "windows"],
+  "platforms": ["macOS", "windows"],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",

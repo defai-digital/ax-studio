@@ -175,10 +175,78 @@ jobs:
           New-Item -ItemType Directory -Force C:\cargo | Out-Null
           New-Item -ItemType Directory -Force C:\cargo-target | Out-Null
 
-      - name: Linter and test
+      - name: Lint
         shell: powershell
+        timeout-minutes: 20
         run: |
-          make test
+          make lint
+        env:
+          NODE_OPTIONS: '--max-old-space-size=2048'
+          CARGO_HOME: C:\cargo
+          CARGO_TARGET_DIR: C:\cargo-target
+          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
+
+      - name: Download binaries
+        shell: powershell
+        timeout-minutes: 15
+        run: |
+          npx -y @yarnpkg/cli-dist@4.5.3 download:bin
+        env:
+          NODE_OPTIONS: '--max-old-space-size=2048'
+          CARGO_HOME: C:\cargo
+          CARGO_TARGET_DIR: C:\cargo-target
+          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
+
+      - name: Vitest
+        shell: powershell
+        timeout-minutes: 20
+        run: |
+          npx -y @yarnpkg/cli-dist@4.5.3 test
+        env:
+          NODE_OPTIONS: '--max-old-space-size=2048'
+          CARGO_HOME: C:\cargo
+          CARGO_TARGET_DIR: C:\cargo-target
+          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
+
+      - name: Prepare Tauri test assets
+        shell: powershell
+        timeout-minutes: 10
+        run: |
+          npx -y @yarnpkg/cli-dist@4.5.3 copy:assets:tauri
+          npx -y @yarnpkg/cli-dist@4.5.3 build:icon
+        env:
+          NODE_OPTIONS: '--max-old-space-size=2048'
+          CARGO_HOME: C:\cargo
+          CARGO_TARGET_DIR: C:\cargo-target
+          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
+
+      - name: Cargo test src-tauri
+        shell: powershell
+        timeout-minutes: 30
+        run: |
+          cargo test --manifest-path src-tauri/Cargo.toml --no-default-features --features test-tauri -- --test-threads=1
+        env:
+          NODE_OPTIONS: '--max-old-space-size=2048'
+          CARGO_HOME: C:\cargo
+          CARGO_TARGET_DIR: C:\cargo-target
+          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
+
+      - name: Cargo test hardware plugin
+        shell: powershell
+        timeout-minutes: 15
+        run: |
+          cargo test --manifest-path src-tauri/plugins/tauri-plugin-hardware/Cargo.toml
+        env:
+          NODE_OPTIONS: '--max-old-space-size=2048'
+          CARGO_HOME: C:\cargo
+          CARGO_TARGET_DIR: C:\cargo-target
+          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
+
+      - name: Cargo test utils
+        shell: powershell
+        timeout-minutes: 10
+        run: |
+          cargo test --manifest-path src-tauri/utils/Cargo.toml
         env:
           NODE_OPTIONS: '--max-old-space-size=2048'
           CARGO_HOME: C:\cargo
@@ -235,10 +303,78 @@ jobs:
           New-Item -ItemType Directory -Force C:\cargo | Out-Null
           New-Item -ItemType Directory -Force C:\cargo-target | Out-Null
 
-      - name: Linter and test
+      - name: Lint
         shell: powershell
+        timeout-minutes: 20
         run: |
-          make test
+          make lint
+        env:
+          NODE_OPTIONS: '--max-old-space-size=2048'
+          CARGO_HOME: C:\cargo
+          CARGO_TARGET_DIR: C:\cargo-target
+          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
+
+      - name: Download binaries
+        shell: powershell
+        timeout-minutes: 15
+        run: |
+          npx -y @yarnpkg/cli-dist@4.5.3 download:bin
+        env:
+          NODE_OPTIONS: '--max-old-space-size=2048'
+          CARGO_HOME: C:\cargo
+          CARGO_TARGET_DIR: C:\cargo-target
+          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
+
+      - name: Vitest
+        shell: powershell
+        timeout-minutes: 20
+        run: |
+          npx -y @yarnpkg/cli-dist@4.5.3 test
+        env:
+          NODE_OPTIONS: '--max-old-space-size=2048'
+          CARGO_HOME: C:\cargo
+          CARGO_TARGET_DIR: C:\cargo-target
+          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
+
+      - name: Prepare Tauri test assets
+        shell: powershell
+        timeout-minutes: 10
+        run: |
+          npx -y @yarnpkg/cli-dist@4.5.3 copy:assets:tauri
+          npx -y @yarnpkg/cli-dist@4.5.3 build:icon
+        env:
+          NODE_OPTIONS: '--max-old-space-size=2048'
+          CARGO_HOME: C:\cargo
+          CARGO_TARGET_DIR: C:\cargo-target
+          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
+
+      - name: Cargo test src-tauri
+        shell: powershell
+        timeout-minutes: 30
+        run: |
+          cargo test --manifest-path src-tauri/Cargo.toml --no-default-features --features test-tauri -- --test-threads=1
+        env:
+          NODE_OPTIONS: '--max-old-space-size=2048'
+          CARGO_HOME: C:\cargo
+          CARGO_TARGET_DIR: C:\cargo-target
+          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
+
+      - name: Cargo test hardware plugin
+        shell: powershell
+        timeout-minutes: 15
+        run: |
+          cargo test --manifest-path src-tauri/plugins/tauri-plugin-hardware/Cargo.toml
+        env:
+          NODE_OPTIONS: '--max-old-space-size=2048'
+          CARGO_HOME: C:\cargo
+          CARGO_TARGET_DIR: C:\cargo-target
+          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
+
+      - name: Cargo test utils
+        shell: powershell
+        timeout-minutes: 10
+        run: |
+          cargo test --manifest-path src-tauri/utils/Cargo.toml
         env:
           NODE_OPTIONS: '--max-old-space-size=2048'
           CARGO_HOME: C:\cargo

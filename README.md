@@ -117,6 +117,11 @@ AX Studio is the general AI workspace in the AutomatosX stack.
 
 ### Install
 
+AX Studio Desktop officially supports macOS Apple Silicon and Windows x64.
+Linux desktop builds are not published or supported; Linux users should use
+AX Serving, OpenAI-compatible endpoints, or source builds without release/SLA
+expectations.
+
 **macOS Apple Silicon - recommended**
 
 ```bash
@@ -191,7 +196,7 @@ AX Studio supports multiple local inference paths:
 
 | Runtime | Platform | Use it when |
 | --- | --- | --- |
-| `llama.cpp` | macOS, Windows, Linux source builds | You want GGUF local inference through the bundled engine manager |
+| `llama.cpp` | macOS, Windows | You want GGUF local inference through the bundled engine manager |
 | MLX provider | Apple Silicon macOS | You want in-process AX Engine SDK inference on Metal |
 | AX Serving / OpenAI-compatible | Any reachable endpoint | You already run a local or remote OpenAI-compatible model server |
 | Ollama | Local machine | You want AX Studio to use models served by Ollama |
@@ -305,6 +310,8 @@ Use this path when contributing to AX Studio or running the app from source.
 - Rust 1.77.2+
 - Tauri CLI 2.x
 - macOS users building MLX support: Apple Silicon is required for the MLX provider
+- Desktop development is focused on macOS and Windows. Linux may compile from
+  source, but it is not an official desktop support target.
 
 ### Run From Source
 

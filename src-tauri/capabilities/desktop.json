@@ -6,7 +6,7 @@
   "remote": {
     "urls": []
   },
-  "platforms": ["linux", "macOS", "windows"],
+  "platforms": ["macOS", "windows"],
   "permissions": [
     "core:default",
     "core:webview:allow-set-webview-zoom",
