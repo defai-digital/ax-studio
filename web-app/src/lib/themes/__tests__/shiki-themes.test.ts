@@ -3,6 +3,14 @@ import { describe, expect, it } from 'vitest'
 import { axStudioDarkTheme } from '../shiki-theme-dark'
 import { axStudioLightTheme } from '../shiki-theme-light'
 
+type ThemeToken = NonNullable<typeof axStudioDarkTheme.tokenColors>[number]
+
+function hasTokenScope(token: ThemeToken, scope: string): boolean {
+  return Array.isArray(token.scope)
+    ? token.scope.includes(scope)
+    : token.scope === scope
+}
+
 describe('AX Studio Shiki themes', () => {
   it('defines matching dark and light theme metadata', () => {
     expect(axStudioDarkTheme).toMatchObject({
@@ -20,16 +28,12 @@ describe('AX Studio Shiki themes', () => {
       expect(theme.colors?.['editor.background']).toBeDefined()
       expect(theme.colors?.['editor.foreground']).toBeDefined()
       expect(theme.tokenColors).toHaveLength(13)
-      expect(theme.tokenColors?.some((token) =>
-        Array.isArray(token.scope)
-          ? token.scope.includes('keyword')
-          : token.scope === 'keyword',
-      )).toBe(true)
-      expect(theme.tokenColors?.some((token) =>
-        Array.isArray(token.scope)
-          ? token.scope.includes('string')
-          : token.scope === 'string',
-      )).toBe(true)
+      expect(
+        theme.tokenColors?.some((token) => hasTokenScope(token, 'keyword'))
+      ).toBe(true)
+      expect(
+        theme.tokenColors?.some((token) => hasTokenScope(token, 'string'))
+      ).toBe(true)
     }
   })
 })

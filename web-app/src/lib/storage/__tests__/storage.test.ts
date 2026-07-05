@@ -14,11 +14,19 @@ function makeStorage(overrides: Partial<Storage> = {}): Storage {
   const store: Record<string, string> = {}
   return {
     getItem: (key) => store[key] ?? null,
-    setItem: (key, value) => { store[key] = value },
-    removeItem: (key) => { delete store[key] },
-    clear: () => { Object.keys(store).forEach((k) => delete store[k]) },
+    setItem: (key, value) => {
+      store[key] = value
+    },
+    removeItem: (key) => {
+      delete store[key]
+    },
+    clear: () => {
+      Object.keys(store).forEach((k) => delete store[k])
+    },
     key: (i) => Object.keys(store)[i] ?? null,
-    get length() { return Object.keys(store).length },
+    get length() {
+      return Object.keys(store).length
+    },
     ...overrides,
   } as Storage
 }
@@ -36,9 +44,16 @@ describe('safeStorageGetItem', () => {
 
   it('returns null and warns when getItem throws', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const s = makeStorage({ getItem: () => { throw new Error('quota') } })
+    const s = makeStorage({
+      getItem: () => {
+        throw new Error('quota')
+      },
+    })
     expect(safeStorageGetItem(s, 'k', 'ctx')).toBeNull()
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Failed to read'), expect.any(Error))
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to read'),
+      expect.any(Error)
+    )
     warn.mockRestore()
   })
 })
@@ -76,7 +91,11 @@ describe('safeStorageSetItem', () => {
 
   it('returns false and warns when setItem throws', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const s = makeStorage({ setItem: () => { throw new Error('full') } })
+    const s = makeStorage({
+      setItem: () => {
+        throw new Error('full')
+      },
+    })
     expect(safeStorageSetItem(s, 'k', 'v')).toBe(false)
     expect(warn).toHaveBeenCalled()
     warn.mockRestore()
@@ -93,7 +112,11 @@ describe('safeStorageRemoveItem', () => {
 
   it('returns false and warns when removeItem throws', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const s = makeStorage({ removeItem: () => { throw new Error('locked') } })
+    const s = makeStorage({
+      removeItem: () => {
+        throw new Error('locked')
+      },
+    })
     expect(safeStorageRemoveItem(s, 'k')).toBe(false)
     expect(warn).toHaveBeenCalled()
     warn.mockRestore()
@@ -149,7 +172,11 @@ describe('safeStorageSetJSON', () => {
 
   it('returns false when the underlying write fails', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const s = makeStorage({ setItem: () => { throw new Error('full') } })
+    const s = makeStorage({
+      setItem: () => {
+        throw new Error('full')
+      },
+    })
     expect(safeStorageSetJSON(s, 'k', {})).toBe(false)
     warn.mockRestore()
   })
@@ -169,7 +196,9 @@ describe('createSafeJSONStorage', () => {
 
   it('returns null when storage resolver throws', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const storage = createSafeJSONStorage(() => { throw new Error('unavailable') })
+    const storage = createSafeJSONStorage(() => {
+      throw new Error('unavailable')
+    })
     expect(storage.getItem('k')).toBeNull()
     expect(warn).toHaveBeenCalled()
     warn.mockRestore()

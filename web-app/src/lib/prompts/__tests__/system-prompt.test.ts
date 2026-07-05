@@ -210,9 +210,13 @@ describe('getOptimizedModelConfig', () => {
 
 describe('LOCAL_KNOWLEDGE_INSTRUCTION', () => {
   it('tells the model to use injected context instead of writing fabric tool calls', () => {
-    expect(LOCAL_KNOWLEDGE_INSTRUCTION).toContain('Local Knowledge Base (ACTIVE)')
+    expect(LOCAL_KNOWLEDGE_INSTRUCTION).toContain(
+      'Local Knowledge Base (ACTIVE)'
+    )
     expect(LOCAL_KNOWLEDGE_INSTRUCTION).toContain('hidden')
-    expect(LOCAL_KNOWLEDGE_INSTRUCTION).toContain('Answer only from the injected')
+    expect(LOCAL_KNOWLEDGE_INSTRUCTION).toContain(
+      'Answer only from the injected'
+    )
     expect(LOCAL_KNOWLEDGE_INSTRUCTION).not.toMatch(/call\s+fabric_search/i)
   })
 })

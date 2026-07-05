@@ -121,12 +121,21 @@ export const getOptimizedModelConfig = (
     optimized.max_output_tokens = targetTokens
   } else {
     // For non-reasoning: clamp down for long prompts / attachments
-    if (!isReasoning && (context.promptLength >= 800 || context.hasAttachments)) {
-      optimized.max_output_tokens = Math.min(optimized.max_output_tokens, targetTokens)
+    if (
+      !isReasoning &&
+      (context.promptLength >= 800 || context.hasAttachments)
+    ) {
+      optimized.max_output_tokens = Math.min(
+        optimized.max_output_tokens,
+        targetTokens
+      )
     }
     // For reasoning: use the higher target if user hasn't set one lower
     if (isReasoning) {
-      optimized.max_output_tokens = Math.max(optimized.max_output_tokens, targetTokens)
+      optimized.max_output_tokens = Math.max(
+        optimized.max_output_tokens,
+        targetTokens
+      )
     }
   }
 

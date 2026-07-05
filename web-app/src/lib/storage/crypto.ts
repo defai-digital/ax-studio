@@ -78,7 +78,10 @@ export async function encrypt(text: string): Promise<string> {
 
     return `${ENCRYPTED_PREFIX}${encodeBase64(iv)}.${encodeBase64(encrypted)}`
   } catch (error) {
-    console.error('Encryption failed — data will NOT be stored securely:', error)
+    console.error(
+      'Encryption failed — data will NOT be stored securely:',
+      error
+    )
     throw new Error('Encryption failed — cannot store securely')
   }
 }
@@ -92,7 +95,10 @@ export async function decrypt(encryptedText: string): Promise<string> {
     return ''
   }
 
-  if (isLegacyFormat(encryptedText) || !encryptedText.startsWith(ENCRYPTED_PREFIX)) {
+  if (
+    isLegacyFormat(encryptedText) ||
+    !encryptedText.startsWith(ENCRYPTED_PREFIX)
+  ) {
     console.warn('Rejected unsupported legacy or plaintext secret format')
     return ''
   }
