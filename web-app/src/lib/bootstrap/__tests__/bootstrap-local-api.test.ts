@@ -1,14 +1,16 @@
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
+import type { ServiceHub } from '@/services'
 import { bootstrapLocalApi } from '../bootstrap-local-api'
 import type { BootstrapLocalApiInput } from '../bootstrap-local-api'
 
-const makeServiceHub = (isRunning = false, shouldFail = false) => ({
-  app: () => ({
-    getServerStatus: shouldFail
-      ? vi.fn().mockRejectedValue(new Error('status check failed'))
-      : vi.fn().mockResolvedValue(isRunning),
-  }),
-})
+const makeServiceHub = (isRunning = false, shouldFail = false): ServiceHub =>
+  ({
+    app: () => ({
+      getServerStatus: shouldFail
+        ? vi.fn().mockRejectedValue(new Error('status check failed'))
+        : vi.fn().mockResolvedValue(isRunning),
+    }),
+  }) as Pick<ServiceHub, 'app'> as ServiceHub
 
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>
 let consoleInfoSpy: ReturnType<typeof vi.spyOn>
@@ -28,7 +30,7 @@ const defaultConfig = {
 const makeInput = (
   overrides: Partial<BootstrapLocalApiInput> = {}
 ): BootstrapLocalApiInput => ({
-  serviceHub: makeServiceHub() as any,
+  serviceHub: makeServiceHub(),
   enabled: true,
   config: defaultConfig,
   setServerStatus: vi.fn(),
@@ -68,7 +70,7 @@ describe('bootstrapLocalApi', () => {
   })
 
   it('sets status to running when server is already running', async () => {
-    const input = makeInput({ serviceHub: makeServiceHub(true) as any })
+    const input = makeInput({ serviceHub: makeServiceHub(true) })
     const result = await bootstrapLocalApi(input)
     expect(result).toEqual({ ok: true })
     expect(input.setServerStatus).toHaveBeenCalledWith('running')
@@ -86,7 +88,7 @@ describe('bootstrapLocalApi', () => {
 
   it('restarts an already-running server when its token is stale', async () => {
     ;(globalThis as any).fetch = vi.fn().mockResolvedValue({ status: 401 })
-    const input = makeInput({ serviceHub: makeServiceHub(true) as any })
+    const input = makeInput({ serviceHub: makeServiceHub(true) })
 
     const result = await bootstrapLocalApi(input)
 
@@ -102,7 +104,7 @@ describe('bootstrapLocalApi', () => {
   })
 
   it('starts server and sets status to running when not already running', async () => {
-    const input = makeInput({ serviceHub: makeServiceHub(false) as any })
+    const input = makeInput({ serviceHub: makeServiceHub(false) })
     const result = await bootstrapLocalApi(input)
     expect(result).toEqual({ ok: true })
     expect(input.setServerStatus).toHaveBeenCalledWith('pending')
@@ -113,7 +115,7 @@ describe('bootstrapLocalApi', () => {
     ;(globalThis as any).window.core.api.startServer = vi
       .fn()
       .mockResolvedValue(40000)
-    const input = makeInput({ serviceHub: makeServiceHub(false) as any })
+    const input = makeInput({ serviceHub: makeServiceHub(false) })
     await bootstrapLocalApi(input)
     expect(input.setServerPort).toHaveBeenCalledWith(40000)
   })
@@ -127,7 +129,7 @@ describe('bootstrapLocalApi', () => {
         )
       )
       .mockResolvedValueOnce(39292)
-    const input = makeInput({ serviceHub: makeServiceHub(false) as any })
+    const input = makeInput({ serviceHub: makeServiceHub(false) })
 
     const result = await bootstrapLocalApi(input)
 
@@ -146,7 +148,7 @@ describe('bootstrapLocalApi', () => {
     ;(globalThis as any).window.core.api.startServer = vi
       .fn()
       .mockRejectedValue(new Error('An API key is required'))
-    const input = makeInput({ serviceHub: makeServiceHub(false) as any })
+    const input = makeInput({ serviceHub: makeServiceHub(false) })
 
     const result = await bootstrapLocalApi(input)
 
@@ -161,13 +163,13 @@ describe('bootstrapLocalApi', () => {
     ;(globalThis as any).window.core.api.startServer = vi
       .fn()
       .mockResolvedValue(39291)
-    const input = makeInput({ serviceHub: makeServiceHub(false) as any })
+    const input = makeInput({ serviceHub: makeServiceHub(false) })
     await bootstrapLocalApi(input)
     expect(input.setServerPort).not.toHaveBeenCalled()
   })
 
   it('sets status to stopped and returns ok: false when getServerStatus throws', async () => {
-    const input = makeInput({ serviceHub: makeServiceHub(false, true) as any })
+    const input = makeInput({ serviceHub: makeServiceHub(false, true) })
     const result = await bootstrapLocalApi(input)
     expect(result.ok).toBe(false)
     expect(input.setServerStatus).toHaveBeenCalledWith('stopped')
@@ -182,8 +184,8 @@ describe('bootstrapLocalApi', () => {
         })
     )
 
-    const firstInput = makeInput({ serviceHub: makeServiceHub(false) as any })
-    const secondInput = makeInput({ serviceHub: makeServiceHub(false) as any })
+    const firstInput = makeInput({ serviceHub: makeServiceHub(false) })
+    const secondInput = makeInput({ serviceHub: makeServiceHub(false) })
 
     const firstPromise = bootstrapLocalApi(firstInput)
     await Promise.resolve()
