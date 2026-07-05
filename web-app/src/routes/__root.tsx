@@ -1,7 +1,14 @@
 import { createRootRoute, Outlet, useLocation } from '@tanstack/react-router'
+import { Fragment } from 'react/jsx-runtime'
+import {
+  useCallback,
+  useEffect,
+  type MouseEvent,
+  type ReactNode,
+} from 'react'
+import { motion } from 'motion/react'
 
 import DialogAppUpdater from '@/containers/dialogs/AppUpdater'
-import { Fragment } from 'react/jsx-runtime'
 import { ThemeProvider } from '@/providers/ThemeProvider'
 import { InterfaceProvider } from '@/providers/InterfaceProvider'
 import { KeyboardShortcutsProvider } from '@/providers/KeyboardShortcuts'
@@ -14,16 +21,17 @@ import ToolApproval from '@/containers/dialogs/mcp/ToolApproval'
 import AttachmentIngestionDialog from '@/containers/dialogs/AttachmentIngestionDialog'
 import { TranslationProvider } from '@/i18n/TranslationContext'
 import OutOfContextPromiseModal from '@/containers/dialogs/OutOfContextDialog'
-import { useEffect } from 'react'
 import GlobalError from '@/components/common/GlobalError'
 import { GlobalEventHandler } from '@/providers/GlobalEventHandler'
 import { ServiceHubProvider } from '@/providers/ServiceHubProvider'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { LeftSidebar } from '@/components/left-sidebar'
 import { WindowControls } from '@/components/WindowControls'
-import { motion } from 'motion/react'
 import { pageVariants, pageTransition } from '@/lib/utils/animations'
 import { hideInitialLoader } from '@/lib/bootstrap/app-startup'
+import { startWindowDragFromMouseEvent } from '@/lib/window-drag'
+
+const MACOS_WINDOW_CHROME_HEIGHT = 60
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -51,6 +59,35 @@ const PageTransition = ({ children }: { children: React.ReactNode }) => {
   )
 }
 
+const MacWindowChrome = ({ children }: { children: ReactNode }) => {
+  const handleWindowChromeDrag = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      if (!IS_MACOS) return
+
+      startWindowDragFromMouseEvent(event, {
+        topInset: MACOS_WINDOW_CHROME_HEIGHT,
+        logContext: 'MacWindowChrome',
+      })
+    },
+    []
+  )
+
+  return (
+    <div
+      className="bg-background size-full relative overflow-hidden"
+      onMouseDownCapture={handleWindowChromeDrag}
+    >
+      {IS_MACOS && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 z-20 h-15 border-b border-border/60 bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/70"
+        />
+      )}
+      {children}
+    </div>
+  )
+}
+
 const AppLayout = () => {
   const {
     open: isLeftPanelOpen,
@@ -60,7 +97,7 @@ const AppLayout = () => {
   } = useLeftPanel()
 
   return (
-    <div className="bg-background size-full relative overflow-hidden">
+    <MacWindowChrome>
       <SidebarProvider
         open={isLeftPanelOpen}
         onOpenChange={setLeftPanel}
@@ -79,7 +116,7 @@ const AppLayout = () => {
           </div>
         </SidebarInset>
       </SidebarProvider>
-    </div>
+    </MacWindowChrome>
   )
 }
 

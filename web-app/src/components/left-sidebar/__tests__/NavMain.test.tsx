@@ -12,6 +12,7 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
         'common:newChat': 'New Chat',
         'common:search': 'Search',
         'common:hub': 'Hub',
+        'common:axBi': 'Ax-BI',
       }
       return map[key] ?? key
     },
@@ -28,6 +29,7 @@ vi.mock('@/hooks/ui/useSearchDialog', () => ({
 vi.mock('@/constants/routes', () => ({
   route: {
     home: '/',
+    axBi: '/ax-bi',
     hub: { index: '/hub' },
     settings: {
       assistant: '/settings/assistant',
@@ -102,6 +104,12 @@ describe('NavMain', () => {
   it('renders Hub link', () => {
     render(<NavMain />)
     expect(screen.getByText('Hub')).toBeInTheDocument()
+  })
+
+  it('renders Ax-BI link', () => {
+    render(<NavMain />)
+    const link = screen.getByText('Ax-BI').closest('a')
+    expect(link).toHaveAttribute('href', '/ax-bi')
   })
 
   it('opens search dialog when search button is clicked', async () => {

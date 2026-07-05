@@ -1,4 +1,4 @@
-import { Bot, Plus, Search, Wrench } from 'lucide-react'
+import { Bot, ChartNoAxesCombined, Plus, Search, Wrench } from 'lucide-react'
 import { route } from '@/constants/routes'
 
 import {
@@ -114,6 +114,14 @@ export function NavMain() {
               <Link to={route.settings.assistant}>
                 <Bot className="text-foreground/70" size={16} />
                 <span className="group-data-[collapsible=icon]:hidden">{t('common:assistants')}</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip={t('common:axBi')}>
+              <Link to={route.axBi}>
+                <ChartNoAxesCombined className="text-foreground/70" size={16} />
+                <span className="group-data-[collapsible=icon]:hidden">{t('common:axBi')}</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
