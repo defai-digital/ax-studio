@@ -452,7 +452,7 @@ export function AxBiWorkspace() {
                           <a
                             href={run.url}
                             target="_blank"
-                            rel="noreferrer"
+                            rel="noopener noreferrer"
                             className="text-primary hover:underline"
                           >
                             Open result

@@ -28,7 +28,11 @@ describe('legacy API bridge', () => {
   it('opens external URLs in a new browser tab', () => {
     openExternalUrl('https://example.com')
 
-    expect(mocks.open).toHaveBeenCalledWith('https://example.com', '_blank')
+    expect(mocks.open).toHaveBeenCalledWith(
+      'https://example.com',
+      '_blank',
+      'noopener,noreferrer'
+    )
   })
 
   it('returns null for bridged API calls on web', async () => {

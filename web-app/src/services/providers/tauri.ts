@@ -104,22 +104,44 @@ async function withProviderTimeout<T>(
 }
 
 function shouldUseTauriFetch(baseUrl: string): boolean {
+  const host = providerUrlHostname(baseUrl)
   return (
-    baseUrl.includes('localhost:') ||
-    baseUrl.includes('127.0.0.1:') ||
-    baseUrl.includes('generativelanguage.googleapis.com')
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host === 'generativelanguage.googleapis.com'
   )
 }
 
 function usesOpenAICompatibleAuth(provider: ModelProvider, baseUrl: string): boolean {
   if (provider.provider !== 'gemini') return true
-  return baseUrl.includes('/openai')
+  return providerUrlPathname(baseUrl).includes('/openai')
 }
 
 function normalizeProviderApiKey(apiKey?: string): string | undefined {
   const trimmed = apiKey?.trim()
   if (!trimmed) return undefined
   return trimmed.replace(/^Bearer\s+/i, '').trim() || undefined
+}
+
+function providerUrl(baseUrl: string): URL | undefined {
+  try {
+    return new URL(baseUrl.trim())
+  } catch {
+    return undefined
+  }
+}
+
+function providerUrlHostname(baseUrl: string): string {
+  return providerUrl(baseUrl)?.hostname.toLowerCase() ?? ''
+}
+
+function providerUrlPathname(baseUrl: string): string {
+  return providerUrl(baseUrl)?.pathname.toLowerCase() ?? ''
+}
+
+function providerUrlHostMatches(baseUrl: string, host: string): boolean {
+  const parsedHost = providerUrlHostname(baseUrl)
+  return parsedHost === host || parsedHost.endsWith(`.${host}`)
 }
 
 const HEADER_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
@@ -155,16 +177,15 @@ const ALIBABA_FALLBACK_MODELS = [
 
 function isAlibabaCompatibleProvider(provider: ModelProvider, baseUrl: string): boolean {
   const providerName = provider.provider.toLowerCase()
-  const normalizedBaseUrl = baseUrl.toLowerCase()
+  const parsedUrl = providerUrl(baseUrl)
   return (
     providerName.includes('alibaba') ||
     providerName.includes('aliyun') ||
     providerName.includes('dashscope') ||
     providerName.includes('qwen') ||
-    normalizedBaseUrl.includes('dashscope.aliyuncs.com') ||
-    normalizedBaseUrl.includes('aliyuncs.com/compatible-mode') ||
-    normalizedBaseUrl.includes('coding-intl.dashscope.aliyuncs.com') ||
-    normalizedBaseUrl.includes('coding.dashscope.aliyuncs.com')
+    providerUrlHostMatches(baseUrl, 'dashscope.aliyuncs.com') ||
+    (parsedUrl?.hostname.toLowerCase().endsWith('.aliyuncs.com') === true &&
+      parsedUrl.pathname.toLowerCase().includes('/compatible-mode'))
   )
 }
 

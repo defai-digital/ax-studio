@@ -170,6 +170,22 @@ describe('TauriProvidersService', () => {
     ).not.toHaveProperty('x-goog-api-key')
   })
 
+  it('does not use Tauri fetch when an allowed host only appears in the URL path', async () => {
+    mocks.fetchNative.mockResolvedValue(response({ data: [{ id: 'safe' }] }))
+
+    await expect(
+      service.fetchModelsFromProvider(
+        provider({
+          base_url:
+            'https://example.com/proxy/generativelanguage.googleapis.com/v1beta',
+        })
+      )
+    ).resolves.toEqual(['safe'])
+
+    expect(mocks.fetchNative).toHaveBeenCalled()
+    expect(mocks.fetchTauri).not.toHaveBeenCalled()
+  })
+
   it('fetches alternative model response shapes', async () => {
     mocks.fetchNative.mockResolvedValue(
       response({ models: ['llama3', { id: 'mistral' }] })
@@ -217,6 +233,19 @@ describe('TauriProvidersService', () => {
       'qwen3-coder-plus',
       'qwen3-coder-next',
     ])
+  })
+
+  it('does not use Alibaba fallback models when a DashScope host only appears in the URL path', async () => {
+    mocks.fetchNative.mockResolvedValue(response({ data: [] }))
+
+    await expect(
+      service.fetchModelsFromProvider(
+        provider({
+          provider: 'openai',
+          base_url: 'https://example.com/proxy/dashscope.aliyuncs.com/v1',
+        })
+      )
+    ).resolves.toEqual([])
   })
 
   it.each([

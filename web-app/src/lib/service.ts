@@ -33,7 +33,8 @@ const apiRoutes = [...CoreRoutes, ...APIRoutes, ...AppRoutes].map((r) => ({
 
 // Function to open an external URL in a new browser window
 export function openExternalUrl(url: string) {
-  window?.open(url, '_blank')
+  const externalWindow = window?.open(url, '_blank', 'noopener,noreferrer')
+  if (externalWindow) externalWindow.opener = null
 }
 
 // Some legacy bridge commands take a single struct parameter named `request`

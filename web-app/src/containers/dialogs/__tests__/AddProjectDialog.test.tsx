@@ -201,6 +201,42 @@ describe('AddProjectDialog', () => {
     )
   })
 
+  it('does not preview or save scriptable logo data URIs', () => {
+    render(
+      <AddProjectDialog
+        open={true}
+        onOpenChange={mockOnOpenChange}
+        editingKey={null}
+        onSave={mockOnSave}
+      />
+    )
+
+    fireEvent.change(
+      screen.getByPlaceholderText('projects.addProjectDialog.namePlaceholder'),
+      { target: { value: 'New Project' } }
+    )
+    fireEvent.change(
+      screen.getByPlaceholderText('https://example.com/logo.png'),
+      {
+        target: {
+          value:
+            'data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9YWxlcnQoMSk+PC9zdmc+',
+        },
+      }
+    )
+
+    expect(screen.queryByRole('img')).toBeNull()
+
+    fireEvent.click(screen.getByText('projects.addProjectDialog.createButton'))
+
+    expect(mockOnSave).toHaveBeenCalledWith(
+      'New Project',
+      undefined,
+      undefined,
+      null
+    )
+  })
+
   it('does not call onSave with empty name', () => {
     render(
       <AddProjectDialog

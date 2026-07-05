@@ -944,14 +944,13 @@ export async function updateBackend(
  */
 export async function installBackendFromFile(filePath: string): Promise<void> {
   const filename = filePath.split(/[\\/]/).pop() ?? filePath
-  const match = filename.match(/^llama-([^_]+(?:_[^.]+)*)-bin-(.+?)\.(tar\.gz|zip)$/)
-  if (!match) {
+  const parsed = parseBackendArchiveFilename(filename)
+  if (!parsed) {
     throw new Error(
       `Invalid backend filename: "${filename}". Expected: llama-{version}-bin-{backend}.tar.gz`
     )
   }
-  const version = match[1]
-  const backend = match[2]
+  const { version, backend } = parsed
 
   const backendsDir = await getBackendsDir()
   const destDir = await getBackendDir(version, backend)
@@ -970,4 +969,28 @@ export async function installBackendFromFile(filePath: string): Promise<void> {
     await removePathIfPresent(destDir, 'backend destination directory')
     throw new Error(`Backend binary missing after installation: ${exePath}`)
   }
+}
+
+function parseBackendArchiveFilename(
+  filename: string
+): { version: string; backend: string } | undefined {
+  const baseName = filename.endsWith('.tar.gz')
+    ? filename.slice(0, -'.tar.gz'.length)
+    : filename.endsWith('.zip')
+      ? filename.slice(0, -'.zip'.length)
+      : undefined
+
+  if (!baseName || !baseName.startsWith('llama-')) return undefined
+
+  const separator = '-bin-'
+  const separatorIndex = baseName.indexOf(separator, 'llama-'.length)
+  if (separatorIndex === -1) return undefined
+
+  const version = baseName.slice('llama-'.length, separatorIndex)
+  const backend = baseName.slice(separatorIndex + separator.length)
+  if (!version || !backend) return undefined
+  if (version.includes('/') || version.includes('\\')) return undefined
+  if (backend.includes('/') || backend.includes('\\')) return undefined
+
+  return { version, backend }
 }

@@ -24,6 +24,23 @@ function deferred<T>() {
 }
 
 describe('createMlxIpcFetch', () => {
+  it('does not expose parse exception details in the response body', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const fetchFn = createMlxIpcFetch()
+
+    const response = await fetchFn('http://localhost/v1/chat/completions', {
+      method: 'POST',
+      body: '{',
+    })
+
+    await expect(response.json()).resolves.toEqual({
+      error: 'mlx fetch could not parse request body',
+    })
+    expect(response.status).toBe(400)
+    expect(warnSpy).toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
   it('forwards MLX stream deltas before the done event', async () => {
     const done = deferred<void>()
 

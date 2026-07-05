@@ -205,6 +205,23 @@ describe('ThreadList', () => {
     // The i18n mock returns the key "common:newThread"
     expect(screen.getByText('common:newThread')).toBeInTheDocument()
   })
+
+  it('does not render scriptable chat logo data URIs', () => {
+    const threads = [
+      makeThread({
+        id: 't1',
+        title: 'Logo Thread',
+        metadata: {
+          chatLogo:
+            'data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9YWxlcnQoMSk+PC9zdmc+',
+        },
+      }),
+    ]
+
+    render(<ThreadList threads={threads} />)
+
+    expect(screen.queryByRole('img', { name: 'Logo Thread' })).toBeNull()
+  })
 })
 
 describe('formatRelativeTime (via ThreadItem)', () => {

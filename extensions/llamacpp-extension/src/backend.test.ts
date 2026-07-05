@@ -81,6 +81,7 @@ import {
   downloadBackend,
   fetchRemoteBackends,
   getAxServingBinaryPath,
+  installBackendFromFile,
 } from './backend'
 import { invoke } from '@tauri-apps/api/core'
 import {
@@ -210,6 +211,28 @@ describe('llamacpp backend helpers', () => {
     ])
 
     expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('installs a backend archive using linear filename parsing', async () => {
+    mocks.existsSync.mockImplementation(async (path: string) => {
+      return path.endsWith('/backends/b123/cpu/llama-server')
+    })
+
+    await installBackendFromFile('/tmp/llama-b123-bin-cpu.tar.gz')
+
+    expect(mocks.mkdir).toHaveBeenCalledWith(
+      '/app-data/llamacpp/backends/b123/cpu'
+    )
+    expect(invoke).toHaveBeenCalledWith('decompress', {
+      path: '/tmp/llama-b123-bin-cpu.tar.gz',
+      outputDir: '/app-data/llamacpp/backends/b123/cpu',
+    })
+  })
+
+  it('rejects malformed backend archive filenames', async () => {
+    await expect(
+      installBackendFromFile('/tmp/llama-b123-cpu.tar.gz')
+    ).rejects.toThrow('Invalid backend filename')
   })
 
   it('serializes duplicate configureBackends calls onto one in-flight promise', async () => {

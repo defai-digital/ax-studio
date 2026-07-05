@@ -70,6 +70,28 @@ function formatRelativeTime(
   return new Date(timestamp * 1000).toLocaleDateString()
 }
 
+function normalizeLogoImageUrl(url: string): string | undefined {
+  const trimmed = url.trim()
+  if (!trimmed) return undefined
+
+  try {
+    const parsed = new URL(trimmed)
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.href
+    }
+    if (parsed.protocol === 'data:') {
+      return /^data:image\/(?:png|jpe?g|gif|webp);base64,[a-z0-9+/]+={0,2}$/i.test(
+        trimmed
+      )
+        ? trimmed
+        : undefined
+    }
+    return undefined
+  } catch {
+    return undefined
+  }
+}
+
 function ChatLogoImage({
   src,
   alt,
@@ -156,10 +178,16 @@ const ThreadItem = memo(
     }, [thread.title])
 
     const currentChatLogo = useMemo(() => {
-      return typeof thread.metadata?.chatLogo === 'string'
-        ? thread.metadata.chatLogo.trim()
-        : ''
+      const logo =
+        typeof thread.metadata?.chatLogo === 'string'
+          ? thread.metadata.chatLogo
+          : ''
+      return normalizeLogoImageUrl(logo) ?? ''
     }, [thread.metadata])
+
+    const chatLogoPreviewUrl = useMemo(() => {
+      return normalizeLogoImageUrl(chatLogo)
+    }, [chatLogo])
 
     const availableProjects = useMemo(() => {
       return folders
@@ -197,7 +225,16 @@ const ThreadItem = memo(
     )
 
     const handleSaveChatLogo = useCallback(() => {
-      const normalizedLogo = chatLogo.trim()
+      const trimmedLogo = chatLogo.trim()
+      const normalizedLogo = trimmedLogo
+        ? normalizeLogoImageUrl(trimmedLogo)
+        : undefined
+      if (trimmedLogo && !normalizedLogo) {
+        toast.error(
+          t('common:invalidImageUrl', { defaultValue: 'Invalid image URL.' })
+        )
+        return
+      }
       updateThread(thread.id, {
         metadata: {
           ...thread.metadata,
@@ -435,9 +472,9 @@ const ThreadItem = memo(
                       handleChatLogoFileChange(event.target.files?.[0])
                     }
                   />
-                  {chatLogo.trim() && (
+                  {chatLogoPreviewUrl && (
                     <img
-                      src={chatLogo.trim()}
+                      src={chatLogoPreviewUrl}
                       alt={threadTitle}
                       className="size-10 rounded-md object-cover border"
                     />
@@ -454,7 +491,7 @@ const ThreadItem = memo(
                   <Button
                     size="sm"
                     onClick={handleSaveChatLogo}
-                    disabled={chatLogo.trim() === currentChatLogo}
+                    disabled={(chatLogoPreviewUrl ?? '') === currentChatLogo}
                   >
                     {t('common:save')}
                   </Button>

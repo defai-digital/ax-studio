@@ -275,10 +275,10 @@ export function createMlxIpcFetch(): typeof fetch {
           : await new Response(init?.body).text()
       parsed = JSON.parse(raw) as OpenAIChatRequest
     } catch (e) {
+      console.warn('[mlx-ipc-fetch] failed to parse request body:', e)
       return new Response(
         JSON.stringify({
           error: 'mlx fetch could not parse request body',
-          detail: String(e),
         }),
         { status: 400, headers: JSON_HEADERS }
       )

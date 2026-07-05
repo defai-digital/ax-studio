@@ -44,24 +44,28 @@ interface AddProjectDialogProps {
   ) => void
 }
 
-// Accept only HTTP(S) URLs and image data URIs for project logos. Keeps
-// `javascript:`, arbitrary `data:text/html` payloads, and other exotic
-// schemes out of the `<img src>` slot.
-function isValidProjectLogoUrl(url: string): boolean {
+// Accept only HTTP(S) URLs and base64 bitmap data URIs for project logos.
+// SVG data URIs are intentionally excluded because they can carry scriptable
+// content in some embedding contexts.
+function normalizeProjectLogoUrl(url: string): string | undefined {
   const trimmed = url.trim()
-  if (!trimmed) return false
+  if (!trimmed) return undefined
 
   try {
     const parsed = new URL(trimmed)
     if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-      return true
+      return parsed.href
     }
     if (parsed.protocol === 'data:') {
-      return /^data:image\/(png|jpe?g|gif|webp|svg\+xml);/i.test(trimmed)
+      return /^data:image\/(?:png|jpe?g|gif|webp);base64,[a-z0-9+/]+={0,2}$/i.test(
+        trimmed
+      )
+        ? trimmed
+        : undefined
     }
-    return false
+    return undefined
   } catch {
-    return false
+    return undefined
   }
 }
 
@@ -120,6 +124,9 @@ export function AddProjectDialog({
 
     const trimmedName = name.trim()
     const trimmedLogo = logo.trim()
+    const normalizedLogo = trimmedLogo
+      ? normalizeProjectLogoUrl(trimmedLogo)
+      : undefined
     const trimmedProjectPrompt = projectPrompt.trim()
 
     // Check for duplicate names (excluding current project when editing)
@@ -141,7 +148,7 @@ export function AddProjectDialog({
     onSave(
       trimmedName,
       selectedAssistantId,
-      trimmedLogo || undefined,
+      normalizedLogo,
       trimmedProjectPrompt || null
     )
 
@@ -175,6 +182,7 @@ export function AddProjectDialog({
       projectPrompt.trim() !== (initialData?.projectPrompt || '')
     : true
   const isButtonDisabled = !name.trim() || (editingKey && !hasChanged)
+  const logoPreviewUrl = normalizeProjectLogoUrl(logo)
 
   return (
     <>
@@ -222,9 +230,9 @@ export function AddProjectDialog({
                 className="mt-2"
                 onChange={(e) => handleLogoFileChange(e.target.files?.[0])}
               />
-              {isValidProjectLogoUrl(logo) && (
+              {logoPreviewUrl && (
                 <img
-                  src={logo.trim()}
+                  src={logoPreviewUrl}
                   alt={name.trim() || t('projects.projectName')}
                   className="mt-2 size-10 rounded-md object-cover border"
                 />
