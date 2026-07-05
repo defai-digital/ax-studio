@@ -25,7 +25,9 @@ vi.mock('@/hooks/ui/use-mobile', () => ({
 
 // Mock framer-motion to avoid animation complexity in tests
 vi.mock('framer-motion', () => ({
-  AnimatePresence: ({ children }: { children: React.ReactNode }) => <div data-testid="animate-presence">{children}</div>,
+  AnimatePresence: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="animate-presence">{children}</div>
+  ),
   motion: {
     div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
   },
@@ -82,7 +84,10 @@ describe('DropDrawer Component', () => {
 
       // Only the trigger is visible initially
       expect(screen.getByText('Open Menu')).toBeInTheDocument()
-      expect(screen.getByRole('button')).toHaveAttribute('aria-haspopup', 'menu')
+      expect(screen.getByRole('button')).toHaveAttribute(
+        'aria-haspopup',
+        'menu'
+      )
     })
 
     it('structures dropdown with separators', () => {
@@ -148,7 +153,10 @@ describe('DropDrawer Component', () => {
       // Verify drawer trigger is present
       const trigger = screen.getByText('Open Drawer')
       expect(trigger).toBeInTheDocument()
-      expect(screen.getByRole('button')).toHaveAttribute('aria-haspopup', 'dialog')
+      expect(screen.getByRole('button')).toHaveAttribute(
+        'aria-haspopup',
+        'dialog'
+      )
     })
 
     it('does not render separators in mobile mode', () => {
@@ -196,7 +204,9 @@ describe('DropDrawer Component', () => {
         <DropDrawer>
           <DropDrawerTrigger>Open Menu</DropDrawerTrigger>
           <DropDrawerContent>
-            <DropDrawerItem onClick={handleClick}>Clickable Item</DropDrawerItem>
+            <DropDrawerItem onClick={handleClick}>
+              Clickable Item
+            </DropDrawerItem>
           </DropDrawerContent>
         </DropDrawer>
       )
@@ -227,9 +237,7 @@ describe('DropDrawer Component', () => {
         <DropDrawer>
           <DropDrawerTrigger>Open Menu</DropDrawerTrigger>
           <DropDrawerContent>
-            <DropDrawerItem variant="destructive">
-              Delete Item
-            </DropDrawerItem>
+            <DropDrawerItem variant="destructive">Delete Item</DropDrawerItem>
           </DropDrawerContent>
         </DropDrawer>
       )
@@ -243,9 +251,7 @@ describe('DropDrawer Component', () => {
         <DropDrawer>
           <DropDrawerTrigger>Open Menu</DropDrawerTrigger>
           <DropDrawerContent>
-            <DropDrawerItem disabled>
-              Disabled Item
-            </DropDrawerItem>
+            <DropDrawerItem disabled>Disabled Item</DropDrawerItem>
           </DropDrawerContent>
         </DropDrawer>
       )
@@ -363,9 +369,7 @@ describe('DropDrawer Component', () => {
           <DropDrawerTrigger>Open Drawer</DropDrawerTrigger>
           <DropDrawerContent>
             <DropDrawerSub>
-              <DropDrawerSubTrigger>
-                Mobile Submenu
-              </DropDrawerSubTrigger>
+              <DropDrawerSubTrigger>Mobile Submenu</DropDrawerSubTrigger>
               <DropDrawerSubContent>
                 <DropDrawerItem>Submenu Item</DropDrawerItem>
               </DropDrawerSubContent>
@@ -464,7 +468,9 @@ describe('DropDrawer Component', () => {
     it('applies custom className', () => {
       render(
         <DropDrawer>
-          <DropDrawerTrigger className="custom-trigger">Custom Trigger</DropDrawerTrigger>
+          <DropDrawerTrigger className="custom-trigger">
+            Custom Trigger
+          </DropDrawerTrigger>
           <DropDrawerContent className="custom-content">
             <DropDrawerItem className="custom-item">Custom Item</DropDrawerItem>
           </DropDrawerContent>
@@ -480,7 +486,9 @@ describe('DropDrawer Component', () => {
         <DropDrawer>
           <DropDrawerTrigger>Open Menu</DropDrawerTrigger>
           <DropDrawerContent>
-            <DropDrawerItem data-custom="test-value">Custom Props Item</DropDrawerItem>
+            <DropDrawerItem data-custom="test-value">
+              Custom Props Item
+            </DropDrawerItem>
           </DropDrawerContent>
         </DropDrawer>
       )

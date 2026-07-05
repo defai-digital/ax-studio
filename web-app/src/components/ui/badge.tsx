@@ -8,12 +8,9 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default:
-          'border-transparent bg-primary text-primary-foreground',
-        secondary:
-          'border-transparent bg-secondary text-secondary-foreground',
-        destructive:
-          'border-transparent bg-destructive text-white',
+        default: 'border-transparent bg-primary text-primary-foreground',
+        secondary: 'border-transparent bg-secondary text-secondary-foreground',
+        destructive: 'border-transparent bg-destructive text-white',
         outline: 'text-foreground',
         emerald:
           'border-transparent bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
@@ -28,7 +25,7 @@ const badgeVariants = cva(
     defaultVariants: {
       variant: 'default',
     },
-  },
+  }
 )
 
 export interface BadgeProps

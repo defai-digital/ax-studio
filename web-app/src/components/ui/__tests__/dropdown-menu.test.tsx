@@ -29,7 +29,7 @@ describe('DropdownMenu Components', () => {
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       // The dropdown menu root might not be directly visible, let's check for the trigger
       const trigger = screen.getByRole('button', { name: 'Open' })
       expect(trigger).toBeInTheDocument()
@@ -44,7 +44,7 @@ describe('DropdownMenu Components', () => {
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       // Check that the dropdown renders without errors when modal={false}
       const trigger = screen.getByRole('button', { name: 'Open' })
       expect(trigger).toBeInTheDocument()
@@ -69,7 +69,7 @@ describe('DropdownMenu Components', () => {
 
     it('opens dropdown menu when clicked', async () => {
       const user = userEvent.setup()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open Menu</DropdownMenuTrigger>
@@ -78,10 +78,10 @@ describe('DropdownMenu Components', () => {
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       const trigger = screen.getByRole('button', { name: 'Open Menu' })
       await user.click(trigger)
-      
+
       await waitFor(() => {
         expect(screen.getByText('Menu Item')).toBeInTheDocument()
       })
@@ -104,7 +104,9 @@ describe('DropdownMenu Components', () => {
       await user.click(screen.getByRole('button'))
 
       await waitFor(() => {
-        const content = document.querySelector('[data-slot="dropdown-menu-content"]')
+        const content = document.querySelector(
+          '[data-slot="dropdown-menu-content"]'
+        )
         expect(content).toBeInTheDocument()
         expect(content).toHaveClass('bg-popover')
         expect(content).toHaveClass('text-popover-foreground')
@@ -113,7 +115,7 @@ describe('DropdownMenu Components', () => {
 
     it('applies custom className', async () => {
       const user = userEvent.setup()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
@@ -122,18 +124,20 @@ describe('DropdownMenu Components', () => {
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       await user.click(screen.getByRole('button'))
-      
+
       await waitFor(() => {
-        const content = document.querySelector('[data-slot="dropdown-menu-content"]')
+        const content = document.querySelector(
+          '[data-slot="dropdown-menu-content"]'
+        )
         expect(content).toHaveClass('custom-class')
       })
     })
 
     it('uses custom sideOffset', async () => {
       const user = userEvent.setup()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
@@ -142,11 +146,13 @@ describe('DropdownMenu Components', () => {
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       await user.click(screen.getByRole('button'))
-      
+
       await waitFor(() => {
-        const content = document.querySelector('[data-slot="dropdown-menu-content"]')
+        const content = document.querySelector(
+          '[data-slot="dropdown-menu-content"]'
+        )
         expect(content).toBeInTheDocument()
       })
     })
@@ -155,7 +161,7 @@ describe('DropdownMenu Components', () => {
   describe('DropdownMenuGroup', () => {
     it('renders DropdownMenuGroup with correct data-slot', async () => {
       const user = userEvent.setup()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
@@ -167,11 +173,13 @@ describe('DropdownMenu Components', () => {
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       await user.click(screen.getByRole('button'))
-      
+
       await waitFor(() => {
-        const group = document.querySelector('[data-slot="dropdown-menu-group"]')
+        const group = document.querySelector(
+          '[data-slot="dropdown-menu-group"]'
+        )
         expect(group).toBeInTheDocument()
       })
     })
@@ -181,7 +189,7 @@ describe('DropdownMenu Components', () => {
     it('renders DropdownMenuItem with correct styling and data-slot', async () => {
       const user = userEvent.setup()
       const handleClick = vi.fn()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
@@ -190,9 +198,9 @@ describe('DropdownMenu Components', () => {
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       await user.click(screen.getByRole('button'))
-      
+
       await waitFor(() => {
         const item = screen.getByText('Menu Item')
         expect(item).toBeInTheDocument()
@@ -202,7 +210,7 @@ describe('DropdownMenu Components', () => {
 
     it('handles inset prop correctly', async () => {
       const user = userEvent.setup()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
@@ -211,9 +219,9 @@ describe('DropdownMenu Components', () => {
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       await user.click(screen.getByRole('button'))
-      
+
       await waitFor(() => {
         const item = screen.getByText('Inset Item')
         expect(item).toHaveAttribute('data-inset', 'true')
@@ -222,18 +230,20 @@ describe('DropdownMenu Components', () => {
 
     it('applies custom className', async () => {
       const user = userEvent.setup()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
           <DropdownMenuContent>
-            <DropdownMenuItem className="custom-item">Custom Item</DropdownMenuItem>
+            <DropdownMenuItem className="custom-item">
+              Custom Item
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       await user.click(screen.getByRole('button'))
-      
+
       await waitFor(() => {
         const item = screen.getByText('Custom Item')
         expect(item).toHaveClass('custom-item')
@@ -243,23 +253,25 @@ describe('DropdownMenu Components', () => {
     it('calls onClick when clicked', async () => {
       const user = userEvent.setup()
       const handleClick = vi.fn()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
           <DropdownMenuContent>
-            <DropdownMenuItem onClick={handleClick}>Clickable Item</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleClick}>
+              Clickable Item
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       await user.click(screen.getByRole('button'))
-      
+
       await waitFor(() => {
         const item = screen.getByText('Clickable Item')
         expect(item).toBeInTheDocument()
       })
-      
+
       await user.click(screen.getByText('Clickable Item'))
       expect(handleClick).toHaveBeenCalledTimes(1)
     })
@@ -268,7 +280,7 @@ describe('DropdownMenu Components', () => {
   describe('DropdownMenuCheckboxItem', () => {
     it('renders DropdownMenuCheckboxItem with correct styling and data-slot', async () => {
       const user = userEvent.setup()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
@@ -279,9 +291,9 @@ describe('DropdownMenu Components', () => {
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       await user.click(screen.getByRole('button'))
-      
+
       await waitFor(() => {
         const item = screen.getByText('Checkbox Item')
         expect(item).toBeInTheDocument()
@@ -292,7 +304,7 @@ describe('DropdownMenu Components', () => {
 
     it('shows check icon when checked', async () => {
       const user = userEvent.setup()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
@@ -303,9 +315,9 @@ describe('DropdownMenu Components', () => {
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       await user.click(screen.getByRole('button'))
-      
+
       await waitFor(() => {
         const item = screen.getByText('Checked Item')
         expect(item).toBeInTheDocument()
@@ -316,20 +328,23 @@ describe('DropdownMenu Components', () => {
 
     it('applies custom className', async () => {
       const user = userEvent.setup()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
           <DropdownMenuContent>
-            <DropdownMenuCheckboxItem className="custom-checkbox" checked={false}>
+            <DropdownMenuCheckboxItem
+              className="custom-checkbox"
+              checked={false}
+            >
               Custom Checkbox
             </DropdownMenuCheckboxItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       await user.click(screen.getByRole('button'))
-      
+
       await waitFor(() => {
         const item = screen.getByText('Custom Checkbox')
         expect(item).toHaveClass('custom-checkbox')
@@ -340,43 +355,51 @@ describe('DropdownMenu Components', () => {
   describe('DropdownMenuRadioGroup and DropdownMenuRadioItem', () => {
     it('renders DropdownMenuRadioGroup with correct data-slot', async () => {
       const user = userEvent.setup()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
           <DropdownMenuContent>
             <DropdownMenuRadioGroup value="option1">
-              <DropdownMenuRadioItem value="option1">Option 1</DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="option2">Option 2</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="option1">
+                Option 1
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="option2">
+                Option 2
+              </DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       await user.click(screen.getByRole('button'))
-      
+
       await waitFor(() => {
-        const radioGroup = document.querySelector('[data-slot="dropdown-menu-radio-group"]')
+        const radioGroup = document.querySelector(
+          '[data-slot="dropdown-menu-radio-group"]'
+        )
         expect(radioGroup).toBeInTheDocument()
       })
     })
 
     it('renders DropdownMenuRadioItem with correct styling and data-slot', async () => {
       const user = userEvent.setup()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
           <DropdownMenuContent>
             <DropdownMenuRadioGroup value="option1">
-              <DropdownMenuRadioItem value="option1">Option 1</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="option1">
+                Option 1
+              </DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       await user.click(screen.getByRole('button'))
-      
+
       await waitFor(() => {
         const item = screen.getByText('Option 1')
         expect(item).toBeInTheDocument()
@@ -387,20 +410,22 @@ describe('DropdownMenu Components', () => {
 
     it('shows circle icon when selected', async () => {
       const user = userEvent.setup()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
           <DropdownMenuContent>
             <DropdownMenuRadioGroup value="selected">
-              <DropdownMenuRadioItem value="selected">Selected Option</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="selected">
+                Selected Option
+              </DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       await user.click(screen.getByRole('button'))
-      
+
       await waitFor(() => {
         const item = screen.getByText('Selected Option')
         expect(item).toBeInTheDocument()
@@ -411,7 +436,7 @@ describe('DropdownMenu Components', () => {
 
     it('applies custom className to radio item', async () => {
       const user = userEvent.setup()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
@@ -424,9 +449,9 @@ describe('DropdownMenu Components', () => {
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       await user.click(screen.getByRole('button'))
-      
+
       await waitFor(() => {
         const item = screen.getByText('Custom Radio')
         expect(item).toHaveClass('custom-radio')
@@ -437,7 +462,7 @@ describe('DropdownMenu Components', () => {
   describe('DropdownMenuLabel', () => {
     it('renders DropdownMenuLabel with correct styling and data-slot', async () => {
       const user = userEvent.setup()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
@@ -447,9 +472,9 @@ describe('DropdownMenu Components', () => {
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       await user.click(screen.getByRole('button'))
-      
+
       await waitFor(() => {
         const label = screen.getByText('Section Label')
         expect(label).toBeInTheDocument()
@@ -459,7 +484,7 @@ describe('DropdownMenu Components', () => {
 
     it('handles inset prop correctly', async () => {
       const user = userEvent.setup()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
@@ -468,9 +493,9 @@ describe('DropdownMenu Components', () => {
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       await user.click(screen.getByRole('button'))
-      
+
       await waitFor(() => {
         const label = screen.getByText('Inset Label')
         expect(label).toHaveAttribute('data-inset', 'true')
@@ -479,18 +504,20 @@ describe('DropdownMenu Components', () => {
 
     it('applies custom className', async () => {
       const user = userEvent.setup()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
           <DropdownMenuContent>
-            <DropdownMenuLabel className="custom-label">Custom Label</DropdownMenuLabel>
+            <DropdownMenuLabel className="custom-label">
+              Custom Label
+            </DropdownMenuLabel>
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       await user.click(screen.getByRole('button'))
-      
+
       await waitFor(() => {
         const label = screen.getByText('Custom Label')
         expect(label).toHaveClass('custom-label')
@@ -516,7 +543,9 @@ describe('DropdownMenu Components', () => {
       await user.click(screen.getByRole('button'))
 
       await waitFor(() => {
-        const separator = document.querySelector('[data-slot="dropdown-menu-separator"]')
+        const separator = document.querySelector(
+          '[data-slot="dropdown-menu-separator"]'
+        )
         expect(separator).toBeInTheDocument()
         expect(separator).toHaveClass('h-px')
         expect(separator).toHaveClass('bg-border')
@@ -525,7 +554,7 @@ describe('DropdownMenu Components', () => {
 
     it('applies custom className', async () => {
       const user = userEvent.setup()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
@@ -536,11 +565,13 @@ describe('DropdownMenu Components', () => {
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       await user.click(screen.getByRole('button'))
-      
+
       await waitFor(() => {
-        const separator = document.querySelector('[data-slot="dropdown-menu-separator"]')
+        const separator = document.querySelector(
+          '[data-slot="dropdown-menu-separator"]'
+        )
         expect(separator).toHaveClass('custom-separator')
       })
     })
@@ -549,7 +580,7 @@ describe('DropdownMenu Components', () => {
   describe('DropdownMenuShortcut', () => {
     it('renders DropdownMenuShortcut with correct styling and data-slot', async () => {
       const user = userEvent.setup()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
@@ -561,9 +592,9 @@ describe('DropdownMenu Components', () => {
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       await user.click(screen.getByRole('button'))
-      
+
       await waitFor(() => {
         const shortcut = screen.getByText('Ctrl+K')
         expect(shortcut).toBeInTheDocument()
@@ -575,21 +606,23 @@ describe('DropdownMenu Components', () => {
 
     it('applies custom className', async () => {
       const user = userEvent.setup()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
           <DropdownMenuContent>
             <DropdownMenuItem>
               Menu Item
-              <DropdownMenuShortcut className="custom-shortcut">Cmd+S</DropdownMenuShortcut>
+              <DropdownMenuShortcut className="custom-shortcut">
+                Cmd+S
+              </DropdownMenuShortcut>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       await user.click(screen.getByRole('button'))
-      
+
       await waitFor(() => {
         const shortcut = screen.getByText('Cmd+S')
         expect(shortcut).toHaveClass('custom-shortcut')
@@ -600,7 +633,7 @@ describe('DropdownMenu Components', () => {
   describe('DropdownMenuSub', () => {
     it('renders DropdownMenuSub with correct data-slot', async () => {
       const user = userEvent.setup()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
@@ -614,9 +647,9 @@ describe('DropdownMenu Components', () => {
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       await user.click(screen.getByRole('button'))
-      
+
       await waitFor(() => {
         // Check for the sub trigger which should be visible
         const subTrigger = screen.getByText('Sub Menu')
@@ -628,7 +661,7 @@ describe('DropdownMenu Components', () => {
   describe('DropdownMenuSubTrigger', () => {
     it('renders DropdownMenuSubTrigger with correct styling and data-slot', async () => {
       const user = userEvent.setup()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
@@ -642,14 +675,17 @@ describe('DropdownMenu Components', () => {
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       await user.click(screen.getByRole('button'))
-      
+
       await waitFor(() => {
         const subTrigger = screen.getByText('Sub Menu')
         expect(subTrigger).toBeInTheDocument()
-        expect(subTrigger).toHaveAttribute('data-slot', 'dropdown-menu-sub-trigger')
-        
+        expect(subTrigger).toHaveAttribute(
+          'data-slot',
+          'dropdown-menu-sub-trigger'
+        )
+
         // Check for chevron icon
         const chevronIcon = subTrigger.querySelector('svg')
         expect(chevronIcon).toBeInTheDocument()
@@ -658,13 +694,15 @@ describe('DropdownMenu Components', () => {
 
     it('handles inset prop correctly', async () => {
       const user = userEvent.setup()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
           <DropdownMenuContent>
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger inset>Inset Sub Menu</DropdownMenuSubTrigger>
+              <DropdownMenuSubTrigger inset>
+                Inset Sub Menu
+              </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
                 <DropdownMenuItem>Sub Item</DropdownMenuItem>
               </DropdownMenuSubContent>
@@ -672,9 +710,9 @@ describe('DropdownMenu Components', () => {
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       await user.click(screen.getByRole('button'))
-      
+
       await waitFor(() => {
         const subTrigger = screen.getByText('Inset Sub Menu')
         expect(subTrigger).toHaveAttribute('data-inset', 'true')
@@ -683,7 +721,7 @@ describe('DropdownMenu Components', () => {
 
     it('applies custom className', async () => {
       const user = userEvent.setup()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
@@ -699,9 +737,9 @@ describe('DropdownMenu Components', () => {
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       await user.click(screen.getByRole('button'))
-      
+
       await waitFor(() => {
         const subTrigger = screen.getByText('Custom Sub Menu')
         expect(subTrigger).toHaveClass('custom-sub-trigger')
@@ -738,7 +776,9 @@ describe('DropdownMenu Components', () => {
       await user.hover(screen.getByText('Sub Menu'))
 
       await waitFor(() => {
-        const subContent = document.querySelector('[data-slot="dropdown-menu-sub-content"]')
+        const subContent = document.querySelector(
+          '[data-slot="dropdown-menu-sub-content"]'
+        )
         expect(subContent).toBeInTheDocument()
         expect(subContent).toHaveClass('bg-popover')
         expect(subContent).toHaveClass('text-popover-foreground')
@@ -747,7 +787,7 @@ describe('DropdownMenu Components', () => {
 
     it('applies custom className', async () => {
       const user = userEvent.setup()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open</DropdownMenuTrigger>
@@ -761,18 +801,20 @@ describe('DropdownMenu Components', () => {
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       await user.click(screen.getByRole('button'))
-      
+
       await waitFor(() => {
         const subTrigger = screen.getByText('Sub Menu')
         expect(subTrigger).toBeInTheDocument()
       })
-      
+
       await user.hover(screen.getByText('Sub Menu'))
-      
+
       await waitFor(() => {
-        const subContent = document.querySelector('[data-slot="dropdown-menu-sub-content"]')
+        const subContent = document.querySelector(
+          '[data-slot="dropdown-menu-sub-content"]'
+        )
         expect(subContent).toHaveClass('custom-sub-content')
       })
     })
@@ -782,7 +824,7 @@ describe('DropdownMenu Components', () => {
     it('renders a complete dropdown menu with all components', async () => {
       const user = userEvent.setup()
       const handleItemClick = vi.fn()
-      
+
       render(
         <DropdownMenu>
           <DropdownMenuTrigger>Open Menu</DropdownMenuTrigger>
@@ -812,10 +854,10 @@ describe('DropdownMenu Components', () => {
           </DropdownMenuContent>
         </DropdownMenu>
       )
-      
+
       // Open the menu
       await user.click(screen.getByText('Open Menu'))
-      
+
       // Verify all components are rendered
       await waitFor(() => {
         expect(screen.getByText('Actions')).toBeInTheDocument()
@@ -826,7 +868,7 @@ describe('DropdownMenu Components', () => {
         expect(screen.getByText('Dark')).toBeInTheDocument()
         expect(screen.getByText('More options')).toBeInTheDocument()
       })
-      
+
       // Test item click
       await user.click(screen.getByText('Edit'))
       expect(handleItemClick).toHaveBeenCalledTimes(1)

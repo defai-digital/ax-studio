@@ -28,26 +28,29 @@ describe('Drawer components', () => {
             <DrawerClose>Close</DrawerClose>
           </DrawerFooter>
         </DrawerContent>
-      </Drawer>,
+      </Drawer>
     )
 
     expect(screen.getByText('Open drawer')).toHaveAttribute(
       'data-slot',
-      'drawer-trigger',
+      'drawer-trigger'
     )
     expect(screen.getByText('Drawer title')).toHaveAttribute(
       'data-slot',
-      'drawer-title',
+      'drawer-title'
     )
     expect(screen.getByText('Drawer description')).toHaveClass(
-      'text-muted-foreground',
+      'text-muted-foreground'
     )
-    expect(screen.getByText('Close')).toHaveAttribute('data-slot', 'drawer-close')
+    expect(screen.getByText('Close')).toHaveAttribute(
+      'data-slot',
+      'drawer-close'
+    )
     expect(
-      document.querySelector('[data-slot="drawer-overlay"]'),
+      document.querySelector('[data-slot="drawer-overlay"]')
     ).toBeInTheDocument()
     expect(document.querySelector('[data-slot="drawer-content"]')).toHaveClass(
-      'bg-background',
+      'bg-background'
     )
   })
 })

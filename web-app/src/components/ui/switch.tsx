@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react";
+import { Loader2 } from 'lucide-react'
 import * as React from 'react'
 import * as SwitchPrimitive from '@radix-ui/react-switch'
 

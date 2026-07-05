@@ -4,12 +4,24 @@ import { HoverCard, HoverCardTrigger, HoverCardContent } from '../hover-card'
 
 // Mock Radix UI
 vi.mock('@radix-ui/react-hover-card', () => ({
-  Root: ({ children, openDelay: _openDelay, ...props }: any) => <div data-testid="hover-card-root" {...props}>{children}</div>,
-  Trigger: ({ children, ...props }: any) => <button data-testid="hover-card-trigger" {...props}>{children}</button>,
-  Portal: ({ children, ...props }: any) => <div data-testid="hover-card-portal" {...props}>{children}</div>,
+  Root: ({ children, openDelay: _openDelay, ...props }: any) => (
+    <div data-testid="hover-card-root" {...props}>
+      {children}
+    </div>
+  ),
+  Trigger: ({ children, ...props }: any) => (
+    <button data-testid="hover-card-trigger" {...props}>
+      {children}
+    </button>
+  ),
+  Portal: ({ children, ...props }: any) => (
+    <div data-testid="hover-card-portal" {...props}>
+      {children}
+    </div>
+  ),
   Content: ({ children, className, align, sideOffset, ...props }: any) => (
-    <div 
-      data-testid="hover-card-content" 
+    <div
+      data-testid="hover-card-content"
       className={className}
       data-align={align}
       data-side-offset={sideOffset}

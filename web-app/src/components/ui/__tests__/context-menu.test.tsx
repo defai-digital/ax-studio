@@ -50,7 +50,7 @@ describe('ContextMenu components', () => {
             </ContextMenuPortal>
           </ContextMenuSub>
         </ContextMenuContent>
-      </ContextMenu>,
+      </ContextMenu>
     )
 
     expect(screen.getByText('Workspace')).toBeInTheDocument()

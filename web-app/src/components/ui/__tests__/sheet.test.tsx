@@ -1,14 +1,14 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { 
-  Sheet, 
-  SheetTrigger, 
-  SheetClose, 
-  SheetContent, 
-  SheetHeader, 
-  SheetFooter, 
-  SheetTitle, 
-  SheetDescription 
+import {
+  Sheet,
+  SheetTrigger,
+  SheetClose,
+  SheetContent,
+  SheetHeader,
+  SheetFooter,
+  SheetTitle,
+  SheetDescription,
 } from '../sheet'
 
 // Mock the translation hook
@@ -28,7 +28,7 @@ describe('Sheet Components', () => {
         </SheetContent>
       </Sheet>
     )
-    
+
     // Sheet root might not render until triggered, so check for trigger
     const trigger = document.querySelector('[data-slot="sheet-trigger"]')
     expect(trigger).toBeInTheDocument()
@@ -41,7 +41,7 @@ describe('Sheet Components', () => {
         <SheetTrigger>Open Sheet</SheetTrigger>
       </Sheet>
     )
-    
+
     const trigger = document.querySelector('[data-slot="sheet-trigger"]')
     expect(trigger).toBeInTheDocument()
     expect(trigger).toHaveTextContent('Open Sheet')
@@ -170,7 +170,9 @@ describe('Sheet Components', () => {
       </Sheet>
     )
 
-    const description = document.querySelector('[data-slot="sheet-description"]')
+    const description = document.querySelector(
+      '[data-slot="sheet-description"]'
+    )
     expect(description).toBeInTheDocument()
     expect(description).toHaveTextContent('Sheet Description')
     expect(description).toHaveClass('text-muted-foreground', 'text-sm')
@@ -189,7 +191,11 @@ describe('Sheet Components', () => {
 
     const closeButton = document.querySelector('.absolute.top-4.right-4')
     expect(closeButton).toBeInTheDocument()
-    expect(closeButton).toHaveClass('rounded-xs', 'opacity-70', 'transition-opacity')
+    expect(closeButton).toHaveClass(
+      'rounded-xs',
+      'opacity-70',
+      'transition-opacity'
+    )
   })
 
   it('renders overlay with proper styling', () => {
@@ -205,7 +211,13 @@ describe('Sheet Components', () => {
 
     const overlay = document.querySelector('[data-slot="sheet-overlay"]')
     expect(overlay).toBeInTheDocument()
-    expect(overlay).toHaveClass('fixed', 'inset-0', 'z-50', 'bg-black/50', 'backdrop-blur')
+    expect(overlay).toHaveClass(
+      'fixed',
+      'inset-0',
+      'z-50',
+      'bg-black/50',
+      'backdrop-blur'
+    )
   })
 
   it('renders SheetClose component', () => {

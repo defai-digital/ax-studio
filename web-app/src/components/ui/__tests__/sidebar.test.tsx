@@ -57,20 +57,20 @@ describe('Sidebar components', () => {
           <SidebarContent>Navigation</SidebarContent>
         </Sidebar>
         <SidebarTrigger aria-label="Toggle navigation" />
-      </SidebarProvider>,
+      </SidebarProvider>
     )
 
     expect(screen.getByText('Navigation')).toBeInTheDocument()
     expect(document.querySelector('[data-state]')).toHaveAttribute(
       'data-state',
-      'expanded',
+      'expanded'
     )
 
     fireEvent.click(screen.getByRole('button', { name: /toggle navigation/i }))
 
     expect(document.querySelector('[data-state]')).toHaveAttribute(
       'data-state',
-      'collapsed',
+      'collapsed'
     )
     expect(document.cookie).toContain('sidebar:state=false')
   })
@@ -84,16 +84,16 @@ describe('Sidebar components', () => {
           <SidebarContent>Controlled</SidebarContent>
         </Sidebar>
         <SidebarTrigger aria-label="Toggle controlled sidebar" />
-      </SidebarProvider>,
+      </SidebarProvider>
     )
 
     expect(document.querySelector('[data-state]')).toHaveAttribute(
       'data-state',
-      'collapsed',
+      'collapsed'
     )
 
     fireEvent.click(
-      screen.getByRole('button', { name: /toggle controlled sidebar/i }),
+      screen.getByRole('button', { name: /toggle controlled sidebar/i })
     )
 
     expect(onOpenChange).toHaveBeenCalledWith(true)
@@ -105,7 +105,7 @@ describe('Sidebar components', () => {
         <Sidebar collapsible="none" className="custom-sidebar">
           Fixed sidebar
         </Sidebar>
-      </SidebarProvider>,
+      </SidebarProvider>
     )
 
     const sidebar = screen.getByText('Fixed sidebar')
@@ -122,10 +122,12 @@ describe('Sidebar components', () => {
           <SidebarContent>Mobile content</SidebarContent>
         </Sidebar>
         <SidebarTrigger aria-label="Open mobile sidebar" />
-      </SidebarProvider>,
+      </SidebarProvider>
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /open mobile sidebar/i }))
+    fireEvent.click(
+      screen.getByRole('button', { name: /open mobile sidebar/i })
+    )
 
     expect(screen.getByText('Mobile content')).toBeInTheDocument()
     expect(document.querySelector('[data-mobile="true"]')).toBeInTheDocument()
@@ -166,24 +168,21 @@ describe('Sidebar components', () => {
           <SidebarRail aria-label="Resize sidebar" />
         </Sidebar>
         <SidebarInset>Inset</SidebarInset>
-      </SidebarProvider>,
+      </SidebarProvider>
     )
 
-    expect(screen.getByText('Header')).toHaveAttribute(
-      'data-sidebar',
-      'header',
-    )
+    expect(screen.getByText('Header')).toHaveAttribute('data-sidebar', 'header')
     expect(screen.getByText('Group')).toHaveAttribute(
       'data-sidebar',
-      'group-label',
+      'group-label'
     )
     expect(screen.getByText('Menu item').closest('button')).toHaveAttribute(
       'data-active',
-      'true',
+      'true'
     )
     expect(screen.getByText('Sub item')).toHaveAttribute('data-size', 'sm')
     expect(
-      document.querySelector('[data-sidebar="menu-skeleton-icon"]'),
+      document.querySelector('[data-sidebar="menu-skeleton-icon"]')
     ).toBeInTheDocument()
     expect(screen.getByText('Inset')).toHaveClass('bg-background')
 
@@ -206,14 +205,14 @@ describe('Sidebar components', () => {
             <button type="button">Sub action</button>
           </SidebarMenuSubButton>
         </Sidebar>
-      </SidebarProvider>,
+      </SidebarProvider>
     )
 
     expect(screen.getByText('Linked group')).toHaveAttribute('href', '#group')
     expect(screen.getByText('Linked menu')).toHaveAttribute('href', '#menu')
     expect(screen.getByRole('button', { name: 'Sub action' })).toHaveAttribute(
       'data-sidebar',
-      'menu-sub-button',
+      'menu-sub-button'
     )
   })
 })

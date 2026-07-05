@@ -23,7 +23,7 @@ describe('Command components', () => {
         observe() {}
         unobserve() {}
         disconnect() {}
-      },
+      }
     )
     Element.prototype.scrollIntoView = vi.fn()
   })
@@ -43,7 +43,7 @@ describe('Command components', () => {
             </CommandItem>
           </CommandGroup>
         </CommandList>
-      </Command>,
+      </Command>
     )
 
     expect(screen.getByPlaceholderText('Search actions')).toBeInTheDocument()
@@ -60,7 +60,7 @@ describe('Command components', () => {
         <CommandList>
           <CommandItem value="settings">Settings</CommandItem>
         </CommandList>
-      </CommandDialog>,
+      </CommandDialog>
     )
 
     expect(screen.getByRole('dialog')).toBeInTheDocument()

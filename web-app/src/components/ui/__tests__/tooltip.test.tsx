@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '../tooltip'
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from '../tooltip'
 
 // Mock ResizeObserver
 class MockResizeObserver {
@@ -11,7 +16,7 @@ class MockResizeObserver {
 
 beforeAll(() => {
   global.ResizeObserver = MockResizeObserver
-  
+
   // Mock getBoundingClientRect for Radix Tooltip positioning
   Element.prototype.getBoundingClientRect = vi.fn(() => ({
     width: 100,
@@ -22,7 +27,7 @@ beforeAll(() => {
     right: 100,
     x: 0,
     y: 0,
-    toJSON: () => ({})
+    toJSON: () => ({}),
   }))
 })
 
@@ -33,7 +38,7 @@ describe('Tooltip Components', () => {
         <div>Content</div>
       </TooltipProvider>
     )
-    
+
     expect(screen.getByText('Content')).toBeInTheDocument()
   })
 
@@ -44,7 +49,7 @@ describe('Tooltip Components', () => {
         <TooltipContent>Tooltip content</TooltipContent>
       </Tooltip>
     )
-    
+
     expect(screen.getByText('Hover me')).toBeInTheDocument()
   })
 
@@ -55,7 +60,7 @@ describe('Tooltip Components', () => {
         <TooltipContent>Tooltip content</TooltipContent>
       </Tooltip>
     )
-    
+
     expect(screen.getByText('Hover me')).toBeInTheDocument()
   })
 
@@ -66,7 +71,7 @@ describe('Tooltip Components', () => {
         <TooltipContent>Content</TooltipContent>
       </Tooltip>
     )
-    
+
     expect(screen.getByText('Trigger')).toBeInTheDocument()
   })
 
@@ -74,10 +79,12 @@ describe('Tooltip Components', () => {
     render(
       <Tooltip>
         <TooltipTrigger>Hover me</TooltipTrigger>
-        <TooltipContent className="custom-tooltip">Tooltip content</TooltipContent>
+        <TooltipContent className="custom-tooltip">
+          Tooltip content
+        </TooltipContent>
       </Tooltip>
     )
-    
+
     expect(screen.getByText('Hover me')).toBeInTheDocument()
   })
 
@@ -90,7 +97,7 @@ describe('Tooltip Components', () => {
         </Tooltip>
       </TooltipProvider>
     )
-    
+
     expect(screen.getByText('Hover me')).toBeInTheDocument()
   })
 
@@ -107,7 +114,7 @@ describe('Tooltip Components', () => {
         </Tooltip>
       </div>
     )
-    
+
     expect(screen.getByText('First')).toBeInTheDocument()
     expect(screen.getByText('Second')).toBeInTheDocument()
   })
