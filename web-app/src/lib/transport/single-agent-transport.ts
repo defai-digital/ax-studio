@@ -113,7 +113,7 @@ export async function executeSingleAgentStream(
     new Set(Object.keys(tools))
   )
 
-  const modelMessages = convertToModelMessages(
+  const modelMessages = await convertToModelMessages(
     mapUserInlineAttachments(cleanedMessages)
   )
 

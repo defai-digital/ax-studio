@@ -3,7 +3,6 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
-import { nodePolyfills } from 'vite-plugin-node-polyfills'
 import packageJson from './package.json'
 const host = process.env.TAURI_DEV_HOST
 
@@ -18,9 +17,6 @@ export default defineConfig(() => {
       }),
       react(),
       tailwindcss(),
-      nodePolyfills({
-        include: ['path'],
-      }),
     ],
     resolve: {
       alias: {
@@ -72,13 +68,6 @@ export default defineConfig(() => {
         ignored: ['**/src-tauri/**'],
         usePolling: true
       },
-    },
-    optimizeDeps: {
-      include: [
-        'vite-plugin-node-polyfills/shims/buffer',
-        'vite-plugin-node-polyfills/shims/global',
-        'vite-plugin-node-polyfills/shims/process',
-      ],
     },
   }
 })
