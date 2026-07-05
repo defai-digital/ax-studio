@@ -1,6 +1,6 @@
 import { type DragEvent, useCallback, useEffect, useState } from 'react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { FileText, Loader2, Paperclip, UploadIcon, X } from "lucide-react";
+import { FileText, Loader2, Paperclip, UploadIcon, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Tooltip,
@@ -145,7 +145,7 @@ async function getFilesFromDirectory(
   return files
 }
 
-export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
+export function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
   const { t } = useTranslation(lng)
   const serviceHub = useServiceHub()
   const attachmentsEnabled = useAttachments((s) => s.enabled)
@@ -220,7 +220,9 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
 
         let size: number | undefined = undefined
         try {
-          const stat = await import('@ax-studio/core').then((m) => m.fs.fileStat(p))
+          const stat = await import('@ax-studio/core').then((m) =>
+            m.fs.fileStat(p)
+          )
           size = stat?.size ? Number(stat.size) : undefined
         } catch (e) {
           console.warn('Failed to read file size for', p, e)
@@ -246,16 +248,14 @@ export default function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
         )
       }
 
-      const {
-        newItems: newAttachments,
-        duplicateLabels: duplicates,
-      } = partitionDuplicateAttachments({
-        existingItems: files,
-        incomingItems: preparedAttachments,
-        getExistingIdentity: (file) => file.path,
-        getIncomingIdentity: (attachment) => attachment.path,
-        getDuplicateLabel: (attachment) => attachment.name,
-      })
+      const { newItems: newAttachments, duplicateLabels: duplicates } =
+        partitionDuplicateAttachments({
+          existingItems: files,
+          incomingItems: preparedAttachments,
+          getExistingIdentity: (file) => file.path,
+          getIncomingIdentity: (attachment) => attachment.path,
+          getDuplicateLabel: (attachment) => attachment.name,
+        })
 
       if (duplicates.length > 0) {
         toast.warning(

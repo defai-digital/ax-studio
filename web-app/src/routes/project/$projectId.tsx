@@ -10,7 +10,7 @@ import { toast } from 'sonner'
 import ChatInput from '@/containers/ChatInput'
 import { HeaderPage } from '@/containers/HeaderPage'
 import ThreadList from '@/containers/ThreadList'
-import ProjectFiles from '@/containers/ProjectFiles'
+import { ProjectFiles } from '@/containers/ProjectFiles'
 import { AvatarEmoji } from '@/components/common/AvatarEmoji'
 
 import {
