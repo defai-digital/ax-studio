@@ -160,7 +160,7 @@ vi.mock('@/components/ui/switch', () => ({
 }))
 
 vi.mock('@/containers/dialogs/mcp/AddEditMCPServer', () => ({
-  default: () => null,
+  AddEditMCPServer: () => null,
 }))
 
 vi.mock('@/containers/dialogs/mcp/DeleteMCPServerConfirm', () => ({

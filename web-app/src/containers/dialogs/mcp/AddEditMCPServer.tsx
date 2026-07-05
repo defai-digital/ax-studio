@@ -1,4 +1,4 @@
-import { Code, GripVertical, Plus, Trash2 } from "lucide-react";
+import { Code, GripVertical, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useState, useEffect } from 'react'
 import {
   Dialog,
@@ -111,7 +111,7 @@ const makeArg = (value: string = ''): ArgEntry => ({
   value,
 })
 
-export default function AddEditMCPServer({
+export function AddEditMCPServer({
   open,
   onOpenChange,
   editingKey,
@@ -513,13 +513,16 @@ export default function AddEditMCPServer({
                 />
                 {command && /[;&|`$]/.test(command) && (
                   <p className="text-xs text-destructive mt-1">
-                    Warning: Command contains potentially dangerous characters (;, &, |, `, $). Only use trusted MCP server configurations.
+                    Warning: Command contains potentially dangerous characters
+                    (;, &, |, `, $). Only use trusted MCP server configurations.
                   </p>
                 )}
               </div>
             ) : (
               <div className="space-y-2">
-                <label className="text-[13px] text-muted-foreground mb-1.5 inline-block">URL</label>
+                <label className="text-[13px] text-muted-foreground mb-1.5 inline-block">
+                  URL
+                </label>
                 <Input
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
@@ -581,7 +584,9 @@ export default function AddEditMCPServer({
             {transportType === 'stdio' && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-[13px] text-muted-foreground">{t('mcp-servers:envVars')}</label>
+                  <label className="text-[13px] text-muted-foreground">
+                    {t('mcp-servers:envVars')}
+                  </label>
                   <div
                     className="size-6 cursor-pointer flex items-center justify-center rounded hover:bg-secondary transition-all duration-200 ease-in-out"
                     onClick={handleAddEnv}
@@ -625,7 +630,9 @@ export default function AddEditMCPServer({
               <>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-[13px] text-muted-foreground">Headers</label>
+                    <label className="text-[13px] text-muted-foreground">
+                      Headers
+                    </label>
                     <div
                       className="size-6 cursor-pointer flex items-center justify-center rounded hover:bg-secondary transition-all duration-200 ease-in-out"
                       onClick={handleAddHeader}
@@ -684,7 +691,11 @@ export default function AddEditMCPServer({
         )}
 
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onOpenChange(false)}
+          >
             {t('common:cancel')}
           </Button>
           <Button

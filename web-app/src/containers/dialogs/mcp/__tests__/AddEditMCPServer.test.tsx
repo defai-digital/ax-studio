@@ -1,12 +1,11 @@
-import { Code, GripVertical } from "lucide-react";
+import { Code, GripVertical } from 'lucide-react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import AddEditMCPServer from '../AddEditMCPServer'
+import { AddEditMCPServer } from '../AddEditMCPServer'
 
 vi.mock('@/i18n/react-i18next-compat', () => ({
   useTranslation: () => ({
-    t: (key: string, opts?: Record<string, unknown>) =>
-      opts ? `${key}` : key,
+    t: (key: string, opts?: Record<string, unknown>) => (opts ? `${key}` : key),
   }),
 }))
 
@@ -44,7 +43,9 @@ vi.mock('@dnd-kit/core', () => ({
 }))
 
 vi.mock('@dnd-kit/sortable', () => ({
-  SortableContext: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  SortableContext: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
   verticalListSortingStrategy: 'vertical',
   arrayMove: vi.fn(),
   useSortable: () => ({
@@ -67,16 +68,27 @@ vi.mock('@/components/ui/dialog', () => ({
   DialogContent: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
-  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   DialogTitle: ({ children }: { children: React.ReactNode }) => (
     <h2 data-testid="dialog-title">{children}</h2>
   ),
-  DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
-  DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogDescription: ({ children }: { children: React.ReactNode }) => (
+    <p>{children}</p>
+  ),
+  DialogFooter: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }))
 
 vi.mock('@/components/ui/button', () => ({
-  Button: ({ children, onClick, disabled, ...props }: Record<string, unknown>) => (
+  Button: ({
+    children,
+    onClick,
+    disabled,
+    ...props
+  }: Record<string, unknown>) => (
     <button
       onClick={onClick as () => void}
       disabled={disabled as boolean}
@@ -88,7 +100,12 @@ vi.mock('@/components/ui/button', () => ({
 }))
 
 vi.mock('@/components/ui/input', () => ({
-  Input: ({ value, onChange, placeholder, ...props }: Record<string, unknown>) => (
+  Input: ({
+    value,
+    onChange,
+    placeholder,
+    ...props
+  }: Record<string, unknown>) => (
     <input
       value={value as string}
       onChange={onChange as React.ChangeEventHandler<HTMLInputElement>}
@@ -202,10 +219,13 @@ describe('AddEditMCPServer', () => {
     fireEvent.change(commandInput, { target: { value: 'npx' } })
 
     fireEvent.click(screen.getByText('mcp-servers:save'))
-    expect(mockOnSave).toHaveBeenCalledWith('test-server', expect.objectContaining({
-      command: 'npx',
-      type: 'stdio',
-    }))
+    expect(mockOnSave).toHaveBeenCalledWith(
+      'test-server',
+      expect.objectContaining({
+        command: 'npx',
+        type: 'stdio',
+      })
+    )
   })
 
   it('closes dialog on cancel', () => {
