@@ -15,7 +15,7 @@ export const useFavoriteModel = create<FavoriteModelState>()(
   persist(
     (set, get) => ({
       favoriteModels: [],
-      
+
       addFavorite: (model: Model) => {
         set((state) => {
           if (!state.favoriteModels.some((fav) => fav.id === model.id)) {
@@ -26,17 +26,19 @@ export const useFavoriteModel = create<FavoriteModelState>()(
           return state
         })
       },
-      
+
       removeFavorite: (modelId: string) => {
         set((state) => ({
-          favoriteModels: state.favoriteModels.filter((model) => model.id !== modelId),
+          favoriteModels: state.favoriteModels.filter(
+            (model) => model.id !== modelId
+          ),
         }))
       },
-      
+
       isFavorite: (modelId: string) => {
         return get().favoriteModels.some((model) => model.id === modelId)
       },
-      
+
       toggleFavorite: (model: Model) => {
         const { isFavorite, addFavorite, removeFavorite } = get()
         if (isFavorite(model.id)) {

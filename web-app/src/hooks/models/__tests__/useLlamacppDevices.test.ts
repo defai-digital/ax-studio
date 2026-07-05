@@ -324,8 +324,20 @@ describe('useLlamacppDevices', () => {
     act(() => {
       useLlamacppDevices.setState({
         devices: [
-          { id: 'gpu-0', name: 'GPU 0', mem: 8192, free: 4096, activated: true },
-          { id: 'gpu-1', name: 'GPU 1', mem: 4096, free: 2048, activated: true },
+          {
+            id: 'gpu-0',
+            name: 'GPU 0',
+            mem: 8192,
+            free: 4096,
+            activated: true,
+          },
+          {
+            id: 'gpu-1',
+            name: 'GPU 1',
+            mem: 4096,
+            free: 2048,
+            activated: true,
+          },
         ],
       })
     })
@@ -343,8 +355,20 @@ describe('useLlamacppDevices', () => {
     act(() => {
       useLlamacppDevices.setState({
         devices: [
-          { id: 'gpu-0', name: 'GPU 0', mem: 8192, free: 4096, activated: true },
-          { id: 'gpu-1', name: 'GPU 1', mem: 4096, free: 2048, activated: false },
+          {
+            id: 'gpu-0',
+            name: 'GPU 0',
+            mem: 8192,
+            free: 4096,
+            activated: true,
+          },
+          {
+            id: 'gpu-1',
+            name: 'GPU 1',
+            mem: 4096,
+            free: 2048,
+            activated: false,
+          },
         ],
       })
     })
@@ -380,8 +404,20 @@ describe('useLlamacppDevices', () => {
     act(() => {
       useLlamacppDevices.setState({
         devices: [
-          { id: 'gpu-0', name: 'GPU 0', mem: 8192, free: 4096, activated: true },
-          { id: 'gpu-1', name: 'GPU 1', mem: 4096, free: 2048, activated: true },
+          {
+            id: 'gpu-0',
+            name: 'GPU 0',
+            mem: 8192,
+            free: 4096,
+            activated: true,
+          },
+          {
+            id: 'gpu-1',
+            name: 'GPU 1',
+            mem: 4096,
+            free: 2048,
+            activated: true,
+          },
         ],
       })
     })
@@ -421,8 +457,20 @@ describe('useLlamacppDevices', () => {
     act(() => {
       useLlamacppDevices.setState({
         devices: [
-          { id: 'gpu-0', name: 'GPU 0', mem: 8192, free: 4096, activated: true },
-          { id: 'gpu-1', name: 'GPU 1', mem: 4096, free: 2048, activated: false },
+          {
+            id: 'gpu-0',
+            name: 'GPU 0',
+            mem: 8192,
+            free: 4096,
+            activated: true,
+          },
+          {
+            id: 'gpu-1',
+            name: 'GPU 1',
+            mem: 4096,
+            free: 2048,
+            activated: false,
+          },
         ],
       })
     })
@@ -446,7 +494,13 @@ describe('useLlamacppDevices', () => {
     act(() => {
       useLlamacppDevices.setState({
         devices: [
-          { id: 'gpu-0', name: 'GPU 0', mem: 8192, free: 4096, activated: true },
+          {
+            id: 'gpu-0',
+            name: 'GPU 0',
+            mem: 8192,
+            free: 4096,
+            activated: true,
+          },
         ],
       })
     })
@@ -462,7 +516,13 @@ describe('useLlamacppDevices', () => {
     act(() => {
       useLlamacppDevices.setState({
         devices: [
-          { id: 'gpu-0', name: 'GPU 0', mem: 8192, free: 4096, activated: true },
+          {
+            id: 'gpu-0',
+            name: 'GPU 0',
+            mem: 8192,
+            free: 4096,
+            activated: true,
+          },
         ],
       })
     })
@@ -496,7 +556,13 @@ describe('useLlamacppDevices', () => {
     act(() => {
       useLlamacppDevices.setState({
         devices: [
-          { id: 'gpu-0', name: 'GPU 0', mem: 8192, free: 4096, activated: true },
+          {
+            id: 'gpu-0',
+            name: 'GPU 0',
+            mem: 8192,
+            free: 4096,
+            activated: true,
+          },
         ],
       })
     })
@@ -536,7 +602,13 @@ describe('useLlamacppDevices', () => {
     act(() => {
       useLlamacppDevices.setState({
         devices: [
-          { id: 'gpu-0', name: 'GPU 0', mem: 8192, free: 4096, activated: true },
+          {
+            id: 'gpu-0',
+            name: 'GPU 0',
+            mem: 8192,
+            free: 4096,
+            activated: true,
+          },
         ],
       })
     })

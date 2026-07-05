@@ -57,7 +57,9 @@ describe('useFavoriteModel', () => {
         useFavoriteModel.getState().addFavorite(makeModel('gpt-4', 'GPT 4'))
       })
       act(() => {
-        useFavoriteModel.getState().addFavorite(makeModel('gpt-4', 'GPT-4 Updated'))
+        useFavoriteModel
+          .getState()
+          .addFavorite(makeModel('gpt-4', 'GPT-4 Updated'))
       })
       expect(useFavoriteModel.getState().favoriteModels).toHaveLength(1)
       expect(useFavoriteModel.getState().favoriteModels[0].name).toBe('GPT 4')

@@ -17,9 +17,7 @@ function syncSelectedModel(
     }
   }
 
-  const provider = providers.find(
-    (item) => item.provider === selectedProvider
-  )
+  const provider = providers.find((item) => item.provider === selectedProvider)
 
   if (!provider) {
     return {
@@ -215,7 +213,8 @@ export const useModelProvider = create<ModelProviderState>()(
               name: state.selectedModel.name,
               capabilities: state.selectedModel.capabilities,
               embedding: state.selectedModel.embedding,
-              provider: (state.selectedModel as Model & { provider?: string }).provider,
+              provider: (state.selectedModel as Model & { provider?: string })
+                .provider,
               settings: state.selectedModel.settings,
             }
           : null,

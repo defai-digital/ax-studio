@@ -341,8 +341,12 @@ describe('useModelProvider migrations', () => {
     )
 
     expect(mistralProvider.base_url).toBe('https://api.mistral.ai/v1')
-    expect(baseUrlSetting.controller_props.value).toBe('https://api.mistral.ai/v1')
-    expect(baseUrlSetting.controller_props.placeholder).toBe('https://api.mistral.ai/v1')
+    expect(baseUrlSetting.controller_props.value).toBe(
+      'https://api.mistral.ai/v1'
+    )
+    expect(baseUrlSetting.controller_props.placeholder).toBe(
+      'https://api.mistral.ai/v1'
+    )
   })
 
   it('does not migrate Mistral provider base URL if already has /v1', () => {
@@ -382,8 +386,12 @@ describe('useModelProvider migrations', () => {
     )
 
     expect(mistralProvider.base_url).toBe('https://api.mistral.ai/v1')
-    expect(baseUrlSetting.controller_props.value).toBe('https://api.mistral.ai/v1')
-    expect(baseUrlSetting.controller_props.placeholder).toBe('https://api.mistral.ai/v1')
+    expect(baseUrlSetting.controller_props.value).toBe(
+      'https://api.mistral.ai/v1'
+    )
+    expect(baseUrlSetting.controller_props.placeholder).toBe(
+      'https://api.mistral.ai/v1'
+    )
   })
 
   it('does not affect other providers during Mistral migration', () => {
@@ -416,7 +424,11 @@ describe('useModelProvider migrations', () => {
 
     const migratedState = migrate!(persistedState, 8)
 
-    expect(migratedState.providers[0].base_url).toBe('https://api.mistral.ai/v1')
-    expect(migratedState.providers[1].base_url).toBe('https://api.openai.com/v1')
+    expect(migratedState.providers[0].base_url).toBe(
+      'https://api.mistral.ai/v1'
+    )
+    expect(migratedState.providers[1].base_url).toBe(
+      'https://api.openai.com/v1'
+    )
   })
 })

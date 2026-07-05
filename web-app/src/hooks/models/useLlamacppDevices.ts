@@ -39,7 +39,10 @@ export const useLlamacppDevices = create<LlamacppDevicesStore>((set, get) => ({
 
       // Parse device setting — comma-separated activated device IDs
       const activatedDevices = currentDeviceSetting
-        ? currentDeviceSetting.split(',').map((d) => d.trim()).filter(Boolean)
+        ? currentDeviceSetting
+            .split(',')
+            .map((d) => d.trim())
+            .filter(Boolean)
         : []
 
       const devicesWithActivation = devices.map((device) => ({
@@ -111,7 +114,10 @@ export const useLlamacppDevices = create<LlamacppDevicesStore>((set, get) => ({
         .updateSettings('llamacpp', updatedSettings)
       updateProvider('llamacpp', { settings: updatedSettings })
     } catch (error) {
-      console.error('[useLlamacppDevices] Failed to persist device setting:', error)
+      console.error(
+        '[useLlamacppDevices] Failed to persist device setting:',
+        error
+      )
       // Roll back the optimistic toggle so UI and backend stay in sync.
       set((state) => ({
         devices: state.devices.map((device) =>
