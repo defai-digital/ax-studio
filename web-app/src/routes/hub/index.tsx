@@ -54,6 +54,7 @@ import { encodeHubRouteParam } from '@/lib/hub'
 import { z } from 'zod/v4'
 import { isMlxCatalogModel } from './-hubFilters'
 import { findDownloadedCatalogModel } from '@/lib/models/downloaded'
+import { useModelSupportStatus } from '@/hooks/models/useModelSupportStatus'
 
 type FilterTag = 'all' | 'downloaded' | 'mlx' | 'tools' | 'vision' | 'reasoning'
 
@@ -113,17 +114,7 @@ function HubContent() {
   const [huggingFaceRepo, setHuggingFaceRepo] = useState<CatalogModel | null>(
     null
   )
-  const [modelSupportStatus, setModelSupportStatus] = useState<
-    Record<string, 'RED' | 'YELLOW' | 'GREEN' | 'GREY' | 'LOADING'>
-  >({})
-  // Mirror `modelSupportStatus` into a ref so `checkModelSupport` below can
-  // read the latest status without listing the state as a dep — doing so
-  // would recreate the callback on every set and cascade renders through
-  // every ModelInfoHoverCard in the list.
-  const modelSupportStatusRef = useRef<
-    Record<string, 'RED' | 'YELLOW' | 'GREEN' | 'GREY' | 'LOADING'>
-  >({})
-  modelSupportStatusRef.current = modelSupportStatus
+  const { modelSupportStatus, checkModelSupport } = useModelSupportStatus()
   const [isInitialLoad, setIsInitialLoad] = useState(true)
   const addModelSourceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
@@ -361,42 +352,6 @@ function HubContent() {
       })
     },
     [navigate]
-  )
-
-  const checkModelSupport = useCallback(
-    async (variant: { model_id: string; path: string }) => {
-      const modelKey = variant.model_id
-
-      // Read from the ref — listing `modelSupportStatus` as a dep below
-      // would cascade re-renders across every ModelInfoHoverCard on set.
-      if (modelSupportStatusRef.current[modelKey]) {
-        return
-      }
-
-      setModelSupportStatus((prev) => ({
-        ...prev,
-        [modelKey]: 'LOADING',
-      }))
-
-      try {
-        const modelPath = variant.path
-        const supportStatus = await serviceHub
-          .models()
-          .isModelSupported(modelPath, 8192)
-
-        setModelSupportStatus((prev) => ({
-          ...prev,
-          [modelKey]: supportStatus,
-        }))
-      } catch (error) {
-        console.error('Error checking model support:', error)
-        setModelSupportStatus((prev) => ({
-          ...prev,
-          [modelKey]: 'RED',
-        }))
-      }
-    },
-    [serviceHub]
   )
 
   const clearFilters = useCallback(() => {

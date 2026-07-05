@@ -110,10 +110,6 @@ vi.mock('../ModelSetting', () => ({
   ModelSetting: () => <div data-testid="model-setting" />,
 }))
 
-vi.mock('../ModelSupportStatus', () => ({
-  ModelSupportStatus: () => <div data-testid="model-support-status" />,
-}))
-
 describe('DropdownModelProvider - Display Name Integration', () => {
   const mockProviders: ModelProvider[] = [
     {

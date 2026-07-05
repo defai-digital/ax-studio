@@ -23,13 +23,13 @@ import {
   getPreferredMmprojPath,
 } from '@/lib/models'
 import { RenderMarkdown } from '@/containers/RenderMarkdown'
-import { useEffect, useMemo, useCallback, useState, useRef } from 'react'
+import { useEffect, useMemo, useCallback, useState } from 'react'
 import {
   toDownloadProcesses,
   useDownloadStore,
 } from '@/hooks/models/useDownloadStore'
 import { useServiceHub } from '@/hooks/useServiceHub'
-import type { CatalogModel, ModelQuant } from '@/services/models/types'
+import type { CatalogModel } from '@/services/models/types'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
@@ -47,6 +47,7 @@ import { toast } from 'sonner'
 import { findDownloadedLocalModel } from '@/lib/models/downloaded'
 import { extractErrorMessage } from '@/lib/utils/error'
 import { isMlxSupported } from '@/lib/platform/utils'
+import { useModelSupportStatus } from '@/hooks/models/useModelSupportStatus'
 
 type SearchParams = {
   repo: string
@@ -100,17 +101,7 @@ function HubModelDetailContent() {
 
   const modelId = useMemo(() => decodeHubRouteParam(rawModelId), [rawModelId])
 
-  // State for model support status
-  const [modelSupportStatus, setModelSupportStatus] = useState<
-    Record<string, 'RED' | 'YELLOW' | 'GREEN' | 'LOADING' | 'GREY'>
-  >({})
-  const inFlightModelChecks = useRef(new Set<string>())
-  // Mirror `modelSupportStatus` into a ref so `checkModelSupport` can read
-  // the latest guard value without listing it as a dep (otherwise every
-  // status update recreates the callback and forces every
-  // ModelInfoHoverCard in the list to re-render).
-  const modelSupportStatusRef = useRef(modelSupportStatus)
-  modelSupportStatusRef.current = modelSupportStatus
+  const { modelSupportStatus, checkModelSupport } = useModelSupportStatus()
 
   useEffect(() => {
     fetchSources()
@@ -229,52 +220,6 @@ function HubModelDetailContent() {
       return `${years} year${years > 1 ? 's' : ''} ago`
     }
   }
-
-  // Check model support function
-  const checkModelSupport = useCallback(
-    async (variant: ModelQuant) => {
-      const modelKey = variant.model_id
-
-      // Don't check again if already checking or checked. Read from the ref
-      // so this callback doesn't depend on `modelSupportStatus` — otherwise
-      // every status update would recreate the callback and cascade renders
-      // through every ModelInfoHoverCard on the page.
-      if (
-        inFlightModelChecks.current.has(modelKey) ||
-        modelSupportStatusRef.current[modelKey]
-      ) {
-        return
-      }
-
-      // Set loading state
-      inFlightModelChecks.current.add(modelKey)
-      setModelSupportStatus((prev) => ({
-        ...prev,
-        [modelKey]: 'LOADING',
-      }))
-
-      try {
-        // Use the HuggingFace path for the model
-        const modelPath = variant.path
-        const supported = await serviceHub
-          .models()
-          .isModelSupported(modelPath, 8192)
-        setModelSupportStatus((prev) => ({
-          ...prev,
-          [modelKey]: supported,
-        }))
-      } catch (error) {
-        console.error('Error checking model support:', error)
-        setModelSupportStatus((prev) => ({
-          ...prev,
-          [modelKey]: 'RED',
-        }))
-      } finally {
-        inFlightModelChecks.current.delete(modelKey)
-      }
-    },
-    [serviceHub]
-  )
 
   // Extract tags from quants (model variants)
   const tags = useMemo(() => {
