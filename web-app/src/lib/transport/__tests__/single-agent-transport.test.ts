@@ -3,6 +3,7 @@ import { executeSingleAgentStream } from '../single-agent-transport'
 import { stripUnavailableToolParts } from '../transport-types'
 import type { SingleAgentConfig } from '../single-agent-transport'
 import type { UIMessage } from '@ai-sdk/react'
+import type { LanguageModel, Tool } from 'ai'
 
 // ─── Mock ai module ───────────────────────────────────────────────────────
 
@@ -43,11 +44,25 @@ vi.mock('@/hooks/settings/useAppState', () => ({
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
+const makeLanguageModel = (): LanguageModel => ({}) as unknown as LanguageModel
+
+const makeTool = (): Tool => ({}) as unknown as Tool
+
+const makeTools = (toolNames: string[]): Record<string, Tool> =>
+  Object.fromEntries(toolNames.map((toolName) => [toolName, makeTool()]))
+
+const makeUiMessage = (
+  message: Pick<UIMessage, 'id' | 'role' | 'parts'>
+): UIMessage => message as unknown as UIMessage
+
+const makeUiPart = (part: Record<string, unknown>) =>
+  part as unknown as UIMessage['parts'][number]
+
 function makeConfig(
   overrides: Partial<SingleAgentConfig> = {}
 ): SingleAgentConfig {
   return {
-    model: {} as any,
+    model: makeLanguageModel(),
     tools: {},
     systemMessage: undefined,
     messages: [],
@@ -96,7 +111,7 @@ describe('executeSingleAgentStream', () => {
 
   it('enables tools when model supports them and tools are provided', async () => {
     const { streamText } = await import('ai')
-    const tools = { search: {} as any }
+    const tools = makeTools(['search'])
     await executeSingleAgentStream(
       makeConfig({ tools, modelSupportsTools: true })
     )
@@ -111,7 +126,7 @@ describe('executeSingleAgentStream', () => {
 
   it('passes tools when available because capability gating happens upstream', async () => {
     const { streamText } = await import('ai')
-    const tools = { search: {} as any }
+    const tools = makeTools(['search'])
     await executeSingleAgentStream(
       makeConfig({ tools, modelSupportsTools: false })
     )
@@ -224,11 +239,11 @@ describe('executeSingleAgentStream', () => {
 describe('stripUnavailableToolParts', () => {
   it('returns messages unchanged when there are no assistant tool parts', () => {
     const messages: UIMessage[] = [
-      {
+      makeUiMessage({
         id: '1',
         role: 'user',
         parts: [{ type: 'text', text: 'hello' }],
-      } as any,
+      }),
     ]
     const result = stripUnavailableToolParts(messages, new Set(['search']))
     expect(result).toEqual(messages)
@@ -236,20 +251,20 @@ describe('stripUnavailableToolParts', () => {
 
   it('keeps tool parts that are still available', () => {
     const messages: UIMessage[] = [
-      {
+      makeUiMessage({
         id: '1',
         role: 'assistant',
         parts: [
           { type: 'text', text: 'result' },
-          {
+          makeUiPart({
             type: 'tool-search',
             toolCallId: 'tc1',
             toolName: 'search',
             state: 'result',
             result: 'found',
-          } as any,
+          }),
         ],
-      } as any,
+      }),
     ]
     const result = stripUnavailableToolParts(messages, new Set(['search']))
     expect(result[0].parts).toHaveLength(2)
@@ -257,20 +272,20 @@ describe('stripUnavailableToolParts', () => {
 
   it('strips tool parts that are no longer available', () => {
     const messages: UIMessage[] = [
-      {
+      makeUiMessage({
         id: '1',
         role: 'assistant',
         parts: [
           { type: 'text', text: 'result' },
-          {
+          makeUiPart({
             type: 'tool-deleted_tool',
             toolCallId: 'tc1',
             toolName: 'deleted_tool',
             state: 'result',
             result: 'gone',
-          } as any,
+          }),
         ],
-      } as any,
+      }),
     ]
     const result = stripUnavailableToolParts(messages, new Set(['search']))
     expect(result[0].parts).toHaveLength(1)
@@ -279,19 +294,19 @@ describe('stripUnavailableToolParts', () => {
 
   it('replaces empty parts list with placeholder text to preserve role alternation', () => {
     const messages: UIMessage[] = [
-      {
+      makeUiMessage({
         id: '1',
         role: 'assistant',
         parts: [
-          {
+          makeUiPart({
             type: 'tool-deleted',
             toolCallId: 'tc1',
             toolName: 'deleted',
             state: 'result',
             result: 'gone',
-          } as any,
+          }),
         ],
-      } as any,
+      }),
     ]
     const result = stripUnavailableToolParts(messages, new Set(['search']))
     expect(result[0].parts).toEqual([{ type: 'text', text: '' }])
@@ -299,18 +314,18 @@ describe('stripUnavailableToolParts', () => {
 
   it('handles dynamic-tool parts', () => {
     const messages: UIMessage[] = [
-      {
+      makeUiMessage({
         id: '1',
         role: 'assistant',
         parts: [
-          {
+          makeUiPart({
             type: 'dynamic-tool',
             toolName: 'my_tool',
             toolCallId: 'tc1',
             state: 'result',
-          } as any,
+          }),
         ],
-      } as any,
+      }),
     ]
     // Tool is available
     const kept = stripUnavailableToolParts(messages, new Set(['my_tool']))
@@ -323,16 +338,16 @@ describe('stripUnavailableToolParts', () => {
 
   it('does not modify non-assistant messages', () => {
     const messages: UIMessage[] = [
-      {
+      makeUiMessage({
         id: '1',
         role: 'user',
         parts: [{ type: 'text', text: 'hello' }],
-      } as any,
-      {
+      }),
+      makeUiMessage({
         id: '2',
         role: 'system',
         parts: [{ type: 'text', text: 'system' }],
-      } as any,
+      }),
     ]
     const result = stripUnavailableToolParts(messages, new Set())
     expect(result).toEqual(messages)
