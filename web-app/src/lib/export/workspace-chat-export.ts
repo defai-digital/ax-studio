@@ -63,7 +63,7 @@ const stringifyToolPart = (input: unknown, output: unknown): string => {
   return parts.join('\n')
 }
 
-export const extractThreadMessageText = (message: ThreadMessage): string => {
+const extractThreadMessageText = (message: ThreadMessage): string => {
   if (!Array.isArray(message.content)) return ''
 
   const parts = message.content

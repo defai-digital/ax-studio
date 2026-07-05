@@ -72,6 +72,27 @@ const messages: ThreadMessage[] = [
     created_at: 1_736_200_002_000,
     completed_at: 1_736_200_002_100,
   },
+  {
+    id: 'msg-4',
+    object: 'thread.message',
+    thread_id: 'thread-1',
+    role: 'assistant',
+    content: [
+      {
+        type: ContentType.Image,
+        image_url: { url: 'file://chart.png', detail: 'auto' },
+      },
+      {
+        type: ContentType.ToolCall,
+        tool_name: 'lookup',
+        input: { query: 'lead status' },
+        output: { status: 'warm' },
+      },
+    ],
+    status: MessageStatus.Ready,
+    created_at: 1_736_200_003_000,
+    completed_at: 1_736_200_003_100,
+  },
 ]
 
 describe('workspace chat export', () => {
@@ -85,6 +106,16 @@ describe('workspace chat export', () => {
     expect(parsed.workspace.name).toBe('Sales Workspace')
     expect(parsed.threads[0].messages[2].content).toContain(
       'Just checking in after our last call.'
+    )
+    expect(parsed.threads[0].messages[3].content).toContain(
+      '[Image] file://chart.png'
+    )
+    expect(parsed.threads[0].messages[3].content).toContain('[Tool: lookup]')
+    expect(parsed.threads[0].messages[3].content).toContain(
+      'Input: {"query":"lead status"}'
+    )
+    expect(parsed.threads[0].messages[3].content).toContain(
+      'Output: {"status":"warm"}'
     )
   })
 
@@ -114,7 +145,11 @@ describe('workspace chat export', () => {
       instruction: 'You are a helpful sales assistant.',
       input: 'Draft a short follow-up email.',
     })
-    expect(openaiLine.messages).toHaveLength(3)
+    expect(openaiLine.messages).toHaveLength(4)
+    expect(openaiLine.messages[3]).toMatchObject({
+      role: 'assistant',
+      content: expect.stringContaining('[Tool: lookup]'),
+    })
     expect(openaiLine.metadata.workspace_id).toBe('workspace-1')
   })
 })
