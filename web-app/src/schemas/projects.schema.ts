@@ -16,5 +16,3 @@ export const projectsStorageSchema = z.object({
     })
     .optional(),
 })
-
-export type ThreadFolderParsed = z.infer<typeof threadFolderSchema>

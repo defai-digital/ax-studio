@@ -39,5 +39,3 @@ export const huggingFaceRepoSchema = z.object({
   siblings: z.array(hfSiblingSchema).optional(),
   readme: z.string().optional(),
 })
-
-export type HuggingFaceRepoParsed = z.infer<typeof huggingFaceRepoSchema>

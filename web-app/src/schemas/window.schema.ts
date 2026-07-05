@@ -8,5 +8,3 @@ export const themeStorageSchema = z.object({
     })
     .optional(),
 })
-
-export type ThemeStorage = z.infer<typeof themeStorageSchema>

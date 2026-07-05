@@ -52,7 +52,3 @@ export const mcpSettingsSchema = z.object({
   maxRestartDelayMs: z.number().finite().int().positive().max(600000),
   backoffMultiplier: z.number().finite().gt(1).max(10),
 })
-
-export type MCPServerConfigParsed = z.infer<typeof mcpServerConfigSchema>
-export type MCPServersParsed = z.infer<typeof mcpServersSchema>
-export type MCPSettingsParsed = z.infer<typeof mcpSettingsSchema>

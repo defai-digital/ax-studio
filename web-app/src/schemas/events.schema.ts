@@ -12,5 +12,3 @@ export const deepLinkPayloadSchema = z
       return false
     }
   }, 'Deep link payload must be a valid URL')
-
-export type DeepLinkPayload = z.infer<typeof deepLinkPayloadSchema>

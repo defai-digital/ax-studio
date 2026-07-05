@@ -15,5 +15,3 @@ export const providerModelsResponseSchema = z.union([
   altModelsResponseSchema,
   z.array(modelItemSchema),
 ])
-
-export type ProviderModelsResponse = z.infer<typeof providerModelsResponseSchema>

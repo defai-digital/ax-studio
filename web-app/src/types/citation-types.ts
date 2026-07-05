@@ -26,16 +26,3 @@ export interface CitationData {
   sources: CitationSource[]
   confidence: 'strong' | 'moderate' | 'uncertain'
 }
-
-/**
- * Compute confidence level from a set of sources.
- * - strong: 3+ sources with score > 0.7
- * - moderate: 1-2 sources or lower scores
- * - uncertain: no sources
- */
-export function computeConfidence(sources: CitationSource[]): CitationData['confidence'] {
-  if (sources.length === 0) return 'uncertain'
-  const strongSources = sources.filter((s) => (s.score ?? 0) > 0.7)
-  if (strongSources.length >= 3) return 'strong'
-  return 'moderate'
-}

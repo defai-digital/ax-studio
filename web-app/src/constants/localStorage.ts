@@ -31,5 +31,3 @@ export const localStorageKey = {
   fileRegistryStore: 'file-registry-store',
   routerSettings: 'router-settings',
 }
-
-export const CACHE_EXPIRY_MS = 1000 * 60 * 60 * 24
