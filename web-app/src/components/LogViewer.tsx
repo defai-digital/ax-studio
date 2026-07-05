@@ -3,6 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import type { LogEntry } from '@/services/app/types'
 import { useTranslation } from '@/i18n/react-i18next-compat'
+import { formatLogTimestamp, getLogLevelColor } from '@/lib/log-display'
 import { useState } from 'react'
 
 const SERVER_LOG_TARGET = 'app_lib::core::server::proxy'
@@ -81,30 +82,6 @@ export function LogViewer() {
     }
   }, [serviceHub])
 
-  const getLogLevelColor = (level: string) => {
-    switch (level) {
-      case 'error':
-        return 'text-red-500'
-      case 'warn':
-        return 'text-yellow-500'
-      case 'info':
-        return 'text-blue-500'
-      default:
-        return 'text-gray-500'
-    }
-  }
-
-  const formatTimestamp = (timestamp: string | number) => {
-    const date = new Date(timestamp)
-    return date.toLocaleTimeString('en-US', {
-      hour12: false,
-      timeZone: 'UTC',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    })
-  }
-
   const virtualItems = rowVirtualizer.getVirtualItems()
 
   return (
@@ -140,7 +117,7 @@ export function LogViewer() {
                   className="mb-1 flex"
                 >
                   <span className="text-muted-foreground mr-2 shrink-0">
-                    [{formatTimestamp(log.timestamp)}]
+                    [{formatLogTimestamp(log.timestamp)}]
                   </span>
                   <span
                     className={`mr-2 font-semibold shrink-0 ${getLogLevelColor(log.level)}`}
