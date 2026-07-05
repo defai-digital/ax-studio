@@ -114,16 +114,6 @@ export const safeStorageSetJSON = (
 export const createSafeJSONStorage = <T>(
   getStorage: () => StorageLike,
   context?: string
-): PersistStorage<T> =>
-  createSafeJSONStorageWithTransforms(getStorage, context)
-
-export const createSafeJSONStorageWithTransforms = <T>(
-  getStorage: () => StorageLike,
-  context: string | undefined,
-  transforms?: {
-    deserialize?: (value: StorageValue<T> | unknown) => StorageValue<T> | null
-    serialize?: (value: StorageValue<T>) => StorageValue<T>
-  }
 ): PersistStorage<T> => ({
   getItem: (name) => {
     const storage = resolveStorage(getStorage, context)
@@ -132,18 +122,13 @@ export const createSafeJSONStorageWithTransforms = <T>(
     const parsed = safeStorageParseJSON<unknown>(storage, name, context)
     if (!parsed) return null
 
-    return transforms?.deserialize
-      ? transforms.deserialize(parsed)
-      : (parsed as StorageValue<T>)
+    return parsed as StorageValue<T>
   },
   setItem: (name, value) => {
     const storage = resolveStorage(getStorage, context)
     if (!storage) return
 
-    const transformed = transforms?.serialize
-      ? transforms.serialize(value)
-      : value
-    safeStorageSetJSON(storage, name, transformed, context)
+    safeStorageSetJSON(storage, name, value, context)
   },
   removeItem: (name) => {
     const storage = resolveStorage(getStorage, context)

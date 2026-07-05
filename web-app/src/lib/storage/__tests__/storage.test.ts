@@ -8,7 +8,6 @@ import {
   safeStorageSetJSON,
   isStorageFlagEnabled,
   createSafeJSONStorage,
-  createSafeJSONStorageWithTransforms,
 } from '../storage'
 
 function makeStorage(overrides: Partial<Storage> = {}): Storage {
@@ -184,33 +183,5 @@ describe('createSafeJSONStorage', () => {
     expect(storage.getItem('k')).toBeNull()
     expect(warn).not.toHaveBeenCalled()
     warn.mockRestore()
-  })
-})
-
-describe('createSafeJSONStorageWithTransforms', () => {
-  it('applies deserialize transform on getItem', () => {
-    const s = makeStorage()
-    s.setItem('k', JSON.stringify({ state: { v: 1 }, version: 0 }))
-
-    const storage = createSafeJSONStorageWithTransforms(
-      () => s,
-      undefined,
-      { deserialize: (v) => ({ ...(v as object), patched: true }) as never }
-    )
-
-    expect((storage.getItem('k') as { patched?: boolean })?.patched).toBe(true)
-  })
-
-  it('applies serialize transform on setItem', () => {
-    const s = makeStorage()
-    const storage = createSafeJSONStorageWithTransforms(
-      () => s,
-      undefined,
-      { serialize: (v) => ({ ...v, extra: 'yes' }) as never }
-    )
-
-    storage.setItem('k', { state: { x: 1 }, version: 0 })
-    const stored = JSON.parse(s.getItem('k')!)
-    expect(stored.extra).toBe('yes')
   })
 })
