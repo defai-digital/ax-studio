@@ -1,7 +1,7 @@
-export const ANTHROPIC_VERSION_HEADER = 'anthropic-version'
-export const ANTHROPIC_VERSION_VALUE = '2023-06-01'
-export const ANTHROPIC_BROWSER_ACCESS_HEADER = 'anthropic-dangerous-direct-browser-access'
-export const ANTHROPIC_BROWSER_ACCESS_VALUE = 'true'
+const ANTHROPIC_VERSION_HEADER = 'anthropic-version'
+const ANTHROPIC_VERSION_VALUE = '2023-06-01'
+const ANTHROPIC_BROWSER_ACCESS_HEADER = 'anthropic-dangerous-direct-browser-access'
+const ANTHROPIC_BROWSER_ACCESS_VALUE = 'true'
 
 // `mlx` is local too: model loading and chat route through the in-process
 // ax-engine-sdk/MLX Tauri commands under the visible `mlx` provider id.
