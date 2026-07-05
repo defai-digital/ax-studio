@@ -36,7 +36,7 @@ function isActiveRemoteProvider(provider: ModelProvider): boolean {
   )
 }
 
-export function buildRemoteProviderRequests(
+function buildRemoteProviderRequests(
   providers: ModelProvider[]
 ): RegisterProviderRequest[] {
   return providers

@@ -6,7 +6,7 @@ vi.mock('@/hooks/useServiceHub', () => ({
   getServiceHub: () => ({ core: () => ({ invoke: invokeMock }) }),
 }))
 
-import { buildRemoteProviderRequests, syncRemoteProviders } from '../provider-sync'
+import { syncRemoteProviders } from '../provider-sync'
 
 function makeProvider(
   provider: string,
@@ -36,36 +36,40 @@ describe('provider-sync', () => {
     })
   })
 
-  it('builds requests only for active remote providers with api keys', () => {
-    const requests = buildRemoteProviderRequests([
+  it('registers only active remote providers with api keys', async () => {
+    await syncRemoteProviders([
       makeProvider('openai'),
       makeProvider('llamacpp'),
       makeProvider('anthropic', { active: false }),
       makeProvider('groq', { api_key: '' }),
     ])
 
-    expect(requests).toEqual([
-      {
-        provider: 'openai',
-        api_key: 'sk-test',
-        base_url: 'https://openai.example.com/v1',
-        custom_headers: [{ header: 'X-Test', value: '1' }],
-        models: ['openai-model'],
-      },
-    ])
+    expect(invokeMock).toHaveBeenNthCalledWith(2, 'register_provider_configs_batch', {
+      requests: [
+        {
+          provider: 'openai',
+          api_key: 'sk-test',
+          base_url: 'https://openai.example.com/v1',
+          custom_headers: [{ header: 'X-Test', value: '1' }],
+          models: ['openai-model'],
+        },
+      ],
+    })
   })
 
-  it('normalizes pasted bearer API keys before registering providers', () => {
-    const requests = buildRemoteProviderRequests([
+  it('normalizes pasted bearer API keys before registering providers', async () => {
+    await syncRemoteProviders([
       makeProvider('openrouter', { api_key: '  Bearer sk-or-test  ' }),
     ])
 
-    expect(requests).toEqual([
-      expect.objectContaining({
-        provider: 'openrouter',
-        api_key: 'sk-or-test',
-      }),
-    ])
+    expect(invokeMock).toHaveBeenNthCalledWith(2, 'register_provider_configs_batch', {
+      requests: [
+        expect.objectContaining({
+          provider: 'openrouter',
+          api_key: 'sk-or-test',
+        }),
+      ],
+    })
   })
 
   it('invokes batch registration when remote providers are present', async () => {
