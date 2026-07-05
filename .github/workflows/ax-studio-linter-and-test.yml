@@ -221,7 +221,10 @@ jobs:
         shell: powershell
         timeout-minutes: 20
         run: |
-          npx -y @yarnpkg/cli-dist@4.5.3 test
+          # Node 24 on Windows can fail during child-process pool teardown after
+          # all Vitest tests pass. Thread workers keep the same test coverage
+          # while avoiding that platform-specific cleanup path.
+          npx -y @yarnpkg/cli-dist@4.5.3 vitest run --pool=threads
         env:
           NODE_OPTIONS: '--max-old-space-size=2048'
           CARGO_HOME: C:\cargo
@@ -349,7 +352,10 @@ jobs:
         shell: powershell
         timeout-minutes: 20
         run: |
-          npx -y @yarnpkg/cli-dist@4.5.3 test
+          # Node 24 on Windows can fail during child-process pool teardown after
+          # all Vitest tests pass. Thread workers keep the same test coverage
+          # while avoiding that platform-specific cleanup path.
+          npx -y @yarnpkg/cli-dist@4.5.3 vitest run --pool=threads
         env:
           NODE_OPTIONS: '--max-old-space-size=2048'
           CARGO_HOME: C:\cargo
