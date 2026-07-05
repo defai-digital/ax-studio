@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-// NOTE: vitest.config.ts defines IS_WEB_APP as JSON.stringify('false')
-// which means it is the STRING 'false', not boolean false.
-// This is important for isPlatformTauri's fallback path.
+// NOTE: vitest.config.ts defines IS_WEB_APP as a boolean literal.
+// The fallback path still accepts legacy string constants so older bundles
+// remain safe if this utility is evaluated outside the browser runtime check.
 
 // We need to re-import fresh for each test group to reset module state
 // since the module uses global defines at evaluation time.

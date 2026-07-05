@@ -6,6 +6,16 @@ import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
 import packageJson from './package.json'
 const host = process.env.TAURI_DEV_HOST
 
+const readBooleanEnv = (name: string): boolean => process.env[name] === 'true'
+
+const readPositiveNumberEnv = (
+  name: string,
+  fallbackValue: number
+): number => {
+  const value = Number(process.env[name])
+  return Number.isFinite(value) && value > 0 ? value : fallbackValue
+}
+
 // https://vite.dev/config/
 export default defineConfig(() => {
   return {
@@ -26,8 +36,8 @@ export default defineConfig(() => {
       },
     },
     define: {
-      IS_TAURI: JSON.stringify(process.env.IS_TAURI),
-      IS_DEV: JSON.stringify(process.env.IS_DEV),
+      IS_TAURI: JSON.stringify(readBooleanEnv('IS_TAURI')),
+      IS_DEV: JSON.stringify(readBooleanEnv('IS_DEV')),
       IS_WEB_APP: JSON.stringify(false),
       IS_MACOS: JSON.stringify(
         process.env.TAURI_ENV_PLATFORM?.includes('darwin') ?? false
@@ -40,10 +50,10 @@ export default defineConfig(() => {
       VERSION: JSON.stringify(packageJson.version),
 
       AUTO_UPDATER_DISABLED: JSON.stringify(
-        process.env.AUTO_UPDATER_DISABLED === 'true'
+        readBooleanEnv('AUTO_UPDATER_DISABLED')
       ),
       UPDATE_CHECK_INTERVAL_MS: JSON.stringify(
-        Number(process.env.UPDATE_CHECK_INTERVAL_MS) || 60 * 60 * 1000
+        readPositiveNumberEnv('UPDATE_CHECK_INTERVAL_MS', 60 * 60 * 1000)
       ),
     },
 
