@@ -2,22 +2,24 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   connectAxBiMcpServer,
   listAxBiDatasets,
-  normalizeAxBiMcpUrl,
-  parseAxBiDatasetList,
 } from '../datasets'
 
 describe('ax-bi datasets', () => {
-  it('normalizes MCP URLs', () => {
-    expect(normalizeAxBiMcpUrl('127.0.0.1:8088')).toBe(
-      'http://127.0.0.1:8088/mcp'
-    )
-    expect(normalizeAxBiMcpUrl('http://localhost:8088/mcp/')).toBe(
-      'http://localhost:8088/mcp'
-    )
-  })
+  function makeDatasetServiceHub(result: unknown) {
+    const callTool = vi.fn().mockResolvedValue(result)
+    const serviceHub = {
+      mcp: () => ({
+        getTools: vi.fn().mockResolvedValue([
+          { server: 'ax-bi', name: 'list_datasets' },
+        ]),
+        callTool,
+      }),
+    }
+    return { serviceHub, callTool }
+  }
 
-  it('parses dataset records from nested MCP results', () => {
-    const datasets = parseAxBiDatasetList({
+  it('parses dataset records from nested MCP results', async () => {
+    const { serviceHub } = makeDatasetServiceHub({
       error: '',
       content: [
         {
@@ -37,7 +39,9 @@ describe('ax-bi datasets', () => {
       ],
     })
 
-    expect(datasets).toEqual([
+    await expect(
+      listAxBiDatasets({ serviceHub: serviceHub as never })
+    ).resolves.toEqual([
       {
         id: 1,
         name: 'sales',
@@ -48,8 +52,8 @@ describe('ax-bi datasets', () => {
     ])
   })
 
-  it('keeps dataset records that do not include an id', () => {
-    const datasets = parseAxBiDatasetList({
+  it('keeps dataset records that do not include an id', async () => {
+    const { serviceHub } = makeDatasetServiceHub({
       error: '',
       content: [
         {
@@ -68,7 +72,9 @@ describe('ax-bi datasets', () => {
       ],
     })
 
-    expect(datasets).toEqual([
+    await expect(
+      listAxBiDatasets({ serviceHub: serviceHub as never })
+    ).resolves.toEqual([
       {
         id: undefined,
         name: 'inventory',
@@ -86,8 +92,8 @@ describe('ax-bi datasets', () => {
     ])
   })
 
-  it('does not merge id-less datasets with the same name in different schemas', () => {
-    const datasets = parseAxBiDatasetList({
+  it('does not merge id-less datasets with the same name in different schemas', async () => {
+    const { serviceHub } = makeDatasetServiceHub({
       error: '',
       content: [
         {
@@ -101,7 +107,9 @@ describe('ax-bi datasets', () => {
       ],
     })
 
-    expect(datasets).toEqual([
+    await expect(
+      listAxBiDatasets({ serviceHub: serviceHub as never })
+    ).resolves.toEqual([
       {
         id: undefined,
         name: 'orders',
@@ -153,6 +161,25 @@ describe('ax-bi datasets', () => {
         active: true,
       })
     )
+  })
+
+  it('preserves already normalized AX-BI MCP URLs when connecting', async () => {
+    const updateMCPConfig = vi.fn().mockResolvedValue(undefined)
+    const activateMCPServer = vi.fn().mockResolvedValue(undefined)
+    const serviceHub = {
+      mcp: () => ({
+        getMCPConfig: vi.fn().mockResolvedValue({}),
+        updateMCPConfig,
+        activateMCPServer,
+      }),
+    }
+
+    await expect(
+      connectAxBiMcpServer({
+        serviceHub: serviceHub as never,
+        url: 'http://localhost:8088/mcp/',
+      })
+    ).resolves.toBe('http://localhost:8088/mcp')
   })
 
   it('uses list_datasets when available', async () => {

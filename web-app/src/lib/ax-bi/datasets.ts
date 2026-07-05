@@ -16,7 +16,7 @@ export type AxBiDataset = {
   url?: string
 }
 
-export function normalizeAxBiMcpUrl(value: string): string {
+function normalizeAxBiMcpUrl(value: string): string {
   const trimmed = value.trim()
   if (!trimmed) return DEFAULT_AX_BI_MCP_URL
 
@@ -164,7 +164,7 @@ function normalizeDatasetRecord(record: Record<string, unknown>): AxBiDataset | 
   }
 }
 
-export function parseAxBiDatasetList(result: MCPToolCallResult): AxBiDataset[] {
+function parseAxBiDatasetList(result: MCPToolCallResult): AxBiDataset[] {
   if (result.error) throw new Error(result.error)
 
   const parsed = parseJsonMcpResult<Record<string, unknown>>(result)
