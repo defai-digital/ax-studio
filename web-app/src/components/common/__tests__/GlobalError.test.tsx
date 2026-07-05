@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import GlobalError from '../GlobalError'
+import { GlobalError } from '../GlobalError'
 import '@testing-library/jest-dom'
 
 describe('GlobalError Component', () => {

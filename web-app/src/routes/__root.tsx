@@ -1,11 +1,6 @@
 import { createRootRoute, Outlet, useLocation } from '@tanstack/react-router'
 import { Fragment } from 'react/jsx-runtime'
-import {
-  useCallback,
-  useEffect,
-  type MouseEvent,
-  type ReactNode,
-} from 'react'
+import { useCallback, useEffect, type MouseEvent, type ReactNode } from 'react'
 import { motion } from 'motion/react'
 
 import DialogAppUpdater from '@/containers/dialogs/AppUpdater'
@@ -21,7 +16,7 @@ import ToolApproval from '@/containers/dialogs/mcp/ToolApproval'
 import AttachmentIngestionDialog from '@/containers/dialogs/AttachmentIngestionDialog'
 import { TranslationProvider } from '@/i18n/TranslationContext'
 import OutOfContextPromiseModal from '@/containers/dialogs/OutOfContextDialog'
-import GlobalError from '@/components/common/GlobalError'
+import { GlobalError } from '@/components/common/GlobalError'
 import { GlobalEventHandler } from '@/providers/GlobalEventHandler'
 import { ServiceHubProvider } from '@/providers/ServiceHubProvider'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'

@@ -4,7 +4,7 @@ interface GlobalErrorProps {
   error: Error | unknown
 }
 
-export default function GlobalError({ error }: GlobalErrorProps) {
+export function GlobalError({ error }: GlobalErrorProps) {
   console.error('Error in root route:', error)
   const [showFull, setShowFull] = useState(false)
 
