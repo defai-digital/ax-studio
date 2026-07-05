@@ -32,18 +32,19 @@ export const newUserThreadContent = (
   )
 
   // Inject document metadata into the text content (id, name, fileType only - no path)
-  const docMetadata = documents
-    .map((doc) => ({
-      id: doc.id ?? doc.name,
-      name: doc.name,
-      type: doc.fileType,
-      size: typeof doc.size === 'number' ? doc.size : undefined,
-      chunkCount: typeof doc.chunkCount === 'number' ? doc.chunkCount : undefined,
-      injectionMode: doc.injectionMode,
-    }))
+  const docMetadata = documents.map((doc) => ({
+    id: doc.id ?? doc.name,
+    name: doc.name,
+    type: doc.fileType,
+    size: typeof doc.size === 'number' ? doc.size : undefined,
+    chunkCount: typeof doc.chunkCount === 'number' ? doc.chunkCount : undefined,
+    injectionMode: doc.injectionMode,
+  }))
 
   const textWithFiles =
-    docMetadata.length > 0 ? injectFilesIntoPrompt(content, docMetadata) : content
+    docMetadata.length > 0
+      ? injectFilesIntoPrompt(content, docMetadata)
+      : content
 
   const contentParts: ThreadContent[] = [
     {
@@ -94,24 +95,25 @@ export const newAssistantThreadContent = (
   threadId: string,
   content: string,
   metadata: Record<string, unknown> = {},
-  id?: string,
-): ThreadMessage => ({
-  type: 'text',
-  role: ChatCompletionRole.Assistant,
-  content: [
-    {
-      type: ContentType.Text,
-      text: {
-        value: content,
-        annotations: [],
+  id?: string
+): ThreadMessage =>
+  ({
+    type: 'text',
+    role: ChatCompletionRole.Assistant,
+    content: [
+      {
+        type: ContentType.Text,
+        text: {
+          value: content,
+          annotations: [],
+        },
       },
-    },
-  ],
-  id: id ?? ulid(),
-  object: 'thread.message',
-  thread_id: threadId,
-  status: MessageStatus.Ready,
-  created_at: 0,
-  completed_at: 0,
-  metadata,
-} as unknown as ThreadMessage)
+    ],
+    id: id ?? ulid(),
+    object: 'thread.message',
+    thread_id: threadId,
+    status: MessageStatus.Ready,
+    created_at: 0,
+    completed_at: 0,
+    metadata,
+  }) as unknown as ThreadMessage

@@ -124,7 +124,9 @@ export class ExtensionManager {
    * Loads all registered extension.
    */
   async load() {
-    const results = await Promise.allSettled(this.listExtensions().map((ext) => ext.onLoad()))
+    const results = await Promise.allSettled(
+      this.listExtensions().map((ext) => ext.onLoad())
+    )
     for (const result of results) {
       if (result.status === 'rejected') {
         console.error('Extension load failed:', result.reason)
@@ -157,18 +159,20 @@ export class ExtensionManager {
     const manifests = await getServiceHub().core().getActiveExtensions()
     if (!manifests || !Array.isArray(manifests)) return []
 
-    const extensions: Extension[] = manifests.map((manifest: ExtensionManifest) => {
-      return new Extension(
-        manifest.url,
-        manifest.name,
-        manifest.productName,
-        manifest.active,
-        manifest.description,
-        manifest.version,
-        manifest.extensionInstance // Pass the extension instance if available
-      )
-    })
-    
+    const extensions: Extension[] = manifests.map(
+      (manifest: ExtensionManifest) => {
+        return new Extension(
+          manifest.url,
+          manifest.name,
+          manifest.productName,
+          manifest.active,
+          manifest.description,
+          manifest.version,
+          manifest.extensionInstance // Pass the extension instance if available
+        )
+      }
+    )
+
     return extensions
   }
 
@@ -183,7 +187,7 @@ export class ExtensionManager {
       this.register(extension.name, extension.extensionInstance)
       return
     }
-    
+
     // Import class for Tauri extensions
     let extensionUrl = extension.url
     try {
@@ -194,7 +198,9 @@ export class ExtensionManager {
         extensionUrl = `${extensionsPath}/${extensionUrl}`
       }
 
-      const extensionClass = await import(/* @vite-ignore */ getServiceHub().core().convertFileSrc(extensionUrl))
+      const extensionClass = await import(
+        /* @vite-ignore */ getServiceHub().core().convertFileSrc(extensionUrl)
+      )
       // Register class if it has a default export
       if (
         typeof extensionClass.default === 'function' &&
@@ -223,7 +229,7 @@ export class ExtensionManager {
    */
   async registerActive() {
     // Get active extensions
-    const activeExtensions = (await this.getActive()) ?? []
+    const activeExtensions = await this.getActive()
     // Activate all
     const results = await Promise.allSettled(
       activeExtensions.map((ext: Extension) => this.activateExtension(ext))
@@ -245,11 +251,13 @@ export class ExtensionManager {
       return
     }
     const res = await getServiceHub().core().installExtension(extensions)
-    return Promise.all(res.map(async (ext: ExtensionManifest) => {
-      const extension = new Extension(ext.url, ext.name)
-      await this.activateExtension(extension)
-      return extension
-    }))
+    return Promise.all(
+      res.map(async (ext: ExtensionManifest) => {
+        const extension = new Extension(ext.url, ext.name)
+        await this.activateExtension(extension)
+        return extension
+      })
+    )
   }
 
   /**

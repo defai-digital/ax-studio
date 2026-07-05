@@ -49,7 +49,9 @@ export function fabricSearchHasResults(result: unknown): boolean {
   return Boolean(formatted) && !formatted.includes('"results":[]')
 }
 
-export function parseFabricSearchResults(result: unknown): FabricSearchResult[] {
+export function parseFabricSearchResults(
+  result: unknown
+): FabricSearchResult[] {
   const text = firstTextPart(result)
   if (!text) return []
 
@@ -57,7 +59,11 @@ export function parseFabricSearchResults(result: unknown): FabricSearchResult[] 
     const parsed = JSON.parse(text) as { results?: unknown[] }
     if (!Array.isArray(parsed.results)) return []
     return parsed.results
-      .map((item) => item && typeof item === 'object' ? item as Record<string, unknown> : null)
+      .map((item) =>
+        item && typeof item === 'object'
+          ? (item as Record<string, unknown>)
+          : null
+      )
       .filter(Boolean)
       .map((item) => ({
         source: typeof item?.source === 'string' ? item.source : null,

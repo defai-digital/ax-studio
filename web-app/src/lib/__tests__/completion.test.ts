@@ -1,13 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import {
-  ContentType,
-  ChatCompletionRole,
-  MessageStatus,
-} from '@ax-studio/core'
-import {
-  newUserThreadContent,
-  newAssistantThreadContent,
-} from '../completion'
+import { ContentType, ChatCompletionRole, MessageStatus } from '@ax-studio/core'
+import { newUserThreadContent, newAssistantThreadContent } from '../completion'
 import type { Attachment } from '@/types/attachment'
 
 // Mock ulid to return deterministic values
@@ -271,7 +264,8 @@ describe('newAssistantThreadContent', () => {
   })
 
   it('handles content with special characters', () => {
-    const content = 'Here is code: `const x = 1;`\n```js\nconsole.log("hi")\n```'
+    const content =
+      'Here is code: `const x = 1;`\n```js\nconsole.log("hi")\n```'
     const msg = newAssistantThreadContent('t1', content)
     expect(msg.content[0].text?.value).toBe(content)
   })
@@ -388,9 +382,7 @@ describe('completion property invariants', () => {
 
   it('each call to newAssistantThreadContent generates unique id', () => {
     const ids = new Set(
-      Array.from({ length: 10 }, () =>
-        newAssistantThreadContent('t1', 'hi').id
-      )
+      Array.from({ length: 10 }, () => newAssistantThreadContent('t1', 'hi').id)
     )
     expect(ids.size).toBe(10)
   })
