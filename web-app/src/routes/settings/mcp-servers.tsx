@@ -14,7 +14,7 @@ import {
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import AddEditMCPServer from '@/containers/dialogs/mcp/AddEditMCPServer'
 import { DeleteMCPServerConfirm } from '@/containers/dialogs/mcp/DeleteMCPServerConfirm'
-import EditJsonMCPserver from '@/containers/dialogs/mcp/EditJsonMCPserver'
+import { EditJsonMCPserver } from '@/containers/dialogs/mcp/EditJsonMCPserver'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { twMerge } from 'tailwind-merge'
