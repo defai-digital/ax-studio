@@ -164,7 +164,7 @@ vi.mock('@/containers/dialogs/mcp/AddEditMCPServer', () => ({
 }))
 
 vi.mock('@/containers/dialogs/mcp/DeleteMCPServerConfirm', () => ({
-  default: () => null,
+  DeleteMCPServerConfirm: () => null,
 }))
 
 vi.mock('@/containers/dialogs/mcp/EditJsonMCPserver', () => ({

@@ -16,7 +16,7 @@ interface DeleteMCPServerConfirmProps {
   onConfirm: () => void
 }
 
-export default function DeleteMCPServerConfirm({
+export function DeleteMCPServerConfirm({
   open,
   onOpenChange,
   serverName,
@@ -33,7 +33,11 @@ export default function DeleteMCPServerConfirm({
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button size="sm" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
             {t('common:cancel')}
           </Button>
           <Button
