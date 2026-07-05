@@ -427,12 +427,17 @@ corepack prepare yarn@4.5.3 --activate
 make dev
 ```
 
-If `corepack` is not available on your machine, run Yarn 4.5.3 through npm and
-make sure `yarn --version` reports `4.5.3` before using Make targets:
+If `corepack` is not available on your machine, run Yarn 4.5.3 through npm:
 
 ```bash
+npm exec --yes --package @yarnpkg/cli-dist@4.5.3 -- yarn --version
 npm exec --yes --package @yarnpkg/cli-dist@4.5.3 -- yarn install --immutable
 ```
+
+Use the same prefix for Yarn commands in Corepack-free shells. For example,
+`npm exec --yes --package @yarnpkg/cli-dist@4.5.3 -- yarn test` runs the test
+suite with the repo's required Yarn version even if the global `yarn` binary is
+Yarn 1.x.
 
 `make dev` installs dependencies when needed, builds `core/` and bundled
 extensions, downloads required binaries, copies Tauri assets, and launches the
