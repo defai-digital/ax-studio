@@ -126,14 +126,12 @@ describe('getModelToStart', () => {
   // ── A: Specification Tests ──
 
   describe('last used model path', () => {
-    it('returns last used model when it exists in provider', () => {
+    it('returns last used model when no selected model exists', () => {
       localStorageMock.setItem(
         'last-used-model',
         JSON.stringify({ provider: 'openai', model: 'gpt-4' })
       )
       const result = getModelToStart({
-        selectedModel: { id: 'claude-3-opus' },
-        selectedProvider: 'anthropic',
         getProviderByName,
       })
       expect(result).toEqual({ model: 'gpt-4', provider: openaiProvider })
@@ -217,8 +215,7 @@ describe('getModelToStart', () => {
   // ── B: Attack Tests ──
 
   describe('adversarial scenarios', () => {
-    it('last used model takes priority over selected model', () => {
-      // DISCOVERED DESIGN ISSUE: lastUsedModel wins over explicit selection
+    it('prefers a valid selected model over the last used model', () => {
       localStorageMock.setItem(
         'last-used-model',
         JSON.stringify({ provider: 'openai', model: 'gpt-4' })
@@ -228,23 +225,32 @@ describe('getModelToStart', () => {
         selectedProvider: 'anthropic',
         getProviderByName,
       })
-      // Last used model wins
-      expect(result).toEqual({ model: 'gpt-4', provider: openaiProvider })
+      expect(result).toEqual({
+        model: 'claude-3-opus',
+        provider: anthropicProvider,
+      })
     })
 
-    it('does NOT validate selectedModel exists in provider models (inconsistency with lastUsedModel path)', () => {
-      // DISCOVERED BUG: selectedModel path does not check if model.id
-      // is in provider.models, unlike the lastUsedModel path which does.
+    it('does not return a selected model that is missing from the provider catalog', () => {
       const result = getModelToStart({
         selectedModel: { id: 'nonexistent-model-not-in-provider' },
         selectedProvider: 'openai',
         getProviderByName,
       })
-      // This returns the model even though it doesn't exist in provider's models list
-      expect(result).toEqual({
-        model: 'nonexistent-model-not-in-provider',
-        provider: openaiProvider,
+      expect(result).toBe(null)
+    })
+
+    it('falls back to a valid last used model when the selected model is stale', () => {
+      localStorageMock.setItem(
+        'last-used-model',
+        JSON.stringify({ provider: 'openai', model: 'gpt-4' })
+      )
+      const result = getModelToStart({
+        selectedModel: { id: 'deleted-model' },
+        selectedProvider: 'anthropic',
+        getProviderByName,
       })
+      expect(result).toEqual({ model: 'gpt-4', provider: openaiProvider })
     })
 
     it('handles corrupted localStorage gracefully', () => {

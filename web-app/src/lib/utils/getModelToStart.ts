@@ -37,20 +37,20 @@ export const getModelToStart = (params: {
 }): { model: string; provider: ModelProvider } | null => {
   const { selectedModel, selectedProvider, getProviderByName } = params
 
-  // Use last used model if available
+  // Explicit UI selection wins when it still exists in the provider catalog.
+  if (selectedModel && selectedProvider) {
+    const provider = getProviderByName(selectedProvider)
+    if (provider && provider.models.some((m) => m.id === selectedModel.id)) {
+      return { model: selectedModel.id, provider }
+    }
+  }
+
+  // Fall back to the last used model only when no valid selection is available.
   const lastUsedModel = getLastUsedModel()
   if (lastUsedModel) {
     const provider = getProviderByName(lastUsedModel.provider)
     if (provider && provider.models.some((m) => m.id === lastUsedModel.model)) {
       return { model: lastUsedModel.model, provider }
-    }
-  }
-
-  // Use selected model if available
-  if (selectedModel && selectedProvider) {
-    const provider = getProviderByName(selectedProvider)
-    if (provider) {
-      return { model: selectedModel.id, provider }
     }
   }
 
