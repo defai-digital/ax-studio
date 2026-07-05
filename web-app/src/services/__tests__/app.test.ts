@@ -1,65 +1,36 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { TauriAppService } from '../app/tauri'
 
+const mocks = vi.hoisted(() => ({
+  invoke: vi.fn(),
+  engineManager: {
+    engines: new Map<string, unknown>(),
+  },
+}))
+
 // Mock dependencies
 vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn(),
+  invoke: mocks.invoke,
 }))
 
 // Mock EngineManager
-vi.mock('@ax-studio/core', async (importOriginal) => {
-  const actual = await importOriginal()
-  return {
-    ...actual,
-    EngineManager: {
-      instance: () => ({
-        engines: new Map([
-          ['engine1', {
-            getLoadedModels: vi.fn().mockResolvedValue(['model1', 'model2']),
-            unload: vi.fn().mockResolvedValue(undefined),
-          }],
-        ]),
-      }),
-    },
-  }
-})
-
-vi.mock('@tauri-apps/api/event', () => ({
-  emit: vi.fn(),
-}))
-
-vi.mock('../models', () => ({
-  stopAllModels: vi.fn(),
-}))
-
 vi.mock('@ax-studio/core', () => ({
-  fs: {
-    rm: vi.fn(),
+  EngineManager: {
+    instance: () => mocks.engineManager,
   },
 }))
 
-// Mock the global window object
-const mockWindow = {
-  core: {
-    api: {
-      installExtensions: vi.fn(),
-      relaunch: vi.fn(),
-      getAppConfigurations: vi.fn(),
-      changeAppDataFolder: vi.fn(),
-    },
-  },
-  localStorage: {
-    clear: vi.fn(),
-  },
+const mockCoreApi = {
+  installExtensions: vi.fn(),
+  relaunch: vi.fn(),
+  getAppConfigurations: vi.fn(),
+  changeAppDataFolder: vi.fn(),
 }
 
 Object.defineProperty(window, 'core', {
-  value: mockWindow.core,
-  writable: true,
-})
-
-Object.defineProperty(window, 'localStorage', {
-  value: mockWindow.localStorage,
+  value: {
+    api: mockCoreApi,
+  },
   writable: true,
 })
 
@@ -69,6 +40,10 @@ describe('TauriAppService', () => {
   beforeEach(() => {
     appService = new TauriAppService()
     vi.clearAllMocks()
+    mocks.engineManager.engines.clear()
+    mocks.invoke.mockResolvedValue(undefined)
+    window.localStorage.clear()
+    window.core.api = mockCoreApi
   })
 
   describe('parseLogLine', () => {
@@ -97,37 +72,35 @@ describe('TauriAppService', () => {
 
   describe('readLogs', () => {
     it('should read and parse logs', async () => {
-      const { invoke } = await import('@tauri-apps/api/core')
       const mockLogs =
         '[2024-01-01][10:00:00Z][target][INFO] Test message\n[2024-01-01][10:01:00Z][target][ERROR] Error message'
-      vi.mocked(invoke).mockResolvedValue(mockLogs)
+      mocks.invoke.mockResolvedValue(mockLogs)
 
       const result = await appService.readLogs()
 
-      expect(invoke).toHaveBeenCalledWith('read_logs')
+      expect(mocks.invoke).toHaveBeenCalledWith('read_logs')
       expect(result).toHaveLength(2)
       expect(result[0].message).toBe('Test message')
       expect(result[1].message).toBe('Error message')
     })
 
-    it('should handle empty logs', async () => {
-      const { invoke } = await import('@tauri-apps/api/core')
-      vi.mocked(invoke).mockResolvedValue('')
+    it('should return no entries for empty or blank logs', async () => {
+      mocks.invoke.mockResolvedValue('\n  \n')
 
       const result = await appService.readLogs()
 
-      expect(result).toEqual([expect.objectContaining({ message: '' })])
+      expect(result).toEqual([])
     })
   })
 
   describe('getAppDataFolder', () => {
     it('should get app data folder path', async () => {
       const mockConfig = { data_folder: '/path/to/ax-studio/data' }
-      mockWindow.core.api.getAppConfigurations.mockResolvedValue(mockConfig)
+      mockCoreApi.getAppConfigurations.mockResolvedValue(mockConfig)
 
       const result = await appService.getAppDataFolder()
 
-      expect(mockWindow.core.api.getAppConfigurations).toHaveBeenCalled()
+      expect(mockCoreApi.getAppConfigurations).toHaveBeenCalled()
       expect(result).toBe('/path/to/ax-studio/data')
     })
   })
@@ -135,34 +108,31 @@ describe('TauriAppService', () => {
   describe('relocateAppDataFolder', () => {
     it('should relocate app data folder', async () => {
       const newPath = '/new/path/to/ax-studio/data'
-      mockWindow.core.api.changeAppDataFolder.mockResolvedValue(undefined)
+      mockCoreApi.changeAppDataFolder.mockResolvedValue(undefined)
 
       await appService.relocateAppDataFolder(newPath)
 
-      expect(mockWindow.core.api.changeAppDataFolder).toHaveBeenCalledWith({
+      expect(mockCoreApi.changeAppDataFolder).toHaveBeenCalledWith({
         newDataFolder: newPath,
       })
     })
   })
 
   describe('factoryReset', () => {
-    it.skip('should perform factory reset', async () => {
-      const { invoke } = await import('@tauri-apps/api/core')
+    it('should unload loaded models, invoke reset, and clear local storage', async () => {
+      const engine = {
+        getLoadedModels: vi.fn().mockResolvedValue(['model1', 'model2']),
+        unload: vi.fn().mockResolvedValue(undefined),
+      }
+      mocks.engineManager.engines.set('engine1', engine)
+      window.localStorage.setItem('theme', 'dark')
 
-      // Use fake timers
-      vi.useFakeTimers()
+      await appService.factoryReset()
 
-      const factoryResetPromise = appService.factoryReset()
-
-      // Advance timers and run all pending timers
-      await vi.advanceTimersByTimeAsync(1000)
-
-      await factoryResetPromise
-
-      expect(mockWindow.localStorage.clear).toHaveBeenCalled()
-      expect(invoke).toHaveBeenCalledWith('factory_reset')
-
-      vi.useRealTimers()
+      expect(engine.unload).toHaveBeenCalledWith('model1')
+      expect(engine.unload).toHaveBeenCalledWith('model2')
+      expect(mocks.invoke).toHaveBeenCalledWith('factory_reset')
+      expect(window.localStorage.getItem('theme')).toBeNull()
     })
   })
 })

@@ -3,7 +3,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core'
-import { AppConfiguration } from '@ax-studio/core'
+import type { AppConfiguration } from '@ax-studio/core'
 import type { LogEntry, AppService } from './types'
 
 export class TauriAppService implements AppService {
@@ -38,7 +38,10 @@ export class TauriAppService implements AppService {
 
   async readLogs(): Promise<LogEntry[]> {
     const logData: string = (await invoke('read_logs')) ?? ''
-    return logData.split('\n').map(this.parseLogLine)
+    return logData
+      .split(/\r?\n/)
+      .filter((line) => line.trim().length > 0)
+      .map(this.parseLogLine)
   }
 
   async getAppDataFolder(): Promise<string | undefined> {
