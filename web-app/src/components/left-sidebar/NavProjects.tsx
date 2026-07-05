@@ -5,7 +5,7 @@ import {
   MoreHorizontal,
   Plus,
   Trash2,
-} from "lucide-react"
+} from 'lucide-react'
 
 import {
   DropdownMenu,
@@ -13,7 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from '@/components/ui/dropdown-menu'
 import {
   SidebarGroup,
   SidebarGroupAction,
@@ -22,17 +22,17 @@ import {
   SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
-} from "@/components/ui/sidebar"
+} from '@/components/ui/sidebar'
 import { useSidebar } from '@/components/ui/sidebar-context'
-import { useThreadManagement } from "@/hooks/threads/useThreadManagement"
-import { Link, useNavigate } from "@tanstack/react-router"
-import { useTranslation } from "@/i18n/react-i18next-compat"
+import { useThreadManagement } from '@/hooks/threads/useThreadManagement'
+import { Link, useNavigate } from '@tanstack/react-router'
+import { useTranslation } from '@/i18n/react-i18next-compat'
 
-import { useState } from "react"
-import type { ThreadFolder } from "@/services/projects/types"
-import AddProjectDialog from "@/containers/dialogs/AddProjectDialog"
-import { DeleteProjectDialog } from "@/containers/dialogs/DeleteProjectDialog"
-import { useProjectDialog } from "@/hooks/ui/useProjectDialog"
+import { useState } from 'react'
+import type { ThreadFolder } from '@/services/projects/types'
+import AddProjectDialog from '@/containers/dialogs/AddProjectDialog'
+import { DeleteProjectDialog } from '@/containers/dialogs/DeleteProjectDialog'
+import { useProjectDialog } from '@/hooks/ui/useProjectDialog'
 
 function ProjectItem({
   item,
@@ -45,7 +45,6 @@ function ProjectItem({
   onEdit: (project: ThreadFolder) => void
   onDelete: (project: ThreadFolder) => void
 }) {
-
   const { t } = useTranslation()
   const navigate = useNavigate()
   const logo = item.logo?.trim()
@@ -53,10 +52,7 @@ function ProjectItem({
   return (
     <SidebarMenuItem>
       <SidebarMenuButton asChild>
-        <Link
-          to="/project/$projectId"
-          params={{ projectId: item.id }}
-        >
+        <Link to="/project/$projectId" params={{ projectId: item.id }}>
           {logo ? (
             <img
               src={logo}
@@ -71,19 +67,27 @@ function ProjectItem({
       </SidebarMenuButton>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <SidebarMenuAction showOnHover className="hover:bg-sidebar-foreground/8">
+          <SidebarMenuAction
+            showOnHover
+            className="hover:bg-sidebar-foreground/8"
+          >
             <MoreHorizontal />
             <span className="sr-only">More</span>
           </SidebarMenuAction>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           className="w-48"
-          side={isMobile ? "bottom" : "right"}
-          align={isMobile ? "end" : "start"}
+          side={isMobile ? 'bottom' : 'right'}
+          align={isMobile ? 'end' : 'start'}
         >
-          <DropdownMenuItem onSelect={() => {
-            navigate({ to: '/project/$projectId', params: { projectId: item.id } })
-          }}>
+          <DropdownMenuItem
+            onSelect={() => {
+              navigate({
+                to: '/project/$projectId',
+                params: { projectId: item.id },
+              })
+            }}
+          >
             <FolderOpenIcon className="text-muted-foreground" />
             <span>{t('common:projects.viewProject')}</span>
           </DropdownMenuItem>
@@ -92,7 +96,10 @@ function ProjectItem({
             <span>{t('common:projects.editProject')}</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onSelect={() => onDelete(item)}>
+          <DropdownMenuItem
+            variant="destructive"
+            onSelect={() => onDelete(item)}
+          >
             <Trash2 />
             <span>{t('common:projects.deleteProject')}</span>
           </DropdownMenuItem>
@@ -107,11 +114,14 @@ export function NavProjects() {
   const navigate = useNavigate()
   const { isMobile } = useSidebar()
   const { folders, addFolder, updateFolder } = useThreadManagement()
-  const { open: createDialogOpen, setOpen: setCreateDialogOpen } = useProjectDialog()
+  const { open: createDialogOpen, setOpen: setCreateDialogOpen } =
+    useProjectDialog()
 
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [selectedProject, setSelectedProject] = useState<ThreadFolder | null>(null)
+  const [selectedProject, setSelectedProject] = useState<ThreadFolder | null>(
+    null
+  )
 
   const handleCreate = async (
     name: string,

@@ -27,7 +27,11 @@ vi.mock('@/hooks/threads/useThreadManagement', () => ({
   useThreadManagement: () => ({
     folders: [
       { id: 'p1', name: 'My Project', logo: '' },
-      { id: 'p2', name: 'Another Project', logo: 'https://example.com/logo.png' },
+      {
+        id: 'p2',
+        name: 'Another Project',
+        logo: 'https://example.com/logo.png',
+      },
     ],
     addFolder: mockAddFolder,
     updateFolder: mockUpdateFolder,

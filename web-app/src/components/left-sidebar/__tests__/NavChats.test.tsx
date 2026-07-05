@@ -85,7 +85,12 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
 
 vi.mock('@/lib/utils/date-group', () => ({
   groupByDate: vi.fn(
-    (items: Thread[], _getTs: unknown, pinnedSet: Set<string>, _getId: unknown) => {
+    (
+      items: Thread[],
+      _getTs: unknown,
+      pinnedSet: Set<string>,
+      _getId: unknown
+    ) => {
       const nonPinned = items.filter((t: Thread) => !pinnedSet.has(t.id))
       return [{ group: 'Today' as const, items: nonPinned }]
     }
@@ -105,7 +110,9 @@ vi.mock('@/containers/ThreadList', () => ({
 }))
 
 vi.mock('@/containers/dialogs/thread/DeleteAllThreadsDialog', () => ({
-  DeleteAllThreadsDialog: () => <button data-testid="delete-all">Delete All</button>,
+  DeleteAllThreadsDialog: () => (
+    <button data-testid="delete-all">Delete All</button>
+  ),
 }))
 
 vi.mock('@/containers/dialogs', () => ({
@@ -135,9 +142,12 @@ vi.mock('@/components/ui/sidebar', () => ({
   SidebarGroupLabel: ({ children }: { children: React.ReactNode }) => (
     <h3 data-testid="sidebar-group-label">{children}</h3>
   ),
-  SidebarGroupAction: ({ children, ...props }: { children: React.ReactNode }) => (
-    <button {...props}>{children}</button>
-  ),
+  SidebarGroupAction: ({
+    children,
+    ...props
+  }: {
+    children: React.ReactNode
+  }) => <button {...props}>{children}</button>,
   SidebarMenu: ({ children }: { children: React.ReactNode }) => (
     <ul data-testid="sidebar-menu">{children}</ul>
   ),
@@ -157,14 +167,28 @@ vi.mock('@/components/ui/sidebar-context', () => ({
 }))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
-  DropdownMenu: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  DropdownMenuContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DropdownMenuItem: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DropdownMenu: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
+  DropdownMenuContent: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DropdownMenuItem: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   DropdownMenuSeparator: () => <hr />,
-  DropdownMenuSub: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  DropdownMenuSubContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DropdownMenuSubTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  DropdownMenuSub: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
+  DropdownMenuSubContent: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DropdownMenuSubTrigger: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
 }))
 
 vi.mock('sonner', () => ({
@@ -203,15 +227,18 @@ describe('NavChats', () => {
   })
 
   it('returns null when there are no threads without projects', async () => {
-    const { useThreads } = await import('@/hooks/threads/useThreads') as { useThreads: ReturnType<typeof vi.fn> }
-    vi.mocked(useThreads).mockImplementation((selector: (state: Record<string, unknown>) => unknown) =>
-      selector({
-        getFilteredThreads: () => [],
-        threads: {},
-        deleteAllThreads: vi.fn(),
-        renameThread: vi.fn(),
-        deleteThread: vi.fn(),
-      })
+    const { useThreads } = (await import('@/hooks/threads/useThreads')) as {
+      useThreads: ReturnType<typeof vi.fn>
+    }
+    vi.mocked(useThreads).mockImplementation(
+      (selector: (state: Record<string, unknown>) => unknown) =>
+        selector({
+          getFilteredThreads: () => [],
+          threads: {},
+          deleteAllThreads: vi.fn(),
+          renameThread: vi.fn(),
+          deleteThread: vi.fn(),
+        })
     )
     const { container } = render(<NavChats />)
     expect(container.firstChild).toBeNull()
@@ -219,18 +246,23 @@ describe('NavChats', () => {
 
   it('renders pinned section when there are pinned threads', async () => {
     // Restore threads mock first (previous test cleared it)
-    const { useThreads } = await import('@/hooks/threads/useThreads') as { useThreads: ReturnType<typeof vi.fn> }
-    vi.mocked(useThreads).mockImplementation((selector: (state: Record<string, unknown>) => unknown) =>
-      selector({
-        getFilteredThreads: () => [...mockThreads, ...mockThreadsWithProject],
-        threads: toThreadRecord([...mockThreads, ...mockThreadsWithProject]),
-        deleteAllThreads: vi.fn(),
-        renameThread: vi.fn(),
-        deleteThread: vi.fn(),
-      })
+    const { useThreads } = (await import('@/hooks/threads/useThreads')) as {
+      useThreads: ReturnType<typeof vi.fn>
+    }
+    vi.mocked(useThreads).mockImplementation(
+      (selector: (state: Record<string, unknown>) => unknown) =>
+        selector({
+          getFilteredThreads: () => [...mockThreads, ...mockThreadsWithProject],
+          threads: toThreadRecord([...mockThreads, ...mockThreadsWithProject]),
+          deleteAllThreads: vi.fn(),
+          renameThread: vi.fn(),
+          deleteThread: vi.fn(),
+        })
     )
 
-    const { usePinnedThreads } = await import('@/hooks/threads/usePinnedThreads') as { usePinnedThreads: ReturnType<typeof vi.fn> }
+    const { usePinnedThreads } = (await import(
+      '@/hooks/threads/usePinnedThreads'
+    )) as { usePinnedThreads: ReturnType<typeof vi.fn> }
     vi.mocked(usePinnedThreads).mockReturnValue({
       pinnedIds: ['t1'],
       pinnedSet: new Set(['t1']),

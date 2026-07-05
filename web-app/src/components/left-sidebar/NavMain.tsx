@@ -83,7 +83,9 @@ export function NavMain() {
                 <Search className="size-4" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="right">{t('common:search')} (⌘K)</TooltipContent>
+            <TooltipContent side="right">
+              {t('common:search')} (⌘K)
+            </TooltipContent>
           </Tooltip>
         </div>
       </div>
@@ -104,8 +106,14 @@ export function NavMain() {
               onMouseLeave={() => hubIconRef.current?.stopAnimation()}
             >
               <Link to={route.hub.index}>
-                <BlocksIcon ref={hubIconRef} className="text-foreground/70" size={16} />
-                <span className="group-data-[collapsible=icon]:hidden">{t('common:hub')}</span>
+                <BlocksIcon
+                  ref={hubIconRef}
+                  className="text-foreground/70"
+                  size={16}
+                />
+                <span className="group-data-[collapsible=icon]:hidden">
+                  {t('common:hub')}
+                </span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -113,7 +121,9 @@ export function NavMain() {
             <SidebarMenuButton asChild tooltip={t('common:assistants')}>
               <Link to={route.settings.assistant}>
                 <Bot className="text-foreground/70" size={16} />
-                <span className="group-data-[collapsible=icon]:hidden">{t('common:assistants')}</span>
+                <span className="group-data-[collapsible=icon]:hidden">
+                  {t('common:assistants')}
+                </span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -121,7 +131,9 @@ export function NavMain() {
             <SidebarMenuButton asChild tooltip={t('common:axBi')}>
               <Link to={route.axBi}>
                 <ChartNoAxesCombined className="text-foreground/70" size={16} />
-                <span className="group-data-[collapsible=icon]:hidden">{t('common:axBi')}</span>
+                <span className="group-data-[collapsible=icon]:hidden">
+                  {t('common:axBi')}
+                </span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -129,7 +141,9 @@ export function NavMain() {
             <SidebarMenuButton asChild tooltip={t('common:tools')}>
               <Link to={route.settings.mcp_servers}>
                 <Wrench className="text-foreground/70" size={16} />
-                <span className="group-data-[collapsible=icon]:hidden">{t('common:tools')}</span>
+                <span className="group-data-[collapsible=icon]:hidden">
+                  {t('common:tools')}
+                </span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

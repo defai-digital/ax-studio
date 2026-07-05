@@ -36,14 +36,24 @@ vi.mock('@tanstack/react-router', () => ({
 
 // Render popover + sidebar wrappers inline so content is queryable.
 vi.mock('@/components/ui/popover', () => ({
-  Popover: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  PopoverTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  PopoverContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Popover: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  PopoverTrigger: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  PopoverContent: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }))
 
 vi.mock('@/components/ui/sidebar', () => ({
-  SidebarMenuItem: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SidebarMenuButton: ({ children }: { children: React.ReactNode }) => <button>{children}</button>,
+  SidebarMenuItem: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SidebarMenuButton: ({ children }: { children: React.ReactNode }) => (
+    <button>{children}</button>
+  ),
 }))
 
 vi.mock('lucide-react', () => ({

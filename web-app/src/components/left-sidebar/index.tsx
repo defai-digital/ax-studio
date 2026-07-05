@@ -17,7 +17,7 @@ import {
   SidebarHeader,
   SidebarRail,
 } from '@/components/ui/sidebar'
-import { MessageCircle, Zap } from "lucide-react";
+import { MessageCircle, Zap } from 'lucide-react'
 import {
   SettingsIcon,
   type SettingsIconHandle,
@@ -35,7 +35,9 @@ export function LeftSidebar() {
     <div className="relative z-50">
       <Sidebar variant="sidebar" collapsible="icon">
         {/* Header — leave room for the macOS overlay titlebar/traffic lights. */}
-        <SidebarHeader className={`flex px-3 pb-3 ${IS_MACOS ? 'pt-[calc(env(safe-area-inset-top)+3.5rem)]' : 'pt-4'}`}>
+        <SidebarHeader
+          className={`flex px-3 pb-3 ${IS_MACOS ? 'pt-[calc(env(safe-area-inset-top)+3.5rem)]' : 'pt-4'}`}
+        >
           {/* Collapsed: logo icon only */}
           <div className="hidden group-data-[collapsible=icon]:flex justify-center mb-1">
             <div className="size-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-md shadow-indigo-500/20">
@@ -85,9 +87,18 @@ export function LeftSidebar() {
                 onMouseEnter={() => settingsIconRef.current?.startAnimation()}
                 onMouseLeave={() => settingsIconRef.current?.stopAnimation()}
               >
-                <Link to={route.settings.general} className="group-data-[collapsible=icon]:justify-center">
-                  <SettingsIcon ref={settingsIconRef} className="text-foreground/70" size={16} />
-                  <span className="group-data-[collapsible=icon]:hidden">{t('common:settings')}</span>
+                <Link
+                  to={route.settings.general}
+                  className="group-data-[collapsible=icon]:justify-center"
+                >
+                  <SettingsIcon
+                    ref={settingsIconRef}
+                    className="text-foreground/70"
+                    size={16}
+                  />
+                  <span className="group-data-[collapsible=icon]:hidden">
+                    {t('common:settings')}
+                  </span>
                   <span className="ml-auto text-[10px] text-sidebar-foreground/20 group-data-[collapsible=icon]:hidden">
                     ⌘,
                   </span>

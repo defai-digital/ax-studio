@@ -16,10 +16,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
-import {
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from '@/components/ui/sidebar'
+import { SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar'
 
 const MAX_RECENT = 10
 
@@ -50,11 +47,7 @@ export function CollapsedRecentChats() {
             <History className="text-foreground/70" size={16} />
           </SidebarMenuButton>
         </PopoverTrigger>
-        <PopoverContent
-          side="right"
-          align="start"
-          className="w-64 p-1.5"
-        >
+        <PopoverContent side="right" align="start" className="w-64 p-1.5">
           <p className="px-2 py-1 text-[10px] font-semibold tracking-widest uppercase text-muted-foreground/40">
             {label}
           </p>
@@ -68,9 +61,7 @@ export function CollapsedRecentChats() {
                 className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors min-w-0"
               >
                 <MessageCircle className="size-3.5 shrink-0" />
-                <span className="truncate">
-                  {thread.title || 'New Thread'}
-                </span>
+                <span className="truncate">{thread.title || 'New Thread'}</span>
               </Link>
             ))}
           </div>

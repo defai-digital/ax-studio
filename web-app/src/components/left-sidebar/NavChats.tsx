@@ -18,7 +18,15 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Download, GripVertical, MoreHorizontal, Pin, PinOff, Pencil, Trash2 } from 'lucide-react'
+import {
+  Download,
+  GripVertical,
+  MoreHorizontal,
+  Pin,
+  PinOff,
+  Pencil,
+  Trash2,
+} from 'lucide-react'
 import {
   CHAT_EXPORT_OPTIONS,
   exportAllThreads,
@@ -63,15 +71,13 @@ export function NavChats() {
       threadsWithoutProject,
       (thread) => (thread.updated || 0) * 1000 || Date.now(),
       pinnedSet,
-      (thread) => thread.id,
+      (thread) => thread.id
     )
   }, [threadsWithoutProject, pinnedSet])
 
   // Resolve pinned threads in order
   const pinnedThreads = useMemo(() => {
-    const threadMap = new Map(
-      threadsWithoutProject.map((t) => [t.id, t]),
-    )
+    const threadMap = new Map(threadsWithoutProject.map((t) => [t.id, t]))
     return pinnedIds
       .map((id) => threadMap.get(id))
       .filter((t): t is Thread => t != null)
@@ -180,7 +186,10 @@ const PinnedThreadItem = memo(function PinnedThreadItem({
       </SidebarMenuButton>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <SidebarMenuAction showOnHover className="hover:bg-sidebar-foreground/8">
+          <SidebarMenuAction
+            showOnHover
+            className="hover:bg-sidebar-foreground/8"
+          >
             <MoreHorizontal />
             <span className="sr-only">More</span>
           </SidebarMenuAction>
@@ -215,7 +224,10 @@ const PinnedThreadItem = memo(function PinnedThreadItem({
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onSelect={() => setDeleteConfirmOpen(true)}>
+          <DropdownMenuItem
+            variant="destructive"
+            onSelect={() => setDeleteConfirmOpen(true)}
+          >
             <Trash2 className="size-4" />
             <span>{t('common:delete')}</span>
           </DropdownMenuItem>
@@ -309,11 +321,7 @@ function DraggablePinnedList({
 }
 
 /** Pinned section header — matches Figma: Pin icon + "Pinned" label */
-function PinnedGroupSection({
-  children,
-}: {
-  children: ReactNode
-}) {
+function PinnedGroupSection({ children }: { children: ReactNode }) {
   return (
     <div className="mb-4">
       <div className="px-2 pb-1.5 flex items-center gap-1.5 text-[10px] font-semibold text-sidebar-foreground/30 uppercase tracking-widest">
