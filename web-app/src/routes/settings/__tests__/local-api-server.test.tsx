@@ -270,7 +270,7 @@ vi.mock('@/components/LogViewer', () => ({
 }))
 
 vi.mock('@/containers/AkidbConfigPanel', () => ({
-  default: () => <div data-testid="akidb-config-panel" />,
+  AkidbConfigPanel: () => <div data-testid="akidb-config-panel" />,
 }))
 
 vi.mock('@/hooks/settings/useLocalApiServer', () => ({

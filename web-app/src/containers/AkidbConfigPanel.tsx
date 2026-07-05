@@ -1,4 +1,4 @@
-import { Database, Folder, RefreshCw } from "lucide-react";
+import { Database, Folder, RefreshCw } from 'lucide-react'
 import { useEffect, useState, useCallback } from 'react'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { toast } from 'sonner'
@@ -20,18 +20,51 @@ const FREQUENCY_OPTIONS = [
 ]
 
 const EMBEDDING_MODEL_OPTIONS = [
-  { label: 'nomic-embed-text-v1.5 (Local, 768d)', value: 'nomic-embed-text-v1.5', dimension: 768 },
-  { label: 'gte-qwen2-1.5b-instruct-q4_k_m (Local, 1536d)', value: 'gte-qwen2-1.5b-instruct-q4_k_m', dimension: 1536 },
-  { label: 'all-minilm-l6-v2-q4_k_m (Local, 384d)', value: 'all-minilm-l6-v2-q4_k_m', dimension: 384 },
-  { label: 'text-embedding-3-small (OpenAI, 1536d)', value: 'text-embedding-3-small', dimension: 1536 },
-  { label: 'text-embedding-3-large (OpenAI, 3072d)', value: 'text-embedding-3-large', dimension: 3072 },
-  { label: 'text-embedding-ada-002 (OpenAI, 1536d)', value: 'text-embedding-ada-002', dimension: 1536 },
+  {
+    label: 'nomic-embed-text-v1.5 (Local, 768d)',
+    value: 'nomic-embed-text-v1.5',
+    dimension: 768,
+  },
+  {
+    label: 'gte-qwen2-1.5b-instruct-q4_k_m (Local, 1536d)',
+    value: 'gte-qwen2-1.5b-instruct-q4_k_m',
+    dimension: 1536,
+  },
+  {
+    label: 'all-minilm-l6-v2-q4_k_m (Local, 384d)',
+    value: 'all-minilm-l6-v2-q4_k_m',
+    dimension: 384,
+  },
+  {
+    label: 'text-embedding-3-small (OpenAI, 1536d)',
+    value: 'text-embedding-3-small',
+    dimension: 1536,
+  },
+  {
+    label: 'text-embedding-3-large (OpenAI, 3072d)',
+    value: 'text-embedding-3-large',
+    dimension: 3072,
+  },
+  {
+    label: 'text-embedding-ada-002 (OpenAI, 1536d)',
+    value: 'text-embedding-ada-002',
+    dimension: 1536,
+  },
 ]
 
-export default function AkidbConfigPanel() {
+export function AkidbConfigPanel() {
   const serviceHub = useServiceHub()
-  const { config, status, loading, saving, syncing, load, save, loadStatus, syncNow } =
-    useAkidbConfig()
+  const {
+    config,
+    status,
+    loading,
+    saving,
+    syncing,
+    load,
+    save,
+    loadStatus,
+    syncNow,
+  } = useAkidbConfig()
 
   const [dataFolder, setDataFolder] = useState('')
   const [frequency, setFrequency] = useState(60)
@@ -72,14 +105,11 @@ export default function AkidbConfigPanel() {
   }, [serviceHub])
 
   // Handle embedding model change — sync dimension automatically
-  const handleModelChange = useCallback(
-    (modelId: string) => {
-      setEmbeddingModel(modelId)
-      const found = EMBEDDING_MODEL_OPTIONS.find((m) => m.value === modelId)
-      if (found) setEmbeddingDimension(found.dimension)
-    },
-    [],
-  )
+  const handleModelChange = useCallback((modelId: string) => {
+    setEmbeddingModel(modelId)
+    const found = EMBEDDING_MODEL_OPTIONS.find((m) => m.value === modelId)
+    if (found) setEmbeddingDimension(found.dimension)
+  }, [])
 
   // Build and write the full config payload; Rust mirrors the legacy path for compatibility.
   const handleSave = useCallback(async () => {
@@ -134,7 +164,7 @@ export default function AkidbConfigPanel() {
     try {
       await save(newConfig)
       toast.success(
-        'Knowledge base config saved — the daemon will pick up changes automatically',
+        'Knowledge base config saved — the daemon will pick up changes automatically'
       )
     } catch {
       toast.error('Failed to save knowledge base config')
@@ -159,10 +189,7 @@ export default function AkidbConfigPanel() {
       <Card
         header={
           <div className="mb-3 flex w-full items-center gap-3">
-            <Database
-              size={20}
-              className="shrink-0 text-muted-foreground"
-            />
+            <Database size={20} className="shrink-0 text-muted-foreground" />
             <h1 className="text-foreground font-medium text-base">
               Knowledge Base Sync
             </h1>
@@ -178,10 +205,7 @@ export default function AkidbConfigPanel() {
     <Card
       header={
         <div className="mb-3 flex w-full items-center gap-3">
-          <Database
-            size={20}
-            className="shrink-0 text-muted-foreground"
-          />
+          <Database size={20} className="shrink-0 text-muted-foreground" />
           <h1 className="text-foreground font-medium text-base">
             Knowledge Base Sync
           </h1>
@@ -259,7 +283,10 @@ export default function AkidbConfigPanel() {
           onClick={handleSyncNow}
           disabled={syncing || !dataFolder.trim()}
         >
-          <RefreshCw size={14} className={syncing ? 'mr-1 animate-spin' : 'mr-1'} />
+          <RefreshCw
+            size={14}
+            className={syncing ? 'mr-1 animate-spin' : 'mr-1'}
+          />
           {syncing ? 'Syncing...' : 'Sync Now'}
         </Button>
       </div>
@@ -278,8 +305,7 @@ export default function AkidbConfigPanel() {
             {status.indexed_files + status.pending_files} indexed
             {status.indexed_files > 0 &&
               ` (${status.indexed_files} new this sync)`}
-            {status.error_files > 0 && ` · ${status.error_files} errors`}
-            {' '}/{' '}
+            {status.error_files > 0 && ` · ${status.error_files} errors`} /{' '}
             {status.total_files} total
           </p>
           {status.last_sync_at && (
