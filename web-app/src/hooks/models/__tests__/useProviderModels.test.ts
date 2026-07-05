@@ -1,9 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { act, renderHook, waitFor } from '@testing-library/react'
-import {
-  clearProviderModelsCache,
-  useProviderModels,
-} from '../useProviderModels'
+import { useProviderModels } from '../useProviderModels'
 import { useServiceHub } from '@/hooks/useServiceHub'
 
 // Local minimal provider type for tests
@@ -29,11 +26,13 @@ describe('useProviderModels', () => {
   const mockModels = ['gpt-4', 'gpt-3.5-turbo', 'gpt-4-turbo']
 
   let fetchModelsSpy: ReturnType<typeof vi.fn>
+  let testRun = 0
 
   beforeEach(() => {
     vi.restoreAllMocks()
     vi.clearAllMocks()
-    clearProviderModelsCache()
+    testRun += 1
+    mockProvider.api_key = `test-api-key-${testRun}`
     const hub = (useServiceHub as unknown as () => any)()
     const mockedFetch = vi.fn()
     vi.spyOn(hub, 'providers').mockReturnValue({

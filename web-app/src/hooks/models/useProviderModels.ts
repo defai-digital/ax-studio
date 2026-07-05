@@ -34,10 +34,6 @@ function getProviderModelsCacheKey(provider: ModelProvider): string {
   return [provider.provider, baseUrl, apiKeyHash, customHeaders].join('::')
 }
 
-export function clearProviderModelsCache() {
-  modelsCache.clear()
-}
-
 export const useProviderModels = (
   provider?: ModelProvider
 ): UseProviderModelsState => {
