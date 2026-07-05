@@ -71,7 +71,9 @@ describe('TauriMCPService activation commands', () => {
   it('rethrows deactivation failures', async () => {
     invokeMock.mockRejectedValue(new Error('deactivate boom'))
 
-    await expect(service.deactivateMCPServer('server-1')).rejects.toThrow('deactivate boom')
+    await expect(service.deactivateMCPServer('server-1')).rejects.toThrow(
+      'deactivate boom'
+    )
   })
 })
 
@@ -86,8 +88,7 @@ describe('TauriMCPService cancellation commands', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    // @ts-ignore
-    global.window = { core: { api: mockCoreApi } }
+    window.core = { api: mockCoreApi } as unknown as Window['core']
     consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
 
@@ -136,17 +137,22 @@ describe('TauriMCPService cancellation commands', () => {
 
     await expect(promise).resolves.toEqual(toolResult)
     expect(mockCoreApi.callTool).toHaveBeenCalledWith(
-      expect.objectContaining({ toolName: 'search', cancellationToken: 'tok-1' })
+      expect.objectContaining({
+        toolName: 'search',
+        cancellationToken: 'tok-1',
+      })
     )
   })
 
   it('callToolWithCancellation returns a structured error when the API is unavailable (no sync throw)', async () => {
-    // @ts-ignore
-    global.window = { core: undefined }
+    window.core = undefined
     const service = new TauriMCPService()
 
     // Must return { promise, cancel, token } without throwing synchronously
-    const result = service.callToolWithCancellation({ toolName: 'search', arguments: {} })
+    const result = service.callToolWithCancellation({
+      toolName: 'search',
+      arguments: {},
+    })
     expect(result.promise).toBeInstanceOf(Promise)
 
     // Promise resolves to a structured error (same contract as callTool)
@@ -207,7 +213,9 @@ describe('TauriMCPService cancellation commands', () => {
 
     await cancel()
 
-    expect(mockCoreApi.cancelToolCall).toHaveBeenCalledWith({ cancellationToken: token })
+    expect(mockCoreApi.cancelToolCall).toHaveBeenCalledWith({
+      cancellationToken: token,
+    })
   })
 
   it('cancel() swallows errors when the tool completes before cancel arrives', async () => {
@@ -233,6 +241,8 @@ describe('TauriMCPService cancellation commands', () => {
 
     await service.cancelToolCall('tok-abc')
 
-    expect(mockCoreApi.cancelToolCall).toHaveBeenCalledWith({ cancellationToken: 'tok-abc' })
+    expect(mockCoreApi.cancelToolCall).toHaveBeenCalledWith({
+      cancellationToken: 'tok-abc',
+    })
   })
 })

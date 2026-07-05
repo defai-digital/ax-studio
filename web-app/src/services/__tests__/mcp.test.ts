@@ -44,7 +44,8 @@ describe('TauriMCPService', () => {
 
   describe('updateMCPConfig', () => {
     it('should call saveMcpConfigs with correct configs', async () => {
-      const testConfig = '{"server1": {"path": "/path/to/server"}, "server2": {"command": "node server.js"}}'
+      const testConfig =
+        '{"server1": {"path": "/path/to/server"}, "server2": {"command": "node server.js"}}'
       mockCore.api.saveMcpConfigs.mockResolvedValue(undefined)
 
       await mcpService.updateMCPConfig(testConfig)
@@ -70,7 +71,9 @@ describe('TauriMCPService', () => {
       const mockError = new Error('Failed to save config')
       mockCore.api.saveMcpConfigs.mockRejectedValue(mockError)
 
-      await expect(mcpService.updateMCPConfig(testConfig)).rejects.toThrow('Failed to save config')
+      await expect(mcpService.updateMCPConfig(testConfig)).rejects.toThrow(
+        'Failed to save config'
+      )
       expect(mockCore.api.saveMcpConfigs).toHaveBeenCalledWith({
         configs: testConfig,
       })
@@ -79,12 +82,13 @@ describe('TauriMCPService', () => {
     it('should reject when window.core.api is unavailable', async () => {
       // Temporarily set window.core to undefined
       const originalCore = window.core
-      // @ts-ignore
       window.core = undefined
 
       const testConfig = '{"server1": {}}'
 
-      await expect(mcpService.updateMCPConfig(testConfig)).rejects.toThrow('MCP API is unavailable')
+      await expect(mcpService.updateMCPConfig(testConfig)).rejects.toThrow(
+        'MCP API is unavailable'
+      )
 
       // Restore original core
       window.core = originalCore
@@ -104,16 +108,19 @@ describe('TauriMCPService', () => {
       const mockError = new Error('Failed to restart servers')
       mockCore.api.restartMcpServers.mockRejectedValue(mockError)
 
-      await expect(mcpService.restartMCPServers()).rejects.toThrow('Failed to restart servers')
+      await expect(mcpService.restartMCPServers()).rejects.toThrow(
+        'Failed to restart servers'
+      )
       expect(mockCore.api.restartMcpServers).toHaveBeenCalledWith()
     })
 
     it('should reject when window.core.api is unavailable', async () => {
       const originalCore = window.core
-      // @ts-ignore
       window.core = undefined
 
-      await expect(mcpService.restartMCPServers()).rejects.toThrow('MCP API is unavailable')
+      await expect(mcpService.restartMCPServers()).rejects.toThrow(
+        'MCP API is unavailable'
+      )
 
       window.core = originalCore
     })
@@ -121,7 +128,8 @@ describe('TauriMCPService', () => {
 
   describe('getMCPConfig', () => {
     it('should get and parse MCP config correctly', async () => {
-      const mockConfigString = '{"server1": {"path": "/path/to/server"}, "server2": {"command": "node server.js"}}'
+      const mockConfigString =
+        '{"server1": {"path": "/path/to/server"}, "server2": {"command": "node server.js"}}'
       const expectedConfig = {
         mcpServers: {
           server1: { command: '', args: [], env: {} },
@@ -176,14 +184,19 @@ describe('TauriMCPService', () => {
       mockCore.api.getMcpConfigs.mockResolvedValue(invalidJson)
 
       const result = await mcpService.getMCPConfig()
-      expect(result).toEqual({ mcpServers: {}, mcpSettings: { ...DEFAULT_MCP_SETTINGS } })
+      expect(result).toEqual({
+        mcpServers: {},
+        mcpSettings: { ...DEFAULT_MCP_SETTINGS },
+      })
     })
 
     it('should handle API rejection', async () => {
       const mockError = new Error('Failed to get config')
       mockCore.api.getMcpConfigs.mockRejectedValue(mockError)
 
-      await expect(mcpService.getMCPConfig()).rejects.toThrow('Failed to get config')
+      await expect(mcpService.getMCPConfig()).rejects.toThrow(
+        'Failed to get config'
+      )
     })
   })
 
@@ -246,10 +259,11 @@ describe('TauriMCPService', () => {
 
     it('should reject when window.core.api is unavailable', async () => {
       const originalCore = window.core
-      // @ts-ignore
       window.core = undefined
 
-      await expect(mcpService.getTools()).rejects.toThrow('MCP API is unavailable')
+      await expect(mcpService.getTools()).rejects.toThrow(
+        'MCP API is unavailable'
+      )
 
       window.core = originalCore
     })
@@ -280,15 +294,18 @@ describe('TauriMCPService', () => {
       const mockError = new Error('Failed to get connected servers')
       mockCore.api.getConnectedServers.mockRejectedValue(mockError)
 
-      await expect(mcpService.getConnectedServers()).rejects.toThrow('Failed to get connected servers')
+      await expect(mcpService.getConnectedServers()).rejects.toThrow(
+        'Failed to get connected servers'
+      )
     })
 
     it('should reject when window.core.api is unavailable', async () => {
       const originalCore = window.core
-      // @ts-ignore
       window.core = undefined
 
-      await expect(mcpService.getConnectedServers()).rejects.toThrow('MCP API is unavailable')
+      await expect(mcpService.getConnectedServers()).rejects.toThrow(
+        'MCP API is unavailable'
+      )
 
       window.core = originalCore
     })
@@ -401,7 +418,6 @@ describe('TauriMCPService', () => {
 
     it('should reject when window.core.api is unavailable', async () => {
       const originalCore = window.core
-      // @ts-ignore
       window.core = undefined
 
       const toolArgs = {
@@ -409,7 +425,9 @@ describe('TauriMCPService', () => {
         arguments: {},
       }
 
-      await expect(mcpService.callTool(toolArgs)).rejects.toThrow('MCP API is unavailable')
+      await expect(mcpService.callTool(toolArgs)).rejects.toThrow(
+        'MCP API is unavailable'
+      )
 
       window.core = originalCore
     })
@@ -468,7 +486,9 @@ describe('TauriMCPService', () => {
       })
 
       // Verify all calls were made correctly
-      expect(mockCore.api.saveMcpConfigs).toHaveBeenCalledWith({ configs: config })
+      expect(mockCore.api.saveMcpConfigs).toHaveBeenCalledWith({
+        configs: config,
+      })
       expect(mockCore.api.restartMcpServers).toHaveBeenCalled()
       expect(mockCore.api.getTools).toHaveBeenCalled()
       expect(mockCore.api.getConnectedServers).toHaveBeenCalled()

@@ -6,7 +6,6 @@ describe('events module', () => {
 
   beforeEach(() => {
     // Reset core between tests so each can control the bridge state
-    // @ts-expect-error - typed as read-only but tests need to overwrite
     globalThis.core = undefined
     handler.mockClear()
   })

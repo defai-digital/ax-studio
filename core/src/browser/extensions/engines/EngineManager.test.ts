@@ -87,19 +87,16 @@ describe('EngineManager', () => {
   describe('singleton instance', () => {
     test('should return the window.core.engineManager if available', () => {
       const mockEngineManager = new EngineManager()
-      // @ts-ignore
       window.core = { engineManager: mockEngineManager }
 
       const instance = EngineManager.instance()
       expect(instance).toBe(mockEngineManager)
 
       // Clean up
-      // @ts-ignore
       delete window.core
     })
 
     test('should create a new instance if window.core.engineManager is not available', () => {
-      // @ts-ignore
       delete window.core
 
       const instance = EngineManager.instance()
