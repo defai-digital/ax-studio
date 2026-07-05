@@ -27,7 +27,9 @@ function highlightedHtml(code: string) {
 }
 
 function getLightThemeContainer(container: HTMLElement) {
-  const lightThemeContainer = container.querySelector('[class*="dark\\:hidden"]')
+  const lightThemeContainer = container.querySelector(
+    '[class*="dark\\:hidden"]'
+  )
   if (!lightThemeContainer) {
     throw new Error('Light theme container not found')
   }
@@ -61,6 +63,8 @@ describe('CodeBlock async highlighting', () => {
     })
 
     expect(getLightThemeContainer(container).innerHTML).toContain('new code')
-    expect(getLightThemeContainer(container).innerHTML).not.toContain('old code')
+    expect(getLightThemeContainer(container).innerHTML).not.toContain(
+      'old code'
+    )
   })
 })

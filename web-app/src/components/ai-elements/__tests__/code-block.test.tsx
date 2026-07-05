@@ -28,7 +28,9 @@ import { highlightCode } from '../code-block-highlight'
 
 type RenderResult = ReturnType<typeof render>
 
-const renderCodeBlock = async (ui: Parameters<typeof render>[0]): Promise<RenderResult> => {
+const renderCodeBlock = async (
+  ui: Parameters<typeof render>[0]
+): Promise<RenderResult> => {
   let result: RenderResult
   await act(async () => {
     result = render(ui)

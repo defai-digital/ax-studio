@@ -1,17 +1,13 @@
-import { cn } from "@/lib/utils";
-import DOMPurify from 'dompurify';
-import {
-  type HTMLAttributes,
-  useEffect,
-  useState,
-} from "react";
+import { cn } from '@/lib/utils'
+import DOMPurify from 'dompurify'
+import { type HTMLAttributes, useEffect, useState } from 'react'
 import { highlightCode, type CodeBlockLanguage } from './code-block-highlight'
 
 type CodeBlockProps = HTMLAttributes<HTMLDivElement> & {
-  code: string;
-  language: CodeBlockLanguage;
-  showLineNumbers?: boolean;
-};
+  code: string
+  language: CodeBlockLanguage
+  showLineNumbers?: boolean
+}
 
 export const CodeBlock = ({
   code,
@@ -21,39 +17,42 @@ export const CodeBlock = ({
   children,
   ...props
 }: CodeBlockProps) => {
-  const [html, setHtml] = useState<string>("");
-  const [darkHtml, setDarkHtml] = useState<string>("");
+  const [html, setHtml] = useState<string>('')
+  const [darkHtml, setDarkHtml] = useState<string>('')
 
   useEffect(() => {
-    let cancelled = false;
+    let cancelled = false
     highlightCode(code, language, showLineNumbers)
       .then(([light, dark]) => {
         if (!cancelled) {
-          setHtml(light);
-          setDarkHtml(dark);
+          setHtml(light)
+          setDarkHtml(dark)
         }
       })
       .catch((error) => {
-        console.error("[CodeBlock] Failed to highlight code:", error);
+        console.error('[CodeBlock] Failed to highlight code:', error)
         // Fallback: show raw code when highlighting fails
         if (!cancelled) {
-          const escaped = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          const fallback = `<pre><code>${escaped}</code></pre>`;
-          setHtml(fallback);
-          setDarkHtml(fallback);
+          const escaped = code
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+          const fallback = `<pre><code>${escaped}</code></pre>`
+          setHtml(fallback)
+          setDarkHtml(fallback)
         }
-      });
+      })
 
     return () => {
-      cancelled = true;
-    };
-  }, [code, language, showLineNumbers]);
+      cancelled = true
+    }
+  }, [code, language, showLineNumbers])
 
   return (
     <div
       className={cn(
-        "group relative w-full overflow-hidden rounded-xl border border-border dark:border-white/6 bg-background dark:bg-[#0d1117]",
-        className,
+        'group relative w-full overflow-hidden rounded-xl border border-border dark:border-white/6 bg-background dark:bg-[#0d1117]',
+        className
       )}
       {...props}
     >
@@ -75,5 +74,5 @@ export const CodeBlock = ({
         )}
       </div>
     </div>
-  );
-};
+  )
+}
