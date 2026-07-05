@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   isAxBiDashboardRequest,
-  isAxBiExistingDatasetChartRequest,
+  isAxBiChartCandidate,
   isAxBiSdkPromptRequest,
   runAxBiExistingDatasetChartWorkflow,
   runAxBiSdkPromptWorkflow,
@@ -47,7 +47,7 @@ describe('AX-BI dashboard workflow', () => {
 
   it('detects existing AX-BI dataset chart requests', () => {
     expect(
-      isAxBiExistingDatasetChartRequest(
+      isAxBiChartCandidate(
         'Use AX-BI MCP only. Find dataset palmer_penguins. Create a saved bar chart showing COUNT(*) by species. Name it Test - Penguins Count by Species.'
       )
     ).toBe(true)
@@ -55,7 +55,7 @@ describe('AX-BI dashboard workflow', () => {
 
   it('detects existing AX-BI aggregate chart requests', () => {
     expect(
-      isAxBiExistingDatasetChartRequest(
+      isAxBiChartCandidate(
         'Use AX-BI MCP. Create a saved bar chart from palmer_penguins showing average body_mass_g by species. Name it Test - Avg Body Mass by Species.'
       )
     ).toBe(true)

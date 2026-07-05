@@ -319,10 +319,6 @@ export function isAxBiDashboardRequest(
   )
 }
 
-export function isAxBiExistingDatasetChartRequest(prompt: string): boolean {
-  return isAxBiChartCandidate(prompt)
-}
-
 export function isAxBiSdkPromptRequest(prompt: string): boolean {
   return (
     /\b(?:ax-?bi|axbi)\b/i.test(prompt) &&
