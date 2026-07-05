@@ -2,7 +2,9 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { MessageRatingActions } from '@/components/chat/MessageRatingActions'
 
-function setup(overrides: Partial<Parameters<typeof MessageRatingActions>[0]> = {}) {
+function setup(
+  overrides: Partial<Parameters<typeof MessageRatingActions>[0]> = {}
+) {
   const props = {
     rating: undefined,
     feedback: undefined,

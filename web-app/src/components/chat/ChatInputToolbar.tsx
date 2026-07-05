@@ -21,7 +21,20 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu'
-import { ArrowUp, Atom, Binary, Database, ImagePlus, Loader2, Paperclip, PlusIcon, Square, type LucideIcon, User, Wrench } from "lucide-react";
+import {
+  ArrowUp,
+  Atom,
+  Binary,
+  Database,
+  ImagePlus,
+  Loader2,
+  Paperclip,
+  PlusIcon,
+  Square,
+  type LucideIcon,
+  User,
+  Wrench,
+} from 'lucide-react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { TokenCounter } from '@/components/TokenCounter'
 import { AvatarEmoji } from '@/components/common/AvatarEmoji'
@@ -157,7 +170,8 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
   ingestingDocs,
 }: Props) {
   const { t } = useTranslation()
-  const selectedModelHasTools = selectedModel?.capabilities?.includes('tools') ?? false
+  const selectedModelHasTools =
+    selectedModel?.capabilities?.includes('tools') ?? false
 
   return (
     <div className="absolute z-20 bg-transparent bottom-0 w-full px-2 pb-2 pt-1">
@@ -174,19 +188,33 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
             {/* Attachment + quick-prompt dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="secondary" size="icon-sm" className="rounded-full mr-2 mb-1">
+                <Button
+                  variant="secondary"
+                  size="icon-sm"
+                  className="rounded-full mr-2 mb-1"
+                >
                   <PlusIcon size={18} className="text-muted-foreground" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
                 {onAttachDocuments && (
-                  <DropdownMenuItem onClick={onAttachDocuments} disabled={ingestingDocs}>
+                  <DropdownMenuItem
+                    onClick={onAttachDocuments}
+                    disabled={ingestingDocs}
+                  >
                     {ingestingDocs ? (
-                      <Loader2 size={18} className="text-muted-foreground animate-spin" />
+                      <Loader2
+                        size={18}
+                        className="text-muted-foreground animate-spin"
+                      />
                     ) : (
                       <Paperclip size={18} className="text-muted-foreground" />
                     )}
-                    <span>{ingestingDocs ? 'Indexing documents...' : 'Attach Document'}</span>
+                    <span>
+                      {ingestingDocs
+                        ? 'Indexing documents...'
+                        : 'Attach Document'}
+                    </span>
                   </DropdownMenuItem>
                 )}
                 {onAttachImages && (
@@ -203,32 +231,46 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent>
                       <DropdownMenuItem
-                        className={!selectedAssistant && !currentThread?.assistants?.length ? 'bg-accent' : ''}
+                        className={
+                          !selectedAssistant &&
+                          !currentThread?.assistants?.length
+                            ? 'bg-accent'
+                            : ''
+                        }
                         onClick={() => {
                           setSelectedAssistant(undefined)
-                          if (effectiveThreadId) updateCurrentThreadAssistant(undefined)
+                          if (effectiveThreadId)
+                            updateCurrentThreadAssistant(undefined)
                         }}
                       >
                         <div className="flex items-center gap-2 w-full">
                           <span className="text-muted-foreground">—</span>
                           <span>None</span>
-                          {!selectedAssistant && !currentThread?.assistants?.length && (
-                            <span className="ml-auto text-xs text-muted-foreground">✓</span>
-                          )}
+                          {!selectedAssistant &&
+                            !currentThread?.assistants?.length && (
+                              <span className="ml-auto text-xs text-muted-foreground">
+                                ✓
+                              </span>
+                            )}
                         </div>
                       </DropdownMenuItem>
                       {assistants.length > 0 ? (
                         assistants.map((assistant) => {
                           const isSelected =
-                            (initialMessage && selectedAssistant?.id === assistant.id) ||
-                            (assistant && currentThread?.assistants?.some((a) => a.id === assistant.id))
+                            (initialMessage &&
+                              selectedAssistant?.id === assistant.id) ||
+                            (assistant &&
+                              currentThread?.assistants?.some(
+                                (a) => a.id === assistant.id
+                              ))
                           return (
                             <DropdownMenuItem
                               key={assistant.id}
                               className={isSelected ? 'bg-accent' : ''}
                               onClick={() => {
                                 setSelectedAssistant(assistant)
-                                if (effectiveThreadId) updateCurrentThreadAssistant(assistant)
+                                if (effectiveThreadId)
+                                  updateCurrentThreadAssistant(assistant)
                               }}
                             >
                               <div className="flex items-center gap-2 w-full">
@@ -237,9 +279,13 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                                   imageClassName="w-4 h-4 object-contain"
                                   textClassName="text-sm"
                                 />
-                                <span>{assistant.name || 'Unnamed Assistant'}</span>
+                                <span>
+                                  {assistant.name || 'Unnamed Assistant'}
+                                </span>
                                 {isSelected && (
-                                  <span className="ml-auto text-xs text-muted-foreground">✓</span>
+                                  <span className="ml-auto text-xs text-muted-foreground">
+                                    ✓
+                                  </span>
                                 )}
                               </div>
                             </DropdownMenuItem>
@@ -247,7 +293,9 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                         })
                       ) : (
                         <DropdownMenuItem disabled>
-                          <span className="text-muted-foreground">No assistants available</span>
+                          <span className="text-muted-foreground">
+                            No assistants available
+                          </span>
                         </DropdownMenuItem>
                       )}
                     </DropdownMenuSubContent>
@@ -264,8 +312,8 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
               />
             )}
 
-            {hasActiveMCPServers && (
-              selectedModelHasTools && MCPToolComponent ? (
+            {hasActiveMCPServers &&
+              (selectedModelHasTools && MCPToolComponent ? (
                 <McpExtensionToolLoader
                   tools={tools}
                   hasActiveMCPServers={hasActiveMCPServers}
@@ -275,12 +323,18 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                   MCPToolComponent={MCPToolComponent}
                 />
               ) : (
-                <Tooltip open={tooltipToolsAvailable} onOpenChange={setTooltipToolsAvailable}>
+                <Tooltip
+                  open={tooltipToolsAvailable}
+                  onOpenChange={setTooltipToolsAvailable}
+                >
                   <TooltipTrigger asChild disabled={dropdownToolsAvailable}>
                     <Button
                       variant="ghost"
                       size="icon-xs"
-                      onClick={(e) => { setDropdownToolsAvailable(false); e.stopPropagation() }}
+                      onClick={(e) => {
+                        setDropdownToolsAvailable(false)
+                        e.stopPropagation()
+                      }}
                     >
                       <DropdownToolsAvailable
                         initialMessage={initialMessage}
@@ -292,7 +346,10 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                       >
                         {() => (
                           <div className="p-1 flex items-center justify-center rounded-sm transition-all duration-200 ease-in-out gap-1 cursor-pointer">
-                            <Wrench size={18} className="text-muted-foreground" />
+                            <Wrench
+                              size={18}
+                              className="text-muted-foreground"
+                            />
                           </div>
                         )}
                       </DropdownToolsAvailable>
@@ -306,13 +363,20 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                     </p>
                   </TooltipContent>
                 </Tooltip>
-              )
-            )}
+              ))}
 
             <ToolbarIconButton
               icon={Database}
-              iconClassName={cn(isLocalKnowledgeEnabled ? 'text-primary' : 'text-muted-foreground')}
-              tooltip={<p>Local Knowledge{isLocalKnowledgeEnabled ? ' (active)' : ''}</p>}
+              iconClassName={cn(
+                isLocalKnowledgeEnabled
+                  ? 'text-primary'
+                  : 'text-muted-foreground'
+              )}
+              tooltip={
+                <p>
+                  Local Knowledge{isLocalKnowledgeEnabled ? ' (active)' : ''}
+                </p>
+              }
               onClick={toggleLocalKnowledge}
             />
 
@@ -333,18 +397,22 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
             <span>⇧⏎ Newline</span>
           </div>
 
-          {tokenCounterCompact && !initialMessage && (threadMessages?.length > 0 || prompt.trim().length > 0) && (
-            <div className="flex-1 flex justify-center">
-              <TokenCounter messages={threadMessages || []} compact={true} />
-            </div>
-          )}
+          {tokenCounterCompact &&
+            !initialMessage &&
+            (threadMessages?.length > 0 || prompt.trim().length > 0) && (
+              <div className="flex-1 flex justify-center">
+                <TokenCounter messages={threadMessages || []} compact={true} />
+              </div>
+            )}
 
           {isStreaming ? (
             <Button
               variant="destructive"
               size="icon-sm"
               className="rounded-full mr-1 mb-1"
-              onClick={() => { if (effectiveThreadId) stopStreaming(effectiveThreadId) }}
+              onClick={() => {
+                if (effectiveThreadId) stopStreaming(effectiveThreadId)
+              }}
             >
               <Square />
             </Button>
