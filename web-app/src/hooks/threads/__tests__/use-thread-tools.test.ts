@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
+import type { UIMessage } from '@ai-sdk/react'
 import { useThreadTools } from '../use-thread-tools'
 
 // Mock ai SDK
@@ -109,6 +110,19 @@ vi.mock('@/stores/chat-session-store', () => {
 describe('useThreadTools', () => {
   const threadId = 'thread-1'
 
+  function toolInvocationMessage(toolName: string): UIMessage {
+    return {
+      id: 'msg-1',
+      role: 'assistant',
+      parts: [
+        {
+          type: 'tool-invocation',
+          toolInvocation: { toolName },
+        },
+      ],
+    } as UIMessage
+  }
+
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -153,21 +167,10 @@ describe('useThreadTools', () => {
 
       result.current.toolCallAbortController.current = new AbortController()
 
-      const messages = [
-        {
-          id: 'msg-1',
-          role: 'assistant' as const,
-          parts: [
-            {
-              type: 'tool-invocation',
-              toolInvocation: { toolName: 'delegate_to_agent1' },
-            },
-          ],
-        },
-      ]
-
       expect(
-        result.current.followUpMessage({ messages: messages as any }) // eslint-disable-line @typescript-eslint/no-explicit-any
+        result.current.followUpMessage({
+          messages: [toolInvocationMessage('delegate_to_agent1')],
+        })
       ).toBe(false)
     })
 
@@ -178,21 +181,10 @@ describe('useThreadTools', () => {
 
       result.current.toolCallAbortController.current = new AbortController()
 
-      const messages = [
-        {
-          id: 'msg-1',
-          role: 'assistant' as const,
-          parts: [
-            {
-              type: 'tool-invocation',
-              toolInvocation: { toolName: 'run_all_agents_parallel' },
-            },
-          ],
-        },
-      ]
-
       expect(
-        result.current.followUpMessage({ messages: messages as any }) // eslint-disable-line @typescript-eslint/no-explicit-any
+        result.current.followUpMessage({
+          messages: [toolInvocationMessage('run_all_agents_parallel')],
+        })
       ).toBe(false)
     })
   })
