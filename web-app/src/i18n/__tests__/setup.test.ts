@@ -13,15 +13,17 @@ Object.defineProperty(window, 'localStorage', {
   writable: true,
 })
 
-// Import after mocking
-import { getCompleteLanguages, getStoredLanguage } from '../setup'
+async function loadI18n() {
+  vi.resetModules()
+  return (await import('../setup')).default
+}
 
 describe('getStoredLanguage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('should return complete language from valid stored settings', () => {
+  it('should initialize with complete language from valid stored settings', async () => {
     const validData = {
       state: {
         currentLanguage: 'en'
@@ -29,61 +31,66 @@ describe('getStoredLanguage', () => {
     }
     mockLocalStorage.getItem.mockReturnValue(JSON.stringify(validData))
 
-    const result = getStoredLanguage()
+    const i18n = await loadI18n()
 
-    expect(result).toBe('en')
+    expect(i18n.language).toBe('en')
     expect(mockLocalStorage.getItem).toHaveBeenCalledWith(localStorageKey.settingGeneral)
   })
 
-  it('should return "en" for stored languages that are incomplete or unsupported', () => {
+  it('should initialize with "en" for stored languages that are incomplete or unsupported', async () => {
     mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
       state: {
         currentLanguage: 'ja',
       },
     }))
 
-    expect(getStoredLanguage()).toBe('en')
+    expect((await loadI18n()).language).toBe('en')
   })
 
-  it('should expose only complete language packs', () => {
-    expect(getCompleteLanguages()).toEqual(['en'])
+  it('should ignore language changes to incomplete or unsupported packs', async () => {
+    mockLocalStorage.getItem.mockReturnValue(null)
+    const i18n = await loadI18n()
+
+    i18n.changeLanguage('ja')
+
+    expect(i18n.language).toBe('en')
   })
 
-  it('should return "en" when no stored value exists', () => {
+  it('should initialize with "en" when no stored value exists', async () => {
     mockLocalStorage.getItem.mockReturnValue(null)
 
-    const result = getStoredLanguage()
+    const i18n = await loadI18n()
 
-    expect(result).toBe('en')
+    expect(i18n.language).toBe('en')
   })
 
-  it('should return "en" when stored value is empty string', () => {
+  it('should initialize with "en" when stored value is empty string', async () => {
     mockLocalStorage.getItem.mockReturnValue('')
 
-    const result = getStoredLanguage()
+    const i18n = await loadI18n()
 
-    expect(result).toBe('en')
+    expect(i18n.language).toBe('en')
   })
 
-  it('should return "en" when parsed data is missing state property', () => {
+  it('should initialize with "en" when parsed data is missing state property', async () => {
     const invalidData = { version: '1.0' }
     mockLocalStorage.getItem.mockReturnValue(JSON.stringify(invalidData))
 
-    const result = getStoredLanguage()
+    const i18n = await loadI18n()
 
-    expect(result).toBe('en')
+    expect(i18n.language).toBe('en')
   })
 
-  it('should return "en" when state is not an object', () => {
+  it('should initialize with "en" when state is not an object', async () => {
     const invalidData = { state: 'invalid' }
     mockLocalStorage.getItem.mockReturnValue(JSON.stringify(invalidData))
 
-    const result = getStoredLanguage()
+    const i18n = await loadI18n()
 
-    expect(result).toBe('en')
+    expect(i18n.language).toBe('en')
   })
 
-  it('should return "en" when state.currentLanguage is missing', () => {
+  it('should initialize with "en" when state.currentLanguage is missing', async () => {
     const invalidData = {
       state: {
         spellCheckChatInput: true
@@ -91,12 +98,12 @@ describe('getStoredLanguage', () => {
     }
     mockLocalStorage.getItem.mockReturnValue(JSON.stringify(invalidData))
 
-    const result = getStoredLanguage()
+    const i18n = await loadI18n()
 
-    expect(result).toBe('en')
+    expect(i18n.language).toBe('en')
   })
 
-  it('should return "en" when currentLanguage is not a string', () => {
+  it('should initialize with "en" when currentLanguage is not a string', async () => {
     const invalidData = {
       state: {
         currentLanguage: 123
@@ -104,20 +111,20 @@ describe('getStoredLanguage', () => {
     }
     mockLocalStorage.getItem.mockReturnValue(JSON.stringify(invalidData))
 
-    const result = getStoredLanguage()
+    const i18n = await loadI18n()
 
-    expect(result).toBe('en')
+    expect(i18n.language).toBe('en')
   })
 
-  it('should return "en" when JSON parsing fails', () => {
+  it('should initialize with "en" when JSON parsing fails', async () => {
     mockLocalStorage.getItem.mockReturnValue('invalid json')
 
-    const result = getStoredLanguage()
+    const i18n = await loadI18n()
 
-    expect(result).toBe('en')
+    expect(i18n.language).toBe('en')
   })
 
-  it('should return "en" for various invalid structures', () => {
+  it('should initialize with "en" for various invalid structures', async () => {
     const invalidCases = [
       null,
       undefined,
@@ -130,14 +137,13 @@ describe('getStoredLanguage', () => {
       { state: { currentLanguage: [] } },
     ]
 
-    invalidCases.forEach((invalidData) => {
+    for (const invalidData of invalidCases) {
       mockLocalStorage.getItem.mockReturnValue(JSON.stringify(invalidData))
-      const result = getStoredLanguage()
-      expect(result).toBe('en')
-    })
+      expect((await loadI18n()).language).toBe('en')
+    }
   })
 
-  it('should handle deeply nested invalid structures', () => {
+  it('should handle deeply nested invalid structures', async () => {
     const invalidData = {
       state: {
         currentLanguage: 'en',
@@ -151,8 +157,8 @@ describe('getStoredLanguage', () => {
     // This should still work since the valid properties are present
     mockLocalStorage.getItem.mockReturnValue(JSON.stringify(invalidData))
 
-    const result = getStoredLanguage()
+    const i18n = await loadI18n()
 
-    expect(result).toBe('en')
+    expect(i18n.language).toBe('en')
   })
 })

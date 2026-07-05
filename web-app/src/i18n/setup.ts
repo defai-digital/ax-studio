@@ -84,7 +84,7 @@ function flattenTranslationKeys(
   )
 }
 
-export function getCompleteLanguages(minCoverage = 0.95): string[] {
+function getCompleteLanguages(minCoverage = 0.95): string[] {
   const englishResources = resources.en
   if (!englishResources) return ['en']
 
@@ -114,7 +114,7 @@ export function getCompleteLanguages(minCoverage = 0.95): string[] {
 }
 
 // Get stored language preference
-export const getStoredLanguage = (): string => {
+const getStoredLanguage = (): string => {
   try {
     const stored = safeStorageGetItem(
       localStorage,
