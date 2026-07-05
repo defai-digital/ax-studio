@@ -70,10 +70,8 @@ describe('newUserThreadContent', () => {
     const msg = newUserThreadContent('t1', 'see image', images)
     expect(msg.content).toHaveLength(2)
     expect(msg.content[1].type).toBe(ContentType.Image)
-    expect((msg.content[1] as any).image_url.url).toBe(
-      'data:image/png;base64,aGVsbG8='
-    )
-    expect((msg.content[1] as any).image_url.detail).toBe('auto')
+    expect(msg.content[1].image_url?.url).toBe('data:image/png;base64,aGVsbG8=')
+    expect(msg.content[1].image_url?.detail).toBe('auto')
   })
 
   it('skips image attachments without base64', () => {
