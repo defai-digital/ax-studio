@@ -37,7 +37,9 @@ export function PromptProgress() {
               />
             ))}
           </div>
-          <span className="text-[12px] text-muted-foreground/50">Thinking...</span>
+          <span className="text-[12px] text-muted-foreground/50">
+            Thinking...
+          </span>
         </div>
       </div>
     )
@@ -63,7 +65,9 @@ export function PromptProgress() {
             />
           ))}
         </div>
-        <span className="text-[12px] text-muted-foreground/60">Reading: {percentage}%</span>
+        <span className="text-[12px] text-muted-foreground/60">
+          Reading: {percentage}%
+        </span>
       </div>
     </div>
   )

@@ -8,7 +8,7 @@ import { ShieldCheck, Globe, Cpu, Cloud } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { useGuardrails, type DataMode } from '@/hooks/settings/useGuardrails'
-import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
+import { SettingsPageLayout } from '@/components/settings/SettingsPageLayout'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { Badge } from '@/components/ui/badge'
 
@@ -74,7 +74,12 @@ function Guardrails() {
           className="flex-1 overflow-y-auto"
           style={{ scrollbarWidth: 'thin' }}
         >
-          <SettingsPageLayout icon={ShieldCheck} title="Workspace Guardrails" subtitle="Control what your AI can and cannot do" gradient="linear-gradient(135deg, #059669, #10b981)" />
+          <SettingsPageLayout
+            icon={ShieldCheck}
+            title="Workspace Guardrails"
+            subtitle="Control what your AI can and cannot do"
+            gradient="linear-gradient(135deg, #059669, #10b981)"
+          />
           <div className="px-8 py-7">
             <div className="max-w-2xl space-y-6">
               {/* Data Rules */}
@@ -173,16 +178,16 @@ function Guardrails() {
 
               {/* Usage Dashboard */}
               <Card
-                header={
-                  <span className="text-sm font-semibold">Usage</span>
-                }
+                header={<span className="text-sm font-semibold">Usage</span>}
               >
                 <CardItem
                   title="Current model"
                   description="The model handling your conversations"
                   actions={
                     <Badge variant="secondary" className="text-xs">
-                      {selectedModel?.name ?? selectedModel?.id ?? 'None selected'}
+                      {selectedModel?.name ??
+                        selectedModel?.id ??
+                        'None selected'}
                     </Badge>
                   }
                 />

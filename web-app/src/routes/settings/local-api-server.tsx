@@ -20,8 +20,14 @@ import { useAppState } from '@/hooks/settings/useAppState'
 
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
-import { Server, Wrench, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
-import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
+import {
+  Server,
+  Wrench,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+} from 'lucide-react'
+import { SettingsPageLayout } from '@/components/settings/SettingsPageLayout'
 import { cn } from '@/lib/utils'
 import { ApiKeyInput } from '@/containers/ApiKeyInput'
 import { useEffect, useState } from 'react'
@@ -55,14 +61,21 @@ function PortInput({ isServerRunning }: { isServerRunning?: boolean }) {
   const { serverPort, setServerPort } = useLocalApiServer()
   const [inputValue, setInputValue] = useState(serverPort.toString())
   return (
-    <Input type="number" min={0} max={65535} value={inputValue}
+    <Input
+      type="number"
+      min={0}
+      max={65535}
+      value={inputValue}
       onChange={(e) => setInputValue(e.target.value)}
       onBlur={() => {
         const port = parseInt(inputValue)
         if (!isNaN(port) && port >= 0 && port <= 65535) setServerPort(port)
         else setInputValue(serverPort.toString())
       }}
-      className={cn('w-24 h-8 text-sm', isServerRunning && 'opacity-50 pointer-events-none')}
+      className={cn(
+        'w-24 h-8 text-sm',
+        isServerRunning && 'opacity-50 pointer-events-none'
+      )}
     />
   )
 }
@@ -71,36 +84,65 @@ function ProxyTimeoutInput({ isServerRunning }: { isServerRunning?: boolean }) {
   const { proxyTimeout, setProxyTimeout } = useLocalApiServer()
   const [inputValue, setInputValue] = useState(proxyTimeout.toString())
   return (
-    <Input type="number" min={0} max={86400} value={inputValue}
+    <Input
+      type="number"
+      min={0}
+      max={86400}
+      value={inputValue}
       onChange={(e) => setInputValue(e.target.value)}
       onBlur={() => {
         const timeout = parseInt(inputValue)
-        if (!isNaN(timeout) && timeout >= 0 && timeout <= 86400) setProxyTimeout(timeout)
+        if (!isNaN(timeout) && timeout >= 0 && timeout <= 86400)
+          setProxyTimeout(timeout)
         else setInputValue(proxyTimeout.toString())
       }}
-      className={cn('w-24 h-8 text-sm', isServerRunning && 'opacity-50 pointer-events-none')}
+      className={cn(
+        'w-24 h-8 text-sm',
+        isServerRunning && 'opacity-50 pointer-events-none'
+      )}
     />
   )
 }
 
-const hostOptions = [{ value: '127.0.0.1', label: '127.0.0.1' }, { value: '0.0.0.0', label: '0.0.0.0' }]
+const hostOptions = [
+  { value: '127.0.0.1', label: '127.0.0.1' },
+  { value: '0.0.0.0', label: '0.0.0.0' },
+]
 
-function ServerHostSwitcher({ isServerRunning }: { isServerRunning?: boolean }) {
+function ServerHostSwitcher({
+  isServerRunning,
+}: {
+  isServerRunning?: boolean
+}) {
   const { serverHost, setServerHost } = useLocalApiServer()
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild className={cn(isServerRunning && 'opacity-50 pointer-events-none')}>
-        <Button variant="outline" size="sm" className="w-full justify-between" title="Edit Server Host">
+      <DropdownMenuTrigger
+        asChild
+        className={cn(isServerRunning && 'opacity-50 pointer-events-none')}
+      >
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full justify-between"
+          title="Edit Server Host"
+        >
           {serverHost}
           <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground ml-2" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-24">
         {hostOptions.map((item) => (
-          <DropdownMenuItem key={item.value}
-            className={cn('cursor-pointer my-0.5', serverHost === item.value && 'bg-secondary')}
+          <DropdownMenuItem
+            key={item.value}
+            className={cn(
+              'cursor-pointer my-0.5',
+              serverHost === item.value && 'bg-secondary'
+            )}
             onClick={() => setServerHost(item.value as '127.0.0.1' | '0.0.0.0')}
-          >{item.label}</DropdownMenuItem>
+          >
+            {item.label}
+          </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -111,14 +153,22 @@ function ApiPrefixInput({ isServerRunning }: { isServerRunning?: boolean }) {
   const { apiPrefix, setApiPrefix } = useLocalApiServer()
   const [inputValue, setInputValue] = useState(apiPrefix)
   return (
-    <Input type="text" value={inputValue} placeholder="/v1"
+    <Input
+      type="text"
+      value={inputValue}
+      placeholder="/v1"
       onChange={(e) => setInputValue(e.target.value)}
       onBlur={() => {
         const prefix = sanitizePrefix(inputValue)
-        if (prefix) { setApiPrefix(prefix); setInputValue(prefix) }
-        else setInputValue(apiPrefix)
+        if (prefix) {
+          setApiPrefix(prefix)
+          setInputValue(prefix)
+        } else setInputValue(apiPrefix)
       }}
-      className={cn('w-24 h-8 text-sm', isServerRunning && 'opacity-50 pointer-events-none')}
+      className={cn(
+        'w-24 h-8 text-sm',
+        isServerRunning && 'opacity-50 pointer-events-none'
+      )}
     />
   )
 }
@@ -328,7 +378,8 @@ function LocalAPIServerContent() {
         return
       }
 
-      (api.stopServer() as Promise<void>)
+      const stopServerPromise = api.stopServer() as Promise<void>
+      stopServerPromise
         .then(() => {
           setServerStatus('stopped')
         })
@@ -513,7 +564,10 @@ function LocalAPIServerContent() {
             className="flex-1 overflow-y-auto"
             style={{ scrollbarWidth: 'thin' }}
           >
-            <SettingsPageLayout icon={Server} title={t('common:local_api_server')} />
+            <SettingsPageLayout
+              icon={Server}
+              title={t('common:local_api_server')}
+            />
             <div className="px-8 py-7">
               <div className="max-w-2xl space-y-6">
                 {/* General Settings */}
@@ -572,7 +626,6 @@ function LocalAPIServerContent() {
                       )
                     }
                   />
-
                 </Card>
               </div>
             </div>

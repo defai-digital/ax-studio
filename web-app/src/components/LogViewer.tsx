@@ -83,10 +83,14 @@ export function LogViewer() {
 
   const getLogLevelColor = (level: string) => {
     switch (level) {
-      case 'error': return 'text-red-500'
-      case 'warn':  return 'text-yellow-500'
-      case 'info':  return 'text-blue-500'
-      default:      return 'text-gray-500'
+      case 'error':
+        return 'text-red-500'
+      case 'warn':
+        return 'text-yellow-500'
+      case 'info':
+        return 'text-blue-500'
+      default:
+        return 'text-gray-500'
     }
   }
 
@@ -138,7 +142,9 @@ export function LogViewer() {
                   <span className="text-muted-foreground mr-2 shrink-0">
                     [{formatTimestamp(log.timestamp)}]
                   </span>
-                  <span className={`mr-2 font-semibold shrink-0 ${getLogLevelColor(log.level)}`}>
+                  <span
+                    className={`mr-2 font-semibold shrink-0 ${getLogLevelColor(log.level)}`}
+                  >
                     {log.level.toUpperCase()}
                   </span>
                   <span className="break-all">{log.message}</span>

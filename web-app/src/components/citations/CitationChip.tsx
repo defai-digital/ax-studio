@@ -1,5 +1,9 @@
 import { useState } from 'react'
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from '@/components/ui/hover-card'
 import type { CitationSource } from '@/types/citation-types'
 import { getDomain, openUrl } from '@/lib/utils/url'
 
@@ -12,8 +16,12 @@ interface CitationChipProps {
 
 export function CitationChip({ number, source }: CitationChipProps) {
   const [imgError, setImgError] = useState(false)
-  const domain = source.url ? getDomain(source.url) : source.documentName ?? 'source'
-  const faviconUrl = source.url ? `https://www.google.com/s2/favicons?domain=${domain}&sz=16` : null
+  const domain = source.url
+    ? getDomain(source.url)
+    : (source.documentName ?? 'source')
+  const faviconUrl = source.url
+    ? `https://www.google.com/s2/favicons?domain=${domain}&sz=16`
+    : null
 
   return (
     <HoverCard openDelay={200} closeDelay={100}>

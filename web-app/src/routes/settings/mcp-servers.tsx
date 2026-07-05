@@ -4,7 +4,7 @@ import HeaderPage from '@/containers/HeaderPage'
 import SettingsMenu from '@/components/common/SettingsMenu'
 import { Card, CardItem } from '@/components/common/Card'
 import { Code, Pencil, Plus, Trash2, Wrench } from 'lucide-react'
-import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
+import { SettingsPageLayout } from '@/components/settings/SettingsPageLayout'
 import {
   DEFAULT_MCP_SETTINGS,
   type MCPServerConfig,

@@ -76,7 +76,7 @@ vi.mock('@/containers/HeaderPage', () => ({
 }))
 
 vi.mock('@/components/settings/SettingsPageLayout', () => ({
-  default: ({
+  SettingsPageLayout: ({
     title,
     subtitle,
   }: {
@@ -245,7 +245,9 @@ describe('additional settings pages', () => {
     render(<Component />)
 
     expect(screen.getAllByText('common:privacy')).toHaveLength(2)
-    expect(screen.getByText('settings:privacy.privacyPolicy')).toBeInTheDocument()
+    expect(
+      screen.getByText('settings:privacy.privacyPolicy')
+    ).toBeInTheDocument()
     expect(screen.getByText('settings:privacy.promise1')).toBeInTheDocument()
     expect(screen.getByTestId('settings-menu')).toBeInTheDocument()
   })
@@ -268,7 +270,9 @@ describe('additional settings pages', () => {
     render(<Component />)
 
     expect(screen.getByText('common:https_proxy')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('http://proxy.local:8080')).toBeInTheDocument()
+    expect(
+      screen.getByDisplayValue('http://proxy.local:8080')
+    ).toBeInTheDocument()
 
     fireEvent.change(screen.getByDisplayValue('http://proxy.local:8080'), {
       target: { value: 'http://new-proxy.local:8080' },
@@ -283,12 +287,19 @@ describe('additional settings pages', () => {
     render(<Component />)
 
     expect(screen.getByText('common:attachments')).toBeInTheDocument()
-    expect(screen.getByText('settings:attachments.featureTitle')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('settings:attachments.parseModeAuto')).toBeInTheDocument()
+    expect(
+      screen.getByText('settings:attachments.featureTitle')
+    ).toBeInTheDocument()
+    expect(
+      screen.getByDisplayValue('settings:attachments.parseModeAuto')
+    ).toBeInTheDocument()
 
-    fireEvent.change(screen.getByDisplayValue('settings:attachments.parseModeAuto'), {
-      target: { value: 'inline' },
-    })
+    fireEvent.change(
+      screen.getByDisplayValue('settings:attachments.parseModeAuto'),
+      {
+        target: { value: 'inline' },
+      }
+    )
     expect(mocks.attachments.setParseMode).toHaveBeenCalledWith('inline')
   })
 })

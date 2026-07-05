@@ -9,7 +9,7 @@ interface SettingsPageLayoutProps {
 
 const DEFAULT_GRADIENT = 'linear-gradient(135deg, #6366f1, #8b5cf6)'
 
-export default function SettingsPageLayout({
+export function SettingsPageLayout({
   icon: Icon,
   title,
   subtitle,
@@ -31,9 +31,7 @@ export default function SettingsPageLayout({
           {title}
         </h1>
         {subtitle && (
-          <p className="text-[11px] text-muted-foreground mt-0.5">
-            {subtitle}
-          </p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">{subtitle}</p>
         )}
       </div>
     </div>

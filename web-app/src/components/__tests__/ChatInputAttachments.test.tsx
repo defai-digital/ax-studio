@@ -18,7 +18,9 @@ vi.mock('@/components/ui/tooltip', () => ({
 vi.mock('motion/react', () => ({
   motion: {
     div: ({ children, className, ...props }: any) => (
-      <div className={className} {...props}>{children}</div>
+      <div className={className} {...props}>
+        {children}
+      </div>
     ),
   },
   AnimatePresence: ({ children }: any) => <>{children}</>,
@@ -29,14 +31,18 @@ vi.mock('motion/react', () => ({
 describe('ChatInputAttachments — Phase 3', () => {
   // Protocol #7: Image attachment preview
   it('renders image attachment with preview thumbnail', () => {
-    const attachments = [{
-      type: 'image' as const,
-      name: 'photo.jpg',
-      dataUrl: 'data:image/jpeg;base64,abc',
-      mimeType: 'image/jpeg',
-      size: 1024,
-    }]
-    render(<ChatInputAttachments attachments={attachments} onRemove={vi.fn()} />)
+    const attachments = [
+      {
+        type: 'image' as const,
+        name: 'photo.jpg',
+        dataUrl: 'data:image/jpeg;base64,abc',
+        mimeType: 'image/jpeg',
+        size: 1024,
+      },
+    ]
+    render(
+      <ChatInputAttachments attachments={attachments} onRemove={vi.fn()} />
+    )
     const img = screen.getByAltText('photo.jpg')
     expect(img).toBeInTheDocument()
     expect(img).toHaveAttribute('src', 'data:image/jpeg;base64,abc')
@@ -44,13 +50,17 @@ describe('ChatInputAttachments — Phase 3', () => {
 
   // Protocol #8: Document attachment with extension
   it('renders document attachment with file extension', () => {
-    const attachments = [{
-      type: 'document' as const,
-      name: 'report.pdf',
-      fileType: 'pdf',
-      size: 2048,
-    }]
-    render(<ChatInputAttachments attachments={attachments} onRemove={vi.fn()} />)
+    const attachments = [
+      {
+        type: 'document' as const,
+        name: 'report.pdf',
+        fileType: 'pdf',
+        size: 2048,
+      },
+    ]
+    render(
+      <ChatInputAttachments attachments={attachments} onRemove={vi.fn()} />
+    )
     expect(screen.getByText('.pdf')).toBeInTheDocument()
   })
 
@@ -58,10 +68,16 @@ describe('ChatInputAttachments — Phase 3', () => {
   it('remove button calls onRemove with correct index', () => {
     const onRemove = vi.fn()
     const attachments = [
-      { type: 'image' as const, name: 'a.jpg', dataUrl: 'data:image/jpeg;base64,a' },
+      {
+        type: 'image' as const,
+        name: 'a.jpg',
+        dataUrl: 'data:image/jpeg;base64,a',
+      },
       { type: 'document' as const, name: 'b.pdf', fileType: 'pdf' },
     ]
-    const { container } = render(<ChatInputAttachments attachments={attachments} onRemove={onRemove} />)
+    const { container } = render(
+      <ChatInputAttachments attachments={attachments} onRemove={onRemove} />
+    )
     // Find remove buttons (bg-destructive)
     const removeButtons = container.querySelectorAll('.bg-destructive')
     expect(removeButtons).toHaveLength(2)
@@ -72,18 +88,24 @@ describe('ChatInputAttachments — Phase 3', () => {
 
   // Empty state: returns null
   it('returns null when no attachments', () => {
-    const { container } = render(<ChatInputAttachments attachments={[]} onRemove={vi.fn()} />)
+    const { container } = render(
+      <ChatInputAttachments attachments={[]} onRemove={vi.fn()} />
+    )
     expect(container.innerHTML).toBe('')
   })
 
   // Processing attachment hides remove button
   it('hides remove button when attachment is processing', () => {
-    const attachments = [{
-      type: 'document' as const,
-      name: 'uploading.txt',
-      processing: true,
-    }]
-    const { container } = render(<ChatInputAttachments attachments={attachments} onRemove={vi.fn()} />)
+    const attachments = [
+      {
+        type: 'document' as const,
+        name: 'uploading.txt',
+        processing: true,
+      },
+    ]
+    const { container } = render(
+      <ChatInputAttachments attachments={attachments} onRemove={vi.fn()} />
+    )
     const removeButtons = container.querySelectorAll('.bg-destructive')
     expect(removeButtons).toHaveLength(0)
   })
@@ -93,7 +115,9 @@ describe('ChatInputAttachments — Phase 3', () => {
     const attachments = [
       { type: 'document' as const, name: 'file.txt', fileType: 'txt' },
     ]
-    const { container } = render(<ChatInputAttachments attachments={attachments} onRemove={vi.fn()} />)
+    const { container } = render(
+      <ChatInputAttachments attachments={attachments} onRemove={vi.fn()} />
+    )
     // The outer wrapper has overflow-hidden for the collapse animation
     const wrapper = container.querySelector('.overflow-hidden')
     expect(wrapper).toBeInTheDocument()

@@ -60,10 +60,7 @@ describe('LogViewer', () => {
   it('subscribes to log events on mount', async () => {
     render(<LogViewer />)
     await waitFor(() => {
-      expect(mockListen).toHaveBeenCalledWith(
-        'log://log',
-        expect.any(Function)
-      )
+      expect(mockListen).toHaveBeenCalledWith('log://log', expect.any(Function))
     })
   })
 

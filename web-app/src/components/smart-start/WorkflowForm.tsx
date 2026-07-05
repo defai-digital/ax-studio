@@ -4,7 +4,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import type { SmartStartWorkflow, WorkflowField } from '@/lib/smart-start/workflows'
+import type {
+  SmartStartWorkflow,
+  WorkflowField,
+} from '@/lib/smart-start/workflows'
 
 interface WorkflowFormProps {
   workflow: SmartStartWorkflow
@@ -43,7 +46,11 @@ function FieldRenderer({
       )
     case 'radio':
       return (
-        <RadioGroup value={value} onValueChange={onChange} className="flex flex-wrap gap-2">
+        <RadioGroup
+          value={value}
+          onValueChange={onChange}
+          className="flex flex-wrap gap-2"
+        >
           {field.options?.map((opt) => (
             <label
               key={opt.value}
@@ -60,7 +67,11 @@ function FieldRenderer({
   }
 }
 
-export function WorkflowForm({ workflow, onSubmit, onCancel }: WorkflowFormProps) {
+export function WorkflowForm({
+  workflow,
+  onSubmit,
+  onCancel,
+}: WorkflowFormProps) {
   const [values, setValues] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {}
     for (const field of workflow.fields) {
@@ -111,7 +122,9 @@ export function WorkflowForm({ workflow, onSubmit, onCancel }: WorkflowFormProps
             <div key={field.id} className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">
                 {field.label}
-                {field.required && <span className="text-red-400 ml-0.5">*</span>}
+                {field.required && (
+                  <span className="text-red-400 ml-0.5">*</span>
+                )}
               </label>
               <FieldRenderer
                 field={field}

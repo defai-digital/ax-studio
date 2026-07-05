@@ -7,8 +7,12 @@ import { Route as RouteIcon, Info, Check, ChevronsUpDown } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { Card, CardItem } from '@/components/common/Card'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import { SettingsPageLayout } from '@/components/settings/SettingsPageLayout'
 import {
   Command,
   CommandEmpty,
@@ -20,7 +24,9 @@ import {
 import { useRouterSettings } from '@/hooks/settings/useRouterSettings'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 
-export const Route = createFileRoute(route.settings.llm_router as '/settings/llm-router')({
+export const Route = createFileRoute(
+  route.settings.llm_router as '/settings/llm-router'
+)({
   component: LLMRouterSettings,
 })
 
@@ -57,16 +63,18 @@ function LLMRouterSettings() {
   const routerModelAvailable = useMemo(() => {
     if (!routerModelId || !routerProviderId) return false
     return availableModels.some(
-      (m) => m.id === routerModelId && m.provider === routerProviderId,
+      (m) => m.id === routerModelId && m.provider === routerProviderId
     )
   }, [routerModelId, routerProviderId, availableModels])
 
   const selectedRouterModelLabel = useMemo(() => {
     if (!routerModelId || !routerProviderId) return null
     const found = availableModels.find(
-      (m) => m.id === routerModelId && m.provider === routerProviderId,
+      (m) => m.id === routerModelId && m.provider === routerProviderId
     )
-    return found ? `${found.displayName} (${found.provider})` : `${routerModelId} (${routerProviderId})`
+    return found
+      ? `${found.displayName} (${found.provider})`
+      : `${routerModelId} (${routerProviderId})`
   }, [routerModelId, routerProviderId, availableModels])
 
   const [modelPickerOpen, setModelPickerOpen] = useState(false)
@@ -100,8 +108,15 @@ function LLMRouterSettings() {
       </HeaderPage>
       <div className="flex flex-1 min-h-0">
         <SettingsMenu />
-        <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
-          <SettingsPageLayout icon={RouteIcon} title="LLM Router" gradient="linear-gradient(135deg, #f59e0b, #ef4444)" />
+        <div
+          className="flex-1 overflow-y-auto"
+          style={{ scrollbarWidth: 'thin' }}
+        >
+          <SettingsPageLayout
+            icon={RouteIcon}
+            title="LLM Router"
+            gradient="linear-gradient(135deg, #f59e0b, #ef4444)"
+          />
           <div className="px-8 py-7">
             <div className="max-w-2xl space-y-6">
               {/* Enable/Disable */}
@@ -111,10 +126,7 @@ function LLMRouterSettings() {
                     <h1 className="font-medium text-foreground text-base">
                       LLM Router
                     </h1>
-                    <Switch
-                      checked={enabled}
-                      onCheckedChange={setEnabled}
-                    />
+                    <Switch checked={enabled} onCheckedChange={setEnabled} />
                   </div>
                 }
               >
@@ -132,41 +144,66 @@ function LLMRouterSettings() {
                   description="The model that decides which model to use for each message. Pick a fast, affordable model for best results."
                   column
                   actions={
-                    <Popover open={modelPickerOpen} onOpenChange={setModelPickerOpen}>
+                    <Popover
+                      open={modelPickerOpen}
+                      onOpenChange={setModelPickerOpen}
+                    >
                       <PopoverTrigger asChild>
                         <button
                           type="button"
                           className="flex w-full h-9 items-center justify-between rounded-md border border-border/60 bg-background px-3 text-sm text-foreground hover:bg-accent/50 focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
                           disabled={!enabled}
                         >
-                          <span className={selectedRouterModelLabel ? '' : 'text-muted-foreground'}>
+                          <span
+                            className={
+                              selectedRouterModelLabel
+                                ? ''
+                                : 'text-muted-foreground'
+                            }
+                          >
                             {selectedRouterModelLabel ?? 'Select a model...'}
                           </span>
                           <ChevronsUpDown className="size-3.5 text-muted-foreground shrink-0 ml-2" />
                         </button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                      <PopoverContent
+                        className="w-[var(--radix-popover-trigger-width)] p-0"
+                        align="start"
+                      >
                         <Command>
                           <CommandInput placeholder="Search models..." />
                           <CommandList>
                             <CommandEmpty>No models found.</CommandEmpty>
-                            {Object.entries(groupedModels).map(([provider, models]) => (
-                              <CommandGroup key={provider} heading={provider}>
-                                {models.map((model) => {
-                                  const isSelected = model.id === routerModelId && model.provider === routerProviderId
-                                  return (
-                                    <CommandItem
-                                      key={`${model.provider}::${model.id}`}
-                                      value={`${model.displayName} ${model.id} ${model.provider}`}
-                                      onSelect={() => handleModelSelect(model.id, model.provider)}
-                                    >
-                                      <Check className={`size-3.5 shrink-0 ${isSelected ? 'opacity-100' : 'opacity-0'}`} />
-                                      <span className="truncate">{model.displayName}</span>
-                                    </CommandItem>
-                                  )
-                                })}
-                              </CommandGroup>
-                            ))}
+                            {Object.entries(groupedModels).map(
+                              ([provider, models]) => (
+                                <CommandGroup key={provider} heading={provider}>
+                                  {models.map((model) => {
+                                    const isSelected =
+                                      model.id === routerModelId &&
+                                      model.provider === routerProviderId
+                                    return (
+                                      <CommandItem
+                                        key={`${model.provider}::${model.id}`}
+                                        value={`${model.displayName} ${model.id} ${model.provider}`}
+                                        onSelect={() =>
+                                          handleModelSelect(
+                                            model.id,
+                                            model.provider
+                                          )
+                                        }
+                                      >
+                                        <Check
+                                          className={`size-3.5 shrink-0 ${isSelected ? 'opacity-100' : 'opacity-0'}`}
+                                        />
+                                        <span className="truncate">
+                                          {model.displayName}
+                                        </span>
+                                      </CommandItem>
+                                    )
+                                  })}
+                                </CommandGroup>
+                              )
+                            )}
                           </CommandList>
                         </Command>
                       </PopoverContent>
@@ -176,23 +213,28 @@ function LLMRouterSettings() {
                 {selectedRouterModelLabel && (
                   <div className="px-5 pb-4">
                     <p className="text-xs text-muted-foreground">
-                      Currently using: <span className="font-medium text-foreground">{selectedRouterModelLabel}</span>
+                      Currently using:{' '}
+                      <span className="font-medium text-foreground">
+                        {selectedRouterModelLabel}
+                      </span>
                     </p>
                   </div>
                 )}
                 {enabled && routerModelId && !routerModelAvailable && (
                   <div className="px-5 pb-4">
                     <p className="text-xs text-destructive">
-                      The configured router model is no longer available. Routing will fall back to your selected model.
-                      Please select a different router model.
+                      The configured router model is no longer available.
+                      Routing will fall back to your selected model. Please
+                      select a different router model.
                     </p>
                   </div>
                 )}
                 <div className="px-5 pb-4 flex items-start gap-2">
                   <Info className="size-3.5 text-muted-foreground shrink-0 mt-0.5" />
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Recommended: GPT-4o Mini, Claude Haiku, Gemini Flash, or a local 8B model.
-                    The router uses ~200-400 tokens per classification.
+                    Recommended: GPT-4o Mini, Claude Haiku, Gemini Flash, or a
+                    local 8B model. The router uses ~200-400 tokens per
+                    classification.
                   </p>
                 </div>
               </Card>
@@ -226,10 +268,22 @@ function LLMRouterSettings() {
                 <div className="px-5 py-4 space-y-3">
                   {[
                     { step: '1', text: 'You send a message' },
-                    { step: '2', text: 'The router model analyzes your message and the list of available models' },
-                    { step: '3', text: 'It picks the best model based on the task type and model strengths' },
-                    { step: '4', text: 'Your message is sent to the chosen model' },
-                    { step: '5', text: 'If the router fails or times out, your selected model is used' },
+                    {
+                      step: '2',
+                      text: 'The router model analyzes your message and the list of available models',
+                    },
+                    {
+                      step: '3',
+                      text: 'It picks the best model based on the task type and model strengths',
+                    },
+                    {
+                      step: '4',
+                      text: 'Your message is sent to the chosen model',
+                    },
+                    {
+                      step: '5',
+                      text: 'If the router fails or times out, your selected model is used',
+                    },
                   ].map(({ step, text }) => (
                     <div key={step} className="flex items-start gap-3">
                       <span className="size-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold shrink-0">

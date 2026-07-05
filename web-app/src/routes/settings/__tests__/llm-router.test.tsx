@@ -87,7 +87,7 @@ vi.mock('@/containers/HeaderPage', () => ({
 }))
 
 vi.mock('@/components/settings/SettingsPageLayout', () => ({
-  default: ({ title }: { title: string }) => <h1>{title}</h1>,
+  SettingsPageLayout: ({ title }: { title: string }) => <h1>{title}</h1>,
 }))
 
 vi.mock('@/components/common/Card', () => ({
@@ -159,7 +159,9 @@ vi.mock('@/components/ui/popover', () => ({
 }))
 
 vi.mock('@/components/ui/command', () => ({
-  Command: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Command: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   CommandEmpty: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
@@ -282,7 +284,9 @@ describe('LLM Router settings route', () => {
     expect(screen.getByText('Automatic model selection')).toBeInTheDocument()
 
     expect(screen.getByRole('checkbox')).not.toBeChecked()
-    expect(screen.getByRole('button', { name: /Select a model/i })).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: /Select a model/i })
+    ).toBeDisabled()
     expect(screen.getByDisplayValue('15000')).toBeDisabled()
   })
 
@@ -296,7 +300,9 @@ describe('LLM Router settings route', () => {
     const Component = Route.component as React.ComponentType
     rerender(<Component />)
     expect(screen.getByRole('checkbox')).toBeChecked()
-    expect(screen.getByRole('button', { name: /Select a model/i })).toBeEnabled()
+    expect(
+      screen.getByRole('button', { name: /Select a model/i })
+    ).toBeEnabled()
     expect(screen.getByDisplayValue('15000')).toBeEnabled()
   })
 
@@ -366,7 +372,9 @@ describe('LLM Router settings route', () => {
     expect(
       screen.getByText(/configured router model is no longer available/i)
     ).toBeInTheDocument()
-    expect(screen.getAllByText('missing-model (openai)').length).toBeGreaterThanOrEqual(1)
+    expect(
+      screen.getAllByText('missing-model (openai)').length
+    ).toBeGreaterThanOrEqual(1)
   })
 
   it('updates classification timeout from numeric input and ignores invalid input', () => {

@@ -9,7 +9,7 @@ import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { Cog } from 'lucide-react'
-import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
+import { SettingsPageLayout } from '@/components/settings/SettingsPageLayout'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute(route.settings.engine_settings)({
@@ -106,7 +106,10 @@ function EngineSettingsContent() {
       .map((key) => {
         const index = provider.settings.findIndex((s) => s.key === key)
         if (index < 0) return null
-        return { setting: normalizeEngineSetting(provider.settings[index]), index }
+        return {
+          setting: normalizeEngineSetting(provider.settings[index]),
+          index,
+        }
       })
       .filter(Boolean) as {
       setting: (typeof provider.settings)[0]
@@ -137,7 +140,8 @@ function EngineSettingsContent() {
               title={setting.title}
               column={
                 setting.controller_type === 'input' &&
-                (setting.controller_props as Record<string, unknown>)?.type !== 'number'
+                (setting.controller_props as Record<string, unknown>)?.type !==
+                  'number'
               }
               description={
                 <RenderMarkdown

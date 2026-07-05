@@ -227,7 +227,7 @@ vi.mock('@/components/ui/textarea', () => ({
 }))
 
 vi.mock('@/components/settings/SettingsPageLayout', () => ({
-  default: ({ title }: { title: string }) => (
+  SettingsPageLayout: ({ title }: { title: string }) => (
     <div data-testid="settings-page-layout">{title}</div>
   ),
 }))
@@ -334,7 +334,6 @@ vi.mock('@/types/events', () => ({
     KILL_SIDECAR: 'kill-sidecar',
   },
 }))
-
 
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: (path: string) => (config: any) => ({

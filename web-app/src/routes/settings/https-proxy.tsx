@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { EyeOff, Eye, Globe } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useProxyConfig } from '@/hooks/settings/useProxyConfig'
-import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
+import { SettingsPageLayout } from '@/components/settings/SettingsPageLayout'
 
 export const Route = createFileRoute(route.settings.https_proxy)({
   component: HTTPSProxyContent,

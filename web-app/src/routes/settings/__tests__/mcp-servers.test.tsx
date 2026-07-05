@@ -77,7 +77,7 @@ vi.mock('@/components/common/SettingsMenu', () => ({
 }))
 
 vi.mock('@/components/settings/SettingsPageLayout', () => ({
-  default: ({ title }: { title: string }) => <h1>{title}</h1>,
+  SettingsPageLayout: ({ title }: { title: string }) => <h1>{title}</h1>,
 }))
 
 vi.mock('@/components/common/Card', () => ({

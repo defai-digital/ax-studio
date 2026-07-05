@@ -2,7 +2,7 @@
  * ChatInputAttachments — renders the attachment preview tiles inside ChatInput.
  * Pure presentational component; no service calls or side effects.
  */
-import { Loader2, Paperclip, X } from "lucide-react";
+import { Loader2, Paperclip, X } from 'lucide-react'
 import { cn, formatBytes } from '@/lib/utils'
 import {
   Tooltip,
@@ -51,7 +51,7 @@ export function ChatInputAttachments({ attachments, onRemove }: Props) {
                           className={cn(
                             'relative border rounded-xl size-14 overflow-hidden',
                             'flex items-center justify-center bg-card/50',
-                            att.error && 'border-destructive',
+                            att.error && 'border-destructive'
                           )}
                         >
                           {isImage && att.dataUrl ? (

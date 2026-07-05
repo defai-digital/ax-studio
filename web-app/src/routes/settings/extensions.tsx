@@ -8,7 +8,7 @@ import { ExtensionManager } from '@/lib/extension'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import HeaderPage from '@/containers/HeaderPage'
 import { Puzzle } from 'lucide-react'
-import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
+import { SettingsPageLayout } from '@/components/settings/SettingsPageLayout'
 
 export const Route = createFileRoute(route.settings.extensions)({
   component: ExtensionsContent,

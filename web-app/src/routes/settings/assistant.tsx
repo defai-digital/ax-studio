@@ -12,8 +12,8 @@ import { useTranslation } from '@/i18n/react-i18next-compat'
 import { Button } from '@/components/ui/button'
 import SettingsMenu from '@/components/common/SettingsMenu'
 import { cn } from '@/lib/utils'
-import { Bot, Pencil, PlusCircle, Trash2 } from "lucide-react";
-import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
+import { Bot, Pencil, PlusCircle, Trash2 } from 'lucide-react'
+import { SettingsPageLayout } from '@/components/settings/SettingsPageLayout'
 
 export const Route = createFileRoute(route.settings.assistant)({
   component: AssistantContent,

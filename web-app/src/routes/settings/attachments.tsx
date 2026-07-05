@@ -7,7 +7,7 @@ import { useTranslation } from '@/i18n/react-i18next-compat'
 import { Switch } from '@/components/ui/switch'
 import { useShallow } from 'zustand/react/shallow'
 import { FileText } from 'lucide-react'
-import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
+import { SettingsPageLayout } from '@/components/settings/SettingsPageLayout'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 export const Route = createFileRoute('/settings/attachments')({
@@ -47,7 +47,10 @@ function DebouncedInput({
       timerRef.current = setTimeout(() => {
         const num = Number(raw)
         if (!Number.isFinite(num)) return
-        const clamped = Math.max(min ?? -Infinity, Math.min(max ?? Infinity, num))
+        const clamped = Math.max(
+          min ?? -Infinity,
+          Math.min(max ?? Infinity, num)
+        )
         onChangeRef.current(clamped)
       }, 500)
     },
@@ -120,7 +123,10 @@ function AttachmentsSettings() {
   const parseModeOptions: { value: ParseMode; label: string }[] = [
     { value: 'auto', label: t('settings:attachments.parseModeAuto') },
     { value: 'inline', label: t('settings:attachments.parseModeInline') },
-    { value: 'embeddings', label: t('settings:attachments.parseModeEmbeddings') },
+    {
+      value: 'embeddings',
+      label: t('settings:attachments.parseModeEmbeddings'),
+    },
     { value: 'prompt', label: t('settings:attachments.parseModePrompt') },
   ]
 
@@ -134,13 +140,21 @@ function AttachmentsSettings() {
     <div className="flex flex-col h-svh w-full">
       <HeaderPage>
         <div className="flex items-center gap-2 w-full">
-          <span className="font-medium text-base font-studio">{t('common:settings')}</span>
+          <span className="font-medium text-base font-studio">
+            {t('common:settings')}
+          </span>
         </div>
       </HeaderPage>
       <div className="flex flex-1 min-h-0">
         <SettingsMenu />
-        <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
-          <SettingsPageLayout icon={FileText} title={t('common:attachments') || 'Attachments'} />
+        <div
+          className="flex-1 overflow-y-auto"
+          style={{ scrollbarWidth: 'thin' }}
+        >
+          <SettingsPageLayout
+            icon={FileText}
+            title={t('common:attachments') || 'Attachments'}
+          />
           <div className="px-8 py-7">
             <div className="max-w-2xl space-y-6">
               <Card title={t('settings:attachments.featureTitle')}>
@@ -167,7 +181,9 @@ function AttachmentsSettings() {
                 />
                 <CardItem
                   title={t('settings:attachments.autoInlineThreshold')}
-                  description={t('settings:attachments.autoInlineThresholdDesc')}
+                  description={t(
+                    'settings:attachments.autoInlineThresholdDesc'
+                  )}
                   actions={
                     <DebouncedInput
                       value={sel.autoInlineContextRatio}

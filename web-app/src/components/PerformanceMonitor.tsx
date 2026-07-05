@@ -42,11 +42,7 @@ function MeterBar({
   )
 }
 
-function StatusDot({
-  status,
-}: {
-  status: 'active' | 'idle' | 'loading'
-}) {
+function StatusDot({ status }: { status: 'active' | 'idle' | 'loading' }) {
   const colors = {
     active: '#22c55e',
     idle: '#f59e0b',
@@ -137,7 +133,9 @@ export function PerformanceMonitor() {
               initial={{ opacity: 0, x: -4 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 4 }}
-              className={status === 'active' ? 'perf-live shrink-0' : 'shrink-0'}
+              className={
+                status === 'active' ? 'perf-live shrink-0' : 'shrink-0'
+              }
               style={{ fontSize: '11px', color: statusColor }}
             >
               {statusLabel}

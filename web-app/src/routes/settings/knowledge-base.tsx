@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import SettingsMenu from '@/components/common/SettingsMenu'
 import HeaderPage from '@/containers/HeaderPage'
-import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
+import { SettingsPageLayout } from '@/components/settings/SettingsPageLayout'
 import AkidbConfigPanel from '@/containers/AkidbConfigPanel'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { Database } from 'lucide-react'
@@ -31,7 +31,9 @@ function KnowledgeBase() {
         >
           <SettingsPageLayout
             icon={Database}
-            title={t('common:knowledgeBase', { defaultValue: 'Knowledge Base' })}
+            title={t('common:knowledgeBase', {
+              defaultValue: 'Knowledge Base',
+            })}
             subtitle="Sync a local folder so the AI can search and cite your own documents"
             gradient="linear-gradient(135deg, #0d9488, #14b8a6)"
           />

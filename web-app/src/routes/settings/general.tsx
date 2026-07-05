@@ -9,7 +9,17 @@ import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import ChangeDataFolderLocation from '@/containers/dialogs/thread/ChangeDataFolderLocation'
 import { FactoryResetDialog } from '@/containers/dialogs'
-import { CheckCheck, Copy, ChevronsUpDown, ExternalLink, Folder, Github, MessageCircle, ScrollText, Settings } from 'lucide-react'
+import {
+  CheckCheck,
+  Copy,
+  ChevronsUpDown,
+  ExternalLink,
+  Folder,
+  Github,
+  MessageCircle,
+  ScrollText,
+  Settings,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -22,12 +32,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { fallbackDefaultPrompt } from '@/lib/prompts/system-prompt'
 import { useGeneralSettingsPage } from '@/hooks/settings/useGeneralSettingsPage'
-import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
+import { SettingsPageLayout } from '@/components/settings/SettingsPageLayout'
 import { useAxBiLiveNavigation } from '@/hooks/settings/useAxBiLiveNavigation'
 
-const LANGUAGES = [
-  { value: 'en', label: 'English' },
-]
+const LANGUAGES = [{ value: 'en', label: 'English' }]
 
 function LanguageSwitcher() {
   const { i18n, t } = useAppTranslation()
@@ -41,7 +49,8 @@ function LanguageSwitcher() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm" className="w-full justify-between">
-          {LANGUAGES.find((lang) => lang.value === currentLanguage)?.label || t('common:english')}
+          {LANGUAGES.find((lang) => lang.value === currentLanguage)?.label ||
+            t('common:english')}
           <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground ml-2" />
         </Button>
       </DropdownMenuTrigger>
@@ -49,7 +58,10 @@ function LanguageSwitcher() {
         {LANGUAGES.map((lang) => (
           <DropdownMenuItem
             key={lang.value}
-            className={cn('cursor-pointer my-0.5', currentLanguage === lang.value && 'bg-secondary-foreground/8')}
+            className={cn(
+              'cursor-pointer my-0.5',
+              currentLanguage === lang.value && 'bg-secondary-foreground/8'
+            )}
             onClick={() => changeLanguage(lang.value)}
           >
             {lang.label}
@@ -60,13 +72,7 @@ function LanguageSwitcher() {
   )
 }
 
-function ExternalTextLink({
-  href,
-  label,
-}: {
-  href: string
-  label: string
-}) {
+function ExternalTextLink({ href, label }: { href: string; label: string }) {
   return (
     <a href={href} target="_blank" rel="noopener noreferrer">
       <div className="flex items-center gap-1">
@@ -97,8 +103,12 @@ function General() {
   } = useGeneralSetting()
 
   const safeGlobalDefaultPrompt = globalDefaultPrompt ?? ''
-  const axBiLiveNavigationEnabled = useAxBiLiveNavigation((state) => state.enabled)
-  const setAxBiLiveNavigationEnabled = useAxBiLiveNavigation((state) => state.setEnabled)
+  const axBiLiveNavigationEnabled = useAxBiLiveNavigation(
+    (state) => state.enabled
+  )
+  const setAxBiLiveNavigationEnabled = useAxBiLiveNavigation(
+    (state) => state.setEnabled
+  )
 
   const {
     appDataFolder,
@@ -181,7 +191,9 @@ function General() {
                   actions={
                     <Switch
                       checked={axBiLiveNavigationEnabled}
-                      onCheckedChange={(value) => setAxBiLiveNavigationEnabled(value)}
+                      onCheckedChange={(value) =>
+                        setAxBiLiveNavigationEnabled(value)
+                      }
                     />
                   }
                 />
@@ -254,7 +266,9 @@ function General() {
                   description={
                     <>
                       <span>
-                        {t('settings:dataFolder.appDataDesc', { ns: 'settings' })}
+                        {t('settings:dataFolder.appDataDesc', {
+                          ns: 'settings',
+                        })}
                         &nbsp;
                       </span>
                       <div className="flex items-center gap-2 mt-1 ">
@@ -267,14 +281,25 @@ function General() {
                           </span>
                         </div>
                         <button
-                          onClick={() => appDataFolder && copyToClipboard(appDataFolder)}
+                          onClick={() =>
+                            appDataFolder && copyToClipboard(appDataFolder)
+                          }
                           className="cursor-pointer flex items-center justify-center rounded-sm bg-secondary transition-all duration-200 ease-in-out p-1"
-                          title={isCopied ? t('settings:general.copied') : t('settings:general.copyPath')}
+                          title={
+                            isCopied
+                              ? t('settings:general.copied')
+                              : t('settings:general.copyPath')
+                          }
                         >
                           {isCopied ? (
                             <div className="flex items-center gap-1">
-                              <CheckCheck size={14} className="text-green-500 dark:text-green-600" />
-                              <span className="text-xs leading-0">{t('settings:general.copied')}</span>
+                              <CheckCheck
+                                size={14}
+                                className="text-green-500 dark:text-green-600"
+                              />
+                              <span className="text-xs leading-0">
+                                {t('settings:general.copied')}
+                              </span>
                             </div>
                           ) : (
                             <Copy size={14} className="text-muted-foreground" />
@@ -333,7 +358,10 @@ function General() {
                         onClick={handleOpenLogs}
                         title={t('settings:dataFolder.appLogs')}
                       >
-                        <ScrollText size={12} className="text-muted-foreground" />
+                        <ScrollText
+                          size={12}
+                          className="text-muted-foreground"
+                        />
                         <span>{t('settings:general.openLogs')}</span>
                       </Button>
                     </div>
@@ -345,12 +373,20 @@ function General() {
               <Card title="Advanced">
                 <CardItem
                   title={t('settings:others.resetFactory', { ns: 'settings' })}
-                  description={t('settings:others.resetFactoryDesc', { ns: 'settings' })}
+                  description={t('settings:others.resetFactoryDesc', {
+                    ns: 'settings',
+                  })}
                   actions={
                     <FactoryResetDialog onReset={resetApp}>
-                      <Button variant="destructive" size="sm" disabled={isResetting}>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        disabled={isResetting}
+                      >
                         {isResetting
-                          ? t('common:resetting', { defaultValue: 'Resetting...' })
+                          ? t('common:resetting', {
+                              defaultValue: 'Resetting...',
+                            })
                           : t('common:reset')}
                       </Button>
                     </FactoryResetDialog>
@@ -362,7 +398,9 @@ function General() {
               <Card title={t('common:others')}>
                 <CardItem
                   title={t('settings:others.spellCheck', { ns: 'settings' })}
-                  description={t('settings:others.spellCheckDesc', { ns: 'settings' })}
+                  description={t('settings:others.spellCheckDesc', {
+                    ns: 'settings',
+                  })}
                   actions={
                     <Switch
                       checked={spellCheckChatInput}
@@ -371,8 +409,12 @@ function General() {
                   }
                 />
                 <CardItem
-                  title={t('settings:general.huggingfaceToken', { ns: 'settings' })}
-                  description={t('settings:general.huggingfaceTokenDesc', { ns: 'settings' })}
+                  title={t('settings:general.huggingfaceToken', {
+                    ns: 'settings',
+                  })}
+                  description={t('settings:general.huggingfaceTokenDesc', {
+                    ns: 'settings',
+                  })}
                   actions={
                     <div className="flex items-center gap-2">
                       <Input
@@ -443,7 +485,10 @@ function General() {
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      <MessageCircle size={18} className="text-muted-foreground" />
+                      <MessageCircle
+                        size={18}
+                        className="text-muted-foreground"
+                      />
                     </a>
                   }
                 />
@@ -470,7 +515,9 @@ function General() {
                   description={
                     <div className="text-muted-foreground -mt-2">
                       <p>{t('settings:general.creditsDesc1')}</p>
-                      <p className="mt-2">{t('settings:general.creditsDesc2')}</p>
+                      <p className="mt-2">
+                        {t('settings:general.creditsDesc2')}
+                      </p>
                     </div>
                   }
                 />

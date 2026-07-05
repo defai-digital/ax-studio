@@ -1,6 +1,11 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import type { CitationData } from '@/types/citation-types'
 import { getDomain, openUrl } from '@/lib/utils/url'
 
@@ -28,13 +33,19 @@ const confidenceConfig: Record<
   },
 }
 
-function ConfidenceBadge({ confidence }: { confidence: CitationData['confidence'] }) {
+function ConfidenceBadge({
+  confidence,
+}: {
+  confidence: CitationData['confidence']
+}) {
   const config = confidenceConfig[confidence]
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium ${config.color} cursor-default`}>
+          <span
+            className={`inline-flex items-center gap-1.5 text-[11px] font-medium ${config.color} cursor-default`}
+          >
             <span className={`size-1.5 rounded-full ${config.dotColor}`} />
             {config.label}
           </span>
@@ -53,7 +64,10 @@ interface SourcesFooterProps {
   showConfidence?: boolean
 }
 
-export function SourcesFooter({ citationData, showConfidence = true }: SourcesFooterProps) {
+export function SourcesFooter({
+  citationData,
+  showConfidence = true,
+}: SourcesFooterProps) {
   const [expanded, setExpanded] = useState(false)
   const { sources, confidence } = citationData
 
@@ -87,7 +101,9 @@ export function SourcesFooter({ citationData, showConfidence = true }: SourcesFo
       {expanded && (
         <div className="border-t border-border px-3 py-2 space-y-1.5 max-h-60 overflow-y-auto">
           {sources.map((source, i) => {
-            const domain = source.url ? getDomain(source.url) : source.documentName ?? 'source'
+            const domain = source.url
+              ? getDomain(source.url)
+              : (source.documentName ?? 'source')
             const faviconUrl = source.url
               ? `https://www.google.com/s2/favicons?domain=${domain}&sz=16`
               : null

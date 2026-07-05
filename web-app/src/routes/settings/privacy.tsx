@@ -5,7 +5,7 @@ import HeaderPage from '@/containers/HeaderPage'
 import { Card, CardItem } from '@/components/common/Card'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { Shield } from 'lucide-react'
-import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
+import { SettingsPageLayout } from '@/components/settings/SettingsPageLayout'
 
 export const Route = createFileRoute(route.settings.privacy)({
   component: Privacy,

@@ -12,7 +12,7 @@ import { useBackendUpdater } from '@/hooks/updater/useBackendUpdater'
 import { useEffect, useState } from 'react'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import type { HardwareData, SystemUsage } from '@/services/hardware/types'
-import { Cpu as CpuIcon, Monitor } from "lucide-react";
+import { Cpu as CpuIcon, Monitor } from 'lucide-react'
 import { cn, formatMegaBytes } from '@/lib/utils'
 import { toNumber } from '@/lib/utils/number'
 import { Button } from '@/components/ui/button'
@@ -20,7 +20,7 @@ import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useAppState } from '@/hooks/settings/useAppState'
 import { isPlatformTauri } from '@/lib/platform/utils'
 import { toast } from 'sonner'
-import SettingsPageLayout from '@/components/settings/SettingsPageLayout'
+import { SettingsPageLayout } from '@/components/settings/SettingsPageLayout'
 
 export const Route = createFileRoute(route.settings.hardware)({
   component: HardwareContent,
@@ -430,12 +430,20 @@ function HardwareContent() {
                                 try {
                                   const result = await checkForUpdate(true)
                                   if (result) {
-                                    toast.info(t('settings:backendUpdater.updateAvailable'))
+                                    toast.info(
+                                      t(
+                                        'settings:backendUpdater.updateAvailable'
+                                      )
+                                    )
                                   } else {
-                                    toast.success(t('settings:backendUpdater.upToDate'))
+                                    toast.success(
+                                      t('settings:backendUpdater.upToDate')
+                                    )
                                   }
                                 } catch {
-                                  toast.error(t('settings:backendUpdater.checkError'))
+                                  toast.error(
+                                    t('settings:backendUpdater.checkError')
+                                  )
                                 }
                               }}
                             >
