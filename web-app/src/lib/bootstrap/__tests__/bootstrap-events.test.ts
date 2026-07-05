@@ -40,14 +40,23 @@ describe('bootstrapEvents', () => {
   it('registers the onModelImported listener', () => {
     const serviceHub = makeServiceHub()
     bootstrapEvents({ serviceHub: serviceHub as any, setProviders: vi.fn() })
-    expect(events.on).toHaveBeenCalledWith(AppEvent.onModelImported, expect.any(Function))
+    expect(events.on).toHaveBeenCalledWith(
+      AppEvent.onModelImported,
+      expect.any(Function)
+    )
   })
 
   it('returns a cleanup that removes the listener', () => {
     const serviceHub = makeServiceHub()
-    const cleanup = bootstrapEvents({ serviceHub: serviceHub as any, setProviders: vi.fn() })
+    const cleanup = bootstrapEvents({
+      serviceHub: serviceHub as any,
+      setProviders: vi.fn(),
+    })
     cleanup()
-    expect(events.off).toHaveBeenCalledWith(AppEvent.onModelImported, expect.any(Function))
+    expect(events.off).toHaveBeenCalledWith(
+      AppEvent.onModelImported,
+      expect.any(Function)
+    )
   })
 
   it('calls setProviders with reloaded providers when onModelImported fires', async () => {
@@ -61,16 +70,22 @@ describe('bootstrapEvents', () => {
     ;(events as any)._emit(AppEvent.onModelImported)
 
     // Wait for the async getProviders call
-    await vi.waitFor(() => expect(setProviders).toHaveBeenCalledWith(mockProviders, '/'))
+    await vi.waitFor(() =>
+      expect(setProviders).toHaveBeenCalledWith(mockProviders, '/')
+    )
   })
 
   it('does not call setProviders after cleanup', async () => {
-    const serviceHub = makeServiceHub([{ provider: 'openai' }] as ModelProvider[])
+    const serviceHub = makeServiceHub([
+      { provider: 'openai' },
+    ] as ModelProvider[])
     const setProviders = vi.fn()
 
-    const cleanup = bootstrapEvents({ serviceHub: serviceHub as any, setProviders })
+    const cleanup = bootstrapEvents({
+      serviceHub: serviceHub as any,
+      setProviders,
+    })
     cleanup()
-
     ;(events as any)._emit(AppEvent.onModelImported)
     await new Promise((r) => setTimeout(r, 10))
     expect(setProviders).not.toHaveBeenCalled()

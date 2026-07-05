@@ -18,7 +18,9 @@ type SaveFileHandle = {
 }
 
 type SaveFilePickerWindow = Window & {
-  showSaveFilePicker?: (options: SaveFilePickerOptions) => Promise<SaveFileHandle>
+  showSaveFilePicker?: (
+    options: SaveFilePickerOptions
+  ) => Promise<SaveFileHandle>
 }
 
 const LOADER_REMOVE_DELAY_MS = 300
@@ -131,12 +133,19 @@ async function saveBlobNative(blob: Blob, filename: string): Promise<void> {
       if (ext === 'png') {
         const buffer = await blob.arrayBuffer()
         const base64Data = btoa(
-          new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+          new Uint8Array(buffer).reduce(
+            (data, byte) => data + String.fromCharCode(byte),
+            ''
+          )
         )
-        await hub.core().invoke('write_binary_file', { path: savePath, base64Data })
+        await hub
+          .core()
+          .invoke('write_binary_file', { path: savePath, base64Data })
       } else {
         const text = await blob.text()
-        await hub.core().invoke('write_text_file', { path: savePath, content: text })
+        await hub
+          .core()
+          .invoke('write_text_file', { path: savePath, content: text })
       }
 
       return
@@ -165,7 +174,8 @@ async function saveBlobNative(blob: Blob, filename: string): Promise<void> {
         document.body.removeChild(anchor)
         resolve()
       }
-      reader.onerror = () => reject(reader.error ?? new Error('Failed to read blob'))
+      reader.onerror = () =>
+        reject(reader.error ?? new Error('Failed to read blob'))
       reader.readAsDataURL(blob)
     })
   } catch (error) {

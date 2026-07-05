@@ -32,9 +32,9 @@ import {
 function makeServiceHub(overrides: Record<string, unknown> = {}) {
   return {
     providers: () => ({
-      getProviders: vi.fn().mockResolvedValue([
-        { id: 'p1', provider: 'openai', name: 'OpenAI' },
-      ]),
+      getProviders: vi
+        .fn()
+        .mockResolvedValue([{ id: 'p1', provider: 'openai', name: 'OpenAI' }]),
       ...((overrides.providers as Record<string, unknown>) ?? {}),
     }),
     mcp: () => ({
@@ -45,9 +45,11 @@ function makeServiceHub(overrides: Record<string, unknown> = {}) {
       ...((overrides.mcp as Record<string, unknown>) ?? {}),
     }),
     assistants: () => ({
-      getAssistants: vi.fn().mockResolvedValue([
-        { id: 'a1', name: 'Default', created_at: Date.now() },
-      ]),
+      getAssistants: vi
+        .fn()
+        .mockResolvedValue([
+          { id: 'a1', name: 'Default', created_at: Date.now() },
+        ]),
       ...((overrides.assistants as Record<string, unknown>) ?? {}),
     }),
     deeplink: () => ({
@@ -65,9 +67,12 @@ function makeServiceHub(overrides: Record<string, unknown> = {}) {
   }
 }
 
-function makeInput(overrides: Partial<BootstrapProvidersInput> = {}): BootstrapProvidersInput {
+function makeInput(
+  overrides: Partial<BootstrapProvidersInput> = {}
+): BootstrapProvidersInput {
   return {
-    serviceHub: makeServiceHub() as unknown as BootstrapProvidersInput['serviceHub'],
+    serviceHub:
+      makeServiceHub() as unknown as BootstrapProvidersInput['serviceHub'],
     setProviders: vi.fn(),
     setServers: vi.fn(),
     setSettings: vi.fn(),
@@ -204,7 +209,9 @@ describe('bootstrapProviders', () => {
   it('handles null mcpServers in config', async () => {
     const hub = makeServiceHub({
       mcp: {
-        getMCPConfig: vi.fn().mockResolvedValue({ mcpServers: null, mcpSettings: null }),
+        getMCPConfig: vi
+          .fn()
+          .mockResolvedValue({ mcpServers: null, mcpSettings: null }),
       },
     })
     const setServers = vi.fn()
@@ -277,10 +284,15 @@ describe('bootstrapProviders', () => {
   it('returns fail result when outer try/catch catches', async () => {
     // Force an error in the Promise.all by making serviceHub methods throw synchronously
     const badHub = {
-      providers: () => { throw new Error('sync kaboom') },
+      providers: () => {
+        throw new Error('sync kaboom')
+      },
       mcp: () => ({ getMCPConfig: vi.fn().mockResolvedValue({}) }),
       assistants: () => ({ getAssistants: vi.fn().mockResolvedValue([]) }),
-      deeplink: () => ({ getCurrent: vi.fn().mockResolvedValue(null), onOpenUrl: vi.fn() }),
+      deeplink: () => ({
+        getCurrent: vi.fn().mockResolvedValue(null),
+        onOpenUrl: vi.fn(),
+      }),
       events: () => ({ listen: vi.fn().mockResolvedValue(() => {}) }),
       path: () => ({ sep: () => '/' }),
     }

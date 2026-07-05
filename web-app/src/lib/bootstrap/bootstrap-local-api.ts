@@ -90,7 +90,10 @@ async function startLocalApiServerWithPortFallback(
   config: LocalApiServerConfig,
   apiKey: string
 ): Promise<number> {
-  const attempts = [config.port, ...Array.from({ length: 10 }, (_, i) => config.port + i + 1)]
+  const attempts = [
+    config.port,
+    ...Array.from({ length: 10 }, (_, i) => config.port + i + 1),
+  ]
   let lastError: unknown
 
   for (const port of attempts) {
@@ -102,7 +105,10 @@ async function startLocalApiServerWithPortFallback(
       if (!isPortBindError(error)) {
         throw error
       }
-      console.warn(`Local API Server port ${port} is unavailable; trying next port`, error)
+      console.warn(
+        `Local API Server port ${port} is unavailable; trying next port`,
+        error
+      )
     }
   }
 
@@ -112,7 +118,14 @@ async function startLocalApiServerWithPortFallback(
 export async function bootstrapLocalApi(
   input: BootstrapLocalApiInput
 ): Promise<BootstrapResult> {
-  const { serviceHub, enabled, config, setServerStatus, setServerPort, setApiKey } = input
+  const {
+    serviceHub,
+    enabled,
+    config,
+    setServerStatus,
+    setServerPort,
+    setApiKey,
+  } = input
 
   if (!enabled) return ok()
 
@@ -128,7 +141,10 @@ export async function bootstrapLocalApi(
   const effectiveApiKey =
     config.apiKey && config.apiKey.trim().length > 0
       ? config.apiKey
-      : 'ax-' + Array.from(crypto.getRandomValues(new Uint8Array(24)), (b) => b.toString(16).padStart(2, '0')).join('')
+      : 'ax-' +
+        Array.from(crypto.getRandomValues(new Uint8Array(24)), (b) =>
+          b.toString(16).padStart(2, '0')
+        ).join('')
 
   // Persist the effective key back to the Zustand store so that chat
   // requests (model-factory.ts, custom-chat-transport.ts) read the SAME
@@ -143,7 +159,9 @@ export async function bootstrapLocalApi(
       if (isRunning) {
         const authState = await isProxyAuthorized(config, effectiveApiKey)
         if (authState === false) {
-          console.warn('Local API Server token is stale; restarting with current key')
+          console.warn(
+            'Local API Server token is stale; restarting with current key'
+          )
           setServerStatus('pending')
           await window.core?.api?.stopServer()
         } else {
@@ -159,7 +177,10 @@ export async function bootstrapLocalApi(
 
       // CORS must be enabled so the webview can reach the proxy via native fetch.
       // Force it on to survive users with persisted `false` from old defaults.
-      const actualPort = await startLocalApiServerWithPortFallback(config, effectiveApiKey)
+      const actualPort = await startLocalApiServerWithPortFallback(
+        config,
+        effectiveApiKey
+      )
 
       if (actualPort && actualPort !== config.port) {
         setServerPort(actualPort)

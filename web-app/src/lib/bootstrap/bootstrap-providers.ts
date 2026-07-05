@@ -70,7 +70,9 @@ export type BootstrapProvidersInput = {
  *
  * @returns { result, unsubscribeDeepLink }
  */
-export async function bootstrapProviders(input: BootstrapProvidersInput): Promise<{
+export async function bootstrapProviders(
+  input: BootstrapProvidersInput
+): Promise<{
   result: BootstrapResult
   unsubscribeDeepLink: () => void
 }> {
@@ -90,13 +92,12 @@ export async function bootstrapProviders(input: BootstrapProvidersInput): Promis
     // Load providers, MCP config, and assistants concurrently with bounded waits.
     await Promise.all([
       withTimeout(
-        getProvidersOnce(serviceHub)
-          .then((providers) => {
-            setProviders(providers, serviceHub.path().sep())
-            return syncRemoteProviders(providers).catch((err) =>
-              console.error('Failed to batch-register providers:', err)
-            )
-          }),
+        getProvidersOnce(serviceHub).then((providers) => {
+          setProviders(providers, serviceHub.path().sep())
+          return syncRemoteProviders(providers).catch((err) =>
+            console.error('Failed to batch-register providers:', err)
+          )
+        }),
         PROVIDER_BOOTSTRAP_TIMEOUT_MS,
         `Provider bootstrap timed out after ${PROVIDER_BOOTSTRAP_TIMEOUT_MS}ms`
       ).catch((error) => {
@@ -104,11 +105,10 @@ export async function bootstrapProviders(input: BootstrapProvidersInput): Promis
       }),
 
       withTimeout(
-        getMCPConfigOnce(serviceHub)
-          .then((data) => {
-            setServers(data.mcpServers ?? {})
-            setSettings(data.mcpSettings ?? null)
-          }),
+        getMCPConfigOnce(serviceHub).then((data) => {
+          setServers(data.mcpServers ?? {})
+          setSettings(data.mcpSettings ?? null)
+        }),
         MCP_BOOTSTRAP_TIMEOUT_MS,
         `MCP bootstrap timed out after ${MCP_BOOTSTRAP_TIMEOUT_MS}ms`
       ).catch((error) => {
@@ -116,40 +116,50 @@ export async function bootstrapProviders(input: BootstrapProvidersInput): Promis
       }),
 
       withTimeout(
-        getAssistantsOnce(serviceHub)
-          .then((data) => {
-            if (data == null) {
-              setAssistants([])
-              return
-            }
-            const parsed = assistantsSchema.safeParse(data)
-            if (parsed.success && parsed.data.length > 0) {
-              setAssistants(parsed.data as Assistant[])
-              initializeWithLastUsed()
-            } else if (!parsed.success) {
-              console.warn(
-                'Assistants data did not match expected schema:',
-                parsed.error.message
-              )
-            }
-          }),
+        getAssistantsOnce(serviceHub).then((data) => {
+          if (data == null) {
+            setAssistants([])
+            return
+          }
+          const parsed = assistantsSchema.safeParse(data)
+          if (parsed.success && parsed.data.length > 0) {
+            setAssistants(parsed.data as Assistant[])
+            initializeWithLastUsed()
+          } else if (!parsed.success) {
+            console.warn(
+              'Assistants data did not match expected schema:',
+              parsed.error.message
+            )
+          }
+        }),
         ASSISTANTS_BOOTSTRAP_TIMEOUT_MS,
         `Assistants bootstrap timed out after ${ASSISTANTS_BOOTSTRAP_TIMEOUT_MS}ms`
       ).catch((error) => {
-        console.warn('[bootstrap-providers] Assistants bootstrap failed:', error)
+        console.warn(
+          '[bootstrap-providers] Assistants bootstrap failed:',
+          error
+        )
       }),
     ])
 
     // Deep link: fetch current and register listener
-    serviceHub.deeplink().getCurrent().then(onDeepLink).catch((error) => {
-      console.error('Failed to get current deep link:', error)
-    })
+    serviceHub
+      .deeplink()
+      .getCurrent()
+      .then(onDeepLink)
+      .catch((error) => {
+        console.error('Failed to get current deep link:', error)
+      })
     let unsubscribeOnOpenUrl: (() => void) | undefined
-    serviceHub.deeplink().onOpenUrl(onDeepLink).then((unsub) => {
-      unsubscribeOnOpenUrl = unsub
-    }).catch((error) => {
-      console.error('Failed to register deep link listener:', error)
-    })
+    serviceHub
+      .deeplink()
+      .onOpenUrl(onDeepLink)
+      .then((unsub) => {
+        unsubscribeOnOpenUrl = unsub
+      })
+      .catch((error) => {
+        console.error('Failed to register deep link listener:', error)
+      })
 
     serviceHub
       .events()

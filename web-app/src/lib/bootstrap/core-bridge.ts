@@ -6,7 +6,9 @@ type CoreBridgeOptions = {
   withEvents?: boolean
 }
 
-export function ensureCoreBridge(options: CoreBridgeOptions = {}): NonNullable<Window['core']> {
+export function ensureCoreBridge(
+  options: CoreBridgeOptions = {}
+): NonNullable<Window['core']> {
   const core = (window.core ||= {} as NonNullable<Window['core']>)
 
   if (options.withApi && !core.api) {
