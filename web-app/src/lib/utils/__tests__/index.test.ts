@@ -6,6 +6,11 @@ import {
   getModelDisplayName,
 } from '..'
 
+const modelWithNullableDisplayName = (model: {
+  id: string
+  displayName: string | null
+}): Model => model as unknown as Model
+
 describe('getProviderLogo', () => {
   it('returns correct logo paths for known providers', () => {
     expect(getProviderLogo('anthropic')).toBe(
@@ -86,10 +91,10 @@ describe('getModelDisplayName', () => {
   })
 
   it('returns model.id when displayName is null', () => {
-    const model = {
+    const model = modelWithNullableDisplayName({
       id: 'llama-3.2-1b-instruct-q4_k_m.gguf',
-      displayName: null as any,
-    } as Model
+      displayName: null,
+    })
     expect(getModelDisplayName(model)).toBe('llama-3.2-1b-instruct-q4_k_m.gguf')
   })
 
