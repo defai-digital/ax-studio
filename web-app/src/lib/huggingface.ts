@@ -30,24 +30,11 @@ export function getCleanHuggingFaceRepoId(rawRepoId: string): string {
     .trim()
 }
 
-export function getHuggingFaceEncodedModelUrl(modelName: string): string {
-  return getHuggingFaceModelUrl(modelName)
-}
-
 export function getHuggingFaceModelFileUrl(
   repoId: string,
   fileName: string
 ): string {
   return `${getHuggingFaceModelUrl(repoId)}/resolve/main/${encodeHuggingFacePath(
-    fileName
-  )}`
-}
-
-export function getHuggingFaceEncodedModelFileUrl(
-  repoId: string,
-  fileName: string
-): string {
-  return `${getHuggingFaceEncodedModelUrl(repoId)}/resolve/main/${encodeURIComponent(
     fileName
   )}`
 }
