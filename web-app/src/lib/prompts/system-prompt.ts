@@ -27,13 +27,7 @@ export interface AutoTuningContext {
   modelCapabilities?: string[]
 }
 
-export interface ChatPromptInjection {
-  systemMessage: string
-}
-
 export const fallbackDefaultPrompt = 'You are a helpful assistant.'
-
-
 
 const normalizePrompt = (value: unknown): string | null => {
   if (typeof value !== 'string') return null
@@ -197,14 +191,3 @@ When your response draws on information from provided sources, context, or searc
 3. Only cite sources that were actually provided to you — never fabricate citations.
 4. If you are uncertain about a claim or cannot find a source for it, say so clearly rather than presenting it as fact.
 5. When no external sources are available, respond based on your knowledge but do not add fake citation numbers.`
-
-export const buildChatPromptInjection = (
-  resolved: ResolvedSystemPrompt,
-  options?: { enableCitations?: boolean }
-): ChatPromptInjection => {
-  let systemMessage = resolved.resolvedPrompt + CODE_EXECUTION_INSTRUCTION
-  if (options?.enableCitations) {
-    systemMessage += CITATION_FORMAT_INSTRUCTION
-  }
-  return { systemMessage }
-}

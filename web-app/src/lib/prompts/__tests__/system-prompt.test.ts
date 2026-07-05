@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  buildChatPromptInjection,
   fallbackDefaultPrompt,
   getOptimizedModelConfig,
   LOCAL_KNOWLEDGE_INSTRUCTION,
@@ -66,15 +65,6 @@ describe('getOptimizedModelConfig', () => {
     expect(tuned.temperature).toBe(0.4)
     expect(tuned.top_p).toBe(0.8)
     expect(tuned.max_output_tokens).toBe(4096)
-  })
-
-  it('injects resolved prompt into chat payload unchanged', () => {
-    const resolved = resolveSystemPrompt('Thread prompt', 'Project prompt', {
-      globalDefaultPrompt: 'Global prompt',
-    })
-    const injection = buildChatPromptInjection(resolved)
-
-    expect(injection.systemMessage).toContain('Thread prompt')
   })
 
   it('preserves base values when no tuning trigger exists', () => {
