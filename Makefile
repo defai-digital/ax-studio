@@ -7,6 +7,7 @@ REPORT_PORTAL_LAUNCH_NAME ?= "Ax-Studio App"
 REPORT_PORTAL_DESCRIPTION ?= "Ax-Studio App report"
 DEV_PORT ?= 1420
 NODE ?= node
+YARN ?= npx -y @yarnpkg/cli-dist@4.5.3
 TAURI_CLI ?= $(NODE) node_modules/@tauri-apps/cli/tauri.js
 
 .PHONY: all install-and-build install-rust-targets dev-setup ensure-dev-setup ensure-dev-port-free dev dev-stop install-web-app dev-web-app build-web-app serve-web-app build-serve-web-app lint test test-quality test-quality-blocking build clean
@@ -17,10 +18,10 @@ all:
 
 # Installs yarn dependencies and builds core and extensions
 install-and-build:
-	yarn install
-	yarn build:tauri:plugin:api
-	yarn build:core
-	yarn build:extensions
+	$(YARN) install
+	$(YARN) build:tauri:plugin:api
+	$(YARN) build:core
+	$(YARN) build:extensions
 
 # Install required Rust target for macOS arm64 builds (MLX is ARM-only)
 install-rust-targets:
@@ -35,7 +36,7 @@ endif
 # One-time setup for the desktop dev app. Re-run this after dependency,
 # core package, extension, or bundled binary changes.
 dev-setup: install-and-build
-	yarn download:bin
+	$(YARN) download:bin
 
 ensure-dev-setup:
 ifeq ($(OS),Windows_NT)
@@ -73,34 +74,34 @@ endif
 
 # Web application targets
 install-web-app:
-	yarn install
+	$(YARN) install
 
 dev-web-app: install-web-app
-	yarn build:core
-	yarn dev:web
+	$(YARN) build:core
+	$(YARN) dev:web
 
 build-web-app: install-web-app
-	yarn build:core
-	yarn build:web
+	$(YARN) build:core
+	$(YARN) build:web
 
 serve-web-app:
-	yarn workspace @ax-studio/web-app preview
+	$(YARN) workspace @ax-studio/web-app preview
 
 build-serve-web-app: build-web-app
-	yarn workspace @ax-studio/web-app preview
+	$(YARN) workspace @ax-studio/web-app preview
 
 # Linting
 lint: install-and-build
-	yarn lint
+	$(YARN) lint
 
 # Testing
 test: lint
-	yarn download:bin
+	$(YARN) download:bin
 ifeq ($(OS),Windows_NT)
 endif
-	yarn test
-	yarn copy:assets:tauri
-	yarn build:icon
+	$(YARN) test
+	$(YARN) copy:assets:tauri
+	$(YARN) build:icon
 	cargo test --manifest-path src-tauri/Cargo.toml --no-default-features --features test-tauri -- --test-threads=1
 	cargo test --manifest-path src-tauri/plugins/tauri-plugin-hardware/Cargo.toml
 	cargo test --manifest-path src-tauri/utils/Cargo.toml
@@ -114,7 +115,7 @@ test-quality-blocking:
 
 # Build
 build: install-and-build install-rust-targets
-	TAURI_SIGNING_PUBLIC_KEY="$${TAURI_SIGNING_PUBLIC_KEY:-$$(cat ~/.tauri/ax-studio.key.pub 2>/dev/null)}" yarn build
+	TAURI_SIGNING_PUBLIC_KEY="$${TAURI_SIGNING_PUBLIC_KEY:-$$(cat ~/.tauri/ax-studio.key.pub 2>/dev/null)}" $(YARN) build
 
 clean:
 ifeq ($(OS),Windows_NT)
