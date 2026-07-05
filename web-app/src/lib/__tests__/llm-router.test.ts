@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { UIMessage } from '@ai-sdk/react'
-import { routeMessage, parseRouterResponse, getAvailableModelsForRouter } from '../llm-router'
+import {
+  routeMessage,
+  parseRouterResponse,
+  getAvailableModelsForRouter,
+} from '../llm-router'
 import { buildRouterPrompt } from '../llm-router-prompt'
 
 const routerMocks = vi.hoisted(() => ({
@@ -49,8 +53,16 @@ vi.mock('ai', () => ({
 }))
 
 const sampleModels: AvailableModelForRouter[] = [
-  { id: 'claude-sonnet-4-6', provider: 'anthropic', displayName: 'Claude Sonnet 4.6' },
-  { id: 'claude-opus-4-6', provider: 'anthropic', displayName: 'Claude Opus 4.6' },
+  {
+    id: 'claude-sonnet-4-6',
+    provider: 'anthropic',
+    displayName: 'Claude Sonnet 4.6',
+  },
+  {
+    id: 'claude-opus-4-6',
+    provider: 'anthropic',
+    displayName: 'Claude Opus 4.6',
+  },
   { id: 'gpt-4o', provider: 'openai', displayName: 'GPT-4o' },
   { id: 'gpt-4o-mini', provider: 'openai', displayName: 'GPT-4o Mini' },
   { id: 'deepseek-chat', provider: 'deepseek', displayName: 'DeepSeek V3' },
@@ -63,7 +75,9 @@ const userMessage = (text: string): UIMessage => ({
   parts: [{ type: 'text', text }],
 })
 
-async function* streamParts(parts: Array<{ type: 'text-delta'; text: string }>) {
+async function* streamParts(
+  parts: Array<{ type: 'text-delta'; text: string }>
+) {
   for (const part of parts) {
     yield part
   }
@@ -88,7 +102,8 @@ afterEach(() => {
 
 describe('parseRouterResponse', () => {
   it('parses valid JSON response with exact match', () => {
-    const raw = '{"model": "claude-sonnet-4-6", "provider": "anthropic", "reason": "code generation"}'
+    const raw =
+      '{"model": "claude-sonnet-4-6", "provider": "anthropic", "reason": "code generation"}'
     const result = parseRouterResponse(raw, sampleModels)
     expect(result).toEqual({
       modelId: 'claude-sonnet-4-6',
@@ -98,12 +113,14 @@ describe('parseRouterResponse', () => {
   })
 
   it('returns null for "default" sentinel', () => {
-    const raw = '{"model": "default", "provider": "default", "reason": "general task"}'
+    const raw =
+      '{"model": "default", "provider": "default", "reason": "general task"}'
     expect(parseRouterResponse(raw, sampleModels)).toBeNull()
   })
 
   it('handles markdown code fences', () => {
-    const raw = '```json\n{"model": "gpt-4o", "provider": "openai", "reason": "quick answer"}\n```'
+    const raw =
+      '```json\n{"model": "gpt-4o", "provider": "openai", "reason": "quick answer"}\n```'
     const result = parseRouterResponse(raw, sampleModels)
     expect(result).toEqual({
       modelId: 'gpt-4o',
@@ -113,7 +130,8 @@ describe('parseRouterResponse', () => {
   })
 
   it('handles case-insensitive match', () => {
-    const raw = '{"model": "Claude-Sonnet-4-6", "provider": "Anthropic", "reason": "coding"}'
+    const raw =
+      '{"model": "Claude-Sonnet-4-6", "provider": "Anthropic", "reason": "coding"}'
     const result = parseRouterResponse(raw, sampleModels)
     expect(result).toEqual({
       modelId: 'claude-sonnet-4-6',
@@ -123,7 +141,8 @@ describe('parseRouterResponse', () => {
   })
 
   it('matches by model ID only when provider differs', () => {
-    const raw = '{"model": "deepseek-chat", "provider": "DeepSeek", "reason": "tech task"}'
+    const raw =
+      '{"model": "deepseek-chat", "provider": "DeepSeek", "reason": "tech task"}'
     const result = parseRouterResponse(raw, sampleModels)
     expect(result).toEqual({
       modelId: 'deepseek-chat',
@@ -133,7 +152,8 @@ describe('parseRouterResponse', () => {
   })
 
   it('rejects loose substring matches below the confidence threshold', () => {
-    const raw = '{"model": "sonnet-4-6", "provider": "anthropic", "reason": "coding"}'
+    const raw =
+      '{"model": "sonnet-4-6", "provider": "anthropic", "reason": "coding"}'
     const result = parseRouterResponse(raw, sampleModels)
     expect(result).toBeNull()
   })
@@ -148,7 +168,8 @@ describe('parseRouterResponse', () => {
   })
 
   it('returns null when model is not in available list', () => {
-    const raw = '{"model": "nonexistent-model", "provider": "unknown", "reason": "test"}'
+    const raw =
+      '{"model": "nonexistent-model", "provider": "unknown", "reason": "test"}'
     expect(parseRouterResponse(raw, sampleModels)).toBeNull()
   })
 
@@ -197,14 +218,14 @@ describe('routeMessage', () => {
       sampleModels,
       'gpt-4o-mini',
       'openai',
-      15000,
+      15000
     )
 
     expect(routerMocks.createModel).toHaveBeenCalledWith(
       'router-model',
       expect.objectContaining({ provider: 'router-provider' }),
       {},
-      { requestRole: 'router' },
+      { requestRole: 'router' }
     )
     expect(routerMocks.streamText).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -215,7 +236,7 @@ describe('routeMessage', () => {
         ],
         maxOutputTokens: 1024,
         temperature: 0,
-      }),
+      })
     )
     expect(result).toEqual(
       expect.objectContaining({
@@ -223,7 +244,7 @@ describe('routeMessage', () => {
         providerId: 'anthropic',
         reason: 'code generation',
         routed: true,
-      }),
+      })
     )
   })
 
@@ -251,7 +272,7 @@ describe('routeMessage', () => {
       ],
       'Qwen3_5-9B-IQ4_XS',
       'llamacpp',
-      15000,
+      15000
     )
 
     expect(result).toEqual(
@@ -260,14 +281,16 @@ describe('routeMessage', () => {
         providerId: 'zai-coding',
         reason: 'production coding',
         routed: true,
-      }),
+      })
     )
     expect(routerMocks.streamText).not.toHaveBeenCalled()
   })
 
   it('falls back to the selected model when the router times out', async () => {
     vi.useFakeTimers()
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const warnSpy = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined)
     routerMocks.streamText.mockImplementation(
       ({ abortSignal }: { abortSignal: AbortSignal }) => ({
         fullStream: (async function* () {
@@ -275,11 +298,11 @@ describe('routeMessage', () => {
             abortSignal.addEventListener(
               'abort',
               () => reject(new DOMException('Aborted', 'AbortError')),
-              { once: true },
+              { once: true }
             )
           })
         })(),
-      }),
+      })
     )
 
     try {
@@ -290,7 +313,7 @@ describe('routeMessage', () => {
         sampleModels,
         'gpt-4o-mini',
         'openai',
-        500,
+        500
       )
 
       await vi.advanceTimersByTimeAsync(2000)
@@ -303,13 +326,13 @@ describe('routeMessage', () => {
           reason: 'fallback',
           routed: false,
           fallbackReason: 'router timed out',
-        }),
+        })
       )
       expect(warnSpy).toHaveBeenCalledWith(
         '[LLM Router] generateText error:',
         expect.any(DOMException),
         '| extracted message:',
-        'Aborted',
+        'Aborted'
       )
     } finally {
       warnSpy.mockRestore()
@@ -324,8 +347,16 @@ describe('getAvailableModelsForRouter', () => {
       provider: 'anthropic',
       api_key: 'sk-test',
       models: [
-        { id: 'claude-sonnet-4-6', name: 'Sonnet', displayName: 'Claude Sonnet 4.6' },
-        { id: 'claude-haiku-4-5', name: 'Haiku', displayName: 'Claude Haiku 4.5' },
+        {
+          id: 'claude-sonnet-4-6',
+          name: 'Sonnet',
+          displayName: 'Claude Sonnet 4.6',
+        },
+        {
+          id: 'claude-haiku-4-5',
+          name: 'Haiku',
+          displayName: 'Claude Haiku 4.5',
+        },
         { id: 'embed-model', name: 'Embed', embedding: true },
       ],
       settings: [],
@@ -444,7 +475,10 @@ describe('getAvailableModelsForRouter', () => {
 
 describe('buildRouterPrompt', () => {
   it('builds system and user prompts', () => {
-    const { system, user } = buildRouterPrompt('Write a Python function', sampleModels)
+    const { system, user } = buildRouterPrompt(
+      'Write a Python function',
+      sampleModels
+    )
     expect(system).toContain('LLM router')
     expect(system).toContain('JSON')
     expect(user).toContain('Available models:')
@@ -453,7 +487,11 @@ describe('buildRouterPrompt', () => {
   })
 
   it('includes recent context when provided', () => {
-    const { user } = buildRouterPrompt('Continue', sampleModels, 'user: Write code\nassistant: Here is...')
+    const { user } = buildRouterPrompt(
+      'Continue',
+      sampleModels,
+      'user: Write code\nassistant: Here is...'
+    )
     expect(user).toContain('Recent conversation context')
     expect(user).toContain('Write code')
   })
@@ -472,12 +510,17 @@ describe('buildRouterPrompt', () => {
   })
 
   it('tells the router to prefer strong models for production engineering', () => {
-    const { system } = buildRouterPrompt('Write production TypeScript with tests', sampleModels)
+    const { system } = buildRouterPrompt(
+      'Write production TypeScript with tests',
+      sampleModels
+    )
     expect(system).toContain('production code')
     expect(system).toContain('TypeScript/JavaScript')
     expect(system).toContain('best practices')
     expect(system).toContain('edge cases')
-    expect(system).toContain('Do not choose a local model for production software engineering')
+    expect(system).toContain(
+      'Do not choose a local model for production software engineering'
+    )
   })
 
   it('adds routing traits to model entries', () => {

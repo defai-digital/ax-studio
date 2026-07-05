@@ -33,10 +33,10 @@ const STRONG_CODING_MODEL_PATTERN =
  */
 export function getAvailableModelsForRouter(
   providers: ModelProvider[],
-  _routerModelId: string,
+  _routerModelId: string
 ): AvailableModelForRouter[] {
   const favoriteIds = new Set(
-    useFavoriteModel.getState().favoriteModels.map((m) => m.id),
+    useFavoriteModel.getState().favoriteModels.map((m) => m.id)
   )
 
   const allModels: AvailableModelForRouter[] = []
@@ -48,7 +48,7 @@ export function getAvailableModelsForRouter(
     // unless they are custom (non-predefined) providers with models loaded
     const hasApiKey = (provider.api_key?.length ?? 0) > 0
     const isPredefined = predefinedProviders.some(
-      (e) => e.provider === provider.provider,
+      (e) => e.provider === provider.provider
     )
     if (!hasApiKey && (isPredefined || provider.models.length === 0)) continue
 
@@ -79,19 +79,20 @@ function isLocalRouterCandidate(model: AvailableModelForRouter): boolean {
     LOCAL_PROVIDER_IDS.has(provider) ||
     provider === 'local' ||
     /\b(local|llama\.?cpp|ollama|mlx|lmstudio)\b/i.test(
-      `${model.id} ${model.displayName}`,
+      `${model.id} ${model.displayName}`
     )
   )
 }
 
 function isStrongCodingCandidate(model: AvailableModelForRouter): boolean {
   return STRONG_CODING_MODEL_PATTERN.test(
-    `${model.id} ${model.provider} ${model.displayName}`,
+    `${model.id} ${model.provider} ${model.displayName}`
   )
 }
 
 function scoreStrongCodingCandidate(model: AvailableModelForRouter): number {
-  const text = `${model.id} ${model.provider} ${model.displayName}`.toLowerCase()
+  const text =
+    `${model.id} ${model.provider} ${model.displayName}`.toLowerCase()
   let score = 0
 
   if (isStrongCodingCandidate(model)) score += 100
@@ -107,11 +108,17 @@ function scoreStrongCodingCandidate(model: AvailableModelForRouter): number {
 }
 
 function pickStrongRemoteCodingModel(
-  availableModels: AvailableModelForRouter[],
+  availableModels: AvailableModelForRouter[]
 ): AvailableModelForRouter | null {
   const candidates = availableModels
-    .map((model, index) => ({ model, index, score: scoreStrongCodingCandidate(model) }))
-    .filter(({ model, score }) => !isLocalRouterCandidate(model) && score >= 100)
+    .map((model, index) => ({
+      model,
+      index,
+      score: scoreStrongCodingCandidate(model),
+    }))
+    .filter(
+      ({ model, score }) => !isLocalRouterCandidate(model) && score >= 100
+    )
     .sort((a, b) => b.score - a.score || a.index - b.index)
 
   return candidates[0]?.model ?? null
@@ -119,7 +126,7 @@ function pickStrongRemoteCodingModel(
 
 function pickDirectEngineeringRoute(
   userMessage: string,
-  availableModels: AvailableModelForRouter[],
+  availableModels: AvailableModelForRouter[]
 ): { modelId: string; providerId: string; reason: string } | null {
   if (!HIGH_RISK_ENGINEERING_PATTERN.test(userMessage)) return null
 
@@ -136,15 +143,25 @@ function pickDirectEngineeringRoute(
 function maybeOverrideLocalEngineeringChoice(
   userMessage: string,
   selected: { modelId: string; providerId: string; reason: string },
-  availableModels: AvailableModelForRouter[],
+  availableModels: AvailableModelForRouter[]
 ): { modelId: string; providerId: string; reason: string } | null {
   const selectedModel = availableModels.find(
     (model) =>
-      model.id === selected.modelId && model.provider === selected.providerId,
+      model.id === selected.modelId && model.provider === selected.providerId
   )
   if (!selectedModel || !isLocalRouterCandidate(selectedModel)) return null
 
   return pickDirectEngineeringRoute(userMessage, availableModels)
+}
+
+function getMessageText(message: UIMessage): string {
+  return (
+    message.parts
+      ?.filter((part) => part.type === 'text')
+      .map((part) => part.text)
+      .join('\n')
+      .trim() ?? ''
+  )
 }
 
 /**
@@ -154,9 +171,8 @@ function getLastUserMessage(messages: UIMessage[]): string | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i]
     if (msg.role !== 'user') continue
-    const textParts = msg.parts?.filter((p) => p.type === 'text') ?? []
-    const text = textParts.map((p) => p.text).join('\n')
-    if (text.trim()) return text.trim()
+    const text = getMessageText(msg)
+    if (text) return text
   }
   return null
 }
@@ -171,8 +187,7 @@ function getRecentContext(messages: UIMessage[]): string | undefined {
   // Walk backwards from the second-to-last message (last is the current user msg)
   for (let i = messages.length - 2; i >= 0 && recent.length < 2; i--) {
     const msg = messages[i]
-    const textParts = msg.parts?.filter((p) => p.type === 'text') ?? []
-    const text = textParts.map((p) => p.text).join('\n').trim()
+    const text = getMessageText(msg)
     if (text) {
       recent.unshift(`${msg.role}: ${text.slice(0, 200)}`)
     }
@@ -189,7 +204,7 @@ function getRecentContext(messages: UIMessage[]): string | undefined {
  */
 export function parseRouterResponse(
   rawText: string,
-  availableModels: AvailableModelForRouter[],
+  availableModels: AvailableModelForRouter[]
 ): { modelId: string; providerId: string; reason: string } | null {
   const RouterDecisionSchema = z.object({
     model: z.string().min(1),
@@ -221,7 +236,7 @@ export function parseRouterResponse(
 
     // Exact match
     const exact = availableModels.find(
-      (m) => m.id === model && m.provider === provider,
+      (m) => m.id === model && m.provider === provider
     )
     if (exact) return { modelId: exact.id, providerId: exact.provider, reason }
 
@@ -229,7 +244,7 @@ export function parseRouterResponse(
     const caseInsensitive = availableModels.find(
       (m) =>
         m.id.toLowerCase() === model.toLowerCase() &&
-        m.provider.toLowerCase() === provider.toLowerCase(),
+        m.provider.toLowerCase() === provider.toLowerCase()
     )
     if (caseInsensitive) {
       return {
@@ -241,7 +256,7 @@ export function parseRouterResponse(
 
     // Match by model ID only (provider might be slightly different)
     const modelOnly = availableModels.find(
-      (m) => m.id.toLowerCase() === model.toLowerCase(),
+      (m) => m.id.toLowerCase() === model.toLowerCase()
     )
     if (modelOnly) {
       return {
@@ -281,7 +296,7 @@ function createFallbackResult(
   fallbackModelId: string,
   fallbackProviderId: string,
   fallbackReason: string,
-  latencyMs: number,
+  latencyMs: number
 ): RouterResult {
   return {
     modelId: fallbackModelId,
@@ -310,7 +325,7 @@ export async function routeMessage(
   availableModels: AvailableModelForRouter[],
   fallbackModelId: string,
   fallbackProviderId: string,
-  timeout: number,
+  timeout: number
 ): Promise<RouterResult> {
   const startTime = performance.now()
 
@@ -320,7 +335,7 @@ export async function routeMessage(
       fallbackModelId,
       fallbackProviderId,
       'no available models for routing',
-      performance.now() - startTime,
+      performance.now() - startTime
     )
   }
 
@@ -331,13 +346,13 @@ export async function routeMessage(
       fallbackModelId,
       fallbackProviderId,
       'no user message found',
-      performance.now() - startTime,
+      performance.now() - startTime
     )
   }
 
   const directEngineeringRoute = pickDirectEngineeringRoute(
     userMessage,
-    availableModels,
+    availableModels
   )
   if (directEngineeringRoute) {
     return {
@@ -353,7 +368,7 @@ export async function routeMessage(
   const { system, user } = buildRouterPrompt(
     userMessage.slice(0, MAX_USER_MESSAGE_LENGTH),
     availableModels,
-    recentContext,
+    recentContext
   )
 
   try {
@@ -366,7 +381,7 @@ export async function routeMessage(
         fallbackModelId,
         fallbackProviderId,
         'router provider not found',
-        performance.now() - startTime,
+        performance.now() - startTime
       )
     }
 
@@ -375,7 +390,7 @@ export async function routeMessage(
       routerModelId,
       routerProvider,
       {},
-      { requestRole: 'router' },
+      { requestRole: 'router' }
     )
 
     // Set up timeout via AbortController.
@@ -385,7 +400,7 @@ export async function routeMessage(
     const abortController = new AbortController()
     const timeoutId = globalThis.setTimeout(
       () => abortController.abort(),
-      effectiveTimeout,
+      effectiveTimeout
     )
 
     try {
@@ -431,13 +446,16 @@ export async function routeMessage(
           fallbackModelId,
           fallbackProviderId,
           'could not parse router response',
-          latencyMs,
+          latencyMs
         )
       }
 
       const selected =
-        maybeOverrideLocalEngineeringChoice(userMessage, parsed, availableModels) ??
-        parsed
+        maybeOverrideLocalEngineeringChoice(
+          userMessage,
+          parsed,
+          availableModels
+        ) ?? parsed
 
       return {
         modelId: selected.modelId,
@@ -465,13 +483,18 @@ export async function routeMessage(
     const isTimeout =
       (error instanceof DOMException && error.name === 'AbortError') ||
       (/abort|cancel/i.test(message) && latencyMs >= timeout * 0.8)
-    console.warn('[LLM Router] generateText error:', error, '| extracted message:', message)
+    console.warn(
+      '[LLM Router] generateText error:',
+      error,
+      '| extracted message:',
+      message
+    )
 
     return createFallbackResult(
       fallbackModelId,
       fallbackProviderId,
       isTimeout ? 'router timed out' : message,
-      latencyMs,
+      latencyMs
     )
   }
 }

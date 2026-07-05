@@ -33,10 +33,17 @@ The "reason" field should be 2-5 words describing the task type (e.g., "code gen
 If you are unsure or the task doesn't clearly favor any model, respond with:
 {"model": "default", "provider": "default", "reason": "general task"}`
 
-const LOCAL_PROVIDER_IDS = new Set(['llamacpp', 'ollama', 'mlx', 'lmstudio', 'local'])
+const LOCAL_PROVIDER_IDS = new Set([
+  'llamacpp',
+  'ollama',
+  'mlx',
+  'lmstudio',
+  'local',
+])
 
 function inferModelTraits(model: AvailableModelForRouter): string[] {
-  const haystack = `${model.id} ${model.provider} ${model.displayName}`.toLowerCase()
+  const haystack =
+    `${model.id} ${model.provider} ${model.displayName}`.toLowerCase()
   const traits: string[] = []
 
   const isLocal =
@@ -47,7 +54,7 @@ function inferModelTraits(model: AvailableModelForRouter): string[] {
 
   if (
     /glm|zai|claude|sonnet|opus|gpt|o[134]|gemini.*pro|deepseek|coder|coding|code/.test(
-      haystack,
+      haystack
     )
   ) {
     traits.push('strong coding/reasoning')
@@ -70,7 +77,7 @@ function inferModelTraits(model: AvailableModelForRouter): string[] {
 export function buildRouterPrompt(
   userMessage: string,
   availableModels: AvailableModelForRouter[],
-  recentContext?: string,
+  recentContext?: string
 ): { system: string; user: string } {
   const modelList = availableModels
     .map((m) => {
