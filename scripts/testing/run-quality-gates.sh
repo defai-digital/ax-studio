@@ -7,12 +7,20 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
+VITEST_BIN="$ROOT/node_modules/.bin/vitest"
+
+if [[ ! -x "$VITEST_BIN" ]]; then
+  echo "Vitest binary not found at $VITEST_BIN"
+  echo "Install project dependencies before running quality gates."
+  exit 1
+fi
+
 echo "=== AX Studio Quality Gates ==="
 echo ""
 
 # 1. Run tests with coverage
 echo "--- Step 1: Run tests with coverage ---"
-yarn test:coverage
+"$VITEST_BIN" run --coverage
 
 # 2. Generate per-module audit from coverage output
 echo ""
