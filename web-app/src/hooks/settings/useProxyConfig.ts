@@ -1,8 +1,15 @@
 import { create } from 'zustand'
-import { persist, type PersistStorage, type StorageValue } from 'zustand/middleware'
+import {
+  persist,
+  type PersistStorage,
+  type StorageValue,
+} from 'zustand/middleware'
 import { AES, enc } from 'crypto-js'
 import { localStorageKey } from '@/constants/localStorage'
-import { encrypt as cryptoEncrypt, decrypt as cryptoDecrypt } from '@/lib/storage/crypto'
+import {
+  encrypt as cryptoEncrypt,
+  decrypt as cryptoDecrypt,
+} from '@/lib/storage/crypto'
 import {
   safeStorageGetItem,
   safeStorageRemoveItem,
@@ -21,7 +28,9 @@ const tryLegacyDecrypt = (value: string): string | null => {
 }
 
 const encryptedStorage = {
-  getItem: async (name: string): Promise<StorageValue<ProxyConfigState> | null> => {
+  getItem: async (
+    name: string
+  ): Promise<StorageValue<ProxyConfigState> | null> => {
     const item = safeStorageGetItem(localStorage, name, 'useProxyConfig')
     if (!item) return null
     let parsed: StorageValue<ProxyConfigState>

@@ -16,7 +16,10 @@ export const useAxBiLiveNavigation = create<AxBiLiveNavigationState>()(
     }),
     {
       name: localStorageKey.settingAxBiLiveNavigation,
-      storage: createSafeJSONStorage(() => localStorage, 'useAxBiLiveNavigation'),
+      storage: createSafeJSONStorage(
+        () => localStorage,
+        'useAxBiLiveNavigation'
+      ),
     }
   )
 )

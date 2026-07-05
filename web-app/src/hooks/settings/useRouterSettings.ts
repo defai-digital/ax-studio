@@ -47,7 +47,8 @@ export const useRouterSettings = create<RouterSettingsState>()(
       clearRouterModel: () =>
         set({ routerModelId: null, routerProviderId: null }),
 
-      setTimeoutMs: (ms) => set({ timeout: Math.max(500, Math.min(ms, 30000)) }),
+      setTimeoutMs: (ms) =>
+        set({ timeout: Math.max(500, Math.min(ms, 30000)) }),
 
       setThreadOverride: (threadId, enabled) =>
         set((state) => {
@@ -110,7 +111,10 @@ export const useRouterSettings = create<RouterSettingsState>()(
       version: 3,
       migrate: (persisted: unknown, version: number) => {
         const state = { ...(persisted as Record<string, unknown>) }
-        if (version < 3 && (!state.timeout || state.timeout === 3000 || state.timeout === 8000)) {
+        if (
+          version < 3 &&
+          (!state.timeout || state.timeout === 3000 || state.timeout === 8000)
+        ) {
           state.timeout = 15000
         }
         return state

@@ -222,7 +222,10 @@ describe('useLocalApiServer', () => {
         result.current.addTrustedHost('api.example.com')
       })
 
-      expect(result.current.trustedHosts).toEqual(['example.com', 'api.example.com'])
+      expect(result.current.trustedHosts).toEqual([
+        'example.com',
+        'api.example.com',
+      ])
     })
 
     it('should remove trusted host', () => {
@@ -235,7 +238,11 @@ describe('useLocalApiServer', () => {
         result.current.addTrustedHost('test.com')
       })
 
-      expect(result.current.trustedHosts).toEqual(['example.com', 'api.example.com', 'test.com'])
+      expect(result.current.trustedHosts).toEqual([
+        'example.com',
+        'api.example.com',
+        'test.com',
+      ])
 
       // Remove middle host
       act(() => {
@@ -442,7 +449,7 @@ describe('useLocalApiServer', () => {
         { port: 443, expectedMessage: 'Port 443 is already in use' },
         { port: 3000, expectedMessage: 'Port 3000 is already in use' },
         { port: 8080, expectedMessage: 'Port 8080 is already in use' },
-        { port: 11434, expectedMessage: 'Port 11434 is already in use' }
+        { port: 11434, expectedMessage: 'Port 11434 is already in use' },
       ]
 
       conflictPorts.forEach(({ port, expectedMessage }) => {
@@ -452,7 +459,9 @@ describe('useLocalApiServer', () => {
 
         expect(result.current.serverPort).toBe(port)
         // Verify the port value that would be used in error message construction
-        expect(`Port ${result.current.serverPort} is already in use`).toBe(expectedMessage)
+        expect(`Port ${result.current.serverPort} is already in use`).toBe(
+          expectedMessage
+        )
       })
     })
 
@@ -485,7 +494,12 @@ describe('useLocalApiServer', () => {
       const { result } = renderHook(() => useLocalApiServer())
 
       // Add hosts that are commonly involved in CORS errors
-      const corsRelatedHosts = ['localhost', '127.0.0.1', '0.0.0.0', 'example.com']
+      const corsRelatedHosts = [
+        'localhost',
+        '127.0.0.1',
+        '0.0.0.0',
+        'example.com',
+      ]
 
       corsRelatedHosts.forEach((host) => {
         act(() => {
@@ -501,7 +515,11 @@ describe('useLocalApiServer', () => {
         result.current.removeTrustedHost('127.0.0.1')
       })
 
-      expect(result.current.trustedHosts).toEqual(['localhost', '0.0.0.0', 'example.com'])
+      expect(result.current.trustedHosts).toEqual([
+        'localhost',
+        '0.0.0.0',
+        'example.com',
+      ])
       expect(result.current.trustedHosts.includes('127.0.0.1')).toBe(false) // Might cause localhost access errors
     })
 
@@ -567,7 +585,7 @@ describe('useLocalApiServer', () => {
       const config = {
         host: result.current.serverHost,
         port: result.current.serverPort,
-        apiKey: result.current.apiKey
+        apiKey: result.current.apiKey,
       }
 
       expect(config.host).toBe('127.0.0.1')
@@ -591,8 +609,12 @@ describe('useLocalApiServer', () => {
       })
 
       // Verify conditions that would trigger validation errors
-      const hasValidApiKey = !!(result.current.apiKey && result.current.apiKey.toString().trim().length > 0)
-      const hasValidPort = result.current.serverPort > 0 && result.current.serverPort <= 65535
+      const hasValidApiKey = !!(
+        result.current.apiKey &&
+        result.current.apiKey.toString().trim().length > 0
+      )
+      const hasValidPort =
+        result.current.serverPort > 0 && result.current.serverPort <= 65535
 
       expect(hasValidApiKey).toBe(false) // Would trigger "Missing API key" error
       expect(hasValidPort).toBe(false) // Would trigger "Invalid port" error
@@ -603,8 +625,12 @@ describe('useLocalApiServer', () => {
         result.current.setServerPort(3000)
       })
 
-      const hasValidApiKeyFixed = !!(result.current.apiKey && result.current.apiKey.toString().trim().length > 0)
-      const hasValidPortFixed = result.current.serverPort > 0 && result.current.serverPort <= 65535
+      const hasValidApiKeyFixed = !!(
+        result.current.apiKey &&
+        result.current.apiKey.toString().trim().length > 0
+      )
+      const hasValidPortFixed =
+        result.current.serverPort > 0 && result.current.serverPort <= 65535
 
       expect(hasValidApiKeyFixed).toBe(true) // Should pass validation
       expect(hasValidPortFixed).toBe(true) // Should pass validation

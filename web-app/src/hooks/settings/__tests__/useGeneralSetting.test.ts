@@ -208,8 +208,9 @@ describe('useGeneralSetting', () => {
         result.current.setHuggingfaceToken('new-token')
       })
 
-      const persistedCall = vi.mocked(localStorage.setItem).mock.calls
-        .filter(([key]) => key === 'general-settings')
+      const persistedCall = vi
+        .mocked(localStorage.setItem)
+        .mock.calls.filter(([key]) => key === 'general-settings')
         .at(-1)
 
       expect(persistedCall).toBeDefined()

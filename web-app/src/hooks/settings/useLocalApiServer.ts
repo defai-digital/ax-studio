@@ -5,7 +5,9 @@ import { createSafeJSONStorage } from '@/lib/storage/storage'
 
 const generateDefaultApiKey = (): string => {
   const bytes = crypto.getRandomValues(new Uint8Array(24))
-  return 'ax-' + Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+  return (
+    'ax-' + Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+  )
 }
 
 type LocalApiServerState = {
@@ -49,7 +51,7 @@ export const useLocalApiServer = create<LocalApiServerState>()(
         if (value === '0.0.0.0') {
           console.warn(
             'Binding to 0.0.0.0 exposes the local API server to all devices on your network. ' +
-            'Ensure a strong API key is set.'
+              'Ensure a strong API key is set.'
           )
         }
         set({ serverHost: value })
@@ -76,7 +78,9 @@ export const useLocalApiServer = create<LocalApiServerState>()(
         ),
       removeTrustedHost: (host) =>
         set((state) => ({
-          trustedHosts: state.trustedHosts.filter((trustedHost) => trustedHost !== host),
+          trustedHosts: state.trustedHosts.filter(
+            (trustedHost) => trustedHost !== host
+          ),
         })),
       proxyTimeout: 600,
       setProxyTimeout: (value) => set({ proxyTimeout: value }),
