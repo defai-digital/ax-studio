@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  assertProviderReadyForChat,
   isLocalProvider,
   prepareProviderForChat,
 } from '../model-session'
@@ -27,15 +26,30 @@ describe('model-session', () => {
     expect(isLocalProvider(makeProvider('openai'))).toBe(false)
   })
 
-  it('requires an api key for remote providers', () => {
-    expect(() => assertProviderReadyForChat(makeProvider('openai'))).toThrow(
+  it('requires an api key for remote providers', async () => {
+    const serviceHub = {
+      models: () => ({ startModel: vi.fn() }),
+    } as unknown as import('@/services').ServiceHub
+
+    await expect(
+      prepareProviderForChat(serviceHub, makeProvider('openai'), 'gpt-4.1')
+    ).rejects.toThrow(
       'No API key configured'
     )
   })
 
-  it('allows local providers without an api key', () => {
-    expect(() => assertProviderReadyForChat(makeProvider('llamacpp'))).not.toThrow()
-    expect(() => assertProviderReadyForChat(makeProvider('mlx'))).not.toThrow()
+  it('allows local providers without an api key', async () => {
+    const startModel = vi.fn().mockResolvedValue(undefined)
+    const serviceHub = {
+      models: () => ({ startModel }),
+    } as unknown as import('@/services').ServiceHub
+
+    await expect(
+      prepareProviderForChat(serviceHub, makeProvider('llamacpp'), 'model-a')
+    ).resolves.toBeUndefined()
+    await expect(
+      prepareProviderForChat(serviceHub, makeProvider('mlx'), 'model-b')
+    ).resolves.toBeUndefined()
   })
 
   it('starts local providers before chat', async () => {

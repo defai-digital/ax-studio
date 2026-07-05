@@ -6,7 +6,7 @@ export function isLocalProvider(provider: ProviderObject): boolean {
   return LOCAL_PROVIDER_IDS.has(provider.provider)
 }
 
-export function assertProviderReadyForChat(provider: ProviderObject): void {
+function assertProviderReadyForChat(provider: ProviderObject): void {
   if (!provider.api_key && !isLocalProvider(provider)) {
     throw new Error(
       `No API key configured for provider "${provider.provider}". ` +
