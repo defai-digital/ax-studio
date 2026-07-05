@@ -40,7 +40,7 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 | --- | --- | --- |
 | macOS Apple Silicon | Active support | Homebrew cask or GitHub release assets |
 | Windows x64 | Active support | GitHub release installer |
-| Windows ARM64 | Active support target | GitHub release installer when an ARM64 asset is published |
+| Windows ARM64 | Active support target | Use the x64 installer unless the latest release includes a native ARM64 installer |
 | Linux desktop | Not active support | Source builds only, without release/SLA expectations |
 
 Linux users should use AX Serving, OpenAI-compatible endpoints, or source builds
@@ -64,9 +64,9 @@ Download the latest `Ax-Studio_*_x64-setup.exe` from
 [GitHub Releases](https://github.com/defai-digital/ax-studio/releases/latest)
 and run the installer.
 
-Windows ARM64 is a supported release target. Use
-`Ax-Studio_*_arm64-setup.exe` when that asset is available on the latest
-release page.
+Windows ARM64 is a supported release target, but not every release includes a
+native ARM64 installer. If the latest release does not include
+`Ax-Studio_*_arm64-setup.exe`, install the x64 build.
 
 **Manual download**
 
@@ -84,6 +84,90 @@ All release assets are published on the
 No project setup is required for normal desktop use. Cloud providers require
 their own API keys. Local models run only after the required model/runtime is
 installed or downloaded.
+
+### Quickstart: Cloud Provider
+
+Use this path when you want the fastest first successful chat.
+
+1. Open **Settings -> Providers**.
+2. Pick a provider such as OpenAI, Anthropic, Gemini, Groq, OpenRouter, xAI, or
+   Azure OpenAI.
+3. Paste the provider API key and save.
+4. Return to **Chat**, select a model from that provider, and send a test
+   message.
+
+If a provider fails, check the API key, selected model, provider base URL, and
+provider logs before changing app settings.
+
+### Quickstart: Local Model
+
+Use this path when you want inference to run on your own machine.
+
+1. Open **Hub**.
+2. Download a supported local model, or import a model already on disk.
+3. Open **Settings -> Engine Settings** and confirm the local runtime.
+4. Select the local provider or model in **Chat**.
+5. Start with a small model first, then move to larger models after the runtime
+   is confirmed working.
+
+Local model support depends on the machine and runtime:
+
+- `llama.cpp` is the default GGUF local inference path on macOS and Windows.
+- MLX requires Apple Silicon macOS.
+- Ollama and OpenAI-compatible servers must already be running locally or on a
+  reachable host.
+
+### Quickstart: MCP Tools
+
+Use this path when you want AX Studio to call local or remote tools.
+
+1. Open **Settings -> MCP Servers**.
+2. Add a server using stdio, HTTP SSE, streamable HTTP, or command launch.
+3. Connect the server and confirm its tools appear.
+4. Return to **Chat** and use a model that supports tool calling.
+
+Tool calls and results are shown in the workspace so you can inspect what ran.
+
+### Common Questions
+
+**Which download should I use?**
+
+- macOS Apple Silicon: use Homebrew unless you specifically need the release
+  asset.
+- Windows x64: use `Ax-Studio_*_x64-setup.exe`.
+- Windows ARM64: use the native ARM64 setup only when it exists on the latest
+  release page; otherwise use the x64 setup.
+- Linux: there is no active desktop release target. Use source builds, AX
+  Serving, or another OpenAI-compatible endpoint.
+
+**Where do I add my API key?**
+
+Open **Settings -> Providers**, choose the provider, paste the key, save, then
+select that provider's model in **Chat**.
+
+**Do I need an API key for local models?**
+
+No. Local runtimes do not need a cloud provider key, but they do need a
+downloaded/imported model and a working local runtime.
+
+**Where are app data and settings stored?**
+
+Threads, settings, memory, downloaded models, and app data are stored locally.
+Cloud requests still go to the provider you select, and MCP calls go to the
+configured MCP server.
+
+**Why does a local model not appear or not respond?**
+
+Confirm that the model is downloaded or imported, the runtime is selected in
+**Settings -> Engine Settings**, and your machine has enough memory for the
+model. Check app logs, local API logs, and provider/runtime logs for the exact
+failure.
+
+**How do I report a bug?**
+
+Open a [GitHub Issue](https://github.com/defai-digital/ax-studio/issues) with
+your OS, AX Studio version, install method, provider/runtime, screenshots if
+useful, and relevant logs.
 
 ### Update
 
