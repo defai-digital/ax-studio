@@ -4307,19 +4307,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@smithy/config-resolver@npm:^4.2.1":
-  version: 4.2.1
-  resolution: "@smithy/config-resolver@npm:4.2.1"
-  dependencies:
-    "@smithy/node-config-provider": "npm:^4.2.1"
-    "@smithy/types": "npm:^4.5.0"
-    "@smithy/util-config-provider": "npm:^4.1.0"
-    "@smithy/util-middleware": "npm:^4.1.1"
-    tslib: "npm:^2.6.2"
-  checksum: 10c0/fc60c55bff658ab102e256b2e9e67d0a75f62ce75025152897ba9ec4f2a71a387cd79f99892e21dd91a1352bff5b7f35da98bc6da335c224e8395a2fe1c280f8
-  languageName: node
-  linkType: hard
-
 "@smithy/core@npm:^2.2.4, @smithy/core@npm:^2.5.7":
   version: 2.5.7
   resolution: "@smithy/core@npm:2.5.7"
@@ -5139,7 +5126,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@smithy/util-config-provider@npm:^4.0.0, @smithy/util-config-provider@npm:^4.1.0":
+"@smithy/util-config-provider@npm:^4.0.0":
   version: 4.1.0
   resolution: "@smithy/util-config-provider@npm:4.1.0"
   dependencies:

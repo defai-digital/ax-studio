@@ -65,6 +65,7 @@
     "@eslint/plugin-kit@npm:^0.2.8": "0.3.4",
     "@smithy/config-resolver@npm:^3.0.4": "4.4.6",
     "@smithy/config-resolver@npm:^3.0.13": "4.4.6",
+    "@smithy/config-resolver@npm:^4.2.1": "4.4.6",
     "bn.js@npm:^5.2.1": "5.2.3",
     "esbuild@npm:^0.27.0": "0.28.1",
     "fast-xml-parser@npm:4.2.5": "4.5.5",
