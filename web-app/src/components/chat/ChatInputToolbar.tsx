@@ -43,32 +43,10 @@ import { McpExtensionToolLoader } from '@/containers/McpExtensionToolLoader'
 import type { MCPToolComponentProps, ThreadMessage } from '@ax-studio/core'
 import type { MCPTool } from '@/types/mcp'
 
-type ToolbarIconButtonProps = {
+type ToolbarIndicatorProps = {
   icon: LucideIcon
   tooltip: ReactNode
   iconClassName?: string
-  onClick?: () => void
-  children?: ReactNode
-}
-
-function ToolbarIconButton({
-  icon: Icon,
-  tooltip,
-  iconClassName,
-  onClick,
-  children,
-}: ToolbarIconButtonProps) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button variant="ghost" size="icon-xs" onClick={onClick}>
-          <Icon size={18} className={iconClassName} />
-          {children}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{tooltip}</TooltipContent>
-    </Tooltip>
-  )
 }
 
 // A read-only capability indicator. Looks like a chip, not a button, so it
@@ -77,7 +55,7 @@ function ToolbarIndicator({
   icon: Icon,
   tooltip,
   iconClassName,
-}: Pick<ToolbarIconButtonProps, 'icon' | 'tooltip' | 'iconClassName'>) {
+}: ToolbarIndicatorProps) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -358,20 +336,29 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                 </Tooltip>
               ))}
 
-            <ToolbarIconButton
-              icon={Database}
-              iconClassName={cn(
-                isLocalKnowledgeEnabled
-                  ? 'text-primary'
-                  : 'text-muted-foreground'
-              )}
-              tooltip={
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={toggleLocalKnowledge}
+                >
+                  <Database
+                    size={18}
+                    className={cn(
+                      isLocalKnowledgeEnabled
+                        ? 'text-primary'
+                        : 'text-muted-foreground'
+                    )}
+                  />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
                 <p>
                   Local Knowledge{isLocalKnowledgeEnabled ? ' (active)' : ''}
                 </p>
-              }
-              onClick={toggleLocalKnowledge}
-            />
+              </TooltipContent>
+            </Tooltip>
 
             {selectedModel?.capabilities?.includes('reasoning') && (
               <ToolbarIndicator
