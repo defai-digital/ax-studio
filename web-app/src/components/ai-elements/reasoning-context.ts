@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react'
+import { createStrictContext } from './strict-context'
 
 export type ReasoningContextValue = {
   isStreaming: boolean
@@ -7,14 +7,13 @@ export type ReasoningContextValue = {
   duration: number | undefined
 }
 
-export const ReasoningContext = createContext<ReasoningContextValue | null>(
-  null
-)
+const [ReasoningContext, useReasoningContext] =
+  createStrictContext<ReasoningContextValue>(
+    'Reasoning components must be used within Reasoning'
+  )
+
+export { ReasoningContext }
 
 export function useReasoning() {
-  const context = useContext(ReasoningContext)
-  if (!context) {
-    throw new Error('Reasoning components must be used within Reasoning')
-  }
-  return context
+  return useReasoningContext()
 }

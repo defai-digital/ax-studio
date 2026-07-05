@@ -1,5 +1,5 @@
-import { createContext, useContext } from 'react'
 import type { ToolUIPart } from 'ai'
+import { createStrictContext } from './strict-context'
 
 export type ToolState = ToolUIPart['state'] | 'output-denied'
 
@@ -9,12 +9,12 @@ export type ToolContextValue = {
   state: ToolState
 }
 
-export const ToolContext = createContext<ToolContextValue | null>(null)
+const [ToolContext, useToolContext] = createStrictContext<ToolContextValue>(
+  'Tool components must be used within Tool'
+)
+
+export { ToolContext }
 
 export function useTool() {
-  const context = useContext(ToolContext)
-  if (!context) {
-    throw new Error('Tool components must be used within Tool')
-  }
-  return context
+  return useToolContext()
 }
