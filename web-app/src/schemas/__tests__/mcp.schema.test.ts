@@ -1,13 +1,17 @@
 import { describe, it, expect } from 'vitest'
-import {
-  mcpServerConfigSchema,
-  mcpServersSchema,
-  mcpSettingsSchema,
-} from '../mcp.schema'
+import { mcpServersSchema, mcpSettingsSchema } from '../mcp.schema'
 
-describe('mcpServerConfigSchema', () => {
+function parseServerConfig(config: unknown) {
+  const result = mcpServersSchema.safeParse({ server: config })
+
+  return result.success
+    ? { success: true as const, data: result.data.server }
+    : { success: false as const }
+}
+
+describe('mcpServersSchema server config values', () => {
   it('should validate a minimal config (all optional)', () => {
-    const result = mcpServerConfigSchema.safeParse({})
+    const result = parseServerConfig({})
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.command).toBe('')
@@ -27,7 +31,7 @@ describe('mcpServerConfigSchema', () => {
       official: false,
       managed: true,
     }
-    const result = mcpServerConfigSchema.safeParse(config)
+    const result = parseServerConfig(config)
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.command).toBe('/usr/bin/node')
@@ -43,7 +47,7 @@ describe('mcpServerConfigSchema', () => {
       headers: { Authorization: 'Bearer token123' },
       active: true,
     }
-    const result = mcpServerConfigSchema.safeParse(config)
+    const result = parseServerConfig(config)
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.url).toBe('https://mcp.example.com/api')
@@ -56,39 +60,39 @@ describe('mcpServerConfigSchema', () => {
       type: 'sse' as const,
       url: 'https://mcp.example.com/sse',
     }
-    const result = mcpServerConfigSchema.safeParse(config)
+    const result = parseServerConfig(config)
     expect(result.success).toBe(true)
   })
 
   it('should fail when type is invalid enum', () => {
-    const result = mcpServerConfigSchema.safeParse({ type: 'websocket' })
+    const result = parseServerConfig({ type: 'websocket' })
     expect(result.success).toBe(false)
   })
 
   it('should fail when args is not an array of strings', () => {
-    const result = mcpServerConfigSchema.safeParse({ args: [1, 2, 3] })
+    const result = parseServerConfig({ args: [1, 2, 3] })
     expect(result.success).toBe(false)
   })
 
   it('should fail when env values are not strings', () => {
-    const result = mcpServerConfigSchema.safeParse({
+    const result = parseServerConfig({
       env: { KEY: 123 },
     })
     expect(result.success).toBe(false)
   })
 
   it('should fail when active is not a boolean', () => {
-    const result = mcpServerConfigSchema.safeParse({ active: 'yes' })
+    const result = parseServerConfig({ active: 'yes' })
     expect(result.success).toBe(false)
   })
 
   it('should fail when timeout is a string', () => {
-    const result = mcpServerConfigSchema.safeParse({ timeout: '5000' })
+    const result = parseServerConfig({ timeout: '5000' })
     expect(result.success).toBe(false)
   })
 
   it('should accept integration field', () => {
-    const result = mcpServerConfigSchema.safeParse({
+    const result = parseServerConfig({
       integration: 'slack',
     })
     expect(result.success).toBe(true)

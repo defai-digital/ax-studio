@@ -1,7 +1,7 @@
 import { z } from 'zod/v4'
 
 // Lenient on command/args/env so http/sse servers without a command don't get dropped
-export const mcpServerConfigSchema = z
+const mcpServerConfigSchema = z
   .object({
     command: z.string().optional().default(''),
     args: z.array(z.string()).optional().default([]),
