@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { toNumber } from '../number'
+import { formatCompactNumber, toNumber } from '../number'
 
 describe('toNumber', () => {
   it('converts valid number strings to numbers', () => {
@@ -65,5 +65,25 @@ describe('toNumber', () => {
     expect(toNumber('  123  ')).toBe(123)
     expect(toNumber('\t42\n')).toBe(42)
     expect(toNumber('\r\n  -5.5  \t')).toBe(-5.5)
+  })
+})
+
+describe('formatCompactNumber', () => {
+  it('formats small numbers without suffixes', () => {
+    expect(formatCompactNumber(0)).toBe('0')
+    expect(formatCompactNumber(999)).toBe('999')
+  })
+
+  it('formats thousands and millions with one decimal by default', () => {
+    expect(formatCompactNumber(1_000)).toBe('1.0K')
+    expect(formatCompactNumber(12_340)).toBe('12.3K')
+    expect(formatCompactNumber(1_000_000)).toBe('1.0M')
+    expect(formatCompactNumber(1_250_000)).toBe('1.3M')
+  })
+
+  it('supports whole-number compact labels', () => {
+    expect(formatCompactNumber(1_000, 0)).toBe('1K')
+    expect(formatCompactNumber(128_000, 0)).toBe('128K')
+    expect(formatCompactNumber(2_000_000, 0)).toBe('2M')
   })
 })

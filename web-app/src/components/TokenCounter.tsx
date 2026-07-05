@@ -1,5 +1,6 @@
 import { useMemo, useEffect, useState, useRef, memo } from 'react'
 import { cn } from '@/lib/utils'
+import { formatCompactNumber } from '@/lib/utils/number'
 import {
   Tooltip,
   TooltipContent,
@@ -104,12 +105,6 @@ export const TokenCounter = memo(function TokenCounter({
     return adjustedPercentage !== undefined && adjustedPercentage > 100
   }, [adjustedPercentage])
 
-  const formatNumber = (num: number) => {
-    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`
-    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`
-    return num.toString()
-  }
-
   return (
     <TooltipProvider delayDuration={isUpdating ? 1200 : 400}>
       <Tooltip>
@@ -187,8 +182,8 @@ export const TokenCounter = memo(function TokenCounter({
                   {adjustedPercentage?.toFixed(1) || '0.0'}%
                 </span>
                 <span className="text-sm text-muted-foreground font-mono">
-                  {formatNumber(totalTokens)} /{' '}
-                  {formatNumber(tokenData.maxTokens || 0)}
+                  {formatCompactNumber(totalTokens)} /{' '}
+                  {formatCompactNumber(tokenData.maxTokens || 0)}
                 </span>
               </div>
 
@@ -211,7 +206,7 @@ export const TokenCounter = memo(function TokenCounter({
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Text</span>
                 <span className="text-foreground font-mono">
-                  {formatNumber(Math.max(0, tokenData.tokenCount))}
+                  {formatCompactNumber(Math.max(0, tokenData.tokenCount))}
                 </span>
               </div>
             </div>
@@ -221,7 +216,7 @@ export const TokenCounter = memo(function TokenCounter({
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Remaining</span>
                 <span className="text-foreground font-semibold font-mono">
-                  {formatNumber(
+                  {formatCompactNumber(
                     Math.max(0, (tokenData.maxTokens || 0) - totalTokens)
                   )}
                 </span>

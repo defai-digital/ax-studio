@@ -34,6 +34,7 @@ import {
   Route,
 } from 'lucide-react'
 import { getLastUsedModel } from '@/lib/utils/getModelToStart'
+import { formatCompactNumber } from '@/lib/utils/number'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useRouterSettings } from '@/hooks/settings/useRouterSettings'
 
@@ -56,9 +57,7 @@ function formatContextWindow(model: Model): string | null {
     (value): value is number => typeof value === 'number'
   )
   if (!tokens) return null
-  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(0)}M context`
-  if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(0)}K context`
-  return `${tokens} context`
+  return `${formatCompactNumber(tokens, 0)} context`
 }
 
 interface SearchableModel {
