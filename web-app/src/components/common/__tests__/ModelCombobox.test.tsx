@@ -38,9 +38,13 @@ describe('ModelCombobox', () => {
   }
 
   let bcrSpy: ReturnType<typeof vi.spyOn>
-  let scrollSpy: ReturnType<typeof vi.spyOn>
+  let originalScrollIntoView:
+    | typeof Element.prototype.scrollIntoView
+    | undefined
 
   beforeAll(() => {
+    originalScrollIntoView = Element.prototype.scrollIntoView
+
     const mockRect = {
       width: 300,
       height: 40,
@@ -54,10 +58,10 @@ describe('ModelCombobox', () => {
     } as unknown as DOMRect
 
     bcrSpy = vi
-      .spyOn(Element.prototype as any, 'getBoundingClientRect')
+      .spyOn(Element.prototype, 'getBoundingClientRect')
       .mockReturnValue(mockRect)
 
-    Element.prototype.scrollIntoView = () => {}
+    Element.prototype.scrollIntoView = vi.fn()
   })
 
   beforeEach(() => {
@@ -66,7 +70,12 @@ describe('ModelCombobox', () => {
 
   afterAll(() => {
     bcrSpy?.mockRestore()
-    scrollSpy?.mockRestore()
+
+    if (originalScrollIntoView) {
+      Element.prototype.scrollIntoView = originalScrollIntoView
+    } else {
+      Reflect.deleteProperty(Element.prototype, 'scrollIntoView')
+    }
   })
 
   it('renders input field with default placeholder', () => {
