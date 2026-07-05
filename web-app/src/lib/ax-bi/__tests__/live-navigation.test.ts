@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  getAxBiLiveEndpoint,
-  inferAxBiAction,
   sendAxBiLiveCommand,
-  toAxBiInternalPath,
   tryAxBiLiveNavigation,
 } from '../live-navigation'
 import { useAxBiLiveNavigation } from '@/hooks/settings/useAxBiLiveNavigation'
@@ -48,22 +45,41 @@ describe('AX-BI live navigation', () => {
     useAxBiLiveNavigation.setState({ enabled: true })
   })
 
-  it('converts local AX-BI URLs to internal paths', () => {
-    expect(
-      toAxBiInternalPath('http://127.0.0.1:8088/explore/?form_data_key=abc#top')
-    ).toBe('/explore/?form_data_key=abc#top')
-    expect(toAxBiInternalPath('https://example.com/explore/')).toBeNull()
-  })
-
-  it('uses the AX-BI URL port for the live endpoint', () => {
-    expect(getAxBiLiveEndpoint('http://127.0.0.1:8088/explore/p/abc/')).toBe(
-      'ws://127.0.0.1:8088/ax-bi/live'
+  it('sends local AX-BI URLs to the matching live endpoint as internal paths', async () => {
+    const promise = tryAxBiLiveNavigation(
+      'http://127.0.0.1:8088/explore/?form_data_key=abc#top'
     )
+
+    await vi.waitFor(() => expect(MockWebSocket.instances[0]?.sent).toHaveLength(1))
+    MockWebSocket.instances[0].emit('message', { data: JSON.stringify({ ok: true }) })
+
+    await expect(promise).resolves.toBe(true)
+    expect(MockWebSocket.instances[0].url).toBe('ws://127.0.0.1:8088/ax-bi/live')
+    expect(JSON.parse(MockWebSocket.instances[0].sent[0])).toEqual({
+      action: 'navigate',
+      url: '/explore/?form_data_key=abc#top',
+    })
   })
 
-  it('infers SQL Lab action from SQL Lab links', () => {
-    expect(inferAxBiAction('http://127.0.0.1:8088/sqllab/')).toBe('open_sql_lab')
-    expect(inferAxBiAction('http://127.0.0.1:8088/explore/')).toBe('navigate')
+  it('infers SQL Lab action from SQL Lab links', async () => {
+    const promise = tryAxBiLiveNavigation('http://127.0.0.1:8088/sqllab/')
+
+    await vi.waitFor(() => expect(MockWebSocket.instances[0]?.sent).toHaveLength(1))
+    MockWebSocket.instances[0].emit('message', { data: JSON.stringify({ ok: true }) })
+
+    await expect(promise).resolves.toBe(true)
+    expect(JSON.parse(MockWebSocket.instances[0].sent[0])).toEqual({
+      action: 'open_sql_lab',
+      url: '/sqllab/',
+    })
+  })
+
+  it('refuses external URLs before opening a socket', async () => {
+    await expect(
+      tryAxBiLiveNavigation('https://example.com/explore/')
+    ).resolves.toBe(false)
+
+    expect(MockWebSocket.instances).toHaveLength(0)
   })
 
   it('returns true when the live command is acknowledged', async () => {

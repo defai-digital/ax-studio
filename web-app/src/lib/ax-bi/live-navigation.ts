@@ -47,7 +47,7 @@ function isRejected(payload: unknown): boolean {
   )
 }
 
-export function toAxBiInternalPath(url: string): string | null {
+function toAxBiInternalPath(url: string): string | null {
   try {
     const parsed = new URL(url)
     if (!AX_BI_HOSTS.has(parsed.hostname)) return null
@@ -58,7 +58,7 @@ export function toAxBiInternalPath(url: string): string | null {
   }
 }
 
-export function getAxBiLiveEndpoint(url: string): string | null {
+function getAxBiLiveEndpoint(url: string): string | null {
   try {
     const parsed = new URL(url)
     if (!AX_BI_HOSTS.has(parsed.hostname)) return null
@@ -69,7 +69,7 @@ export function getAxBiLiveEndpoint(url: string): string | null {
   }
 }
 
-export function inferAxBiAction(url: string): AxBiLiveAction {
+function inferAxBiAction(url: string): AxBiLiveAction {
   const path = toAxBiInternalPath(url)?.toLowerCase() ?? ''
   if (path.includes('sql_lab') || path.includes('sqllab')) return 'open_sql_lab'
   return 'navigate'
