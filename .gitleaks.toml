@@ -1,0 +1,18 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Baseline removed historical findings that remain in public git history."
+commits = [
+  # sonar-project.properties was removed from the repository after the token was exposed.
+  "da4b29f6490d1de68f1d7d51b8aa192f8a5377c4",
+  # Legacy integration tests used secret-shaped LINEAR_API_KEY placeholders.
+  "8778bea4433f7926d8da04002a10324f95e8a5b5",
+]
+paths = [
+  '''(^|/)dist/''',
+  '''(^|/)build/''',
+  '''(^|/)coverage/''',
+  '''(^|/)node_modules/''',
+  '''(^|/)target/''',
+]
