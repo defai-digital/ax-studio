@@ -395,7 +395,16 @@ export function useDocumentAttachmentHandler({
         let size: number | undefined = undefined
         try {
           const stat = await fs.fileStat(p)
-          size = stat?.size ? Number(stat.size) : undefined
+          const parsedSize =
+            stat?.size === undefined || stat.size === null
+              ? undefined
+              : Number(stat.size)
+          size =
+            typeof parsedSize === 'number' &&
+            Number.isFinite(parsedSize) &&
+            parsedSize >= 0
+              ? parsedSize
+              : undefined
         } catch (e) {
           console.warn('Failed to read file size for', p, e)
         }

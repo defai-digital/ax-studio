@@ -95,7 +95,9 @@ export function ChatInputAttachments({ attachments, onRemove }: Props) {
                                 : ext
                                   ? `.${ext}`
                                   : 'document'}
-                              {att.size ? ` · ${formatBytes(att.size)}` : ''}
+                              {typeof att.size === 'number'
+                                ? ` · ${formatBytes(att.size)}`
+                                : ''}
                             </div>
                           )}
                         </div>

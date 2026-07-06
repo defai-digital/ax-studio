@@ -1426,7 +1426,7 @@ describe('DefaultModelsService', () => {
 
       expect(result.quants[0].file_size).toBe('0.0 MB')
       expect(result.quants[1].file_size).toBe('1.0 GB')
-      expect(result.quants[2].file_size).toBe('Unknown size') // 0 is falsy, so it returns 'Unknown size'
+      expect(result.quants[2].file_size).toBe('0.0 MB')
     })
 
     it('should handle missing optional fields gracefully', () => {

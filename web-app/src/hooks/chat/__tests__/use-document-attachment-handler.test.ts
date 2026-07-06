@@ -121,6 +121,7 @@ vi.mock('@/hooks/useServiceHub', () => ({
 import { useDocumentAttachmentHandler } from '../use-document-attachment-handler'
 import { useFileRegistry } from '@/lib/file-registry'
 import { toast } from 'sonner'
+import { fs } from '@ax-studio/core'
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
@@ -142,6 +143,9 @@ describe('useDocumentAttachmentHandler', () => {
     mockStartModel.mockResolvedValue(undefined)
     mockGetActiveModels.mockResolvedValue(['model-1'])
     mockGetTokensCount.mockResolvedValue(100)
+    ;(fs.fileStat as ReturnType<typeof vi.fn>).mockResolvedValue({
+      size: 1000,
+    })
     // Reset the Zustand stores
     act(() => {
       useChatAttachments.setState({ attachmentsByThread: {} })
@@ -255,7 +259,6 @@ describe('useDocumentAttachmentHandler', () => {
 
   it('shows error toast when file exceeds max size', async () => {
     mockMaxFileSizeMB = 1
-    const { fs } = await import('@ax-studio/core')
     ;(fs.fileStat as ReturnType<typeof vi.fn>).mockResolvedValue({
       size: 2 * 1024 * 1024,
     })
@@ -275,6 +278,31 @@ describe('useDocumentAttachmentHandler', () => {
     expect(toast.error).toHaveBeenCalledWith('File too large', {
       description: 'One or more files exceed the 1MB limit',
     })
+  })
+
+  it('preserves zero byte file sizes from fileStat', async () => {
+    ;(fs.fileStat as ReturnType<typeof vi.fn>).mockResolvedValue({ size: 0 })
+    mockDialogOpen.mockResolvedValue(['/path/to/empty.pdf'])
+
+    const { result } = renderHook(() =>
+      useDocumentAttachmentHandler({
+        attachmentsKey: ATTACHMENTS_KEY,
+        effectiveThreadId: 'thread-1',
+      })
+    )
+
+    await act(async () => {
+      await result.current.handleAttachDocsIngest()
+    })
+
+    const { createDocumentAttachment } = await import('@/types/attachment')
+    expect(createDocumentAttachment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'empty.pdf',
+        path: '/path/to/empty.pdf',
+        size: 0,
+      })
+    )
   })
 
   // ── handleRemoveAttachment ───────────────────────────────────────────────

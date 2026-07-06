@@ -7,6 +7,7 @@ import {
   isDev,
   basename,
   fileExtension,
+  formatBytes,
 } from '../utils'
 
 describe('sanitizeModelId', () => {
@@ -78,6 +79,24 @@ describe('fileExtension', () => {
     expect(fileExtension('Makefile')).toBe('')
     expect(fileExtension('.gitignore')).toBe('')
     expect(fileExtension('file.')).toBe('')
+  })
+})
+
+describe('formatBytes', () => {
+  it('formats zero bytes instead of treating it as missing', () => {
+    expect(formatBytes(0)).toBe('0 B')
+  })
+
+  it('formats positive byte counts', () => {
+    expect(formatBytes(512)).toBe('512 B')
+    expect(formatBytes(2048)).toBe('2.0 KB')
+  })
+
+  it('returns an empty string for absent or invalid byte counts', () => {
+    expect(formatBytes()).toBe('')
+    expect(formatBytes(-1)).toBe('')
+    expect(formatBytes(Number.NaN)).toBe('')
+    expect(formatBytes(Number.POSITIVE_INFINITY)).toBe('')
   })
 })
 

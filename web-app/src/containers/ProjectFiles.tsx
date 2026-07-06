@@ -223,12 +223,25 @@ export function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
           const stat = await import('@ax-studio/core').then((m) =>
             m.fs.fileStat(p)
           )
-          size = stat?.size ? Number(stat.size) : undefined
+          const parsedSize =
+            stat?.size === undefined || stat.size === null
+              ? undefined
+              : Number(stat.size)
+          size =
+            typeof parsedSize === 'number' &&
+            Number.isFinite(parsedSize) &&
+            parsedSize >= 0
+              ? parsedSize
+              : undefined
         } catch (e) {
           console.warn('Failed to read file size for', p, e)
         }
 
-        if (maxFileSizeBytes !== undefined && size && size > maxFileSizeBytes) {
+        if (
+          maxFileSizeBytes !== undefined &&
+          typeof size === 'number' &&
+          size > maxFileSizeBytes
+        ) {
           toast.error(t('common:errors.fileTooLarge') ?? 'File too large', {
             description: t('common:errors.fileTooLargeDescription', {
               fileName: name,
@@ -444,7 +457,7 @@ export function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
                   <p className="text-xs">{file.name}</p>
                 </TooltipContent>
               </Tooltip>
-              {file.size ? (
+              {typeof file.size === 'number' ? (
                 <span className="text-[11px] text-muted-foreground shrink-0">
                   {formatBytes(file.size)}
                 </span>

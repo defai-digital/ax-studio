@@ -147,7 +147,9 @@ export class DefaultModelsService implements ModelsService {
   convertHfRepoToCatalogModel(repo: HuggingFaceRepo): CatalogModel {
     // Format file size helper
     const formatFileSize = (size?: number) => {
-      if (!size) return 'Unknown size'
+      if (typeof size !== 'number' || !Number.isFinite(size) || size < 0) {
+        return 'Unknown size'
+      }
       if (size < 1024 ** 3) return `${(size / 1024 ** 2).toFixed(1)} MB`
       return `${(size / 1024 ** 3).toFixed(1)} GB`
     }

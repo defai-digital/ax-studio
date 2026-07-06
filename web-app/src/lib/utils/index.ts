@@ -92,7 +92,10 @@ export function formatMegaBytes(mb: number) {
 }
 
 export function formatBytes(bytes?: number): string {
-  if (!bytes || bytes <= 0) return ''
+  if (typeof bytes !== 'number' || !Number.isFinite(bytes) || bytes < 0) {
+    return ''
+  }
+
   const units = ['B', 'KB', 'MB', 'GB']
   let i = 0
   let val = bytes

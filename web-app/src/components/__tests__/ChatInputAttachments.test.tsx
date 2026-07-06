@@ -64,6 +64,22 @@ describe('ChatInputAttachments — Phase 3', () => {
     expect(screen.getByText('.pdf')).toBeInTheDocument()
   })
 
+  it('shows zero byte attachment sizes', () => {
+    const attachments = [
+      {
+        type: 'document' as const,
+        name: 'empty.txt',
+        fileType: 'txt',
+        size: 0,
+      },
+    ]
+    render(
+      <ChatInputAttachments attachments={attachments} onRemove={vi.fn()} />
+    )
+
+    expect(screen.getByText(/0 B/)).toBeInTheDocument()
+  })
+
   // Protocol #7/#8: Remove button calls onRemove
   it('remove button calls onRemove with correct index', () => {
     const onRemove = vi.fn()
