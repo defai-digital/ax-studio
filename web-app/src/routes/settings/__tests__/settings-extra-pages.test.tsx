@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 
 const mocks = vi.hoisted(() => ({
   guardrails: {
@@ -301,5 +301,34 @@ describe('additional settings pages', () => {
       }
     )
     expect(mocks.attachments.setParseMode).toHaveBeenCalledWith('inline')
+  })
+
+  it('rejects non-decimal attachment number inputs', () => {
+    vi.useFakeTimers()
+    try {
+      const Component = AttachmentsRoute.component as React.ComponentType
+      render(<Component />)
+
+      const topKInput = screen.getByDisplayValue('3')
+      fireEvent.change(topKInput, { target: { value: '0x10' } })
+      act(() => {
+        vi.advanceTimersByTime(500)
+      })
+      expect(mocks.attachments.setRetrievalLimit).not.toHaveBeenCalled()
+
+      fireEvent.change(topKInput, { target: { value: '1e2' } })
+      act(() => {
+        vi.advanceTimersByTime(500)
+      })
+      expect(mocks.attachments.setRetrievalLimit).not.toHaveBeenCalled()
+
+      fireEvent.change(topKInput, { target: { value: '12' } })
+      act(() => {
+        vi.advanceTimersByTime(500)
+      })
+      expect(mocks.attachments.setRetrievalLimit).toHaveBeenCalledWith(12)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

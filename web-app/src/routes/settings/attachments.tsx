@@ -17,6 +17,14 @@ export const Route = createFileRoute('/settings/attachments')({
 type SearchMode = 'auto' | 'ann' | 'linear'
 type ParseMode = 'auto' | 'inline' | 'embeddings' | 'prompt'
 
+function parsePlainDecimalInput(raw: string): number | null {
+  const trimmed = raw.trim()
+  if (!/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(trimmed)) return null
+
+  const value = Number(trimmed)
+  return Number.isFinite(value) ? value : null
+}
+
 function DebouncedInput({
   value,
   min,
@@ -45,8 +53,8 @@ function DebouncedInput({
       setLocal(raw)
       if (timerRef.current) clearTimeout(timerRef.current)
       timerRef.current = setTimeout(() => {
-        const num = Number(raw)
-        if (!Number.isFinite(num)) return
+        const num = parsePlainDecimalInput(raw)
+        if (num === null) return
         const clamped = Math.max(
           min ?? -Infinity,
           Math.min(max ?? Infinity, num)

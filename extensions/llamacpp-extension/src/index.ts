@@ -203,8 +203,23 @@ function disableThinkingForToolFollowUp(body: ChatRequestBody): ChatRequestBody 
 
 type DeviceInfoLike = DeviceInfo | DeviceList
 
-const toNumberSetting = (value: SettingValue, defaultValue = 0): number =>
-  value === '' || value == null ? defaultValue : Number(value)
+const DECIMAL_NUMBER_PATTERN = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i
+
+const toNumberSetting = (value: SettingValue, defaultValue = 0): number => {
+  if (value === '' || value == null) return defaultValue
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : defaultValue
+  }
+
+  if (typeof value !== 'string') return defaultValue
+
+  const trimmed = value.trim()
+  if (!DECIMAL_NUMBER_PATTERN.test(trimmed)) return defaultValue
+
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : defaultValue
+}
 
 const toBooleanSetting = (value: SettingValue): boolean =>
   value === true || value === 'true' || value === 1 || value === '1'
@@ -1451,8 +1466,11 @@ export default class AxStudioLlamacppExtension extends AIEngine {
           ? String(parsed.mmproj_path)
           : undefined,
         name: String(parsed.name ?? modelId),
-        size_bytes: Number(parsed.size_bytes ?? 0),
-        embedding: Boolean(parsed.embedding),
+        size_bytes: Math.max(
+          0,
+          toNumberSetting(parsed.size_bytes as SettingValue, 0)
+        ),
+        embedding: toBooleanSetting(parsed.embedding as SettingValue),
         sha256: parsed.sha256 ? String(parsed.sha256) : undefined,
         mmproj_sha256: parsed.mmproj_sha256
           ? String(parsed.mmproj_sha256)

@@ -267,6 +267,23 @@ describe('AxStudioLlamacppExtension', () => {
     expect((extension as any).config.timeout).toBe(42)
   })
 
+  it('rejects malformed numeric setting updates', () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+
+    extension.onSettingUpdate('timeout', 'Infinity')
+    extension.onSettingUpdate('ctx_size', '0x400')
+    extension.onSettingUpdate('threads', true)
+    extension.onSettingUpdate('ubatch_size', ['1024'])
+    extension.onSettingUpdate('rope_scale', '2.5e-1')
+
+    expect((extension as any).timeout).toBe(600)
+    expect((extension as any).config.timeout).toBe(600)
+    expect((extension as any).config.ctx_size).toBe(0)
+    expect((extension as any).config.threads).toBe(-1)
+    expect((extension as any).config.ubatch_size).toBe(512)
+    expect((extension as any).config.rope_scale).toBe(0.25)
+  })
+
   it('rejects invalid model identifiers', () => {
     const extension = new AxStudioLlamacppExtension('', '')
     expect(() => (extension as any)._validateModelId('../escape')).toThrow(
@@ -1015,6 +1032,25 @@ describe('AxStudioLlamacppExtension', () => {
       embedding: true,
       sha256: 'abc',
       mmproj_sha256: 'def',
+    })
+  })
+
+  it('normalizes quoted model config scalars defensively', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    mocks.fsState.set(
+      '/app-data/llamacpp/models/org/model/model.yml',
+      [
+        'model_path: llamacpp/models/org/model/model.gguf',
+        'name: org/model',
+        'size_bytes: "not-a-number"',
+        'embedding: "false"',
+      ].join('\n')
+    )
+
+    const config = await (extension as any)._readModelConfig('org/model')
+    expect(config).toMatchObject({
+      size_bytes: 0,
+      embedding: false,
     })
   })
 
