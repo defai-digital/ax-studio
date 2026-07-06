@@ -9,28 +9,22 @@ vi.mock('@/constants/localStorage', () => ({
   },
 }))
 
-// Mock zustand persist
-vi.mock('zustand/middleware', () => ({
-  persist: (fn: any) => fn,
-  createJSONStorage: () => ({
-    getItem: vi.fn(),
-    setItem: vi.fn(),
-    removeItem: vi.fn(),
-  }),
-}))
-
 describe('useLeftPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     // Reset store state to defaults
     const store = useLeftPanel.getState()
     store.setLeftPanel(true)
+    store.setLeftPanelSize(20)
+    store.setLeftPanelWidth('15rem')
   })
 
   it('should initialize with default values', () => {
     const { result } = renderHook(() => useLeftPanel())
 
     expect(result.current.open).toBe(true)
+    expect(result.current.size).toBe(20)
+    expect(result.current.width).toBe('15rem')
     expect(typeof result.current.setLeftPanel).toBe('function')
   })
 
@@ -90,6 +84,53 @@ describe('useLeftPanel', () => {
     })
   })
 
+  describe('setLeftPanelSize', () => {
+    it('clamps size to the valid percentage range', () => {
+      const { result } = renderHook(() => useLeftPanel())
+
+      act(() => {
+        result.current.setLeftPanelSize(-10)
+      })
+      expect(result.current.size).toBe(0)
+
+      act(() => {
+        result.current.setLeftPanelSize(120)
+      })
+      expect(result.current.size).toBe(100)
+    })
+
+    it('ignores non-finite sizes', () => {
+      const { result } = renderHook(() => useLeftPanel())
+
+      act(() => {
+        result.current.setLeftPanelSize(Number.NaN)
+      })
+      expect(result.current.size).toBe(20)
+    })
+  })
+
+  describe('setLeftPanelWidth', () => {
+    it('normalizes valid width strings', () => {
+      const { result } = renderHook(() => useLeftPanel())
+
+      act(() => {
+        result.current.setLeftPanelWidth(' 18.5rem ')
+      })
+
+      expect(result.current.width).toBe('18.5rem')
+    })
+
+    it('falls back for malformed width strings', () => {
+      const { result } = renderHook(() => useLeftPanel())
+
+      act(() => {
+        result.current.setLeftPanelWidth('calc(100vw)')
+      })
+
+      expect(result.current.width).toBe('15rem')
+    })
+  })
+
   describe('state persistence', () => {
     it('should maintain state across multiple hook instances', () => {
       const { result: result1 } = renderHook(() => useLeftPanel())
@@ -107,6 +148,50 @@ describe('useLeftPanel', () => {
 
       expect(result1.current.open).toBe(true)
       expect(result2.current.open).toBe(true)
+    })
+
+    it('sanitizes malformed persisted state during merge', () => {
+      const current = useLeftPanel.getState()
+      const merge = useLeftPanel.persist.getOptions().merge
+
+      const merged = merge?.(
+        {
+          open: 'true',
+          size: Number.POSITIVE_INFINITY,
+          width: 'javascript:alert(1)',
+        },
+        current
+      )
+
+      expect(merged).toEqual(
+        expect.objectContaining({
+          open: true,
+          size: 20,
+          width: '15rem',
+        })
+      )
+    })
+
+    it('hydrates valid persisted state during merge', () => {
+      const current = useLeftPanel.getState()
+      const merge = useLeftPanel.persist.getOptions().merge
+
+      const merged = merge?.(
+        {
+          open: false,
+          size: 125,
+          width: '320px',
+        },
+        current
+      )
+
+      expect(merged).toEqual(
+        expect.objectContaining({
+          open: false,
+          size: 100,
+          width: '320px',
+        })
+      )
     })
   })
 
