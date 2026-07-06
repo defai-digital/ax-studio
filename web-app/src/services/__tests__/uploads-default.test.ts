@@ -139,6 +139,128 @@ describe('DefaultUploadsService', () => {
       expect(result.chunkCount).toBe(8)
     })
 
+    it('rejects non-numeric success metrics from fabric_ingest_run', async () => {
+      const hub = makeServiceHub({
+        error: '',
+        content: [
+          {
+            text: JSON.stringify({
+              filesSucceeded: true,
+              totalChunksGenerated: [12],
+              errors: [],
+            }),
+          },
+        ],
+      })
+      service.setMcpService(hub.mcp())
+
+      await expect(
+        service.ingestFileAttachment('t1', makeDocAttachment())
+      ).rejects.toThrow('No files were successfully indexed')
+    })
+
+    it('ignores non-decimal chunk count strings from fabric_ingest_run', async () => {
+      const hub = makeServiceHub({
+        error: '',
+        content: [
+          {
+            text: JSON.stringify({
+              filesSucceeded: 1,
+              totalChunksGenerated: '0x10',
+              errors: [],
+            }),
+          },
+        ],
+      })
+      service.setMcpService(hub.mcp())
+
+      const result = await service.ingestFileAttachment(
+        't1',
+        makeDocAttachment()
+      )
+
+      expect(result.chunkCount).toBe(0)
+    })
+
+    it.each([
+      ['12 chunks'],
+      ['1e2'],
+      ['12.5'],
+      [''],
+      ['9007199254740992'],
+    ])(
+      'ignores malformed chunk count string "%s" from fabric_ingest_run',
+      async (totalChunksGenerated) => {
+        const hub = makeServiceHub({
+          error: '',
+          content: [
+            {
+              text: JSON.stringify({
+                filesSucceeded: 1,
+                totalChunksGenerated,
+                errors: [],
+              }),
+            },
+          ],
+        })
+        service.setMcpService(hub.mcp())
+
+        const result = await service.ingestFileAttachment(
+          't1',
+          makeDocAttachment()
+        )
+
+        expect(result.chunkCount).toBe(0)
+      }
+    )
+
+    it('falls back to the next valid metric alias after a malformed value', async () => {
+      const hub = makeServiceHub({
+        error: '',
+        content: [
+          {
+            text: JSON.stringify({
+              filesSucceeded: 1,
+              totalChunksGenerated: '12 chunks',
+              total_chunks: '7',
+              errors: [],
+            }),
+          },
+        ],
+      })
+      service.setMcpService(hub.mcp())
+
+      const result = await service.ingestFileAttachment(
+        't1',
+        makeDocAttachment()
+      )
+
+      expect(result.chunkCount).toBe(7)
+    })
+
+    it.each([['1 file'], ['1e0'], ['1.0'], ['0'], ['9007199254740992']])(
+      'rejects malformed success metric string "%s" from fabric_ingest_run',
+      async (filesSucceeded) => {
+        const hub = makeServiceHub({
+          error: '',
+          content: [
+            {
+              text: JSON.stringify({
+                filesSucceeded,
+                totalChunksGenerated: 1,
+                errors: [],
+              }),
+            },
+          ],
+        })
+        service.setMcpService(hub.mcp())
+
+        await expect(
+          service.ingestFileAttachment('t1', makeDocAttachment())
+        ).rejects.toThrow('No files were successfully indexed')
+      }
+    )
+
     it('saves file to registry after successful ingestion', async () => {
       const metrics = {
         filesSucceeded: 1,

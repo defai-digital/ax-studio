@@ -65,7 +65,7 @@ function parsePipelineMetrics(result: {
   }
   try {
     const metrics = JSON.parse(text)
-    const filesSucceeded = firstFiniteNumber(
+    const filesSucceeded = firstPositiveIntegerMetric(
       metrics?.filesSucceeded,
       metrics?.files_succeeded,
       metrics?.succeeded,
@@ -75,7 +75,7 @@ function parsePipelineMetrics(result: {
       metrics?.successful_files,
       metrics?.ok
     )
-    const totalChunksGenerated = firstFiniteNumber(
+    const totalChunksGenerated = firstPositiveIntegerMetric(
       metrics?.totalChunksGenerated,
       metrics?.total_chunks_generated,
       metrics?.chunksGenerated,
@@ -85,9 +85,6 @@ function parsePipelineMetrics(result: {
       metrics?.total_chunks
     )
 
-    // Use `Number(...) || 0` instead of `?? 0` so a string-typed count
-    // from an older MCP server version (`"1"`) is coerced to a number
-    // rather than flowing through and breaking downstream arithmetic.
     return {
       filesSucceeded,
       totalChunksGenerated,
@@ -98,10 +95,24 @@ function parsePipelineMetrics(result: {
   }
 }
 
-function firstFiniteNumber(...values: unknown[]): number {
+function parsePositiveIntegerMetric(value: unknown): number | undefined {
+  if (typeof value === 'number') {
+    return Number.isSafeInteger(value) && value > 0 ? value : undefined
+  }
+
+  if (typeof value !== 'string') return undefined
+
+  const trimmed = value.trim()
+  if (!/^\d+$/.test(trimmed)) return undefined
+
+  const parsed = Number(trimmed)
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined
+}
+
+function firstPositiveIntegerMetric(...values: unknown[]): number {
   for (const value of values) {
-    const num = Number(value)
-    if (Number.isFinite(num) && num > 0) return num
+    const parsed = parsePositiveIntegerMetric(value)
+    if (parsed !== undefined) return parsed
   }
   return 0
 }
