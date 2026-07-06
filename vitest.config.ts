@@ -14,6 +14,7 @@ export default defineConfig({
       './extensions/conversational-extension',
       './extensions/download-extension',
       './extensions/llamacpp-extension',
+      './src-tauri/plugins/tauri-plugin-llamacpp',
 
       // Test infrastructure guardrails
       './scripts/testing',
