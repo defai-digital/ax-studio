@@ -163,6 +163,29 @@ describe('getProxyConfig', () => {
     expect(config!.https).toBe(true)
     expect(config!.noVerify).toBe(true)
   })
+
+  it('parses boolean-like proxy flags without treating false strings as true', () => {
+    for (const [https, noVerify, expectedHttps, expectedNoVerify] of [
+      ['true', '1', true, true],
+      ['false', '0', false, false],
+      ['', 'yes', false, false],
+      [1, 0, true, false],
+    ] as const) {
+      localStorage.setItem(
+        'setting-proxy-config',
+        JSON.stringify({
+          enabled: true,
+          host: 'proxy.local',
+          port: 8080,
+          https,
+          noVerify,
+        })
+      )
+      const config = getProxyConfig()
+      expect(config!.https).toBe(expectedHttps)
+      expect(config!.noVerify).toBe(expectedNoVerify)
+    }
+  })
 })
 
 describe('buildProxyArg', () => {

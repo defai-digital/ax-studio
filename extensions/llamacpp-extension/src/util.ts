@@ -31,6 +31,15 @@ const parseProxyPort = (value: unknown): number => {
     : 8080
 }
 
+const parseProxyBoolean = (value: unknown): boolean => {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value === 1
+  if (typeof value !== 'string') return false
+
+  const normalized = value.trim().toLowerCase()
+  return normalized === 'true' || normalized === '1'
+}
+
 /**
  * Read proxy configuration from localStorage.
  * Returns null if proxy is disabled or not configured.
@@ -46,8 +55,8 @@ export function getProxyConfig(): ProxyConfig | null {
       port: parseProxyPort(config.port),
       user: config.user,
       password: config.password,
-      https: Boolean(config.https),
-      noVerify: Boolean(config.noVerify),
+      https: parseProxyBoolean(config.https),
+      noVerify: parseProxyBoolean(config.noVerify),
     }
   } catch {
     return null
