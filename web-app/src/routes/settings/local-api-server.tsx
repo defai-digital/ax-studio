@@ -61,6 +61,16 @@ function parseBoundedInteger(
   return value
 }
 
+function parseServerPortResult(raw: unknown): number | null {
+  if (typeof raw === 'number') {
+    return Number.isInteger(raw) && raw >= 0 && raw <= 65535 ? raw : null
+  }
+
+  if (typeof raw === 'string') return parseBoundedInteger(raw, 0, 65535)
+
+  return null
+}
+
 function sanitizePrefix(raw: string): string {
   let prefix = raw.trim().replace(/\\/g, '/')
   if (!prefix.startsWith('/')) prefix = '/' + prefix
@@ -333,14 +343,14 @@ function LocalAPIServerContent() {
           })
         })
         .then((rawPort: unknown) => {
-          const actualPort = rawPort as number
+          const actualPort = parseServerPortResult(rawPort)
           if (actualPort && actualPort !== serverPort) {
             setServerPort(actualPort)
           }
           setServerStatus('running')
           toast.dismiss()
           toast.success('Server started', {
-            description: `Local API server running on port ${actualPort || serverPort}`,
+            description: `Local API server running on port ${actualPort ?? serverPort}`,
           })
         })
         .catch((error: unknown) => {

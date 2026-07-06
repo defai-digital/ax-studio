@@ -454,6 +454,33 @@ describe('Local API Server settings route', () => {
     })
   })
 
+  it('normalizes string port results from the local API bridge', async () => {
+    mocks.startServer.mockResolvedValueOnce('1555')
+    renderLocalApiServerRoute()
+    fireEvent.click(screen.getByText('settings:localApiServer.startServer'))
+
+    await waitFor(() => {
+      expect(mocks.setServerPort).toHaveBeenCalledWith(1555)
+    })
+    expect(mocks.toast.success).toHaveBeenCalledWith('Server started', {
+      description: 'Local API server running on port 1555',
+    })
+  })
+
+  it('ignores malformed port results from the local API bridge', async () => {
+    mocks.startServer.mockResolvedValueOnce('0x539')
+    renderLocalApiServerRoute()
+    fireEvent.click(screen.getByText('settings:localApiServer.startServer'))
+
+    await waitFor(() => {
+      expect(mocks.setServerStatus).toHaveBeenCalledWith('running')
+    })
+    expect(mocks.setServerPort).not.toHaveBeenCalled()
+    expect(mocks.toast.success).toHaveBeenCalledWith('Server started', {
+      description: 'Local API server running on port 1337',
+    })
+  })
+
   it('rejects fractional server port input instead of truncating it', () => {
     renderLocalApiServerRoute()
 
