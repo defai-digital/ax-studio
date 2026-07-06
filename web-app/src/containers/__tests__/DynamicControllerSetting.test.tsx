@@ -15,6 +15,14 @@ import { DynamicControllerSetting } from '../DynamicControllerSetting'
 describe('DynamicControllerSetting', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.stubGlobal(
+      'ResizeObserver',
+      class ResizeObserver {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    )
     Object.assign(navigator, {
       clipboard: {
         writeText: vi.fn().mockResolvedValue(undefined),
@@ -140,7 +148,7 @@ describe('DynamicControllerSetting', () => {
   it('renders number inputs with bounded stepper controls', () => {
     const onChange = vi.fn()
 
-    render(
+    const { rerender } = render(
       <DynamicControllerSetting
         controllerType="input"
         controllerProps={{ type: 'number', value: 5, min: 0, max: 6, step: 0.5 }}
@@ -153,6 +161,45 @@ describe('DynamicControllerSetting', () => {
 
     expect(onChange).toHaveBeenCalledWith('5.5')
     expect(onChange).toHaveBeenCalledWith('4.5')
+
+    onChange.mockClear()
+    rerender(
+      <DynamicControllerSetting
+        controllerType="input"
+        controllerProps={{ type: 'number', value: '0x5', min: 0, max: 6, step: 1 }}
+        onChange={onChange}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /increment/i }))
+    expect(onChange).toHaveBeenCalledWith('1')
+  })
+
+  it('rejects partial numeric slider input', () => {
+    const onChange = vi.fn()
+
+    render(
+      <DynamicControllerSetting
+        title="Temperature"
+        controllerType="slider"
+        controllerProps={{ value: 5, min: 0, max: 10, step: 0.5 }}
+        onChange={onChange}
+      />,
+    )
+
+    const input = screen.getByDisplayValue('5')
+
+    fireEvent.change(input, { target: { value: '6abc' } })
+    expect(onChange).not.toHaveBeenCalled()
+
+    fireEvent.change(input, { target: { value: '0x8' } })
+    expect(onChange).not.toHaveBeenCalled()
+
+    fireEvent.change(input, { target: { value: '1e2' } })
+    expect(onChange).not.toHaveBeenCalled()
+
+    fireEvent.change(input, { target: { value: '6.5' } })
+    expect(onChange).toHaveBeenCalledWith(6.5)
   })
 
   it('renders checkbox and fallback switch controls', () => {

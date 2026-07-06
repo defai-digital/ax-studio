@@ -9,6 +9,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { FileText } from 'lucide-react'
 import { SettingsPageLayout } from '@/components/settings/SettingsPageLayout'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { parsePlainDecimalNumber } from '@/lib/utils/decimal'
 
 export const Route = createFileRoute('/settings/attachments')({
   component: AttachmentsSettings,
@@ -16,14 +17,6 @@ export const Route = createFileRoute('/settings/attachments')({
 
 type SearchMode = 'auto' | 'ann' | 'linear'
 type ParseMode = 'auto' | 'inline' | 'embeddings' | 'prompt'
-
-function parsePlainDecimalInput(raw: string): number | null {
-  const trimmed = raw.trim()
-  if (!/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(trimmed)) return null
-
-  const value = Number(trimmed)
-  return Number.isFinite(value) ? value : null
-}
 
 function DebouncedInput({
   value,
@@ -53,7 +46,7 @@ function DebouncedInput({
       setLocal(raw)
       if (timerRef.current) clearTimeout(timerRef.current)
       timerRef.current = setTimeout(() => {
-        const num = parsePlainDecimalInput(raw)
+        const num = parsePlainDecimalNumber(raw, { allowTrailingDot: true })
         if (num === null) return
         const clamped = Math.max(
           min ?? -Infinity,

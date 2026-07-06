@@ -9,6 +9,7 @@ import type { SliderProps } from '@radix-ui/react-slider'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { useClipboardCopy } from '@/hooks/ui/useClipboardCopy'
 import { cn } from '@/lib/utils'
+import { parsePlainDecimalNumber } from '@/lib/utils/decimal'
 import {
   CheckCheck,
   ChevronsUpDown,
@@ -59,7 +60,7 @@ function InputControl({
   const numericValue = hasValue
     ? typeof value === 'number'
       ? value
-      : Number(value) || 0
+      : (parsePlainDecimalNumber(value, { allowTrailingDot: true }) ?? 0)
     : (min ?? 0)
 
   const handleNumberAdjustment = (delta: number) => {
@@ -193,8 +194,8 @@ function SliderControl({
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value
     setInputValue(val)
-    const newValue = parseFloat(val)
-    if (!isNaN(newValue)) {
+    const newValue = parsePlainDecimalNumber(val, { allowTrailingDot: true })
+    if (newValue !== null) {
       setInputNumber(newValue)
       if (newValue >= min && newValue <= max) handleValueChange([newValue])
     }

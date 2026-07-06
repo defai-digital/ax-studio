@@ -25,6 +25,7 @@ import { teamEmoji } from '@/lib/utils/teamEmoji'
 import { AvatarEmoji } from '@/components/common/AvatarEmoji'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { cn, isDev } from '@/lib/utils'
+import { parsePlainDecimalNumber } from '@/lib/utils/decimal'
 
 interface AddEditAssistantProps {
   open: boolean
@@ -37,14 +38,7 @@ interface AddEditAssistantProps {
 type AssistantParameterType = 'string' | 'number' | 'boolean' | 'json'
 
 function parseDecimalNumber(value: unknown): number | null {
-  const raw = typeof value === 'number' ? String(value) : String(value ?? '')
-  const trimmed = raw.trim()
-  if (trimmed === '' || !/^[+-]?(?:\d+|\d+\.\d+|\.\d+)$/.test(trimmed)) {
-    return null
-  }
-
-  const parsed = Number(trimmed)
-  return Number.isFinite(parsed) ? parsed : null
+  return parsePlainDecimalNumber(value)
 }
 
 function getAssistantParameterType(value: unknown): AssistantParameterType {

@@ -78,6 +78,7 @@ import {
   buildProxyArg,
   buildEmbedBatches,
   mergeEmbedResponses,
+  parseFiniteDecimalNumber,
   EmbeddingResponse,
 } from './util'
 import { decideLocalProviderSync } from './provider-sync'
@@ -203,8 +204,6 @@ function disableThinkingForToolFollowUp(body: ChatRequestBody): ChatRequestBody 
 
 type DeviceInfoLike = DeviceInfo | DeviceList
 
-const DECIMAL_NUMBER_PATTERN = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i
-
 const toNumberSetting = (value: SettingValue, defaultValue = 0): number => {
   if (value === '' || value == null) return defaultValue
 
@@ -215,10 +214,7 @@ const toNumberSetting = (value: SettingValue, defaultValue = 0): number => {
   if (typeof value !== 'string') return defaultValue
 
   const trimmed = value.trim()
-  if (!DECIMAL_NUMBER_PATTERN.test(trimmed)) return defaultValue
-
-  const parsed = Number(trimmed)
-  return Number.isFinite(parsed) ? parsed : defaultValue
+  return parseFiniteDecimalNumber(trimmed) ?? defaultValue
 }
 
 const toBooleanSetting = (value: SettingValue): boolean =>

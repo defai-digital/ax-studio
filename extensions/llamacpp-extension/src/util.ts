@@ -203,8 +203,45 @@ const stripInlineComment = (value: string): string => {
   return value.trimEnd()
 }
 
-const parseFiniteDecimalNumber = (value: string): number | null => {
-  if (!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(value)) return null
+const isAsciiDigit = (value: string, index: number): boolean => {
+  const code = value.charCodeAt(index)
+  return code >= 48 && code <= 57
+}
+
+export const parseFiniteDecimalNumber = (value: string): number | null => {
+  let index = 0
+  if (value[index] === '+' || value[index] === '-') index += 1
+
+  let wholeDigits = 0
+  while (index < value.length && isAsciiDigit(value, index)) {
+    wholeDigits += 1
+    index += 1
+  }
+
+  let fractionalDigits = 0
+  if (value[index] === '.') {
+    index += 1
+    while (index < value.length && isAsciiDigit(value, index)) {
+      fractionalDigits += 1
+      index += 1
+    }
+  }
+
+  if (wholeDigits + fractionalDigits === 0) return null
+
+  if (value[index] === 'e' || value[index] === 'E') {
+    index += 1
+    if (value[index] === '+' || value[index] === '-') index += 1
+
+    let exponentDigits = 0
+    while (index < value.length && isAsciiDigit(value, index)) {
+      exponentDigits += 1
+      index += 1
+    }
+    if (exponentDigits === 0) return null
+  }
+
+  if (index !== value.length) return null
 
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : null
