@@ -391,6 +391,7 @@ describe('useModelProvider migrations', () => {
               { id: '', name: 'bad' },
               {
                 id: ' gpt-4 ',
+                provider: 'openai',
                 name: 'GPT 4',
                 capabilities: [' text ', 42, 'text'],
                 embedding: true,
@@ -453,6 +454,7 @@ describe('useModelProvider migrations', () => {
         models: [
           {
             id: 'gpt-4',
+            provider: 'openai',
             name: 'GPT 4',
             capabilities: ['text'],
             embedding: true,
