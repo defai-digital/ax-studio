@@ -74,6 +74,28 @@ describe('file-registry', () => {
       expect(useFileRegistry.getState().listFiles('col-a')).toHaveLength(1)
       expect(useFileRegistry.getState().listFiles('col-b')).toHaveLength(1)
     })
+
+    it('ignores invalid collection ids and file entries', () => {
+      useFileRegistry.getState().addFile('   ', makeEntry())
+      useFileRegistry.getState().addFile(
+        'col',
+        makeEntry({ file_id: '', file_path: '/valid' })
+      )
+      useFileRegistry.getState().addFile(
+        'col',
+        makeEntry({ file_id: 'valid', file_path: '   ' })
+      )
+      useFileRegistry.getState().addFile(
+        'col',
+        makeEntry({
+          file_id: 'negative-chunks',
+          file_path: '/negative-chunks',
+          chunk_count: -1,
+        })
+      )
+
+      expect(useFileRegistry.getState().files).toEqual({})
+    })
   })
 
   describe('removeFile', () => {
@@ -168,6 +190,82 @@ describe('file-registry', () => {
       useFileRegistry.getState().addFile('col', makeEntry())
       useFileRegistry.getState().clearCollection('col')
       expect(useFileRegistry.getState().hasFiles('col')).toBe(false)
+    })
+  })
+
+  describe('persisted state', () => {
+    it('sanitizes malformed persisted files during merge', () => {
+      const merge = useFileRegistry.persist.getOptions().merge
+      const current = useFileRegistry.getState()
+
+      const merged = merge?.(
+        {
+          files: {
+            '': [makeEntry({ file_id: 'blank-collection' })],
+            thread_abc: [
+              makeEntry({
+                file_id: ' keep ',
+                file_name: ' report.pdf ',
+                file_path: ' /tmp/report.pdf ',
+                file_type: 42,
+                file_size: -1,
+                chunk_count: 5.9,
+                collection_id: 'wrong_collection',
+                created_at: ' 2026-01-01T00:00:00.000Z ',
+              } as unknown as Partial<FileRegistryEntry>),
+              makeEntry({
+                file_id: 'duplicate-path',
+                file_path: '/tmp/report.pdf',
+              }),
+              makeEntry({
+                file_id: '',
+                file_path: '/tmp/invalid.pdf',
+              }),
+            ],
+            broken: { not: 'an-array' },
+          },
+        },
+        current
+      )
+
+      expect(merged?.files).toEqual({
+        thread_abc: [
+          {
+            file_id: 'keep',
+            file_name: 'report.pdf',
+            file_path: '/tmp/report.pdf',
+            file_type: undefined,
+            file_size: undefined,
+            chunk_count: 5,
+            collection_id: 'thread_abc',
+            created_at: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      })
+    })
+
+    it('caps persisted collections and files per collection', () => {
+      const merge = useFileRegistry.persist.getOptions().merge
+      const current = useFileRegistry.getState()
+      const files = Object.fromEntries(
+        Array.from({ length: 205 }, (_, collectionIndex) => [
+          `collection_${collectionIndex}`,
+          Array.from({ length: 505 }, (_, fileIndex) =>
+            makeEntry({
+              file_id: `file-${collectionIndex}-${fileIndex}`,
+              file_path: `/tmp/${collectionIndex}/${fileIndex}`,
+              collection_id: `collection_${collectionIndex}`,
+            })
+          ),
+        ])
+      )
+
+      const merged = merge?.({ files }, current)
+      const collectionKeys = Object.keys(merged?.files ?? {})
+
+      expect(collectionKeys).toHaveLength(200)
+      expect(collectionKeys[0]).toBe('collection_5')
+      expect(merged?.files.collection_204).toHaveLength(500)
     })
   })
 })
