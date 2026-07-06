@@ -13,6 +13,24 @@ export interface ProxyConfig {
   noVerify?: boolean
 }
 
+const parseProxyPort = (value: unknown): number => {
+  if (typeof value === 'number') {
+    return Number.isSafeInteger(value) && value >= 1 && value <= 65535
+      ? value
+      : 8080
+  }
+
+  if (typeof value !== 'string') return 8080
+
+  const trimmed = value.trim()
+  if (!/^\d+$/.test(trimmed)) return 8080
+
+  const parsed = Number(trimmed)
+  return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 65535
+    ? parsed
+    : 8080
+}
+
 /**
  * Read proxy configuration from localStorage.
  * Returns null if proxy is disabled or not configured.
@@ -25,7 +43,7 @@ export function getProxyConfig(): ProxyConfig | null {
     if (!config || !config.enabled || !config.host) return null
     return {
       host: config.host,
-      port: Number(config.port) || 8080,
+      port: parseProxyPort(config.port),
       user: config.user,
       password: config.password,
       https: Boolean(config.https),
@@ -176,6 +194,13 @@ const stripInlineComment = (value: string): string => {
   return value.trimEnd()
 }
 
+const parseFiniteDecimalNumber = (value: string): number | null => {
+  if (!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(value)) return null
+
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 const parseScalar = (rawValue: string): YamlValue => {
   const value = stripInlineComment(rawValue).trim()
   if (value === '') return ''
@@ -189,7 +214,8 @@ const parseScalar = (rawValue: string): YamlValue => {
     // YAML single-quoted strings only escape '' (two single quotes → one)
     return value.slice(1, -1).replace(/''/g, "'")
   }
-  if (!Number.isNaN(Number(value))) return Number(value)
+  const numericValue = parseFiniteDecimalNumber(value)
+  if (numericValue !== null) return numericValue
   if (value === '[]') return []
   if (value === '{}') return {}
   return value
@@ -423,4 +449,3 @@ export function toSimpleYaml(
 
   return `${serializeYamlValue(filtered).join('\n')}\n`
 }
-

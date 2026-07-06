@@ -120,6 +120,25 @@ describe('getProxyConfig', () => {
     expect(config!.port).toBe(8080)
   })
 
+  it('accepts decimal string ports', () => {
+    localStorage.setItem(
+      'setting-proxy-config',
+      JSON.stringify({ enabled: true, host: 'proxy.local', port: '3128' })
+    )
+    const config = getProxyConfig()
+    expect(config!.port).toBe(3128)
+  })
+
+  it('rejects non-decimal and out-of-range proxy ports', () => {
+    for (const port of ['0x10', '1e3', '8080.5', 0, 65536, Infinity]) {
+      localStorage.setItem(
+        'setting-proxy-config',
+        JSON.stringify({ enabled: true, host: 'proxy.local', port })
+      )
+      expect(getProxyConfig()!.port).toBe(8080)
+    }
+  })
+
   it('returns null for invalid JSON', () => {
     localStorage.setItem('setting-proxy-config', 'not-json')
     expect(getProxyConfig()).toBeNull()
@@ -335,6 +354,27 @@ describe('parseSimpleYaml', () => {
     const result = parseSimpleYaml('count: 42\npi: 3.14')
     expect(result.count).toBe(42)
     expect(result.pi).toBe(3.14)
+  })
+
+  it('parses signed and exponent decimal numbers', () => {
+    const result = parseSimpleYaml('negative: -3\nsmall: 1e-3\nfraction: .5')
+    expect(result.negative).toBe(-3)
+    expect(result.small).toBe(0.001)
+    expect(result.fraction).toBe(0.5)
+  })
+
+  it('keeps non-decimal and non-finite scalar values as strings', () => {
+    const result = parseSimpleYaml([
+      'hex: 0x10',
+      'infinity: Infinity',
+      'nan: NaN',
+      'blank: ',
+    ].join('\n'))
+
+    expect(result.hex).toBe('0x10')
+    expect(result.infinity).toBe('Infinity')
+    expect(result.nan).toBe('NaN')
+    expect(result.blank).toBe('')
   })
 
   it('skips empty lines', () => {
