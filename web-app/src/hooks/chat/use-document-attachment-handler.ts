@@ -25,6 +25,7 @@ import { useFileRegistry, threadCollectionId } from '@/lib/file-registry'
 import { createDocumentAttachment, type Attachment } from '@/types/attachment'
 import { getModelContextLength } from '@/lib/models'
 import { partitionDuplicateAttachments } from '@/lib/attachments/dedupe'
+import { normalizeFileSize } from '@/lib/attachments/size'
 import { extractErrorMessage } from '@/lib/utils/error'
 import { basename, fileExtension } from '@/lib/utils'
 import { withTimeout } from '@/lib/utils/async'
@@ -395,16 +396,7 @@ export function useDocumentAttachmentHandler({
         let size: number | undefined = undefined
         try {
           const stat = await fs.fileStat(p)
-          const parsedSize =
-            stat?.size === undefined || stat.size === null
-              ? undefined
-              : Number(stat.size)
-          size =
-            typeof parsedSize === 'number' &&
-            Number.isFinite(parsedSize) &&
-            parsedSize >= 0
-              ? parsedSize
-              : undefined
+          size = normalizeFileSize(stat?.size)
         } catch (e) {
           console.warn('Failed to read file size for', p, e)
         }

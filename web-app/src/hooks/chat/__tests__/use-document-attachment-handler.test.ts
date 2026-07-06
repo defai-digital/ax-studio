@@ -305,6 +305,33 @@ describe('useDocumentAttachmentHandler', () => {
     )
   })
 
+  it('does not coerce malformed fileStat sizes into attachments', async () => {
+    ;(fs.fileStat as ReturnType<typeof vi.fn>).mockResolvedValue({
+      size: true,
+    })
+    mockDialogOpen.mockResolvedValue(['/path/to/bad-size.pdf'])
+
+    const { result } = renderHook(() =>
+      useDocumentAttachmentHandler({
+        attachmentsKey: ATTACHMENTS_KEY,
+        effectiveThreadId: 'thread-1',
+      })
+    )
+
+    await act(async () => {
+      await result.current.handleAttachDocsIngest()
+    })
+
+    const { createDocumentAttachment } = await import('@/types/attachment')
+    expect(createDocumentAttachment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'bad-size.pdf',
+        path: '/path/to/bad-size.pdf',
+        size: undefined,
+      })
+    )
+  })
+
   // ── handleRemoveAttachment ───────────────────────────────────────────────
 
   it('removes attachment at specified index', async () => {

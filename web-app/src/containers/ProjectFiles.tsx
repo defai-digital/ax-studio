@@ -14,6 +14,7 @@ import { createDocumentAttachment, type Attachment } from '@/types/attachment'
 import { useAttachments } from '@/hooks/chat/useAttachments'
 import { FileStat } from '@ax-studio/core'
 import { SUPPORTED_DOCUMENT_EXTENSIONS } from '@/constants/attachments'
+import { normalizeFileSize } from '@/lib/attachments/size'
 import { useFileRegistry, projectCollectionId } from '@/lib/file-registry'
 import { partitionDuplicateAttachments } from '@/lib/attachments/dedupe'
 import { extractErrorMessage } from '@/lib/utils/error'
@@ -223,16 +224,7 @@ export function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
           const stat = await import('@ax-studio/core').then((m) =>
             m.fs.fileStat(p)
           )
-          const parsedSize =
-            stat?.size === undefined || stat.size === null
-              ? undefined
-              : Number(stat.size)
-          size =
-            typeof parsedSize === 'number' &&
-            Number.isFinite(parsedSize) &&
-            parsedSize >= 0
-              ? parsedSize
-              : undefined
+          size = normalizeFileSize(stat?.size)
         } catch (e) {
           console.warn('Failed to read file size for', p, e)
         }

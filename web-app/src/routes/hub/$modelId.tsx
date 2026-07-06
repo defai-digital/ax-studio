@@ -40,6 +40,7 @@ import { useTranslation } from '@/i18n'
 import {
   buildHuggingFaceRepoUrl,
   decodeHubRouteParam,
+  extractModelSizeTags,
   normalizeHuggingFaceRepoId,
 } from '@/lib/hub'
 import { z } from 'zod/v4'
@@ -223,23 +224,7 @@ function HubModelDetailContent() {
 
   // Extract tags from quants (model variants)
   const tags = useMemo(() => {
-    if (!modelData?.quants) return []
-    // Extract unique size indicators from quant names
-    const sizePattern = /(\d+b)/i
-    const uniqueSizes = new Set<string>()
-
-    modelData.quants.forEach((quant) => {
-      const match = quant.model_id.match(sizePattern)
-      if (match) {
-        uniqueSizes.add(match[1].toLowerCase())
-      }
-    })
-
-    return Array.from(uniqueSizes).sort((a, b) => {
-      const numA = parseInt(a)
-      const numB = parseInt(b)
-      return numA - numB
-    })
+    return extractModelSizeTags(modelData?.quants)
   }, [modelData])
 
   // Fetch README content when modelData.readme is available
