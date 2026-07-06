@@ -1,6 +1,13 @@
+import { parsePlainDecimalNumber } from './decimal'
+
 export const toNumber = (value: unknown): number => {
-  const num = Number(value)
-  return Number.isFinite(num) ? num : 0
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0
+  }
+  if (typeof value !== 'string') return 0
+
+  const parsed = parsePlainDecimalNumber(value)
+  return parsed ?? 0
 }
 
 export function formatCompactNumber(value: number, fractionDigits = 1): string {

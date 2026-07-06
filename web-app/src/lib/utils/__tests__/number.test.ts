@@ -30,15 +30,15 @@ describe('toNumber', () => {
     expect(toNumber(undefined)).toBe(0)
   })
 
-  it('handles boolean values', () => {
-    expect(toNumber(true)).toBe(1)
+  it('rejects boolean values', () => {
+    expect(toNumber(true)).toBe(0)
     expect(toNumber(false)).toBe(0)
   })
 
-  it('handles arrays and objects', () => {
+  it('rejects arrays and objects', () => {
     expect(toNumber([])).toBe(0)
-    expect(toNumber([1])).toBe(1)
-    expect(toNumber([1, 2])).toBe(0) // NaN case
+    expect(toNumber([1])).toBe(0)
+    expect(toNumber([1, 2])).toBe(0)
     expect(toNumber({})).toBe(0)
     expect(toNumber({ a: 1 })).toBe(0)
   })
@@ -51,16 +51,16 @@ describe('toNumber', () => {
     expect(toNumber(NaN)).toBe(0)
   })
 
-  it('handles scientific notation strings', () => {
-    expect(toNumber('1e5')).toBe(100000)
-    expect(toNumber('2.5e-3')).toBe(0.0025)
-    expect(toNumber('1E10')).toBe(10000000000)
+  it('rejects scientific notation strings', () => {
+    expect(toNumber('1e5')).toBe(0)
+    expect(toNumber('2.5e-3')).toBe(0)
+    expect(toNumber('1E10')).toBe(0)
   })
 
-  it('handles hex and octal strings', () => {
-    expect(toNumber('0x10')).toBe(16)
-    expect(toNumber('0o10')).toBe(8)
-    expect(toNumber('0b10')).toBe(2)
+  it('rejects non-decimal numeric strings', () => {
+    expect(toNumber('0x10')).toBe(0)
+    expect(toNumber('0o10')).toBe(0)
+    expect(toNumber('0b10')).toBe(0)
   })
 
   it('handles whitespace in strings', () => {
