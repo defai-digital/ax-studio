@@ -160,16 +160,16 @@ describe('useLocalKnowledge', () => {
 
   // --- Adversarial: empty string threadId ---
 
-  it('should handle empty string threadId', () => {
+  it('should ignore empty string threadId', () => {
     act(() => {
       useLocalKnowledge.getState().toggleLocalKnowledgeForThread('')
     })
     expect(
       useLocalKnowledge.getState().localKnowledgeEnabledPerThread['']
-    ).toBe(true)
+    ).toBeUndefined()
     expect(
       useLocalKnowledge.getState().isLocalKnowledgeEnabledForThread('')
-    ).toBe(true)
+    ).toBe(false)
   })
 
   // --- Property: toggle is always idempotent (double toggle = identity) ---
@@ -185,5 +185,57 @@ describe('useLocalKnowledge', () => {
     expect(
       useLocalKnowledge.getState().isLocalKnowledgeEnabledForThread('thread-1')
     ).toBe(false)
+  })
+
+  describe('persistence', () => {
+    it('sanitizes malformed persisted state during merge', () => {
+      const merge = useLocalKnowledge.persist.getOptions().merge
+      const current = useLocalKnowledge.getState()
+
+      const merged = merge?.(
+        {
+          localKnowledgeEnabled: 'true',
+          localKnowledgeEnabledPerThread: {
+            ' thread-1 ': true,
+            '': true,
+            'thread-2': 'false',
+            'thread-3': false,
+          },
+        },
+        current
+      )
+
+      expect(merged).toEqual(
+        expect.objectContaining({
+          localKnowledgeEnabled: false,
+          localKnowledgeEnabledPerThread: {
+            'thread-1': true,
+            'thread-3': false,
+          },
+        })
+      )
+    })
+
+    it('caps persisted thread overrides to the most recent 200 entries', () => {
+      const merge = useLocalKnowledge.persist.getOptions().merge
+      const current = useLocalKnowledge.getState()
+      const localKnowledgeEnabledPerThread = Object.fromEntries(
+        Array.from({ length: 205 }, (_, index) => [`thread-${index}`, true])
+      )
+
+      const merged = merge?.(
+        {
+          localKnowledgeEnabled: true,
+          localKnowledgeEnabledPerThread,
+        },
+        current
+      )
+      const keys = Object.keys(merged?.localKnowledgeEnabledPerThread ?? {})
+
+      expect(keys).toHaveLength(200)
+      expect(keys[0]).toBe('thread-5')
+      expect(keys[199]).toBe('thread-204')
+      expect(merged?.localKnowledgeEnabled).toBe(true)
+    })
   })
 })
