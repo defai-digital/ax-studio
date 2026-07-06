@@ -270,6 +270,52 @@ describe('useModelProvider - displayName functionality', () => {
     expect(result.current.getProviderByName('openai')).toBeDefined()
   })
 
+  it('should ignore malformed runtime provider operations', () => {
+    const { result } = renderHook(() => useModelProvider())
+
+    act(() => {
+      result.current.addProvider({ active: true, models: [], settings: [] } as never)
+      result.current.updateProvider('', { active: false })
+      result.current.selectModelProvider('', 'model-a')
+      result.current.deleteProvider(null as never)
+      result.current.deleteModel('')
+    })
+
+    expect(result.current.providers).toEqual([])
+    expect(result.current.selectedProvider).toBe('')
+    expect(result.current.selectedModel).toBeNull()
+    expect(result.current.deletedModels).toEqual([])
+  })
+
+  it('should normalize runtime provider and model identifiers', () => {
+    const { result } = renderHook(() => useModelProvider())
+
+    act(() => {
+      result.current.addProvider({
+        provider: ' openai ',
+        active: true,
+        models: [{ id: ' gpt-4 ', capabilities: [' completion ', 'completion'] }],
+        settings: [],
+      } as never)
+    })
+
+    expect(result.current.providers).toEqual([
+      {
+        provider: 'openai',
+        active: true,
+        models: [{ id: 'gpt-4', capabilities: ['completion'] }],
+        settings: [],
+      },
+    ])
+
+    act(() => {
+      result.current.selectModelProvider(' openai ', ' gpt-4 ')
+    })
+
+    expect(result.current.selectedProvider).toBe('openai')
+    expect(result.current.selectedModel?.id).toBe('gpt-4')
+  })
+
   it('should handle provider operations with models that have displayName', () => {
     const { result } = renderHook(() => useModelProvider())
 
@@ -304,6 +350,169 @@ describe('useModelProvider - displayName functionality', () => {
 })
 
 describe('useModelProvider migrations', () => {
+  it('does not throw on malformed persisted migration input', () => {
+    const persistApi = (useModelProvider as any).persist
+    const migrate = persistApi?.getOptions().migrate as
+      | ((state: unknown, version: number) => any)
+      | undefined
+
+    expect(migrate).toBeDefined()
+
+    expect(() => migrate!(undefined, 10)).not.toThrow()
+    expect(() => migrate!({ providers: 'bad' }, 10)).not.toThrow()
+
+    expect(migrate!(undefined, 10)).toEqual({
+      providers: [],
+      selectedProvider: '',
+      selectedModel: null,
+      deletedModels: [],
+    })
+  })
+
+  it('sanitizes persisted merge data and preserves store actions', () => {
+    const persistApi = (useModelProvider as any).persist
+    const merge = persistApi?.getOptions().merge as
+      | ((persisted: unknown, current: unknown) => any)
+      | undefined
+    const current = useModelProvider.getState()
+
+    expect(merge).toBeDefined()
+
+    const merged = merge!(
+      {
+        providers: [
+          null,
+          { active: true, models: [], settings: [] },
+          {
+            provider: ' openai ',
+            active: 'yes',
+            models: [
+              null,
+              { id: '', name: 'bad' },
+              {
+                id: ' gpt-4 ',
+                name: 'GPT 4',
+                capabilities: [' text ', 42, 'text'],
+                embedding: true,
+              },
+              {
+                model: 'gpt-4o-mini',
+                displayName: 'Mini',
+                settings: {
+                  temperature: {
+                    key: 'temperature',
+                    title: 'Temperature',
+                    description: 'Sampling temperature',
+                    controller_type: 'slider',
+                    controller_props: { value: 0.7 },
+                  },
+                },
+              },
+            ],
+            settings: [
+              {
+                key: 'base-url',
+                title: 42,
+                controller_type: 'input',
+                controller_props: {
+                  value: 'https://api.openai.com/v1',
+                  options: [{ value: 'a', name: 'A' }, { bad: true }],
+                },
+              },
+            ],
+            custom_header: [
+              { header: 'x-test', value: '1' },
+              { header: '', value: 'bad' },
+            ],
+          },
+        ],
+        selectedProvider: ' openai ',
+        selectedModel: { id: ' gpt-4 ' },
+        deletedModels: [' gpt-old ', null, 'gpt-old'],
+        addProvider: null,
+      },
+      current
+    )
+
+    expect(merged.providers).toEqual([
+      {
+        provider: 'openai',
+        active: true,
+        settings: [
+          {
+            key: 'base-url',
+            title: 'base-url',
+            description: '',
+            controller_type: 'input',
+            controller_props: {
+              value: 'https://api.openai.com/v1',
+              options: [{ value: 'a', name: 'A' }],
+            },
+          },
+        ],
+        models: [
+          {
+            id: 'gpt-4',
+            name: 'GPT 4',
+            capabilities: ['text'],
+            embedding: true,
+          },
+          {
+            id: 'gpt-4o-mini',
+            model: 'gpt-4o-mini',
+            displayName: 'Mini',
+            settings: {
+              temperature: {
+                key: 'temperature',
+                title: 'Temperature',
+                description: 'Sampling temperature',
+                controller_type: 'slider',
+                controller_props: { value: 0.7 },
+              },
+            },
+          },
+        ],
+        custom_header: [{ header: 'x-test', value: '1' }],
+      },
+    ])
+    expect(merged.selectedProvider).toBe('openai')
+    expect(merged.selectedModel?.id).toBe('gpt-4')
+    expect(merged.deletedModels).toEqual(['gpt-old'])
+    expect(typeof merged.addProvider).toBe('function')
+  })
+
+  it('caps persisted providers, models, and deleted model ids', () => {
+    const persistApi = (useModelProvider as any).persist
+    const merge = persistApi?.getOptions().merge as
+      | ((persisted: unknown, current: unknown) => any)
+      | undefined
+    const current = useModelProvider.getState()
+
+    const merged = merge!(
+      {
+        providers: Array.from({ length: 105 }, (_, providerIndex) => ({
+          provider: `provider-${providerIndex}`,
+          active: true,
+          settings: [],
+          models: Array.from({ length: 2005 }, (_, modelIndex) => ({
+            id: `model-${providerIndex}-${modelIndex}`,
+          })),
+        })),
+        selectedProvider: '',
+        selectedModel: null,
+        deletedModels: Array.from(
+          { length: 2005 },
+          (_, modelIndex) => `deleted-${modelIndex}`
+        ),
+      },
+      current
+    )
+
+    expect(merged.providers).toHaveLength(100)
+    expect(merged.providers[0].models).toHaveLength(2000)
+    expect(merged.deletedModels).toHaveLength(2000)
+  })
+
   it('migrates Mistral provider base URL to add /v1 suffix', () => {
     const persistApi = (useModelProvider as any).persist
     const migrate = persistApi?.getOptions().migrate as

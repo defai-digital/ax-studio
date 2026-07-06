@@ -11,7 +11,12 @@ vi.mock('@/constants/localStorage', () => ({
 
 // Mock zustand persist
 vi.mock('zustand/middleware', () => ({
-  persist: (fn: any) => fn,
+  persist: (fn: any, options: any) => (set: any, get: any, api: any) => {
+    api.persist = {
+      getOptions: () => options,
+    }
+    return fn(set, get, api)
+  },
   createJSONStorage: () => ({
     getItem: vi.fn(),
     setItem: vi.fn(),
@@ -68,6 +73,16 @@ describe('useLocalApiServer', () => {
 
       expect(result.current.enableOnStartup).toBe(true)
     })
+
+    it('should ignore malformed enableOnStartup values', () => {
+      const { result } = renderHook(() => useLocalApiServer())
+
+      act(() => {
+        result.current.setEnableOnStartup('false' as never)
+      })
+
+      expect(result.current.enableOnStartup).toBe(true)
+    })
   })
 
   describe('serverHost', () => {
@@ -89,6 +104,16 @@ describe('useLocalApiServer', () => {
       })
 
       expect(result.current.serverHost).toBe('0.0.0.0')
+    })
+
+    it('should ignore malformed server host values', () => {
+      const { result } = renderHook(() => useLocalApiServer())
+
+      act(() => {
+        result.current.setServerHost('localhost' as never)
+      })
+
+      expect(result.current.serverHost).toBe('127.0.0.1')
     })
   })
 
@@ -116,6 +141,19 @@ describe('useLocalApiServer', () => {
         expect(result.current.serverPort).toBe(port)
       })
     })
+
+    it('should ignore invalid server ports', () => {
+      const { result } = renderHook(() => useLocalApiServer())
+
+      act(() => {
+        result.current.setServerPort(0)
+        result.current.setServerPort(65536)
+        result.current.setServerPort(1337.5)
+        result.current.setServerPort('1337' as never)
+      })
+
+      expect(result.current.serverPort).toBe(1337)
+    })
   })
 
   describe('apiPrefix', () => {
@@ -142,6 +180,16 @@ describe('useLocalApiServer', () => {
         expect(result.current.apiPrefix).toBe(prefix)
       })
     })
+
+    it('should ignore malformed API prefixes', () => {
+      const { result } = renderHook(() => useLocalApiServer())
+
+      act(() => {
+        result.current.setApiPrefix(null as never)
+      })
+
+      expect(result.current.apiPrefix).toBe('/v1')
+    })
   })
 
   describe('corsEnabled', () => {
@@ -160,6 +208,16 @@ describe('useLocalApiServer', () => {
 
       expect(result.current.corsEnabled).toBe(true)
     })
+
+    it('should ignore malformed CORS values', () => {
+      const { result } = renderHook(() => useLocalApiServer())
+
+      act(() => {
+        result.current.setCorsEnabled('false' as never)
+      })
+
+      expect(result.current.corsEnabled).toBe(true)
+    })
   })
 
   describe('verboseLogs', () => {
@@ -174,6 +232,16 @@ describe('useLocalApiServer', () => {
 
       act(() => {
         result.current.setVerboseLogs(true)
+      })
+
+      expect(result.current.verboseLogs).toBe(true)
+    })
+
+    it('should ignore malformed verbose log values', () => {
+      const { result } = renderHook(() => useLocalApiServer())
+
+      act(() => {
+        result.current.setVerboseLogs('false' as never)
       })
 
       expect(result.current.verboseLogs).toBe(true)
@@ -202,6 +270,16 @@ describe('useLocalApiServer', () => {
 
       act(() => {
         result.current.setApiKey('')
+      })
+
+      expect(result.current.apiKey).toBe('')
+    })
+
+    it('should ignore malformed API key values', () => {
+      const { result } = renderHook(() => useLocalApiServer())
+
+      act(() => {
+        result.current.setApiKey(123 as never)
       })
 
       expect(result.current.apiKey).toBe('')
@@ -327,6 +405,39 @@ describe('useLocalApiServer', () => {
 
       expect(result.current.trustedHosts).toEqual([])
     })
+
+    it('should normalize and ignore malformed trusted hosts', () => {
+      const { result } = renderHook(() => useLocalApiServer())
+
+      act(() => {
+        result.current.setTrustedHosts([
+          ' example.com ',
+          '',
+          'example.com',
+          42,
+          'api.example.com',
+        ] as never)
+        result.current.addTrustedHost(null as never)
+        result.current.addTrustedHost(' api.example.com ')
+        result.current.addTrustedHost(' docs.example.com ')
+      })
+
+      expect(result.current.trustedHosts).toEqual([
+        'example.com',
+        'api.example.com',
+        'docs.example.com',
+      ])
+
+      act(() => {
+        result.current.removeTrustedHost(' api.example.com ')
+        result.current.removeTrustedHost(null as never)
+      })
+
+      expect(result.current.trustedHosts).toEqual([
+        'example.com',
+        'docs.example.com',
+      ])
+    })
   })
 
   describe('proxyTimeout', () => {
@@ -352,6 +463,19 @@ describe('useLocalApiServer', () => {
 
         expect(result.current.proxyTimeout).toBe(timeout)
       })
+    })
+
+    it('should ignore invalid proxy timeouts', () => {
+      const { result } = renderHook(() => useLocalApiServer())
+
+      act(() => {
+        result.current.setProxyTimeout(0)
+        result.current.setProxyTimeout(-1)
+        result.current.setProxyTimeout(100.5)
+        result.current.setProxyTimeout('600' as never)
+      })
+
+      expect(result.current.proxyTimeout).toBe(600)
     })
   })
 
@@ -381,6 +505,110 @@ describe('useLocalApiServer', () => {
       expect(result2.current.apiKey).toBe('test-key')
       expect(result2.current.trustedHosts).toEqual(['example.com'])
       expect(result2.current.proxyTimeout).toBe(1800)
+    })
+
+    it('sanitizes malformed persisted state during merge', () => {
+      const current = useLocalApiServer.getState()
+      const merge = useLocalApiServer.persist.getOptions().merge
+
+      const merged = merge?.(
+        {
+          enableOnStartup: 'false',
+          serverHost: 'localhost',
+          serverPort: '1337',
+          apiPrefix: null,
+          corsEnabled: 'true',
+          verboseLogs: false,
+          trustedHosts: [
+            ' example.com ',
+            '',
+            'example.com',
+            42,
+            'api.example.com',
+          ],
+          proxyTimeout: 0,
+          apiKey: 123,
+        },
+        current
+      )
+
+      expect(merged).toEqual(
+        expect.objectContaining({
+          enableOnStartup: true,
+          serverHost: '127.0.0.1',
+          serverPort: 1337,
+          apiPrefix: '/v1',
+          corsEnabled: true,
+          verboseLogs: false,
+          trustedHosts: ['example.com', 'api.example.com'],
+          proxyTimeout: 600,
+          apiKey: '',
+        })
+      )
+      expect(() => merged?.addTrustedHost('new.example.com')).not.toThrow()
+      expect(typeof merged?.setServerPort).toBe('function')
+    })
+
+    it('hydrates valid persisted state during merge', () => {
+      const current = useLocalApiServer.getState()
+      const merge = useLocalApiServer.persist.getOptions().merge
+
+      const merged = merge?.(
+        {
+          enableOnStartup: false,
+          serverHost: '0.0.0.0',
+          serverPort: 8080,
+          apiPrefix: '',
+          corsEnabled: false,
+          verboseLogs: false,
+          trustedHosts: ['localhost', '127.0.0.1'],
+          proxyTimeout: 1800,
+          apiKey: 'test-key',
+        },
+        current
+      )
+
+      expect(merged).toEqual(
+        expect.objectContaining({
+          enableOnStartup: false,
+          serverHost: '0.0.0.0',
+          serverPort: 8080,
+          apiPrefix: '',
+          corsEnabled: false,
+          verboseLogs: false,
+          trustedHosts: ['localhost', '127.0.0.1'],
+          proxyTimeout: 1800,
+          apiKey: 'test-key',
+        })
+      )
+    })
+
+    it('sanitizes malformed state during partialize', () => {
+      const partialize = useLocalApiServer.persist.getOptions().partialize
+      const state = {
+        ...useLocalApiServer.getState(),
+        enableOnStartup: 'true',
+        serverHost: 'localhost',
+        serverPort: 0,
+        apiPrefix: null,
+        corsEnabled: 'true',
+        verboseLogs: 'false',
+        trustedHosts: [' one.example ', '', 'one.example', 42],
+        proxyTimeout: -1,
+        apiKey: 123,
+      }
+
+      expect(partialize?.(state as never)).toEqual({
+        enableOnStartup: true,
+        serverHost: '127.0.0.1',
+        serverPort: 1337,
+        apiPrefix: '/v1',
+        corsEnabled: true,
+        verboseLogs: true,
+        trustedHosts: ['one.example'],
+        proxyTimeout: 600,
+        apiKey: '',
+      })
     })
   })
 
@@ -605,7 +833,7 @@ describe('useLocalApiServer', () => {
       // Test configuration that would prevent server startup
       act(() => {
         result.current.setApiKey('') // Invalid - empty API key
-        result.current.setServerPort(0) // Invalid - port 0
+        useLocalApiServer.setState({ serverPort: 0 }) // Simulate external state corruption
       })
 
       // Verify conditions that would trigger validation errors
