@@ -1,5 +1,5 @@
-import { getCleanHuggingFaceRepoId } from './huggingface'
 import type { ModelQuant } from '@/services/models/types'
+import { getCleanHuggingFaceRepoId } from './huggingface'
 
 const MODEL_SIZE_TAG_PATTERN =
   /(?:^|[^a-z0-9])(\d+(?:\.\d+)?)b(?:$|[^a-z0-9])/i
