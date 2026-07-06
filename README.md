@@ -50,13 +50,28 @@ when they need AX workflows outside the supported desktop release targets.
 
 **macOS Apple Silicon - recommended**
 
+1. Install Homebrew if you do not already have it:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+2. Install and launch AX Studio:
+
 ```bash
 brew tap defai-digital/ax-studio
-brew install --cask ax-studio
+brew trust defai-digital/ax-studio
+brew install --cask defai-digital/ax-studio/ax-studio
 open -a Ax-Studio
 ```
 
-The Homebrew cask is the fastest install path for supported Macs.
+Already have Homebrew? Start from step 2. The `brew trust` command supports
+Homebrew setups that require explicit trust for third-party taps.
+
+![Install AX Studio with Homebrew](docs/images/install-homebrew-ax-studio.gif)
+
+The Homebrew cask is the fastest install path for supported Macs. Manual
+downloads are available from GitHub Releases if you prefer not to use Homebrew.
 
 **Windows**
 
