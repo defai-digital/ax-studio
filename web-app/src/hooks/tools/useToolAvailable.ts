@@ -2,33 +2,120 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
 import { createSafeJSONStorage } from '@/lib/storage/storage'
-import { MCPTool } from '@/types/mcp'
+import type { MCPTool } from '@/types/mcp'
 import { appendUniqueString, uniqueStrings } from '@/lib/utils/array'
+
+const MAX_DISABLED_TOOL_THREADS = 200
+const MAX_DISABLED_TOOLS_PER_THREAD = 200
 
 // Helper function to create composite key for server+tool
 const createToolKey = (serverName: string, toolName: string) => {
   return `${serverName}::${toolName}`
 }
 
+const isPlainRecord = (value: unknown): value is Record<string, unknown> => {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+const normalizeNonEmptyString = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  return normalized ? normalized : null
+}
+
+const normalizeToolKey = (value: unknown): string | null => {
+  const normalized = normalizeNonEmptyString(value)
+  if (!normalized) return null
+
+  const [serverName, toolName, ...extra] = normalized.split('::')
+  if (extra.length > 0) return null
+
+  const normalizedServerName = normalizeNonEmptyString(serverName)
+  const normalizedToolName = normalizeNonEmptyString(toolName)
+  if (!normalizedServerName || !normalizedToolName) return null
+
+  return createToolKey(normalizedServerName, normalizedToolName)
+}
+
+const normalizeToolList = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return []
+
+  const tools: string[] = []
+  for (const item of value) {
+    const toolKey = normalizeToolKey(item)
+    if (!toolKey || tools.includes(toolKey)) continue
+
+    tools.push(toolKey)
+    if (tools.length >= MAX_DISABLED_TOOLS_PER_THREAD) break
+  }
+
+  return tools
+}
+
+const normalizeDisabledTools = (
+  value: unknown
+): Record<string, string[]> => {
+  if (!isPlainRecord(value)) return {}
+
+  const disabledTools: Record<string, string[]> = {}
+  for (const [threadId, tools] of Object.entries(value)) {
+    const normalizedThreadId = normalizeNonEmptyString(threadId)
+    if (!normalizedThreadId) continue
+
+    disabledTools[normalizedThreadId] = normalizeToolList(tools)
+    if (Object.keys(disabledTools).length >= MAX_DISABLED_TOOL_THREADS) break
+  }
+
+  return disabledTools
+}
+
 const isOldFormatKey = (key: string): boolean => {
   return !key.includes('::')
 }
 
-const migrateOldFormatIfNeeded = (
-  disabledTools: Record<string, string[]>,
-  defaultDisabledTools: string[]
-): { disabledTools: Record<string, string[]>; defaultDisabledTools: string[] } => {
-  const needsMigration =
-    Object.values(disabledTools).some(tools => tools.some(isOldFormatKey)) ||
-    defaultDisabledTools.some(isOldFormatKey)
+const containsOldFormatToolKey = (value: unknown): boolean => {
+  if (!Array.isArray(value)) return false
+  return value.some((toolKey) => {
+    const normalizedToolKey = normalizeNonEmptyString(toolKey)
+    return normalizedToolKey ? isOldFormatKey(normalizedToolKey) : false
+  })
+}
 
-  if (!needsMigration) {
-    return { disabledTools, defaultDisabledTools }
+const containsOldFormatDisabledTools = (value: unknown): boolean => {
+  if (!isPlainRecord(value)) return false
+  return Object.values(value).some(containsOldFormatToolKey)
+}
+
+const sanitizePersistedToolAvailability = (
+  persisted: unknown
+): Pick<
+  ToolDisabledState,
+  'disabledTools' | 'defaultDisabledTools' | 'defaultsInitialized'
+> => {
+  if (!isPlainRecord(persisted)) {
+    return {
+      disabledTools: {},
+      defaultDisabledTools: [],
+      defaultsInitialized: false,
+    }
+  }
+
+  const hasLegacyToolKeys =
+    containsOldFormatDisabledTools(persisted.disabledTools) ||
+    containsOldFormatToolKey(persisted.defaultDisabledTools)
+
+  if (hasLegacyToolKeys) {
+    return {
+      disabledTools: {},
+      defaultDisabledTools: [],
+      defaultsInitialized: false,
+    }
   }
 
   return {
-    disabledTools: {},
-    defaultDisabledTools: [],
+    disabledTools: normalizeDisabledTools(persisted.disabledTools),
+    defaultDisabledTools: normalizeToolList(persisted.defaultDisabledTools),
+    defaultsInitialized: persisted.defaultsInitialized === true,
   }
 }
 
@@ -70,9 +157,23 @@ export const useToolAvailable = create<ToolDisabledState>()(
         toolName: string,
         available: boolean
       ) => {
+        const normalizedThreadId = normalizeNonEmptyString(threadId)
+        const normalizedServerName = normalizeNonEmptyString(serverName)
+        const normalizedToolName = normalizeNonEmptyString(toolName)
+        if (
+          !normalizedThreadId ||
+          !normalizedServerName ||
+          !normalizedToolName ||
+          typeof available !== 'boolean'
+        ) {
+          return
+        }
+
         set((state) => {
-          const currentTools = state.disabledTools[threadId] || []
-          const toolKey = createToolKey(serverName, toolName)
+          const currentTools = normalizeToolList(
+            state.disabledTools[normalizedThreadId]
+          )
+          const toolKey = createToolKey(normalizedServerName, normalizedToolName)
           let updatedTools: string[]
 
           if (available) {
@@ -86,7 +187,7 @@ export const useToolAvailable = create<ToolDisabledState>()(
           return {
             disabledTools: {
               ...state.disabledTools,
-              [threadId]: updatedTools,
+              [normalizedThreadId]: updatedTools,
             },
           }
         })
@@ -94,29 +195,47 @@ export const useToolAvailable = create<ToolDisabledState>()(
 
       isToolDisabled: (threadId: string, serverName: string, toolName: string) => {
         const state = get()
-        const toolKey = createToolKey(serverName, toolName)
-        // If no thread-specific settings, use default
-        if (!state.disabledTools[threadId]) {
-          return state.defaultDisabledTools.includes(toolKey)
+        const normalizedThreadId = normalizeNonEmptyString(threadId)
+        const normalizedServerName = normalizeNonEmptyString(serverName)
+        const normalizedToolName = normalizeNonEmptyString(toolName)
+        if (!normalizedThreadId || !normalizedServerName || !normalizedToolName) {
+          return false
         }
-        return state.disabledTools[threadId]?.includes(toolKey) || false
+
+        const toolKey = createToolKey(normalizedServerName, normalizedToolName)
+        const disabledTools = isPlainRecord(state.disabledTools)
+          ? state.disabledTools
+          : {}
+        const threadTools = disabledTools[normalizedThreadId]
+        // If no thread-specific settings, use default
+        if (threadTools === undefined) {
+          return normalizeToolList(state.defaultDisabledTools).includes(toolKey)
+        }
+        return normalizeToolList(threadTools).includes(toolKey)
       },
 
       getDisabledToolsForThread: (threadId: string) => {
         const state = get()
+        const normalizedThreadId = normalizeNonEmptyString(threadId)
+        if (!normalizedThreadId) return []
+
+        const disabledTools = isPlainRecord(state.disabledTools)
+          ? state.disabledTools
+          : {}
+        const threadTools = disabledTools[normalizedThreadId]
         // If no thread-specific settings, use default
-        if (!state.disabledTools[threadId]) {
-          return state.defaultDisabledTools
+        if (threadTools === undefined) {
+          return normalizeToolList(state.defaultDisabledTools)
         }
-        return state.disabledTools[threadId] || []
+        return normalizeToolList(threadTools)
       },
 
       setDefaultDisabledTools: (toolKeys: string[]) => {
-        set({ defaultDisabledTools: uniqueStrings(toolKeys) })
+        set({ defaultDisabledTools: normalizeToolList(toolKeys) })
       },
 
       getDefaultDisabledTools: () => {
-        return get().defaultDisabledTools
+        return normalizeToolList(get().defaultDisabledTools)
       },
 
       isDefaultsInitialized: () => {
@@ -128,22 +247,39 @@ export const useToolAvailable = create<ToolDisabledState>()(
       },
 
       initializeThreadTools: (threadId: string, allTools: MCPTool[]) => {
+        const normalizedThreadId = normalizeNonEmptyString(threadId)
+        if (!normalizedThreadId || !Array.isArray(allTools)) return
+
         const state = get()
+        const disabledTools = isPlainRecord(state.disabledTools)
+          ? state.disabledTools
+          : {}
         // If thread already has settings, don't override
-        if (state.disabledTools[threadId]) {
+        if (disabledTools[normalizedThreadId] !== undefined) {
           return
         }
 
         // Initialize with default tools only
         // Don't auto-enable all tools if defaults are explicitly empty
-        const initialTools = state.defaultDisabledTools.filter((toolKey) =>
-          allTools.some((tool) => createToolKey(tool.server, tool.name) === toolKey)
+        const availableToolKeys = new Set(
+          allTools
+            .map((tool) => {
+              const serverName = normalizeNonEmptyString(tool?.server)
+              const toolName = normalizeNonEmptyString(tool?.name)
+              return serverName && toolName
+                ? createToolKey(serverName, toolName)
+                : null
+            })
+            .filter((toolKey): toolKey is string => toolKey !== null)
+        )
+        const initialTools = normalizeToolList(state.defaultDisabledTools).filter(
+          (toolKey) => availableToolKeys.has(toolKey)
         )
 
         set((currentState) => ({
           disabledTools: {
             ...currentState.disabledTools,
-            [threadId]: uniqueStrings(initialTools),
+            [normalizedThreadId]: uniqueStrings(initialTools),
           },
         }))
       },
@@ -151,30 +287,16 @@ export const useToolAvailable = create<ToolDisabledState>()(
     {
       name: localStorageKey.toolAvailability,
       storage: createSafeJSONStorage(() => localStorage, 'useToolAvailable'),
-      // Persist all state
+      merge: (persisted, current) => ({
+        ...current,
+        ...sanitizePersistedToolAvailability(persisted),
+      }),
       partialize: (state) => ({
-        disabledTools: state.disabledTools,
-        defaultDisabledTools: state.defaultDisabledTools,
-        defaultsInitialized: state.defaultsInitialized,
+        ...sanitizePersistedToolAvailability(state),
       }),
       // Migration function to handle old format data
       migrate: (persistedState: unknown) => {
-        if (persistedState && typeof persistedState === 'object') {
-          const state = persistedState as Record<string, unknown>
-          const migrated = migrateOldFormatIfNeeded(
-            (state.disabledTools as Record<string, string[]>) || {},
-            (state.defaultDisabledTools as string[]) || []
-          )
-
-          return {
-            ...state,
-            disabledTools: migrated.disabledTools,
-            defaultDisabledTools: migrated.defaultDisabledTools,
-            defaultsInitialized: migrated.disabledTools === state.disabledTools ?
-              state.defaultsInitialized : false,
-          }
-        }
-        return persistedState
+        return sanitizePersistedToolAvailability(persistedState)
       },
       version: 1, // Increment version to trigger migration
     }

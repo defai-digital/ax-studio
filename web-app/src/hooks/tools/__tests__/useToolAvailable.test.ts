@@ -10,23 +10,15 @@ vi.mock('@/constants/localStorage', () => ({
   },
 }))
 
-// Mock zustand persist
-vi.mock('zustand/middleware', () => ({
-  persist: (fn: any) => fn,
-  createJSONStorage: () => ({
-    getItem: vi.fn(),
-    setItem: vi.fn(),
-    removeItem: vi.fn(),
-  }),
-}))
-
 describe('useToolAvailable', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
     // Reset store state to defaults
     useToolAvailable.setState({
       disabledTools: {},
       defaultDisabledTools: [],
+      defaultsInitialized: false,
     })
   })
 
@@ -118,6 +110,40 @@ describe('useToolAvailable', () => {
 
       expect(result.current.disabledTools['thread-1']).toEqual([])
     })
+
+    it('should ignore malformed runtime values', () => {
+      const { result } = renderHook(() => useToolAvailable())
+
+      act(() => {
+        result.current.setToolDisabledForThread('', 'server-1', 'tool-a', false)
+        result.current.setToolDisabledForThread('thread-1', '', 'tool-a', false)
+        result.current.setToolDisabledForThread(
+          'thread-1',
+          'server-1',
+          'tool-a',
+          'false' as never
+        )
+      })
+
+      expect(result.current.disabledTools).toEqual({})
+    })
+
+    it('should trim runtime identifiers before storing', () => {
+      const { result } = renderHook(() => useToolAvailable())
+
+      act(() => {
+        result.current.setToolDisabledForThread(
+          ' thread-1 ',
+          ' server-1 ',
+          ' tool-a ',
+          false
+        )
+      })
+
+      expect(result.current.disabledTools).toEqual({
+        'thread-1': ['server-1::tool-a'],
+      })
+    })
   })
 
   describe('isToolDisabled', () => {
@@ -172,6 +198,27 @@ describe('useToolAvailable', () => {
       const isDisabled = result.current.isToolDisabled('thread-1', 'server-1', 'tool-default')
       expect(isDisabled).toBe(false)
     })
+
+    it('should return false for malformed runtime ids', () => {
+      const { result } = renderHook(() => useToolAvailable())
+
+      expect(result.current.isToolDisabled('', 'server-1', 'tool-a')).toBe(false)
+      expect(result.current.isToolDisabled('thread-1', '', 'tool-a')).toBe(false)
+      expect(result.current.isToolDisabled({} as never, 'server-1', 'tool-a')).toBe(false)
+    })
+
+    it('should not throw when in-memory disabled tools are malformed', () => {
+      const { result } = renderHook(() => useToolAvailable())
+
+      act(() => {
+        useToolAvailable.setState({
+          disabledTools: { 'thread-1': 42 as never },
+          defaultDisabledTools: ['server-1::tool-a'],
+        })
+      })
+
+      expect(result.current.isToolDisabled('thread-1', 'server-1', 'tool-a')).toBe(false)
+    })
   })
 
   describe('getDisabledToolsForThread', () => {
@@ -215,6 +262,12 @@ describe('useToolAvailable', () => {
 
       const disabledTools = result.current.getDisabledToolsForThread('thread-1')
       expect(disabledTools).toEqual(['server-1::tool-specific'])
+    })
+
+    it('should return an empty array for malformed runtime ids', () => {
+      const { result } = renderHook(() => useToolAvailable())
+
+      expect(result.current.getDisabledToolsForThread(null as never)).toEqual([])
     })
   })
 
@@ -275,6 +328,25 @@ describe('useToolAvailable', () => {
       expect(result.current.defaultDisabledTools).toEqual([
         'server-1::tool-1',
         'server-1::tool-2',
+      ])
+    })
+
+    it('should drop malformed default disabled tool keys', () => {
+      const { result } = renderHook(() => useToolAvailable())
+
+      act(() => {
+        result.current.setDefaultDisabledTools([
+          'server-1::tool-1',
+          '',
+          'legacy-tool',
+          '::missing-server',
+          'server-2::tool-2',
+        ] as never)
+      })
+
+      expect(result.current.defaultDisabledTools).toEqual([
+        'server-1::tool-1',
+        'server-2::tool-2',
       ])
     })
   })
@@ -375,6 +447,38 @@ describe('useToolAvailable', () => {
 
       expect(result.current.disabledTools['new-thread']).toEqual([])
     })
+
+    it('should ignore malformed thread ids and tool lists', () => {
+      const { result } = renderHook(() => useToolAvailable())
+
+      act(() => {
+        result.current.setDefaultDisabledTools(['server-1::tool-1'])
+        result.current.initializeThreadTools('', [] as MCPTool[])
+        result.current.initializeThreadTools('new-thread', null as never)
+      })
+
+      expect(result.current.disabledTools).toEqual({})
+    })
+
+    it('should trim available tool identifiers before matching defaults', () => {
+      const { result } = renderHook(() => useToolAvailable())
+
+      act(() => {
+        result.current.setDefaultDisabledTools(['server-1::tool-1'])
+        result.current.initializeThreadTools('new-thread', [
+          {
+            name: ' tool-1 ',
+            description: 'Tool 1',
+            inputSchema: {},
+            server: ' server-1 ',
+          },
+        ])
+      })
+
+      expect(result.current.disabledTools['new-thread']).toEqual([
+        'server-1::tool-1',
+      ])
+    })
   })
 
   describe('state management', () => {
@@ -432,6 +536,131 @@ describe('useToolAvailable', () => {
       expect(result.current.isToolDisabled('thread-1', 'test-server', 'tool-a')).toBe(false)
       expect(result.current.isToolDisabled('thread-1', 'test-server', 'tool-b')).toBe(true)
       expect(result.current.isToolDisabled('thread-1', 'test-server', 'tool-c')).toBe(true)
+    })
+  })
+
+  describe('persistence', () => {
+    it('sanitizes malformed persisted state during merge and preserves actions', () => {
+      const merge = useToolAvailable.persist.getOptions().merge
+      const current = useToolAvailable.getState()
+
+      const merged = merge?.(
+        {
+          disabledTools: {
+            ' thread-1 ': [
+              ' server-1 :: tool-a ',
+              'server-1::tool-a',
+              null,
+              'server-1::',
+              'server-2::tool-b',
+            ],
+            'thread-2': 42,
+            'thread-3': ['::missing-server', 'server-3::tool-c'],
+          },
+          defaultDisabledTools: [
+            ' server-4 :: tool-d ',
+            'server-4::tool-d',
+            'server-5::tool-e',
+            'server-5::',
+          ],
+          defaultsInitialized: true,
+          setDefaultDisabledTools: null,
+        },
+        current
+      )
+
+      expect(merged?.disabledTools).toEqual({
+        'thread-1': ['server-1::tool-a', 'server-2::tool-b'],
+        'thread-2': [],
+        'thread-3': ['server-3::tool-c'],
+      })
+      expect(merged?.defaultDisabledTools).toEqual([
+        'server-4::tool-d',
+        'server-5::tool-e',
+      ])
+      expect(merged?.defaultsInitialized).toBe(true)
+      expect(typeof merged?.setDefaultDisabledTools).toBe('function')
+    })
+
+    it('migrates legacy tool-key persisted state to empty defaults', () => {
+      const migrate = useToolAvailable.persist.getOptions().migrate
+
+      const migrated = migrate?.(
+        {
+          disabledTools: {
+            'thread-1': ['legacy-tool', 'server-1::tool-a'],
+          },
+          defaultDisabledTools: ['server-2::tool-b'],
+          defaultsInitialized: true,
+        },
+        0
+      )
+
+      expect(migrated).toEqual({
+        disabledTools: {},
+        defaultDisabledTools: [],
+        defaultsInitialized: false,
+      })
+    })
+
+    it('does not throw while migrating malformed persisted state', () => {
+      const migrate = useToolAvailable.persist.getOptions().migrate
+
+      expect(() =>
+        migrate?.(
+          {
+            disabledTools: { 'thread-1': 42 },
+            defaultDisabledTools: 'bad',
+            defaultsInitialized: 'yes',
+          },
+          0
+        )
+      ).not.toThrow()
+
+      expect(
+        migrate?.(
+          {
+            disabledTools: { 'thread-1': 42 },
+            defaultDisabledTools: 'bad',
+            defaultsInitialized: 'yes',
+          },
+          0
+        )
+      ).toEqual({
+        disabledTools: { 'thread-1': [] },
+        defaultDisabledTools: [],
+        defaultsInitialized: false,
+      })
+    })
+
+    it('caps persisted disabled tool maps and lists', () => {
+      const merge = useToolAvailable.persist.getOptions().merge
+      const current = useToolAvailable.getState()
+      const disabledTools = Object.fromEntries(
+        Array.from({ length: 205 }, (_, threadIndex) => [
+          `thread-${threadIndex}`,
+          Array.from(
+            { length: 205 },
+            (_, toolIndex) => `server-${threadIndex}::tool-${toolIndex}`
+          ),
+        ])
+      )
+
+      const merged = merge?.(
+        {
+          disabledTools,
+          defaultDisabledTools: Array.from(
+            { length: 205 },
+            (_, toolIndex) => `server-default::tool-${toolIndex}`
+          ),
+          defaultsInitialized: true,
+        },
+        current
+      )
+
+      expect(Object.keys(merged?.disabledTools ?? {})).toHaveLength(200)
+      expect(merged?.disabledTools['thread-0']).toHaveLength(200)
+      expect(merged?.defaultDisabledTools).toHaveLength(200)
     })
   })
 })
