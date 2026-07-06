@@ -9,16 +9,6 @@ vi.mock('@/constants/localStorage', () => ({
   },
 }))
 
-// Mock zustand persist
-vi.mock('zustand/middleware', () => ({
-  persist: (fn: any) => fn,
-  createJSONStorage: () => ({
-    getItem: vi.fn(),
-    setItem: vi.fn(),
-    removeItem: vi.fn(),
-  }),
-}))
-
 describe('useToolApproval', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -122,6 +112,30 @@ describe('useToolApproval', () => {
 
       expect(result.current.approvedTools['thread-1']).toEqual(['tool-a'])
     })
+
+    it('should ignore malformed runtime approvals', () => {
+      const { result } = renderHook(() => useToolApproval())
+
+      act(() => {
+        result.current.approveToolForThread('', 'tool-a')
+        result.current.approveToolForThread('thread-1', '')
+        result.current.approveToolForThread(null as never, 'tool-a')
+      })
+
+      expect(result.current.approvedTools).toEqual({})
+    })
+
+    it('should trim runtime approval ids', () => {
+      const { result } = renderHook(() => useToolApproval())
+
+      act(() => {
+        result.current.approveToolForThread(' thread-1 ', ' tool-a ')
+      })
+
+      expect(result.current.approvedTools).toEqual({
+        'thread-1': ['tool-a'],
+      })
+    })
   })
 
   describe('isToolApproved', () => {
@@ -152,6 +166,14 @@ describe('useToolApproval', () => {
 
       const isApproved = result.current.isToolApproved('thread-2', 'tool-a')
       expect(isApproved).toBe(false)
+    })
+
+    it('should return false for malformed runtime ids', () => {
+      const { result } = renderHook(() => useToolApproval())
+
+      expect(result.current.isToolApproved('', 'tool-a')).toBe(false)
+      expect(result.current.isToolApproved('thread-1', '')).toBe(false)
+      expect(result.current.isToolApproved({} as never, 'tool-a')).toBe(false)
     })
   })
 
@@ -214,6 +236,16 @@ describe('useToolApproval', () => {
 
       expect(result.current.isModalOpen).toBe(false)
       expect(result.current.modalProps).toBe(null)
+    })
+
+    it('should ignore malformed runtime open values', () => {
+      const { result } = renderHook(() => useToolApproval())
+
+      act(() => {
+        result.current.setModalOpen('true' as never)
+      })
+
+      expect(result.current.isModalOpen).toBe(false)
     })
   })
 
@@ -330,6 +362,86 @@ describe('useToolApproval', () => {
       expect(approvalResult).toBe(false)
       expect(result.current.isModalOpen).toBe(false)
       expect(result.current.modalProps).toBe(null)
+    })
+
+    it('should reject malformed modal requests without opening', async () => {
+      const { result } = renderHook(() => useToolApproval())
+
+      let approvalResult: boolean
+      await act(async () => {
+        approvalResult = await result.current.showApprovalModal('', 'thread-1')
+      })
+
+      expect(approvalResult!).toBe(false)
+      expect(result.current.isModalOpen).toBe(false)
+      expect(result.current.modalProps).toBe(null)
+    })
+  })
+
+  describe('persistence', () => {
+    it('sanitizes malformed persisted state during merge', () => {
+      const merge = useToolApproval.persist.getOptions().merge
+      const current = useToolApproval.getState()
+
+      const merged = merge?.(
+        {
+          approvedTools: {
+            ' thread-1 ': [' tool-a ', 42, 'tool-a', '', 'tool-b'],
+            '': ['tool-c'],
+            'thread-2': 'tool-d',
+            'thread-3': ['tool-e'],
+          },
+          allowAllMCPPermissions: 'true',
+          isModalOpen: true,
+          modalProps: {
+            toolName: 'persisted-modal',
+          },
+        },
+        current
+      )
+
+      expect(merged).toEqual(
+        expect.objectContaining({
+          approvedTools: {
+            'thread-1': ['tool-a', 'tool-b'],
+            'thread-3': ['tool-e'],
+          },
+          allowAllMCPPermissions: false,
+          isModalOpen: false,
+          modalProps: null,
+        })
+      )
+      expect(typeof merged?.showApprovalModal).toBe('function')
+    })
+
+    it('caps persisted approved tool maps', () => {
+      const merge = useToolApproval.persist.getOptions().merge
+      const current = useToolApproval.getState()
+      const approvedTools = Object.fromEntries(
+        Array.from({ length: 205 }, (_, threadIndex) => [
+          `thread-${threadIndex}`,
+          Array.from(
+            { length: 205 },
+            (_, toolIndex) => `tool-${threadIndex}-${toolIndex}`
+          ),
+        ])
+      )
+
+      const merged = merge?.(
+        {
+          approvedTools,
+          allowAllMCPPermissions: true,
+        },
+        current
+      )
+      const threadIds = Object.keys(merged?.approvedTools ?? {})
+
+      expect(threadIds).toHaveLength(200)
+      expect(threadIds[0]).toBe('thread-5')
+      expect(threadIds[199]).toBe('thread-204')
+      expect(merged?.approvedTools['thread-204']).toHaveLength(200)
+      expect(merged?.approvedTools['thread-204']?.[0]).toBe('tool-204-5')
+      expect(merged?.allowAllMCPPermissions).toBe(true)
     })
   })
 
