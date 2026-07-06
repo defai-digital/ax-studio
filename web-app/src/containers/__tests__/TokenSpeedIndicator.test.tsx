@@ -17,13 +17,6 @@ vi.mock('@/hooks/settings/useAppState', () => ({
     }),
 }))
 
-vi.mock('@/lib/utils/number', () => ({
-  toNumber: (val: unknown) => {
-    const num = Number(val)
-    return isNaN(num) ? 0 : num
-  },
-}))
-
 vi.mock('lucide-react', () => ({
   Gauge: () => <span data-testid="gauge-icon" />,
 }))
@@ -95,5 +88,13 @@ describe('TokenSpeedIndicator', () => {
     render(<TokenSpeedIndicator metadata={metadata} />)
     expect(screen.getByText('20 t/s')).toBeInTheDocument()
     expect(screen.getByText(/75 tokens/)).toBeInTheDocument()
+  })
+
+  it('ignores non-finite persisted token speed metadata', () => {
+    const metadata = {
+      tokenSpeed: { tokenSpeed: Infinity, tokenCount: 10 },
+    }
+    const { container } = render(<TokenSpeedIndicator metadata={metadata} />)
+    expect(container.innerHTML).toBe('')
   })
 })

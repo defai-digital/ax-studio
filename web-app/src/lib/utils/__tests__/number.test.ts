@@ -44,9 +44,11 @@ describe('toNumber', () => {
   })
 
   it('handles special number cases', () => {
-    expect(toNumber(Infinity)).toBe(Infinity)
-    expect(toNumber(-Infinity)).toBe(-Infinity)
-    expect(toNumber(NaN)).toBe(0) // NaN gets converted to 0
+    expect(toNumber(Infinity)).toBe(0)
+    expect(toNumber(-Infinity)).toBe(0)
+    expect(toNumber('Infinity')).toBe(0)
+    expect(toNumber('-Infinity')).toBe(0)
+    expect(toNumber(NaN)).toBe(0)
   })
 
   it('handles scientific notation strings', () => {
