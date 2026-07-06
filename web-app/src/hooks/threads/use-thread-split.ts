@@ -23,50 +23,62 @@ type Input = {
   selectedProvider: string
 }
 
+type StoredSplitViewInfo = {
+  direction: 'left' | 'right'
+  splitThreadId: string
+}
+
+function parseStoredSplitViewInfo(raw: string): StoredSplitViewInfo | null {
+  try {
+    const parsed = JSON.parse(raw)
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      (parsed.direction === 'left' || parsed.direction === 'right') &&
+      typeof parsed.splitThreadId === 'string' &&
+      parsed.splitThreadId.trim() !== ''
+    ) {
+      return {
+        direction: parsed.direction,
+        splitThreadId: parsed.splitThreadId,
+      }
+    }
+  } catch {
+    // Ignore malformed session state and let the hook start without split view.
+  }
+
+  return null
+}
+
+function readAndConsumeSplitViewInfo(): StoredSplitViewInfo | null {
+  const stored = safeStorageGetItem(
+    sessionStorage,
+    SESSION_STORAGE_KEY.SPLIT_VIEW_INFO,
+    'useThreadSplit'
+  )
+
+  if (!stored) return null
+
+  safeStorageRemoveItem(
+    sessionStorage,
+    SESSION_STORAGE_KEY.SPLIT_VIEW_INFO,
+    'useThreadSplit'
+  )
+
+  return parseStoredSplitViewInfo(stored)
+}
+
 export function useThreadSplit({ thread, selectedModel, selectedProvider }: Input): ThreadSplitResult {
   const createThread = useThreads((state) => state.createThread)
+  const [initialSplitViewInfo] = useState(readAndConsumeSplitViewInfo)
 
-  const [splitDirection, setSplitDirection] = useState<'left' | 'right' | null>(() => {
-    const stored = safeStorageGetItem(
-      sessionStorage,
-      SESSION_STORAGE_KEY.SPLIT_VIEW_INFO,
-      'useThreadSplit'
-    )
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored)
-        if (
-          parsed &&
-          typeof parsed === 'object' &&
-          (parsed.direction === 'left' || parsed.direction === 'right') &&
-          typeof parsed.splitThreadId === 'string'
-        ) {
-          return parsed.direction as 'left' | 'right'
-        }
-      } catch { /* ignore */ }
-    }
-    return null
-  })
+  const [splitDirection, setSplitDirection] = useState<'left' | 'right' | null>(
+    () => initialSplitViewInfo?.direction ?? null
+  )
 
-  const [splitThreadId, setSplitThreadId] = useState<string | null>(() => {
-    const stored = safeStorageGetItem(
-      sessionStorage,
-      SESSION_STORAGE_KEY.SPLIT_VIEW_INFO,
-      'useThreadSplit'
-    )
-    if (stored) {
-      try {
-        safeStorageRemoveItem(
-          sessionStorage,
-          SESSION_STORAGE_KEY.SPLIT_VIEW_INFO,
-          'useThreadSplit'
-        )
-        const parsed = JSON.parse(stored)
-        return typeof parsed?.splitThreadId === 'string' ? parsed.splitThreadId : null
-      } catch { /* ignore */ }
-    }
-    return null
-  })
+  const [splitThreadId, setSplitThreadId] = useState<string | null>(
+    () => initialSplitViewInfo?.splitThreadId ?? null
+  )
 
   const splitPaneOrder = useMemo(() => {
     if (!splitThreadId || !splitDirection) return null

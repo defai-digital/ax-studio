@@ -104,7 +104,62 @@ describe('useThreadSplit', () => {
       })
     )
 
-    // sessionStorage is cleared by the splitThreadId initializer
+    // sessionStorage is consumed during initial hook state setup.
+    expect(sessionStorage.getItem('split-view-info')).toBeNull()
+  })
+
+  it('ignores and consumes malformed split view info', () => {
+    sessionStorage.setItem(
+      'split-view-info',
+      JSON.stringify({ splitThreadId: '', direction: 'left' })
+    )
+
+    const { result } = renderHook(() =>
+      useThreadSplit({
+        thread: makeThread(),
+        selectedModel: makeModel(),
+        selectedProvider: 'openai',
+      })
+    )
+
+    expect(result.current.splitDirection).toBeNull()
+    expect(result.current.splitThreadId).toBeNull()
+    expect(sessionStorage.getItem('split-view-info')).toBeNull()
+  })
+
+  it('ignores and consumes split view info with an invalid direction', () => {
+    sessionStorage.setItem(
+      'split-view-info',
+      JSON.stringify({ splitThreadId: 'stale-split', direction: 'up' })
+    )
+
+    const { result } = renderHook(() =>
+      useThreadSplit({
+        thread: makeThread(),
+        selectedModel: makeModel(),
+        selectedProvider: 'openai',
+      })
+    )
+
+    expect(result.current.splitDirection).toBeNull()
+    expect(result.current.splitThreadId).toBeNull()
+    expect(result.current.splitPaneOrder).toBeNull()
+    expect(sessionStorage.getItem('split-view-info')).toBeNull()
+  })
+
+  it('ignores and consumes invalid JSON split view info', () => {
+    sessionStorage.setItem('split-view-info', '{not json')
+
+    const { result } = renderHook(() =>
+      useThreadSplit({
+        thread: makeThread(),
+        selectedModel: makeModel(),
+        selectedProvider: 'openai',
+      })
+    )
+
+    expect(result.current.splitDirection).toBeNull()
+    expect(result.current.splitThreadId).toBeNull()
     expect(sessionStorage.getItem('split-view-info')).toBeNull()
   })
 
@@ -232,6 +287,29 @@ describe('useThreadSplit', () => {
 
       expect(result.current.splitDirection).toBe('right')
       expect(result.current.splitThreadId).toBe('existing-split')
+    })
+
+    it('creates a new split thread after invalid stored split info', async () => {
+      sessionStorage.setItem(
+        'split-view-info',
+        JSON.stringify({ splitThreadId: 'stale-split', direction: 'up' })
+      )
+
+      const { result } = renderHook(() =>
+        useThreadSplit({
+          thread: makeThread(),
+          selectedModel: makeModel(),
+          selectedProvider: 'openai',
+        })
+      )
+
+      await act(async () => {
+        await result.current.handleSplit('right')
+      })
+
+      expect(useThreads.getState().createThread).toHaveBeenCalledTimes(1)
+      expect(result.current.splitDirection).toBe('right')
+      expect(result.current.splitThreadId).toBe('new-thread-1')
     })
   })
 })

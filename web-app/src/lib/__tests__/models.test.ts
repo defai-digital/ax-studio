@@ -3,6 +3,7 @@ import {
   defaultModel,
   extractDescription,
   extractModelName,
+  getModelContextLength,
   getModelCapabilities,
   getPreferredMmprojPath,
 } from '../models'
@@ -228,6 +229,52 @@ describe('getModelCapabilities', () => {
     expect(capabilities).toContain(ModelCapabilities.COMPLETION)
     expect(capabilities).toContain(ModelCapabilities.TOOLS)
     expect(capabilities).not.toContain(ModelCapabilities.VISION)
+  })
+})
+
+describe('getModelContextLength', () => {
+  it('returns a positive integer ctx_len setting', () => {
+    expect(
+      getModelContextLength({
+        settings: {
+          ctx_len: { controller_props: { value: 8192 } },
+        },
+      })
+    ).toBe(8192)
+  })
+
+  it('falls back to ctx_size when ctx_len is missing', () => {
+    expect(
+      getModelContextLength({
+        settings: {
+          ctx_size: { controller_props: { value: '4096' } },
+        },
+      })
+    ).toBe(4096)
+  })
+
+  it('rejects partial and non-decimal context length strings', () => {
+    for (const value of ['8192abc', '1e6', '0x2000', '12.5', '']) {
+      expect(
+        getModelContextLength({
+          settings: {
+            ctx_len: { controller_props: { value } },
+          },
+        })
+      ).toBeUndefined()
+    }
+  })
+
+  it('rejects non-positive and non-safe integer values', () => {
+    for (const value of [0, -1, 4096.5, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(
+        getModelContextLength({
+          settings: {
+            ctx_len: { controller_props: { value } },
+          },
+        })
+      ).toBeUndefined()
+    }
   })
 })
 

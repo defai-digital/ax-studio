@@ -96,18 +96,27 @@ export function isMlxCatalogModel(model: CatalogModel): boolean {
   )
 }
 
+function parsePositiveIntegerSetting(value: unknown): number | undefined {
+  if (typeof value === 'number') {
+    return Number.isSafeInteger(value) && value > 0 ? value : undefined
+  }
+
+  if (typeof value !== 'string') return undefined
+
+  const trimmed = value.trim()
+  if (!/^\d+$/.test(trimmed)) return undefined
+
+  const parsed = Number(trimmed)
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined
+}
+
 export function getModelContextLength(model?: {
   settings?: Record<string, { controller_props?: { value?: unknown } }>
 }): number | undefined {
   const raw =
     model?.settings?.ctx_len?.controller_props?.value ??
     model?.settings?.ctx_size?.controller_props?.value
-  if (typeof raw === 'number') return raw > 0 ? raw : undefined
-  if (typeof raw === 'string') {
-    const parsed = parseInt(raw, 10)
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
-  }
-  return undefined
+  return parsePositiveIntegerSetting(raw)
 }
 
 export function getPreferredMmprojPath(
