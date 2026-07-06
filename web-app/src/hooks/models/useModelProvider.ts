@@ -179,6 +179,12 @@ const normalizeModel = (value: unknown): Model | null => {
   const modelName = normalizeOptionalString(value.model)
   if (modelName) model.model = modelName
 
+  const provider = normalizeOptionalString(value.provider)
+  if (provider) {
+    const modelWithProvider = model as Model & { provider?: string }
+    modelWithProvider.provider = provider
+  }
+
   const name = normalizeOptionalString(value.name)
   if (name) model.name = name
 
