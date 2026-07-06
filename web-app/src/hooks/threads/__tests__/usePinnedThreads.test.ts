@@ -45,6 +45,30 @@ describe('usePinnedThreads', () => {
     expect(result.current.pinnedIds).toHaveLength(0)
   })
 
+  it('sanitizes persisted pinned thread ids on startup', async () => {
+    localStorageMock.setItem(
+      'ax-pinned-threads',
+      JSON.stringify([
+        ' thread-1 ',
+        '',
+        'thread-1',
+        42,
+        ...Array.from({ length: 205 }, (_, index) => `thread-${index + 2}`),
+      ])
+    )
+    vi.resetModules()
+    const mod = await import('../usePinnedThreads')
+
+    const { result } = renderHook(() => mod.usePinnedThreads())
+
+    expect(result.current.pinnedIds).toHaveLength(200)
+    expect(result.current.pinnedIds[0]).toBe('thread-1')
+    expect(result.current.pinnedIds[1]).toBe('thread-2')
+    expect(result.current.pinnedIds).not.toContain('')
+    expect(result.current.pinnedIds).not.toContain(42)
+    expect(new Set(result.current.pinnedIds).size).toBe(200)
+  })
+
   it('should toggle pin a thread and update pinnedIds', () => {
     const { result } = renderHook(() => usePinnedThreads())
 
@@ -67,6 +91,20 @@ describe('usePinnedThreads', () => {
       result.current.togglePin('thread-1')
     })
     expect(result.current.pinnedIds).not.toContain('thread-1')
+  })
+
+  it('ignores blank thread ids when toggling', () => {
+    const { result } = renderHook(() => usePinnedThreads())
+
+    act(() => {
+      result.current.togglePin('   ')
+    })
+
+    expect(result.current.pinnedIds).toEqual([])
+    expect(localStorageMock.setItem).not.toHaveBeenCalledWith(
+      'ax-pinned-threads',
+      expect.any(String)
+    )
   })
 
   it('should persist to localStorage on pin', () => {
@@ -104,6 +142,24 @@ describe('usePinnedThreads', () => {
 
     expect(result.current.pinnedIds[0]).toBe('thread-2')
     expect(result.current.pinnedIds[1]).toBe('thread-1')
+  })
+
+  it('sanitizes reordered pinned threads before persisting', () => {
+    const { result } = renderHook(() => usePinnedThreads())
+
+    act(() => {
+      result.current.reorder(['thread-2', '', 'thread-2', ' thread-1 '])
+    })
+
+    expect(result.current.pinnedIds).toEqual(['thread-2', 'thread-1'])
+    const calls = localStorageMock.setItem.mock.calls.filter(
+      (c: string[]) => c[0] === 'ax-pinned-threads',
+    )
+    const lastCall = calls[calls.length - 1]
+    expect(JSON.parse(lastCall[1] as string)).toEqual([
+      'thread-2',
+      'thread-1',
+    ])
   })
 
   it('should provide a pinnedSet that is a Set', () => {

@@ -2,6 +2,26 @@ import { useSyncExternalStore, useCallback, useMemo } from 'react'
 import { safeStorageGetItem, safeStorageSetItem } from '@/lib/storage/storage'
 
 const STORAGE_KEY = 'ax-pinned-threads'
+const MAX_PINNED_THREADS = 200
+
+function normalizePinnedThreadIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+
+  const ids: string[] = []
+  const seen = new Set<string>()
+  for (const entry of value) {
+    if (typeof entry !== 'string') continue
+
+    const id = entry.trim()
+    if (id === '' || seen.has(id)) continue
+
+    ids.push(id)
+    seen.add(id)
+    if (ids.length >= MAX_PINNED_THREADS) break
+  }
+
+  return ids
+}
 
 // Module-level state with subscriber pattern
 let listeners: Array<() => void> = []
@@ -13,9 +33,7 @@ let pinnedSnapshot: string[] = (() => {
       'usePinnedThreads'
     )
     const parsed = stored ? JSON.parse(stored) : []
-    return Array.isArray(parsed) && parsed.every((entry) => typeof entry === 'string')
-      ? parsed
-      : []
+    return normalizePinnedThreadIds(parsed)
   } catch {
     return []
   }
@@ -39,11 +57,11 @@ function getSnapshot() {
 }
 
 function persist(ids: string[]) {
-  pinnedSnapshot = ids
+  pinnedSnapshot = normalizePinnedThreadIds(ids)
   safeStorageSetItem(
     localStorage,
     STORAGE_KEY,
-    JSON.stringify(ids),
+    JSON.stringify(pinnedSnapshot),
     'usePinnedThreads'
   )
   emitChange()
@@ -53,10 +71,13 @@ export function usePinnedThreads() {
   const pinnedIds = useSyncExternalStore(subscribe, getSnapshot, () => [])
 
   const togglePin = useCallback((threadId: string) => {
+    const normalizedThreadId = threadId.trim()
+    if (normalizedThreadId === '') return
+
     const current = pinnedSnapshot
-    const next = current.includes(threadId)
-      ? current.filter((id) => id !== threadId)
-      : [...current, threadId]
+    const next = current.includes(normalizedThreadId)
+      ? current.filter((id) => id !== normalizedThreadId)
+      : [...current, normalizedThreadId]
     persist(next)
   }, [])
 
