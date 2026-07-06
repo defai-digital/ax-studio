@@ -83,13 +83,35 @@ export type AxBiChartMetric =
       column: string
     }
 
+type AxBiChartOptions = {
+  colorScheme?: string
+  rowLimit?: number
+  showValues?: boolean
+}
+
+type AxBiChartFilter = {
+  column: string
+  op: '=' | '!='
+  value: string | number | boolean
+}
+
+type AxBiGroupedChartKind =
+  | 'area'
+  | 'bar'
+  | 'donut'
+  | 'horizontal_bar'
+  | 'line'
+  | 'pie'
+
 export type AxBiChartIntentDraft =
   | {
       datasetName: string
       groupBy: string
-      chartKind: 'bar'
+      chartKind: AxBiGroupedChartKind
       metric: AxBiChartMetric
       chartName?: string
+      options?: AxBiChartOptions
+      filters?: AxBiChartFilter[]
     }
   | {
       datasetName: string
@@ -98,10 +120,33 @@ export type AxBiChartIntentDraft =
       yColumn: string
       groupBy?: string
       chartName?: string
+      options?: AxBiChartOptions
+      filters?: AxBiChartFilter[]
+    }
+  | {
+      datasetName: string
+      chartKind: 'table'
+      columns: string[]
+      chartName?: string
+      options?: AxBiChartOptions
+      filters?: AxBiChartFilter[]
+    }
+  | {
+      datasetName: string
+      chartKind: 'big_number'
+      metric: AxBiChartMetric
+      chartName?: string
+      options?: AxBiChartOptions
+      filters?: AxBiChartFilter[]
     }
 
 type ExistingDatasetChartIntent = AxBiChartIntentDraft & {
   chartName: string
+}
+
+type ExistingDatasetDashboardIntent = {
+  datasetName: string
+  dashboardTitle: string
 }
 
 type ResolvedExistingDatasetChartIntent = ExistingDatasetChartIntent
@@ -134,6 +179,157 @@ function stripTrailingPunctuation(value: string): string {
   return value.replace(/[.,;:!?]+$/g, '').trim()
 }
 
+function normalizeChartKind(
+  value: unknown
+): AxBiGroupedChartKind | 'big_number' | 'scatter' | 'table' {
+  if (typeof value !== 'string') return 'bar'
+  const normalized = value.toLowerCase().replace(/[\s-]+/g, '_')
+  if (normalized === 'scatter') return 'scatter'
+  if (normalized === 'table') return 'table'
+  if (normalized === 'big_number' || normalized === 'kpi') return 'big_number'
+  if (normalized === 'area') return 'area'
+  if (normalized === 'line') return 'line'
+  if (normalized === 'donut') return 'donut'
+  if (normalized === 'pie') return 'pie'
+  if (normalized === 'column') return 'bar'
+  if (normalized === 'horizontal_bar') return 'horizontal_bar'
+  return 'bar'
+}
+
+function inferChartKindFromPrompt(prompt: string): AxBiGroupedChartKind {
+  if (/\barea\s+chart\b/i.test(prompt)) return 'area'
+  if (/\bhorizontal\s+bar\s+chart\b/i.test(prompt)) return 'horizontal_bar'
+  if (/\bline\s+chart\b/i.test(prompt)) return 'line'
+  if (/\bdonut\s+chart\b/i.test(prompt)) return 'donut'
+  if (/\bpie\s+chart\b/i.test(prompt)) return 'pie'
+  return 'bar'
+}
+
+function extractRequestedChartName(prompt: string): string | undefined {
+  const nameMatch = prompt.match(
+    /\b(?:name\s+it|call\s+it|title\s+it|named|called|titled)\s+(.+?)(?:[.!?]\s*$|$)/i
+  )
+  return typeof nameMatch?.[1] === 'string'
+    ? stripTrailingPunctuation(nameMatch[1])
+    : undefined
+}
+
+function normalizeChartOptions(value: unknown): AxBiChartOptions | undefined {
+  if (!isRecord(value)) return undefined
+  const options: AxBiChartOptions = {}
+
+  if (typeof value.colorScheme === 'string' && value.colorScheme.trim()) {
+    options.colorScheme = stripTrailingPunctuation(value.colorScheme)
+  }
+
+  if (typeof value.rowLimit === 'number' && Number.isFinite(value.rowLimit)) {
+    options.rowLimit = Math.max(1, Math.min(50000, Math.round(value.rowLimit)))
+  }
+
+  if (typeof value.showValues === 'boolean') {
+    options.showValues = value.showValues
+  }
+
+  return Object.keys(options).length > 0 ? options : undefined
+}
+
+function extractPromptChartOptions(prompt: string): AxBiChartOptions | undefined {
+  const options: AxBiChartOptions = {}
+
+  const rowLimitMatch =
+    prompt.match(/\b(?:top|first|limit|row\s+limit)\s+(\d{1,5})\b/i) ??
+    prompt.match(/\b(\d{1,5})\s+(?:rows|records|bars|slices|items)\b/i)
+  if (rowLimitMatch?.[1]) {
+    const rowLimit = Number(rowLimitMatch[1])
+    if (Number.isFinite(rowLimit)) {
+      options.rowLimit = Math.max(1, Math.min(50000, Math.round(rowLimit)))
+    }
+  }
+
+  if (
+    /\b(?:show|display|include)\s+(?:data\s+)?(?:value\s+)?labels?\b/i.test(
+      prompt
+    ) ||
+    /\bshow\s+values?\b/i.test(prompt)
+  ) {
+    options.showValues = true
+  }
+
+  const colorSchemes: Array<[RegExp, string]> = [
+    [/\blyft\s+(?:colors?|colours?|palette|scheme)\b/i, 'lyftColors'],
+    [/\bgoogle\s+(?:colors?|colours?|palette|scheme)\b/i, 'googleCategory10c'],
+    [/\bd3\s+(?:colors?|colours?|palette|scheme)\b/i, 'd3Category10'],
+    [/\b(?:superset|default|ax-?bi)\s+(?:colors?|colours?|palette|scheme)\b/i, 'supersetColors'],
+  ]
+  const matchedScheme = colorSchemes.find(([pattern]) => pattern.test(prompt))
+  if (matchedScheme) {
+    options.colorScheme = matchedScheme[1]
+  }
+
+  return Object.keys(options).length > 0 ? options : undefined
+}
+
+function normalizeChartFilters(value: unknown): AxBiChartFilter[] | undefined {
+  if (!Array.isArray(value)) return undefined
+
+  const filters = value.flatMap((item): AxBiChartFilter[] => {
+    if (!isRecord(item) || typeof item.column !== 'string') return []
+    const rawOp =
+      item.op === '!=' || item.operator === '!=' || item.op === '<>'
+        ? '!='
+        : '='
+    const rawValue = item.value ?? item.val
+    if (
+      typeof rawValue !== 'string' &&
+      typeof rawValue !== 'number' &&
+      typeof rawValue !== 'boolean'
+    ) {
+      return []
+    }
+
+    return [
+      {
+        column: stripTrailingPunctuation(item.column),
+        op: rawOp,
+        value:
+          typeof rawValue === 'string'
+            ? stripTrailingPunctuation(rawValue)
+            : rawValue,
+      },
+    ]
+  })
+
+  return filters.length > 0 ? filters : undefined
+}
+
+function normalizeFilterValue(value: string): string | number {
+  const normalized = stripTrailingPunctuation(
+    value.trim().replace(/^['"]|['"]$/g, '')
+  )
+  if (/^-?\d+(?:\.\d+)?$/.test(normalized)) return Number(normalized)
+  return normalized
+}
+
+function extractPromptFilters(prompt: string): AxBiChartFilter[] | undefined {
+  const filters: AxBiChartFilter[] = []
+  const filterPattern =
+    /\b(?:where|filter(?:ed)?(?:\s+to)?|only)\s+([A-Za-z0-9_][A-Za-z0-9_. -]*?)\s*(=|!=|is\s+not|is|equals?)\s+(['"]?)(.+?)(?:\3)(?:\s+(?:with|using)\b|\s+(?:name\s+it|call\s+it|title\s+it|named|called|titled)\b|\s+return\b|[.!?]\s*$|$)/gi
+
+  for (const match of prompt.matchAll(filterPattern)) {
+    const column = match[1]?.trim()
+    const operator = match[2]?.toLowerCase().replace(/\s+/g, ' ')
+    const value = match[4]?.trim()
+    if (!column || !value) continue
+    filters.push({
+      column: stripTrailingPunctuation(column),
+      op: operator === '!=' || operator === 'is not' ? '!=' : '=',
+      value: normalizeFilterValue(value),
+    })
+  }
+
+  return filters.length > 0 ? filters : undefined
+}
+
 function normalizeMetric(value: unknown): AxBiChartMetric | null {
   if (!isRecord(value)) return null
   if (value.type === 'count') return { type: 'count' }
@@ -155,6 +351,14 @@ function buildDefaultChartName(intent: AxBiChartIntentDraft): string {
   if (intent.chartKind === 'scatter') {
     return `${humanize(intent.yColumn)} vs ${humanize(intent.xColumn)}`
   }
+  if (intent.chartKind === 'table') {
+    return `${intent.datasetName} Detail Table`
+  }
+  if (intent.chartKind === 'big_number') {
+    return intent.metric.type === 'count'
+      ? `${intent.datasetName} Count`
+      : `${humanize(intent.metric.column)} ${intent.metric.aggregate}`
+  }
   return intent.metric.type === 'count'
     ? `${intent.datasetName} Count by ${intent.groupBy}`
     : `${humanize(intent.metric.column)} ${intent.metric.aggregate} by ${humanize(intent.groupBy)}`
@@ -171,7 +375,55 @@ function normalizeChartIntentDraft(
   ) {
     return null
   }
-  const chartKind = value.chartKind === 'scatter' ? 'scatter' : 'bar'
+  const chartKind = normalizeChartKind(value.chartKind)
+
+  if (chartKind === 'table') {
+    if (!Array.isArray(value.columns)) return null
+    const columns = value.columns
+      .filter((column): column is string => typeof column === 'string')
+      .map(stripTrailingPunctuation)
+      .filter(Boolean)
+    if (columns.length === 0) return null
+
+    const draft: AxBiChartIntentDraft = {
+      datasetName: stripTrailingPunctuation(value.datasetName),
+      chartKind: 'table',
+      columns,
+      options: normalizeChartOptions(value.options),
+      filters: normalizeChartFilters(value.filters),
+      chartName:
+        typeof value.chartName === 'string' && value.chartName.trim().length > 0
+          ? stripTrailingPunctuation(value.chartName)
+          : undefined,
+    }
+
+    return {
+      ...draft,
+      chartName: draft.chartName ?? buildDefaultChartName(draft),
+    }
+  }
+
+  if (chartKind === 'big_number') {
+    const metric = normalizeMetric(value.metric)
+    if (!metric) return null
+
+    const draft: AxBiChartIntentDraft = {
+      datasetName: stripTrailingPunctuation(value.datasetName),
+      chartKind: 'big_number',
+      metric,
+      options: normalizeChartOptions(value.options),
+      filters: normalizeChartFilters(value.filters),
+      chartName:
+        typeof value.chartName === 'string' && value.chartName.trim().length > 0
+          ? stripTrailingPunctuation(value.chartName)
+          : undefined,
+    }
+
+    return {
+      ...draft,
+      chartName: draft.chartName ?? buildDefaultChartName(draft),
+    }
+  }
 
   if (chartKind === 'scatter') {
     if (
@@ -195,6 +447,8 @@ function normalizeChartIntentDraft(
         typeof value.groupBy === 'string' && value.groupBy.trim().length > 0
           ? stripTrailingPunctuation(value.groupBy)
           : undefined,
+      options: normalizeChartOptions(value.options),
+      filters: normalizeChartFilters(value.filters),
       chartName:
         typeof value.chartName === 'string' && value.chartName.trim().length > 0
           ? stripTrailingPunctuation(value.chartName)
@@ -216,8 +470,10 @@ function normalizeChartIntentDraft(
   const draft: AxBiChartIntentDraft = {
     datasetName: stripTrailingPunctuation(value.datasetName),
     groupBy: stripTrailingPunctuation(value.groupBy),
-    chartKind: 'bar',
+    chartKind,
     metric,
+    options: normalizeChartOptions(value.options),
+    filters: normalizeChartFilters(value.filters),
     chartName:
       typeof value.chartName === 'string' && value.chartName.trim().length > 0
         ? stripTrailingPunctuation(value.chartName)
@@ -233,14 +489,55 @@ function normalizeChartIntentDraft(
 function parseExistingDatasetChartIntent(
   prompt: string
 ): ExistingDatasetChartIntent | null {
-  if (!/\bax-?bi\s+mcp\b/i.test(prompt)) return null
-  if (!/\b(bar\s+chart|scatter\s+chart|chart|scatter)\b/i.test(prompt))
+  const explicitAxBiMcp = /\bax-?bi\s+mcp\b/i.test(prompt)
+  const explicitSavedDatasetRequest =
+    /\b(?:create|make|build|generate|save)\s+(?:a\s+|an\s+)?(?:saved\s+)?(?:area\s+chart|bar\s+chart|column\s+chart|horizontal\s+bar\s+chart|line\s+chart|pie\s+chart|donut\s+chart|scatter\s+chart|big\s+number|kpi|chart|table)\s+from\s+[A-Za-z0-9_][A-Za-z0-9_.-]*/i.test(
+      prompt
+    )
+  if (!explicitAxBiMcp && !explicitSavedDatasetRequest) return null
+  if (
+    !/\b(area\s+chart|bar\s+chart|column\s+chart|horizontal\s+bar\s+chart|line\s+chart|pie\s+chart|donut\s+chart|scatter\s+chart|big\s+number|kpi|chart|scatter|table)\b/i.test(
+      prompt
+    )
+  )
     return null
 
   const datasetMatch =
     prompt.match(/\bdataset\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\b/i) ??
     prompt.match(/\bfrom\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\b/i)
   if (!datasetMatch?.[1]) return null
+
+  if (
+    /\b(?:(?:saved\s+)?table\s+from|table\s+showing|create\s+(?:a\s+|an\s+)?(?:saved\s+)?table)\b/i.test(
+      prompt
+    )
+  ) {
+    const columnsMatch = prompt.match(
+      /\b(?:showing|with\s+columns?|listing)\s+(.+?)(?:\s+(?:where|filter(?:ed)?|only|with|using)\b|\s+(?:name\s+it|call\s+it|title\s+it|named|called|titled)\b|\s+return\b|[.!?]\s*$|$)/i
+    )
+    if (!columnsMatch?.[1]) return null
+    const columns = columnsMatch[1]
+      .replace(/\s+and\s+/gi, ',')
+      .split(',')
+      .map(stripTrailingPunctuation)
+      .map((column) => column.trim())
+      .filter(Boolean)
+    if (columns.length === 0) return null
+
+    const draft: AxBiChartIntentDraft = {
+      datasetName: stripTrailingPunctuation(datasetMatch[1]),
+      chartKind: 'table',
+      columns,
+      options: extractPromptChartOptions(prompt),
+      filters: extractPromptFilters(prompt),
+      chartName: extractRequestedChartName(prompt),
+    }
+
+    return {
+      ...draft,
+      chartName: draft.chartName ?? buildDefaultChartName(draft),
+    }
+  }
 
   if (/\bscatter\b/i.test(prompt)) {
     const xMatch =
@@ -263,7 +560,6 @@ function parseExistingDatasetChartIntent(
       prompt.match(/\bgrouped\s+by\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\b/i) ??
       prompt.match(/\bcolored\s+by\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\b/i) ??
       prompt.match(/\bsplit\s+by\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\b/i)
-    const nameMatch = prompt.match(/\bname\s+it\s+(.+?)(?:[.!?]\s*$|$)/i)
     const draft: AxBiChartIntentDraft = {
       datasetName: stripTrailingPunctuation(datasetMatch[1]),
       chartKind: 'scatter',
@@ -272,10 +568,9 @@ function parseExistingDatasetChartIntent(
       groupBy: groupByMatch?.[1]
         ? stripTrailingPunctuation(groupByMatch[1])
         : undefined,
-      chartName:
-        typeof nameMatch?.[1] === 'string'
-          ? stripTrailingPunctuation(nameMatch[1])
-          : undefined,
+      options: extractPromptChartOptions(prompt),
+      filters: extractPromptFilters(prompt),
+      chartName: extractRequestedChartName(prompt),
     }
 
     return {
@@ -284,21 +579,24 @@ function parseExistingDatasetChartIntent(
     }
   }
 
-  const groupByMatch = prompt.match(/\bby\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\b/i)
-  if (!groupByMatch?.[1]) return null
-
   const countMetric =
-    /\bcount\s*(?:\(\s*\*\s*\))?|\bcount\s+of\s+records\b|\brecords?\s+by\b/i.test(
+    /\bcount\s*(?:\(\s*\*\s*\))?|\bcount\s+of\s+records\b|\bnumber\s+of\s+records\b|\brecords?\s+by\b|\brecord\s+count\b/i.test(
       prompt
     )
-  const aggregateMatch = prompt.match(
-    /\b(?:showing\s+)?(average|avg|sum|total|min|minimum|max|maximum)\s+(?:of\s+)?([A-Za-z0-9_][A-Za-z0-9_.-]*)\b/i
+  const aggregateFunctionMatch = prompt.match(
+    /\b(average|avg|mean|sum|total|min|minimum|max|maximum)\s*\(\s*([A-Za-z0-9_][A-Za-z0-9_.-]*)\s*\)/i
   )
+  const aggregateMatch =
+    aggregateFunctionMatch ??
+    prompt.match(
+      /\b(?:showing\s+)?(average|avg|mean|sum|total|min|minimum|max|maximum)\s+(?:of\s+)?([A-Za-z0-9_][A-Za-z0-9_. -]*?)(?:\s+by\b|\s+and\s+|\s*,|\s*\.|\s+(?:where|filter(?:ed)?|only|name\s+it|call\s+it|title\s+it|named|called|titled)\b|\s+return\b|$)/i
+    )
   if (!countMetric && !aggregateMatch) return null
 
   const aggregateMap: Record<string, 'AVG' | 'SUM' | 'MIN' | 'MAX'> = {
     average: 'AVG',
     avg: 'AVG',
+    mean: 'AVG',
     sum: 'SUM',
     total: 'SUM',
     min: 'MIN',
@@ -307,7 +605,6 @@ function parseExistingDatasetChartIntent(
     maximum: 'MAX',
   }
 
-  const nameMatch = prompt.match(/\bname\s+it\s+(.+?)(?:[.!?]\s*$|$)/i)
   const metric = countMetric
     ? ({ type: 'count' } as const)
     : ({
@@ -315,25 +612,67 @@ function parseExistingDatasetChartIntent(
         aggregate: aggregateMap[aggregateMatch![1].toLowerCase()],
         column: stripTrailingPunctuation(aggregateMatch![2]),
       } as const)
+
+  if (/\b(?:big\s+number|kpi)\b/i.test(prompt)) {
+    const defaultChartName =
+      metric.type === 'count'
+        ? `${datasetMatch[1]} Count`
+        : `${humanize(metric.column)} ${metric.aggregate}`
+    return {
+      datasetName: stripTrailingPunctuation(datasetMatch[1]),
+      chartName: extractRequestedChartName(prompt) ?? defaultChartName,
+      chartKind: 'big_number',
+      metric,
+      options: extractPromptChartOptions(prompt),
+      filters: extractPromptFilters(prompt),
+    }
+  }
+
+  const chartKind = inferChartKindFromPrompt(prompt)
+  const groupByMatch = prompt.match(
+    /\bby\s+([A-Za-z0-9_][A-Za-z0-9_. -]*?)(?:\s+and\s+|\s*,|\s*\.|\s+(?:where|filter(?:ed)?|only|with|using)\b|\s+(?:name\s+it|call\s+it|title\s+it|named|called|titled)\b|\s+return\b|$)/i
+  )
+  if (!groupByMatch?.[1]) return null
   const defaultChartName =
     metric.type === 'count'
       ? `${datasetMatch[1]} Count by ${groupByMatch[1]}`
       : `${humanize(metric.column)} ${metric.aggregate} by ${humanize(groupByMatch[1])}`
-  const chartName = stripTrailingPunctuation(nameMatch?.[1] ?? defaultChartName)
+  const chartName = extractRequestedChartName(prompt) ?? defaultChartName
 
   return {
     datasetName: stripTrailingPunctuation(datasetMatch[1]),
     groupBy: stripTrailingPunctuation(groupByMatch[1]),
     chartName,
-    chartKind: 'bar',
+    chartKind,
     metric,
+    options: extractPromptChartOptions(prompt),
+    filters: extractPromptFilters(prompt),
+  }
+}
+
+function parseExistingDatasetDashboardIntent(
+  prompt: string
+): ExistingDatasetDashboardIntent | null {
+  if (!/\b(?:dashboard|report)\b/i.test(prompt)) return null
+  const datasetMatch =
+    prompt.match(/\bwith\s+dataset\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\b/i) ??
+    prompt.match(/\bfrom\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\b/i)
+  if (!datasetMatch?.[1]) return null
+
+  const datasetName = stripTrailingPunctuation(datasetMatch[1])
+  return {
+    datasetName,
+    dashboardTitle:
+      extractRequestedChartName(prompt) ?? `${humanize(datasetName)} Dashboard`,
   }
 }
 
 function isAxBiChartCandidate(prompt: string): boolean {
   return (
     /\bax-?bi\s+mcp\b/i.test(prompt) &&
-    /\b(chart|charts|bar|scatter|graph|plot|visuali[sz]e)\b/i.test(prompt)
+    /\b(chart|charts|bar|scatter|graph|plot|visuali[sz]e|table)\b/i.test(
+      prompt
+    )
   )
 }
 
@@ -435,10 +774,10 @@ function buildChartPlans(dataset: DatasetInfo): ChartPlan[] {
       config: {
         chart_type: 'table',
         columns: tableColumns,
-        groupby: tableColumns.map((c) => c.name),
-        metrics: [],
+        all_columns: tableColumns,
+        groupby: [],
         query_mode: 'raw',
-        include_time: false,
+        row_limit: 1000,
       },
     })
   }
@@ -512,6 +851,7 @@ function chartIdFromResult(result: ChartResult): number | undefined {
   return (
     extractId(result.chart?.id) ??
     extractId(result.chart?.slice_id) ??
+    extractId(result.chart_id) ??
     extractId(result.id) ??
     extractId(result.slice_id)
   )
@@ -651,18 +991,42 @@ function normalizeColumnLookup(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, '')
 }
 
+function lookupVariants(value: string): string[] {
+  const compact = normalizeColumnLookup(value)
+  const variants = new Set([compact])
+
+  if (/^(?:table|party)\s+size$/i.test(value.trim())) {
+    variants.add('size')
+  }
+  if (/^meal\s+time$/i.test(value.trim())) {
+    variants.add('time')
+  }
+
+  return [...variants].filter(Boolean)
+}
+
 function findColumn(
   columns: DatasetColumn[],
   requestedName: string
 ): DatasetColumn | undefined {
   const requested = requestedName.toLowerCase()
-  const compact = normalizeColumnLookup(requestedName)
+  const variants = lookupVariants(requestedName)
+  const exactMatch = columns.find((column) => {
+    const name = columnName(column)
+    if (!name) return false
+    const normalizedName = normalizeColumnLookup(name)
+    return name.toLowerCase() === requested || variants.includes(normalizedName)
+  })
+  if (exactMatch) return exactMatch
+
   return columns.find((column) => {
     const name = columnName(column)
     if (!name) return false
-    return (
-      name.toLowerCase() === requested ||
-      normalizeColumnLookup(name) === compact
+    const normalizedName = normalizeColumnLookup(name)
+    return variants.some(
+      (variant) =>
+        variant.length >= 4 &&
+        (normalizedName.endsWith(variant) || normalizedName.includes(variant))
     )
   })
 }
@@ -686,7 +1050,55 @@ function validateAndResolveIntentColumns(
   intent: ExistingDatasetChartIntent,
   columns: DatasetColumn[]
 ): ResolvedExistingDatasetChartIntent {
+  if (intent.chartKind === 'big_number') {
+    const resolvedFilters = resolveIntentFilters(intent.filters, columns)
+    if (intent.metric.type === 'count') {
+      return { ...intent, filters: resolvedFilters }
+    }
+
+    const metricColumn = findColumn(columns, intent.metric.column)
+    if (!metricColumn || !columnName(metricColumn)) {
+      throw new Error(
+        `Dataset "${intent.datasetName}" does not contain metric column "${intent.metric.column}".`
+      )
+    }
+    if (!isNumericColumn(metricColumn)) {
+      throw new Error(
+        `Column "${columnName(metricColumn)}" is not numeric, so ${intent.metric.aggregate} cannot be used for this KPI.`
+      )
+    }
+
+    return {
+      ...intent,
+      filters: resolvedFilters,
+      metric: {
+        ...intent.metric,
+        column: columnName(metricColumn)!,
+      },
+    }
+  }
+
+  if (intent.chartKind === 'table') {
+    const resolvedFilters = resolveIntentFilters(intent.filters, columns)
+    const resolvedColumns = intent.columns.map((requestedColumn) => {
+      const matchedColumn = findColumn(columns, requestedColumn)
+      if (!matchedColumn || !columnName(matchedColumn)) {
+        throw new Error(
+          `Dataset "${intent.datasetName}" does not contain table column "${requestedColumn}".`
+        )
+      }
+      return columnName(matchedColumn)!
+    })
+
+    return {
+      ...intent,
+      columns: resolvedColumns,
+      filters: resolvedFilters,
+    }
+  }
+
   if (intent.chartKind === 'scatter') {
+    const resolvedFilters = resolveIntentFilters(intent.filters, columns)
     const xColumn = findColumn(columns, intent.xColumn)
     if (!xColumn || !columnName(xColumn)) {
       throw new Error(
@@ -725,9 +1137,11 @@ function validateAndResolveIntentColumns(
       xColumn: columnName(xColumn)!,
       yColumn: columnName(yColumn)!,
       groupBy: groupByColumn ? columnName(groupByColumn) : undefined,
+      filters: resolvedFilters,
     }
   }
 
+  const resolvedFilters = resolveIntentFilters(intent.filters, columns)
   const groupByColumn = findColumn(columns, intent.groupBy)
   if (!groupByColumn || !columnName(groupByColumn)) {
     throw new Error(
@@ -739,6 +1153,7 @@ function validateAndResolveIntentColumns(
     return {
       ...intent,
       groupBy: columnName(groupByColumn)!,
+      filters: resolvedFilters,
     }
   }
 
@@ -757,6 +1172,7 @@ function validateAndResolveIntentColumns(
   return {
     ...intent,
     groupBy: columnName(groupByColumn)!,
+    filters: resolvedFilters,
     metric: {
       ...intent.metric,
       column: columnName(metricColumn)!,
@@ -764,9 +1180,107 @@ function validateAndResolveIntentColumns(
   }
 }
 
+function resolveIntentFilters(
+  filters: AxBiChartFilter[] | undefined,
+  columns: DatasetColumn[]
+): AxBiChartFilter[] | undefined {
+  if (!filters?.length) return undefined
+
+  return filters.map((filter) => {
+    const filterColumn = findColumn(columns, filter.column)
+    if (!filterColumn || !columnName(filterColumn)) {
+      throw new Error(`Dataset does not contain filter column "${filter.column}".`)
+    }
+
+    return {
+      ...filter,
+      column: columnName(filterColumn)!,
+    }
+  })
+}
+
+function applyCommonChartOptions(
+  config: Record<string, unknown>,
+  options: AxBiChartOptions | undefined,
+  supported: {
+    colorScheme?: boolean
+    rowLimit?: number
+    showValues?: boolean
+  }
+): void {
+  if (!options) return
+
+  if (supported.colorScheme && options.colorScheme) {
+    config.color_scheme = options.colorScheme
+  }
+
+  if (supported.rowLimit && options.rowLimit) {
+    config.row_limit = Math.min(options.rowLimit, supported.rowLimit)
+  }
+
+  if (supported.showValues && options.showValues) {
+    config.show_value = true
+  }
+}
+
+function applyChartFilters(
+  config: Record<string, unknown>,
+  filters: AxBiChartFilter[] | undefined
+): void {
+  if (!filters?.length) return
+  config.filters = filters.map((filter) => ({
+    column: filter.column,
+    op: filter.op,
+    value: filter.value,
+  }))
+}
+
 function buildExistingDatasetChartConfig(
   intent: ResolvedExistingDatasetChartIntent
 ): Record<string, unknown> {
+  const metricConfig =
+    'metric' in intent
+      ? intent.metric.type === 'count'
+        ? { sql_expression: 'COUNT(*)', label: 'Count' }
+        : {
+            name: intent.metric.column,
+            aggregate: intent.metric.aggregate,
+            label: `${intent.metric.aggregate}(${intent.metric.column})`,
+          }
+      : null
+
+  if (intent.chartKind === 'big_number') {
+    const config = {
+      chart_type: 'big_number',
+      metric: metricConfig,
+      subheader:
+        intent.metric.type === 'count'
+          ? 'COUNT(*)'
+          : `${intent.metric.aggregate}(${intent.metric.column})`,
+    }
+    applyChartFilters(config, intent.filters)
+    applyCommonChartOptions(config, intent.options, { colorScheme: true })
+    return config
+  }
+
+  if (intent.chartKind === 'table') {
+    const tableColumns = intent.columns.map((name) => ({ name }))
+    const config = {
+      chart_type: 'table',
+      query_mode: 'raw',
+      columns: tableColumns,
+      all_columns: tableColumns,
+      groupby: [],
+      row_limit: 1000,
+    }
+    applyChartFilters(config, intent.filters)
+    applyCommonChartOptions(config, intent.options, {
+      colorScheme: true,
+      rowLimit: 50000,
+    })
+    return config
+  }
+
   if (intent.chartKind === 'scatter') {
     const config: Record<string, unknown> = {
       chart_type: 'xy',
@@ -780,32 +1294,57 @@ function buildExistingDatasetChartConfig(
     if (intent.groupBy) {
       config.group_by = [{ name: intent.groupBy }]
     }
+    applyChartFilters(config, intent.filters)
+    applyCommonChartOptions(config, intent.options, {
+      colorScheme: true,
+      rowLimit: 50000,
+    })
     return config
   }
 
-  return {
+  const yMetric = metricConfig!
+
+  if (intent.chartKind === 'pie' || intent.chartKind === 'donut') {
+    const config = {
+      chart_type: 'pie',
+      dimension: { name: intent.groupBy },
+      metric: yMetric,
+      donut: intent.chartKind === 'donut',
+      show_labels: true,
+      label_type: 'key_value_percent',
+      show_legend: true,
+      color_scheme: 'supersetColors',
+    }
+    applyChartFilters(config, intent.filters)
+    applyCommonChartOptions(config, intent.options, {
+      colorScheme: true,
+      rowLimit: 10000,
+    })
+    return config
+  }
+
+  const config = {
     chart_type: 'xy',
     x: { name: intent.groupBy },
-    y:
-      intent.metric.type === 'count'
-        ? [{ sql_expression: 'COUNT(*)', label: 'Count' }]
-        : [
-            {
-              name: intent.metric.column,
-              aggregate: intent.metric.aggregate,
-              label: `${intent.metric.aggregate}(${intent.metric.column})`,
-            },
-          ],
-    kind: intent.chartKind,
-    orientation: 'vertical',
+    y: [yMetric],
+    kind: intent.chartKind === 'horizontal_bar' ? 'bar' : intent.chartKind,
+    orientation:
+      intent.chartKind === 'horizontal_bar' ? 'horizontal' : 'vertical',
     x_axis: { title: humanize(intent.groupBy) },
     y_axis: {
       title:
         intent.metric.type === 'count'
           ? 'Count'
-          : `${intent.metric.aggregate}(${humanize(intent.metric.column)})`,
+        : `${intent.metric.aggregate}(${humanize(intent.metric.column)})`,
     },
   }
+  applyChartFilters(config, intent.filters)
+  applyCommonChartOptions(config, intent.options, {
+    colorScheme: true,
+    rowLimit: 50000,
+    showValues: true,
+  })
+  return config
 }
 
 function axBiToolNames(tools: MCPTool[]): Set<string> {
@@ -898,20 +1437,23 @@ export async function runAxBiExistingDatasetChartWorkflow({
   serviceHub: ServiceHub
   intentExtractor?: AxBiChartIntentExtractor
 }): Promise<AxBiChartIntentWorkflowResult> {
+  const dashboardIntent = parseExistingDatasetDashboardIntent(prompt)
   let intent =
     isAxBiChartCandidate(prompt) && intentExtractor
       ? normalizeChartIntentDraft(await intentExtractor(prompt))
       : null
   intent ??= parseExistingDatasetChartIntent(prompt)
-  if (!intent) return { handled: false }
+  if (!intent && !dashboardIntent) return { handled: false }
 
   const tools = await serviceHub.mcp().getTools()
   const toolNames = axBiToolNames(tools)
-  for (const required of [
+  const requiredTools = [
     'list_datasets',
     'get_dataset_info',
     'generate_chart',
-  ]) {
+    ...(dashboardIntent ? ['generate_dashboard'] : []),
+  ]
+  for (const required of requiredTools) {
     if (!canCallAxBiTool(toolNames, required)) {
       throw new Error(
         `AX-BI MCP is connected, but the required tool "${required}" is not available directly or through the "call_tool" proxy. Please restart the AX-BI MCP service and reconnect it in Ax Studio.`
@@ -919,13 +1461,14 @@ export async function runAxBiExistingDatasetChartWorkflow({
     }
   }
 
+  const datasetName = dashboardIntent?.datasetName ?? intent!.datasetName
   const datasetList = await callAxBiTool({
     serviceHub,
     toolNames,
     toolName: 'list_datasets',
     arguments: {
       request: {
-        search: intent.datasetName,
+        search: datasetName,
         page: 1,
         page_size: 20,
         select_columns: ['id', 'table_name', 'schema', 'database_name', 'url'],
@@ -934,10 +1477,14 @@ export async function runAxBiExistingDatasetChartWorkflow({
   })
   const parsedDatasetList =
     parseJsonToolResult<Record<string, unknown>>(datasetList)
-  const dataset = findDatasetRecord(parsedDatasetList, intent.datasetName)
-  const datasetId = dataset?.id
+  const dataset = findDatasetRecord(parsedDatasetList, datasetName)
+  const rawDatasetId = dataset?.id
+  const datasetId =
+    typeof rawDatasetId === 'number' || typeof rawDatasetId === 'string'
+      ? rawDatasetId
+      : undefined
   if (datasetId == null) {
-    throw new Error(`Could not find AX-BI dataset "${intent.datasetName}".`)
+    throw new Error(`Could not find AX-BI dataset "${datasetName}".`)
   }
 
   const datasetInfoResult = await callAxBiTool({
@@ -955,10 +1502,112 @@ export async function runAxBiExistingDatasetChartWorkflow({
   const columns = datasetColumnsFromResult(parsedDatasetInfo)
   if (columns.length === 0) {
     throw new Error(
-      `Could not read columns for AX-BI dataset "${intent.datasetName}".`
+      `Could not read columns for AX-BI dataset "${datasetName}".`
     )
   }
-  const resolvedIntent = validateAndResolveIntentColumns(intent, columns)
+
+  if (dashboardIntent) {
+    const chartPlans = buildChartPlans({
+      id: datasetId,
+      table_name:
+        typeof dataset?.table_name === 'string'
+          ? dataset.table_name
+          : dashboardIntent.datasetName,
+      columns,
+    })
+    if (chartPlans.length === 0) {
+      return {
+        handled: true,
+        message: `AX-BI found dataset "${dashboardIntent.datasetName}", but I could not identify usable columns for dashboard charts.`,
+      }
+    }
+
+    const chartIds: number[] = []
+    for (const plan of chartPlans) {
+      const chart = await callAxBiTool({
+        serviceHub,
+        toolNames,
+        toolName: 'generate_chart',
+        arguments: {
+          request: {
+            dataset_id: datasetId,
+            chart_name: `${dashboardIntent.dashboardTitle} - ${plan.name}`,
+            config: plan.config,
+            save_chart: true,
+            generate_preview: false,
+          },
+        },
+      })
+      const chartResult = parseJsonToolResult<ChartResult>(chart)
+      if (chartResult.error) {
+        console.warn(
+          '[AX-BI] Dashboard chart generation failed',
+          plan.name,
+          chartResult.error
+        )
+        continue
+      }
+      const chartId = chartIdFromResult(chartResult)
+      if (!chartId) continue
+
+      if (toolNames.has('update_chart')) {
+        try {
+          await callAxBiTool({
+            serviceHub,
+            toolNames,
+            toolName: 'update_chart',
+            arguments: {
+              request: {
+                chart_id: chartId,
+                config: plan.config,
+              },
+            },
+          })
+        } catch (error) {
+          console.warn('[AX-BI] update_chart failed for chart', chartId, error)
+        }
+      }
+
+      chartIds.push(chartId)
+    }
+
+    if (chartIds.length === 0) {
+      throw new Error('AX-BI found the dataset, but no dashboard charts could be saved.')
+    }
+
+    const dashboard = await callAxBiTool({
+      serviceHub,
+      toolNames,
+      toolName: 'generate_dashboard',
+      arguments: {
+        request: {
+          chart_ids: chartIds,
+          dashboard_title: dashboardIntent.dashboardTitle,
+          description: `Generated from ${dashboardIntent.datasetName} via Ax Studio.`,
+          published: true,
+        },
+      },
+    })
+    const dashboardResult = parseJsonToolResult<DashboardResult>(dashboard)
+    if (dashboardResult.error) {
+      throw new Error(
+        typeof dashboardResult.error === 'string'
+          ? dashboardResult.error
+          : 'AX-BI dashboard creation failed'
+      )
+    }
+
+    const dashboardUrl = dashboardUrlFromResult(dashboardResult)
+    return {
+      handled: true,
+      chartUrl: dashboardUrl,
+      message: dashboardUrl
+        ? `Created AX-BI dashboard "${dashboardIntent.dashboardTitle}" with ${chartIds.length} saved chart${chartIds.length === 1 ? '' : 's'}.\n\nDashboard URL: ${dashboardUrl}`
+        : `Created AX-BI dashboard "${dashboardIntent.dashboardTitle}" with ${chartIds.length} saved chart${chartIds.length === 1 ? '' : 's'}, but AX-BI did not return a dashboard URL.`,
+    }
+  }
+
+  const resolvedIntent = validateAndResolveIntentColumns(intent!, columns)
 
   const chartResult = await callAxBiTool({
     serviceHub,
