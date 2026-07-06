@@ -224,13 +224,41 @@ describe('fileMetadata adversarial inputs', () => {
     expect(files[0].id).toBe('1')
   })
 
-  it('handles size value of negative number', () => {
+  it('rejects negative size values', () => {
     const input =
       'hi\n\n[ATTACHED_FILES]\n- file_id: 1, name: f.txt, size: -5\n[/ATTACHED_FILES]'
     const { files } = extractFilesFromPrompt(input)
     expect(files).toHaveLength(1)
-    // -5 is a valid number, not NaN, so it gets stored
-    expect(files[0].size).toBe(-5)
+    expect(files[0].size).toBeUndefined()
+  })
+
+  it('rejects non-decimal numeric metadata', () => {
+    const input =
+      'hi\n\n[ATTACHED_FILES]\n' +
+      '- file_id: a, name: a.txt, size: 1e3, chunks: 0x10\n' +
+      '- file_id: b, name: b.txt, size: 1.5, chunks: 2.5\n' +
+      '[/ATTACHED_FILES]'
+    const { files } = extractFilesFromPrompt(input)
+
+    expect(files).toHaveLength(2)
+    expect(files[0].size).toBeUndefined()
+    expect(files[0].chunkCount).toBeUndefined()
+    expect(files[1].size).toBeUndefined()
+    expect(files[1].chunkCount).toBeUndefined()
+  })
+
+  it('does not inject invalid numeric metadata', () => {
+    const result = injectFilesIntoPrompt('p', [
+      {
+        id: '1',
+        name: 'a.txt',
+        size: -1,
+        chunkCount: 1.5,
+      },
+    ])
+
+    expect(result).not.toContain('size:')
+    expect(result).not.toContain('chunks:')
   })
 
   it('strips whitespace from clean prompt', () => {
