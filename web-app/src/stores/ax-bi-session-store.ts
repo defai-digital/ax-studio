@@ -5,12 +5,13 @@ import { localStorageKey } from '@/constants/localStorage'
 import { createSafeJSONStorage } from '@/lib/storage/storage'
 
 export type AxBiSessionStatus = 'idle' | 'draft' | 'running' | 'ready' | 'error'
+type AxBiRunStatus = Extract<AxBiSessionStatus, 'ready' | 'error'>
 
 export type AxBiRun = {
   id: string
   prompt: string
   message: string
-  status: Extract<AxBiSessionStatus, 'ready' | 'error'>
+  status: AxBiRunStatus
   url?: string
   createdAt: string
 }
@@ -31,7 +32,7 @@ type AxBiSessionDraft = Partial<
 >
 
 type AxBiRunOutcome = {
-  status: Extract<AxBiSessionStatus, 'ready' | 'error'>
+  status: AxBiRunStatus
   message: string
   prompt?: string
   url?: string
@@ -48,14 +49,143 @@ type AxBiSessionState = {
   reset: () => void
 }
 
+const SESSION_STATUSES = new Set<AxBiSessionStatus>([
+  'idle',
+  'draft',
+  'running',
+  'ready',
+  'error',
+])
+const RUN_STATUSES = new Set<AxBiRunStatus>(['ready', 'error'])
+const MAX_SESSIONS = 50
+const MAX_RUNS_PER_SESSION = 20
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function normalizeString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback
+}
+
+function normalizeNonEmptyString(
+  value: unknown,
+  fallback: string
+): string {
+  const normalized = normalizeString(value).trim()
+  return normalized || fallback
+}
+
+function isSessionStatus(value: unknown): value is AxBiSessionStatus {
+  return (
+    typeof value === 'string' &&
+    SESSION_STATUSES.has(value as AxBiSessionStatus)
+  )
+}
+
+function isRunStatus(value: unknown): value is AxBiRunStatus {
+  return typeof value === 'string' && RUN_STATUSES.has(value as AxBiRunStatus)
+}
+
+function normalizeIsoString(value: unknown, fallback: string): string {
+  return typeof value === 'string' && !Number.isNaN(Date.parse(value))
+    ? value
+    : fallback
+}
+
+function normalizeAxBiRun(value: unknown): AxBiRun | undefined {
+  if (!isPlainRecord(value)) return undefined
+
+  const id = normalizeNonEmptyString(value.id, '')
+  const prompt = normalizeNonEmptyString(value.prompt, '')
+  const message = normalizeString(value.message)
+  const now = new Date().toISOString()
+  const createdAt = normalizeIsoString(value.createdAt, now)
+
+  if (!id || !prompt || !isRunStatus(value.status)) return undefined
+
+  return {
+    id,
+    prompt,
+    message,
+    status: value.status,
+    url: typeof value.url === 'string' ? value.url : undefined,
+    createdAt,
+  }
+}
+
+function normalizeAxBiSession(
+  sessionId: string,
+  value: unknown
+): AxBiSession | undefined {
+  if (!isPlainRecord(value)) return undefined
+
+  const now = new Date().toISOString()
+  const runs = Array.isArray(value.runs)
+    ? value.runs
+        .map(normalizeAxBiRun)
+        .filter((run): run is AxBiRun => run !== undefined)
+        .slice(0, MAX_RUNS_PER_SESSION)
+    : []
+
+  return {
+    id: sessionId,
+    title: normalizeNonEmptyString(value.title, 'Untitled analysis'),
+    source: normalizeString(value.source),
+    prompt: normalizeString(value.prompt),
+    status: isSessionStatus(value.status) ? value.status : 'idle',
+    runs,
+    createdAt: normalizeIsoString(value.createdAt, now),
+    updatedAt: normalizeIsoString(value.updatedAt, now),
+  }
+}
+
+function normalizeSessions(value: unknown): Record<string, AxBiSession> {
+  if (!isPlainRecord(value)) return {}
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([sessionId, session]) => [sessionId.trim(), session] as const)
+      .filter(([sessionId]) => sessionId !== '')
+      .slice(-MAX_SESSIONS)
+      .map(([sessionId, session]) => [
+        sessionId,
+        normalizeAxBiSession(sessionId, session),
+      ])
+      .filter(
+        (entry): entry is [string, AxBiSession] => entry[1] !== undefined
+      )
+  )
+}
+
+function sanitizePersistedAxBiSessions(
+  persisted: unknown,
+  current: AxBiSessionState
+): AxBiSessionState {
+  if (!isPlainRecord(persisted)) return current
+
+  const sessions = normalizeSessions(persisted.sessions)
+  const activeSessionId =
+    typeof persisted.activeSessionId === 'string' &&
+    persisted.activeSessionId in sessions
+      ? persisted.activeSessionId
+      : undefined
+
+  return {
+    ...current,
+    sessions,
+    activeSessionId,
+  }
+}
+
 function createAxBiSession(draft: AxBiSessionDraft = {}): AxBiSession {
   const now = new Date().toISOString()
   return {
     id: ulid(),
-    title: draft.title?.trim() || 'Untitled analysis',
-    source: draft.source ?? '',
-    prompt: draft.prompt ?? '',
-    status: draft.status ?? 'idle',
+    title: normalizeNonEmptyString(draft.title, 'Untitled analysis'),
+    source: normalizeString(draft.source),
+    prompt: normalizeString(draft.prompt),
+    status: isSessionStatus(draft.status) ? draft.status : 'idle',
     runs: [],
     createdAt: now,
     updatedAt: now,
@@ -98,14 +228,31 @@ export const useAxBiSessions = create<AxBiSessionState>()(
         set((state) => {
           const session = state.sessions[sessionId]
           if (!session) return state
+          const nextStatus =
+            patch.status === undefined
+              ? session.status
+              : isSessionStatus(patch.status)
+                ? patch.status
+                : session.status
 
           return {
             sessions: {
               ...state.sessions,
               [sessionId]: {
                 ...session,
-                ...patch,
-                title: patch.title ?? session.title,
+                title:
+                  typeof patch.title !== 'string'
+                    ? session.title
+                    : patch.title.trim() || session.title,
+                source:
+                  typeof patch.source === 'string'
+                    ? patch.source
+                    : session.source,
+                prompt:
+                  typeof patch.prompt === 'string'
+                    ? patch.prompt
+                    : session.prompt,
+                status: nextStatus,
                 updatedAt: new Date().toISOString(),
               },
             },
@@ -132,16 +279,18 @@ export const useAxBiSessions = create<AxBiSessionState>()(
       recordRun: (sessionId, outcome) => {
         set((state) => {
           const session = state.sessions[sessionId]
-          const prompt = outcome.prompt?.trim() || session?.prompt.trim()
-          if (!session || !prompt) return state
+          const submittedPrompt =
+            typeof outcome.prompt === 'string' ? outcome.prompt.trim() : ''
+          const prompt = submittedPrompt || session?.prompt.trim()
+          if (!session || !prompt || !isRunStatus(outcome.status)) return state
 
           const now = new Date().toISOString()
           const run: AxBiRun = {
             id: ulid(),
             prompt,
-            message: outcome.message,
+            message: normalizeString(outcome.message),
             status: outcome.status,
-            url: outcome.url,
+            url: typeof outcome.url === 'string' ? outcome.url : undefined,
             createdAt: now,
           }
 
@@ -151,7 +300,7 @@ export const useAxBiSessions = create<AxBiSessionState>()(
               [sessionId]: {
                 ...session,
                 status: outcome.status,
-                runs: [run, ...session.runs].slice(0, 20),
+                runs: [run, ...session.runs].slice(0, MAX_RUNS_PER_SESSION),
                 updatedAt: now,
               },
             },
@@ -164,6 +313,12 @@ export const useAxBiSessions = create<AxBiSessionState>()(
     {
       name: localStorageKey.axBiSessions,
       storage: createSafeJSONStorage(() => localStorage, 'useAxBiSessions'),
+      merge: (persisted, current) =>
+        sanitizePersistedAxBiSessions(persisted, current),
+      partialize: (state) => ({
+        sessions: normalizeSessions(state.sessions),
+        activeSessionId: state.activeSessionId,
+      }),
     }
   )
 )
