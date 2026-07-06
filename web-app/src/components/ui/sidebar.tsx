@@ -81,6 +81,12 @@ const SidebarProvider = React.forwardRef<
     const [width, setWidthState] = React.useState(normalizedDefaultWidth)
 
     React.useEffect(() => {
+      setWidthState((currentWidth) =>
+        currentWidth === normalizedDefaultWidth
+          ? currentWidth
+          : normalizedDefaultWidth
+      )
+
       if (defaultWidth !== normalizedDefaultWidth) {
         onWidthChange?.(normalizedDefaultWidth)
       }

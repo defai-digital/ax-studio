@@ -39,7 +39,7 @@ vi.mock('@/hooks/ui/use-mobile', () => ({
 vi.mock('@/hooks/ui/use-sidebar-resize', () => ({
   normalizeSidebarWidth: (width: string, fallbackWidth = '15rem') =>
     /^(?:\d+(?:\.\d+)?|\.\d+)(?:rem|px)$/.test(width.trim())
-      ? width.trim()
+      ? width.trim().replace(/^\./, '0.')
       : fallbackWidth,
   useSidebarResize: vi.fn(() => ({
     dragRef: { current: null },
@@ -218,5 +218,45 @@ describe('Sidebar components', () => {
       'data-sidebar',
       'menu-sub-button'
     )
+  })
+
+  it('normalizes malformed default width before applying sidebar styles', () => {
+    const onWidthChange = vi.fn()
+
+    const { container } = render(
+      <SidebarProvider
+        defaultWidth="18rem trailing"
+        onWidthChange={onWidthChange}
+      >
+        <Sidebar>Navigation</Sidebar>
+      </SidebarProvider>
+    )
+
+    expect(container.firstElementChild).toHaveStyle({
+      '--sidebar-width': '15rem',
+    })
+    expect(onWidthChange).toHaveBeenCalledWith('15rem')
+  })
+
+  it('syncs sidebar width when default width changes', () => {
+    const { container, rerender } = render(
+      <SidebarProvider defaultWidth="15rem">
+        <Sidebar>Navigation</Sidebar>
+      </SidebarProvider>
+    )
+
+    expect(container.firstElementChild).toHaveStyle({
+      '--sidebar-width': '15rem',
+    })
+
+    rerender(
+      <SidebarProvider defaultWidth="18rem">
+        <Sidebar>Navigation</Sidebar>
+      </SidebarProvider>
+    )
+
+    expect(container.firstElementChild).toHaveStyle({
+      '--sidebar-width': '18rem',
+    })
   })
 })
