@@ -245,7 +245,7 @@ async function computeFileSha256Browser(filePath: string): Promise<string> {
     .join('')
 }
 
-const ALLOWED_LOAD_OVERRIDE_KEYS = new Set<keyof LlamacppConfig>([
+const ALLOWED_LOAD_OVERRIDE_KEYS = new Set<string>([
   'fit',
   'fit_target',
   'fit_ctx',
@@ -1752,11 +1752,11 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     if (mmprojPath) {
       loadBody.mmproj_path = mmprojPath
     }
-    const nGpuLayers = Number(this.config.n_gpu_layers)
+    const nGpuLayers = toNumberSetting(this.config.n_gpu_layers, -1)
     if (nGpuLayers >= 0 && nGpuLayers !== AUTO_GPU_LAYERS_SENTINEL) {
       loadBody.n_gpu_layers = nGpuLayers
     }
-    const ctxSize = Number(this.config.ctx_size)
+    const ctxSize = toNumberSetting(this.config.ctx_size, 0)
     if (ctxSize > 0) {
       loadBody.context_length = ctxSize
     }
@@ -2119,7 +2119,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     }
     if (overrideSettings) {
       for (const [key, value] of Object.entries(overrideSettings)) {
-        if (!ALLOWED_LOAD_OVERRIDE_KEYS.has(key as keyof LlamacppConfig)) {
+        if (!ALLOWED_LOAD_OVERRIDE_KEYS.has(key)) {
           // Historically this threw, which killed model load whenever the
           // caller happened to pass a sampling param (temperature, top_p, …)
           // among the settings — those are per-request params, not load-time
@@ -2954,7 +2954,10 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     const session = await this._requireSession(modelId)
     await this._healthCheck(session.port, session.pid, modelId)
 
-    const ubatchSize = Number(this.config.ubatch_size) || DEFAULT_UBATCH_SIZE
+    const ubatchSize = toNumberSetting(
+      this.config.ubatch_size,
+      DEFAULT_UBATCH_SIZE
+    )
     const batches = buildEmbedBatches(inputs, ubatchSize)
     const batchResults = []
 

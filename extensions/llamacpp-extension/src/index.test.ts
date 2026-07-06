@@ -502,6 +502,105 @@ describe('AxStudioLlamacppExtension', () => {
     fetchSpy.mockRestore()
   })
 
+  it('does not forward malformed numeric load settings to ax-serving', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    ;(extension as any).config = {
+      engine_type: 'ax-serving',
+      n_gpu_layers: '0x10',
+      ctx_size: '0x100000',
+    }
+    mocks.dirState.add('/app-data/llamacpp/models/ax-model')
+    mocks.fsState.set(
+      '/app-data/llamacpp/models/ax-model/model.yml',
+      [
+        'model_path: llamacpp/models/ax-model/model.gguf',
+        'name: ax-model',
+        'size_bytes: 123',
+        'embedding: false',
+      ].join('\n')
+    )
+    mocks.fsState.set('/app-data/llamacpp/models/ax-model/model.gguf', 'gguf')
+    mocks.fsState.set('/app-data/llamacpp/models/ax-model/model-manifest.json', '{}')
+
+    vi.mocked(getLoadedModels).mockResolvedValue([])
+    vi.mocked(startAxServing).mockResolvedValue({
+      pid: 321,
+      port: 6543,
+      model_id: '__ax_serving__',
+      model_path: '/backend/ax-serving',
+      is_embedding: false,
+      api_key: '',
+    })
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+      text: async () => '',
+    } as Response)
+
+    await expect(
+      extension.load('ax-model', undefined, false, true)
+    ).resolves.toMatchObject({
+      model_id: 'ax-model',
+      port: 6543,
+    })
+
+    const loadCall = fetchSpy.mock.calls.find(
+      ([url]) => String(url) === 'http://127.0.0.1:6543/v1/models'
+    )
+    expect(loadCall).toBeDefined()
+    const loadBody = JSON.parse(
+      String((loadCall?.[1] as RequestInit | undefined)?.body)
+    )
+    expect(loadBody).not.toHaveProperty('n_gpu_layers')
+    expect(loadBody).not.toHaveProperty('context_length')
+
+    fetchSpy.mockRestore()
+  })
+
+  it('uses the default embedding batch size for malformed ubatch_size config', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    ;(extension as any).config = {
+      ubatch_size: '0x10',
+    }
+    ;(extension as any).axServingSessions.set('embedding-model', {
+      pid: 321,
+      port: 6543,
+      model_id: 'embedding-model',
+      model_path: '/models/embedding',
+      is_embedding: true,
+      api_key: 'key',
+    })
+    vi.spyOn(extension as any, '_healthCheck').mockResolvedValue(undefined)
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [
+          { embedding: [0.1], index: 0, object: 'embedding' },
+          { embedding: [0.2], index: 1, object: 'embedding' },
+        ],
+        usage: { prompt_tokens: 2, total_tokens: 2 },
+      }),
+      text: async () => '',
+    } as Response)
+
+    await expect(
+      extension.embed({
+        modelId: 'embedding-model',
+        inputs: ['a'.repeat(30), 'b'.repeat(30)],
+      })
+    ).resolves.toMatchObject({
+      model: 'embedding-model',
+    })
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    const body = JSON.parse(
+      String((fetchSpy.mock.calls[0][1] as RequestInit | undefined)?.body)
+    )
+    expect(body.input).toEqual(['a'.repeat(30), 'b'.repeat(30)])
+
+    fetchSpy.mockRestore()
+  })
+
   it('imports Hugging Face MLX repos into the Hugging Face snapshot cache', async () => {
     const extension = new AxStudioLlamacppExtension('', '')
     const snapshotDir =
