@@ -177,4 +177,65 @@ describe('useRouterSettings', () => {
     )
     expect(migrated).not.toBe(persisted)
   })
+
+  it('sanitizes malformed persisted state during merge', () => {
+    const current = useRouterSettings.getState()
+    const merge = useRouterSettings.persist.getOptions().merge
+
+    const merged = merge?.(
+      {
+        enabled: 'true',
+        routerModelId: 42,
+        routerProviderId: ['openai'],
+        timeout: '0x10',
+        threadOverrides: {
+          keep: true,
+          drop: 'false',
+          alsoDrop: 1,
+        },
+      },
+      current
+    )
+
+    expect(merged).toEqual(
+      expect.objectContaining({
+        enabled: false,
+        routerModelId: null,
+        routerProviderId: null,
+        timeout: 15000,
+        threadOverrides: { keep: true },
+      })
+    )
+  })
+
+  it('clamps persisted timeout and caps persisted thread overrides during merge', () => {
+    const current = useRouterSettings.getState()
+    const merge = useRouterSettings.persist.getOptions().merge
+    const threadOverrides = Object.fromEntries(
+      Array.from({ length: 205 }, (_, index) => [`thread-${index}`, true])
+    )
+
+    const merged = merge?.(
+      {
+        enabled: true,
+        routerModelId: 'router-model',
+        routerProviderId: 'openai',
+        timeout: 99999,
+        threadOverrides,
+      },
+      current
+    )
+
+    expect(merged).toEqual(
+      expect.objectContaining({
+        enabled: true,
+        routerModelId: 'router-model',
+        routerProviderId: 'openai',
+        timeout: 30000,
+      })
+    )
+    expect(Object.keys(merged?.threadOverrides ?? {})).toHaveLength(200)
+    expect(merged?.threadOverrides['thread-0']).toBeUndefined()
+    expect(merged?.threadOverrides['thread-204']).toBe(true)
+  })
 })

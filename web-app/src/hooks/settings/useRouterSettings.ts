@@ -32,6 +32,61 @@ export const ROUTER_TIMEOUT_MIN_MS = 500
 export const ROUTER_TIMEOUT_MAX_MS = 30000
 export const ROUTER_TIMEOUT_DEFAULT_MS = 15000
 
+function normalizeRouterTimeout(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+
+  return Math.max(
+    ROUTER_TIMEOUT_MIN_MS,
+    Math.min(Math.trunc(value), ROUTER_TIMEOUT_MAX_MS)
+  )
+}
+
+function normalizeThreadOverrides(
+  value: unknown
+): Record<string, boolean> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(
+      (entry): entry is [string, boolean] =>
+        entry[0] !== '' && typeof entry[1] === 'boolean'
+    )
+    .slice(-200)
+
+  return Object.fromEntries(entries)
+}
+
+function sanitizePersistedRouterSettings(
+  persisted: unknown,
+  current: RouterSettingsState
+): RouterSettingsState {
+  if (!persisted || typeof persisted !== 'object' || Array.isArray(persisted)) {
+    return current
+  }
+
+  const state = persisted as Record<string, unknown>
+  return {
+    ...current,
+    enabled:
+      typeof state.enabled === 'boolean' ? state.enabled : current.enabled,
+    routerModelId:
+      typeof state.routerModelId === 'string' || state.routerModelId === null
+        ? state.routerModelId
+        : current.routerModelId,
+    routerProviderId:
+      typeof state.routerProviderId === 'string' ||
+      state.routerProviderId === null
+        ? state.routerProviderId
+        : current.routerProviderId,
+    timeout: normalizeRouterTimeout(state.timeout) ?? current.timeout,
+    threadOverrides:
+      normalizeThreadOverrides(state.threadOverrides) ??
+      current.threadOverrides,
+  }
+}
+
 export const useRouterSettings = create<RouterSettingsState>()(
   persist(
     (set, get) => ({
@@ -110,6 +165,8 @@ export const useRouterSettings = create<RouterSettingsState>()(
     {
       name: localStorageKey.routerSettings,
       storage: createSafeJSONStorage(() => localStorage, 'useRouterSettings'),
+      merge: (persisted, current) =>
+        sanitizePersistedRouterSettings(persisted, current),
       partialize: (state) => ({
         enabled: state.enabled,
         routerModelId: state.routerModelId,
@@ -119,7 +176,10 @@ export const useRouterSettings = create<RouterSettingsState>()(
       }),
       version: 3,
       migrate: (persisted: unknown, version: number) => {
-        const state = { ...(persisted as Record<string, unknown>) }
+        const state =
+          persisted && typeof persisted === 'object' && !Array.isArray(persisted)
+            ? { ...(persisted as Record<string, unknown>) }
+            : {}
         if (
           version < 3 &&
           (!state.timeout || state.timeout === 3000 || state.timeout === 8000)
