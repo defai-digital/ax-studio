@@ -318,6 +318,32 @@ describe('BaseExtension', () => {
       expect(await baseExtension.getSetting('port', 0)).toBe(8080)
     })
 
+    it('should coerce complete decimal strings to number', async () => {
+      const settings = [
+        setting('temperature', ' .75 '),
+        setting('scale', '1e3'),
+      ]
+      vi.spyOn(baseExtension, 'getSettings').mockResolvedValue(settings)
+
+      expect(await baseExtension.getSetting('temperature', 0)).toBe(0.75)
+      expect(await baseExtension.getSetting('scale', 0)).toBe(1000)
+    })
+
+    it('should reject JS numeric coercion edge cases for number defaults', async () => {
+      const settings = [
+        setting('empty', ''),
+        setting('hex', '0x20'),
+        setting('flag', true),
+        setting('partial', '12abc'),
+      ]
+      vi.spyOn(baseExtension, 'getSettings').mockResolvedValue(settings)
+
+      expect(await baseExtension.getSetting('empty', 42)).toBe(42)
+      expect(await baseExtension.getSetting('hex', 42)).toBe(42)
+      expect(await baseExtension.getSetting('flag', 42)).toBe(42)
+      expect(await baseExtension.getSetting('partial', 42)).toBe(42)
+    })
+
     it('should return default for non-finite stored number', async () => {
       const settings = [setting('val', 'notanumber')]
       vi.spyOn(baseExtension, 'getSettings').mockResolvedValue(settings)

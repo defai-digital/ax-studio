@@ -45,6 +45,58 @@ function buildDefaultControllerProps(
   }
 }
 
+function isAsciiDigit(value: string, index: number): boolean {
+  const code = value.charCodeAt(index)
+  return code >= 48 && code <= 57
+}
+
+function parseFiniteNumericSetting(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null
+  }
+  if (typeof value !== 'string') return null
+
+  const trimmed = value.trim()
+  if (trimmed === '') return null
+
+  let index = 0
+  if (trimmed[index] === '+' || trimmed[index] === '-') index += 1
+
+  let wholeDigits = 0
+  while (index < trimmed.length && isAsciiDigit(trimmed, index)) {
+    wholeDigits += 1
+    index += 1
+  }
+
+  let fractionalDigits = 0
+  if (trimmed[index] === '.') {
+    index += 1
+    while (index < trimmed.length && isAsciiDigit(trimmed, index)) {
+      fractionalDigits += 1
+      index += 1
+    }
+  }
+
+  if (wholeDigits + fractionalDigits === 0) return null
+
+  if (trimmed[index] === 'e' || trimmed[index] === 'E') {
+    index += 1
+    if (trimmed[index] === '+' || trimmed[index] === '-') index += 1
+
+    let exponentDigits = 0
+    while (index < trimmed.length && isAsciiDigit(trimmed, index)) {
+      exponentDigits += 1
+      index += 1
+    }
+    if (exponentDigits === 0) return null
+  }
+
+  if (index !== trimmed.length) return null
+
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 /**
  * Represents a base extension.
  * This class should be extended by any class that represents an extension.
@@ -252,8 +304,7 @@ export abstract class BaseExtension implements ExtensionType {
     if (value === undefined || value === null) return defaultValue
 
     if (typeof defaultValue === 'number') {
-      const coerced = typeof value === 'number' ? value : Number(value)
-      return (Number.isFinite(coerced) ? coerced : defaultValue) as T
+      return (parseFiniteNumericSetting(value) ?? defaultValue) as T
     }
     if (typeof defaultValue === 'boolean') {
       if (typeof value === 'boolean') return value as T
