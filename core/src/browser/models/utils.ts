@@ -1,28 +1,31 @@
 type ValidationRule = (value: unknown) => boolean
 
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value)
+
 export const validationRules: Record<string, ValidationRule> = {
-  temperature: (v) => typeof v === 'number' && v >= 0 && v <= 2,
-  token_limit: (v) => typeof v === 'number' && v >= 0,
-  top_k: (v) => typeof v === 'number' && v >= 0,
-  top_p: (v) => typeof v === 'number' && v >= 0 && v <= 1,
+  temperature: (v) => isFiniteNumber(v) && v >= 0 && v <= 2,
+  token_limit: (v) => isFiniteNumber(v) && v >= 0,
+  top_k: (v) => isFiniteNumber(v) && v >= 0,
+  top_p: (v) => isFiniteNumber(v) && v >= 0 && v <= 1,
   stream: (v) => typeof v === 'boolean',
-  max_tokens: (v) => typeof v === 'number' && v >= 0,
+  max_tokens: (v) => isFiniteNumber(v) && v >= 0,
   stop: (v) => Array.isArray(v) && v.every((s) => typeof s === 'string'),
-  frequency_penalty: (v) => typeof v === 'number',
-  presence_penalty: (v) => typeof v === 'number',
-  ctx_len: (v) => typeof v === 'number' && v >= 0,
-  ngl: (v) => typeof v === 'number' && v >= 0,
+  frequency_penalty: (v) => isFiniteNumber(v),
+  presence_penalty: (v) => isFiniteNumber(v),
+  ctx_len: (v) => isFiniteNumber(v) && v >= 0,
+  ngl: (v) => isFiniteNumber(v) && v >= 0,
   embedding: (v) => typeof v === 'boolean',
-  n_parallel: (v) => typeof v === 'number' && v >= 0,
-  cpu_threads: (v) => typeof v === 'number' && v >= 0,
+  n_parallel: (v) => isFiniteNumber(v) && v >= 0,
+  cpu_threads: (v) => isFiniteNumber(v) && v >= 0,
   prompt_template: (v) => typeof v === 'string',
   llama_model_path: (v) => typeof v === 'string',
   mmproj: (v) => typeof v === 'string',
   vision_model: (v) => typeof v === 'boolean',
   text_model: (v) => typeof v === 'boolean',
-  repeat_last_n: (v) => typeof v === 'number',
-  repeat_penalty: (v) => typeof v === 'number',
-  min_p: (v) => typeof v === 'number',
+  repeat_last_n: (v) => isFiniteNumber(v),
+  repeat_penalty: (v) => isFiniteNumber(v),
+  min_p: (v) => isFiniteNumber(v),
 }
 
 const INTEGER_KEYS = new Set([
@@ -34,16 +37,40 @@ const FLOAT_KEYS = new Set([
   'presence_penalty', 'repeat_penalty', 'repeat_last_n',
 ])
 
+function parseIntegerString(value: string): number {
+  const trimmed = value.trim()
+  if (!/^-?\d+$/.test(trimmed)) return NaN
+
+  const parsed = Number(trimmed)
+  return Number.isSafeInteger(parsed) ? parsed : NaN
+}
+
+function normalizeIntegerNumber(value: number): number {
+  if (!Number.isFinite(value)) return NaN
+
+  const truncated = Math.trunc(value)
+  return Number.isSafeInteger(truncated) ? truncated : NaN
+}
+
+function parseFiniteNumberString(value: string): number {
+  const trimmed = value.trim()
+  if (!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(trimmed)) {
+    return NaN
+  }
+
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : NaN
+}
+
 export function normalizeValue(key: string, value: unknown): unknown {
   if (INTEGER_KEYS.has(key)) {
-    if (typeof value === 'string') return parseInt(value, 10)
-    if (typeof value === 'number') return Math.trunc(value)
-    if (value === null) return 0
-    if (value === undefined) return NaN
+    if (typeof value === 'string') return parseIntegerString(value)
+    if (typeof value === 'number') return normalizeIntegerNumber(value)
+    if (value === null || value === undefined) return NaN
     return value
   }
   if (FLOAT_KEYS.has(key) && typeof value === 'string') {
-    return Number(value)
+    return parseFiniteNumberString(value)
   }
   return value
 }

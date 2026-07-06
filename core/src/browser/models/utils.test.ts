@@ -196,6 +196,7 @@ describe('normalizeValue', () => {
   it('should normalize ctx_len correctly', () => {
     expect(normalizeValue('ctx_len', 100.5)).toBe(100)
     expect(normalizeValue('ctx_len', '2')).toBe(2)
+    expect(normalizeValue('ctx_len', ' 2 ')).toBe(2)
     expect(normalizeValue('ctx_len', 100)).toBe(100)
   })
   it('should normalize token_limit correctly', () => {
@@ -227,15 +228,40 @@ describe('normalizeValue', () => {
   it('should handle edge cases for normalization', () => {
     expect(normalizeValue('ctx_len', -5.7)).toBe(-5)
     expect(normalizeValue('token_limit', 'abc')).toBeNaN()
-    expect(normalizeValue('max_tokens', null)).toBe(0)
+    expect(normalizeValue('max_tokens', null)).toBeNaN()
     expect(normalizeValue('ngl', undefined)).toBeNaN()
-    expect(normalizeValue('n_parallel', Infinity)).toBe(Infinity)
-    expect(normalizeValue('cpu_threads', -Infinity)).toBe(-Infinity)
+    expect(normalizeValue('n_parallel', Infinity)).toBeNaN()
+    expect(normalizeValue('cpu_threads', -Infinity)).toBeNaN()
+  })
+
+  it('rejects malformed integer strings instead of partially parsing them', () => {
+    expect(normalizeValue('ctx_len', '1024abc')).toBeNaN()
+    expect(normalizeValue('token_limit', '1e3')).toBeNaN()
+    expect(normalizeValue('max_tokens', '0x10')).toBeNaN()
+    expect(normalizeValue('ngl', '12.5')).toBeNaN()
+    expect(normalizeValue('cpu_threads', '')).toBeNaN()
+  })
+
+  it('rejects non-finite numeric values', () => {
+    expect(validationRules.token_limit(Infinity)).toBe(false)
+    expect(validationRules.max_tokens(Infinity)).toBe(false)
+    expect(validationRules.ctx_len(Infinity)).toBe(false)
+    expect(validationRules.frequency_penalty(NaN)).toBe(false)
+    expect(validationRules.repeat_last_n(-Infinity)).toBe(false)
   })
 
   it('should return NaN for invalid numeric float inputs instead of the original string', () => {
     expect(normalizeValue('temperature', 'invalid')).toBeNaN()
     expect(normalizeValue('top_p', 'oops')).toBeNaN()
+    expect(normalizeValue('top_p', '')).toBeNaN()
+    expect(normalizeValue('top_p', '0x1')).toBeNaN()
+    expect(normalizeValue('top_p', 'Infinity')).toBeNaN()
+  })
+
+  it('normalizes finite decimal float strings', () => {
+    expect(normalizeValue('temperature', '0.7')).toBe(0.7)
+    expect(normalizeValue('top_p', '.9')).toBe(0.9)
+    expect(normalizeValue('min_p', '1e-3')).toBe(0.001)
   })
 
   it('should not normalize non-integer parameters', () => {
@@ -287,6 +313,20 @@ describe('extractInferenceParams', () => {
     const modelParams = { temperature: 'invalid', top_p: 0.8 }
     const result = extractInferenceParams(modelParams)
     expect(result).toEqual({ top_p: 0.8 })
+  })
+
+  it('does not extract malformed or non-finite numeric parameters', () => {
+    const modelParams = {
+      token_limit: '10abc',
+      max_tokens: '1e3',
+      top_p: '0x1',
+      temperature: Infinity,
+      frequency_penalty: NaN,
+      stream: true,
+    }
+
+    const result = extractInferenceParams(modelParams)
+    expect(result).toEqual({ stream: true })
   })
 
   it('does not mutate the input params while extracting inference parameters', () => {
@@ -364,6 +404,19 @@ describe('extractModelLoadParams', () => {
 
   it('should skip invalid values when no origin params provided', () => {
     const modelParams = { ctx_len: -1, embedding: true }
+    const result = extractModelLoadParams(modelParams)
+    expect(result).toEqual({ embedding: true })
+  })
+
+  it('does not extract malformed or non-finite model load numbers', () => {
+    const modelParams = {
+      ctx_len: '4096x',
+      ngl: '1e2',
+      n_parallel: Infinity,
+      cpu_threads: null,
+      embedding: true,
+    }
+
     const result = extractModelLoadParams(modelParams)
     expect(result).toEqual({ embedding: true })
   })
