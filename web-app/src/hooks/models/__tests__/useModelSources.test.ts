@@ -10,16 +10,6 @@ vi.mock('@/constants/localStorage', () => ({
   },
 }))
 
-// Mock zustand persist
-vi.mock('zustand/middleware', () => ({
-  persist: (fn: any) => fn,
-  createJSONStorage: () => ({
-    getItem: vi.fn(),
-    setItem: vi.fn(),
-    removeItem: vi.fn(),
-  }),
-}))
-
 // Mock the ServiceHub
 const mockFetchModelCatalog = vi.fn()
 
@@ -332,6 +322,62 @@ describe('useModelSources', () => {
       expect(result.current.error).toBe(null)
     })
 
+    it('should sanitize malformed catalog responses', async () => {
+      mockFetchModelCatalog.mockResolvedValueOnce([
+        null,
+        {
+          model_name: '',
+          description: 'Missing name',
+          downloads: 100,
+        },
+        {
+          model_name: 'valid-model',
+          description: 42,
+          developer: 'provider',
+          downloads: Number.NaN,
+          quants: [
+            null,
+            {
+              model_id: ' valid-model-q4 ',
+              path: ' /path/model.gguf ',
+              file_size: 123,
+            },
+            {
+              model_id: '',
+              path: '/missing-id',
+              file_size: '1GB',
+            },
+          ],
+          is_mlx: false,
+        },
+      ])
+
+      const { result } = renderHook(() => useModelSources())
+
+      await act(async () => {
+        await result.current.fetchSources()
+      })
+
+      expect(result.current.sources).toEqual([
+        {
+          model_name: 'valid-model',
+          description: '',
+          developer: 'provider',
+          downloads: 0,
+          quants: [
+            {
+              model_id: 'valid-model-q4',
+              path: '/path/model.gguf',
+              file_size: '',
+            },
+          ],
+          num_quants: 1,
+          is_mlx: false,
+        },
+      ])
+      expect(result.current.error).toBe(null)
+    })
+
     it('should clear previous error on successful fetch', async () => {
       const { result } = renderHook(() => useModelSources())
 
@@ -477,6 +523,119 @@ describe('useModelSources', () => {
       })
 
       expect(result2.current.sources).toEqual(mockSources)
+    })
+  })
+
+  describe('persistence', () => {
+    it('sanitizes malformed persisted sources during merge', () => {
+      const merge = useModelSources.persist.getOptions().merge
+      const current = useModelSources.getState()
+      const replacementFetch = 'not-a-function'
+
+      const merged = merge?.(
+        {
+          loading: true,
+          error: { message: 'persisted error' },
+          fetchSources: replacementFetch,
+          sources: [
+            null,
+            {
+              model_name: '',
+              description: 'Missing model name',
+              downloads: 1,
+            },
+            {
+              model_name: ' persisted-model ',
+              description: 'Persisted model',
+              developer: 42,
+              downloads: Number.POSITIVE_INFINITY,
+              quants: [
+                {
+                  model_id: ' persisted-model-q4 ',
+                  path: ' /models/persisted.gguf ',
+                  file_size: '4GB',
+                },
+                {
+                  model_id: 'missing-path',
+                  path: '',
+                  file_size: '1GB',
+                },
+              ],
+              mmproj_models: [
+                {
+                  model_id: ' projector ',
+                  path: ' /models/projector.gguf ',
+                  file_size: 12,
+                },
+              ],
+              safetensors_files: [
+                {
+                  model_id: ' st-model ',
+                  path: ' /models/model.safetensors ',
+                  file_size: '8GB',
+                  sha256: 123,
+                },
+              ],
+              tools: true,
+              is_mlx: false,
+            },
+          ],
+        },
+        current
+      )
+
+      expect(typeof merged?.fetchSources).toBe('function')
+      expect(merged?.loading).toBe(false)
+      expect(merged?.error).toBe(null)
+      expect(merged?.sources).toEqual([
+        {
+          model_name: 'persisted-model',
+          description: 'Persisted model',
+          downloads: 0,
+          quants: [
+            {
+              model_id: 'persisted-model-q4',
+              path: '/models/persisted.gguf',
+              file_size: '4GB',
+            },
+          ],
+          num_quants: 1,
+          mmproj_models: [
+            {
+              model_id: 'projector',
+              path: '/models/projector.gguf',
+              file_size: '',
+            },
+          ],
+          safetensors_files: [
+            {
+              model_id: 'st-model',
+              path: '/models/model.safetensors',
+              file_size: '8GB',
+            },
+          ],
+          tools: true,
+          is_mlx: false,
+        },
+      ])
+    })
+
+    it('caps persisted sources to the most recent 2000 valid entries', () => {
+      const merge = useModelSources.persist.getOptions().merge
+      const current = useModelSources.getState()
+      const sources = Array.from({ length: 2005 }, (_, index) => ({
+        model_name: `model-${index}`,
+        description: `Model ${index}`,
+        downloads: index,
+        quants: [],
+        is_mlx: false,
+      }))
+
+      const merged = merge?.({ sources }, current)
+
+      expect(merged?.sources).toHaveLength(2000)
+      expect(merged?.sources[0]?.model_name).toBe('model-5')
+      expect(merged?.sources[1999]?.model_name).toBe('model-2004')
     })
   })
 
