@@ -37,6 +37,10 @@ vi.mock('@/hooks/ui/use-mobile', () => ({
 }))
 
 vi.mock('@/hooks/ui/use-sidebar-resize', () => ({
+  normalizeSidebarWidth: (width: string, fallbackWidth = '15rem') =>
+    /^(?:\d+(?:\.\d+)?|\.\d+)(?:rem|px)$/.test(width.trim())
+      ? width.trim()
+      : fallbackWidth,
   useSidebarResize: vi.fn(() => ({
     dragRef: { current: null },
     handleMouseDown: mockHandleMouseDown,

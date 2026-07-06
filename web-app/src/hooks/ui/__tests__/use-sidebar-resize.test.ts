@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { useSidebarResize } from '../use-sidebar-resize'
+import {
+  normalizeSidebarWidth,
+  useSidebarResize,
+} from '../use-sidebar-resize'
 
 /**
  * useSidebarResize is a DOM-heavy hook. We focus on:
@@ -28,6 +31,19 @@ describe('useSidebarResize', () => {
   })
 
   // ── Phase 1: Return shape ────────────────────────────────────────────────
+
+  it('normalizes valid px and rem widths', () => {
+    expect(normalizeSidebarWidth(' 15rem ', '14rem')).toBe('15rem')
+    expect(normalizeSidebarWidth('320px', '14rem')).toBe('320px')
+    expect(normalizeSidebarWidth('.5rem', '14rem')).toBe('0.5rem')
+  })
+
+  it('falls back instead of partially parsing malformed widths', () => {
+    expect(normalizeSidebarWidth('18rem junk', '14rem')).toBe('14rem')
+    expect(normalizeSidebarWidth('18em', '14rem')).toBe('14rem')
+    expect(normalizeSidebarWidth('-1rem', '14rem')).toBe('14rem')
+    expect(normalizeSidebarWidth('NaNrem', '14rem')).toBe('14rem')
+  })
 
   it('returns dragRef, isDragging ref, and handleMouseDown', () => {
     const { result } = renderHook(() => useSidebarResize(defaultProps()))
@@ -134,6 +150,31 @@ describe('useSidebarResize', () => {
     expect(result.current.isDragging.current).toBe(true)
 
     // Cleanup
+    act(() => {
+      document.dispatchEvent(new MouseEvent('mouseup'))
+    })
+  })
+
+  it('uses fallback units when current width is malformed during drag', () => {
+    const props = {
+      ...defaultProps(),
+      currentWidth: '18rem junk',
+    }
+    const { result } = renderHook(() => useSidebarResize(props))
+
+    act(() => {
+      result.current.handleMouseDown({
+        clientX: 300,
+        preventDefault: vi.fn(),
+      } as unknown as React.MouseEvent)
+    })
+
+    act(() => {
+      document.dispatchEvent(new MouseEvent('mousemove', { clientX: 320 }))
+    })
+
+    expect(props.onResize).toHaveBeenCalledWith('20.0rem')
+
     act(() => {
       document.dispatchEvent(new MouseEvent('mouseup'))
     })

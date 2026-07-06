@@ -94,20 +94,41 @@ interface WidthUnit {
   unit: 'rem' | 'px'
 }
 
+const FALLBACK_WIDTH: WidthUnit = { value: 0, unit: 'px' }
+const DEFAULT_MIN_RESIZE_WIDTH = '14rem'
+const DEFAULT_MAX_RESIZE_WIDTH = '24rem'
+const WIDTH_PATTERN = /^(\d+(?:\.\d+)?|\.\d+)(rem|px)$/
+
 /**
  * Parse width string into value and unit
  */
-function parseWidth(width: string): WidthUnit {
-  const unit = width.endsWith('rem') ? 'rem' : 'px'
-  const value = Number.parseFloat(width)
-  return { value, unit }
+function parseWidth(width: string): WidthUnit | null {
+  const match = width.trim().match(WIDTH_PATTERN)
+  if (!match) return null
+
+  const value = Number(match[1])
+  if (!Number.isFinite(value) || value < 0) return null
+
+  return { value, unit: match[2] as WidthUnit['unit'] }
+}
+
+function parseWidthOrFallback(width: string, fallbackWidth: string): WidthUnit {
+  return parseWidth(width) ?? parseWidth(fallbackWidth) ?? FALLBACK_WIDTH
+}
+
+export function normalizeSidebarWidth(
+  width: string,
+  fallbackWidth = DEFAULT_MIN_RESIZE_WIDTH
+): string {
+  const parsed = parseWidthOrFallback(width, fallbackWidth)
+  return `${parsed.value}${parsed.unit}`
 }
 
 /**
  * Convert any width to pixels for calculations
  */
-function toPx(width: string): number {
-  const { value, unit } = parseWidth(width)
+function toPx(width: string, fallbackWidth: string): number {
+  const { value, unit } = parseWidthOrFallback(width, fallbackWidth)
   return unit === 'rem' ? value * 16 : value
 }
 
@@ -129,8 +150,8 @@ export function useSidebarResize({
   onResize,
   onToggle,
   isCollapsed = false,
-  minResizeWidth = '14rem',
-  maxResizeWidth = '24rem',
+  minResizeWidth = DEFAULT_MIN_RESIZE_WIDTH,
+  maxResizeWidth = DEFAULT_MAX_RESIZE_WIDTH,
   enableToggle = true,
   enableAutoCollapse = true,
   autoCollapseThreshold = 1.5, // Default to collapsing at minWidth + 50%
@@ -165,8 +186,14 @@ export function useSidebarResize({
   const autoCollapseThresholdPx = React.useRef(0)
 
   // Memoize min/max width calculations for performance
-  const minWidthPx = React.useMemo(() => toPx(minResizeWidth), [minResizeWidth])
-  const maxWidthPx = React.useMemo(() => toPx(maxResizeWidth), [maxResizeWidth])
+  const minWidthPx = React.useMemo(
+    () => toPx(minResizeWidth, DEFAULT_MIN_RESIZE_WIDTH),
+    [minResizeWidth]
+  )
+  const maxWidthPx = React.useMemo(
+    () => toPx(maxResizeWidth, DEFAULT_MAX_RESIZE_WIDTH),
+    [maxResizeWidth]
+  )
 
   // Helper function to determine if width is increasing based on direction and mouse movement
   const isIncreasingWidth = React.useCallback(
@@ -237,7 +264,9 @@ export function useSidebarResize({
       }
 
       // Store initial state
-      const currentWidthPx = isCollapsed ? 0 : toPx(currentWidthRef.current)
+      const currentWidthPx = isCollapsed
+        ? 0
+        : toPx(currentWidthRef.current, minResizeWidth)
       startWidth.current = currentWidthPx
       startX.current = e.clientX
       dragStartPoint.current = e.clientX
@@ -262,7 +291,7 @@ export function useSidebarResize({
 
       e.preventDefault()
     },
-    [enableDrag, isCollapsed, isNested]
+    [enableDrag, isCollapsed, isNested, minResizeWidth]
   )
 
   // Handle mouse movement and resizing
@@ -278,7 +307,10 @@ export function useSidebarResize({
 
       if (isDragging.current) {
         // Get unit for width calculations
-        const { unit } = parseWidth(currentWidthRef.current)
+        const { unit } = parseWidthOrFallback(
+          currentWidthRef.current,
+          minResizeWidth
+        )
 
         // Get current rail position for ultra-precise tracking
         let currentRailRect = railRect.current
@@ -470,6 +502,7 @@ export function useSidebarResize({
     autoCollapseThreshold,
     expandThreshold,
     enableToggle,
+    minResizeWidth,
   ])
 
   return {

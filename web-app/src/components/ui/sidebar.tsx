@@ -27,7 +27,10 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar-context'
 import { useIsMobile } from '@/hooks/ui/use-mobile'
-import { useSidebarResize } from '@/hooks/ui/use-sidebar-resize'
+import {
+  normalizeSidebarWidth,
+  useSidebarResize,
+} from '@/hooks/ui/use-sidebar-resize'
 import { mergeButtonRefs } from '@/lib/utils/merge-button-refs'
 import { cn } from '@/lib/utils'
 
@@ -69,14 +72,26 @@ const SidebarProvider = React.forwardRef<
     ref
   ) => {
     const isMobile = useIsMobile()
+    const normalizedDefaultWidth = React.useMemo(
+      () => normalizeSidebarWidth(defaultWidth, SIDEBAR_WIDTH),
+      [defaultWidth]
+    )
+
     //* new state for sidebar width
-    const [width, setWidthState] = React.useState(defaultWidth)
+    const [width, setWidthState] = React.useState(normalizedDefaultWidth)
+
+    React.useEffect(() => {
+      if (defaultWidth !== normalizedDefaultWidth) {
+        onWidthChange?.(normalizedDefaultWidth)
+      }
+    }, [defaultWidth, normalizedDefaultWidth, onWidthChange])
 
     //* wrapper to call both internal state and external callback
     const setWidth = React.useCallback(
       (newWidth: string) => {
-        setWidthState(newWidth)
-        onWidthChange?.(newWidth)
+        const normalizedWidth = normalizeSidebarWidth(newWidth, SIDEBAR_WIDTH)
+        setWidthState(normalizedWidth)
+        onWidthChange?.(normalizedWidth)
       },
       [onWidthChange]
     )
