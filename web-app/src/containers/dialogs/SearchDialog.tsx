@@ -78,9 +78,21 @@ function readRecentSearchThreadIds() {
 
   try {
     const parsed = JSON.parse(stored)
-    return Array.isArray(parsed)
-      ? parsed.filter((id): id is string => typeof id === 'string')
-      : []
+    if (!Array.isArray(parsed)) return []
+
+    const ids: string[] = []
+    const seen = new Set<string>()
+    for (const id of parsed) {
+      if (typeof id !== 'string' || id.trim() === '' || seen.has(id)) {
+        continue
+      }
+
+      ids.push(id)
+      seen.add(id)
+      if (ids.length >= MAX_RECENT_SEARCHES) break
+    }
+
+    return ids
   } catch {
     return []
   }
@@ -455,7 +467,7 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
   const handleSelectThread = useCallback(
     (threadId: string) => {
       const nextThreadIds = readRecentSearchThreadIds()
-        .filter((id) => id !== threadId)
+        .filter((id) => id !== threadId && threads[id] !== undefined)
         .slice(0, MAX_RECENT_SEARCHES - 1)
       nextThreadIds.unshift(threadId)
 
@@ -470,7 +482,7 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
       handleClose()
       navigate({ to: route.threadsDetail, params: { threadId } })
     },
-    [handleClose, navigate]
+    [handleClose, navigate, threads]
   )
 
   // Filtered results

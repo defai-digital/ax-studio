@@ -143,6 +143,20 @@ describe('SearchDialog', () => {
     vi.clearAllMocks()
     localStorage.clear()
     mocks.providers = []
+    mocks.threads = {
+      'thread-alpha': {
+        id: 'thread-alpha',
+        title: 'Alpha roadmap',
+        updated: 1,
+        metadata: {},
+      },
+      'thread-beta': {
+        id: 'thread-beta',
+        title: 'Beta notes',
+        updated: 2,
+        metadata: {},
+      },
+    } as Record<string, Thread>
     Element.prototype.scrollIntoView = vi.fn()
   })
 
@@ -169,6 +183,34 @@ describe('SearchDialog', () => {
     localStorage.setItem(
       localStorageKey.recentSearches,
       JSON.stringify(['thread-beta', 'thread-alpha'])
+    )
+
+    render(<SearchDialog open onOpenChange={mocks.onOpenChange} />)
+
+    fireEvent.click(screen.getByRole('option', { name: 'Alpha roadmap' }))
+
+    await waitFor(() => {
+      expect(mocks.navigate).toHaveBeenCalledWith({
+        to: route.threadsDetail,
+        params: { threadId: 'thread-alpha' },
+      })
+    })
+    expect(
+      JSON.parse(localStorage.getItem(localStorageKey.recentSearches) ?? '[]')
+    ).toEqual(['thread-alpha', 'thread-beta'])
+  })
+
+  it('drops stale and duplicate recent ids when storing a selected thread', async () => {
+    localStorage.setItem(
+      localStorageKey.recentSearches,
+      JSON.stringify([
+        'missing-thread',
+        'thread-beta',
+        'thread-beta',
+        'thread-alpha',
+        '',
+        42,
+      ])
     )
 
     render(<SearchDialog open onOpenChange={mocks.onOpenChange} />)
