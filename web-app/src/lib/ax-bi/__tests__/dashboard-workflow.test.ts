@@ -2413,6 +2413,92 @@ describe('AX-BI dashboard workflow', () => {
     })
   })
 
+  it('adds an explicitly named saved chart to an existing dashboard', async () => {
+    const calls: Array<{ toolName: string; arguments: object }> = []
+    const serviceHub = {
+      mcp: () => ({
+        getTools: async () => [
+          { server: 'ax-bi', name: 'list_charts', description: '', inputSchema: {} },
+          { server: 'ax-bi', name: 'list_dashboards', description: '', inputSchema: {} },
+          {
+            server: 'ax-bi',
+            name: 'add_chart_to_existing_dashboard',
+            description: '',
+            inputSchema: {},
+          },
+        ],
+        callTool: async (args: { toolName: string; arguments: object }) => {
+          calls.push(args)
+          if (args.toolName === 'list_charts') {
+            const search =
+              ((args.arguments as { request?: { search?: string } }).request
+                ?.search as string | undefined) ?? ''
+            const charts = [
+              {
+                id: 402,
+                slice_name: 'Housing - Income vs Value',
+                datasource_name: 'upload_california_housing_b074e1',
+              },
+            ].filter((chart) =>
+              chart.slice_name.toLowerCase().includes(search.toLowerCase())
+            )
+            return { error: '', content: [{ text: JSON.stringify({ charts }) }] }
+          }
+          if (args.toolName === 'list_dashboards') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    dashboards: [
+                      {
+                        id: 75,
+                        dashboard_title: 'Housing Overview Dashboard',
+                        url: 'http://127.0.0.1:8080/ax-bi/dashboard/75/',
+                      },
+                    ],
+                  }),
+                },
+              ],
+            }
+          }
+          return {
+            error: '',
+            content: [
+              {
+                text: JSON.stringify({
+                  dashboard_url: 'http://127.0.0.1:8080/ax-bi/dashboard/75/',
+                }),
+              },
+            ],
+          }
+        },
+      }),
+    }
+
+    const result = await runAxBiExistingDatasetChartWorkflow({
+      prompt:
+        'Add chart "Housing - Income vs Value" to existing dashboard "Housing Overview Dashboard".',
+      serviceHub: serviceHub as never,
+    })
+
+    expect(result).toMatchObject({
+      handled: true,
+      chartUrl: 'http://127.0.0.1:8080/ax-bi/dashboard/75/',
+    })
+    expect(calls.map((call) => call.toolName)).toContain('list_dashboards')
+    expect(calls.map((call) => call.toolName)).toContain('list_charts')
+    expect(calls.at(-1)).toMatchObject({
+      toolName: 'add_chart_to_existing_dashboard',
+      arguments: {
+        request: {
+          dashboard_id: 75,
+          chart_id: 402,
+        },
+      },
+    })
+  })
+
   it('creates an existing-dataset chart from model-extracted intent', async () => {
     const calls: Array<{ toolName: string; arguments: object }> = []
     const intentExtractor = vi.fn(async () => ({

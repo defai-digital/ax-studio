@@ -142,6 +142,21 @@ describe.skipIf(process.env.AX_BI_LIVE_SMOKE !== 'true')(
           /127\.0\.0\.1:8080/
         )
 
+        const updatedDashboard = await runAxBiExistingDatasetChartWorkflow({
+          prompt:
+            'Add chart "Smoke - Sales Total by Date" to existing dashboard "Smoke Tips Dashboard".',
+          serviceHub: serviceHub as never,
+        })
+        messages.push(
+          updatedDashboard.handled
+            ? updatedDashboard.message
+            : 'Add-to-dashboard unhandled'
+        )
+        expect(updatedDashboard.handled).toBe(true)
+        expect(updatedDashboard.handled && updatedDashboard.chartUrl).toMatch(
+          /127\.0\.0\.1:8080/
+        )
+
         console.info(messages.join('\n'))
       },
       180_000

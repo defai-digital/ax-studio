@@ -46,6 +46,15 @@ type ChartInfo = {
   url?: string | null
 }
 
+type DashboardInfo = {
+  id?: number | string | null
+  dashboard_id?: number | string | null
+  dashboard_title?: string | null
+  title?: string | null
+  name?: string | null
+  url?: string | null
+}
+
 type ChartResult = {
   chart?: ChartInfo | null
   id?: number | string | null
@@ -57,9 +66,11 @@ type ChartResult = {
 }
 
 type DashboardResult = {
+  dashboard?: DashboardInfo | null
   dashboard_url?: string | null
   url?: string | null
   error?: unknown
+  permission_denied?: boolean | null
 }
 
 type ChartPlan = {
@@ -193,6 +204,11 @@ type ExistingDatasetDashboardIntent = {
   dashboardTitle: string
 }
 
+type AddChartToDashboardIntent = {
+  dashboardTitle: string
+  chartNames: string[]
+}
+
 type SavedChartRecord = {
   id?: number | string | null
   slice_id?: number | string | null
@@ -201,6 +217,16 @@ type SavedChartRecord = {
   chart_name?: string | null
   name?: string | null
   datasource_name?: string | null
+  url?: string | null
+}
+
+type SavedDashboardRecord = {
+  id?: number | string | null
+  dashboard_id?: number | string | null
+  dashboard_title?: string | null
+  title?: string | null
+  name?: string | null
+  slug?: string | null
   url?: string | null
 }
 
@@ -1068,6 +1094,7 @@ function parseExistingDatasetDashboardIntent(
   prompt: string
 ): ExistingDatasetDashboardIntent | null {
   if (!/\b(?:dashboard|report)\b/i.test(prompt)) return null
+  if (parseAddChartToDashboardIntent(prompt)) return null
   const datasetMatch =
     prompt.match(/\bwith\s+dataset\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\b/i) ??
     prompt.match(/\bfrom\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\b/i)
@@ -1085,22 +1112,64 @@ function parseExistingDatasetDashboardIntent(
   }
 }
 
+function parseAddChartToDashboardIntent(
+  prompt: string
+): AddChartToDashboardIntent | null {
+  if (
+    !/\b(?:add|append|place|put)\b/i.test(prompt) ||
+    !/\bcharts?\b/i.test(prompt) ||
+    !/\bdashboard\b/i.test(prompt)
+  ) {
+    return null
+  }
+
+  const chartNames = explicitChartNameCandidates(prompt)
+  if (chartNames.length === 0) return null
+
+  const quotedDashboard =
+    prompt.match(/\bdashboard\s+(?:named|called|titled)?\s*["'`](.+?)["'`]/i)?.[1] ??
+    prompt.match(/\bto\s+(?:the\s+)?(?:existing\s+)?dashboard\s+["'`](.+?)["'`]/i)?.[1]
+  const unquotedDashboard =
+    quotedDashboard ??
+    prompt.match(
+      /\bto\s+(?:the\s+)?(?:existing\s+)?dashboard\s+(?:named|called|titled)?\s*([A-Za-z0-9][A-Za-z0-9 _-]*?)(?=\s+(?:using|with|include|including|and\s+chart|chart)\b|[.!?](?:\s|$)|$)/i
+    )?.[1] ??
+    prompt.match(
+      /\bdashboard\s+(?:named|called|titled)\s+([A-Za-z0-9][A-Za-z0-9 _-]*?)(?=\s+(?:using|with|include|including|and\s+chart|chart)\b|[.!?](?:\s|$)|$)/i
+    )?.[1]
+
+  const dashboardTitle = unquotedDashboard
+    ? stripTrailingPunctuation(unquotedDashboard).replace(/^["'`]|["'`]$/g, '').trim()
+    : undefined
+  if (!dashboardTitle) return null
+
+  return { dashboardTitle, chartNames }
+}
+
 function normalizeSearchText(value: string): string {
   return value
     .toLowerCase()
+    .replace(/<\/?untrusted-content>/g, ' ')
     .replace(/[_-]+/g, ' ')
     .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
 }
 
+function cleanMcpDisplayText(value: string): string {
+  return value
+    .replace(/<\/?UNTRUSTED-CONTENT>/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function savedChartName(chart: SavedChartRecord): string | undefined {
-  return (
+  const name =
     (typeof chart.slice_name === 'string' && chart.slice_name) ||
     (typeof chart.chart_name === 'string' && chart.chart_name) ||
     (typeof chart.name === 'string' && chart.name) ||
     undefined
-  )
+  return name ? cleanMcpDisplayText(name) : undefined
 }
 
 function savedChartId(chart: SavedChartRecord): number | undefined {
@@ -1124,6 +1193,50 @@ function chartRecordsFromResult(value: unknown): SavedChartRecord[] {
     }
     if (isRecord(nested)) {
       const records = chartRecordsFromResult(nested)
+      if (records.length > 0) return records
+    }
+  }
+
+  return []
+}
+
+function savedDashboardTitle(
+  dashboard: SavedDashboardRecord
+): string | undefined {
+  const title =
+    (typeof dashboard.dashboard_title === 'string' &&
+      dashboard.dashboard_title) ||
+    (typeof dashboard.title === 'string' && dashboard.title) ||
+    (typeof dashboard.name === 'string' && dashboard.name) ||
+    undefined
+  return title ? cleanMcpDisplayText(title) : undefined
+}
+
+function savedDashboardId(dashboard: SavedDashboardRecord): number | undefined {
+  return extractId(dashboard.id) ?? extractId(dashboard.dashboard_id)
+}
+
+function newestDashboardRecord(
+  dashboards: SavedDashboardRecord[]
+): SavedDashboardRecord | undefined {
+  return [...dashboards].sort(
+    (a, b) => (savedDashboardId(b) ?? 0) - (savedDashboardId(a) ?? 0)
+  )[0]
+}
+
+function dashboardRecordsFromResult(value: unknown): SavedDashboardRecord[] {
+  if (Array.isArray(value)) {
+    return value.filter(isRecord) as SavedDashboardRecord[]
+  }
+  if (!isRecord(value)) return []
+
+  for (const key of ['dashboards', 'result', 'data', 'items']) {
+    const nested = value[key]
+    if (Array.isArray(nested)) {
+      return nested.filter(isRecord) as SavedDashboardRecord[]
+    }
+    if (isRecord(nested)) {
+      const records = dashboardRecordsFromResult(nested)
       if (records.length > 0) return records
     }
   }
@@ -1469,7 +1582,7 @@ function chartIdFromResult(result: ChartResult): number | undefined {
 }
 
 function dashboardUrlFromResult(result: DashboardResult): string | undefined {
-  return result.dashboard_url || result.url || undefined
+  return result.dashboard_url || result.url || result.dashboard?.url || undefined
 }
 
 function getServerUrlFromMcpConfig(config: unknown): string | undefined {
@@ -2439,6 +2552,80 @@ async function findSavedDashboardChartIds({
   }
 }
 
+async function findSavedDashboard({
+  serviceHub,
+  toolNames,
+  dashboardTitle,
+}: {
+  serviceHub: ServiceHub
+  toolNames: Set<string>
+  dashboardTitle: string
+}): Promise<SavedDashboardRecord | null> {
+  if (!canCallAxBiTool(toolNames, 'list_dashboards')) return null
+
+  const searches = Array.from(
+    new Set([dashboardTitle, normalizeSearchText(dashboardTitle), ''])
+  ).filter((search) => search.length === 0 || search.length >= 3)
+
+  for (const search of searches) {
+    let dashboardList: MCPToolCallResult
+    try {
+      dashboardList = await callAxBiTool({
+        serviceHub,
+        toolNames,
+        toolName: 'list_dashboards',
+        arguments: {
+          request: {
+            search,
+            order_column: 'changed_on',
+            order_direction: 'desc',
+            page: 1,
+            page_size: 100,
+            select_columns: ['id', 'dashboard_title', 'slug', 'url'],
+          },
+        },
+      })
+    } catch (error) {
+      console.warn('[AX-BI] list_dashboards failed', error)
+      continue
+    }
+
+    try {
+      const parsedDashboardList =
+        parseJsonToolResult<Record<string, unknown>>(dashboardList)
+      const dashboards = dashboardRecordsFromResult(parsedDashboardList)
+      const exact = newestDashboardRecord(
+        dashboards.filter((dashboard) => {
+          const title = savedDashboardTitle(dashboard)
+          return (
+            title != null &&
+            normalizeSearchText(title) === normalizeSearchText(dashboardTitle)
+          )
+        })
+      )
+      if (exact) return exact
+
+      const fuzzy = newestDashboardRecord(
+        dashboards.filter((dashboard) => {
+          const title = savedDashboardTitle(dashboard)
+          if (!title) return false
+          const normalizedTitle = normalizeSearchText(title)
+          const normalizedRequested = normalizeSearchText(dashboardTitle)
+          return (
+            normalizedTitle.includes(normalizedRequested) ||
+            normalizedRequested.includes(normalizedTitle)
+          )
+        })
+      )
+      if (fuzzy) return fuzzy
+    } catch (error) {
+      console.warn('[AX-BI] Could not parse list_dashboards response', error)
+    }
+  }
+
+  return null
+}
+
 function chartUrlFromResult(result: ChartResult): string | undefined {
   const chart = result.chart ?? undefined
   if (result.chart_url) return result.chart_url
@@ -2469,27 +2656,120 @@ export async function runAxBiExistingDatasetChartWorkflow({
   serviceHub: ServiceHub
   intentExtractor?: AxBiChartIntentExtractor
 }): Promise<AxBiChartIntentWorkflowResult> {
+  const addChartToDashboardIntent = parseAddChartToDashboardIntent(prompt)
   const dashboardIntent = parseExistingDatasetDashboardIntent(prompt)
   let intent =
     isAxBiChartCandidate(prompt) && intentExtractor
       ? normalizeChartIntentDraft(await intentExtractor(prompt))
       : null
   intent ??= parseExistingDatasetChartIntent(prompt)
-  if (!intent && !dashboardIntent) return { handled: false }
+  if (!intent && !dashboardIntent && !addChartToDashboardIntent) {
+    return { handled: false }
+  }
 
   const tools = await serviceHub.mcp().getTools()
   const toolNames = axBiToolNames(tools)
   const dashboardHasDataset = Boolean(dashboardIntent?.datasetName)
-  const requiredTools = dashboardIntent
-    ? dashboardHasDataset
-      ? ['list_datasets', 'get_dataset_info', 'generate_chart', 'generate_dashboard']
-      : ['list_charts', 'generate_dashboard']
-    : ['list_datasets', 'get_dataset_info', 'generate_chart']
+  const requiredTools = addChartToDashboardIntent
+    ? ['list_charts', 'list_dashboards', 'add_chart_to_existing_dashboard']
+    : dashboardIntent
+      ? dashboardHasDataset
+        ? ['list_datasets', 'get_dataset_info', 'generate_chart', 'generate_dashboard']
+        : ['list_charts', 'generate_dashboard']
+      : ['list_datasets', 'get_dataset_info', 'generate_chart']
   for (const required of requiredTools) {
     if (!canCallAxBiTool(toolNames, required)) {
       throw new Error(
         `AX-BI MCP is connected, but the required tool "${required}" is not available directly or through the "call_tool" proxy. Please restart the AX-BI MCP service and reconnect it in Ax Studio.`
       )
+    }
+  }
+
+  if (addChartToDashboardIntent) {
+    const dashboard = await findSavedDashboard({
+      serviceHub,
+      toolNames,
+      dashboardTitle: addChartToDashboardIntent.dashboardTitle,
+    })
+    const dashboardId = dashboard ? savedDashboardId(dashboard) : undefined
+    if (!dashboard || dashboardId == null) {
+      return {
+        handled: true,
+        message: `AX-BI could not find dashboard "${addChartToDashboardIntent.dashboardTitle}". Please confirm the dashboard name and retry.`,
+      }
+    }
+
+    const existingChartLookup = await findSavedDashboardChartIds({
+      serviceHub,
+      toolNames,
+      prompt,
+      intent: { dashboardTitle: addChartToDashboardIntent.dashboardTitle },
+      datasetTableName: '',
+    })
+
+    if (existingChartLookup.missingExplicitNames.length > 0) {
+      return {
+        handled: true,
+        message: `AX-BI could not find these saved chart(s): ${existingChartLookup.missingExplicitNames.join(', ')}. Please confirm the chart names or open the AX-BI Charts page and retry.`,
+      }
+    }
+
+    const addedChartIds: number[] = []
+    const alreadyPresentChartIds: number[] = []
+    let dashboardUrl: string | undefined =
+      typeof dashboard.url === 'string' ? dashboard.url : undefined
+    for (const chartId of existingChartLookup.chartIds) {
+      const added = await callAxBiTool({
+        serviceHub,
+        toolNames,
+        toolName: 'add_chart_to_existing_dashboard',
+        arguments: {
+          request: {
+            dashboard_id: dashboardId,
+            chart_id: chartId,
+          },
+        },
+      })
+      const addResult = parseJsonToolResult<DashboardResult>(added)
+      const errorText =
+        typeof addResult.error === 'string' ? addResult.error : undefined
+      if (addResult.permission_denied) {
+        throw new Error(
+          errorText ??
+            `You do not have permission to edit dashboard "${addChartToDashboardIntent.dashboardTitle}".`
+        )
+      }
+      if (errorText) {
+        if (/already\s+in\s+dashboard/i.test(errorText)) {
+          alreadyPresentChartIds.push(chartId)
+          continue
+        }
+        throw new Error(errorText)
+      }
+      addedChartIds.push(chartId)
+      dashboardUrl = dashboardUrlFromResult(addResult) ?? dashboardUrl
+    }
+
+    if (!dashboardUrl) {
+      dashboardUrl = `http://127.0.0.1:8080/ax-bi/dashboard/${dashboardId}/`
+    }
+
+    const statusParts = []
+    if (addedChartIds.length > 0) {
+      statusParts.push(
+        `added ${addedChartIds.length} chart${addedChartIds.length === 1 ? '' : 's'}`
+      )
+    }
+    if (alreadyPresentChartIds.length > 0) {
+      statusParts.push(
+        `${alreadyPresentChartIds.length} chart${alreadyPresentChartIds.length === 1 ? ' was' : 's were'} already present`
+      )
+    }
+
+    return {
+      handled: true,
+      chartUrl: dashboardUrl,
+      message: `Updated AX-BI dashboard "${savedDashboardTitle(dashboard) ?? addChartToDashboardIntent.dashboardTitle}" (${statusParts.join(', ') || 'no changes needed'}).\n\nDashboard URL: ${dashboardUrl}`,
     }
   }
 
