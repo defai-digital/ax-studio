@@ -83,10 +83,7 @@ describe('mergeButtonRefs', () => {
     expect(() => merged(element)).not.toThrow()
   })
 
-  it('DISCOVERED BUG: string refs (legacy) throw TypeError', () => {
-    // String refs are legacy React refs. The mergeButtonRefs function
-    // does not handle them - it attempts to assign .current on a string,
-    // which throws a TypeError in strict mode.
+  it('skips legacy string refs without blocking other refs', () => {
     const fnRef = vi.fn()
     const merged = mergeButtonRefs([
       'legacyRef' as unknown as React.LegacyRef<HTMLButtonElement>,
@@ -94,6 +91,7 @@ describe('mergeButtonRefs', () => {
     ])
 
     const element = document.createElement('button')
-    expect(() => merged(element)).toThrow(TypeError)
+    expect(() => merged(element)).not.toThrow()
+    expect(fnRef).toHaveBeenCalledWith(element)
   })
 })
