@@ -108,6 +108,7 @@ type AxBiGroupedChartKind =
   | 'horizontal_bar'
   | 'line'
   | 'pie'
+type AxBiMixedSeriesKind = 'area' | 'bar' | 'line' | 'scatter'
 
 export type AxBiChartIntentDraft =
   | {
@@ -145,6 +146,38 @@ export type AxBiChartIntentDraft =
       options?: AxBiChartOptions
       filters?: AxBiChartFilter[]
     }
+  | {
+      datasetName: string
+      chartKind: 'pivot_table'
+      rows: string[]
+      columns?: string[]
+      metric: AxBiChartMetric
+      chartName?: string
+      options?: AxBiChartOptions
+      filters?: AxBiChartFilter[]
+    }
+  | {
+      datasetName: string
+      chartKind: 'mixed_timeseries'
+      timeColumn: string
+      primaryMetric: Exclude<AxBiChartMetric, { type: 'count' }>
+      secondaryMetric: Exclude<AxBiChartMetric, { type: 'count' }>
+      primaryKind?: AxBiMixedSeriesKind
+      secondaryKind?: AxBiMixedSeriesKind
+      chartName?: string
+      options?: AxBiChartOptions
+      filters?: AxBiChartFilter[]
+    }
+  | {
+      datasetName: string
+      chartKind: 'handlebars'
+      groupBy?: string
+      metric?: AxBiChartMetric
+      columns?: string[]
+      chartName?: string
+      options?: AxBiChartOptions
+      filters?: AxBiChartFilter[]
+    }
 
 type ExistingDatasetChartIntent = AxBiChartIntentDraft & {
   chartName: string
@@ -164,6 +197,11 @@ type SavedChartRecord = {
   name?: string | null
   datasource_name?: string | null
   url?: string | null
+}
+
+type SavedDashboardChartLookup = {
+  chartIds: number[]
+  missingExplicitNames: string[]
 }
 
 type ResolvedExistingDatasetChartIntent = ExistingDatasetChartIntent
@@ -198,11 +236,31 @@ function stripTrailingPunctuation(value: string): string {
 
 function normalizeChartKind(
   value: unknown
-): AxBiGroupedChartKind | 'big_number' | 'scatter' | 'table' {
+):
+  | AxBiGroupedChartKind
+  | 'big_number'
+  | 'handlebars'
+  | 'mixed_timeseries'
+  | 'pivot_table'
+  | 'scatter'
+  | 'table' {
   if (typeof value !== 'string') return 'bar'
   const normalized = value.toLowerCase().replace(/[\s-]+/g, '_')
   if (normalized === 'scatter') return 'scatter'
   if (normalized === 'table') return 'table'
+  if (normalized === 'pivot_table' || normalized === 'pivot') {
+    return 'pivot_table'
+  }
+  if (
+    normalized === 'mixed_timeseries' ||
+    normalized === 'mixed_time_series' ||
+    normalized === 'dual_axis'
+  ) {
+    return 'mixed_timeseries'
+  }
+  if (normalized === 'handlebars' || normalized === 'custom_html') {
+    return 'handlebars'
+  }
   if (normalized === 'big_number' || normalized === 'kpi') return 'big_number'
   if (normalized === 'area') return 'area'
   if (normalized === 'line') return 'line'
@@ -222,13 +280,65 @@ function inferChartKindFromPrompt(prompt: string): AxBiGroupedChartKind {
   return 'bar'
 }
 
+function normalizeMixedSeriesKind(value: string): AxBiMixedSeriesKind {
+  const normalized = value.toLowerCase().replace(/[\s-]+/g, '_')
+  if (normalized === 'area') return 'area'
+  if (normalized === 'bar' || normalized === 'column') return 'bar'
+  if (normalized === 'scatter') return 'scatter'
+  return 'line'
+}
+
 function extractRequestedChartName(prompt: string): string | undefined {
   const nameMatch = prompt.match(
-    /\b(?:name\s+it|call\s+it|title\s+it|named|called|titled|dashboard\s+named|dashboard\s+called|dashboard\s+titled)\s+(.+?)(?=\s+(?:using|with|include|including|from|which|that)\b|[.!?](?:\s|$)|$)/i
+    /\b(?:name\s+it|call\s+it|title\s+it|named|called|titled|dashboard\s+named|dashboard\s+called|dashboard\s+titled)\s+(.+?)(?=\s+(?:and\s+)?(?:using|with|include|including|from|which|that)\b|[.!?](?:\s|$)|$)/i
   )
   return typeof nameMatch?.[1] === 'string'
     ? stripTrailingPunctuation(nameMatch[1])
     : undefined
+}
+
+const aggregateMap: Record<string, 'AVG' | 'SUM' | 'MIN' | 'MAX'> = {
+  average: 'AVG',
+  avg: 'AVG',
+  mean: 'AVG',
+  sum: 'SUM',
+  total: 'SUM',
+  min: 'MIN',
+  minimum: 'MIN',
+  max: 'MAX',
+  maximum: 'MAX',
+}
+
+function aggregateMetricFromMatch(
+  match: RegExpMatchArray | RegExpExecArray
+): Exclude<AxBiChartMetric, { type: 'count' }> | null {
+  const aggregate = match[1] ? aggregateMap[match[1].toLowerCase()] : undefined
+  const column = match[2] ? stripTrailingPunctuation(match[2]) : undefined
+  if (!aggregate || !column) return null
+  return {
+    type: 'aggregate',
+    aggregate,
+    column,
+  }
+}
+
+function extractPromptMetric(prompt: string): AxBiChartMetric | null {
+  const countMetric =
+    /\bcount\s*(?:\(\s*\*\s*\))?|\bcount\s+of\s+records\b|\bnumber\s+of\s+records\b|\brecords?\s+by\b|\brecord\s+count\b/i.test(
+      prompt
+    )
+  if (countMetric) return { type: 'count' }
+
+  const aggregateFunctionMatch = prompt.match(
+    /\b(average|avg|mean|sum|total|min|minimum|max|maximum)\s*\(\s*([A-Za-z0-9_][A-Za-z0-9_.-]*)\s*\)/i
+  )
+  const aggregateMatch =
+    aggregateFunctionMatch ??
+    prompt.match(
+      /\b(?:showing\s+)?(average|avg|mean|sum|total|min|minimum|max|maximum)\s+(?:of\s+)?([A-Za-z0-9_][A-Za-z0-9_. -]*?)(?:\s+by\b|\s+and\s+|\s*,|\s*\.|\s+(?:where|filter(?:ed)?|only|name\s+it|call\s+it|title\s+it|named|called|titled)\b|\s+return\b|$)/i
+    )
+
+  return aggregateMatch ? aggregateMetricFromMatch(aggregateMatch) : null
 }
 
 function normalizeChartOptions(value: unknown): AxBiChartOptions | undefined {
@@ -376,6 +486,17 @@ function buildDefaultChartName(intent: AxBiChartIntentDraft): string {
       ? `${intent.datasetName} Count`
       : `${humanize(intent.metric.column)} ${intent.metric.aggregate}`
   }
+  if (intent.chartKind === 'pivot_table') {
+    return `${intent.datasetName} Pivot Table`
+  }
+  if (intent.chartKind === 'mixed_timeseries') {
+    return `${humanize(intent.primaryMetric.column)} and ${humanize(intent.secondaryMetric.column)} over ${humanize(intent.timeColumn)}`
+  }
+  if (intent.chartKind === 'handlebars') {
+    return intent.groupBy
+      ? `${intent.datasetName} Custom Report by ${humanize(intent.groupBy)}`
+      : `${intent.datasetName} Custom Report`
+  }
   return intent.metric.type === 'count'
     ? `${intent.datasetName} Count by ${intent.groupBy}`
     : `${humanize(intent.metric.column)} ${intent.metric.aggregate} by ${humanize(intent.groupBy)}`
@@ -393,6 +514,125 @@ function normalizeChartIntentDraft(
     return null
   }
   const chartKind = normalizeChartKind(value.chartKind)
+
+  if (chartKind === 'pivot_table') {
+    const rows = Array.isArray(value.rows)
+      ? value.rows
+          .filter((column): column is string => typeof column === 'string')
+          .map(stripTrailingPunctuation)
+          .filter(Boolean)
+      : typeof value.row === 'string'
+        ? [stripTrailingPunctuation(value.row)]
+        : []
+    const columns = Array.isArray(value.columns)
+      ? value.columns
+          .filter((column): column is string => typeof column === 'string')
+          .map(stripTrailingPunctuation)
+          .filter(Boolean)
+      : typeof value.column === 'string'
+        ? [stripTrailingPunctuation(value.column)]
+        : undefined
+    const metric = normalizeMetric(value.metric)
+    if (rows.length === 0 || !metric) return null
+
+    const draft: AxBiChartIntentDraft = {
+      datasetName: stripTrailingPunctuation(value.datasetName),
+      chartKind: 'pivot_table',
+      rows,
+      columns: columns?.length ? columns : undefined,
+      metric,
+      options: normalizeChartOptions(value.options),
+      filters: normalizeChartFilters(value.filters),
+      chartName:
+        typeof value.chartName === 'string' && value.chartName.trim().length > 0
+          ? stripTrailingPunctuation(value.chartName)
+          : undefined,
+    }
+
+    return {
+      ...draft,
+      chartName: draft.chartName ?? buildDefaultChartName(draft),
+    }
+  }
+
+  if (chartKind === 'mixed_timeseries') {
+    if (
+      typeof value.timeColumn !== 'string' ||
+      value.timeColumn.trim().length === 0
+    ) {
+      return null
+    }
+    const primaryMetric = normalizeMetric(value.primaryMetric)
+    const secondaryMetric = normalizeMetric(value.secondaryMetric)
+    if (
+      !primaryMetric ||
+      primaryMetric.type === 'count' ||
+      !secondaryMetric ||
+      secondaryMetric.type === 'count'
+    ) {
+      return null
+    }
+
+    const draft: AxBiChartIntentDraft = {
+      datasetName: stripTrailingPunctuation(value.datasetName),
+      chartKind: 'mixed_timeseries',
+      timeColumn: stripTrailingPunctuation(value.timeColumn),
+      primaryMetric,
+      secondaryMetric,
+      primaryKind:
+        typeof value.primaryKind === 'string'
+          ? normalizeMixedSeriesKind(value.primaryKind)
+          : undefined,
+      secondaryKind:
+        typeof value.secondaryKind === 'string'
+          ? normalizeMixedSeriesKind(value.secondaryKind)
+          : undefined,
+      options: normalizeChartOptions(value.options),
+      filters: normalizeChartFilters(value.filters),
+      chartName:
+        typeof value.chartName === 'string' && value.chartName.trim().length > 0
+          ? stripTrailingPunctuation(value.chartName)
+          : undefined,
+    }
+
+    return {
+      ...draft,
+      chartName: draft.chartName ?? buildDefaultChartName(draft),
+    }
+  }
+
+  if (chartKind === 'handlebars') {
+    const metric = normalizeMetric(value.metric)
+    const columns = Array.isArray(value.columns)
+      ? value.columns
+          .filter((column): column is string => typeof column === 'string')
+          .map(stripTrailingPunctuation)
+          .filter(Boolean)
+      : undefined
+    const draft: AxBiChartIntentDraft = {
+      datasetName: stripTrailingPunctuation(value.datasetName),
+      chartKind: 'handlebars',
+      groupBy:
+        typeof value.groupBy === 'string' && value.groupBy.trim().length > 0
+          ? stripTrailingPunctuation(value.groupBy)
+          : undefined,
+      metric: metric ?? undefined,
+      columns: columns?.length ? columns : undefined,
+      options: normalizeChartOptions(value.options),
+      filters: normalizeChartFilters(value.filters),
+      chartName:
+        typeof value.chartName === 'string' && value.chartName.trim().length > 0
+          ? stripTrailingPunctuation(value.chartName)
+          : undefined,
+    }
+
+    if (!draft.metric && !draft.columns?.length) return null
+
+    return {
+      ...draft,
+      chartName: draft.chartName ?? buildDefaultChartName(draft),
+    }
+  }
 
   if (chartKind === 'table') {
     if (!Array.isArray(value.columns)) return null
@@ -508,12 +748,12 @@ function parseExistingDatasetChartIntent(
 ): ExistingDatasetChartIntent | null {
   const explicitAxBiMcp = /\bax-?bi\s+mcp\b/i.test(prompt)
   const explicitSavedDatasetRequest =
-    /\b(?:create|make|build|generate|save)\s+(?:a\s+|an\s+)?(?:saved\s+)?(?:area\s+chart|bar\s+chart|column\s+chart|horizontal\s+bar\s+chart|line\s+chart|pie\s+chart|donut\s+chart|scatter\s+chart|big\s+number|kpi|chart|table)\s+from\s+[A-Za-z0-9_][A-Za-z0-9_.-]*/i.test(
+    /\b(?:create|make|build|generate|save)\s+(?:a\s+|an\s+)?(?:saved\s+)?(?:area\s+chart|bar\s+chart|column\s+chart|horizontal\s+bar\s+chart|line\s+chart|pie\s+chart|donut\s+chart|scatter\s+chart|pivot\s+table|mixed\s+time(?:series|\s+series)\s+chart|handlebars\s+chart|big\s+number|kpi|chart|table)\s+from\s+[A-Za-z0-9_][A-Za-z0-9_.-]*/i.test(
       prompt
     )
   if (!explicitAxBiMcp && !explicitSavedDatasetRequest) return null
   if (
-    !/\b(area\s+chart|bar\s+chart|column\s+chart|horizontal\s+bar\s+chart|line\s+chart|pie\s+chart|donut\s+chart|scatter\s+chart|big\s+number|kpi|chart|scatter|table)\b/i.test(
+    !/\b(area\s+chart|bar\s+chart|column\s+chart|horizontal\s+bar\s+chart|line\s+chart|pie\s+chart|donut\s+chart|scatter\s+chart|pivot\s+table|mixed\s+time(?:series|\s+series)\s+chart|handlebars\s+chart|big\s+number|kpi|chart|scatter|table)\b/i.test(
       prompt
     )
   )
@@ -523,6 +763,100 @@ function parseExistingDatasetChartIntent(
     prompt.match(/\bdataset\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\b/i) ??
     prompt.match(/\bfrom\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\b/i)
   if (!datasetMatch?.[1]) return null
+
+  if (/\bpivot\s+table\b/i.test(prompt)) {
+    const metric = extractPromptMetric(prompt)
+    if (!metric) return null
+    const byMatch = prompt.match(
+      /\bby\s+([A-Za-z0-9_][A-Za-z0-9_. -]*?)(?:\s+and\s+([A-Za-z0-9_][A-Za-z0-9_. -]*?))?(?:\s+(?:where|filter(?:ed)?|only|with|using)\b|\s+(?:name\s+it|call\s+it|title\s+it|named|called|titled)\b|\s+return\b|[.!?]\s*$|$)/i
+    )
+    const rowsMatch = prompt.match(/\brows?\s+([A-Za-z0-9_][A-Za-z0-9_. -]*?)\b/i)
+    const columnsMatch = prompt.match(
+      /\bcolumns?\s+([A-Za-z0-9_][A-Za-z0-9_. -]*?)(?:\s+(?:where|filter(?:ed)?|only|with|using)\b|\s+(?:name\s+it|call\s+it|title\s+it|named|called|titled)\b|\s+return\b|[.!?]\s*$|$)/i
+    )
+    const row = rowsMatch?.[1] ?? byMatch?.[1]
+    const column = columnsMatch?.[1] ?? byMatch?.[2]
+    if (!row) return null
+    const draft: AxBiChartIntentDraft = {
+      datasetName: stripTrailingPunctuation(datasetMatch[1]),
+      chartKind: 'pivot_table',
+      rows: [stripTrailingPunctuation(row)],
+      columns: column ? [stripTrailingPunctuation(column)] : undefined,
+      metric,
+      chartName: extractRequestedChartName(prompt),
+      options: extractPromptChartOptions(prompt),
+      filters: extractPromptFilters(prompt),
+    }
+    return {
+      ...draft,
+      chartName: draft.chartName ?? buildDefaultChartName(draft),
+    }
+  }
+
+  if (/\bmixed\s+time(?:series|\s+series)\s+chart\b/i.test(prompt)) {
+    const aggregateMatches = [...prompt.matchAll(
+      /\b(average|avg|mean|sum|total|min|minimum|max|maximum)\s*\(?\s*([A-Za-z0-9_][A-Za-z0-9_.-]*)\s*\)?/gi
+    )]
+    if (aggregateMatches.length < 2) return null
+    const primaryMetric = aggregateMetricFromMatch(aggregateMatches[0])
+    const secondaryMetric = aggregateMetricFromMatch(aggregateMatches[1])
+    const timeMatch =
+      prompt.match(/\bby\s+([A-Za-z0-9_][A-Za-z0-9_.-]*(?:date|time|year|month)[A-Za-z0-9_.-]*)\b/i) ??
+      prompt.match(/\bover\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\b/i) ??
+      prompt.match(/\bwith\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\s+on\s+(?:the\s+)?x-?axis\b/i)
+    if (!primaryMetric || !secondaryMetric || !timeMatch?.[1]) return null
+    const draft: AxBiChartIntentDraft = {
+      datasetName: stripTrailingPunctuation(datasetMatch[1]),
+      chartKind: 'mixed_timeseries',
+      timeColumn: stripTrailingPunctuation(timeMatch[1]),
+      primaryMetric,
+      secondaryMetric,
+      primaryKind: /\bprimary\s+bar\b/i.test(prompt) ? 'bar' : 'line',
+      secondaryKind: /\bsecondary\s+line\b/i.test(prompt) ? 'line' : 'bar',
+      chartName: extractRequestedChartName(prompt),
+      options: extractPromptChartOptions(prompt),
+      filters: extractPromptFilters(prompt),
+    }
+    return {
+      ...draft,
+      chartName: draft.chartName ?? buildDefaultChartName(draft),
+    }
+  }
+
+  if (/\bhandlebars\s+chart\b|\bcustom\s+html\s+chart\b/i.test(prompt)) {
+    const metric = extractPromptMetric(prompt)
+    const columnsMatch = prompt.match(
+      /\b(?:showing|with\s+columns?|listing)\s+(.+?)(?:\s+(?:where|filter(?:ed)?|only|with|using)\b|\s+(?:name\s+it|call\s+it|title\s+it|named|called|titled)\b|\s+return\b|[.!?]\s*$|$)/i
+    )
+    const groupByMatch = prompt.match(
+      /\bby\s+([A-Za-z0-9_][A-Za-z0-9_. -]*?)(?:\s+and\s+|\s*,|\s*\.|\s+(?:where|filter(?:ed)?|only|with|using)\b|\s+(?:name\s+it|call\s+it|title\s+it|named|called|titled)\b|\s+return\b|$)/i
+    )
+    const columns = !metric && columnsMatch?.[1]
+      ? columnsMatch[1]
+          .replace(/\s+and\s+/gi, ',')
+          .split(',')
+          .map(stripTrailingPunctuation)
+          .map((column) => column.trim())
+          .filter(Boolean)
+      : undefined
+    if (!metric && !columns?.length) return null
+    const draft: AxBiChartIntentDraft = {
+      datasetName: stripTrailingPunctuation(datasetMatch[1]),
+      chartKind: 'handlebars',
+      metric: metric ?? undefined,
+      groupBy: groupByMatch?.[1]
+        ? stripTrailingPunctuation(groupByMatch[1])
+        : undefined,
+      columns,
+      chartName: extractRequestedChartName(prompt),
+      options: extractPromptChartOptions(prompt),
+      filters: extractPromptFilters(prompt),
+    }
+    return {
+      ...draft,
+      chartName: draft.chartName ?? buildDefaultChartName(draft),
+    }
+  }
 
   if (
     /\b(?:(?:saved\s+)?table\s+from|table\s+showing|create\s+(?:a\s+|an\s+)?(?:saved\s+)?table)\b/i.test(
@@ -759,7 +1093,11 @@ function explicitChartNameCandidates(prompt: string): string[] {
     new Set(
       names
         .map((name) => name.trim())
-        .filter((name) => name.length >= 4 && name.includes(' - '))
+        .filter((name) => {
+          if (name.length < 4 || !name.includes(' - ')) return false
+          const prefix = name.split(' - ')[0]?.trim()
+          return !/^(?:ax|mcp)$/i.test(prefix || '')
+        })
     )
   )
 }
@@ -769,6 +1107,10 @@ function dashboardChartSearchTerms(
   intent: ExistingDatasetDashboardIntent
 ): string[] {
   const terms = explicitChartNameCandidates(prompt)
+  for (const name of [...terms]) {
+    const prefix = name.split(' - ')[0]?.trim()
+    if (prefix && prefix.length >= 3) terms.push(prefix)
+  }
   const regardingMatch = prompt.match(
     /\b(?:regarding|related\s+to|about)\s+([A-Za-z0-9][A-Za-z0-9 _-]{2,40})\b/i
   )
@@ -826,6 +1168,9 @@ function chartMatchesDashboardPrompt(
     (name) =>
       name.includes(normalizedChartName) || normalizedChartName.includes(name)
   )
+  if (explicitNames.length > 0) {
+    return chartBelongsToDataset && (exactNameMentioned || explicitNameMatched)
+  }
   const broadChartRequest =
     /\b(?:all|these|created|existing|saved)\s+(?:the\s+)?charts\b/i.test(
       prompt
@@ -838,6 +1183,21 @@ function chartMatchesDashboardPrompt(
   return (
     chartBelongsToDataset &&
     (exactNameMentioned || explicitNameMatched || (broadChartRequest && keywordMatched))
+  )
+}
+
+function chartMatchesExplicitName(
+  chart: SavedChartRecord,
+  explicitName: string
+): boolean {
+  const chartName = savedChartName(chart)
+  if (!chartName) return false
+  const normalizedChartName = normalizeSearchText(chartName)
+  const normalizedExplicitName = normalizeSearchText(explicitName)
+  return (
+    normalizedChartName === normalizedExplicitName ||
+    normalizedChartName.includes(normalizedExplicitName) ||
+    normalizedExplicitName.includes(normalizedChartName)
   )
 }
 
@@ -1224,6 +1584,155 @@ function validateAndResolveIntentColumns(
   intent: ExistingDatasetChartIntent,
   columns: DatasetColumn[]
 ): ResolvedExistingDatasetChartIntent {
+  if (intent.chartKind === 'pivot_table') {
+    const resolvedFilters = resolveIntentFilters(intent.filters, columns)
+    const rows = intent.rows.map((requestedColumn) => {
+      const matchedColumn = findColumn(columns, requestedColumn)
+      if (!matchedColumn || !columnName(matchedColumn)) {
+        throw new Error(
+          `Dataset "${intent.datasetName}" does not contain pivot row column "${requestedColumn}".`
+        )
+      }
+      return columnName(matchedColumn)!
+    })
+    const pivotColumns = intent.columns?.map((requestedColumn) => {
+      const matchedColumn = findColumn(columns, requestedColumn)
+      if (!matchedColumn || !columnName(matchedColumn)) {
+        throw new Error(
+          `Dataset "${intent.datasetName}" does not contain pivot column "${requestedColumn}".`
+        )
+      }
+      return columnName(matchedColumn)!
+    })
+
+    if (intent.metric.type === 'count') {
+      return { ...intent, rows, columns: pivotColumns, filters: resolvedFilters }
+    }
+
+    const metricColumn = findColumn(columns, intent.metric.column)
+    if (!metricColumn || !columnName(metricColumn)) {
+      throw new Error(
+        `Dataset "${intent.datasetName}" does not contain metric column "${intent.metric.column}".`
+      )
+    }
+    if (!isNumericColumn(metricColumn)) {
+      throw new Error(
+        `Column "${columnName(metricColumn)}" is not numeric, so ${intent.metric.aggregate} cannot be used for this pivot table.`
+      )
+    }
+
+    return {
+      ...intent,
+      rows,
+      columns: pivotColumns,
+      filters: resolvedFilters,
+      metric: { ...intent.metric, column: columnName(metricColumn)! },
+    }
+  }
+
+  if (intent.chartKind === 'mixed_timeseries') {
+    const resolvedFilters = resolveIntentFilters(intent.filters, columns)
+    const timeColumn = findColumn(columns, intent.timeColumn)
+    if (!timeColumn || !columnName(timeColumn)) {
+      throw new Error(
+        `Dataset "${intent.datasetName}" does not contain time column "${intent.timeColumn}".`
+      )
+    }
+    if (!isDateColumn(timeColumn)) {
+      throw new Error(
+        `Column "${columnName(timeColumn)}" is not temporal, so it cannot be used for a mixed time-series chart.`
+      )
+    }
+
+    const primaryMetricColumn = findColumn(columns, intent.primaryMetric.column)
+    if (!primaryMetricColumn || !columnName(primaryMetricColumn)) {
+      throw new Error(
+        `Dataset "${intent.datasetName}" does not contain primary metric column "${intent.primaryMetric.column}".`
+      )
+    }
+    if (!isNumericColumn(primaryMetricColumn)) {
+      throw new Error(
+        `Column "${columnName(primaryMetricColumn)}" is not numeric, so ${intent.primaryMetric.aggregate} cannot be used for this mixed time-series chart.`
+      )
+    }
+
+    const secondaryMetricColumn = findColumn(columns, intent.secondaryMetric.column)
+    if (!secondaryMetricColumn || !columnName(secondaryMetricColumn)) {
+      throw new Error(
+        `Dataset "${intent.datasetName}" does not contain secondary metric column "${intent.secondaryMetric.column}".`
+      )
+    }
+    if (!isNumericColumn(secondaryMetricColumn)) {
+      throw new Error(
+        `Column "${columnName(secondaryMetricColumn)}" is not numeric, so ${intent.secondaryMetric.aggregate} cannot be used for this mixed time-series chart.`
+      )
+    }
+
+    return {
+      ...intent,
+      timeColumn: columnName(timeColumn)!,
+      filters: resolvedFilters,
+      primaryMetric: {
+        ...intent.primaryMetric,
+        column: columnName(primaryMetricColumn)!,
+      },
+      secondaryMetric: {
+        ...intent.secondaryMetric,
+        column: columnName(secondaryMetricColumn)!,
+      },
+    }
+  }
+
+  if (intent.chartKind === 'handlebars') {
+    const resolvedFilters = resolveIntentFilters(intent.filters, columns)
+    const resolvedColumns = intent.columns?.map((requestedColumn) => {
+      const matchedColumn = findColumn(columns, requestedColumn)
+      if (!matchedColumn || !columnName(matchedColumn)) {
+        throw new Error(
+          `Dataset "${intent.datasetName}" does not contain handlebars column "${requestedColumn}".`
+        )
+      }
+      return columnName(matchedColumn)!
+    })
+    const groupByColumn = intent.groupBy
+      ? findColumn(columns, intent.groupBy)
+      : undefined
+    if (intent.groupBy && (!groupByColumn || !columnName(groupByColumn))) {
+      throw new Error(
+        `Dataset "${intent.datasetName}" does not contain handlebars grouping column "${intent.groupBy}".`
+      )
+    }
+
+    if (!intent.metric || intent.metric.type === 'count') {
+      return {
+        ...intent,
+        groupBy: groupByColumn ? columnName(groupByColumn) : undefined,
+        columns: resolvedColumns,
+        filters: resolvedFilters,
+      }
+    }
+
+    const metricColumn = findColumn(columns, intent.metric.column)
+    if (!metricColumn || !columnName(metricColumn)) {
+      throw new Error(
+        `Dataset "${intent.datasetName}" does not contain metric column "${intent.metric.column}".`
+      )
+    }
+    if (!isNumericColumn(metricColumn)) {
+      throw new Error(
+        `Column "${columnName(metricColumn)}" is not numeric, so ${intent.metric.aggregate} cannot be used for this handlebars chart.`
+      )
+    }
+
+    return {
+      ...intent,
+      groupBy: groupByColumn ? columnName(groupByColumn) : undefined,
+      columns: resolvedColumns,
+      filters: resolvedFilters,
+      metric: { ...intent.metric, column: columnName(metricColumn)! },
+    }
+  }
+
   if (intent.chartKind === 'big_number') {
     const resolvedFilters = resolveIntentFilters(intent.filters, columns)
     if (intent.metric.type === 'count') {
@@ -1412,16 +1921,16 @@ function applyChartFilters(
 function buildExistingDatasetChartConfig(
   intent: ResolvedExistingDatasetChartIntent
 ): Record<string, unknown> {
-  const metricConfig =
-    'metric' in intent
-      ? intent.metric.type === 'count'
-        ? { sql_expression: 'COUNT(*)', label: 'Count' }
-        : {
-            name: intent.metric.column,
-            aggregate: intent.metric.aggregate,
-            label: `${intent.metric.aggregate}(${intent.metric.column})`,
-          }
-      : null
+  const intentMetric = 'metric' in intent ? intent.metric : undefined
+  const metricConfig = intentMetric
+    ? intentMetric.type === 'count'
+      ? { sql_expression: 'COUNT(*)', label: 'Count' }
+      : {
+          name: intentMetric.column,
+          aggregate: intentMetric.aggregate,
+          label: `${intentMetric.aggregate}(${intentMetric.column})`,
+        }
+    : null
 
   if (intent.chartKind === 'big_number') {
     const config = {
@@ -1450,6 +1959,87 @@ function buildExistingDatasetChartConfig(
     applyChartFilters(config, intent.filters)
     applyCommonChartOptions(config, intent.options, {
       colorScheme: true,
+      rowLimit: 50000,
+    })
+    return config
+  }
+
+  if (intent.chartKind === 'pivot_table') {
+    const config = {
+      chart_type: 'pivot_table',
+      rows: intent.rows.map((name) => ({ name })),
+      columns: intent.columns?.map((name) => ({ name })),
+      metrics: [metricConfig!],
+      show_row_totals: true,
+      show_column_totals: true,
+      row_limit: 10000,
+    }
+    applyChartFilters(config, intent.filters)
+    applyCommonChartOptions(config, intent.options, {
+      rowLimit: 50000,
+    })
+    return config
+  }
+
+  if (intent.chartKind === 'mixed_timeseries') {
+    const primaryMetric = {
+      name: intent.primaryMetric.column,
+      aggregate: intent.primaryMetric.aggregate,
+      label: `${intent.primaryMetric.aggregate}(${intent.primaryMetric.column})`,
+    }
+    const secondaryMetric = {
+      name: intent.secondaryMetric.column,
+      aggregate: intent.secondaryMetric.aggregate,
+      label: `${intent.secondaryMetric.aggregate}(${intent.secondaryMetric.column})`,
+    }
+    const config = {
+      chart_type: 'mixed_timeseries',
+      x: { name: intent.timeColumn },
+      time_grain: 'P1M',
+      y: [primaryMetric],
+      primary_kind: intent.primaryKind ?? 'line',
+      y_secondary: [secondaryMetric],
+      secondary_kind: intent.secondaryKind ?? 'bar',
+      show_legend: true,
+      color_scheme: 'supersetColors',
+    }
+    applyChartFilters(config, intent.filters)
+    applyCommonChartOptions(config, intent.options, {
+      colorScheme: true,
+      rowLimit: 50000,
+      showValues: true,
+    })
+    return config
+  }
+
+  if (intent.chartKind === 'handlebars') {
+    const columns = intent.columns?.map((name) => ({ name })) ?? []
+    const groupby = intent.groupBy ? [{ name: intent.groupBy }] : []
+    const config: Record<string, unknown> =
+      intent.metric && groupby.length > 0
+        ? {
+            chart_type: 'handlebars',
+            query_mode: 'aggregate',
+            groupby,
+            metrics: [metricConfig!],
+            handlebars_template:
+              '<div class="ax-bi-report"><h3>{{chartName}}</h3><ul>{{#each data}}<li>{{stringify this}}</li>{{/each}}</ul></div>',
+            style_template:
+              '.ax-bi-report{font-family:Inter,system-ui,sans-serif;color:#e5e7eb}.ax-bi-report li{margin:6px 0}',
+            row_limit: 1000,
+          }
+        : {
+            chart_type: 'handlebars',
+            query_mode: 'raw',
+            columns,
+            handlebars_template:
+              '<div class="ax-bi-report"><h3>{{chartName}}</h3><table>{{#each data}}<tr>{{#each this}}<td>{{this}}</td>{{/each}}</tr>{{/each}}</table></div>',
+            style_template:
+              '.ax-bi-report{font-family:Inter,system-ui,sans-serif;color:#e5e7eb}.ax-bi-report table{border-collapse:collapse}.ax-bi-report td{border:1px solid #374151;padding:6px 8px}',
+            row_limit: 100,
+          }
+    applyChartFilters(config, intent.filters)
+    applyCommonChartOptions(config, intent.options, {
       rowLimit: 50000,
     })
     return config
@@ -1593,12 +2183,20 @@ async function findSavedDashboardChartIds({
   prompt: string
   intent: ExistingDatasetDashboardIntent
   datasetTableName: string
-}): Promise<number[]> {
-  if (!canCallAxBiTool(toolNames, 'list_charts')) return []
+}): Promise<SavedDashboardChartLookup> {
+  const explicitNames = explicitChartNameCandidates(prompt)
+  const matchedExplicitNames = new Set<string>()
+  if (!canCallAxBiTool(toolNames, 'list_charts')) {
+    return {
+      chartIds: [],
+      missingExplicitNames: explicitNames,
+    }
+  }
 
   const chartIds: number[] = []
   const seenChartIds = new Set<number>()
   const terms = dashboardChartSearchTerms(prompt, intent)
+  if (explicitNames.length > 0) terms.push('')
 
   for (const search of terms) {
     let chartList: MCPToolCallResult
@@ -1611,7 +2209,7 @@ async function findSavedDashboardChartIds({
           request: {
             search,
             page: 1,
-            page_size: 50,
+            page_size: 250,
             select_columns: [
               'id',
               'slice_name',
@@ -1640,6 +2238,11 @@ async function findSavedDashboardChartIds({
           continue
         }
 
+        for (const explicitName of explicitNames) {
+          if (chartMatchesExplicitName(chart, explicitName)) {
+            matchedExplicitNames.add(explicitName)
+          }
+        }
         seenChartIds.add(chartId)
         chartIds.push(chartId)
       }
@@ -1648,7 +2251,12 @@ async function findSavedDashboardChartIds({
     }
   }
 
-  return chartIds
+  return {
+    chartIds,
+    missingExplicitNames: explicitNames.filter(
+      (name) => !matchedExplicitNames.has(name)
+    ),
+  }
 }
 
 function chartUrlFromResult(result: ChartResult): string | undefined {
@@ -1755,13 +2363,24 @@ export async function runAxBiExistingDatasetChartWorkflow({
       typeof dataset?.table_name === 'string'
         ? dataset.table_name
         : dashboardIntent.datasetName
-    const existingChartIds = await findSavedDashboardChartIds({
+    const existingChartLookup = await findSavedDashboardChartIds({
       serviceHub,
       toolNames,
       prompt,
       intent: dashboardIntent,
       datasetTableName,
     })
+    const existingChartIds = existingChartLookup.chartIds
+
+    if (
+      existingChartLookup.missingExplicitNames.length > 0 &&
+      /\b(?:these|include|including|using)\b/i.test(prompt)
+    ) {
+      return {
+        handled: true,
+        message: `AX-BI found dataset "${dashboardIntent.datasetName}", but could not find these saved chart(s): ${existingChartLookup.missingExplicitNames.join(', ')}. Please confirm the chart names or open the AX-BI Charts page and retry.`,
+      }
+    }
 
     if (existingChartIds.length > 0) {
       const dashboard = await callAxBiTool({

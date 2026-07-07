@@ -620,6 +620,252 @@ describe('AX-BI dashboard workflow', () => {
     })
   })
 
+  it('creates a saved pivot table from row, column, and metric prompts', async () => {
+    const calls: Array<{ toolName: string; arguments: object }> = []
+    const serviceHub = {
+      mcp: () => ({
+        getTools: async () => [
+          { server: 'ax-bi', name: 'list_datasets', description: '', inputSchema: {} },
+          { server: 'ax-bi', name: 'get_dataset_info', description: '', inputSchema: {} },
+          { server: 'ax-bi', name: 'generate_chart', description: '', inputSchema: {} },
+        ],
+        callTool: async (args: { toolName: string; arguments: object }) => {
+          calls.push(args)
+          if (args.toolName === 'list_datasets') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    datasets: [{ id: 103, table_name: 'upload_restaurant_tips_f0d2d2' }],
+                  }),
+                },
+              ],
+            }
+          }
+          if (args.toolName === 'get_dataset_info') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    columns: [
+                      { name: 'day', type: 'TEXT' },
+                      { name: 'smoker', type: 'TEXT' },
+                      { name: 'total_bill', type: 'FLOAT' },
+                    ],
+                  }),
+                },
+              ],
+            }
+          }
+          return {
+            error: '',
+            content: [
+              {
+                text: JSON.stringify({
+                  chart_id: 190,
+                  chart_url: 'http://127.0.0.1:8080/explore/?slice_id=190',
+                }),
+              },
+            ],
+          }
+        },
+      }),
+    }
+
+    const result = await runAxBiExistingDatasetChartWorkflow({
+      prompt:
+        'Create a saved pivot table from restaurant_tips showing SUM(total_bill) by day and smoker. Name it Tips - Bill Pivot by Day and Smoker.',
+      serviceHub: serviceHub as never,
+    })
+
+    expect(result).toMatchObject({ handled: true })
+    expect(calls[2]).toMatchObject({
+      toolName: 'generate_chart',
+      arguments: {
+        request: {
+          chart_name: 'Tips - Bill Pivot by Day and Smoker',
+          config: {
+            chart_type: 'pivot_table',
+            rows: [{ name: 'day' }],
+            columns: [{ name: 'smoker' }],
+            metrics: [
+              {
+                name: 'total_bill',
+                aggregate: 'SUM',
+                label: 'SUM(total_bill)',
+              },
+            ],
+          },
+        },
+      },
+    })
+  })
+
+  it('creates a saved mixed time-series chart from two metrics', async () => {
+    const calls: Array<{ toolName: string; arguments: object }> = []
+    const serviceHub = {
+      mcp: () => ({
+        getTools: async () => [
+          { server: 'ax-bi', name: 'list_datasets', description: '', inputSchema: {} },
+          { server: 'ax-bi', name: 'get_dataset_info', description: '', inputSchema: {} },
+          { server: 'ax-bi', name: 'generate_chart', description: '', inputSchema: {} },
+        ],
+        callTool: async (args: { toolName: string; arguments: object }) => {
+          calls.push(args)
+          if (args.toolName === 'list_datasets') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    datasets: [{ id: 300, table_name: 'sales_daily' }],
+                  }),
+                },
+              ],
+            }
+          }
+          if (args.toolName === 'get_dataset_info') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    columns: [
+                      { name: 'order_date', type: 'DATE', is_dttm: true },
+                      { name: 'revenue', type: 'FLOAT' },
+                      { name: 'profit', type: 'FLOAT' },
+                    ],
+                  }),
+                },
+              ],
+            }
+          }
+          return {
+            error: '',
+            content: [
+              {
+                text: JSON.stringify({
+                  chart_id: 191,
+                  chart_url: 'http://127.0.0.1:8080/explore/?slice_id=191',
+                }),
+              },
+            ],
+          }
+        },
+      }),
+    }
+
+    const result = await runAxBiExistingDatasetChartWorkflow({
+      prompt:
+        'Create a saved mixed time series chart from sales_daily showing SUM(revenue) and AVG(profit) by order_date. Name it Sales - Revenue and Profit.',
+      serviceHub: serviceHub as never,
+    })
+
+    expect(result).toMatchObject({ handled: true })
+    expect(calls[2]).toMatchObject({
+      toolName: 'generate_chart',
+      arguments: {
+        request: {
+          chart_name: 'Sales - Revenue and Profit',
+          config: {
+            chart_type: 'mixed_timeseries',
+            x: { name: 'order_date' },
+            y: [{ name: 'revenue', aggregate: 'SUM', label: 'SUM(revenue)' }],
+            primary_kind: 'line',
+            y_secondary: [
+              { name: 'profit', aggregate: 'AVG', label: 'AVG(profit)' },
+            ],
+            secondary_kind: 'bar',
+          },
+        },
+      },
+    })
+  })
+
+  it('creates a saved handlebars chart from an aggregate prompt', async () => {
+    const calls: Array<{ toolName: string; arguments: object }> = []
+    const serviceHub = {
+      mcp: () => ({
+        getTools: async () => [
+          { server: 'ax-bi', name: 'list_datasets', description: '', inputSchema: {} },
+          { server: 'ax-bi', name: 'get_dataset_info', description: '', inputSchema: {} },
+          { server: 'ax-bi', name: 'generate_chart', description: '', inputSchema: {} },
+        ],
+        callTool: async (args: { toolName: string; arguments: object }) => {
+          calls.push(args)
+          if (args.toolName === 'list_datasets') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    datasets: [{ id: 103, table_name: 'upload_restaurant_tips_f0d2d2' }],
+                  }),
+                },
+              ],
+            }
+          }
+          if (args.toolName === 'get_dataset_info') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    columns: [
+                      { name: 'day', type: 'TEXT' },
+                      { name: 'total_bill', type: 'FLOAT' },
+                    ],
+                  }),
+                },
+              ],
+            }
+          }
+          return {
+            error: '',
+            content: [
+              {
+                text: JSON.stringify({
+                  chart_id: 192,
+                  chart_url: 'http://127.0.0.1:8080/explore/?slice_id=192',
+                }),
+              },
+            ],
+          }
+        },
+      }),
+    }
+
+    const result = await runAxBiExistingDatasetChartWorkflow({
+      prompt:
+        'Create a saved handlebars chart from restaurant_tips showing SUM(total_bill) by day. Name it Tips - Day Summary.',
+      serviceHub: serviceHub as never,
+    })
+
+    expect(result).toMatchObject({ handled: true })
+    expect(calls[2]).toMatchObject({
+      toolName: 'generate_chart',
+      arguments: {
+        request: {
+          chart_name: 'Tips - Day Summary',
+          config: {
+            chart_type: 'handlebars',
+            query_mode: 'aggregate',
+            groupby: [{ name: 'day' }],
+            metrics: [
+              {
+                name: 'total_bill',
+                aggregate: 'SUM',
+                label: 'SUM(total_bill)',
+              },
+            ],
+          },
+        },
+      },
+    })
+  })
+
   it('handles short natural chart prompts and common column aliases', async () => {
     const prompts = [
       {
