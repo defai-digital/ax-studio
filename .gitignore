@@ -86,6 +86,8 @@ agent-teams/
 
 # Generated reports
 report/
+outputs/
+/.scannerwork/
 
 # Local planning docs
 /.internal/
