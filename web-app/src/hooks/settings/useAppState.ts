@@ -186,6 +186,9 @@ export const useAppState = create<AppState>()((set) => ({
         cancelToolCall: undefined,
         errorMessage: undefined,
         showOutOfContextDialog: false,
+        loadingModel: false,
+        promptProgress: undefined,
+        activeModels: [],
       }
     }),
   setOutOfContextDialog: (show) => {

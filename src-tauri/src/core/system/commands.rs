@@ -167,14 +167,14 @@ pub fn log(request: LogRequest) -> Result<(), String> {
 pub fn canonicalize_path(path: String) -> Result<String, String> {
     let path = PathBuf::from(path);
     let canonical = validate_open_path(&path)?;
-    let display = canonical.to_string_lossy().to_string();
     if let Some(home) = dirs::home_dir() {
-        let home_str = home.to_string_lossy().to_string();
-        if display.starts_with(&home_str) {
-            return Ok(display.replacen(&home_str, "~", 1));
+        if canonical.starts_with(&home) {
+            if let Ok(stripped) = canonical.strip_prefix(&home) {
+                return Ok(format!("~/{}", stripped.display()));
+            }
         }
     }
-    Ok(display)
+    Ok(canonical.to_string_lossy().to_string())
 }
 
 #[tauri::command]

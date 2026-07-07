@@ -179,7 +179,7 @@ export class DefaultThreadsService implements ThreadsService {
         is_favorite: thread.isFavorite,
         order: thread.order,
       },
-      created: Math.floor(Date.now() / 1000),
+      created: thread.created ?? Math.floor(Date.now() / 1000),
       updated: Math.floor(Date.now() / 1000),
     } as CoreThread
 
