@@ -109,7 +109,7 @@ type AxBiChartOptions = {
 
 type AxBiChartFilter = {
   column: string
-  op: '=' | '!='
+  op: '=' | '!=' | '>' | '<' | '>=' | '<='
   value: string | number | boolean
 }
 
@@ -443,10 +443,10 @@ function normalizeChartFilters(value: unknown): AxBiChartFilter[] | undefined {
 
   const filters = value.flatMap((item): AxBiChartFilter[] => {
     if (!isRecord(item) || typeof item.column !== 'string') return []
-    const rawOp =
-      item.op === '!=' || item.operator === '!=' || item.op === '<>'
-        ? '!='
-        : '='
+    const operator = item.op ?? item.operator ?? item.opr
+    const rawOp = normalizeFilterOperator(
+      typeof operator === 'string' ? operator : undefined
+    )
     const rawValue = item.value ?? item.val
     if (
       typeof rawValue !== 'string' &&
@@ -479,19 +479,60 @@ function normalizeFilterValue(value: string): string | number {
   return normalized
 }
 
+function normalizeFilterOperator(
+  operator: string | undefined
+): AxBiChartFilter['op'] {
+  const normalized = (operator || '=').toLowerCase().replace(/\s+/g, ' ').trim()
+  if (normalized === '!=' || normalized === '<>' || normalized === 'is not') {
+    return '!='
+  }
+  if (
+    normalized === '>' ||
+    normalized === 'greater than' ||
+    normalized === 'more than' ||
+    normalized === 'above'
+  ) {
+    return '>'
+  }
+  if (
+    normalized === '<' ||
+    normalized === 'less than' ||
+    normalized === 'under' ||
+    normalized === 'below'
+  ) {
+    return '<'
+  }
+  if (
+    normalized === '>=' ||
+    normalized === 'at least' ||
+    normalized === 'greater than or equal to' ||
+    normalized === 'more than or equal to'
+  ) {
+    return '>='
+  }
+  if (
+    normalized === '<=' ||
+    normalized === 'at most' ||
+    normalized === 'less than or equal to'
+  ) {
+    return '<='
+  }
+  return '='
+}
+
 function extractPromptFilters(prompt: string): AxBiChartFilter[] | undefined {
   const filters: AxBiChartFilter[] = []
   const filterPattern =
-    /\b(?:where|filter(?:ed)?(?:\s+to)?|only)\s+([A-Za-z0-9_][A-Za-z0-9_. -]*?)\s*(=|!=|is\s+not|is|equals?)\s+(['"]?)(.+?)(?:\3)(?:\s+(?:with|using)\b|\s+(?:name\s+it|call\s+it|title\s+it|named|called|titled)\b|\s+return\b|[.!?]\s*$|$)/gi
+    /\b(?:where|filter(?:ed)?(?:\s+to)?|only)\s+([A-Za-z0-9_][A-Za-z0-9_. -]*?)\s*(>=|<=|>|<|!=|is\s+not|is|equals?|greater\s+than\s+or\s+equal\s+to|more\s+than\s+or\s+equal\s+to|less\s+than\s+or\s+equal\s+to|greater\s+than|more\s+than|less\s+than|at\s+least|at\s+most|above|below|under)\s+(['"]?)(.+?)(?:\3)(?:\s+(?:with|using)\b|\s+(?:name\s+it|call\s+it|title\s+it|named|called|titled)\b|\s+return\b|[.!?]\s*$|$)/gi
 
   for (const match of prompt.matchAll(filterPattern)) {
     const column = match[1]?.trim()
-    const operator = match[2]?.toLowerCase().replace(/\s+/g, ' ')
+    const operator = match[2]
     const value = match[4]?.trim()
     if (!column || !value) continue
     filters.push({
       column: stripTrailingPunctuation(column),
-      op: operator === '!=' || operator === 'is not' ? '!=' : '=',
+      op: normalizeFilterOperator(operator),
       value: normalizeFilterValue(value),
     })
   }

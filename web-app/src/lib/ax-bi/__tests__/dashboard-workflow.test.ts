@@ -1784,6 +1784,31 @@ describe('AX-BI dashboard workflow', () => {
           filters: [{ column: 'time', op: '=', value: 'Dinner' }],
         },
       },
+      {
+        prompt:
+          'Create a bar chart from restaurant_tips showing total bill by day where total_bill > 20. Name it Tips - Big Bills by Day.',
+        expectedChartName: 'Tips - Big Bills by Day',
+        expectedConfig: {
+          chart_type: 'xy',
+          kind: 'bar',
+          x: { name: 'day' },
+          y: [{ name: 'total_bill', aggregate: 'SUM', label: 'SUM(total_bill)' }],
+          filters: [{ column: 'total_bill', op: '>', value: 20 }],
+        },
+      },
+      {
+        prompt:
+          'Create a horizontal bar chart from restaurant_tips showing average tip by day where tip at most 3. Name it Tips - Small Tip by Day.',
+        expectedChartName: 'Tips - Small Tip by Day',
+        expectedConfig: {
+          chart_type: 'xy',
+          kind: 'bar',
+          orientation: 'horizontal',
+          x: { name: 'day' },
+          y: [{ name: 'tip', aggregate: 'AVG', label: 'AVG(tip)' }],
+          filters: [{ column: 'tip', op: '<=', value: 3 }],
+        },
+      },
     ]
 
     for (const { prompt, expectedChartName, expectedConfig } of prompts) {

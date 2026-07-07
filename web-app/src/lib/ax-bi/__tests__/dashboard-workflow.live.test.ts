@@ -101,6 +101,7 @@ describe.skipIf(process.env.AX_BI_LIVE_SMOKE !== 'true')(
           'Create a saved bar chart from restaurant_tips showing COUNT(*) by day. Name it Smoke - Tips Count by Day.',
           'Create a saved bar chart from restaurant_tips showing SUM(total_bill) by day grouped by smoker with lyft colors and show value labels. Name it Smoke - Grouped Bill by Day and Smoker.',
           'Create a saved bar chart from restaurant_tips showing AVG(tip) by day where smoker is Yes top 3. Name it Smoke - Smoker Tip Top Days.',
+          'Create a saved bar chart from restaurant_tips showing SUM(total_bill) by day where total_bill > 20. Name it Smoke - Big Bills by Day.',
           'Create a saved horizontal bar chart from restaurant_tips showing AVG(tip) by time. Name it Smoke - Avg Tip by Time.',
           'Create a saved line chart from supermarket_sales showing SUM(Total) by Date. Name it Smoke - Sales Total by Date.',
           'Create a saved area chart from supermarket_sales showing AVG(Rating) by Date. Name it Smoke - Rating by Date.',
@@ -133,7 +134,7 @@ describe.skipIf(process.env.AX_BI_LIVE_SMOKE !== 'true')(
 
         const dashboard = await runAxBiExistingDatasetChartWorkflow({
           prompt:
-            'Create dashboard named Smoke Tips Dashboard using these charts Smoke - Tips Count by Day Smoke - Grouped Bill by Day and Smoker Smoke - Smoker Tip Top Days Smoke - Avg Tip by Time Smoke - Smoker Split Smoke - Sex Split Smoke - Tips Detail Table Smoke - Tips Bill Summary Table Smoke - Bill Pivot by Day and Smoker Smoke - Tips Day Summary',
+            'Create dashboard named Smoke Tips Dashboard using these charts Smoke - Tips Count by Day Smoke - Grouped Bill by Day and Smoker Smoke - Smoker Tip Top Days Smoke - Big Bills by Day Smoke - Avg Tip by Time Smoke - Smoker Split Smoke - Sex Split Smoke - Tips Detail Table Smoke - Tips Bill Summary Table Smoke - Bill Pivot by Day and Smoker Smoke - Tips Day Summary',
           serviceHub: serviceHub as never,
         })
         messages.push(dashboard.handled ? dashboard.message : 'Dashboard unhandled')
