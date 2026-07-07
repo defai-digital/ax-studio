@@ -620,6 +620,92 @@ describe('AX-BI dashboard workflow', () => {
     })
   })
 
+  it('creates an interactive ag-grid table when requested', async () => {
+    const calls: Array<{ toolName: string; arguments: object }> = []
+    const serviceHub = {
+      mcp: () => ({
+        getTools: async () => [
+          { server: 'ax-bi', name: 'list_datasets', description: '', inputSchema: {} },
+          {
+            server: 'ax-bi',
+            name: 'get_dataset_info',
+            description: '',
+            inputSchema: {},
+          },
+          { server: 'ax-bi', name: 'generate_chart', description: '', inputSchema: {} },
+        ],
+        callTool: async (args: { toolName: string; arguments: object }) => {
+          calls.push(args)
+          if (args.toolName === 'list_datasets') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    datasets: [{ id: 103, table_name: 'upload_restaurant_tips_f0d2d2' }],
+                  }),
+                },
+              ],
+            }
+          }
+          if (args.toolName === 'get_dataset_info') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    columns: [
+                      { name: 'day', type: 'TEXT' },
+                      { name: 'time', type: 'TEXT' },
+                      { name: 'total_bill', type: 'FLOAT' },
+                    ],
+                  }),
+                },
+              ],
+            }
+          }
+          return {
+            error: '',
+            content: [
+              {
+                text: JSON.stringify({
+                  chart_id: 182,
+                  chart_url: 'http://127.0.0.1:8080/explore/?slice_id=182',
+                }),
+              },
+            ],
+          }
+        },
+      }),
+    }
+
+    const result = await runAxBiExistingDatasetChartWorkflow({
+      prompt:
+        'Create an interactive table from restaurant_tips showing day, time, and total bill. Name it Tips - Interactive Table.',
+      serviceHub: serviceHub as never,
+    })
+
+    expect(result).toMatchObject({ handled: true })
+    expect(calls[2]).toMatchObject({
+      toolName: 'generate_chart',
+      arguments: {
+        request: {
+          chart_name: 'Tips - Interactive Table',
+          config: {
+            chart_type: 'table',
+            viz_type: 'ag-grid-table',
+            query_mode: 'raw',
+            columns: [
+              { name: 'day' },
+              { name: 'time' },
+              { name: 'total_bill' },
+            ],
+          },
+        },
+      },
+    })
+  })
+
   it('creates a saved pivot table from row, column, and metric prompts', async () => {
     const calls: Array<{ toolName: string; arguments: object }> = []
     const serviceHub = {
@@ -1160,6 +1246,121 @@ describe('AX-BI dashboard workflow', () => {
                   text: JSON.stringify({
                     chart_id: 183,
                     chart_url: 'http://127.0.0.1:8080/explore/?slice_id=183',
+                  }),
+                },
+              ],
+            }
+          },
+        }),
+      }
+
+      const result = await runAxBiExistingDatasetChartWorkflow({
+        prompt,
+        serviceHub: serviceHub as never,
+      })
+
+      expect(result).toMatchObject({ handled: true })
+      expect(calls[2]).toMatchObject({
+        toolName: 'generate_chart',
+        arguments: {
+          request: {
+            chart_name: expectedChartName,
+            config: expectedConfig,
+          },
+        },
+      })
+    }
+  })
+
+  it('creates stacked grouped bars and KPI trendlines from prompt variants', async () => {
+    const prompts = [
+      {
+        prompt:
+          'Create a saved stacked bar chart from restaurant_tips showing SUM(total_bill) by day stacked by smoker. Name it Tips - Bill by Day and Smoker.',
+        expectedChartName: 'Tips - Bill by Day and Smoker',
+        columns: [
+          { name: 'day', type: 'TEXT' },
+          { name: 'smoker', type: 'TEXT' },
+          { name: 'total_bill', type: 'FLOAT' },
+        ],
+        expectedConfig: {
+          chart_type: 'xy',
+          kind: 'bar',
+          x: { name: 'day' },
+          group_by: [{ name: 'smoker' }],
+          stacked: true,
+          y: [
+            {
+              name: 'total_bill',
+              aggregate: 'SUM',
+              label: 'SUM(total_bill)',
+            },
+          ],
+        },
+      },
+      {
+        prompt:
+          'Create a saved big number from supermarket_sales showing SUM(Total) with trendline by Date. Name it Sales - Total KPI Trend.',
+        expectedChartName: 'Sales - Total KPI Trend',
+        columns: [
+          { name: 'Date', type: 'TIMESTAMP', is_dttm: true },
+          { name: 'Total', type: 'FLOAT' },
+        ],
+        expectedConfig: {
+          chart_type: 'big_number',
+          metric: { name: 'Total', aggregate: 'SUM', label: 'SUM(Total)' },
+          temporal_column: 'Date',
+          time_grain: 'P1M',
+          show_trendline: true,
+          aggregation: 'sum',
+        },
+      },
+    ]
+
+    for (const { prompt, expectedChartName, columns, expectedConfig } of prompts) {
+      const calls: Array<{ toolName: string; arguments: object }> = []
+      const serviceHub = {
+        mcp: () => ({
+          getTools: async () => [
+            { server: 'ax-bi', name: 'list_datasets', description: '', inputSchema: {} },
+            {
+              server: 'ax-bi',
+              name: 'get_dataset_info',
+              description: '',
+              inputSchema: {},
+            },
+            { server: 'ax-bi', name: 'generate_chart', description: '', inputSchema: {} },
+          ],
+          callTool: async (args: { toolName: string; arguments: object }) => {
+            calls.push(args)
+            if (args.toolName === 'list_datasets') {
+              return {
+                error: '',
+                content: [
+                  {
+                    text: JSON.stringify({
+                      datasets: [
+                        { id: 103, table_name: 'upload_restaurant_tips_f0d2d2' },
+                        { id: 104, table_name: 'upload_supermarket_sales' },
+                      ],
+                    }),
+                  },
+                ],
+              }
+            }
+            if (args.toolName === 'get_dataset_info') {
+              return {
+                error: '',
+                content: [{ text: JSON.stringify({ columns }) }],
+              }
+            }
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    chart_id: 184,
+                    chart_url: 'http://127.0.0.1:8080/explore/?slice_id=184',
                   }),
                 },
               ],

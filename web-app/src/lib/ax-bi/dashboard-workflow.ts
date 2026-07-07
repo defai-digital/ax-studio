@@ -93,6 +93,7 @@ type AxBiChartOptions = {
   colorScheme?: string
   rowLimit?: number
   showValues?: boolean
+  tableVizType?: 'ag-grid-table'
 }
 
 type AxBiChartFilter = {
@@ -116,6 +117,8 @@ export type AxBiChartIntentDraft =
       groupBy: string
       chartKind: AxBiGroupedChartKind
       metric: AxBiChartMetric
+      seriesBy?: string
+      stacked?: boolean
       chartName?: string
       options?: AxBiChartOptions
       filters?: AxBiChartFilter[]
@@ -142,6 +145,7 @@ export type AxBiChartIntentDraft =
       datasetName: string
       chartKind: 'big_number'
       metric: AxBiChartMetric
+      temporalColumn?: string
       chartName?: string
       options?: AxBiChartOptions
       filters?: AxBiChartFilter[]
@@ -357,6 +361,13 @@ function normalizeChartOptions(value: unknown): AxBiChartOptions | undefined {
     options.showValues = value.showValues
   }
 
+  if (
+    value.tableVizType === 'ag-grid-table' ||
+    value.tableVizType === 'ag_grid_table'
+  ) {
+    options.tableVizType = 'ag-grid-table'
+  }
+
   return Object.keys(options).length > 0 ? options : undefined
 }
 
@@ -391,6 +402,10 @@ function extractPromptChartOptions(prompt: string): AxBiChartOptions | undefined
   const matchedScheme = colorSchemes.find(([pattern]) => pattern.test(prompt))
   if (matchedScheme) {
     options.colorScheme = matchedScheme[1]
+  }
+
+  if (/\b(?:interactive|ag-?grid)\s+table\b/i.test(prompt)) {
+    options.tableVizType = 'ag-grid-table'
   }
 
   return Object.keys(options).length > 0 ? options : undefined
@@ -668,6 +683,11 @@ function normalizeChartIntentDraft(
       datasetName: stripTrailingPunctuation(value.datasetName),
       chartKind: 'big_number',
       metric,
+      temporalColumn:
+        typeof value.temporalColumn === 'string' &&
+        value.temporalColumn.trim().length > 0
+          ? stripTrailingPunctuation(value.temporalColumn)
+          : undefined,
       options: normalizeChartOptions(value.options),
       filters: normalizeChartFilters(value.filters),
       chartName:
@@ -729,6 +749,11 @@ function normalizeChartIntentDraft(
     groupBy: stripTrailingPunctuation(value.groupBy),
     chartKind,
     metric,
+    seriesBy:
+      typeof value.seriesBy === 'string' && value.seriesBy.trim().length > 0
+        ? stripTrailingPunctuation(value.seriesBy)
+        : undefined,
+    stacked: value.stacked === true,
     options: normalizeChartOptions(value.options),
     filters: normalizeChartFilters(value.filters),
     chartName:
@@ -748,12 +773,12 @@ function parseExistingDatasetChartIntent(
 ): ExistingDatasetChartIntent | null {
   const explicitAxBiMcp = /\bax-?bi\s+mcp\b/i.test(prompt)
   const explicitSavedDatasetRequest =
-    /\b(?:create|make|build|generate|save)\s+(?:a\s+|an\s+)?(?:saved\s+)?(?:area\s+chart|bar\s+chart|column\s+chart|horizontal\s+bar\s+chart|line\s+chart|pie\s+chart|donut\s+chart|scatter\s+chart|pivot\s+table|mixed\s+time(?:series|\s+series)\s+chart|handlebars\s+chart|big\s+number|kpi|chart|table)\s+from\s+[A-Za-z0-9_][A-Za-z0-9_.-]*/i.test(
+    /\b(?:create|make|build|generate|save)\s+(?:a\s+|an\s+)?(?:saved\s+)?(?:(?:interactive|ag-?grid)\s+table|stacked\s+bar\s+chart|area\s+chart|bar\s+chart|column\s+chart|horizontal\s+bar\s+chart|line\s+chart|pie\s+chart|donut\s+chart|scatter\s+chart|pivot\s+table|mixed\s+time(?:series|\s+series)\s+chart|handlebars\s+chart|big\s+number|kpi|chart|table)\s+from\s+[A-Za-z0-9_][A-Za-z0-9_.-]*/i.test(
       prompt
     )
   if (!explicitAxBiMcp && !explicitSavedDatasetRequest) return null
   if (
-    !/\b(area\s+chart|bar\s+chart|column\s+chart|horizontal\s+bar\s+chart|line\s+chart|pie\s+chart|donut\s+chart|scatter\s+chart|pivot\s+table|mixed\s+time(?:series|\s+series)\s+chart|handlebars\s+chart|big\s+number|kpi|chart|scatter|table)\b/i.test(
+    !/\b((?:interactive|ag-?grid)\s+table|stacked\s+bar\s+chart|area\s+chart|bar\s+chart|column\s+chart|horizontal\s+bar\s+chart|line\s+chart|pie\s+chart|donut\s+chart|scatter\s+chart|pivot\s+table|mixed\s+time(?:series|\s+series)\s+chart|handlebars\s+chart|big\s+number|kpi|chart|scatter|table)\b/i.test(
       prompt
     )
   )
@@ -965,6 +990,10 @@ function parseExistingDatasetChartIntent(
       } as const)
 
   if (/\b(?:big\s+number|kpi)\b/i.test(prompt)) {
+    const temporalMatch =
+      prompt.match(/\b(?:trendline|trend)\s+(?:by|over|using)\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\b/i) ??
+      prompt.match(/\bwith\s+(?:a\s+)?trendline\s+(?:by|over|using)\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\b/i) ??
+      prompt.match(/\bover\s+time\s+by\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\b/i)
     const defaultChartName =
       metric.type === 'count'
         ? `${datasetMatch[1]} Count`
@@ -974,6 +1003,9 @@ function parseExistingDatasetChartIntent(
       chartName: extractRequestedChartName(prompt) ?? defaultChartName,
       chartKind: 'big_number',
       metric,
+      temporalColumn: temporalMatch?.[1]
+        ? stripTrailingPunctuation(temporalMatch[1])
+        : undefined,
       options: extractPromptChartOptions(prompt),
       filters: extractPromptFilters(prompt),
     }
@@ -981,9 +1013,12 @@ function parseExistingDatasetChartIntent(
 
   const chartKind = inferChartKindFromPrompt(prompt)
   const groupByMatch = prompt.match(
-    /\bby\s+([A-Za-z0-9_][A-Za-z0-9_. -]*?)(?:\s+and\s+|\s*,|\s*\.|\s+(?:where|filter(?:ed)?|only|with|using)\b|\s+(?:name\s+it|call\s+it|title\s+it|named|called|titled)\b|\s+return\b|$)/i
+    /\bby\s+([A-Za-z0-9_][A-Za-z0-9_. -]*?)(?:\s+and\s+|\s*,|\s*\.|\s+(?:stacked|grouped|colored|coloured|split|series)\s+by\b|\s+(?:where|filter(?:ed)?|only|with|using)\b|\s+(?:name\s+it|call\s+it|title\s+it|named|called|titled)\b|\s+return\b|$)/i
   )
   if (!groupByMatch?.[1]) return null
+  const seriesByMatch =
+    prompt.match(/\b(?:stacked|grouped|colored|coloured|split)\s+by\s+([A-Za-z0-9_][A-Za-z0-9_. -]*?)(?:\s+(?:where|filter(?:ed)?|only|with|using)\b|\s+(?:name\s+it|call\s+it|title\s+it|named|called|titled)\b|\s+return\b|[.!?]\s*$|$)/i) ??
+    prompt.match(/\bseries\s+by\s+([A-Za-z0-9_][A-Za-z0-9_. -]*?)(?:\s+(?:where|filter(?:ed)?|only|with|using)\b|\s+(?:name\s+it|call\s+it|title\s+it|named|called|titled)\b|\s+return\b|[.!?]\s*$|$)/i)
   const defaultChartName =
     metric.type === 'count'
       ? `${datasetMatch[1]} Count by ${groupByMatch[1]}`
@@ -996,6 +1031,10 @@ function parseExistingDatasetChartIntent(
     chartName,
     chartKind,
     metric,
+    seriesBy: seriesByMatch?.[1]
+      ? stripTrailingPunctuation(seriesByMatch[1])
+      : undefined,
+    stacked: /\bstacked\b/i.test(prompt),
     options: extractPromptChartOptions(prompt),
     filters: extractPromptFilters(prompt),
   }
@@ -1749,8 +1788,26 @@ function validateAndResolveIntentColumns(
 
   if (intent.chartKind === 'big_number') {
     const resolvedFilters = resolveIntentFilters(intent.filters, columns)
+    const temporalColumn = intent.temporalColumn
+      ? findColumn(columns, intent.temporalColumn)
+      : undefined
+    if (intent.temporalColumn && (!temporalColumn || !columnName(temporalColumn))) {
+      throw new Error(
+        `Dataset "${intent.datasetName}" does not contain trendline column "${intent.temporalColumn}".`
+      )
+    }
+    if (temporalColumn && !isDateColumn(temporalColumn)) {
+      throw new Error(
+        `Column "${columnName(temporalColumn)}" is not temporal, so it cannot be used for a KPI trendline.`
+      )
+    }
+
     if (intent.metric.type === 'count') {
-      return { ...intent, filters: resolvedFilters }
+      return {
+        ...intent,
+        temporalColumn: temporalColumn ? columnName(temporalColumn) : undefined,
+        filters: resolvedFilters,
+      }
     }
 
     const metricColumn = findColumn(columns, intent.metric.column)
@@ -1767,6 +1824,7 @@ function validateAndResolveIntentColumns(
 
     return {
       ...intent,
+      temporalColumn: temporalColumn ? columnName(temporalColumn) : undefined,
       filters: resolvedFilters,
       metric: {
         ...intent.metric,
@@ -1845,11 +1903,20 @@ function validateAndResolveIntentColumns(
       `Dataset "${intent.datasetName}" does not contain column "${intent.groupBy}".`
     )
   }
+  const seriesByColumn = intent.seriesBy
+    ? findColumn(columns, intent.seriesBy)
+    : undefined
+  if (intent.seriesBy && (!seriesByColumn || !columnName(seriesByColumn))) {
+    throw new Error(
+      `Dataset "${intent.datasetName}" does not contain series column "${intent.seriesBy}".`
+    )
+  }
 
   if (intent.metric.type === 'count') {
     return {
       ...intent,
       groupBy: columnName(groupByColumn)!,
+      seriesBy: seriesByColumn ? columnName(seriesByColumn) : undefined,
       filters: resolvedFilters,
     }
   }
@@ -1869,6 +1936,7 @@ function validateAndResolveIntentColumns(
   return {
     ...intent,
     groupBy: columnName(groupByColumn)!,
+    seriesBy: seriesByColumn ? columnName(seriesByColumn) : undefined,
     filters: resolvedFilters,
     metric: {
       ...intent.metric,
@@ -1947,13 +2015,19 @@ function buildExistingDatasetChartConfig(
     : null
 
   if (intent.chartKind === 'big_number') {
-    const config = {
+    const config: Record<string, unknown> = {
       chart_type: 'big_number',
       metric: metricConfig,
       subheader:
         intent.metric.type === 'count'
           ? 'COUNT(*)'
           : `${intent.metric.aggregate}(${intent.metric.column})`,
+    }
+    if (intent.temporalColumn) {
+      config.temporal_column = intent.temporalColumn
+      config.time_grain = 'P1M'
+      config.show_trendline = true
+      config.aggregation = 'sum'
     }
     applyChartFilters(config, intent.filters)
     applyCommonChartOptions(config, intent.options, { colorScheme: true })
@@ -1964,6 +2038,7 @@ function buildExistingDatasetChartConfig(
     const tableColumns = intent.columns.map((name) => ({ name }))
     const config = {
       chart_type: 'table',
+      viz_type: intent.options?.tableVizType ?? 'table',
       query_mode: 'raw',
       columns: tableColumns,
       all_columns: tableColumns,
@@ -2101,11 +2176,12 @@ function buildExistingDatasetChartConfig(
     return config
   }
 
-  const config = {
+  const config: Record<string, unknown> = {
     chart_type: 'xy',
     x: { name: intent.groupBy },
     y: [yMetric],
     kind: intent.chartKind === 'horizontal_bar' ? 'bar' : intent.chartKind,
+    stacked: intent.stacked === true,
     orientation:
       intent.chartKind === 'horizontal_bar' ? 'horizontal' : 'vertical',
     x_axis: { title: humanize(intent.groupBy) },
@@ -2113,8 +2189,11 @@ function buildExistingDatasetChartConfig(
       title:
         intent.metric.type === 'count'
           ? 'Count'
-        : `${intent.metric.aggregate}(${humanize(intent.metric.column)})`,
+          : `${intent.metric.aggregate}(${humanize(intent.metric.column)})`,
     },
+  }
+  if (intent.seriesBy) {
+    config.group_by = [{ name: intent.seriesBy }]
   }
   applyChartFilters(config, intent.filters)
   applyCommonChartOptions(config, intent.options, {
