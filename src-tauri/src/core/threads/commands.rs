@@ -375,16 +375,16 @@ pub async fn modify_thread_assistant<R: Runtime>(
         .and_then(|v| v.as_str())
         .ok_or("Missing id")?
         .to_string();
-    if let Some(index) = thread
+    let index = thread
         .assistants
         .iter()
         .position(|a| a.get("id").and_then(|v| v.as_str()) == Some(assistant_id.as_str()))
-    {
-        thread.assistants[index] = assistant.clone();
-        task::spawn_blocking(move || update_thread_metadata(&path, &thread))
-            .await
-            .map_err(|e| format!("modify_thread_assistant task error: {e}"))??;
-    }
+        .ok_or_else(|| format!("Assistant '{assistant_id}' not found in thread '{thread_id}'"))?;
+    thread.assistants[index] = assistant.clone();
+    task::spawn_blocking(move || update_thread_metadata(&path, &thread))
+        .await
+        .map_err(|e| format!("modify_thread_assistant task error: {e}"))??;
+
     drop(_guard);
     drop(lock);
     prune_unused_message_locks().await;
