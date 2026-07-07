@@ -51,6 +51,15 @@ const cask = `cask "ax-studio" do
   depends_on formula: "mlx"
   depends_on formula: "mlx-c"
 
+  preflight do
+    # Clears any pre-existing bundle (current or pre-rename "Ax-Studio.app" name) so
+    # upgrades from untracked installs don't hit Homebrew's "already an App" guard.
+    [
+      "#{appdir}/AX Studio.app",
+      "#{appdir}/Ax-Studio.app",
+    ].each { |legacy_app| FileUtils.rm_rf(legacy_app) }
+  end
+
   app "AX Studio.app"
 
   postflight do
