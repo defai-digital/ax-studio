@@ -620,6 +620,173 @@ describe('AX-BI dashboard workflow', () => {
     })
   })
 
+  it('creates an aggregate table from a grouped metric prompt', async () => {
+    const calls: Array<{ toolName: string; arguments: object }> = []
+    const serviceHub = {
+      mcp: () => ({
+        getTools: async () => [
+          { server: 'ax-bi', name: 'list_datasets', description: '', inputSchema: {} },
+          {
+            server: 'ax-bi',
+            name: 'get_dataset_info',
+            description: '',
+            inputSchema: {},
+          },
+          { server: 'ax-bi', name: 'generate_chart', description: '', inputSchema: {} },
+        ],
+        callTool: async (args: { toolName: string; arguments: object }) => {
+          calls.push(args)
+          if (args.toolName === 'list_datasets') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    datasets: [{ id: 103, table_name: 'upload_restaurant_tips_f0d2d2' }],
+                  }),
+                },
+              ],
+            }
+          }
+          if (args.toolName === 'get_dataset_info') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    columns: [
+                      { name: 'day', type: 'TEXT' },
+                      { name: 'total_bill', type: 'FLOAT' },
+                    ],
+                  }),
+                },
+              ],
+            }
+          }
+          return {
+            error: '',
+            content: [
+              {
+                text: JSON.stringify({
+                  chart_id: 183,
+                  chart_url: 'http://127.0.0.1:8080/explore/?slice_id=183',
+                }),
+              },
+            ],
+          }
+        },
+      }),
+    }
+
+    const result = await runAxBiExistingDatasetChartWorkflow({
+      prompt:
+        'Create a saved table from restaurant_tips showing SUM(total_bill) by day. Name it Tips - Bill Summary Table.',
+      serviceHub: serviceHub as never,
+    })
+
+    expect(result).toMatchObject({ handled: true })
+    expect(calls[2]).toMatchObject({
+      toolName: 'generate_chart',
+      arguments: {
+        request: {
+          chart_name: 'Tips - Bill Summary Table',
+          config: {
+            chart_type: 'table',
+            query_mode: 'aggregate',
+            columns: [
+              { name: 'day' },
+              {
+                name: 'total_bill',
+                aggregate: 'SUM',
+                label: 'SUM(total_bill)',
+              },
+            ],
+          },
+        },
+      },
+    })
+  })
+
+  it('creates an aggregate count table from a grouped count prompt', async () => {
+    const calls: Array<{ toolName: string; arguments: object }> = []
+    const serviceHub = {
+      mcp: () => ({
+        getTools: async () => [
+          { server: 'ax-bi', name: 'list_datasets', description: '', inputSchema: {} },
+          {
+            server: 'ax-bi',
+            name: 'get_dataset_info',
+            description: '',
+            inputSchema: {},
+          },
+          { server: 'ax-bi', name: 'generate_chart', description: '', inputSchema: {} },
+        ],
+        callTool: async (args: { toolName: string; arguments: object }) => {
+          calls.push(args)
+          if (args.toolName === 'list_datasets') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    datasets: [{ id: 22, table_name: 'palmer_penguins' }],
+                  }),
+                },
+              ],
+            }
+          }
+          if (args.toolName === 'get_dataset_info') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    columns: [{ name: 'island', type: 'TEXT' }],
+                  }),
+                },
+              ],
+            }
+          }
+          return {
+            error: '',
+            content: [
+              {
+                text: JSON.stringify({
+                  chart_id: 184,
+                  chart_url: 'http://127.0.0.1:8080/explore/?slice_id=184',
+                }),
+              },
+            ],
+          }
+        },
+      }),
+    }
+
+    const result = await runAxBiExistingDatasetChartWorkflow({
+      prompt:
+        'Create a saved table from palmer_penguins showing COUNT(*) by island. Name it Penguins - Count Table.',
+      serviceHub: serviceHub as never,
+    })
+
+    expect(result).toMatchObject({ handled: true })
+    expect(calls[2]).toMatchObject({
+      toolName: 'generate_chart',
+      arguments: {
+        request: {
+          chart_name: 'Penguins - Count Table',
+          config: {
+            chart_type: 'table',
+            query_mode: 'aggregate',
+            columns: [
+              { name: 'island' },
+              { sql_expression: 'COUNT(*)', label: 'Count' },
+            ],
+          },
+        },
+      },
+    })
+  })
+
   it('creates an interactive ag-grid table when requested', async () => {
     const calls: Array<{ toolName: string; arguments: object }> = []
     const serviceHub = {

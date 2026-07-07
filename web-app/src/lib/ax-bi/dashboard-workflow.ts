@@ -137,6 +137,7 @@ export type AxBiChartIntentDraft =
       datasetName: string
       chartKind: 'table'
       columns: string[]
+      metric?: AxBiChartMetric
       chartName?: string
       options?: AxBiChartOptions
       filters?: AxBiChartFilter[]
@@ -656,11 +657,13 @@ function normalizeChartIntentDraft(
       .map(stripTrailingPunctuation)
       .filter(Boolean)
     if (columns.length === 0) return null
+    const metric = normalizeMetric(value.metric) ?? undefined
 
     const draft: AxBiChartIntentDraft = {
       datasetName: stripTrailingPunctuation(value.datasetName),
       chartKind: 'table',
       columns,
+      metric,
       options: normalizeChartOptions(value.options),
       filters: normalizeChartFilters(value.filters),
       chartName:
@@ -888,6 +891,27 @@ function parseExistingDatasetChartIntent(
       prompt
     )
   ) {
+    const metric = extractPromptMetric(prompt)
+    const groupByMatch = prompt.match(
+      /\bby\s+([A-Za-z0-9_][A-Za-z0-9_. -]*?)(?:\s+and\s+|\s*,|\s*\.|\s+(?:where|filter(?:ed)?|only|with|using)\b|\s+(?:name\s+it|call\s+it|title\s+it|named|called|titled)\b|\s+return\b|$)/i
+    )
+    if (metric && groupByMatch?.[1]) {
+      const draft: AxBiChartIntentDraft = {
+        datasetName: stripTrailingPunctuation(datasetMatch[1]),
+        chartKind: 'table',
+        columns: [stripTrailingPunctuation(groupByMatch[1])],
+        metric,
+        options: extractPromptChartOptions(prompt),
+        filters: extractPromptFilters(prompt),
+        chartName: extractRequestedChartName(prompt),
+      }
+
+      return {
+        ...draft,
+        chartName: draft.chartName ?? buildDefaultChartName(draft),
+      }
+    }
+
     const columnsMatch = prompt.match(
       /\b(?:showing|with\s+columns?|listing)\s+(.+?)(?:\s+(?:where|filter(?:ed)?|only|with|using)\b|\s+(?:name\s+it|call\s+it|title\s+it|named|called|titled)\b|\s+return\b|[.!?]\s*$|$)/i
     )
@@ -1845,6 +1869,27 @@ function validateAndResolveIntentColumns(
       return columnName(matchedColumn)!
     })
 
+    if (intent.metric?.type === 'aggregate') {
+      const metricColumn = findColumn(columns, intent.metric.column)
+      if (!metricColumn || !columnName(metricColumn)) {
+        throw new Error(
+          `Dataset "${intent.datasetName}" does not contain metric column "${intent.metric.column}".`
+        )
+      }
+      if (!isNumericColumn(metricColumn)) {
+        throw new Error(
+          `Column "${columnName(metricColumn)}" is not numeric, so ${intent.metric.aggregate} cannot be used for this table.`
+        )
+      }
+
+      return {
+        ...intent,
+        columns: resolvedColumns,
+        filters: resolvedFilters,
+        metric: { ...intent.metric, column: columnName(metricColumn)! },
+      }
+    }
+
     return {
       ...intent,
       columns: resolvedColumns,
@@ -2036,6 +2081,30 @@ function buildExistingDatasetChartConfig(
 
   if (intent.chartKind === 'table') {
     const tableColumns = intent.columns.map((name) => ({ name }))
+    if (intent.metric) {
+      const metricColumn =
+        intent.metric.type === 'count'
+          ? { sql_expression: 'COUNT(*)', label: 'Count' }
+          : {
+              name: intent.metric.column,
+              aggregate: intent.metric.aggregate,
+              label: `${intent.metric.aggregate}(${intent.metric.column})`,
+            }
+      const config = {
+        chart_type: 'table',
+        viz_type: intent.options?.tableVizType ?? 'table',
+        query_mode: 'aggregate',
+        columns: [...tableColumns, metricColumn],
+        row_limit: 1000,
+      }
+      applyChartFilters(config, intent.filters)
+      applyCommonChartOptions(config, intent.options, {
+        colorScheme: true,
+        rowLimit: 50000,
+      })
+      return config
+    }
+
     const config = {
       chart_type: 'table',
       viz_type: intent.options?.tableVizType ?? 'table',
