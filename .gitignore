@@ -27,8 +27,11 @@ src-tauri/tauri.bundle.windows.nsis.template
 
 # Helper tools
 .opencode
+AGENTS.md
+CLAUDE.md
 OpenCode.md
 Claude.md
+ax-code.json
 archive/
 .cache/
 
