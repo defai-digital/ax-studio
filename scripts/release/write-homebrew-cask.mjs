@@ -41,7 +41,7 @@ const cask = `cask "ax-studio" do
   version "${version}"
   sha256 "${sha256}"
 
-  url "https://github.com/defai-digital/ax-studio/releases/download/v#{version}/AX%20Studio_#{version}_aarch64.dmg"
+  url "https://github.com/defai-digital/ax-studio/releases/download/v#{version}/AX.Studio_#{version}_aarch64.dmg"
   name "AX Studio"
   desc "AI workspace for cloud models, local inference, tools, and research"
   homepage "https://github.com/defai-digital/ax-studio"

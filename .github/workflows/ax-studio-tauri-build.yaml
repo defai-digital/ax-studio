@@ -490,13 +490,23 @@ jobs:
         run: |
           cd ./src-tauri/target/aarch64-apple-darwin/release/bundle/macos
           zip -r "ax-studio-mac-arm64-${VERSION}.zip" "AX Studio.app"
-          SIG_FILE="AX Studio.app.tar.gz.sig"
+          BUNDLE_DMG="../dmg"
+          if [ -f "AX Studio.app.tar.gz" ]; then
+            mv "AX Studio.app.tar.gz" "AX.Studio.app.tar.gz"
+          fi
+          if [ -f "AX Studio.app.tar.gz.sig" ]; then
+            mv "AX Studio.app.tar.gz.sig" "AX.Studio.app.tar.gz.sig"
+          fi
+          if [ -f "${BUNDLE_DMG}/AX Studio_${VERSION}_aarch64.dmg" ]; then
+            mv "${BUNDLE_DMG}/AX Studio_${VERSION}_aarch64.dmg" "${BUNDLE_DMG}/AX.Studio_${VERSION}_aarch64.dmg"
+          fi
+          SIG_FILE="AX.Studio.app.tar.gz.sig"
           MAC_UNIVERSAL_SIG=$( [ -f "$SIG_FILE" ] && cat "$SIG_FILE" || echo "" )
           {
             echo "MAC_UNIVERSAL_SIG=${MAC_UNIVERSAL_SIG}"
             echo "FILE_NAME=ax-studio-mac-arm64-${VERSION}.zip"
-            echo "DMG_NAME=AX Studio_${VERSION}_aarch64.dmg"
-            echo "TAR_NAME=AX Studio.app.tar.gz"
+            echo "DMG_NAME=AX.Studio_${VERSION}_aarch64.dmg"
+            echo "TAR_NAME=AX.Studio.app.tar.gz"
           } >> "$GITHUB_OUTPUT"
 
       - name: Upload release artifacts to GitHub release
@@ -618,12 +628,20 @@ jobs:
         env:
           VERSION: ${{ needs.get-update-version.outputs.new_version }}
         run: |
-          FILE_NAME="AX Studio_${VERSION}_x64-setup.exe"
-          WIN_SIG=""
-          if [ -f "./src-tauri/target/release/bundle/nsis/AX Studio_${VERSION}_x64-setup.exe.sig" ]; then
-            WIN_SIG=$(cat "./src-tauri/target/release/bundle/nsis/AX Studio_${VERSION}_x64-setup.exe.sig")
+          NSIS_DIR="./src-tauri/target/release/bundle/nsis"
+          RAW_FILE_NAME="AX Studio_${VERSION}_x64-setup.exe"
+          FILE_NAME="AX.Studio_${VERSION}_x64-setup.exe"
+          if [ -f "${NSIS_DIR}/${RAW_FILE_NAME}" ]; then
+            mv "${NSIS_DIR}/${RAW_FILE_NAME}" "${NSIS_DIR}/${FILE_NAME}"
           fi
-          PORTABLE_FILE_NAME="AX Studio_${VERSION}_x64-portable.exe"
+          if [ -f "${NSIS_DIR}/${RAW_FILE_NAME}.sig" ]; then
+            mv "${NSIS_DIR}/${RAW_FILE_NAME}.sig" "${NSIS_DIR}/${FILE_NAME}.sig"
+          fi
+          WIN_SIG=""
+          if [ -f "${NSIS_DIR}/${FILE_NAME}.sig" ]; then
+            WIN_SIG=$(cat "${NSIS_DIR}/${FILE_NAME}.sig")
+          fi
+          PORTABLE_FILE_NAME="AX.Studio_${VERSION}_x64-portable.exe"
           # Copy portable exe to deterministic name
           PORTABLE_SRC=$(find ./src-tauri/target/release -maxdepth 1 -type f \( -name "AX Studio*.exe" -o -name "ax-studio.exe" \) -print -quit || true)
           if [ -n "$PORTABLE_SRC" ] && [ -f "$PORTABLE_SRC" ]; then
@@ -757,12 +775,20 @@ jobs:
           VERSION: ${{ needs.get-update-version.outputs.new_version }}
         run: |
           TARGET_DIR="./src-tauri/target/aarch64-pc-windows-msvc/release"
-          FILE_NAME="AX Studio_${VERSION}_arm64-setup.exe"
-          WIN_ARM64_SIG=""
-          if [ -f "${TARGET_DIR}/bundle/nsis/${FILE_NAME}.sig" ]; then
-            WIN_ARM64_SIG=$(cat "${TARGET_DIR}/bundle/nsis/${FILE_NAME}.sig")
+          NSIS_DIR="${TARGET_DIR}/bundle/nsis"
+          RAW_FILE_NAME="AX Studio_${VERSION}_arm64-setup.exe"
+          FILE_NAME="AX.Studio_${VERSION}_arm64-setup.exe"
+          if [ -f "${NSIS_DIR}/${RAW_FILE_NAME}" ]; then
+            mv "${NSIS_DIR}/${RAW_FILE_NAME}" "${NSIS_DIR}/${FILE_NAME}"
           fi
-          PORTABLE_FILE_NAME="AX Studio_${VERSION}_arm64-portable.exe"
+          if [ -f "${NSIS_DIR}/${RAW_FILE_NAME}.sig" ]; then
+            mv "${NSIS_DIR}/${RAW_FILE_NAME}.sig" "${NSIS_DIR}/${FILE_NAME}.sig"
+          fi
+          WIN_ARM64_SIG=""
+          if [ -f "${NSIS_DIR}/${FILE_NAME}.sig" ]; then
+            WIN_ARM64_SIG=$(cat "${NSIS_DIR}/${FILE_NAME}.sig")
+          fi
+          PORTABLE_FILE_NAME="AX.Studio_${VERSION}_arm64-portable.exe"
           PORTABLE_SRC=$(find "$TARGET_DIR" -maxdepth 1 -type f \( -name "AX Studio*.exe" -o -name "ax-studio.exe" \) -print -quit || true)
           if [ -n "$PORTABLE_SRC" ] && [ -f "$PORTABLE_SRC" ]; then
             cp "$PORTABLE_SRC" "${TARGET_DIR}/${PORTABLE_FILE_NAME}"
@@ -879,12 +905,13 @@ jobs:
             --dir artifacts \
             --repo "$GITHUB_REPOSITORY" \
             --pattern "AX Studio_${{ needs.get-update-version.outputs.new_version }}_aarch64.dmg" \
-            --pattern "AX Studio.app.tar.gz" \
+            --pattern "AX.Studio_${{ needs.get-update-version.outputs.new_version }}_aarch64.dmg" \
+            --pattern "AX.Studio.app.tar.gz" \
             --pattern "ax-studio-mac-arm64-${{ needs.get-update-version.outputs.new_version }}.zip" \
-            --pattern "AX Studio_${{ needs.get-update-version.outputs.new_version }}_x64-setup.exe" \
-            --pattern "AX Studio_${{ needs.get-update-version.outputs.new_version }}_x64-portable.exe" \
-            --pattern "AX Studio_${{ needs.get-update-version.outputs.new_version }}_arm64-setup.exe" \
-            --pattern "AX Studio_${{ needs.get-update-version.outputs.new_version }}_arm64-portable.exe" \
+            --pattern "AX.Studio_${{ needs.get-update-version.outputs.new_version }}_x64-setup.exe" \
+            --pattern "AX.Studio_${{ needs.get-update-version.outputs.new_version }}_x64-portable.exe" \
+            --pattern "AX.Studio_${{ needs.get-update-version.outputs.new_version }}_arm64-setup.exe" \
+            --pattern "AX.Studio_${{ needs.get-update-version.outputs.new_version }}_arm64-portable.exe" \
             --pattern "latest.json"
 
       - name: Sign release assets with minisign

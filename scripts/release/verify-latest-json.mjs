@@ -64,7 +64,7 @@ if (!darwin?.url) {
   fail('darwin-aarch64 url is required')
 }
 
-if (darwin?.url && !/\/AX Studio(?:-[A-Za-z0-9.-]+)?(?:_|\.)/.test(decodedPath(darwin.url))) {
+if (darwin?.url && !/\/AX[ .]Studio(?:-[A-Za-z0-9.-]+)?(?:_|\.)/.test(decodedPath(darwin.url))) {
   fail(`darwin-aarch64 url does not look like an AX Studio macOS artifact URL: ${darwin.url}`)
 }
 
@@ -77,7 +77,7 @@ if (!windows?.url) {
   console.warn('warning: windows-x86_64 url is empty — Windows build may not have completed')
 }
 
-if (windows?.url && !/\/AX Studio_.*_x64-setup\.exe$/.test(decodedPath(windows.url))) {
+if (windows?.url && !/\/AX[ .]Studio_.*_x64-setup\.exe$/.test(decodedPath(windows.url))) {
   fail(`windows-x86_64 url does not look like an AX Studio Windows NSIS installer URL: ${windows.url}`)
 }
 
@@ -90,7 +90,7 @@ if (!windowsArm64?.url) {
   console.warn('warning: windows-aarch64 url is empty — Windows ARM64 build may not have completed')
 }
 
-if (windowsArm64?.url && !/\/AX Studio_.*_arm64-setup\.exe$/.test(decodedPath(windowsArm64.url))) {
+if (windowsArm64?.url && !/\/AX[ .]Studio_.*_arm64-setup\.exe$/.test(decodedPath(windowsArm64.url))) {
   fail(`windows-aarch64 url does not look like an AX Studio Windows ARM64 NSIS installer URL: ${windowsArm64.url}`)
 }
 
