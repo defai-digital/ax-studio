@@ -68,7 +68,7 @@ pub async fn graceful_terminate_process(child: &mut tokio::process::Child) {
         // If so, send signals to the whole group (negative PID) to also
         // kill child processes like llama-server instances spawned by ax-serving.
         let pgid = unsafe { libc::getpgid(raw_pid) };
-        let is_group_leader = pgid == raw_pid;
+        let is_group_leader = pgid > 0 && pgid == raw_pid;
 
         let signal_target = if is_group_leader {
             log::debug!("Sending SIGTERM to process group -{}", raw_pid);

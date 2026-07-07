@@ -435,10 +435,11 @@ pub async fn unload_llama_model<R: Runtime>(
             error: None,
         })
     } else {
-        log::warn!("No server with PID '{}' found", pid);
+        let msg = format!("No server with PID '{}' found", pid);
+        log::warn!("{}", msg);
         Ok(UnloadResult {
-            success: true,
-            error: None,
+            success: false,
+            error: Some(msg),
         })
     }
 }

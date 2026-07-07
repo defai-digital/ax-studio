@@ -676,6 +676,10 @@ fn patch_ax_studio_sqlite_flag(app_handle: tauri::AppHandle) -> Result<(), Strin
 fn migrate_exa_to_http(app_handle: tauri::AppHandle) -> Result<(), String> {
     let config_path = get_app_data_folder_path(app_handle).join("mcp_config.json");
 
+    if !config_path.exists() {
+        return Ok(());
+    }
+
     let config_str =
         fs::read_to_string(&config_path).map_err(|e| format!("Failed to read MCP config: {e}"))?;
 
