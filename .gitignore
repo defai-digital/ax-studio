@@ -88,6 +88,7 @@ agent-teams/
 report/
 
 # Local planning docs
+/.internal/
 /ADRS/
 /BUGS/
 /PRDS/
